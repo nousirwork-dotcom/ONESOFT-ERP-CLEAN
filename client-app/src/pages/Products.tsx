@@ -341,6 +341,34 @@ function ProductCard({
     }
   };
 
+  // ── Extra description dynamic rows ───────────────────────────────────────
+  const [extRows, setExtRows] = useState<{ desc: string; val: string }[]>(() => {
+    const rows: { desc: string; val: string }[] = [];
+    for (let i = 1; i <= 6; i++) {
+      const d = (form as any)[`extDesc${i}`] ?? "";
+      const v = (form as any)[`extVal${i}`] ?? "";
+      if (i === 1 || d || v) rows.push({ desc: d, val: v });
+    }
+    return rows.length ? rows : [{ desc: "", val: "" }];
+  });
+
+  const syncExtRows = (next: { desc: string; val: string }[]) => {
+    setExtRows(next);
+    const patch: Partial<ProductForm> = {};
+    for (let i = 1; i <= 6; i++) {
+      (patch as any)[`extDesc${i}`] = next[i - 1]?.desc ?? "";
+      (patch as any)[`extVal${i}`] = next[i - 1]?.val ?? "";
+    }
+    setForm(prev => ({ ...prev, ...patch }));
+  };
+  const updateExtRow = (idx: number, field: "desc" | "val", value: string) =>
+    syncExtRows(extRows.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+  const addExtRow = () => syncExtRows([...extRows, { desc: "", val: "" }]);
+  const removeExtRow = (idx: number) => {
+    if (extRows.length <= 1) return;
+    syncExtRows(extRows.filter((_, i) => i !== idx));
+  };
+
   const { data: stockData, isLoading: loadingStock } = trpc.products.stockByWarehouse.useQuery(
     { productId: productId! },
     { enabled: isEdit && activeTab === "qty" }
@@ -805,43 +833,72 @@ function ProductCard({
               </div>
             </div>
 
-            {/* جدول الأوصاف الإضافية */}
-            <div className="border border-slate-200 dark:border-slate-700 rounded">
-              <div className="bg-slate-100 dark:bg-slate-800 px-3 py-1.5 border-b border-slate-200 dark:border-slate-700">
-                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">أوصاف إضافية</span>
+            {/* جدول الأوصاف الإضافية — ديناميكي */}
+            <div className="border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
+              <div className="bg-blue-50 dark:bg-blue-900/20 px-3 py-0.5 border-b border-slate-200 dark:border-slate-700 text-center">
+                <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">وصف إضافي</span>
               </div>
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
-                    <th className="text-right px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 w-8">#</th>
-                    <th className="text-right px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400">الوصف الإضافي</th>
-                    <th className="text-right px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400">القيمة</th>
+                    <th className="text-center px-2 py-1 text-xs font-semibold text-slate-500 w-8 border-l border-slate-200 dark:border-slate-700">#</th>
+                    <th className="text-right px-3 py-1 text-xs font-semibold text-slate-600 dark:text-slate-400 border-l border-slate-200 dark:border-slate-700">وصف إضافي</th>
+                    <th className="text-right px-3 py-1 text-xs font-semibold text-slate-600 dark:text-slate-400 border-l border-slate-200 dark:border-slate-700 w-40">القيمة</th>
+                    <th className="w-8"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {[1, 2, 3, 4, 5, 6].map((i) => (
-                    <tr key={i} className="border-b border-slate-100 dark:border-slate-700/50">
-                      <td className="px-3 py-1.5 text-xs text-slate-500">{i}</td>
-                      <td className="px-3 py-1.5">
-                        <CInput
-                          value={(form as any)[`extDesc${i}`]}
-                          onChange={(v) => set(`extDesc${i}` as keyof ProductForm, v)}
-                          placeholder={`وصف إضافي ${i}`}
-                          className="w-full"
+                  {extRows.map((row, idx) => (
+                    <tr key={idx} className="border-b border-slate-200 dark:border-slate-700">
+                      {/* رقم */}
+                      <td className="text-center px-2 py-1 text-xs font-semibold text-slate-500 bg-slate-50 dark:bg-slate-800/50 border-l border-slate-200 dark:border-slate-700 w-8">
+                        {idx + 1}
+                      </td>
+                      {/* وصف إضافي */}
+                      <td className="px-1 py-1 border-l border-slate-200 dark:border-slate-700">
+                        <input
+                          type="text"
+                          value={row.desc}
+                          onChange={(e) => updateExtRow(idx, "desc", e.target.value)}
+                          placeholder={`وصف إضافي ${idx + 1}`}
+                          className="h-7 w-full text-sm border border-slate-300 dark:border-slate-600 rounded px-2 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500"
                         />
                       </td>
-                      <td className="px-3 py-1.5">
-                        <CInput
-                          value={(form as any)[`extVal${i}`]}
-                          onChange={(v) => set(`extVal${i}` as keyof ProductForm, v)}
+                      {/* القيمة */}
+                      <td className="px-1 py-1 border-l border-slate-200 dark:border-slate-700 w-40">
+                        <input
+                          type="text"
+                          value={row.val}
+                          onChange={(e) => updateExtRow(idx, "val", e.target.value)}
                           placeholder="القيمة"
-                          className="w-full"
+                          className="h-7 w-full text-sm border border-slate-300 dark:border-slate-600 rounded px-2 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500"
                         />
+                      </td>
+                      {/* حذف */}
+                      <td className="px-1 py-1 text-center w-8">
+                        {extRows.length > 1 ? (
+                          <button
+                            type="button"
+                            onClick={() => removeExtRow(idx)}
+                            className="h-6 w-6 flex items-center justify-center rounded text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 mx-auto"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        ) : <span className="block w-6" />}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              {/* زر إضافة صف */}
+              <button
+                type="button"
+                onClick={addExtRow}
+                className="w-full flex items-center justify-center gap-1 py-1.5 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-700/50 border-t border-dashed border-slate-300 dark:border-slate-600 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                إضافة وصف إضافي
+              </button>
             </div>
 
             {/* خيارات المخزون */}
