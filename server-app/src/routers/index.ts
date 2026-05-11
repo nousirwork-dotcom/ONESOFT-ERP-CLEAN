@@ -332,9 +332,10 @@ export const appRouter = router({
         const group = await db.query.productGroups.findFirst({
           where: and(eq(productGroups.id, input.groupId), eq(productGroups.orgId, ctx.user.orgId)),
         });
-        if (!group || !group.autoNumbering) return null;
+        if (!group) return null;
         const prefix = group.groupCode ?? '';
-        const digits = group.codeDigits ?? 5;
+        const totalDigits = group.codeDigits ?? 5;
+        const seqLen = Math.max(1, totalDigits - prefix.length);
         const firstNum = group.firstNumber ?? 1;
         const incr = group.increment ?? 1;
         const lastNum = group.lastNumber ?? 99999;
@@ -342,21 +343,27 @@ export const appRouter = router({
         const existing = await db.query.products.findMany({
           where: and(
             eq(products.orgId, ctx.user.orgId),
-            sql`${products.code} LIKE ${prefix + '%'}`
+            prefix
+              ? sql`${products.code} LIKE ${prefix + '%'}`
+              : sql`${products.code} IS NOT NULL`
           ),
           orderBy: (p, { desc }) => [desc(p.code)],
         });
         let nextNum = firstNum;
         if (existing.length > 0) {
           const nums = existing
-            .map(p => parseInt((p.code ?? '').substring(prefix.length)))
-            .filter(n => !isNaN(n));
+            .map(p => {
+              const seq = (p.code ?? '').substring(prefix.length);
+              const n = parseInt(seq, 10);
+              return isNaN(n) ? -1 : n;
+            })
+            .filter(n => n >= 0);
           if (nums.length > 0) {
             nextNum = Math.max(...nums) + incr;
           }
         }
         if (nextNum > lastNum) return null;
-        const seqPart = String(nextNum).padStart(digits, '0');
+        const seqPart = String(nextNum).padStart(seqLen, '0');
         return prefix + seqPart;
       }),
   }),

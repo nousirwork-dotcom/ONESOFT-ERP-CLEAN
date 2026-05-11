@@ -20,7 +20,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { toast } from "sonner";
 
 // =============================================
@@ -211,12 +211,14 @@ function ProductCard({
     { enabled: !!form.groupId && !isEdit, staleTime: 0 }
   );
 
+  const appliedGroupIdRef = useRef<string>("");
   useEffect(() => {
-    if (!isEdit && nextCode) {
+    if (!isEdit && nextCode && form.groupId && form.groupId !== appliedGroupIdRef.current) {
+      appliedGroupIdRef.current = form.groupId;
       setForm({ ...form, sku: nextCode });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nextCode, form.groupId]);
+  }, [nextCode, form.groupId, isEdit]);
 
   // ── Build leaf group list (only groups with no children are selectable) ──
   const leafGroups = useMemo(() => {
