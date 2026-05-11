@@ -214,8 +214,8 @@ function ProductCard({
   const [skuLoading, setSkuLoading] = useState(false);
 
   const handleGroupSelect = async (groupId: string) => {
-    // Update groupId immediately (functional update avoids stale closure)
-    setForm(prev => ({ ...prev, groupId, sku: "" }));
+    // Update groupId immediately; only clear sku when creating new product
+    setForm(prev => ({ ...prev, groupId, ...(isEdit ? {} : { sku: "" }) }));
     if (!groupId || isEdit) return;
     setSkuLoading(true);
     try {
@@ -433,10 +433,10 @@ function ProductCard({
                         )}
                         <CInput
                           value={form.sku}
-                          onChange={(v) => { if (!autoNum) set("sku", v); }}
-                          placeholder={autoNum ? "يُولَّد تلقائياً..." : "SKU-001"}
-                          className={`w-full ${autoNum ? "bg-slate-100 dark:bg-slate-700 text-blue-700 dark:text-blue-300 font-mono font-semibold cursor-not-allowed" : ""}`}
-                          readOnly={autoNum}
+                          onChange={(v) => { if (!autoNum || isEdit) set("sku", v); }}
+                          placeholder={autoNum && !isEdit ? "يُولَّد تلقائياً..." : "SKU-001"}
+                          className={`w-full ${autoNum && !isEdit ? "bg-slate-100 dark:bg-slate-700 text-blue-700 dark:text-blue-300 font-mono font-semibold cursor-not-allowed" : ""}`}
+                          readOnly={autoNum && !isEdit}
                         />
                       </div>
                     </div>
