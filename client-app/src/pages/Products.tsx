@@ -293,6 +293,50 @@ function ProductCard({
     }
   };
 
+  // ── Categories dynamic rows ───────────────────────────────────────────────
+  const createCatMutation = trpc.categories.create.useMutation();
+  const [catRows, setCatRows] = useState<string[]>(() => {
+    const rows: string[] = [form.category1 || ""];
+    if (form.category2) rows.push(form.category2);
+    if (form.category3) rows.push(form.category3);
+    return rows;
+  });
+  const [addCatOpen, setAddCatOpen] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
+  const [addingToCatRow, setAddingToCatRow] = useState(0);
+
+  const syncCatRows = (next: string[]) => {
+    setCatRows(next);
+    setForm(prev => ({
+      ...prev,
+      category1: next[0] || "",
+      category2: next[1] || "",
+      category3: next[2] || "",
+    }));
+  };
+  const updateCatRow = (idx: number, value: string) =>
+    syncCatRows(catRows.map((r, i) => i === idx ? value : r));
+  const addCatRow = () => {
+    if (catRows.length >= 3) return;
+    syncCatRows([...catRows, ""]);
+  };
+  const removeCatRow = (idx: number) => {
+    if (catRows.length <= 1) return;
+    syncCatRows(catRows.filter((_, i) => i !== idx));
+  };
+  const handleQuickAddCat = async () => {
+    if (!newCatName.trim()) return;
+    try {
+      const c = await createCatMutation.mutateAsync({ name: newCatName.trim() });
+      await trpcUtils.categories.list.invalidate();
+      updateCatRow(addingToCatRow, c.name);
+      setNewCatName("");
+      setAddCatOpen(false);
+    } catch {
+      toast.error("فشل إضافة الفئة");
+    }
+  };
+
   const { data: stockData, isLoading: loadingStock } = trpc.products.stockByWarehouse.useQuery(
     { productId: productId! },
     { enabled: isEdit && activeTab === "qty" }
@@ -511,7 +555,7 @@ function ProductCard({
                           >
                             <option value="">-- اختر --</option>
                             {unitsList?.map(u => (
-                              <option key={u.id} value={u.name}>{u.symbol ? `${u.name} (${u.symbol})` : u.name}</option>
+                              <option key={u.id} value={u.name}>{u.name}</option>
                             ))}
                           </select>
                           <button
@@ -550,16 +594,15 @@ function ProductCard({
                 </tbody>
               </table>
               {/* زر إضافة وحدة أخرى */}
-              {unitRows.length < 3 && (
-                <button
-                  type="button"
-                  onClick={addUnitRow}
-                  className="w-full flex items-center justify-center gap-1 py-1.5 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-700/50 border-t border-dashed border-slate-300 dark:border-slate-600 transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  إضافة وحدة أخرى
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={addUnitRow}
+                disabled={unitRows.length >= 3}
+                className="w-full flex items-center justify-center gap-1 py-1.5 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-700/50 border-t border-dashed border-slate-300 dark:border-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                إضافة وحدة أخرى
+              </button>
             </div>
 
             {/* ── Dialog إضافة وحدة جديدة ── */}
@@ -595,34 +638,96 @@ function ProductCard({
             {/* ── الصف السفلي: فئات | مواصفات تفصيلية ── */}
             <div className="flex border-b border-slate-300 dark:border-slate-600">
 
-              {/* يمين: فئات */}
-              <div className="flex-1 border-l border-slate-300 dark:border-slate-600">
+              {/* يمين: فئات — نظام ديناميكي مطابق للوحدات */}
+              <div className="flex-1 border-l border-slate-300 dark:border-slate-600 flex flex-col">
                 <div className="bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 border-b border-slate-300 dark:border-slate-600 text-center">
                   <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">فئات</span>
                 </div>
-                {[
-                  { label: "فئة 1", key: "category1" },
-                  { label: "فئة 2", key: "category2" },
-                  { label: "فئة 3", key: "category3" },
-                ].map((r, i, arr) => (
-                  <div key={r.key} className={`flex ${i < arr.length - 1 ? "border-b border-slate-200 dark:border-slate-700" : ""}`}>
-                    <div className="w-20 shrink-0 bg-slate-50 dark:bg-slate-800 px-2 flex items-center border-l border-slate-200 dark:border-slate-700">
-                      <span className="text-xs text-slate-600 dark:text-slate-400">{r.label}</span>
+                <table className="w-full text-sm">
+                  <tbody>
+                    {catRows.map((cat, idx) => (
+                      <tr key={idx} className="border-b border-slate-200 dark:border-slate-700">
+                        {/* رقم */}
+                        <td className="text-center px-2 py-1 text-xs font-semibold text-slate-500 bg-slate-50 dark:bg-slate-800/50 border-l border-slate-200 dark:border-slate-700 w-8">
+                          {idx + 1}
+                        </td>
+                        {/* اختيار الفئة */}
+                        <td className="px-1 py-1 border-l border-slate-200 dark:border-slate-700">
+                          <div className="flex items-center gap-1">
+                            <select
+                              value={cat}
+                              onChange={(e) => updateCatRow(idx, e.target.value)}
+                              className="h-7 flex-1 text-sm border border-slate-300 dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500"
+                            >
+                              <option value="">-- اختر --</option>
+                              {categories?.map((c) => (
+                                <option key={c.id} value={c.name}>{c.name}</option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              title="إضافة فئة جديدة"
+                              onClick={() => { setAddingToCatRow(idx); setNewCatName(""); setAddCatOpen(true); }}
+                              className="h-7 w-7 shrink-0 flex items-center justify-center rounded border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-800/40 text-sm font-bold"
+                            >+</button>
+                          </div>
+                        </td>
+                        {/* حذف */}
+                        <td className="px-1 py-1 text-center w-8">
+                          {catRows.length > 1 ? (
+                            <button
+                              type="button"
+                              onClick={() => removeCatRow(idx)}
+                              className="h-6 w-6 flex items-center justify-center rounded text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 mx-auto"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          ) : <span className="block w-6" />}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {/* زر إضافة فئة أخرى */}
+                <button
+                  type="button"
+                  onClick={addCatRow}
+                  disabled={catRows.length >= 3}
+                  className="w-full flex items-center justify-center gap-1 py-1.5 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-700/50 border-t border-dashed border-slate-300 dark:border-slate-600 transition-colors mt-auto disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  إضافة فئة أخرى
+                </button>
+
+                {/* Dialog إضافة فئة جديدة */}
+                <Dialog open={addCatOpen} onOpenChange={setAddCatOpen}>
+                  <DialogContent className="max-w-sm" dir="rtl">
+                    <DialogHeader>
+                      <DialogTitle className="text-right">إضافة فئة جديدة</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3 pt-2">
+                      <input
+                        type="text"
+                        value={newCatName}
+                        onChange={(e) => setNewCatName(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleQuickAddCat()}
+                        placeholder="اسم الفئة (مثال: إلكترونيات، مواد بناء...)"
+                        autoFocus
+                        className="w-full h-9 text-sm border border-slate-300 dark:border-slate-600 rounded px-3 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                      />
+                      <div className="flex gap-2 justify-end">
+                        <Button variant="outline" size="sm" onClick={() => setAddCatOpen(false)}>إلغاء</Button>
+                        <Button
+                          size="sm"
+                          onClick={handleQuickAddCat}
+                          disabled={!newCatName.trim() || createCatMutation.isPending}
+                        >
+                          {createCatMutation.isPending ? "جاري الحفظ..." : "حفظ"}
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex-1 px-1 py-1">
-                      <select
-                        value={(form as any)[r.key] || ""}
-                        onChange={(e) => set(r.key as keyof ProductForm, e.target.value)}
-                        className="h-7 w-full text-sm border border-slate-300 dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500"
-                      >
-                        <option value="">-- بدون --</option>
-                        {categories?.map((c) => (
-                          <option key={c.id} value={c.name}>{c.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                ))}
+                  </DialogContent>
+                </Dialog>
               </div>
 
               {/* يسار: مواصفات تفصيلية */}
