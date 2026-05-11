@@ -430,119 +430,121 @@ function ProductCard({
         </div>
       )}
 
+      {/* ── الصف الثابت: مواصفات + نوع (يظهر في كل التبويبات) ── */}
+      <div className="flex-shrink-0 border-b border-slate-300 dark:border-slate-600 text-sm">
+        <div className="flex">
+
+          {/* يمين: مواصفات — رقم، اسم 1، اسم 2 */}
+          <div className="flex-1 border-l border-slate-300 dark:border-slate-600">
+            <div className="bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 border-b border-slate-300 dark:border-slate-600 text-center">
+              <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">مواصفات</span>
+            </div>
+            {/* رقم */}
+            {(() => {
+              const selGroup = form.groupId ? leafGroups.find(g => String(g.id) === form.groupId) : null;
+              const autoNum = selGroup?.autoNumbering ?? false;
+              return (
+                <div className="flex border-b border-slate-200 dark:border-slate-700">
+                  <div className="w-24 shrink-0 bg-slate-50 dark:bg-slate-800 px-2 flex items-center border-l border-slate-200 dark:border-slate-700">
+                    <span className="text-xs text-slate-600 dark:text-slate-400">رقم</span>
+                  </div>
+                  <div className="flex-1 px-1 py-1 relative">
+                    {skuLoading && (
+                      <div className="absolute inset-0 flex items-center justify-center z-10 bg-white/70 dark:bg-slate-800/70 rounded">
+                        <div className="w-3 h-3 border border-blue-500 border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    )}
+                    <CInput
+                      value={form.sku}
+                      onChange={(v) => { if (!autoNum || isEdit) set("sku", v); }}
+                      placeholder={autoNum && !isEdit ? "يُولَّد تلقائياً..." : "SKU-001"}
+                      className={`w-full ${autoNum && !isEdit ? "bg-slate-100 dark:bg-slate-700 text-blue-700 dark:text-blue-300 font-mono font-semibold cursor-not-allowed" : ""}`}
+                      readOnly={autoNum && !isEdit}
+                    />
+                  </div>
+                </div>
+              );
+            })()}
+            {/* اسم 1 */}
+            <div className="flex border-b border-slate-200 dark:border-slate-700">
+              <div className="w-24 shrink-0 bg-slate-50 dark:bg-slate-800 px-2 flex items-center border-l border-slate-200 dark:border-slate-700">
+                <span className="text-xs text-slate-600 dark:text-slate-400">إسم 1</span>
+              </div>
+              <div className="flex-1 px-1 py-1">
+                <CInput value={form.name} onChange={(v) => set("name", v)} placeholder="اسم الصنف بالعربية" className="w-full" />
+              </div>
+            </div>
+            {/* اسم 2 */}
+            <div className="flex">
+              <div className="w-24 shrink-0 bg-slate-50 dark:bg-slate-800 px-2 flex items-center border-l border-slate-200 dark:border-slate-700">
+                <span className="text-xs text-slate-600 dark:text-slate-400">إسم 2</span>
+              </div>
+              <div className="flex-1 px-1 py-1">
+                <CInput value={form.name2} onChange={(v) => set("name2", v)} placeholder="English Name" dir="ltr" className="w-full" />
+              </div>
+            </div>
+          </div>
+
+          {/* يسار: نوع السجل، رقم المجموعة، الصنف الرئيسي */}
+          <div className="w-72 shrink-0">
+            <div className="bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 border-b border-slate-300 dark:border-slate-600 text-center">
+              <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">نوع</span>
+            </div>
+            {/* نوع السجل */}
+            <div className="flex border-b border-slate-200 dark:border-slate-700">
+              <div className="w-28 shrink-0 bg-slate-50 dark:bg-slate-800 px-2 flex items-center border-l border-slate-200 dark:border-slate-700">
+                <span className="text-xs text-slate-600 dark:text-slate-400">نوع السجل</span>
+              </div>
+              <div className="flex-1 px-1 py-1">
+                <select value={form.itemType} onChange={(e) => set("itemType", e.target.value)}
+                  className="h-7 w-full text-sm border border-slate-300 dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500">
+                  <option value="مخزون">مخزون</option>
+                  <option value="خدمة">خدمة</option>
+                  <option value="مجموعة">مجموعة</option>
+                  <option value="مركّب">مركّب</option>
+                </select>
+              </div>
+            </div>
+            {/* رقم المجموعة */}
+            <div className="flex border-b border-slate-200 dark:border-slate-700">
+              <div className="w-28 shrink-0 bg-slate-50 dark:bg-slate-800 px-2 flex items-center border-l border-slate-200 dark:border-slate-700">
+                <span className="text-xs text-slate-600 dark:text-slate-400">رقم المجموعة</span>
+              </div>
+              <div className="flex-1 px-1 py-1">
+                <select
+                  value={form.groupId || "none"}
+                  onChange={(e) => handleGroupSelect(e.target.value === "none" ? "" : e.target.value)}
+                  disabled={skuLoading}
+                  className="h-7 w-full text-sm border border-slate-300 dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500 disabled:opacity-60"
+                >
+                  <option value="none">-- بدون --</option>
+                  {leafGroups.map(g => (
+                    <option key={g.id} value={String(g.id)}>
+                      {g.groupCode ? `[${g.groupCode}] ` : ""}{g.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {/* الصنف الرئيسي */}
+            <div className="flex">
+              <div className="w-28 shrink-0 bg-slate-50 dark:bg-slate-800 px-2 flex items-center border-l border-slate-200 dark:border-slate-700">
+                <span className="text-xs text-slate-600 dark:text-slate-400">الصنف الرئيسي</span>
+              </div>
+              <div className="flex-1 px-1 py-1">
+                <CInput value={form.parentItem} onChange={(v) => set("parentItem", v)} placeholder="" className="w-full" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* محتوى التبويبات */}
       <div className="flex-1 overflow-y-auto p-4">
 
         {/* ===== التبويب 1: النافذة الرئيسية ===== */}
         {activeTab === "main" && (
           <div className="space-y-0 border border-slate-300 dark:border-slate-600 rounded overflow-hidden text-sm">
-
-            {/* ── الصف العلوي: مواصفات | نوع ومجموعة ── */}
-            <div className="flex border-b border-slate-300 dark:border-slate-600">
-
-              {/* يمين: مواصفات — رقم، اسم 1، اسم 2 */}
-              <div className="flex-1 border-l border-slate-300 dark:border-slate-600">
-                <div className="bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 border-b border-slate-300 dark:border-slate-600 text-center">
-                  <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">مواصفات</span>
-                </div>
-                {/* رقم */}
-                {(() => {
-                  const selGroup = form.groupId ? leafGroups.find(g => String(g.id) === form.groupId) : null;
-                  const autoNum = selGroup?.autoNumbering ?? false;
-                  return (
-                    <div className="flex border-b border-slate-200 dark:border-slate-700">
-                      <div className="w-24 shrink-0 bg-slate-50 dark:bg-slate-800 px-2 flex items-center border-l border-slate-200 dark:border-slate-700">
-                        <span className="text-xs text-slate-600 dark:text-slate-400">رقم</span>
-                      </div>
-                      <div className="flex-1 px-1 py-1 relative">
-                        {skuLoading && (
-                          <div className="absolute inset-0 flex items-center justify-center z-10 bg-white/70 dark:bg-slate-800/70 rounded">
-                            <div className="w-3 h-3 border border-blue-500 border-t-transparent rounded-full animate-spin" />
-                          </div>
-                        )}
-                        <CInput
-                          value={form.sku}
-                          onChange={(v) => { if (!autoNum || isEdit) set("sku", v); }}
-                          placeholder={autoNum && !isEdit ? "يُولَّد تلقائياً..." : "SKU-001"}
-                          className={`w-full ${autoNum && !isEdit ? "bg-slate-100 dark:bg-slate-700 text-blue-700 dark:text-blue-300 font-mono font-semibold cursor-not-allowed" : ""}`}
-                          readOnly={autoNum && !isEdit}
-                        />
-                      </div>
-                    </div>
-                  );
-                })()}
-                {/* اسم 1 */}
-                <div className="flex border-b border-slate-200 dark:border-slate-700">
-                  <div className="w-24 shrink-0 bg-slate-50 dark:bg-slate-800 px-2 flex items-center border-l border-slate-200 dark:border-slate-700">
-                    <span className="text-xs text-slate-600 dark:text-slate-400">إسم 1</span>
-                  </div>
-                  <div className="flex-1 px-1 py-1">
-                    <CInput value={form.name} onChange={(v) => set("name", v)} placeholder="اسم الصنف بالعربية" className="w-full" />
-                  </div>
-                </div>
-                {/* اسم 2 */}
-                <div className="flex">
-                  <div className="w-24 shrink-0 bg-slate-50 dark:bg-slate-800 px-2 flex items-center border-l border-slate-200 dark:border-slate-700">
-                    <span className="text-xs text-slate-600 dark:text-slate-400">إسم 2</span>
-                  </div>
-                  <div className="flex-1 px-1 py-1">
-                    <CInput value={form.name2} onChange={(v) => set("name2", v)} placeholder="English Name" dir="ltr" className="w-full" />
-                  </div>
-                </div>
-              </div>
-
-              {/* يسار: نوع السجل، رقم المجموعة، التصنيف، الصنف الرئيسي */}
-              <div className="w-72 shrink-0">
-                <div className="bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 border-b border-slate-300 dark:border-slate-600 text-center">
-                  <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">نوع</span>
-                </div>
-                {/* نوع السجل */}
-                <div className="flex border-b border-slate-200 dark:border-slate-700">
-                  <div className="w-28 shrink-0 bg-slate-50 dark:bg-slate-800 px-2 flex items-center border-l border-slate-200 dark:border-slate-700">
-                    <span className="text-xs text-slate-600 dark:text-slate-400">نوع السجل</span>
-                  </div>
-                  <div className="flex-1 px-1 py-1">
-                    <select value={form.itemType} onChange={(e) => set("itemType", e.target.value)}
-                      className="h-7 w-full text-sm border border-slate-300 dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500">
-                      <option value="مخزون">مخزون</option>
-                      <option value="خدمة">خدمة</option>
-                      <option value="مجموعة">مجموعة</option>
-                      <option value="مركّب">مركّب</option>
-                    </select>
-                  </div>
-                </div>
-                {/* رقم المجموعة */}
-                <div className="flex border-b border-slate-200 dark:border-slate-700">
-                  <div className="w-28 shrink-0 bg-slate-50 dark:bg-slate-800 px-2 flex items-center border-l border-slate-200 dark:border-slate-700">
-                    <span className="text-xs text-slate-600 dark:text-slate-400">رقم المجموعة</span>
-                  </div>
-                  <div className="flex-1 px-1 py-1">
-                    <select
-                      value={form.groupId || "none"}
-                      onChange={(e) => handleGroupSelect(e.target.value === "none" ? "" : e.target.value)}
-                      disabled={skuLoading}
-                      className="h-7 w-full text-sm border border-slate-300 dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500 disabled:opacity-60"
-                    >
-                      <option value="none">-- بدون --</option>
-                      {leafGroups.map(g => (
-                        <option key={g.id} value={String(g.id)}>
-                          {g.groupCode ? `[${g.groupCode}] ` : ""}{g.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                {/* الصنف الرئيسي */}
-                <div className="flex">
-                  <div className="w-28 shrink-0 bg-slate-50 dark:bg-slate-800 px-2 flex items-center border-l border-slate-200 dark:border-slate-700">
-                    <span className="text-xs text-slate-600 dark:text-slate-400">الصنف الرئيسي</span>
-                  </div>
-                  <div className="flex-1 px-1 py-1">
-                    <CInput value={form.parentItem} onChange={(v) => set("parentItem", v)} placeholder="" className="w-full" />
-                  </div>
-                </div>
-              </div>
-            </div>
 
             {/* ── جدول الوحدات والباركود (ديناميكي) ── */}
             <div className="border-b border-slate-300 dark:border-slate-600">
