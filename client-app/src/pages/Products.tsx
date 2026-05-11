@@ -20,7 +20,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
 
 // =============================================
@@ -199,11 +199,38 @@ function ProductCard({
   form: ProductForm;
   setForm: (f: ProductForm) => void;
   categories: Array<{ id: number; name: string }> | undefined;
-  groups: Array<{ id: number; groupCode?: string | null; name: string }> | undefined;
+  groups: Array<{ id: number; groupCode?: string | null; name: string; groupType?: string | null; parentId?: number | null; autoNumbering?: boolean | null; codeDigits?: number | null }> | undefined;
   productId?: number | null;
 }) {
   const [activeTab, setActiveTab] = useState<string>("main");
   const isEdit = !!productId;
+
+  // ── Auto-generate SKU from group ─────────────────────────────────────────
+  const { data: nextCode } = trpc.productGroups.nextCode.useQuery(
+    { groupId: Number(form.groupId) },
+    { enabled: !!form.groupId && !isEdit, staleTime: 0 }
+  );
+
+  useEffect(() => {
+    if (!isEdit && nextCode) {
+      setForm({ ...form, sku: nextCode });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nextCode, form.groupId]);
+
+  // ── Build hierarchical group list ────────────────────────────────────────
+  const rootGroups = useMemo(
+    () => (groups ?? []).filter(g => g.groupType === "root" || !g.parentId),
+    [groups]
+  );
+  const subGroups = useMemo(
+    () => (groups ?? []).filter(g => g.groupType !== "root" && !!g.parentId),
+    [groups]
+  );
+  const orphanSubs = useMemo(
+    () => subGroups.filter(s => !rootGroups.find(r => r.id === s.parentId)),
+    [subGroups, rootGroups]
+  );
 
   const { data: stockData, isLoading: loadingStock } = trpc.products.stockByWarehouse.useQuery(
     { productId: productId! },
@@ -338,8 +365,28 @@ function ProductCard({
                     <select value={form.groupId || "none"} onChange={(e) => set("groupId", e.target.value === "none" ? "" : e.target.value)}
                       className="h-7 w-full text-sm border border-slate-300 dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500">
                       <option value="none">-- بدون --</option>
-                      {groups?.map((g) => (
-                        <option key={g.id} value={String(g.id)}>{g.groupCode ? `[${g.groupCode}] ` : ""}{g.name}</option>
+                      {rootGroups.map(root => {
+                        const children = subGroups.filter(s => s.parentId === root.id);
+                        const rootLabel = `${root.groupCode ? `[${root.groupCode}] ` : ""}${root.name}`;
+                        if (children.length > 0) {
+                          return (
+                            <optgroup key={root.id} label={rootLabel}>
+                              {children.map(c => (
+                                <option key={c.id} value={String(c.id)}>
+                                  {c.groupCode ? `[${c.groupCode}] ` : ""}{c.name}
+                                </option>
+                              ))}
+                            </optgroup>
+                          );
+                        }
+                        return (
+                          <optgroup key={root.id} label={rootLabel} />
+                        );
+                      })}
+                      {orphanSubs.map(s => (
+                        <option key={s.id} value={String(s.id)}>
+                          {s.groupCode ? `[${s.groupCode}] ` : ""}{s.name}
+                        </option>
                       ))}
                     </select>
                   </div>
