@@ -10,7 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "sonner";
 import {
   Plus, Edit, Trash2, Search, ListTree, TableIcon,
-  ChevronDown, ChevronLeft, FolderOpen, Folder, GitBranch
+  ChevronDown, ChevronLeft, FolderOpen, Folder, GitBranch,
+  Maximize2, Minimize2
 } from "lucide-react";
 
 const emptyForm = {
@@ -204,6 +205,7 @@ export default function ProductGroups() {
   const [editItem, setEditItem] = useState<any>(null);
   const [form, setForm] = useState({ ...emptyForm });
   const [search, setSearch] = useState("");
+  const [isMaximized, setIsMaximized] = useState(false);
 
   const set = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }));
 
@@ -466,16 +468,29 @@ export default function ProductGroups() {
       )}
 
       {/* ─── Dialog ─── */}
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="max-w-[480px] p-0 gap-0 overflow-hidden" dir="rtl">
+      <Dialog open={showDialog} onOpenChange={(v) => { setShowDialog(v); if (!v) setIsMaximized(false); }}>
+        <DialogContent
+          className={`p-0 gap-0 overflow-hidden transition-all duration-200
+            ${isMaximized
+              ? "max-w-[95vw] w-[95vw] h-[95vh] max-h-[95vh]"
+              : "max-w-[480px]"}`}
+          dir="rtl"
+        >
           <DialogHeader className="px-4 py-3 bg-muted/40 border-b border-border">
             <DialogTitle className="flex items-center gap-2 text-base">
               <ListTree className="w-4 h-4 text-primary" />
               {editItem ? "تعديل مجموعة أصناف" : "إضافة مجموعة أصناف"}
+              <button
+                onClick={() => setIsMaximized(m => !m)}
+                className="mr-auto p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                title={isMaximized ? "تصغير" : "تكبير"}
+              >
+                {isMaximized ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              </button>
             </DialogTitle>
           </DialogHeader>
 
-          <div className="overflow-y-auto max-h-[75vh]">
+          <div className={`overflow-y-auto ${isMaximized ? "max-h-[calc(95vh-110px)]" : "max-h-[75vh]"}`}>
             {/* البيانات الأساسية */}
             <div className="border-b border-border">
               <div className="px-4 py-1.5 bg-primary/5 text-xs font-semibold text-primary border-b border-border">
