@@ -343,7 +343,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (layoutMode === "horizontal") {
     return (
       <>
-      <div className="flex flex-col min-h-screen bg-background">
+      <div className="flex flex-col h-screen overflow-hidden bg-background">
         {/* Top Bar */}
         <header className="sticky top-0 z-20 border-b border-border bg-background/95 backdrop-blur-sm">
           {/* Row 1: Logo + User */}
@@ -462,7 +462,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         )}
       </Sidebar>
 
-      <SidebarInset className="flex flex-col min-h-screen">
+      <SidebarInset className="flex flex-col h-screen overflow-hidden">
         {/* Top Bar */}
         <header className="sticky top-0 z-10 flex items-center gap-3 px-4 h-14 border-b border-border bg-background/95 backdrop-blur-sm">
           <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
