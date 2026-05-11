@@ -1274,7 +1274,7 @@ export default function Products() {
     setForm({
       name: p.name ?? "",
       name2: p.name2 ?? "",
-      sku: p.sku ?? "",
+      sku: p.code ?? p.sku ?? "",
       itemType: p.itemType ?? "مخزون",
       groupId: p.groupId ? String(p.groupId) : "",
       categoryId: p.categoryId ? String(p.categoryId) : "",
