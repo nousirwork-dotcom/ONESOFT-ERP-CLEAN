@@ -114,20 +114,20 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 function TabContent() {
   const { tabs, activeTabId } = useTabManager();
   return (
-    <>
+    <div className="h-full" dir="rtl">
       {tabs.map(tab => {
         const Component = PAGE_MAP[tab.path];
         return (
           <div
             key={tab.id}
-            style={{ display: tab.id === activeTabId ? "block" : "none" }}
+            style={{ display: tab.id === activeTabId ? "flex" : "none", flexDirection: "column" }}
             className="h-full"
           >
             {Component ? <Component /> : <NotFound />}
           </div>
         );
       })}
-    </>
+    </div>
   );
 }
 

@@ -90,7 +90,7 @@ export default function Dashboard() {
   }));
 
   return (
-    <div className="space-y-6">
+    <div className="h-full overflow-auto p-4 md:p-5 space-y-6" dir="rtl">
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>

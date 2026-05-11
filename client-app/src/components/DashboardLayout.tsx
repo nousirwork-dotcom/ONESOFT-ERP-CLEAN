@@ -493,7 +493,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <TabBar />
 
         {/* Main Content */}
-        <main className="flex-1 overflow-auto p-4 md:p-6">{children}</main>
+        <main className="flex-1 overflow-hidden">{children}</main>
       </div>
       <ChatWidget />
       </>
@@ -600,7 +600,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <TabBar />
 
         {/* Main Content */}
-        <main className="flex-1 overflow-auto p-4 md:p-6">{children}</main>
+        <main className="flex-1 overflow-hidden">{children}</main>
       </SidebarInset>
     </SidebarProvider>
     <ChatWidget />
