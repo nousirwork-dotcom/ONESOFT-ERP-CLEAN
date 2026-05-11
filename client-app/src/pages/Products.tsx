@@ -49,6 +49,9 @@ type ProductForm = {
   category1: string;
   category2: string;
   category3: string;
+  // وحدات/فئات إضافية (JSON)
+  unitsJson: string;
+  catsJson: string;
   // مواصفات
   distinguishNo: string;
   weight: string;
@@ -113,6 +116,7 @@ const emptyForm: ProductForm = {
   conversionFactor: "1", convFactor2: "1", convFactor3: "1",
   barcode: "", barcode2: "", barcode3: "",
   category1: "", category2: "", category3: "",
+  unitsJson: "", catsJson: "",
   distinguishNo: "", weight: "", size: "", colorCode: "", itemSize: "",
   taxType: "", prevTaxType: "", taxable: true, vatRate: "15",
   nameEn: "", brand: "", model: "", description: "",
@@ -268,12 +272,12 @@ function ProductCard({
       unit3:        next[2]?.unit    || "",
       barcode3:     next[2]?.barcode || "",
       convFactor3:  next[2]?.conv    || "1",
+      unitsJson:    next.length > 1 ? JSON.stringify(next) : "",
     }));
   };
   const updateUnitRow = (idx: number, field: keyof UnitRow, value: string) =>
     syncRows(unitRows.map((r, i) => i === idx ? { ...r, [field]: value } : r));
   const addUnitRow = () => {
-    if (unitRows.length >= 3) return;
     syncRows([...unitRows, { unit: "", conv: "1", barcode: "" }]);
   };
   const removeUnitRow = (idx: number) => {
@@ -312,12 +316,12 @@ function ProductCard({
       category1: next[0] || "",
       category2: next[1] || "",
       category3: next[2] || "",
+      catsJson:  next.length > 1 ? JSON.stringify(next) : "",
     }));
   };
   const updateCatRow = (idx: number, value: string) =>
     syncCatRows(catRows.map((r, i) => i === idx ? value : r));
   const addCatRow = () => {
-    if (catRows.length >= 3) return;
     syncCatRows([...catRows, ""]);
   };
   const removeCatRow = (idx: number) => {
@@ -597,8 +601,7 @@ function ProductCard({
               <button
                 type="button"
                 onClick={addUnitRow}
-                disabled={unitRows.length >= 3}
-                className="w-full flex items-center justify-center gap-1 py-1.5 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-700/50 border-t border-dashed border-slate-300 dark:border-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                className="w-full flex items-center justify-center gap-1 py-1.5 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-700/50 border-t border-dashed border-slate-300 dark:border-slate-600 transition-colors"
               >
                 <Plus className="w-3.5 h-3.5" />
                 إضافة وحدة أخرى
@@ -639,7 +642,7 @@ function ProductCard({
             <div className="flex border-b border-slate-300 dark:border-slate-600">
 
               {/* يمين: فئات — نظام ديناميكي مطابق للوحدات */}
-              <div className="flex-1 border-l border-slate-300 dark:border-slate-600 flex flex-col">
+              <div className="w-48 shrink-0 border-l border-slate-300 dark:border-slate-600 flex flex-col">
                 <div className="bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 border-b border-slate-300 dark:border-slate-600 text-center">
                   <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">فئات</span>
                 </div>
@@ -692,8 +695,7 @@ function ProductCard({
                 <button
                   type="button"
                   onClick={addCatRow}
-                  disabled={catRows.length >= 3}
-                  className="w-full flex items-center justify-center gap-1 py-1.5 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-700/50 border-t border-dashed border-slate-300 dark:border-slate-600 transition-colors mt-auto disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                  className="w-full flex items-center justify-center gap-1 py-1.5 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-700/50 border-t border-dashed border-slate-300 dark:border-slate-600 transition-colors mt-auto"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   إضافة فئة أخرى
@@ -731,7 +733,7 @@ function ProductCard({
               </div>
 
               {/* يسار: مواصفات تفصيلية */}
-              <div className="w-72 shrink-0">
+              <div className="flex-1">
                 <div className="bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 border-b border-slate-300 dark:border-slate-600 text-center">
                   <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">مواصفات</span>
                 </div>
@@ -1361,6 +1363,8 @@ export default function Products() {
       unit:          form.unit || "قطعة",
       unit2:         form.unit2.trim() || undefined,
       unit3:         form.unit3.trim() || undefined,
+      unitsJson:     form.unitsJson || undefined,
+      catsJson:      form.catsJson  || undefined,
       itemType:      form.itemType || "مخزون",
       brand:         form.brand.trim() || undefined,
       model:         form.model.trim() || undefined,

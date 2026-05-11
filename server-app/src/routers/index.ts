@@ -84,6 +84,8 @@ export const appRouter = router({
         unit: z.string().optional(),
         unit2: z.string().optional(),
         unit3: z.string().optional(),
+        unitsJson: z.string().optional(),
+        catsJson: z.string().optional(),
         salePrice: z.string().optional(),
         salePrice2: z.string().optional(),
         salePrice3: z.string().optional(),
@@ -110,7 +112,7 @@ export const appRouter = router({
           name, name2, nameEn, sku,
           barcode, barcode2, barcode3,
           groupId, categoryId,
-          unit, unit2, unit3,
+          unit, unit2, unit3, unitsJson, catsJson,
           salePrice, salePrice2, salePrice3, salePrice4, salePrice5,
           wholesalePrice, purchasePrice, costPrice,
           vatRate, taxRate, taxable, taxType,
@@ -131,6 +133,8 @@ export const appRouter = router({
         if (barcode3)        extraData.barcode3 = barcode3;
         if (unit2)           extraData.unit2 = unit2;
         if (unit3)           extraData.unit3 = unit3;
+        if (unitsJson)       extraData.unitsJson = unitsJson;
+        if (catsJson)        extraData.catsJson = catsJson;
         if (salePrice2)      extraData.salePrice2 = salePrice2;
         if (salePrice3)      extraData.salePrice3 = salePrice3;
         if (salePrice4)      extraData.salePrice4 = salePrice4;
@@ -193,6 +197,8 @@ export const appRouter = router({
         unit: z.string().optional(),
         unit2: z.string().optional(),
         unit3: z.string().optional(),
+        unitsJson: z.string().optional(),
+        catsJson: z.string().optional(),
         salePrice: z.string().optional(),
         salePrice2: z.string().optional(),
         salePrice3: z.string().optional(),
@@ -217,7 +223,8 @@ export const appRouter = router({
       }).passthrough())
       .mutation(async ({ ctx, input }) => {
         const { id, sku, name2, nameEn, categoryId, costPrice, vatRate, taxable, taxType,
-          barcode2, barcode3, unit2, unit3, salePrice2, salePrice3, salePrice4, salePrice5,
+          barcode2, barcode3, unit2, unit3, unitsJson, catsJson,
+          salePrice2, salePrice3, salePrice4, salePrice5,
           wholesalePrice, maxStock, reorderPoint, itemType, brand, model, description,
           ...rest } = input as any;
 
@@ -227,6 +234,8 @@ export const appRouter = router({
         if (barcode3 !== undefined) extraData.barcode3 = barcode3;
         if (unit2 !== undefined) extraData.unit2 = unit2;
         if (unit3 !== undefined) extraData.unit3 = unit3;
+        if (unitsJson !== undefined) extraData.unitsJson = unitsJson;
+        if (catsJson !== undefined) extraData.catsJson = catsJson;
         if (salePrice2 !== undefined) extraData.salePrice2 = salePrice2;
         if (salePrice3 !== undefined) extraData.salePrice3 = salePrice3;
         if (salePrice4 !== undefined) extraData.salePrice4 = salePrice4;
