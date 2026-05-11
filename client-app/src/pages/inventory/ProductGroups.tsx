@@ -5,13 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { FloatingWindow } from "@/components/ui/floating-window";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import {
   Plus, Edit, Trash2, Search, ListTree, TableIcon,
-  ChevronDown, ChevronLeft, FolderOpen, Folder, GitBranch,
-  Maximize2, Minimize2
+  ChevronDown, ChevronLeft, FolderOpen, Folder, GitBranch
 } from "lucide-react";
 
 const emptyForm = {
@@ -205,45 +204,6 @@ export default function ProductGroups() {
   const [editItem, setEditItem] = useState<any>(null);
   const [form, setForm] = useState({ ...emptyForm });
   const [search, setSearch] = useState("");
-  const [isMaximized, setIsMaximized] = useState(false);
-  const [dialogSize, setDialogSize] = useState({ width: 640, height: 520 });
-
-  const startResize = (e: React.MouseEvent, dir: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const startW = dialogSize.width;
-    const startH = dialogSize.height;
-
-    const onMove = (ev: MouseEvent) => {
-      const dx = ev.clientX - startX;
-      const dy = ev.clientY - startY;
-      setDialogSize(() => {
-        let w = startW;
-        let h = startH;
-        if (dir.includes("e")) w = Math.max(420, startW + dx);
-        if (dir.includes("w")) w = Math.max(420, startW - dx);
-        if (dir.includes("s")) h = Math.max(300, startH + dy);
-        if (dir.includes("n")) h = Math.max(300, startH - dy);
-        return { width: w, height: h };
-      });
-    };
-    const onUp = () => {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-      document.body.style.userSelect = "";
-      document.body.style.cursor = "";
-    };
-    document.body.style.userSelect = "none";
-    const cursors: Record<string, string> = {
-      n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize",
-      ne: "nesw-resize", sw: "nesw-resize", nw: "nwse-resize", se: "nwse-resize",
-    };
-    document.body.style.cursor = cursors[dir] ?? "default";
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
-  };
 
   const set = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }));
 
@@ -521,47 +481,30 @@ export default function ProductGroups() {
         </div>
       )}
 
-      {/* ─── Dialog ─── */}
-      <Dialog open={showDialog} onOpenChange={(v) => { setShowDialog(v); if (!v) setIsMaximized(false); }}>
-        <DialogContent
-          className="p-0 gap-0 overflow-hidden"
-          style={isMaximized
-            ? { maxWidth: "95vw", width: "95vw", height: "95vh", maxHeight: "95vh" }
-            : { width: `${dialogSize.width}px`, maxWidth: "95vw", height: `${dialogSize.height}px`, maxHeight: "95vh", minWidth: "420px", minHeight: "300px", position: "relative" }}
-          dir="rtl"
-        >
-          {/* ── مقابض السحب (Resize handles) ── */}
-          {!isMaximized && (<>
-            {/* أعلى */}
-            <div onMouseDown={e => startResize(e, "n")} className="absolute top-0 left-4 right-4 h-1.5 cursor-ns-resize z-50 hover:bg-primary/20 rounded-full transition-colors" />
-            {/* أسفل */}
-            <div onMouseDown={e => startResize(e, "s")} className="absolute bottom-0 left-4 right-4 h-1.5 cursor-ns-resize z-50 hover:bg-primary/20 rounded-full transition-colors" />
-            {/* يسار */}
-            <div onMouseDown={e => startResize(e, "w")} className="absolute top-4 bottom-4 left-0 w-1.5 cursor-ew-resize z-50 hover:bg-primary/20 rounded-full transition-colors" />
-            {/* يمين */}
-            <div onMouseDown={e => startResize(e, "e")} className="absolute top-4 bottom-4 right-0 w-1.5 cursor-ew-resize z-50 hover:bg-primary/20 rounded-full transition-colors" />
-            {/* زوايا */}
-            <div onMouseDown={e => startResize(e, "nw")} className="absolute top-0 left-0 w-3 h-3 cursor-nwse-resize z-50" />
-            <div onMouseDown={e => startResize(e, "ne")} className="absolute top-0 right-0 w-3 h-3 cursor-nesw-resize z-50" />
-            <div onMouseDown={e => startResize(e, "sw")} className="absolute bottom-0 left-0 w-3 h-3 cursor-nesw-resize z-50" />
-            <div onMouseDown={e => startResize(e, "se")} className="absolute bottom-0 right-0 w-3 h-3 cursor-nwse-resize z-50" />
-          </>)}
-
-          <DialogHeader className="px-4 py-3 bg-muted/40 border-b border-border shrink-0">
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <ListTree className="w-4 h-4 text-primary" />
-              {editItem ? "تعديل مجموعة أصناف" : "إضافة مجموعة أصناف"}
-              <button
-                onClick={() => setIsMaximized(m => !m)}
-                className="mr-auto p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-                title={isMaximized ? "تصغير" : "تكبير"}
-              >
-                {isMaximized ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-              </button>
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="overflow-y-auto flex-1">
+      {/* ─── FloatingWindow ─── */}
+      <FloatingWindow
+        open={showDialog}
+        onOpenChange={setShowDialog}
+        defaultWidth={620}
+        defaultHeight={460}
+        minWidth={420}
+        minHeight={260}
+        title={
+          <span className="flex items-center gap-2">
+            <ListTree className="w-4 h-4 text-primary" />
+            {editItem ? "تعديل مجموعة أصناف" : "إضافة مجموعة أصناف"}
+          </span>
+        }
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setShowDialog(false)}>إلغاء</Button>
+            <Button size="sm" onClick={handleSubmit} disabled={createMutation.isPending || updateMutation.isPending}>
+              {editItem ? "حفظ التعديلات" : "إضافة"}
+            </Button>
+          </>
+        }
+      >
+          <div>
 
             {/* ── البيانات الأساسية ── */}
             <div className="border-b border-border">
@@ -755,15 +698,7 @@ export default function ProductGroups() {
               </div>
             </div>
           </div>
-
-          <DialogFooter className="px-4 py-3 border-t border-border gap-2">
-            <Button variant="outline" size="sm" onClick={() => setShowDialog(false)}>إلغاء</Button>
-            <Button size="sm" onClick={handleSubmit} disabled={createMutation.isPending || updateMutation.isPending}>
-              {editItem ? "حفظ التعديلات" : "إضافة"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </FloatingWindow>
     </div>
   );
 }
