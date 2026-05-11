@@ -6,7 +6,7 @@ import { salesRouter } from './sales.js';
 import { chatRouter } from './chat.js';
 import { db } from '../db.js';
 import { products, customers, suppliers, chartOfAccounts, warehouses, branches, units, productGroups, journalEntries, journalEntryLines, vouchers, inventory, stockVouchers, stockVoucherItems, inventoryCounts, inventoryCountItems, freeProducts } from '../schema.js';
-import { eq, and, desc, like, or, sql } from 'drizzle-orm';
+import { eq, and, desc, like, or, sql, isNotNull } from 'drizzle-orm';
 
 export const appRouter = router({
   // ─── Auth ────────────────────────────────────────────────────────────────────
@@ -366,16 +366,18 @@ export const appRouter = router({
         const firstNum = group.firstNumber ?? 1;
         const incr = group.increment ?? 1;
         const lastNum = group.lastNumber ?? 99999;
-        // Find the last product code in this group
-        const existing = await db.query.products.findMany({
-          where: and(
-            eq(products.orgId, ctx.user.orgId),
-            prefix
-              ? sql`${products.code} LIKE ${prefix + '%'}`
-              : sql`${products.code} IS NOT NULL`
-          ),
-          orderBy: (p, { desc }) => [desc(p.code)],
-        });
+        // Find the last product code in this group using proper drizzle helpers
+        const existing = await db.select({ code: products.code })
+          .from(products)
+          .where(
+            and(
+              eq(products.orgId, ctx.user.orgId),
+              prefix
+                ? like(products.code, prefix + '%')
+                : isNotNull(products.code)
+            )
+          )
+          .orderBy(desc(products.code));
         let nextNum = firstNum;
         if (existing.length > 0) {
           const nums = existing
