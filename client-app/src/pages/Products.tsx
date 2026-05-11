@@ -241,6 +241,58 @@ function ProductCard({
     return allGroups.filter(g => !parentIds.has(g.id));
   }, [groups]);
 
+  // ── Units list from DB ────────────────────────────────────────────────────
+  const { data: unitsList, refetch: refetchUnits } = trpc.units.list.useQuery(undefined, { staleTime: 30000 });
+  const createUnitMutation = trpc.units.create.useMutation();
+
+  type UnitRow = { unit: string; conv: string; barcode: string };
+  const [unitRows, setUnitRows] = useState<UnitRow[]>(() => {
+    const rows: UnitRow[] = [{ unit: form.unit || "", conv: "1", barcode: form.barcode || "" }];
+    if (form.unit2) rows.push({ unit: form.unit2, conv: form.convFactor2 || "1", barcode: form.barcode2 || "" });
+    if (form.unit3) rows.push({ unit: form.unit3, conv: form.convFactor3 || "1", barcode: form.barcode3 || "" });
+    return rows;
+  });
+  const [addUnitOpen, setAddUnitOpen] = useState(false);
+  const [newUnitName, setNewUnitName] = useState("");
+  const [addingToRow, setAddingToRow] = useState(0);
+
+  const syncRows = (next: UnitRow[]) => {
+    setUnitRows(next);
+    setForm(prev => ({
+      ...prev,
+      unit:         next[0]?.unit    || "",
+      barcode:      next[0]?.barcode || "",
+      unit2:        next[1]?.unit    || "",
+      barcode2:     next[1]?.barcode || "",
+      convFactor2:  next[1]?.conv    || "1",
+      unit3:        next[2]?.unit    || "",
+      barcode3:     next[2]?.barcode || "",
+      convFactor3:  next[2]?.conv    || "1",
+    }));
+  };
+  const updateUnitRow = (idx: number, field: keyof UnitRow, value: string) =>
+    syncRows(unitRows.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+  const addUnitRow = () => {
+    if (unitRows.length >= 3) return;
+    syncRows([...unitRows, { unit: "", conv: "1", barcode: "" }]);
+  };
+  const removeUnitRow = (idx: number) => {
+    if (unitRows.length <= 1) return;
+    syncRows(unitRows.filter((_, i) => i !== idx));
+  };
+  const handleQuickAddUnit = async () => {
+    if (!newUnitName.trim()) return;
+    try {
+      const u = await createUnitMutation.mutateAsync({ name: newUnitName.trim() });
+      await refetchUnits();
+      updateUnitRow(addingToRow, "unit", u.name);
+      setNewUnitName("");
+      setAddUnitOpen(false);
+    } catch {
+      toast.error("فشل إضافة الوحدة");
+    }
+  };
+
   const { data: stockData, isLoading: loadingStock } = trpc.products.stockByWarehouse.useQuery(
     { productId: productId! },
     { enabled: isEdit && activeTab === "qty" }
@@ -430,42 +482,115 @@ function ProductCard({
               </div>
             </div>
 
-            {/* ── جدول الوحدات والباركود ── */}
+            {/* ── جدول الوحدات والباركود (ديناميكي) ── */}
             <div className="border-b border-slate-300 dark:border-slate-600">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-100 dark:bg-slate-800 border-b border-slate-300 dark:border-slate-600">
                     <th className="text-center px-2 py-1 text-xs font-semibold text-slate-600 dark:text-slate-400 w-8 border-l border-slate-300 dark:border-slate-600">#</th>
-                    <th className="text-center px-2 py-1 text-xs font-semibold text-slate-600 dark:text-slate-400 border-l border-slate-300 dark:border-slate-600">وحدة</th>
-                    <th className="text-center px-2 py-1 text-xs font-semibold text-slate-600 dark:text-slate-400 w-32 border-l border-slate-300 dark:border-slate-600">م. تحويل</th>
-                    <th className="text-center px-2 py-1 text-xs font-semibold text-slate-600 dark:text-slate-400">باركود</th>
+                    <th className="text-right px-2 py-1 text-xs font-semibold text-slate-600 dark:text-slate-400 border-l border-slate-300 dark:border-slate-600">وحدة</th>
+                    <th className="text-center px-2 py-1 text-xs font-semibold text-slate-600 dark:text-slate-400 w-28 border-l border-slate-300 dark:border-slate-600">م. تحويل</th>
+                    <th className="text-right px-2 py-1 text-xs font-semibold text-slate-600 dark:text-slate-400 border-l border-slate-300 dark:border-slate-600">باركود</th>
+                    <th className="w-8 border-l border-slate-300 dark:border-slate-600"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {[
-                    { num: 1, unit: form.unit, unitKey: "unit", conv: "1", convKey: null, bc: form.barcode, bcKey: "barcode" },
-                    { num: 2, unit: form.unit2, unitKey: "unit2", conv: form.convFactor2, convKey: "convFactor2", bc: form.barcode2, bcKey: "barcode2" },
-                    { num: 3, unit: form.unit3, unitKey: "unit3", conv: form.convFactor3, convKey: "convFactor3", bc: form.barcode3, bcKey: "barcode3" },
-                  ].map((row) => (
-                    <tr key={row.num} className="border-b border-slate-200 dark:border-slate-700">
-                      <td className="text-center px-2 py-1 text-xs font-semibold text-slate-500 bg-slate-50 dark:bg-slate-800/50 border-l border-slate-200 dark:border-slate-700">{row.num}</td>
-                      <td className="px-1 py-1 border-l border-slate-200 dark:border-slate-700">
-                        <CInput value={row.unit} onChange={(v) => set(row.unitKey as keyof ProductForm, v)} placeholder={row.num === 1 ? "قطعة" : `وحدة ${row.num}`} className="w-full" />
+                  {unitRows.map((row, idx) => (
+                    <tr key={idx} className="border-b border-slate-200 dark:border-slate-700">
+                      {/* رقم */}
+                      <td className="text-center px-2 py-1 text-xs font-semibold text-slate-500 bg-slate-50 dark:bg-slate-800/50 border-l border-slate-200 dark:border-slate-700">
+                        {idx + 1}
                       </td>
+                      {/* اختيار الوحدة */}
                       <td className="px-1 py-1 border-l border-slate-200 dark:border-slate-700">
-                        {row.convKey
-                          ? <CInput value={row.conv} onChange={(v) => set(row.convKey as keyof ProductForm, v)} type="number" className="w-full text-center" />
-                          : <CInput value="1.000" readOnly className="w-full text-center bg-slate-50 dark:bg-slate-700 text-slate-500" />
+                        <div className="flex items-center gap-1">
+                          <select
+                            value={row.unit}
+                            onChange={(e) => updateUnitRow(idx, "unit", e.target.value)}
+                            className="h-7 flex-1 text-sm border border-slate-300 dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500"
+                          >
+                            <option value="">-- اختر --</option>
+                            {unitsList?.map(u => (
+                              <option key={u.id} value={u.name}>{u.symbol ? `${u.name} (${u.symbol})` : u.name}</option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            title="إضافة وحدة جديدة"
+                            onClick={() => { setAddingToRow(idx); setNewUnitName(""); setAddUnitOpen(true); }}
+                            className="h-7 w-7 shrink-0 flex items-center justify-center rounded border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-800/40 text-sm font-bold"
+                          >+</button>
+                        </div>
+                      </td>
+                      {/* معامل التحويل */}
+                      <td className="px-1 py-1 border-l border-slate-200 dark:border-slate-700">
+                        {idx === 0
+                          ? <CInput value="1.000" readOnly className="w-full text-center bg-slate-50 dark:bg-slate-700 text-slate-500" />
+                          : <CInput value={row.conv} onChange={(v) => updateUnitRow(idx, "conv", v)} type="number" className="w-full text-center" />
                         }
                       </td>
-                      <td className="px-1 py-1">
-                        <CInput value={row.bc} onChange={(v) => set(row.bcKey as keyof ProductForm, v)} placeholder="" dir="ltr" className="w-full" />
+                      {/* باركود */}
+                      <td className="px-1 py-1 border-l border-slate-200 dark:border-slate-700">
+                        <CInput value={row.barcode} onChange={(v) => updateUnitRow(idx, "barcode", v)} placeholder="" dir="ltr" className="w-full" />
+                      </td>
+                      {/* حذف */}
+                      <td className="px-1 py-1 text-center border-l border-slate-200 dark:border-slate-700">
+                        {unitRows.length > 1 ? (
+                          <button
+                            type="button"
+                            onClick={() => removeUnitRow(idx)}
+                            className="h-6 w-6 flex items-center justify-center rounded text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 mx-auto"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        ) : <span className="block w-6" />}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              {/* زر إضافة وحدة أخرى */}
+              {unitRows.length < 3 && (
+                <button
+                  type="button"
+                  onClick={addUnitRow}
+                  className="w-full flex items-center justify-center gap-1 py-1.5 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-700/50 border-t border-dashed border-slate-300 dark:border-slate-600 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  إضافة وحدة أخرى
+                </button>
+              )}
             </div>
+
+            {/* ── Dialog إضافة وحدة جديدة ── */}
+            <Dialog open={addUnitOpen} onOpenChange={setAddUnitOpen}>
+              <DialogContent className="max-w-sm" dir="rtl">
+                <DialogHeader>
+                  <DialogTitle className="text-right">إضافة وحدة جديدة</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3 pt-2">
+                  <input
+                    type="text"
+                    value={newUnitName}
+                    onChange={(e) => setNewUnitName(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleQuickAddUnit()}
+                    placeholder="اسم الوحدة (مثال: كرتون، لتر، كيلو...)"
+                    autoFocus
+                    className="w-full h-9 text-sm border border-slate-300 dark:border-slate-600 rounded px-3 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <Button variant="outline" size="sm" onClick={() => setAddUnitOpen(false)}>إلغاء</Button>
+                    <Button
+                      size="sm"
+                      onClick={handleQuickAddUnit}
+                      disabled={!newUnitName.trim() || createUnitMutation.isPending}
+                    >
+                      {createUnitMutation.isPending ? "جاري الحفظ..." : "حفظ"}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
 
             {/* ── الصف السفلي: فئات | مواصفات تفصيلية ── */}
             <div className="flex border-b border-slate-300 dark:border-slate-600">
@@ -485,7 +610,16 @@ function ProductCard({
                       <span className="text-xs text-slate-600 dark:text-slate-400">{r.label}</span>
                     </div>
                     <div className="flex-1 px-1 py-1">
-                      <CInput value={(form as any)[r.key]} onChange={(v) => set(r.key as keyof ProductForm, v)} placeholder="" className="w-full" />
+                      <select
+                        value={(form as any)[r.key] || ""}
+                        onChange={(e) => set(r.key as keyof ProductForm, e.target.value)}
+                        className="h-7 w-full text-sm border border-slate-300 dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500"
+                      >
+                        <option value="">-- بدون --</option>
+                        {categories?.map((c) => (
+                          <option key={c.id} value={c.name}>{c.name}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 ))}
@@ -1587,6 +1721,7 @@ export default function Products() {
           {/* محتوى الكارت */}
           <div className="flex-1 overflow-hidden">
             <ProductCard
+              key={editId ?? "new"}
               form={form}
               setForm={setForm}
               categories={categories}
