@@ -1,6 +1,7 @@
 import { useState } from "react";
 import SalesInvoicePageNew from "./SalesInvoicePage";
 import SalesQuotation from "./sales/SalesQuotation";
+import { useTabManager } from "@/contexts/TabManagerContext";
 import {
   ChevronDown, ChevronRight, TrendingUp, FileText, RotateCcw,
   BarChart3, Settings, Users, ClipboardList, ShoppingCart, Tag,
@@ -30,12 +31,12 @@ const menuSections = [
     label: "المعاملات",
     icon: FileText,
     children: [
-      { id: "sales-invoice",    label: "فاتورة مبيعات",      icon: Receipt },
-      { id: "sales-return",     label: "مردود المبيعات",      icon: RotateCcw },
-      { id: "credit-note",      label: "إشعار دائن",          icon: FileText },
-      { id: "quotation",        label: "عرض سعر مبيعات",      icon: Tag },
-      { id: "sales-order",      label: "أمر بيع",             icon: ClipboardList },
-      { id: "delivery-order",   label: "أمر تسليم مبيعات",  icon: ArrowRight },
+      { id: "sales-invoice",  label: "فاتورة مبيعات",     icon: Receipt,      path: "/sales/invoice" },
+      { id: "sales-return",   label: "مردود المبيعات",     icon: RotateCcw,    path: "/sales/return" },
+      { id: "credit-note",    label: "إشعار دائن",         icon: FileText,     path: "/sales/credit-note" },
+      { id: "quotation",      label: "عرض سعر مبيعات",    icon: Tag,          path: "/sales/quotation" },
+      { id: "sales-order",    label: "أمر بيع",            icon: ClipboardList,path: "/sales/order" },
+      { id: "delivery-order", label: "أمر تسليم مبيعات",  icon: ArrowRight,   path: "/sales/delivery" },
     ],
   },
   {
@@ -43,11 +44,11 @@ const menuSections = [
     label: "نقطة بيع",
     icon: ShoppingCart,
     children: [
-      { id: "pos-screen",       label: "شاشة البيع",          icon: ShoppingCart },
-      { id: "shifts",           label: "الورديات",             icon: Clock },
-      { id: "payment-methods",  label: "طرق السداد",           icon: Wallet },
-      { id: "pos-settings",     label: "إعدادات POS",          icon: Star },
-      { id: "pos-reports",      label: "تقارير POS",           icon: BarChart3 },
+      { id: "pos-screen",      label: "شاشة البيع",   icon: ShoppingCart, path: "/sales/pos" },
+      { id: "shifts",          label: "الورديات",      icon: Clock,        path: "/sales/shifts" },
+      { id: "payment-methods", label: "طرق السداد",    icon: Wallet,       path: "/sales/payment-methods" },
+      { id: "pos-settings",    label: "إعدادات POS",   icon: Star,         path: "/sales/pos-settings" },
+      { id: "pos-reports",     label: "تقارير POS",    icon: BarChart3,    path: "/sales/pos-reports" },
     ],
   },
   {
@@ -55,10 +56,10 @@ const menuSections = [
     label: "العملاء",
     icon: Users,
     children: [
-      { id: "add-customer",       label: "إضافة عميل",          icon: Plus },
-      { id: "customer-groups",    label: "مجموعات العملاء",      icon: Users },
-      { id: "customer-balances",  label: "أرصدة العملاء",        icon: DollarSign },
-      { id: "customer-statement", label: "كشف حساب عميل",        icon: FileText },
+      { id: "add-customer",       label: "دليل العملاء",        icon: Users,       path: "/sales/customers" },
+      { id: "customer-groups",    label: "مجموعات العملاء",     icon: Users,       path: "/sales/customer-groups" },
+      { id: "customer-balances",  label: "أرصدة العملاء",       icon: DollarSign,  path: "/sales/customer-balances" },
+      { id: "customer-statement", label: "كشف حساب عميل",       icon: FileText,    path: "/sales/customer-statement" },
     ],
   },
   {
@@ -66,9 +67,9 @@ const menuSections = [
     label: "التقارير",
     icon: BarChart3,
     children: [
-      { id: "customer-reports",       label: "تقارير العملاء",                icon: Users },
-      { id: "sales-totals-reports",   label: "تقارير إجماليات المبيعات",      icon: TrendingUp },
-      { id: "sales-items-reports",    label: "تقارير أصناف المبيعات",         icon: BarChart3 },
+      { id: "customer-reports",      label: "تقارير العملاء",              icon: Users,     path: "/sales/customer-reports" },
+      { id: "sales-totals-reports",  label: "تقارير إجماليات المبيعات",    icon: TrendingUp,path: "/sales/totals-reports" },
+      { id: "sales-items-reports",   label: "تقارير أصناف المبيعات",       icon: BarChart3, path: "/sales/items-reports" },
     ],
   },
 ];
@@ -76,6 +77,8 @@ const menuSections = [
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
 function SalesMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
+  const { openTab, tabs, activeTabId } = useTabManager();
+  const activeTab = tabs.find(t => t.id === activeTabId);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
     transactions: true, pos: false, customers: false, reports: false,
   });
@@ -105,20 +108,28 @@ function SalesMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: Me
             </button>
             {expanded[section.id] && (
               <div className="mr-3 border-r border-border/40 mb-1">
-                {section.children.map(child => (
-                  <button
-                    key={child.id}
-                    onClick={() => onSelect(child.id)}
-                    className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors ${
-                      activeId === child.id
-                        ? "bg-primary/10 text-primary font-semibold border-r-2 border-primary"
-                        : "text-muted-foreground hover:text-foreground hover:bg-accent/20"
-                    }`}
-                  >
-                    <child.icon className="w-3 h-3 shrink-0" />
-                    <span className="text-right leading-tight">{child.label}</span>
-                  </button>
-                ))}
+                {section.children.map(child => {
+                  const isActive = child.path
+                    ? activeTab?.path === child.path
+                    : activeId === child.id;
+                  return (
+                    <button
+                      key={child.id}
+                      onClick={() => child.path
+                        ? openTab(child.path, child.label, child.icon)
+                        : onSelect(child.id)
+                      }
+                      className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors ${
+                        isActive
+                          ? "bg-primary/10 text-primary font-semibold border-r-2 border-primary"
+                          : "text-muted-foreground hover:text-foreground hover:bg-accent/20"
+                      }`}
+                    >
+                      <child.icon className="w-3 h-3 shrink-0" />
+                      <span className="text-right leading-tight">{child.label}</span>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -832,6 +843,26 @@ function SalesContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (id:
     default:                      return <SalesOverview onSelect={onSelect} />;
   }
 }
+
+// ─── Exported Sub-Page Wrappers (for MDI tab system) ──────────────────────────
+export function SalesInvoiceTab()       { return <div className="h-full overflow-auto p-5" dir="rtl"><SalesInvoicePageNew /></div>; }
+export function SalesReturnTab()        { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="مردود المبيعات" /></div>; }
+export function SalesCreditNoteTab()    { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="إشعار دائن" /></div>; }
+export function SalesQuotationTab()     { return <div className="h-full overflow-auto p-5" dir="rtl"><SalesQuotation /></div>; }
+export function SalesOrderTab()         { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="أمر بيع" /></div>; }
+export function SalesDeliveryTab()      { return <div className="h-full overflow-auto p-5" dir="rtl"><DeliveryOrderPage /></div>; }
+export function SalesPosTab()           { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="شاشة البيع" /></div>; }
+export function SalesShiftsTab()        { return <div className="h-full overflow-auto p-5" dir="rtl"><ShiftsPage /></div>; }
+export function SalesPaymentMethodsTab(){ return <div className="h-full overflow-auto p-5" dir="rtl"><PaymentMethodsPage /></div>; }
+export function SalesPosSettingsTab()   { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="إعدادات POS" /></div>; }
+export function SalesPosReportsTab()    { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="تقارير POS" /></div>; }
+export function SalesCustomersTab()     { return <div className="h-full overflow-auto p-5" dir="rtl"><CustomersPage /></div>; }
+export function SalesCustomerGroupsTab()    { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="مجموعات العملاء" /></div>; }
+export function SalesCustomerBalancesTab()  { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="أرصدة العملاء" /></div>; }
+export function SalesCustomerStatementTab() { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="كشف حساب عميل" /></div>; }
+export function SalesCustomerReportsTab()   { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="تقارير العملاء" /></div>; }
+export function SalesTotalsReportsTab() { return <div className="h-full overflow-auto p-5" dir="rtl"><SalesTotalsReports /></div>; }
+export function SalesItemsReportsTab()  { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="تقارير أصناف المبيعات" /></div>; }
 
 // ─── Root ──────────────────────────────────────────────────────────────────────
 

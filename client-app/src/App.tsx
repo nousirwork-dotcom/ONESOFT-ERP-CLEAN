@@ -10,8 +10,18 @@ import Dashboard from "./pages/Dashboard";
 import POS from "./pages/POS";
 import Invoices from "./pages/Invoices";
 import InventoryModule from "./pages/InventoryModule";
-import PurchasesModule from "./pages/PurchasesModule";
-import SalesModule from "./pages/SalesModule";
+import PurchasesModule, {
+  PurchaseSuppliersPage, PurchaseOrdersPage, PurchaseInvoicesPage,
+  PurchaseReturnsPage, PurchaseRptSupplierPage, PurchaseRptItemPage,
+} from "./pages/PurchasesModule";
+import SalesModule, {
+  SalesInvoiceTab, SalesReturnTab, SalesCreditNoteTab, SalesQuotationTab,
+  SalesOrderTab, SalesDeliveryTab, SalesPosTab, SalesShiftsTab,
+  SalesPaymentMethodsTab, SalesPosSettingsTab, SalesPosReportsTab,
+  SalesCustomersTab, SalesCustomerGroupsTab, SalesCustomerBalancesTab,
+  SalesCustomerStatementTab, SalesCustomerReportsTab,
+  SalesTotalsReportsTab, SalesItemsReportsTab,
+} from "./pages/SalesModule";
 import Users from "./pages/Users";
 import ManufacturingModule from "./pages/ManufacturingModule";
 import AccountingModule from "./pages/AccountingModule";
@@ -25,13 +35,11 @@ import { trpc } from "./lib/trpc";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
 import superjson from "superjson";
-import {
-  LayoutDashboard, TrendingUp, ShoppingBag, Boxes,
-  Factory, Calculator, UserCheck, Wrench, Settings, Store,
-} from "lucide-react";
+import { LayoutDashboard, Settings } from "lucide-react";
 
 // ─── خريطة المسارات إلى المكونات ──────────────────────────────────────────
 export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
+  // الصفحات الرئيسية
   "/":                     Dashboard,
   "/pos":                  POS,
   "/invoices":             Invoices,
@@ -44,6 +52,32 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/accounting-module":    AccountingModule,
   "/hr-module":            HRModule,
   "/assets-module":        AssetsModule,
+  // صفحات المشتريات الفرعية
+  "/purchases/suppliers":    PurchaseSuppliersPage,
+  "/purchases/orders":       PurchaseOrdersPage,
+  "/purchases/invoices":     PurchaseInvoicesPage,
+  "/purchases/returns":      PurchaseReturnsPage,
+  "/purchases/rpt-supplier": PurchaseRptSupplierPage,
+  "/purchases/rpt-item":     PurchaseRptItemPage,
+  // صفحات المبيعات الفرعية
+  "/sales/invoice":           SalesInvoiceTab,
+  "/sales/return":            SalesReturnTab,
+  "/sales/credit-note":       SalesCreditNoteTab,
+  "/sales/quotation":         SalesQuotationTab,
+  "/sales/order":             SalesOrderTab,
+  "/sales/delivery":          SalesDeliveryTab,
+  "/sales/pos":               SalesPosTab,
+  "/sales/shifts":            SalesShiftsTab,
+  "/sales/payment-methods":   SalesPaymentMethodsTab,
+  "/sales/pos-settings":      SalesPosSettingsTab,
+  "/sales/pos-reports":       SalesPosReportsTab,
+  "/sales/customers":         SalesCustomersTab,
+  "/sales/customer-groups":   SalesCustomerGroupsTab,
+  "/sales/customer-balances": SalesCustomerBalancesTab,
+  "/sales/customer-statement":SalesCustomerStatementTab,
+  "/sales/customer-reports":  SalesCustomerReportsTab,
+  "/sales/totals-reports":    SalesTotalsReportsTab,
+  "/sales/items-reports":     SalesItemsReportsTab,
 };
 
 // ─── Auth Guard ───────────────────────────────────────────────────────────
@@ -76,7 +110,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// ─── محتوى التبويبات (يرسم كل التبويبات ويخفي غير النشطة) ───────────────
+// ─── محتوى التبويبات ─────────────────────────────────────────────────────
 function TabContent() {
   const { tabs, activeTabId } = useTabManager();
   return (

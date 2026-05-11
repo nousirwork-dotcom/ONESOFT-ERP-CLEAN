@@ -4,6 +4,7 @@ import {
   Plus, Search, Printer, X, Check, Trash2, Edit2, ArrowLeft,
   Package, RotateCcw, ClipboardList, TrendingDown, DollarSign,
 } from "lucide-react";
+import { useTabManager } from "@/contexts/TabManagerContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +26,7 @@ const menuSections = [
     label: "الموردون",
     icon: Users,
     children: [
-      { id: "suppliers-list", label: "دليل الموردين", icon: Users },
+      { id: "suppliers-list", label: "دليل الموردين", icon: Users, path: "/purchases/suppliers" },
     ],
   },
   {
@@ -33,9 +34,9 @@ const menuSections = [
     label: "مستندات المشتريات",
     icon: ShoppingCart,
     children: [
-      { id: "purchase-orders",   label: "أوامر الشراء",     icon: ClipboardList },
-      { id: "purchase-invoices", label: "فواتير المشتريات", icon: FileText },
-      { id: "purchase-returns",  label: "مردود المشتريات",  icon: RotateCcw },
+      { id: "purchase-orders",   label: "أوامر الشراء",     icon: ClipboardList, path: "/purchases/orders" },
+      { id: "purchase-invoices", label: "فواتير المشتريات", icon: FileText,       path: "/purchases/invoices" },
+      { id: "purchase-returns",  label: "مردود المشتريات",  icon: RotateCcw,      path: "/purchases/returns" },
     ],
   },
   {
@@ -43,14 +44,16 @@ const menuSections = [
     label: "تقارير المشتريات",
     icon: TrendingDown,
     children: [
-      { id: "rpt-by-supplier", label: "مشتريات حسب المورد", icon: TrendingDown },
-      { id: "rpt-by-item",     label: "مشتريات حسب الصنف",  icon: Package },
+      { id: "rpt-by-supplier", label: "مشتريات حسب المورد", icon: TrendingDown, path: "/purchases/rpt-supplier" },
+      { id: "rpt-by-item",     label: "مشتريات حسب الصنف",  icon: Package,      path: "/purchases/rpt-item" },
     ],
   },
 ];
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 function PurchasesMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
+  const { openTab, tabs, activeTabId } = useTabManager();
+  const activeTab = tabs.find(t => t.id === activeTabId);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
     "suppliers-group": true, "purchase-docs": true, "purchase-reports": false,
   });
@@ -78,17 +81,27 @@ function PurchasesMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id
             </button>
             {expanded[section.id] && (
               <div className="mr-3 border-r border-border/40 mb-1">
-                {section.children.map(child => (
-                  <button key={child.id} onClick={() => onSelect(child.id)}
-                    className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors ${
-                      activeId === child.id
-                        ? "bg-primary/10 text-primary font-semibold border-r-2 border-primary"
-                        : "text-muted-foreground hover:text-foreground hover:bg-accent/20"
-                    }`}>
-                    <child.icon className="w-3 h-3 shrink-0" />
-                    <span className="text-right leading-tight">{child.label}</span>
-                  </button>
-                ))}
+                {section.children.map(child => {
+                  const isActive = child.path
+                    ? activeTab?.path === child.path
+                    : activeId === child.id;
+                  return (
+                    <button
+                      key={child.id}
+                      onClick={() => child.path
+                        ? openTab(child.path, child.label, child.icon)
+                        : onSelect(child.id)
+                      }
+                      className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors ${
+                        isActive
+                          ? "bg-primary/10 text-primary font-semibold border-r-2 border-primary"
+                          : "text-muted-foreground hover:text-foreground hover:bg-accent/20"
+                      }`}>
+                      <child.icon className="w-3 h-3 shrink-0" />
+                      <span className="text-right leading-tight">{child.label}</span>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -873,6 +886,26 @@ function PurchasesContent({ activeId, onSelect }: { activeId: MenuId; onSelect: 
     case "rpt-by-item":       return <div className="text-xs text-muted-foreground p-4">تقرير المشتريات حسب الصنف - قريباً</div>;
     default:                  return <PurchasesOverview onSelect={onSelect} />;
   }
+}
+
+// ─── Exported Sub-Page Wrappers (for MDI tab system) ──────────────────────────
+export function PurchaseSuppliersPage() {
+  return <div className="h-full overflow-auto p-5" dir="rtl"><SuppliersListPage /></div>;
+}
+export function PurchaseOrdersPage() {
+  return <div className="h-full overflow-auto p-5" dir="rtl"><PurchaseDocPage invoiceType="order" /></div>;
+}
+export function PurchaseInvoicesPage() {
+  return <div className="h-full overflow-auto p-5" dir="rtl"><PurchaseDocPage invoiceType="invoice" /></div>;
+}
+export function PurchaseReturnsPage() {
+  return <div className="h-full overflow-auto p-5" dir="rtl"><PurchaseDocPage invoiceType="return" /></div>;
+}
+export function PurchaseRptSupplierPage() {
+  return <div className="h-full overflow-auto p-5" dir="rtl"><ReportBySupplier /></div>;
+}
+export function PurchaseRptItemPage() {
+  return <div className="h-full overflow-auto p-5 text-xs text-muted-foreground" dir="rtl">تقرير المشتريات حسب الصنف — قريباً</div>;
 }
 
 // ─── Root ──────────────────────────────────────────────────────────────────────
