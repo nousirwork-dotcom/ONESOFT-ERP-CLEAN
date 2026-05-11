@@ -1822,7 +1822,7 @@ export default function Products() {
       <Dialog open={isOpen} onOpenChange={(open) => !open && setIsOpen(false)}>
         <DialogContent
           showCloseButton={false}
-          className="inset-0 flex flex-col p-0 gap-0 overflow-hidden shadow-2xl border border-slate-300 dark:border-slate-600"
+          className="inset-0 flex flex-col p-0 gap-0 overflow-hidden border-2 border-blue-500/70 dark:border-blue-400/60 shadow-[0_0_0_1px_rgba(59,130,246,0.15),0_20px_60px_-10px_rgba(59,130,246,0.35),0_8px_32px_rgba(0,0,0,0.18)]"
           style={dialogSize === "full" ? {
             position: "fixed",
             top: "56px",
