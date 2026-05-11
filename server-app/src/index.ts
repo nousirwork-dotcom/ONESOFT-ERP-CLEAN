@@ -36,6 +36,16 @@ if (existsSync(path.join(clientBuildPath, 'index.html'))) {
   app.get('*', (_req, res) => {
     res.sendFile(path.join(clientBuildPath, 'index.html'));
   });
+} else {
+  // Development: redirect non-API requests to Vite dev server
+  const devDomain = process.env.REPLIT_DEV_DOMAIN;
+  app.get('*', (req, res) => {
+    if (devDomain) {
+      res.redirect(`https://${devDomain}:5000${req.path}`);
+    } else {
+      res.redirect(`http://localhost:5000${req.path}`);
+    }
+  });
 }
 
 // ─── Start ────────────────────────────────────────────────────────────────────
