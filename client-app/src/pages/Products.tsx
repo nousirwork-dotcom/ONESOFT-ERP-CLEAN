@@ -978,6 +978,12 @@ export default function Products() {
 
   const { data: categories } = trpc.categories.list.useQuery(undefined, { staleTime: 60000 });
   const { data: groups } = trpc.productGroups.list.useQuery(undefined, { staleTime: 60000 });
+
+  const leafGroups = useMemo(() => {
+    const all = groups ?? [];
+    const parentIds = new Set(all.map(g => g.parentId).filter(Boolean));
+    return all.filter(g => !parentIds.has(g.id));
+  }, [groups]);
   const { data: catProducts, isLoading: loadingCatProducts } = trpc.products.list.useQuery(
     { categoryId: selectedCatId ?? undefined },
     { staleTime: 10000, enabled: viewTab === "categories" }
@@ -1091,79 +1097,50 @@ export default function Products() {
   };
 
   const handleSubmit = () => {
-    if (!form.name.trim()) {
-      toast.error("اسم الصنف مطلوب");
-      return;
-    }
-    if (form.salePrice === "" || Number(form.salePrice) < 0) {
-      toast.error("سعر البيع مطلوب");
+    const errors: string[] = [];
+    if (!form.name.trim()) errors.push("اسم الصنف (إسم 1) مطلوب");
+    const selGroup = form.groupId ? leafGroups.find(g => String(g.id) === form.groupId) : null;
+    if (selGroup?.autoNumbering && !form.sku.trim()) errors.push("الكود لم يُولَّد بعد — اختر المجموعة مجدداً");
+    if (errors.length) {
+      errors.forEach(msg => toast.error(msg));
       return;
     }
 
     const data = {
-      name: form.name.trim(),
-      name2: form.name2.trim() || undefined,
-      nameEn: form.nameEn.trim() || undefined,
-      sku: form.sku.trim() || undefined,
-      barcode: form.barcode.trim() || undefined,
-      barcode2: form.barcode2.trim() || undefined,
-      barcode3: form.barcode3.trim() || undefined,
-      categoryId: form.categoryId ? Number(form.categoryId) : undefined,
-      groupId: form.groupId ? Number(form.groupId) : undefined,
-      parentItem: form.parentItem ? Number(form.parentItem) : undefined,
-      brand: form.brand.trim() || undefined,
-      model: form.model.trim() || undefined,
-      description: form.description.trim() || undefined,
-      itemType: form.itemType || "مخزون",
-      unit: form.unit || "قطعة",
-      unit2: form.unit2.trim() || undefined,
-      unit3: form.unit3.trim() || undefined,
-      purchaseUnit: form.purchaseUnit.trim() || undefined,
-      saleUnit: form.saleUnit.trim() || undefined,
-      conversionFactor: form.conversionFactor || "1",
-      convFactor2: form.convFactor2 || "1",
-      convFactor3: form.convFactor3 || "1",
-      category1: form.category1.trim() || undefined,
-      category2: form.category2.trim() || undefined,
-      category3: form.category3.trim() || undefined,
-      distinguishNo: form.distinguishNo.trim() || undefined,
-      weight: form.weight.trim() || undefined,
-      size: form.size.trim() || undefined,
-      colorCode: form.colorCode.trim() || undefined,
-      itemSize: form.itemSize.trim() || undefined,
-      taxType: form.taxType.trim() || undefined,
-      prevTaxType: form.prevTaxType.trim() || undefined,
-      minStock: Number(form.minStock) || 0,
-      maxStock: Number(form.maxStock) || 0,
-      reorderPoint: Number(form.reorderPoint) || 0,
-      trackBatch: form.trackBatch,
-      trackSerial: form.trackSerial,
-      hasBOM: form.hasBOM,
-      extDesc1: form.extDesc1.trim() || undefined, extVal1: form.extVal1.trim() || undefined,
-      extDesc2: form.extDesc2.trim() || undefined, extVal2: form.extVal2.trim() || undefined,
-      extDesc3: form.extDesc3.trim() || undefined, extVal3: form.extVal3.trim() || undefined,
-      extDesc4: form.extDesc4.trim() || undefined, extVal4: form.extVal4.trim() || undefined,
-      extDesc5: form.extDesc5.trim() || undefined, extVal5: form.extVal5.trim() || undefined,
-      extDesc6: form.extDesc6.trim() || undefined, extVal6: form.extVal6.trim() || undefined,
+      name:          form.name.trim(),
+      name2:         form.name2.trim() || undefined,
+      nameEn:        form.nameEn.trim() || undefined,
+      sku:           form.sku.trim() || undefined,
+      barcode:       form.barcode.trim() || undefined,
+      barcode2:      form.barcode2.trim() || undefined,
+      barcode3:      form.barcode3.trim() || undefined,
+      groupId:       form.groupId ? Number(form.groupId) : undefined,
+      categoryId:    form.categoryId ? Number(form.categoryId) : undefined,
+      unit:          form.unit || "قطعة",
+      unit2:         form.unit2.trim() || undefined,
+      unit3:         form.unit3.trim() || undefined,
+      itemType:      form.itemType || "مخزون",
+      brand:         form.brand.trim() || undefined,
+      model:         form.model.trim() || undefined,
+      description:   form.description.trim() || undefined,
       purchasePrice: form.purchasePrice || "0",
-      costPrice: form.costPrice || "0",
-      salePrice: form.salePrice || "0",
-      salePrice2: form.salePrice2 || "0",
-      salePrice3: form.salePrice3 || "0",
-      salePrice4: form.salePrice4 || "0",
-      salePrice5: form.salePrice5 || "0",
-      wholesalePrice: form.wholesalePrice || "0",
-      minSalePrice: form.minSalePrice || "0",
-      priceIncludesTax: form.priceIncludesTax,
-      pricingPlan: form.pricingPlan.trim() || undefined,
-      stdCost: form.stdCost || "0",
-      defaultSupplier: form.defaultSupplier.trim() || undefined,
-      lastSupplier1: form.lastSupplier1.trim() || undefined,
-      lastSupplier2: form.lastSupplier2.trim() || undefined,
-      defaultOrderQty: form.defaultOrderQty || "0",
-      vatRate: form.vatRate || "15",
-      taxable: form.taxable,
+      costPrice:     form.costPrice || "0",
+      salePrice:     form.salePrice || "0",
+      salePrice2:    form.salePrice2 || undefined,
+      salePrice3:    form.salePrice3 || undefined,
+      salePrice4:    form.salePrice4 || undefined,
+      salePrice5:    form.salePrice5 || undefined,
+      wholesalePrice: form.wholesalePrice || undefined,
+      vatRate:       form.vatRate || "15",
+      taxRate:       form.taxRate || undefined,
+      taxable:       form.taxable,
+      taxType:       form.taxType.trim() || undefined,
+      minStock:      Number(form.minStock) || 0,
+      maxStock:      Number(form.maxStock) || 0,
+      reorderPoint:  Number(form.reorderPoint) || 0,
     };
+
+    console.log("[handleSubmit] data:", data);
 
     if (editId) {
       updateProduct.mutate({ id: editId, ...data });

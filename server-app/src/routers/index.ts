@@ -72,15 +72,15 @@ export const appRouter = router({
       }),
     create: protectedProcedure
       .input(z.object({
-        name: z.string().min(1),
+        name: z.string().min(1, "اسم الصنف مطلوب"),
         name2: z.string().optional(),
         nameEn: z.string().optional(),
         sku: z.string().optional(),
         barcode: z.string().optional(),
         barcode2: z.string().optional(),
         barcode3: z.string().optional(),
-        groupId: z.number().optional(),
-        categoryId: z.number().optional(),
+        groupId: z.number().int().positive().optional(),
+        categoryId: z.number().int().positive().optional(),
         unit: z.string().optional(),
         unit2: z.string().optional(),
         unit3: z.string().optional(),
@@ -104,52 +104,79 @@ export const appRouter = router({
         model: z.string().optional(),
         description: z.string().optional(),
         notes: z.string().optional(),
-      }).passthrough())
+      }))
       .mutation(async ({ ctx, input }) => {
-        const { sku, name2, nameEn, categoryId, costPrice, vatRate, taxable, taxType,
-          barcode2, barcode3, unit2, unit3, salePrice2, salePrice3, salePrice4, salePrice5,
-          wholesalePrice, maxStock, reorderPoint, itemType, brand, model, description,
-          ...rest } = input as any;
+        const {
+          name, name2, nameEn, sku,
+          barcode, barcode2, barcode3,
+          groupId, categoryId,
+          unit, unit2, unit3,
+          salePrice, salePrice2, salePrice3, salePrice4, salePrice5,
+          wholesalePrice, purchasePrice, costPrice,
+          vatRate, taxRate, taxable, taxType,
+          minStock, maxStock, reorderPoint,
+          itemType, brand, model,
+          description, notes,
+        } = input;
+
+        if (!name || !name.trim()) {
+          throw new Error("اسم الصنف مطلوب");
+        }
+
+        const resolvedGroupId = groupId ?? categoryId ?? undefined;
 
         const extraData: Record<string, any> = {};
-        if (name2) extraData.name2 = name2;
-        if (barcode2) extraData.barcode2 = barcode2;
-        if (barcode3) extraData.barcode3 = barcode3;
-        if (unit2) extraData.unit2 = unit2;
-        if (unit3) extraData.unit3 = unit3;
-        if (salePrice2) extraData.salePrice2 = salePrice2;
-        if (salePrice3) extraData.salePrice3 = salePrice3;
-        if (salePrice4) extraData.salePrice4 = salePrice4;
-        if (salePrice5) extraData.salePrice5 = salePrice5;
-        if (wholesalePrice) extraData.wholesalePrice = wholesalePrice;
-        if (maxStock !== undefined) extraData.maxStock = maxStock;
-        if (reorderPoint !== undefined) extraData.reorderPoint = reorderPoint;
-        if (taxable !== undefined) extraData.taxable = taxable;
-        if (taxType) extraData.taxType = taxType;
-        if (itemType) extraData.itemType = itemType;
-        if (brand) extraData.brand = brand;
-        if (model) extraData.model = model;
+        if (name2)           extraData.name2 = name2;
+        if (barcode2)        extraData.barcode2 = barcode2;
+        if (barcode3)        extraData.barcode3 = barcode3;
+        if (unit2)           extraData.unit2 = unit2;
+        if (unit3)           extraData.unit3 = unit3;
+        if (salePrice2)      extraData.salePrice2 = salePrice2;
+        if (salePrice3)      extraData.salePrice3 = salePrice3;
+        if (salePrice4)      extraData.salePrice4 = salePrice4;
+        if (salePrice5)      extraData.salePrice5 = salePrice5;
+        if (wholesalePrice)  extraData.wholesalePrice = wholesalePrice;
+        if (maxStock != null)       extraData.maxStock = maxStock;
+        if (reorderPoint != null)   extraData.reorderPoint = reorderPoint;
+        if (taxable != null)        extraData.taxable = taxable;
+        if (taxType)         extraData.taxType = taxType;
+        if (itemType)        extraData.itemType = itemType;
+        if (brand)           extraData.brand = brand;
+        if (model)           extraData.model = model;
 
         const notesStr = description
           ? (Object.keys(extraData).length ? `${description}\n---\n${JSON.stringify(extraData)}` : description)
-          : (Object.keys(extraData).length ? JSON.stringify(extraData) : rest.notes);
+          : (Object.keys(extraData).length ? JSON.stringify(extraData) : (notes ?? undefined));
 
-        const [p] = await db.insert(products).values({
-          code: sku || rest.code,
-          name: rest.name,
-          nameEn: nameEn || name2,
-          barcode: rest.barcode,
-          groupId: rest.groupId || categoryId,
-          unit: rest.unit,
-          salePrice: rest.salePrice || '0',
-          purchasePrice: costPrice || rest.purchasePrice || '0',
-          taxRate: vatRate || rest.taxRate || '0',
-          minStock: rest.minStock !== undefined ? String(rest.minStock) : '0',
-          isActive: true,
-          notes: notesStr,
-          orgId: ctx.user.orgId,
-        }).returning();
-        return p;
+        console.log("[products.create] inserting:", {
+          name: name.trim(),
+          code: sku || undefined,
+          groupId: resolvedGroupId,
+          unit: unit || "قطعة",
+          salePrice: salePrice || "0",
+        });
+
+        try {
+          const [p] = await db.insert(products).values({
+            name:          name.trim(),
+            nameEn:        nameEn?.trim() || name2?.trim() || undefined,
+            code:          sku?.trim() || undefined,
+            barcode:       barcode?.trim() || undefined,
+            groupId:       resolvedGroupId,
+            unit:          unit?.trim() || "قطعة",
+            salePrice:     salePrice || "0",
+            purchasePrice: costPrice || purchasePrice || "0",
+            taxRate:       vatRate || taxRate || "0",
+            minStock:      minStock != null ? String(minStock) : "0",
+            isActive:      true,
+            notes:         notesStr,
+            orgId:         ctx.user.orgId,
+          }).returning();
+          return p;
+        } catch (err: any) {
+          console.error("[products.create] DB error:", err?.message ?? err);
+          throw new Error("فشل حفظ الصنف — تحقق من البيانات المدخلة");
+        }
       }),
     update: protectedProcedure
       .input(z.object({
