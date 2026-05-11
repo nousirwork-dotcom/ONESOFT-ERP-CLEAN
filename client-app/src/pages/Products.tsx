@@ -798,133 +798,118 @@ function ProductCard({
 
         {/* ===== التبويب 2: وصف إضافي ===== */}
         {activeTab === "extra" && (
-          <div className="space-y-4">
-            {/* الوصف العام */}
-            <div className="border border-slate-200 dark:border-slate-700 rounded">
-              <div className="bg-slate-100 dark:bg-slate-800 px-3 py-1.5 border-b border-slate-200 dark:border-slate-700">
-                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">الوصف العام</span>
-              </div>
-              <div className="p-3 grid grid-cols-2 gap-3">
-                <CField label="الوصف">
+          <div className="flex gap-3 h-full">
+
+            {/* العمود الأيسر: وصف + جدول مضغوط */}
+            <div className="flex-1 flex flex-col gap-3 min-w-0">
+              {/* الوصف */}
+              <div className="border border-slate-200 dark:border-slate-700 rounded">
+                <div className="bg-slate-100 dark:bg-slate-800 px-3 py-1 border-b border-slate-200 dark:border-slate-700">
+                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">الوصف</span>
+                </div>
+                <div className="p-2">
                   <textarea
                     value={form.description}
                     onChange={(e) => set("description", e.target.value)}
-                    rows={4}
+                    rows={3}
                     className="text-sm border border-slate-300 dark:border-slate-600 rounded px-2 py-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500 resize-none w-full"
                     placeholder="وصف الصنف..."
                   />
-                </CField>
-                {/* مربع إضافة صورة */}
-                <div>
-                  <span className="text-xs font-medium text-slate-600 dark:text-slate-400 block mb-1">صورة الصنف</span>
-                  <label
-                    htmlFor="product-image-upload"
-                    className="flex flex-col items-center justify-center w-full h-52 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg cursor-pointer bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-400 transition-colors overflow-hidden"
-                  >
-                    {imagePreview ? (
-                      <img src={imagePreview} alt="صورة الصنف" className="w-full h-full object-contain" />
-                    ) : (
-                      <div className="flex flex-col items-center gap-1 text-slate-400 dark:text-slate-500">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        <span className="text-xs">اضغط لإضافة صورة</span>
-                      </div>
-                    )}
-                  </label>
-                  <input
-                    id="product-image-upload"
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      const reader = new FileReader();
-                      reader.onload = (ev) => setImagePreview(ev.target?.result as string);
-                      reader.readAsDataURL(file);
-                    }}
-                  />
-                  {imagePreview && (
-                    <button
-                      type="button"
-                      onClick={() => { setImagePreview(null); }}
-                      className="mt-1 w-full text-xs text-red-500 hover:text-red-700 text-center"
-                    >
-                      حذف الصورة
-                    </button>
-                  )}
                 </div>
+              </div>
+
+              {/* جدول الأوصاف الإضافية — مضغوط */}
+              <div className="border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
+                <div className="bg-blue-50 dark:bg-blue-900/20 px-3 py-0.5 border-b border-slate-200 dark:border-slate-700 text-center">
+                  <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">وصف إضافي</span>
+                </div>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+                      <th className="text-center px-1 py-0.5 font-semibold text-slate-500 w-6 border-l border-slate-200 dark:border-slate-700">#</th>
+                      <th className="text-right px-2 py-0.5 font-semibold text-slate-600 dark:text-slate-400 border-l border-slate-200 dark:border-slate-700 w-28">القيمة</th>
+                      <th className="text-right px-2 py-0.5 font-semibold text-slate-600 dark:text-slate-400 border-l border-slate-200 dark:border-slate-700">وصف إضافي</th>
+                      <th className="w-6"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {extRows.map((row, idx) => (
+                      <tr key={idx} className="border-b border-slate-200 dark:border-slate-700">
+                        <td className="text-center px-1 py-0.5 font-semibold text-slate-500 bg-slate-50 dark:bg-slate-800/50 border-l border-slate-200 dark:border-slate-700 w-6">
+                          {idx + 1}
+                        </td>
+                        {/* القيمة — يمين */}
+                        <td className="px-1 py-0.5 border-l border-slate-200 dark:border-slate-700 w-28">
+                          <input
+                            type="text"
+                            value={row.val}
+                            onChange={(e) => updateExtRow(idx, "val", e.target.value)}
+                            placeholder="القيمة"
+                            className="h-6 w-full text-xs border border-slate-300 dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500"
+                          />
+                        </td>
+                        {/* وصف إضافي — يسار */}
+                        <td className="px-1 py-0.5 border-l border-slate-200 dark:border-slate-700">
+                          <input
+                            type="text"
+                            value={row.desc}
+                            onChange={(e) => updateExtRow(idx, "desc", e.target.value)}
+                            placeholder={`وصف إضافي ${idx + 1}`}
+                            className="h-6 w-full text-xs border border-slate-300 dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500"
+                          />
+                        </td>
+                        <td className="px-1 py-0.5 text-center w-6">
+                          {extRows.length > 1 ? (
+                            <button type="button" onClick={() => removeExtRow(idx)}
+                              className="h-5 w-5 flex items-center justify-center rounded text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 mx-auto">
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          ) : <span className="block w-5" />}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <button type="button" onClick={addExtRow}
+                  className="w-full flex items-center justify-center gap-1 py-1 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-700/50 border-t border-dashed border-slate-300 dark:border-slate-600 transition-colors">
+                  <Plus className="w-3 h-3" />
+                  إضافة وصف إضافي
+                </button>
               </div>
             </div>
 
-            {/* جدول الأوصاف الإضافية — ديناميكي */}
-            <div className="border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
-              <div className="bg-blue-50 dark:bg-blue-900/20 px-3 py-0.5 border-b border-slate-200 dark:border-slate-700 text-center">
-                <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">وصف إضافي</span>
-              </div>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
-                    <th className="text-center px-2 py-1 text-xs font-semibold text-slate-500 w-8 border-l border-slate-200 dark:border-slate-700">#</th>
-                    <th className="text-right px-3 py-1 text-xs font-semibold text-slate-600 dark:text-slate-400 border-l border-slate-200 dark:border-slate-700">وصف إضافي</th>
-                    <th className="text-right px-3 py-1 text-xs font-semibold text-slate-600 dark:text-slate-400 border-l border-slate-200 dark:border-slate-700 w-40">القيمة</th>
-                    <th className="w-8"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {extRows.map((row, idx) => (
-                    <tr key={idx} className="border-b border-slate-200 dark:border-slate-700">
-                      {/* رقم */}
-                      <td className="text-center px-2 py-1 text-xs font-semibold text-slate-500 bg-slate-50 dark:bg-slate-800/50 border-l border-slate-200 dark:border-slate-700 w-8">
-                        {idx + 1}
-                      </td>
-                      {/* وصف إضافي */}
-                      <td className="px-1 py-1 border-l border-slate-200 dark:border-slate-700">
-                        <input
-                          type="text"
-                          value={row.desc}
-                          onChange={(e) => updateExtRow(idx, "desc", e.target.value)}
-                          placeholder={`وصف إضافي ${idx + 1}`}
-                          className="h-7 w-full text-sm border border-slate-300 dark:border-slate-600 rounded px-2 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500"
-                        />
-                      </td>
-                      {/* القيمة */}
-                      <td className="px-1 py-1 border-l border-slate-200 dark:border-slate-700 w-40">
-                        <input
-                          type="text"
-                          value={row.val}
-                          onChange={(e) => updateExtRow(idx, "val", e.target.value)}
-                          placeholder="القيمة"
-                          className="h-7 w-full text-sm border border-slate-300 dark:border-slate-600 rounded px-2 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500"
-                        />
-                      </td>
-                      {/* حذف */}
-                      <td className="px-1 py-1 text-center w-8">
-                        {extRows.length > 1 ? (
-                          <button
-                            type="button"
-                            onClick={() => removeExtRow(idx)}
-                            className="h-6 w-6 flex items-center justify-center rounded text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 mx-auto"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        ) : <span className="block w-6" />}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {/* زر إضافة صف */}
-              <button
-                type="button"
-                onClick={addExtRow}
-                className="w-full flex items-center justify-center gap-1 py-1.5 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-700/50 border-t border-dashed border-slate-300 dark:border-slate-600 transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                إضافة وصف إضافي
-              </button>
+            {/* العمود الأيمن: صورة الصنف تملأ الارتفاع */}
+            <div className="w-56 shrink-0 flex flex-col">
+              <span className="text-xs font-medium text-slate-600 dark:text-slate-400 block mb-1">صورة الصنف</span>
+              <label htmlFor="product-image-upload"
+                className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg cursor-pointer bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-400 transition-colors overflow-hidden min-h-[200px]">
+                {imagePreview ? (
+                  <img src={imagePreview} alt="صورة الصنف" className="w-full h-full object-contain" />
+                ) : (
+                  <div className="flex flex-col items-center gap-1 text-slate-400 dark:text-slate-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <span className="text-xs text-center px-2">اضغط لإضافة صورة</span>
+                  </div>
+                )}
+              </label>
+              <input id="product-image-upload" type="file" accept="image/*" className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = (ev) => setImagePreview(ev.target?.result as string);
+                  reader.readAsDataURL(file);
+                }} />
+              {imagePreview && (
+                <button type="button" onClick={() => setImagePreview(null)}
+                  className="mt-1 w-full text-xs text-red-500 hover:text-red-700 text-center">
+                  حذف الصورة
+                </button>
+              )}
             </div>
+
           </div>
         )}
 
