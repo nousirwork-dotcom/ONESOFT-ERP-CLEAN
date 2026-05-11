@@ -811,7 +811,7 @@ function ProductCard({
                   <textarea
                     value={form.description}
                     onChange={(e) => set("description", e.target.value)}
-                    rows={3}
+                    rows={2}
                     className="text-sm border border-slate-300 dark:border-slate-600 rounded px-2 py-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500 resize-none w-full"
                     placeholder="وصف الصنف..."
                   />
@@ -879,7 +879,7 @@ function ProductCard({
             </div>
 
             {/* العمود الأيمن: صورة الصنف تملأ الارتفاع */}
-            <div className="w-56 shrink-0 flex flex-col">
+            <div className="w-72 shrink-0 flex flex-col">
               <span className="text-xs font-medium text-slate-600 dark:text-slate-400 block mb-1">صورة الصنف</span>
               <label htmlFor="product-image-upload"
                 className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg cursor-pointer bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-400 transition-colors overflow-hidden min-h-[200px]">
