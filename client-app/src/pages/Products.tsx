@@ -819,7 +819,7 @@ function ProductCard({
                   <span className="text-xs font-medium text-slate-600 dark:text-slate-400 block mb-1">صورة الصنف</span>
                   <label
                     htmlFor="product-image-upload"
-                    className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg cursor-pointer bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-400 transition-colors overflow-hidden"
+                    className="flex flex-col items-center justify-center w-full h-52 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg cursor-pointer bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-400 transition-colors overflow-hidden"
                   >
                     {imagePreview ? (
                       <img src={imagePreview} alt="صورة الصنف" className="w-full h-full object-contain" />
