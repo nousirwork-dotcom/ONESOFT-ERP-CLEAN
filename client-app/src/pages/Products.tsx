@@ -827,7 +827,6 @@ function ProductCard({
                   <thead>
                     <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
                       <th className="text-center px-1 py-0.5 font-semibold text-slate-500 w-6 border-l border-slate-200 dark:border-slate-700">#</th>
-                      <th className="text-right px-2 py-0.5 font-semibold text-slate-600 dark:text-slate-400 border-l border-slate-200 dark:border-slate-700 w-28">القيمة</th>
                       <th className="text-right px-2 py-0.5 font-semibold text-slate-600 dark:text-slate-400 border-l border-slate-200 dark:border-slate-700">وصف إضافي</th>
                       <th className="w-6"></th>
                     </tr>
@@ -838,17 +837,7 @@ function ProductCard({
                         <td className="text-center px-1 py-0.5 font-semibold text-slate-500 bg-slate-50 dark:bg-slate-800/50 border-l border-slate-200 dark:border-slate-700 w-6">
                           {idx + 1}
                         </td>
-                        {/* القيمة — يمين */}
-                        <td className="px-1 py-0.5 border-l border-slate-200 dark:border-slate-700 w-28">
-                          <input
-                            type="text"
-                            value={row.val}
-                            onChange={(e) => updateExtRow(idx, "val", e.target.value)}
-                            placeholder="القيمة"
-                            className="h-6 w-full text-xs border border-slate-300 dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500"
-                          />
-                        </td>
-                        {/* وصف إضافي — يسار */}
+                        {/* وصف إضافي */}
                         <td className="px-1 py-0.5 border-l border-slate-200 dark:border-slate-700">
                           <input
                             type="text"
