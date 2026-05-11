@@ -642,7 +642,7 @@ function ProductCard({
             <div className="flex border-b border-slate-300 dark:border-slate-600">
 
               {/* يمين: فئات — نظام ديناميكي مطابق للوحدات */}
-              <div className="w-48 shrink-0 border-l border-slate-300 dark:border-slate-600 flex flex-col">
+              <div className="w-64 shrink-0 border-l border-slate-300 dark:border-slate-600 flex flex-col">
                 <div className="bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 border-b border-slate-300 dark:border-slate-600 text-center">
                   <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">فئات</span>
                 </div>
