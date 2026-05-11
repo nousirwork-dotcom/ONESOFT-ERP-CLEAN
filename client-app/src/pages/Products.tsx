@@ -395,15 +395,15 @@ function ProductCard({
   return (
     <div className="flex flex-col h-full" dir="rtl">
       {/* شريط التبويبات الكلاسيكي */}
-      <div className="flex border-b border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 flex-shrink-0">
+      <div className="flex border-b border-[#CFCFCF] dark:border-slate-600 bg-[#E8E1D3] dark:bg-slate-800 flex-shrink-0">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2 text-sm font-medium border-l border-slate-300 dark:border-slate-600 transition-colors
+            className={`px-4 py-2 text-sm font-medium border-l border-[#CFCFCF] dark:border-slate-600 transition-colors
               ${activeTab === tab.id
                 ? "bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 border-b-2 border-b-blue-600 -mb-px"
-                : "text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
+                : "text-[#444] dark:text-slate-400 hover:bg-[#DDD4C4] dark:hover:bg-slate-700"
               }`}
           >
             {tab.label}
@@ -436,7 +436,7 @@ function ProductCard({
 
           {/* يمين: مواصفات — رقم، اسم 1، اسم 2 */}
           <div className="flex-1 border-l border-slate-300 dark:border-slate-600">
-            <div className="bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 border-b border-slate-300 dark:border-slate-600 text-center">
+            <div className="bg-[#DDD4C4] dark:bg-blue-900/20 px-2 py-0.5 border-b border-[#CFCFCF] dark:border-slate-600 text-center">
               <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">مواصفات</span>
             </div>
             {/* رقم */}
@@ -445,7 +445,7 @@ function ProductCard({
               const autoNum = selGroup?.autoNumbering ?? false;
               return (
                 <div className="flex border-b border-slate-200 dark:border-slate-700">
-                  <div className="w-24 shrink-0 bg-slate-50 dark:bg-slate-800 px-2 flex items-center border-l border-slate-200 dark:border-slate-700">
+                  <div className="w-24 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#D6D6D6] dark:border-slate-700">
                     <span className="text-xs text-slate-600 dark:text-slate-400">رقم</span>
                   </div>
                   <div className="flex-1 px-1 py-1 relative">
@@ -467,7 +467,7 @@ function ProductCard({
             })()}
             {/* اسم 1 */}
             <div className="flex border-b border-slate-200 dark:border-slate-700">
-              <div className="w-24 shrink-0 bg-slate-50 dark:bg-slate-800 px-2 flex items-center border-l border-slate-200 dark:border-slate-700">
+              <div className="w-24 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#D6D6D6] dark:border-slate-700">
                 <span className="text-xs text-slate-600 dark:text-slate-400">إسم 1</span>
               </div>
               <div className="flex-1 px-1 py-1">
@@ -476,7 +476,7 @@ function ProductCard({
             </div>
             {/* اسم 2 */}
             <div className="flex">
-              <div className="w-24 shrink-0 bg-slate-50 dark:bg-slate-800 px-2 flex items-center border-l border-slate-200 dark:border-slate-700">
+              <div className="w-24 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#D6D6D6] dark:border-slate-700">
                 <span className="text-xs text-slate-600 dark:text-slate-400">إسم 2</span>
               </div>
               <div className="flex-1 px-1 py-1">
@@ -487,12 +487,12 @@ function ProductCard({
 
           {/* يسار: نوع السجل، رقم المجموعة، الصنف الرئيسي */}
           <div className="w-72 shrink-0">
-            <div className="bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 border-b border-slate-300 dark:border-slate-600 text-center">
+            <div className="bg-[#DDD4C4] dark:bg-blue-900/20 px-2 py-0.5 border-b border-[#CFCFCF] dark:border-slate-600 text-center">
               <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">نوع</span>
             </div>
             {/* نوع السجل */}
             <div className="flex border-b border-slate-200 dark:border-slate-700">
-              <div className="w-28 shrink-0 bg-slate-50 dark:bg-slate-800 px-2 flex items-center border-l border-slate-200 dark:border-slate-700">
+              <div className="w-28 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#D6D6D6] dark:border-slate-700">
                 <span className="text-xs text-slate-600 dark:text-slate-400">نوع السجل</span>
               </div>
               <div className="flex-1 px-1 py-1">
@@ -510,7 +510,7 @@ function ProductCard({
             </div>
             {/* رقم المجموعة */}
             <div className="flex border-b border-slate-200 dark:border-slate-700">
-              <div className="w-28 shrink-0 bg-slate-50 dark:bg-slate-800 px-2 flex items-center border-l border-slate-200 dark:border-slate-700">
+              <div className="w-28 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#D6D6D6] dark:border-slate-700">
                 <span className="text-xs text-slate-600 dark:text-slate-400">رقم المجموعة</span>
               </div>
               <div className="flex-1 px-1 py-1">
@@ -531,7 +531,7 @@ function ProductCard({
             </div>
             {/* الصنف الرئيسي */}
             <div className="flex">
-              <div className="w-28 shrink-0 bg-slate-50 dark:bg-slate-800 px-2 flex items-center border-l border-slate-200 dark:border-slate-700">
+              <div className="w-28 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#D6D6D6] dark:border-slate-700">
                 <span className="text-xs text-slate-600 dark:text-slate-400">الصنف الرئيسي</span>
               </div>
               <div className="flex-1 px-1 py-1">
@@ -662,7 +662,7 @@ function ProductCard({
 
               {/* يمين: فئات — نظام ديناميكي مطابق للوحدات */}
               <div className="w-80 shrink-0 border-l border-slate-300 dark:border-slate-600 flex flex-col">
-                <div className="bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 border-b border-slate-300 dark:border-slate-600 text-center">
+                <div className="bg-[#DDD4C4] dark:bg-blue-900/20 px-2 py-0.5 border-b border-[#CFCFCF] dark:border-slate-600 text-center">
                   <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">فئات</span>
                 </div>
                 <table className="w-full text-sm">
@@ -753,7 +753,7 @@ function ProductCard({
 
               {/* يسار: مواصفات تفصيلية */}
               <div className="flex-1">
-                <div className="bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 border-b border-slate-300 dark:border-slate-600 text-center">
+                <div className="bg-[#DDD4C4] dark:bg-blue-900/20 px-2 py-0.5 border-b border-[#CFCFCF] dark:border-slate-600 text-center">
                   <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">مواصفات</span>
                 </div>
                 {[
@@ -765,7 +765,7 @@ function ProductCard({
                   { label: "حجم", key: "itemSize", type: "text" },
                 ].map((r, i) => (
                   <div key={`${r.key}-${i}`} className={`flex ${i < 5 ? "border-b border-slate-200 dark:border-slate-700" : ""}`}>
-                    <div className="w-28 shrink-0 bg-slate-50 dark:bg-slate-800 px-2 flex items-center border-l border-slate-200 dark:border-slate-700">
+                    <div className="w-28 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#D6D6D6] dark:border-slate-700">
                       <span className="text-xs text-slate-600 dark:text-slate-400">{r.label}</span>
                     </div>
                     <div className="flex-1 px-1 py-1">
@@ -779,7 +779,7 @@ function ProductCard({
             {/* ── نوع الضريبة ── */}
             <div className="flex">
               <div className="flex-1 border-l border-slate-300 dark:border-slate-600 flex">
-                <div className="w-36 shrink-0 bg-slate-50 dark:bg-slate-800 px-2 flex items-center border-l border-slate-200 dark:border-slate-700">
+                <div className="w-36 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#D6D6D6] dark:border-slate-700">
                   <span className="text-xs text-slate-600 dark:text-slate-400">نوع الضريبة السابقة</span>
                 </div>
                 <div className="flex-1 px-1 py-1">
@@ -787,7 +787,7 @@ function ProductCard({
                 </div>
               </div>
               <div className="w-72 shrink-0 flex">
-                <div className="w-28 shrink-0 bg-slate-50 dark:bg-slate-800 px-2 flex items-center border-l border-slate-200 dark:border-slate-700">
+                <div className="w-28 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#D6D6D6] dark:border-slate-700">
                   <span className="text-xs text-slate-600 dark:text-slate-400">نوع الضريبة</span>
                 </div>
                 <div className="flex-1 px-1 py-1">
@@ -828,7 +828,7 @@ function ProductCard({
                 </div>
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+                    <tr className="bg-[#F0EDE8] dark:bg-slate-800/50 border-b border-[#D6D6D6] dark:border-slate-700">
                       <th className="text-center px-1 py-0.5 font-semibold text-slate-500 w-6 border-l border-slate-200 dark:border-slate-700">#</th>
                       <th className="text-right px-2 py-0.5 font-semibold text-slate-600 dark:text-slate-400 border-l border-slate-200 dark:border-slate-700">وصف إضافي</th>
                       <th className="w-6"></th>
@@ -937,12 +937,12 @@ function ProductCard({
           <div className="space-y-4">
             {/* جدول الأسعار */}
             <div className="border border-slate-200 dark:border-slate-700 rounded">
-              <div className="bg-slate-100 dark:bg-slate-800 px-3 py-1.5 border-b border-slate-200 dark:border-slate-700">
+              <div className="bg-[#EBE7DF] dark:bg-slate-800 px-3 py-1.5 border-b border-[#CFCFCF] dark:border-slate-700">
                 <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">جدول الأسعار</span>
               </div>
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+                  <tr className="bg-[#F0EDE8] dark:bg-slate-800/50 border-b border-[#D6D6D6] dark:border-slate-700">
                     <th className="text-right px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400">نوع السعر</th>
                     <th className="text-right px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 w-40">السعر</th>
                     <th className="text-center px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 w-24">يشمل ضريبة</th>
@@ -985,7 +985,7 @@ function ProductCard({
 
             {/* أقل سعر بيع وقواعد التسعير */}
             <div className="border border-slate-200 dark:border-slate-700 rounded">
-              <div className="bg-slate-100 dark:bg-slate-800 px-3 py-1.5 border-b border-slate-200 dark:border-slate-700">
+              <div className="bg-[#EBE7DF] dark:bg-slate-800 px-3 py-1.5 border-b border-[#CFCFCF] dark:border-slate-700">
                 <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">قواعد التسعير</span>
               </div>
               <div className="p-3 grid grid-cols-3 gap-3">
@@ -1013,7 +1013,7 @@ function ProductCard({
           <div className="space-y-3">
             {/* رأس: الموردين + آخر مشتريات */}
             <div className="border border-slate-200 dark:border-slate-700 rounded">
-              <div className="bg-slate-100 dark:bg-slate-800 px-3 py-1.5 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+              <div className="bg-[#EBE7DF] dark:bg-slate-800 px-3 py-1.5 border-b border-[#CFCFCF] dark:border-slate-700 flex items-center justify-between">
                 <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">بيانات الموردين</span>
                 {isEdit && costsData?.lastVoucherDate && (
                   <span className="text-xs text-slate-500">آخر مشتروات: {new Date(costsData.lastVoucherDate).toLocaleDateString("ar-SA")}</span>
@@ -1040,7 +1040,7 @@ function ProductCard({
 
             {/* جدول التكاليف — قراءة فقط لصنف موجود */}
             <div className="border border-slate-200 dark:border-slate-700 rounded">
-              <div className="bg-slate-100 dark:bg-slate-800 px-3 py-1.5 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2">
+              <div className="bg-[#EBE7DF] dark:bg-slate-800 px-3 py-1.5 border-b border-[#CFCFCF] dark:border-slate-700 flex items-center gap-2">
                 <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">التكاليف</span>
                 {isEdit && (
                   <span className="text-xs text-blue-600 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded">محسوب آلياً من فواتير المشتريات</span>
@@ -1052,7 +1052,7 @@ function ProductCard({
                 ) : (
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+                      <tr className="bg-[#F0EDE8] dark:bg-slate-800/50 border-b border-[#D6D6D6] dark:border-slate-700">
                         <th className="text-right px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 w-8">#</th>
                         <th className="text-right px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400">نوع التكلفة</th>
                         <th className="text-right px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 w-36">وحدة 1</th>
@@ -1099,7 +1099,7 @@ function ProductCard({
             {/* شريط الإجماليات */}
             {isEdit && (
               <div className="border border-slate-200 dark:border-slate-700 rounded">
-                <div className="bg-slate-100 dark:bg-slate-800 px-3 py-1.5 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <div className="bg-[#EBE7DF] dark:bg-slate-800 px-3 py-1.5 border-b border-[#CFCFCF] dark:border-slate-700 flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">وحدة الكميات</span>
                   <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{form.unit || "قطعة"}</span>
                 </div>
@@ -1134,7 +1134,7 @@ function ProductCard({
 
             {/* جدول الكميات حسب المخزن */}
             <div className="border border-slate-200 dark:border-slate-700 rounded">
-              <div className="bg-slate-100 dark:bg-slate-800 px-3 py-1.5 border-b border-slate-200 dark:border-slate-700">
+              <div className="bg-[#EBE7DF] dark:bg-slate-800 px-3 py-1.5 border-b border-[#CFCFCF] dark:border-slate-700">
                 <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">الكميات حسب المخزن / الفرع</span>
               </div>
               {isEdit ? (
@@ -1143,7 +1143,7 @@ function ProductCard({
                 ) : (
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+                      <tr className="bg-[#F0EDE8] dark:bg-slate-800/50 border-b border-[#D6D6D6] dark:border-slate-700">
                         <th className="text-right px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 w-8">#</th>
                         <th className="text-right px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400">اسم المخزن</th>
                         <th className="text-right px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 w-32">الكمية الآنية</th>
@@ -1192,7 +1192,7 @@ function ProductCard({
 
             {/* حدود المخزون */}
             <div className="border border-slate-200 dark:border-slate-700 rounded">
-              <div className="bg-slate-100 dark:bg-slate-800 px-3 py-1.5 border-b border-slate-200 dark:border-slate-700">
+              <div className="bg-[#EBE7DF] dark:bg-slate-800 px-3 py-1.5 border-b border-[#CFCFCF] dark:border-slate-700">
                 <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">حدود المخزون</span>
               </div>
               <div className="p-3 grid grid-cols-3 gap-3">
@@ -1214,7 +1214,7 @@ function ProductCard({
         {activeTab === "stats" && (
           <div className="space-y-4">
             <div className="border border-slate-200 dark:border-slate-700 rounded">
-              <div className="bg-slate-100 dark:bg-slate-800 px-3 py-1.5 border-b border-slate-200 dark:border-slate-700">
+              <div className="bg-[#EBE7DF] dark:bg-slate-800 px-3 py-1.5 border-b border-[#CFCFCF] dark:border-slate-700">
                 <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">الإحصائيات الشهرية</span>
               </div>
               <div className="p-4 text-center text-slate-500 dark:text-slate-400 text-sm">
@@ -1223,7 +1223,7 @@ function ProductCard({
               </div>
             </div>
             <div className="border border-slate-200 dark:border-slate-700 rounded">
-              <div className="bg-slate-100 dark:bg-slate-800 px-3 py-1.5 border-b border-slate-200 dark:border-slate-700">
+              <div className="bg-[#EBE7DF] dark:bg-slate-800 px-3 py-1.5 border-b border-[#CFCFCF] dark:border-slate-700">
                 <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">ملخص الحركة</span>
               </div>
               <div className="p-3 grid grid-cols-3 gap-3">
@@ -1849,7 +1849,7 @@ export default function Products() {
           }}
           dir="rtl"
         >
-          <DialogHeader className="flex-shrink-0 flex flex-row items-center justify-between px-4 py-2.5 border-b border-border bg-slate-100 dark:bg-slate-800">
+          <DialogHeader className="flex-shrink-0 flex flex-row items-center justify-between px-4 py-2.5 border-b border-[#CFCFCF] dark:border-slate-600 bg-[#DDD4C4] dark:bg-slate-800">
             <DialogTitle className="flex items-center gap-2 text-base font-semibold text-slate-700 dark:text-slate-200">
               <Package className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               {editId ? `تعديل بيانات الصنف${form.sku ? ` - ${form.sku}` : ""}` : "إضافة صنف جديد"}

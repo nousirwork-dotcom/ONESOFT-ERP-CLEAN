@@ -43,7 +43,7 @@
 }
 
 :root {
-  --radius: 0.75rem;
+  --radius: 0.25rem;
   /* Primary - Indigo */
   --primary: oklch(0.47 0.20 265);
   --primary-foreground: oklch(0.99 0.005 265);
