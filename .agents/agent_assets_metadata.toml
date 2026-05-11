@@ -6,3 +6,9 @@ id = "UKuH1M3NkdcSmZ_zcuePP"
 uri = "file://OneSoft-ERP-backup-20260511.tar.gz"
 type = "unspecified"
 title = "OneSoft ERP - نسخة احتياطية 2026-05-11"
+
+[[outputs]]
+id = "38OFMUNG0zHEF73i97MA9"
+uri = "file://OneSoft-ERP-source.tar.gz"
+type = "unspecified"
+title = "OneSoft ERP — Source Code"
