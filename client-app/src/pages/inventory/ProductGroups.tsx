@@ -485,8 +485,8 @@ export default function ProductGroups() {
       <FloatingWindow
         open={showDialog}
         onOpenChange={setShowDialog}
-        defaultWidth={620}
-        defaultHeight={460}
+        defaultWidth={700}
+        defaultHeight={480}
         minWidth={420}
         minHeight={260}
         title={

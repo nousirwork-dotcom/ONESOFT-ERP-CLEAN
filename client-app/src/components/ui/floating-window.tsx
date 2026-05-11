@@ -26,10 +26,14 @@ export function FloatingWindow({
   minWidth = 380,
   minHeight = 260,
 }: FloatingWindowProps) {
-  const getInitialPos = () => ({
-    x: Math.max(20, (typeof window !== "undefined" ? window.innerWidth : 1280) / 2 - defaultWidth / 2),
-    y: 48,
-  });
+  const getInitialPos = () => {
+    const vw = typeof window !== "undefined" ? window.innerWidth : 1280;
+    const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+    return {
+      x: Math.max(20, vw / 2 - defaultWidth / 2),
+      y: Math.max(80, Math.round((vh - defaultHeight) * 0.35)),
+    };
+  };
 
   const [pos, setPos] = useState(getInitialPos);
   const [size, setSize] = useState({ w: defaultWidth, h: defaultHeight });
