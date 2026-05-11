@@ -34,17 +34,24 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
   Cog,
   Factory,
+  FileText,
   LayoutDashboard,
   LayoutGrid,
   LogOut,
   PanelRight,
+  Receipt,
+  RotateCcw,
   Settings,
-  Store,
-  TrendingUp,
   ShoppingBag,
+  Store,
+  Tag,
+  TrendingDown,
+  TrendingUp,
   UserCheck,
+  Users,
   Wifi,
   WifiOff,
   Wrench,
@@ -63,12 +70,19 @@ const MAX_WIDTH = 320;
 
 type LayoutMode = "vertical" | "horizontal";
 
+type SubNavItem = {
+  icon: React.ElementType;
+  label: string;
+  path: string;
+};
+
 type NavItem = {
   icon: React.ElementType;
   label: string;
   path: string;
   badge?: string;
   roles?: string[];
+  children?: SubNavItem[];
 };
 
 type NavGroup = {
@@ -80,15 +94,33 @@ const navGroups: NavGroup[] = [
   {
     label: "القائمة الرئيسية",
     items: [
-      { icon: LayoutDashboard, label: "لوحة التحكم",     path: "/" },
-      { icon: TrendingUp,      label: "إدارة المبيعات",   path: "/sales-module" },
-      { icon: ShoppingBag,     label: "إدارة المشتريات",  path: "/purchases-module" },
-      { icon: Boxes,           label: "إدارة المخزون",    path: "/inventory-module" },
-      { icon: Factory,         label: "إدارة التصنيع",    path: "/manufacturing-module" },
-      { icon: Calculator,      label: "الحسابات العامة",  path: "/accounting-module" },
-      { icon: UserCheck,       label: "الموارد البشرية",  path: "/hr-module" },
-      { icon: Wrench,          label: "الأصول الثابتة",   path: "/assets-module" },
-      { icon: Settings,        label: "الإعدادات",        path: "/settings", roles: ["admin"] },
+      { icon: LayoutDashboard, label: "لوحة التحكم",    path: "/" },
+      {
+        icon: TrendingUp, label: "إدارة المبيعات", path: "/sales-module",
+        children: [
+          { icon: Receipt,      label: "فاتورة مبيعات",    path: "/sales/invoice" },
+          { icon: Tag,          label: "عرض سعر مبيعات",   path: "/sales/quotation" },
+          { icon: RotateCcw,    label: "مردود المبيعات",    path: "/sales/return" },
+          { icon: Users,        label: "دليل العملاء",      path: "/sales/customers" },
+          { icon: BarChart3,    label: "تقارير المبيعات",   path: "/sales/totals-reports" },
+        ],
+      },
+      {
+        icon: ShoppingBag, label: "إدارة المشتريات", path: "/purchases-module",
+        children: [
+          { icon: ClipboardList, label: "أوامر الشراء",      path: "/purchases/orders" },
+          { icon: FileText,      label: "فواتير المشتريات",  path: "/purchases/invoices" },
+          { icon: RotateCcw,     label: "مردود المشتريات",   path: "/purchases/returns" },
+          { icon: Users,         label: "دليل الموردين",     path: "/purchases/suppliers" },
+          { icon: TrendingDown,  label: "تقارير المشتريات",  path: "/purchases/rpt-supplier" },
+        ],
+      },
+      { icon: Boxes,      label: "إدارة المخزون",    path: "/inventory-module" },
+      { icon: Factory,    label: "إدارة التصنيع",    path: "/manufacturing-module" },
+      { icon: Calculator, label: "الحسابات العامة",  path: "/accounting-module" },
+      { icon: UserCheck,  label: "الموارد البشرية",  path: "/hr-module" },
+      { icon: Wrench,     label: "الأصول الثابتة",   path: "/assets-module" },
+      { icon: Settings,   label: "الإعدادات",        path: "/settings", roles: ["admin"] },
     ],
   },
 ];
@@ -121,6 +153,12 @@ function SidebarNav({ user }: { user: any }) {
   const activeTab = tabs.find(t => t.id === activeTabId);
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
+  const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({
+    "/sales-module": true,
+    "/purchases-module": true,
+  });
+  const toggleModule = (path: string) =>
+    setExpandedModules(p => ({ ...p, [path]: !p[path] }));
 
   return (
     <SidebarContent className="py-2">
@@ -138,6 +176,53 @@ function SidebarNav({ user }: { user: any }) {
             )}
             <SidebarMenu>
               {visibleItems.map((item) => {
+                if (item.children) {
+                  const expanded = expandedModules[item.path] ?? false;
+                  const hasActiveChild = item.children.some(c => activeTab?.path === c.path);
+                  return (
+                    <SidebarMenuItem key={item.path}>
+                      <SidebarMenuButton
+                        isActive={hasActiveChild}
+                        onClick={() => toggleModule(item.path)}
+                        tooltip={collapsed ? item.label : undefined}
+                        className={`mx-1 rounded-lg transition-all duration-150 ${
+                          hasActiveChild
+                            ? "bg-sidebar-primary/20 text-sidebar-primary font-medium"
+                            : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+                        }`}
+                      >
+                        <item.icon className={`w-4 h-4 shrink-0 ${hasActiveChild ? "text-sidebar-primary" : ""}`} />
+                        <span className="flex-1">{item.label}</span>
+                        {!collapsed && (
+                          expanded
+                            ? <ChevronDown className="w-3 h-3 shrink-0" />
+                            : <ChevronLeft className="w-3 h-3 shrink-0" />
+                        )}
+                      </SidebarMenuButton>
+                      {!collapsed && expanded && (
+                        <div className="mr-3 border-r border-sidebar-border/40 mt-0.5 mb-1">
+                          {item.children.map(child => {
+                            const childActive = activeTab?.path === child.path;
+                            return (
+                              <button
+                                key={child.path}
+                                onClick={() => openTab(child.path, child.label, child.icon)}
+                                className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors ${
+                                  childActive
+                                    ? "bg-sidebar-primary/15 text-sidebar-primary font-semibold border-r-2 border-sidebar-primary"
+                                    : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+                                }`}
+                              >
+                                <child.icon className="w-3 h-3 shrink-0" />
+                                <span className="text-right leading-tight">{child.label}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </SidebarMenuItem>
+                  );
+                }
                 const isActive = activeTab?.path === item.path;
                 return (
                   <SidebarMenuItem key={item.path}>
@@ -186,6 +271,36 @@ function HorizontalNav({ user }: { user: any }) {
   return (
     <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
       {allItems.map((item) => {
+        if (item.children) {
+          const hasActiveChild = item.children.some(c => activeTab?.path === c.path);
+          return (
+            <DropdownMenu key={item.path}>
+              <DropdownMenuTrigger asChild>
+                <button className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-all duration-150 ${
+                  hasActiveChild
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                }`}>
+                  <item.icon className="w-3.5 h-3.5 shrink-0" />
+                  <span>{item.label}</span>
+                  <ChevronDown className="w-3 h-3 shrink-0 mr-0.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-[180px]">
+                {item.children.map(child => (
+                  <DropdownMenuItem
+                    key={child.path}
+                    onClick={() => openTab(child.path, child.label, child.icon)}
+                    className={`text-xs gap-2 ${activeTab?.path === child.path ? "bg-primary/10 text-primary" : ""}`}
+                  >
+                    <child.icon className="w-3.5 h-3.5 shrink-0" />
+                    {child.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          );
+        }
         const isActive = activeTab?.path === item.path;
         return (
           <button
