@@ -95,26 +95,8 @@ const navGroups: NavGroup[] = [
     label: "القائمة الرئيسية",
     items: [
       { icon: LayoutDashboard, label: "لوحة التحكم",    path: "/" },
-      {
-        icon: TrendingUp, label: "إدارة المبيعات", path: "/sales-module",
-        children: [
-          { icon: Receipt,      label: "فاتورة مبيعات",    path: "/sales/invoice" },
-          { icon: Tag,          label: "عرض سعر مبيعات",   path: "/sales/quotation" },
-          { icon: RotateCcw,    label: "مردود المبيعات",    path: "/sales/return" },
-          { icon: Users,        label: "دليل العملاء",      path: "/sales/customers" },
-          { icon: BarChart3,    label: "تقارير المبيعات",   path: "/sales/totals-reports" },
-        ],
-      },
-      {
-        icon: ShoppingBag, label: "إدارة المشتريات", path: "/purchases-module",
-        children: [
-          { icon: ClipboardList, label: "أوامر الشراء",      path: "/purchases/orders" },
-          { icon: FileText,      label: "فواتير المشتريات",  path: "/purchases/invoices" },
-          { icon: RotateCcw,     label: "مردود المشتريات",   path: "/purchases/returns" },
-          { icon: Users,         label: "دليل الموردين",     path: "/purchases/suppliers" },
-          { icon: TrendingDown,  label: "تقارير المشتريات",  path: "/purchases/rpt-supplier" },
-        ],
-      },
+      { icon: TrendingUp,  label: "إدارة المبيعات",   path: "/sales-module" },
+      { icon: ShoppingBag, label: "إدارة المشتريات", path: "/purchases-module" },
       { icon: Boxes,      label: "إدارة المخزون",    path: "/inventory-module" },
       { icon: Factory,    label: "إدارة التصنيع",    path: "/manufacturing-module" },
       { icon: Calculator, label: "الحسابات العامة",  path: "/accounting-module" },

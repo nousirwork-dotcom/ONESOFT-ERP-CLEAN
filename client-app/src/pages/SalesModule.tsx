@@ -77,8 +77,6 @@ const menuSections = [
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
 function SalesMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
-  const { openTab, tabs, activeTabId } = useTabManager();
-  const activeTab = tabs.find(t => t.id === activeTabId);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
     transactions: true, pos: false, customers: false, reports: false,
   });
@@ -108,19 +106,12 @@ function SalesMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: Me
             </button>
             {expanded[section.id] && (
               <div className="mr-3 border-r border-border/40 mb-1">
-                {section.children.map(child => {
-                  const isActive = child.path
-                    ? activeTab?.path === child.path
-                    : activeId === child.id;
-                  return (
+                {section.children.map(child => (
                     <button
                       key={child.id}
-                      onClick={() => child.path
-                        ? openTab(child.path, child.label, child.icon)
-                        : onSelect(child.id)
-                      }
+                      onClick={() => onSelect(child.id)}
                       className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors ${
-                        isActive
+                        activeId === child.id
                           ? "bg-primary/10 text-primary font-semibold border-r-2 border-primary"
                           : "text-muted-foreground hover:text-foreground hover:bg-accent/20"
                       }`}
@@ -128,8 +119,7 @@ function SalesMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: Me
                       <child.icon className="w-3 h-3 shrink-0" />
                       <span className="text-right leading-tight">{child.label}</span>
                     </button>
-                  );
-                })}
+                ))}
               </div>
             )}
           </div>
