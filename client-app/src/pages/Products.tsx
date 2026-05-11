@@ -20,7 +20,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo } from "react";
 import { toast } from "sonner";
 
 // =============================================
@@ -205,20 +205,27 @@ function ProductCard({
   const [activeTab, setActiveTab] = useState<string>("main");
   const isEdit = !!productId;
 
-  // ── Auto-generate SKU from group ─────────────────────────────────────────
-  const { data: nextCode } = trpc.productGroups.nextCode.useQuery(
-    { groupId: Number(form.groupId) },
-    { enabled: !!form.groupId && !isEdit, staleTime: 0 }
-  );
+  // ── Imperative auto-code generation on group select ──────────────────────
+  const trpcUtils = trpc.useUtils();
+  const [skuLoading, setSkuLoading] = useState(false);
 
-  const appliedGroupIdRef = useRef<string>("");
-  useEffect(() => {
-    if (!isEdit && nextCode && form.groupId && form.groupId !== appliedGroupIdRef.current) {
-      appliedGroupIdRef.current = form.groupId;
-      setForm({ ...form, sku: nextCode });
+  const handleGroupSelect = async (groupId: string) => {
+    const base = { ...form, groupId };
+    setForm(base);
+    if (!groupId || isEdit) return;
+    setSkuLoading(true);
+    try {
+      const code = await trpcUtils.productGroups.nextCode.fetch(
+        { groupId: Number(groupId) },
+        { signal: undefined }
+      );
+      if (code) setForm({ ...base, sku: code });
+    } catch (_) {
+      // keep existing SKU on error
+    } finally {
+      setSkuLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nextCode, form.groupId, isEdit]);
+  };
 
   // ── Build leaf group list (only groups with no children are selectable) ──
   const leafGroups = useMemo(() => {
@@ -303,14 +310,31 @@ function ProductCard({
                   <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">مواصفات</span>
                 </div>
                 {/* رقم */}
-                <div className="flex border-b border-slate-200 dark:border-slate-700">
-                  <div className="w-24 shrink-0 bg-slate-50 dark:bg-slate-800 px-2 flex items-center border-l border-slate-200 dark:border-slate-700">
-                    <span className="text-xs text-slate-600 dark:text-slate-400">رقم</span>
-                  </div>
-                  <div className="flex-1 px-1 py-1">
-                    <CInput value={form.sku} onChange={(v) => set("sku", v)} placeholder="SKU-001" className="w-full" />
-                  </div>
-                </div>
+                {(() => {
+                  const selGroup = form.groupId ? leafGroups.find(g => String(g.id) === form.groupId) : null;
+                  const autoNum = selGroup?.autoNumbering ?? false;
+                  return (
+                    <div className="flex border-b border-slate-200 dark:border-slate-700">
+                      <div className="w-24 shrink-0 bg-slate-50 dark:bg-slate-800 px-2 flex items-center border-l border-slate-200 dark:border-slate-700">
+                        <span className="text-xs text-slate-600 dark:text-slate-400">رقم</span>
+                      </div>
+                      <div className="flex-1 px-1 py-1 relative">
+                        {skuLoading && (
+                          <div className="absolute inset-0 flex items-center justify-center z-10 bg-white/70 dark:bg-slate-800/70 rounded">
+                            <div className="w-3 h-3 border border-blue-500 border-t-transparent rounded-full animate-spin" />
+                          </div>
+                        )}
+                        <CInput
+                          value={form.sku}
+                          onChange={(v) => { if (!autoNum) set("sku", v); }}
+                          placeholder={autoNum ? "يُولَّد تلقائياً..." : "SKU-001"}
+                          className={`w-full ${autoNum ? "bg-slate-100 dark:bg-slate-700 text-blue-700 dark:text-blue-300 font-mono font-semibold cursor-not-allowed" : ""}`}
+                          readOnly={autoNum}
+                        />
+                      </div>
+                    </div>
+                  );
+                })()}
                 {/* اسم 1 */}
                 <div className="flex border-b border-slate-200 dark:border-slate-700">
                   <div className="w-24 shrink-0 bg-slate-50 dark:bg-slate-800 px-2 flex items-center border-l border-slate-200 dark:border-slate-700">
@@ -357,8 +381,12 @@ function ProductCard({
                     <span className="text-xs text-slate-600 dark:text-slate-400">رقم المجموعة</span>
                   </div>
                   <div className="flex-1 px-1 py-1">
-                    <select value={form.groupId || "none"} onChange={(e) => set("groupId", e.target.value === "none" ? "" : e.target.value)}
-                      className="h-7 w-full text-sm border border-slate-300 dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500">
+                    <select
+                      value={form.groupId || "none"}
+                      onChange={(e) => handleGroupSelect(e.target.value === "none" ? "" : e.target.value)}
+                      disabled={skuLoading}
+                      className="h-7 w-full text-sm border border-slate-300 dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500 disabled:opacity-60"
+                    >
                       <option value="none">-- بدون --</option>
                       {leafGroups.map(g => (
                         <option key={g.id} value={String(g.id)}>
