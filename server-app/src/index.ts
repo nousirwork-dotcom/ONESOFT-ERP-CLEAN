@@ -28,12 +28,15 @@ app.use('/api/trpc', createExpressMiddleware({
   createContext: ({ req, res }) => createContext({ req, res }),
 }));
 
-// ─── Static Files (React Build) ───────────────────────────────────────────────
+// ─── Static Files (React Build - Production Only) ─────────────────────────────
+import { existsSync } from 'fs';
 const clientBuildPath = path.join(__dirname, '..', '..', 'client-app', 'dist');
-app.use(express.static(clientBuildPath));
-app.get('*', (_req, res) => {
-  res.sendFile(path.join(clientBuildPath, 'index.html'));
-});
+if (existsSync(path.join(clientBuildPath, 'index.html'))) {
+  app.use(express.static(clientBuildPath));
+  app.get('*', (_req, res) => {
+    res.sendFile(path.join(clientBuildPath, 'index.html'));
+  });
+}
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 app.listen(ENV.port, () => {
