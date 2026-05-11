@@ -218,19 +218,12 @@ function ProductCard({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nextCode, form.groupId]);
 
-  // ── Build hierarchical group list ────────────────────────────────────────
-  const rootGroups = useMemo(
-    () => (groups ?? []).filter(g => g.groupType === "root" || !g.parentId),
-    [groups]
-  );
-  const subGroups = useMemo(
-    () => (groups ?? []).filter(g => g.groupType !== "root" && !!g.parentId),
-    [groups]
-  );
-  const orphanSubs = useMemo(
-    () => subGroups.filter(s => !rootGroups.find(r => r.id === s.parentId)),
-    [subGroups, rootGroups]
-  );
+  // ── Build leaf group list (only groups with no children are selectable) ──
+  const leafGroups = useMemo(() => {
+    const allGroups = groups ?? [];
+    const parentIds = new Set(allGroups.map(g => g.parentId).filter(Boolean));
+    return allGroups.filter(g => !parentIds.has(g.id));
+  }, [groups]);
 
   const { data: stockData, isLoading: loadingStock } = trpc.products.stockByWarehouse.useQuery(
     { productId: productId! },
@@ -365,27 +358,9 @@ function ProductCard({
                     <select value={form.groupId || "none"} onChange={(e) => set("groupId", e.target.value === "none" ? "" : e.target.value)}
                       className="h-7 w-full text-sm border border-slate-300 dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500">
                       <option value="none">-- بدون --</option>
-                      {rootGroups.map(root => {
-                        const children = subGroups.filter(s => s.parentId === root.id);
-                        const rootLabel = `${root.groupCode ? `[${root.groupCode}] ` : ""}${root.name}`;
-                        if (children.length > 0) {
-                          return (
-                            <optgroup key={root.id} label={rootLabel}>
-                              {children.map(c => (
-                                <option key={c.id} value={String(c.id)}>
-                                  {c.groupCode ? `[${c.groupCode}] ` : ""}{c.name}
-                                </option>
-                              ))}
-                            </optgroup>
-                          );
-                        }
-                        return (
-                          <optgroup key={root.id} label={rootLabel} />
-                        );
-                      })}
-                      {orphanSubs.map(s => (
-                        <option key={s.id} value={String(s.id)}>
-                          {s.groupCode ? `[${s.groupCode}] ` : ""}{s.name}
+                      {leafGroups.map(g => (
+                        <option key={g.id} value={String(g.id)}>
+                          {g.groupCode ? `[${g.groupCode}] ` : ""}{g.name}
                         </option>
                       ))}
                     </select>
