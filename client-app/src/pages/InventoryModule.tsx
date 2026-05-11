@@ -42,7 +42,7 @@ const menuSections: MenuSection[] = [
     children: [
       { id: "products-list", label: "دليل الأصناف", icon: Package },
       { id: "units", label: "وحدات الأصناف", icon: Ruler },
-      { id: "product-groups", label: "إنشاء مجموعات الأصناف", icon: Layers },
+      { id: "product-groups", label: "مجموعات الأصناف", icon: Layers },
       { id: "categories", label: "فئات الأصناف", icon: Tag },
       { id: "product-binding", label: "ربط الأصناف بالمخازن", icon: Link2 },
       { id: "auto-pricing", label: "تسعير الأصناف آلياً", icon: TrendingUp },
