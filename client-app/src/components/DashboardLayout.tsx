@@ -442,9 +442,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <>
       <div className="flex flex-col h-screen overflow-hidden bg-background">
         {/* Top Bar */}
-        <header className="sticky top-0 z-20 border-b border-border bg-background/95 backdrop-blur-sm">
+        <header className="sticky top-0 z-20 border-b border-[#D4CDC1] dark:border-slate-700 bg-[#DDD4C4] dark:bg-slate-900">
           {/* Row 1: Logo + User */}
-          <div className="flex items-center gap-3 px-4 h-12 border-b border-border/50">
+          <div className="flex items-center gap-3 px-4 h-10 border-b border-[#C8C1B8] dark:border-slate-700">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-primary/20 flex items-center justify-center">
                 <Store className="w-4 h-4 text-primary" />
@@ -561,7 +561,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       <SidebarInset className="flex flex-col h-screen overflow-hidden">
         {/* Top Bar */}
-        <header className="sticky top-0 z-10 flex items-center gap-3 px-4 h-14 border-b border-border bg-background/95 backdrop-blur-sm">
+        <header className="sticky top-0 z-10 flex items-center gap-3 px-4 h-10 border-b border-[#D4CDC1] bg-[#DDD4C4] dark:bg-slate-900 dark:border-slate-700">
           <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
           <div className="flex-1" />
           <div className="flex items-center gap-2">
