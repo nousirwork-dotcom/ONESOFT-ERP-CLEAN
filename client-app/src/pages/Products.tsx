@@ -207,6 +207,7 @@ function ProductCard({
   productId?: number | null;
 }) {
   const [activeTab, setActiveTab] = useState<string>("main");
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const isEdit = !!productId;
 
   // ── Imperative auto-code generation on group select ──────────────────────
@@ -821,15 +822,52 @@ function ProductCard({
                   <textarea
                     value={form.description}
                     onChange={(e) => set("description", e.target.value)}
-                    rows={3}
-                    className="text-sm border border-slate-300 dark:border-slate-600 rounded px-2 py-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500 resize-none"
+                    rows={4}
+                    className="text-sm border border-slate-300 dark:border-slate-600 rounded px-2 py-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500 resize-none w-full"
                     placeholder="وصف الصنف..."
                   />
                 </CField>
-                <CField label="الماركة / الموديل">
-                  <CInput value={form.brand} onChange={(v) => set("brand", v)} placeholder="الماركة" className="mb-1" />
-                  <CInput value={form.model} onChange={(v) => set("model", v)} placeholder="الموديل" />
-                </CField>
+                {/* مربع إضافة صورة */}
+                <div>
+                  <span className="text-xs font-medium text-slate-600 dark:text-slate-400 block mb-1">صورة الصنف</span>
+                  <label
+                    htmlFor="product-image-upload"
+                    className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg cursor-pointer bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-400 transition-colors overflow-hidden"
+                  >
+                    {imagePreview ? (
+                      <img src={imagePreview} alt="صورة الصنف" className="w-full h-full object-contain" />
+                    ) : (
+                      <div className="flex flex-col items-center gap-1 text-slate-400 dark:text-slate-500">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <span className="text-xs">اضغط لإضافة صورة</span>
+                      </div>
+                    )}
+                  </label>
+                  <input
+                    id="product-image-upload"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = (ev) => setImagePreview(ev.target?.result as string);
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                  {imagePreview && (
+                    <button
+                      type="button"
+                      onClick={() => { setImagePreview(null); }}
+                      className="mt-1 w-full text-xs text-red-500 hover:text-red-700 text-center"
+                    >
+                      حذف الصورة
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -899,36 +937,6 @@ function ProductCard({
                 <Plus className="w-3.5 h-3.5" />
                 إضافة وصف إضافي
               </button>
-            </div>
-
-            {/* خيارات المخزون */}
-            <div className="border border-slate-200 dark:border-slate-700 rounded">
-              <div className="bg-slate-100 dark:bg-slate-800 px-3 py-1.5 border-b border-slate-200 dark:border-slate-700">
-                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">خيارات المخزون</span>
-              </div>
-              <div className="p-3 grid grid-cols-3 gap-3">
-                <CField label="الحد الأدنى">
-                  <CInput value={form.minStock} onChange={(v) => set("minStock", v)} type="number" />
-                </CField>
-                <CField label="الحد الأقصى">
-                  <CInput value={form.maxStock} onChange={(v) => set("maxStock", v)} type="number" />
-                </CField>
-                <CField label="نقطة إعادة الطلب">
-                  <CInput value={form.reorderPoint} onChange={(v) => set("reorderPoint", v)} type="number" />
-                </CField>
-                <div className="flex items-center gap-2">
-                  <Switch checked={form.trackBatch} onCheckedChange={(v) => set("trackBatch", v)} id="trackBatch" />
-                  <label htmlFor="trackBatch" className="text-sm cursor-pointer">تتبع الدفعات</label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch checked={form.trackSerial} onCheckedChange={(v) => set("trackSerial", v)} id="trackSerial" />
-                  <label htmlFor="trackSerial" className="text-sm cursor-pointer">تتبع التسلسلي</label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch checked={form.hasBOM} onCheckedChange={(v) => set("hasBOM", v)} id="hasBOM" />
-                  <label htmlFor="hasBOM" className="text-sm cursor-pointer">قائمة مواد (BOM)</label>
-                </div>
-              </div>
             </div>
           </div>
         )}
