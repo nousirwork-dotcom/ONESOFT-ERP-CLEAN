@@ -206,6 +206,44 @@ export default function ProductGroups() {
   const [form, setForm] = useState({ ...emptyForm });
   const [search, setSearch] = useState("");
   const [isMaximized, setIsMaximized] = useState(false);
+  const [dialogSize, setDialogSize] = useState({ width: 640, height: 520 });
+
+  const startResize = (e: React.MouseEvent, dir: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startW = dialogSize.width;
+    const startH = dialogSize.height;
+
+    const onMove = (ev: MouseEvent) => {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      setDialogSize(() => {
+        let w = startW;
+        let h = startH;
+        if (dir.includes("e")) w = Math.max(420, startW + dx);
+        if (dir.includes("w")) w = Math.max(420, startW - dx);
+        if (dir.includes("s")) h = Math.max(300, startH + dy);
+        if (dir.includes("n")) h = Math.max(300, startH - dy);
+        return { width: w, height: h };
+      });
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+    document.body.style.userSelect = "none";
+    const cursors: Record<string, string> = {
+      n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize",
+      ne: "nesw-resize", sw: "nesw-resize", nw: "nwse-resize", se: "nwse-resize",
+    };
+    document.body.style.cursor = cursors[dir] ?? "default";
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  };
 
   const set = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }));
 
@@ -486,13 +524,30 @@ export default function ProductGroups() {
       {/* ─── Dialog ─── */}
       <Dialog open={showDialog} onOpenChange={(v) => { setShowDialog(v); if (!v) setIsMaximized(false); }}>
         <DialogContent
-          className={`p-0 gap-0 overflow-hidden transition-all duration-200
-            ${isMaximized
-              ? "max-w-[95vw] w-[95vw] h-[95vh] max-h-[95vh]"
-              : "max-w-[640px]"}`}
+          className="p-0 gap-0 overflow-hidden"
+          style={isMaximized
+            ? { maxWidth: "95vw", width: "95vw", height: "95vh", maxHeight: "95vh" }
+            : { width: `${dialogSize.width}px`, maxWidth: "95vw", height: `${dialogSize.height}px`, maxHeight: "95vh", minWidth: "420px", minHeight: "300px", position: "relative" }}
           dir="rtl"
         >
-          <DialogHeader className="px-4 py-3 bg-muted/40 border-b border-border">
+          {/* ── مقابض السحب (Resize handles) ── */}
+          {!isMaximized && (<>
+            {/* أعلى */}
+            <div onMouseDown={e => startResize(e, "n")} className="absolute top-0 left-4 right-4 h-1.5 cursor-ns-resize z-50 hover:bg-primary/20 rounded-full transition-colors" />
+            {/* أسفل */}
+            <div onMouseDown={e => startResize(e, "s")} className="absolute bottom-0 left-4 right-4 h-1.5 cursor-ns-resize z-50 hover:bg-primary/20 rounded-full transition-colors" />
+            {/* يسار */}
+            <div onMouseDown={e => startResize(e, "w")} className="absolute top-4 bottom-4 left-0 w-1.5 cursor-ew-resize z-50 hover:bg-primary/20 rounded-full transition-colors" />
+            {/* يمين */}
+            <div onMouseDown={e => startResize(e, "e")} className="absolute top-4 bottom-4 right-0 w-1.5 cursor-ew-resize z-50 hover:bg-primary/20 rounded-full transition-colors" />
+            {/* زوايا */}
+            <div onMouseDown={e => startResize(e, "nw")} className="absolute top-0 left-0 w-3 h-3 cursor-nwse-resize z-50" />
+            <div onMouseDown={e => startResize(e, "ne")} className="absolute top-0 right-0 w-3 h-3 cursor-nesw-resize z-50" />
+            <div onMouseDown={e => startResize(e, "sw")} className="absolute bottom-0 left-0 w-3 h-3 cursor-nesw-resize z-50" />
+            <div onMouseDown={e => startResize(e, "se")} className="absolute bottom-0 right-0 w-3 h-3 cursor-nwse-resize z-50" />
+          </>)}
+
+          <DialogHeader className="px-4 py-3 bg-muted/40 border-b border-border shrink-0">
             <DialogTitle className="flex items-center gap-2 text-base">
               <ListTree className="w-4 h-4 text-primary" />
               {editItem ? "تعديل مجموعة أصناف" : "إضافة مجموعة أصناف"}
@@ -506,7 +561,7 @@ export default function ProductGroups() {
             </DialogTitle>
           </DialogHeader>
 
-          <div className={`overflow-y-auto ${isMaximized ? "max-h-[calc(95vh-110px)]" : "max-h-[80vh]"}`}>
+          <div className="overflow-y-auto flex-1">
 
             {/* ── البيانات الأساسية ── */}
             <div className="border-b border-border">
