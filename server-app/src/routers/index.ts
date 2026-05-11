@@ -276,15 +276,23 @@ export const appRouter = router({
     list: protectedProcedure.query(async ({ ctx }) => {
       return db.query.productGroups.findMany({
         where: eq(productGroups.orgId, ctx.user.orgId),
-        orderBy: (g, { asc }) => [asc(g.name)],
+        orderBy: (g, { asc }) => [asc(g.groupCode), asc(g.name)],
       });
     }),
     create: protectedProcedure
       .input(z.object({
         name: z.string().min(1),
+        name2: z.string().optional(),
         groupCode: z.string().optional(),
         description: z.string().optional(),
         parentId: z.number().optional(),
+        groupType: z.string().optional(),
+        level: z.number().optional(),
+        autoNumbering: z.boolean().optional(),
+        firstNumber: z.number().optional(),
+        lastNumber: z.number().optional(),
+        increment: z.number().optional(),
+        codeDigits: z.number().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const [g] = await db.insert(productGroups).values({ ...input, orgId: ctx.user.orgId }).returning();
@@ -294,9 +302,17 @@ export const appRouter = router({
       .input(z.object({
         id: z.number(),
         name: z.string().min(1).optional(),
+        name2: z.string().optional(),
         groupCode: z.string().optional(),
         description: z.string().optional(),
         parentId: z.number().optional(),
+        groupType: z.string().optional(),
+        level: z.number().optional(),
+        autoNumbering: z.boolean().optional(),
+        firstNumber: z.number().optional(),
+        lastNumber: z.number().optional(),
+        increment: z.number().optional(),
+        codeDigits: z.number().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const { id, ...data } = input;
@@ -309,6 +325,39 @@ export const appRouter = router({
         await db.delete(productGroups)
           .where(and(eq(productGroups.id, input.id), eq(productGroups.orgId, ctx.user.orgId)));
         return { success: true };
+      }),
+    nextCode: protectedProcedure
+      .input(z.object({ groupId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const group = await db.query.productGroups.findFirst({
+          where: and(eq(productGroups.id, input.groupId), eq(productGroups.orgId, ctx.user.orgId)),
+        });
+        if (!group || !group.autoNumbering) return null;
+        const prefix = group.groupCode ?? '';
+        const digits = group.codeDigits ?? 5;
+        const firstNum = group.firstNumber ?? 1;
+        const incr = group.increment ?? 1;
+        const lastNum = group.lastNumber ?? 99999;
+        // Find the last product code in this group
+        const existing = await db.query.products.findMany({
+          where: and(
+            eq(products.orgId, ctx.user.orgId),
+            sql`${products.code} LIKE ${prefix + '%'}`
+          ),
+          orderBy: (p, { desc }) => [desc(p.code)],
+        });
+        let nextNum = firstNum;
+        if (existing.length > 0) {
+          const nums = existing
+            .map(p => parseInt((p.code ?? '').substring(prefix.length)))
+            .filter(n => !isNaN(n));
+          if (nums.length > 0) {
+            nextNum = Math.max(...nums) + incr;
+          }
+        }
+        if (nextNum > lastNum) return null;
+        const seqPart = String(nextNum).padStart(digits, '0');
+        return prefix + seqPart;
       }),
   }),
 

@@ -82,8 +82,16 @@ export const productGroups = pgTable('product_groups', {
   orgId: integer('org_id').notNull().references(() => organizations.id),
   groupCode: varchar('group_code', { length: 50 }),
   name: varchar('name', { length: 255 }).notNull(),
+  name2: varchar('name2', { length: 255 }),
   description: text('description'),
   parentId: integer('parent_id'),
+  groupType: varchar('group_type', { length: 20 }).default('root'),
+  level: integer('level').default(1),
+  autoNumbering: boolean('auto_numbering').default(true),
+  firstNumber: integer('first_number').default(1),
+  lastNumber: integer('last_number').default(99999),
+  increment: integer('increment').default(1),
+  codeDigits: integer('code_digits').default(5),
 });
 
 // ─── Products ─────────────────────────────────────────────────────────────────
