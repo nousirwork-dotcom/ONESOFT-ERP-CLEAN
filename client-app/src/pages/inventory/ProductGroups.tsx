@@ -209,6 +209,22 @@ export default function ProductGroups() {
 
   const set = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }));
 
+  // حساب المستوى تلقائياً عند تغيير المجموعة الأم
+  const handleParentChange = (parentId: number | undefined) => {
+    const parent = allGroups.find(g => g.id === parentId);
+    const newLevel = parent ? (parent.level ?? 1) + 1 : 2;
+    setForm(p => ({ ...p, parentId, level: newLevel }));
+  };
+
+  // عند تغيير النوع
+  const handleTypeChange = (v: string) => {
+    if (v === "root") {
+      setForm(p => ({ ...p, groupType: v, parentId: undefined, level: 1 }));
+    } else {
+      setForm(p => ({ ...p, groupType: v, level: p.parentId ? p.level : 2 }));
+    }
+  };
+
   const openCreate = (presetParentId?: number) => {
     setEditItem(null);
     setForm({
@@ -473,7 +489,7 @@ export default function ProductGroups() {
           className={`p-0 gap-0 overflow-hidden transition-all duration-200
             ${isMaximized
               ? "max-w-[95vw] w-[95vw] h-[95vh] max-h-[95vh]"
-              : "max-w-[480px]"}`}
+              : "max-w-[640px]"}`}
           dir="rtl"
         >
           <DialogHeader className="px-4 py-3 bg-muted/40 border-b border-border">
@@ -490,41 +506,34 @@ export default function ProductGroups() {
             </DialogTitle>
           </DialogHeader>
 
-          <div className={`overflow-y-auto ${isMaximized ? "max-h-[calc(95vh-110px)]" : "max-h-[75vh]"}`}>
-            {/* البيانات الأساسية */}
+          <div className={`overflow-y-auto ${isMaximized ? "max-h-[calc(95vh-110px)]" : "max-h-[80vh]"}`}>
+
+            {/* ── البيانات الأساسية ── */}
             <div className="border-b border-border">
               <div className="px-4 py-1.5 bg-primary/5 text-xs font-semibold text-primary border-b border-border">
                 البيانات الأساسية
               </div>
-              <div className="divide-y divide-border">
-                <FieldRow label="رقم المجموعة">
+
+              {/* صف 1: رقم المجموعة + النوع */}
+              <div className="flex items-stretch border-b border-border">
+                <div className="w-36 shrink-0 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-l border-border flex items-center">
+                  رقم المجموعة
+                </div>
+                <div className="px-3 py-1.5 flex items-center" style={{ width: "110px", borderLeft: "1px solid var(--border)" }}>
                   <Input
                     value={form.groupCode}
                     onChange={e => set("groupCode", e.target.value)}
-                    placeholder="مثال: 2 أو 10 أو A"
-                    className="h-7 text-sm font-mono border-0 p-0 focus-visible:ring-0 bg-transparent"
+                    placeholder="مثال: A أو 10"
+                    className="h-7 text-sm font-mono border-0 p-0 focus-visible:ring-0 bg-transparent w-full"
                     dir="ltr"
                   />
-                </FieldRow>
-                <FieldRow label="الاسم الأول">
-                  <Input
-                    value={form.name}
-                    onChange={e => set("name", e.target.value)}
-                    placeholder="اسم المجموعة *"
-                    className="h-7 text-sm border-0 p-0 focus-visible:ring-0 bg-transparent"
-                  />
-                </FieldRow>
-                <FieldRow label="الاسم الثاني">
-                  <Input
-                    value={form.name2}
-                    onChange={e => set("name2", e.target.value)}
-                    placeholder="اسم بديل (اختياري)"
-                    className="h-7 text-sm border-0 p-0 focus-visible:ring-0 bg-transparent"
-                  />
-                </FieldRow>
-                <FieldRow label="النوع">
-                  <Select value={form.groupType} onValueChange={v => set("groupType", v)}>
-                    <SelectTrigger className="h-7 text-sm border-0 p-0 focus:ring-0 bg-transparent w-40">
+                </div>
+                <div className="w-24 shrink-0 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-l border-border flex items-center">
+                  النوع
+                </div>
+                <div className="flex-1 px-3 py-1.5 flex flex-col justify-center">
+                  <Select value={form.groupType} onValueChange={handleTypeChange}>
+                    <SelectTrigger className="h-7 text-sm border-0 p-0 focus:ring-0 bg-transparent w-36">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -532,20 +541,52 @@ export default function ProductGroups() {
                       <SelectItem value="sub">فرعي</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                    {form.groupType === "root"
-                      ? "⚠️ جذري — لن يظهر في اختيارات كارت الصنف"
-                      : "✅ فرعي — سيظهر عند اختيار المجموعة في كارت الصنف"}
+                  <p className="text-[9px] text-muted-foreground mt-0.5">
+                    {form.groupType === "root" ? "⚠️ لن يظهر في كارت الصنف" : "✅ يظهر في كارت الصنف"}
                   </p>
-                </FieldRow>
-                {form.groupType === "sub" && (
-                  <FieldRow label="المجموعة الأم">
+                </div>
+              </div>
+
+              {/* صف 2: الاسم الأول + الاسم الثاني */}
+              <div className="flex items-stretch border-b border-border">
+                <div className="w-36 shrink-0 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-l border-border flex items-center">
+                  الاسم الأول *
+                </div>
+                <div className="flex-1 px-3 py-1.5 flex items-center border-l border-border">
+                  <Input
+                    value={form.name}
+                    onChange={e => set("name", e.target.value)}
+                    placeholder="اسم المجموعة"
+                    className="h-7 text-sm border-0 p-0 focus-visible:ring-0 bg-transparent w-full"
+                  />
+                </div>
+                <div className="w-28 shrink-0 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-l border-border flex items-center">
+                  الاسم الثاني
+                </div>
+                <div className="flex-1 px-3 py-1.5 flex items-center">
+                  <Input
+                    value={form.name2}
+                    onChange={e => set("name2", e.target.value)}
+                    placeholder="اختياري"
+                    className="h-7 text-sm border-0 p-0 focus-visible:ring-0 bg-transparent w-full"
+                  />
+                </div>
+              </div>
+
+              {/* صف 3: يصب في + المستوى (يظهر دائماً للفرعي) */}
+              {form.groupType === "sub" && (
+                <div className="flex items-stretch border-b border-border">
+                  <div className="w-36 shrink-0 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-l border-border flex items-center gap-1">
+                    <span>يصب في</span>
+                    <span className="text-[9px] text-primary">(الأم)</span>
+                  </div>
+                  <div className="flex-1 px-3 py-1.5 flex items-center border-l border-border">
                     <Select
                       value={form.parentId ? String(form.parentId) : ""}
-                      onValueChange={v => set("parentId", v ? parseInt(v) : undefined)}
+                      onValueChange={v => handleParentChange(v ? parseInt(v) : undefined)}
                     >
-                      <SelectTrigger className="h-7 text-sm border-0 p-0 focus:ring-0 bg-transparent w-52">
-                        <SelectValue placeholder="اختر المجموعة الأم" />
+                      <SelectTrigger className="h-7 text-sm border-0 p-0 focus:ring-0 bg-transparent w-full">
+                        <SelectValue placeholder="اختر المجموعة الجذرية" />
                       </SelectTrigger>
                       <SelectContent>
                         {rootGroups.map((g: any) => (
@@ -555,57 +596,89 @@ export default function ProductGroups() {
                         ))}
                       </SelectContent>
                     </Select>
-                  </FieldRow>
-                )}
-                <FieldRow label="المستوى">
-                  <Input
-                    type="number" min={1} max={9}
-                    value={form.level}
-                    onChange={e => set("level", parseInt(e.target.value) || 1)}
-                    className="h-7 text-sm border-0 p-0 focus-visible:ring-0 bg-transparent w-16 font-mono"
-                    dir="ltr"
-                  />
-                </FieldRow>
-              </div>
+                  </div>
+                  <div className="w-28 shrink-0 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-l border-border flex items-center">
+                    المستوى
+                  </div>
+                  <div className="flex-1 px-3 py-1.5 flex items-center gap-2">
+                    <span className="font-mono font-bold text-primary text-sm w-6 text-center">{form.level}</span>
+                    <span className="text-[9px] text-muted-foreground">يُحسب تلقائياً</span>
+                  </div>
+                </div>
+              )}
+
+              {/* مستوى للجذري */}
+              {form.groupType === "root" && (
+                <div className="flex items-stretch border-b border-border">
+                  <div className="w-36 shrink-0 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-l border-border flex items-center">
+                    المستوى
+                  </div>
+                  <div className="flex-1 px-3 py-1.5 flex items-center gap-2">
+                    <span className="font-mono font-bold text-amber-600 text-sm w-6 text-center">1</span>
+                    <span className="text-[9px] text-muted-foreground">جذري دائماً مستوى 1</span>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* إعدادات الترقيم */}
+            {/* ── إعدادات الترقيم ── */}
             <div>
               <div className="px-4 py-1.5 bg-primary/5 text-xs font-semibold text-primary border-b border-border flex items-center justify-between">
                 <span>إعدادات الترقيم التلقائي</span>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <Checkbox checked={form.autoNumbering} onCheckedChange={v => set("autoNumbering", !!v)} />
-                  <span className="text-xs font-normal">تفعيل</span>
+                  <span className="text-xs font-normal">تفعيل تسلسل أرقام أوتوماتيكي</span>
                 </label>
               </div>
 
-              <div className={`divide-y divide-border ${!form.autoNumbering ? "opacity-40 pointer-events-none" : ""}`}>
-                <FieldRow label="أول رقم">
-                  <Input type="number" min={1} value={form.firstNumber}
-                    onChange={e => set("firstNumber", parseInt(e.target.value) || 1)}
-                    className="h-7 text-sm border-0 p-0 focus-visible:ring-0 bg-transparent w-28 font-mono" dir="ltr" />
-                </FieldRow>
-                <FieldRow label="آخر رقم">
-                  <Input type="number" min={1} value={form.lastNumber}
-                    onChange={e => set("lastNumber", parseInt(e.target.value) || 99999)}
-                    className="h-7 text-sm border-0 p-0 focus-visible:ring-0 bg-transparent w-28 font-mono" dir="ltr" />
-                </FieldRow>
-                <FieldRow label="معدل الزيادة"
-                  note="1 = يزيد 1 (001، 002...) | 2 = يزيد 2 (001، 003، 005...)">
-                  <Input type="number" min={1} value={form.increment}
-                    onChange={e => set("increment", parseInt(e.target.value) || 1)}
-                    className="h-7 text-sm border-0 p-0 focus-visible:ring-0 bg-transparent w-16 font-mono" dir="ltr" />
-                </FieldRow>
-                <FieldRow label="عدد الخانات"
-                  note="إجمالي طول كود الصنف كاملاً (بما فيه البادئة)">
-                  <Input type="number" min={2} max={12} value={form.codeDigits}
-                    onChange={e => set("codeDigits", parseInt(e.target.value) || 5)}
-                    className="h-7 text-sm border-0 p-0 focus-visible:ring-0 bg-transparent w-16 font-mono" dir="ltr" />
-                </FieldRow>
+              <div className={`${!form.autoNumbering ? "opacity-40 pointer-events-none" : ""}`}>
 
+                {/* صف: أول رقم + آخر رقم */}
+                <div className="flex items-stretch border-b border-border">
+                  <div className="w-36 shrink-0 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-l border-border flex items-center">
+                    أول رقم
+                  </div>
+                  <div className="flex-1 px-3 py-1.5 flex items-center border-l border-border">
+                    <Input type="number" min={1} value={form.firstNumber}
+                      onChange={e => set("firstNumber", parseInt(e.target.value) || 1)}
+                      className="h-7 text-sm border-0 p-0 focus-visible:ring-0 bg-transparent w-32 font-mono" dir="ltr" />
+                  </div>
+                  <div className="w-28 shrink-0 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-l border-border flex items-center">
+                    آخر رقم
+                  </div>
+                  <div className="flex-1 px-3 py-1.5 flex items-center">
+                    <Input type="number" min={1} value={form.lastNumber}
+                      onChange={e => set("lastNumber", parseInt(e.target.value) || 99999)}
+                      className="h-7 text-sm border-0 p-0 focus-visible:ring-0 bg-transparent w-32 font-mono" dir="ltr" />
+                  </div>
+                </div>
+
+                {/* صف: معدل الزيادة + عدد الخانات */}
+                <div className="flex items-stretch border-b border-border">
+                  <div className="w-36 shrink-0 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-l border-border flex items-center">
+                    معدل الزيادة
+                  </div>
+                  <div className="flex-1 px-3 py-1.5 flex flex-col justify-center border-l border-border">
+                    <Input type="number" min={1} value={form.increment}
+                      onChange={e => set("increment", parseInt(e.target.value) || 1)}
+                      className="h-7 text-sm border-0 p-0 focus-visible:ring-0 bg-transparent w-20 font-mono" dir="ltr" />
+                    <p className="text-[9px] text-muted-foreground mt-0.5">مثال: 1 = يزيد 1 (001، 002...) | 2 = (002، 004...)</p>
+                  </div>
+                  <div className="w-28 shrink-0 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-l border-border flex items-center">
+                    عدد الخانات
+                  </div>
+                  <div className="flex-1 px-3 py-1.5 flex flex-col justify-center">
+                    <Input type="number" min={2} max={12} value={form.codeDigits}
+                      onChange={e => set("codeDigits", parseInt(e.target.value) || 5)}
+                      className="h-7 text-sm border-0 p-0 focus-visible:ring-0 bg-transparent w-20 font-mono" dir="ltr" />
+                    <p className="text-[9px] text-muted-foreground mt-0.5">إجمالي طول الكود (بما فيه البادئة)</p>
+                  </div>
+                </div>
+
+                {/* معاينة */}
                 {preview && form.groupCode && (
-                  <div className="px-4 py-3 bg-emerald-50 dark:bg-emerald-950/30">
-                    <p className="text-[11px] text-muted-foreground mb-1.5">معاينة أكواد الأصناف:</p>
+                  <div className="px-4 py-3 bg-emerald-50 dark:bg-emerald-950/30 border-b border-border">
+                    <p className="text-[11px] text-muted-foreground mb-1.5 font-medium">معاينة أكواد الأصناف:</p>
                     <div className="flex items-center gap-2 flex-wrap">
                       <code className="font-mono font-bold text-sm text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/50 px-2 py-0.5 rounded">
                         {preview.first}
@@ -615,12 +688,12 @@ export default function ProductGroups() {
                         {preview.second}
                       </code>
                       <span className="text-muted-foreground text-xs">، ...</span>
+                      <span className="text-[10px] text-muted-foreground mr-auto">
+                        بادئة: <b>{form.groupCode}</b> | تسلسل: <b>{preview.seqLen}</b> خانة | إجمالي: <b>{form.codeDigits}</b>
+                      </span>
                     </div>
-                    <p className="text-[10px] text-muted-foreground mt-1">
-                      بادئة: <b>{form.groupCode}</b> | خانات التسلسل: <b>{preview.seqLen}</b> | إجمالي: <b>{form.codeDigits}</b>
-                    </p>
                     {form.codeDigits <= form.groupCode.length && (
-                      <p className="text-[11px] text-red-500 mt-1">⚠️ عدد الخانات أقل من أو يساوي طول البادئة!</p>
+                      <p className="text-[11px] text-red-500 mt-1.5">⚠️ عدد الخانات أقل من أو يساوي طول البادئة!</p>
                     )}
                   </div>
                 )}
