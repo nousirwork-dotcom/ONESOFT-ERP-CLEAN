@@ -1259,7 +1259,7 @@ export default function Products() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [viewTab, setViewTab] = useState<"products" | "categories">("products");
   const [selectedCatId, setSelectedCatId] = useState<number | null>(null);
-  const [dialogSize, setDialogSize] = useState<"full" | "compact">("full");
+  const [dialogSize, setDialogSize] = useState<"full" | "compact">("compact");
 
   const toggleSort = (field: string) => {
     if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -1835,14 +1835,12 @@ export default function Products() {
             borderRadius: "6px",
           } : {
             position: "fixed",
-            top: "90px",
-            bottom: "60px",
-            left: "6%",
-            right: "calc(var(--sidebar-width, 260px) + 6%)",
-            width: "auto",
-            height: "auto",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: "min(880px, 94vw)",
+            height: "min(620px, 90vh)",
             maxWidth: "none",
-            transform: "none",
             borderRadius: "8px",
           }}
           dir="rtl"
