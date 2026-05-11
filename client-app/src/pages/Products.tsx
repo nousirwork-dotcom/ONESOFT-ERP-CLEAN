@@ -532,21 +532,6 @@ function ProductCard({
                     </select>
                   </div>
                 </div>
-                {/* التصنيف */}
-                <div className="flex border-b border-slate-200 dark:border-slate-700">
-                  <div className="w-28 shrink-0 bg-slate-50 dark:bg-slate-800 px-2 flex items-center border-l border-slate-200 dark:border-slate-700">
-                    <span className="text-xs text-slate-600 dark:text-slate-400">التصنيف</span>
-                  </div>
-                  <div className="flex-1 px-1 py-1">
-                    <select value={form.categoryId || "none"} onChange={(e) => set("categoryId", e.target.value === "none" ? "" : e.target.value)}
-                      className="h-7 w-full text-sm border border-slate-300 dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500">
-                      <option value="none">-- بدون --</option>
-                      {categories?.map((c) => (
-                        <option key={c.id} value={String(c.id)}>{c.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
                 {/* الصنف الرئيسي */}
                 <div className="flex">
                   <div className="w-28 shrink-0 bg-slate-50 dark:bg-slate-800 px-2 flex items-center border-l border-slate-200 dark:border-slate-700">
