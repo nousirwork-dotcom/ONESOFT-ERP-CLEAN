@@ -500,8 +500,11 @@ function ProductCard({
                   className="h-7 w-full text-sm border border-slate-300 dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500">
                   <option value="مخزون">مخزون</option>
                   <option value="خدمة">خدمة</option>
-                  <option value="مجموعة">مجموعة</option>
-                  <option value="مركّب">مركّب</option>
+                  <option value="تجميع">تجميع</option>
+                  <option value="صنف مصنوع">صنف مصنوع</option>
+                  <option value="تصنيع المخزون">تصنيع المخزون</option>
+                  <option value="تصنيع للعميل">تصنيع للعميل</option>
+                  <option value="صنف مصنع">صنف مصنع</option>
                 </select>
               </div>
             </div>
