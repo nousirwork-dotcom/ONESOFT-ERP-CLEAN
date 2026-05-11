@@ -170,21 +170,23 @@ export function FloatingWindow({
           <div
             onMouseDown={onHeaderMouseDown}
             className={cn(
-              "flex items-center gap-2 px-4 py-2.5 bg-muted/40 border-b border-border shrink-0 select-none",
+              "flex items-center px-4 py-2.5 bg-muted/40 border-b border-border shrink-0 select-none",
               !maximized && "cursor-move"
             )}
           >
-            <span className="flex items-center gap-2 text-sm font-semibold flex-1">{title}</span>
-            <button
-              onClick={toggleMaximize}
-              className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground shrink-0"
-              title={maximized ? "تصغير" : "تكبير"}
-            >
-              {maximized ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-            </button>
-            <DialogPrimitive.Close className="p-1 rounded hover:bg-destructive/10 hover:text-destructive transition-colors text-muted-foreground shrink-0">
-              <XIcon className="w-3.5 h-3.5" />
-            </DialogPrimitive.Close>
+            <span className="flex items-center gap-2 text-sm font-semibold flex-1 min-w-0 truncate">{title}</span>
+            <div className="flex items-center gap-1 mr-3 shrink-0">
+              <button
+                onClick={toggleMaximize}
+                className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                title={maximized ? "تصغير" : "تكبير"}
+              >
+                {maximized ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+              </button>
+              <DialogPrimitive.Close className="p-1 rounded hover:bg-destructive/10 hover:text-destructive transition-colors text-muted-foreground">
+                <XIcon className="w-3.5 h-3.5" />
+              </DialogPrimitive.Close>
+            </div>
           </div>
 
           {/* ── المحتوى ── */}
