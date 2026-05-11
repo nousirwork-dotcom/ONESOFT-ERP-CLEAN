@@ -210,18 +210,25 @@ function ProductCard({
   const [skuLoading, setSkuLoading] = useState(false);
 
   const handleGroupSelect = async (groupId: string) => {
-    const base = { ...form, groupId };
-    setForm(base);
+    // Update groupId immediately (functional update avoids stale closure)
+    setForm(prev => ({ ...prev, groupId, sku: "" }));
     if (!groupId || isEdit) return;
     setSkuLoading(true);
     try {
+      // staleTime: 0 forces a fresh server fetch every time (bypass cache)
       const code = await trpcUtils.productGroups.nextCode.fetch(
         { groupId: Number(groupId) },
-        { signal: undefined }
+        { staleTime: 0 }
       );
-      if (code) setForm({ ...base, sku: code });
-    } catch (_) {
-      // keep existing SKU on error
+      console.log("[handleGroupSelect] groupId:", groupId, "→ code:", code);
+      if (code) {
+        setForm(prev => ({ ...prev, sku: code }));
+      } else {
+        toast.warning("لم يتمكن النظام من توليد كود تلقائي لهذه المجموعة — أدخل الكود يدوياً");
+      }
+    } catch (err: any) {
+      console.error("[handleGroupSelect] fetch error:", err?.message ?? err);
+      toast.error("فشل توليد كود الصنف — " + (err?.message ?? "تحقق من إعدادات المجموعة"));
     } finally {
       setSkuLoading(false);
     }
@@ -1097,12 +1104,8 @@ export default function Products() {
   };
 
   const handleSubmit = () => {
-    const errors: string[] = [];
-    if (!form.name.trim()) errors.push("اسم الصنف (إسم 1) مطلوب");
-    const selGroup = form.groupId ? leafGroups.find(g => String(g.id) === form.groupId) : null;
-    if (selGroup?.autoNumbering && !form.sku.trim()) errors.push("الكود لم يُولَّد بعد — اختر المجموعة مجدداً");
-    if (errors.length) {
-      errors.forEach(msg => toast.error(msg));
+    if (!form.name.trim()) {
+      toast.error("اسم الصنف (إسم 1) مطلوب");
       return;
     }
 
