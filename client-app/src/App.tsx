@@ -5,6 +5,7 @@ import { Route, Switch, useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import DashboardLayout from "./components/DashboardLayout";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { TabManagerProvider, useTabManager } from "./contexts/TabManagerContext";
 import Dashboard from "./pages/Dashboard";
 import POS from "./pages/POS";
 import Invoices from "./pages/Invoices";
@@ -19,12 +20,33 @@ import AssetsModule from "./pages/AssetsModule";
 import SettingsModule from "./pages/SettingsModule";
 import LoginPage from "./pages/LoginPage";
 import SuperAdminPage from "./pages/SuperAdminPage";
-import { useEffect } from "react";
+import { createElement, useEffect } from "react";
 import { trpc } from "./lib/trpc";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
 import superjson from "superjson";
+import {
+  LayoutDashboard, TrendingUp, ShoppingBag, Boxes,
+  Factory, Calculator, UserCheck, Wrench, Settings, Store,
+} from "lucide-react";
 
+// ─── خريطة المسارات إلى المكونات ──────────────────────────────────────────
+export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
+  "/":                     Dashboard,
+  "/pos":                  POS,
+  "/invoices":             Invoices,
+  "/inventory-module":     InventoryModule,
+  "/purchases-module":     PurchasesModule,
+  "/sales-module":         SalesModule,
+  "/users":                Users,
+  "/settings":             SettingsModule,
+  "/manufacturing-module": ManufacturingModule,
+  "/accounting-module":    AccountingModule,
+  "/hr-module":            HRModule,
+  "/assets-module":        AssetsModule,
+};
+
+// ─── Auth Guard ───────────────────────────────────────────────────────────
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const [location, navigate] = useLocation();
   const meQuery = trpc.auth.me.useQuery(undefined, { retry: false });
@@ -32,10 +54,10 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (meQuery.isLoading) return;
     if (!meQuery.data) {
-      if (location !== '/login') navigate('/login');
+      if (location !== "/login") navigate("/login");
     } else {
-      if (location === '/login') {
-        navigate(meQuery.data.role === 'superadmin' ? '/superadmin' : '/');
+      if (location === "/login") {
+        navigate(meQuery.data.role === "superadmin" ? "/superadmin" : "/");
       }
     }
   }, [meQuery.data, meQuery.isLoading, location]);
@@ -54,11 +76,33 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// ─── محتوى التبويبات (يرسم كل التبويبات ويخفي غير النشطة) ───────────────
+function TabContent() {
+  const { tabs, activeTabId } = useTabManager();
+  return (
+    <>
+      {tabs.map(tab => {
+        const Component = PAGE_MAP[tab.path];
+        return (
+          <div
+            key={tab.id}
+            style={{ display: tab.id === activeTabId ? "block" : "none" }}
+            className="h-full"
+          >
+            {Component ? <Component /> : <NotFound />}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+// ─── مسارات التطبيق ───────────────────────────────────────────────────────
 function AppRoutes() {
   const meQuery = trpc.auth.me.useQuery(undefined, { retry: false });
   const user = meQuery.data;
 
-  if (user?.role === 'superadmin') {
+  if (user?.role === "superadmin") {
     return (
       <Switch>
         <Route path="/superadmin" component={SuperAdminPage} />
@@ -68,27 +112,19 @@ function AppRoutes() {
   }
 
   return (
-    <DashboardLayout>
-      <Switch>
-        <Route path="/" component={Dashboard} />
-        <Route path="/pos" component={POS} />
-        <Route path="/invoices" component={Invoices} />
-        <Route path="/inventory-module" component={InventoryModule} />
-        <Route path="/purchases-module" component={PurchasesModule} />
-        <Route path="/sales-module" component={SalesModule} />
-        <Route path="/users" component={Users} />
-        <Route path="/settings" component={SettingsModule} />
-        <Route path="/manufacturing-module" component={ManufacturingModule} />
-        <Route path="/accounting-module" component={AccountingModule} />
-        <Route path="/hr-module" component={HRModule} />
-        <Route path="/assets-module" component={AssetsModule} />
-        <Route path="/404" component={NotFound} />
-        <Route component={NotFound} />
-      </Switch>
-    </DashboardLayout>
+    <TabManagerProvider
+      initialPath="/"
+      initialLabel="لوحة التحكم"
+      InitialIcon={LayoutDashboard}
+    >
+      <DashboardLayout>
+        <TabContent />
+      </DashboardLayout>
+    </TabManagerProvider>
   );
 }
 
+// ─── QueryClient & tRPC ───────────────────────────────────────────────────
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30000 } },
 });
@@ -96,13 +132,14 @@ const queryClient = new QueryClient({
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
-      url: '/api/trpc',
+      url: "/api/trpc",
       transformer: superjson,
-      fetch: (url, options) => fetch(url, { ...options, credentials: 'include' }),
+      fetch: (url, options) => fetch(url, { ...options, credentials: "include" }),
     }),
   ],
 });
 
+// ─── App Root ─────────────────────────────────────────────────────────────
 function App() {
   return (
     <ErrorBoundary>

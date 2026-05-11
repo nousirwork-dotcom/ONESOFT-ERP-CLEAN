@@ -50,9 +50,10 @@ import {
   Wrench,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
-import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import ChatWidget from "./ChatWidget";
+import TabBar from "./TabBar";
+import { useTabManager } from "@/contexts/TabManagerContext";
 
 const SIDEBAR_WIDTH_KEY = "erp-sidebar-width";
 const LAYOUT_MODE_KEY = "erp-layout-mode";
@@ -116,7 +117,8 @@ function OnlineIndicator() {
    VERTICAL LAYOUT — الشريط الجانبي الرأسي
 ============================================= */
 function SidebarNav({ user }: { user: any }) {
-  const [location, navigate] = useLocation();
+  const { tabs, activeTabId, openTab } = useTabManager();
+  const activeTab = tabs.find(t => t.id === activeTabId);
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
 
@@ -136,14 +138,12 @@ function SidebarNav({ user }: { user: any }) {
             )}
             <SidebarMenu>
               {visibleItems.map((item) => {
-                const isActive =
-                  location === item.path ||
-                  (item.path !== "/" && location.startsWith(item.path));
+                const isActive = activeTab?.path === item.path;
                 return (
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
                       isActive={isActive}
-                      onClick={() => navigate(item.path)}
+                      onClick={() => openTab(item.path, item.label, item.icon)}
                       tooltip={collapsed ? item.label : undefined}
                       className={`mx-1 rounded-lg transition-all duration-150 ${
                         isActive
@@ -176,16 +176,9 @@ function SidebarNav({ user }: { user: any }) {
 /* =============================================
    HORIZONTAL LAYOUT — الشريط الأفقي العلوي
 ============================================= */
-function HorizontalNav({
-  user,
-  activeModule,
-  onModuleClick,
-}: {
-  user: any;
-  activeModule: string | null;
-  onModuleClick: (path: string) => void;
-}) {
-  const [location] = useLocation();
+function HorizontalNav({ user }: { user: any }) {
+  const { tabs, activeTabId, openTab } = useTabManager();
+  const activeTab = tabs.find(t => t.id === activeTabId);
   const allItems = navGroups.flatMap((g) =>
     g.items.filter((item) => !item.roles || (user?.role && item.roles.includes(user.role)))
   );
@@ -193,13 +186,11 @@ function HorizontalNav({
   return (
     <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
       {allItems.map((item) => {
-        const isActive =
-          location === item.path ||
-          (item.path !== "/" && location.startsWith(item.path));
+        const isActive = activeTab?.path === item.path;
         return (
           <button
             key={item.path}
-            onClick={() => onModuleClick(item.path)}
+            onClick={() => openTab(item.path, item.label, item.icon)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-all duration-150 ${
               isActive
                 ? "bg-primary text-primary-foreground"
@@ -230,7 +221,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const { loading, user, logout } = useAuth();
   const isMobile = useIsMobile();
-  const [location, navigate] = useLocation();
+  const { openTab } = useTabManager();
   const isResizing = useRef(false);
   const startX = useRef(0);
   const startWidth = useRef(0);
@@ -312,7 +303,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuLabel className="text-xs text-muted-foreground">{user.email}</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => navigate("/settings")}>
+        <DropdownMenuItem onClick={() => openTab("/settings", "الإعدادات", Settings)}>
           <Settings className="w-4 h-4 ml-2" />
           الإعدادات
         </DropdownMenuItem>
@@ -379,16 +370,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           {/* Row 2: Horizontal Nav */}
           <div className="flex items-center px-4 h-10 gap-2 overflow-x-auto scrollbar-none">
-            <HorizontalNav
-              user={user}
-              activeModule={location}
-              onModuleClick={(path) => navigate(path)}
-            />
+            <HorizontalNav user={user} />
           </div>
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 p-4 md:p-6">{children}</main>
+        <main className="flex-1 overflow-auto p-4 md:p-6">{children}</main>
+
+        {/* Tab Bar */}
+        <TabBar />
       </div>
       <ChatWidget />
       </>
@@ -447,7 +437,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 {user.email}
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate("/settings")}>
+              <DropdownMenuItem onClick={() => openTab("/settings", "الإعدادات", Settings)}>
                 <Settings className="w-4 h-4 ml-2" />
                 الإعدادات
               </DropdownMenuItem>
@@ -492,7 +482,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 p-4 md:p-6">{children}</main>
+        <main className="flex-1 overflow-auto p-4 md:p-6">{children}</main>
+
+        {/* Tab Bar */}
+        <TabBar />
       </SidebarInset>
     </SidebarProvider>
     <ChatWidget />
