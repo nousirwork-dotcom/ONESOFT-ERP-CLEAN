@@ -8,6 +8,7 @@ import { trpc } from "@/lib/trpc";
 import { Edit, Plus, Search, Users } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import ERPToolbar from "@/components/ERPToolbar";
 
 const emptyForm = { name: "", phone: "", email: "", address: "" };
 
@@ -48,8 +49,20 @@ export default function Customers() {
           <h1 className="text-2xl font-bold">العملاء</h1>
           <p className="text-muted-foreground text-sm mt-0.5">إدارة قاعدة بيانات العملاء</p>
         </div>
-        <Button onClick={openCreate} className="gap-2"><Plus className="w-4 h-4" />إضافة عميل</Button>
       </div>
+
+      {/* ERP Toolbar */}
+      <ERPToolbar
+        pageTitle="العملاء"
+        hideStatusBar
+        onNew={openCreate}
+        onEdit={() => toast.info("اختر عميلاً للتعديل")}
+        onDelete={() => toast.info("اختر عميلاً للحذف")}
+        onSearch={() => toast.info("بحث...")}
+        onRefresh={() => window.location.reload()}
+        onPrint={() => toast.info("جاري الطباعة...")}
+      />
+
       <div className="relative max-w-sm">
         <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث بالاسم أو الهاتف..." className="pr-9" />

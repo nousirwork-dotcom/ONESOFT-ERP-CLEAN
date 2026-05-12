@@ -5,6 +5,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { trpc } from "@/lib/trpc";
 import { ClipboardCheck } from "lucide-react";
 import { useLocation } from "wouter";
+import { toast } from "sonner";
+import ERPToolbar from "@/components/ERPToolbar";
 
 const paymentLabels: Record<string, string> = { cash: "نقدي", card: "بطاقة", transfer: "تحويل", credit: "آجل" };
 
@@ -22,11 +24,18 @@ export default function Invoices() {
           <h1 className="text-2xl font-bold">الفواتير</h1>
           <p className="text-muted-foreground text-sm mt-0.5">سجل جميع فواتير المبيعات</p>
         </div>
-        <Button onClick={() => navigate("/pos")} className="gap-2">
-          <ClipboardCheck className="w-4 h-4" />
-          فاتورة جديدة
-        </Button>
       </div>
+
+      {/* ERP Toolbar */}
+      <ERPToolbar
+        pageTitle="قائمة الفواتير"
+        hideStatusBar
+        onNew={() => navigate("/pos")}
+        onSearch={() => toast.info("بحث في الفواتير...")}
+        onRefresh={() => window.location.reload()}
+        onPrint={() => toast.info("طباعة القائمة...")}
+      />
+
       <Card className="border-0 shadow-sm">
         <CardContent className="p-0">
           <Table>

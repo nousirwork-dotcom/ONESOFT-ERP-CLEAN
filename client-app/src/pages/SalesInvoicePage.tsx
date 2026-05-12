@@ -8,12 +8,13 @@
  * - قسم الإجماليات: إجمالي، خصم، ضريبة، صافي، مدفوع نقداً، مدين
  */
 import React, { useState, useRef, useCallback, useEffect, KeyboardEvent } from "react";
-import { Save, Printer, Search, Plus, Trash2, Copy, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, X, RefreshCw } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import ERPToolbar, { ERPMode } from "@/components/ERPToolbar";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface InvoiceLine {
@@ -344,6 +345,9 @@ export default function SalesInvoicePage() {
     });
   }, [nextNumberQuery]);
 
+  // ─── ERP mode state ───────────────────────────────────────────────────────
+  const [erpMode, setErpMode] = useState<ERPMode>("new");
+
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div
@@ -351,27 +355,29 @@ export default function SalesInvoicePage() {
       style={{ fontFamily: "Tahoma, Arial, sans-serif", fontSize: "12px" }}
       dir="rtl"
     >
-      {/* ── Toolbar ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-1 px-2 py-1 bg-[#e8e8e8] border-b border-[#a0a0a0] shadow-sm">
-        <ToolBtn icon={<Save className="w-4 h-4" />} label="حفظ" onClick={handleSave} disabled={createMutation.isPending} />
-        <ToolBtn icon={<Printer className="w-4 h-4" />} label="طباعة" onClick={() => toast.info("جاري الطباعة...")} />
-        <ToolBtn icon={<Search className="w-4 h-4" />} label="بحث" onClick={() => toast.info("بحث...")} />
-        <div className="w-px h-6 bg-[#a0a0a0] mx-1" />
-        <ToolBtn icon={<Plus className="w-4 h-4" />} label="جديد" onClick={handleNew} />
-        <ToolBtn icon={<Trash2 className="w-4 h-4" />} label="حذف" onClick={() => toast.info("حذف...")} />
-        <ToolBtn icon={<Copy className="w-4 h-4" />} label="نسخ" onClick={() => copiedLine && toast.info("تم النسخ")} />
-        <div className="w-px h-6 bg-[#a0a0a0] mx-1" />
-        <ToolBtn icon={<ChevronFirst className="w-4 h-4" />} label="أول" onClick={() => {}} />
-        <ToolBtn icon={<ChevronLeft className="w-4 h-4" />} label="سابق" onClick={() => {}} />
-        <ToolBtn icon={<ChevronRight className="w-4 h-4" />} label="تالي" onClick={() => {}} />
-        <ToolBtn icon={<ChevronLast className="w-4 h-4" />} label="آخر" onClick={() => {}} />
-        <div className="w-px h-6 bg-[#a0a0a0] mx-1" />
-        <ToolBtn icon={<RefreshCw className="w-4 h-4" />} label="تحديث" onClick={() => nextNumberQuery.refetch()} />
-        <div className="flex-1" />
-        <span className="text-[11px] text-[#555] bg-[#fff] border border-[#ccc] px-2 py-0.5 rounded">
-          فاتورة مبيعات
-        </span>
-      </div>
+      {/* ── ERP Toolbar ──────────────────────────────────────────────────── */}
+      <ERPToolbar
+        pageTitle="فواتير المبيعات"
+        mode={erpMode}
+        saveDisabled={createMutation.isPending}
+        onNew={() => { handleNew(); setErpMode("new"); }}
+        onSave={() => { handleSave(); setErpMode("view"); }}
+        onEdit={() => { setErpMode("edit"); toast.info("وضع التعديل"); }}
+        onDelete={() => { toast.info("حذف الفاتورة..."); }}
+        onSearch={() => { setErpMode("search"); toast.info("بحث..."); }}
+        onRefresh={() => nextNumberQuery.refetch()}
+        onCopy={() => copiedLine && toast.info("تم النسخ")}
+        onPost={() => toast.info("جاري الترحيل...")}
+        onApprove={() => toast.success("تم الاعتماد")}
+        onCancel={() => { setErpMode("view"); toast.info("تم الإلغاء"); }}
+        onPrint={() => toast.info("جاري الطباعة...")}
+        onFirst={() => {}}
+        onPrev={() => {}}
+        onNext={() => {}}
+        onLast={() => {}}
+        onClose={() => toast.info("إغلاق")}
+        enableShortcuts
+      />
 
       {/* ── Header Form ──────────────────────────────────────────────────── */}
       <div className="bg-white border-b border-[#a0a0a0] px-3 py-2">
@@ -759,25 +765,6 @@ export default function SalesInvoicePage() {
 }
 
 // ─── Helper Components ────────────────────────────────────────────────────────
-function ToolBtn({ icon, label, onClick, disabled }: {
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title={label}
-      className="flex flex-col items-center gap-0.5 px-2 py-1 rounded hover:bg-[#d0d8e8] active:bg-[#b8c8e0] disabled:opacity-50 transition-colors min-w-[36px]"
-      style={{ fontSize: "10px", color: "#333" }}
-    >
-      {icon}
-      <span>{label}</span>
-    </button>
-  );
-}
 
 function HeaderField({ label, children }: { label: string; children: React.ReactNode }) {
   return (

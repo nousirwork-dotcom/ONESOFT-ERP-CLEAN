@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { useState, useMemo } from "react";
+import ERPToolbar from "@/components/ERPToolbar";
 import { toast } from "sonner";
 
 // =============================================
@@ -1491,11 +1492,19 @@ export default function Products() {
             إدارة وتنظيم أصناف المخزون
           </p>
         </div>
-        <Button onClick={openCreate} className="gap-2">
-          <Plus className="w-4 h-4" />
-          إضافة صنف جديد
-        </Button>
       </div>
+
+      {/* ERP Toolbar */}
+      <ERPToolbar
+        pageTitle="دليل الأصناف"
+        hideStatusBar
+        onNew={openCreate}
+        onEdit={() => toast.info("اختر صنفاً للتعديل")}
+        onDelete={() => toast.info("اختر صنفاً للحذف")}
+        onSearch={() => toast.info("بحث...")}
+        onRefresh={() => window.location.reload()}
+        onPrint={() => toast.info("جاري الطباعة...")}
+      />
 
       {/* تبويبات العرض */}
       <div className="flex border-b border-border bg-muted/10">
