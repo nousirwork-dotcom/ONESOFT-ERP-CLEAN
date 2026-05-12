@@ -1405,12 +1405,6 @@ export default function Products() {
     });
   };
 
-  const currentNavIdx = editId ? sortedProducts.findIndex((p: any) => p.id === editId) : -1;
-  const navFirst  = () => { if (sortedProducts.length) navigateTo(sortedProducts[0]); };
-  const navLast   = () => { if (sortedProducts.length) navigateTo(sortedProducts[sortedProducts.length - 1]); };
-  const navPrev   = () => { if (currentNavIdx > 0) navigateTo(sortedProducts[currentNavIdx - 1]); };
-  const navNext   = () => { if (currentNavIdx < sortedProducts.length - 1) navigateTo(sortedProducts[currentNavIdx + 1]); };
-
   const openEdit = (p: any) => {
     setEditId(p.id);
     setForm({
@@ -1563,6 +1557,12 @@ export default function Products() {
     });
     return list;
   }, [products, groupFilter, sortField, sortDir]);
+
+  const currentNavIdx = editId ? sortedProducts.findIndex((p: any) => p.id === editId) : -1;
+  const navFirst  = () => { if (sortedProducts.length) navigateTo(sortedProducts[0]); };
+  const navLast   = () => { if (sortedProducts.length) navigateTo(sortedProducts[sortedProducts.length - 1]); };
+  const navPrev   = () => { if (currentNavIdx > 0) navigateTo(sortedProducts[currentNavIdx - 1]); };
+  const navNext   = () => { if (currentNavIdx < sortedProducts.length - 1) navigateTo(sortedProducts[currentNavIdx + 1]); };
 
   return (
     <div className="space-y-4" dir="rtl">
