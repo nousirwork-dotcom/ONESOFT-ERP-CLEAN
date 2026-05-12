@@ -50,6 +50,8 @@ export interface ERPToolbarProps {
   hideStatusBar?: boolean;
   /** حالة تعطيل الحفظ (مثلاً أثناء الإرسال) */
   saveDisabled?: boolean;
+  /** تسمية بديلة لزر "جديد" — مثال: "إضافة صنف" */
+  newLabel?: string;
 }
 
 // ─── Button definition ────────────────────────────────────────────────────────
@@ -196,6 +198,7 @@ export default function ERPToolbar({
   enableShortcuts = true,
   hideStatusBar = false,
   saveDisabled = false,
+  newLabel,
 }: ERPToolbarProps) {
   const [activeBtn, setActiveBtn] = useState<ERPAction | "">("");
 
@@ -259,7 +262,7 @@ export default function ERPToolbar({
         {visibleButtons.map((btn, idx) => (
           <div key={btn.id} style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
             <TBtn
-              btn={btn}
+              btn={btn.id === "new" && newLabel ? { ...btn, label: newLabel } : btn}
               active={activeBtn === btn.id}
               disabled={btn.id === "save" && saveDisabled}
               onClick={() => handleClick(btn.id)}

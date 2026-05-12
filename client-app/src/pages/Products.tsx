@@ -1498,12 +1498,10 @@ export default function Products() {
       <ERPToolbar
         pageTitle="دليل الأصناف"
         hideStatusBar
+        buttons={["new"]}
+        newLabel="إضافة صنف"
+        enableShortcuts
         onNew={openCreate}
-        onEdit={() => toast.info("اختر صنفاً للتعديل")}
-        onDelete={() => toast.info("اختر صنفاً للحذف")}
-        onSearch={() => toast.info("بحث...")}
-        onRefresh={() => window.location.reload()}
-        onPrint={() => toast.info("جاري الطباعة...")}
       />
 
       {/* تبويبات العرض */}
