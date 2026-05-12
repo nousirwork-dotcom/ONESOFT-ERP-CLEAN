@@ -18,3 +18,9 @@ id = "QfwJ93vbkJP9nTreesPsg"
 uri = "file://OneSoft-ERP-source_20260511_0341.tar.gz"
 type = "unspecified"
 title = "OneSoft ERP — 2026-05-11 03:41"
+
+[[outputs]]
+id = "SJQ9ip4XQBFy4UaJ5X-jw"
+uri = "file://onesoft-erp-backup.zip"
+type = "unspecified"
+title = "OneSoft ERP — الملفات المعدّلة"
