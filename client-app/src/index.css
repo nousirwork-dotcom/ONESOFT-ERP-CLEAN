@@ -129,21 +129,52 @@
   * {
     @apply border-border outline-ring/50;
   }
+
+  html {
+    direction: rtl;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
   body {
     @apply bg-background text-foreground;
-    font-family: "Tahoma", "IBM Plex Sans Arabic", "Segoe UI", sans-serif;
+    font-family: "Cairo", "IBM Plex Sans Arabic", "Tahoma", "Segoe UI", sans-serif;
     font-size: 13px;
+    font-weight: 400;
+    line-height: 1.6;
+    color: #2B2B2B;
     direction: rtl;
   }
-  html { direction: rtl; }
 
-  /* ── حقول الإدخال العالمية — ERP style ── */
+  /* ── تدرج Typography الاحترافي ── */
+
+  /* عناوين الصفحات */
+  h1 { font-size: 22px; font-weight: 700; line-height: 1.3; color: #2B2B2B; }
+  h2 { font-size: 18px; font-weight: 700; line-height: 1.3; color: #2B2B2B; }
+  h3 { font-size: 16px; font-weight: 600; line-height: 1.4; color: #2B2B2B; }
+  h4 { font-size: 14px; font-weight: 600; line-height: 1.4; color: #2B2B2B; }
+  h5, h6 { font-size: 13px; font-weight: 600; line-height: 1.4; color: #2B2B2B; }
+
+  /* حقول الإدخال — ERP style */
   input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]),
   select,
   textarea {
     font-family: inherit;
     font-size: 13px;
+    font-weight: 400;
+    line-height: 1.4;
   }
+
+  button {
+    font-family: inherit;
+    font-weight: 500;
+  }
+
+  /* تحسين قراءة الجداول */
+  table { font-size: 13px; }
+  th { font-weight: 600; }
+  td { font-weight: 400; }
 
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),
@@ -159,6 +190,18 @@
 }
 
 @layer utilities {
+  /* ── Typography Classes ── */
+  .erp-page-title   { font-size: 22px; font-weight: 700; color: #2B2B2B; line-height: 1.3; }
+  .erp-section-title{ font-size: 16px; font-weight: 600; color: #2B2B2B; line-height: 1.4; }
+  .erp-label        { font-size: 13px; font-weight: 600; color: #2B2B2B; }
+  .erp-value        { font-size: 13px; font-weight: 400; color: #2B2B2B; }
+  .erp-secondary    { font-size: 12px; font-weight: 400; color: #6B7280; }
+  .erp-stat-number  { font-size: 30px; font-weight: 700; color: #2B2B2B; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .erp-sidebar-item { font-size: 14px; font-weight: 600; color: #E5E7EB; }
+  .erp-table-header { font-size: 12px; font-weight: 600; color: #2B2B2B; }
+  .erp-table-cell   { font-size: 13px; font-weight: 400; color: #2B2B2B; }
+  .erp-number       { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+
   .status-pending  { @apply bg-amber-50 text-amber-700 border border-amber-200; }
   .status-approved { @apply bg-emerald-50 text-emerald-700 border border-emerald-200; }
   .status-rejected { @apply bg-red-50 text-red-700 border border-red-200; }

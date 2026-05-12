@@ -164,7 +164,7 @@ function SidebarNav({ user }: { user: any }) {
                         isActive={hasActiveChild}
                         onClick={() => toggleModule(item.path)}
                         tooltip={collapsed ? item.label : undefined}
-                        className={`h-[38px] rounded-[4px] px-3 transition-colors text-[13px] font-medium ${
+                        className={`h-[38px] rounded-[4px] px-3 transition-colors text-[14px] font-semibold ${
                           hasActiveChild
                             ? "bg-[#406B93] text-white"
                             : "text-[#CBD5E1] hover:text-[#E5E7EB] hover:bg-[#1E344F]"
@@ -209,7 +209,7 @@ function SidebarNav({ user }: { user: any }) {
                       isActive={isActive}
                       onClick={() => openTab(item.path, item.label, item.icon)}
                       tooltip={collapsed ? item.label : undefined}
-                      className={`h-[38px] rounded-[4px] px-3 transition-colors text-[13px] font-medium ${
+                      className={`h-[38px] rounded-[4px] px-3 transition-colors text-[14px] font-semibold ${
                         isActive
                           ? "bg-[#406B93] text-white"
                           : "text-[#CBD5E1] hover:text-[#E5E7EB] hover:bg-[#1E344F]"
