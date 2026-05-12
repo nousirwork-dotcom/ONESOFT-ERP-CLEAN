@@ -1985,7 +1985,7 @@ export default function Products() {
               color: "#2B2B2B", whiteSpace: "nowrap", flexShrink: 0,
             }}>
               <Package style={{ width: 15, height: 15, color: "#406B93" }} />
-              {editId ? `تعديل بيانات الصنف${form.sku ? ` — ${form.sku}` : ""}` : "إضافة صنف جديد"}
+              {editId ? "تعديل بيانات الصنف" : "إضافة صنف جديد"}
             </DialogTitle>
 
             {/* فاصل */}
