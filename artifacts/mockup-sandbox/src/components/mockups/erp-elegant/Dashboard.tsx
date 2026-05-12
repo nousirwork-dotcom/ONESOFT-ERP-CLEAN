@@ -17,7 +17,7 @@ const colors = {
   textPrimary: "#2B2B2B",
   textSecondary: "#6B7280",
   border: "#E2DCCB",
-  headerBg: "#F0EDE4",
+  headerBg: "#FFFFFF",
 };
 
 const sidebarItems = [
@@ -217,7 +217,7 @@ export function Dashboard() {
                   <span style={{ fontSize: 12, color: colors.textSecondary, fontWeight: 500 }}>{s.label}</span>
                   <div style={{
                     width: 30, height: 30, borderRadius: 6,
-                    background: "#F9F6EE",
+                    background: "#FFFFFF",
                     border: `1px solid ${colors.border}`,
                     display: "flex", alignItems: "center", justifyContent: "center",
                   }}>
@@ -261,7 +261,7 @@ export function Dashboard() {
               </div>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
-                  <tr style={{ background: "#F9F6EE" }}>
+                  <tr style={{ background: "#FAFAFA" }}>
                     {["رقم الطلب", "العميل", "التاريخ", "المبلغ", "الحالة"].map((h) => (
                       <th key={h} style={{
                         padding: "8px 12px",
@@ -276,7 +276,7 @@ export function Dashboard() {
                 </thead>
                 <tbody>
                   {recentOrders.map((o, i) => (
-                    <tr key={o.id} style={{ background: i % 2 === 0 ? colors.card : "#FAFAF7" }}>
+                    <tr key={o.id} style={{ background: "#FFFFFF" }}>
                       <td style={{ padding: "8px 12px", fontSize: 13, color: colors.gold, fontWeight: 600 }}>{o.id}</td>
                       <td style={{ padding: "8px 12px", fontSize: 13, color: colors.textPrimary }}>{o.client}</td>
                       <td style={{ padding: "8px 12px", fontSize: 12, color: colors.textSecondary }}>{o.date}</td>
