@@ -24,3 +24,9 @@ id = "SJQ9ip4XQBFy4UaJ5X-jw"
 uri = "file://onesoft-erp-backup.zip"
 type = "unspecified"
 title = "OneSoft ERP — الملفات المعدّلة"
+
+[[outputs]]
+id = "FX9LvOR0tqP2iqP7ByxUz"
+uri = "file://onesoft-erp-backup-2026-05-12.zip"
+type = "unspecified"
+title = "OneSoft ERP — نسخة احتياطية 2026-05-12"
