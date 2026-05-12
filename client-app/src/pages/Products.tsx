@@ -1264,6 +1264,7 @@ export default function Products() {
   const [viewTab, setViewTab] = useState<"products" | "categories">("products");
   const [selectedCatId, setSelectedCatId] = useState<number | null>(null);
   const [dialogSize, setDialogSize] = useState<"full" | "compact">("compact");
+  const [toolsOpen, setToolsOpen] = useState(false);
 
   const toggleSort = (field: string) => {
     if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -1887,92 +1888,24 @@ export default function Products() {
           }}
           dir="rtl"
         >
-          <DialogHeader className="flex-shrink-0 flex flex-col gap-0 border-b border-[#CFCFCF] dark:border-slate-600 bg-[#DDD4C4] dark:bg-slate-800 p-0">
-            {/* ── الصف العلوي: العنوان + الأزرار ── */}
-            <div className="flex items-center justify-between px-4 py-2">
-              <DialogTitle className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-                <Package className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                {editId ? `تعديل بيانات الصنف${form.sku ? ` · ${form.sku}` : ""}` : "إضافة صنف جديد"}
-              </DialogTitle>
-              <div className="flex items-center gap-1.5">
-                <Button
-                  size="sm"
-                  onClick={handleSubmit}
-                  disabled={createProduct.isPending || updateProduct.isPending}
-                  className="gap-1 h-7 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  {createProduct.isPending || updateProduct.isPending
-                    ? "جارِ الحفظ..."
-                    : editId ? "حفظ التعديلات" : "إضافة الصنف"}
-                </Button>
-                <Button
-                  variant="outline" size="sm"
-                  className="h-7 px-2.5 gap-1 text-xs"
-                  title="طباعة بيانات الصنف"
-                  onClick={() => toast.info("جارِ تجهيز الطباعة...")}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-                  طباعة
-                </Button>
-                <Button
-                  variant="outline" size="icon"
-                  className="h-7 w-7 shrink-0"
-                  title={dialogSize === "full" ? "تصغير النافذة" : "تكبير النافذة"}
-                  onClick={() => setDialogSize(s => s === "full" ? "compact" : "full")}
-                >
-                  {dialogSize === "full"
-                    ? <Minimize2 className="w-3 h-3" />
-                    : <Maximize2 className="w-3 h-3" />}
-                </Button>
-                <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => setIsOpen(false)}>
-                  <X className="w-3 h-3" />
-                  إغلاق
-                </Button>
-              </div>
-            </div>
-
-            {/* ── الصف الثاني: إسم 1 (يمين) + إسم 2 (يسار) ── */}
-            <div className="flex items-stretch border-t border-[#CFCFCF] dark:border-slate-600">
-              {/* إسم 1 — الاسم بالعربية */}
-              <div className="flex flex-1 items-center border-l border-[#CFCFCF] dark:border-slate-600">
-                <div className="shrink-0 bg-[#C8BFAE] dark:bg-slate-700 px-2.5 h-full flex items-center border-l border-[#CFCFCF] dark:border-slate-600 min-w-[60px]">
-                  <span className="text-xs font-bold text-slate-600 dark:text-slate-300 whitespace-nowrap">إسم 1</span>
-                </div>
-                <input
-                  value={form.name}
-                  onChange={e => setForm({ ...form, name: e.target.value })}
-                  placeholder="اسم الصنف بالعربية *"
-                  dir="rtl"
-                  style={{
-                    flex: 1, height: 30, border: "none", outline: "none",
-                    background: "#FFFFF0", padding: "0 8px",
-                    fontFamily: "'Cairo', Tahoma, sans-serif",
-                    fontSize: 13, fontWeight: 600, color: "#1a1a1a",
-                  }}
-                  onFocus={e => (e.target.style.background = "#EFF6FF")}
-                  onBlur={e => (e.target.style.background = "#FFFFF0")}
-                />
-              </div>
-              {/* إسم 2 — الاسم الإنجليزي */}
-              <div className="flex flex-1 items-center">
-                <div className="shrink-0 bg-[#C8BFAE] dark:bg-slate-700 px-2.5 h-full flex items-center border-l border-[#CFCFCF] dark:border-slate-600 min-w-[60px]">
-                  <span className="text-xs font-bold text-slate-600 dark:text-slate-300 whitespace-nowrap">إسم 2</span>
-                </div>
-                <input
-                  value={form.name2}
-                  onChange={e => setForm({ ...form, name2: e.target.value })}
-                  placeholder="English Name"
-                  dir="ltr"
-                  style={{
-                    flex: 1, height: 30, border: "none", outline: "none",
-                    background: "#FFFFF0", padding: "0 8px",
-                    fontFamily: "Tahoma, Arial, sans-serif",
-                    fontSize: 12, color: "#1a1a1a",
-                  }}
-                  onFocus={e => (e.target.style.background = "#EFF6FF")}
-                  onBlur={e => (e.target.style.background = "#FFFFF0")}
-                />
-              </div>
+          <DialogHeader className="flex-shrink-0 flex flex-row items-center justify-between px-4 py-2.5 border-b border-[#CFCFCF] dark:border-slate-600 bg-[#DDD4C4] dark:bg-slate-800">
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold text-slate-700 dark:text-slate-200">
+              <Package className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              {editId ? `تعديل بيانات الصنف${form.sku ? ` - ${form.sku}` : ""}` : "إضافة صنف جديد"}
+            </DialogTitle>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline" size="icon"
+                className="h-8 w-8 shrink-0"
+                title={dialogSize === "full" ? "تصغير النافذة" : "تكبير النافذة"}
+                onClick={() => setDialogSize(s => s === "full" ? "compact" : "full")}
+              >
+                {dialogSize === "full" ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+              </Button>
+              <Button variant="outline" size="sm" className="h-8 gap-1" onClick={() => setIsOpen(false)}>
+                <X className="w-3.5 h-3.5" />
+                إغلاق
+              </Button>
             </div>
           </DialogHeader>
           {/* محتوى الكارت */}
@@ -1986,8 +1919,199 @@ export default function Products() {
               productId={editId}
             />
           </div>
+
+          {/* ── Bottom Toolbar ─────────────────────────────────────────── */}
+          <div dir="rtl" style={{
+            flexShrink: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            borderTop: "1px solid #CFCFCF",
+            background: "#F0EDE8",
+            padding: "4px 10px",
+            gap: 4,
+          }}>
+            {/* Right group: main actions */}
+            <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+
+              {/* حفظ */}
+              <BotBtn
+                icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>}
+                label="حفظ"
+                variant="primary"
+                disabled={createProduct.isPending || updateProduct.isPending}
+                onClick={handleSubmit}
+              />
+
+              <BotDivider />
+
+              {/* حذف */}
+              <BotBtn
+                icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>}
+                label="حذف"
+                variant="danger"
+                disabled={!editId}
+                onClick={() => {
+                  if (!editId) return;
+                  if (confirm("هل أنت متأكد من حذف هذا الصنف؟ لا يمكن التراجع.")) {
+                    deleteProduct.mutate({ id: editId });
+                    setIsOpen(false);
+                  }
+                }}
+              />
+
+              <BotDivider />
+
+              {/* نسخة مماثلة */}
+              <BotBtn
+                icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>}
+                label="نسخة مماثلة"
+                disabled={!editId}
+                onClick={() => {
+                  if (!editId) { toast.warning("لا يوجد صنف محدد للنسخ"); return; }
+                  const copy = {
+                    ...form,
+                    sku: "",
+                    barcode: "",
+                    barcode2: "",
+                    barcode3: "",
+                  };
+                  setEditId(null);
+                  setForm(copy);
+                  toast.info("تم إنشاء نسخة — عدّل الرقم واحفظ");
+                }}
+              />
+
+              <BotDivider />
+
+              {/* جديد */}
+              <BotBtn
+                icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>}
+                label="جديد"
+                onClick={() => { setEditId(null); setForm(emptyForm); }}
+              />
+
+              <BotDivider />
+
+              {/* أدوات — dropdown */}
+              <div style={{ position: "relative" }}>
+                <BotBtn
+                  icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>}
+                  label="أدوات ▾"
+                  onClick={() => setToolsOpen(o => !o)}
+                />
+                {toolsOpen && (
+                  <>
+                    {/* backdrop */}
+                    <div
+                      style={{ position: "fixed", inset: 0, zIndex: 40 }}
+                      onClick={() => setToolsOpen(false)}
+                    />
+                    <div style={{
+                      position: "absolute",
+                      bottom: "calc(100% + 4px)",
+                      right: 0,
+                      zIndex: 50,
+                      background: "#fff",
+                      border: "1px solid #CFCFCF",
+                      borderRadius: 4,
+                      boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+                      minWidth: 160,
+                      overflow: "hidden",
+                      fontFamily: "'Cairo', Tahoma, sans-serif",
+                      fontSize: 12,
+                    }}>
+                      {[
+                        { label: "نشاط المستخدمين", icon: "👤" },
+                        { label: "توقيف الاستخدام",  icon: "🚫" },
+                        { label: "قصر المطالعة على", icon: "🔒" },
+                      ].map((item, i) => (
+                        <button
+                          key={i}
+                          onClick={() => { setToolsOpen(false); toast.info(item.label); }}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 8,
+                            width: "100%", padding: "7px 12px",
+                            background: "none", border: "none",
+                            cursor: "pointer", textAlign: "right",
+                            color: "#2B2B2B", fontSize: 12,
+                            borderBottom: i < 2 ? "1px solid #F0EDE8" : "none",
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.background = "#F0EDE8")}
+                          onMouseLeave={e => (e.currentTarget.style.background = "none")}
+                        >
+                          <span>{item.icon}</span>
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Left: status info */}
+            <div style={{ fontSize: 10.5, color: "#888", fontFamily: "Tahoma, sans-serif" }}>
+              {editId ? `صنف رقم: ${editId}` : "صنف جديد"}
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// ─── BotBtn: زر Bottom Toolbar ────────────────────────────────────────────────
+function BotBtn({
+  icon, label, onClick, disabled, variant,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  variant?: "primary" | "danger" | "default";
+}) {
+  const [hovered, setHovered] = useState(false);
+  const bg = () => {
+    if (disabled) return "transparent";
+    if (variant === "primary") return hovered ? "#365E80" : "#406B93";
+    if (variant === "danger")  return hovered ? "#A93226" : "#C0392B";
+    return hovered ? "#E2DDD6" : "transparent";
+  };
+  const color = () => {
+    if (disabled) return "#bbb";
+    if (variant === "primary" || variant === "danger") return "#fff";
+    return "#2B2B2B";
+  };
+  return (
+    <button
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: "flex", alignItems: "center", gap: 5,
+        padding: "4px 10px", height: 28,
+        background: bg(), color: color(),
+        border: "1px solid",
+        borderColor: variant === "primary" ? "#365E80" : variant === "danger" ? "#A93226" : hovered ? "#C8C0B4" : "transparent",
+        borderRadius: 3, cursor: disabled ? "not-allowed" : "pointer",
+        fontFamily: "'Cairo', Tahoma, sans-serif",
+        fontSize: 11.5, fontWeight: 600,
+        whiteSpace: "nowrap", flexShrink: 0,
+        opacity: disabled ? 0.45 : 1,
+        transition: "background 0.1s, border-color 0.1s",
+      }}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+// ─── BotDivider ───────────────────────────────────────────────────────────────
+function BotDivider() {
+  return (
+    <div style={{ width: 1, height: 18, background: "#C8C0B4", margin: "0 2px", flexShrink: 0 }} />
   );
 }
