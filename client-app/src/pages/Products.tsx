@@ -20,8 +20,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useState, useMemo } from "react";
-import ERPToolbar from "@/components/ERPToolbar";
+import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
 
 // =============================================
@@ -1326,6 +1325,15 @@ export default function Products() {
     setIsOpen(true);
   };
 
+  // F1 shortcut for add product
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "F1") { e.preventDefault(); openCreate(); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
   const openEdit = (p: any) => {
     setEditId(p.id);
     setForm({
@@ -1492,17 +1500,40 @@ export default function Products() {
             إدارة وتنظيم أصناف المخزون
           </p>
         </div>
+        <button
+          onClick={openCreate}
+          title="إضافة صنف (F1)"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "10px 20px",
+            background: "#406B93",
+            color: "#fff",
+            border: "none",
+            borderRadius: 6,
+            fontFamily: "'Cairo', Tahoma, sans-serif",
+            fontSize: 14,
+            fontWeight: 700,
+            cursor: "pointer",
+            boxShadow: "0 2px 6px rgba(64,107,147,0.35)",
+            transition: "background 0.15s",
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = "#365E80")}
+          onMouseLeave={e => (e.currentTarget.style.background = "#406B93")}
+        >
+          <Plus style={{ width: 18, height: 18, strokeWidth: 2.5 }} />
+          إضافة صنف
+          <span style={{
+            fontSize: 10,
+            background: "rgba(255,255,255,0.2)",
+            borderRadius: 3,
+            padding: "1px 5px",
+            fontFamily: "monospace",
+            fontWeight: 400,
+          }}>F1</span>
+        </button>
       </div>
-
-      {/* ERP Toolbar */}
-      <ERPToolbar
-        pageTitle="دليل الأصناف"
-        hideStatusBar
-        buttons={["new"]}
-        newLabel="إضافة صنف"
-        enableShortcuts
-        onNew={openCreate}
-      />
 
       {/* تبويبات العرض */}
       <div className="flex border-b border-border bg-muted/10">
