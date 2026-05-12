@@ -2026,11 +2026,12 @@ export default function Products() {
                   flexShrink: 0,
                   display: "flex", flexDirection: "row", alignItems: "center",
                   justifyContent: "space-between",
-                  borderBottom: "1px solid #CFCFCF",
-                  background: "#DDD4C4",
-                  padding: "3px 8px",
-                  gap: 4,
+                  borderBottom: "1px solid #E5E7EB",
+                  background: "#FFFFFF",
+                  padding: "2px 8px",
+                  gap: 3,
                   userSelect: "none",
+                  minHeight: 36,
                 }}
               >
                 {/* ① العنوان — منطقة السحب */}
@@ -2039,19 +2040,19 @@ export default function Products() {
                   onDoubleClick={toggleMaximize}
                   style={{
                     display: "flex", alignItems: "center", gap: 6,
-                    fontSize: 13, fontWeight: 700,
+                    fontSize: 12.5, fontWeight: 600,
                     fontFamily: "'Cairo', Tahoma, sans-serif",
-                    color: "#2B2B2B", whiteSpace: "nowrap", flexShrink: 0,
+                    color: "#111827", whiteSpace: "nowrap", flexShrink: 0,
                     cursor: isMaximized ? "default" : "move",
                     paddingLeft: 4,
                   }}
                 >
-                  <Package style={{ width: 15, height: 15, color: "#406B93", pointerEvents: "none" }} />
+                  <Package style={{ width: 14, height: 14, color: "#2563EB", pointerEvents: "none" }} />
                   {editId ? "تعديل بيانات الصنف" : "إضافة صنف جديد"}
                 </div>
 
                 {/* فاصل */}
-                <div style={{ width: 1, height: 18, background: "#B8AFA6", margin: "0 4px", flexShrink: 0 }} />
+                <div style={{ width: 1, height: 16, background: "#E5E7EB", margin: "0 3px", flexShrink: 0 }} />
 
                 {/* ② أزرار العمليات */}
                 <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
@@ -2134,7 +2135,7 @@ export default function Products() {
                 </div>
 
                 {/* فاصل */}
-                <div style={{ width: 1, height: 18, background: "#B8AFA6", margin: "0 4px", flexShrink: 0 }} />
+                <div style={{ width: 1, height: 16, background: "#E5E7EB", margin: "0 3px", flexShrink: 0 }} />
 
                 {/* ③ أسهم التنقل */}
                 <div style={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
@@ -2151,9 +2152,9 @@ export default function Products() {
                     <span style={{ fontSize: 10 }}>السابق</span>
                   </NavBtn>
                   <div style={{
-                    padding: "0 6px", fontSize: 10.5, color: "#555",
+                    padding: "0 7px", fontSize: 10.5, color: "#6B7280",
                     fontFamily: "Tahoma, sans-serif", minWidth: 40, textAlign: "center",
-                    borderRight: "1px solid #C0B9AF", borderLeft: "1px solid #C0B9AF",
+                    borderRight: "1px solid #E5E7EB", borderLeft: "1px solid #E5E7EB",
                     height: 20, lineHeight: "20px",
                   }}>
                     {editId && currentNavIdx >= 0
@@ -2190,10 +2191,10 @@ export default function Products() {
                 />
 
                 {/* فاصل */}
-                <div style={{ width: 1, height: 18, background: "#B8AFA6", margin: "0 4px", flexShrink: 0 }} />
+                <div style={{ width: 1, height: 16, background: "#E5E7EB", margin: "0 3px", flexShrink: 0 }} />
 
                 {/* ④ تكبير + إغلاق */}
-                <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
                   <button
                     onClick={toggleMaximize}
                     title={isMaximized ? "استعادة الحجم" : "تكبير النافذة"}
@@ -2201,30 +2202,30 @@ export default function Products() {
                       display: "flex", alignItems: "center", justifyContent: "center",
                       width: 26, height: 26,
                       background: "transparent", border: "1px solid transparent",
-                      borderRadius: 3, cursor: "pointer", color: "#2B2B2B",
-                      transition: "background 0.1s, border-color 0.1s",
+                      borderRadius: 4, cursor: "pointer", color: "#6B7280",
+                      transition: "background 0.12s, color 0.12s",
                     }}
-                    onMouseEnter={e => { e.currentTarget.style.background = "#C9B89E"; e.currentTarget.style.borderColor = "#B0A090"; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "transparent"; }}
+                    onMouseEnter={e => { e.currentTarget.style.background = "#F3F4F6"; e.currentTarget.style.color = "#111827"; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#6B7280"; }}
                   >
                     {isMaximized
-                      ? <Minimize2 style={{ width: 12, height: 12 }} />
-                      : <Maximize2 style={{ width: 12, height: 12 }} />}
+                      ? <Minimize2 style={{ width: 13, height: 13 }} />
+                      : <Maximize2 style={{ width: 13, height: 13 }} />}
                   </button>
                   <button
                     onClick={() => setIsOpen(false)}
                     title="إغلاق"
                     style={{
                       display: "flex", alignItems: "center", gap: 4,
-                      padding: "3px 9px", height: 26,
+                      padding: "3px 8px", height: 26,
                       background: "transparent", border: "1px solid transparent",
-                      borderRadius: 3, cursor: "pointer",
-                      fontFamily: "'Cairo', Tahoma, sans-serif", fontSize: 11.5, fontWeight: 600,
-                      color: "#2B2B2B", whiteSpace: "nowrap",
-                      transition: "background 0.1s, border-color 0.1s",
+                      borderRadius: 4, cursor: "pointer",
+                      fontFamily: "'Cairo', Tahoma, sans-serif", fontSize: 11.5, fontWeight: 500,
+                      color: "#6B7280", whiteSpace: "nowrap",
+                      transition: "background 0.12s, color 0.12s",
                     }}
-                    onMouseEnter={e => { e.currentTarget.style.background = "#C9B89E"; e.currentTarget.style.borderColor = "#B0A090"; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "transparent"; }}
+                    onMouseEnter={e => { e.currentTarget.style.background = "#FEF2F2"; (e.currentTarget.style as any).color = "#DC2626"; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#6B7280"; }}
                   >
                     <X style={{ width: 12, height: 12 }} />
                     إغلاق
@@ -2252,7 +2253,7 @@ export default function Products() {
   );
 }
 
-// ─── BotBtn: زر Bottom Toolbar ────────────────────────────────────────────────
+// ─── BotBtn: زر Toolbar ───────────────────────────────────────────────────────
 function BotBtn({
   icon, label, onClick, disabled, variant,
 }: {
@@ -2265,14 +2266,19 @@ function BotBtn({
   const [hovered, setHovered] = useState(false);
   const bg = () => {
     if (disabled) return "transparent";
-    if (variant === "primary") return hovered ? "#365E80" : "#406B93";
-    if (variant === "danger")  return hovered ? "#A93226" : "#C0392B";
-    return hovered ? "#E2DDD6" : "transparent";
+    if (variant === "primary") return hovered ? "#1D4ED8" : "#2563EB";
+    if (variant === "danger")  return hovered ? "#B91C1C" : "#DC2626";
+    return hovered ? "#F3F4F6" : "transparent";
+  };
+  const borderColor = () => {
+    if (variant === "primary") return hovered ? "#1D4ED8" : "#2563EB";
+    if (variant === "danger")  return hovered ? "#B91C1C" : "#DC2626";
+    return hovered ? "#D1D5DB" : "transparent";
   };
   const color = () => {
-    if (disabled) return "#bbb";
+    if (disabled) return "#D1D5DB";
     if (variant === "primary" || variant === "danger") return "#fff";
-    return "#2B2B2B";
+    return "#374151";
   };
   return (
     <button
@@ -2281,17 +2287,17 @@ function BotBtn({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        display: "flex", alignItems: "center", gap: 5,
-        padding: "4px 10px", height: 28,
+        display: "flex", alignItems: "center", gap: 4,
+        padding: "3px 8px", height: 26,
         background: bg(), color: color(),
         border: "1px solid",
-        borderColor: variant === "primary" ? "#365E80" : variant === "danger" ? "#A93226" : hovered ? "#C8C0B4" : "transparent",
-        borderRadius: 3, cursor: disabled ? "not-allowed" : "pointer",
+        borderColor: borderColor(),
+        borderRadius: 4, cursor: disabled ? "not-allowed" : "pointer",
         fontFamily: "'Cairo', Tahoma, sans-serif",
-        fontSize: 11.5, fontWeight: 600,
+        fontSize: 11, fontWeight: 500,
         whiteSpace: "nowrap", flexShrink: 0,
-        opacity: disabled ? 0.45 : 1,
-        transition: "background 0.1s, border-color 0.1s",
+        opacity: disabled ? 0.5 : 1,
+        transition: "background 0.12s, border-color 0.12s",
       }}
     >
       {icon}
@@ -2303,7 +2309,7 @@ function BotBtn({
 // ─── BotDivider ───────────────────────────────────────────────────────────────
 function BotDivider() {
   return (
-    <div style={{ width: 1, height: 18, background: "#C8C0B4", margin: "0 2px", flexShrink: 0 }} />
+    <div style={{ width: 1, height: 16, background: "#E5E7EB", margin: "0 2px", flexShrink: 0 }} />
   );
 }
 
@@ -2326,12 +2332,12 @@ function NavBtn({
       onMouseLeave={() => setHovered(false)}
       style={{
         display: "flex", alignItems: "center", gap: 2,
-        padding: "2px 6px", height: 24,
-        background: hovered && !disabled ? "#E2DDD6" : "transparent",
-        color: disabled ? "#bbb" : "#2B2B2B",
+        padding: "2px 5px", height: 22,
+        background: hovered && !disabled ? "#F3F4F6" : "transparent",
+        color: disabled ? "#D1D5DB" : "#4B5563",
         border: "1px solid",
-        borderColor: hovered && !disabled ? "#C8C0B4" : "transparent",
-        borderRadius: 3, cursor: disabled ? "not-allowed" : "pointer",
+        borderColor: hovered && !disabled ? "#D1D5DB" : "transparent",
+        borderRadius: 4, cursor: disabled ? "not-allowed" : "pointer",
         fontFamily: "Tahoma, sans-serif",
         fontSize: 10.5, fontWeight: 500,
         whiteSpace: "nowrap", flexShrink: 0,
