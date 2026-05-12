@@ -135,67 +135,64 @@ function SidebarNav({ user }: { user: any }) {
   const activeTab = tabs.find(t => t.id === activeTabId);
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
-  const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({
-    "/sales-module": true,
-    "/purchases-module": true,
-  });
+  const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
   const toggleModule = (path: string) =>
     setExpandedModules(p => ({ ...p, [path]: !p[path] }));
 
   return (
-    <SidebarContent className="py-2">
+    <SidebarContent className="py-1 overflow-y-auto">
       {navGroups.map((group) => {
         const visibleItems = group.items.filter(
           (item) => !item.roles || (user?.role && item.roles.includes(user.role))
         );
         if (!visibleItems.length) return null;
         return (
-          <SidebarGroup key={group.label}>
+          <SidebarGroup key={group.label} className="p-0">
             {!collapsed && group.label !== "القائمة الرئيسية" && (
-              <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] uppercase tracking-widest font-semibold px-3 mb-1">
+              <SidebarGroupLabel className="text-[#CBD5E1]/50 text-[10px] uppercase tracking-widest font-semibold px-3 py-1 mt-1">
                 {group.label}
               </SidebarGroupLabel>
             )}
-            <SidebarMenu>
+            <SidebarMenu className="gap-0 px-1.5">
               {visibleItems.map((item) => {
                 if (item.children) {
                   const expanded = expandedModules[item.path] ?? false;
                   const hasActiveChild = item.children.some(c => activeTab?.path === c.path);
                   return (
-                    <SidebarMenuItem key={item.path}>
+                    <SidebarMenuItem key={item.path} className="mb-px">
                       <SidebarMenuButton
                         isActive={hasActiveChild}
                         onClick={() => toggleModule(item.path)}
                         tooltip={collapsed ? item.label : undefined}
-                        className={`mx-1 rounded-lg transition-all duration-150 ${
+                        className={`h-[38px] rounded-[4px] px-3 transition-colors text-[13px] font-medium ${
                           hasActiveChild
-                            ? "bg-sidebar-primary/20 text-sidebar-primary font-medium"
-                            : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+                            ? "bg-[#406B93] text-white"
+                            : "text-[#CBD5E1] hover:text-[#E5E7EB] hover:bg-[#1E344F]"
                         }`}
                       >
-                        <item.icon className={`w-4 h-4 shrink-0 ${hasActiveChild ? "text-sidebar-primary" : ""}`} />
-                        <span className="flex-1">{item.label}</span>
+                        <item.icon className="w-4 h-4 shrink-0 text-[#CBD5E1]" />
+                        <span className="flex-1 text-right">{item.label}</span>
                         {!collapsed && (
                           expanded
-                            ? <ChevronDown className="w-3 h-3 shrink-0" />
-                            : <ChevronLeft className="w-3 h-3 shrink-0" />
+                            ? <ChevronDown className="w-3.5 h-3.5 shrink-0 text-[#CBD5E1]/60" />
+                            : <ChevronLeft className="w-3.5 h-3.5 shrink-0 text-[#CBD5E1]/60" />
                         )}
                       </SidebarMenuButton>
                       {!collapsed && expanded && (
-                        <div className="mr-3 border-r border-sidebar-border/40 mt-0.5 mb-1">
+                        <div className="border-r border-[rgba(255,255,255,0.08)] mr-4 mt-px mb-1">
                           {item.children.map(child => {
                             const childActive = activeTab?.path === child.path;
                             return (
                               <button
                                 key={child.path}
                                 onClick={() => openTab(child.path, child.label, child.icon)}
-                                className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors ${
+                                className={`w-full flex items-center gap-2 px-3 h-[34px] text-[12px] font-medium transition-colors rounded-[4px] ${
                                   childActive
-                                    ? "bg-sidebar-primary/15 text-sidebar-primary font-semibold border-r-2 border-sidebar-primary"
-                                    : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+                                    ? "bg-[#406B93] text-white"
+                                    : "text-[#CBD5E1]/80 hover:text-[#E5E7EB] hover:bg-[#1E344F]"
                                 }`}
                               >
-                                <child.icon className="w-3 h-3 shrink-0" />
+                                <child.icon className="w-3.5 h-3.5 shrink-0" />
                                 <span className="text-right leading-tight">{child.label}</span>
                               </button>
                             );
@@ -207,18 +204,18 @@ function SidebarNav({ user }: { user: any }) {
                 }
                 const isActive = activeTab?.path === item.path;
                 return (
-                  <SidebarMenuItem key={item.path}>
+                  <SidebarMenuItem key={item.path} className="mb-px">
                     <SidebarMenuButton
                       isActive={isActive}
                       onClick={() => openTab(item.path, item.label, item.icon)}
                       tooltip={collapsed ? item.label : undefined}
-                      className={`mx-1 rounded-lg transition-all duration-150 ${
+                      className={`h-[38px] rounded-[4px] px-3 transition-colors text-[13px] font-medium ${
                         isActive
-                          ? "bg-sidebar-primary/20 text-sidebar-primary font-medium"
-                          : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+                          ? "bg-[#406B93] text-white"
+                          : "text-[#CBD5E1] hover:text-[#E5E7EB] hover:bg-[#1E344F]"
                       }`}
                     >
-                      <item.icon className={`w-4 h-4 shrink-0 ${isActive ? "text-sidebar-primary" : ""}`} />
+                      <item.icon className={`w-4 h-4 shrink-0 ${isActive ? "text-white" : "text-[#CBD5E1]"}`} />
                       <span>{item.label}</span>
                       {item.badge && (
                         <Badge variant="destructive" className="mr-auto text-[10px] h-4 px-1">
@@ -231,7 +228,7 @@ function SidebarNav({ user }: { user: any }) {
               })}
             </SidebarMenu>
             {group.label !== "القائمة الرئيسية" && (
-              <SidebarSeparator className="mt-2 bg-sidebar-border/50" />
+              <SidebarSeparator className="my-1 bg-[rgba(255,255,255,0.06)]" />
             )}
           </SidebarGroup>
         );
