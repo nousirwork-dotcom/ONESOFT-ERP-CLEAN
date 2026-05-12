@@ -1,17 +1,14 @@
 /**
- * SalesInvoicePage.tsx
- * فاتورة مبيعات كلاسيكية بتصميم مطابق لبرنامج أجيال
- * - تنقل Tab/Enter بين حقول الجدول
- * - Ctrl+C لنسخ السطر المحدد، Ctrl+V للصق
- * - رأس الفاتورة: رقم الفاتورة، التاريخ، العميل، المخزن، نوع السند، العملة، البائع، الكود التحليلي
- * - جدول الأصناف: رقم الصنف، اسم الصنف، الكمية، الوحدة، السعر، الخصم%، الخصم$، الضريبة%، الإجمالي
- * - قسم الإجماليات: إجمالي، خصم، ضريبة، صافي، مدفوع نقداً، مدين
+ * SalesInvoicePage.tsx — فاتورة مبيعات احترافية
+ * تصميم ERP كثيف (NamaSoft / Dynamics / Oracle Forms)
+ * - ترقيم تسلسلي تلقائي: INV-YYYY-XXXXXX
+ * - نوع السند: نقدًا / آجل مع حساب المدفوع والمتبقي
+ * - حفظ كامل مع Validation وتوست احترافي
+ * - تنقل Tab/Enter بين خلايا الجدول
+ * - بحث الأصناف بالاسم أو الكود
  */
 import React, { useState, useRef, useCallback, useEffect, KeyboardEvent } from "react";
 import { Plus, X } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import ERPToolbar, { ERPMode } from "@/components/ERPToolbar";
@@ -32,6 +29,8 @@ interface InvoiceLine {
   productId?: number;
 }
 
+type PaymentType = "cash" | "credit";
+
 const EMPTY_LINE = (): InvoiceLine => ({
   id: crypto.randomUUID(),
   productCode: "",
@@ -46,7 +45,6 @@ const EMPTY_LINE = (): InvoiceLine => ({
   total: "0",
 });
 
-// أعمدة الجدول بالترتيب للتنقل بـ Tab
 const COL_FIELDS: (keyof InvoiceLine)[] = [
   "productCode", "productName", "quantity", "unit", "unitPrice",
   "discountPct", "discountAmt", "taxPct", "taxAmt",
@@ -59,99 +57,99 @@ function calcLineTotal(line: InvoiceLine): string {
   const discPct = parseFloat(line.discountPct) || 0;
   const taxPct = parseFloat(line.taxPct) || 0;
   const base = qty * price;
-  const discAmt = base * (discPct / 100);
-  const afterDisc = base - discAmt;
-  const taxAmt = afterDisc * (taxPct / 100);
-  return (afterDisc + taxAmt).toFixed(3);
+  const afterDisc = base - base * (discPct / 100);
+  return (afterDisc + afterDisc * (taxPct / 100)).toFixed(3);
 }
+
+function fmt(n: number) { return n.toFixed(3); }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function SalesInvoicePage() {
-  // Header state
+  // ── Header state ─────────────────────────────────────────────────────────
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [dueDate, setDueDate] = useState("");
   const [customerId, setCustomerId] = useState<number | null>(null);
   const [customerName, setCustomerName] = useState("");
   const [warehouseId, setWarehouseId] = useState<number | null>(null);
-  const [voucherType, setVoucherType] = useState("");
-  const [basedOn, setBasedOn] = useState("");
+  const [paymentType, setPaymentType] = useState<PaymentType>("cash");
   const [currency, setCurrency] = useState("SAR");
-  const [exchangeRate, setExchangeRate] = useState("1.00000");
-  const [salesperson, setSalesperson] = useState("بائع");
-  const [analyticCode, setAnalyticCode] = useState("");
+  const [exchangeRate, setExchangeRate] = useState("1.000");
+  const [salesperson, setSalesperson] = useState("");
+  const [basedOn, setBasedOn] = useState("");
   const [notes, setNotes] = useState("");
+  const [paidAmountOverride, setPaidAmountOverride] = useState<string>("");
 
-  // Lines state
+  // ── Lines state ───────────────────────────────────────────────────────────
   const [lines, setLines] = useState<InvoiceLine[]>([EMPTY_LINE()]);
   const [selectedLineIdx, setSelectedLineIdx] = useState<number>(0);
   const [copiedLine, setCopiedLine] = useState<InvoiceLine | null>(null);
 
-  // Refs for cell inputs
+  // ── ERP mode ──────────────────────────────────────────────────────────────
+  const [erpMode, setErpMode] = useState<ERPMode>("new");
+
   const cellRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
-  // Queries
+  // ── Queries ───────────────────────────────────────────────────────────────
   const customersQuery = trpc.customers.list.useQuery({});
   const warehousesQuery = trpc.warehouses.list.useQuery();
   const productsQuery = trpc.products.list.useQuery({});
-  const nextNumberQuery = trpc.salesInvoices.nextNumber.useQuery({ prefix: "SI" });
+  const nextNumberQuery = trpc.salesInvoices.nextNumber.useQuery({ prefix: "INV" });
 
-  // Mutations
   const createMutation = trpc.salesInvoices.create.useMutation({
-    onSuccess: () => {
-      toast.success("تم حفظ الفاتورة بنجاح");
+    onSuccess: (data) => {
+      toast.success(`✓ تم حفظ الفاتورة ${data.invoiceNumber} بنجاح`, {
+        description: `الإجمالي: ${fmt(netTotal)} ${currency}`,
+        duration: 4000,
+      });
       handleNew();
     },
-    onError: (e) => toast.error(`خطأ: ${e.message}`),
+    onError: (e) => toast.error(`خطأ في الحفظ: ${e.message}`),
   });
 
-  // Set invoice number on load
+  // ── Auto number on load ───────────────────────────────────────────────────
   useEffect(() => {
     if (nextNumberQuery.data && !invoiceNumber) {
       setInvoiceNumber(nextNumberQuery.data);
     }
   }, [nextNumberQuery.data]);
 
-  // ─── Calculations ─────────────────────────────────────────────────────────
+  // ── Calculations ──────────────────────────────────────────────────────────
   const subtotal = lines.reduce((s, l) => {
-    const qty = parseFloat(l.quantity) || 0;
-    const price = parseFloat(l.unitPrice) || 0;
-    return s + qty * price;
+    return s + (parseFloat(l.quantity) || 0) * (parseFloat(l.unitPrice) || 0);
   }, 0);
 
   const totalDiscount = lines.reduce((s, l) => {
-    const qty = parseFloat(l.quantity) || 0;
-    const price = parseFloat(l.unitPrice) || 0;
-    const discPct = parseFloat(l.discountPct) || 0;
-    return s + qty * price * (discPct / 100);
+    const base = (parseFloat(l.quantity) || 0) * (parseFloat(l.unitPrice) || 0);
+    return s + base * ((parseFloat(l.discountPct) || 0) / 100);
   }, 0);
 
   const totalTax = lines.reduce((s, l) => {
-    const qty = parseFloat(l.quantity) || 0;
-    const price = parseFloat(l.unitPrice) || 0;
-    const discPct = parseFloat(l.discountPct) || 0;
-    const taxPct = parseFloat(l.taxPct) || 0;
-    const base = qty * price;
-    const afterDisc = base - base * (discPct / 100);
-    return s + afterDisc * (taxPct / 100);
+    const base = (parseFloat(l.quantity) || 0) * (parseFloat(l.unitPrice) || 0);
+    const afterDisc = base - base * ((parseFloat(l.discountPct) || 0) / 100);
+    return s + afterDisc * ((parseFloat(l.taxPct) || 0) / 100);
   }, 0);
 
   const netTotal = subtotal - totalDiscount + totalTax;
 
-  // ─── Line Operations ──────────────────────────────────────────────────────
+  // المدفوع والمتبقي بناءً على نوع السند
+  const paidAmount = paymentType === "cash"
+    ? netTotal
+    : parseFloat(paidAmountOverride || "0");
+  const remainingAmount = Math.max(0, netTotal - paidAmount);
+
+  // ── Line Operations ───────────────────────────────────────────────────────
   const updateLine = useCallback((idx: number, field: keyof InvoiceLine, value: string) => {
     setLines(prev => {
       const updated = [...prev];
       const line = { ...updated[idx], [field]: value };
-      // Auto-calc discount amount when pct changes
       if (field === "discountPct" || field === "quantity" || field === "unitPrice") {
         const qty = parseFloat(field === "quantity" ? value : line.quantity) || 0;
         const price = parseFloat(field === "unitPrice" ? value : line.unitPrice) || 0;
         const discPct = parseFloat(field === "discountPct" ? value : line.discountPct) || 0;
         line.discountAmt = (qty * price * discPct / 100).toFixed(3);
       }
-      // Auto-calc tax amount when pct changes
-      if (field === "taxPct" || field === "quantity" || field === "unitPrice" || field === "discountPct") {
+      if (["taxPct", "quantity", "unitPrice", "discountPct"].includes(field)) {
         const qty = parseFloat(line.quantity) || 0;
         const price = parseFloat(line.unitPrice) || 0;
         const discPct = parseFloat(line.discountPct) || 0;
@@ -172,37 +170,35 @@ export default function SalesInvoicePage() {
   }, []);
 
   const deleteLine = useCallback((idx: number) => {
-    setLines(prev => {
-      if (prev.length === 1) return [EMPTY_LINE()];
-      return prev.filter((_, i) => i !== idx);
-    });
+    setLines(prev => prev.length === 1 ? [EMPTY_LINE()] : prev.filter((_, i) => i !== idx));
     setSelectedLineIdx(prev => Math.max(0, prev - 1));
   }, []);
 
-  // ─── Product Search ───────────────────────────────────────────────────────
+  // ── Product auto-fill ─────────────────────────────────────────────────────
   const handleProductCodeChange = useCallback((idx: number, code: string) => {
     updateLine(idx, "productCode", code);
     if (!code) return;
-    const products = productsQuery.data ?? [];
-    const found = products.find(p => p.sku === code || p.barcode === code || p.id.toString() === code);
+    const found = (productsQuery.data ?? []).find(
+      p => p.sku === code || p.barcode === code || String(p.id) === code
+    );
     if (found) {
       setLines(prev => {
         const updated = [...prev];
-        const line = { ...updated[idx] };
-        line.productCode = found.sku ?? found.barcode ?? code;
-        line.productName = found.name;
-        line.productId = found.id;
-        line.unit = found.unit ?? "";
-        line.unitPrice = found.salePrice ? String(found.salePrice) : "";
-        line.taxPct = found.vatRate ? String(found.vatRate) : "0";
-        line.total = calcLineTotal(line);
-        updated[idx] = line;
+        const l = { ...updated[idx] };
+        l.productCode = found.sku ?? found.barcode ?? code;
+        l.productName = found.name;
+        l.productId = found.id;
+        l.unit = found.unit ?? "";
+        l.unitPrice = found.salePrice ? String(found.salePrice) : "";
+        l.taxPct = found.taxRate ? String(found.taxRate) : "0";
+        l.total = calcLineTotal(l);
+        updated[idx] = l;
         return updated;
       });
     }
   }, [productsQuery.data]);
 
-  // ─── Keyboard Navigation (Tab/Enter + Ctrl+C/V) ──────────────────────────
+  // ── Keyboard Navigation ───────────────────────────────────────────────────
   const handleCellKeyDown = useCallback((
     e: KeyboardEvent<HTMLInputElement>,
     rowIdx: number,
@@ -211,108 +207,100 @@ export default function SalesInvoicePage() {
     const totalCols = COL_FIELDS.length;
     const totalRows = lines.length;
 
-    // Ctrl+C: نسخ السطر الحالي
     if (e.ctrlKey && e.key === "c") {
       e.preventDefault();
       setCopiedLine({ ...lines[rowIdx] });
       toast.info(`تم نسخ السطر ${rowIdx + 1}`);
       return;
     }
-
-    // Ctrl+V: لصق السطر المنسوخ
     if (e.ctrlKey && e.key === "v") {
       e.preventDefault();
       if (!copiedLine) { toast.warning("لا يوجد سطر منسوخ"); return; }
       setLines(prev => {
         const updated = [...prev];
-        const newLine = { ...copiedLine, id: crypto.randomUUID() };
-        newLine.total = calcLineTotal(newLine);
-        updated.splice(rowIdx + 1, 0, newLine);
+        updated.splice(rowIdx + 1, 0, { ...copiedLine, id: crypto.randomUUID() });
         return updated;
       });
-      setTimeout(() => {
-        const key = `${rowIdx + 1}-0`;
-        cellRefs.current.get(key)?.focus();
-      }, 50);
+      setTimeout(() => cellRefs.current.get(`${rowIdx + 1}-0`)?.focus(), 50);
       return;
     }
-
-    // Tab أو Enter: الانتقال للحقل التالي
     if (e.key === "Tab" || e.key === "Enter") {
       e.preventDefault();
       const nextCol = colIdx + 1;
       if (nextCol < totalCols) {
-        // انتقل للعمود التالي في نفس السطر
-        const key = `${rowIdx}-${nextCol}`;
-        cellRefs.current.get(key)?.focus();
+        cellRefs.current.get(`${rowIdx}-${nextCol}`)?.focus();
       } else {
-        // آخر عمود → انتقل للسطر التالي
         if (rowIdx + 1 < totalRows) {
           setSelectedLineIdx(rowIdx + 1);
-          const key = `${rowIdx + 1}-0`;
-          cellRefs.current.get(key)?.focus();
+          cellRefs.current.get(`${rowIdx + 1}-0`)?.focus();
         } else {
-          // آخر سطر → أضف سطراً جديداً
           addLine();
-          setTimeout(() => {
-            const key = `${rowIdx + 1}-0`;
-            cellRefs.current.get(key)?.focus();
-          }, 50);
+          setTimeout(() => cellRefs.current.get(`${rowIdx + 1}-0`)?.focus(), 50);
         }
       }
       return;
     }
-
-    // Shift+Tab: الانتقال للخلف
     if (e.shiftKey && e.key === "Tab") {
       e.preventDefault();
       const prevCol = colIdx - 1;
-      if (prevCol >= 0) {
-        const key = `${rowIdx}-${prevCol}`;
-        cellRefs.current.get(key)?.focus();
-      } else if (rowIdx > 0) {
-        setSelectedLineIdx(rowIdx - 1);
-        const key = `${rowIdx - 1}-${totalCols - 1}`;
-        cellRefs.current.get(key)?.focus();
-      }
+      if (prevCol >= 0) cellRefs.current.get(`${rowIdx}-${prevCol}`)?.focus();
+      else if (rowIdx > 0) cellRefs.current.get(`${rowIdx - 1}-${totalCols - 1}`)?.focus();
       return;
     }
-
-    // Delete: حذف السطر
-    if (e.key === "Delete" && e.ctrlKey) {
+    if (e.ctrlKey && e.key === "Delete") {
       e.preventDefault();
       deleteLine(rowIdx);
-      return;
     }
   }, [lines, copiedLine, addLine, deleteLine]);
 
-  // ─── Save ─────────────────────────────────────────────────────────────────
+  // ── Validation & Save ─────────────────────────────────────────────────────
   const handleSave = useCallback(() => {
-    const validLines = lines.filter(l => l.productName.trim() !== "");
-    if (validLines.length === 0) {
-      toast.error("يجب إضافة صنف واحد على الأقل");
+    // Validation
+    if (!invoiceNumber.trim()) {
+      toast.error("رقم الفاتورة مطلوب");
       return;
     }
+    const validLines = lines.filter(l => l.productName.trim() !== "");
+    if (validLines.length === 0) {
+      toast.error("يجب إضافة صنف واحد على الأقل في الفاتورة");
+      return;
+    }
+    for (const l of validLines) {
+      if (!l.unitPrice || parseFloat(l.unitPrice) === 0) {
+        toast.error(`سعر الصنف "${l.productName}" يجب أن يكون أكبر من صفر`);
+        return;
+      }
+      if (!l.quantity || parseFloat(l.quantity) === 0) {
+        toast.error(`كمية الصنف "${l.productName}" يجب أن تكون أكبر من صفر`);
+        return;
+      }
+    }
+
+    const paid = paymentType === "cash" ? fmt(netTotal) : fmt(paidAmount);
+    const remaining = paymentType === "cash" ? "0.000" : fmt(remainingAmount);
+    const payMethod = paymentType === "cash" ? "cash" : "credit";
+    const status = paymentType === "cash" ? "paid" : (remainingAmount <= 0 ? "paid" : "confirmed");
+
     createMutation.mutate({
       invoiceNumber,
-      invoiceType: "invoice",
-      invoiceDate: new Date(invoiceDate),
-      dueDate: dueDate ? new Date(dueDate) : undefined,
+      invoiceType: "sale",
+      invoiceDate,
+      dueDate: dueDate || undefined,
       customerId: customerId ?? undefined,
       customerName: customerName || undefined,
       warehouseId: warehouseId ?? undefined,
       currency,
       exchangeRate,
-      voucherType: voucherType || undefined,
-      basedOn: basedOn || undefined,
-      analyticCode: analyticCode || undefined,
-      salesperson: salesperson || undefined,
+      subtotal: fmt(subtotal),
+      discountAmount: fmt(totalDiscount),
+      taxAmount: fmt(totalTax),
+      total: fmt(netTotal),
+      paidAmount: paid,
+      remainingAmount: remaining,
+      paymentMethod: payMethod as any,
+      status: status as any,
       notes: notes || undefined,
-      subtotal: subtotal.toFixed(3),
-      discountAmount: totalDiscount.toFixed(3),
-      taxAmount: totalTax.toFixed(3),
-      total: netTotal.toFixed(3),
-      items: validLines.map(l => ({
+      items: validLines.map((l, idx) => ({
         productId: l.productId,
         productCode: l.productCode || undefined,
         productName: l.productName,
@@ -324,46 +312,51 @@ export default function SalesInvoicePage() {
         taxPercent: l.taxPct,
         taxAmount: l.taxAmt,
         total: l.total,
+        sortOrder: idx,
       })),
     });
-  }, [invoiceNumber, invoiceDate, dueDate, customerId, customerName, warehouseId, currency, exchangeRate, voucherType, basedOn, analyticCode, salesperson, notes, lines, subtotal, totalDiscount, totalTax, netTotal, createMutation]);
+  }, [
+    invoiceNumber, invoiceDate, dueDate, customerId, customerName,
+    warehouseId, currency, exchangeRate, paymentType, paidAmount,
+    remainingAmount, notes, lines, subtotal, totalDiscount, totalTax,
+    netTotal, createMutation,
+  ]);
 
-  // ─── New Invoice ──────────────────────────────────────────────────────────
+  // ── New Invoice ───────────────────────────────────────────────────────────
   const handleNew = useCallback(() => {
     setLines([EMPTY_LINE()]);
     setSelectedLineIdx(0);
     setCustomerId(null);
     setCustomerName("");
     setWarehouseId(null);
-    setVoucherType("");
+    setPaymentType("cash");
     setBasedOn("");
-    setAnalyticCode("");
     setNotes("");
     setDueDate("");
+    setSalesperson("");
+    setPaidAmountOverride("");
+    setErpMode("new");
     nextNumberQuery.refetch().then(r => {
       if (r.data) setInvoiceNumber(r.data);
     });
   }, [nextNumberQuery]);
 
-  // ─── ERP mode state ───────────────────────────────────────────────────────
-  const [erpMode, setErpMode] = useState<ERPMode>("new");
-
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div
-      className="flex flex-col h-full bg-[#f0f0f0] text-[#1a1a1a] select-none"
-      style={{ fontFamily: "Tahoma, Arial, sans-serif", fontSize: "12px" }}
+      className="flex flex-col h-full text-[#1a1a1a] select-none"
+      style={{ fontFamily: "'Cairo', Tahoma, Arial, sans-serif", fontSize: "12px", background: "#ECE7DD" }}
       dir="rtl"
     >
-      {/* ── ERP Toolbar ──────────────────────────────────────────────────── */}
+      {/* ── ERP Toolbar ─────────────────────────────────────────────────── */}
       <ERPToolbar
         pageTitle="فواتير المبيعات"
         mode={erpMode}
         saveDisabled={createMutation.isPending}
         onNew={() => { handleNew(); setErpMode("new"); }}
-        onSave={() => { handleSave(); setErpMode("view"); }}
+        onSave={() => handleSave()}
         onEdit={() => { setErpMode("edit"); toast.info("وضع التعديل"); }}
-        onDelete={() => { toast.info("حذف الفاتورة..."); }}
+        onDelete={() => toast.info("حذف الفاتورة...")}
         onSearch={() => { setErpMode("search"); toast.info("بحث..."); }}
         onRefresh={() => nextNumberQuery.refetch()}
         onCopy={() => copiedLine && toast.info("تم النسخ")}
@@ -379,172 +372,185 @@ export default function SalesInvoicePage() {
         enableShortcuts
       />
 
-      {/* ── Header Form ──────────────────────────────────────────────────── */}
-      <div className="bg-white border-b border-[#a0a0a0] px-3 py-2">
-        {/* Row 1 */}
-        <div className="grid grid-cols-6 gap-x-3 gap-y-1 mb-1">
-          <HeaderField label="فاتورة #">
+      {/* ── Header Form ─────────────────────────────────────────────────── */}
+      <div className="bg-white border-b border-[#b0a89a] px-3 pt-2 pb-1.5" style={{ boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }}>
+
+        {/* ── رقم الفاتورة (بارز أعلى يمين) + حقول الصف الأول ── */}
+        <div className="flex items-start gap-2 mb-1.5">
+          {/* رقم الفاتورة — بارز */}
+          <div className="flex flex-col gap-0.5 flex-shrink-0">
+            <label className="text-[10px] font-bold text-[#406B93] uppercase tracking-wide">رقم الفاتورة</label>
             <input
               value={invoiceNumber}
               onChange={e => setInvoiceNumber(e.target.value)}
-              className="classic-input w-full"
-              style={{ backgroundColor: "#ffffcc" }}
+              className="classic-input text-center font-bold"
+              style={{
+                width: 148, background: "#FFFDE7", borderColor: "#F59E0B",
+                color: "#1a1a1a", fontSize: "13px", fontWeight: 700,
+                letterSpacing: "0.03em",
+              }}
             />
-          </HeaderField>
-          <HeaderField label="بناءً على">
-            <input
-              value={basedOn}
-              onChange={e => setBasedOn(e.target.value)}
+          </div>
+
+          {/* Grid الحقول الرئيسية */}
+          <div className="grid gap-x-2 gap-y-1 flex-1" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
+            <HF label="العميل">
+              <select
+                value={customerId ?? ""}
+                onChange={e => {
+                  const id = parseInt(e.target.value);
+                  setCustomerId(isNaN(id) ? null : id);
+                  const c = customersQuery.data?.find(x => x.id === id);
+                  setCustomerName(c?.name ?? "");
+                }}
+                className="classic-input w-full"
+              >
+                <option value="">-- اختر عميل --</option>
+                {customersQuery.data?.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </HF>
+            <HF label="تاريخ التحرير">
+              <input
+                type="date"
+                value={invoiceDate}
+                onChange={e => setInvoiceDate(e.target.value)}
+                className="classic-input w-full"
+              />
+            </HF>
+            <HF label="تاريخ الدفع">
+              <input
+                type="date"
+                value={dueDate}
+                onChange={e => setDueDate(e.target.value)}
+                className="classic-input w-full"
+              />
+            </HF>
+            <HF label="المخزن">
+              <select
+                value={warehouseId ?? ""}
+                onChange={e => setWarehouseId(parseInt(e.target.value) || null)}
+                className="classic-input w-full"
+              >
+                <option value="">-- اختر مخزن --</option>
+                {warehousesQuery.data?.map(w => (
+                  <option key={w.id} value={w.id}>{w.name}</option>
+                ))}
+              </select>
+            </HF>
+            <HF label="البائع">
+              <input
+                value={salesperson}
+                onChange={e => setSalesperson(e.target.value)}
+                className="classic-input w-full"
+              />
+            </HF>
+          </div>
+        </div>
+
+        {/* ── الصف الثاني ── */}
+        <div className="grid gap-x-2 gap-y-1" style={{ gridTemplateColumns: "150px 120px 90px 100px 1fr 1fr" }}>
+          <HF label="نوع السند">
+            <select
+              value={paymentType}
+              onChange={e => {
+                setPaymentType(e.target.value as PaymentType);
+                setPaidAmountOverride("");
+              }}
               className="classic-input w-full"
-            />
-          </HeaderField>
-          <HeaderField label="نوع السند">
-            <input
-              value={voucherType}
-              onChange={e => setVoucherType(e.target.value)}
-              className="classic-input w-full"
-            />
-          </HeaderField>
-          <HeaderField label="العملة">
+              style={{
+                background: paymentType === "cash" ? "#F0FDF4" : "#FFF7ED",
+                borderColor: paymentType === "cash" ? "#16A34A" : "#D97706",
+                fontWeight: 700,
+                color: paymentType === "cash" ? "#15803D" : "#B45309",
+              }}
+            >
+              <option value="cash">نقدًا</option>
+              <option value="credit">آجل</option>
+            </select>
+          </HF>
+          <HF label="العملة">
             <select
               value={currency}
               onChange={e => setCurrency(e.target.value)}
               className="classic-input w-full"
             >
-              <option value="SAR">SAR</option>
-              <option value="USD">USD</option>
-              <option value="EUR">EUR</option>
-              <option value="AED">AED</option>
+              <option value="SAR">ريال سعودي (SAR)</option>
+              <option value="USD">دولار (USD)</option>
+              <option value="EUR">يورو (EUR)</option>
+              <option value="AED">درهم (AED)</option>
             </select>
-          </HeaderField>
-          <HeaderField label="سعر الصرف">
+          </HF>
+          <HF label="سعر الصرف">
             <input
               value={exchangeRate}
               onChange={e => setExchangeRate(e.target.value)}
               className="classic-input w-full text-center"
             />
-          </HeaderField>
-          <div />
-        </div>
-        {/* Row 2 */}
-        <div className="grid grid-cols-6 gap-x-3 gap-y-1 mb-1">
-          <HeaderField label="عميل">
-            <select
-              value={customerId ?? ""}
-              onChange={e => {
-                const id = parseInt(e.target.value);
-                setCustomerId(isNaN(id) ? null : id);
-                const c = customersQuery.data?.find(x => x.id === id);
-                setCustomerName(c?.name ?? "");
-              }}
-              className="classic-input w-full"
-            >
-              <option value="">-- اختر عميل --</option>
-              {customersQuery.data?.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </HeaderField>
-          <HeaderField label="تاريخ التحرير">
+          </HF>
+          <HF label="بناءً على">
             <input
-              type="date"
-              value={invoiceDate}
-              onChange={e => setInvoiceDate(e.target.value)}
+              value={basedOn}
+              onChange={e => setBasedOn(e.target.value)}
               className="classic-input w-full"
             />
-          </HeaderField>
-          <HeaderField label="تاريخ الدفع">
-            <input
-              type="date"
-              value={dueDate}
-              onChange={e => setDueDate(e.target.value)}
-              className="classic-input w-full"
-            />
-          </HeaderField>
-          <HeaderField label="مخزن">
-            <select
-              value={warehouseId ?? ""}
-              onChange={e => setWarehouseId(parseInt(e.target.value) || null)}
-              className="classic-input w-full"
-            >
-              <option value="">-- اختر مخزن --</option>
-              {warehousesQuery.data?.map(w => (
-                <option key={w.id} value={w.id}>{w.name}</option>
-              ))}
-            </select>
-          </HeaderField>
-          <HeaderField label="بائع">
-            <input
-              value={salesperson}
-              onChange={e => setSalesperson(e.target.value)}
-              className="classic-input w-full"
-            />
-          </HeaderField>
-          <div />
-        </div>
-        {/* Row 3 */}
-        <div className="grid grid-cols-6 gap-x-3 gap-y-1">
-          <HeaderField label="ملحوظة">
+          </HF>
+          <HF label="ملحوظة">
             <input
               value={notes}
               onChange={e => setNotes(e.target.value)}
               className="classic-input w-full"
             />
-          </HeaderField>
-          <HeaderField label="الكود التحليلي">
-            <input
-              value={analyticCode}
-              onChange={e => setAnalyticCode(e.target.value)}
-              className="classic-input w-full"
-            />
-          </HeaderField>
-          <div className="col-span-4" />
+          </HF>
+          <div />
         </div>
       </div>
 
-      {/* ── Lines Table ──────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-auto bg-white border-b border-[#a0a0a0]">
+      {/* ── Lines Table ─────────────────────────────────────────────────── */}
+      <div className="flex-1 overflow-auto bg-white border-b border-[#b0a89a]">
         <table className="w-full border-collapse" style={{ fontSize: "12px" }}>
-          <thead>
-            <tr className="bg-[#d4e3f7] text-[#1a1a1a]">
-              <th className="classic-th w-8 text-center">#</th>
-              <th className="classic-th w-24">رقم الصنف</th>
-              <th className="classic-th">إسم الصنف</th>
-              <th className="classic-th w-20 text-center">كمية</th>
-              <th className="classic-th w-20">وحدة</th>
-              <th className="classic-th w-24 text-center">سعر الوحدة</th>
-              <th className="classic-th w-16 text-center">%</th>
-              <th className="classic-th w-24 text-center">تخفيض $</th>
-              <th className="classic-th w-16 text-center">ض%</th>
-              <th className="classic-th w-24 text-center">القيمة</th>
-              <th className="classic-th w-8"></th>
+          <thead className="sticky top-0 z-10">
+            <tr style={{ background: "linear-gradient(to bottom, #406B93, #365E80)", color: "#fff" }}>
+              <th className="inv-th w-8 text-center">#</th>
+              <th className="inv-th w-24">رقم الصنف</th>
+              <th className="inv-th">اسم الصنف</th>
+              <th className="inv-th w-20 text-center">الكمية</th>
+              <th className="inv-th w-20 text-center">الوحدة</th>
+              <th className="inv-th w-24 text-center">السعر</th>
+              <th className="inv-th w-14 text-center">خصم%</th>
+              <th className="inv-th w-24 text-center">الخصم ﷼</th>
+              <th className="inv-th w-14 text-center">ض%</th>
+              <th className="inv-th w-24 text-center font-bold">الإجمالي</th>
+              <th className="inv-th w-7"></th>
             </tr>
           </thead>
           <tbody>
             {lines.map((line, rowIdx) => (
               <tr
                 key={line.id}
-                className={`border-b border-[#e0e0e0] ${selectedLineIdx === rowIdx ? "bg-[#e8f0fe]" : rowIdx % 2 === 0 ? "bg-white" : "bg-[#f8f8f8]"}`}
+                className={`border-b border-[#e8e4dc] ${
+                  selectedLineIdx === rowIdx
+                    ? "bg-[#EEF4FA]"
+                    : rowIdx % 2 === 0 ? "bg-white" : "bg-[#FAFAF8]"
+                }`}
                 onClick={() => setSelectedLineIdx(rowIdx)}
               >
-                {/* # */}
-                <td className="classic-td text-center text-[#666]">{rowIdx + 1}</td>
+                <td className="inv-td text-center text-[#999] text-[11px]">{rowIdx + 1}</td>
 
-                {/* رقم الصنف */}
-                <td className="classic-td p-0">
+                <td className="inv-td p-0">
                   <input
                     ref={el => { if (el) cellRefs.current.set(`${rowIdx}-0`, el); }}
                     value={line.productCode}
                     onChange={e => handleProductCodeChange(rowIdx, e.target.value)}
                     onFocus={() => setSelectedLineIdx(rowIdx)}
                     onKeyDown={e => handleCellKeyDown(e, rowIdx, 0)}
-                    className="classic-cell-input w-full"
+                    className="inv-cell"
                     placeholder="كود..."
                   />
                 </td>
 
-                {/* اسم الصنف */}
-                <td className="classic-td p-0">
+                <td className="inv-td p-0">
                   <ProductNameCell
                     rowIdx={rowIdx}
                     value={line.productName}
@@ -553,13 +559,7 @@ export default function SalesInvoicePage() {
                     onSelect={(name, code, id, unit, price, tax) => {
                       setLines(prev => {
                         const updated = [...prev];
-                        const l = { ...updated[rowIdx] };
-                        l.productName = name;
-                        l.productCode = code;
-                        l.productId = id;
-                        l.unit = unit;
-                        l.unitPrice = price;
-                        l.taxPct = tax;
+                        const l = { ...updated[rowIdx], productName: name, productCode: code, productId: id, unit, unitPrice: price, taxPct: tax };
                         l.total = calcLineTotal(l);
                         updated[rowIdx] = l;
                         return updated;
@@ -570,8 +570,7 @@ export default function SalesInvoicePage() {
                   />
                 </td>
 
-                {/* كمية */}
-                <td className="classic-td p-0">
+                <td className="inv-td p-0">
                   <input
                     ref={el => { if (el) cellRefs.current.set(`${rowIdx}-2`, el); }}
                     type="number"
@@ -579,26 +578,24 @@ export default function SalesInvoicePage() {
                     onChange={e => updateLine(rowIdx, "quantity", e.target.value)}
                     onFocus={e => { setSelectedLineIdx(rowIdx); e.target.select(); }}
                     onKeyDown={e => handleCellKeyDown(e, rowIdx, 2)}
-                    className="classic-cell-input w-full text-center"
+                    className="inv-cell text-center"
                     min="0"
                   />
                 </td>
 
-                {/* وحدة */}
-                <td className="classic-td p-0">
+                <td className="inv-td p-0">
                   <input
                     ref={el => { if (el) cellRefs.current.set(`${rowIdx}-3`, el); }}
                     value={line.unit}
                     onChange={e => updateLine(rowIdx, "unit", e.target.value)}
                     onFocus={() => setSelectedLineIdx(rowIdx)}
                     onKeyDown={e => handleCellKeyDown(e, rowIdx, 3)}
-                    className="classic-cell-input w-full text-center"
+                    className="inv-cell text-center"
                     placeholder="وحدة"
                   />
                 </td>
 
-                {/* سعر الوحدة */}
-                <td className="classic-td p-0">
+                <td className="inv-td p-0">
                   <input
                     ref={el => { if (el) cellRefs.current.set(`${rowIdx}-4`, el); }}
                     type="number"
@@ -606,13 +603,12 @@ export default function SalesInvoicePage() {
                     onChange={e => updateLine(rowIdx, "unitPrice", e.target.value)}
                     onFocus={e => { setSelectedLineIdx(rowIdx); e.target.select(); }}
                     onKeyDown={e => handleCellKeyDown(e, rowIdx, 4)}
-                    className="classic-cell-input w-full text-center"
+                    className="inv-cell text-center"
                     min="0"
                   />
                 </td>
 
-                {/* خصم % */}
-                <td className="classic-td p-0">
+                <td className="inv-td p-0">
                   <input
                     ref={el => { if (el) cellRefs.current.set(`${rowIdx}-5`, el); }}
                     type="number"
@@ -620,13 +616,12 @@ export default function SalesInvoicePage() {
                     onChange={e => updateLine(rowIdx, "discountPct", e.target.value)}
                     onFocus={e => { setSelectedLineIdx(rowIdx); e.target.select(); }}
                     onKeyDown={e => handleCellKeyDown(e, rowIdx, 5)}
-                    className="classic-cell-input w-full text-center"
+                    className="inv-cell text-center"
                     min="0" max="100"
                   />
                 </td>
 
-                {/* خصم $ */}
-                <td className="classic-td p-0">
+                <td className="inv-td p-0">
                   <input
                     ref={el => { if (el) cellRefs.current.set(`${rowIdx}-6`, el); }}
                     type="number"
@@ -634,13 +629,12 @@ export default function SalesInvoicePage() {
                     onChange={e => updateLine(rowIdx, "discountAmt", e.target.value)}
                     onFocus={e => { setSelectedLineIdx(rowIdx); e.target.select(); }}
                     onKeyDown={e => handleCellKeyDown(e, rowIdx, 6)}
-                    className="classic-cell-input w-full text-center"
+                    className="inv-cell text-center"
                     min="0"
                   />
                 </td>
 
-                {/* ضريبة % */}
-                <td className="classic-td p-0">
+                <td className="inv-td p-0">
                   <input
                     ref={el => { if (el) cellRefs.current.set(`${rowIdx}-7`, el); }}
                     type="number"
@@ -648,22 +642,20 @@ export default function SalesInvoicePage() {
                     onChange={e => updateLine(rowIdx, "taxPct", e.target.value)}
                     onFocus={e => { setSelectedLineIdx(rowIdx); e.target.select(); }}
                     onKeyDown={e => handleCellKeyDown(e, rowIdx, 7)}
-                    className="classic-cell-input w-full text-center"
+                    className="inv-cell text-center"
                     min="0" max="100"
                   />
                 </td>
 
-                {/* الإجمالي */}
-                <td className="classic-td text-center font-semibold text-[#003399]">
+                <td className="inv-td text-center font-bold" style={{ color: "#003399", fontSize: "12px" }}>
                   {parseFloat(line.total).toFixed(3)}
                 </td>
 
-                {/* حذف */}
-                <td className="classic-td text-center">
+                <td className="inv-td text-center">
                   <button
                     onClick={() => deleteLine(rowIdx)}
-                    className="text-red-500 hover:text-red-700 px-1"
-                    title="حذف السطر"
+                    className="text-red-400 hover:text-red-600 transition-colors"
+                    title="حذف السطر (Ctrl+Del)"
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -673,135 +665,189 @@ export default function SalesInvoicePage() {
           </tbody>
         </table>
 
-        {/* Add Line Button */}
-        <div className="p-2 border-t border-[#e0e0e0]">
+        <div className="px-2 py-1.5 border-t border-[#e8e4dc]">
           <button
             onClick={addLine}
-            className="flex items-center gap-1 text-[11px] text-[#0055cc] hover:underline"
+            className="flex items-center gap-1 text-[11px] text-[#406B93] hover:text-[#2d4f6e] hover:underline transition-colors"
           >
-            <Plus className="w-3 h-3" /> إضافة سطر جديد (أو اضغط Enter في آخر سطر)
+            <Plus className="w-3 h-3" />
+            إضافة سطر جديد
+            <span className="text-[#aaa] mr-1">(Enter في آخر سطر)</span>
           </button>
         </div>
       </div>
 
-      {/* ── Totals Bar ───────────────────────────────────────────────────── */}
-      <div className="bg-[#e8e8e8] border-t border-[#a0a0a0] px-3 py-2">
-        <div className="flex items-center gap-4">
-          {/* Right totals */}
+      {/* ── Totals Bar ──────────────────────────────────────────────────── */}
+      <div style={{ background: "#E8E4DC", borderTop: "1px solid #b0a89a" }}>
+        <div className="flex items-center gap-0 px-3 py-1.5">
+          {/* Left: totals summary */}
           <div className="flex items-center gap-3 flex-1">
-            <TotalField label="إجمالي" value={subtotal.toFixed(3)} />
-            <TotalField label="تخفيض" value={totalDiscount.toFixed(3)} />
-            <TotalField label="الضريبة" value={totalTax.toFixed(3)} />
+            <TF label="إجمالي" value={fmt(subtotal)} />
+            <span className="text-[#aaa]">−</span>
+            <TF label="الخصم" value={fmt(totalDiscount)} color="#C0392B" />
+            <span className="text-[#aaa]">+</span>
+            <TF label="الضريبة" value={fmt(totalTax)} />
           </div>
-          {/* Left totals */}
+
+          {/* Divider */}
+          <div style={{ width: 1, height: 28, background: "#b0a89a", margin: "0 12px" }} />
+
+          {/* Right: payment info */}
           <div className="flex items-center gap-3">
-            <TotalField label="صافي" value={netTotal.toFixed(3)} highlight />
-            <TotalField label="مدفوع نقداً" value="0.00" />
-            <TotalField label="مدين" value={netTotal.toFixed(3)} />
-            <TotalField label="المجموع الإجمالي" value={netTotal.toFixed(3)} />
+            <TF label="الصافي" value={fmt(netTotal)} highlight />
+
+            {paymentType === "cash" ? (
+              <>
+                <TF label="مدفوع نقداً" value={fmt(netTotal)} color="#16A34A" />
+                <TF label="المتبقي" value="0.000" />
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-1">
+                  <span className="text-[11px] text-[#444] whitespace-nowrap">مدفوع:</span>
+                  <input
+                    type="number"
+                    value={paidAmountOverride}
+                    onChange={e => setPaidAmountOverride(e.target.value)}
+                    placeholder="0.000"
+                    className="classic-input text-center w-24"
+                    style={{ background: "#FFF7ED", borderColor: "#D97706" }}
+                    min="0"
+                  />
+                </div>
+                <TF
+                  label="المتبقي"
+                  value={fmt(remainingAmount)}
+                  color={remainingAmount > 0 ? "#C0392B" : "#16A34A"}
+                />
+              </>
+            )}
+
+            <div style={{ width: 1, height: 28, background: "#b0a89a", margin: "0 4px" }} />
+            <TF label="الإجمالي الكلي" value={fmt(netTotal)} highlight big />
+          </div>
+        </div>
+
+        {/* Status + Shortcuts row */}
+        <div className="flex items-center justify-between px-3 py-0.5 border-t border-[#c8c0b4]" style={{ background: "#DDD9D0", fontSize: "10px", color: "#666" }}>
+          <div className="flex gap-4">
+            <span>
+              نوع السند:&nbsp;
+              <strong style={{ color: paymentType === "cash" ? "#16A34A" : "#B45309" }}>
+                {paymentType === "cash" ? "نقدًا — سيُحفظ بحالة مدفوع" : "آجل — يمكن المدفوع الجزئي"}
+              </strong>
+            </span>
+            <span>الأصناف: <strong style={{ color: "#406B93" }}>{lines.filter(l => l.productName).length}</strong></span>
+          </div>
+          <div className="flex gap-3">
+            <span>Tab/Enter: انتقال</span>
+            <span>Ctrl+C: نسخ سطر</span>
+            <span>Ctrl+V: لصق</span>
+            <span>Ctrl+Del: حذف سطر</span>
+            <span>F1: جديد</span>
+            <span>F2: حفظ</span>
           </div>
         </div>
       </div>
 
-      {/* ── Keyboard Hint ────────────────────────────────────────────────── */}
-      <div className="bg-[#f5f5f5] border-t border-[#d0d0d0] px-3 py-1 text-[10px] text-[#666] flex gap-4">
-        <span>Tab/Enter: انتقال للحقل التالي</span>
-        <span>Ctrl+C: نسخ السطر</span>
-        <span>Ctrl+V: لصق السطر</span>
-        <span>Ctrl+Del: حذف السطر</span>
-      </div>
-
-      {/* ── Styles ───────────────────────────────────────────────────────── */}
+      {/* ── Styles ──────────────────────────────────────────────────────── */}
       <style>{`
         .classic-input {
           border: 1px solid #a0a0a0;
-          padding: 2px 4px;
+          padding: 1px 5px;
           height: 22px;
           font-size: 12px;
-          font-family: Tahoma, Arial, sans-serif;
+          font-family: 'Cairo', Tahoma, Arial, sans-serif;
           background: #fff;
           outline: none;
+          border-radius: 1px;
         }
         .classic-input:focus {
-          border-color: #0066cc;
-          background: #fffff0;
+          border-color: #406B93;
+          background: #F0F6FF;
+          box-shadow: 0 0 0 1px rgba(64,107,147,0.2);
         }
-        .classic-th {
-          border: 1px solid #a0b8d0;
-          padding: 3px 6px;
+        .inv-th {
+          border: 1px solid rgba(255,255,255,0.15);
+          border-bottom: 2px solid rgba(0,0,0,0.15);
+          padding: 4px 6px;
           text-align: right;
-          font-weight: bold;
+          font-weight: 700;
           font-size: 11px;
           white-space: nowrap;
+          font-family: 'Cairo', Tahoma, sans-serif;
         }
-        .classic-td {
-          border: 1px solid #e0e0e0;
-          padding: 1px 4px;
+        .inv-td {
+          border: 1px solid #e8e4dc;
+          padding: 1px 3px;
           height: 24px;
           vertical-align: middle;
         }
-        .classic-cell-input {
+        .inv-cell {
           border: none;
           outline: none;
-          padding: 2px 4px;
+          padding: 1px 4px;
           height: 22px;
           font-size: 12px;
-          font-family: Tahoma, Arial, sans-serif;
+          font-family: 'Cairo', Tahoma, Arial, sans-serif;
           background: transparent;
           width: 100%;
         }
-        .classic-cell-input:focus {
-          background: #fffff0;
-          border: 1px solid #0066cc;
+        .inv-cell:focus {
+          background: #FFFFF0;
+          border: 1px solid #406B93;
+          box-shadow: inset 0 0 0 1px rgba(64,107,147,0.15);
         }
         input[type=number]::-webkit-inner-spin-button,
-        input[type=number]::-webkit-outer-spin-button {
-          -webkit-appearance: none;
-          margin: 0;
-        }
+        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
       `}</style>
     </div>
   );
 }
 
-// ─── Helper Components ────────────────────────────────────────────────────────
-
-function HeaderField({ label, children }: { label: string; children: React.ReactNode }) {
+// ─── HF: Header Field ─────────────────────────────────────────────────────────
+function HF({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <label className="text-[11px] text-[#555] font-bold">{label}</label>
+      <label style={{ fontSize: "10px", fontWeight: 700, color: "#666", fontFamily: "'Cairo', Tahoma" }}>
+        {label}
+      </label>
       {children}
     </div>
   );
 }
 
-function TotalField({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+// ─── TF: Total Field ──────────────────────────────────────────────────────────
+function TF({ label, value, highlight, big, color }: {
+  label: string;
+  value: string;
+  highlight?: boolean;
+  big?: boolean;
+  color?: string;
+}) {
   return (
     <div className="flex items-center gap-1">
-      <span className="text-[11px] text-[#444] whitespace-nowrap">{label}</span>
+      <span style={{ fontSize: 11, color: "#555", whiteSpace: "nowrap" }}>{label}</span>
       <input
         readOnly
         value={value}
-        className="classic-input text-center w-24"
+        className="classic-input text-center"
         style={{
-          backgroundColor: highlight ? "#ffffcc" : "#f0f0f0",
-          fontWeight: highlight ? "bold" : "normal",
-          color: highlight ? "#003399" : "#333",
+          width: big ? 100 : 88,
+          background: highlight ? "#FFFDE7" : "#F5F3EF",
+          fontWeight: highlight || big ? 700 : 400,
+          color: color ?? (highlight ? "#003399" : "#333"),
+          fontSize: big ? 13 : 12,
+          borderColor: highlight ? "#F59E0B" : "#c0bab2",
         }}
       />
     </div>
   );
 }
 
-// ─── Product Name Cell with Search ───────────────────────────────────────────
+// ─── Product Name Cell with autocomplete ─────────────────────────────────────
 function ProductNameCell({
-  rowIdx,
-  value,
-  products,
-  cellRefs,
-  onSelect,
-  onKeyDown,
-  onFocus,
+  rowIdx, value, products, cellRefs, onSelect, onKeyDown, onFocus,
 }: {
   rowIdx: number;
   value: string;
@@ -814,6 +860,7 @@ function ProductNameCell({
   const [search, setSearch] = useState(value);
   const [open, setOpen] = useState(false);
   const [filtered, setFiltered] = useState<any[]>([]);
+  const [highlighted, setHighlighted] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
 
@@ -823,10 +870,12 @@ function ProductNameCell({
     setSearch(v);
     if (v.length >= 1) {
       const f = products.filter(p =>
-        p.name.includes(v) || (p.code && p.code.includes(v))
-      ).slice(0, 10);
+        p.name.includes(v) || (p.code && p.code.includes(v)) ||
+        (p.sku && p.sku.includes(v)) || (p.barcode && p.barcode.includes(v))
+      ).slice(0, 12);
       setFiltered(f);
       setOpen(f.length > 0);
+      setHighlighted(0);
     } else {
       setOpen(false);
     }
@@ -835,17 +884,9 @@ function ProductNameCell({
   const handleSelect = (p: any) => {
     setSearch(p.name);
     setOpen(false);
-    onSelect(
-      p.name,
-      p.sku ?? p.barcode ?? "",
-      p.id,
-      p.unit ?? "",
-      p.salePrice ? String(p.salePrice) : "",
-      p.vatRate ? String(p.vatRate) : "0"
-    );
+    onSelect(p.name, p.sku ?? p.barcode ?? p.code ?? "", p.id, p.unit ?? "", p.salePrice ? String(p.salePrice) : "", p.taxRate ? String(p.taxRate) : "0");
   };
 
-  // Close on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (!dropRef.current?.contains(e.target as Node) && !inputRef.current?.contains(e.target as Node)) {
@@ -859,39 +900,51 @@ function ProductNameCell({
   return (
     <div className="relative w-full">
       <input
-        ref={el => {
-          (inputRef as any).current = el;
-          if (el) cellRefs.current.set(`${rowIdx}-1`, el);
-        }}
+        ref={el => { (inputRef as any).current = el; if (el) cellRefs.current.set(`${rowIdx}-1`, el); }}
         value={search}
         onChange={e => handleChange(e.target.value)}
         onFocus={onFocus}
         onKeyDown={e => {
-          if (open && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
-            e.preventDefault();
-            return;
+          if (open) {
+            if (e.key === "ArrowDown") { e.preventDefault(); setHighlighted(h => Math.min(h + 1, filtered.length - 1)); return; }
+            if (e.key === "ArrowUp") { e.preventDefault(); setHighlighted(h => Math.max(h - 1, 0)); return; }
+            if (e.key === "Enter" && filtered[highlighted]) { e.preventDefault(); handleSelect(filtered[highlighted]); return; }
+            if (e.key === "Escape") { setOpen(false); return; }
           }
-          if (e.key === "Escape") { setOpen(false); return; }
           onKeyDown(e);
         }}
-        className="classic-cell-input w-full"
+        className="inv-cell w-full"
         placeholder="اسم الصنف..."
         autoComplete="off"
       />
       {open && (
         <div
           ref={dropRef}
-          className="absolute z-50 bg-white border border-[#a0a0a0] shadow-lg w-64 max-h-40 overflow-y-auto"
-          style={{ top: "100%", right: 0, fontSize: "12px" }}
+          style={{
+            position: "absolute", top: "100%", right: 0, zIndex: 100,
+            background: "#fff", border: "1px solid #a0a0a0",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+            width: 280, maxHeight: 200, overflowY: "auto",
+            fontSize: "12px",
+          }}
         >
-          {filtered.map(p => (
+          {filtered.map((p, i) => (
             <div
               key={p.id}
-              className="px-2 py-1 hover:bg-[#d4e3f7] cursor-pointer border-b border-[#f0f0f0]"
+              style={{
+                padding: "4px 8px",
+                background: i === highlighted ? "#D4E3F7" : (i % 2 === 0 ? "#fff" : "#FAFAF8"),
+                cursor: "pointer",
+                borderBottom: "1px solid #f0f0f0",
+                display: "flex",
+                gap: 8,
+              }}
               onMouseDown={() => handleSelect(p)}
+              onMouseEnter={() => setHighlighted(i)}
             >
-              <span className="text-[#0055cc] ml-2">{p.code}</span>
-              <span>{p.name}</span>
+              <span style={{ color: "#406B93", fontWeight: 600, minWidth: 60 }}>{p.sku ?? p.code ?? ""}</span>
+              <span style={{ flex: 1 }}>{p.name}</span>
+              <span style={{ color: "#16A34A", fontWeight: 600 }}>{p.salePrice}</span>
             </div>
           ))}
         </div>

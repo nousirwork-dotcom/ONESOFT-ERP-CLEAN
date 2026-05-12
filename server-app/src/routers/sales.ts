@@ -39,18 +39,26 @@ export const salesRouter = router({
       return filtered.slice((page - 1) * limit, page * limit);
     }),
 
-  // رقم المستند التالي
+  // رقم المستند التالي — تنسيق: INV-YYYY-XXXXXX
   nextNumber: protectedProcedure
     .input(z.object({ prefix: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
       const prefix = input?.prefix || 'INV';
+      const year = new Date().getFullYear();
+      const yearPrefix = `${prefix}-${year}-`;
       const last = await db.query.salesInvoices.findFirst({
         where: eq(salesInvoices.orgId, ctx.user.orgId),
         orderBy: [desc(salesInvoices.id)],
       });
-      if (!last) return `${prefix}-0001`;
-      const num = parseInt(last.invoiceNumber.replace(/\D/g, '') || '0') + 1;
-      return `${prefix}-${String(num).padStart(4, '0')}`;
+      if (!last) return `${yearPrefix}000001`;
+      // استخراج الرقم من آخر فاتورة في نفس السنة
+      const match = last.invoiceNumber.match(new RegExp(`${prefix}-(\\d{4})-(\\d+)`));
+      if (match && parseInt(match[1]) === year) {
+        const num = parseInt(match[2]) + 1;
+        return `${yearPrefix}${String(num).padStart(6, '0')}`;
+      }
+      // سنة مختلفة أو تنسيق قديم — ابدأ من 1
+      return `${yearPrefix}000001`;
     }),
 
   // تفاصيل مستند
@@ -79,6 +87,7 @@ export const salesRouter = router({
       customerName: z.string().optional(),
       warehouseId: z.number().optional(),
       currency: z.string().default('SAR'),
+      exchangeRate: z.string().default('1'),
       subtotal: z.string().default('0'),
       discountPercent: z.string().default('0'),
       discountAmount: z.string().default('0'),
@@ -87,7 +96,7 @@ export const salesRouter = router({
       paidAmount: z.string().default('0'),
       remainingAmount: z.string().default('0'),
       paymentMethod: z.enum(['cash', 'bank', 'credit', 'check', 'other']).default('cash'),
-      status: z.enum(['draft', 'confirmed', 'cancelled', 'paid']).default('draft'),
+      status: z.enum(['draft', 'confirmed', 'cancelled', 'paid']).default('confirmed'),
       notes: z.string().optional(),
       items: z.array(z.object({
         productId: z.number().optional(),
@@ -105,13 +114,14 @@ export const salesRouter = router({
       })),
     }))
     .mutation(async ({ ctx, input }) => {
-      const { items, ...invoiceData } = input;
+      const { items, dueDate, ...invoiceData } = input;
       const orgId = ctx.user.orgId;
       const [invoice] = await db.insert(salesInvoices).values({
         ...invoiceData,
         orgId,
         userId: ctx.user.id,
         invoiceDate: new Date(invoiceData.invoiceDate),
+        ...(dueDate ? { dueDate: new Date(dueDate) } : {}),
       }).returning();
       if (items.length > 0) {
         await db.insert(salesInvoiceItems).values(

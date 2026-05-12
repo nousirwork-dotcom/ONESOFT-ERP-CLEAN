@@ -167,6 +167,7 @@ export const salesInvoices = pgTable('sales_invoices', {
   invoiceNumber: varchar('invoice_number', { length: 50 }).notNull(),
   invoiceType: invoiceTypeEnum('invoice_type').notNull().default('sale'),
   invoiceDate: timestamp('invoice_date').notNull().defaultNow(),
+  dueDate: timestamp('due_date'),
   customerId: integer('customer_id').references(() => customers.id),
   customerName: varchar('customer_name', { length: 500 }),
   warehouseId: integer('warehouse_id').references(() => warehouses.id),
