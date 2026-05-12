@@ -1887,36 +1887,92 @@ export default function Products() {
           }}
           dir="rtl"
         >
-          <DialogHeader className="flex-shrink-0 flex flex-row items-center justify-between px-4 py-2.5 border-b border-[#CFCFCF] dark:border-slate-600 bg-[#DDD4C4] dark:bg-slate-800">
-            <DialogTitle className="flex items-center gap-2 text-base font-semibold text-slate-700 dark:text-slate-200">
-              <Package className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              {editId ? `تعديل بيانات الصنف${form.sku ? ` - ${form.sku}` : ""}` : "إضافة صنف جديد"}
-            </DialogTitle>
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                onClick={handleSubmit}
-                disabled={createProduct.isPending || updateProduct.isPending}
-                className="gap-1 h-8 px-4 bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                {createProduct.isPending || updateProduct.isPending
-                  ? "جارِ الحفظ..."
-                  : editId ? "حفظ التعديلات" : "إضافة الصنف"}
-              </Button>
-              <Button
-                variant="outline" size="icon"
-                className="h-8 w-8 shrink-0"
-                title={dialogSize === "full" ? "تصغير النافذة" : "تكبير النافذة"}
-                onClick={() => setDialogSize(s => s === "full" ? "compact" : "full")}
-              >
-                {dialogSize === "full"
-                  ? <Minimize2 className="w-3.5 h-3.5" />
-                  : <Maximize2 className="w-3.5 h-3.5" />}
-              </Button>
-              <Button variant="outline" size="sm" className="h-8 gap-1" onClick={() => setIsOpen(false)}>
-                <X className="w-3.5 h-3.5" />
-                إغلاق
-              </Button>
+          <DialogHeader className="flex-shrink-0 flex flex-col gap-0 border-b border-[#CFCFCF] dark:border-slate-600 bg-[#DDD4C4] dark:bg-slate-800 p-0">
+            {/* ── الصف العلوي: العنوان + الأزرار ── */}
+            <div className="flex items-center justify-between px-4 py-2">
+              <DialogTitle className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                <Package className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                {editId ? `تعديل بيانات الصنف${form.sku ? ` · ${form.sku}` : ""}` : "إضافة صنف جديد"}
+              </DialogTitle>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  size="sm"
+                  onClick={handleSubmit}
+                  disabled={createProduct.isPending || updateProduct.isPending}
+                  className="gap-1 h-7 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  {createProduct.isPending || updateProduct.isPending
+                    ? "جارِ الحفظ..."
+                    : editId ? "حفظ التعديلات" : "إضافة الصنف"}
+                </Button>
+                <Button
+                  variant="outline" size="sm"
+                  className="h-7 px-2.5 gap-1 text-xs"
+                  title="طباعة بيانات الصنف"
+                  onClick={() => toast.info("جارِ تجهيز الطباعة...")}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                  طباعة
+                </Button>
+                <Button
+                  variant="outline" size="icon"
+                  className="h-7 w-7 shrink-0"
+                  title={dialogSize === "full" ? "تصغير النافذة" : "تكبير النافذة"}
+                  onClick={() => setDialogSize(s => s === "full" ? "compact" : "full")}
+                >
+                  {dialogSize === "full"
+                    ? <Minimize2 className="w-3 h-3" />
+                    : <Maximize2 className="w-3 h-3" />}
+                </Button>
+                <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => setIsOpen(false)}>
+                  <X className="w-3 h-3" />
+                  إغلاق
+                </Button>
+              </div>
+            </div>
+
+            {/* ── الصف الثاني: إسم 1 (يمين) + إسم 2 (يسار) ── */}
+            <div className="flex items-stretch border-t border-[#CFCFCF] dark:border-slate-600">
+              {/* إسم 1 — الاسم بالعربية */}
+              <div className="flex flex-1 items-center border-l border-[#CFCFCF] dark:border-slate-600">
+                <div className="shrink-0 bg-[#C8BFAE] dark:bg-slate-700 px-2.5 h-full flex items-center border-l border-[#CFCFCF] dark:border-slate-600 min-w-[60px]">
+                  <span className="text-xs font-bold text-slate-600 dark:text-slate-300 whitespace-nowrap">إسم 1</span>
+                </div>
+                <input
+                  value={form.name}
+                  onChange={e => setForm({ ...form, name: e.target.value })}
+                  placeholder="اسم الصنف بالعربية *"
+                  dir="rtl"
+                  style={{
+                    flex: 1, height: 30, border: "none", outline: "none",
+                    background: "#FFFFF0", padding: "0 8px",
+                    fontFamily: "'Cairo', Tahoma, sans-serif",
+                    fontSize: 13, fontWeight: 600, color: "#1a1a1a",
+                  }}
+                  onFocus={e => (e.target.style.background = "#EFF6FF")}
+                  onBlur={e => (e.target.style.background = "#FFFFF0")}
+                />
+              </div>
+              {/* إسم 2 — الاسم الإنجليزي */}
+              <div className="flex flex-1 items-center">
+                <div className="shrink-0 bg-[#C8BFAE] dark:bg-slate-700 px-2.5 h-full flex items-center border-l border-[#CFCFCF] dark:border-slate-600 min-w-[60px]">
+                  <span className="text-xs font-bold text-slate-600 dark:text-slate-300 whitespace-nowrap">إسم 2</span>
+                </div>
+                <input
+                  value={form.name2}
+                  onChange={e => setForm({ ...form, name2: e.target.value })}
+                  placeholder="English Name"
+                  dir="ltr"
+                  style={{
+                    flex: 1, height: 30, border: "none", outline: "none",
+                    background: "#FFFFF0", padding: "0 8px",
+                    fontFamily: "Tahoma, Arial, sans-serif",
+                    fontSize: 12, color: "#1a1a1a",
+                  }}
+                  onFocus={e => (e.target.style.background = "#EFF6FF")}
+                  onBlur={e => (e.target.style.background = "#FFFFF0")}
+                />
+              </div>
             </div>
           </DialogHeader>
           {/* محتوى الكارت */}
