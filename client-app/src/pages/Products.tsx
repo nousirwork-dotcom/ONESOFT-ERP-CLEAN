@@ -1908,25 +1908,13 @@ export default function Products() {
               </Button>
             </div>
           </DialogHeader>
-          {/* محتوى الكارت */}
-          <div className="flex-1 overflow-hidden">
-            <ProductCard
-              key={editId ?? "new"}
-              form={form}
-              setForm={setForm}
-              categories={categories}
-              groups={groups as any}
-              productId={editId}
-            />
-          </div>
-
-          {/* ── Bottom Toolbar ─────────────────────────────────────────── */}
+          {/* ── Top Action Toolbar ─────────────────────────────────────── */}
           <div dir="rtl" style={{
             flexShrink: 0,
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            borderTop: "1px solid #CFCFCF",
+            borderBottom: "1px solid #CFCFCF",
             background: "#F0EDE8",
             padding: "4px 10px",
             gap: 4,
@@ -2009,7 +1997,7 @@ export default function Products() {
                     />
                     <div style={{
                       position: "absolute",
-                      bottom: "calc(100% + 4px)",
+                      top: "calc(100% + 4px)",
                       right: 0,
                       zIndex: 50,
                       background: "#fff",
@@ -2054,6 +2042,18 @@ export default function Products() {
             <div style={{ fontSize: 10.5, color: "#888", fontFamily: "Tahoma, sans-serif" }}>
               {editId ? `صنف رقم: ${editId}` : "صنف جديد"}
             </div>
+          </div>
+
+          {/* محتوى الكارت */}
+          <div className="flex-1 overflow-hidden">
+            <ProductCard
+              key={editId ?? "new"}
+              form={form}
+              setForm={setForm}
+              categories={categories}
+              groups={groups as any}
+              productId={editId}
+            />
           </div>
         </DialogContent>
       </Dialog>
