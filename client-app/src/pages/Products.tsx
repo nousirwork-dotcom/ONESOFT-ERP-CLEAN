@@ -1977,50 +1977,22 @@ export default function Products() {
               gap: 4,
             }}
           >
-            {/* الجانب الأيمن: نوافذ التحكم + أزرار العمليات + العنوان */}
-            <div style={{ display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }}>
+            {/* ① أقصى اليمين: العنوان */}
+            <DialogTitle style={{
+              display: "flex", alignItems: "center", gap: 6,
+              fontSize: 13, fontWeight: 700,
+              fontFamily: "'Cairo', Tahoma, sans-serif",
+              color: "#2B2B2B", whiteSpace: "nowrap", flexShrink: 0,
+            }}>
+              <Package style={{ width: 15, height: 15, color: "#406B93" }} />
+              {editId ? `تعديل بيانات الصنف${form.sku ? ` — ${form.sku}` : ""}` : "إضافة صنف جديد"}
+            </DialogTitle>
 
-              {/* إغلاق */}
-              <button
-                onClick={() => setIsOpen(false)}
-                title="إغلاق"
-                style={{
-                  display: "flex", alignItems: "center", gap: 4,
-                  padding: "3px 9px", height: 26,
-                  background: "transparent", border: "1px solid transparent",
-                  borderRadius: 3, cursor: "pointer",
-                  fontFamily: "'Cairo', Tahoma, sans-serif", fontSize: 11.5, fontWeight: 600,
-                  color: "#2B2B2B", whiteSpace: "nowrap",
-                  transition: "background 0.1s, border-color 0.1s",
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = "#C9B89E"; e.currentTarget.style.borderColor = "#B0A090"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "transparent"; }}
-              >
-                <X style={{ width: 12, height: 12 }} />
-                إغلاق
-              </button>
+            {/* فاصل */}
+            <div style={{ width: 1, height: 18, background: "#B8AFA6", margin: "0 4px", flexShrink: 0 }} />
 
-              {/* تكبير/تصغير */}
-              <button
-                onClick={() => setDialogSize(s => s === "full" ? "compact" : "full")}
-                title={dialogSize === "full" ? "تصغير النافذة" : "تكبير النافذة"}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  width: 26, height: 26,
-                  background: "transparent", border: "1px solid transparent",
-                  borderRadius: 3, cursor: "pointer", color: "#2B2B2B",
-                  transition: "background 0.1s, border-color 0.1s",
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = "#C9B89E"; e.currentTarget.style.borderColor = "#B0A090"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "transparent"; }}
-              >
-                {dialogSize === "full"
-                  ? <Minimize2 style={{ width: 12, height: 12 }} />
-                  : <Maximize2 style={{ width: 12, height: 12 }} />}
-              </button>
-
-              {/* فاصل */}
-              <div style={{ width: 1, height: 18, background: "#B8AFA6", margin: "0 2px", flexShrink: 0 }} />
+            {/* ② أزرار العمليات */}
+            <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
 
               {/* حفظ */}
               <BotBtn
@@ -2112,24 +2084,13 @@ export default function Products() {
                   }
                 }}
               />
-
-              {/* فاصل + عنوان */}
-              <div style={{ width: 1, height: 18, background: "#B8AFA6", margin: "0 6px 0 4px", flexShrink: 0 }} />
-              <DialogTitle style={{
-                display: "flex", alignItems: "center", gap: 6,
-                fontSize: 13, fontWeight: 700,
-                fontFamily: "'Cairo', Tahoma, sans-serif",
-                color: "#2B2B2B", whiteSpace: "nowrap",
-              }}>
-                <Package style={{ width: 15, height: 15, color: "#406B93" }} />
-                {editId ? `تعديل بيانات الصنف${form.sku ? ` — ${form.sku}` : ""}` : "إضافة صنف جديد"}
-              </DialogTitle>
             </div>
 
-            {/* الجانب الأيسر: أسهم التنقل */}
-            <div style={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
+            {/* فاصل */}
+            <div style={{ width: 1, height: 18, background: "#B8AFA6", margin: "0 4px", flexShrink: 0 }} />
 
-              {/* أول ◄◄ */}
+            {/* ③ أسهم التنقل */}
+            <div style={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
               <NavBtn title="أول سجل" disabled={!editId || currentNavIdx <= 0} onClick={navFirst}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                   <polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/>
@@ -2137,7 +2098,6 @@ export default function Products() {
                 <span style={{ fontSize: 10 }}>أول</span>
               </NavBtn>
 
-              {/* السابق ◄ */}
               <NavBtn title="السابق" disabled={!editId || currentNavIdx <= 0} onClick={navPrev}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                   <polyline points="15 18 9 12 15 6"/>
@@ -2145,7 +2105,6 @@ export default function Products() {
                 <span style={{ fontSize: 10 }}>السابق</span>
               </NavBtn>
 
-              {/* عداد الموضع */}
               <div style={{
                 padding: "0 6px", fontSize: 10.5, color: "#555",
                 fontFamily: "Tahoma, sans-serif", minWidth: 40, textAlign: "center",
@@ -2157,7 +2116,6 @@ export default function Products() {
                   : editId ? "—" : "جديد"}
               </div>
 
-              {/* التالي ► */}
               <NavBtn
                 title="التالي"
                 disabled={!editId || currentNavIdx < 0 || currentNavIdx >= sortedProducts.length - 1}
@@ -2169,7 +2127,6 @@ export default function Products() {
                 </svg>
               </NavBtn>
 
-              {/* آخر ►► */}
               <NavBtn
                 title="آخر سجل"
                 disabled={!editId || currentNavIdx < 0 || currentNavIdx >= sortedProducts.length - 1}
@@ -2180,6 +2137,54 @@ export default function Products() {
                   <polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/>
                 </svg>
               </NavBtn>
+            </div>
+
+            {/* spacer يدفع زرّي النافذة لأقصى اليسار */}
+            <div style={{ flex: 1 }} />
+
+            {/* فاصل */}
+            <div style={{ width: 1, height: 18, background: "#B8AFA6", margin: "0 4px", flexShrink: 0 }} />
+
+            {/* ④ أقصى اليسار: تكبير + إغلاق */}
+            <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+              {/* تكبير/تصغير */}
+              <button
+                onClick={() => setDialogSize(s => s === "full" ? "compact" : "full")}
+                title={dialogSize === "full" ? "تصغير النافذة" : "تكبير النافذة"}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 26, height: 26,
+                  background: "transparent", border: "1px solid transparent",
+                  borderRadius: 3, cursor: "pointer", color: "#2B2B2B",
+                  transition: "background 0.1s, border-color 0.1s",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = "#C9B89E"; e.currentTarget.style.borderColor = "#B0A090"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "transparent"; }}
+              >
+                {dialogSize === "full"
+                  ? <Minimize2 style={{ width: 12, height: 12 }} />
+                  : <Maximize2 style={{ width: 12, height: 12 }} />}
+              </button>
+
+              {/* إغلاق */}
+              <button
+                onClick={() => setIsOpen(false)}
+                title="إغلاق"
+                style={{
+                  display: "flex", alignItems: "center", gap: 4,
+                  padding: "3px 9px", height: 26,
+                  background: "transparent", border: "1px solid transparent",
+                  borderRadius: 3, cursor: "pointer",
+                  fontFamily: "'Cairo', Tahoma, sans-serif", fontSize: 11.5, fontWeight: 600,
+                  color: "#2B2B2B", whiteSpace: "nowrap",
+                  transition: "background 0.1s, border-color 0.1s",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = "#C9B89E"; e.currentTarget.style.borderColor = "#B0A090"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "transparent"; }}
+              >
+                <X style={{ width: 12, height: 12 }} />
+                إغلاق
+              </button>
             </div>
           </DialogHeader>
 
