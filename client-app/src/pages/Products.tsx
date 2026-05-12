@@ -1335,6 +1335,82 @@ export default function Products() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
+  // ─── التنقل بين الأصناف ──────────────────────────────────────────────────────
+  const navigateTo = (p: any) => {
+    if (!p) return;
+    setEditId(p.id);
+    setForm({
+      name: p.name ?? "",
+      name2: p.name2 ?? "",
+      sku: p.code ?? p.sku ?? "",
+      itemType: p.itemType ?? "مخزون",
+      groupId: p.groupId ? String(p.groupId) : "",
+      categoryId: p.categoryId ? String(p.categoryId) : "",
+      parentItem: p.parentItem ? String(p.parentItem) : "",
+      unit: p.unit ?? "قطعة",
+      unit2: p.unit2 ?? "",
+      unit3: p.unit3 ?? "",
+      conversionFactor: p.conversionFactor ?? "1",
+      convFactor2: p.convFactor2 ?? "1",
+      convFactor3: p.convFactor3 ?? "1",
+      barcode: p.barcode ?? "",
+      barcode2: p.barcode2 ?? "",
+      barcode3: p.barcode3 ?? "",
+      nameEn: p.nameEn ?? "",
+      brand: p.brand ?? "",
+      model: p.model ?? "",
+      description: p.description ?? "",
+      hasColors: p.hasColors ?? false,
+      hasSizes: p.hasSizes ?? false,
+      hasSerialNo: p.hasSerialNo ?? false,
+      hasExpiry: p.hasExpiry ?? false,
+      canSell: p.canSell ?? true,
+      canBuy: p.canBuy ?? true,
+      canReturn: p.canReturn ?? true,
+      taxable: p.taxable ?? false,
+      taxRate: p.taxRate ?? "15",
+      allowNegative: p.allowNegative ?? false,
+      isActive: p.isActive ?? true,
+      unitsJson: p.unitsJson ?? "",
+      catsJson: p.catsJson ?? "",
+      hasBOM: p.hasBOM ?? false,
+      extDesc1: p.extDesc1 ?? "", extVal1: p.extVal1 ?? "",
+      extDesc2: p.extDesc2 ?? "", extVal2: p.extVal2 ?? "",
+      extDesc3: p.extDesc3 ?? "", extVal3: p.extVal3 ?? "",
+      extDesc4: p.extDesc4 ?? "", extVal4: p.extVal4 ?? "",
+      extDesc5: p.extDesc5 ?? "", extVal5: p.extVal5 ?? "",
+      extDesc6: p.extDesc6 ?? "", extVal6: p.extVal6 ?? "",
+      purchasePrice: p.purchasePrice ?? "0",
+      costPrice: p.costPrice ?? "0",
+      salePrice: p.salePrice ?? "0",
+      salePrice2: p.salePrice2 ?? "0",
+      salePrice3: p.salePrice3 ?? "0",
+      salePrice4: p.salePrice4 ?? "0",
+      salePrice5: p.salePrice5 ?? "0",
+      wholesalePrice: p.wholesalePrice ?? "0",
+      minSalePrice: p.minSalePrice ?? "0",
+      priceIncludesTax: p.priceIncludesTax ?? false,
+      price1Tax: p.price1Tax ?? false,
+      price2Tax: p.price2Tax ?? false,
+      price3Tax: p.price3Tax ?? false,
+      price4Tax: p.price4Tax ?? false,
+      price5Tax: p.price5Tax ?? false,
+      wholesaleTax: p.wholesaleTax ?? false,
+      pricingPlan: p.pricingPlan ?? "",
+      stdCost: p.stdCost ?? "0",
+      defaultSupplier: p.defaultSupplier ?? "",
+      lastSupplier1: p.lastSupplier1 ?? "",
+      lastSupplier2: p.lastSupplier2 ?? "",
+      defaultOrderQty: p.defaultOrderQty ?? "0",
+    });
+  };
+
+  const currentNavIdx = editId ? sortedProducts.findIndex((p: any) => p.id === editId) : -1;
+  const navFirst  = () => { if (sortedProducts.length) navigateTo(sortedProducts[0]); };
+  const navLast   = () => { if (sortedProducts.length) navigateTo(sortedProducts[sortedProducts.length - 1]); };
+  const navPrev   = () => { if (currentNavIdx > 0) navigateTo(sortedProducts[currentNavIdx - 1]); };
+  const navNext   = () => { if (currentNavIdx < sortedProducts.length - 1) navigateTo(sortedProducts[currentNavIdx + 1]); };
+
   const openEdit = (p: any) => {
     setEditId(p.id);
     setForm({
@@ -1916,15 +1992,16 @@ export default function Products() {
             justifyContent: "space-between",
             borderBottom: "1px solid #CFCFCF",
             background: "#F0EDE8",
-            padding: "4px 10px",
+            padding: "3px 8px",
             gap: 4,
           }}>
-            {/* Right group: main actions */}
-            <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+
+            {/* ── Right group: أزرار العمليات ── */}
+            <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
 
               {/* حفظ */}
               <BotBtn
-                icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>}
+                icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>}
                 label="حفظ"
                 variant="primary"
                 disabled={createProduct.isPending || updateProduct.isPending}
@@ -1933,9 +2010,74 @@ export default function Products() {
 
               <BotDivider />
 
+              {/* مماثلة */}
+              <BotBtn
+                icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>}
+                label="مماثلة"
+                disabled={!editId}
+                onClick={() => {
+                  if (!editId) { toast.warning("لا يوجد صنف محدد للنسخ"); return; }
+                  setEditId(null);
+                  setForm({ ...form, sku: "", barcode: "", barcode2: "", barcode3: "" });
+                  toast.info("تم إنشاء نسخة — عدّل الرقم واحفظ");
+                }}
+              />
+
+              {/* جديد */}
+              <BotBtn
+                icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>}
+                label="جديد"
+                onClick={() => { setEditId(null); setForm(emptyForm); }}
+              />
+
+              <BotDivider />
+
+              {/* أدوات — dropdown */}
+              <div style={{ position: "relative" }}>
+                <BotBtn
+                  icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>}
+                  label="أدوات ▾"
+                  onClick={() => setToolsOpen(o => !o)}
+                />
+                {toolsOpen && (
+                  <>
+                    <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={() => setToolsOpen(false)} />
+                    <div style={{
+                      position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 50,
+                      background: "#fff", border: "1px solid #CFCFCF", borderRadius: 4,
+                      boxShadow: "0 4px 16px rgba(0,0,0,0.12)", minWidth: 160, overflow: "hidden",
+                      fontFamily: "'Cairo', Tahoma, sans-serif", fontSize: 12,
+                    }}>
+                      {[
+                        { label: "نشاط المستخدمين", icon: "👤" },
+                        { label: "توقيف الاستخدام",  icon: "🚫" },
+                        { label: "قصر المطالعة على", icon: "🔒" },
+                      ].map((item, i) => (
+                        <button key={i}
+                          onClick={() => { setToolsOpen(false); toast.info(item.label); }}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 8,
+                            width: "100%", padding: "7px 12px",
+                            background: "none", border: "none", cursor: "pointer",
+                            textAlign: "right", color: "#2B2B2B", fontSize: 12,
+                            borderBottom: i < 2 ? "1px solid #F0EDE8" : "none",
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.background = "#F0EDE8")}
+                          onMouseLeave={e => (e.currentTarget.style.background = "none")}
+                        >
+                          <span>{item.icon}</span>{item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <BotDivider />
+
               {/* حذف */}
               <BotBtn
-                icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>}
+                icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>}
                 label="حذف"
                 variant="danger"
                 disabled={!editId}
@@ -1947,100 +2089,70 @@ export default function Products() {
                   }
                 }}
               />
-
-              <BotDivider />
-
-              {/* نسخة مماثلة */}
-              <BotBtn
-                icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>}
-                label="نسخة مماثلة"
-                disabled={!editId}
-                onClick={() => {
-                  if (!editId) { toast.warning("لا يوجد صنف محدد للنسخ"); return; }
-                  const copy = {
-                    ...form,
-                    sku: "",
-                    barcode: "",
-                    barcode2: "",
-                    barcode3: "",
-                  };
-                  setEditId(null);
-                  setForm(copy);
-                  toast.info("تم إنشاء نسخة — عدّل الرقم واحفظ");
-                }}
-              />
-
-              <BotDivider />
-
-              {/* جديد */}
-              <BotBtn
-                icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>}
-                label="جديد"
-                onClick={() => { setEditId(null); setForm(emptyForm); }}
-              />
-
-              <BotDivider />
-
-              {/* أدوات — dropdown */}
-              <div style={{ position: "relative" }}>
-                <BotBtn
-                  icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>}
-                  label="أدوات ▾"
-                  onClick={() => setToolsOpen(o => !o)}
-                />
-                {toolsOpen && (
-                  <>
-                    {/* backdrop */}
-                    <div
-                      style={{ position: "fixed", inset: 0, zIndex: 40 }}
-                      onClick={() => setToolsOpen(false)}
-                    />
-                    <div style={{
-                      position: "absolute",
-                      top: "calc(100% + 4px)",
-                      right: 0,
-                      zIndex: 50,
-                      background: "#fff",
-                      border: "1px solid #CFCFCF",
-                      borderRadius: 4,
-                      boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
-                      minWidth: 160,
-                      overflow: "hidden",
-                      fontFamily: "'Cairo', Tahoma, sans-serif",
-                      fontSize: 12,
-                    }}>
-                      {[
-                        { label: "نشاط المستخدمين", icon: "👤" },
-                        { label: "توقيف الاستخدام",  icon: "🚫" },
-                        { label: "قصر المطالعة على", icon: "🔒" },
-                      ].map((item, i) => (
-                        <button
-                          key={i}
-                          onClick={() => { setToolsOpen(false); toast.info(item.label); }}
-                          style={{
-                            display: "flex", alignItems: "center", gap: 8,
-                            width: "100%", padding: "7px 12px",
-                            background: "none", border: "none",
-                            cursor: "pointer", textAlign: "right",
-                            color: "#2B2B2B", fontSize: 12,
-                            borderBottom: i < 2 ? "1px solid #F0EDE8" : "none",
-                          }}
-                          onMouseEnter={e => (e.currentTarget.style.background = "#F0EDE8")}
-                          onMouseLeave={e => (e.currentTarget.style.background = "none")}
-                        >
-                          <span>{item.icon}</span>
-                          {item.label}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
             </div>
 
-            {/* Left: status info */}
-            <div style={{ fontSize: 10.5, color: "#888", fontFamily: "Tahoma, sans-serif" }}>
-              {editId ? `صنف رقم: ${editId}` : "صنف جديد"}
+            {/* ── Left group: أسهم التنقل ── */}
+            <div style={{ display: "flex", alignItems: "center", gap: 1 }}>
+
+              {/* أول ◄◄ */}
+              <NavBtn
+                title="أول سجل"
+                disabled={!editId || currentNavIdx <= 0}
+                onClick={navFirst}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/>
+                </svg>
+                <span style={{ fontSize: 10, marginRight: 1 }}>أول</span>
+              </NavBtn>
+
+              {/* السابق ◄ */}
+              <NavBtn
+                title="السابق"
+                disabled={!editId || currentNavIdx <= 0}
+                onClick={navPrev}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <polyline points="15 18 9 12 15 6"/>
+                </svg>
+                <span style={{ fontSize: 10 }}>السابق</span>
+              </NavBtn>
+
+              {/* عداد الموضع */}
+              <div style={{
+                padding: "0 6px", fontSize: 10.5, color: "#666",
+                fontFamily: "Tahoma, sans-serif", minWidth: 44, textAlign: "center",
+                borderRight: "1px solid #D4CFC9", borderLeft: "1px solid #D4CFC9",
+                height: 22, lineHeight: "22px",
+              }}>
+                {editId && currentNavIdx >= 0
+                  ? `${currentNavIdx + 1} / ${sortedProducts.length}`
+                  : editId ? "—" : "جديد"}
+              </div>
+
+              {/* التالي ► */}
+              <NavBtn
+                title="التالي"
+                disabled={!editId || currentNavIdx < 0 || currentNavIdx >= sortedProducts.length - 1}
+                onClick={navNext}
+              >
+                <span style={{ fontSize: 10 }}>التالي</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+              </NavBtn>
+
+              {/* آخر ►► */}
+              <NavBtn
+                title="آخر سجل"
+                disabled={!editId || currentNavIdx < 0 || currentNavIdx >= sortedProducts.length - 1}
+                onClick={navLast}
+              >
+                <span style={{ fontSize: 10, marginLeft: 1 }}>آخر</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/>
+                </svg>
+              </NavBtn>
             </div>
           </div>
 
@@ -2113,5 +2225,42 @@ function BotBtn({
 function BotDivider() {
   return (
     <div style={{ width: 1, height: 18, background: "#C8C0B4", margin: "0 2px", flexShrink: 0 }} />
+  );
+}
+
+// ─── NavBtn: زر التنقل ────────────────────────────────────────────────────────
+function NavBtn({
+  children, onClick, disabled, title,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  title?: string;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <button
+      title={title}
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: "flex", alignItems: "center", gap: 2,
+        padding: "2px 6px", height: 24,
+        background: hovered && !disabled ? "#E2DDD6" : "transparent",
+        color: disabled ? "#bbb" : "#2B2B2B",
+        border: "1px solid",
+        borderColor: hovered && !disabled ? "#C8C0B4" : "transparent",
+        borderRadius: 3, cursor: disabled ? "not-allowed" : "pointer",
+        fontFamily: "Tahoma, sans-serif",
+        fontSize: 10.5, fontWeight: 500,
+        whiteSpace: "nowrap", flexShrink: 0,
+        opacity: disabled ? 0.4 : 1,
+        transition: "background 0.1s, border-color 0.1s",
+      }}
+    >
+      {children}
+    </button>
   );
 }
