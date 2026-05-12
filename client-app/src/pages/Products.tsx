@@ -1,7 +1,8 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { createPortal } from "react-dom";
+import { Rnd } from "react-rnd";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -20,7 +21,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { toast } from "sonner";
 
 // =============================================
@@ -1263,7 +1264,36 @@ export default function Products() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [viewTab, setViewTab] = useState<"products" | "categories">("products");
   const [selectedCatId, setSelectedCatId] = useState<number | null>(null);
-  const [dialogSize, setDialogSize] = useState<"full" | "compact">("compact");
+  const [isMaximized, setIsMaximized] = useState(false);
+  const preMaxRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [winPos, setWinPos] = useState<{ x: number; y: number }>(() => {
+    try { const s = localStorage.getItem("pdlg-pos"); if (s) return JSON.parse(s); } catch {}
+    return { x: Math.max(40, Math.floor((window.innerWidth - 880) / 2)), y: Math.max(56, Math.floor((window.innerHeight - 620) / 2)) };
+  });
+  const [winSize, setWinSize] = useState<{ w: number; h: number }>(() => {
+    try { const s = localStorage.getItem("pdlg-size"); if (s) return JSON.parse(s); } catch {}
+    return { w: 880, h: 620 };
+  });
+  const saveWinBounds = (x: number, y: number, w: number, h: number) => {
+    try {
+      localStorage.setItem("pdlg-pos", JSON.stringify({ x, y }));
+      localStorage.setItem("pdlg-size", JSON.stringify({ w, h }));
+    } catch {}
+  };
+  const toggleMaximize = () => {
+    if (isMaximized) {
+      setIsMaximized(false);
+      if (preMaxRef.current) {
+        setWinPos({ x: preMaxRef.current.x, y: preMaxRef.current.y });
+        setWinSize({ w: preMaxRef.current.w, h: preMaxRef.current.h });
+      }
+    } else {
+      preMaxRef.current = { x: winPos.x, y: winPos.y, w: winSize.w, h: winSize.h };
+      setWinPos({ x: 8, y: 56 });
+      setWinSize({ w: window.innerWidth - 280, h: window.innerHeight - 72 });
+      setIsMaximized(true);
+    }
+  };
   const [toolsOpen, setToolsOpen] = useState(false);
 
   const toggleSort = (field: string) => {
@@ -1936,271 +1966,287 @@ export default function Products() {
         </div>
       )}
 
-      {/* ===== Dialog كارت الصنف — يملأ منطقة المحتوى بالكامل ===== */}
-      <Dialog open={isOpen} onOpenChange={(open) => !open && setIsOpen(false)}>
-        <DialogContent
-          showCloseButton={false}
-          className="inset-0 flex flex-col p-0 gap-0 overflow-hidden border-2 border-blue-500/70 dark:border-blue-400/60 shadow-[0_0_0_1px_rgba(59,130,246,0.15),0_20px_60px_-10px_rgba(59,130,246,0.35),0_8px_32px_rgba(0,0,0,0.18)]"
-          style={dialogSize === "full" ? {
-            position: "fixed",
-            top: "56px",
-            bottom: "16px",
-            left: "8px",
-            right: "var(--sidebar-width, 260px)",
-            width: "auto",
-            height: "auto",
-            maxWidth: "none",
-            transform: "none",
-            borderRadius: "6px",
-          } : {
-            position: "fixed",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            width: "min(880px, 94vw)",
-            height: "min(620px, 90vh)",
-            maxWidth: "none",
-            borderRadius: "8px",
-          }}
-          dir="rtl"
-        >
-          {/* ── Header + Toolbar (صف واحد) ─────────────────────────────── */}
-          <DialogHeader
-            dir="rtl"
-            className="flex-shrink-0"
-            style={{
-              display: "flex", flexDirection: "row", alignItems: "center",
-              justifyContent: "space-between",
-              borderBottom: "1px solid #CFCFCF",
-              background: "#DDD4C4",
-              padding: "3px 8px",
-              gap: 4,
+      {/* ===== نافذة الصنف — قابلة للسحب والتكبير (react-rnd) ===== */}
+      {isOpen && createPortal(
+        <>
+          {/* طبقة الخلفية */}
+          <div
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.42)", zIndex: 2000 }}
+            onClick={() => setIsOpen(false)}
+          />
+
+          <Rnd
+            position={{ x: winPos.x, y: winPos.y }}
+            size={{ width: winSize.w, height: winSize.h }}
+            onDragStop={(_, d) => {
+              if (!isMaximized) {
+                setWinPos({ x: d.x, y: d.y });
+                saveWinBounds(d.x, d.y, winSize.w, winSize.h);
+              }
             }}
+            onResizeStop={(_, __, ref, ___, pos) => {
+              if (!isMaximized) {
+                const w = ref.offsetWidth;
+                const h = ref.offsetHeight;
+                setWinSize({ w, h });
+                setWinPos({ x: pos.x, y: pos.y });
+                saveWinBounds(pos.x, pos.y, w, h);
+              }
+            }}
+            dragHandleClassName="erp-drag-handle"
+            minWidth={640}
+            minHeight={420}
+            bounds="window"
+            disableDragging={isMaximized}
+            enableResizing={isMaximized ? false : {
+              top: true, bottom: true, left: true, right: true,
+              topLeft: true, topRight: true, bottomLeft: true, bottomRight: true,
+            }}
+            style={{ zIndex: 2001 }}
           >
-            {/* ① أقصى اليمين: العنوان */}
-            <DialogTitle style={{
-              display: "flex", alignItems: "center", gap: 6,
-              fontSize: 13, fontWeight: 700,
-              fontFamily: "'Cairo', Tahoma, sans-serif",
-              color: "#2B2B2B", whiteSpace: "nowrap", flexShrink: 0,
-            }}>
-              <Package style={{ width: 15, height: 15, color: "#406B93" }} />
-              {editId ? "تعديل بيانات الصنف" : "إضافة صنف جديد"}
-            </DialogTitle>
-
-            {/* فاصل */}
-            <div style={{ width: 1, height: 18, background: "#B8AFA6", margin: "0 4px", flexShrink: 0 }} />
-
-            {/* ② أزرار العمليات */}
-            <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
-
-              {/* حفظ */}
-              <BotBtn
-                icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>}
-                label="حفظ"
-                variant="primary"
-                disabled={createProduct.isPending || updateProduct.isPending}
-                onClick={handleSubmit}
-              />
-
-              <BotDivider />
-
-              {/* مماثلة */}
-              <BotBtn
-                icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>}
-                label="مماثلة"
-                disabled={!editId}
-                onClick={() => {
-                  if (!editId) { toast.warning("لا يوجد صنف محدد للنسخ"); return; }
-                  setEditId(null);
-                  setForm({ ...form, sku: "", barcode: "", barcode2: "", barcode3: "" });
-                  toast.info("تم إنشاء نسخة — عدّل الرقم واحفظ");
+            {/* الحاوية الداخلية */}
+            <div
+              dir="rtl"
+              onClick={e => e.stopPropagation()}
+              style={{
+                display: "flex", flexDirection: "column",
+                width: "100%", height: "100%",
+                background: "#fff",
+                borderRadius: isMaximized ? 4 : 8,
+                overflow: "hidden",
+                border: "2px solid rgba(59,130,246,0.7)",
+                boxShadow: "0 0 0 1px rgba(59,130,246,0.15),0 20px 60px -10px rgba(59,130,246,0.35),0 8px 32px rgba(0,0,0,0.18)",
+              }}
+            >
+              {/* ── شريط العنوان والأزرار ── */}
+              <div
+                dir="rtl"
+                style={{
+                  flexShrink: 0,
+                  display: "flex", flexDirection: "row", alignItems: "center",
+                  justifyContent: "space-between",
+                  borderBottom: "1px solid #CFCFCF",
+                  background: "#DDD4C4",
+                  padding: "3px 8px",
+                  gap: 4,
+                  userSelect: "none",
                 }}
-              />
+              >
+                {/* ① العنوان — منطقة السحب */}
+                <div
+                  className="erp-drag-handle"
+                  onDoubleClick={toggleMaximize}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 6,
+                    fontSize: 13, fontWeight: 700,
+                    fontFamily: "'Cairo', Tahoma, sans-serif",
+                    color: "#2B2B2B", whiteSpace: "nowrap", flexShrink: 0,
+                    cursor: isMaximized ? "default" : "move",
+                    paddingLeft: 4,
+                  }}
+                >
+                  <Package style={{ width: 15, height: 15, color: "#406B93", pointerEvents: "none" }} />
+                  {editId ? "تعديل بيانات الصنف" : "إضافة صنف جديد"}
+                </div>
 
-              {/* جديد */}
-              <BotBtn
-                icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>}
-                label="جديد"
-                onClick={() => { setEditId(null); setForm(emptyForm); }}
-              />
+                {/* فاصل */}
+                <div style={{ width: 1, height: 18, background: "#B8AFA6", margin: "0 4px", flexShrink: 0 }} />
 
-              <BotDivider />
+                {/* ② أزرار العمليات */}
+                <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+                  <BotBtn
+                    icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>}
+                    label="حفظ" variant="primary"
+                    disabled={createProduct.isPending || updateProduct.isPending}
+                    onClick={handleSubmit}
+                  />
+                  <BotDivider />
+                  <BotBtn
+                    icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>}
+                    label="نسخة"
+                    disabled={!editId}
+                    onClick={() => {
+                      if (!editId) { toast.warning("لا يوجد صنف محدد للنسخ"); return; }
+                      setEditId(null);
+                      setForm({ ...form, sku: "", barcode: "", barcode2: "", barcode3: "" });
+                      toast.info("تم إنشاء نسخة — عدّل الرقم واحفظ");
+                    }}
+                  />
+                  <BotBtn
+                    icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>}
+                    label="جديد"
+                    onClick={() => { setEditId(null); setForm(emptyForm); }}
+                  />
+                  <BotDivider />
+                  {/* أدوات */}
+                  <div style={{ position: "relative" }}>
+                    <BotBtn
+                      icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>}
+                      label="أدوات ▾"
+                      onClick={() => setToolsOpen(o => !o)}
+                    />
+                    {toolsOpen && (
+                      <>
+                        <div style={{ position: "fixed", inset: 0, zIndex: 2060 }} onClick={() => setToolsOpen(false)} />
+                        <div style={{
+                          position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 2061,
+                          background: "#fff", border: "1px solid #CFCFCF", borderRadius: 4,
+                          boxShadow: "0 4px 16px rgba(0,0,0,0.12)", minWidth: 160, overflow: "hidden",
+                          fontFamily: "'Cairo', Tahoma, sans-serif", fontSize: 12,
+                        }}>
+                          {[
+                            { label: "نشاط المستخدمين", icon: "👤" },
+                            { label: "توقيف الاستخدام",  icon: "🚫" },
+                            { label: "قصر المطالعة على", icon: "🔒" },
+                          ].map((item, i) => (
+                            <button key={i}
+                              onClick={() => { setToolsOpen(false); toast.info(item.label); }}
+                              style={{
+                                display: "flex", alignItems: "center", gap: 8,
+                                width: "100%", padding: "7px 12px",
+                                background: "none", border: "none", cursor: "pointer",
+                                textAlign: "right", color: "#2B2B2B", fontSize: 12,
+                                borderBottom: i < 2 ? "1px solid #F0EDE8" : "none",
+                              }}
+                              onMouseEnter={e => (e.currentTarget.style.background = "#F0EDE8")}
+                              onMouseLeave={e => (e.currentTarget.style.background = "none")}
+                            >
+                              <span>{item.icon}</span>{item.label}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <BotDivider />
+                  <BotBtn
+                    icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>}
+                    label="حذف" variant="danger" disabled={!editId}
+                    onClick={() => {
+                      if (!editId) return;
+                      if (confirm("هل أنت متأكد من حذف هذا الصنف؟ لا يمكن التراجع.")) {
+                        deleteProduct.mutate({ id: editId });
+                        setIsOpen(false);
+                      }
+                    }}
+                  />
+                </div>
 
-              {/* أدوات — dropdown */}
-              <div style={{ position: "relative" }}>
-                <BotBtn
-                  icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>}
-                  label="أدوات ▾"
-                  onClick={() => setToolsOpen(o => !o)}
+                {/* فاصل */}
+                <div style={{ width: 1, height: 18, background: "#B8AFA6", margin: "0 4px", flexShrink: 0 }} />
+
+                {/* ③ أسهم التنقل */}
+                <div style={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
+                  <NavBtn title="أول سجل" disabled={!editId || currentNavIdx <= 0} onClick={navFirst}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                      <polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/>
+                    </svg>
+                    <span style={{ fontSize: 10 }}>أول</span>
+                  </NavBtn>
+                  <NavBtn title="السابق" disabled={!editId || currentNavIdx <= 0} onClick={navPrev}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                      <polyline points="15 18 9 12 15 6"/>
+                    </svg>
+                    <span style={{ fontSize: 10 }}>السابق</span>
+                  </NavBtn>
+                  <div style={{
+                    padding: "0 6px", fontSize: 10.5, color: "#555",
+                    fontFamily: "Tahoma, sans-serif", minWidth: 40, textAlign: "center",
+                    borderRight: "1px solid #C0B9AF", borderLeft: "1px solid #C0B9AF",
+                    height: 20, lineHeight: "20px",
+                  }}>
+                    {editId && currentNavIdx >= 0
+                      ? `${currentNavIdx + 1} / ${sortedProducts.length}`
+                      : editId ? "—" : "جديد"}
+                  </div>
+                  <NavBtn
+                    title="التالي"
+                    disabled={!editId || currentNavIdx < 0 || currentNavIdx >= sortedProducts.length - 1}
+                    onClick={navNext}
+                  >
+                    <span style={{ fontSize: 10 }}>التالي</span>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                      <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                  </NavBtn>
+                  <NavBtn
+                    title="آخر سجل"
+                    disabled={!editId || currentNavIdx < 0 || currentNavIdx >= sortedProducts.length - 1}
+                    onClick={navLast}
+                  >
+                    <span style={{ fontSize: 10 }}>آخر</span>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                      <polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/>
+                    </svg>
+                  </NavBtn>
+                </div>
+
+                {/* spacer — منطقة السحب الثانية */}
+                <div
+                  className="erp-drag-handle"
+                  onDoubleClick={toggleMaximize}
+                  style={{ flex: 1, cursor: isMaximized ? "default" : "move", minWidth: 12 }}
                 />
-                {toolsOpen && (
-                  <>
-                    <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={() => setToolsOpen(false)} />
-                    <div style={{
-                      position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 50,
-                      background: "#fff", border: "1px solid #CFCFCF", borderRadius: 4,
-                      boxShadow: "0 4px 16px rgba(0,0,0,0.12)", minWidth: 160, overflow: "hidden",
-                      fontFamily: "'Cairo', Tahoma, sans-serif", fontSize: 12,
-                    }}>
-                      {[
-                        { label: "نشاط المستخدمين", icon: "👤" },
-                        { label: "توقيف الاستخدام",  icon: "🚫" },
-                        { label: "قصر المطالعة على", icon: "🔒" },
-                      ].map((item, i) => (
-                        <button key={i}
-                          onClick={() => { setToolsOpen(false); toast.info(item.label); }}
-                          style={{
-                            display: "flex", alignItems: "center", gap: 8,
-                            width: "100%", padding: "7px 12px",
-                            background: "none", border: "none", cursor: "pointer",
-                            textAlign: "right", color: "#2B2B2B", fontSize: 12,
-                            borderBottom: i < 2 ? "1px solid #F0EDE8" : "none",
-                          }}
-                          onMouseEnter={e => (e.currentTarget.style.background = "#F0EDE8")}
-                          onMouseLeave={e => (e.currentTarget.style.background = "none")}
-                        >
-                          <span>{item.icon}</span>{item.label}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
+
+                {/* فاصل */}
+                <div style={{ width: 1, height: 18, background: "#B8AFA6", margin: "0 4px", flexShrink: 0 }} />
+
+                {/* ④ تكبير + إغلاق */}
+                <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+                  <button
+                    onClick={toggleMaximize}
+                    title={isMaximized ? "استعادة الحجم" : "تكبير النافذة"}
+                    style={{
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      width: 26, height: 26,
+                      background: "transparent", border: "1px solid transparent",
+                      borderRadius: 3, cursor: "pointer", color: "#2B2B2B",
+                      transition: "background 0.1s, border-color 0.1s",
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = "#C9B89E"; e.currentTarget.style.borderColor = "#B0A090"; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "transparent"; }}
+                  >
+                    {isMaximized
+                      ? <Minimize2 style={{ width: 12, height: 12 }} />
+                      : <Maximize2 style={{ width: 12, height: 12 }} />}
+                  </button>
+                  <button
+                    onClick={() => setIsOpen(false)}
+                    title="إغلاق"
+                    style={{
+                      display: "flex", alignItems: "center", gap: 4,
+                      padding: "3px 9px", height: 26,
+                      background: "transparent", border: "1px solid transparent",
+                      borderRadius: 3, cursor: "pointer",
+                      fontFamily: "'Cairo', Tahoma, sans-serif", fontSize: 11.5, fontWeight: 600,
+                      color: "#2B2B2B", whiteSpace: "nowrap",
+                      transition: "background 0.1s, border-color 0.1s",
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = "#C9B89E"; e.currentTarget.style.borderColor = "#B0A090"; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "transparent"; }}
+                  >
+                    <X style={{ width: 12, height: 12 }} />
+                    إغلاق
+                  </button>
+                </div>
               </div>
 
-              <BotDivider />
-
-              {/* حذف */}
-              <BotBtn
-                icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>}
-                label="حذف"
-                variant="danger"
-                disabled={!editId}
-                onClick={() => {
-                  if (!editId) return;
-                  if (confirm("هل أنت متأكد من حذف هذا الصنف؟ لا يمكن التراجع.")) {
-                    deleteProduct.mutate({ id: editId });
-                    setIsOpen(false);
-                  }
-                }}
-              />
-            </div>
-
-            {/* فاصل */}
-            <div style={{ width: 1, height: 18, background: "#B8AFA6", margin: "0 4px", flexShrink: 0 }} />
-
-            {/* ③ أسهم التنقل */}
-            <div style={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
-              <NavBtn title="أول سجل" disabled={!editId || currentNavIdx <= 0} onClick={navFirst}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                  <polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/>
-                </svg>
-                <span style={{ fontSize: 10 }}>أول</span>
-              </NavBtn>
-
-              <NavBtn title="السابق" disabled={!editId || currentNavIdx <= 0} onClick={navPrev}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                  <polyline points="15 18 9 12 15 6"/>
-                </svg>
-                <span style={{ fontSize: 10 }}>السابق</span>
-              </NavBtn>
-
-              <div style={{
-                padding: "0 6px", fontSize: 10.5, color: "#555",
-                fontFamily: "Tahoma, sans-serif", minWidth: 40, textAlign: "center",
-                borderRight: "1px solid #C0B9AF", borderLeft: "1px solid #C0B9AF",
-                height: 20, lineHeight: "20px",
-              }}>
-                {editId && currentNavIdx >= 0
-                  ? `${currentNavIdx + 1} / ${sortedProducts.length}`
-                  : editId ? "—" : "جديد"}
+              {/* محتوى الكارت */}
+              <div style={{ flex: 1, overflow: "hidden", minHeight: 0 }}>
+                <ProductCard
+                  key={editId ?? "new"}
+                  form={form}
+                  setForm={setForm}
+                  categories={categories}
+                  groups={groups as any}
+                  productId={editId}
+                />
               </div>
-
-              <NavBtn
-                title="التالي"
-                disabled={!editId || currentNavIdx < 0 || currentNavIdx >= sortedProducts.length - 1}
-                onClick={navNext}
-              >
-                <span style={{ fontSize: 10 }}>التالي</span>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                  <polyline points="9 18 15 12 9 6"/>
-                </svg>
-              </NavBtn>
-
-              <NavBtn
-                title="آخر سجل"
-                disabled={!editId || currentNavIdx < 0 || currentNavIdx >= sortedProducts.length - 1}
-                onClick={navLast}
-              >
-                <span style={{ fontSize: 10 }}>آخر</span>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                  <polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/>
-                </svg>
-              </NavBtn>
             </div>
-
-            {/* spacer يدفع زرّي النافذة لأقصى اليسار */}
-            <div style={{ flex: 1 }} />
-
-            {/* فاصل */}
-            <div style={{ width: 1, height: 18, background: "#B8AFA6", margin: "0 4px", flexShrink: 0 }} />
-
-            {/* ④ أقصى اليسار: تكبير + إغلاق */}
-            <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
-              {/* تكبير/تصغير */}
-              <button
-                onClick={() => setDialogSize(s => s === "full" ? "compact" : "full")}
-                title={dialogSize === "full" ? "تصغير النافذة" : "تكبير النافذة"}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  width: 26, height: 26,
-                  background: "transparent", border: "1px solid transparent",
-                  borderRadius: 3, cursor: "pointer", color: "#2B2B2B",
-                  transition: "background 0.1s, border-color 0.1s",
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = "#C9B89E"; e.currentTarget.style.borderColor = "#B0A090"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "transparent"; }}
-              >
-                {dialogSize === "full"
-                  ? <Minimize2 style={{ width: 12, height: 12 }} />
-                  : <Maximize2 style={{ width: 12, height: 12 }} />}
-              </button>
-
-              {/* إغلاق */}
-              <button
-                onClick={() => setIsOpen(false)}
-                title="إغلاق"
-                style={{
-                  display: "flex", alignItems: "center", gap: 4,
-                  padding: "3px 9px", height: 26,
-                  background: "transparent", border: "1px solid transparent",
-                  borderRadius: 3, cursor: "pointer",
-                  fontFamily: "'Cairo', Tahoma, sans-serif", fontSize: 11.5, fontWeight: 600,
-                  color: "#2B2B2B", whiteSpace: "nowrap",
-                  transition: "background 0.1s, border-color 0.1s",
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = "#C9B89E"; e.currentTarget.style.borderColor = "#B0A090"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "transparent"; }}
-              >
-                <X style={{ width: 12, height: 12 }} />
-                إغلاق
-              </button>
-            </div>
-          </DialogHeader>
-
-          {/* محتوى الكارت */}
-          <div className="flex-1 overflow-hidden">
-            <ProductCard
-              key={editId ?? "new"}
-              form={form}
-              setForm={setForm}
-              categories={categories}
-              groups={groups as any}
-              productId={editId}
-            />
-          </div>
-        </DialogContent>
-      </Dialog>
+          </Rnd>
+        </>,
+        document.body
+      )}
     </div>
   );
 }
