@@ -1964,40 +1964,63 @@ export default function Products() {
           }}
           dir="rtl"
         >
-          <DialogHeader className="flex-shrink-0 flex flex-row items-center justify-between px-4 py-2.5 border-b border-[#CFCFCF] dark:border-slate-600 bg-[#DDD4C4] dark:bg-slate-800">
-            <DialogTitle className="flex items-center gap-2 text-base font-semibold text-slate-700 dark:text-slate-200">
-              <Package className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              {editId ? `تعديل بيانات الصنف${form.sku ? ` - ${form.sku}` : ""}` : "إضافة صنف جديد"}
-            </DialogTitle>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline" size="icon"
-                className="h-8 w-8 shrink-0"
-                title={dialogSize === "full" ? "تصغير النافذة" : "تكبير النافذة"}
-                onClick={() => setDialogSize(s => s === "full" ? "compact" : "full")}
-              >
-                {dialogSize === "full" ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-              </Button>
-              <Button variant="outline" size="sm" className="h-8 gap-1" onClick={() => setIsOpen(false)}>
-                <X className="w-3.5 h-3.5" />
-                إغلاق
-              </Button>
-            </div>
-          </DialogHeader>
-          {/* ── Top Action Toolbar ─────────────────────────────────────── */}
-          <div dir="rtl" style={{
-            flexShrink: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            borderBottom: "1px solid #CFCFCF",
-            background: "#F0EDE8",
-            padding: "3px 8px",
-            gap: 4,
-          }}>
+          {/* ── Header + Toolbar (صف واحد) ─────────────────────────────── */}
+          <DialogHeader
+            dir="rtl"
+            className="flex-shrink-0"
+            style={{
+              display: "flex", flexDirection: "row", alignItems: "center",
+              justifyContent: "space-between",
+              borderBottom: "1px solid #CFCFCF",
+              background: "#DDD4C4",
+              padding: "3px 8px",
+              gap: 4,
+            }}
+          >
+            {/* الجانب الأيمن: نوافذ التحكم + أزرار العمليات + العنوان */}
+            <div style={{ display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }}>
 
-            {/* ── Right group: أزرار العمليات ── */}
-            <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+              {/* إغلاق */}
+              <button
+                onClick={() => setIsOpen(false)}
+                title="إغلاق"
+                style={{
+                  display: "flex", alignItems: "center", gap: 4,
+                  padding: "3px 9px", height: 26,
+                  background: "transparent", border: "1px solid transparent",
+                  borderRadius: 3, cursor: "pointer",
+                  fontFamily: "'Cairo', Tahoma, sans-serif", fontSize: 11.5, fontWeight: 600,
+                  color: "#2B2B2B", whiteSpace: "nowrap",
+                  transition: "background 0.1s, border-color 0.1s",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = "#C9B89E"; e.currentTarget.style.borderColor = "#B0A090"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "transparent"; }}
+              >
+                <X style={{ width: 12, height: 12 }} />
+                إغلاق
+              </button>
+
+              {/* تكبير/تصغير */}
+              <button
+                onClick={() => setDialogSize(s => s === "full" ? "compact" : "full")}
+                title={dialogSize === "full" ? "تصغير النافذة" : "تكبير النافذة"}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 26, height: 26,
+                  background: "transparent", border: "1px solid transparent",
+                  borderRadius: 3, cursor: "pointer", color: "#2B2B2B",
+                  transition: "background 0.1s, border-color 0.1s",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = "#C9B89E"; e.currentTarget.style.borderColor = "#B0A090"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "transparent"; }}
+              >
+                {dialogSize === "full"
+                  ? <Minimize2 style={{ width: 12, height: 12 }} />
+                  : <Maximize2 style={{ width: 12, height: 12 }} />}
+              </button>
+
+              {/* فاصل */}
+              <div style={{ width: 1, height: 18, background: "#B8AFA6", margin: "0 2px", flexShrink: 0 }} />
 
               {/* حفظ */}
               <BotBtn
@@ -2089,30 +2112,34 @@ export default function Products() {
                   }
                 }}
               />
+
+              {/* فاصل + عنوان */}
+              <div style={{ width: 1, height: 18, background: "#B8AFA6", margin: "0 6px 0 4px", flexShrink: 0 }} />
+              <DialogTitle style={{
+                display: "flex", alignItems: "center", gap: 6,
+                fontSize: 13, fontWeight: 700,
+                fontFamily: "'Cairo', Tahoma, sans-serif",
+                color: "#2B2B2B", whiteSpace: "nowrap",
+              }}>
+                <Package style={{ width: 15, height: 15, color: "#406B93" }} />
+                {editId ? `تعديل بيانات الصنف${form.sku ? ` — ${form.sku}` : ""}` : "إضافة صنف جديد"}
+              </DialogTitle>
             </div>
 
-            {/* ── Left group: أسهم التنقل ── */}
-            <div style={{ display: "flex", alignItems: "center", gap: 1 }}>
+            {/* الجانب الأيسر: أسهم التنقل */}
+            <div style={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
 
               {/* أول ◄◄ */}
-              <NavBtn
-                title="أول سجل"
-                disabled={!editId || currentNavIdx <= 0}
-                onClick={navFirst}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+              <NavBtn title="أول سجل" disabled={!editId || currentNavIdx <= 0} onClick={navFirst}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                   <polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/>
                 </svg>
-                <span style={{ fontSize: 10, marginRight: 1 }}>أول</span>
+                <span style={{ fontSize: 10 }}>أول</span>
               </NavBtn>
 
               {/* السابق ◄ */}
-              <NavBtn
-                title="السابق"
-                disabled={!editId || currentNavIdx <= 0}
-                onClick={navPrev}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+              <NavBtn title="السابق" disabled={!editId || currentNavIdx <= 0} onClick={navPrev}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                   <polyline points="15 18 9 12 15 6"/>
                 </svg>
                 <span style={{ fontSize: 10 }}>السابق</span>
@@ -2120,10 +2147,10 @@ export default function Products() {
 
               {/* عداد الموضع */}
               <div style={{
-                padding: "0 6px", fontSize: 10.5, color: "#666",
-                fontFamily: "Tahoma, sans-serif", minWidth: 44, textAlign: "center",
-                borderRight: "1px solid #D4CFC9", borderLeft: "1px solid #D4CFC9",
-                height: 22, lineHeight: "22px",
+                padding: "0 6px", fontSize: 10.5, color: "#555",
+                fontFamily: "Tahoma, sans-serif", minWidth: 40, textAlign: "center",
+                borderRight: "1px solid #C0B9AF", borderLeft: "1px solid #C0B9AF",
+                height: 20, lineHeight: "20px",
               }}>
                 {editId && currentNavIdx >= 0
                   ? `${currentNavIdx + 1} / ${sortedProducts.length}`
@@ -2137,7 +2164,7 @@ export default function Products() {
                 onClick={navNext}
               >
                 <span style={{ fontSize: 10 }}>التالي</span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                   <polyline points="9 18 15 12 9 6"/>
                 </svg>
               </NavBtn>
@@ -2148,13 +2175,13 @@ export default function Products() {
                 disabled={!editId || currentNavIdx < 0 || currentNavIdx >= sortedProducts.length - 1}
                 onClick={navLast}
               >
-                <span style={{ fontSize: 10, marginLeft: 1 }}>آخر</span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <span style={{ fontSize: 10 }}>آخر</span>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                   <polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/>
                 </svg>
               </NavBtn>
             </div>
-          </div>
+          </DialogHeader>
 
           {/* محتوى الكارت */}
           <div className="flex-1 overflow-hidden">
