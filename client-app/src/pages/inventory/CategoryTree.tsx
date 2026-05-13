@@ -31,6 +31,7 @@ export default function CategoryTree() {
   const [editCat, setEditCat] = useState<Category | null>(null);
   const [form, setForm] = useState({ name: "", description: "", color: "#f59e0b", parentId: "" });
   const [search, setSearch] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   const createCat = trpc.categories.create.useMutation({
     onSuccess: () => {
@@ -48,6 +49,16 @@ export default function CategoryTree() {
       utils.categories.list.invalidate();
       toast.success("تم تحديث الفئة");
       setShowDialog(false);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const deleteCat = trpc.categories.delete.useMutation({
+    onSuccess: () => {
+      utils.categories.tree.invalidate();
+      utils.categories.list.invalidate();
+      toast.success("تم حذف الفئة");
+      setConfirmDeleteId(null);
     },
     onError: (e) => toast.error(e.message),
   });
@@ -227,15 +238,26 @@ export default function CategoryTree() {
                       </Badge>
                     </td>
                     <td className="px-4 py-2.5">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 text-slate-500 hover:text-[#406B93]"
-                        onClick={() => openEdit(cat)}
-                        title="تعديل"
-                      >
-                        <Edit className="w-3.5 h-3.5" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 text-slate-500 hover:text-[#406B93]"
+                          onClick={() => openEdit(cat)}
+                          title="تعديل"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 text-slate-500 hover:text-red-600"
+                          onClick={() => setConfirmDeleteId(cat.id)}
+                          title="حذف"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -244,6 +266,57 @@ export default function CategoryTree() {
           </table>
         )}
       </div>
+
+      {/* ── نافذة تأكيد الحذف ── */}
+      <Dialog open={confirmDeleteId !== null} onOpenChange={(o) => !o && setConfirmDeleteId(null)}>
+        <DialogContent className="max-w-sm" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="w-4 h-4" />
+              تأكيد الحذف
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-3">
+            {confirmDeleteId && (() => {
+              const cat = cats.find(c => c.id === confirmDeleteId);
+              const subCount = cats.filter(c => c.parentId === confirmDeleteId).length;
+              return (
+                <div className="space-y-3">
+                  <p className="text-sm text-slate-700">
+                    هل تريد حذف الفئة{" "}
+                    <span className="font-bold">"{cat?.name}"</span>؟
+                  </p>
+                  {subCount > 0 && (
+                    <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700">
+                      <span>⚠️</span>
+                      <span>هذه الفئة تحتوي على {subCount} فئة فرعية. سيتم فصلها عن هذه الفئة عند الحذف.</span>
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">لا يمكن التراجع عن هذا الإجراء.</p>
+                </div>
+              );
+            })()}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDeleteId(null)}>
+              إلغاء
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteCat.isPending}
+              onClick={() => confirmDeleteId && deleteCat.mutate({ id: confirmDeleteId })}
+              className="gap-1.5"
+            >
+              {deleteCat.isPending ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="w-3.5 h-3.5" />
+              )}
+              حذف الفئة
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── نافذة إضافة / تعديل فئة ── */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
