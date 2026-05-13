@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import SalesInvoicePageNew from "./SalesInvoicePage";
 import SalesQuotation from "./sales/SalesQuotation";
 import { useTabManager } from "@/contexts/TabManagerContext";
@@ -7,6 +7,7 @@ import {
   BarChart3, Settings, Users, ClipboardList, ShoppingCart, Tag,
   DollarSign, Receipt, Clock, Wallet, Star, Plus, Search,
   Printer, CheckCircle, RefreshCw, ArrowRight, Filter,
+  Bell, Activity, X,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -74,6 +75,175 @@ const menuSections = [
   },
 ];
 
+// ─── Dashboard Settings ────────────────────────────────────────────────────────
+
+type DashboardWidgetKey =
+  | "todaySales" | "invoiceCount" | "newCustomers" | "avgInvoice"
+  | "chart" | "alerts" | "recentOps" | "stats";
+
+type DashboardSettings = Record<DashboardWidgetKey, boolean>;
+
+const SETTINGS_KEY = "onesoft_sales_dash_v1";
+
+const DEFAULT_SETTINGS: DashboardSettings = {
+  todaySales: true, invoiceCount: true, newCustomers: true, avgInvoice: true,
+  chart: true, alerts: true, recentOps: true, stats: true,
+};
+
+const WIDGET_LABELS: { key: DashboardWidgetKey; label: string }[] = [
+  { key: "todaySales",    label: "مبيعات اليوم" },
+  { key: "invoiceCount",  label: "عدد الفواتير" },
+  { key: "newCustomers",  label: "العملاء الجدد" },
+  { key: "avgInvoice",    label: "متوسط الفاتورة" },
+  { key: "chart",         label: "الرسم البياني" },
+  { key: "alerts",        label: "التنبيهات" },
+  { key: "recentOps",     label: "آخر العمليات" },
+  { key: "stats",         label: "الإحصائيات" },
+];
+
+function loadSettings(): DashboardSettings {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return DEFAULT_SETTINGS;
+    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+  } catch { return DEFAULT_SETTINGS; }
+}
+
+function saveSettings(s: DashboardSettings) {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+}
+
+/* ── Toggle Switch ── */
+function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      style={{
+        width: 36, height: 20, borderRadius: 10, border: "none", cursor: "pointer",
+        background: checked ? "#2563EB" : "#D1D5DB",
+        position: "relative", transition: "background 0.2s", flexShrink: 0,
+        padding: 0,
+      }}
+    >
+      <span style={{
+        position: "absolute", top: 2,
+        left: checked ? 18 : 2,
+        width: 16, height: 16, borderRadius: "50%",
+        background: "#fff", transition: "left 0.2s",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+      }} />
+    </button>
+  );
+}
+
+/* ── Settings Popup ── */
+function DashboardSettingsPanel({
+  settings, onChange, onClose,
+  anchorRef,
+}: {
+  settings: DashboardSettings;
+  onChange: (key: DashboardWidgetKey, val: boolean) => void;
+  onClose: () => void;
+  anchorRef: React.RefObject<HTMLButtonElement | null>;
+}) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (
+        panelRef.current && !panelRef.current.contains(e.target as Node) &&
+        anchorRef.current && !anchorRef.current.contains(e.target as Node)
+      ) onClose();
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [onClose, anchorRef]);
+
+  return (
+    <div
+      ref={panelRef}
+      dir="rtl"
+      style={{
+        position: "absolute", top: "calc(100% + 6px)", left: 0,
+        zIndex: 9999, width: 240,
+        background: "#FFFFFF",
+        border: "1px solid #E5E7EB",
+        borderRadius: 10,
+        boxShadow: "0 8px 24px rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.06)",
+        overflow: "hidden",
+      }}
+    >
+      {/* Header */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "10px 14px", borderBottom: "1px solid #F3F4F6",
+        background: "#F9FAFB",
+      }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: "#111827", fontFamily: "'Cairo', Tahoma, sans-serif" }}>
+          تخصيص لوحة التحكم
+        </span>
+        <button
+          onClick={onClose}
+          style={{
+            width: 22, height: 22, borderRadius: 5, border: "none",
+            background: "transparent", cursor: "pointer", color: "#9CA3AF",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = "#F3F4F6")}
+          onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+        >
+          <X style={{ width: 13, height: 13, pointerEvents: "none" }} />
+        </button>
+      </div>
+
+      {/* Widget list */}
+      <div style={{ padding: "6px 0" }}>
+        {WIDGET_LABELS.map(({ key, label }) => (
+          <div
+            key={key}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "7px 14px", transition: "background 0.1s",
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = "#F9FAFB")}
+            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+          >
+            <span style={{
+              fontSize: 12.5, color: "#374151",
+              fontFamily: "'Cairo', Tahoma, sans-serif",
+            }}>
+              {label}
+            </span>
+            <ToggleSwitch checked={settings[key]} onChange={val => onChange(key, val)} />
+          </div>
+        ))}
+      </div>
+
+      {/* Footer */}
+      <div style={{ padding: "8px 14px", borderTop: "1px solid #F3F4F6" }}>
+        <button
+          onClick={() => {
+            WIDGET_LABELS.forEach(({ key }) => onChange(key, true));
+          }}
+          style={{
+            width: "100%", padding: "5px 0", borderRadius: 6,
+            border: "1px solid #E5E7EB", background: "transparent",
+            fontSize: 11.5, color: "#6B7280", cursor: "pointer",
+            fontFamily: "'Cairo', Tahoma, sans-serif",
+            transition: "background 0.1s",
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = "#F3F4F6")}
+          onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+        >
+          إظهار الكل
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
 function SalesMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
@@ -131,72 +301,246 @@ function SalesMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: Me
 
 // ─── Overview ─────────────────────────────────────────────────────────────────
 
-function SalesOverview({ onSelect }: { onSelect: (id: MenuId) => void }) {
-  const stats = [
-    { label: "مبيعات اليوم",    value: "12,450", change: "+8%",  color: "text-emerald-500", icon: TrendingUp },
-    { label: "عدد الفواتير",    value: "47",      change: "+12%", color: "text-blue-500",    icon: Receipt },
-    { label: "العملاء الجدد",   value: "5",       change: "+2",   color: "text-purple-500",  icon: Users },
-    { label: "متوسط الفاتورة",  value: "264.9",   change: "-3%",  color: "text-amber-500",   icon: DollarSign },
+function SalesOverview({
+  onSelect, settings, onSettingsChange,
+}: {
+  onSelect: (id: MenuId) => void;
+  settings: DashboardSettings;
+  onSettingsChange: (key: DashboardWidgetKey, val: boolean) => void;
+}) {
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const gearBtnRef = useRef<HTMLButtonElement>(null);
+
+  const allStats = [
+    { key: "todaySales"   as DashboardWidgetKey, label: "مبيعات اليوم",   value: "12,450", change: "+8%",  color: "text-emerald-500", icon: TrendingUp },
+    { key: "invoiceCount" as DashboardWidgetKey, label: "عدد الفواتير",   value: "47",      change: "+12%", color: "text-blue-500",    icon: Receipt },
+    { key: "newCustomers" as DashboardWidgetKey, label: "العملاء الجدد",  value: "5",       change: "+2",   color: "text-purple-500",  icon: Users },
+    { key: "avgInvoice"   as DashboardWidgetKey, label: "متوسط الفاتورة", value: "264.9",   change: "-3%",  color: "text-amber-500",   icon: DollarSign },
   ];
+  const visibleStats = allStats.filter(s => settings[s.key]);
+
   const salesData = [
     { day: "السبت",    sales: 8200 }, { day: "الأحد",   sales: 9400 },
     { day: "الاثنين", sales: 11000 }, { day: "الثلاثاء", sales: 9800 },
     { day: "الأربعاء",sales: 12450 }, { day: "الخميس",  sales: 10600 },
     { day: "الجمعة",  sales: 7300 },
   ];
+
+  const recentOps = [
+    { id: "INV-2026-0047", customer: "أحمد محمد",   amount: "1,250",  status: "مكتملة",  color: "#10B981" },
+    { id: "INV-2026-0046", customer: "شركة النور",   amount: "4,800",  status: "معلقة",   color: "#F59E0B" },
+    { id: "INV-2026-0045", customer: "محمد علي",     amount: "760",    status: "مكتملة",  color: "#10B981" },
+    { id: "INV-2026-0044", customer: "مؤسسة الفجر",  amount: "12,300", status: "مكتملة",  color: "#10B981" },
+  ];
+
+  const colsClass = visibleStats.length === 4 ? "grid-cols-2 lg:grid-cols-4"
+                   : visibleStats.length === 3 ? "grid-cols-3"
+                   : visibleStats.length === 2 ? "grid-cols-2"
+                   : "grid-cols-1";
+
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {stats.map(s => (
-          <Card key={s.label} className="border-border/50">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <s.icon className={`w-5 h-5 ${s.color}`} />
-                <span className="text-xs text-muted-foreground">{s.change}</span>
+
+      {/* ── العنوان + زر الإعدادات ── */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", position: "relative" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: 8,
+            background: "rgba(37,99,235,0.1)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <TrendingUp style={{ width: 16, height: 16, color: "#2563EB" }} />
+          </div>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#111827", fontFamily: "'Cairo', Tahoma, sans-serif" }}>
+              المبيعات
+            </h2>
+            <p style={{ margin: 0, fontSize: 11, color: "#9CA3AF", fontFamily: "'Cairo', Tahoma, sans-serif" }}>
+              لوحة تحكم المبيعات
+            </p>
+          </div>
+        </div>
+
+        {/* زر الإعدادات */}
+        <div style={{ position: "relative" }}>
+          <button
+            ref={gearBtnRef}
+            onClick={() => setSettingsOpen(p => !p)}
+            title="إعدادات لوحة التحكم"
+            style={{
+              width: 32, height: 32, borderRadius: 7,
+              border: `1px solid ${settingsOpen ? "#2563EB" : "#E5E7EB"}`,
+              background: settingsOpen ? "#EFF6FF" : "#fff",
+              cursor: "pointer", color: settingsOpen ? "#2563EB" : "#6B7280",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              transition: "all 0.15s",
+            }}
+            onMouseEnter={e => {
+              if (!settingsOpen) {
+                e.currentTarget.style.borderColor = "#2563EB";
+                e.currentTarget.style.color = "#2563EB";
+                e.currentTarget.style.background = "#EFF6FF";
+              }
+            }}
+            onMouseLeave={e => {
+              if (!settingsOpen) {
+                e.currentTarget.style.borderColor = "#E5E7EB";
+                e.currentTarget.style.color = "#6B7280";
+                e.currentTarget.style.background = "#fff";
+              }
+            }}
+          >
+            <Settings style={{ width: 15, height: 15, pointerEvents: "none" }} />
+          </button>
+
+          {settingsOpen && (
+            <DashboardSettingsPanel
+              settings={settings}
+              onChange={onSettingsChange}
+              onClose={() => setSettingsOpen(false)}
+              anchorRef={gearBtnRef}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* ── بطاقات الإحصائيات ── */}
+      {visibleStats.length > 0 && (
+        <div className={`grid ${colsClass} gap-3`}>
+          {visibleStats.map(s => (
+            <Card key={s.label} className="border-border/50">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <s.icon className={`w-5 h-5 ${s.color}`} />
+                  <span className="text-xs text-muted-foreground">{s.change}</span>
+                </div>
+                <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
+                <p className="text-xs text-muted-foreground mt-1">{s.label}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* ── الرسم البياني ── */}
+      {settings.chart && (
+        <Card className="border-border/50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">مبيعات الأسبوع الحالي</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={salesData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="day" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} />
+                <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} />
+                <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", color: "hsl(var(--foreground))" }} />
+                <Bar dataKey="sales" fill="hsl(var(--primary))" name="المبيعات" radius={[4,4,0,0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── التنبيهات ── */}
+      {settings.alerts && (
+        <Card className="border-border/50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Bell className="w-4 h-4 text-amber-500" />
+              التنبيهات
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {[
+              { msg: "فاتورة INV-2026-0046 معلقة منذ يومين", color: "#F59E0B" },
+              { msg: "رصيد العميل شركة النور تجاوز حد الائتمان", color: "#EF4444" },
+              { msg: "3 عروض أسعار على وشك الانتهاء", color: "#3B82F6" },
+            ].map((a, i) => (
+              <div key={i} style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "7px 10px", borderRadius: 7,
+                background: `${a.color}10`,
+                border: `1px solid ${a.color}30`,
+              }}>
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: a.color, flexShrink: 0 }} />
+                <span style={{ fontSize: 12, color: "#374151", fontFamily: "'Cairo', Tahoma, sans-serif" }}>{a.msg}</span>
               </div>
-              <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
-              <p className="text-xs text-muted-foreground mt-1">{s.label}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-      <Card className="border-border/50">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">مبيعات الأسبوع الحالي</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={salesData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="day" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} />
-              <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} />
-              <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", color: "hsl(var(--foreground))" }} />
-              <Bar dataKey="sales" fill="hsl(var(--primary))" name="المبيعات" radius={[4,4,0,0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-        {menuSections.map(group => (
-          <Card key={group.id} className="border-border/50 hover:border-primary/30 transition-colors cursor-pointer">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs text-muted-foreground flex items-center gap-2">
-                <group.icon className="w-3.5 h-3.5 text-primary" />
-                {group.label}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-1 pt-0">
-              {group.children.map(item => (
-                <button key={item.id} onClick={() => onSelect(item.id)}
-                  className="w-full flex items-center gap-1.5 px-2 py-1 rounded text-xs text-muted-foreground hover:text-foreground hover:bg-accent/30 transition-colors">
-                  <ArrowRight className="w-2.5 h-2.5 shrink-0" />
-                  {item.label}
-                </button>
-              ))}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── آخر العمليات ── */}
+      {settings.recentOps && (
+        <Card className="border-border/50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Activity className="w-4 h-4 text-blue-500" />
+              آخر العمليات
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, fontFamily: "'Cairo', Tahoma, sans-serif" }}>
+                <thead>
+                  <tr style={{ borderBottom: "1px solid #F3F4F6" }}>
+                    {["رقم الفاتورة", "العميل", "المبلغ", "الحالة"].map(h => (
+                      <th key={h} style={{ padding: "8px 16px", textAlign: "right", color: "#9CA3AF", fontWeight: 500, fontSize: 11 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentOps.map((op, i) => (
+                    <tr key={i} style={{ borderBottom: "1px solid #F9FAFB" }}
+                      onMouseEnter={e => (e.currentTarget.style.background = "#F9FAFB")}
+                      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                    >
+                      <td style={{ padding: "8px 16px", color: "#2563EB", fontWeight: 500 }}>{op.id}</td>
+                      <td style={{ padding: "8px 16px", color: "#374151" }}>{op.customer}</td>
+                      <td style={{ padding: "8px 16px", color: "#111827", fontWeight: 600 }}>{op.amount}</td>
+                      <td style={{ padding: "8px 16px" }}>
+                        <span style={{
+                          display: "inline-block", padding: "2px 10px", borderRadius: 20,
+                          fontSize: 11, fontWeight: 500,
+                          background: `${op.color}15`, color: op.color,
+                          border: `1px solid ${op.color}30`,
+                        }}>{op.status}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── الإحصائيات (روابط سريعة) ── */}
+      {settings.stats && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          {menuSections.map(group => (
+            <Card key={group.id} className="border-border/50 hover:border-primary/30 transition-colors cursor-pointer">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs text-muted-foreground flex items-center gap-2">
+                  <group.icon className="w-3.5 h-3.5 text-primary" />
+                  {group.label}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1 pt-0">
+                {group.children.map(item => (
+                  <button key={item.id} onClick={() => onSelect(item.id)}
+                    className="w-full flex items-center gap-1.5 px-2 py-1 rounded text-xs text-muted-foreground hover:text-foreground hover:bg-accent/30 transition-colors">
+                    <ArrowRight className="w-2.5 h-2.5 shrink-0" />
+                    {item.label}
+                  </button>
+                ))}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
     </div>
   );
 }
@@ -809,9 +1153,14 @@ function DeliveryOrderPage() {
 
 // ─── Content Router ────────────────────────────────────────────────────────────
 
-function SalesContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
+function SalesContent({ activeId, onSelect, settings, onSettingsChange }: {
+  activeId: MenuId;
+  onSelect: (id: MenuId) => void;
+  settings: DashboardSettings;
+  onSettingsChange: (key: DashboardWidgetKey, val: boolean) => void;
+}) {
   switch (activeId) {
-    case "overview":              return <SalesOverview onSelect={onSelect} />;
+    case "overview":              return <SalesOverview onSelect={onSelect} settings={settings} onSettingsChange={onSettingsChange} />;
     case "sales-invoice":         return <SalesInvoicePageNew />;
     case "sales-return":          return <ComingSoon title="مردود المبيعات" />;
     case "credit-note":           return <ComingSoon title="إشعار دائن" />;
@@ -858,11 +1207,26 @@ export function SalesItemsReportsTab()  { return <div className="h-full overflow
 
 export default function SalesModule() {
   const [activeId, setActiveId] = useState<MenuId>("overview");
+  const [settings, setSettings] = useState<DashboardSettings>(loadSettings);
+
+  const handleSettingsChange = (key: DashboardWidgetKey, val: boolean) => {
+    setSettings(prev => {
+      const next = { ...prev, [key]: val };
+      saveSettings(next);
+      return next;
+    });
+  };
+
   return (
     <div className="flex h-full" dir="rtl">
       <SalesMenu activeId={activeId} onSelect={setActiveId} />
       <div className="flex-1 overflow-auto p-5">
-        <SalesContent activeId={activeId} onSelect={setActiveId} />
+        <SalesContent
+          activeId={activeId}
+          onSelect={setActiveId}
+          settings={settings}
+          onSettingsChange={handleSettingsChange}
+        />
       </div>
     </div>
   );
