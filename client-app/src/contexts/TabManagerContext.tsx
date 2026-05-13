@@ -1,16 +1,17 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, ReactNode, useCallback } from "react";
 
 export type AppTab = {
   id: string;
   path: string;
   label: string;
   Icon: React.ElementType;
+  pinned?: boolean;
 };
 
 type TabManagerContextType = {
   tabs: AppTab[];
   activeTabId: string;
-  openTab: (path: string, label: string, Icon: React.ElementType) => void;
+  openTab: (path: string, label: string, Icon: React.ElementType, pinned?: boolean) => void;
   closeTab: (id: string) => void;
   activateTab: (id: string) => void;
 };
@@ -25,7 +26,9 @@ export function useTabManager() {
 
 let tabCounter = 1;
 
-export function TabManagerProvider({ children, initialPath, initialLabel, InitialIcon }: {
+export function TabManagerProvider({
+  children, initialPath, initialLabel, InitialIcon,
+}: {
   children: ReactNode;
   initialPath: string;
   initialLabel: string;
@@ -33,11 +36,11 @@ export function TabManagerProvider({ children, initialPath, initialLabel, Initia
 }) {
   const firstId = "tab-1";
   const [tabs, setTabs] = useState<AppTab[]>([
-    { id: firstId, path: initialPath, label: initialLabel, Icon: InitialIcon },
+    { id: firstId, path: initialPath, label: initialLabel, Icon: InitialIcon, pinned: true },
   ]);
   const [activeTabId, setActiveTabId] = useState(firstId);
 
-  const openTab = (path: string, label: string, Icon: React.ElementType) => {
+  const openTab = useCallback((path: string, label: string, Icon: React.ElementType, pinned = false) => {
     setTabs(prev => {
       const existing = prev.find(t => t.path === path);
       if (existing) {
@@ -47,12 +50,14 @@ export function TabManagerProvider({ children, initialPath, initialLabel, Initia
       tabCounter++;
       const id = `tab-${tabCounter}`;
       setActiveTabId(id);
-      return [...prev, { id, path, label, Icon }];
+      return [...prev, { id, path, label, Icon, pinned }];
     });
-  };
+  }, []);
 
-  const closeTab = (id: string) => {
+  const closeTab = useCallback((id: string) => {
     setTabs(prev => {
+      const tab = prev.find(t => t.id === id);
+      if (!tab || tab.pinned) return prev;
       if (prev.length === 1) return prev;
       const idx = prev.findIndex(t => t.id === id);
       const next = prev.filter(t => t.id !== id);
@@ -62,9 +67,9 @@ export function TabManagerProvider({ children, initialPath, initialLabel, Initia
       }
       return next;
     });
-  };
+  }, [activeTabId]);
 
-  const activateTab = (id: string) => setActiveTabId(id);
+  const activateTab = useCallback((id: string) => setActiveTabId(id), []);
 
   return (
     <TabManagerContext.Provider value={{ tabs, activeTabId, openTab, closeTab, activateTab }}>
