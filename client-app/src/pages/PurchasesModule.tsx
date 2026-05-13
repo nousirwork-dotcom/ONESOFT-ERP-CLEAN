@@ -52,6 +52,7 @@ const menuSections = [
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 function PurchasesMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
+  const { openTab } = useTabManager();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
     "suppliers-group": true, "purchase-docs": true, "purchase-reports": false,
   });
@@ -82,7 +83,10 @@ function PurchasesMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id
                 {section.children.map(child => (
                     <button
                       key={child.id}
-                      onClick={() => onSelect(child.id)}
+                      onClick={() => {
+                        onSelect(child.id);
+                        openTab(child.path, child.label, child.icon);
+                      }}
                       className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors ${
                         activeId === child.id
                           ? "bg-primary/10 text-primary font-semibold border-r-2 border-primary"
