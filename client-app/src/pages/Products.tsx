@@ -398,7 +398,7 @@ function ProductCard({
   return (
     <div className="flex flex-col h-full" dir="rtl">
       {/* شريط التبويبات — مربعات منفصلة بحدود */}
-      <div className="flex flex-wrap gap-1 px-2 py-1.5 bg-[#EDE7DF] dark:bg-slate-800 border-b border-[#BEBEBE] dark:border-slate-600 flex-shrink-0">
+      <div className="flex flex-wrap gap-1 px-2 py-0.5.5 bg-[#EDE7DF] dark:bg-slate-800 border-b border-[#BEBEBE] dark:border-slate-600 flex-shrink-0">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -451,7 +451,7 @@ function ProductCard({
                   <div className="w-24 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#BEBEBE] dark:border-slate-700">
                     <span className="text-xs text-slate-600 dark:text-slate-400">الكود</span>
                   </div>
-                  <div className="flex-1 px-1 py-1 relative">
+                  <div className="flex-1 px-1 py-0.5 relative">
                     {skuLoading && (
                       <div className="absolute inset-0 flex items-center justify-center z-10 bg-white/70 dark:bg-slate-800/70 rounded">
                         <div className="w-3 h-3 border border-blue-500 border-t-transparent rounded-full animate-spin" />
@@ -473,7 +473,7 @@ function ProductCard({
               <div className="w-24 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#BEBEBE] dark:border-slate-700">
                 <span className="text-xs text-slate-600 dark:text-slate-400">إسم 1</span>
               </div>
-              <div className="flex-1 px-1 py-1">
+              <div className="flex-1 px-1 py-0.5">
                 <CInput value={form.name} onChange={(v) => set("name", v)} placeholder="اسم الصنف بالعربية" className="w-full" />
               </div>
             </div>
@@ -482,7 +482,7 @@ function ProductCard({
               <div className="w-24 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#BEBEBE] dark:border-slate-700">
                 <span className="text-xs text-slate-600 dark:text-slate-400">إسم 2</span>
               </div>
-              <div className="flex-1 px-1 py-1">
+              <div className="flex-1 px-1 py-0.5">
                 <CInput value={form.name2} onChange={(v) => set("name2", v)} placeholder="English Name" dir="ltr" className="w-full" />
               </div>
             </div>
@@ -498,9 +498,9 @@ function ProductCard({
               <div className="w-28 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#BEBEBE] dark:border-slate-700">
                 <span className="text-xs text-slate-600 dark:text-slate-400">نوع السجل</span>
               </div>
-              <div className="flex-1 px-1 py-1">
+              <div className="flex-1 px-1 py-0.5">
                 <select value={form.itemType} onChange={(e) => set("itemType", e.target.value)}
-                  className="h-7 w-full text-sm border border-slate-300 dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500">
+                  className="h-6 w-full text-sm border border-slate-300 dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500">
                   <option value="مخزون">مخزون</option>
                   <option value="خدمة">خدمة</option>
                   <option value="تجميع">تجميع</option>
@@ -516,12 +516,12 @@ function ProductCard({
               <div className="w-28 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#BEBEBE] dark:border-slate-700">
                 <span className="text-xs text-slate-600 dark:text-slate-400">رقم المجموعة</span>
               </div>
-              <div className="flex-1 px-1 py-1">
+              <div className="flex-1 px-1 py-0.5">
                 <select
                   value={form.groupId || "none"}
                   onChange={(e) => handleGroupSelect(e.target.value === "none" ? "" : e.target.value)}
                   disabled={skuLoading}
-                  className="h-7 w-full text-sm border border-slate-300 dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500 disabled:opacity-60"
+                  className="h-6 w-full text-sm border border-slate-300 dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500 disabled:opacity-60"
                 >
                   <option value="none">-- بدون --</option>
                   {leafGroups.map(g => (
@@ -537,7 +537,7 @@ function ProductCard({
               <div className="w-28 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#BEBEBE] dark:border-slate-700">
                 <span className="text-xs text-slate-600 dark:text-slate-400">الصنف الرئيسي</span>
               </div>
-              <div className="flex-1 px-1 py-1">
+              <div className="flex-1 px-1 py-0.5">
                 <CInput value={form.parentItem} onChange={(v) => set("parentItem", v)} placeholder="" className="w-full" />
               </div>
             </div>
@@ -557,10 +557,10 @@ function ProductCard({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-[#EDE7DF] dark:bg-slate-800 border-b border-[#BEBEBE] dark:border-slate-600">
-                    <th className="text-center px-2 py-1 text-xs font-semibold text-slate-600 dark:text-slate-400 w-8 border-l border-[#BEBEBE] dark:border-slate-600">#</th>
-                    <th className="text-right px-2 py-1 text-xs font-semibold text-slate-600 dark:text-slate-400 border-l border-[#BEBEBE] dark:border-slate-600">وحدة</th>
-                    <th className="text-center px-2 py-1 text-xs font-semibold text-slate-600 dark:text-slate-400 w-28 border-l border-[#BEBEBE] dark:border-slate-600">م. تحويل</th>
-                    <th className="text-right px-2 py-1 text-xs font-semibold text-slate-600 dark:text-slate-400 border-l border-[#BEBEBE] dark:border-slate-600">باركود</th>
+                    <th className="text-center px-2 py-0.5 text-xs font-semibold text-slate-600 dark:text-slate-400 w-8 border-l border-[#BEBEBE] dark:border-slate-600">#</th>
+                    <th className="text-right px-2 py-0.5 text-xs font-semibold text-slate-600 dark:text-slate-400 border-l border-[#BEBEBE] dark:border-slate-600">وحدة</th>
+                    <th className="text-center px-2 py-0.5 text-xs font-semibold text-slate-600 dark:text-slate-400 w-28 border-l border-[#BEBEBE] dark:border-slate-600">م. تحويل</th>
+                    <th className="text-right px-2 py-0.5 text-xs font-semibold text-slate-600 dark:text-slate-400 border-l border-[#BEBEBE] dark:border-slate-600">باركود</th>
                     <th className="w-8 border-l border-[#BEBEBE] dark:border-slate-600"></th>
                   </tr>
                 </thead>
@@ -568,16 +568,16 @@ function ProductCard({
                   {unitRows.map((row, idx) => (
                     <tr key={idx} className="border-b border-[#DEDCDA] dark:border-slate-700">
                       {/* رقم */}
-                      <td className="text-center px-2 py-1 text-xs font-semibold text-slate-500 bg-[#F5F0E8] dark:bg-slate-800/50 border-l border-[#DEDCDA] dark:border-slate-700">
+                      <td className="text-center px-2 py-0.5 text-xs font-semibold text-slate-500 bg-[#F5F0E8] dark:bg-slate-800/50 border-l border-[#DEDCDA] dark:border-slate-700">
                         {idx + 1}
                       </td>
                       {/* اختيار الوحدة */}
-                      <td className="px-1 py-1 border-l border-[#DEDCDA] dark:border-slate-700">
+                      <td className="px-1 py-0.5 border-l border-[#DEDCDA] dark:border-slate-700">
                         <div className="flex items-center gap-1">
                           <select
                             value={row.unit}
                             onChange={(e) => updateUnitRow(idx, "unit", e.target.value)}
-                            className="h-7 flex-1 text-sm border border-slate-300 dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500"
+                            className="h-6 flex-1 text-sm border border-slate-300 dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500"
                           >
                             <option value="">-- اختر --</option>
                             {unitsList?.map(u => (
@@ -588,23 +588,23 @@ function ProductCard({
                             type="button"
                             title="إضافة وحدة جديدة"
                             onClick={() => { setAddingToRow(idx); setNewUnitName(""); setAddUnitOpen(true); }}
-                            className="h-7 w-7 shrink-0 flex items-center justify-center rounded border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-800/40 text-sm font-bold"
+                            className="h-6 w-6 shrink-0 flex items-center justify-center rounded border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-800/40 text-sm font-bold"
                           >+</button>
                         </div>
                       </td>
                       {/* معامل التحويل */}
-                      <td className="px-1 py-1 border-l border-[#DEDCDA] dark:border-slate-700">
+                      <td className="px-1 py-0.5 border-l border-[#DEDCDA] dark:border-slate-700">
                         {idx === 0
                           ? <CInput value="1.000" readOnly className="w-full text-center bg-slate-50 dark:bg-slate-700 text-slate-500" />
                           : <CInput value={row.conv} onChange={(v) => updateUnitRow(idx, "conv", v)} type="number" className="w-full text-center" />
                         }
                       </td>
                       {/* باركود */}
-                      <td className="px-1 py-1 border-l border-[#DEDCDA] dark:border-slate-700">
+                      <td className="px-1 py-0.5 border-l border-[#DEDCDA] dark:border-slate-700">
                         <CInput value={row.barcode} onChange={(v) => updateUnitRow(idx, "barcode", v)} placeholder="" dir="ltr" className="w-full" />
                       </td>
                       {/* حذف */}
-                      <td className="px-1 py-1 text-center border-l border-[#DEDCDA] dark:border-slate-700">
+                      <td className="px-1 py-0.5 text-center border-l border-[#DEDCDA] dark:border-slate-700">
                         {unitRows.length > 1 ? (
                           <button
                             type="button"
@@ -673,16 +673,16 @@ function ProductCard({
                     {catRows.map((cat, idx) => (
                       <tr key={idx} className="border-b border-[#DEDCDA] dark:border-slate-700">
                         {/* رقم */}
-                        <td className="text-center px-2 py-1 text-xs font-semibold text-slate-500 bg-[#F5F0E8] dark:bg-slate-800/50 border-l border-[#DEDCDA] dark:border-slate-700 w-8">
+                        <td className="text-center px-2 py-0.5 text-xs font-semibold text-slate-500 bg-[#F5F0E8] dark:bg-slate-800/50 border-l border-[#DEDCDA] dark:border-slate-700 w-8">
                           {idx + 1}
                         </td>
                         {/* اختيار الفئة */}
-                        <td className="px-1 py-1 border-l border-[#DEDCDA] dark:border-slate-700">
+                        <td className="px-1 py-0.5 border-l border-[#DEDCDA] dark:border-slate-700">
                           <div className="flex items-center gap-1">
                             <select
                               value={cat}
                               onChange={(e) => updateCatRow(idx, e.target.value)}
-                              className="h-7 flex-1 text-sm border border-slate-300 dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500"
+                              className="h-6 flex-1 text-sm border border-slate-300 dark:border-slate-600 rounded px-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500"
                             >
                               <option value="">-- اختر --</option>
                               {categories?.map((c) => (
@@ -693,12 +693,12 @@ function ProductCard({
                               type="button"
                               title="إضافة فئة جديدة"
                               onClick={() => { setAddingToCatRow(idx); setNewCatName(""); setAddCatOpen(true); }}
-                              className="h-7 w-7 shrink-0 flex items-center justify-center rounded border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-800/40 text-sm font-bold"
+                              className="h-6 w-6 shrink-0 flex items-center justify-center rounded border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-800/40 text-sm font-bold"
                             >+</button>
                           </div>
                         </td>
                         {/* حذف */}
-                        <td className="px-1 py-1 text-center w-8">
+                        <td className="px-1 py-0.5 text-center w-8">
                           {catRows.length > 1 ? (
                             <button
                               type="button"
@@ -771,7 +771,7 @@ function ProductCard({
                     <div className="w-28 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#BEBEBE] dark:border-slate-700">
                       <span className="text-xs text-slate-600 dark:text-slate-400">{r.label}</span>
                     </div>
-                    <div className="flex-1 px-1 py-1">
+                    <div className="flex-1 px-1 py-0.5">
                       <CInput value={(form as any)[r.key]} onChange={(v) => set(r.key as keyof ProductForm, v)} type={r.type} placeholder="" className="w-full" />
                     </div>
                   </div>
@@ -785,7 +785,7 @@ function ProductCard({
                 <div className="w-36 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#BEBEBE] dark:border-slate-700">
                   <span className="text-xs text-slate-600 dark:text-slate-400">نوع الضريبة السابقة</span>
                 </div>
-                <div className="flex-1 px-1 py-1">
+                <div className="flex-1 px-1 py-0.5">
                   <CInput value={form.prevTaxType} onChange={(v) => set("prevTaxType", v)} placeholder="" className="w-full" />
                 </div>
               </div>
@@ -793,7 +793,7 @@ function ProductCard({
                 <div className="w-28 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#BEBEBE] dark:border-slate-700">
                   <span className="text-xs text-slate-600 dark:text-slate-400">نوع الضريبة</span>
                 </div>
-                <div className="flex-1 px-1 py-1">
+                <div className="flex-1 px-1 py-0.5">
                   <CInput value={form.vatRate} onChange={(v) => set("vatRate", v)} type="number" placeholder="15" className="w-full" />
                 </div>
               </div>
@@ -818,7 +818,7 @@ function ProductCard({
                     value={form.description}
                     onChange={(e) => set("description", e.target.value)}
                     rows={2}
-                    className="text-sm border border-slate-300 dark:border-slate-600 rounded px-2 py-1 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500 resize-none w-full"
+                    className="text-sm border border-slate-300 dark:border-slate-600 rounded px-2 py-0.5 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500 resize-none w-full"
                     placeholder="وصف الصنف..."
                   />
                 </div>
