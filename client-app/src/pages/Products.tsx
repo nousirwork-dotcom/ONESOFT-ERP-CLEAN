@@ -439,8 +439,8 @@ function ProductCard({
 
           {/* يمين: مواصفات — رقم، اسم 1، اسم 2 */}
           <div className="flex-1 border-l border-slate-300 dark:border-slate-600">
-            <div className="bg-[#DDD4C4] dark:bg-blue-900/20 px-2 py-0.5 border-b border-[#CFCFCF] dark:border-slate-600 text-center">
-              <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">مواصفات</span>
+            <div className="bg-[#406B93] dark:bg-[#2d5070] px-2 py-0.5 border-b border-[#365C7D] dark:border-slate-600 text-center">
+              <span className="text-xs font-semibold text-white">مواصفات</span>
             </div>
             {/* رقم */}
             {(() => {
@@ -490,8 +490,8 @@ function ProductCard({
 
           {/* يسار: نوع السجل، رقم المجموعة، الصنف الرئيسي */}
           <div className="w-72 shrink-0">
-            <div className="bg-[#DDD4C4] dark:bg-blue-900/20 px-2 py-0.5 border-b border-[#CFCFCF] dark:border-slate-600 text-center">
-              <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">نوع</span>
+            <div className="bg-[#406B93] dark:bg-[#2d5070] px-2 py-0.5 border-b border-[#365C7D] dark:border-slate-600 text-center">
+              <span className="text-xs font-semibold text-white">نوع</span>
             </div>
             {/* نوع السجل */}
             <div className="flex border-b border-slate-200 dark:border-slate-700">
@@ -665,8 +665,8 @@ function ProductCard({
 
               {/* يمين: فئات — نظام ديناميكي مطابق للوحدات */}
               <div className="w-80 shrink-0 border-l border-slate-300 dark:border-slate-600 flex flex-col">
-                <div className="bg-[#DDD4C4] dark:bg-blue-900/20 px-2 py-0.5 border-b border-[#CFCFCF] dark:border-slate-600 text-center">
-                  <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">فئات</span>
+                <div className="bg-[#406B93] dark:bg-[#2d5070] px-2 py-0.5 border-b border-[#365C7D] dark:border-slate-600 text-center">
+                  <span className="text-xs font-semibold text-white">فئات</span>
                 </div>
                 <table className="w-full text-sm">
                   <tbody>
@@ -756,8 +756,8 @@ function ProductCard({
 
               {/* يسار: مواصفات تفصيلية */}
               <div className="flex-1">
-                <div className="bg-[#DDD4C4] dark:bg-blue-900/20 px-2 py-0.5 border-b border-[#CFCFCF] dark:border-slate-600 text-center">
-                  <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">مواصفات</span>
+                <div className="bg-[#406B93] dark:bg-[#2d5070] px-2 py-0.5 border-b border-[#365C7D] dark:border-slate-600 text-center">
+                  <span className="text-xs font-semibold text-white">مواصفات</span>
                 </div>
                 {[
                   { label: "الرقم المميز", key: "distinguishNo", type: "text" },
