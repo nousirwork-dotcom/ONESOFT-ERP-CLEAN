@@ -2041,19 +2041,19 @@ export default function Products() {
                 boxShadow: "0 0 0 1px rgba(59,130,246,0.15),0 20px 60px -10px rgba(59,130,246,0.35),0 8px 32px rgba(0,0,0,0.18)",
               }}
             >
-              {/* ── شريط العنوان والأزرار ── */}
+              {/* ── شريط الأدوات الرئيسي — Enterprise ERP Action Bar ── */}
               <div
                 dir="rtl"
                 style={{
                   flexShrink: 0,
                   display: "flex", flexDirection: "row", alignItems: "center",
                   justifyContent: "space-between",
-                  borderBottom: "1px solid #E5E7EB",
+                  borderBottom: "1px solid #DDE3EC",
                   background: "#FFFFFF",
-                  padding: "2px 8px",
-                  gap: 3,
+                  padding: "6px 10px",
+                  gap: 6,
                   userSelect: "none",
-                  minHeight: 36,
+                  minHeight: 48,
                 }}
               >
                 {/* ① العنوان — منطقة السحب */}
@@ -2061,23 +2061,29 @@ export default function Products() {
                   className="erp-drag-handle"
                   onDoubleClick={toggleMaximize}
                   style={{
-                    display: "flex", alignItems: "center", gap: 6,
-                    fontSize: 12.5, fontWeight: 600,
+                    display: "flex", alignItems: "center", gap: 7,
+                    fontSize: 13, fontWeight: 600,
                     fontFamily: "'Cairo', Tahoma, sans-serif",
-                    color: "#111827", whiteSpace: "nowrap", flexShrink: 0,
+                    color: "#1E293B", whiteSpace: "nowrap", flexShrink: 0,
                     cursor: isMaximized ? "default" : "move",
-                    paddingLeft: 4,
+                    paddingLeft: 2,
                   }}
                 >
-                  <Package style={{ width: 14, height: 14, color: "#2563EB", pointerEvents: "none" }} />
+                  <div style={{
+                    width: 26, height: 26, borderRadius: 6,
+                    background: "#EFF6FF", border: "1px solid #BFDBFE",
+                    display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                  }}>
+                    <Package style={{ width: 13, height: 13, color: "#2563EB", pointerEvents: "none" }} />
+                  </div>
                   {editId ? "تعديل بيانات الصنف" : "إضافة صنف جديد"}
                 </div>
 
-                {/* فاصل */}
-                <div style={{ width: 1, height: 16, background: "#E5E7EB", margin: "0 3px", flexShrink: 0 }} />
+                {/* فاصل رأسي */}
+                <div style={{ width: 1, height: 24, background: "#DDE3EC", margin: "0 2px", flexShrink: 0 }} />
 
                 {/* ② أزرار العمليات */}
-                <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
                   <BotBtn
                     icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>}
                     label="حفظ" variant="primary"
@@ -2156,28 +2162,28 @@ export default function Products() {
                   />
                 </div>
 
-                {/* فاصل */}
-                <div style={{ width: 1, height: 16, background: "#E5E7EB", margin: "0 3px", flexShrink: 0 }} />
+                {/* فاصل رأسي */}
+                <div style={{ width: 1, height: 24, background: "#DDE3EC", margin: "0 2px", flexShrink: 0 }} />
 
                 {/* ③ أسهم التنقل */}
-                <div style={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }}>
                   <NavBtn title="أول سجل" disabled={!editId || currentNavIdx <= 0} onClick={navFirst}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                       <polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/>
                     </svg>
-                    <span style={{ fontSize: 10 }}>أول</span>
+                    <span style={{ fontSize: 11 }}>أول</span>
                   </NavBtn>
                   <NavBtn title="السابق" disabled={!editId || currentNavIdx <= 0} onClick={navPrev}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                       <polyline points="15 18 9 12 15 6"/>
                     </svg>
-                    <span style={{ fontSize: 10 }}>السابق</span>
+                    <span style={{ fontSize: 11 }}>السابق</span>
                   </NavBtn>
                   <div style={{
-                    padding: "0 7px", fontSize: 10.5, color: "#6B7280",
-                    fontFamily: "Tahoma, sans-serif", minWidth: 40, textAlign: "center",
-                    borderRight: "1px solid #E5E7EB", borderLeft: "1px solid #E5E7EB",
-                    height: 20, lineHeight: "20px",
+                    padding: "0 10px", fontSize: 11, color: "#475569",
+                    fontFamily: "'Cairo', Tahoma, sans-serif", minWidth: 46, textAlign: "center",
+                    background: "#F8FAFC", border: "1px solid #D6DCE5",
+                    borderRadius: 6, height: 28, lineHeight: "28px", flexShrink: 0,
                   }}>
                     {editId && currentNavIdx >= 0
                       ? `${currentNavIdx + 1} / ${sortedProducts.length}`
@@ -2188,8 +2194,8 @@ export default function Products() {
                     disabled={!editId || currentNavIdx < 0 || currentNavIdx >= sortedProducts.length - 1}
                     onClick={navNext}
                   >
-                    <span style={{ fontSize: 10 }}>التالي</span>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                    <span style={{ fontSize: 11 }}>التالي</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                       <polyline points="9 18 15 12 9 6"/>
                     </svg>
                   </NavBtn>
@@ -2198,8 +2204,8 @@ export default function Products() {
                     disabled={!editId || currentNavIdx < 0 || currentNavIdx >= sortedProducts.length - 1}
                     onClick={navLast}
                   >
-                    <span style={{ fontSize: 10 }}>آخر</span>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                    <span style={{ fontSize: 11 }}>آخر</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                       <polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/>
                     </svg>
                   </NavBtn>
@@ -2209,47 +2215,64 @@ export default function Products() {
                 <div
                   className="erp-drag-handle"
                   onDoubleClick={toggleMaximize}
-                  style={{ flex: 1, cursor: isMaximized ? "default" : "move", minWidth: 12 }}
+                  style={{ flex: 1, cursor: isMaximized ? "default" : "move", minWidth: 16 }}
                 />
 
-                {/* فاصل */}
-                <div style={{ width: 1, height: 16, background: "#E5E7EB", margin: "0 3px", flexShrink: 0 }} />
+                {/* فاصل رأسي */}
+                <div style={{ width: 1, height: 24, background: "#DDE3EC", margin: "0 2px", flexShrink: 0 }} />
 
                 {/* ④ تكبير + إغلاق */}
-                <div style={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }}>
                   <button
                     onClick={toggleMaximize}
                     title={isMaximized ? "استعادة الحجم" : "تكبير النافذة"}
                     style={{
                       display: "flex", alignItems: "center", justifyContent: "center",
-                      width: 26, height: 26,
-                      background: "transparent", border: "1px solid transparent",
-                      borderRadius: 4, cursor: "pointer", color: "#6B7280",
-                      transition: "background 0.12s, color 0.12s",
+                      width: 32, height: 32,
+                      background: "#FFFFFF", border: "1px solid #D6DCE5",
+                      borderRadius: 6, cursor: "pointer", color: "#6B7280",
+                      transition: "background 0.15s ease, border-color 0.15s ease",
+                      flexShrink: 0,
                     }}
-                    onMouseEnter={e => { e.currentTarget.style.background = "#F3F4F6"; e.currentTarget.style.color = "#111827"; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#6B7280"; }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.background = "#F5F8FC";
+                      e.currentTarget.style.borderColor = "#B8C7DA";
+                      e.currentTarget.style.color = "#374151";
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.background = "#FFFFFF";
+                      e.currentTarget.style.borderColor = "#D6DCE5";
+                      e.currentTarget.style.color = "#6B7280";
+                    }}
                   >
                     {isMaximized
-                      ? <Minimize2 style={{ width: 13, height: 13 }} />
-                      : <Maximize2 style={{ width: 13, height: 13 }} />}
+                      ? <Minimize2 style={{ width: 13, height: 13, pointerEvents: "none" }} />
+                      : <Maximize2 style={{ width: 13, height: 13, pointerEvents: "none" }} />}
                   </button>
                   <button
                     onClick={() => setIsOpen(false)}
                     title="إغلاق"
                     style={{
-                      display: "flex", alignItems: "center", gap: 4,
-                      padding: "3px 8px", height: 26,
-                      background: "transparent", border: "1px solid transparent",
-                      borderRadius: 4, cursor: "pointer",
-                      fontFamily: "'Cairo', Tahoma, sans-serif", fontSize: 11.5, fontWeight: 500,
-                      color: "#6B7280", whiteSpace: "nowrap",
-                      transition: "background 0.12s, color 0.12s",
+                      display: "flex", alignItems: "center", gap: 5,
+                      padding: "0 12px", height: 32,
+                      background: "#FFFFFF", border: "1px solid #D6DCE5",
+                      borderRadius: 6, cursor: "pointer",
+                      fontFamily: "'Cairo', Tahoma, sans-serif", fontSize: 12, fontWeight: 500,
+                      color: "#6B7280", whiteSpace: "nowrap", flexShrink: 0,
+                      transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease",
                     }}
-                    onMouseEnter={e => { e.currentTarget.style.background = "#FEF2F2"; (e.currentTarget.style as any).color = "#DC2626"; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#6B7280"; }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.background = "#FEF2F2";
+                      e.currentTarget.style.borderColor = "#FECACA";
+                      (e.currentTarget.style as any).color = "#DC2626";
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.background = "#FFFFFF";
+                      e.currentTarget.style.borderColor = "#D6DCE5";
+                      e.currentTarget.style.color = "#6B7280";
+                    }}
                   >
-                    <X style={{ width: 12, height: 12 }} />
+                    <X style={{ width: 12, height: 12, pointerEvents: "none" }} />
                     إغلاق
                   </button>
                 </div>
@@ -2275,7 +2298,7 @@ export default function Products() {
   );
 }
 
-// ─── BotBtn: زر Toolbar ───────────────────────────────────────────────────────
+// ─── BotBtn: زر Toolbar (NamaSoft / SAP Style) ────────────────────────────────
 function BotBtn({
   icon, label, onClick, disabled, variant,
 }: {
@@ -2286,41 +2309,52 @@ function BotBtn({
   variant?: "primary" | "danger" | "default";
 }) {
   const [hovered, setHovered] = useState(false);
-  const bg = () => {
-    if (disabled) return "transparent";
-    if (variant === "primary") return hovered ? "#1D4ED8" : "#2563EB";
-    if (variant === "danger")  return hovered ? "#B91C1C" : "#DC2626";
-    return hovered ? "#F3F4F6" : "transparent";
+
+  const getStyle = (): React.CSSProperties => {
+    const base: React.CSSProperties = {
+      display: "flex", alignItems: "center", gap: 6,
+      padding: "0 12px", height: 32,
+      border: "1px solid",
+      borderRadius: 6,
+      cursor: disabled ? "not-allowed" : "pointer",
+      fontFamily: "'Cairo', Tahoma, sans-serif",
+      fontSize: 12, fontWeight: 500,
+      whiteSpace: "nowrap", flexShrink: 0,
+      transition: "background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease",
+      outline: "none",
+    };
+    if (variant === "primary") return {
+      ...base,
+      background: hovered && !disabled ? "#1D4ED8" : "#2563EB",
+      borderColor: hovered && !disabled ? "#1D4ED8" : "#2563EB",
+      color: "#FFFFFF",
+      opacity: disabled ? 0.55 : 1,
+      boxShadow: hovered && !disabled ? "0 2px 8px rgba(37,99,235,0.35)" : "0 1px 3px rgba(37,99,235,0.18)",
+    };
+    if (variant === "danger") return {
+      ...base,
+      background: hovered && !disabled ? "#B91C1C" : "#DC2626",
+      borderColor: hovered && !disabled ? "#B91C1C" : "#DC2626",
+      color: "#FFFFFF",
+      opacity: disabled ? 0.5 : 1,
+      boxShadow: hovered && !disabled ? "0 2px 8px rgba(220,38,38,0.3)" : "none",
+    };
+    return {
+      ...base,
+      background: hovered && !disabled ? "#F5F8FC" : "#FFFFFF",
+      borderColor: hovered && !disabled ? "#B8C7DA" : "#D6DCE5",
+      color: disabled ? "#A8B4C2" : "#374151",
+      opacity: disabled ? 0.65 : 1,
+    };
   };
-  const borderColor = () => {
-    if (variant === "primary") return hovered ? "#1D4ED8" : "#2563EB";
-    if (variant === "danger")  return hovered ? "#B91C1C" : "#DC2626";
-    return hovered ? "#D1D5DB" : "transparent";
-  };
-  const color = () => {
-    if (disabled) return "#D1D5DB";
-    if (variant === "primary" || variant === "danger") return "#fff";
-    return "#374151";
-  };
+
   return (
     <button
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{
-        display: "flex", alignItems: "center", gap: 4,
-        padding: "3px 8px", height: 26,
-        background: bg(), color: color(),
-        border: "1px solid",
-        borderColor: borderColor(),
-        borderRadius: 4, cursor: disabled ? "not-allowed" : "pointer",
-        fontFamily: "'Cairo', Tahoma, sans-serif",
-        fontSize: 11, fontWeight: 500,
-        whiteSpace: "nowrap", flexShrink: 0,
-        opacity: disabled ? 0.5 : 1,
-        transition: "background 0.12s, border-color 0.12s",
-      }}
+      style={getStyle()}
     >
       {icon}
       {label}
@@ -2331,11 +2365,11 @@ function BotBtn({
 // ─── BotDivider ───────────────────────────────────────────────────────────────
 function BotDivider() {
   return (
-    <div style={{ width: 1, height: 16, background: "#E5E7EB", margin: "0 2px", flexShrink: 0 }} />
+    <div style={{ width: 1, height: 22, background: "#D6DCE5", margin: "0 4px", flexShrink: 0 }} />
   );
 }
 
-// ─── NavBtn: زر التنقل ────────────────────────────────────────────────────────
+// ─── NavBtn: زر التنقل (Minimal ERP Style) ────────────────────────────────────
 function NavBtn({
   children, onClick, disabled, title,
 }: {
@@ -2353,18 +2387,18 @@ function NavBtn({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        display: "flex", alignItems: "center", gap: 2,
-        padding: "2px 5px", height: 22,
-        background: hovered && !disabled ? "#F3F4F6" : "transparent",
-        color: disabled ? "#D1D5DB" : "#4B5563",
+        display: "flex", alignItems: "center", gap: 3,
+        padding: "0 8px", height: 28,
+        background: hovered && !disabled ? "#F5F8FC" : "#FFFFFF",
+        color: disabled ? "#C5CDD8" : "#4B5563",
         border: "1px solid",
-        borderColor: hovered && !disabled ? "#D1D5DB" : "transparent",
-        borderRadius: 4, cursor: disabled ? "not-allowed" : "pointer",
-        fontFamily: "Tahoma, sans-serif",
-        fontSize: 10.5, fontWeight: 500,
+        borderColor: hovered && !disabled ? "#B8C7DA" : "#D6DCE5",
+        borderRadius: 6, cursor: disabled ? "not-allowed" : "pointer",
+        fontFamily: "'Cairo', Tahoma, sans-serif",
+        fontSize: 11, fontWeight: 500,
         whiteSpace: "nowrap", flexShrink: 0,
-        opacity: disabled ? 0.4 : 1,
-        transition: "background 0.1s, border-color 0.1s",
+        opacity: disabled ? 0.55 : 1,
+        transition: "background 0.15s ease, border-color 0.15s ease",
       }}
     >
       {children}
