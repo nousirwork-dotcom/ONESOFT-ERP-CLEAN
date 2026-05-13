@@ -62,6 +62,9 @@ import ChatWidget from "./ChatWidget";
 import TabBar from "./TabBar";
 import { useTabManager } from "@/contexts/TabManagerContext";
 import { WorkspaceContext } from "@/contexts/WorkspaceContext";
+import { useLang } from "@/contexts/LanguageContext";
+import { t } from "@/lib/translations";
+import { Languages } from "lucide-react";
 
 const SIDEBAR_WIDTH_KEY = "erp-sidebar-width";
 const LAYOUT_MODE_KEY = "erp-layout-mode";
@@ -91,22 +94,24 @@ type NavGroup = {
   items: NavItem[];
 };
 
-const navGroups: NavGroup[] = [
-  {
-    label: "القائمة الرئيسية",
-    items: [
-      { icon: LayoutDashboard, label: "لوحة التحكم",    path: "/" },
-      { icon: TrendingUp,  label: "إدارة المبيعات",   path: "/sales-module" },
-      { icon: ShoppingBag, label: "إدارة المشتريات", path: "/purchases-module" },
-      { icon: Boxes,      label: "إدارة المخزون",    path: "/inventory-module" },
-      { icon: Factory,    label: "إدارة التصنيع",    path: "/manufacturing-module" },
-      { icon: Calculator, label: "الحسابات العامة",  path: "/accounting-module" },
-      { icon: UserCheck,  label: "الموارد البشرية",  path: "/hr-module" },
-      { icon: Wrench,     label: "الأصول الثابتة",   path: "/assets-module" },
-      { icon: Settings,   label: "الإعدادات",        path: "/settings", roles: ["admin"] },
-    ],
-  },
-];
+function getNavGroups(lang: "ar" | "en"): NavGroup[] {
+  return [
+    {
+      label: t(lang, "mainMenu"),
+      items: [
+        { icon: LayoutDashboard, label: t(lang, "dashboard"),        path: "/" },
+        { icon: TrendingUp,      label: t(lang, "salesMgmt"),        path: "/sales-module" },
+        { icon: ShoppingBag,     label: t(lang, "purchasesMgmt"),    path: "/purchases-module" },
+        { icon: Boxes,           label: t(lang, "inventoryMgmt"),    path: "/inventory-module" },
+        { icon: Factory,         label: t(lang, "manufacturingMgmt"),path: "/manufacturing-module" },
+        { icon: Calculator,      label: t(lang, "accounting"),       path: "/accounting-module" },
+        { icon: UserCheck,       label: t(lang, "hr"),               path: "/hr-module" },
+        { icon: Wrench,          label: t(lang, "fixedAssets"),      path: "/assets-module" },
+        { icon: Settings,        label: t(lang, "settings"),         path: "/settings", roles: ["admin"] },
+      ],
+    },
+  ];
+}
 
 function OnlineIndicator() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -120,10 +125,11 @@ function OnlineIndicator() {
       window.removeEventListener("offline", off);
     };
   }, []);
+  const { lang } = useLang();
   return (
     <div className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-full ${isOnline ? "bg-emerald-500/20 text-emerald-300" : "bg-red-500/20 text-red-300"}`}>
       {isOnline ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-      <span>{isOnline ? "متصل" : "غير متصل"}</span>
+      <span>{isOnline ? t(lang, "online") : t(lang, "offline")}</span>
     </div>
   );
 }
@@ -133,12 +139,14 @@ function OnlineIndicator() {
 ============================================= */
 function SidebarNav({ user }: { user: any }) {
   const { tabs, activeTabId, openTab, dashboardVisible, toggleDashboard } = useTabManager();
-  const activeTab = tabs.find(t => t.id === activeTabId);
+  const activeTab = tabs.find(tab => tab.id === activeTabId);
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
   const toggleModule = (path: string) =>
     setExpandedModules(p => ({ ...p, [path]: !p[path] }));
+  const { lang } = useLang();
+  const navGroups = getNavGroups(lang);
 
   return (
     <SidebarContent className="py-1 overflow-y-auto">
@@ -149,7 +157,7 @@ function SidebarNav({ user }: { user: any }) {
         if (!visibleItems.length) return null;
         return (
           <SidebarGroup key={group.label} className="p-0">
-            {!collapsed && group.label !== "القائمة الرئيسية" && (
+            {!collapsed && group.label !== t(lang, "mainMenu") && (
               <SidebarGroupLabel className="text-[#CBD5E1]/50 text-[10px] uppercase tracking-widest font-semibold px-3 py-1 mt-1">
                 {group.label}
               </SidebarGroupLabel>
@@ -229,7 +237,7 @@ function SidebarNav({ user }: { user: any }) {
                 );
               })}
             </SidebarMenu>
-            {group.label !== "القائمة الرئيسية" && (
+            {group.label !== t(lang, "mainMenu") && (
               <SidebarSeparator className="my-1 bg-[rgba(255,255,255,0.06)]" />
             )}
           </SidebarGroup>
@@ -244,8 +252,9 @@ function SidebarNav({ user }: { user: any }) {
 ============================================= */
 function HorizontalNav({ user }: { user: any }) {
   const { tabs, activeTabId, openTab, dashboardVisible, toggleDashboard } = useTabManager();
-  const activeTab = tabs.find(t => t.id === activeTabId);
-  const allItems = navGroups.flatMap((g) =>
+  const { lang } = useLang();
+  const activeTab = tabs.find(tab => tab.id === activeTabId);
+  const allItems = getNavGroups(lang).flatMap((g) =>
     g.items.filter((item) => !item.roles || (user?.role && item.roles.includes(user.role)))
   );
 
@@ -328,6 +337,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { loading, user, logout } = useAuth();
   const isMobile = useIsMobile();
   const { openTab } = useTabManager();
+  const { lang, toggleLang, dir, isAr } = useLang();
   const isResizing = useRef(false);
   const startX = useRef(0);
   const startWidth = useRef(0);
@@ -385,9 +395,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     .slice(0, 2)
     .toUpperCase();
   const roleLabels: Record<string, string> = {
-    admin: "مدير النظام",
-    cashier: "كاشير",
-    warehouse_manager: "مدير مخزن",
+    admin: t(lang, "roleAdmin"),
+    cashier: t(lang, "roleCashier"),
+    warehouse_manager: t(lang, "roleWarehouseManager"),
   };
 
   /* ---- User Menu (shared) ---- */
@@ -401,43 +411,55 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </AvatarFallback>
           </Avatar>
           <span className="text-xs font-medium text-foreground hidden sm:block">
-            {user.name ?? "مستخدم"}
+            {user.name ?? t(lang, "user")}
           </span>
           <ChevronDown className="w-3 h-3 text-muted-foreground hidden sm:block" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
+      <DropdownMenuContent align="end" className="w-48" dir={dir}>
         <DropdownMenuLabel className="text-xs text-muted-foreground">{user.email}</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => openTab("/settings", "الإعدادات", Settings)}>
+        <DropdownMenuItem onClick={() => openTab("/settings", t(lang, "settings"), Settings)}>
           <Settings className="w-4 h-4 ml-2" />
-          الإعدادات
+          {t(lang, "settings")}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
           <LogOut className="w-4 h-4 ml-2" />
-          تسجيل الخروج
+          {t(lang, "logout")}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+
+  /* ---- Language Toggle Button ---- */
+  const LangToggleBtn = () => (
+    <button
+      onClick={toggleLang}
+      title={isAr ? t(lang, "switchToEnglish") : t(lang, "switchToArabic")}
+      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-accent transition-all duration-150"
+    >
+      <Languages className="w-3.5 h-3.5" />
+      <span className="hidden sm:block">{isAr ? "EN" : "ع"}</span>
+    </button>
   );
 
   /* ---- Layout Toggle Button ---- */
   const LayoutToggleBtn = () => (
     <button
       onClick={toggleLayout}
-      title={layoutMode === "vertical" ? "تبديل إلى القائمة الأفقية" : "تبديل إلى القائمة الرأسية"}
+      title={layoutMode === "vertical" ? t(lang, "switchToHorizontal") : t(lang, "switchToVertical")}
       className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-all duration-150"
     >
       {layoutMode === "vertical" ? (
         <>
           <LayoutGrid className="w-3.5 h-3.5" />
-          <span className="hidden sm:block">أفقي</span>
+          <span className="hidden sm:block">{t(lang, "horizontal")}</span>
         </>
       ) : (
         <>
           <PanelRight className="w-3.5 h-3.5" />
-          <span className="hidden sm:block">رأسي</span>
+          <span className="hidden sm:block">{t(lang, "vertical")}</span>
         </>
       )}
     </button>
@@ -453,7 +475,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Top Bar */}
         <header className="sticky top-0 z-20 border-b border-[#D4CDC1] dark:border-slate-700 bg-[#DDD4C4] dark:bg-slate-900">
           {/* Row 1: Logo + User */}
-          <div className="flex items-center gap-3 px-4 h-10 border-b border-[#C8C1B8] dark:border-slate-700">
+          <div className="flex items-center gap-3 px-4 h-10 border-b border-[#C8C1B8] dark:border-slate-700" dir={dir}>
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-primary/20 flex items-center justify-center">
                 <Store className="w-4 h-4 text-primary" />
@@ -463,19 +485,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="flex-1" />
             <OnlineIndicator />
             <span className="text-xs text-muted-foreground hidden md:block">
-              {new Date().toLocaleDateString("ar-SA", {
+              {new Date().toLocaleDateString(t(lang, "dateLocale"), {
                 weekday: "long",
                 year: "numeric",
                 month: "long",
                 day: "numeric",
               })}
             </span>
+            <LangToggleBtn />
             <LayoutToggleBtn />
             <UserMenu />
           </div>
 
           {/* Row 2: Horizontal Nav */}
-          <div className="flex items-center px-4 h-10 gap-2 overflow-x-auto scrollbar-none">
+          <div className="flex items-center px-4 h-10 gap-2 overflow-x-auto scrollbar-none" dir={dir}>
             <HorizontalNav user={user} />
           </div>
         </header>
@@ -516,7 +539,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sidebar-foreground font-bold text-sm truncate">ONESOFT ERP</p>
-              <p className="text-sidebar-foreground/40 text-xs">نظام إدارة الأعمال</p>
+              <p className="text-sidebar-foreground/40 text-xs">{t(lang, "systemSubtitle")}</p>
             </div>
             <OnlineIndicator />
           </div>
@@ -537,7 +560,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </Avatar>
                 <div className="flex-1 min-w-0 text-right">
                   <p className="text-sidebar-foreground text-xs font-medium truncate">
-                    {user.name ?? "مستخدم"}
+                    {user.name ?? t(lang, "user")}
                   </p>
                   <p className="text-sidebar-foreground/40 text-[10px]">
                     {roleLabels[user.role] ?? user.role}
@@ -546,14 +569,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <ChevronDown className="w-3.5 h-3.5 text-sidebar-foreground/40 shrink-0" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuContent align="end" className="w-48" dir={dir}>
               <DropdownMenuLabel className="text-xs text-muted-foreground">
                 {user.email}
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => openTab("/settings", "الإعدادات", Settings)}>
+              <DropdownMenuItem onClick={() => openTab("/settings", t(lang, "settings"), Settings)}>
                 <Settings className="w-4 h-4 ml-2" />
-                الإعدادات
+                {t(lang, "settings")}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -561,7 +584,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 className="text-destructive focus:text-destructive"
               >
                 <LogOut className="w-4 h-4 ml-2" />
-                تسجيل الخروج
+                {t(lang, "logout")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -578,18 +601,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       <SidebarInset className="flex flex-col h-screen overflow-hidden">
         {/* Top Bar */}
-        <header className="sticky top-0 z-10 flex items-center gap-3 px-4 h-10 border-b border-[#D4CDC1] bg-[#DDD4C4] dark:bg-slate-900 dark:border-slate-700">
+        <header className="sticky top-0 z-10 flex items-center gap-3 px-4 h-10 border-b border-[#D4CDC1] bg-[#DDD4C4] dark:bg-slate-900 dark:border-slate-700" dir={dir}>
           <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
           <div className="flex-1" />
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground hidden sm:block">
-              {new Date().toLocaleDateString("ar-SA", {
+              {new Date().toLocaleDateString(t(lang, "dateLocale"), {
                 weekday: "long",
                 year: "numeric",
                 month: "long",
                 day: "numeric",
               })}
             </span>
+            <LangToggleBtn />
             <LayoutToggleBtn />
             <UserMenu />
           </div>

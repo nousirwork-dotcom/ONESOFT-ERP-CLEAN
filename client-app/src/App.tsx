@@ -6,6 +6,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import DashboardLayout from "./components/DashboardLayout";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { TabManagerProvider, useTabManager } from "./contexts/TabManagerContext";
+import { LanguageProvider } from "./contexts/LanguageContext";
 import Dashboard from "./pages/Dashboard";
 import POS from "./pages/POS";
 import Invoices from "./pages/Invoices";
@@ -323,23 +324,25 @@ const trpcClient = trpc.createClient({
 function App() {
   return (
     <ErrorBoundary>
-      <trpc.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}>
-          <ThemeProvider defaultTheme="light">
-            <TooltipProvider>
-              <Toaster position="top-center" richColors />
-              <Switch>
-                <Route path="/login" component={LoginPage} />
-                <Route>
-                  <AuthGuard>
-                    <AppRoutes />
-                  </AuthGuard>
-                </Route>
-              </Switch>
-            </TooltipProvider>
-          </ThemeProvider>
-        </QueryClientProvider>
-      </trpc.Provider>
+      <LanguageProvider>
+        <trpc.Provider client={trpcClient} queryClient={queryClient}>
+          <QueryClientProvider client={queryClient}>
+            <ThemeProvider defaultTheme="light">
+              <TooltipProvider>
+                <Toaster position="top-center" richColors />
+                <Switch>
+                  <Route path="/login" component={LoginPage} />
+                  <Route>
+                    <AuthGuard>
+                      <AppRoutes />
+                    </AuthGuard>
+                  </Route>
+                </Switch>
+              </TooltipProvider>
+            </ThemeProvider>
+          </QueryClientProvider>
+        </trpc.Provider>
+      </LanguageProvider>
     </ErrorBoundary>
   );
 }
