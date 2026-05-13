@@ -398,15 +398,15 @@ function ProductCard({
   return (
     <div className="flex flex-col h-full" dir="rtl">
       {/* شريط التبويبات — مربعات منفصلة بحدود */}
-      <div className="flex flex-wrap gap-1 px-2 py-1.5 bg-[#EDE7DF] dark:bg-slate-800 border-b border-[#C8874A] dark:border-slate-600 flex-shrink-0">
+      <div className="flex flex-wrap gap-1 px-2 py-1.5 bg-[#EDE7DF] dark:bg-slate-800 border-b border-[#BEBEBE] dark:border-slate-600 flex-shrink-0">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`px-3 py-1 text-xs font-medium border rounded transition-colors whitespace-nowrap
               ${activeTab === tab.id
-                ? "bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 border-[#C8874A] dark:border-blue-500 shadow-sm"
-                : "bg-[#F5F0E8] dark:bg-slate-700 text-[#555] dark:text-slate-300 border-[#C8B090] dark:border-slate-600 hover:bg-white dark:hover:bg-slate-600 hover:border-[#C8874A]"
+                ? "bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 border-[#BEBEBE] dark:border-blue-500 shadow-sm"
+                : "bg-[#F5F0E8] dark:bg-slate-700 text-[#555] dark:text-slate-300 border-[#BEBEBE] dark:border-slate-600 hover:bg-white dark:hover:bg-slate-600 hover:border-[#BEBEBE]"
               }`}
           >
             {tab.label}
@@ -416,7 +416,7 @@ function ProductCard({
 
       {/* شريط المعلومات الثابت */}
       {(form.name || form.sku) && (
-        <div className="flex-shrink-0 bg-slate-50 dark:bg-slate-800/60 border-b border-[#E8D0B0] dark:border-slate-700 px-4 py-1.5 flex items-center gap-3 flex-wrap">
+        <div className="flex-shrink-0 bg-slate-50 dark:bg-slate-800/60 border-b border-[#DEDCDA] dark:border-slate-700 px-4 py-1.5 flex items-center gap-3 flex-wrap">
           <div className="flex flex-col leading-tight">
             <span className="font-bold text-sm text-slate-800 dark:text-slate-100">{form.name || "—"}</span>
             {form.nameEn && <span className="text-xs text-slate-500 dark:text-slate-400">{form.nameEn}</span>}
@@ -434,12 +434,12 @@ function ProductCard({
       )}
 
       {/* ── الصف الثابت: مواصفات + نوع (يظهر في كل التبويبات) ── */}
-      <div className="flex-shrink-0 border-b border-[#C8874A] dark:border-slate-600 text-sm">
+      <div className="flex-shrink-0 border-b border-[#BEBEBE] dark:border-slate-600 text-sm">
         <div className="flex">
 
           {/* يمين: مواصفات — رقم، اسم 1، اسم 2 */}
-          <div className="flex-1 border-l border-[#C8874A] dark:border-slate-600">
-            <div className="bg-[#EDE7DF] dark:bg-blue-900/20 px-2 py-0.5 border-b border-[#C8874A] dark:border-slate-600 text-center">
+          <div className="flex-1 border-l border-[#BEBEBE] dark:border-slate-600">
+            <div className="bg-[#EDE7DF] dark:bg-blue-900/20 px-2 py-0.5 border-b border-[#BEBEBE] dark:border-slate-600 text-center">
               <span className="text-xs font-semibold text-blue-800 dark:text-blue-300">مواصفات</span>
             </div>
             {/* رقم */}
@@ -447,8 +447,8 @@ function ProductCard({
               const selGroup = form.groupId ? leafGroups.find(g => String(g.id) === form.groupId) : null;
               const autoNum = selGroup?.autoNumbering ?? false;
               return (
-                <div className="flex border-b border-[#E8D0B0] dark:border-slate-700">
-                  <div className="w-24 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#C8874A] dark:border-slate-700">
+                <div className="flex border-b border-[#DEDCDA] dark:border-slate-700">
+                  <div className="w-24 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#BEBEBE] dark:border-slate-700">
                     <span className="text-xs text-slate-600 dark:text-slate-400">رقم</span>
                   </div>
                   <div className="flex-1 px-1 py-1 relative">
@@ -469,8 +469,8 @@ function ProductCard({
               );
             })()}
             {/* اسم 1 */}
-            <div className="flex border-b border-[#E8D0B0] dark:border-slate-700">
-              <div className="w-24 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#C8874A] dark:border-slate-700">
+            <div className="flex border-b border-[#DEDCDA] dark:border-slate-700">
+              <div className="w-24 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#BEBEBE] dark:border-slate-700">
                 <span className="text-xs text-slate-600 dark:text-slate-400">إسم 1</span>
               </div>
               <div className="flex-1 px-1 py-1">
@@ -479,7 +479,7 @@ function ProductCard({
             </div>
             {/* اسم 2 */}
             <div className="flex">
-              <div className="w-24 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#C8874A] dark:border-slate-700">
+              <div className="w-24 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#BEBEBE] dark:border-slate-700">
                 <span className="text-xs text-slate-600 dark:text-slate-400">إسم 2</span>
               </div>
               <div className="flex-1 px-1 py-1">
@@ -490,12 +490,12 @@ function ProductCard({
 
           {/* يسار: نوع السجل، رقم المجموعة، الصنف الرئيسي */}
           <div className="w-72 shrink-0">
-            <div className="bg-[#EDE7DF] dark:bg-blue-900/20 px-2 py-0.5 border-b border-[#C8874A] dark:border-slate-600 text-center">
+            <div className="bg-[#EDE7DF] dark:bg-blue-900/20 px-2 py-0.5 border-b border-[#BEBEBE] dark:border-slate-600 text-center">
               <span className="text-xs font-semibold text-blue-800 dark:text-blue-300">نوع</span>
             </div>
             {/* نوع السجل */}
-            <div className="flex border-b border-[#E8D0B0] dark:border-slate-700">
-              <div className="w-28 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#C8874A] dark:border-slate-700">
+            <div className="flex border-b border-[#DEDCDA] dark:border-slate-700">
+              <div className="w-28 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#BEBEBE] dark:border-slate-700">
                 <span className="text-xs text-slate-600 dark:text-slate-400">نوع السجل</span>
               </div>
               <div className="flex-1 px-1 py-1">
@@ -512,8 +512,8 @@ function ProductCard({
               </div>
             </div>
             {/* رقم المجموعة */}
-            <div className="flex border-b border-[#E8D0B0] dark:border-slate-700">
-              <div className="w-28 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#C8874A] dark:border-slate-700">
+            <div className="flex border-b border-[#DEDCDA] dark:border-slate-700">
+              <div className="w-28 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#BEBEBE] dark:border-slate-700">
                 <span className="text-xs text-slate-600 dark:text-slate-400">رقم المجموعة</span>
               </div>
               <div className="flex-1 px-1 py-1">
@@ -534,7 +534,7 @@ function ProductCard({
             </div>
             {/* الصنف الرئيسي */}
             <div className="flex">
-              <div className="w-28 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#C8874A] dark:border-slate-700">
+              <div className="w-28 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#BEBEBE] dark:border-slate-700">
                 <span className="text-xs text-slate-600 dark:text-slate-400">الصنف الرئيسي</span>
               </div>
               <div className="flex-1 px-1 py-1">
@@ -550,29 +550,29 @@ function ProductCard({
 
         {/* ===== التبويب 1: النافذة الرئيسية ===== */}
         {activeTab === "main" && (
-          <div className="space-y-0 border border-[#C8874A] dark:border-slate-600 rounded overflow-hidden text-sm">
+          <div className="space-y-0 border border-[#BEBEBE] dark:border-slate-600 rounded overflow-hidden text-sm">
 
             {/* ── جدول الوحدات والباركود (ديناميكي) ── */}
-            <div className="border-b border-[#C8874A] dark:border-slate-600">
+            <div className="border-b border-[#BEBEBE] dark:border-slate-600">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-[#EDE7DF] dark:bg-slate-800 border-b border-[#C8874A] dark:border-slate-600">
-                    <th className="text-center px-2 py-1 text-xs font-semibold text-slate-600 dark:text-slate-400 w-8 border-l border-[#C8874A] dark:border-slate-600">#</th>
-                    <th className="text-right px-2 py-1 text-xs font-semibold text-slate-600 dark:text-slate-400 border-l border-[#C8874A] dark:border-slate-600">وحدة</th>
-                    <th className="text-center px-2 py-1 text-xs font-semibold text-slate-600 dark:text-slate-400 w-28 border-l border-[#C8874A] dark:border-slate-600">م. تحويل</th>
-                    <th className="text-right px-2 py-1 text-xs font-semibold text-slate-600 dark:text-slate-400 border-l border-[#C8874A] dark:border-slate-600">باركود</th>
-                    <th className="w-8 border-l border-[#C8874A] dark:border-slate-600"></th>
+                  <tr className="bg-[#EDE7DF] dark:bg-slate-800 border-b border-[#BEBEBE] dark:border-slate-600">
+                    <th className="text-center px-2 py-1 text-xs font-semibold text-slate-600 dark:text-slate-400 w-8 border-l border-[#BEBEBE] dark:border-slate-600">#</th>
+                    <th className="text-right px-2 py-1 text-xs font-semibold text-slate-600 dark:text-slate-400 border-l border-[#BEBEBE] dark:border-slate-600">وحدة</th>
+                    <th className="text-center px-2 py-1 text-xs font-semibold text-slate-600 dark:text-slate-400 w-28 border-l border-[#BEBEBE] dark:border-slate-600">م. تحويل</th>
+                    <th className="text-right px-2 py-1 text-xs font-semibold text-slate-600 dark:text-slate-400 border-l border-[#BEBEBE] dark:border-slate-600">باركود</th>
+                    <th className="w-8 border-l border-[#BEBEBE] dark:border-slate-600"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {unitRows.map((row, idx) => (
-                    <tr key={idx} className="border-b border-[#E8D0B0] dark:border-slate-700">
+                    <tr key={idx} className="border-b border-[#DEDCDA] dark:border-slate-700">
                       {/* رقم */}
-                      <td className="text-center px-2 py-1 text-xs font-semibold text-slate-500 bg-[#F5F0E8] dark:bg-slate-800/50 border-l border-[#E8D0B0] dark:border-slate-700">
+                      <td className="text-center px-2 py-1 text-xs font-semibold text-slate-500 bg-[#F5F0E8] dark:bg-slate-800/50 border-l border-[#DEDCDA] dark:border-slate-700">
                         {idx + 1}
                       </td>
                       {/* اختيار الوحدة */}
-                      <td className="px-1 py-1 border-l border-[#E8D0B0] dark:border-slate-700">
+                      <td className="px-1 py-1 border-l border-[#DEDCDA] dark:border-slate-700">
                         <div className="flex items-center gap-1">
                           <select
                             value={row.unit}
@@ -593,18 +593,18 @@ function ProductCard({
                         </div>
                       </td>
                       {/* معامل التحويل */}
-                      <td className="px-1 py-1 border-l border-[#E8D0B0] dark:border-slate-700">
+                      <td className="px-1 py-1 border-l border-[#DEDCDA] dark:border-slate-700">
                         {idx === 0
                           ? <CInput value="1.000" readOnly className="w-full text-center bg-slate-50 dark:bg-slate-700 text-slate-500" />
                           : <CInput value={row.conv} onChange={(v) => updateUnitRow(idx, "conv", v)} type="number" className="w-full text-center" />
                         }
                       </td>
                       {/* باركود */}
-                      <td className="px-1 py-1 border-l border-[#E8D0B0] dark:border-slate-700">
+                      <td className="px-1 py-1 border-l border-[#DEDCDA] dark:border-slate-700">
                         <CInput value={row.barcode} onChange={(v) => updateUnitRow(idx, "barcode", v)} placeholder="" dir="ltr" className="w-full" />
                       </td>
                       {/* حذف */}
-                      <td className="px-1 py-1 text-center border-l border-[#E8D0B0] dark:border-slate-700">
+                      <td className="px-1 py-1 text-center border-l border-[#DEDCDA] dark:border-slate-700">
                         {unitRows.length > 1 ? (
                           <button
                             type="button"
@@ -623,7 +623,7 @@ function ProductCard({
               <button
                 type="button"
                 onClick={addUnitRow}
-                className="w-full flex items-center justify-center gap-1 py-1.5 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-700/50 border-t border-dashed border-[#C8874A] dark:border-slate-600 transition-colors"
+                className="w-full flex items-center justify-center gap-1 py-1.5 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-700/50 border-t border-dashed border-[#BEBEBE] dark:border-slate-600 transition-colors"
               >
                 <Plus className="w-3.5 h-3.5" />
                 إضافة وحدة أخرى
@@ -661,23 +661,23 @@ function ProductCard({
             </Dialog>
 
             {/* ── الصف السفلي: فئات | مواصفات تفصيلية ── */}
-            <div className="flex border-b border-[#C8874A] dark:border-slate-600">
+            <div className="flex border-b border-[#BEBEBE] dark:border-slate-600">
 
               {/* يمين: فئات — نظام ديناميكي مطابق للوحدات */}
               <div className="w-80 shrink-0 border-l border-slate-300 dark:border-slate-600 flex flex-col">
-                <div className="bg-[#EDE7DF] dark:bg-blue-900/20 px-2 py-0.5 border-b border-[#C8874A] dark:border-slate-600 text-center">
+                <div className="bg-[#EDE7DF] dark:bg-blue-900/20 px-2 py-0.5 border-b border-[#BEBEBE] dark:border-slate-600 text-center">
                   <span className="text-xs font-semibold text-blue-800 dark:text-blue-300">فئات</span>
                 </div>
                 <table className="w-full text-sm">
                   <tbody>
                     {catRows.map((cat, idx) => (
-                      <tr key={idx} className="border-b border-[#E8D0B0] dark:border-slate-700">
+                      <tr key={idx} className="border-b border-[#DEDCDA] dark:border-slate-700">
                         {/* رقم */}
-                        <td className="text-center px-2 py-1 text-xs font-semibold text-slate-500 bg-[#F5F0E8] dark:bg-slate-800/50 border-l border-[#E8D0B0] dark:border-slate-700 w-8">
+                        <td className="text-center px-2 py-1 text-xs font-semibold text-slate-500 bg-[#F5F0E8] dark:bg-slate-800/50 border-l border-[#DEDCDA] dark:border-slate-700 w-8">
                           {idx + 1}
                         </td>
                         {/* اختيار الفئة */}
-                        <td className="px-1 py-1 border-l border-[#E8D0B0] dark:border-slate-700">
+                        <td className="px-1 py-1 border-l border-[#DEDCDA] dark:border-slate-700">
                           <div className="flex items-center gap-1">
                             <select
                               value={cat}
@@ -717,7 +717,7 @@ function ProductCard({
                 <button
                   type="button"
                   onClick={addCatRow}
-                  className="w-full flex items-center justify-center gap-1 py-1.5 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-700/50 border-t border-dashed border-[#C8874A] dark:border-slate-600 transition-colors mt-auto"
+                  className="w-full flex items-center justify-center gap-1 py-1.5 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-700/50 border-t border-dashed border-[#BEBEBE] dark:border-slate-600 transition-colors mt-auto"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   إضافة فئة أخرى
@@ -756,7 +756,7 @@ function ProductCard({
 
               {/* يسار: مواصفات تفصيلية */}
               <div className="flex-1">
-                <div className="bg-[#EDE7DF] dark:bg-blue-900/20 px-2 py-0.5 border-b border-[#C8874A] dark:border-slate-600 text-center">
+                <div className="bg-[#EDE7DF] dark:bg-blue-900/20 px-2 py-0.5 border-b border-[#BEBEBE] dark:border-slate-600 text-center">
                   <span className="text-xs font-semibold text-blue-800 dark:text-blue-300">مواصفات</span>
                 </div>
                 {[
@@ -767,8 +767,8 @@ function ProductCard({
                   { label: "لون", key: "colorCode", type: "text" },
                   { label: "حجم", key: "itemSize", type: "text" },
                 ].map((r, i) => (
-                  <div key={`${r.key}-${i}`} className={`flex ${i < 5 ? "border-b border-[#E8D0B0] dark:border-slate-700" : ""}`}>
-                    <div className="w-28 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#C8874A] dark:border-slate-700">
+                  <div key={`${r.key}-${i}`} className={`flex ${i < 5 ? "border-b border-[#DEDCDA] dark:border-slate-700" : ""}`}>
+                    <div className="w-28 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#BEBEBE] dark:border-slate-700">
                       <span className="text-xs text-slate-600 dark:text-slate-400">{r.label}</span>
                     </div>
                     <div className="flex-1 px-1 py-1">
@@ -782,7 +782,7 @@ function ProductCard({
             {/* ── نوع الضريبة ── */}
             <div className="flex">
               <div className="flex-1 border-l border-slate-300 dark:border-slate-600 flex">
-                <div className="w-36 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#C8874A] dark:border-slate-700">
+                <div className="w-36 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#BEBEBE] dark:border-slate-700">
                   <span className="text-xs text-slate-600 dark:text-slate-400">نوع الضريبة السابقة</span>
                 </div>
                 <div className="flex-1 px-1 py-1">
@@ -790,7 +790,7 @@ function ProductCard({
                 </div>
               </div>
               <div className="w-72 shrink-0 flex">
-                <div className="w-28 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#C8874A] dark:border-slate-700">
+                <div className="w-28 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#BEBEBE] dark:border-slate-700">
                   <span className="text-xs text-slate-600 dark:text-slate-400">نوع الضريبة</span>
                 </div>
                 <div className="flex-1 px-1 py-1">
@@ -810,7 +810,7 @@ function ProductCard({
             <div className="flex-1 flex flex-col gap-3 min-w-0">
               {/* الوصف */}
               <div className="border border-slate-200 dark:border-slate-700 rounded">
-                <div className="bg-slate-100 dark:bg-slate-800 px-3 py-1 border-b border-[#E8D0B0] dark:border-slate-700">
+                <div className="bg-slate-100 dark:bg-slate-800 px-3 py-1 border-b border-[#DEDCDA] dark:border-slate-700">
                   <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">الوصف</span>
                 </div>
                 <div className="p-2">
@@ -826,25 +826,25 @@ function ProductCard({
 
               {/* جدول الأوصاف الإضافية — مضغوط */}
               <div className="border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
-                <div className="bg-blue-50 dark:bg-blue-900/20 px-3 py-0.5 border-b border-[#E8D0B0] dark:border-slate-700 text-center">
+                <div className="bg-blue-50 dark:bg-blue-900/20 px-3 py-0.5 border-b border-[#DEDCDA] dark:border-slate-700 text-center">
                   <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">وصف إضافي</span>
                 </div>
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="bg-[#F0EDE8] dark:bg-slate-800/50 border-b border-[#C8874A] dark:border-slate-700">
-                      <th className="text-center px-1 py-0.5 font-semibold text-slate-500 w-6 border-l border-[#E8D0B0] dark:border-slate-700">#</th>
-                      <th className="text-right px-2 py-0.5 font-semibold text-slate-600 dark:text-slate-400 border-l border-[#E8D0B0] dark:border-slate-700">وصف إضافي</th>
+                    <tr className="bg-[#F0EDE8] dark:bg-slate-800/50 border-b border-[#BEBEBE] dark:border-slate-700">
+                      <th className="text-center px-1 py-0.5 font-semibold text-slate-500 w-6 border-l border-[#DEDCDA] dark:border-slate-700">#</th>
+                      <th className="text-right px-2 py-0.5 font-semibold text-slate-600 dark:text-slate-400 border-l border-[#DEDCDA] dark:border-slate-700">وصف إضافي</th>
                       <th className="w-6"></th>
                     </tr>
                   </thead>
                   <tbody>
                     {extRows.map((row, idx) => (
-                      <tr key={idx} className="border-b border-[#E8D0B0] dark:border-slate-700">
-                        <td className="text-center px-1 py-0.5 font-semibold text-slate-500 bg-[#F5F0E8] dark:bg-slate-800/50 border-l border-[#E8D0B0] dark:border-slate-700 w-6">
+                      <tr key={idx} className="border-b border-[#DEDCDA] dark:border-slate-700">
+                        <td className="text-center px-1 py-0.5 font-semibold text-slate-500 bg-[#F5F0E8] dark:bg-slate-800/50 border-l border-[#DEDCDA] dark:border-slate-700 w-6">
                           {idx + 1}
                         </td>
                         {/* وصف إضافي */}
-                        <td className="px-1 py-0.5 border-l border-[#E8D0B0] dark:border-slate-700">
+                        <td className="px-1 py-0.5 border-l border-[#DEDCDA] dark:border-slate-700">
                           <input
                             type="text"
                             value={row.desc}
@@ -866,7 +866,7 @@ function ProductCard({
                   </tbody>
                 </table>
                 <button type="button" onClick={addExtRow}
-                  className="w-full flex items-center justify-center gap-1 py-1 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-700/50 border-t border-dashed border-[#C8874A] dark:border-slate-600 transition-colors">
+                  className="w-full flex items-center justify-center gap-1 py-1 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-700/50 border-t border-dashed border-[#BEBEBE] dark:border-slate-600 transition-colors">
                   <Plus className="w-3 h-3" />
                   إضافة وصف إضافي
                 </button>
@@ -945,7 +945,7 @@ function ProductCard({
               </div>
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-[#F0EDE8] dark:bg-slate-800/50 border-b border-[#C8874A] dark:border-slate-700">
+                  <tr className="bg-[#F0EDE8] dark:bg-slate-800/50 border-b border-[#BEBEBE] dark:border-slate-700">
                     <th className="text-right px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400">نوع السعر</th>
                     <th className="text-right px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 w-40">السعر</th>
                     <th className="text-center px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 w-24">يشمل ضريبة</th>
@@ -1055,7 +1055,7 @@ function ProductCard({
                 ) : (
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-[#F0EDE8] dark:bg-slate-800/50 border-b border-[#C8874A] dark:border-slate-700">
+                      <tr className="bg-[#F0EDE8] dark:bg-slate-800/50 border-b border-[#BEBEBE] dark:border-slate-700">
                         <th className="text-right px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 w-8">#</th>
                         <th className="text-right px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400">نوع التكلفة</th>
                         <th className="text-right px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 w-36">وحدة 1</th>
@@ -1146,7 +1146,7 @@ function ProductCard({
                 ) : (
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-[#F0EDE8] dark:bg-slate-800/50 border-b border-[#C8874A] dark:border-slate-700">
+                      <tr className="bg-[#F0EDE8] dark:bg-slate-800/50 border-b border-[#BEBEBE] dark:border-slate-700">
                         <th className="text-right px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 w-8">#</th>
                         <th className="text-right px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400">اسم المخزن</th>
                         <th className="text-right px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 w-32">الكمية الآنية</th>
