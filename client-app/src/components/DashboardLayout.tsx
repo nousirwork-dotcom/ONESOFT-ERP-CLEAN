@@ -132,7 +132,7 @@ function OnlineIndicator() {
    VERTICAL LAYOUT — الشريط الجانبي الرأسي
 ============================================= */
 function SidebarNav({ user }: { user: any }) {
-  const { tabs, activeTabId, openTab } = useTabManager();
+  const { tabs, activeTabId, openTab, dashboardVisible, toggleDashboard } = useTabManager();
   const activeTab = tabs.find(t => t.id === activeTabId);
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
@@ -203,12 +203,13 @@ function SidebarNav({ user }: { user: any }) {
                     </SidebarMenuItem>
                   );
                 }
-                const isActive = activeTab?.path === item.path;
+                const isDashboard = item.path === "/";
+                const isActive = isDashboard ? dashboardVisible : activeTab?.path === item.path;
                 return (
                   <SidebarMenuItem key={item.path} className="mb-px">
                     <SidebarMenuButton
                       isActive={isActive}
-                      onClick={() => openTab(item.path, item.label, item.icon)}
+                      onClick={() => isDashboard ? toggleDashboard() : openTab(item.path, item.label, item.icon)}
                       tooltip={collapsed ? item.label : undefined}
                       className={`h-[38px] rounded-[4px] px-3 transition-colors text-[14px] font-semibold ${
                         isActive
@@ -242,7 +243,7 @@ function SidebarNav({ user }: { user: any }) {
    HORIZONTAL LAYOUT — الشريط الأفقي العلوي
 ============================================= */
 function HorizontalNav({ user }: { user: any }) {
-  const { tabs, activeTabId, openTab } = useTabManager();
+  const { tabs, activeTabId, openTab, dashboardVisible, toggleDashboard } = useTabManager();
   const activeTab = tabs.find(t => t.id === activeTabId);
   const allItems = navGroups.flatMap((g) =>
     g.items.filter((item) => !item.roles || (user?.role && item.roles.includes(user.role)))
@@ -285,11 +286,12 @@ function HorizontalNav({ user }: { user: any }) {
             </DropdownMenu>
           );
         }
-        const isActive = activeTab?.path === item.path;
+        const isDashboardItem = item.path === "/";
+        const isActive = isDashboardItem ? dashboardVisible : activeTab?.path === item.path;
         return (
           <button
             key={item.path}
-            onClick={() => openTab(item.path, item.label, item.icon)}
+            onClick={() => isDashboardItem ? toggleDashboard() : openTab(item.path, item.label, item.icon)}
             className={`
               relative flex items-center gap-2 px-3.5 mx-0.5 my-1.5 rounded-md
               text-[14.5px] font-[500] whitespace-nowrap

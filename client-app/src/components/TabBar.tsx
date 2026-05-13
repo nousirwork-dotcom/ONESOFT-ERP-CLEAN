@@ -9,6 +9,8 @@ export default function TabBar() {
   const [canScrollRight, setCanScrollRight] = useState(false);
   const [hoveredTabId,   setHoveredTabId]   = useState<string | null>(null);
 
+  if (tabs.length === 0) return null;
+
   const checkScroll = () => {
     const el = scrollRef.current;
     if (!el) return;

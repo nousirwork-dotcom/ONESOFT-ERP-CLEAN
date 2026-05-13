@@ -68,7 +68,7 @@ import { trpc } from "./lib/trpc";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
 import superjson from "superjson";
-import { LayoutDashboard, Settings } from "lucide-react";
+import { Settings } from "lucide-react";
 
 // ─── خريطة المسارات إلى المكونات ──────────────────────────────────────────
 export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
@@ -253,15 +253,24 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
 // ─── محتوى التبويبات ─────────────────────────────────────────────────────
 function TabContent() {
-  const { tabs, activeTabId } = useTabManager();
+  const { tabs, activeTabId, dashboardVisible } = useTabManager();
+  const showDashboard = dashboardVisible || tabs.length === 0;
   return (
     <div className="h-full" dir="rtl">
+      {/* لوحة التحكم — تُعرض خارج التبويبات */}
+      <div
+        style={{ display: showDashboard ? "flex" : "none", flexDirection: "column" }}
+        className="h-full"
+      >
+        <Dashboard />
+      </div>
+      {/* التبويبات الأخرى */}
       {tabs.map(tab => {
         const Component = PAGE_MAP[tab.path];
         return (
           <div
             key={tab.id}
-            style={{ display: tab.id === activeTabId ? "flex" : "none", flexDirection: "column" }}
+            style={{ display: tab.id === activeTabId && !showDashboard ? "flex" : "none", flexDirection: "column" }}
             className="h-full"
           >
             {Component ? <Component /> : <NotFound />}
@@ -287,11 +296,7 @@ function AppRoutes() {
   }
 
   return (
-    <TabManagerProvider
-      initialPath="/"
-      initialLabel="لوحة التحكم"
-      InitialIcon={LayoutDashboard}
-    >
+    <TabManagerProvider>
       <DashboardLayout>
         <TabContent />
       </DashboardLayout>
