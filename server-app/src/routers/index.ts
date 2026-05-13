@@ -182,6 +182,39 @@ export const appRouter = router({
           throw new Error("فشل حفظ الصنف — تحقق من البيانات المدخلة");
         }
       }),
+    bulkImport: protectedProcedure
+      .input(z.object({
+        rows: z.array(z.object({
+          name: z.string().min(1),
+          nameEn: z.string().optional(),
+          sku: z.string().optional(),
+          barcode: z.string().optional(),
+          unit: z.string().optional(),
+          salePrice: z.string().optional(),
+          purchasePrice: z.string().optional(),
+          taxRate: z.string().optional(),
+          minStock: z.string().optional(),
+          notes: z.string().optional(),
+        })).min(1).max(2000),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const values = input.rows.map(r => ({
+          name:          r.name.trim(),
+          nameEn:        r.nameEn?.trim() || undefined,
+          code:          r.sku?.trim() || undefined,
+          barcode:       r.barcode?.trim() || undefined,
+          unit:          r.unit?.trim() || "قطعة",
+          salePrice:     r.salePrice || "0",
+          purchasePrice: r.purchasePrice || "0",
+          taxRate:       r.taxRate || "0",
+          minStock:      r.minStock || "0",
+          notes:         r.notes?.trim() || undefined,
+          isActive:      true as const,
+          orgId:         ctx.user.orgId,
+        }));
+        const inserted = await db.insert(products).values(values).returning({ id: products.id });
+        return { count: inserted.length };
+      }),
     update: protectedProcedure
       .input(z.object({
         id: z.number(),

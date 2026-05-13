@@ -9,9 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
+import * as XLSX from "xlsx";
 import {
   Archive,
+  Download,
   Edit,
+  FileUp,
   Layers,
   Maximize2,
   Minimize2,
@@ -1318,6 +1321,9 @@ export default function Products() {
   }, [isOpen, workspaceEl]);
 
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importRows, setImportRows] = useState<any[]>([]);
+  const [importLoading, setImportLoading] = useState(false);
 
   const toggleSort = (field: string) => {
     if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -1355,6 +1361,77 @@ export default function Products() {
     },
     onError: (e) => toast.error(e.message),
   });
+
+  const bulkImport = trpc.products.bulkImport.useMutation({
+    onSuccess: (res) => {
+      utils.products.list.invalidate();
+      toast.success(`تم استيراد ${res.count} صنف بنجاح`);
+      setImportOpen(false);
+      setImportRows([]);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const downloadTemplate = () => {
+    const ws = XLSX.utils.aoa_to_sheet([
+      ["اسم الصنف*", "الاسم الإنجليزي", "الكود", "الباركود", "الوحدة", "سعر البيع", "سعر الشراء", "نسبة الضريبة%", "الحد الأدنى", "ملاحظات"],
+      ["مثال: قميص قطني أبيض", "White Cotton Shirt", "SKU-001", "6281234567890", "قطعة", "150", "90", "15", "5", ""],
+    ]);
+    ws["!cols"] = [22, 20, 12, 15, 8, 10, 10, 12, 10, 20].map(w => ({ wch: w }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "الأصناف");
+    XLSX.writeFile(wb, "قالب_استيراد_الأصناف.xlsx");
+  };
+
+  const handleImportFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target!.result as ArrayBuffer);
+        const wb = XLSX.read(data, { type: "array" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
+        if (rows.length < 2) { toast.error("الملف فارغ أو لا يحتوي على بيانات"); return; }
+        const header = rows[0] as string[];
+        const colIdx = (label: string) => header.findIndex(h => String(h ?? "").includes(label));
+        const iName = colIdx("اسم الصنف"); const iNameEn = colIdx("الإنجليزي");
+        const iSku = colIdx("الكود"); const iBarcode = colIdx("الباركود");
+        const iUnit = colIdx("الوحدة"); const iSale = colIdx("البيع");
+        const iPurch = colIdx("الشراء"); const iTax = colIdx("الضريبة");
+        const iMin = colIdx("الأدنى"); const iNotes = colIdx("ملاحظات");
+        if (iName === -1) { toast.error("لم يتم العثور على عمود 'اسم الصنف' في الملف"); return; }
+        const parsed = rows.slice(1)
+          .map(r => ({
+            name: String(r[iName] ?? "").trim(),
+            nameEn: iNameEn >= 0 ? String(r[iNameEn] ?? "").trim() : "",
+            sku: iSku >= 0 ? String(r[iSku] ?? "").trim() : "",
+            barcode: iBarcode >= 0 ? String(r[iBarcode] ?? "").trim() : "",
+            unit: iUnit >= 0 ? String(r[iUnit] ?? "").trim() : "",
+            salePrice: iSale >= 0 ? String(r[iSale] ?? "").trim() : "",
+            purchasePrice: iPurch >= 0 ? String(r[iPurch] ?? "").trim() : "",
+            taxRate: iTax >= 0 ? String(r[iTax] ?? "").trim() : "",
+            minStock: iMin >= 0 ? String(r[iMin] ?? "").trim() : "",
+            notes: iNotes >= 0 ? String(r[iNotes] ?? "").trim() : "",
+          }))
+          .filter(r => r.name);
+        if (parsed.length === 0) { toast.error("لا توجد أصناف صالحة في الملف"); return; }
+        setImportRows(parsed);
+      } catch {
+        toast.error("فشل قراءة الملف — تأكد أنه ملف Excel صحيح");
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const confirmImport = async () => {
+    if (!importRows.length) return;
+    setImportLoading(true);
+    try {
+      await bulkImport.mutateAsync({ rows: importRows });
+    } finally {
+      setImportLoading(false);
+    }
+  };
 
   const updateProduct = trpc.products.update.useMutation({
     onSuccess: () => {
@@ -1630,6 +1707,24 @@ export default function Products() {
             إدارة وتنظيم أصناف المخزون
           </p>
         </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <button
+          onClick={() => { setImportRows([]); setImportOpen(true); }}
+          title="استيراد من Excel"
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "10px 16px", background: "#fff",
+            color: "#406B93", border: "1.5px solid #406B93",
+            borderRadius: 6, fontFamily: "'Cairo', Tahoma, sans-serif",
+            fontSize: 14, fontWeight: 600, cursor: "pointer",
+            transition: "background 0.15s",
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = "#EDF3F8")}
+          onMouseLeave={e => (e.currentTarget.style.background = "#fff")}
+        >
+          <FileUp style={{ width: 16, height: 16 }} />
+          استيراد Excel
+        </button>
         <button
           onClick={openCreate}
           title="إضافة صنف (F1)"
@@ -1663,7 +1758,130 @@ export default function Products() {
             fontWeight: 400,
           }}>F1</span>
         </button>
+        </div>
       </div>
+
+      {/* نافذة استيراد Excel */}
+      {importOpen && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 1000,
+          background: "rgba(0,0,0,0.45)", display: "flex",
+          alignItems: "center", justifyContent: "center",
+        }} onClick={(e) => { if (e.target === e.currentTarget) { setImportOpen(false); setImportRows([]); } }}>
+          <div dir="rtl" style={{
+            background: "#fff", borderRadius: 10, width: "min(820px, 95vw)",
+            maxHeight: "85vh", display: "flex", flexDirection: "column",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
+            fontFamily: "'Cairo', Tahoma, sans-serif",
+          }}>
+            {/* رأس النافذة */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderBottom: "1px solid #E5E7EB" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <FileUp style={{ width: 20, height: 20, color: "#406B93" }} />
+                <span style={{ fontWeight: 700, fontSize: 16, color: "#1E3A5F" }}>استيراد أصناف من Excel</span>
+              </div>
+              <button onClick={() => { setImportOpen(false); setImportRows([]); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#888" }}>
+                <X style={{ width: 20, height: 20 }} />
+              </button>
+            </div>
+
+            {/* المحتوى */}
+            <div style={{ padding: "20px", overflowY: "auto", flex: 1 }}>
+              {/* خطوة 1: تنزيل القالب */}
+              <div style={{ background: "#F0F7FF", border: "1px solid #BDD7F5", borderRadius: 8, padding: "14px 16px", marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div>
+                  <p style={{ fontWeight: 700, fontSize: 14, color: "#1E3A5F", margin: 0 }}>الخطوة 1 — نزّل القالب</p>
+                  <p style={{ fontSize: 12, color: "#5A7DA0", margin: "4px 0 0" }}>قالب Excel جاهز بالأعمدة المطلوبة. أضف أصنافك ثم ارفعه.</p>
+                </div>
+                <button onClick={downloadTemplate} style={{
+                  display: "flex", alignItems: "center", gap: 6, padding: "8px 14px",
+                  background: "#406B93", color: "#fff", border: "none", borderRadius: 6,
+                  fontFamily: "'Cairo', Tahoma, sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                }}>
+                  <Download style={{ width: 15, height: 15 }} />
+                  تنزيل القالب
+                </button>
+              </div>
+
+              {/* خطوة 2: رفع الملف */}
+              <div style={{ marginBottom: 16 }}>
+                <p style={{ fontWeight: 700, fontSize: 14, color: "#1E3A5F", margin: "0 0 8px" }}>الخطوة 2 — ارفع ملف Excel</p>
+                <label style={{
+                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                  border: "2px dashed #B0C4DE", borderRadius: 8, padding: "24px 16px",
+                  cursor: "pointer", background: "#F8FAFC", transition: "border-color 0.15s",
+                }}
+                  onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = "#406B93"; }}
+                  onDragLeave={(e) => { e.currentTarget.style.borderColor = "#B0C4DE"; }}
+                  onDrop={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = "#B0C4DE"; const f = e.dataTransfer.files[0]; if (f) handleImportFile(f); }}
+                >
+                  <FileUp style={{ width: 32, height: 32, color: "#406B93", marginBottom: 8 }} />
+                  <span style={{ fontSize: 13, color: "#406B93", fontWeight: 600 }}>اسحب الملف هنا أو انقر للاختيار</span>
+                  <span style={{ fontSize: 11, color: "#888", marginTop: 4 }}>xlsx, xls, csv — حتى 2000 صنف</span>
+                  <input type="file" accept=".xlsx,.xls,.csv" style={{ display: "none" }}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportFile(f); e.target.value = ""; }} />
+                </label>
+              </div>
+
+              {/* معاينة الصفوف */}
+              {importRows.length > 0 && (
+                <div>
+                  <p style={{ fontWeight: 700, fontSize: 14, color: "#1E3A5F", margin: "0 0 8px" }}>
+                    الخطوة 3 — مراجعة البيانات
+                    <span style={{ fontWeight: 400, fontSize: 12, color: "#406B93", marginRight: 8 }}>({importRows.length} صنف)</span>
+                  </p>
+                  <div style={{ border: "1px solid #E5E7EB", borderRadius: 6, overflow: "hidden", maxHeight: 280, overflowY: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, fontFamily: "'Cairo', Tahoma, sans-serif" }}>
+                      <thead>
+                        <tr style={{ background: "#EDE7DF", position: "sticky", top: 0 }}>
+                          {["#", "اسم الصنف", "الكود", "الوحدة", "سعر البيع", "سعر الشراء"].map(h => (
+                            <th key={h} style={{ padding: "6px 10px", textAlign: "right", fontWeight: 700, color: "#1E3A5F", borderBottom: "1px solid #BEBEBE" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {importRows.slice(0, 100).map((r, i) => (
+                          <tr key={i} style={{ borderBottom: "1px solid #F0EDE8", background: i % 2 ? "#FAFAFA" : "#fff" }}>
+                            <td style={{ padding: "5px 10px", color: "#888" }}>{i + 1}</td>
+                            <td style={{ padding: "5px 10px", fontWeight: 600, color: "#1E3A5F" }}>{r.name}</td>
+                            <td style={{ padding: "5px 10px", color: "#555" }}>{r.sku || "—"}</td>
+                            <td style={{ padding: "5px 10px", color: "#555" }}>{r.unit || "قطعة"}</td>
+                            <td style={{ padding: "5px 10px", color: "#166534" }}>{r.salePrice || "0"}</td>
+                            <td style={{ padding: "5px 10px", color: "#7C3AED" }}>{r.purchasePrice || "0"}</td>
+                          </tr>
+                        ))}
+                        {importRows.length > 100 && (
+                          <tr><td colSpan={6} style={{ padding: "8px 10px", textAlign: "center", color: "#888", fontSize: 11 }}>... و {importRows.length - 100} صنف آخر</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* أزرار التذييل */}
+            <div style={{ padding: "14px 20px", borderTop: "1px solid #E5E7EB", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <button onClick={() => { setImportOpen(false); setImportRows([]); }} style={{
+                padding: "8px 20px", background: "#F5F5F5", border: "1px solid #DDD",
+                borderRadius: 6, cursor: "pointer", fontFamily: "'Cairo', Tahoma, sans-serif", fontSize: 13, color: "#555",
+              }}>إلغاء</button>
+              <button
+                onClick={confirmImport}
+                disabled={importRows.length === 0 || importLoading}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6, padding: "8px 24px",
+                  background: importRows.length === 0 || importLoading ? "#A0B8CC" : "#406B93",
+                  color: "#fff", border: "none", borderRadius: 6, cursor: importRows.length === 0 ? "not-allowed" : "pointer",
+                  fontFamily: "'Cairo', Tahoma, sans-serif", fontSize: 14, fontWeight: 700,
+                }}
+              >
+                {importLoading ? "جاري الاستيراد..." : `استيراد ${importRows.length > 0 ? importRows.length + " صنف" : ""}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* تبويبات العرض */}
       <div className="flex border-b border-border bg-muted/10">
