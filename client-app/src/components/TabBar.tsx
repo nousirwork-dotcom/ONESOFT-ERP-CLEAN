@@ -44,8 +44,8 @@ export default function TabBar() {
         display: "flex",
         alignItems: "stretch",
         height: 36,
-        background: "#FFFFFF",
-        borderBottom: "1px solid #E5E7EB",
+        background: "#EDE8DC",
+        borderBottom: "1px solid #D4CDC1",
         overflow: "hidden",
       }}
     >
@@ -76,11 +76,11 @@ export default function TabBar() {
                 cursor: "pointer", flexShrink: 0,
                 maxWidth: 200, minWidth: 90,
                 position: "relative",
-                borderLeft: "1px solid #F3F4F6",
+                borderLeft: "1px solid #CFC9BC",
                 background: isActive
                   ? "#FFFFFF"
                   : isHovered
-                  ? "#F9FAFB"
+                  ? "#D9D3C7"
                   : "transparent",
                 transition: "background 0.1s",
               }}
@@ -172,10 +172,10 @@ function ScrollArrow({ dir, onClick }: { dir: "left" | "right"; onClick: () => v
       style={{
         flexShrink: 0, width: 26,
         display: "flex", alignItems: "center", justifyContent: "center",
-        background: hovered ? "#F3F4F6" : "#FFFFFF",
+        background: hovered ? "#D9D3C7" : "#EDE8DC",
         border: "none",
-        borderLeft:  dir === "left"  ? "1px solid #E5E7EB" : "none",
-        borderRight: dir === "right" ? "1px solid #E5E7EB" : "none",
+        borderLeft:  dir === "left"  ? "1px solid #D4CDC1" : "none",
+        borderRight: dir === "right" ? "1px solid #D4CDC1" : "none",
         cursor: "pointer", color: "#6B7280",
         transition: "background 0.1s",
       }}
