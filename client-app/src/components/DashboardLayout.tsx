@@ -249,29 +249,34 @@ function HorizontalNav({ user }: { user: any }) {
   );
 
   return (
-    <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
+    <div className="flex items-stretch gap-0 h-full overflow-x-auto scrollbar-none">
       {allItems.map((item) => {
         if (item.children) {
           const hasActiveChild = item.children.some(c => activeTab?.path === c.path);
           return (
             <DropdownMenu key={item.path}>
               <DropdownMenuTrigger asChild>
-                <button className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-all duration-150 ${
-                  hasActiveChild
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
-                }`}>
-                  <item.icon className="w-3.5 h-3.5 shrink-0" />
+                <button className={`
+                  relative flex items-center gap-2 px-3.5 h-full
+                  text-[14.5px] font-[500] whitespace-nowrap
+                  transition-colors duration-150 outline-none
+                  border-b-2
+                  ${hasActiveChild
+                    ? "border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-500/5"
+                    : "border-transparent text-foreground/60 hover:text-foreground hover:bg-black/[0.04] dark:hover:bg-white/[0.04]"
+                  }
+                `}>
+                  <item.icon className={`w-3.5 h-3.5 shrink-0 ${hasActiveChild ? "text-blue-500" : "text-foreground/50"}`} />
                   <span>{item.label}</span>
-                  <ChevronDown className="w-3 h-3 shrink-0 mr-0.5" />
+                  <ChevronDown className="w-3 h-3 shrink-0 opacity-50" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="min-w-[180px]">
+              <DropdownMenuContent align="start" className="min-w-[190px]">
                 {item.children.map(child => (
                   <DropdownMenuItem
                     key={child.path}
                     onClick={() => openTab(child.path, child.label, child.icon)}
-                    className={`text-xs gap-2 ${activeTab?.path === child.path ? "bg-primary/10 text-primary" : ""}`}
+                    className={`text-[13px] gap-2 ${activeTab?.path === child.path ? "bg-blue-500/10 text-blue-600" : ""}`}
                   >
                     <child.icon className="w-3.5 h-3.5 shrink-0" />
                     {child.label}
@@ -286,13 +291,18 @@ function HorizontalNav({ user }: { user: any }) {
           <button
             key={item.path}
             onClick={() => openTab(item.path, item.label, item.icon)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-all duration-150 ${
-              isActive
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:text-foreground hover:bg-accent"
-            }`}
+            className={`
+              relative flex items-center gap-2 px-3.5 h-full
+              text-[14.5px] font-[500] whitespace-nowrap
+              transition-colors duration-150
+              border-b-2
+              ${isActive
+                ? "border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-500/5"
+                : "border-transparent text-foreground/60 hover:text-foreground hover:bg-black/[0.04] dark:hover:bg-white/[0.04]"
+              }
+            `}
           >
-            <item.icon className="w-3.5 h-3.5 shrink-0" />
+            <item.icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? "text-blue-500" : "text-foreground/50"}`} />
             <span>{item.label}</span>
           </button>
         );
