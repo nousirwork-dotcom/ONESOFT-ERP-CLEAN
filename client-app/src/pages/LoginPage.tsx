@@ -2,9 +2,7 @@ import { useState } from 'react';
 import { trpc } from '../lib/trpc';
 import { useLocation } from 'wouter';
 
-
 export default function LoginPage() {
-
   const [form, setForm] = useState({ orgCode: '', username: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -38,39 +36,109 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4" dir="rtl">
-      {/* خلفية */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl" />
+    <div
+      dir="rtl"
+      style={{
+        minHeight: "100vh",
+        background: "linear-gradient(145deg, #E8E0D4 0%, #D4CCC0 40%, #C8C0B4 100%)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 16,
+        position: "relative",
+        overflow: "hidden",
+        fontFamily: "'Cairo', Tahoma, sans-serif",
+      }}
+    >
+      {/* زخارف خلفية دافئة */}
+      <div style={{
+        position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none",
+      }}>
+        <div style={{
+          position: "absolute", top: -80, right: -80,
+          width: 340, height: 340,
+          background: "radial-gradient(circle, rgba(64,107,147,0.12) 0%, transparent 70%)",
+          borderRadius: "50%",
+        }} />
+        <div style={{
+          position: "absolute", bottom: -100, left: -100,
+          width: 400, height: 400,
+          background: "radial-gradient(circle, rgba(64,107,147,0.08) 0%, transparent 70%)",
+          borderRadius: "50%",
+        }} />
+        <div style={{
+          position: "absolute", top: "50%", left: "10%",
+          width: 200, height: 200,
+          background: "radial-gradient(circle, rgba(221,212,196,0.4) 0%, transparent 70%)",
+          borderRadius: "50%",
+        }} />
       </div>
 
-      <div className="w-full max-w-md relative">
+      <div style={{ width: "100%", maxWidth: 420, position: "relative" }}>
+
         {/* الشعار */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4 shadow-lg shadow-blue-600/30">
-            <span className="text-white text-2xl font-bold">O</span>
+        <div style={{ textAlign: "center", marginBottom: 28 }}>
+          <div style={{
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            width: 64, height: 64,
+            background: "linear-gradient(135deg, #406B93 0%, #2d5070 100%)",
+            borderRadius: 18,
+            marginBottom: 14,
+            boxShadow: "0 8px 24px rgba(64,107,147,0.35)",
+          }}>
+            <span style={{ color: "#fff", fontSize: 26, fontWeight: 800 }}>O</span>
           </div>
-          <h1 className="text-3xl font-bold text-white">
-            One<span className="text-blue-400">Soft</span> ERP
+          <h1 style={{
+            fontSize: 26, fontWeight: 800, margin: 0,
+            color: "#1E344F",
+            letterSpacing: 0.5,
+          }}>
+            One<span style={{ color: "#406B93" }}>Soft</span> ERP
           </h1>
-          <p className="text-slate-400 mt-1 text-sm">نظام إدارة الأعمال المتكامل</p>
+          <p style={{ color: "#6B7280", marginTop: 4, fontSize: 13, fontWeight: 400 }}>
+            نظام إدارة الأعمال المتكامل
+          </p>
         </div>
 
         {/* بطاقة تسجيل الدخول */}
-        <div className="bg-slate-800/80 backdrop-blur border border-slate-700 rounded-2xl p-8 shadow-2xl">
-          <h2 className="text-xl font-semibold text-white mb-6 text-center">تسجيل الدخول</h2>
+        <div style={{
+          background: "rgba(255,255,255,0.82)",
+          backdropFilter: "blur(12px)",
+          border: "1px solid #D4CDC1",
+          borderRadius: 16,
+          padding: "32px 36px",
+          boxShadow: "0 4px 32px rgba(30,52,79,0.12), 0 1px 4px rgba(30,52,79,0.08)",
+        }}>
+          <h2 style={{
+            fontSize: 17, fontWeight: 700, color: "#1E344F",
+            textAlign: "center", marginBottom: 24, marginTop: 0,
+          }}>
+            تسجيل الدخول
+          </h2>
 
           {error && (
-            <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg p-3 mb-4 text-sm text-center">
+            <div style={{
+              background: "rgba(220,38,38,0.08)",
+              border: "1px solid rgba(220,38,38,0.25)",
+              color: "#B91C1C",
+              borderRadius: 8,
+              padding: "10px 14px",
+              marginBottom: 16,
+              fontSize: 13,
+              textAlign: "center",
+            }}>
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
             {/* كود المؤسسة */}
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">
+              <label style={{
+                display: "block", fontSize: 13, fontWeight: 600,
+                color: "#374151", marginBottom: 6,
+              }}>
                 كود المؤسسة
               </label>
               <input
@@ -78,15 +146,40 @@ export default function LoginPage() {
                 value={form.orgCode}
                 onChange={e => setForm(f => ({ ...f, orgCode: e.target.value.toUpperCase() }))}
                 placeholder="مثال: COMP01"
-                className="w-full bg-slate-700/50 border border-slate-600 text-white placeholder-slate-500 rounded-lg px-4 py-2.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition text-sm"
                 autoFocus
+                style={{
+                  width: "100%", boxSizing: "border-box",
+                  background: "#F7F4F0",
+                  border: "1px solid #C8C1B8",
+                  borderRadius: 8,
+                  padding: "9px 14px",
+                  fontSize: 13, color: "#1E344F",
+                  outline: "none",
+                  transition: "border-color 0.15s, box-shadow 0.15s",
+                  fontFamily: "'Cairo', Tahoma, sans-serif",
+                }}
+                onFocus={e => {
+                  e.target.style.borderColor = "#406B93";
+                  e.target.style.boxShadow = "0 0 0 3px rgba(64,107,147,0.12)";
+                  e.target.style.background = "#FFFFFF";
+                }}
+                onBlur={e => {
+                  e.target.style.borderColor = "#C8C1B8";
+                  e.target.style.boxShadow = "none";
+                  e.target.style.background = "#F7F4F0";
+                }}
               />
-              <p className="text-xs text-slate-500 mt-1">اتركه فارغاً إذا كنت المدير العام</p>
+              <p style={{ fontSize: 11.5, color: "#9CA3AF", marginTop: 5 }}>
+                اتركه فارغاً إذا كنت المدير العام
+              </p>
             </div>
 
             {/* اسم المستخدم */}
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">
+              <label style={{
+                display: "block", fontSize: 13, fontWeight: 600,
+                color: "#374151", marginBottom: 6,
+              }}>
                 اسم المستخدم
               </label>
               <input
@@ -95,13 +188,36 @@ export default function LoginPage() {
                 onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
                 placeholder="أدخل اسم المستخدم"
                 required
-                className="w-full bg-slate-700/50 border border-slate-600 text-white placeholder-slate-500 rounded-lg px-4 py-2.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition text-sm"
+                style={{
+                  width: "100%", boxSizing: "border-box",
+                  background: "#F7F4F0",
+                  border: "1px solid #C8C1B8",
+                  borderRadius: 8,
+                  padding: "9px 14px",
+                  fontSize: 13, color: "#1E344F",
+                  outline: "none",
+                  transition: "border-color 0.15s, box-shadow 0.15s",
+                  fontFamily: "'Cairo', Tahoma, sans-serif",
+                }}
+                onFocus={e => {
+                  e.target.style.borderColor = "#406B93";
+                  e.target.style.boxShadow = "0 0 0 3px rgba(64,107,147,0.12)";
+                  e.target.style.background = "#FFFFFF";
+                }}
+                onBlur={e => {
+                  e.target.style.borderColor = "#C8C1B8";
+                  e.target.style.boxShadow = "none";
+                  e.target.style.background = "#F7F4F0";
+                }}
               />
             </div>
 
             {/* كلمة المرور */}
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">
+              <label style={{
+                display: "block", fontSize: 13, fontWeight: 600,
+                color: "#374151", marginBottom: 6,
+              }}>
                 كلمة المرور
               </label>
               <input
@@ -110,18 +226,70 @@ export default function LoginPage() {
                 onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                 placeholder="أدخل كلمة المرور"
                 required
-                className="w-full bg-slate-700/50 border border-slate-600 text-white placeholder-slate-500 rounded-lg px-4 py-2.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition text-sm"
+                style={{
+                  width: "100%", boxSizing: "border-box",
+                  background: "#F7F4F0",
+                  border: "1px solid #C8C1B8",
+                  borderRadius: 8,
+                  padding: "9px 14px",
+                  fontSize: 13, color: "#1E344F",
+                  outline: "none",
+                  transition: "border-color 0.15s, box-shadow 0.15s",
+                  fontFamily: "'Cairo', Tahoma, sans-serif",
+                }}
+                onFocus={e => {
+                  e.target.style.borderColor = "#406B93";
+                  e.target.style.boxShadow = "0 0 0 3px rgba(64,107,147,0.12)";
+                  e.target.style.background = "#FFFFFF";
+                }}
+                onBlur={e => {
+                  e.target.style.borderColor = "#C8C1B8";
+                  e.target.style.boxShadow = "none";
+                  e.target.style.background = "#F7F4F0";
+                }}
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg py-3 transition-colors mt-2 flex items-center justify-center gap-2"
+              style={{
+                width: "100%",
+                background: loading ? "#6B8FAD" : "linear-gradient(135deg, #406B93 0%, #2d5070 100%)",
+                color: "#FFFFFF",
+                fontWeight: 700,
+                fontSize: 14,
+                borderRadius: 8,
+                padding: "11px 0",
+                border: "none",
+                cursor: loading ? "not-allowed" : "pointer",
+                marginTop: 4,
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                transition: "opacity 0.15s, box-shadow 0.15s",
+                boxShadow: loading ? "none" : "0 4px 12px rgba(64,107,147,0.30)",
+                fontFamily: "'Cairo', Tahoma, sans-serif",
+              }}
+              onMouseEnter={e => {
+                if (!loading) {
+                  (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 6px 18px rgba(64,107,147,0.40)";
+                  (e.currentTarget as HTMLButtonElement).style.opacity = "0.92";
+                }
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLButtonElement).style.boxShadow = loading ? "none" : "0 4px 12px rgba(64,107,147,0.30)";
+                (e.currentTarget as HTMLButtonElement).style.opacity = "1";
+              }}
             >
               {loading ? (
                 <>
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span style={{
+                    width: 15, height: 15,
+                    border: "2px solid rgba(255,255,255,0.35)",
+                    borderTopColor: "#fff",
+                    borderRadius: "50%",
+                    display: "inline-block",
+                    animation: "spin 0.7s linear infinite",
+                  }} />
                   جاري تسجيل الدخول...
                 </>
               ) : (
@@ -131,10 +299,18 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p className="text-center text-slate-600 text-xs mt-6">
+        <p style={{
+          textAlign: "center", color: "#9CA3AF",
+          fontSize: 11.5, marginTop: 20,
+        }}>
           OneSoft ERP v1.0 © 2024
         </p>
       </div>
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        input::placeholder { color: #B0A898; }
+      `}</style>
     </div>
   );
 }
