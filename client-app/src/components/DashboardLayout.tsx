@@ -257,16 +257,15 @@ function HorizontalNav({ user }: { user: any }) {
             <DropdownMenu key={item.path}>
               <DropdownMenuTrigger asChild>
                 <button className={`
-                  relative flex items-center gap-2 px-3.5 h-full
+                  relative flex items-center gap-2 px-3.5 mx-0.5 my-1.5 rounded-md
                   text-[14.5px] font-[500] whitespace-nowrap
                   transition-colors duration-150 outline-none
-                  border-b-2
                   ${hasActiveChild
-                    ? "border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-500/5"
-                    : "border-transparent text-foreground/60 hover:text-foreground hover:bg-black/[0.04] dark:hover:bg-white/[0.04]"
+                    ? "bg-[#406B93] text-white shadow-sm"
+                    : "text-foreground/60 hover:text-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.06]"
                   }
                 `}>
-                  <item.icon className={`w-3.5 h-3.5 shrink-0 ${hasActiveChild ? "text-blue-500" : "text-foreground/50"}`} />
+                  <item.icon className={`w-3.5 h-3.5 shrink-0 ${hasActiveChild ? "text-white" : "text-foreground/50"}`} />
                   <span>{item.label}</span>
                   <ChevronDown className="w-3 h-3 shrink-0 opacity-50" />
                 </button>
@@ -292,17 +291,16 @@ function HorizontalNav({ user }: { user: any }) {
             key={item.path}
             onClick={() => openTab(item.path, item.label, item.icon)}
             className={`
-              relative flex items-center gap-2 px-3.5 h-full
+              relative flex items-center gap-2 px-3.5 mx-0.5 my-1.5 rounded-md
               text-[14.5px] font-[500] whitespace-nowrap
               transition-colors duration-150
-              border-b-2
               ${isActive
-                ? "border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-500/5"
-                : "border-transparent text-foreground/60 hover:text-foreground hover:bg-black/[0.04] dark:hover:bg-white/[0.04]"
+                ? "bg-[#406B93] text-white shadow-sm"
+                : "text-foreground/60 hover:text-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.06]"
               }
             `}
           >
-            <item.icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? "text-blue-500" : "text-foreground/50"}`} />
+            <item.icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? "text-white" : "text-foreground/50"}`} />
             <span>{item.label}</span>
           </button>
         );
