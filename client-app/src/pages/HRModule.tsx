@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTabManager } from "@/contexts/TabManagerContext";
 import {
   ChevronDown, ChevronRight, Users, FileText, BarChart3,
   ClipboardList, Plus, Search, DollarSign, ArrowRight,
@@ -23,10 +24,10 @@ const menuSections = [
     label: "الموظفون",
     icon: Users,
     children: [
-      { id: "employees-list",  label: "قائمة الموظفين",     icon: Users },
-      { id: "add-employee",    label: "إضافة موظف",          icon: Plus },
-      { id: "departments",     label: "الأقسام",              icon: Briefcase },
-      { id: "positions",       label: "المسميات الوظيفية",    icon: UserCheck },
+      { id: "employees-list",  label: "قائمة الموظفين",   icon: Users,      path: "/hr/employees" },
+      { id: "add-employee",    label: "إضافة موظف",        icon: Plus,       path: "/hr/add-employee" },
+      { id: "departments",     label: "الأقسام",            icon: Briefcase,  path: "/hr/departments" },
+      { id: "positions",       label: "المسميات الوظيفية", icon: UserCheck,  path: "/hr/positions" },
     ],
   },
   {
@@ -34,9 +35,9 @@ const menuSections = [
     label: "الرواتب",
     icon: DollarSign,
     children: [
-      { id: "payroll-run",     label: "تشغيل الرواتب",        icon: DollarSign },
-      { id: "payroll-list",    label: "كشوف الرواتب",         icon: ClipboardList },
-      { id: "salary-advance",  label: "السلف",                icon: CreditCard },
+      { id: "payroll-run",    label: "تشغيل الرواتب", icon: DollarSign,   path: "/hr/payroll" },
+      { id: "payroll-list",   label: "كشوف الرواتب",  icon: ClipboardList,path: "/hr/payroll-list" },
+      { id: "salary-advance", label: "السلف",          icon: CreditCard,   path: "/hr/advances" },
     ],
   },
   {
@@ -44,9 +45,9 @@ const menuSections = [
     label: "الحضور والانصراف",
     icon: Clock,
     children: [
-      { id: "attendance-log",    label: "سجل الحضور",          icon: Clock },
-      { id: "attendance-report", label: "تقرير الحضور",        icon: BarChart3 },
-      { id: "work-schedule",     label: "جداول العمل",          icon: Calendar },
+      { id: "attendance-log",    label: "سجل الحضور",   icon: Clock,     path: "/hr/attendance" },
+      { id: "attendance-report", label: "تقرير الحضور", icon: BarChart3, path: "/hr/attendance-report" },
+      { id: "work-schedule",     label: "جداول العمل",   icon: Calendar,  path: "/hr/schedule" },
     ],
   },
   {
@@ -54,9 +55,9 @@ const menuSections = [
     label: "الإجازات",
     icon: Calendar,
     children: [
-      { id: "leave-request",   label: "طلب إجازة",            icon: Plus },
-      { id: "leave-list",      label: "قائمة الإجازات",        icon: ClipboardList },
-      { id: "leave-balance",   label: "أرصدة الإجازات",        icon: Calendar },
+      { id: "leave-request", label: "طلب إجازة",       icon: Plus,        path: "/hr/leave-request" },
+      { id: "leave-list",    label: "قائمة الإجازات",   icon: ClipboardList,path: "/hr/leaves" },
+      { id: "leave-balance", label: "أرصدة الإجازات",   icon: Calendar,    path: "/hr/leave-balance" },
     ],
   },
   {
@@ -64,9 +65,9 @@ const menuSections = [
     label: "التقارير",
     icon: BarChart3,
     children: [
-      { id: "headcount-report", label: "تقرير الكوادر",        icon: Users },
-      { id: "payroll-report",   label: "تقرير الرواتب",        icon: DollarSign },
-      { id: "attendance-summary","label": "ملخص الحضور",       icon: BarChart3 },
+      { id: "headcount-report",   label: "تقرير الكوادر", icon: Users,      path: "/hr/headcount" },
+      { id: "payroll-report",     label: "تقرير الرواتب", icon: DollarSign, path: "/hr/payroll-report" },
+      { id: "attendance-summary", label: "ملخص الحضور",   icon: BarChart3,  path: "/hr/attendance-summary" },
     ],
   },
 ];
@@ -76,6 +77,7 @@ const menuSections = [
 function HRMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ employees: true });
   const toggle = (id: string) => setExpanded(p => ({ ...p, [id]: !p[id] }));
+  const { openTab } = useTabManager();
 
   return (
     <nav className="w-56 shrink-0 border-l border-border bg-card/50 overflow-y-auto flex flex-col">
@@ -98,7 +100,7 @@ function HRMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuI
             {expanded[section.id] && (
               <div className="mr-3 border-r border-border/40 mb-1">
                 {section.children.map(child => (
-                  <button key={child.id} onClick={() => onSelect(child.id)}
+                  <button key={child.id} onClick={() => { onSelect(child.id); openTab(child.path, child.label, child.icon); }}
                     className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors ${
                       activeId === child.id ? "bg-primary/10 text-primary font-semibold border-r-2 border-primary" : "text-muted-foreground hover:text-foreground hover:bg-accent/20"
                     }`}>
@@ -492,3 +494,24 @@ export default function HRModule() {
     </div>
   );
 }
+
+// ─── Tab Sub-Pages ─────────────────────────────────────────────────────────────
+function HRSubPage({ activeId }: { activeId: string }) {
+  return <div className="h-full overflow-auto p-5" dir="rtl"><HRContent activeId={activeId} onSelect={() => {}} /></div>;
+}
+export function HREmployeesTab()         { return <HRSubPage activeId="employees-list" />; }
+export function HRAddEmployeeTab()       { return <HRSubPage activeId="add-employee" />; }
+export function HRDepartmentsTab()       { return <HRSubPage activeId="departments" />; }
+export function HRPositionsTab()         { return <HRSubPage activeId="positions" />; }
+export function HRPayrollTab()           { return <HRSubPage activeId="payroll-run" />; }
+export function HRPayrollListTab()       { return <HRSubPage activeId="payroll-list" />; }
+export function HRAdvancesTab()          { return <HRSubPage activeId="salary-advance" />; }
+export function HRAttendanceTab()        { return <HRSubPage activeId="attendance-log" />; }
+export function HRAttendanceReportTab()  { return <HRSubPage activeId="attendance-report" />; }
+export function HRScheduleTab()          { return <HRSubPage activeId="work-schedule" />; }
+export function HRLeaveRequestTab()      { return <HRSubPage activeId="leave-request" />; }
+export function HRLeavesTab()            { return <HRSubPage activeId="leave-list" />; }
+export function HRLeaveBalanceTab()      { return <HRSubPage activeId="leave-balance" />; }
+export function HRHeadcountTab()         { return <HRSubPage activeId="headcount-report" />; }
+export function HRPayrollReportTab()     { return <HRSubPage activeId="payroll-report" />; }
+export function HRAttendanceSummaryTab() { return <HRSubPage activeId="attendance-summary" />; }

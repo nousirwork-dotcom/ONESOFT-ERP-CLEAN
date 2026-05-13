@@ -9,7 +9,6 @@ import { TabManagerProvider, useTabManager } from "./contexts/TabManagerContext"
 import Dashboard from "./pages/Dashboard";
 import POS from "./pages/POS";
 import Invoices from "./pages/Invoices";
-import InventoryModule from "./pages/InventoryModule";
 import PurchasesModule, {
   PurchaseSuppliersPage, PurchaseOrdersPage, PurchaseInvoicesPage,
   PurchaseReturnsPage, PurchaseRptSupplierPage, PurchaseRptItemPage,
@@ -23,11 +22,45 @@ import SalesModule, {
   SalesTotalsReportsTab, SalesItemsReportsTab,
 } from "./pages/SalesModule";
 import Users from "./pages/Users";
-import ManufacturingModule from "./pages/ManufacturingModule";
-import AccountingModule from "./pages/AccountingModule";
-import HRModule from "./pages/HRModule";
-import AssetsModule from "./pages/AssetsModule";
-import SettingsModule from "./pages/SettingsModule";
+import ManufacturingModule, {
+  MfgNewOrderTab, MfgOrdersTab, MfgTrackingTab, MfgNewBomTab, MfgBomTab,
+  MfgCostTab, MfgCostReportsTab, MfgStagesTab, MfgWorkcentersTab,
+  MfgProductionReportTab, MfgEfficiencyTab, MfgWasteTab,
+} from "./pages/ManufacturingModule";
+import AccountingModule, {
+  AccJournalTab, AccReceiptTab, AccPaymentTab, AccNewJournalTab, AccOpeningTab,
+  AccAccountsTab, AccLedgerTab, AccCostCentersTab, AccCostAllocationTab,
+  AccTrialBalanceTab, AccIncomeTab, AccBalanceSheetTab, AccCashFlowTab,
+} from "./pages/AccountingModule";
+import HRModule, {
+  HREmployeesTab, HRAddEmployeeTab, HRDepartmentsTab, HRPositionsTab,
+  HRPayrollTab, HRPayrollListTab, HRAdvancesTab, HRAttendanceTab,
+  HRAttendanceReportTab, HRScheduleTab, HRLeaveRequestTab, HRLeavesTab,
+  HRLeaveBalanceTab, HRHeadcountTab, HRPayrollReportTab, HRAttendanceSummaryTab,
+} from "./pages/HRModule";
+import AssetsModule, {
+  AssetsListTab, AssetsAddTab, AssetsCategoriesTab, AssetsDepreciationTab,
+  AssetsDeprScheduleTab, AssetsTransferTab, AssetsTransferListTab,
+  AssetsDisposalTab, AssetsDisposalListTab, AssetsSummaryTab,
+  AssetsDeprReportTab, AssetsMovementTab,
+} from "./pages/AssetsModule";
+import InventoryModule, {
+  InvProductsTab, InvUnitsTab, InvGroupsTab, InvCategoriesTab, InvBindingTab,
+  InvPricingTab, InvFreeProductsTab, InvTransferTab, InvReceiptTab, InvIssueTab,
+  InvCountTab, InvStockReportsTab, InvVoucherReportsTab, InvBranchesTab,
+  InvWarehousesTab, InvReinstateTab, InvRegenerateTab,
+} from "./pages/InventoryModule";
+import SettingsModule, {
+  CfgCompanyTab, CfgCurrenciesTab, CfgTaxesTab, CfgFiscalTab,
+  CfgUsersTab, CfgUserGroupsTab, CfgPermissionsTab,
+  CfgApproveInvoiceTab, CfgApprovePurchaseTab, CfgApproveDiscountTab,
+  CfgApproveInventoryTab, CfgApproveJournalTab, CfgApprovalsLogTab, CfgApprovalPathsTab,
+  CfgNotifStockTab, CfgNotifCreditTab, CfgNotifOverdueTab, CfgNotifExpiryTab,
+  CfgNotifMaintenanceTab, CfgNotifPendingTab, CfgWarehousesTab,
+  CfgDocTypesTab, CfgDocBooksTab, CfgFieldDesignTab, CfgBackupTab, CfgAuditLogTab,
+  CfgMissingDocsTab, CfgPayrollPeriodsTab, CfgOrgChartTab, CfgWageCalendarTab,
+  CfgShiftsTab, CfgReportDesignerTab, CfgTestSetupTab, CfgTestEditTab, CfgFieldSpecsTab,
+} from "./pages/SettingsModule";
 import LoginPage from "./pages/LoginPage";
 import SuperAdminPage from "./pages/SuperAdminPage";
 import { createElement, useEffect } from "react";
@@ -75,6 +108,117 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/sales/customer-reports":  SalesCustomerReportsTab,
   "/sales/totals-reports":    SalesTotalsReportsTab,
   "/sales/items-reports":     SalesItemsReportsTab,
+  // Manufacturing
+  "/mfg/new-order":           MfgNewOrderTab,
+  "/mfg/orders":              MfgOrdersTab,
+  "/mfg/tracking":            MfgTrackingTab,
+  "/mfg/new-bom":             MfgNewBomTab,
+  "/mfg/bom":                 MfgBomTab,
+  "/mfg/cost":                MfgCostTab,
+  "/mfg/cost-reports":        MfgCostReportsTab,
+  "/mfg/stages":              MfgStagesTab,
+  "/mfg/workcenters":         MfgWorkcentersTab,
+  "/mfg/production-report":   MfgProductionReportTab,
+  "/mfg/efficiency":          MfgEfficiencyTab,
+  "/mfg/waste":               MfgWasteTab,
+  // Accounting
+  "/accounting/journal":          AccJournalTab,
+  "/accounting/receipt":          AccReceiptTab,
+  "/accounting/payment":          AccPaymentTab,
+  "/accounting/new-journal":      AccNewJournalTab,
+  "/accounting/opening":          AccOpeningTab,
+  "/accounting/accounts":         AccAccountsTab,
+  "/accounting/ledger":           AccLedgerTab,
+  "/accounting/cost-centers":     AccCostCentersTab,
+  "/accounting/cost-allocation":  AccCostAllocationTab,
+  "/accounting/trial-balance":    AccTrialBalanceTab,
+  "/accounting/income-statement": AccIncomeTab,
+  "/accounting/balance-sheet":    AccBalanceSheetTab,
+  "/accounting/cash-flow":        AccCashFlowTab,
+  // HR
+  "/hr/employees":          HREmployeesTab,
+  "/hr/add-employee":       HRAddEmployeeTab,
+  "/hr/departments":        HRDepartmentsTab,
+  "/hr/positions":          HRPositionsTab,
+  "/hr/payroll":            HRPayrollTab,
+  "/hr/payroll-list":       HRPayrollListTab,
+  "/hr/advances":           HRAdvancesTab,
+  "/hr/attendance":         HRAttendanceTab,
+  "/hr/attendance-report":  HRAttendanceReportTab,
+  "/hr/schedule":           HRScheduleTab,
+  "/hr/leave-request":      HRLeaveRequestTab,
+  "/hr/leaves":             HRLeavesTab,
+  "/hr/leave-balance":      HRLeaveBalanceTab,
+  "/hr/headcount":          HRHeadcountTab,
+  "/hr/payroll-report":     HRPayrollReportTab,
+  "/hr/attendance-summary": HRAttendanceSummaryTab,
+  // Assets
+  "/assets/list":                 AssetsListTab,
+  "/assets/add":                  AssetsAddTab,
+  "/assets/categories":           AssetsCategoriesTab,
+  "/assets/depreciation":         AssetsDepreciationTab,
+  "/assets/depreciation-schedule":AssetsDeprScheduleTab,
+  "/assets/transfer":             AssetsTransferTab,
+  "/assets/transfer-list":        AssetsTransferListTab,
+  "/assets/disposal":             AssetsDisposalTab,
+  "/assets/disposal-list":        AssetsDisposalListTab,
+  "/assets/summary":              AssetsSummaryTab,
+  "/assets/depreciation-report":  AssetsDeprReportTab,
+  "/assets/movement":             AssetsMovementTab,
+  // Inventory
+  "/inv/products":        InvProductsTab,
+  "/inv/units":           InvUnitsTab,
+  "/inv/groups":          InvGroupsTab,
+  "/inv/categories":      InvCategoriesTab,
+  "/inv/binding":         InvBindingTab,
+  "/inv/pricing":         InvPricingTab,
+  "/inv/free-products":   InvFreeProductsTab,
+  "/inv/transfer":        InvTransferTab,
+  "/inv/receipt":         InvReceiptTab,
+  "/inv/issue":           InvIssueTab,
+  "/inv/count":           InvCountTab,
+  "/inv/stock-reports":   InvStockReportsTab,
+  "/inv/voucher-reports": InvVoucherReportsTab,
+  "/inv/branches":        InvBranchesTab,
+  "/inv/warehouses":      InvWarehousesTab,
+  "/inv/reinstate":       InvReinstateTab,
+  "/inv/regenerate":      InvRegenerateTab,
+  // Settings/Config
+  "/cfg/company":           CfgCompanyTab,
+  "/cfg/currencies":        CfgCurrenciesTab,
+  "/cfg/taxes":             CfgTaxesTab,
+  "/cfg/fiscal":            CfgFiscalTab,
+  "/cfg/users":             CfgUsersTab,
+  "/cfg/user-groups":       CfgUserGroupsTab,
+  "/cfg/permissions":       CfgPermissionsTab,
+  "/cfg/approve-invoice":   CfgApproveInvoiceTab,
+  "/cfg/approve-purchase":  CfgApprovePurchaseTab,
+  "/cfg/approve-discount":  CfgApproveDiscountTab,
+  "/cfg/approve-inventory": CfgApproveInventoryTab,
+  "/cfg/approve-journal":   CfgApproveJournalTab,
+  "/cfg/approvals-log":     CfgApprovalsLogTab,
+  "/cfg/approval-paths":    CfgApprovalPathsTab,
+  "/cfg/notif-stock":       CfgNotifStockTab,
+  "/cfg/notif-credit":      CfgNotifCreditTab,
+  "/cfg/notif-overdue":     CfgNotifOverdueTab,
+  "/cfg/notif-expiry":      CfgNotifExpiryTab,
+  "/cfg/notif-maintenance": CfgNotifMaintenanceTab,
+  "/cfg/notif-pending":     CfgNotifPendingTab,
+  "/cfg/warehouses":        CfgWarehousesTab,
+  "/cfg/doc-types":         CfgDocTypesTab,
+  "/cfg/doc-books":         CfgDocBooksTab,
+  "/cfg/field-design":      CfgFieldDesignTab,
+  "/cfg/backup":            CfgBackupTab,
+  "/cfg/audit-log":         CfgAuditLogTab,
+  "/cfg/missing-docs":      CfgMissingDocsTab,
+  "/cfg/payroll-periods":   CfgPayrollPeriodsTab,
+  "/cfg/org-chart":         CfgOrgChartTab,
+  "/cfg/wage-calendar":     CfgWageCalendarTab,
+  "/cfg/shifts":            CfgShiftsTab,
+  "/cfg/report-designer":   CfgReportDesignerTab,
+  "/cfg/test-setup":        CfgTestSetupTab,
+  "/cfg/test-edit":         CfgTestEditTab,
+  "/cfg/field-specs":       CfgFieldSpecsTab,
 };
 
 // ─── Auth Guard ───────────────────────────────────────────────────────────

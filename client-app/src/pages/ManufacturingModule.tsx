@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTabManager } from "@/contexts/TabManagerContext";
 import {
   ChevronDown, ChevronRight, Factory, FileText, BarChart3,
   ClipboardList, Plus, Search, CheckCircle, ArrowRight,
@@ -22,9 +23,9 @@ const menuSections = [
     label: "أوامر الإنتاج",
     icon: Factory,
     children: [
-      { id: "new-production-order",  label: "أمر إنتاج جديد",      icon: Plus },
-      { id: "production-orders-list",label: "قائمة أوامر الإنتاج",  icon: ClipboardList },
-      { id: "production-tracking",   label: "متابعة الإنتاج",       icon: GitBranch },
+      { id: "new-production-order",  label: "أمر إنتاج جديد",      icon: Plus,          path: "/mfg/new-order" },
+      { id: "production-orders-list",label: "قائمة أوامر الإنتاج",  icon: ClipboardList, path: "/mfg/orders" },
+      { id: "production-tracking",   label: "متابعة الإنتاج",       icon: GitBranch,     path: "/mfg/tracking" },
     ],
   },
   {
@@ -32,8 +33,8 @@ const menuSections = [
     label: "قوائم المكونات (BOM)",
     icon: Layers,
     children: [
-      { id: "new-bom",    label: "إنشاء قائمة مكونات",  icon: Plus },
-      { id: "bom-list",   label: "قوائم المكونات",       icon: Layers },
+      { id: "new-bom",    label: "إنشاء قائمة مكونات",  icon: Plus,   path: "/mfg/new-bom" },
+      { id: "bom-list",   label: "قوائم المكونات",       icon: Layers, path: "/mfg/bom" },
     ],
   },
   {
@@ -41,8 +42,8 @@ const menuSections = [
     label: "تكلفة الإنتاج",
     icon: DollarSign,
     children: [
-      { id: "cost-calculation", label: "حساب التكلفة",       icon: DollarSign },
-      { id: "cost-reports",     label: "تقارير التكلفة",      icon: BarChart3 },
+      { id: "cost-calculation", label: "حساب التكلفة",   icon: DollarSign, path: "/mfg/cost" },
+      { id: "cost-reports",     label: "تقارير التكلفة",  icon: BarChart3,  path: "/mfg/cost-reports" },
     ],
   },
   {
@@ -50,8 +51,8 @@ const menuSections = [
     label: "مراحل الإنتاج",
     icon: Cog,
     children: [
-      { id: "production-stages",   label: "إدارة المراحل",    icon: Cog },
-      { id: "workcenters",         label: "مراكز العمل",       icon: Factory },
+      { id: "production-stages", label: "إدارة المراحل", icon: Cog,     path: "/mfg/stages" },
+      { id: "workcenters",       label: "مراكز العمل",   icon: Factory, path: "/mfg/workcenters" },
     ],
   },
   {
@@ -59,9 +60,9 @@ const menuSections = [
     label: "التقارير",
     icon: BarChart3,
     children: [
-      { id: "production-report",   label: "تقرير الإنتاج",      icon: BarChart3 },
-      { id: "efficiency-report",   label: "تقرير الكفاءة",       icon: BarChart3 },
-      { id: "waste-report",        label: "تقرير الهالك",        icon: BarChart3 },
+      { id: "production-report", label: "تقرير الإنتاج", icon: BarChart3, path: "/mfg/production-report" },
+      { id: "efficiency-report", label: "تقرير الكفاءة", icon: BarChart3, path: "/mfg/efficiency" },
+      { id: "waste-report",      label: "تقرير الهالك",  icon: BarChart3, path: "/mfg/waste" },
     ],
   },
 ];
@@ -71,6 +72,7 @@ const menuSections = [
 function ManufacturingMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ production: true });
   const toggle = (id: string) => setExpanded(p => ({ ...p, [id]: !p[id] }));
+  const { openTab } = useTabManager();
 
   return (
     <nav className="w-56 shrink-0 border-l border-border bg-card/50 overflow-y-auto flex flex-col">
@@ -93,7 +95,7 @@ function ManufacturingMenu({ activeId, onSelect }: { activeId: MenuId; onSelect:
             {expanded[section.id] && (
               <div className="mr-3 border-r border-border/40 mb-1">
                 {section.children.map(child => (
-                  <button key={child.id} onClick={() => onSelect(child.id)}
+                  <button key={child.id} onClick={() => { onSelect(child.id); openTab(child.path, child.label, child.icon); }}
                     className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors ${
                       activeId === child.id ? "bg-primary/10 text-primary font-semibold border-r-2 border-primary" : "text-muted-foreground hover:text-foreground hover:bg-accent/20"
                     }`}>
@@ -373,3 +375,20 @@ export default function ManufacturingModule() {
     </div>
   );
 }
+
+// ─── Tab Sub-Pages ─────────────────────────────────────────────────────────────
+function MfgSubPage({ activeId }: { activeId: string }) {
+  return <div className="h-full overflow-auto p-5" dir="rtl"><ManufacturingContent activeId={activeId} onSelect={() => {}} /></div>;
+}
+export function MfgNewOrderTab()          { return <MfgSubPage activeId="new-production-order" />; }
+export function MfgOrdersTab()            { return <MfgSubPage activeId="production-orders-list" />; }
+export function MfgTrackingTab()          { return <MfgSubPage activeId="production-tracking" />; }
+export function MfgNewBomTab()            { return <MfgSubPage activeId="new-bom" />; }
+export function MfgBomTab()               { return <MfgSubPage activeId="bom-list" />; }
+export function MfgCostTab()              { return <MfgSubPage activeId="cost-calculation" />; }
+export function MfgCostReportsTab()       { return <MfgSubPage activeId="cost-reports" />; }
+export function MfgStagesTab()            { return <MfgSubPage activeId="production-stages" />; }
+export function MfgWorkcentersTab()       { return <MfgSubPage activeId="workcenters" />; }
+export function MfgProductionReportTab()  { return <MfgSubPage activeId="production-report" />; }
+export function MfgEfficiencyTab()        { return <MfgSubPage activeId="efficiency-report" />; }
+export function MfgWasteTab()             { return <MfgSubPage activeId="waste-report" />; }

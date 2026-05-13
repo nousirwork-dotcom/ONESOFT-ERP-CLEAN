@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTabManager } from "@/contexts/TabManagerContext";
 import {
   ChevronDown, ChevronRight, Settings, Building2, DollarSign,
   Calendar, Users, Shield, Database, FileText, History,
@@ -27,13 +28,13 @@ const menuSections = [
     color: "#a855f7",
     emoji: "📁",
     children: [
-      { id: "company-info",    label: "معلومات الشركة",              status: "done" },
-      { id: "currencies",      label: "العملات",                     status: "done" },
-      { id: "taxes",           label: "الضرائب",                     status: "done" },
-      { id: "fiscal-periods",  label: "الفترات المحاسبية",           status: "done" },
-      { id: "users-list",      label: "المستخدمين",                  status: "missing" },
-      { id: "user-groups",     label: "مجموعات المستخدمين",          status: "missing" },
-      { id: "permissions",     label: "صلاحيات المستخدمين",          status: "missing" },
+      { id: "company-info",   label: "معلومات الشركة",      status: "done",    path: "/cfg/company" },
+      { id: "currencies",     label: "العملات",              status: "done",    path: "/cfg/currencies" },
+      { id: "taxes",          label: "الضرائب",              status: "done",    path: "/cfg/taxes" },
+      { id: "fiscal-periods", label: "الفترات المحاسبية",    status: "done",    path: "/cfg/fiscal" },
+      { id: "users-list",     label: "المستخدمين",           status: "missing", path: "/cfg/users" },
+      { id: "user-groups",    label: "مجموعات المستخدمين",   status: "missing", path: "/cfg/user-groups" },
+      { id: "permissions",    label: "صلاحيات المستخدمين",   status: "missing", path: "/cfg/permissions" },
     ],
   },
   {
@@ -42,13 +43,13 @@ const menuSections = [
     color: "#a855f7",
     emoji: "📁",
     children: [
-      { id: "approve-invoice",   label: "طلب اعتماد فاتورة",         status: "partial" },
-      { id: "approve-purchase",  label: "اعتماد أمر شراء",           status: "partial" },
-      { id: "approve-discount",  label: "اعتماد خصم / عرض خاص",     status: "partial" },
-      { id: "approve-inventory", label: "اعتماد تسوية مخزنية",       status: "partial" },
-      { id: "approve-journal",   label: "اعتماد قيد يومية",          status: "partial" },
-      { id: "approvals-log",     label: "سجل الموافقات",             status: "partial" },
-      { id: "approval-paths",    label: "مسارات الاعتماد حسب القسم", status: "missing" },
+      { id: "approve-invoice",   label: "طلب اعتماد فاتورة",         status: "partial", path: "/cfg/approve-invoice" },
+      { id: "approve-purchase",  label: "اعتماد أمر شراء",           status: "partial", path: "/cfg/approve-purchase" },
+      { id: "approve-discount",  label: "اعتماد خصم / عرض خاص",     status: "partial", path: "/cfg/approve-discount" },
+      { id: "approve-inventory", label: "اعتماد تسوية مخزنية",       status: "partial", path: "/cfg/approve-inventory" },
+      { id: "approve-journal",   label: "اعتماد قيد يومية",          status: "partial", path: "/cfg/approve-journal" },
+      { id: "approvals-log",     label: "سجل الموافقات",             status: "partial", path: "/cfg/approvals-log" },
+      { id: "approval-paths",    label: "مسارات الاعتماد حسب القسم", status: "missing", path: "/cfg/approval-paths" },
     ],
   },
   {
@@ -57,12 +58,12 @@ const menuSections = [
     color: "#a855f7",
     emoji: "📁",
     children: [
-      { id: "notif-stock",       label: "تنبيه نقص المخزون",                    status: "partial" },
-      { id: "notif-credit",      label: "تنبيه تجاوز الحد الائتماني للعميل",   status: "partial" },
-      { id: "notif-overdue",     label: "تنبيه فواتير مستحقة أو متأخرة",       status: "partial" },
-      { id: "notif-expiry",      label: "تنبيه انتهاء صلاحية مواد خام",        status: "partial" },
-      { id: "notif-maintenance", label: "تنبيه اقتراب صيانة أصل أو ماكينة",   status: "partial" },
-      { id: "notif-pending",     label: "تنبيه مستندات بانتظار الاعتماد",      status: "partial" },
+      { id: "notif-stock",       label: "تنبيه نقص المخزون",                  status: "partial", path: "/cfg/notif-stock" },
+      { id: "notif-credit",      label: "تنبيه تجاوز الحد الائتماني للعميل", status: "partial", path: "/cfg/notif-credit" },
+      { id: "notif-overdue",     label: "تنبيه فواتير مستحقة أو متأخرة",     status: "partial", path: "/cfg/notif-overdue" },
+      { id: "notif-expiry",      label: "تنبيه انتهاء صلاحية مواد خام",      status: "partial", path: "/cfg/notif-expiry" },
+      { id: "notif-maintenance", label: "تنبيه اقتراب صيانة أصل أو ماكينة", status: "partial", path: "/cfg/notif-maintenance" },
+      { id: "notif-pending",     label: "تنبيه مستندات بانتظار الاعتماد",    status: "partial", path: "/cfg/notif-pending" },
     ],
   },
   {
@@ -71,12 +72,12 @@ const menuSections = [
     color: "#a855f7",
     emoji: "📁",
     children: [
-      { id: "warehouses-config", label: "المخازن",              status: "partial" },
-      { id: "doc-types",         label: "أنواع المستندات",       status: "partial" },
-      { id: "doc-books",         label: "دفاتر المستندات",       status: "missing" },
-      { id: "field-design",      label: "تصميم الحقول",          status: "missing" },
-      { id: "backup",            label: "النسخ الاحتياطي",       status: "done" },
-      { id: "audit-log",         label: "سجل العمليات",          status: "done" },
+      { id: "warehouses-config", label: "المخازن",           status: "partial", path: "/cfg/warehouses" },
+      { id: "doc-types",         label: "أنواع المستندات",    status: "partial", path: "/cfg/doc-types" },
+      { id: "doc-books",         label: "دفاتر المستندات",    status: "missing", path: "/cfg/doc-books" },
+      { id: "field-design",      label: "تصميم الحقول",       status: "missing", path: "/cfg/field-design" },
+      { id: "backup",            label: "النسخ الاحتياطي",    status: "done",    path: "/cfg/backup" },
+      { id: "audit-log",         label: "سجل العمليات",       status: "done",    path: "/cfg/audit-log" },
     ],
   },
   {
@@ -85,15 +86,15 @@ const menuSections = [
     color: "#a855f7",
     emoji: "📁",
     children: [
-      { id: "missing-doc-numbers", label: "أرقام المستندات المفقودة", status: "partial" },
-      { id: "payroll-periods",     label: "فترات الرواتب",            status: "partial" },
-      { id: "org-chart",           label: "ملف الهيكل الإداري",       status: "partial" },
-      { id: "wage-calendar",       label: "تقويم نظام الأجور",        status: "partial" },
-      { id: "shifts-setup",        label: "ملف الدوامات",             status: "partial" },
-      { id: "report-designer",     label: "أدوات التقارير",           status: "partial" },
-      { id: "test-files-setup",    label: "إعداد ملفات الاختبار",     status: "missing" },
-      { id: "test-files-edit",     label: "تحرير ملفات الاختبار",     status: "missing" },
-      { id: "field-specs",         label: "مواصفات الحقول",           status: "missing" },
+      { id: "missing-doc-numbers", label: "أرقام المستندات المفقودة", status: "partial", path: "/cfg/missing-docs" },
+      { id: "payroll-periods",     label: "فترات الرواتب",            status: "partial", path: "/cfg/payroll-periods" },
+      { id: "org-chart",           label: "ملف الهيكل الإداري",       status: "partial", path: "/cfg/org-chart" },
+      { id: "wage-calendar",       label: "تقويم نظام الأجور",        status: "partial", path: "/cfg/wage-calendar" },
+      { id: "shifts-setup",        label: "ملف الدوامات",             status: "partial", path: "/cfg/shifts" },
+      { id: "report-designer",     label: "أدوات التقارير",           status: "partial", path: "/cfg/report-designer" },
+      { id: "test-files-setup",    label: "إعداد ملفات الاختبار",     status: "missing", path: "/cfg/test-setup" },
+      { id: "test-files-edit",     label: "تحرير ملفات الاختبار",     status: "missing", path: "/cfg/test-edit" },
+      { id: "field-specs",         label: "مواصفات الحقول",           status: "missing", path: "/cfg/field-specs" },
     ],
   },
 ];
@@ -117,6 +118,7 @@ function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id:
     "hr-settings": false,
   });
   const toggle = (id: string) => setExpanded(p => ({ ...p, [id]: !p[id] }));
+  const { openTab } = useTabManager();
 
   return (
     <nav className="w-64 shrink-0 border-l border-border bg-[#1a1a2e] overflow-y-auto flex flex-col">
@@ -141,7 +143,7 @@ function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id:
             {expanded[section.id] && (
               <div className="mb-1">
                 {section.children.map(child => (
-                  <button key={child.id} onClick={() => onSelect(child.id)}
+                  <button key={child.id} onClick={() => { onSelect(child.id); openTab(child.path, child.label, Settings); }}
                     className={`w-full flex items-center gap-2 px-4 py-1.5 text-xs transition-colors ${
                       activeId === child.id
                         ? "bg-[#a855f7]/15 text-white font-semibold"
@@ -1411,3 +1413,43 @@ export default function SettingsModule() {
     </div>
   );
 }
+
+// ─── Tab Sub-Pages ─────────────────────────────────────────────────────────────
+function CfgSubPage({ activeId }: { activeId: string }) {
+  return <div className="h-full overflow-auto p-5" dir="rtl"><SettingsContent activeId={activeId} onSelect={() => {}} /></div>;
+}
+export function CfgCompanyTab()          { return <CfgSubPage activeId="company-info" />; }
+export function CfgCurrenciesTab()       { return <CfgSubPage activeId="currencies" />; }
+export function CfgTaxesTab()            { return <CfgSubPage activeId="taxes" />; }
+export function CfgFiscalTab()           { return <CfgSubPage activeId="fiscal-periods" />; }
+export function CfgUsersTab()            { return <CfgSubPage activeId="users-list" />; }
+export function CfgUserGroupsTab()       { return <CfgSubPage activeId="user-groups" />; }
+export function CfgPermissionsTab()      { return <CfgSubPage activeId="permissions" />; }
+export function CfgApproveInvoiceTab()   { return <CfgSubPage activeId="approve-invoice" />; }
+export function CfgApprovePurchaseTab()  { return <CfgSubPage activeId="approve-purchase" />; }
+export function CfgApproveDiscountTab()  { return <CfgSubPage activeId="approve-discount" />; }
+export function CfgApproveInventoryTab() { return <CfgSubPage activeId="approve-inventory" />; }
+export function CfgApproveJournalTab()   { return <CfgSubPage activeId="approve-journal" />; }
+export function CfgApprovalsLogTab()     { return <CfgSubPage activeId="approvals-log" />; }
+export function CfgApprovalPathsTab()    { return <CfgSubPage activeId="approval-paths" />; }
+export function CfgNotifStockTab()       { return <CfgSubPage activeId="notif-stock" />; }
+export function CfgNotifCreditTab()      { return <CfgSubPage activeId="notif-credit" />; }
+export function CfgNotifOverdueTab()     { return <CfgSubPage activeId="notif-overdue" />; }
+export function CfgNotifExpiryTab()      { return <CfgSubPage activeId="notif-expiry" />; }
+export function CfgNotifMaintenanceTab() { return <CfgSubPage activeId="notif-maintenance" />; }
+export function CfgNotifPendingTab()     { return <CfgSubPage activeId="notif-pending" />; }
+export function CfgWarehousesTab()       { return <CfgSubPage activeId="warehouses-config" />; }
+export function CfgDocTypesTab()         { return <CfgSubPage activeId="doc-types" />; }
+export function CfgDocBooksTab()         { return <CfgSubPage activeId="doc-books" />; }
+export function CfgFieldDesignTab()      { return <CfgSubPage activeId="field-design" />; }
+export function CfgBackupTab()           { return <CfgSubPage activeId="backup" />; }
+export function CfgAuditLogTab()         { return <CfgSubPage activeId="audit-log" />; }
+export function CfgMissingDocsTab()      { return <CfgSubPage activeId="missing-doc-numbers" />; }
+export function CfgPayrollPeriodsTab()   { return <CfgSubPage activeId="payroll-periods" />; }
+export function CfgOrgChartTab()         { return <CfgSubPage activeId="org-chart" />; }
+export function CfgWageCalendarTab()     { return <CfgSubPage activeId="wage-calendar" />; }
+export function CfgShiftsTab()           { return <CfgSubPage activeId="shifts-setup" />; }
+export function CfgReportDesignerTab()   { return <CfgSubPage activeId="report-designer" />; }
+export function CfgTestSetupTab()        { return <CfgSubPage activeId="test-files-setup" />; }
+export function CfgTestEditTab()         { return <CfgSubPage activeId="test-files-edit" />; }
+export function CfgFieldSpecsTab()       { return <CfgSubPage activeId="field-specs" />; }

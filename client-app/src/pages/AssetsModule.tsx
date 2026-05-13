@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTabManager } from "@/contexts/TabManagerContext";
 import {
   ChevronDown, ChevronRight, Building2, FileText, BarChart3,
   Plus, Search, DollarSign, ArrowRight, TrendingDown,
@@ -23,9 +24,9 @@ const menuSections = [
     label: "الأصول",
     icon: Building2,
     children: [
-      { id: "assets-list",     label: "قائمة الأصول",         icon: Building2 },
-      { id: "add-asset",       label: "إضافة أصل",             icon: Plus },
-      { id: "asset-categories",label: "فئات الأصول",           icon: Package },
+      { id: "assets-list",      label: "قائمة الأصول",  icon: Building2,    path: "/assets/list" },
+      { id: "add-asset",        label: "إضافة أصل",     icon: Plus,          path: "/assets/add" },
+      { id: "asset-categories", label: "فئات الأصول",   icon: Package,       path: "/assets/categories" },
     ],
   },
   {
@@ -33,8 +34,8 @@ const menuSections = [
     label: "الإهلاك",
     icon: TrendingDown,
     children: [
-      { id: "depreciation-run",    label: "تشغيل الإهلاك",      icon: TrendingDown },
-      { id: "depreciation-schedule","label": "جدول الإهلاك",    icon: FileText },
+      { id: "depreciation-run",      label: "تشغيل الإهلاك", icon: TrendingDown, path: "/assets/depreciation" },
+      { id: "depreciation-schedule", label: "جدول الإهلاك",   icon: FileText,     path: "/assets/depreciation-schedule" },
     ],
   },
   {
@@ -42,8 +43,8 @@ const menuSections = [
     label: "نقل الأصول",
     icon: ArrowLeftRight,
     children: [
-      { id: "asset-transfer",  label: "نقل أصل",               icon: ArrowLeftRight },
-      { id: "transfer-list",   label: "سجل النقل",              icon: FileText },
+      { id: "asset-transfer", label: "نقل أصل",    icon: ArrowLeftRight, path: "/assets/transfer" },
+      { id: "transfer-list",  label: "سجل النقل",   icon: FileText,       path: "/assets/transfer-list" },
     ],
   },
   {
@@ -51,8 +52,8 @@ const menuSections = [
     label: "التخلص من الأصول",
     icon: Settings,
     children: [
-      { id: "asset-disposal",  label: "التخلص من أصل",         icon: Settings },
-      { id: "disposal-list",   label: "سجل التخلص",             icon: FileText },
+      { id: "asset-disposal", label: "التخلص من أصل", icon: Settings,  path: "/assets/disposal" },
+      { id: "disposal-list",  label: "سجل التخلص",     icon: FileText,  path: "/assets/disposal-list" },
     ],
   },
   {
@@ -60,9 +61,9 @@ const menuSections = [
     label: "التقارير",
     icon: BarChart3,
     children: [
-      { id: "assets-summary",      label: "ملخص الأصول",         icon: BarChart3 },
-      { id: "depreciation-report", label: "تقرير الإهلاك",       icon: TrendingDown },
-      { id: "asset-movement",      label: "حركة الأصول",         icon: ArrowLeftRight },
+      { id: "assets-summary",      label: "ملخص الأصول",   icon: BarChart3,     path: "/assets/summary" },
+      { id: "depreciation-report", label: "تقرير الإهلاك", icon: TrendingDown,  path: "/assets/depreciation-report" },
+      { id: "asset-movement",      label: "حركة الأصول",   icon: ArrowLeftRight,path: "/assets/movement" },
     ],
   },
 ];
@@ -72,6 +73,7 @@ const menuSections = [
 function AssetsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ assets: true });
   const toggle = (id: string) => setExpanded(p => ({ ...p, [id]: !p[id] }));
+  const { openTab } = useTabManager();
 
   return (
     <nav className="w-56 shrink-0 border-l border-border bg-card/50 overflow-y-auto flex flex-col">
@@ -94,7 +96,7 @@ function AssetsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: M
             {expanded[section.id] && (
               <div className="mr-3 border-r border-border/40 mb-1">
                 {section.children.map(child => (
-                  <button key={child.id} onClick={() => onSelect(child.id)}
+                  <button key={child.id} onClick={() => { onSelect(child.id); openTab(child.path, child.label, child.icon); }}
                     className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors ${
                       activeId === child.id ? "bg-primary/10 text-primary font-semibold border-r-2 border-primary" : "text-muted-foreground hover:text-foreground hover:bg-accent/20"
                     }`}>
@@ -382,3 +384,20 @@ export default function AssetsModule() {
     </div>
   );
 }
+
+// ─── Tab Sub-Pages ─────────────────────────────────────────────────────────────
+function AssetsSubPage({ activeId }: { activeId: string }) {
+  return <div className="h-full overflow-auto p-5" dir="rtl"><AssetsContent activeId={activeId} onSelect={() => {}} /></div>;
+}
+export function AssetsListTab()            { return <AssetsSubPage activeId="assets-list" />; }
+export function AssetsAddTab()             { return <AssetsSubPage activeId="add-asset" />; }
+export function AssetsCategoriesTab()      { return <AssetsSubPage activeId="asset-categories" />; }
+export function AssetsDepreciationTab()    { return <AssetsSubPage activeId="depreciation-run" />; }
+export function AssetsDeprScheduleTab()    { return <AssetsSubPage activeId="depreciation-schedule" />; }
+export function AssetsTransferTab()        { return <AssetsSubPage activeId="asset-transfer" />; }
+export function AssetsTransferListTab()    { return <AssetsSubPage activeId="transfer-list" />; }
+export function AssetsDisposalTab()        { return <AssetsSubPage activeId="asset-disposal" />; }
+export function AssetsDisposalListTab()    { return <AssetsSubPage activeId="disposal-list" />; }
+export function AssetsSummaryTab()         { return <AssetsSubPage activeId="assets-summary" />; }
+export function AssetsDeprReportTab()      { return <AssetsSubPage activeId="depreciation-report" />; }
+export function AssetsMovementTab()        { return <AssetsSubPage activeId="asset-movement" />; }

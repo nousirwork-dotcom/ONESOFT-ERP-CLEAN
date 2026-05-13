@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useCallback } from "react";
+import { useTabManager } from "@/contexts/TabManagerContext";
 import type { KeyboardEvent } from "react";
 import {
   ChevronDown, ChevronRight, BookOpen, FileText, BarChart3,
@@ -34,11 +35,11 @@ const menuSections = [
     label: "اليومية العامة",
     icon: FileText,
     children: [
-      { id: "journal-list",    label: "القيود اليومية",      icon: ClipboardList },
-      { id: "receipt-voucher", label: "سند قبض",             icon: ArrowDownCircle },
-      { id: "payment-voucher", label: "سند صرف",             icon: ArrowUpCircle },
-      { id: "new-journal",     label: "سند قيد",             icon: FileText },
-      { id: "opening-entry",   label: "سند قيد افتتاحي",    icon: Plus },
+      { id: "journal-list",    label: "القيود اليومية",    icon: ClipboardList,   path: "/accounting/journal" },
+      { id: "receipt-voucher", label: "سند قبض",           icon: ArrowDownCircle, path: "/accounting/receipt" },
+      { id: "payment-voucher", label: "سند صرف",           icon: ArrowUpCircle,   path: "/accounting/payment" },
+      { id: "new-journal",     label: "سند قيد",           icon: FileText,        path: "/accounting/new-journal" },
+      { id: "opening-entry",   label: "سند قيد افتتاحي",  icon: Plus,            path: "/accounting/opening" },
     ],
   },
   {
@@ -46,8 +47,8 @@ const menuSections = [
     label: "دليل الحسابات",
     icon: BookOpen,
     children: [
-      { id: "accounts-tree",   label: "شجرة الحسابات",       icon: BookOpen },
-      { id: "account-ledger",  label: "كشف حساب أستاذ",      icon: FileText },
+      { id: "accounts-tree",  label: "شجرة الحسابات",    icon: BookOpen,  path: "/accounting/accounts" },
+      { id: "account-ledger", label: "كشف حساب أستاذ",   icon: FileText,  path: "/accounting/ledger" },
     ],
   },
   {
@@ -55,8 +56,8 @@ const menuSections = [
     label: "مراكز التكلفة",
     icon: Building,
     children: [
-      { id: "cost-centers-list", label: "مراكز التكلفة",     icon: Building },
-      { id: "cost-allocation",   label: "توزيع التكاليف",    icon: Scale },
+      { id: "cost-centers-list", label: "مراكز التكلفة",  icon: Building, path: "/accounting/cost-centers" },
+      { id: "cost-allocation",   label: "توزيع التكاليف", icon: Scale,    path: "/accounting/cost-allocation" },
     ],
   },
   {
@@ -64,10 +65,10 @@ const menuSections = [
     label: "التقارير المالية",
     icon: BarChart3,
     children: [
-      { id: "trial-balance",    label: "ميزان مراجعة الأستاذ العام", icon: Scale },
-      { id: "income-statement", label: "قائمة الأرباح والخسائر",     icon: TrendingUp },
-      { id: "balance-sheet",    label: "الميزانية العمومية",          icon: BarChart3 },
-      { id: "cash-flow",        label: "قائمة التدفقات النقدية",      icon: Wallet },
+      { id: "trial-balance",    label: "ميزان مراجعة الأستاذ العام", icon: Scale,    path: "/accounting/trial-balance" },
+      { id: "income-statement", label: "قائمة الأرباح والخسائر",     icon: TrendingUp,path: "/accounting/income-statement" },
+      { id: "balance-sheet",    label: "الميزانية العمومية",          icon: BarChart3, path: "/accounting/balance-sheet" },
+      { id: "cash-flow",        label: "قائمة التدفقات النقدية",      icon: Wallet,    path: "/accounting/cash-flow" },
     ],
   },
 ];
@@ -78,6 +79,7 @@ function AccountingMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (i
     journal: true, "chart-of-accounts": true, "cost-centers": true, "financial-reports": true,
   });
   const toggle = (id: string) => setExpanded(p => ({ ...p, [id]: !p[id] }));
+  const { openTab } = useTabManager();
 
   return (
     <nav className="w-56 shrink-0 border-l border-border bg-card/50 overflow-y-auto flex flex-col">
@@ -100,7 +102,7 @@ function AccountingMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (i
             {expanded[section.id] && (
               <div className="mr-3 border-r border-border/40 mb-1">
                 {section.children.map(child => (
-                  <button key={child.id} onClick={() => onSelect(child.id)}
+                  <button key={child.id} onClick={() => { onSelect(child.id); openTab(child.path, child.label, child.icon); }}
                     className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors ${
                       activeId === child.id ? "bg-primary/10 text-primary font-semibold border-r-2 border-primary" : "text-muted-foreground hover:text-foreground hover:bg-accent/20"
                     }`}>
@@ -1915,3 +1917,21 @@ export default function AccountingModule() {
     </div>
   );
 }
+
+// ─── Tab Sub-Pages ─────────────────────────────────────────────────────────────
+function AccSubPage({ activeId }: { activeId: string }) {
+  return <div className="h-full overflow-auto p-5" dir="rtl"><AccountingContent activeId={activeId} onSelect={() => {}} /></div>;
+}
+export function AccJournalTab()         { return <AccSubPage activeId="journal-list" />; }
+export function AccReceiptTab()         { return <AccSubPage activeId="receipt-voucher" />; }
+export function AccPaymentTab()         { return <AccSubPage activeId="payment-voucher" />; }
+export function AccNewJournalTab()      { return <AccSubPage activeId="new-journal" />; }
+export function AccOpeningTab()         { return <AccSubPage activeId="opening-entry" />; }
+export function AccAccountsTab()        { return <AccSubPage activeId="accounts-tree" />; }
+export function AccLedgerTab()          { return <AccSubPage activeId="account-ledger" />; }
+export function AccCostCentersTab()     { return <AccSubPage activeId="cost-centers-list" />; }
+export function AccCostAllocationTab()  { return <AccSubPage activeId="cost-allocation" />; }
+export function AccTrialBalanceTab()    { return <AccSubPage activeId="trial-balance" />; }
+export function AccIncomeTab()          { return <AccSubPage activeId="income-statement" />; }
+export function AccBalanceSheetTab()    { return <AccSubPage activeId="balance-sheet" />; }
+export function AccCashFlowTab()        { return <AccSubPage activeId="cash-flow" />; }

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { useTabManager } from "@/contexts/TabManagerContext";
 import {
   ChevronDown, ChevronRight, FolderTree, Ruler, Layers, Tag, Link2, TrendingUp,
   ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, ClipboardList, RefreshCw,
@@ -40,13 +41,13 @@ const menuSections: MenuSection[] = [
     label: "الأصناف",
     icon: Package,
     children: [
-      { id: "products-list", label: "دليل الأصناف", icon: Package },
-      { id: "units", label: "وحدات الأصناف", icon: Ruler },
-      { id: "product-groups", label: "مجموعات الأصناف", icon: Layers },
-      { id: "categories", label: "فئات الأصناف", icon: Tag },
-      { id: "product-binding", label: "ربط الأصناف بالمخازن", icon: Link2 },
-      { id: "auto-pricing", label: "تسعير الأصناف آلياً", icon: TrendingUp },
-      { id: "free-products", label: "الأصناف المجانية", icon: Gift },
+      { id: "products-list",    label: "دليل الأصناف",          icon: Package,   path: "/inv/products" },
+      { id: "units",            label: "وحدات الأصناف",          icon: Ruler,     path: "/inv/units" },
+      { id: "product-groups",   label: "مجموعات الأصناف",        icon: Layers,    path: "/inv/groups" },
+      { id: "categories",       label: "فئات الأصناف",            icon: Tag,       path: "/inv/categories" },
+      { id: "product-binding",  label: "ربط الأصناف بالمخازن",   icon: Link2,     path: "/inv/binding" },
+      { id: "auto-pricing",     label: "تسعير الأصناف آلياً",     icon: TrendingUp,path: "/inv/pricing" },
+      { id: "free-products",    label: "الأصناف المجانية",         icon: Gift,      path: "/inv/free-products" },
     ],
   },
   {
@@ -54,23 +55,24 @@ const menuSections: MenuSection[] = [
     label: "السندات",
     icon: FileText,
     children: [
-      { id: "transfer-voucher", label: "سند تحويل بين الفروع", icon: ArrowLeftRight },
-      { id: "receipt-voucher", label: "سند توريد", icon: ArrowDownCircle },
-      { id: "issue-voucher", label: "سند صرف", icon: ArrowUpCircle },
+      { id: "transfer-voucher", label: "سند تحويل بين الفروع", icon: ArrowLeftRight, path: "/inv/transfer" },
+      { id: "receipt-voucher",  label: "سند توريد",              icon: ArrowDownCircle,path: "/inv/receipt" },
+      { id: "issue-voucher",    label: "سند صرف",                icon: ArrowUpCircle,  path: "/inv/issue" },
     ],
   },
   {
     id: "inventory-count",
     label: "شاشة جرد المخزون",
     icon: ClipboardList,
+    path: "/inv/count",
   },
   {
     id: "invoice-ops",
     label: "عمليات الفواتير",
     icon: RefreshCw,
     children: [
-      { id: "reinstate-invoices", label: "إعادة تثبيت الفواتير", icon: RefreshCw },
-      { id: "regenerate-invoices", label: "إعادة توليد الفواتير", icon: RefreshCw },
+      { id: "reinstate-invoices",  label: "إعادة تثبيت الفواتير",  icon: RefreshCw, path: "/inv/reinstate" },
+      { id: "regenerate-invoices", label: "إعادة توليد الفواتير",   icon: RefreshCw, path: "/inv/regenerate" },
     ],
   },
   {
@@ -78,8 +80,8 @@ const menuSections: MenuSection[] = [
     label: "التقارير",
     icon: BarChart3,
     children: [
-      { id: "stock-reports", label: "تقارير المخزون والأصناف", icon: BarChart3 },
-      { id: "voucher-reports", label: "تقارير سندات المخزن", icon: FileText },
+      { id: "stock-reports",   label: "تقارير المخزون والأصناف", icon: BarChart3, path: "/inv/stock-reports" },
+      { id: "voucher-reports", label: "تقارير سندات المخزن",     icon: FileText,  path: "/inv/voucher-reports" },
     ],
   },
   {
@@ -87,8 +89,8 @@ const menuSections: MenuSection[] = [
     label: "التهيئة",
     icon: Settings,
     children: [
-      { id: "branches-config", label: "الفروع", icon: Building2 },
-      { id: "warehouses-config", label: "المستودعات", icon: Warehouse },
+      { id: "branches-config",   label: "الفروع",       icon: Building2, path: "/inv/branches" },
+      { id: "warehouses-config", label: "المستودعات",   icon: Warehouse, path: "/inv/warehouses" },
     ],
   },
 ];
@@ -207,6 +209,7 @@ function InventoryMenu({ activeId, onSelect }: { activeId: string; onSelect: (id
   });
 
   const toggle = (id: string) => setExpanded(p => ({ ...p, [id]: !p[id] }));
+  const { openTab } = useTabManager();
 
   return (
     <nav className="w-56 shrink-0 border-l border-border bg-card/50 overflow-y-auto">
@@ -237,7 +240,7 @@ function InventoryMenu({ activeId, onSelect }: { activeId: string; onSelect: (id
                     {section.children.map(child => (
                       <button
                         key={child.id}
-                        onClick={() => onSelect(child.id)}
+                        onClick={() => { onSelect(child.id); openTab((child as any).path, child.label, child.icon); }}
                         className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors ${
                           activeId === child.id
                             ? "bg-primary/10 text-primary font-medium border-r-2 border-primary"
@@ -253,7 +256,7 @@ function InventoryMenu({ activeId, onSelect }: { activeId: string; onSelect: (id
               </>
             ) : (
               <button
-                onClick={() => onSelect(section.id)}
+                onClick={() => { onSelect(section.id); openTab((section as any).path, section.label, section.icon); }}
                 className={`w-full flex items-center gap-2 px-3 py-2 text-sm font-semibold transition-colors ${
                   activeId === section.id
                     ? "bg-primary/10 text-primary font-medium"
@@ -313,3 +316,25 @@ export default function InventoryModule() {
     </div>
   );
 }
+
+// ─── Tab Sub-Pages ─────────────────────────────────────────────────────────────
+function InvSubPage({ activeId }: { activeId: string }) {
+  return <div className="h-full overflow-auto p-6" dir="rtl"><InventoryContent activeId={activeId} /></div>;
+}
+export function InvProductsTab()       { return <InvSubPage activeId="products-list" />; }
+export function InvUnitsTab()          { return <InvSubPage activeId="units" />; }
+export function InvGroupsTab()         { return <InvSubPage activeId="product-groups" />; }
+export function InvCategoriesTab()     { return <InvSubPage activeId="categories" />; }
+export function InvBindingTab()        { return <InvSubPage activeId="product-binding" />; }
+export function InvPricingTab()        { return <InvSubPage activeId="auto-pricing" />; }
+export function InvFreeProductsTab()   { return <InvSubPage activeId="free-products" />; }
+export function InvTransferTab()       { return <InvSubPage activeId="transfer-voucher" />; }
+export function InvReceiptTab()        { return <InvSubPage activeId="receipt-voucher" />; }
+export function InvIssueTab()          { return <InvSubPage activeId="issue-voucher" />; }
+export function InvCountTab()          { return <InvSubPage activeId="inventory-count" />; }
+export function InvStockReportsTab()   { return <InvSubPage activeId="stock-reports" />; }
+export function InvVoucherReportsTab() { return <InvSubPage activeId="voucher-reports" />; }
+export function InvBranchesTab()       { return <InvSubPage activeId="branches-config" />; }
+export function InvWarehousesTab()     { return <InvSubPage activeId="warehouses-config" />; }
+export function InvReinstateTab()      { return <InvSubPage activeId="reinstate-invoices" />; }
+export function InvRegenerateTab()     { return <InvSubPage activeId="regenerate-invoices" />; }
