@@ -145,10 +145,10 @@ function TBtn({
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: 3,
-        padding: "5px 9px",
-        minWidth: 52,
-        height: 52,
+        gap: 2,
+        padding: "3px 8px",
+        minWidth: 44,
+        height: 40,
         borderRadius: 4,
         border: `1px solid ${getBorder()}`,
         background: getBg(),
@@ -162,8 +162,8 @@ function TBtn({
         opacity: disabled ? 0.5 : 1,
       }}
     >
-      <btn.icon size={18} strokeWidth={1.8} />
-      <span style={{ fontSize: 10.5, fontWeight: 600, lineHeight: 1, whiteSpace: "nowrap" }}>
+      <btn.icon size={15} strokeWidth={1.8} />
+      <span style={{ fontSize: 10, fontWeight: 600, lineHeight: 1, whiteSpace: "nowrap" }}>
         {btn.label}
       </span>
       {btn.shortcut && (
@@ -250,14 +250,14 @@ export default function ERPToolbar({
         display: "flex",
         alignItems: "center",
         gap: 2,
-        padding: "6px 10px",
+        padding: "4px 8px",
         background: C.bg,
         borderBottom: `1px solid ${C.border}`,
         overflowX: "auto",
         overflowY: "hidden",
         flexShrink: 0,
         boxShadow: "0 1px 3px rgba(0,0,0,0.07)",
-        minHeight: 64,
+        minHeight: 48,
       }}>
         {visibleButtons.map((btn, idx) => (
           <div key={btn.id} style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
