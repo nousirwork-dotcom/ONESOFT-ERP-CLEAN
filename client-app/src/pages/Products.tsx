@@ -406,7 +406,7 @@ function ProductCard({
             className={`px-3 py-1.5 text-xs font-medium border rounded transition-colors whitespace-nowrap
               ${activeTab === tab.id
                 ? "bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 border-[#BEBEBE] dark:border-blue-500 shadow-sm"
-                : "bg-white dark:bg-slate-700 text-[#555] dark:text-slate-300 border-[#BEBEBE] dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 hover:border-[#BEBEBE]"
+                : "bg-[#F5F0E8] dark:bg-slate-700 text-[#555] dark:text-slate-300 border-[#BEBEBE] dark:border-slate-600 hover:bg-white dark:hover:bg-slate-600 hover:border-[#BEBEBE]"
               }`}
           >
             {tab.label}
