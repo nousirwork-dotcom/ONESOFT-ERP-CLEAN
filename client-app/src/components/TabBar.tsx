@@ -9,8 +9,6 @@ export default function TabBar() {
   const [canScrollRight, setCanScrollRight] = useState(false);
   const [hoveredTabId,   setHoveredTabId]   = useState<string | null>(null);
 
-  if (tabs.length === 0) return null;
-
   const checkScroll = () => {
     const el = scrollRef.current;
     if (!el) return;
@@ -37,6 +35,8 @@ export default function TabBar() {
 
   const scrollBy = (dir: "left" | "right") =>
     scrollRef.current?.scrollBy({ left: dir === "left" ? -160 : 160, behavior: "smooth" });
+
+  if (tabs.length === 0) return null;
 
   return (
     <div
