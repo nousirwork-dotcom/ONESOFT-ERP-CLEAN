@@ -316,20 +316,50 @@ export const appRouter = router({
   // ─── Categories (Product Groups used as categories) ───────────────────────────
   categories: router({
     list: protectedProcedure.query(async ({ ctx }) => {
-      return db.query.productGroups.findMany({
+      const rows = await db.query.productGroups.findMany({
         where: eq(productGroups.orgId, ctx.user.orgId),
         orderBy: (g, { asc }) => [asc(g.name)],
       });
+      return rows.map(r => ({ ...r, uuid: String(r.id), isActive: r.isActive ?? true }));
+    }),
+    tree: protectedProcedure.query(async ({ ctx }) => {
+      const rows = await db.query.productGroups.findMany({
+        where: eq(productGroups.orgId, ctx.user.orgId),
+        orderBy: (g, { asc }) => [asc(g.name)],
+      });
+      return rows.map(r => ({ ...r, uuid: String(r.id), isActive: r.isActive ?? true }));
     }),
     create: protectedProcedure
-      .input(z.object({ name: z.string().min(1), parentId: z.number().optional() }))
+      .input(z.object({
+        name: z.string().min(1),
+        parentId: z.number().optional(),
+        description: z.string().optional(),
+        color: z.string().optional(),
+      }))
       .mutation(async ({ ctx, input }) => {
         const [g] = await db.insert(productGroups).values({
           orgId: ctx.user.orgId,
           name: input.name,
           parentId: input.parentId,
+          description: input.description,
+          color: input.color,
         }).returning();
-        return g;
+        return { ...g, uuid: String(g.id), isActive: g.isActive ?? true };
+      }),
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().min(1).optional(),
+        description: z.string().optional(),
+        color: z.string().optional(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { id, ...data } = input;
+        await db.update(productGroups)
+          .set(data)
+          .where(and(eq(productGroups.id, id), eq(productGroups.orgId, ctx.user.orgId)));
+        return { success: true };
       }),
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))

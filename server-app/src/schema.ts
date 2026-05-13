@@ -92,6 +92,8 @@ export const productGroups = pgTable('product_groups', {
   lastNumber: integer('last_number').default(99999),
   increment: integer('increment').default(1),
   codeDigits: integer('code_digits').default(5),
+  color: varchar('color', { length: 30 }),
+  isActive: boolean('is_active').default(true),
 });
 
 // ─── Products ─────────────────────────────────────────────────────────────────
