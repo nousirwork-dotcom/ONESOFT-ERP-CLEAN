@@ -2076,7 +2076,7 @@ export default function Products() {
                   }}>
                     <Package style={{ width: 13, height: 13, color: "#2563EB", pointerEvents: "none" }} />
                   </div>
-                  <span style={{ color: "#CA8A04", fontWeight: 700, fontSize: 13.5 }}>
+                  <span style={{ color: "#CA8A04", fontWeight: 700, fontSize: 15.5 }}>
                     {editId ? "تعديل بيانات الصنف" : "إضافة صنف جديد"}
                   </span>
                 </div>
