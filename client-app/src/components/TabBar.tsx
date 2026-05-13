@@ -4,10 +4,10 @@ import { X, ChevronLeft, ChevronRight } from "lucide-react";
 
 export default function TabBar() {
   const { tabs, activeTabId, activateTab, closeTab } = useTabManager();
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [canScrollLeft, setCanScrollLeft]   = useState(false);
+  const scrollRef   = useRef<HTMLDivElement>(null);
+  const [canScrollLeft,  setCanScrollLeft]  = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
-  const [hoveredTabId, setHoveredTabId]     = useState<string | null>(null);
+  const [hoveredTabId,   setHoveredTabId]   = useState<string | null>(null);
 
   const checkScroll = () => {
     const el = scrollRef.current;
@@ -43,16 +43,14 @@ export default function TabBar() {
         flexShrink: 0,
         display: "flex",
         alignItems: "stretch",
-        height: 34,
-        background: "#E8EDF4",
-        borderBottom: "1px solid #C4CDD9",
+        height: 36,
+        background: "#FFFFFF",
+        borderBottom: "1px solid #E5E7EB",
         overflow: "hidden",
       }}
     >
-      {/* زر التمرير يمين */}
-      {canScrollRight && (
-        <ScrollArrow dir="right" onClick={() => scrollBy("right")} />
-      )}
+      {/* سهم تمرير يمين */}
+      {canScrollRight && <ScrollArrow dir="right" onClick={() => scrollBy("right")} />}
 
       {/* قائمة التبويبات */}
       <div
@@ -74,24 +72,23 @@ export default function TabBar() {
               title={tab.label}
               style={{
                 display: "flex", alignItems: "center", gap: 5,
-                padding: "0 8px 0 6px",
+                padding: "0 10px 0 8px",
                 cursor: "pointer", flexShrink: 0,
-                maxWidth: 192, minWidth: 88,
+                maxWidth: 200, minWidth: 90,
                 position: "relative",
-                borderLeft: "1px solid",
-                borderLeftColor: isActive ? "#B0BDD0" : "#C4CDD9",
+                borderLeft: "1px solid #F3F4F6",
                 background: isActive
                   ? "#FFFFFF"
                   : isHovered
-                  ? "#D6DFEe"
+                  ? "#F9FAFB"
                   : "transparent",
                 transition: "background 0.1s",
               }}
             >
-              {/* شريط أزرق علوي للتبويب النشط */}
+              {/* شريط أزرق سفلي للتبويب النشط — Odoo/SAP Fiori Style */}
               {isActive && (
                 <span style={{
-                  position: "absolute", top: 0, left: 0, right: 0,
+                  position: "absolute", bottom: 0, left: 0, right: 0,
                   height: 2.5, background: "#2563EB",
                 }} />
               )}
@@ -99,7 +96,7 @@ export default function TabBar() {
               {/* أيقونة */}
               <tab.Icon style={{
                 width: 13, height: 13, flexShrink: 0,
-                color: isActive ? "#2563EB" : "#6B7280",
+                color: isActive ? "#2563EB" : "#9CA3AF",
                 pointerEvents: "none",
               }} />
 
@@ -107,7 +104,7 @@ export default function TabBar() {
               <span style={{
                 fontSize: 12,
                 fontWeight: isActive ? 600 : 400,
-                color: isActive ? "#1E293B" : "#4B5563",
+                color: isActive ? "#111827" : "#6B7280",
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 flex: 1,
                 fontFamily: "'Cairo', Tahoma, sans-serif",
@@ -126,18 +123,18 @@ export default function TabBar() {
                     width: 16, height: 16, flexShrink: 0,
                     borderRadius: 3, border: "none",
                     background: "transparent", cursor: "pointer",
-                    padding: 0, color: "#9CA3AF",
+                    padding: 0, color: "#D1D5DB",
                     opacity: showClose ? 1 : 0,
                     pointerEvents: showClose ? "auto" : "none",
                     transition: "opacity 0.12s, background 0.12s, color 0.12s",
                   }}
                   onMouseEnter={e => {
-                    e.currentTarget.style.background = "#FECACA";
+                    e.currentTarget.style.background = "#FEE2E2";
                     e.currentTarget.style.color = "#DC2626";
                   }}
                   onMouseLeave={e => {
                     e.currentTarget.style.background = "transparent";
-                    e.currentTarget.style.color = "#9CA3AF";
+                    e.currentTarget.style.color = "#D1D5DB";
                   }}
                 >
                   <X style={{ width: 9, height: 9, pointerEvents: "none" }} />
@@ -145,8 +142,8 @@ export default function TabBar() {
               ) : (
                 /* نقطة صغيرة للتبويبات الثابتة */
                 <span style={{
-                  width: 5, height: 5, borderRadius: "50%", flexShrink: 0,
-                  background: isActive ? "#2563EB" : "#BCC5D3",
+                  width: 4, height: 4, borderRadius: "50%", flexShrink: 0,
+                  background: isActive ? "#2563EB" : "#D1D5DB",
                   transition: "background 0.12s",
                 }} />
               )}
@@ -158,30 +155,28 @@ export default function TabBar() {
         <div style={{ flex: 1, minWidth: 16 }} />
       </div>
 
-      {/* زر التمرير يسار */}
-      {canScrollLeft && (
-        <ScrollArrow dir="left" onClick={() => scrollBy("left")} />
-      )}
+      {/* سهم تمرير يسار */}
+      {canScrollLeft && <ScrollArrow dir="left" onClick={() => scrollBy("left")} />}
     </div>
   );
 }
 
-/* ── مكوّن سهم التمرير ───────────────────────── */
+/* ── سهم التمرير ─────────────────────────────── */
 function ScrollArrow({ dir, onClick }: { dir: "left" | "right"; onClick: () => void }) {
   const [hovered, setHovered] = useState(false);
-  const borderSide = dir === "left" ? "borderRight" : "borderLeft";
   return (
     <button
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        flexShrink: 0, width: 24,
+        flexShrink: 0, width: 26,
         display: "flex", alignItems: "center", justifyContent: "center",
-        background: hovered ? "#D3DCE9" : "#E8EDF4",
+        background: hovered ? "#F3F4F6" : "#FFFFFF",
         border: "none",
-        [borderSide]: "1px solid #C4CDD9",
-        cursor: "pointer", color: "#5A687A",
+        borderLeft:  dir === "left"  ? "1px solid #E5E7EB" : "none",
+        borderRight: dir === "right" ? "1px solid #E5E7EB" : "none",
+        cursor: "pointer", color: "#6B7280",
         transition: "background 0.1s",
       }}
     >
