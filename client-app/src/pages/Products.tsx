@@ -1644,7 +1644,7 @@ export default function Products() {
             borderRadius: 6,
             fontFamily: "'Cairo', Tahoma, sans-serif",
             fontSize: 16,
-            fontWeight: 800,
+            fontWeight: 900,
             cursor: "pointer",
             boxShadow: "0 2px 6px rgba(64,107,147,0.35)",
             transition: "background 0.15s",
