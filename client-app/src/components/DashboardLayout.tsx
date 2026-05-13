@@ -61,6 +61,7 @@ import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import ChatWidget from "./ChatWidget";
 import TabBar from "./TabBar";
 import { useTabManager } from "@/contexts/TabManagerContext";
+import { WorkspaceContext } from "@/contexts/WorkspaceContext";
 
 const SIDEBAR_WIDTH_KEY = "erp-sidebar-width";
 const LAYOUT_MODE_KEY = "erp-layout-mode";
@@ -313,6 +314,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return (localStorage.getItem(LAYOUT_MODE_KEY) as LayoutMode) ?? "vertical";
   });
 
+  const [workspaceEl, setWorkspaceEl] = useState<HTMLElement | null>(null);
   const { loading, user, logout } = useAuth();
   const isMobile = useIsMobile();
   const { openTab } = useTabManager();
@@ -472,7 +474,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <TabBar />
 
         {/* Main Content */}
-        <main className="flex-1 overflow-hidden">{children}</main>
+        <WorkspaceContext.Provider value={workspaceEl}>
+          <main
+            ref={setWorkspaceEl as any}
+            className="flex-1 overflow-hidden"
+            style={{ position: "relative" }}
+          >
+            {children}
+          </main>
+        </WorkspaceContext.Provider>
       </div>
       <ChatWidget />
       </>
@@ -579,7 +589,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <TabBar />
 
         {/* Main Content */}
-        <main className="flex-1 overflow-hidden">{children}</main>
+        <WorkspaceContext.Provider value={workspaceEl}>
+          <main
+            ref={setWorkspaceEl as any}
+            className="flex-1 overflow-hidden"
+            style={{ position: "relative" }}
+          >
+            {children}
+          </main>
+        </WorkspaceContext.Provider>
       </SidebarInset>
     </SidebarProvider>
     <ChatWidget />

@@ -23,6 +23,7 @@ import {
   X,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useRef } from "react";
+import { useWorkspaceEl } from "@/contexts/WorkspaceContext";
 import { toast } from "sonner";
 
 // =============================================
@@ -1265,15 +1266,16 @@ export default function Products() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [viewTab, setViewTab] = useState<"products" | "categories">("products");
   const [selectedCatId, setSelectedCatId] = useState<number | null>(null);
+  const workspaceEl = useWorkspaceEl();
   const [isMaximized, setIsMaximized] = useState(false);
   const preMaxRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const [winPos, setWinPos] = useState<{ x: number; y: number }>(() => {
     try { const s = localStorage.getItem("pdlg-pos"); if (s) return JSON.parse(s); } catch {}
-    return { x: Math.max(40, Math.floor((window.innerWidth - 880) / 2)), y: Math.max(56, Math.floor((window.innerHeight - 620) / 2)) };
+    return { x: 60, y: 30 };
   });
   const [winSize, setWinSize] = useState<{ w: number; h: number }>(() => {
     try { const s = localStorage.getItem("pdlg-size"); if (s) return JSON.parse(s); } catch {}
-    return { w: 880, h: 620 };
+    return { w: 880, h: 580 };
   });
   const saveWinBounds = (x: number, y: number, w: number, h: number) => {
     try {
@@ -1290,11 +1292,31 @@ export default function Products() {
       }
     } else {
       preMaxRef.current = { x: winPos.x, y: winPos.y, w: winSize.w, h: winSize.h };
-      setWinPos({ x: 8, y: 56 });
-      setWinSize({ w: window.innerWidth - 280, h: window.innerHeight - 72 });
+      const ww = workspaceEl?.offsetWidth ?? 900;
+      const wh = workspaceEl?.offsetHeight ?? 600;
+      setWinPos({ x: 0, y: 0 });
+      setWinSize({ w: ww, h: wh });
       setIsMaximized(true);
     }
   };
+
+  // توسيط النافذة عند أول فتح (إذا لم يكن هناك موضع محفوظ)
+  const hasCentered = useRef(false);
+  useEffect(() => {
+    if (isOpen && workspaceEl && !hasCentered.current) {
+      const saved = localStorage.getItem("pdlg-pos");
+      if (!saved) {
+        const ww = workspaceEl.offsetWidth;
+        const wh = workspaceEl.offsetHeight;
+        setWinPos({
+          x: Math.max(20, Math.floor((ww - winSize.w) / 2)),
+          y: Math.max(10, Math.floor((wh - winSize.h) / 4)),
+        });
+      }
+      hasCentered.current = true;
+    }
+  }, [isOpen, workspaceEl]);
+
   const [toolsOpen, setToolsOpen] = useState(false);
 
   const toggleSort = (field: string) => {
@@ -1968,11 +1990,11 @@ export default function Products() {
       )}
 
       {/* ===== نافذة الصنف — قابلة للسحب والتكبير (react-rnd) ===== */}
-      {isOpen && createPortal(
+      {isOpen && workspaceEl && createPortal(
         <>
-          {/* طبقة الخلفية */}
+          {/* طبقة الخلفية — داخل منطقة العمل فقط */}
           <div
-            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.42)", zIndex: 2000 }}
+            style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.38)", zIndex: 50 }}
             onClick={() => setIsOpen(false)}
           />
 
@@ -1997,13 +2019,13 @@ export default function Products() {
             dragHandleClassName="erp-drag-handle"
             minWidth={640}
             minHeight={420}
-            bounds="window"
+            bounds="parent"
             disableDragging={isMaximized}
             enableResizing={isMaximized ? false : {
               top: true, bottom: true, left: true, right: true,
               topLeft: true, topRight: true, bottomLeft: true, bottomRight: true,
             }}
-            style={{ zIndex: 2001 }}
+            style={{ zIndex: 51 }}
           >
             {/* الحاوية الداخلية */}
             <div
@@ -2247,7 +2269,7 @@ export default function Products() {
             </div>
           </Rnd>
         </>,
-        document.body
+        workspaceEl
       )}
     </div>
   );
