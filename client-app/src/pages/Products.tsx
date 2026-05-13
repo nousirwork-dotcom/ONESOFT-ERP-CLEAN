@@ -2076,7 +2076,9 @@ export default function Products() {
                   }}>
                     <Package style={{ width: 13, height: 13, color: "#2563EB", pointerEvents: "none" }} />
                   </div>
-                  {editId ? "تعديل بيانات الصنف" : "إضافة صنف جديد"}
+                  <span style={{ color: "#CA8A04" }}>
+                    {editId ? "تعديل بيانات الصنف" : "إضافة صنف جديد"}
+                  </span>
                 </div>
 
                 {/* فاصل رأسي */}
