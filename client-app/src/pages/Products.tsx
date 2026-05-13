@@ -1984,10 +1984,6 @@ export default function Products() {
                 <TableHead className="text-right cursor-pointer hover:bg-muted/50" onClick={() => toggleSort("name")}>
                   <span className="flex items-center gap-1">اسم الصنف {sortField === "name" ? (sortDir === "asc" ? "↑" : "↓") : ""}</span>
                 </TableHead>
-                <TableHead className="text-right">الباركود</TableHead>
-                <TableHead className="text-right cursor-pointer hover:bg-muted/50" onClick={() => toggleSort("categoryId")}>
-                  <span className="flex items-center gap-1">التصنيف {sortField === "categoryId" ? (sortDir === "asc" ? "↑" : "↓") : ""}</span>
-                </TableHead>
                 <TableHead className="text-right cursor-pointer hover:bg-muted/50" onClick={() => toggleSort("groupId")}>
                   <span className="flex items-center gap-1">المجموعة {sortField === "groupId" ? (sortDir === "asc" ? "↑" : "↓") : ""}</span>
                 </TableHead>
@@ -2028,7 +2024,7 @@ export default function Products() {
                       className="font-mono text-xs text-blue-600 dark:text-blue-400 cursor-pointer hover:underline"
                       onClick={() => openEdit(p)}
                     >
-                      {p.sku ?? "—"}
+                      {p.code ?? p.sku ?? "—"}
                     </TableCell>
                     <TableCell
                       className="font-medium cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
@@ -2041,10 +2037,6 @@ export default function Products() {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="text-muted-foreground font-mono text-xs">
-                      {p.barcode ?? "—"}
-                    </TableCell>
-                    <TableCell>{getCategoryName(p.categoryId)}</TableCell>
                     <TableCell className="text-xs">{getGroupName(p.groupId)}</TableCell>
                     <TableCell>{p.unit}</TableCell>
                     <TableCell>{formatCurrency(p.costPrice ?? 0)}</TableCell>
