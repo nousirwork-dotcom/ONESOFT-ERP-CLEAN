@@ -437,19 +437,19 @@ function ProductCard({
       <div className="flex-shrink-0 border-b border-[#BEBEBE] dark:border-slate-600 text-sm">
         <div className="flex">
 
-          {/* يمين: مواصفات — رقم، اسم 1، اسم 2 */}
+          {/* يمين: مواصفات — الكود، اسم 1، اسم 2 */}
           <div className="flex-1 border-l border-[#BEBEBE] dark:border-slate-600">
             <div className="bg-[#EDE7DF] dark:bg-blue-900/20 px-2 py-0.5 border-b border-[#BEBEBE] dark:border-slate-600 text-center">
               <span className="text-xs font-semibold text-blue-800 dark:text-blue-300">مواصفات</span>
             </div>
-            {/* رقم */}
+            {/* الكود */}
             {(() => {
               const selGroup = form.groupId ? leafGroups.find(g => String(g.id) === form.groupId) : null;
               const autoNum = selGroup?.autoNumbering ?? false;
               return (
                 <div className="flex border-b border-[#DEDCDA] dark:border-slate-700">
                   <div className="w-24 shrink-0 bg-[#F0EDE8] dark:bg-slate-800 px-2 flex items-center border-l border-[#BEBEBE] dark:border-slate-700">
-                    <span className="text-xs text-slate-600 dark:text-slate-400">رقم</span>
+                    <span className="text-xs text-slate-600 dark:text-slate-400">الكود</span>
                   </div>
                   <div className="flex-1 px-1 py-1 relative">
                     {skuLoading && (
