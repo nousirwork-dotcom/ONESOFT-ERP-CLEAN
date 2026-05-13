@@ -398,15 +398,15 @@ function ProductCard({
   return (
     <div className="flex flex-col h-full" dir="rtl">
       {/* شريط التبويبات — مربعات منفصلة بحدود */}
-      <div className="flex flex-wrap gap-1 px-2 py-0.5.5 bg-[#EDE7DF] dark:bg-slate-800 border-b border-[#BEBEBE] dark:border-slate-600 flex-shrink-0">
+      <div className="flex flex-wrap gap-1 px-2 py-1 bg-white dark:bg-slate-800 border-b border-[#BEBEBE] dark:border-slate-600 flex-shrink-0">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-3 py-1 text-xs font-medium border rounded transition-colors whitespace-nowrap
+            className={`px-3 py-1.5 text-xs font-medium border rounded transition-colors whitespace-nowrap
               ${activeTab === tab.id
                 ? "bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 border-[#BEBEBE] dark:border-blue-500 shadow-sm"
-                : "bg-[#F5F0E8] dark:bg-slate-700 text-[#555] dark:text-slate-300 border-[#BEBEBE] dark:border-slate-600 hover:bg-white dark:hover:bg-slate-600 hover:border-[#BEBEBE]"
+                : "bg-white dark:bg-slate-700 text-[#555] dark:text-slate-300 border-[#BEBEBE] dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 hover:border-[#BEBEBE]"
               }`}
           >
             {tab.label}
