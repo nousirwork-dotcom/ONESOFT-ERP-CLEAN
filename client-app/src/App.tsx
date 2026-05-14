@@ -66,9 +66,6 @@ import LoginPage from "./pages/LoginPage";
 import SuperAdminPage from "./pages/SuperAdminPage";
 import { createElement, useEffect } from "react";
 import { trpc } from "./lib/trpc";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { httpBatchLink } from "@trpc/client";
-import superjson from "superjson";
 import { Settings } from "lucide-react";
 
 // ─── خريطة المسارات إلى المكونات ──────────────────────────────────────────
@@ -305,43 +302,24 @@ function AppRoutes() {
   );
 }
 
-// ─── QueryClient & tRPC ───────────────────────────────────────────────────
-const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: 1, staleTime: 30000 } },
-});
-
-const trpcClient = trpc.createClient({
-  links: [
-    httpBatchLink({
-      url: "/api/trpc",
-      transformer: superjson,
-      fetch: (url, options) => fetch(url, { ...options, credentials: "include" }),
-    }),
-  ],
-});
-
 // ─── App Root ─────────────────────────────────────────────────────────────
 function App() {
   return (
     <ErrorBoundary>
       <LanguageProvider>
-        <trpc.Provider client={trpcClient} queryClient={queryClient}>
-          <QueryClientProvider client={queryClient}>
-            <ThemeProvider defaultTheme="light">
-              <TooltipProvider>
-                <Toaster position="top-center" richColors />
-                <Switch>
-                  <Route path="/login" component={LoginPage} />
-                  <Route>
-                    <AuthGuard>
-                      <AppRoutes />
-                    </AuthGuard>
-                  </Route>
-                </Switch>
-              </TooltipProvider>
-            </ThemeProvider>
-          </QueryClientProvider>
-        </trpc.Provider>
+        <ThemeProvider defaultTheme="light">
+          <TooltipProvider>
+            <Toaster position="top-center" richColors />
+            <Switch>
+              <Route path="/login" component={LoginPage} />
+              <Route>
+                <AuthGuard>
+                  <AppRoutes />
+                </AuthGuard>
+              </Route>
+            </Switch>
+          </TooltipProvider>
+        </ThemeProvider>
       </LanguageProvider>
     </ErrorBoundary>
   );
