@@ -62,6 +62,7 @@ export const warehouses = pgTable('warehouses', {
   id: serial('id').primaryKey(),
   orgId: integer('org_id').notNull().references(() => organizations.id),
   branchId: integer('branch_id').references(() => branches.id),
+  code: varchar('code', { length: 50 }),
   name: varchar('name', { length: 255 }).notNull(),
   address: text('address'),
   isActive: boolean('is_active').notNull().default(true),
