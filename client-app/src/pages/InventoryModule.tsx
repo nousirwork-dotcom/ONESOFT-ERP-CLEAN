@@ -24,8 +24,7 @@ import InventoryReports from "./inventory/InventoryReports";
 
 // استيراد الصفحات الموجودة
 import Products from "./Products";
-import Warehouses from "./Warehouses";
-import Branches from "./Branches";
+
 import Transfers from "./Transfers";
 
 type MenuSection = {
@@ -89,8 +88,6 @@ const menuSections: MenuSection[] = [
     label: "التهيئة",
     icon: Settings,
     children: [
-      { id: "branches-config",   label: "الفروع",       icon: Building2, path: "/inv/branches" },
-      { id: "warehouses-config", label: "المستودعات",   icon: Warehouse, path: "/inv/warehouses" },
     ],
   },
 ];
@@ -290,8 +287,6 @@ function InventoryContent({ activeId }: { activeId: string }) {
     case "inventory-count": return <InventoryCount />;
     case "stock-reports":
     case "voucher-reports": return <InventoryReports />;
-    case "branches-config": return <Branches />;
-    case "warehouses-config": return <Warehouses />;
     case "reinstate-invoices": return <ReinstateInvoices />;
     case "regenerate-invoices": return <RegeneratePricing />;
     default:
@@ -334,7 +329,5 @@ export function InvIssueTab()          { return <InvSubPage activeId="issue-vouc
 export function InvCountTab()          { return <InvSubPage activeId="inventory-count" />; }
 export function InvStockReportsTab()   { return <InvSubPage activeId="stock-reports" />; }
 export function InvVoucherReportsTab() { return <InvSubPage activeId="voucher-reports" />; }
-export function InvBranchesTab()       { return <InvSubPage activeId="branches-config" />; }
-export function InvWarehousesTab()     { return <InvSubPage activeId="warehouses-config" />; }
 export function InvReinstateTab()      { return <InvSubPage activeId="reinstate-invoices" />; }
 export function InvRegenerateTab()     { return <InvSubPage activeId="regenerate-invoices" />; }

@@ -48,8 +48,7 @@ import AssetsModule, {
 import InventoryModule, {
   InvProductsTab, InvUnitsTab, InvGroupsTab, InvCategoriesTab, InvBindingTab,
   InvPricingTab, InvFreeProductsTab, InvTransferTab, InvReceiptTab, InvIssueTab,
-  InvCountTab, InvStockReportsTab, InvVoucherReportsTab, InvBranchesTab,
-  InvWarehousesTab, InvReinstateTab, InvRegenerateTab,
+  InvCountTab, InvStockReportsTab, InvVoucherReportsTab, InvReinstateTab, InvRegenerateTab,
 } from "./pages/InventoryModule";
 import SettingsModule, {
   CfgCompanyTab, CfgCurrenciesTab, CfgTaxesTab, CfgFiscalTab,
@@ -177,8 +176,6 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/inv/count":           InvCountTab,
   "/inv/stock-reports":   InvStockReportsTab,
   "/inv/voucher-reports": InvVoucherReportsTab,
-  "/inv/branches":        InvBranchesTab,
-  "/inv/warehouses":      InvWarehousesTab,
   "/inv/reinstate":       InvReinstateTab,
   "/inv/regenerate":      InvRegenerateTab,
   // Settings/Config

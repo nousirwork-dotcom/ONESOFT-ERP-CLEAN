@@ -69,7 +69,7 @@ export const appRouter = router({
           and(eq(products.orgId, orgId), eq(products.isActive, true))
         ),
         db.select({ count: sql<string>`count(*)` }).from(stockVouchers).where(
-          and(eq(stockVouchers.orgId, orgId), eq(stockVouchers.type, 'transfer'), eq(stockVouchers.status, 'draft'))
+          and(eq(stockVouchers.orgId, orgId), sql`${stockVouchers.type}::text = 'transfer'`, eq(stockVouchers.status, 'draft'))
         ),
       ]);
 
