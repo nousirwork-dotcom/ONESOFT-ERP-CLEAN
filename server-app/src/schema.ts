@@ -81,6 +81,15 @@ export const warehouses = pgTable('warehouses', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
+// ─── Warehouse Account Links ───────────────────────────────────────────────────
+export const warehouseAccountLinks = pgTable('warehouse_account_links', {
+  id: serial('id').primaryKey(),
+  warehouseId: integer('warehouse_id').notNull().references(() => warehouses.id, { onDelete: 'cascade' }),
+  label: varchar('label', { length: 255 }).notNull(),
+  accountId: integer('account_id').references(() => chartOfAccounts.id),
+  sortOrder: integer('sort_order').notNull().default(0),
+});
+
 // ─── Units ────────────────────────────────────────────────────────────────────
 export const units = pgTable('units', {
   id: serial('id').primaryKey(),

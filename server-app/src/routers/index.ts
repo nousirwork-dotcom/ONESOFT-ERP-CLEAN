@@ -5,7 +5,7 @@ import { usersRouter } from './users.js';
 import { salesRouter } from './sales.js';
 import { chatRouter } from './chat.js';
 import { db } from '../db.js';
-import { products, customers, suppliers, chartOfAccounts, warehouses, branches, units, productGroups, journalEntries, journalEntryLines, vouchers, inventory, stockVouchers, stockVoucherItems, inventoryCounts, inventoryCountItems, freeProducts, salesInvoices, salesInvoiceItems } from '../schema.js';
+import { products, customers, suppliers, chartOfAccounts, warehouses, branches, units, productGroups, journalEntries, journalEntryLines, vouchers, inventory, stockVouchers, stockVoucherItems, inventoryCounts, inventoryCountItems, freeProducts, salesInvoices, salesInvoiceItems, warehouseAccountLinks } from '../schema.js';
 import { eq, and, desc, like, or, sql, isNotNull } from 'drizzle-orm';
 
 export const appRouter = router({
@@ -816,6 +816,39 @@ export const appRouter = router({
         await db.update(warehouses).set({ ...rest, address: description } as any).where(and(eq(warehouses.id, id), eq(warehouses.orgId, ctx.user.orgId)));
         return { success: true };
       }),
+    accountLinks: router({
+      list: protectedProcedure
+        .input(z.object({ warehouseId: z.number() }))
+        .query(async ({ input }) => {
+          return db.select().from(warehouseAccountLinks)
+            .where(eq(warehouseAccountLinks.warehouseId, input.warehouseId))
+            .orderBy(warehouseAccountLinks.sortOrder);
+        }),
+      save: protectedProcedure
+        .input(z.object({
+          warehouseId: z.number(),
+          links: z.array(z.object({
+            id: z.number().optional(),
+            label: z.string().min(1),
+            accountId: z.number().nullable().optional(),
+            sortOrder: z.number().default(0),
+          })),
+        }))
+        .mutation(async ({ input }) => {
+          await db.delete(warehouseAccountLinks).where(eq(warehouseAccountLinks.warehouseId, input.warehouseId));
+          if (input.links.length > 0) {
+            await db.insert(warehouseAccountLinks).values(
+              input.links.map((l, i) => ({
+                warehouseId: input.warehouseId,
+                label: l.label,
+                accountId: l.accountId ?? null,
+                sortOrder: i,
+              }))
+            );
+          }
+          return { success: true };
+        }),
+    }),
   }),
 
   // ─── Units ───────────────────────────────────────────────────────────────────
