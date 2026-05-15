@@ -9,7 +9,7 @@ import { trpc } from "@/lib/trpc";
 import {
   ArrowLeft, Edit, Printer, Plus, Trash2, Warehouse, Search,
   ChevronFirst, ChevronLast, ChevronLeft as CLeft, ChevronRight as CRight,
-  Eye, LogOut, Save, SkipForward,
+  Eye, LogOut, Save, SkipForward, Settings,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -106,7 +106,7 @@ const FS = ({
 
 /* ─────────────────────────── main component ─────────────────────────── */
 export default function Warehouses() {
-  const [view, setView] = useState<"list" | "form">("list");
+  const [view, setView] = useState<"list" | "form" | "settings">("list");
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [links, setLinks] = useState<LinkRow[]>(DEFAULT_LINKS.map(l => ({ ...l })));
@@ -476,6 +476,124 @@ export default function Warehouses() {
   }
 
   /* ══════════════════════════════════════════════════════════════
+     SETTINGS VIEW
+  ══════════════════════════════════════════════════════════════ */
+  if (view === "settings") {
+    return (
+      <div className="space-y-5" dir="rtl">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+              <Settings className="w-4 h-4 text-indigo-600" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold text-slate-800">إعدادات المخازن</h1>
+              <p className="text-slate-400 text-xs">الإعدادات العامة والخيارات الافتراضية للمخازن</p>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            onClick={() => setView("list")}
+            className="gap-1.5 h-9 px-4 text-sm rounded-lg border-slate-200 text-slate-600 hover:bg-slate-50"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            رجوع
+          </Button>
+        </div>
+
+        {/* Settings sections */}
+        <Section title="خيارات الترقيم التلقائي">
+          <div className="grid grid-cols-4 gap-4">
+            <Field label="بادئة كود المخزن">
+              <FI value="" onChange={() => {}} placeholder="مثال: WH-" />
+            </Field>
+            <Field label="رقم البداية">
+              <FI value="" onChange={() => {}} placeholder="1" />
+            </Field>
+            <Field label="عدد الأرقام">
+              <FI value="" onChange={() => {}} placeholder="3" />
+            </Field>
+            <Field label="الترقيم التلقائي عند الإضافة">
+              <FS value="" onValueChange={() => {}} placeholder="— اختر —">
+                <SelectItem value="yes">نعم</SelectItem>
+                <SelectItem value="no">لا</SelectItem>
+              </FS>
+            </Field>
+          </div>
+        </Section>
+
+        <Section title="الأذونات والصلاحيات">
+          <div className="grid grid-cols-4 gap-4">
+            <Field label="السماح لجميع المستخدمين">
+              <FS value="" onValueChange={() => {}} placeholder="— اختر —">
+                <SelectItem value="yes">نعم</SelectItem>
+                <SelectItem value="no">لا</SelectItem>
+              </FS>
+            </Field>
+            <Field label="المستخدم الافتراضي">
+              <FS value="" onValueChange={() => {}}>
+                {(users ?? []).map(u => (
+                  <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
+                ))}
+              </FS>
+            </Field>
+            <Field label="مجموعة المستخدمين الافتراضية">
+              <FI value="" onChange={() => {}} placeholder="مجموعة المستخدمين" />
+            </Field>
+          </div>
+        </Section>
+
+        <Section title="إعدادات المخزون">
+          <div className="grid grid-cols-4 gap-4">
+            <Field label="طريقة تقييم المخزون">
+              <FS value="" onValueChange={() => {}}>
+                <SelectItem value="fifo">FIFO — الأول دخولاً الأول خروجاً</SelectItem>
+                <SelectItem value="avg">متوسط التكلفة</SelectItem>
+                <SelectItem value="lifo">LIFO — الأخير دخولاً الأول خروجاً</SelectItem>
+              </FS>
+            </Field>
+            <Field label="السماح بمخزون سالب">
+              <FS value="" onValueChange={() => {}}>
+                <SelectItem value="yes">نعم</SelectItem>
+                <SelectItem value="no">لا</SelectItem>
+              </FS>
+            </Field>
+            <Field label="الفرع الافتراضي">
+              <FS value="" onValueChange={() => {}}>
+                {(branches ?? []).map(b => (
+                  <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
+                ))}
+              </FS>
+            </Field>
+          </div>
+        </Section>
+
+        {/* Save bar */}
+        <div
+          className="flex items-center justify-end gap-3 px-4 py-3 rounded-xl"
+          style={{ background: "#f0f4ff", border: "1px solid #e0e7ff" }}
+        >
+          <Button
+            variant="outline"
+            onClick={() => setView("list")}
+            className="h-9 px-5 text-sm border-slate-200 text-slate-600"
+          >
+            إلغاء
+          </Button>
+          <Button
+            className="h-9 px-6 text-sm bg-indigo-600 hover:bg-indigo-700 gap-2"
+            onClick={() => { toast.success("تم حفظ الإعدادات"); setView("list"); }}
+          >
+            <Save className="w-3.5 h-3.5" />
+            حفظ الإعدادات
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  /* ══════════════════════════════════════════════════════════════
      LIST VIEW
   ══════════════════════════════════════════════════════════════ */
   return (
@@ -492,13 +610,23 @@ export default function Warehouses() {
             <p className="text-slate-400 text-xs">إدارة مخازن الفروع والمواقع</p>
           </div>
         </div>
-        <Button
-          onClick={openCreate}
-          className="gap-1.5 bg-indigo-600 hover:bg-indigo-700 h-9 px-4 text-sm rounded-lg shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          إضافة مخزن
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setView("settings")}
+            className="gap-1.5 h-9 px-4 text-sm rounded-lg border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-indigo-600"
+          >
+            <Settings className="w-4 h-4" />
+            إعدادات المخازن
+          </Button>
+          <Button
+            onClick={openCreate}
+            className="gap-1.5 bg-indigo-600 hover:bg-indigo-700 h-9 px-4 text-sm rounded-lg shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            إضافة مخزن
+          </Button>
+        </div>
       </div>
 
       {/* Table card */}
