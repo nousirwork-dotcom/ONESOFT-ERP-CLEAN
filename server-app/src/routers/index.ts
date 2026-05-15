@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
 import { router, publicProcedure, protectedProcedure, superAdminProcedure } from '../trpc.js';
 import { orgsRouter } from './orgs.js';
 import { usersRouter } from './users.js';
@@ -814,6 +815,25 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const { id, description, ...rest } = input;
         await db.update(warehouses).set({ ...rest, address: description } as any).where(and(eq(warehouses.id, id), eq(warehouses.orgId, ctx.user.orgId)));
+        return { success: true };
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const hasInventory = await db.select({ id: inventory.id }).from(inventory)
+          .where(and(eq(inventory.warehouseId, input.id), eq(inventory.orgId, ctx.user.orgId)))
+          .limit(1);
+        if (hasInventory.length > 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن حذف المخزن لأنه مرتبط بمنتجات في المخزون' });
+        }
+        const hasVouchers = await db.select({ id: stockVouchers.id }).from(stockVouchers)
+          .where(and(eq(stockVouchers.warehouseId, input.id), eq(stockVouchers.orgId, ctx.user.orgId)))
+          .limit(1);
+        if (hasVouchers.length > 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن حذف المخزن لأنه مرتبط بحركات مخزنية' });
+        }
+        await db.update(warehouses).set({ isActive: false } as any)
+          .where(and(eq(warehouses.id, input.id), eq(warehouses.orgId, ctx.user.orgId)));
         return { success: true };
       }),
     accountLinks: router({
