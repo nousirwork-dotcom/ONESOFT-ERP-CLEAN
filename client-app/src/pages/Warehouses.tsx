@@ -72,7 +72,7 @@ const Field = ({
     span === 3 ? "col-span-3" :
     span === 2 ? "col-span-2" : ""
   }>
-    <Label className="block text-[11px] font-medium text-slate-400 mb-1 uppercase tracking-wide">
+    <Label className="block text-xs font-medium text-slate-500 mb-1">
       {label}
     </Label>
     {children}
@@ -345,7 +345,7 @@ export default function Warehouses() {
                         key={i}
                         className="group transition-colors hover:bg-indigo-50/40"
                         style={{
-                          height: 38,
+                          height: 40,
                           background: isEven ? "#ffffff" : "#f9fafb",
                           borderBottom: "1px solid #f1f5f9",
                         }}
@@ -358,7 +358,7 @@ export default function Warehouses() {
                             value={link.label}
                             onChange={e => updateLink(i, "label", e.target.value)}
                             className="w-full h-full py-0 px-3 text-sm bg-transparent border-0 outline-none focus:bg-indigo-50/60 text-slate-700"
-                            style={{ height: 38 }}
+                            style={{ height: 40 }}
                           />
                         </td>
                         <td className="text-center border-l border-slate-100 px-2" style={{ background: isEven ? "#f8fafc" : "#f4f6f8" }}>
@@ -368,7 +368,7 @@ export default function Warehouses() {
                           <Select value={link.accountId} onValueChange={v => updateLink(i, "accountId", v)}>
                             <SelectTrigger
                               className="border-0 shadow-none rounded-none focus:ring-0 bg-transparent text-slate-700 text-sm"
-                              style={{ height: 38 }}
+                              style={{ height: 40 }}
                             >
                               <SelectValue placeholder="— اختر الحساب —" />
                             </SelectTrigger>
@@ -386,7 +386,7 @@ export default function Warehouses() {
                           <button
                             onClick={() => removeLink(i)}
                             className="w-full flex items-center justify-center text-slate-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
-                            style={{ height: 38 }}
+                            style={{ height: 40 }}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
