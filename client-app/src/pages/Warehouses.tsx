@@ -1,18 +1,19 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
 import {
   ArrowLeft, Edit, Printer, Plus, Trash2, Warehouse, Search,
   ChevronFirst, ChevronLast, ChevronLeft as CLeft, ChevronRight as CRight,
-  Eye, LogOut, FileText, SkipBack, SkipForward
+  Eye, LogOut, FileText, SkipForward
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+/* ─── Default account link labels ─── */
 const DEFAULT_LINKS = [
   "حساب المخزون",
   "حساب تكلفة مبيعات 1",
@@ -39,25 +40,48 @@ const EMPTY_FORM = {
 };
 type FormState = typeof EMPTY_FORM;
 
-/* ── Borderless inline input ── */
-const CI = ({ value, onChange, placeholder, className = "" }: {
-  value: string; onChange: (v: string) => void; placeholder?: string; className?: string;
+/* ─── Section card wrapper ─── */
+const Section = ({ title, children, action }: {
+  title: string; children: React.ReactNode; action?: React.ReactNode;
 }) => (
-  <input
+  <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+    <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-slate-50/60">
+      <span className="text-[15px] font-semibold text-blue-700 tracking-wide">{title}</span>
+      {action}
+    </div>
+    <div className="p-5">{children}</div>
+  </div>
+);
+
+/* ─── Labeled field ─── */
+const Field = ({ label, children, span = 1 }: {
+  label: string; children: React.ReactNode; span?: number;
+}) => (
+  <div className={span === 2 ? "col-span-2" : span === 3 ? "col-span-3" : ""}>
+    <Label className="block text-xs font-medium text-slate-500 mb-1.5">{label}</Label>
+    {children}
+  </div>
+);
+
+/* ─── Standard input (h-10) ─── */
+const FI = ({ value, onChange, placeholder }: {
+  value: string; onChange: (v: string) => void; placeholder?: string;
+}) => (
+  <Input
     value={value}
     onChange={e => onChange(e.target.value)}
     placeholder={placeholder}
-    className={`w-full h-7 text-sm px-2 bg-transparent border-0 outline-none focus:bg-blue-50/50 ${className}`}
+    className="h-10 text-sm border-slate-200 focus:border-blue-400 focus-visible:ring-1 focus-visible:ring-blue-200 bg-white rounded-md"
   />
 );
 
-/* ── Compact select (borderless) ── */
-const CS = ({ value, onValueChange, placeholder, children }: {
+/* ─── Standard select (h-10) ─── */
+const FS = ({ value, onValueChange, placeholder, children }: {
   value: string; onValueChange: (v: string) => void; placeholder?: string; children: React.ReactNode;
 }) => (
   <Select value={value} onValueChange={onValueChange}>
-    <SelectTrigger className="h-7 text-sm rounded-none border-0 shadow-none focus:ring-0 bg-transparent px-2">
-      <SelectValue placeholder={placeholder} />
+    <SelectTrigger className="h-10 text-sm border-slate-200 focus:border-blue-400 focus:ring-1 focus:ring-blue-200 bg-white rounded-md">
+      <SelectValue placeholder={placeholder ?? "— اختر —"} />
     </SelectTrigger>
     <SelectContent>{children}</SelectContent>
   </Select>
@@ -95,7 +119,7 @@ export default function Warehouses() {
     onSuccess: async (w) => {
       await doSaveLinks(w.id);
       utils.warehouses.list.invalidate();
-      toast.success("تم إنشاء المخزن");
+      toast.success("تم إنشاء المخزن بنجاح");
       setView("list");
     },
     onError: (e) => toast.error(e.message),
@@ -104,7 +128,7 @@ export default function Warehouses() {
     onSuccess: async () => {
       await doSaveLinks(editId!);
       utils.warehouses.list.invalidate();
-      toast.success("تم تحديث المخزن");
+      toast.success("تم تحديث المخزن بنجاح");
       setView("list");
     },
     onError: (e) => toast.error(e.message),
@@ -171,230 +195,198 @@ export default function Warehouses() {
   const currentIndex = editId ? warehouseList.findIndex(w => w.id === editId) : -1;
   const otherWarehouses = warehouseList.filter(w => w.id !== editId);
 
-  /* ════════════════════ FORM VIEW ════════════════════ */
+  /* ════════════════════════════ FORM VIEW ════════════════════════════ */
   if (view === "form") {
     return (
       <div className="flex flex-col min-h-full" dir="rtl">
 
         {/* ── Page title ── */}
-        <div className="flex items-center justify-between mb-3 pb-2 border-b border-border/40">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Warehouse className="w-4 h-4 text-primary" />
-            <span className="font-semibold text-foreground text-base">
-              {editId ? "تعديل مخزن" : "إضافة مخزن جديد"}
-            </span>
-          </div>
-          <button onClick={() => setView("list")}
-            className="text-muted-foreground hover:text-foreground transition-colors">
+        <div className="flex items-center gap-3 mb-5">
+          <button
+            onClick={() => setView("list")}
+            className="w-8 h-8 flex items-center justify-center rounded-full border border-slate-200 bg-white hover:bg-slate-50 transition-colors shadow-sm text-slate-500 hover:text-slate-700">
             <ArrowLeft className="w-4 h-4" />
           </button>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+              <Warehouse className="w-4.5 h-4.5 text-blue-600" />
+            </div>
+            <h1 className="text-lg font-bold text-slate-800">
+              {editId ? "تعديل بيانات المخزن" : "إضافة مخزن جديد"}
+            </h1>
+          </div>
         </div>
 
-        {/* ── Main form container ── */}
-        <div className="flex-1 pb-16 space-y-0">
+        {/* ── Sections ── */}
+        <div className="flex-1 space-y-4 pb-20">
 
-          {/* ══ الأوصاف ══ */}
-          <div className="border border-border/50 rounded-sm bg-white">
-            {/* Section title */}
-            <div className="px-3 pt-1.5 pb-0.5">
-              <span className="text-xs font-bold text-blue-600">الأوصاف</span>
+          {/* ══ البيانات الأساسية ══ */}
+          <Section title="البيانات الأساسية">
+            <div className="grid grid-cols-4 gap-x-6 gap-y-4">
+              <Field label="رقم المخزن">
+                <FI value={form.code} onChange={v => set("code", v)} placeholder="مثال: 001" />
+              </Field>
+              <Field label="الموقع / الفرع" span={2}>
+                <FS value={form.branchId} onValueChange={v => set("branchId", v)} placeholder="المقر الرئيسي">
+                  <SelectItem value="none">المقر الرئيسي</SelectItem>
+                  {branches?.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+                </FS>
+              </Field>
+              <div /> {/* spacer */}
+              <Field label="إسم 1 *" span={2}>
+                <FI value={form.name} onChange={v => set("name", v)} placeholder="الإسم الأول للمخزن" />
+              </Field>
+              <Field label="إسم 2" span={2}>
+                <FI value={form.name2} onChange={v => set("name2", v)} placeholder="الإسم الثاني (اختياري)" />
+              </Field>
+              <Field label="الإسم الكامل 1" span={4}>
+                <FI value={form.fullName1} onChange={v => set("fullName1", v)} placeholder="الإسم الكامل الأول" />
+              </Field>
+              <Field label="الإسم الكامل 2" span={4}>
+                <FI value={form.fullName2} onChange={v => set("fullName2", v)} placeholder="الإسم الكامل الثاني" />
+              </Field>
+              <Field label="ملحوظة" span={4}>
+                <FI value={form.description} onChange={v => set("description", v)} placeholder="أي ملاحظات..." />
+              </Field>
             </div>
-            <table className="w-full text-sm border-collapse">
-              <tbody>
-                {/* Row 1: رقم + موقع */}
-                <tr className="border-t border-border/30">
-                  <td className="w-24 px-3 py-1 text-right text-xs text-muted-foreground border-l border-border/30 bg-slate-50/70 whitespace-nowrap">رقم</td>
-                  <td className="w-36 border-l border-border/30">
-                    <CI value={form.code} onChange={v => set("code", v)} placeholder="001" />
-                  </td>
-                  <td className="w-20 px-3 py-1 text-right text-xs text-muted-foreground border-l border-border/30 bg-slate-50/70 whitespace-nowrap">موقع</td>
-                  <td className="border-l border-border/30">
-                    <CS value={form.branchId} onValueChange={v => set("branchId", v)} placeholder="المقر الرئيسي">
-                      <SelectItem value="none">المقر الرئيسي</SelectItem>
-                      {branches?.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
-                    </CS>
-                  </td>
-                  {/* spacer column to keep visual balance */}
-                  <td className="w-8 bg-slate-50/70"></td>
-                </tr>
-                {/* Row 2: إسم 1 + إسم 2 */}
-                <tr className="border-t border-border/30">
-                  <td className="px-3 py-1 text-right text-xs text-muted-foreground border-l border-border/30 bg-slate-50/70 whitespace-nowrap">إسم 1 *</td>
-                  <td className="border-l border-border/30">
-                    <CI value={form.name} onChange={v => set("name", v)} />
-                  </td>
-                  <td className="px-3 py-1 text-right text-xs text-muted-foreground border-l border-border/30 bg-slate-50/70 whitespace-nowrap">إسم 2</td>
-                  <td colSpan={2} className="border-l border-border/30">
-                    <CI value={form.name2} onChange={v => set("name2", v)} />
-                  </td>
-                </tr>
-                {/* Row 3: إسم كامل 1 */}
-                <tr className="border-t border-border/30">
-                  <td className="px-3 py-1 text-right text-xs text-muted-foreground border-l border-border/30 bg-slate-50/70 whitespace-nowrap">إسم كامل 1</td>
-                  <td colSpan={4}>
-                    <CI value={form.fullName1} onChange={v => set("fullName1", v)} />
-                  </td>
-                </tr>
-                {/* Row 4: إسم كامل 2 */}
-                <tr className="border-t border-border/30">
-                  <td className="px-3 py-1 text-right text-xs text-muted-foreground border-l border-border/30 bg-slate-50/70 whitespace-nowrap">إسم كامل 2</td>
-                  <td colSpan={4}>
-                    <CI value={form.fullName2} onChange={v => set("fullName2", v)} />
-                  </td>
-                </tr>
-                {/* Row 5: ملحوظة */}
-                <tr className="border-t border-border/30">
-                  <td className="px-3 py-1 text-right text-xs text-muted-foreground border-l border-border/30 bg-slate-50/70 whitespace-nowrap">ملحوظة</td>
-                  <td colSpan={4}>
-                    <CI value={form.description} onChange={v => set("description", v)} />
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          </Section>
+
+          {/* ══ حدود الاستخدام + الروابط المحاسبية ══ */}
+          <div className="grid grid-cols-2 gap-4">
+
+            {/* حدود الاستخدام */}
+            <Section title="حدود الاستخدام">
+              <div className="space-y-4">
+                <Field label="مجموعة المستخدمين">
+                  <FI value={form.allowedUserGroup} onChange={v => set("allowedUserGroup", v)} placeholder="اسم المجموعة" />
+                </Field>
+                <Field label="مستخدم محدد">
+                  <FS value={form.allowedUserId} onValueChange={v => set("allowedUserId", v)} placeholder="— الكل —">
+                    <SelectItem value="none">— الكل —</SelectItem>
+                    {(users as any[])?.map((u: any) => (
+                      <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
+                    ))}
+                  </FS>
+                </Field>
+              </div>
+            </Section>
+
+            {/* الروابط المحاسبية */}
+            <Section title="الروابط المحاسبية">
+              <div className="space-y-4">
+                <Field label="إستبعد من مخزن">
+                  <FS value={form.copyFromWarehouseId} onValueChange={v => set("copyFromWarehouseId", v)} placeholder="— بدون —">
+                    <SelectItem value="none">— بدون —</SelectItem>
+                    {otherWarehouses.map(w => (
+                      <SelectItem key={w.id} value={String(w.id)}>
+                        {(w as any).code ? `${(w as any).code} - ${w.name}` : w.name}
+                      </SelectItem>
+                    ))}
+                  </FS>
+                </Field>
+              </div>
+            </Section>
           </div>
 
-          {/* ══ حدود الأستخدام + الروابط المحاسبية ══ */}
-          <div className="border border-t-0 border-border/50 bg-white">
-            <div className="flex">
-              {/* حدود الأستخدام — RIGHT half */}
-              <div className="flex-1 border-l border-border/30">
-                <div className="px-3 pt-1.5 pb-0.5">
-                  <span className="text-xs font-bold text-blue-600">حدود الأستخدام</span>
-                </div>
-                <table className="w-full text-sm border-collapse border-t border-border/30">
-                  <tbody>
-                    <tr>
-                      <td className="w-32 px-3 py-1 text-right text-xs text-muted-foreground border-l border-border/30 bg-slate-50/70 whitespace-nowrap">مجموعة مستخدمين</td>
-                      <td>
-                        <CI value={form.allowedUserGroup} onChange={v => set("allowedUserGroup", v)} />
-                      </td>
-                      <td className="w-20 px-3 py-1 text-right text-xs text-muted-foreground border-l border-border/30 bg-slate-50/70 whitespace-nowrap">مستخدم</td>
-                      <td>
-                        <CS value={form.allowedUserId} onValueChange={v => set("allowedUserId", v)} placeholder="— الكل —">
-                          <SelectItem value="none">— الكل —</SelectItem>
-                          {(users as any[])?.map((u: any) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
-                        </CS>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              {/* الروابط المحاسبية — LEFT half */}
-              <div className="flex-1">
-                <div className="px-3 pt-1.5 pb-0.5">
-                  <span className="text-xs font-bold text-blue-600">الروابط المحاسبية</span>
-                </div>
-                <table className="w-full text-sm border-collapse border-t border-border/30">
-                  <tbody>
-                    <tr>
-                      <td className="w-24 px-3 py-1 text-right text-xs text-muted-foreground border-l border-border/30 bg-slate-50/70 whitespace-nowrap">إستبعد من</td>
-                      <td>
-                        <CS value={form.copyFromWarehouseId} onValueChange={v => set("copyFromWarehouseId", v)} placeholder="— بدون —">
-                          <SelectItem value="none">— بدون —</SelectItem>
-                          {otherWarehouses.map(w => <SelectItem key={w.id} value={String(w.id)}>{(w as any).code ?? w.name}</SelectItem>)}
-                        </CS>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          {/* ══ جدول الروابط المحاسبية ══ */}
-          <div className="border border-t-0 border-border/50 bg-white">
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="border-b border-border/40 bg-slate-50/80">
-                  <th className="w-10 text-center text-xs font-semibold text-blue-600 border-l border-border/30 py-1.5 px-2">#</th>
-                  <th className="text-right text-xs font-semibold text-blue-600 border-l border-border/30 py-1.5 px-3">عنوان</th>
-                  <th className="w-28 text-right text-xs font-semibold text-blue-600 border-l border-border/30 py-1.5 px-3">كود الحساب</th>
-                  <th className="text-right text-xs font-semibold text-blue-600 py-1.5 px-3">إسم الحساب</th>
-                  <th className="w-8 border-r border-border/30">
-                    <button onClick={addLink} title="إضافة سطر"
-                      className="w-full h-6 flex items-center justify-center text-blue-500 hover:bg-blue-100 transition-colors">
-                      <Plus className="w-3.5 h-3.5" />
-                    </button>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {links.map((link, i) => {
-                  const acc = (accounts as any[])?.find((a: any) => String(a.id) === link.accountId);
-                  return (
-                    <tr key={i} className="border-b border-border/20 hover:bg-blue-50/30 group">
-                      <td className="text-center text-xs text-muted-foreground border-l border-border/30 py-0.5 px-2 bg-slate-50/60">
-                        {i + 1}
-                      </td>
-                      <td className="border-l border-border/30 py-0">
-                        <input
-                          value={link.label}
-                          onChange={e => updateLink(i, "label", e.target.value)}
-                          className="w-full h-7 text-sm px-3 bg-transparent border-0 outline-none focus:bg-blue-50/60"
-                        />
-                      </td>
-                      <td className="text-center border-l border-border/30 py-0.5 px-2 font-mono text-xs text-slate-500 bg-slate-50/40">
-                        {acc?.code ?? ""}
-                      </td>
-                      <td className="py-0">
-                        <CS value={link.accountId} onValueChange={v => updateLink(i, "accountId", v)} placeholder="">
-                          <SelectItem value="none">— بدون —</SelectItem>
-                          {(accounts as any[])?.map((a: any) => (
-                            <SelectItem key={a.id} value={String(a.id)}>{a.code} - {a.name}</SelectItem>
-                          ))}
-                        </CS>
-                      </td>
-                      <td className="border-r border-border/30 text-center">
-                        <button onClick={() => removeLink(i)}
-                          className="w-full h-7 flex items-center justify-center text-muted-foreground hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {links.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="text-center text-xs text-muted-foreground py-8">
-                      لا توجد روابط — اضغط (+) لإضافة سطر
-                    </td>
+          {/* ══ جدول الحسابات ══ */}
+          <Section
+            title="الحسابات المحاسبية للمخزن"
+            action={
+              <Button variant="outline" size="sm" onClick={addLink}
+                className="h-8 text-xs gap-1.5 border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300">
+                <Plus className="w-3.5 h-3.5" />
+                إضافة سطر
+              </Button>
+            }
+          >
+            <div className="border border-slate-200 rounded-md overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="w-10 py-3 px-4 text-center text-xs font-semibold text-slate-500 border-l border-slate-200">#</th>
+                    <th className="py-3 px-4 text-right text-xs font-semibold text-slate-600 border-l border-slate-200 w-56">عنوان الحساب</th>
+                    <th className="py-3 px-4 text-center text-xs font-semibold text-slate-600 border-l border-slate-200 w-28">كود الحساب</th>
+                    <th className="py-3 px-4 text-right text-xs font-semibold text-slate-600">إسم الحساب</th>
+                    <th className="w-10 border-l border-slate-200"></th>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {links.map((link, i) => {
+                    const acc = (accounts as any[])?.find((a: any) => String(a.id) === link.accountId);
+                    return (
+                      <tr key={i} className="hover:bg-blue-50/30 group transition-colors" style={{ height: 40 }}>
+                        <td className="px-4 text-center text-xs text-slate-400 border-l border-slate-100 bg-slate-50/50">
+                          {i + 1}
+                        </td>
+                        <td className="px-1 border-l border-slate-100">
+                          <input
+                            value={link.label}
+                            onChange={e => updateLink(i, "label", e.target.value)}
+                            className="w-full h-10 text-sm px-3 bg-transparent border-0 outline-none rounded focus:bg-blue-50/60 text-slate-700"
+                          />
+                        </td>
+                        <td className="px-4 text-center border-l border-slate-100 bg-slate-50/30">
+                          <span className="font-mono text-xs text-slate-500">{acc?.code ?? ""}</span>
+                        </td>
+                        <td className="px-1">
+                          <Select value={link.accountId} onValueChange={v => updateLink(i, "accountId", v)}>
+                            <SelectTrigger className="h-10 text-sm rounded-none border-0 shadow-none focus:ring-0 bg-transparent text-slate-700">
+                              <SelectValue placeholder="— اختر الحساب —" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">— بدون —</SelectItem>
+                              {(accounts as any[])?.map((a: any) => (
+                                <SelectItem key={a.id} value={String(a.id)}>
+                                  {a.code} - {a.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="border-l border-slate-100 text-center">
+                          <button onClick={() => removeLink(i)}
+                            className="w-10 h-10 flex items-center justify-center text-slate-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {links.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="text-center text-sm text-slate-400 py-10">
+                        لا توجد حسابات — اضغط "إضافة سطر" لإضافة حساب
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Section>
         </div>
 
         {/* ══ شريط الأدوات السفلي ══ */}
-        <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-border/50 bg-[#f0f0f0]" dir="rtl">
-          <div className="flex items-stretch divide-x divide-x-reverse divide-border/40">
+        <div className="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-slate-200 shadow-[0_-2px_8px_rgba(0,0,0,0.06)]" dir="rtl">
+          <div className="flex items-stretch">
             {[
-              { label: "حفظ",   icon: <FileText className="w-4 h-4" />,   action: handleSave,  primary: true },
-              { label: "جديد",  icon: <Plus className="w-4 h-4" />,       action: openCreate },
-              { label: "بحث",   icon: <Search className="w-4 h-4" />,     action: () => {} },
-              { label: "الحل",  icon: <SkipForward className="w-4 h-4" />, action: () => {} },
-              { label: "الأخير",icon: <ChevronLast className="w-4 h-4" />, action: () => warehouseList.at(-1) && openEdit(warehouseList.at(-1)!) },
-              { label: "التالي",icon: <CLeft className="w-4 h-4" />,       action: () => currentIndex < warehouseList.length - 1 && openEdit(warehouseList[currentIndex + 1]) },
-              { label: "السابق",icon: <CRight className="w-4 h-4" />,      action: () => currentIndex > 0 && openEdit(warehouseList[currentIndex - 1]) },
-              { label: "الأول", icon: <ChevronFirst className="w-4 h-4" />,action: () => warehouseList[0] && openEdit(warehouseList[0]) },
-              { label: "حذف",   icon: <Trash2 className="w-4 h-4" />,     action: () => {},    danger: true },
-              { label: "عرض",   icon: <Eye className="w-4 h-4" />,        action: () => {} },
-              { label: "طباعة", icon: <Printer className="w-4 h-4" />,    action: () => {} },
-              { label: "خروج",  icon: <LogOut className="w-4 h-4" />,     action: () => setView("list") },
-            ].map(({ label, icon, action, primary, danger }: any) => (
+              { label: "حفظ",    icon: <FileText className="w-4 h-4" />,    action: handleSave,   style: "bg-blue-600 text-white hover:bg-blue-700 font-semibold" },
+              { label: "جديد",   icon: <Plus className="w-4 h-4" />,         action: openCreate,   style: "text-slate-700 hover:bg-slate-50" },
+              { label: "بحث",    icon: <Search className="w-4 h-4" />,       action: () => {},     style: "text-slate-700 hover:bg-slate-50" },
+              { label: "الحل",   icon: <SkipForward className="w-4 h-4" />,  action: () => {},     style: "text-slate-700 hover:bg-slate-50" },
+              { label: "الأخير", icon: <ChevronLast className="w-4 h-4" />,  action: () => warehouseList.at(-1) && openEdit(warehouseList.at(-1)!), style: "text-slate-700 hover:bg-slate-50" },
+              { label: "التالي", icon: <CLeft className="w-4 h-4" />,        action: () => currentIndex < warehouseList.length - 1 && openEdit(warehouseList[currentIndex + 1]), style: "text-slate-700 hover:bg-slate-50" },
+              { label: "السابق", icon: <CRight className="w-4 h-4" />,       action: () => currentIndex > 0 && openEdit(warehouseList[currentIndex - 1]), style: "text-slate-700 hover:bg-slate-50" },
+              { label: "الأول",  icon: <ChevronFirst className="w-4 h-4" />, action: () => warehouseList[0] && openEdit(warehouseList[0]), style: "text-slate-700 hover:bg-slate-50" },
+              { label: "حذف",    icon: <Trash2 className="w-4 h-4" />,       action: () => {},     style: "text-red-500 hover:bg-red-50" },
+              { label: "عرض",    icon: <Eye className="w-4 h-4" />,          action: () => {},     style: "text-slate-700 hover:bg-slate-50" },
+              { label: "طباعة",  icon: <Printer className="w-4 h-4" />,      action: () => {},     style: "text-slate-700 hover:bg-slate-50" },
+              { label: "خروج",   icon: <LogOut className="w-4 h-4" />,       action: () => setView("list"), style: "text-slate-700 hover:bg-slate-50" },
+            ].map(({ label, icon, action, style }: any) => (
               <button key={label} onClick={action}
                 disabled={label === "حفظ" && isSaving}
-                className={[
-                  "flex flex-col items-center justify-center gap-0.5 px-3 py-2 text-[11px] min-w-[52px] flex-1 transition-colors",
-                  primary
-                    ? "bg-blue-600 text-white hover:bg-blue-700 font-semibold"
-                    : danger
-                      ? "text-red-600 hover:bg-red-50"
-                      : "text-slate-700 hover:bg-slate-200",
-                ].join(" ")}>
+                className={`flex flex-col items-center justify-center gap-1 flex-1 py-2.5 text-[11px] font-medium border-l border-slate-100 last:border-0 transition-colors min-w-0 ${style}`}>
                 {icon}
-                <span>{label === "حفظ" && isSaving ? "..." : label}</span>
+                <span className="leading-none">{label === "حفظ" && isSaving ? "..." : label}</span>
               </button>
             ))}
           </div>
@@ -404,76 +396,101 @@ export default function Warehouses() {
     );
   }
 
-  /* ════════════════════ LIST VIEW ════════════════════ */
+  /* ════════════════════════════ LIST VIEW ════════════════════════════ */
   return (
-    <div className="space-y-5" dir="rtl">
+    <div className="space-y-6" dir="rtl">
+
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">المخازن</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">إدارة مخازن الفروع</p>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center border border-blue-100">
+            <Warehouse className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-slate-800">المخازن</h1>
+            <p className="text-slate-400 text-sm">إدارة مخازن الفروع والمواقع</p>
+          </div>
         </div>
-        <Button onClick={openCreate} className="gap-2"><Plus className="w-4 h-4" />إضافة مخزن</Button>
+        <Button onClick={openCreate}
+          className="gap-2 bg-blue-600 hover:bg-blue-700 h-10 px-5 rounded-lg shadow-sm">
+          <Plus className="w-4 h-4" />
+          إضافة مخزن
+        </Button>
       </div>
 
-      <Card className="border-0 shadow-sm">
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="text-right">رقم</TableHead>
-                <TableHead className="text-right">إسم 1</TableHead>
-                <TableHead className="text-right">إسم 2</TableHead>
-                <TableHead className="text-right">موقع</TableHead>
-                <TableHead className="text-right">ملحوظة</TableHead>
-                <TableHead className="text-right">الحالة</TableHead>
-                <TableHead className="w-12"></TableHead>
+      {/* Table card */}
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent border-b border-slate-100 bg-slate-50/60">
+              <TableHead className="text-right text-xs font-semibold text-slate-500 py-3.5 px-5">رقم</TableHead>
+              <TableHead className="text-right text-xs font-semibold text-slate-500 py-3.5">إسم المخزن</TableHead>
+              <TableHead className="text-right text-xs font-semibold text-slate-500 py-3.5">إسم 2</TableHead>
+              <TableHead className="text-right text-xs font-semibold text-slate-500 py-3.5">الموقع</TableHead>
+              <TableHead className="text-right text-xs font-semibold text-slate-500 py-3.5">ملحوظة</TableHead>
+              <TableHead className="text-right text-xs font-semibold text-slate-500 py-3.5">الحالة</TableHead>
+              <TableHead className="w-12"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <TableRow key={i} className="border-b border-slate-50">
+                  {Array.from({ length: 7 }).map((_, j) => (
+                    <TableCell key={j} className="py-4 px-5">
+                      <div className="h-4 bg-slate-100 rounded animate-pulse" />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : !warehouseList.length ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-16">
+                  <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center">
+                    <Warehouse className="w-7 h-7 text-slate-300" />
+                  </div>
+                  <p className="text-slate-400 text-sm">لا توجد مخازن مضافة بعد</p>
+                  <button onClick={openCreate} className="mt-2 text-sm text-blue-600 hover:underline">
+                    إضافة أول مخزن
+                  </button>
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                Array.from({ length: 3 }).map((_, i) => (
-                  <TableRow key={i}>
-                    {Array.from({ length: 7 }).map((_, j) => (
-                      <TableCell key={j}><div className="h-4 bg-muted rounded animate-pulse" /></TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              ) : !warehouseList.length ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-12">
-                    <Warehouse className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                    لا توجد مخازن
-                  </TableCell>
-                </TableRow>
-              ) : warehouseList.map(w => (
-                <TableRow key={w.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => openEdit(w)}>
-                  <TableCell className="font-mono text-sm">{(w as any).code || "—"}</TableCell>
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-2">
-                      <Warehouse className="w-4 h-4 text-primary shrink-0" />
-                      {w.name}
+            ) : warehouseList.map(w => (
+              <TableRow key={w.id}
+                className="border-b border-slate-50 hover:bg-blue-50/30 cursor-pointer transition-colors"
+                onClick={() => openEdit(w)}>
+                <TableCell className="py-3.5 px-5">
+                  <span className="font-mono text-sm text-slate-500">{(w as any).code || "—"}</span>
+                </TableCell>
+                <TableCell className="py-3.5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-md bg-blue-50 flex items-center justify-center shrink-0">
+                      <Warehouse className="w-3.5 h-3.5 text-blue-500" />
                     </div>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{(w as any).name2 || "—"}</TableCell>
-                  <TableCell>{getBranchName(w.branchId ?? null)}</TableCell>
-                  <TableCell className="text-muted-foreground text-sm">{w.address || "—"}</TableCell>
-                  <TableCell>
-                    <Badge variant={w.isActive ? "default" : "secondary"} className="text-xs">
-                      {w.isActive ? "نشط" : "غير نشط"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Button variant="ghost" size="icon" className="h-7 w-7"
-                      onClick={e => { e.stopPropagation(); openEdit(w); }}>
-                      <Edit className="w-3.5 h-3.5" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                    <span className="font-medium text-slate-800">{w.name}</span>
+                  </div>
+                </TableCell>
+                <TableCell className="py-3.5 text-slate-500 text-sm">{(w as any).name2 || "—"}</TableCell>
+                <TableCell className="py-3.5 text-slate-500 text-sm">{getBranchName(w.branchId ?? null)}</TableCell>
+                <TableCell className="py-3.5 text-slate-400 text-sm">{w.address || "—"}</TableCell>
+                <TableCell className="py-3.5">
+                  <Badge variant={w.isActive ? "default" : "secondary"}
+                    className={`text-xs rounded-full px-2.5 ${w.isActive ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50" : ""}`}>
+                    {w.isActive ? "نشط" : "غير نشط"}
+                  </Badge>
+                </TableCell>
+                <TableCell className="py-3.5">
+                  <button
+                    onClick={e => { e.stopPropagation(); openEdit(w); }}
+                    className="w-8 h-8 rounded-md flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
+                    <Edit className="w-3.5 h-3.5" />
+                  </button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }
