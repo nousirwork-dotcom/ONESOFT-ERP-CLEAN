@@ -5,11 +5,13 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
-import { ArrowRight, Edit, Plus, Trash2, Warehouse } from "lucide-react";
+import {
+  ArrowRight, Edit, Printer, Plus, Trash2, Warehouse, Search,
+  ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, Eye, LogOut, FileText
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-// الحسابات الافتراضية للمخزن الجديد
 const DEFAULT_LINKS = [
   "حساب المخزون",
   "حساب تكلفة مبيعات 1",
@@ -33,50 +35,72 @@ const EMPTY_FORM = {
   code: "", name: "", name2: "", fullName1: "", fullName2: "",
   branchId: "", description: "",
   allowedUserGroup: "", allowedUserId: "", copyFromWarehouseId: "",
+  excludeFrom: "",
 };
-
 type FormState = typeof EMPTY_FORM;
+
+/* ─── Compact input (borderless, ERP style) ─── */
+const CI = ({ value, onChange, placeholder, className = "" }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; className?: string;
+}) => (
+  <Input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+    className={`h-7 text-sm border border-border/60 rounded-none bg-white focus-visible:ring-1 focus-visible:ring-primary/40 px-2 ${className}`} />
+);
+
+/* ─── Field label cell ─── */
+const LC = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
+  <td className={`text-right text-xs whitespace-nowrap px-2 py-1 text-foreground bg-muted/40 border border-border/50 font-medium ${className}`}>
+    {children}
+  </td>
+);
+
+/* ─── Field value cell ─── */
+const VC = ({ children, colSpan = 1 }: { children: React.ReactNode; colSpan?: number }) => (
+  <td colSpan={colSpan} className="px-0 py-0 border border-border/50 bg-white">
+    {children}
+  </td>
+);
 
 export default function Warehouses() {
   const [view, setView] = useState<"list" | "form">("list");
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [links, setLinks] = useState<LinkRow[]>(DEFAULT_LINKS);
-  const utils = trpc.useUtils();
+  const [links, setLinks] = useState<LinkRow[]>(DEFAULT_LINKS.map(l => ({ ...l })));
 
+  const utils = trpc.useUtils();
   const { data: warehouses, isLoading } = trpc.warehouses.list.useQuery();
   const { data: branches } = trpc.branches.list.useQuery();
   const { data: accounts } = trpc.accounts.list.useQuery();
   const { data: users } = trpc.users.list.useQuery();
-
   const { data: loadedLinks } = trpc.warehouses.accountLinks.list.useQuery(
-    { warehouseId: editId! },
-    { enabled: !!editId }
+    { warehouseId: editId! }, { enabled: !!editId }
   );
 
   useEffect(() => {
     if (loadedLinks && loadedLinks.length > 0) {
-      setLinks(loadedLinks.map(l => ({ label: l.label, accountId: l.accountId ? String(l.accountId) : "", sortOrder: l.sortOrder })));
+      setLinks(loadedLinks.map(l => ({
+        label: l.label,
+        accountId: l.accountId ? String(l.accountId) : "",
+        sortOrder: l.sortOrder,
+      })));
     } else if (editId) {
       setLinks([]);
     }
   }, [loadedLinks, editId]);
 
   const saveLinks = trpc.warehouses.accountLinks.save.useMutation();
-
   const create = trpc.warehouses.create.useMutation({
     onSuccess: async (w) => {
-      await saveLinks.mutateAsync({ warehouseId: w.id, links: links.map((l, i) => ({ label: l.label, accountId: l.accountId && l.accountId !== "none" ? Number(l.accountId) : null, sortOrder: i })) });
+      await doSaveLinks(w.id);
       utils.warehouses.list.invalidate();
       toast.success("تم إنشاء المخزن");
       setView("list");
     },
     onError: (e) => toast.error(e.message),
   });
-
   const update = trpc.warehouses.update.useMutation({
     onSuccess: async () => {
-      await saveLinks.mutateAsync({ warehouseId: editId!, links: links.map((l, i) => ({ label: l.label, accountId: l.accountId && l.accountId !== "none" ? Number(l.accountId) : null, sortOrder: i })) });
+      await doSaveLinks(editId!);
       utils.warehouses.list.invalidate();
       toast.success("تم تحديث المخزن");
       setView("list");
@@ -84,13 +108,27 @@ export default function Warehouses() {
     onError: (e) => toast.error(e.message),
   });
 
+  const doSaveLinks = async (warehouseId: number) => {
+    await saveLinks.mutateAsync({
+      warehouseId,
+      links: links.filter(l => l.label.trim()).map((l, i) => ({
+        label: l.label,
+        accountId: l.accountId && l.accountId !== "none" ? Number(l.accountId) : null,
+        sortOrder: i,
+      })),
+    });
+  };
+
+  const set = (k: keyof FormState, v: string) => setForm(p => ({ ...p, [k]: v }));
+  const f = (v: string) => v || undefined;
+  const fNum = (v: string) => (v && v !== "none" ? Number(v) : undefined);
+
   const openCreate = () => {
     setEditId(null);
     setForm(EMPTY_FORM);
     setLinks(DEFAULT_LINKS.map(l => ({ ...l })));
     setView("form");
   };
-
   const openEdit = (w: any) => {
     setEditId(w.id);
     setForm({
@@ -101,20 +139,14 @@ export default function Warehouses() {
       allowedUserGroup: w.allowedUserGroup ?? "",
       allowedUserId: w.allowedUserId ? String(w.allowedUserId) : "",
       copyFromWarehouseId: w.copyFromWarehouseId ? String(w.copyFromWarehouseId) : "",
+      excludeFrom: "",
     });
     setLinks([]);
     setView("form");
   };
 
-  const f = (v: string) => (v || undefined);
-  const fNum = (v: string) => (v && v !== "none" ? Number(v) : undefined);
-  const set = (k: keyof FormState, v: string) => setForm(p => ({ ...p, [k]: v }));
-
-  const handleSubmit = () => {
+  const handleSave = () => {
     if (!form.name.trim()) { toast.error("إسم 1 مطلوب"); return; }
-    const validLinks = links.filter(l => l.label.trim());
-    if (validLinks.length !== links.length) { toast.error("تحقق من أسماء الحسابات"); return; }
-
     const payload = {
       name: form.name, code: f(form.code), name2: f(form.name2),
       fullName1: f(form.fullName1), fullName2: f(form.fullName2),
@@ -127,171 +159,209 @@ export default function Warehouses() {
     else create.mutate(payload);
   };
 
-  // إضافة سطر جديد
   const addLink = () => setLinks(p => [...p, { label: "", accountId: "", sortOrder: p.length }]);
-  // حذف سطر
   const removeLink = (i: number) => setLinks(p => p.filter((_, idx) => idx !== i));
-  // تعديل سطر
   const updateLink = (i: number, field: keyof LinkRow, val: string) =>
     setLinks(p => p.map((l, idx) => idx === i ? { ...l, [field]: val } : l));
 
   const getBranchName = (id: number | null) => branches?.find(b => b.id === id)?.name ?? "—";
-
   const isSaving = create.isPending || update.isPending || saveLinks.isPending;
+  const warehouseList = warehouses ?? [];
+  const currentIndex = editId ? warehouseList.findIndex(w => w.id === editId) : -1;
+  const otherWarehouses = warehouseList.filter(w => w.id !== editId);
 
+  /* ══════════════════════════ FORM VIEW ══════════════════════════ */
   if (view === "form") {
-    const otherWarehouses = warehouses?.filter(w => w.id !== editId) ?? [];
     return (
-      <div className="space-y-3" dir="rtl">
-        {/* Header */}
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => setView("list")} className="h-8 w-8">
+      <div className="flex flex-col h-full" dir="rtl">
+
+        {/* ─── Page header ─── */}
+        <div className="flex items-center justify-between border-b border-border/50 pb-2 mb-3 px-1">
+          <div className="flex items-center gap-2">
+            <Warehouse className="w-5 h-5 text-primary" />
+            <h1 className="text-base font-bold">{editId ? "تعديل مخزن" : "إضافة مخزن جديد"}</h1>
+          </div>
+          <button onClick={() => setView("list")} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
             <ArrowRight className="w-4 h-4" />
-          </Button>
-          <h1 className="text-lg font-bold">{editId ? "تعديل مخزن" : "إضافة مخزن جديد"}</h1>
+          </button>
         </div>
 
-        {/* البيانات الأساسية */}
-        <Card className="border shadow-sm">
-          <CardHeader className="py-2 px-4 border-b bg-muted/30">
-            <CardTitle className="text-xs font-semibold text-muted-foreground">البيانات الأساسية</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <table className="w-full text-sm">
+        <div className="flex-1 space-y-2 overflow-y-auto pb-14">
+
+          {/* ══ الأوصاف ══ */}
+          <div className="border border-border/60 rounded overflow-hidden">
+            <div className="bg-primary/10 border-b border-border/60 px-3 py-1">
+              <span className="text-xs font-bold text-primary">الأوصاف</span>
+            </div>
+            <table className="w-full text-sm border-collapse">
               <tbody>
-                <tr className="border-b border-border/40">
-                  <td className="py-1.5 px-3 text-right text-xs text-muted-foreground w-28 bg-muted/20 border-l border-border/40">رقم</td>
-                  <td className="py-0.5 px-2 w-44">
-                    <Input value={form.code} onChange={e => set("code", e.target.value)} placeholder="001"
-                      className="h-7 text-sm border-0 shadow-none focus-visible:ring-0 px-1" />
-                  </td>
-                  <td className="py-1.5 px-3 text-right text-xs text-muted-foreground w-24 bg-muted/20 border-l border-border/40 border-r border-border/40">موقع</td>
-                  <td className="py-0.5 px-2">
+                {/* رقم + موقع */}
+                <tr>
+                  <LC>رقم</LC>
+                  <VC>
+                    <CI value={form.code} onChange={v => set("code", v)} placeholder="001" className="w-full" />
+                  </VC>
+                  <LC>موقع</LC>
+                  <VC colSpan={3}>
                     <Select value={form.branchId} onValueChange={v => set("branchId", v)}>
-                      <SelectTrigger className="h-7 text-sm border-0 shadow-none focus:ring-0">
-                        <SelectValue placeholder="— بدون —" />
+                      <SelectTrigger className="h-7 text-sm rounded-none border-0 shadow-none focus:ring-0 w-full">
+                        <SelectValue placeholder="المقر الرئيسي" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">— بدون —</SelectItem>
+                        <SelectItem value="none">المقر الرئيسي</SelectItem>
                         {branches?.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
-                  </td>
+                  </VC>
                 </tr>
-                <tr className="border-b border-border/40">
-                  <td className="py-1.5 px-3 text-right text-xs text-muted-foreground bg-muted/20 border-l border-border/40">إسم 1 *</td>
-                  <td className="py-0.5 px-2">
-                    <Input value={form.name} onChange={e => set("name", e.target.value)}
-                      className="h-7 text-sm border-0 shadow-none focus-visible:ring-0 px-1" />
-                  </td>
-                  <td className="py-1.5 px-3 text-right text-xs text-muted-foreground bg-muted/20 border-l border-border/40 border-r border-border/40">إسم 2</td>
-                  <td className="py-0.5 px-2">
-                    <Input value={form.name2} onChange={e => set("name2", e.target.value)}
-                      className="h-7 text-sm border-0 shadow-none focus-visible:ring-0 px-1" />
-                  </td>
-                </tr>
-                <tr className="border-b border-border/40">
-                  <td className="py-1.5 px-3 text-right text-xs text-muted-foreground bg-muted/20 border-l border-border/40">إسم كامل 1</td>
-                  <td className="py-0.5 px-2" colSpan={3}>
-                    <Input value={form.fullName1} onChange={e => set("fullName1", e.target.value)}
-                      className="h-7 text-sm border-0 shadow-none focus-visible:ring-0 px-1 w-full" />
-                  </td>
-                </tr>
-                <tr className="border-b border-border/40">
-                  <td className="py-1.5 px-3 text-right text-xs text-muted-foreground bg-muted/20 border-l border-border/40">إسم كامل 2</td>
-                  <td className="py-0.5 px-2" colSpan={3}>
-                    <Input value={form.fullName2} onChange={e => set("fullName2", e.target.value)}
-                      className="h-7 text-sm border-0 shadow-none focus-visible:ring-0 px-1 w-full" />
-                  </td>
-                </tr>
+                {/* إسم 1 + إسم 2 */}
                 <tr>
-                  <td className="py-1.5 px-3 text-right text-xs text-muted-foreground bg-muted/20 border-l border-border/40">ملحوظة</td>
-                  <td className="py-0.5 px-2" colSpan={3}>
-                    <Input value={form.description} onChange={e => set("description", e.target.value)}
-                      className="h-7 text-sm border-0 shadow-none focus-visible:ring-0 px-1 w-full" />
-                  </td>
+                  <LC>إسم 1 *</LC>
+                  <VC>
+                    <CI value={form.name} onChange={v => set("name", v)} className="w-full" />
+                  </VC>
+                  <LC>إسم 2</LC>
+                  <VC colSpan={3}>
+                    <CI value={form.name2} onChange={v => set("name2", v)} className="w-full" />
+                  </VC>
+                </tr>
+                {/* إسم كامل 1 */}
+                <tr>
+                  <LC>إسم كامل 1</LC>
+                  <VC colSpan={5}>
+                    <CI value={form.fullName1} onChange={v => set("fullName1", v)} className="w-full" />
+                  </VC>
+                </tr>
+                {/* إسم كامل 2 */}
+                <tr>
+                  <LC>إسم كامل 2</LC>
+                  <VC colSpan={5}>
+                    <CI value={form.fullName2} onChange={v => set("fullName2", v)} className="w-full" />
+                  </VC>
+                </tr>
+                {/* ملحوظة */}
+                <tr>
+                  <LC>ملحوظة</LC>
+                  <VC colSpan={5}>
+                    <CI value={form.description} onChange={v => set("description", v)} className="w-full" />
+                  </VC>
                 </tr>
               </tbody>
             </table>
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* حدود الاستخدام */}
-        <Card className="border shadow-sm">
-          <CardHeader className="py-2 px-4 border-b bg-muted/30">
-            <CardTitle className="text-xs font-semibold text-muted-foreground">حدود الاستخدام</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <tbody>
-                <tr>
-                  <td className="py-1.5 px-3 text-right text-xs text-muted-foreground w-36 bg-muted/20 border-l border-border/40">مجموعة مستخدمين</td>
-                  <td className="py-0.5 px-2">
-                    <Input value={form.allowedUserGroup} onChange={e => set("allowedUserGroup", e.target.value)}
-                      className="h-7 text-sm border-0 shadow-none focus-visible:ring-0 px-1 w-full" />
-                  </td>
-                  <td className="py-1.5 px-3 text-right text-xs text-muted-foreground w-20 bg-muted/20 border-l border-border/40 border-r border-border/40">مستخدم</td>
-                  <td className="py-0.5 px-2">
-                    <Select value={form.allowedUserId} onValueChange={v => set("allowedUserId", v)}>
-                      <SelectTrigger className="h-7 text-sm border-0 shadow-none focus:ring-0"><SelectValue placeholder="— الكل —" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">— الكل —</SelectItem>
-                        {(users as any[])?.map((u: any) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </td>
-                  <td className="py-1.5 px-3 text-right text-xs text-muted-foreground w-20 bg-muted/20 border-l border-border/40 border-r border-border/40">إنسخ من</td>
-                  <td className="py-0.5 px-2">
-                    <Select value={form.copyFromWarehouseId} onValueChange={v => set("copyFromWarehouseId", v)}>
-                      <SelectTrigger className="h-7 text-sm border-0 shadow-none focus:ring-0"><SelectValue placeholder="— بدون —" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">— بدون —</SelectItem>
-                        {otherWarehouses.map(w => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
+          {/* ══ حدود الأستخدام + الروابط المحاسبية (جنباً لجنب) ══ */}
+          <div className="grid grid-cols-2 gap-2">
+            {/* حدود الأستخدام — RIGHT */}
+            <div className="border border-border/60 rounded overflow-hidden">
+              <div className="bg-primary/10 border-b border-border/60 px-3 py-1">
+                <span className="text-xs font-bold text-primary">حدود الأستخدام</span>
+              </div>
+              <table className="w-full text-sm border-collapse">
+                <tbody>
+                  <tr>
+                    <LC>مجموعة مستخدمين</LC>
+                    <VC>
+                      <CI value={form.allowedUserGroup} onChange={v => set("allowedUserGroup", v)} className="w-full" />
+                    </VC>
+                  </tr>
+                  <tr>
+                    <LC>مستخدم</LC>
+                    <VC>
+                      <Select value={form.allowedUserId} onValueChange={v => set("allowedUserId", v)}>
+                        <SelectTrigger className="h-7 text-sm rounded-none border-0 shadow-none focus:ring-0 w-full">
+                          <SelectValue placeholder="— الكل —" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">— الكل —</SelectItem>
+                          {(users as any[])?.map((u: any) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </VC>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
 
-        {/* الروابط المحاسبية */}
-        <Card className="border shadow-sm">
-          <CardHeader className="py-2 px-4 border-b bg-muted/30 flex-row items-center justify-between">
-            <CardTitle className="text-xs font-semibold text-muted-foreground">الروابط المحاسبية</CardTitle>
-            <Button variant="outline" size="sm" onClick={addLink} className="h-6 text-xs gap-1 px-2">
-              <Plus className="w-3 h-3" />إضافة سطر
-            </Button>
-          </CardHeader>
-          <CardContent className="p-0">
-            <table className="w-full text-sm">
+            {/* الروابط المحاسبية (header only) — LEFT */}
+            <div className="border border-border/60 rounded overflow-hidden">
+              <div className="bg-primary/10 border-b border-border/60 px-3 py-1">
+                <span className="text-xs font-bold text-primary">الروابط المحاسبية</span>
+              </div>
+              <table className="w-full text-sm border-collapse">
+                <tbody>
+                  <tr>
+                    <LC>إستبعد من</LC>
+                    <VC>
+                      <Select value={form.copyFromWarehouseId} onValueChange={v => set("copyFromWarehouseId", v)}>
+                        <SelectTrigger className="h-7 text-sm rounded-none border-0 shadow-none focus:ring-0 w-full">
+                          <SelectValue placeholder="— بدون —" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">— بدون —</SelectItem>
+                          {otherWarehouses.map(w => <SelectItem key={w.id} value={String(w.id)}>{(w as any).code ?? w.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </VC>
+                  </tr>
+                  <tr>
+                    <LC>إنسخ من</LC>
+                    <VC>
+                      <Select value="" onValueChange={() => {}}>
+                        <SelectTrigger className="h-7 text-sm rounded-none border-0 shadow-none focus:ring-0 w-full">
+                          <SelectValue placeholder="— بدون —" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">— بدون —</SelectItem>
+                          {otherWarehouses.map(w => <SelectItem key={w.id} value={String(w.id)}>{(w as any).code ?? w.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </VC>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* ══ جدول الروابط المحاسبية ══ */}
+          <div className="border border-border/60 rounded overflow-hidden">
+            <table className="w-full text-sm border-collapse">
               <thead>
-                <tr className="border-b border-border/60 bg-muted/20">
-                  <th className="py-1 px-3 text-right text-xs text-muted-foreground font-medium w-8">#</th>
-                  <th className="py-1 px-3 text-right text-xs text-muted-foreground font-medium w-52">عنوان</th>
-                  <th className="py-1 px-3 text-right text-xs text-muted-foreground font-medium">كود الحساب</th>
-                  <th className="py-1 px-3 text-right text-xs text-muted-foreground font-medium">إسم الحساب</th>
-                  <th className="w-8"></th>
+                <tr className="bg-primary/10">
+                  <th className="text-center text-xs font-bold text-primary border border-border/50 px-2 py-1.5 w-10">#</th>
+                  <th className="text-right text-xs font-bold text-primary border border-border/50 px-3 py-1.5 w-52">عنوان</th>
+                  <th className="text-right text-xs font-bold text-primary border border-border/50 px-3 py-1.5 w-28">كود الحساب</th>
+                  <th className="text-right text-xs font-bold text-primary border border-border/50 px-3 py-1.5">إسم الحساب</th>
+                  <th className="w-8 border border-border/50">
+                    <button onClick={addLink} title="إضافة سطر"
+                      className="w-full h-full flex items-center justify-center text-primary hover:bg-primary/20 transition-colors p-1">
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {links.map((link, i) => {
                   const acc = (accounts as any[])?.find((a: any) => String(a.id) === link.accountId);
                   return (
-                    <tr key={i} className="border-b border-border/30 hover:bg-muted/10">
-                      <td className="py-0.5 px-3 text-xs text-muted-foreground">{i + 1}</td>
-                      <td className="py-0.5 px-1">
-                        <Input value={link.label} onChange={e => updateLink(i, "label", e.target.value)}
-                          className="h-6 text-xs border-0 shadow-none focus-visible:ring-0 px-1 bg-transparent" />
+                    <tr key={i} className="hover:bg-blue-50/40 group">
+                      <td className="text-center text-xs text-muted-foreground border border-border/40 px-2 py-0.5 bg-muted/20">
+                        {i + 1}
                       </td>
-                      <td className="py-0.5 px-1 text-xs font-mono text-muted-foreground">
-                        {acc?.code ?? "—"}
+                      <td className="border border-border/40 px-0 py-0">
+                        <input
+                          value={link.label}
+                          onChange={e => updateLink(i, "label", e.target.value)}
+                          className="w-full h-7 text-sm px-2 bg-transparent outline-none border-none focus:bg-blue-50/60"
+                        />
                       </td>
-                      <td className="py-0.5 px-1">
+                      <td className="text-center border border-border/40 px-2 py-0.5 font-mono text-xs text-muted-foreground bg-white">
+                        {acc?.code ?? ""}
+                      </td>
+                      <td className="border border-border/40 px-0 py-0">
                         <Select value={link.accountId} onValueChange={v => updateLink(i, "accountId", v)}>
-                          <SelectTrigger className="h-6 text-xs border-0 shadow-none focus:ring-0 bg-transparent">
-                            <SelectValue placeholder="اختر الحساب" />
+                          <SelectTrigger className="h-7 text-sm rounded-none border-0 shadow-none focus:ring-0 bg-transparent w-full">
+                            <SelectValue placeholder="" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="none">— بدون —</SelectItem>
@@ -301,9 +371,9 @@ export default function Warehouses() {
                           </SelectContent>
                         </Select>
                       </td>
-                      <td className="py-0.5 px-1">
+                      <td className="border border-border/40 text-center">
                         <button onClick={() => removeLink(i)}
-                          className="w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-destructive rounded transition-colors">
+                          className="w-full h-7 flex items-center justify-center text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity">
                           <Trash2 className="w-3 h-3" />
                         </button>
                       </td>
@@ -312,27 +382,50 @@ export default function Warehouses() {
                 })}
                 {links.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="text-center text-xs text-muted-foreground py-4">
-                      لا توجد روابط — اضغط "إضافة سطر"
+                    <td colSpan={5} className="text-center text-xs text-muted-foreground py-6 border border-border/40">
+                      لا توجد روابط — اضغط (+) لإضافة سطر
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        {/* أزرار الحفظ */}
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" size="sm" onClick={() => setView("list")}>إلغاء</Button>
-          <Button size="sm" onClick={handleSubmit} disabled={isSaving}>
-            {isSaving ? "جاري الحفظ..." : editId ? "حفظ التعديلات" : "إضافة المخزن"}
-          </Button>
+        {/* ══ شريط الأدوات السفلي ══ */}
+        <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-border/60 bg-muted/60 backdrop-blur-sm" dir="rtl">
+          <div className="flex items-center justify-end gap-0 px-2 py-1">
+            {[
+              { label: "حفظ", icon: <FileText className="w-4 h-4" />, action: handleSave, variant: "primary" as const },
+              { label: "جديد", icon: <Plus className="w-4 h-4" />, action: openCreate },
+              { label: "بحث", icon: <Search className="w-4 h-4" />, action: () => {} },
+              { label: "الأول", icon: <ChevronFirst className="w-4 h-4" />, action: () => warehouseList[0] && openEdit(warehouseList[0]) },
+              { label: "السابق", icon: <ChevronRight className="w-4 h-4" />, action: () => currentIndex > 0 && openEdit(warehouseList[currentIndex - 1]) },
+              { label: "التالي", icon: <ChevronLeft className="w-4 h-4" />, action: () => currentIndex < warehouseList.length - 1 && openEdit(warehouseList[currentIndex + 1]) },
+              { label: "الأخير", icon: <ChevronLast className="w-4 h-4" />, action: () => warehouseList.at(-1) && openEdit(warehouseList.at(-1)!) },
+              { label: "حذف", icon: <Trash2 className="w-4 h-4" />, action: () => {}, danger: true },
+              { label: "عرض", icon: <Eye className="w-4 h-4" />, action: () => {} },
+              { label: "طباعة", icon: <Printer className="w-4 h-4" />, action: () => {} },
+              { label: "خروج", icon: <LogOut className="w-4 h-4" />, action: () => setView("list") },
+            ].map(({ label, icon, action, variant, danger }: any) => (
+              <button key={label} onClick={action} disabled={label === "حفظ" && isSaving}
+                className={[
+                  "flex flex-col items-center gap-0.5 px-3 py-1.5 text-xs min-w-[48px] transition-colors border-r border-border/30 last:border-0",
+                  variant === "primary" ? "bg-primary text-primary-foreground hover:bg-primary/90 font-semibold" :
+                  danger ? "text-destructive hover:bg-destructive/10" :
+                  "text-foreground hover:bg-accent",
+                ].join(" ")}>
+                {icon}
+                <span>{label === "حفظ" && isSaving ? "..." : label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     );
   }
 
+  /* ══════════════════════════ LIST VIEW ══════════════════════════ */
   return (
     <div className="space-y-5" dir="rtl">
       <div className="flex items-center justify-between">
@@ -366,14 +459,14 @@ export default function Warehouses() {
                     ))}
                   </TableRow>
                 ))
-              ) : !warehouses?.length ? (
+              ) : !warehouseList.length ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center text-muted-foreground py-12">
                     <Warehouse className="w-8 h-8 mx-auto mb-2 opacity-30" />
                     لا توجد مخازن
                   </TableCell>
                 </TableRow>
-              ) : warehouses.map(w => (
+              ) : warehouseList.map(w => (
                 <TableRow key={w.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => openEdit(w)}>
                   <TableCell className="font-mono text-sm">{(w as any).code || "—"}</TableCell>
                   <TableCell className="font-medium">
@@ -391,7 +484,8 @@ export default function Warehouses() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={e => { e.stopPropagation(); openEdit(w); }}>
+                    <Button variant="ghost" size="icon" className="h-7 w-7"
+                      onClick={e => { e.stopPropagation(); openEdit(w); }}>
                       <Edit className="w-3.5 h-3.5" />
                     </Button>
                   </TableCell>
