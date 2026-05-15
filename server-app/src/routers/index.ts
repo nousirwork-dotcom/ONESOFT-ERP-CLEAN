@@ -782,6 +782,9 @@ export const appRouter = router({
         cashAccountId: z.number().optional(),
         bankAccountId: z.number().optional(),
         salesAccount1Id: z.number().optional(),
+        allowedUserId: z.number().optional(),
+        allowedUserGroup: z.string().optional(),
+        copyFromWarehouseId: z.number().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const { description, ...rest } = input;
@@ -804,6 +807,9 @@ export const appRouter = router({
         cashAccountId: z.number().optional(),
         bankAccountId: z.number().optional(),
         salesAccount1Id: z.number().optional(),
+        allowedUserId: z.number().optional(),
+        allowedUserGroup: z.string().optional(),
+        copyFromWarehouseId: z.number().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const { id, description, ...rest } = input;

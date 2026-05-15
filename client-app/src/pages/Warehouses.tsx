@@ -26,6 +26,7 @@ const EMPTY = {
   branchId: "", description: "",
   invAccountId: "", cogsAccount1Id: "", cogsAccount2Id: "",
   cashAccountId: "", bankAccountId: "", salesAccount1Id: "",
+  allowedUserGroup: "", allowedUserId: "", copyFromWarehouseId: "",
 };
 
 type FormState = typeof EMPTY;
@@ -39,6 +40,7 @@ export default function Warehouses() {
   const { data: warehouses, isLoading } = trpc.warehouses.list.useQuery();
   const { data: branches } = trpc.branches.list.useQuery();
   const { data: accounts } = trpc.accounts.list.useQuery();
+  const { data: users } = trpc.users.list.useQuery();
 
   const create = trpc.warehouses.create.useMutation({
     onSuccess: () => { utils.warehouses.list.invalidate(); toast.success("تم إنشاء المخزن"); setView("list"); },
@@ -66,6 +68,9 @@ export default function Warehouses() {
       cashAccountId: w.cashAccountId ? String(w.cashAccountId) : "",
       bankAccountId: w.bankAccountId ? String(w.bankAccountId) : "",
       salesAccount1Id: w.salesAccount1Id ? String(w.salesAccount1Id) : "",
+      allowedUserGroup: w.allowedUserGroup ?? "",
+      allowedUserId: w.allowedUserId ? String(w.allowedUserId) : "",
+      copyFromWarehouseId: w.copyFromWarehouseId ? String(w.copyFromWarehouseId) : "",
     });
     setView("form");
   };
@@ -89,6 +94,9 @@ export default function Warehouses() {
       cashAccountId: fNum(form.cashAccountId),
       bankAccountId: fNum(form.bankAccountId),
       salesAccount1Id: fNum(form.salesAccount1Id),
+      allowedUserGroup: f(form.allowedUserGroup),
+      allowedUserId: fNum(form.allowedUserId),
+      copyFromWarehouseId: fNum(form.copyFromWarehouseId),
     };
     if (editId) update.mutate({ id: editId, ...payload });
     else create.mutate(payload);
@@ -97,10 +105,6 @@ export default function Warehouses() {
   const set = (k: keyof FormState, v: string) => setForm(p => ({ ...p, [k]: v }));
 
   const getBranchName = (id: number | null) => branches?.find((b) => b.id === id)?.name ?? "—";
-  const getAccName = (id: number | null) => {
-    const acc = (accounts as any[])?.find((a: any) => a.id === id);
-    return acc ? `${acc.code} - ${acc.name}` : "—";
-  };
 
   const AccountSelect = ({ field }: { field: AccountKey }) => (
     <Select value={form[field]} onValueChange={(v) => set(field, v)}>
@@ -115,6 +119,7 @@ export default function Warehouses() {
   );
 
   if (view === "form") {
+    const otherWarehouses = warehouses?.filter(w => w.id !== editId) ?? [];
     return (
       <div className="space-y-4" dir="rtl">
         {/* Header */}
@@ -122,9 +127,7 @@ export default function Warehouses() {
           <Button variant="ghost" size="icon" onClick={() => setView("list")} className="h-8 w-8">
             <ArrowRight className="w-4 h-4" />
           </Button>
-          <div>
-            <h1 className="text-xl font-bold">{editId ? "تعديل مخزن" : "إضافة مخزن جديد"}</h1>
-          </div>
+          <h1 className="text-xl font-bold">{editId ? "تعديل مخزن" : "إضافة مخزن جديد"}</h1>
         </div>
 
         {/* البيانات الأساسية */}
@@ -133,7 +136,6 @@ export default function Warehouses() {
             <CardTitle className="text-sm font-semibold">البيانات الأساسية</CardTitle>
           </CardHeader>
           <CardContent className="p-4 space-y-3">
-            {/* Row 1: رقم + موقع */}
             <div className="grid grid-cols-2 gap-4">
               <div className="flex items-center gap-2">
                 <Label className="text-sm w-20 shrink-0 text-right">موقع</Label>
@@ -154,7 +156,6 @@ export default function Warehouses() {
               </div>
             </div>
 
-            {/* Row 2: إسم 1 + إسم 2 */}
             <div className="grid grid-cols-2 gap-4">
               <div className="flex items-center gap-2">
                 <Label className="text-sm w-20 shrink-0 text-right">إسم 2</Label>
@@ -168,25 +169,66 @@ export default function Warehouses() {
               </div>
             </div>
 
-            {/* Row 3: إسم كامل 1 */}
             <div className="flex items-center gap-2">
               <Label className="text-sm w-20 shrink-0 text-right">إسم كامل 1</Label>
               <Input value={form.fullName1} onChange={(e) => set("fullName1", e.target.value)}
                 className="h-8 text-sm flex-1" />
             </div>
 
-            {/* Row 4: إسم كامل 2 */}
             <div className="flex items-center gap-2">
               <Label className="text-sm w-20 shrink-0 text-right">إسم كامل 2</Label>
               <Input value={form.fullName2} onChange={(e) => set("fullName2", e.target.value)}
                 className="h-8 text-sm flex-1" />
             </div>
 
-            {/* Row 5: ملحوظة */}
             <div className="flex items-center gap-2">
               <Label className="text-sm w-20 shrink-0 text-right">ملحوظة</Label>
               <Input value={form.description} onChange={(e) => set("description", e.target.value)}
                 className="h-8 text-sm flex-1" />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* حدود الاستخدام */}
+        <Card className="border shadow-sm">
+          <CardHeader className="py-3 px-4 border-b bg-muted/30">
+            <CardTitle className="text-sm font-semibold">حدود الاستخدام</CardTitle>
+          </CardHeader>
+          <CardContent className="p-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div className="flex items-center gap-2">
+                <Label className="text-sm w-28 shrink-0 text-right">مجموعة مستخدمين</Label>
+                <Input
+                  value={form.allowedUserGroup}
+                  onChange={(e) => set("allowedUserGroup", e.target.value)}
+                  placeholder="اسم المجموعة"
+                  className="h-8 text-sm flex-1"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Label className="text-sm w-16 shrink-0 text-right">مستخدم</Label>
+                <Select value={form.allowedUserId} onValueChange={(v) => set("allowedUserId", v)}>
+                  <SelectTrigger className="h-8 text-sm flex-1"><SelectValue placeholder="اختر المستخدم" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— الكل —</SelectItem>
+                    {(users as any[])?.map((u: any) => (
+                      <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Label className="text-sm w-16 shrink-0 text-right">إنسخ من</Label>
+                <Select value={form.copyFromWarehouseId} onValueChange={(v) => set("copyFromWarehouseId", v)}>
+                  <SelectTrigger className="h-8 text-sm flex-1"><SelectValue placeholder="اختر المخزن" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— بدون —</SelectItem>
+                    {otherWarehouses.map((w) => (
+                      <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </CardContent>
         </Card>

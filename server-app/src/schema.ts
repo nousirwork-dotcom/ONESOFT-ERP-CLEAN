@@ -75,6 +75,9 @@ export const warehouses = pgTable('warehouses', {
   cashAccountId: integer('cash_account_id').references(() => chartOfAccounts.id),
   bankAccountId: integer('bank_account_id').references(() => chartOfAccounts.id),
   salesAccount1Id: integer('sales_account1_id').references(() => chartOfAccounts.id),
+  allowedUserId: integer('allowed_user_id').references(() => users.id),
+  allowedUserGroup: varchar('allowed_user_group', { length: 255 }),
+  copyFromWarehouseId: integer('copy_from_warehouse_id'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
