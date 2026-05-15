@@ -46,7 +46,7 @@ import AssetsModule, {
   AssetsDeprReportTab, AssetsMovementTab,
 } from "./pages/AssetsModule";
 import InventoryModule, {
-  InvProductsTab, InvUnitsTab, InvGroupsTab, InvCategoriesTab, InvBindingTab,
+  InvProductsTab, InvUnitsTab, InvGroupsTab, InvCategoriesTab,
   InvPricingTab, InvFreeProductsTab, InvTransferTab, InvReceiptTab, InvIssueTab,
   InvCountTab, InvStockReportsTab, InvVoucherReportsTab, InvReinstateTab, InvRegenerateTab,
 } from "./pages/InventoryModule";
@@ -167,7 +167,6 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/inv/units":           InvUnitsTab,
   "/inv/groups":          InvGroupsTab,
   "/inv/categories":      InvCategoriesTab,
-  "/inv/binding":         InvBindingTab,
   "/inv/pricing":         InvPricingTab,
   "/inv/free-products":   InvFreeProductsTab,
   "/inv/transfer":        InvTransferTab,

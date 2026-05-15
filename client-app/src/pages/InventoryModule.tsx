@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useTabManager } from "@/contexts/TabManagerContext";
 import {
-  ChevronDown, ChevronRight, FolderTree, Ruler, Layers, Tag, Link2, TrendingUp,
+  ChevronDown, ChevronRight, FolderTree, Ruler, Layers, Tag, TrendingUp,
   ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, ClipboardList, RefreshCw,
   BarChart3, Settings, Building2, Warehouse, Package, FileText, AlertTriangle, CheckCircle2, TrendingDown, Gift
 } from "lucide-react";
@@ -15,7 +15,6 @@ import { toast } from "sonner";
 import CategoryTree from "./inventory/CategoryTree";
 import Units from "./inventory/Units";
 import ProductGroups from "./inventory/ProductGroups";
-import ProductWarehouseBinding from "./inventory/ProductWarehouseBinding";
 import AutoPricing from "./inventory/AutoPricing";
 import FreeProducts from "./inventory/FreeProducts";
 import StockVouchers from "./inventory/StockVouchers";
@@ -44,7 +43,6 @@ const menuSections: MenuSection[] = [
       { id: "units",            label: "وحدات الأصناف",          icon: Ruler,     path: "/inv/units" },
       { id: "product-groups",   label: "مجموعات الأصناف",        icon: Layers,    path: "/inv/groups" },
       { id: "categories",       label: "فئات الأصناف",            icon: Tag,       path: "/inv/categories" },
-      { id: "product-binding",  label: "ربط الأصناف بالمخازن",   icon: Link2,     path: "/inv/binding" },
       { id: "auto-pricing",     label: "تسعير الأصناف آلياً",     icon: TrendingUp,path: "/inv/pricing" },
       { id: "free-products",    label: "الأصناف المجانية",         icon: Gift,      path: "/inv/free-products" },
     ],
@@ -271,7 +269,6 @@ function InventoryContent({ activeId }: { activeId: string }) {
     case "units": return <Units />;
     case "product-groups": return <ProductGroups />;
     case "categories": return <CategoryTree />;
-    case "product-binding": return <ProductWarehouseBinding />;
     case "auto-pricing": return <AutoPricing />;
     case "free-products": return <FreeProducts />;
     case "transfer-voucher": return <Transfers />;
@@ -313,7 +310,6 @@ export function InvProductsTab()       { return <InvSubPage activeId="products-l
 export function InvUnitsTab()          { return <InvSubPage activeId="units" />; }
 export function InvGroupsTab()         { return <InvSubPage activeId="product-groups" />; }
 export function InvCategoriesTab()     { return <InvSubPage activeId="categories" />; }
-export function InvBindingTab()        { return <InvSubPage activeId="product-binding" />; }
 export function InvPricingTab()        { return <InvSubPage activeId="auto-pricing" />; }
 export function InvFreeProductsTab()   { return <InvSubPage activeId="free-products" />; }
 export function InvTransferTab()       { return <InvSubPage activeId="transfer-voucher" />; }
