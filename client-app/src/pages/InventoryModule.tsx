@@ -83,13 +83,6 @@ const menuSections: MenuSection[] = [
       { id: "voucher-reports", label: "تقارير سندات المخزن",     icon: FileText,  path: "/inv/voucher-reports" },
     ],
   },
-  {
-    id: "config-section",
-    label: "التهيئة",
-    icon: Settings,
-    children: [
-    ],
-  },
 ];
 
 // ─── إعادة تثبيت الفواتير ──────────────────────────────────────────────────
