@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTabManager } from "@/contexts/TabManagerContext";
 import { trpc } from "@/lib/trpc";
+import Warehouses from "./Warehouses";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   ChevronDown, ChevronRight, Settings, Building2, DollarSign,
@@ -762,150 +763,6 @@ function NotificationSettingsPage({ title, description }: { title: string; descr
   );
 }
 
-// ─── Warehouses Config ─────────────────────────────────────────────────────────
-
-const EMPTY_WH = { code: "", name: "", branchId: "", description: "" };
-
-function WarehousesConfigPage() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [editId, setEditId] = useState<number | null>(null);
-  const [form, setForm] = useState(EMPTY_WH);
-  const utils = trpc.useUtils();
-
-  const { data: warehouses = [], isLoading } = trpc.warehouses.list.useQuery();
-  const { data: branches = [] } = trpc.branches.list.useQuery();
-
-  const create = trpc.warehouses.create.useMutation({
-    onSuccess: () => { utils.warehouses.list.invalidate(); toast.success("تم إنشاء المخزن"); setIsOpen(false); },
-    onError: (e) => toast.error(e.message),
-  });
-  const update = trpc.warehouses.update.useMutation({
-    onSuccess: () => { utils.warehouses.list.invalidate(); toast.success("تم تحديث المخزن"); setIsOpen(false); },
-    onError: (e) => toast.error(e.message),
-  });
-
-  const openCreate = () => { setEditId(null); setForm(EMPTY_WH); setIsOpen(true); };
-  const openEdit = (w: any) => {
-    setEditId(w.id);
-    setForm({ code: w.code ?? "", name: w.name, branchId: w.branchId ? String(w.branchId) : "", description: w.address ?? "" });
-    setIsOpen(true);
-  };
-
-  const handleSubmit = () => {
-    if (!form.name.trim()) { toast.error("اسم المخزن مطلوب"); return; }
-    const payload = {
-      name: form.name,
-      code: form.code || undefined,
-      branchId: form.branchId && form.branchId !== "none" ? Number(form.branchId) : undefined,
-      description: form.description || undefined,
-    };
-    if (editId) update.mutate({ id: editId, ...payload });
-    else create.mutate(payload);
-  };
-
-  const getBranchName = (id: number | null) => (branches as any[]).find((b: any) => b.id === id)?.name ?? "—";
-
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h3 className="font-semibold text-sm">إدارة المخازن</h3>
-        <Button className="h-8 text-sm" onClick={openCreate}>
-          <Plus className="w-3.5 h-3.5 ml-1" />مخزن جديد
-        </Button>
-      </div>
-      <Card className="border-border/50">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="text-xs">الرقم</TableHead>
-              <TableHead className="text-xs">اسم المخزن</TableHead>
-              <TableHead className="text-xs">الفرع</TableHead>
-              <TableHead className="text-xs">الوصف</TableHead>
-              <TableHead className="text-xs text-center">الحالة</TableHead>
-              <TableHead className="text-xs">إجراءات</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <TableRow key={i}>
-                  {Array.from({ length: 6 }).map((_, j) => (
-                    <TableCell key={j}><div className="h-3 bg-muted rounded animate-pulse" /></TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : (warehouses as any[]).length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center text-xs text-muted-foreground py-6">لا توجد مخازن مضافة</TableCell>
-              </TableRow>
-            ) : (warehouses as any[]).map((w: any) => (
-              <TableRow key={w.id}>
-                <TableCell className="text-xs font-mono text-muted-foreground">{w.code || "—"}</TableCell>
-                <TableCell className="text-xs font-medium">{w.name}</TableCell>
-                <TableCell className="text-xs">{getBranchName(w.branchId)}</TableCell>
-                <TableCell className="text-xs text-muted-foreground">{w.address || "—"}</TableCell>
-                <TableCell className="text-center">
-                  <Badge variant={w.isActive ? "default" : "secondary"} className="text-xs">
-                    {w.isActive ? "نشط" : "موقوف"}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <button className="text-primary text-xs hover:underline" onClick={() => openEdit(w)}>تعديل</button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Card>
-
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{editId ? "تعديل المخزن" : "إضافة مخزن جديد"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">رقم المخزن</Label>
-                <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })}
-                  placeholder="مثال: WH-001" className="h-8 text-sm mt-1" />
-              </div>
-              <div>
-                <Label className="text-xs">اسم المخزن *</Label>
-                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="أدخل الاسم" className="h-8 text-sm mt-1" />
-              </div>
-            </div>
-            <div>
-              <Label className="text-xs">الفرع</Label>
-              <Select value={form.branchId} onValueChange={(v) => setForm({ ...form, branchId: v })}>
-                <SelectTrigger className="h-8 text-sm mt-1"><SelectValue placeholder="اختر الفرع" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">بدون فرع</SelectItem>
-                  {(branches as any[]).map((b: any) => (
-                    <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs">الوصف</Label>
-              <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
-                placeholder="وصف اختياري" className="h-8 text-sm mt-1" />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setIsOpen(false)}>إلغاء</Button>
-            <Button size="sm" onClick={handleSubmit} disabled={create.isPending || update.isPending}>
-              {editId ? "حفظ" : "إضافة"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
-
 // ─── Doc Types ─────────────────────────────────────────────────────────────────
 
 function DocTypesPage() {
@@ -1473,7 +1330,7 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
     case "notif-maintenance":    return <NotificationSettingsPage title="تنبيه اقتراب صيانة أصل أو ماكينة" description="تنبيه عند اقتراب موعد الصيانة الدورية" />;
     case "notif-pending":        return <NotificationSettingsPage title="تنبيه مستندات بانتظار الاعتماد" description="تنبيه عند وجود مستندات تحتاج اعتماداً" />;
     // النظام
-    case "warehouses-config":    return <WarehousesConfigPage />;
+    case "warehouses-config":    return <Warehouses />;
     case "doc-types":            return <DocTypesPage />;
     case "doc-books":            return <DocBooksPage />;
     case "field-design":         return <FieldDesignPage />;
