@@ -135,57 +135,63 @@ export default function Warehouses() {
           <CardHeader className="py-3 px-4 border-b bg-muted/30">
             <CardTitle className="text-sm font-semibold">البيانات الأساسية</CardTitle>
           </CardHeader>
-          <CardContent className="p-4 space-y-3">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex items-center gap-2">
-                <Label className="text-sm w-20 shrink-0 text-right">موقع</Label>
-                <Select value={form.branchId} onValueChange={(v) => set("branchId", v)}>
-                  <SelectTrigger className="h-8 text-sm flex-1"><SelectValue placeholder="اختر الموقع" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— بدون —</SelectItem>
-                    {branches?.map((b) => (
-                      <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center gap-2">
-                <Label className="text-sm w-16 shrink-0 text-right">رقم</Label>
-                <Input value={form.code} onChange={(e) => set("code", e.target.value)}
-                  placeholder="001" className="h-8 text-sm flex-1" />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex items-center gap-2">
-                <Label className="text-sm w-20 shrink-0 text-right">إسم 2</Label>
-                <Input value={form.name2} onChange={(e) => set("name2", e.target.value)}
-                  className="h-8 text-sm flex-1" />
-              </div>
-              <div className="flex items-center gap-2">
-                <Label className="text-sm w-16 shrink-0 text-right">إسم 1 *</Label>
-                <Input value={form.name} onChange={(e) => set("name", e.target.value)}
-                  className="h-8 text-sm flex-1" />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Label className="text-sm w-20 shrink-0 text-right">إسم كامل 1</Label>
-              <Input value={form.fullName1} onChange={(e) => set("fullName1", e.target.value)}
-                className="h-8 text-sm flex-1" />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Label className="text-sm w-20 shrink-0 text-right">إسم كامل 2</Label>
-              <Input value={form.fullName2} onChange={(e) => set("fullName2", e.target.value)}
-                className="h-8 text-sm flex-1" />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Label className="text-sm w-20 shrink-0 text-right">ملحوظة</Label>
-              <Input value={form.description} onChange={(e) => set("description", e.target.value)}
-                className="h-8 text-sm flex-1" />
-            </div>
+          <CardContent className="p-0">
+            <table className="w-full text-sm">
+              <tbody>
+                <tr className="border-b border-border/50">
+                  <td className="py-1.5 px-3 text-right text-muted-foreground w-32 bg-muted/20 border-l border-border/50">رقم</td>
+                  <td className="py-1 px-2 w-40">
+                    <Input value={form.code} onChange={(e) => set("code", e.target.value)}
+                      placeholder="001" className="h-7 text-sm border-0 shadow-none focus-visible:ring-0 p-0 px-1" />
+                  </td>
+                  <td className="py-1.5 px-3 text-right text-muted-foreground w-32 bg-muted/20 border-l border-border/50 border-r border-border/50">موقع</td>
+                  <td className="py-1 px-2">
+                    <Select value={form.branchId} onValueChange={(v) => set("branchId", v)}>
+                      <SelectTrigger className="h-7 text-sm border-0 shadow-none focus:ring-0"><SelectValue placeholder="— بدون —" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">— بدون —</SelectItem>
+                        {branches?.map((b) => (
+                          <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </td>
+                </tr>
+                <tr className="border-b border-border/50">
+                  <td className="py-1.5 px-3 text-right text-muted-foreground bg-muted/20 border-l border-border/50">إسم 1 *</td>
+                  <td className="py-1 px-2">
+                    <Input value={form.name} onChange={(e) => set("name", e.target.value)}
+                      className="h-7 text-sm border-0 shadow-none focus-visible:ring-0 p-0 px-1" />
+                  </td>
+                  <td className="py-1.5 px-3 text-right text-muted-foreground bg-muted/20 border-l border-border/50 border-r border-border/50">إسم 2</td>
+                  <td className="py-1 px-2">
+                    <Input value={form.name2} onChange={(e) => set("name2", e.target.value)}
+                      className="h-7 text-sm border-0 shadow-none focus-visible:ring-0 p-0 px-1" />
+                  </td>
+                </tr>
+                <tr className="border-b border-border/50">
+                  <td className="py-1.5 px-3 text-right text-muted-foreground bg-muted/20 border-l border-border/50">إسم كامل 1</td>
+                  <td className="py-1 px-2" colSpan={3}>
+                    <Input value={form.fullName1} onChange={(e) => set("fullName1", e.target.value)}
+                      className="h-7 text-sm border-0 shadow-none focus-visible:ring-0 p-0 px-1 w-full" />
+                  </td>
+                </tr>
+                <tr className="border-b border-border/50">
+                  <td className="py-1.5 px-3 text-right text-muted-foreground bg-muted/20 border-l border-border/50">إسم كامل 2</td>
+                  <td className="py-1 px-2" colSpan={3}>
+                    <Input value={form.fullName2} onChange={(e) => set("fullName2", e.target.value)}
+                      className="h-7 text-sm border-0 shadow-none focus-visible:ring-0 p-0 px-1 w-full" />
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-1.5 px-3 text-right text-muted-foreground bg-muted/20 border-l border-border/50">ملحوظة</td>
+                  <td className="py-1 px-2" colSpan={3}>
+                    <Input value={form.description} onChange={(e) => set("description", e.target.value)}
+                      className="h-7 text-sm border-0 shadow-none focus-visible:ring-0 p-0 px-1 w-full" />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </CardContent>
         </Card>
 
@@ -194,42 +200,42 @@ export default function Warehouses() {
           <CardHeader className="py-3 px-4 border-b bg-muted/30">
             <CardTitle className="text-sm font-semibold">حدود الاستخدام</CardTitle>
           </CardHeader>
-          <CardContent className="p-4">
-            <div className="grid grid-cols-3 gap-4">
-              <div className="flex items-center gap-2">
-                <Label className="text-sm w-28 shrink-0 text-right">مجموعة مستخدمين</Label>
-                <Input
-                  value={form.allowedUserGroup}
-                  onChange={(e) => set("allowedUserGroup", e.target.value)}
-                  placeholder="اسم المجموعة"
-                  className="h-8 text-sm flex-1"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <Label className="text-sm w-16 shrink-0 text-right">مستخدم</Label>
-                <Select value={form.allowedUserId} onValueChange={(v) => set("allowedUserId", v)}>
-                  <SelectTrigger className="h-8 text-sm flex-1"><SelectValue placeholder="اختر المستخدم" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— الكل —</SelectItem>
-                    {(users as any[])?.map((u: any) => (
-                      <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center gap-2">
-                <Label className="text-sm w-16 shrink-0 text-right">إنسخ من</Label>
-                <Select value={form.copyFromWarehouseId} onValueChange={(v) => set("copyFromWarehouseId", v)}>
-                  <SelectTrigger className="h-8 text-sm flex-1"><SelectValue placeholder="اختر المخزن" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— بدون —</SelectItem>
-                    {otherWarehouses.map((w) => (
-                      <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+          <CardContent className="p-0">
+            <table className="w-full text-sm">
+              <tbody>
+                <tr>
+                  <td className="py-1.5 px-3 text-right text-muted-foreground w-36 bg-muted/20 border-l border-border/50">مجموعة مستخدمين</td>
+                  <td className="py-1 px-2">
+                    <Input value={form.allowedUserGroup} onChange={(e) => set("allowedUserGroup", e.target.value)}
+                      placeholder="اسم المجموعة" className="h-7 text-sm border-0 shadow-none focus-visible:ring-0 p-0 px-1 w-full" />
+                  </td>
+                  <td className="py-1.5 px-3 text-right text-muted-foreground w-24 bg-muted/20 border-l border-border/50 border-r border-border/50">مستخدم</td>
+                  <td className="py-1 px-2">
+                    <Select value={form.allowedUserId} onValueChange={(v) => set("allowedUserId", v)}>
+                      <SelectTrigger className="h-7 text-sm border-0 shadow-none focus:ring-0"><SelectValue placeholder="— الكل —" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">— الكل —</SelectItem>
+                        {(users as any[])?.map((u: any) => (
+                          <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </td>
+                  <td className="py-1.5 px-3 text-right text-muted-foreground w-24 bg-muted/20 border-l border-border/50 border-r border-border/50">إنسخ من</td>
+                  <td className="py-1 px-2">
+                    <Select value={form.copyFromWarehouseId} onValueChange={(v) => set("copyFromWarehouseId", v)}>
+                      <SelectTrigger className="h-7 text-sm border-0 shadow-none focus:ring-0"><SelectValue placeholder="— بدون —" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">— بدون —</SelectItem>
+                        {otherWarehouses.map((w) => (
+                          <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </CardContent>
         </Card>
 
@@ -239,26 +245,26 @@ export default function Warehouses() {
             <CardTitle className="text-sm font-semibold">الروابط المحاسبية</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="text-right text-xs py-2 w-8">#</TableHead>
-                  <TableHead className="text-right text-xs py-2">عنوان</TableHead>
-                  <TableHead className="text-right text-xs py-2">الحساب</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/30">
+                  <th className="py-1.5 px-3 text-right text-xs text-muted-foreground font-medium w-8">#</th>
+                  <th className="py-1.5 px-3 text-right text-xs text-muted-foreground font-medium w-52">عنوان</th>
+                  <th className="py-1.5 px-3 text-right text-xs text-muted-foreground font-medium">الحساب</th>
+                </tr>
+              </thead>
+              <tbody>
                 {ACCOUNT_LINKS.map((link, i) => (
-                  <TableRow key={link.key} className="hover:bg-muted/20">
-                    <TableCell className="text-xs text-muted-foreground py-1.5 w-8">{i + 1}</TableCell>
-                    <TableCell className="text-xs font-medium py-1.5">{link.label}</TableCell>
-                    <TableCell className="py-1.5">
+                  <tr key={link.key} className="border-b border-border/40 hover:bg-muted/20">
+                    <td className="py-1 px-3 text-xs text-muted-foreground">{i + 1}</td>
+                    <td className="py-1 px-3 text-xs font-medium">{link.label}</td>
+                    <td className="py-1 px-2">
                       <AccountSelect field={link.key} />
-                    </TableCell>
-                  </TableRow>
+                    </td>
+                  </tr>
                 ))}
-              </TableBody>
-            </Table>
+              </tbody>
+            </table>
           </CardContent>
         </Card>
 
