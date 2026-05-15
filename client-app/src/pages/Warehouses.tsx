@@ -352,7 +352,7 @@ export default function Warehouses() {
                         key={i}
                         className="group transition-colors hover:bg-indigo-50/40"
                         style={{
-                          height: 40,
+                          height: 30,
                           background: isEven ? "#ffffff" : "#f9fafb",
                           borderBottom: "1px solid #f1f5f9",
                         }}
@@ -365,7 +365,7 @@ export default function Warehouses() {
                             value={link.label}
                             onChange={e => updateLink(i, "label", e.target.value)}
                             className="w-full h-full py-0 px-3 text-sm bg-transparent border-0 outline-none focus:bg-indigo-50/60 text-slate-700"
-                            style={{ height: 40 }}
+                            style={{ height: 30 }}
                           />
                         </td>
                         <td className="text-center border-l border-slate-100 px-2" style={{ background: isEven ? "#f8fafc" : "#f4f6f8" }}>
@@ -375,7 +375,7 @@ export default function Warehouses() {
                           <Select value={link.accountId} onValueChange={v => updateLink(i, "accountId", v)}>
                             <SelectTrigger
                               className="border-0 shadow-none rounded-none focus:ring-0 bg-transparent text-slate-700 text-sm"
-                              style={{ height: 40 }}
+                              style={{ height: 30 }}
                             >
                               <SelectValue placeholder="— اختر الحساب —" />
                             </SelectTrigger>
@@ -393,7 +393,7 @@ export default function Warehouses() {
                           <button
                             onClick={() => removeLink(i)}
                             className="w-full flex items-center justify-center text-slate-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
-                            style={{ height: 40 }}
+                            style={{ height: 30 }}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -556,21 +556,21 @@ export default function Warehouses() {
                 }}
                 onClick={() => openEdit(w)}
               >
-                <TableCell className="py-3 px-5">
+                <TableCell className="py-1.5 px-5">
                   <span className="font-mono text-xs text-slate-500">{(w as any).code || "—"}</span>
                 </TableCell>
-                <TableCell className="py-3">
+                <TableCell className="py-1.5">
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-md bg-indigo-50 flex items-center justify-center shrink-0">
+                    <div className="w-5 h-5 rounded-md bg-indigo-50 flex items-center justify-center shrink-0">
                       <Warehouse className="w-3 h-3 text-indigo-400" />
                     </div>
                     <span className="font-medium text-sm text-slate-800">{w.name}</span>
                   </div>
                 </TableCell>
-                <TableCell className="py-3 text-slate-500 text-sm">{(w as any).name2 || "—"}</TableCell>
-                <TableCell className="py-3 text-slate-500 text-sm">{getBranchName(w.branchId ?? null)}</TableCell>
-                <TableCell className="py-3 text-slate-400 text-sm">{w.address || "—"}</TableCell>
-                <TableCell className="py-3">
+                <TableCell className="py-1.5 text-slate-500 text-sm">{(w as any).name2 || "—"}</TableCell>
+                <TableCell className="py-1.5 text-slate-500 text-sm">{getBranchName(w.branchId ?? null)}</TableCell>
+                <TableCell className="py-1.5 text-slate-400 text-sm">{w.address || "—"}</TableCell>
+                <TableCell className="py-1.5">
                   <Badge
                     variant={w.isActive ? "default" : "secondary"}
                     className={`text-[11px] rounded-full px-2.5 font-medium ${
@@ -582,10 +582,10 @@ export default function Warehouses() {
                     {w.isActive ? "نشط" : "غير نشط"}
                   </Badge>
                 </TableCell>
-                <TableCell className="py-3">
+                <TableCell className="py-1.5">
                   <button
                     onClick={e => { e.stopPropagation(); openEdit(w); }}
-                    className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                    className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
                   >
                     <Edit className="w-3.5 h-3.5" />
                   </button>
