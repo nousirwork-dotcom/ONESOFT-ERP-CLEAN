@@ -65,3 +65,7 @@ channel = "stable-25_05"
 deploymentTarget = "autoscale"
 run = ["bash", "-c", "cd server-app && pnpm run start"]
 build = ["bash", "-c", "cd client-app && pnpm run build && cd ../server-app && pnpm run build"]
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 120000
