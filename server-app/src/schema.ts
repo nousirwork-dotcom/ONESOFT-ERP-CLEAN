@@ -64,8 +64,17 @@ export const warehouses = pgTable('warehouses', {
   branchId: integer('branch_id').references(() => branches.id),
   code: varchar('code', { length: 50 }),
   name: varchar('name', { length: 255 }).notNull(),
+  name2: varchar('name2', { length: 255 }),
+  fullName1: varchar('full_name1', { length: 255 }),
+  fullName2: varchar('full_name2', { length: 255 }),
   address: text('address'),
   isActive: boolean('is_active').notNull().default(true),
+  invAccountId: integer('inv_account_id').references(() => chartOfAccounts.id),
+  cogsAccount1Id: integer('cogs_account1_id').references(() => chartOfAccounts.id),
+  cogsAccount2Id: integer('cogs_account2_id').references(() => chartOfAccounts.id),
+  cashAccountId: integer('cash_account_id').references(() => chartOfAccounts.id),
+  bankAccountId: integer('bank_account_id').references(() => chartOfAccounts.id),
+  salesAccount1Id: integer('sales_account1_id').references(() => chartOfAccounts.id),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 

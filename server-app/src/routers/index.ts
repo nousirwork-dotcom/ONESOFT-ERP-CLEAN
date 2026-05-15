@@ -768,14 +768,43 @@ export const appRouter = router({
       });
     }),
     create: protectedProcedure
-      .input(z.object({ name: z.string().min(1), code: z.string().optional(), branchId: z.number().optional(), description: z.string().optional() }))
+      .input(z.object({
+        name: z.string().min(1),
+        code: z.string().optional(),
+        branchId: z.number().optional(),
+        name2: z.string().optional(),
+        fullName1: z.string().optional(),
+        fullName2: z.string().optional(),
+        description: z.string().optional(),
+        invAccountId: z.number().optional(),
+        cogsAccount1Id: z.number().optional(),
+        cogsAccount2Id: z.number().optional(),
+        cashAccountId: z.number().optional(),
+        bankAccountId: z.number().optional(),
+        salesAccount1Id: z.number().optional(),
+      }))
       .mutation(async ({ ctx, input }) => {
         const { description, ...rest } = input;
         const [w] = await db.insert(warehouses).values({ ...rest, address: description, orgId: ctx.user.orgId, isActive: true }).returning();
         return w;
       }),
     update: protectedProcedure
-      .input(z.object({ id: z.number(), name: z.string().optional(), code: z.string().optional(), branchId: z.number().optional(), description: z.string().optional() }))
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        code: z.string().optional(),
+        branchId: z.number().optional(),
+        name2: z.string().optional(),
+        fullName1: z.string().optional(),
+        fullName2: z.string().optional(),
+        description: z.string().optional(),
+        invAccountId: z.number().optional(),
+        cogsAccount1Id: z.number().optional(),
+        cogsAccount2Id: z.number().optional(),
+        cashAccountId: z.number().optional(),
+        bankAccountId: z.number().optional(),
+        salesAccount1Id: z.number().optional(),
+      }))
       .mutation(async ({ ctx, input }) => {
         const { id, description, ...rest } = input;
         await db.update(warehouses).set({ ...rest, address: description } as any).where(and(eq(warehouses.id, id), eq(warehouses.orgId, ctx.user.orgId)));
