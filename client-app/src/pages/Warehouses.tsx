@@ -10,6 +10,8 @@ import {
   ArrowLeft, Edit, Printer, Plus, Trash2, Warehouse, Search,
   ChevronFirst, ChevronLast, ChevronLeft as CLeft, ChevronRight as CRight,
   Eye, LogOut, Save, SkipForward, Settings,
+  BookOpen, FileText, ChevronDown, ChevronRight as ChevronRightIcon,
+  RotateCcw, ClipboardList, ArrowLeftRight, Package, BookMarked, Tag,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -108,6 +110,11 @@ const FS = ({
 export default function Warehouses() {
   const [view, setView] = useState<"list" | "form" | "settings">("list");
   const [editId, setEditId] = useState<number | null>(null);
+  const [journalsOpen, setJournalsOpen] = useState(true);
+  const [docTypesOpen, setDocTypesOpen] = useState(false);
+  const [settingsItem, setSettingsItem] = useState<{ group: "journals" | "docTypes"; id: string }>(
+    { group: "journals", id: "basic" }
+  );
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [links, setLinks] = useState<LinkRow[]>(DEFAULT_LINKS.map(l => ({ ...l })));
 
@@ -479,115 +486,342 @@ export default function Warehouses() {
      SETTINGS VIEW
   ══════════════════════════════════════════════════════════════ */
   if (view === "settings") {
+    /* ── tree data ── */
+    const JOURNAL_ITEMS = [
+      { id: "basic",            label: "البيانات الأساسية",       icon: <FileText className="w-3.5 h-3.5" /> },
+      { id: "sales",            label: "دفتر المبيعات",            icon: <BookOpen className="w-3.5 h-3.5" /> },
+      { id: "sales-return",     label: "دفتر مردود المبيعات",     icon: <RotateCcw className="w-3.5 h-3.5" /> },
+      { id: "purchases",        label: "دفتر المشتريات",           icon: <BookMarked className="w-3.5 h-3.5" /> },
+      { id: "purchases-return", label: "مردود المشتريات",          icon: <RotateCcw className="w-3.5 h-3.5" /> },
+      { id: "sales-order",      label: "أمر البيع",                icon: <ClipboardList className="w-3.5 h-3.5" /> },
+      { id: "sales-quote",      label: "عرض أسعار مبيعات",        icon: <Tag className="w-3.5 h-3.5" /> },
+      { id: "purchase-quote",   label: "عرض أسعار مشتريات",       icon: <Tag className="w-3.5 h-3.5" /> },
+      { id: "purchase-order",   label: "أمر شراء",                 icon: <ClipboardList className="w-3.5 h-3.5" /> },
+      { id: "transfer",         label: "سند تحويل داخلي",          icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
+      { id: "dispatch",         label: "سند صرف أصناف",            icon: <Package className="w-3.5 h-3.5" /> },
+      { id: "supply",           label: "سند صرف توريد",            icon: <Package className="w-3.5 h-3.5" /> },
+    ];
+
+    const DOCTYPE_ITEMS = [
+      { id: "basic",            label: "البيانات الأساسية",       icon: <FileText className="w-3.5 h-3.5" /> },
+      { id: "sales",            label: "دفتر المبيعات",            icon: <BookOpen className="w-3.5 h-3.5" /> },
+      { id: "sales-return",     label: "دفتر مردود المبيعات",     icon: <RotateCcw className="w-3.5 h-3.5" /> },
+      { id: "purchases",        label: "دفتر المشتريات / مردود المشتريات", icon: <BookMarked className="w-3.5 h-3.5" /> },
+      { id: "sales-order",      label: "أمر البيع",                icon: <ClipboardList className="w-3.5 h-3.5" /> },
+      { id: "sales-quote",      label: "عرض أسعار مبيعات",        icon: <Tag className="w-3.5 h-3.5" /> },
+      { id: "purchase-quote",   label: "عرض أسعار مشتريات",       icon: <Tag className="w-3.5 h-3.5" /> },
+      { id: "purchase-order",   label: "أمر شراء",                 icon: <ClipboardList className="w-3.5 h-3.5" /> },
+      { id: "transfer",         label: "سند تحويل داخلي",          icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
+    ];
+
+    const currentItems = settingsItem.group === "journals" ? JOURNAL_ITEMS : DOCTYPE_ITEMS;
+    const currentLabel = currentItems.find(i => i.id === settingsItem.id)?.label ?? "";
+    const isJournalBasic = settingsItem.group === "journals" && settingsItem.id === "basic";
+
+    /* ── content area renderer ── */
+    const renderContent = () => {
+      if (isJournalBasic) {
+        return (
+          <div className="space-y-4">
+            <Section title="البيانات الأساسية للمخزن">
+              <div className="grid grid-cols-4 gap-x-5 gap-y-3">
+                <Field label="طريقة تقييم المخزون">
+                  <FS value="" onValueChange={() => {}}>
+                    <SelectItem value="fifo">FIFO — الأول دخولاً الأول خروجاً</SelectItem>
+                    <SelectItem value="avg">متوسط التكلفة</SelectItem>
+                    <SelectItem value="lifo">LIFO — الأخير دخولاً الأول خروجاً</SelectItem>
+                  </FS>
+                </Field>
+                <Field label="السماح بمخزون سالب">
+                  <FS value="" onValueChange={() => {}}>
+                    <SelectItem value="yes">نعم</SelectItem>
+                    <SelectItem value="no">لا</SelectItem>
+                  </FS>
+                </Field>
+                <Field label="الفرع الافتراضي" span={2}>
+                  <FS value="" onValueChange={() => {}}>
+                    {(branches ?? []).map(b => (
+                      <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
+                    ))}
+                  </FS>
+                </Field>
+                <Field label="بادئة كود المخزن">
+                  <FI value="" onChange={() => {}} placeholder="WH-" />
+                </Field>
+                <Field label="رقم البداية">
+                  <FI value="" onChange={() => {}} placeholder="1" />
+                </Field>
+                <Field label="عدد الأرقام">
+                  <FI value="" onChange={() => {}} placeholder="3" />
+                </Field>
+                <Field label="الترقيم التلقائي">
+                  <FS value="" onValueChange={() => {}}>
+                    <SelectItem value="yes">نعم</SelectItem>
+                    <SelectItem value="no">لا</SelectItem>
+                  </FS>
+                </Field>
+              </div>
+            </Section>
+          </div>
+        );
+      }
+
+      /* Generic journal / doc-type form */
+      return (
+        <div className="space-y-4">
+          <Section title={`إعدادات — ${currentLabel}`}>
+            <div className="grid grid-cols-4 gap-x-5 gap-y-3">
+              <Field label="اسم الدفتر / النوع" span={2}>
+                <FI value="" onChange={() => {}} placeholder={currentLabel} />
+              </Field>
+              <Field label="الكود">
+                <FI value="" onChange={() => {}} placeholder="مثال: SJ-01" />
+              </Field>
+              <Field label="الفرع">
+                <FS value="" onValueChange={() => {}}>
+                  {(branches ?? []).map(b => (
+                    <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
+                  ))}
+                </FS>
+              </Field>
+            </div>
+          </Section>
+
+          <Section title="الحسابات المحاسبية المرتبطة">
+            <div className="grid grid-cols-4 gap-x-5 gap-y-3">
+              <Field label="حساب الطرف المدين" span={2}>
+                <FS value="" onValueChange={() => {}}>
+                  {(accounts as any[])?.map((a: any) => (
+                    <SelectItem key={a.id} value={String(a.id)}>
+                      {a.code} — {a.name}
+                    </SelectItem>
+                  ))}
+                </FS>
+              </Field>
+              <Field label="حساب الطرف الدائن" span={2}>
+                <FS value="" onValueChange={() => {}}>
+                  {(accounts as any[])?.map((a: any) => (
+                    <SelectItem key={a.id} value={String(a.id)}>
+                      {a.code} — {a.name}
+                    </SelectItem>
+                  ))}
+                </FS>
+              </Field>
+              <Field label="حساب الضريبة" span={2}>
+                <FS value="" onValueChange={() => {}}>
+                  {(accounts as any[])?.map((a: any) => (
+                    <SelectItem key={a.id} value={String(a.id)}>
+                      {a.code} — {a.name}
+                    </SelectItem>
+                  ))}
+                </FS>
+              </Field>
+              <Field label="حساب الخصم" span={2}>
+                <FS value="" onValueChange={() => {}}>
+                  {(accounts as any[])?.map((a: any) => (
+                    <SelectItem key={a.id} value={String(a.id)}>
+                      {a.code} — {a.name}
+                    </SelectItem>
+                  ))}
+                </FS>
+              </Field>
+            </div>
+          </Section>
+
+          <Section title="إعدادات الترقيم">
+            <div className="grid grid-cols-4 gap-x-5 gap-y-3">
+              <Field label="البادئة">
+                <FI value="" onChange={() => {}} placeholder="مثال: SJ-" />
+              </Field>
+              <Field label="رقم البداية">
+                <FI value="" onChange={() => {}} placeholder="1" />
+              </Field>
+              <Field label="عدد الأرقام">
+                <FI value="" onChange={() => {}} placeholder="5" />
+              </Field>
+              <Field label="الترقيم التلقائي">
+                <FS value="" onValueChange={() => {}}>
+                  <SelectItem value="yes">نعم</SelectItem>
+                  <SelectItem value="no">لا</SelectItem>
+                </FS>
+              </Field>
+            </div>
+          </Section>
+        </div>
+      );
+    };
+
     return (
-      <div className="space-y-5" dir="rtl">
-        {/* Header */}
-        <div className="flex items-center justify-between">
+      <div className="flex flex-col" style={{ height: "calc(100vh - 100px)" }} dir="rtl">
+        {/* ── Top header ── */}
+        <div className="flex items-center justify-between mb-3 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center">
               <Settings className="w-4 h-4 text-indigo-600" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-slate-800">إعدادات المخازن</h1>
-              <p className="text-slate-400 text-xs">الإعدادات العامة والخيارات الافتراضية للمخازن</p>
+              <h1 className="text-[15px] font-bold text-slate-800">إعدادات المخازن</h1>
+              <p className="text-slate-400 text-[11px]">إدارة دفاتر المستندات وأنواعها</p>
             </div>
           </div>
           <Button
             variant="outline"
             onClick={() => setView("list")}
-            className="gap-1.5 h-9 px-4 text-sm rounded-lg border-slate-200 text-slate-600 hover:bg-slate-50"
+            className="gap-1.5 h-8 px-3 text-sm rounded-lg border-slate-200 text-slate-600 hover:bg-slate-50"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="w-3.5 h-3.5" />
             رجوع
           </Button>
         </div>
 
-        {/* Settings sections */}
-        <Section title="خيارات الترقيم التلقائي">
-          <div className="grid grid-cols-4 gap-4">
-            <Field label="بادئة كود المخزن">
-              <FI value="" onChange={() => {}} placeholder="مثال: WH-" />
-            </Field>
-            <Field label="رقم البداية">
-              <FI value="" onChange={() => {}} placeholder="1" />
-            </Field>
-            <Field label="عدد الأرقام">
-              <FI value="" onChange={() => {}} placeholder="3" />
-            </Field>
-            <Field label="الترقيم التلقائي عند الإضافة">
-              <FS value="" onValueChange={() => {}} placeholder="— اختر —">
-                <SelectItem value="yes">نعم</SelectItem>
-                <SelectItem value="no">لا</SelectItem>
-              </FS>
-            </Field>
-          </div>
-        </Section>
+        {/* ── Body: sidebar + content ── */}
+        <div className="flex gap-3 flex-1 min-h-0">
 
-        <Section title="الأذونات والصلاحيات">
-          <div className="grid grid-cols-4 gap-4">
-            <Field label="السماح لجميع المستخدمين">
-              <FS value="" onValueChange={() => {}} placeholder="— اختر —">
-                <SelectItem value="yes">نعم</SelectItem>
-                <SelectItem value="no">لا</SelectItem>
-              </FS>
-            </Field>
-            <Field label="المستخدم الافتراضي">
-              <FS value="" onValueChange={() => {}}>
-                {(users ?? []).map(u => (
-                  <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
-                ))}
-              </FS>
-            </Field>
-            <Field label="مجموعة المستخدمين الافتراضية">
-              <FI value="" onChange={() => {}} placeholder="مجموعة المستخدمين" />
-            </Field>
-          </div>
-        </Section>
-
-        <Section title="إعدادات المخزون">
-          <div className="grid grid-cols-4 gap-4">
-            <Field label="طريقة تقييم المخزون">
-              <FS value="" onValueChange={() => {}}>
-                <SelectItem value="fifo">FIFO — الأول دخولاً الأول خروجاً</SelectItem>
-                <SelectItem value="avg">متوسط التكلفة</SelectItem>
-                <SelectItem value="lifo">LIFO — الأخير دخولاً الأول خروجاً</SelectItem>
-              </FS>
-            </Field>
-            <Field label="السماح بمخزون سالب">
-              <FS value="" onValueChange={() => {}}>
-                <SelectItem value="yes">نعم</SelectItem>
-                <SelectItem value="no">لا</SelectItem>
-              </FS>
-            </Field>
-            <Field label="الفرع الافتراضي">
-              <FS value="" onValueChange={() => {}}>
-                {(branches ?? []).map(b => (
-                  <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
-                ))}
-              </FS>
-            </Field>
-          </div>
-        </Section>
-
-        {/* Save bar */}
-        <div
-          className="flex items-center justify-end gap-3 px-4 py-3 rounded-xl"
-          style={{ background: "#f0f4ff", border: "1px solid #e0e7ff" }}
-        >
-          <Button
-            variant="outline"
-            onClick={() => setView("list")}
-            className="h-9 px-5 text-sm border-slate-200 text-slate-600"
+          {/* ── Sidebar ── */}
+          <div
+            className="shrink-0 flex flex-col overflow-hidden"
+            style={{
+              width: 230,
+              background: "#fff",
+              border: "1px solid #e5e7eb",
+              borderRadius: 10,
+              boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+            }}
           >
-            إلغاء
-          </Button>
-          <Button
-            className="h-9 px-6 text-sm bg-indigo-600 hover:bg-indigo-700 gap-2"
-            onClick={() => { toast.success("تم حفظ الإعدادات"); setView("list"); }}
-          >
-            <Save className="w-3.5 h-3.5" />
-            حفظ الإعدادات
-          </Button>
+            <div className="px-3 pt-3 pb-2 shrink-0" style={{ borderBottom: "1px solid #f1f5f9" }}>
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">القوائم</span>
+            </div>
+
+            <div className="flex-1 overflow-y-auto py-1">
+
+              {/* ── دفاتر المستندات ── */}
+              <div>
+                <button
+                  className="w-full flex items-center gap-2 px-3 py-2 text-right hover:bg-slate-50 transition-colors"
+                  onClick={() => setJournalsOpen(o => !o)}
+                >
+                  <span className="text-indigo-500 transition-transform" style={{ transform: journalsOpen ? "rotate(0deg)" : "rotate(-90deg)" }}>
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  </span>
+                  <BookOpen className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                  <span className="text-[12px] font-semibold text-slate-700 flex-1">دفاتر المستندات</span>
+                </button>
+
+                {journalsOpen && (
+                  <div className="pr-6">
+                    {JOURNAL_ITEMS.map(item => {
+                      const active = settingsItem.group === "journals" && settingsItem.id === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => setSettingsItem({ group: "journals", id: item.id })}
+                          className="w-full flex items-center gap-2 px-3 py-1.5 text-right rounded-md mx-1 transition-colors"
+                          style={{
+                            background: active ? "#eef2ff" : "transparent",
+                            color: active ? "#4338ca" : "#64748b",
+                          }}
+                        >
+                          <span style={{ color: active ? "#6366f1" : "#94a3b8" }}>{item.icon}</span>
+                          <span className="text-[12px] truncate">{item.label}</span>
+                        </button>
+                      );
+                    })}
+                    {/* Add journal */}
+                    <button
+                      className="w-full flex items-center gap-2 px-3 py-1.5 text-right rounded-md mx-1 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                      onClick={() => toast.info("سيتم إضافة دفتر جديد")}
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span className="text-[12px]">إضافة دفتر</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* ── أنواع المستندات ── */}
+              <div className="mt-1">
+                <button
+                  className="w-full flex items-center gap-2 px-3 py-2 text-right hover:bg-slate-50 transition-colors"
+                  onClick={() => setDocTypesOpen(o => !o)}
+                >
+                  <span className="text-indigo-500 transition-transform" style={{ transform: docTypesOpen ? "rotate(0deg)" : "rotate(-90deg)" }}>
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  </span>
+                  <FileText className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                  <span className="text-[12px] font-semibold text-slate-700 flex-1">أنواع المستندات</span>
+                </button>
+
+                {docTypesOpen && (
+                  <div className="pr-6">
+                    {DOCTYPE_ITEMS.map(item => {
+                      const active = settingsItem.group === "docTypes" && settingsItem.id === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => setSettingsItem({ group: "docTypes", id: item.id })}
+                          className="w-full flex items-center gap-2 px-3 py-1.5 text-right rounded-md mx-1 transition-colors"
+                          style={{
+                            background: active ? "#eef2ff" : "transparent",
+                            color: active ? "#4338ca" : "#64748b",
+                          }}
+                        >
+                          <span style={{ color: active ? "#6366f1" : "#94a3b8" }}>{item.icon}</span>
+                          <span className="text-[12px] truncate">{item.label}</span>
+                        </button>
+                      );
+                    })}
+                    {/* Add doc type */}
+                    <button
+                      className="w-full flex items-center gap-2 px-3 py-1.5 text-right rounded-md mx-1 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                      onClick={() => toast.info("سيتم إضافة نوع مستند جديد")}
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span className="text-[12px]">إضافة نوع مستند</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+            </div>
+          </div>
+
+          {/* ── Content area ── */}
+          <div className="flex-1 flex flex-col min-w-0 min-h-0">
+            <div className="flex-1 overflow-y-auto space-y-3">
+              {/* breadcrumb */}
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mb-1">
+                <Settings className="w-3 h-3" />
+                <span>إعدادات المخازن</span>
+                <ChevronRightIcon className="w-3 h-3" />
+                <span>{settingsItem.group === "journals" ? "دفاتر المستندات" : "أنواع المستندات"}</span>
+                <ChevronRightIcon className="w-3 h-3" />
+                <span className="text-indigo-600 font-medium">{currentLabel}</span>
+              </div>
+              {renderContent()}
+            </div>
+
+            {/* save bar */}
+            <div
+              className="flex items-center justify-end gap-3 px-4 py-2.5 mt-3 rounded-xl shrink-0"
+              style={{ background: "#f0f4ff", border: "1px solid #e0e7ff" }}
+            >
+              <Button
+                variant="outline"
+                onClick={() => setView("list")}
+                className="h-8 px-4 text-sm border-slate-200 text-slate-600"
+              >
+                إلغاء
+              </Button>
+              <Button
+                className="h-8 px-5 text-sm bg-indigo-600 hover:bg-indigo-700 gap-2"
+                onClick={() => { toast.success("تم حفظ الإعدادات"); }}
+              >
+                <Save className="w-3.5 h-3.5" />
+                حفظ
+              </Button>
+            </div>
+          </div>
+
         </div>
       </div>
     );
