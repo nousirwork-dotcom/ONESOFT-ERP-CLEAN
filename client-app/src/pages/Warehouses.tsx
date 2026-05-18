@@ -485,15 +485,15 @@ export default function Warehouses() {
           {/* ══ TAB: أنواع المستندات ══ */}
           {formTab === "doctypes" && (() => {
             const DTYPE_ITEMS = [
-              { id: "sales",             label: "فاتورة المبيعات",    icon: <BookOpen className="w-3.5 h-3.5" /> },
-              { id: "sales-return",      label: "مردود المبيعات",     icon: <RotateCcw className="w-3.5 h-3.5" /> },
-              { id: "purchases",         label: "فاتورة المشتريات",   icon: <BookMarked className="w-3.5 h-3.5" /> },
-              { id: "purchases-return",  label: "مردود المشتريات",    icon: <RotateCcw className="w-3.5 h-3.5" /> },
-              { id: "sales-order",    label: "أمر البيع",                        icon: <ClipboardList className="w-3.5 h-3.5" /> },
-              { id: "sales-quote",    label: "عرض أسعار مبيعات",                icon: <Tag className="w-3.5 h-3.5" /> },
-              { id: "purch-quote",    label: "عرض أسعار مشتريات",               icon: <Tag className="w-3.5 h-3.5" /> },
-              { id: "purchase-order", label: "أمر شراء",                         icon: <ClipboardList className="w-3.5 h-3.5" /> },
-              { id: "transfer",       label: "سند تحويل داخلي",                  icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
+              { id: "sales",             label: "أنواع مستند فاتورة المبيعات",    icon: <BookOpen className="w-3.5 h-3.5" /> },
+              { id: "sales-return",      label: "أنواع مستند مردود المبيعات",     icon: <RotateCcw className="w-3.5 h-3.5" /> },
+              { id: "purchases",         label: "أنواع مستند فاتورة المشتريات",   icon: <BookMarked className="w-3.5 h-3.5" /> },
+              { id: "purchases-return",  label: "أنواع مستند مردود المشتريات",    icon: <RotateCcw className="w-3.5 h-3.5" /> },
+              { id: "sales-order",       label: "أنواع مستند أمر البيع",          icon: <ClipboardList className="w-3.5 h-3.5" /> },
+              { id: "sales-quote",       label: "أنواع مستند عرض أسعار مبيعات",  icon: <Tag className="w-3.5 h-3.5" /> },
+              { id: "purch-quote",       label: "أنواع مستند عرض أسعار مشتريات", icon: <Tag className="w-3.5 h-3.5" /> },
+              { id: "purchase-order",    label: "أنواع مستند أمر شراء",           icon: <ClipboardList className="w-3.5 h-3.5" /> },
+              { id: "transfer",          label: "أنواع مستند سند تحويل داخلي",    icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
             ];
             const currentLabel = DTYPE_ITEMS.find(i => i.id === doctypeItem)?.label ?? "";
             return (
@@ -644,16 +644,16 @@ export default function Warehouses() {
     ];
 
     const DOCTYPE_ITEMS = [
-      { id: "basic",             label: "البيانات الأساسية",  icon: <FileText className="w-3.5 h-3.5" /> },
-      { id: "sales",             label: "فاتورة المبيعات",    icon: <BookOpen className="w-3.5 h-3.5" /> },
-      { id: "sales-return",      label: "مردود المبيعات",     icon: <RotateCcw className="w-3.5 h-3.5" /> },
-      { id: "purchases",         label: "فاتورة المشتريات",   icon: <BookMarked className="w-3.5 h-3.5" /> },
-      { id: "purchases-return",  label: "مردود المشتريات",    icon: <RotateCcw className="w-3.5 h-3.5" /> },
-      { id: "sales-order",      label: "أمر البيع",                icon: <ClipboardList className="w-3.5 h-3.5" /> },
-      { id: "sales-quote",      label: "عرض أسعار مبيعات",        icon: <Tag className="w-3.5 h-3.5" /> },
-      { id: "purchase-quote",   label: "عرض أسعار مشتريات",       icon: <Tag className="w-3.5 h-3.5" /> },
-      { id: "purchase-order",   label: "أمر شراء",                 icon: <ClipboardList className="w-3.5 h-3.5" /> },
-      { id: "transfer",         label: "سند تحويل داخلي",          icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
+      { id: "basic",             label: "البيانات الأساسية",              icon: <FileText className="w-3.5 h-3.5" /> },
+      { id: "sales",             label: "أنواع مستند فاتورة المبيعات",    icon: <BookOpen className="w-3.5 h-3.5" /> },
+      { id: "sales-return",      label: "أنواع مستند مردود المبيعات",     icon: <RotateCcw className="w-3.5 h-3.5" /> },
+      { id: "purchases",         label: "أنواع مستند فاتورة المشتريات",   icon: <BookMarked className="w-3.5 h-3.5" /> },
+      { id: "purchases-return",  label: "أنواع مستند مردود المشتريات",    icon: <RotateCcw className="w-3.5 h-3.5" /> },
+      { id: "sales-order",       label: "أنواع مستند أمر البيع",          icon: <ClipboardList className="w-3.5 h-3.5" /> },
+      { id: "sales-quote",       label: "أنواع مستند عرض أسعار مبيعات",  icon: <Tag className="w-3.5 h-3.5" /> },
+      { id: "purchase-quote",    label: "أنواع مستند عرض أسعار مشتريات", icon: <Tag className="w-3.5 h-3.5" /> },
+      { id: "purchase-order",    label: "أنواع مستند أمر شراء",           icon: <ClipboardList className="w-3.5 h-3.5" /> },
+      { id: "transfer",          label: "أنواع مستند سند تحويل داخلي",    icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
     ];
 
     const currentItems = settingsItem.group === "journals" ? JOURNAL_ITEMS : DOCTYPE_ITEMS;
