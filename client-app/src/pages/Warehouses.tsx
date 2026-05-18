@@ -356,17 +356,17 @@ export default function Warehouses() {
           {/* ══ TAB: دفاتر المستندات ══ */}
           {formTab === "journals" && (() => {
             const ITEMS = [
-              { id: "sales",           label: "دفتر المبيعات",           icon: <BookOpen className="w-3.5 h-3.5" /> },
-              { id: "sales-return",    label: "دفتر مردود المبيعات",    icon: <RotateCcw className="w-3.5 h-3.5" /> },
-              { id: "purchases",       label: "دفتر المشتريات",          icon: <BookMarked className="w-3.5 h-3.5" /> },
-              { id: "purch-return",    label: "مردود المشتريات",         icon: <RotateCcw className="w-3.5 h-3.5" /> },
-              { id: "sales-order",     label: "أمر البيع",               icon: <ClipboardList className="w-3.5 h-3.5" /> },
-              { id: "sales-quote",     label: "عرض أسعار مبيعات",       icon: <Tag className="w-3.5 h-3.5" /> },
-              { id: "purch-quote",     label: "عرض أسعار مشتريات",      icon: <Tag className="w-3.5 h-3.5" /> },
-              { id: "purchase-order",  label: "أمر شراء",                icon: <ClipboardList className="w-3.5 h-3.5" /> },
-              { id: "transfer",        label: "سند تحويل داخلي",         icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
-              { id: "dispatch",        label: "سند صرف أصناف",           icon: <Package className="w-3.5 h-3.5" /> },
-              { id: "supply",          label: "سند صرف توريد",           icon: <Package className="w-3.5 h-3.5" /> },
+              { id: "sales",           label: "دفتر فاتورة المبيعات",    icon: <BookOpen className="w-3.5 h-3.5" /> },
+              { id: "sales-return",    label: "دفتر مردود المبيعات",     icon: <RotateCcw className="w-3.5 h-3.5" /> },
+              { id: "purchases",       label: "دفتر فاتورة المشتريات",   icon: <BookMarked className="w-3.5 h-3.5" /> },
+              { id: "purch-return",    label: "دفتر مردود المشتريات",    icon: <RotateCcw className="w-3.5 h-3.5" /> },
+              { id: "sales-order",     label: "دفتر أمر البيع",          icon: <ClipboardList className="w-3.5 h-3.5" /> },
+              { id: "sales-quote",     label: "دفتر عرض أسعار مبيعات",  icon: <Tag className="w-3.5 h-3.5" /> },
+              { id: "purch-quote",     label: "دفتر عرض أسعار مشتريات", icon: <Tag className="w-3.5 h-3.5" /> },
+              { id: "purchase-order",  label: "دفتر أمر شراء",           icon: <ClipboardList className="w-3.5 h-3.5" /> },
+              { id: "transfer",        label: "دفتر سند تحويل داخلي",    icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
+              { id: "dispatch",        label: "دفتر سند صرف أصناف",      icon: <Package className="w-3.5 h-3.5" /> },
+              { id: "supply",          label: "دفتر سند صرف توريد",      icon: <Package className="w-3.5 h-3.5" /> },
             ];
             const currentLabel = ITEMS.find(i => i.id === journalItem)?.label ?? "";
             const journalLinks = links.filter(l =>
