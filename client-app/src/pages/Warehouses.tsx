@@ -485,9 +485,10 @@ export default function Warehouses() {
           {/* ══ TAB: أنواع المستندات ══ */}
           {formTab === "doctypes" && (() => {
             const DTYPE_ITEMS = [
-              { id: "sales",          label: "دفتر المبيعات",                    icon: <BookOpen className="w-3.5 h-3.5" /> },
-              { id: "sales-return",   label: "دفتر مردود المبيعات",             icon: <RotateCcw className="w-3.5 h-3.5" /> },
-              { id: "purchases",      label: "دفتر المشتريات / مردود المشتريات", icon: <BookMarked className="w-3.5 h-3.5" /> },
+              { id: "sales",             label: "فاتورة المبيعات",    icon: <BookOpen className="w-3.5 h-3.5" /> },
+              { id: "sales-return",      label: "مردود المبيعات",     icon: <RotateCcw className="w-3.5 h-3.5" /> },
+              { id: "purchases",         label: "فاتورة المشتريات",   icon: <BookMarked className="w-3.5 h-3.5" /> },
+              { id: "purchases-return",  label: "مردود المشتريات",    icon: <RotateCcw className="w-3.5 h-3.5" /> },
               { id: "sales-order",    label: "أمر البيع",                        icon: <ClipboardList className="w-3.5 h-3.5" /> },
               { id: "sales-quote",    label: "عرض أسعار مبيعات",                icon: <Tag className="w-3.5 h-3.5" /> },
               { id: "purch-quote",    label: "عرض أسعار مشتريات",               icon: <Tag className="w-3.5 h-3.5" /> },
@@ -643,10 +644,11 @@ export default function Warehouses() {
     ];
 
     const DOCTYPE_ITEMS = [
-      { id: "basic",            label: "البيانات الأساسية",       icon: <FileText className="w-3.5 h-3.5" /> },
-      { id: "sales",            label: "دفتر المبيعات",            icon: <BookOpen className="w-3.5 h-3.5" /> },
-      { id: "sales-return",     label: "دفتر مردود المبيعات",     icon: <RotateCcw className="w-3.5 h-3.5" /> },
-      { id: "purchases",        label: "دفتر المشتريات / مردود المشتريات", icon: <BookMarked className="w-3.5 h-3.5" /> },
+      { id: "basic",             label: "البيانات الأساسية",  icon: <FileText className="w-3.5 h-3.5" /> },
+      { id: "sales",             label: "فاتورة المبيعات",    icon: <BookOpen className="w-3.5 h-3.5" /> },
+      { id: "sales-return",      label: "مردود المبيعات",     icon: <RotateCcw className="w-3.5 h-3.5" /> },
+      { id: "purchases",         label: "فاتورة المشتريات",   icon: <BookMarked className="w-3.5 h-3.5" /> },
+      { id: "purchases-return",  label: "مردود المشتريات",    icon: <RotateCcw className="w-3.5 h-3.5" /> },
       { id: "sales-order",      label: "أمر البيع",                icon: <ClipboardList className="w-3.5 h-3.5" /> },
       { id: "sales-quote",      label: "عرض أسعار مبيعات",        icon: <Tag className="w-3.5 h-3.5" /> },
       { id: "purchase-quote",   label: "عرض أسعار مشتريات",       icon: <Tag className="w-3.5 h-3.5" /> },
