@@ -113,6 +113,7 @@ export default function Warehouses() {
   const [formTab, setFormTab] = useState<"basic" | "journals" | "doctypes">("basic");
   const [journalItem, setJournalItem] = useState("sales");
   const [doctypeItem, setDoctypeItem] = useState("sales");
+  const [doctypeSubItem, setDoctypeSubItem] = useState<"main"|"options">("main");
   const [journalsOpen, setJournalsOpen] = useState(true);
   const [docTypesOpen, setDocTypesOpen] = useState(false);
   const [settingsItem, setSettingsItem] = useState<{ group: "journals" | "docTypes"; id: string }>(
@@ -505,15 +506,38 @@ export default function Warehouses() {
                   </div>
                   <div className="flex-1 overflow-y-auto py-1">
                     {DTYPE_ITEMS.map(item => {
-                      const active = doctypeItem === item.id;
+                      const expanded = doctypeItem === item.id;
                       return (
-                        <button key={item.id} onClick={() => setDoctypeItem(item.id)}
-                          className="w-full flex items-center gap-2 px-3 py-1.5 text-right rounded-md mx-1 transition-colors"
-                          style={{ background: active ? "#eef2ff" : "transparent", color: active ? "#4338ca" : "#64748b", width: "calc(100% - 8px)" }}
-                        >
-                          <span style={{ color: active ? "#6366f1" : "#94a3b8" }}>{item.icon}</span>
-                          <span className="text-[12px] truncate">{item.label}</span>
-                        </button>
+                        <div key={item.id}>
+                          {/* Parent row */}
+                          <button
+                            onClick={() => { setDoctypeItem(item.id); setDoctypeSubItem("main"); }}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-right rounded-md mx-1 transition-colors"
+                            style={{ background: expanded ? "#eef2ff" : "transparent", color: expanded ? "#4338ca" : "#64748b", width: "calc(100% - 8px)" }}
+                          >
+                            <span style={{ color: expanded ? "#6366f1" : "#94a3b8" }}>{item.icon}</span>
+                            <span className="text-[12px] truncate flex-1">{item.label}</span>
+                            <ChevronDown className="w-3 h-3 shrink-0 transition-transform" style={{ transform: expanded ? "rotate(0deg)" : "rotate(-90deg)", color: expanded ? "#6366f1" : "#cbd5e1" }} />
+                          </button>
+                          {/* Sub-items */}
+                          {expanded && (
+                            <div className="pr-6 pb-1">
+                              {(["main", "options"] as const).map(sub => {
+                                const subActive = doctypeSubItem === sub;
+                                return (
+                                  <button
+                                    key={sub}
+                                    onClick={() => setDoctypeSubItem(sub)}
+                                    className="w-full flex items-center gap-2 px-3 py-1 text-right rounded-md transition-colors"
+                                    style={{ background: subActive ? "#e0e7ff" : "transparent", color: subActive ? "#4338ca" : "#94a3b8" }}
+                                  >
+                                    <span className="text-[11px]">{sub === "main" ? "نافذة رئيسية" : "خيارات"}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
                     <button
