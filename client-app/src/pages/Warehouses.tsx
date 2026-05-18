@@ -110,7 +110,9 @@ const FS = ({
 export default function Warehouses() {
   const [view, setView] = useState<"list" | "form" | "settings">("list");
   const [editId, setEditId] = useState<number | null>(null);
-  const [formTab, setFormTab] = useState<"basic" | "sales" | "purchases" | "returns">("basic");
+  const [formTab, setFormTab] = useState<"basic" | "journals" | "doctypes">("basic");
+  const [journalItem, setJournalItem] = useState("sales");
+  const [doctypeItem, setDoctypeItem] = useState("sales");
   const [journalsOpen, setJournalsOpen] = useState(true);
   const [docTypesOpen, setDocTypesOpen] = useState(false);
   const [settingsItem, setSettingsItem] = useState<{ group: "journals" | "docTypes"; id: string }>(
@@ -262,10 +264,9 @@ export default function Warehouses() {
           style={{ borderBottom: "2px solid #e5e7eb" }}
         >
           {([
-            { id: "basic",     label: "البيانات الأساسية" },
-            { id: "sales",     label: "دفتر المبيعات" },
-            { id: "purchases", label: "دفتر المشتريات" },
-            { id: "returns",   label: "مردود المشتريات" },
+            { id: "basic",    label: "البيانات الأساسية" },
+            { id: "journals", label: "دفاتر المستندات" },
+            { id: "doctypes", label: "أنواع المستندات" },
           ] as const).map(tab => (
             <button
               key={tab.id}
@@ -352,111 +353,209 @@ export default function Warehouses() {
             </div>
           </>}
 
-          {/* ══ TAB: دفتر المبيعات / المشتريات / المردود ══ */}
-          {formTab !== "basic" && (() => {
-            const tabLinks = links.filter(l =>
-              formTab === "sales"
-                ? (l.label.includes("مبيعات") || l.label.includes("تكلفة"))
-                : formTab === "purchases"
-                ? (l.label.includes("مشتريات") && !l.label.includes("مردود"))
-                : l.label.includes("مردود")
+          {/* ══ TAB: دفاتر المستندات ══ */}
+          {formTab === "journals" && (() => {
+            const ITEMS = [
+              { id: "sales",           label: "دفتر المبيعات",           icon: <BookOpen className="w-3.5 h-3.5" /> },
+              { id: "sales-return",    label: "دفتر مردود المبيعات",    icon: <RotateCcw className="w-3.5 h-3.5" /> },
+              { id: "purchases",       label: "دفتر المشتريات",          icon: <BookMarked className="w-3.5 h-3.5" /> },
+              { id: "purch-return",    label: "مردود المشتريات",         icon: <RotateCcw className="w-3.5 h-3.5" /> },
+              { id: "sales-order",     label: "أمر البيع",               icon: <ClipboardList className="w-3.5 h-3.5" /> },
+              { id: "sales-quote",     label: "عرض أسعار مبيعات",       icon: <Tag className="w-3.5 h-3.5" /> },
+              { id: "purch-quote",     label: "عرض أسعار مشتريات",      icon: <Tag className="w-3.5 h-3.5" /> },
+              { id: "purchase-order",  label: "أمر شراء",                icon: <ClipboardList className="w-3.5 h-3.5" /> },
+              { id: "transfer",        label: "سند تحويل داخلي",         icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
+              { id: "dispatch",        label: "سند صرف أصناف",           icon: <Package className="w-3.5 h-3.5" /> },
+              { id: "supply",          label: "سند صرف توريد",           icon: <Package className="w-3.5 h-3.5" /> },
+            ];
+            const currentLabel = ITEMS.find(i => i.id === journalItem)?.label ?? "";
+            const journalLinks = links.filter(l =>
+              journalItem === "sales"        ? (l.label.includes("مبيعات") || l.label.includes("تكلفة")) && !l.label.includes("مردود") :
+              journalItem === "sales-return" ? l.label.includes("مردود") && l.label.includes("مبيعات") :
+              journalItem === "purchases"    ? l.label.includes("مشتريات") && !l.label.includes("مردود") :
+              journalItem === "purch-return" ? l.label.includes("مردود") && l.label.includes("مشتريات") :
+              false
             );
-            const tabTitle =
-              formTab === "sales" ? "حسابات دفتر المبيعات" :
-              formTab === "purchases" ? "حسابات دفتر المشتريات" :
-              "حسابات مردود المشتريات";
 
             return (
-              <Section
-                title={tabTitle}
-                action={
-                  <button
-                    onClick={() => {
-                      const label =
-                        formTab === "sales" ? `حساب مبيعات ${tabLinks.length + 1}` :
-                        formTab === "purchases" ? `حساب مشتريات ${tabLinks.length + 1}` :
-                        `حساب مردود مشتريات ${tabLinks.length + 1}`;
-                      setLinks(p => [...p, { label, accountId: "", sortOrder: p.length }]);
-                    }}
-                    className="flex items-center gap-1.5 text-[11px] font-medium text-indigo-600 border border-indigo-200 rounded px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 transition-colors"
-                  >
-                    <Plus className="w-3 h-3" />
-                    إضافة سطر
-                  </button>
-                }
-              >
-                <div className="overflow-hidden" style={{ border: "1px solid #e5e7eb", borderRadius: 6 }}>
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e5e7eb" }}>
-                        <th className="w-9 py-2.5 text-center text-[11px] font-semibold text-slate-400 border-l border-slate-200">#</th>
-                        <th className="py-2.5 px-3 text-right text-[11px] font-semibold text-slate-500 border-l border-slate-200 w-52">عنوان الحساب</th>
-                        <th className="py-2.5 px-3 text-center text-[11px] font-semibold text-slate-500 border-l border-slate-200 w-24">كود الحساب</th>
-                        <th className="py-2.5 px-3 text-right text-[11px] font-semibold text-slate-500">إسم الحساب</th>
-                        <th className="w-9 border-l border-slate-200" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tabLinks.map((link, ri) => {
-                        const i = links.indexOf(link);
-                        const acc = (accounts as any[])?.find((a: any) => String(a.id) === link.accountId);
-                        const isEven = ri % 2 === 0;
-                        return (
-                          <tr
-                            key={i}
-                            className="group transition-colors hover:bg-indigo-50/40"
-                            style={{ height: 30, background: isEven ? "#ffffff" : "#f9fafb", borderBottom: "1px solid #f1f5f9" }}
-                          >
-                            <td className="text-center text-[11px] text-slate-400 border-l border-slate-100 select-none" style={{ background: isEven ? "#f8fafc" : "#f4f6f8" }}>
-                              {ri + 1}
-                            </td>
-                            <td className="border-l border-slate-100 py-0 px-0">
-                              <input
-                                value={link.label}
-                                onChange={e => updateLink(i, "label", e.target.value)}
-                                className="w-full h-full py-0 px-3 text-sm bg-transparent border-0 outline-none focus:bg-indigo-50/60 text-slate-700"
-                                style={{ height: 30 }}
-                              />
-                            </td>
-                            <td className="text-center border-l border-slate-100 px-2" style={{ background: isEven ? "#f8fafc" : "#f4f6f8" }}>
-                              <span className="font-mono text-xs text-slate-500">{acc?.code ?? ""}</span>
-                            </td>
-                            <td className="py-0 px-0">
-                              <Select value={link.accountId} onValueChange={v => updateLink(i, "accountId", v)}>
-                                <SelectTrigger className="border-0 shadow-none rounded-none focus:ring-0 bg-transparent text-slate-700 text-sm" style={{ height: 30 }}>
-                                  <SelectValue placeholder="— اختر الحساب —" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="none">— بدون —</SelectItem>
-                                  {(accounts as any[])?.map((a: any) => (
-                                    <SelectItem key={a.id} value={String(a.id)}>{a.code} - {a.name}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </td>
-                            <td className="border-l border-slate-100 text-center">
-                              <button
-                                onClick={() => removeLink(i)}
-                                className="w-full flex items-center justify-center text-slate-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
-                                style={{ height: 30 }}
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                      {tabLinks.length === 0 && (
-                        <tr>
-                          <td colSpan={5} className="py-10 text-center text-sm text-slate-400">
-                            لا توجد حسابات — اضغط "إضافة سطر"
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+              <div className="flex gap-3" style={{ height: "calc(100vh - 260px)" }}>
+                {/* Sidebar */}
+                <div className="shrink-0 flex flex-col overflow-hidden" style={{ width: 210, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+                  <div className="px-3 pt-3 pb-2 shrink-0" style={{ borderBottom: "1px solid #f1f5f9" }}>
+                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">الدفاتر</span>
+                  </div>
+                  <div className="flex-1 overflow-y-auto py-1">
+                    {ITEMS.map(item => {
+                      const active = journalItem === item.id;
+                      return (
+                        <button key={item.id} onClick={() => setJournalItem(item.id)}
+                          className="w-full flex items-center gap-2 px-3 py-1.5 text-right rounded-md mx-1 transition-colors"
+                          style={{ background: active ? "#eef2ff" : "transparent", color: active ? "#4338ca" : "#64748b", width: "calc(100% - 8px)" }}
+                        >
+                          <span style={{ color: active ? "#6366f1" : "#94a3b8" }}>{item.icon}</span>
+                          <span className="text-[12px] truncate">{item.label}</span>
+                        </button>
+                      );
+                    })}
+                    <button
+                      className="w-full flex items-center gap-2 px-3 py-1.5 text-right text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                      onClick={() => toast.info("سيتم إضافة دفتر جديد")}
+                    >
+                      <Plus className="w-3.5 h-3.5" /> <span className="text-[12px]">إضافة دفتر</span>
+                    </button>
+                  </div>
                 </div>
-              </Section>
+
+                {/* Content */}
+                <div className="flex-1 min-w-0 flex flex-col gap-3 overflow-y-auto">
+                  <Section
+                    title={`حسابات — ${currentLabel}`}
+                    action={
+                      <button onClick={() => setLinks(p => [...p, { label: `حساب ${currentLabel} ${journalLinks.length + 1}`, accountId: "", sortOrder: p.length }])}
+                        className="flex items-center gap-1.5 text-[11px] font-medium text-indigo-600 border border-indigo-200 rounded px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 transition-colors"
+                      >
+                        <Plus className="w-3 h-3" /> إضافة سطر
+                      </button>
+                    }
+                  >
+                    <div className="overflow-hidden" style={{ border: "1px solid #e5e7eb", borderRadius: 6 }}>
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e5e7eb" }}>
+                            <th className="w-9 py-2.5 text-center text-[11px] font-semibold text-slate-400 border-l border-slate-200">#</th>
+                            <th className="py-2.5 px-3 text-right text-[11px] font-semibold text-slate-500 border-l border-slate-200 w-52">عنوان الحساب</th>
+                            <th className="py-2.5 px-3 text-center text-[11px] font-semibold text-slate-500 border-l border-slate-200 w-24">كود</th>
+                            <th className="py-2.5 px-3 text-right text-[11px] font-semibold text-slate-500">إسم الحساب</th>
+                            <th className="w-9 border-l border-slate-200" />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {journalLinks.map((link, ri) => {
+                            const i = links.indexOf(link);
+                            const acc = (accounts as any[])?.find((a: any) => String(a.id) === link.accountId);
+                            const isEven = ri % 2 === 0;
+                            return (
+                              <tr key={i} className="group hover:bg-indigo-50/40 transition-colors"
+                                style={{ height: 30, background: isEven ? "#fff" : "#f9fafb", borderBottom: "1px solid #f1f5f9" }}
+                              >
+                                <td className="text-center text-[11px] text-slate-400 border-l border-slate-100" style={{ background: isEven ? "#f8fafc" : "#f4f6f8" }}>{ri + 1}</td>
+                                <td className="border-l border-slate-100 py-0 px-0">
+                                  <input value={link.label} onChange={e => updateLink(i, "label", e.target.value)}
+                                    className="w-full py-0 px-3 text-sm bg-transparent border-0 outline-none focus:bg-indigo-50/60 text-slate-700"
+                                    style={{ height: 30 }} />
+                                </td>
+                                <td className="text-center border-l border-slate-100 px-2" style={{ background: isEven ? "#f8fafc" : "#f4f6f8" }}>
+                                  <span className="font-mono text-xs text-slate-500">{acc?.code ?? ""}</span>
+                                </td>
+                                <td className="py-0 px-0">
+                                  <Select value={link.accountId} onValueChange={v => updateLink(i, "accountId", v)}>
+                                    <SelectTrigger className="border-0 shadow-none rounded-none focus:ring-0 bg-transparent text-slate-700 text-sm" style={{ height: 30 }}>
+                                      <SelectValue placeholder="— اختر الحساب —" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="none">— بدون —</SelectItem>
+                                      {(accounts as any[])?.map((a: any) => (
+                                        <SelectItem key={a.id} value={String(a.id)}>{a.code} - {a.name}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </td>
+                                <td className="border-l border-slate-100 text-center">
+                                  <button onClick={() => removeLink(i)}
+                                    className="w-full flex items-center justify-center text-slate-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                                    style={{ height: 30 }}>
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {journalLinks.length === 0 && (
+                            <tr><td colSpan={5} className="py-8 text-center text-sm text-slate-400">لا توجد حسابات — اضغط "إضافة سطر"</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Section>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ══ TAB: أنواع المستندات ══ */}
+          {formTab === "doctypes" && (() => {
+            const DTYPE_ITEMS = [
+              { id: "sales",          label: "دفتر المبيعات",                    icon: <BookOpen className="w-3.5 h-3.5" /> },
+              { id: "sales-return",   label: "دفتر مردود المبيعات",             icon: <RotateCcw className="w-3.5 h-3.5" /> },
+              { id: "purchases",      label: "دفتر المشتريات / مردود المشتريات", icon: <BookMarked className="w-3.5 h-3.5" /> },
+              { id: "sales-order",    label: "أمر البيع",                        icon: <ClipboardList className="w-3.5 h-3.5" /> },
+              { id: "sales-quote",    label: "عرض أسعار مبيعات",                icon: <Tag className="w-3.5 h-3.5" /> },
+              { id: "purch-quote",    label: "عرض أسعار مشتريات",               icon: <Tag className="w-3.5 h-3.5" /> },
+              { id: "purchase-order", label: "أمر شراء",                         icon: <ClipboardList className="w-3.5 h-3.5" /> },
+              { id: "transfer",       label: "سند تحويل داخلي",                  icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
+            ];
+            const currentLabel = DTYPE_ITEMS.find(i => i.id === doctypeItem)?.label ?? "";
+            return (
+              <div className="flex gap-3" style={{ height: "calc(100vh - 260px)" }}>
+                {/* Sidebar */}
+                <div className="shrink-0 flex flex-col overflow-hidden" style={{ width: 210, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+                  <div className="px-3 pt-3 pb-2 shrink-0" style={{ borderBottom: "1px solid #f1f5f9" }}>
+                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">الأنواع</span>
+                  </div>
+                  <div className="flex-1 overflow-y-auto py-1">
+                    {DTYPE_ITEMS.map(item => {
+                      const active = doctypeItem === item.id;
+                      return (
+                        <button key={item.id} onClick={() => setDoctypeItem(item.id)}
+                          className="w-full flex items-center gap-2 px-3 py-1.5 text-right rounded-md mx-1 transition-colors"
+                          style={{ background: active ? "#eef2ff" : "transparent", color: active ? "#4338ca" : "#64748b", width: "calc(100% - 8px)" }}
+                        >
+                          <span style={{ color: active ? "#6366f1" : "#94a3b8" }}>{item.icon}</span>
+                          <span className="text-[12px] truncate">{item.label}</span>
+                        </button>
+                      );
+                    })}
+                    <button
+                      className="w-full flex items-center gap-2 px-3 py-1.5 text-right text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                      onClick={() => toast.info("سيتم إضافة نوع مستند جديد")}
+                    >
+                      <Plus className="w-3.5 h-3.5" /> <span className="text-[12px]">إضافة نوع مستند</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 min-w-0 overflow-y-auto">
+                  <Section title={`إعدادات — ${currentLabel}`}>
+                    <div className="grid grid-cols-4 gap-x-5 gap-y-3">
+                      <Field label="اسم النوع" span={2}>
+                        <FI value="" onChange={() => {}} placeholder={currentLabel} />
+                      </Field>
+                      <Field label="الكود">
+                        <FI value="" onChange={() => {}} placeholder="مثال: SJ-01" />
+                      </Field>
+                      <Field label="الفرع">
+                        <FS value="" onValueChange={() => {}}>
+                          {(branches ?? []).map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+                        </FS>
+                      </Field>
+                      <Field label="الدفتر المرتبط" span={2}>
+                        <FS value="" onValueChange={() => {}}>
+                          <SelectItem value="sales">دفتر المبيعات</SelectItem>
+                          <SelectItem value="purchases">دفتر المشتريات</SelectItem>
+                          <SelectItem value="transfer">سند التحويل</SelectItem>
+                        </FS>
+                      </Field>
+                      <Field label="الترقيم التلقائي" span={2}>
+                        <FS value="" onValueChange={() => {}}>
+                          <SelectItem value="yes">نعم</SelectItem>
+                          <SelectItem value="no">لا</SelectItem>
+                        </FS>
+                      </Field>
+                    </div>
+                  </Section>
+                </div>
+              </div>
             );
           })()}
 
