@@ -76,8 +76,6 @@ const menuSections = [
     emoji: "📁",
     children: [
       { id: "warehouses-config", label: "المخازن",           status: "partial", path: "/cfg/warehouses" },
-      { id: "doc-types",         label: "أنواع المستندات",    status: "partial", path: "/cfg/doc-types" },
-      { id: "doc-books",         label: "دفاتر المستندات",    status: "missing", path: "/cfg/doc-books" },
       { id: "field-design",      label: "تصميم الحقول",       status: "missing", path: "/cfg/field-design" },
       { id: "backup",            label: "النسخ الاحتياطي",    status: "done",    path: "/cfg/backup" },
       { id: "audit-log",         label: "سجل العمليات",       status: "done",    path: "/cfg/audit-log" },
@@ -763,106 +761,6 @@ function NotificationSettingsPage({ title, description }: { title: string; descr
   );
 }
 
-// ─── Doc Types ─────────────────────────────────────────────────────────────────
-
-function DocTypesPage() {
-  const types = [
-    { id: 1, name: "فاتورة مبيعات",   code: "INV",  module: "المبيعات",   prefix: "INV-", active: true },
-    { id: 2, name: "فاتورة مشتريات",  code: "PUR",  module: "المشتريات",  prefix: "PUR-", active: true },
-    { id: 3, name: "سند قبض",         code: "RCV",  module: "الحسابات",   prefix: "RCV-", active: true },
-    { id: 4, name: "سند صرف",         code: "PAY",  module: "الحسابات",   prefix: "PAY-", active: true },
-    { id: 5, name: "سند تحويل مخزني", code: "TRF",  module: "المخزون",    prefix: "TRF-", active: true },
-  ];
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h3 className="font-semibold text-sm">أنواع المستندات</h3>
-        <Button className="h-8 text-sm" onClick={() => toast.info("إضافة نوع")}><Plus className="w-3.5 h-3.5 ml-1" />نوع جديد</Button>
-      </div>
-      <Card className="border-border/50">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="text-xs">اسم المستند</TableHead>
-              <TableHead className="text-xs">الكود</TableHead>
-              <TableHead className="text-xs">الوحدة</TableHead>
-              <TableHead className="text-xs">البادئة</TableHead>
-              <TableHead className="text-xs text-center">الحالة</TableHead>
-              <TableHead className="text-xs">الإجراءات</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {types.map(t => (
-              <TableRow key={t.id}>
-                <TableCell className="text-xs font-medium">{t.name}</TableCell>
-                <TableCell className="text-xs font-mono">{t.code}</TableCell>
-                <TableCell className="text-xs">{t.module}</TableCell>
-                <TableCell className="text-xs font-mono">{t.prefix}</TableCell>
-                <TableCell className="text-center">
-                  <Badge variant={t.active ? "default" : "secondary"} className="text-xs">{t.active ? "فعّال" : "موقوف"}</Badge>
-                </TableCell>
-                <TableCell>
-                  <button className="text-primary text-xs hover:underline" onClick={() => toast.info("تعديل")}>تعديل</button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Card>
-    </div>
-  );
-}
-
-// ─── Doc Books ─────────────────────────────────────────────────────────────────
-
-function DocBooksPage() {
-  const books = [
-    { id: 1, name: "دفتر فواتير المبيعات",  docType: "فاتورة مبيعات",  from: 1,    to: 9999,  current: 47,  active: true },
-    { id: 2, name: "دفتر فواتير المشتريات", docType: "فاتورة مشتريات", from: 1,    to: 9999,  current: 23,  active: true },
-    { id: 3, name: "دفتر سندات القبض",      docType: "سند قبض",        from: 1000, to: 1999,  current: 1015,active: true },
-    { id: 4, name: "دفتر سندات الصرف",      docType: "سند صرف",        from: 2000, to: 2999,  current: 2008,active: true },
-  ];
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h3 className="font-semibold text-sm">دفاتر المستندات</h3>
-        <Button className="h-8 text-sm" onClick={() => toast.info("إضافة دفتر")}><Plus className="w-3.5 h-3.5 ml-1" />دفتر جديد</Button>
-      </div>
-      <Card className="border-border/50">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="text-xs">اسم الدفتر</TableHead>
-              <TableHead className="text-xs">نوع المستند</TableHead>
-              <TableHead className="text-xs text-center">من</TableHead>
-              <TableHead className="text-xs text-center">إلى</TableHead>
-              <TableHead className="text-xs text-center">الرقم الحالي</TableHead>
-              <TableHead className="text-xs text-center">الحالة</TableHead>
-              <TableHead className="text-xs">الإجراءات</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {books.map(b => (
-              <TableRow key={b.id}>
-                <TableCell className="text-xs font-medium">{b.name}</TableCell>
-                <TableCell className="text-xs">{b.docType}</TableCell>
-                <TableCell className="text-xs text-center">{b.from}</TableCell>
-                <TableCell className="text-xs text-center">{b.to}</TableCell>
-                <TableCell className="text-xs text-center font-bold text-primary">{b.current}</TableCell>
-                <TableCell className="text-center">
-                  <Badge variant={b.active ? "default" : "secondary"} className="text-xs">{b.active ? "نشط" : "مغلق"}</Badge>
-                </TableCell>
-                <TableCell>
-                  <button className="text-primary text-xs hover:underline" onClick={() => toast.info("تعديل الدفتر")}>تعديل</button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Card>
-    </div>
-  );
-}
 
 // ─── Field Design ──────────────────────────────────────────────────────────────
 
@@ -1331,8 +1229,6 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
     case "notif-pending":        return <NotificationSettingsPage title="تنبيه مستندات بانتظار الاعتماد" description="تنبيه عند وجود مستندات تحتاج اعتماداً" />;
     // النظام
     case "warehouses-config":    return <Warehouses />;
-    case "doc-types":            return <DocTypesPage />;
-    case "doc-books":            return <DocBooksPage />;
     case "field-design":         return <FieldDesignPage />;
     case "backup":               return <BackupPage />;
     case "audit-log":            return <AuditLogPage />;
