@@ -773,6 +773,12 @@ export const appRouter = router({
         if (hasInvoices.length > 0) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن حذف الفرع لأنه مرتبط بفواتير مبيعات' });
         }
+        const hasInventoryCounts = await db.select({ id: inventoryCounts.id }).from(inventoryCounts)
+          .where(and(eq(inventoryCounts.branchId, input.id), eq(inventoryCounts.orgId, ctx.user.orgId)))
+          .limit(1);
+        if (hasInventoryCounts.length > 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن حذف الفرع لأنه مرتبط بعمليات جرد مخزني' });
+        }
         await db.update(branches).set({ isActive: false })
           .where(and(eq(branches.id, input.id), eq(branches.orgId, ctx.user.orgId)));
         return { success: true };
