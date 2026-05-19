@@ -36,3 +36,9 @@ id = "GmODfKtSA9UEeFC_iFA7R"
 uri = "file://OneSoft_ERP_2026-05-13.tar.gz"
 type = "unspecified"
 title = "OneSoft ERP — نسخة احتياطية 2026-05-13"
+
+[[outputs]]
+id = "YbNr2K1SzXt0hBYdkhDOc"
+uri = "file://onesoft-erp-source.zip"
+type = "unspecified"
+title = "OneSoft ERP — كود المصدر (نسخة احتياطية)"
