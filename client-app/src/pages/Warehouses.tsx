@@ -291,40 +291,55 @@ export default function Warehouses() {
           {/* ══ TAB: البيانات الأساسية ══ */}
           {formTab === "basic" && <>
             {/* ── بيانات المخزن ── */}
-            <Section title="بيانات المخزن">
-              <div className="grid grid-cols-4 gap-x-5 gap-y-3">
-                <Field label="رقم">
-                  <FI value={form.code} onChange={v => set("code", v)} placeholder="001" />
-                </Field>
-                <Field label="موقع" span={3}>
-                  <FS value={form.branchId} onValueChange={v => set("branchId", v)} placeholder="المقر الرئيسي">
-                    <SelectItem value="none">المقر الرئيسي</SelectItem>
-                    {branches?.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
-                  </FS>
-                </Field>
-                <Field label="إسم 1 *" span={2}>
-                  <FI value={form.name} onChange={v => set("name", v)} placeholder="الاسم بالعربي" />
-                </Field>
-                <Field label="إسم 2" span={2}>
-                  <FI value={form.name2} onChange={v => set("name2", v)} placeholder="Name in English" />
-                </Field>
-                <Field label="إسم كامل 1" span={2}>
-                  <FI value={form.fullName1} onChange={v => set("fullName1", v)} placeholder="الاسم الكامل بالعربي" />
-                </Field>
-                <Field label="إسم كامل 2" span={2}>
-                  <FI value={form.fullName2} onChange={v => set("fullName2", v)} placeholder="Full name in English" />
-                </Field>
-                <Field label="ملحوظة" span={4}>
-                  <FI value={form.description} onChange={v => set("description", v)} placeholder="ملاحظات إضافية..." />
-                </Field>
-              </div>
-              <div className="mt-3 pt-3" style={{ borderTop: "1px solid #f1f5f9" }}>
-                <button className="text-[12px] font-medium text-indigo-600 hover:text-indigo-800 hover:underline"
-                  onClick={() => toast.info("الروابط المحاسبية")}>
-                  الروابط المحاسبية
-                </button>
-              </div>
-            </Section>
+            {(() => {
+              const IL = ({ label, lw = 80, children }: { label: string; lw?: number; children: React.ReactNode }) => (
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 min-w-0">{children}</div>
+                  <span className="text-[12px] font-medium text-slate-600 shrink-0 text-right" style={{ width: lw }}>{label}</span>
+                </div>
+              );
+              return (
+                <Section title="بيانات المخزن">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                    {/* رقم + موقع */}
+                    <IL label="رقم" lw={40}>
+                      <FI value={form.code} onChange={v => set("code", v)} placeholder="001" />
+                    </IL>
+                    <IL label="موقع">
+                      <FS value={form.branchId} onValueChange={v => set("branchId", v)} placeholder="المقر الرئيسي">
+                        <SelectItem value="none">المقر الرئيسي</SelectItem>
+                        {branches?.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+                      </FS>
+                    </IL>
+                    {/* إسم 1 + إسم 2 */}
+                    <IL label="إسم 1 *">
+                      <FI value={form.name} onChange={v => set("name", v)} placeholder="الاسم بالعربي" />
+                    </IL>
+                    <IL label="إسم 2">
+                      <FI value={form.name2} onChange={v => set("name2", v)} placeholder="Name in English" />
+                    </IL>
+                    {/* إسم كامل 1 + إسم كامل 2 */}
+                    <IL label="إسم كامل 1">
+                      <FI value={form.fullName1} onChange={v => set("fullName1", v)} placeholder="الاسم الكامل بالعربي" />
+                    </IL>
+                    <IL label="إسم كامل 2">
+                      <FI value={form.fullName2} onChange={v => set("fullName2", v)} placeholder="Full name in English" />
+                    </IL>
+                    {/* ملحوظة - full width */}
+                    <div className="col-span-2">
+                      <div className="text-[12px] font-medium text-slate-600 mb-1">ملحوظة</div>
+                      <FI value={form.description} onChange={v => set("description", v)} placeholder="ملاحظات إضافية..." />
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-2 flex justify-end" style={{ borderTop: "1px solid #f1f5f9" }}>
+                    <button className="text-[12px] font-medium text-indigo-600 hover:text-indigo-800 hover:underline"
+                      onClick={() => toast.info("الروابط المحاسبية")}>
+                      الروابط المحاسبية
+                    </button>
+                  </div>
+                </Section>
+              );
+            })()}
 
             {/* ── حدود الاستخدام ── */}
             <Section title="حدود الاستخدام">
