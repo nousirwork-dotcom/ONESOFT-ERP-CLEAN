@@ -290,68 +290,106 @@ export default function Warehouses() {
 
           {/* ══ TAB: البيانات الأساسية ══ */}
           {formTab === "basic" && <>
-            <Section title="البيانات الأساسية">
+            {/* ── بيانات المخزن ── */}
+            <Section title="بيانات المخزن">
               <div className="grid grid-cols-4 gap-x-5 gap-y-3">
-                <Field label="رقم المخزن">
+                <Field label="رقم">
                   <FI value={form.code} onChange={v => set("code", v)} placeholder="001" />
                 </Field>
-                <Field label="الموقع / الفرع" span={2}>
+                <Field label="موقع" span={3}>
                   <FS value={form.branchId} onValueChange={v => set("branchId", v)} placeholder="المقر الرئيسي">
                     <SelectItem value="none">المقر الرئيسي</SelectItem>
                     {branches?.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
                   </FS>
                 </Field>
-                <div />
                 <Field label="إسم 1 *" span={2}>
-                  <FI value={form.name} onChange={v => set("name", v)} placeholder="الإسم الأول" />
+                  <FI value={form.name} onChange={v => set("name", v)} placeholder="الاسم بالعربي" />
                 </Field>
                 <Field label="إسم 2" span={2}>
-                  <FI value={form.name2} onChange={v => set("name2", v)} placeholder="الإسم الثاني" />
+                  <FI value={form.name2} onChange={v => set("name2", v)} placeholder="Name in English" />
                 </Field>
-                <Field label="الإسم الكامل 1" span={4}>
-                  <FI value={form.fullName1} onChange={v => set("fullName1", v)} />
+                <Field label="إسم كامل 1" span={2}>
+                  <FI value={form.fullName1} onChange={v => set("fullName1", v)} placeholder="الاسم الكامل بالعربي" />
                 </Field>
-                <Field label="الإسم الكامل 2" span={4}>
-                  <FI value={form.fullName2} onChange={v => set("fullName2", v)} />
+                <Field label="إسم كامل 2" span={2}>
+                  <FI value={form.fullName2} onChange={v => set("fullName2", v)} placeholder="Full name in English" />
                 </Field>
                 <Field label="ملحوظة" span={4}>
-                  <FI value={form.description} onChange={v => set("description", v)} />
+                  <FI value={form.description} onChange={v => set("description", v)} placeholder="ملاحظات إضافية..." />
                 </Field>
+              </div>
+              <div className="mt-3 pt-3" style={{ borderTop: "1px solid #f1f5f9" }}>
+                <button className="text-[12px] font-medium text-indigo-600 hover:text-indigo-800 hover:underline"
+                  onClick={() => toast.info("الروابط المحاسبية")}>
+                  الروابط المحاسبية
+                </button>
               </div>
             </Section>
 
-            <div className="grid grid-cols-2 gap-3">
-              <Section title="حدود الاستخدام">
-                <div className="space-y-3">
-                  <Field label="مجموعة المستخدمين">
-                    <FI value={form.allowedUserGroup} onChange={v => set("allowedUserGroup", v)} placeholder="اسم المجموعة" />
-                  </Field>
-                  <Field label="مستخدم محدد">
-                    <FS value={form.allowedUserId} onValueChange={v => set("allowedUserId", v)} placeholder="— الكل —">
-                      <SelectItem value="none">— الكل —</SelectItem>
-                      {(users as any[])?.map((u: any) => (
-                        <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
-                      ))}
-                    </FS>
-                  </Field>
+            {/* ── حدود الاستخدام ── */}
+            <Section title="حدود الاستخدام">
+              <div className="grid grid-cols-4 gap-x-5 gap-y-3 items-end">
+                <Field label="مجموعة مستخدمين" span={2}>
+                  <FI value={form.allowedUserGroup} onChange={v => set("allowedUserGroup", v)} placeholder="— الكل —" />
+                </Field>
+                <Field label="مستخدم" span={2}>
+                  <FS value={form.allowedUserId} onValueChange={v => set("allowedUserId", v)} placeholder="— الكل —">
+                    <SelectItem value="none">— الكل —</SelectItem>
+                    {(users as any[])?.map((u: any) => (
+                      <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
+                    ))}
+                  </FS>
+                </Field>
+                <div className="col-span-1">
+                  <button
+                    className="h-9 px-4 text-[12px] rounded border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-600 transition-colors"
+                    onClick={() => {
+                      if (otherWarehouses.length === 0) { toast.info("لا يوجد مخازن أخرى للنسخ منها"); return; }
+                      toast.info("نسخ من مخزن آخر");
+                    }}
+                  >
+                    نسخ من
+                  </button>
                 </div>
-              </Section>
+              </div>
+            </Section>
 
-              <Section title="الروابط المحاسبية">
-                <div className="space-y-3">
-                  <Field label="إستبعد من مخزن">
-                    <FS value={form.copyFromWarehouseId} onValueChange={v => set("copyFromWarehouseId", v)} placeholder="— بدون —">
-                      <SelectItem value="none">— بدون —</SelectItem>
-                      {otherWarehouses.map(w => (
-                        <SelectItem key={w.id} value={String(w.id)}>
-                          {(w as any).code ? `${(w as any).code} - ${w.name}` : w.name}
-                        </SelectItem>
-                      ))}
-                    </FS>
-                  </Field>
-                </div>
-              </Section>
-            </div>
+            {/* ── جدول الروابط المحاسبية ── */}
+            <Section title="الروابط المحاسبية">
+              <div style={{ overflowX: "auto" }}>
+                <table className="w-full text-right" style={{ borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e5e7eb" }}>
+                      <th className="text-[11px] font-semibold text-slate-500 px-3 py-2 text-right">#</th>
+                      <th className="text-[11px] font-semibold text-slate-500 px-3 py-2 text-right">بيان</th>
+                      <th className="text-[11px] font-semibold text-slate-500 px-3 py-2 text-right">كود الحساب</th>
+                      <th className="text-[11px] font-semibold text-slate-500 px-3 py-2 text-right">إسم الحساب</th>
+                      <th className="text-[11px] font-semibold text-slate-500 px-3 py-2"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {links.map((row, idx) => {
+                      const acc = (accounts as any[])?.find((a: any) => String(a.id) === row.accountId);
+                      return (
+                        <tr key={idx} style={{ borderBottom: "1px solid #f1f5f9", background: idx % 2 === 0 ? "#fff" : "#fafafa", height: 30 }}>
+                          <td className="px-3 text-[11px] text-slate-400">{idx + 1}</td>
+                          <td className="px-3 text-[12px] text-slate-700 font-medium">{row.label}</td>
+                          <td className="px-3 text-[12px] font-mono text-slate-500">{acc?.code ?? "—"}</td>
+                          <td className="px-3 text-[12px] text-slate-600">{acc?.name ?? "— اختر الحساب —"}</td>
+                          <td className="px-3 py-1">
+                            <FS value={row.accountId} onValueChange={v => setLinks(prev => prev.map((l, i) => i === idx ? { ...l, accountId: v } : l))}>
+                              {(accounts as any[])?.map((a: any) => (
+                                <SelectItem key={a.id} value={String(a.id)}>{a.code} — {a.name}</SelectItem>
+                              ))}
+                            </FS>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Section>
           </>}
 
           {/* ══ TAB: دفاتر المستندات ══ */}
