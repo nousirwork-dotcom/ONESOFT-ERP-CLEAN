@@ -767,7 +767,7 @@ export default function Warehouses() {
                   <thead>
                     <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e5e7eb" }}>
                       <th className="text-[11px] font-semibold text-slate-500 px-3 py-2 text-right">#</th>
-                      <th className="text-[11px] font-semibold text-slate-500 px-3 py-2 text-right">عنوان</th>
+                      <th className="text-[11px] font-semibold text-slate-500 px-3 py-2 text-right">بيان</th>
                       <th className="text-[11px] font-semibold text-slate-500 px-3 py-2 text-right">كود الحساب</th>
                       <th className="text-[11px] font-semibold text-slate-500 px-3 py-2 text-right">إسم الحساب</th>
                       <th className="text-[11px] font-semibold text-slate-500 px-3 py-2"></th>
