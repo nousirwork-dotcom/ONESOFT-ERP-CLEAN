@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
-import { Shield, Users as UsersIcon } from "lucide-react";
+import { Shield, Trash2, Users as UsersIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -28,12 +28,22 @@ export default function Users() {
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [role, setRole] = useState<string>("");
   const [branchId, setBranchId] = useState<string>("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const utils = trpc.useUtils();
 
   const { data: users, isLoading } = trpc.users.list.useQuery();
   const { data: branches } = trpc.branches.list.useQuery();
   const updateRole = trpc.users.updateRole.useMutation({
     onSuccess: () => { utils.users.list.invalidate(); toast.success("تم تحديث الصلاحية"); setIsOpen(false); },
+    onError: (e) => toast.error(e.message),
+  });
+  const deleteUser = trpc.users.delete.useMutation({
+    onSuccess: () => {
+      utils.users.list.invalidate();
+      toast.success("تم حذف المستخدم");
+      setShowDeleteConfirm(false);
+      setIsOpen(false);
+    },
     onError: (e) => toast.error(e.message),
   });
 
@@ -45,6 +55,9 @@ export default function Users() {
   };
   const handleSubmit = () => {
     updateRole.mutate({ userId: selectedUser.id, role: role as any, branchId: branchId ? Number(branchId) : undefined });
+  };
+  const handleDelete = () => {
+    if (selectedUser) deleteUser.mutate({ id: selectedUser.id });
   };
 
   return (
@@ -106,6 +119,7 @@ export default function Users() {
           </Table>
         </CardContent>
       </Card>
+
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>تعديل صلاحيات: {selectedUser?.name}</DialogTitle></DialogHeader>
@@ -133,9 +147,34 @@ export default function Users() {
               </Select>
             </div>
           </div>
+          <DialogFooter className="flex-row-reverse sm:flex-row gap-2">
+            <Button
+              variant="destructive"
+              onClick={() => setShowDeleteConfirm(true)}
+              className="mr-auto gap-1"
+            >
+              <Trash2 className="w-4 h-4" />
+              حذف
+            </Button>
+            <div className="flex gap-2 ms-auto">
+              <Button variant="outline" onClick={() => setIsOpen(false)}>إلغاء</Button>
+              <Button onClick={handleSubmit} disabled={updateRole.isPending}>حفظ الصلاحيات</Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>تأكيد الحذف</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            هل أنت متأكد من حذف المستخدم "<span className="font-medium text-foreground">{selectedUser?.name}</span>"؟ سيتم تعطيل حساب المستخدم ولن يتمكن من تسجيل الدخول.
+          </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsOpen(false)}>إلغاء</Button>
-            <Button onClick={handleSubmit} disabled={updateRole.isPending}>حفظ الصلاحيات</Button>
+            <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>إلغاء</Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleteUser.isPending}>
+              {deleteUser.isPending ? "جاري الحذف..." : "حذف"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

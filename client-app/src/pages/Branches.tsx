@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
-import { Building2, Edit, Plus } from "lucide-react";
+import { Building2, Edit, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -16,6 +16,7 @@ export default function Branches() {
   const [isOpen, setIsOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const utils = trpc.useUtils();
 
   const { data: branches, isLoading } = trpc.branches.list.useQuery();
@@ -25,6 +26,15 @@ export default function Branches() {
   });
   const update = trpc.branches.update.useMutation({
     onSuccess: () => { utils.branches.list.invalidate(); toast.success("تم تحديث الفرع"); setIsOpen(false); },
+    onError: (e) => toast.error(e.message),
+  });
+  const deleteBranch = trpc.branches.delete.useMutation({
+    onSuccess: () => {
+      utils.branches.list.invalidate();
+      toast.success("تم حذف الفرع");
+      setShowDeleteConfirm(false);
+      setIsOpen(false);
+    },
     onError: (e) => toast.error(e.message),
   });
 
@@ -39,6 +49,9 @@ export default function Branches() {
     const data = { name: form.name.trim(), address: form.address || undefined, phone: form.phone || undefined };
     if (editId) update.mutate({ id: editId, ...data });
     else create.mutate(data);
+  };
+  const handleDelete = () => {
+    if (editId) deleteBranch.mutate({ id: editId });
   };
 
   return (
@@ -95,6 +108,7 @@ export default function Branches() {
           </Table>
         </CardContent>
       </Card>
+
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>{editId ? "تعديل الفرع" : "إضافة فرع جديد"}</DialogTitle></DialogHeader>
@@ -103,9 +117,36 @@ export default function Branches() {
             <div><Label>العنوان</Label><Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="mt-1" /></div>
             <div><Label>الهاتف</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="mt-1" /></div>
           </div>
+          <DialogFooter className="flex-row-reverse sm:flex-row gap-2">
+            {editId && (
+              <Button
+                variant="destructive"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="mr-auto gap-1"
+              >
+                <Trash2 className="w-4 h-4" />
+                حذف
+              </Button>
+            )}
+            <div className="flex gap-2 ms-auto">
+              <Button variant="outline" onClick={() => setIsOpen(false)}>إلغاء</Button>
+              <Button onClick={handleSubmit} disabled={create.isPending || update.isPending}>{editId ? "حفظ" : "إضافة"}</Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>تأكيد الحذف</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            هل أنت متأكد من حذف الفرع "<span className="font-medium text-foreground">{form.name}</span>"؟ لا يمكن التراجع عن هذا الإجراء.
+          </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsOpen(false)}>إلغاء</Button>
-            <Button onClick={handleSubmit} disabled={create.isPending || update.isPending}>{editId ? "حفظ" : "إضافة"}</Button>
+            <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>إلغاء</Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleteBranch.isPending}>
+              {deleteBranch.isPending ? "جاري الحذف..." : "حذف"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

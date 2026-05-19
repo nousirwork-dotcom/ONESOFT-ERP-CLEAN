@@ -758,6 +758,25 @@ export const appRouter = router({
         await db.update(branches).set(data as any).where(and(eq(branches.id, id), eq(branches.orgId, ctx.user.orgId)));
         return { success: true };
       }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const hasWarehouses = await db.select({ id: warehouses.id }).from(warehouses)
+          .where(and(eq(warehouses.branchId, input.id), eq(warehouses.orgId, ctx.user.orgId), eq(warehouses.isActive, true)))
+          .limit(1);
+        if (hasWarehouses.length > 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن حذف الفرع لأنه مرتبط بمخازن' });
+        }
+        const hasInvoices = await db.select({ id: salesInvoices.id }).from(salesInvoices)
+          .where(and(eq(salesInvoices.branchId, input.id), eq(salesInvoices.orgId, ctx.user.orgId)))
+          .limit(1);
+        if (hasInvoices.length > 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن حذف الفرع لأنه مرتبط بفواتير مبيعات' });
+        }
+        await db.update(branches).set({ isActive: false })
+          .where(and(eq(branches.id, input.id), eq(branches.orgId, ctx.user.orgId)));
+        return { success: true };
+      }),
   }),
 
   // ─── Warehouses ──────────────────────────────────────────────────────────────
