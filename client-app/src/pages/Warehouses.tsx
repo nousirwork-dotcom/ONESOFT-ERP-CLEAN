@@ -688,44 +688,115 @@ export default function Warehouses() {
     const renderContent = () => {
       if (isJournalBasic) {
         return (
-          <div className="space-y-4">
-            <Section title="البيانات الأساسية للمخزن">
+          <div className="space-y-3">
+            {/* ── بيانات المخزن ── */}
+            <Section title="بيانات المخزن">
               <div className="grid grid-cols-4 gap-x-5 gap-y-3">
-                <Field label="طريقة تقييم المخزون">
+                {/* رقم + موقع */}
+                <Field label="رقم">
+                  <FI value="001" onChange={() => {}} placeholder="001" />
+                </Field>
+                <Field label="موقع" span={3}>
                   <FS value="" onValueChange={() => {}}>
-                    <SelectItem value="fifo">FIFO — الأول دخولاً الأول خروجاً</SelectItem>
-                    <SelectItem value="avg">متوسط التكلفة</SelectItem>
-                    <SelectItem value="lifo">LIFO — الأخير دخولاً الأول خروجاً</SelectItem>
+                    <SelectItem value="hq">المقر الرئيسي</SelectItem>
+                    <SelectItem value="branch1">فرع 1</SelectItem>
+                    <SelectItem value="branch2">فرع 2</SelectItem>
                   </FS>
                 </Field>
-                <Field label="السماح بمخزون سالب">
+                {/* إسم 1 + إسم 2 */}
+                <Field label="إسم 1" span={2}>
+                  <FI value="" onChange={() => {}} placeholder="الاسم بالعربي" />
+                </Field>
+                <Field label="إسم 2" span={2}>
+                  <FI value="" onChange={() => {}} placeholder="Name in English" />
+                </Field>
+                {/* إسم كامل 1 + إسم كامل 2 */}
+                <Field label="إسم كامل 1" span={2}>
+                  <FI value="" onChange={() => {}} placeholder="الاسم الكامل بالعربي" />
+                </Field>
+                <Field label="إسم كامل 2" span={2}>
+                  <FI value="" onChange={() => {}} placeholder="Full name in English" />
+                </Field>
+                {/* ملحوظة */}
+                <Field label="ملحوظة" span={4}>
+                  <FI value="" onChange={() => {}} placeholder="ملاحظات إضافية..." />
+                </Field>
+              </div>
+
+              {/* الروابط المحاسبية */}
+              <div className="mt-3 pt-3" style={{ borderTop: "1px solid #f1f5f9" }}>
+                <button
+                  className="text-[12px] font-medium text-indigo-600 hover:text-indigo-800 hover:underline"
+                  onClick={() => toast.info("الروابط المحاسبية")}
+                >
+                  الروابط المحاسبية
+                </button>
+              </div>
+            </Section>
+
+            {/* ── حدود الاستخدام ── */}
+            <Section title="حدود الاستخدام">
+              <div className="grid grid-cols-4 gap-x-5 gap-y-3 items-end">
+                <Field label="مجموعة مستخدمين" span={2}>
                   <FS value="" onValueChange={() => {}}>
-                    <SelectItem value="yes">نعم</SelectItem>
-                    <SelectItem value="no">لا</SelectItem>
+                    <SelectItem value="all">الكل</SelectItem>
+                    <SelectItem value="sales">فريق المبيعات</SelectItem>
+                    <SelectItem value="store">فريق المخزن</SelectItem>
                   </FS>
                 </Field>
-                <Field label="الفرع الافتراضي" span={2}>
+                <Field label="مستخدم" span={2}>
                   <FS value="" onValueChange={() => {}}>
-                    {(branches ?? []).map(b => (
-                      <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
-                    ))}
+                    <SelectItem value="all">الكل</SelectItem>
                   </FS>
                 </Field>
-                <Field label="بادئة كود المخزن">
-                  <FI value="" onChange={() => {}} placeholder="WH-" />
-                </Field>
-                <Field label="رقم البداية">
-                  <FI value="" onChange={() => {}} placeholder="1" />
-                </Field>
-                <Field label="عدد الأرقام">
-                  <FI value="" onChange={() => {}} placeholder="3" />
-                </Field>
-                <Field label="الترقيم التلقائي">
-                  <FS value="" onValueChange={() => {}}>
-                    <SelectItem value="yes">نعم</SelectItem>
-                    <SelectItem value="no">لا</SelectItem>
-                  </FS>
-                </Field>
+                <div className="col-span-1">
+                  <button
+                    className="h-9 px-4 text-[12px] rounded border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-600 transition-colors"
+                    onClick={() => toast.info("نسخ من مخزن آخر")}
+                  >
+                    نسخ من
+                  </button>
+                </div>
+              </div>
+            </Section>
+
+            {/* ── جدول الروابط المحاسبية ── */}
+            <Section title="الروابط المحاسبية">
+              <div style={{ overflowX: "auto" }}>
+                <table className="w-full text-right" style={{ borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e5e7eb" }}>
+                      <th className="text-[11px] font-semibold text-slate-500 px-3 py-2 text-right">#</th>
+                      <th className="text-[11px] font-semibold text-slate-500 px-3 py-2 text-right">عنوان</th>
+                      <th className="text-[11px] font-semibold text-slate-500 px-3 py-2 text-right">كود الحساب</th>
+                      <th className="text-[11px] font-semibold text-slate-500 px-3 py-2 text-right">إسم الحساب</th>
+                      <th className="text-[11px] font-semibold text-slate-500 px-3 py-2"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {DEFAULT_LINKS.map((row, idx) => {
+                      const acc = (accounts as any[])?.find((a: any) => String(a.id) === row.accountId);
+                      return (
+                        <tr
+                          key={idx}
+                          style={{ borderBottom: "1px solid #f1f5f9", background: idx % 2 === 0 ? "#fff" : "#fafafa", height: 30 }}
+                        >
+                          <td className="px-3 text-[11px] text-slate-400">{idx + 1}</td>
+                          <td className="px-3 text-[12px] text-slate-700 font-medium">{row.label}</td>
+                          <td className="px-3 text-[12px] font-mono text-slate-500">{acc?.code ?? "—"}</td>
+                          <td className="px-3 text-[12px] text-slate-600">{acc?.name ?? "— اختر الحساب —"}</td>
+                          <td className="px-3">
+                            <FS value={row.accountId} onValueChange={() => {}}>
+                              {(accounts as any[])?.map((a: any) => (
+                                <SelectItem key={a.id} value={String(a.id)}>{a.code} — {a.name}</SelectItem>
+                              ))}
+                            </FS>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </Section>
           </div>
