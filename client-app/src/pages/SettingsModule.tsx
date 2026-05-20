@@ -860,8 +860,8 @@ function UserCategoriesPage() {
 
 type PendingMember = { memberType: 'user' | 'group'; memberCode: string; memberName: string };
 
-function MemberRow({ memberType, setMemberType, memberCode, setMemberCode, memberName, setMemberName, onAdd, users, groups, existingCodes = [] }:
-  { memberType: 'user'|'group'; setMemberType: (v:'user'|'group')=>void; memberCode:string; setMemberCode:(v:string)=>void; memberName:string; setMemberName:(v:string)=>void; onAdd:()=>void; users:any[]; groups:any[]; existingCodes?: string[] }) {
+function MemberRow({ memberType, setMemberType, memberCode, setMemberCode, memberName, setMemberName, onAdd, users, groups, existingCodes = [], dupHighlight = false }:
+  { memberType: 'user'|'group'; setMemberType: (v:'user'|'group')=>void; memberCode:string; setMemberCode:(v:string)=>void; memberName:string; setMemberName:(v:string)=>void; onAdd:()=>void; users:any[]; groups:any[]; existingCodes?: string[]; dupHighlight?: boolean }) {
 
   const [notFound, setNotFound] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
@@ -969,7 +969,7 @@ function MemberRow({ memberType, setMemberType, memberCode, setMemberCode, membe
           <div className="flex items-center gap-0.5">
             <Input
               ref={inputRef}
-              className={`h-7 text-xs w-24 ${errorMsg ? "border-destructive focus-visible:ring-destructive" : ""}`}
+              className={`h-7 text-xs w-24 ${errorMsg || dupHighlight ? "border-destructive focus-visible:ring-destructive" : ""}`}
               placeholder="الكود"
               value={memberCode}
               onChange={e => { setMemberCode(e.target.value); setMemberName(""); setNotFound(false); setShowPicker(true); setPickerFocusIdx(-1); }}
@@ -1155,28 +1155,44 @@ function UserGroupsPage() {
 
   // duplicate rows highlighted at save time (not during typing)
   const [dupKeySet, setDupKeySet] = useState<Set<string>>(new Set());
+  const [inputRowDup, setInputRowDup] = useState(false);
 
   const addPending = () => {
     if (!rowCode.trim() || !rowName.trim()) return;
     setPendingMembers(prev => [...prev, { memberType: rowType, memberCode: rowCode.trim(), memberName: rowName }]);
     setDupKeySet(new Set());
+    setInputRowDup(false);
     setRowCode(""); setRowName("");
   };
 
   const validateAndSave = async () => {
-    // check duplicates in pendingMembers
+    // build full list: pendingMembers + current input row (if filled)
+    const inputFilled = !!rowCode.trim() && !!rowName.trim();
+    const allRows: PendingMember[] = inputFilled
+      ? [...pendingMembers, { memberType: rowType, memberCode: rowCode.trim(), memberName: rowName }]
+      : [...pendingMembers];
+
+    // find duplicate type:code keys
     const seen = new Map<string, number>();
-    for (const m of pendingMembers) {
+    for (const m of allRows) {
       const key = `${m.memberType}:${m.memberCode}`;
       seen.set(key, (seen.get(key) ?? 0) + 1);
     }
-    const dups = new Set<string>([...seen.entries()].filter(([,c]) => c > 1).map(([k]) => k));
-    if (dups.size > 0) {
+    const dups = new Set<string>();
+    for (const [key, count] of seen.entries()) { if (count > 1) dups.add(key); }
+
+    // also flag input row if it duplicates an existing pendingMember
+    const inputKey = `${rowType}:${rowCode.trim()}`;
+    const inputIsDup = inputFilled && pendingMembers.some(m => `${m.memberType}:${m.memberCode}` === inputKey);
+
+    if (dups.size > 0 || inputIsDup) {
       setDupKeySet(dups);
-      toast.error("يوجد عضو مكرر داخل المجموعة — أزل التكرار ثم احفظ");
+      setInputRowDup(inputIsDup);
+      toast.error("العضو تم تكراره بالجدول — أزل التكرار ثم احفظ");
       return;
     }
     setDupKeySet(new Set());
+    setInputRowDup(false);
     try {
       const g = await createGroup.mutateAsync({ code: newCode || undefined, name: newName.trim() });
       if (pendingMembers.length) {
@@ -1245,9 +1261,11 @@ function UserGroupsPage() {
                     </TableRow>
                   );
                 })}
-                <MemberRow memberType={rowType} setMemberType={setRowType} memberCode={rowCode} setMemberCode={setRowCode}
+                <MemberRow memberType={rowType} setMemberType={setRowType}
+                  memberCode={rowCode} setMemberCode={v => { setRowCode(v); setInputRowDup(false); }}
                   memberName={rowName} setMemberName={setRowName} users={allUsers} groups={groups}
                   existingCodes={[]}
+                  dupHighlight={inputRowDup}
                   onAdd={addPending} />
               </TableBody>
             </Table>
@@ -1260,12 +1278,12 @@ function UserGroupsPage() {
               {(createGroup.isPending || addBulk.isPending) ? "جارٍ الحفظ..." : "حفظ"}
             </Button>
             <Button size="sm" variant="outline" className="h-7 text-xs"
-              onClick={() => { setShowAdd(false); setNewCode(""); setNewName(""); setPendingMembers([]); setDupKeySet(new Set()); }}>
+              onClick={() => { setShowAdd(false); setNewCode(""); setNewName(""); setPendingMembers([]); setDupKeySet(new Set()); setInputRowDup(false); }}>
               إلغاء
             </Button>
-            {dupKeySet.size > 0 && (
+            {(dupKeySet.size > 0 || inputRowDup) && (
               <span className="text-[11px] text-destructive font-medium flex items-center gap-1">
-                ⚠ يوجد عضو مكرر داخل المجموعة — أزل التكرار ثم احفظ
+                ⚠ العضو تم تكراره بالجدول — لا يمكن الحفظ
               </span>
             )}
           </div>
