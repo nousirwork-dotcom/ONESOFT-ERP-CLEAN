@@ -52,7 +52,7 @@ import InventoryModule, {
 } from "./pages/InventoryModule";
 import SettingsModule, {
   CfgCompanyTab, CfgCurrenciesTab, CfgTaxesTab, CfgFiscalTab,
-  CfgUsersTab, CfgUserGroupsTab, CfgPermissionsTab,
+  CfgUserCategoriesTab, CfgUsersTab, CfgUserGroupsTab, CfgPermissionsTab,
   CfgApproveInvoiceTab, CfgApprovePurchaseTab, CfgApproveDiscountTab,
   CfgApproveInventoryTab, CfgApproveJournalTab, CfgApprovalsLogTab, CfgApprovalPathsTab,
   CfgNotifStockTab, CfgNotifCreditTab, CfgNotifOverdueTab, CfgNotifExpiryTab,
@@ -182,6 +182,7 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/cfg/currencies":        CfgCurrenciesTab,
   "/cfg/taxes":             CfgTaxesTab,
   "/cfg/fiscal":            CfgFiscalTab,
+  "/cfg/user-categories":   CfgUserCategoriesTab,
   "/cfg/users":             CfgUsersTab,
   "/cfg/user-groups":       CfgUserGroupsTab,
   "/cfg/permissions":       CfgPermissionsTab,
