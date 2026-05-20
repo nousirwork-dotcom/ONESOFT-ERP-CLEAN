@@ -34,8 +34,9 @@ const menuSections = [
       { id: "company-info",   label: "معلومات الشركة",      status: "done",    path: "/cfg/company" },
       { id: "currencies",     label: "العملات",              status: "done",    path: "/cfg/currencies" },
       { id: "taxes",          label: "الضرائب",              status: "done",    path: "/cfg/taxes" },
-      { id: "fiscal-periods", label: "الفترات المحاسبية",    status: "done",    path: "/cfg/fiscal" },
-      { id: "users-list",     label: "المستخدمين",           status: "missing", path: "/cfg/users" },
+      { id: "fiscal-periods",   label: "الفترات المحاسبية",    status: "done",    path: "/cfg/fiscal" },
+      { id: "user-categories", label: "فئات المستخدمين",      status: "done",    path: "/cfg/user-categories" },
+      { id: "users-list",      label: "المستخدمين",           status: "missing", path: "/cfg/users" },
       { id: "user-groups",    label: "مجموعات المستخدمين",   status: "missing", path: "/cfg/user-groups" },
       { id: "permissions",    label: "صلاحيات المستخدمين",   status: "missing", path: "/cfg/permissions" },
     ],
@@ -528,6 +529,128 @@ function UsersListPage() {
                   <div className="flex gap-2">
                     <button className="text-destructive text-xs hover:underline"
                       onClick={() => deleteUser.mutate({ id: u.id })}>
+                      حذف
+                    </button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
+    </div>
+  );
+}
+
+// ─── User Categories ───────────────────────────────────────────────────────────
+
+function UserCategoriesPage() {
+  const utils = trpc.useUtils();
+  const { data: cats = [], isLoading } = trpc.userCategories.list.useQuery();
+  const createCat = trpc.userCategories.create.useMutation({
+    onSuccess: () => { utils.userCategories.list.invalidate(); setShowAdd(false); setNewCode(""); setNewName(""); toast.success("تم إضافة الفئة"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const updateCat = trpc.userCategories.update.useMutation({
+    onSuccess: () => { utils.userCategories.list.invalidate(); setEditId(null); toast.success("تم تعديل الفئة"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const deleteCat = trpc.userCategories.delete.useMutation({
+    onSuccess: () => { utils.userCategories.list.invalidate(); toast.success("تم حذف الفئة"); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const [showAdd, setShowAdd] = useState(false);
+  const [newCode, setNewCode] = useState("");
+  const [newName, setNewName] = useState("");
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editCode, setEditCode] = useState("");
+  const [editName, setEditName] = useState("");
+
+  return (
+    <div className="space-y-4" dir="rtl">
+      <div className="flex justify-between items-center">
+        <h3 className="font-semibold text-sm">فئات المستخدمين</h3>
+        <Button className="h-8 text-sm" onClick={() => { setShowAdd(v => !v); setEditId(null); }}>
+          <Plus className="w-3.5 h-3.5 ml-1" />فئة جديدة
+        </Button>
+      </div>
+
+      {showAdd && (
+        <Card className="border-indigo-200 bg-indigo-50/40 p-4">
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <Label className="text-xs mb-1 block">الكود</Label>
+              <Input className="h-8 text-sm" value={newCode} onChange={e => setNewCode(e.target.value)} placeholder="CAT01" autoFocus />
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">اسم الفئة *</Label>
+              <Input className="h-8 text-sm" value={newName} onChange={e => setNewName(e.target.value)} placeholder="مثال: المحاسبون" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" className="h-7 text-xs" disabled={!newName.trim() || createCat.isPending}
+              onClick={() => createCat.mutate({ code: newCode || undefined, name: newName.trim() })}>
+              {createCat.isPending ? "جارٍ الحفظ..." : "حفظ"}
+            </Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs"
+              onClick={() => { setShowAdd(false); setNewCode(""); setNewName(""); }}>
+              إلغاء
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {editId !== null && (
+        <Card className="border-amber-200 bg-amber-50/30 p-4">
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <Label className="text-xs mb-1 block">الكود</Label>
+              <Input className="h-8 text-sm" value={editCode} onChange={e => setEditCode(e.target.value)} autoFocus />
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">اسم الفئة *</Label>
+              <Input className="h-8 text-sm" value={editName} onChange={e => setEditName(e.target.value)} />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" className="h-7 text-xs" disabled={!editName.trim() || updateCat.isPending}
+              onClick={() => updateCat.mutate({ id: editId, code: editCode || undefined, name: editName.trim() })}>
+              {updateCat.isPending ? "جارٍ الحفظ..." : "حفظ"}
+            </Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditId(null)}>إلغاء</Button>
+          </div>
+        </Card>
+      )}
+
+      <Card className="border-border/50">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-xs w-20">الكود</TableHead>
+              <TableHead className="text-xs">اسم الفئة</TableHead>
+              <TableHead className="text-xs">الإجراءات</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading && (
+              <TableRow><TableCell colSpan={3} className="text-xs text-center text-muted-foreground py-6">جارٍ التحميل...</TableCell></TableRow>
+            )}
+            {!isLoading && cats.length === 0 && (
+              <TableRow><TableCell colSpan={3} className="text-xs text-center text-muted-foreground py-6">لا توجد فئات — أضف فئة جديدة</TableCell></TableRow>
+            )}
+            {cats.map((c: any) => (
+              <TableRow key={c.id} className={editId === c.id ? "bg-amber-50/40" : ""}>
+                <TableCell className="text-xs font-mono text-muted-foreground">{c.code ?? "—"}</TableCell>
+                <TableCell className="text-xs font-medium">{c.name}</TableCell>
+                <TableCell>
+                  <div className="flex gap-2">
+                    <button className="text-primary text-xs hover:underline"
+                      onClick={() => { setEditId(c.id); setEditCode(c.code ?? ""); setEditName(c.name); setShowAdd(false); }}>
+                      تعديل
+                    </button>
+                    <button className="text-destructive text-xs hover:underline"
+                      onClick={() => deleteCat.mutate({ id: c.id })}>
                       حذف
                     </button>
                   </div>
@@ -1566,6 +1689,7 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
     case "currencies":           return <CurrenciesPage />;
     case "taxes":                return <TaxesPage />;
     case "fiscal-periods":       return <FiscalPeriodsPage />;
+    case "user-categories":      return <UserCategoriesPage />;
     // المستخدمون والصلاحيات
     case "users-list":           return <UsersListPage />;
     case "user-groups":          return <UserGroupsPage />;
@@ -1628,6 +1752,7 @@ export function CfgCompanyTab()          { return <CfgSubPage activeId="company-
 export function CfgCurrenciesTab()       { return <CfgSubPage activeId="currencies" />; }
 export function CfgTaxesTab()            { return <CfgSubPage activeId="taxes" />; }
 export function CfgFiscalTab()           { return <CfgSubPage activeId="fiscal-periods" />; }
+export function CfgUserCategoriesTab()   { return <CfgSubPage activeId="user-categories" />; }
 export function CfgUsersTab()            { return <CfgSubPage activeId="users-list" />; }
 export function CfgUserGroupsTab()       { return <CfgSubPage activeId="user-groups" />; }
 export function CfgPermissionsTab()      { return <CfgSubPage activeId="permissions" />; }

@@ -6,7 +6,7 @@ import { usersRouter } from './users.js';
 import { salesRouter } from './sales.js';
 import { chatRouter } from './chat.js';
 import { db } from '../db.js';
-import { products, customers, suppliers, chartOfAccounts, warehouses, branches, units, productGroups, journalEntries, journalEntryLines, vouchers, inventory, stockVouchers, stockVoucherItems, inventoryCounts, inventoryCountItems, freeProducts, salesInvoices, salesInvoiceItems, warehouseAccountLinks, userGroups, userGroupMembers, users } from '../schema.js';
+import { products, customers, suppliers, chartOfAccounts, warehouses, branches, units, productGroups, journalEntries, journalEntryLines, vouchers, inventory, stockVouchers, stockVoucherItems, inventoryCounts, inventoryCountItems, freeProducts, salesInvoices, salesInvoiceItems, warehouseAccountLinks, userGroups, userGroupMembers, userCategories, users } from '../schema.js';
 import { eq, and, desc, like, or, sql, isNotNull } from 'drizzle-orm';
 
 export const appRouter = router({
@@ -57,6 +57,38 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         await db.update(userGroups).set({ isActive: false })
           .where(and(eq(userGroups.id, input.id), eq(userGroups.orgId, ctx.user.orgId)));
+        return { success: true };
+      }),
+  }),
+
+  // ─── User Categories ─────────────────────────────────────────────────────────
+  userCategories: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return db.select().from(userCategories)
+        .where(and(eq(userCategories.orgId, ctx.user.orgId), eq(userCategories.isActive, true)))
+        .orderBy(userCategories.name);
+    }),
+    create: protectedProcedure
+      .input(z.object({ code: z.string().optional(), name: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        const [c] = await db.insert(userCategories).values({
+          orgId: ctx.user.orgId, code: input.code, name: input.name,
+        }).returning();
+        return c;
+      }),
+    update: protectedProcedure
+      .input(z.object({ id: z.number(), code: z.string().optional(), name: z.string().optional() }))
+      .mutation(async ({ input, ctx }) => {
+        const { id, ...rest } = input;
+        await db.update(userCategories).set(rest)
+          .where(and(eq(userCategories.id, id), eq(userCategories.orgId, ctx.user.orgId)));
+        return { success: true };
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        await db.update(userCategories).set({ isActive: false })
+          .where(and(eq(userCategories.id, input.id), eq(userCategories.orgId, ctx.user.orgId)));
         return { success: true };
       }),
   }),

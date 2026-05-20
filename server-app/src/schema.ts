@@ -58,6 +58,16 @@ export const userGroups = pgTable('user_groups', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
+// ─── User Categories ──────────────────────────────────────────────────────────
+export const userCategories = pgTable('user_categories', {
+  id: serial('id').primaryKey(),
+  orgId: integer('org_id').notNull(),
+  code: varchar('code', { length: 50 }),
+  name: varchar('name', { length: 255 }).notNull(),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
 // ─── User Group Members ───────────────────────────────────────────────────────
 export const userGroupMembers = pgTable('user_group_members', {
   id: serial('id').primaryKey(),
