@@ -1156,6 +1156,35 @@ export default function Warehouses() {
           </TableBody>
         </Table>
       </div>
+
+      {/* ══ نافذة تأكيد الحذف (list view) ══ */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent className="max-w-sm" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-right text-base">هل تريد حذف هذا المخزن؟</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-slate-500 text-right">
+            سيتم إلغاء تفعيل المخزن وإخفاؤه من القوائم. يمكن استعادته لاحقاً عند الحاجة.
+          </p>
+          <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
+            <Button
+              variant="destructive"
+              className="flex-1"
+              onClick={() => { setShowDeleteDialog(false); deleteWarehouse.mutate({ id: editId! }); }}
+              disabled={deleteWarehouse.isPending}
+            >
+              {deleteWarehouse.isPending ? "جارٍ الحذف..." : "حذف"}
+            </Button>
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => setShowDeleteDialog(false)}
+            >
+              إلغاء
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
