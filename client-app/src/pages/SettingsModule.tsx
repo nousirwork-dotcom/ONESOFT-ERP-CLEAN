@@ -417,10 +417,32 @@ const ROLE_LABELS: Record<string, string> = {
 function UsersListPage() {
   const utils = trpc.useUtils();
   const { data: users = [], isLoading } = trpc.users.list.useQuery();
+  const { data: cats = [] } = trpc.userCategories.list.useQuery();
+
+  const [showAdd, setShowAdd] = useState(false);
+  const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [form, setForm] = useState({ code: "", username: "", password: "", name: "", email: "", phone: "", role: "cashier" });
+  const sf = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
+
+  // fetch next code whenever a category with autoNumbering is selected
+  const { data: nextCodeData } = trpc.userCategories.nextCode.useQuery(
+    { categoryId: categoryId! },
+    { enabled: !!categoryId }
+  );
+  // auto-fill code when next code data arrives (only if code is still empty / matches previous auto)
+  const prevCatId = useRef<number | null>(null);
+  useEffect(() => {
+    if (!categoryId) { if (prevCatId.current !== null) { sf("code", ""); } prevCatId.current = null; return; }
+    if (nextCodeData?.code) { sf("code", nextCodeData.code); }
+    prevCatId.current = categoryId;
+  }, [nextCodeData, categoryId]);
+
   const createUser = trpc.users.create.useMutation({
     onSuccess: () => {
       utils.users.list.invalidate();
+      utils.userCategories.nextCode.invalidate(categoryId ? { categoryId } : undefined);
       setShowAdd(false);
+      setCategoryId(null);
       setForm({ code: "", username: "", password: "", name: "", email: "", phone: "", role: "cashier" });
       toast.success("تم إضافة المستخدم");
     },
@@ -430,10 +452,6 @@ function UsersListPage() {
     onSuccess: () => { utils.users.list.invalidate(); toast.success("تم حذف المستخدم"); },
     onError: (e) => toast.error(e.message),
   });
-
-  const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ code: "", username: "", password: "", name: "", email: "", phone: "", role: "cashier" });
-  const sf = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
 
   return (
     <div className="space-y-4" dir="rtl">
@@ -448,8 +466,36 @@ function UsersListPage() {
         <Card className="border-indigo-200 bg-indigo-50/40 p-4">
           <div className="grid grid-cols-3 gap-3 mb-3">
             <div>
-              <Label className="text-xs mb-1 block">الكود</Label>
-              <Input className="h-8 text-sm" value={form.code} onChange={e => sf("code", e.target.value)} placeholder="U001" />
+              <Label className="text-xs mb-1 block">فئة المستخدم</Label>
+              <Select
+                value={categoryId ? String(categoryId) : ""}
+                onValueChange={v => setCategoryId(v ? Number(v) : null)}
+              >
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="بدون فئة" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">بدون فئة</SelectItem>
+                  {(cats as any[]).map((c: any) => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      {c.code ? `${c.code} — ` : ""}{c.name}
+                      {c.autoNumbering ? " (ترقيم تلقائي)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block flex items-center gap-1">
+                الكود
+                {nextCodeData?.code && categoryId && (
+                  <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">تلقائي</span>
+                )}
+              </Label>
+              <Input
+                className={`h-8 text-sm ${nextCodeData?.code && categoryId ? "border-emerald-300 bg-emerald-50/40" : ""}`}
+                value={form.code}
+                onChange={e => sf("code", e.target.value)}
+                placeholder={nextCodeData?.code ?? "U001"}
+              />
             </div>
             <div>
               <Label className="text-xs mb-1 block">الاسم الكامل *</Label>
@@ -481,15 +527,20 @@ function UsersListPage() {
               </Select>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
             <Button size="sm" className="h-7 text-xs" disabled={!form.name || !form.username || !form.password || createUser.isPending}
               onClick={() => createUser.mutate({
-                code: form.code || undefined, username: form.username, password: form.password,
-                name: form.name, email: form.email || undefined, role: form.role as any,
+                code: form.code || undefined,
+                username: form.username,
+                password: form.password,
+                name: form.name,
+                email: form.email || undefined,
+                role: form.role as any,
+                categoryId: categoryId ?? undefined,
               })}>
               {createUser.isPending ? "جارٍ الحفظ..." : "حفظ"}
             </Button>
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowAdd(false)}>إلغاء</Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setShowAdd(false); setCategoryId(null); setForm({ code: "", username: "", password: "", name: "", email: "", phone: "", role: "cashier" }); }}>إلغاء</Button>
           </div>
         </Card>
       )}

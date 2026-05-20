@@ -127,6 +127,32 @@ export const appRouter = router({
           .where(and(eq(userCategories.id, input.id), eq(userCategories.orgId, ctx.user.orgId)));
         return { success: true };
       }),
+    nextCode: protectedProcedure
+      .input(z.object({ categoryId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const cat = await db.select().from(userCategories)
+          .where(and(eq(userCategories.id, input.categoryId), eq(userCategories.orgId, ctx.user.orgId)))
+          .limit(1);
+        if (!cat.length || !cat[0].autoNumbering) return null;
+        const c = cat[0];
+        const prefix = c.code ?? "";
+        const numDigits = Math.max(c.codeDigits - prefix.length, 1);
+        // find all users in this category to get max used number
+        const catUsers = await db.select({ code: users.code })
+          .from(users)
+          .where(and(eq(users.orgId, ctx.user.orgId), eq(users.categoryId, input.categoryId), eq(users.isActive, true)));
+        let maxNum = c.firstNumber - c.increment;
+        for (const u of catUsers) {
+          if (!u.code) continue;
+          const numPart = prefix && u.code.startsWith(prefix) ? u.code.slice(prefix.length) : u.code;
+          const n = parseInt(numPart, 10);
+          if (!isNaN(n) && n > maxNum) maxNum = n;
+        }
+        const nextNum = maxNum < c.firstNumber ? c.firstNumber : maxNum + c.increment;
+        if (nextNum > c.lastNumber) return null;
+        const nextCode = prefix + String(nextNum).padStart(numDigits, '0');
+        return { code: nextCode, category: c };
+      }),
   }),
 
   // ─── User Group Members ───────────────────────────────────────────────────────

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { eq, and, sql } from 'drizzle-orm';
 import { router, adminProcedure, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { users, salesInvoices, vouchers, stockVouchers } from '../schema.js';
+import { users, salesInvoices, vouchers, stockVouchers, userCategories } from '../schema.js';
 import { hashPassword } from '../auth.js';
 import { TRPCError } from '@trpc/server';
 
@@ -26,6 +26,7 @@ export const usersRouter = router({
       email: z.string().email().optional(),
       phone: z.string().optional(),
       role: z.enum(['admin', 'cashier', 'accountant', 'warehouse_manager', 'viewer']),
+      categoryId: z.number().int().positive().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const existing = await db.query.users.findFirst({
@@ -33,16 +34,43 @@ export const usersRouter = router({
       });
       if (existing) throw new Error('اسم المستخدم مستخدم بالفعل');
 
+      // if category has autoNumbering and no code provided, generate next code
+      let finalCode = input.code;
+      if (!finalCode && input.categoryId) {
+        const cats = await db.select().from(userCategories)
+          .where(and(eq(userCategories.id, input.categoryId), eq(userCategories.orgId, ctx.user.orgId)))
+          .limit(1);
+        if (cats.length && cats[0].autoNumbering) {
+          const c = cats[0];
+          const prefix = c.code ?? "";
+          const numDigits = Math.max(c.codeDigits - prefix.length, 1);
+          const catUsers = await db.select({ code: users.code }).from(users)
+            .where(and(eq(users.orgId, ctx.user.orgId), eq(users.categoryId, input.categoryId), eq(users.isActive, true)));
+          let maxNum = c.firstNumber - c.increment;
+          for (const u of catUsers) {
+            if (!u.code) continue;
+            const numPart = prefix && u.code.startsWith(prefix) ? u.code.slice(prefix.length) : u.code;
+            const n = parseInt(numPart, 10);
+            if (!isNaN(n) && n > maxNum) maxNum = n;
+          }
+          const nextNum = maxNum < c.firstNumber ? c.firstNumber : maxNum + c.increment;
+          if (nextNum <= c.lastNumber) {
+            finalCode = prefix + String(nextNum).padStart(numDigits, '0');
+          }
+        }
+      }
+
       const passwordHash = await hashPassword(input.password);
       const [user] = await db.insert(users).values({
         orgId: ctx.user.orgId,
-        code: input.code,
+        code: finalCode,
         username: input.username,
         passwordHash,
         name: input.name,
         email: input.email,
         phone: input.phone,
         role: input.role,
+        categoryId: input.categoryId,
         isActive: true,
       }).returning({ id: users.id, code: users.code, name: users.name, username: users.username, role: users.role });
 
