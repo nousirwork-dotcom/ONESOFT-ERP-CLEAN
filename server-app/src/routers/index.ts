@@ -1093,6 +1093,12 @@ export const appRouter = router({
         if (hasInventoryCounts.length > 0) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن حذف المخزن لأنه مرتبط بعمليات جرد مخزني' });
         }
+        const hasSalesInvoices = await db.select({ id: salesInvoices.id }).from(salesInvoices)
+          .where(and(eq(salesInvoices.warehouseId, input.id), eq(salesInvoices.orgId, ctx.user.orgId)))
+          .limit(1);
+        if (hasSalesInvoices.length > 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن حذف المخزن لأنه مرتبط بفواتير مبيعات' });
+        }
         await db.update(warehouses).set({ isActive: false } as any)
           .where(and(eq(warehouses.id, input.id), eq(warehouses.orgId, ctx.user.orgId)));
         return { success: true };

@@ -1134,12 +1134,22 @@ export default function Warehouses() {
                   </Badge>
                 </TableCell>
                 <TableCell className="py-1.5">
-                  <button
-                    onClick={e => { e.stopPropagation(); openEdit(w); }}
-                    className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
-                  >
-                    <Edit className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={e => { e.stopPropagation(); openEdit(w); }}
+                      className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                      title="تعديل"
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={e => { e.stopPropagation(); setEditId(w.id); setShowDeleteDialog(true); }}
+                      className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                      title="حذف"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
