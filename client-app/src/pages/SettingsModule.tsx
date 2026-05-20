@@ -503,11 +503,11 @@ function UsersListPage() {
             </div>
             <div>
               <Label className="text-xs mb-1 block">اسم المستخدم *</Label>
-              <Input className="h-8 text-sm" value={form.username} onChange={e => sf("username", e.target.value)} placeholder="ahmed" dir="ltr" />
+              <Input className="h-8 text-sm" value={form.username} onChange={e => sf("username", e.target.value)} placeholder="ahmed" dir="ltr" autoComplete="off" name="new-username" />
             </div>
             <div>
               <Label className="text-xs mb-1 block">كلمة المرور *</Label>
-              <Input className="h-8 text-sm" type="password" value={form.password} onChange={e => sf("password", e.target.value)} placeholder="••••••" dir="ltr" />
+              <Input className="h-8 text-sm" type="password" value={form.password} onChange={e => sf("password", e.target.value)} placeholder="••••••" dir="ltr" autoComplete="new-password" name="new-password" />
             </div>
             <div>
               <Label className="text-xs mb-1 block">البريد الإلكتروني</Label>
