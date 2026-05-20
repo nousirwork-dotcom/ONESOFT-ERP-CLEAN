@@ -126,6 +126,15 @@ export const appRouter = router({
           if (!found.length) throw new TRPCError({ code: 'BAD_REQUEST', message: `كود المجموعة "${input.memberCode}" غير موجود في النظام` });
           resolvedName = found[0].name;
         }
+        const existing = await db.select({ id: userGroupMembers.id })
+          .from(userGroupMembers)
+          .where(and(
+            eq(userGroupMembers.groupId, input.groupId),
+            eq(userGroupMembers.orgId, ctx.user.orgId),
+            eq(userGroupMembers.memberType, input.memberType),
+            eq(userGroupMembers.memberCode, input.memberCode),
+          )).limit(1);
+        if (existing.length) throw new TRPCError({ code: 'BAD_REQUEST', message: `العضو تم تكرار بالجدول` });
         const [m] = await db.insert(userGroupMembers).values({
           groupId: input.groupId,
           orgId: ctx.user.orgId,

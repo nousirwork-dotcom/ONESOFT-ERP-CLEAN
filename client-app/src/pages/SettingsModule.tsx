@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useTabManager } from "@/contexts/TabManagerContext";
 import { trpc } from "@/lib/trpc";
 import Warehouses from "./Warehouses";
@@ -668,30 +668,65 @@ function UserCategoriesPage() {
 
 type PendingMember = { memberType: 'user' | 'group'; memberCode: string; memberName: string };
 
-function MemberRow({ memberType, setMemberType, memberCode, setMemberCode, memberName, setMemberName, onAdd, users, groups }:
-  { memberType: 'user'|'group'; setMemberType: (v:'user'|'group')=>void; memberCode:string; setMemberCode:(v:string)=>void; memberName:string; setMemberName:(v:string)=>void; onAdd:()=>void; users:any[]; groups:any[] }) {
+function MemberRow({ memberType, setMemberType, memberCode, setMemberCode, memberName, setMemberName, onAdd, users, groups, existingCodes = [] }:
+  { memberType: 'user'|'group'; setMemberType: (v:'user'|'group')=>void; memberCode:string; setMemberCode:(v:string)=>void; memberName:string; setMemberName:(v:string)=>void; onAdd:()=>void; users:any[]; groups:any[]; existingCodes?: string[] }) {
 
   const [notFound, setNotFound] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  const isDuplicate = !!memberCode.trim() && existingCodes.includes(memberCode.trim());
+
+  const availableList: any[] = memberType === 'user' ? users : groups;
+  const filteredList = availableList.filter((item: any) => {
+    if (!memberCode.trim()) return true;
+    return (
+      item.code?.toLowerCase().includes(memberCode.toLowerCase()) ||
+      item.name?.toLowerCase().includes(memberCode.toLowerCase())
+    );
+  });
 
   const handleCodeBlur = () => {
-    if (!memberCode.trim()) { setNotFound(false); return; }
-    if (memberType === 'user') {
-      const found = users.find((u:any) => u.code === memberCode.trim());
-      if (found) { setMemberName(found.name); setNotFound(false); }
-      else { setMemberName(""); setNotFound(true); }
-    } else {
-      const found = groups.find((g:any) => g.code === memberCode.trim());
-      if (found) { setMemberName(found.name); setNotFound(false); }
-      else { setMemberName(""); setNotFound(true); }
-    }
+    setTimeout(() => {
+      if (pickerRef.current?.contains(document.activeElement)) return;
+      setShowPicker(false);
+      if (!memberCode.trim()) { setNotFound(false); return; }
+      if (memberType === 'user') {
+        const found = users.find((u:any) => u.code === memberCode.trim());
+        if (found) { setMemberName(found.name); setNotFound(false); }
+        else { setMemberName(""); setNotFound(true); }
+      } else {
+        const found = groups.find((g:any) => g.code === memberCode.trim());
+        if (found) { setMemberName(found.name); setNotFound(false); }
+        else { setMemberName(""); setNotFound(true); }
+      }
+    }, 150);
   };
 
-  const canAdd = memberCode.trim() && memberName.trim() && !notFound;
+  const selectFromPicker = (item: any) => {
+    setMemberCode(item.code ?? "");
+    setMemberName(item.name ?? "");
+    setNotFound(false);
+    setShowPicker(false);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setShowPicker(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const errorMsg = isDuplicate ? "العضو تم تكرار بالجدول" : notFound ? "كود غير موجود" : null;
+  const canAdd = memberCode.trim() && memberName.trim() && !notFound && !isDuplicate;
 
   return (
     <TableRow>
       <TableCell className="py-1 pe-1">
-        <Select value={memberType} onValueChange={v => { setMemberType(v as any); setMemberCode(""); setMemberName(""); setNotFound(false); }}>
+        <Select value={memberType} onValueChange={v => { setMemberType(v as any); setMemberCode(""); setMemberName(""); setNotFound(false); setShowPicker(false); }}>
           <SelectTrigger className="h-7 text-xs w-28"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="user">مستخدم</SelectItem>
@@ -700,15 +735,39 @@ function MemberRow({ memberType, setMemberType, memberCode, setMemberCode, membe
         </Select>
       </TableCell>
       <TableCell className="py-1 pe-1">
-        <div className="space-y-0.5">
+        <div className="relative space-y-0.5" ref={pickerRef}>
           <Input
-            className={`h-7 text-xs w-24 ${notFound ? "border-destructive focus-visible:ring-destructive" : ""}`}
+            className={`h-7 text-xs w-28 ${errorMsg ? "border-destructive focus-visible:ring-destructive" : ""}`}
             placeholder="الكود"
             value={memberCode}
-            onChange={e => { setMemberCode(e.target.value); setMemberName(""); setNotFound(false); }}
+            onChange={e => { setMemberCode(e.target.value); setMemberName(""); setNotFound(false); setShowPicker(true); }}
+            onFocus={() => setShowPicker(true)}
             onBlur={handleCodeBlur}
+            onContextMenu={e => { e.preventDefault(); setShowPicker(v => !v); }}
           />
-          {notFound && <p className="text-[10px] text-destructive">كود غير موجود</p>}
+          {errorMsg && <p className="text-[10px] text-destructive leading-tight">{errorMsg}</p>}
+          {showPicker && filteredList.length > 0 && (
+            <div className="absolute z-50 top-8 right-0 bg-white border border-border rounded-md shadow-lg max-h-44 overflow-y-auto min-w-[220px]" dir="rtl">
+              <div className="px-2 py-1 border-b border-border/50 bg-muted/30">
+                <span className="text-[10px] text-muted-foreground">اختر من القائمة أو اكتب يدوياً</span>
+              </div>
+              {filteredList.map((item: any) => {
+                const alreadyAdded = existingCodes.includes(item.code ?? "");
+                return (
+                  <button
+                    key={item.id}
+                    className={`w-full text-right px-3 py-1.5 text-xs flex justify-between gap-2 items-center
+                      ${alreadyAdded ? "opacity-40 cursor-not-allowed" : "hover:bg-accent cursor-pointer"}`}
+                    onMouseDown={() => { if (!alreadyAdded) selectFromPicker(item); }}
+                  >
+                    <span className="font-mono text-muted-foreground shrink-0">{item.code ?? "—"}</span>
+                    <span className="truncate">{item.name}</span>
+                    {alreadyAdded && <span className="text-[9px] text-destructive shrink-0">مضاف</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </TableCell>
       <TableCell className="py-1 pe-1">
@@ -764,6 +823,7 @@ function SavedMembersTable({ groupId }: { groupId: number }) {
 
 function AddMemberToGroup({ groupId, users, groups }: { groupId: number; users: any[]; groups: any[] }) {
   const utils = trpc.useUtils();
+  const { data: savedMembers = [] } = trpc.groupMembers.list.useQuery({ groupId });
   const addMember = trpc.groupMembers.add.useMutation({
     onSuccess: () => { utils.groupMembers.list.invalidate({ groupId }); setCode(""); setName(""); toast.success("تم إضافة العضو"); },
     onError: (e) => toast.error(e.message),
@@ -771,6 +831,11 @@ function AddMemberToGroup({ groupId, users, groups }: { groupId: number; users: 
   const [type, setType] = useState<'user'|'group'>('user');
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
+
+  const existingCodes = (savedMembers as any[])
+    .filter((m: any) => m.memberType === type)
+    .map((m: any) => m.memberCode)
+    .filter(Boolean);
 
   return (
     <Table>
@@ -785,7 +850,11 @@ function AddMemberToGroup({ groupId, users, groups }: { groupId: number; users: 
       <TableBody>
         <MemberRow memberType={type} setMemberType={setType} memberCode={code} setMemberCode={setCode}
           memberName={name} setMemberName={setName} users={users} groups={groups}
-          onAdd={() => addMember.mutate({ groupId, memberType: type, memberCode: code.trim(), memberName: name || undefined })} />
+          existingCodes={existingCodes}
+          onAdd={() => {
+            if (existingCodes.includes(code.trim())) return;
+            addMember.mutate({ groupId, memberType: type, memberCode: code.trim(), memberName: name || undefined });
+          }} />
       </TableBody>
     </Table>
   );
@@ -836,6 +905,8 @@ function UserGroupsPage() {
 
   const addPending = () => {
     if (!rowCode.trim() || !rowName.trim()) return;
+    const isDup = pendingMembers.some(m => m.memberCode === rowCode.trim() && m.memberType === rowType);
+    if (isDup) return;
     setPendingMembers(p => [...p, { memberType: rowType, memberCode: rowCode.trim(), memberName: rowName }]);
     setRowCode(""); setRowName("");
   };
@@ -890,6 +961,7 @@ function UserGroupsPage() {
                 ))}
                 <MemberRow memberType={rowType} setMemberType={setRowType} memberCode={rowCode} setMemberCode={setRowCode}
                   memberName={rowName} setMemberName={setRowName} users={allUsers} groups={groups}
+                  existingCodes={pendingMembers.filter(m => m.memberType === rowType).map(m => m.memberCode)}
                   onAdd={addPending} />
               </TableBody>
             </Table>
