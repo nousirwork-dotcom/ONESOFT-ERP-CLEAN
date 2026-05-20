@@ -412,8 +412,8 @@ export default function Warehouses() {
             /* ── compact row helper ── */
             const R = ({ label, lw = 88, children }: { label: string; lw?: number; children: React.ReactNode }) => (
               <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-[11px] text-slate-600 shrink-0" style={{ width: lw }}>{label}</span>
                 <div className="flex-1 min-w-0">{children}</div>
-                <span className="text-[11px] text-slate-600 shrink-0 text-right" style={{ width: lw }}>{label}</span>
               </div>
             );
             const CB = ({ label }: { label: string }) => (
@@ -655,8 +655,8 @@ export default function Warehouses() {
             /* ── compact row helper ── */
             const R = ({ label, lw = 88, children }: { label: string; lw?: number; children: React.ReactNode }) => (
               <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-[11px] text-slate-600 shrink-0" style={{ width: lw }}>{label}</span>
                 <div className="flex-1 min-w-0">{children}</div>
-                <span className="text-[11px] text-slate-600 shrink-0 text-right" style={{ width: lw }}>{label}</span>
               </div>
             );
             const CB = ({ label }: { label: string }) => (
