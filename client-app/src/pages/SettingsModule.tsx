@@ -1125,19 +1125,11 @@ function UserGroupsPage() {
   const { data: allUsers = [] } = trpc.users.list.useQuery();
 
   const createGroup = trpc.userGroups.create.useMutation({
-    onSuccess: async (g) => {
-      if (pendingMembers.length) {
-        await addBulk.mutateAsync({ groupId: g.id, members: pendingMembers });
-      }
-      utils.userGroups.list.invalidate();
-      setShowAdd(false);
-      setNewCode(""); setNewName("");
-      setPendingMembers([]);
-      toast.success("تم إضافة المجموعة");
-    },
     onError: (e) => toast.error(e.message),
   });
-  const addBulk = trpc.groupMembers.addBulk.useMutation();
+  const addBulk = trpc.groupMembers.addBulk.useMutation({
+    onError: (e) => toast.error(e.message),
+  });
 
   const deleteGroup = trpc.userGroups.delete.useMutation({
     onSuccess: () => { utils.userGroups.list.invalidate(); toast.success("تم حذف المجموعة"); },
@@ -1171,7 +1163,8 @@ function UserGroupsPage() {
     setRowCode(""); setRowName("");
   };
 
-  const validateAndSave = () => {
+  const validateAndSave = async () => {
+    // check duplicates in pendingMembers
     const seen = new Map<string, number>();
     for (const m of pendingMembers) {
       const key = `${m.memberType}:${m.memberCode}`;
@@ -1184,7 +1177,17 @@ function UserGroupsPage() {
       return;
     }
     setDupKeySet(new Set());
-    createGroup.mutate({ code: newCode || undefined, name: newName.trim() });
+    try {
+      const g = await createGroup.mutateAsync({ code: newCode || undefined, name: newName.trim() });
+      if (pendingMembers.length) {
+        await addBulk.mutateAsync({ groupId: g.id, members: pendingMembers });
+      }
+      utils.userGroups.list.invalidate();
+      setShowAdd(false);
+      setNewCode(""); setNewName("");
+      setPendingMembers([]);
+      toast.success("تم إضافة المجموعة");
+    } catch { /* errors shown via onError */ }
   };
 
   return (
@@ -1251,9 +1254,10 @@ function UserGroupsPage() {
           </div>
 
           <div className="flex gap-2 items-center flex-wrap">
-            <Button size="sm" className="h-7 text-xs" disabled={!newName.trim() || createGroup.isPending}
+            <Button size="sm" className="h-7 text-xs"
+              disabled={!newName.trim() || createGroup.isPending || addBulk.isPending}
               onClick={validateAndSave}>
-              {createGroup.isPending ? "جارٍ الحفظ..." : "حفظ"}
+              {(createGroup.isPending || addBulk.isPending) ? "جارٍ الحفظ..." : "حفظ"}
             </Button>
             <Button size="sm" variant="outline" className="h-7 text-xs"
               onClick={() => { setShowAdd(false); setNewCode(""); setNewName(""); setPendingMembers([]); setDupKeySet(new Set()); }}>
