@@ -865,9 +865,10 @@ function MemberRow({ memberType, setMemberType, memberCode, setMemberCode, membe
 
   const [notFound, setNotFound] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
+  const [pickerFocusIdx, setPickerFocusIdx] = useState(-1);
   const pickerRef = useRef<HTMLDivElement>(null);
-
-  const isDuplicate = !!memberCode.trim() && existingCodes.includes(memberCode.trim());
+  const pickerListRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const availableList: any[] = memberType === 'user' ? users : groups;
   const filteredList = availableList.filter((item: any) => {
@@ -877,6 +878,14 @@ function MemberRow({ memberType, setMemberType, memberCode, setMemberCode, membe
       item.name?.toLowerCase().includes(memberCode.toLowerCase())
     );
   });
+
+  useEffect(() => { setPickerFocusIdx(-1); }, [filteredList.length]);
+
+  useEffect(() => {
+    if (pickerFocusIdx < 0 || !pickerListRef.current) return;
+    const items = pickerListRef.current.querySelectorAll<HTMLElement>('[data-picker-item]');
+    items[pickerFocusIdx]?.scrollIntoView({ block: 'nearest' });
+  }, [pickerFocusIdx]);
 
   const handleCodeBlur = () => {
     setTimeout(() => {
@@ -900,20 +909,49 @@ function MemberRow({ memberType, setMemberType, memberCode, setMemberCode, membe
     setMemberName(item.name ?? "");
     setNotFound(false);
     setShowPicker(false);
+    setPickerFocusIdx(-1);
+    setTimeout(() => inputRef.current?.focus(), 0);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showPicker) {
+      if (e.key === 'Enter' && canAdd) { e.preventDefault(); onAdd(); }
+      if (e.key === 'F2' || e.key === 'F4') { e.preventDefault(); setShowPicker(true); }
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setPickerFocusIdx(i => Math.min(i + 1, filteredList.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setPickerFocusIdx(i => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const idx = pickerFocusIdx >= 0 ? pickerFocusIdx
+        : filteredList.findIndex(it => it.code === memberCode.trim());
+      if (idx >= 0 && filteredList[idx]) { selectFromPicker(filteredList[idx]); }
+      else if (canAdd) { setShowPicker(false); onAdd(); }
+    } else if (e.key === 'Tab') {
+      if (pickerFocusIdx >= 0 && filteredList[pickerFocusIdx]) {
+        e.preventDefault();
+        selectFromPicker(filteredList[pickerFocusIdx]);
+      } else { setShowPicker(false); }
+    } else if (e.key === 'Escape') {
+      e.preventDefault(); setShowPicker(false); setPickerFocusIdx(-1);
+    }
   };
 
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
-        setShowPicker(false);
-      }
+    const onOutside = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setShowPicker(false);
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("mousedown", onOutside);
+    return () => document.removeEventListener("mousedown", onOutside);
   }, []);
 
-  const errorMsg = isDuplicate ? "العضو تم تكرار بالجدول" : notFound ? "كود غير موجود" : null;
-  const canAdd = memberCode.trim() && memberName.trim() && !notFound && !isDuplicate;
+  // duplicate check is NOT shown during typing — only at save (notFound shown for invalid code)
+  const errorMsg = notFound ? "كود غير موجود في النظام" : null;
+  const canAdd = !!(memberCode.trim() && memberName.trim() && !notFound);
 
   return (
     <TableRow>
@@ -930,47 +968,54 @@ function MemberRow({ memberType, setMemberType, memberCode, setMemberCode, membe
         <div className="relative space-y-0.5" ref={pickerRef}>
           <div className="flex items-center gap-0.5">
             <Input
+              ref={inputRef}
               className={`h-7 text-xs w-24 ${errorMsg ? "border-destructive focus-visible:ring-destructive" : ""}`}
               placeholder="الكود"
               value={memberCode}
-              onChange={e => { setMemberCode(e.target.value); setMemberName(""); setNotFound(false); setShowPicker(true); }}
+              onChange={e => { setMemberCode(e.target.value); setMemberName(""); setNotFound(false); setShowPicker(true); setPickerFocusIdx(-1); }}
               onFocus={() => setShowPicker(true)}
               onBlur={handleCodeBlur}
+              onKeyDown={handleKeyDown}
               onContextMenu={e => { e.preventDefault(); setShowPicker(v => !v); }}
             />
             <button
               type="button"
-              title="اختر من القائمة (أو كليك يمين)"
+              title="اختر من القائمة (F2 / كليك يمين)"
               className="h-7 w-7 flex items-center justify-center rounded border border-border hover:bg-primary hover:text-primary-foreground text-muted-foreground transition-colors shrink-0"
-              onMouseDown={e => { e.preventDefault(); setShowPicker(v => !v); }}
+              onMouseDown={e => { e.preventDefault(); setShowPicker(v => !v); inputRef.current?.focus(); }}
             >
               <List className="w-3.5 h-3.5" />
             </button>
           </div>
           {errorMsg && <p className="text-[10px] text-destructive leading-tight font-medium">{errorMsg}</p>}
           {showPicker && (
-            <div className="absolute z-50 top-9 right-0 bg-white border border-border rounded-md shadow-xl max-h-52 overflow-y-auto min-w-[250px]" dir="rtl">
-              <div className="px-3 py-1.5 border-b border-border/50 bg-primary/5 flex items-center gap-1.5">
-                <List className="w-3 h-3 text-primary" />
-                <span className="text-[10px] text-primary font-medium">
-                  {memberType === 'user' ? 'المستخدمون' : 'المجموعات'} — اختر أو اكتب يدوياً
+            <div ref={pickerListRef} className="absolute z-50 top-9 right-0 bg-white border border-border rounded-md shadow-xl max-h-52 overflow-y-auto min-w-[260px]" dir="rtl">
+              <div className="px-3 py-1.5 border-b border-border/50 bg-primary/5 flex items-center gap-2 sticky top-0 z-10">
+                <List className="w-3 h-3 text-primary shrink-0" />
+                <span className="text-[10px] text-primary font-medium flex-1">
+                  {memberType === 'user' ? 'المستخدمون' : 'المجموعات'}
                 </span>
+                <span className="text-[9px] text-muted-foreground">↑↓ Enter / Tab</span>
               </div>
               {filteredList.length === 0 && (
                 <p className="text-[10px] text-muted-foreground text-center py-3">لا توجد نتائج</p>
               )}
-              {filteredList.map((item: any) => {
-                const alreadyAdded = existingCodes.includes(item.code ?? "");
+              {filteredList.map((item: any, idx: number) => {
+                const isFocused = idx === pickerFocusIdx;
                 return (
                   <button
                     key={item.id}
-                    className={`w-full text-right px-3 py-2 text-xs flex justify-between gap-2 items-center border-b border-border/20 last:border-0
-                      ${alreadyAdded ? "opacity-40 cursor-not-allowed bg-muted/20" : "hover:bg-accent cursor-pointer"}`}
-                    onMouseDown={() => { if (!alreadyAdded) selectFromPicker(item); }}
+                    data-picker-item=""
+                    className={`w-full text-right px-3 py-2 text-xs flex justify-between gap-2 items-center border-b border-border/20 last:border-0 transition-colors
+                      ${isFocused ? "bg-primary text-primary-foreground" : "hover:bg-accent cursor-pointer"}`}
+                    onMouseDown={() => selectFromPicker(item)}
+                    onDoubleClick={() => selectFromPicker(item)}
+                    onMouseEnter={() => setPickerFocusIdx(idx)}
                   >
-                    <code className="font-mono text-xs text-primary shrink-0 bg-primary/10 px-1.5 py-0.5 rounded">{item.code ?? "—"}</code>
+                    <code className={`font-mono text-xs shrink-0 px-1.5 py-0.5 rounded ${isFocused ? "bg-white/20 text-white" : "text-primary bg-primary/10"}`}>
+                      {item.code ?? "—"}
+                    </code>
                     <span className="flex-1 truncate text-right">{item.name}</span>
-                    {alreadyAdded && <span className="text-[9px] text-destructive bg-destructive/10 px-1 py-0.5 rounded shrink-0">مضاف</span>}
                   </button>
                 );
               })}
@@ -979,11 +1024,10 @@ function MemberRow({ memberType, setMemberType, memberCode, setMemberCode, membe
         </div>
       </TableCell>
       <TableCell className="py-1 pe-1">
-        <Input className="h-7 text-xs w-40 bg-muted/40" placeholder="يُحمَّل تلقائياً" value={memberName} readOnly />
+        <Input className="h-7 text-xs w-40 bg-muted/40" placeholder="يُحمَّل تلقائياً" value={memberName} readOnly tabIndex={-1} />
       </TableCell>
       <TableCell className="py-1">
-        <Button size="sm" variant="outline" className="h-7 text-xs px-2" disabled={!canAdd}
-          onClick={onAdd}>
+        <Button size="sm" variant="outline" className="h-7 text-xs px-2" disabled={!canAdd} onClick={onAdd} title="إضافة (Enter)">
           <Plus className="w-3 h-3" />
         </Button>
       </TableCell>
@@ -1115,25 +1159,33 @@ function UserGroupsPage() {
   const [editName, setEditName] = useState("");
   const [editMemberHasError, setEditMemberHasError] = useState(false);
 
-  // block add-form "حفظ" if the current member input row has a duplicate
-  const addRowIsDup = !!rowCode.trim() && pendingMembers.some(m => m.memberCode === rowCode.trim() && m.memberType === rowType);
+  // duplicate rows detected at save (not during typing)
+  const [dupKeySet, setDupKeySet] = useState<Set<string>>(new Set());
 
   const addPending = () => {
     if (!rowCode.trim() || !rowName.trim()) return;
     const code = rowCode.trim();
-    const type = rowType;
-    const name = rowName;
-    let wasAdded = false;
-    setPendingMembers(prev => {
-      const isDup = prev.some(m => m.memberCode === code && m.memberType === type);
-      if (isDup) return prev;
-      wasAdded = true;
-      return [...prev, { memberType: type, memberCode: code, memberName: name }];
-    });
-    // clear inputs only if member was actually added (no dup)
-    setTimeout(() => {
-      if (wasAdded) { setRowCode(""); setRowName(""); }
-    }, 0);
+    setPendingMembers(prev => [...prev, { memberType: rowType, memberCode: code, memberName: rowName }]);
+    setDupKeySet(new Set()); // clear highlights when new member added
+    setRowCode(""); setRowName("");
+  };
+
+  const validateAndSave = () => {
+    // find duplicate type:code keys in pendingMembers
+    const seen = new Map<string, number>();
+    const dups = new Set<string>();
+    for (const m of pendingMembers) {
+      const key = `${m.memberType}:${m.memberCode}`;
+      seen.set(key, (seen.get(key) ?? 0) + 1);
+    }
+    for (const [key, count] of seen.entries()) { if (count > 1) dups.add(key); }
+    if (dups.size > 0) {
+      setDupKeySet(dups);
+      toast.error("يوجد عضو مكرر داخل المجموعة — أزل التكرار ثم احفظ");
+      return;
+    }
+    setDupKeySet(new Set());
+    createGroup.mutate({ code: newCode || undefined, name: newName.trim() });
   };
 
   return (
@@ -1174,39 +1226,43 @@ function UserGroupsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {pendingMembers.map((m, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="text-xs">{m.memberType === 'user' ? 'مستخدم' : 'مجموعة'}</TableCell>
-                    <TableCell className="text-xs font-mono">{m.memberCode}</TableCell>
-                    <TableCell className="text-xs">{m.memberName || '—'}</TableCell>
-                    <TableCell>
-                      <button className="text-destructive text-xs" onClick={() => setPendingMembers(p => p.filter((_, j) => j !== i))}>حذف</button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {pendingMembers.map((m, i) => {
+                  const rowKey = `${m.memberType}:${m.memberCode}`;
+                  const isDupRow = dupKeySet.has(rowKey);
+                  return (
+                    <TableRow key={i} className={isDupRow ? "bg-destructive/10 border-destructive/30" : ""}>
+                      <TableCell className="text-xs">{m.memberType === 'user' ? 'مستخدم' : 'مجموعة'}</TableCell>
+                      <TableCell className={`text-xs font-mono ${isDupRow ? "text-destructive font-bold" : ""}`}>{m.memberCode}</TableCell>
+                      <TableCell className="text-xs">{m.memberName || '—'}</TableCell>
+                      <TableCell>
+                        <button className="text-destructive text-xs" onClick={() => {
+                          setPendingMembers(p => p.filter((_, j) => j !== i));
+                          setDupKeySet(new Set());
+                        }}>حذف</button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
                 <MemberRow memberType={rowType} setMemberType={setRowType} memberCode={rowCode} setMemberCode={setRowCode}
                   memberName={rowName} setMemberName={setRowName} users={allUsers} groups={groups}
-                  existingCodes={pendingMembers.filter(m => m.memberType === rowType).map(m => m.memberCode)}
+                  existingCodes={[]}
                   onAdd={addPending} />
               </TableBody>
             </Table>
           </div>
 
           <div className="flex gap-2 items-center flex-wrap">
-            <Button size="sm" className="h-7 text-xs" disabled={!newName.trim() || addRowIsDup || createGroup.isPending}
-              onClick={() => {
-                if (addRowIsDup) { toast.error("يوجد كود عضو مكرر — أزل الكود المكرر أولاً"); return; }
-                createGroup.mutate({ code: newCode || undefined, name: newName.trim() });
-              }}>
+            <Button size="sm" className="h-7 text-xs" disabled={!newName.trim() || createGroup.isPending}
+              onClick={validateAndSave}>
               {createGroup.isPending ? "جارٍ الحفظ..." : "حفظ"}
             </Button>
             <Button size="sm" variant="outline" className="h-7 text-xs"
-              onClick={() => { setShowAdd(false); setNewCode(""); setNewName(""); setPendingMembers([]); }}>
+              onClick={() => { setShowAdd(false); setNewCode(""); setNewName(""); setPendingMembers([]); setDupKeySet(new Set()); }}>
               إلغاء
             </Button>
-            {addRowIsDup && (
+            {dupKeySet.size > 0 && (
               <span className="text-[11px] text-destructive font-medium flex items-center gap-1">
-                ⚠ العضو تم تكرار بالجدول — لا يمكن الحفظ
+                ⚠ يوجد عضو مكرر داخل المجموعة — أزل التكرار ثم احفظ
               </span>
             )}
           </div>
