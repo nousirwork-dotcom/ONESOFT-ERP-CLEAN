@@ -869,7 +869,6 @@ function MemberRow({ memberType, setMemberType, memberCode, setMemberCode, membe
   const pickerRef = useRef<HTMLDivElement>(null);
   const pickerListRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const skipOpenPicker = useRef(false);
 
   const availableList: any[] = memberType === 'user' ? users : groups;
   const filteredList = availableList.filter((item: any) => {
@@ -911,8 +910,7 @@ function MemberRow({ memberType, setMemberType, memberCode, setMemberCode, membe
     setNotFound(false);
     setShowPicker(false);
     setPickerFocusIdx(-1);
-    skipOpenPicker.current = true;
-    setTimeout(() => inputRef.current?.focus(), 0);
+    // input keeps focus naturally — no blur fired (onPointerDown prevents focus move)
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -975,7 +973,7 @@ function MemberRow({ memberType, setMemberType, memberCode, setMemberCode, membe
               placeholder="الكود"
               value={memberCode}
               onChange={e => { setMemberCode(e.target.value); setMemberName(""); setNotFound(false); setShowPicker(true); setPickerFocusIdx(-1); }}
-              onFocus={() => { if (skipOpenPicker.current) { skipOpenPicker.current = false; return; } setShowPicker(true); }}
+              onFocus={() => setShowPicker(true)}
               onBlur={handleCodeBlur}
               onKeyDown={handleKeyDown}
               onContextMenu={e => { e.preventDefault(); setShowPicker(v => !v); }}
@@ -1010,8 +1008,8 @@ function MemberRow({ memberType, setMemberType, memberCode, setMemberCode, membe
                     data-picker-item=""
                     className={`w-full text-right px-3 py-2 text-xs flex justify-between gap-2 items-center border-b border-border/20 last:border-0 transition-colors
                       ${isFocused ? "bg-primary text-primary-foreground" : "hover:bg-accent cursor-pointer"}`}
-                    onMouseDown={() => selectFromPicker(item)}
-                    onDoubleClick={() => selectFromPicker(item)}
+                    onPointerDown={e => e.preventDefault()}
+                    onClick={() => selectFromPicker(item)}
                     onMouseEnter={() => setPickerFocusIdx(idx)}
                   >
                     <code className={`font-mono text-xs shrink-0 px-1.5 py-0.5 rounded ${isFocused ? "bg-white/20 text-white" : "text-primary bg-primary/10"}`}>
