@@ -407,45 +407,129 @@ function FiscalPeriodsPage() {
 
 // ─── Users List ────────────────────────────────────────────────────────────────
 
+const ROLE_LABELS: Record<string, string> = {
+  admin: "مدير النظام", cashier: "كاشير", accountant: "محاسب",
+  warehouse_manager: "أمين مخزن", viewer: "مشاهد",
+};
+
 function UsersListPage() {
-  const users = [
-    { id: 1, name: "أحمد محمد",   email: "ahmed@co.sa",  role: "مدير النظام", status: "نشط",    lastLogin: "اليوم" },
-    { id: 2, name: "سارة علي",    email: "sara@co.sa",   role: "محاسب",       status: "نشط",    lastLogin: "أمس" },
-    { id: 3, name: "خالد يوسف",   email: "khalid@co.sa", role: "مبيعات",      status: "نشط",    lastLogin: "3 أيام" },
-    { id: 4, name: "منى حسن",     email: "mona@co.sa",   role: "مخازن",       status: "موقوف",  lastLogin: "أسبوع" },
-  ];
+  const utils = trpc.useUtils();
+  const { data: users = [], isLoading } = trpc.users.list.useQuery();
+  const createUser = trpc.users.create.useMutation({
+    onSuccess: () => {
+      utils.users.list.invalidate();
+      setShowAdd(false);
+      setForm({ code: "", username: "", password: "", name: "", email: "", phone: "", role: "cashier" });
+      toast.success("تم إضافة المستخدم");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const deleteUser = trpc.users.delete.useMutation({
+    onSuccess: () => { utils.users.list.invalidate(); toast.success("تم حذف المستخدم"); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ code: "", username: "", password: "", name: "", email: "", phone: "", role: "cashier" });
+  const sf = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" dir="rtl">
       <div className="flex justify-between items-center">
         <h3 className="font-semibold text-sm">إدارة المستخدمين</h3>
-        <Button className="h-8 text-sm" onClick={() => toast.info("إضافة مستخدم")}><Plus className="w-3.5 h-3.5 ml-1" />مستخدم جديد</Button>
+        <Button className="h-8 text-sm" onClick={() => setShowAdd(v => !v)}>
+          <Plus className="w-3.5 h-3.5 ml-1" />مستخدم جديد
+        </Button>
       </div>
+
+      {showAdd && (
+        <Card className="border-indigo-200 bg-indigo-50/40 p-4">
+          <div className="grid grid-cols-3 gap-3 mb-3">
+            <div>
+              <Label className="text-xs mb-1 block">الكود</Label>
+              <Input className="h-8 text-sm" value={form.code} onChange={e => sf("code", e.target.value)} placeholder="U001" />
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">الاسم الكامل *</Label>
+              <Input className="h-8 text-sm" value={form.name} onChange={e => sf("name", e.target.value)} placeholder="أحمد محمد" />
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">اسم المستخدم *</Label>
+              <Input className="h-8 text-sm" value={form.username} onChange={e => sf("username", e.target.value)} placeholder="ahmed" dir="ltr" />
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">كلمة المرور *</Label>
+              <Input className="h-8 text-sm" type="password" value={form.password} onChange={e => sf("password", e.target.value)} placeholder="••••••" dir="ltr" />
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">البريد الإلكتروني</Label>
+              <Input className="h-8 text-sm" value={form.email} onChange={e => sf("email", e.target.value)} placeholder="ahmed@co.sa" dir="ltr" />
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">الدور</Label>
+              <Select value={form.role} onValueChange={v => sf("role", v)}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">مدير النظام</SelectItem>
+                  <SelectItem value="accountant">محاسب</SelectItem>
+                  <SelectItem value="cashier">كاشير</SelectItem>
+                  <SelectItem value="warehouse_manager">أمين مخزن</SelectItem>
+                  <SelectItem value="viewer">مشاهد</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" className="h-7 text-xs" disabled={!form.name || !form.username || !form.password || createUser.isPending}
+              onClick={() => createUser.mutate({
+                code: form.code || undefined, username: form.username, password: form.password,
+                name: form.name, email: form.email || undefined, role: form.role as any,
+              })}>
+              {createUser.isPending ? "جارٍ الحفظ..." : "حفظ"}
+            </Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowAdd(false)}>إلغاء</Button>
+          </div>
+        </Card>
+      )}
+
       <Card className="border-border/50">
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="text-xs w-16">الكود</TableHead>
               <TableHead className="text-xs">الاسم</TableHead>
+              <TableHead className="text-xs">اسم المستخدم</TableHead>
               <TableHead className="text-xs">البريد الإلكتروني</TableHead>
               <TableHead className="text-xs">الدور</TableHead>
               <TableHead className="text-xs text-center">الحالة</TableHead>
-              <TableHead className="text-xs">آخر دخول</TableHead>
               <TableHead className="text-xs">الإجراءات</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {users.map(u => (
+            {isLoading && (
+              <TableRow><TableCell colSpan={7} className="text-xs text-center text-muted-foreground py-6">جارٍ التحميل...</TableCell></TableRow>
+            )}
+            {!isLoading && users.length === 0 && (
+              <TableRow><TableCell colSpan={7} className="text-xs text-center text-muted-foreground py-6">لا يوجد مستخدمون</TableCell></TableRow>
+            )}
+            {users.map((u: any) => (
               <TableRow key={u.id}>
+                <TableCell className="text-xs font-mono text-muted-foreground">{u.code ?? "—"}</TableCell>
                 <TableCell className="text-xs font-medium">{u.name}</TableCell>
-                <TableCell className="text-xs">{u.email}</TableCell>
-                <TableCell className="text-xs">{u.role}</TableCell>
+                <TableCell className="text-xs font-mono" dir="ltr">{u.username}</TableCell>
+                <TableCell className="text-xs" dir="ltr">{u.email ?? "—"}</TableCell>
+                <TableCell className="text-xs">{ROLE_LABELS[u.role] ?? u.role}</TableCell>
                 <TableCell className="text-center">
-                  <Badge variant={u.status === "نشط" ? "default" : "secondary"} className="text-xs">{u.status}</Badge>
+                  <Badge variant={u.isActive ? "default" : "secondary"} className="text-xs">
+                    {u.isActive ? "نشط" : "موقوف"}
+                  </Badge>
                 </TableCell>
-                <TableCell className="text-xs text-muted-foreground">{u.lastLogin}</TableCell>
                 <TableCell>
                   <div className="flex gap-2">
-                    <button className="text-primary text-xs hover:underline" onClick={() => toast.info("تعديل المستخدم")}>تعديل</button>
-                    <button className="text-amber-500 text-xs hover:underline" onClick={() => toast.info("إعادة تعيين كلمة المرور")}>كلمة المرور</button>
+                    <button className="text-destructive text-xs hover:underline"
+                      onClick={() => deleteUser.mutate({ id: u.id })}>
+                      حذف
+                    </button>
                   </div>
                 </TableCell>
               </TableRow>
@@ -463,7 +547,7 @@ function UserGroupsPage() {
   const utils = trpc.useUtils();
   const { data: groups = [], isLoading } = trpc.userGroups.list.useQuery();
   const createGroup = trpc.userGroups.create.useMutation({
-    onSuccess: () => { utils.userGroups.list.invalidate(); setShowAdd(false); setNewName(""); setNewDesc(""); toast.success("تم إضافة المجموعة"); },
+    onSuccess: () => { utils.userGroups.list.invalidate(); setShowAdd(false); setNewCode(""); setNewName(""); setNewDesc(""); toast.success("تم إضافة المجموعة"); },
     onError: (e) => toast.error(e.message),
   });
   const deleteGroup = trpc.userGroups.delete.useMutation({
@@ -476,9 +560,11 @@ function UserGroupsPage() {
   });
 
   const [showAdd, setShowAdd] = useState(false);
+  const [newCode, setNewCode] = useState("");
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [editId, setEditId] = useState<number | null>(null);
+  const [editCode, setEditCode] = useState("");
   const [editName, setEditName] = useState("");
   const [editDesc, setEditDesc] = useState("");
 
@@ -493,7 +579,11 @@ function UserGroupsPage() {
 
       {showAdd && (
         <Card className="border-indigo-200 bg-indigo-50/40 p-4">
-          <div className="grid grid-cols-2 gap-3 mb-3">
+          <div className="grid grid-cols-3 gap-3 mb-3">
+            <div>
+              <Label className="text-xs mb-1 block">الكود</Label>
+              <Input className="h-8 text-sm" value={newCode} onChange={e => setNewCode(e.target.value)} placeholder="GRP01" />
+            </div>
             <div>
               <Label className="text-xs mb-1 block">اسم المجموعة *</Label>
               <Input className="h-8 text-sm" value={newName} onChange={e => setNewName(e.target.value)} placeholder="مثال: أمناء المخازن" />
@@ -505,10 +595,10 @@ function UserGroupsPage() {
           </div>
           <div className="flex gap-2">
             <Button size="sm" className="h-7 text-xs" disabled={!newName.trim() || createGroup.isPending}
-              onClick={() => createGroup.mutate({ name: newName.trim(), description: newDesc || undefined })}>
+              onClick={() => createGroup.mutate({ code: newCode || undefined, name: newName.trim(), description: newDesc || undefined })}>
               {createGroup.isPending ? "جارٍ الحفظ..." : "حفظ"}
             </Button>
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setShowAdd(false); setNewName(""); setNewDesc(""); }}>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setShowAdd(false); setNewCode(""); setNewName(""); setNewDesc(""); }}>
               إلغاء
             </Button>
           </div>
@@ -519,6 +609,7 @@ function UserGroupsPage() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="text-xs w-20">الكود</TableHead>
               <TableHead className="text-xs">اسم المجموعة</TableHead>
               <TableHead className="text-xs">الوصف</TableHead>
               <TableHead className="text-xs">الإجراءات</TableHead>
@@ -526,16 +617,21 @@ function UserGroupsPage() {
           </TableHeader>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={3} className="text-xs text-center text-muted-foreground py-6">جارٍ التحميل...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={4} className="text-xs text-center text-muted-foreground py-6">جارٍ التحميل...</TableCell></TableRow>
             )}
             {!isLoading && groups.length === 0 && (
-              <TableRow><TableCell colSpan={3} className="text-xs text-center text-muted-foreground py-6">لا توجد مجموعات — أضف مجموعة جديدة</TableCell></TableRow>
+              <TableRow><TableCell colSpan={4} className="text-xs text-center text-muted-foreground py-6">لا توجد مجموعات — أضف مجموعة جديدة</TableCell></TableRow>
             )}
-            {groups.map(g => (
+            {groups.map((g: any) => (
               <TableRow key={g.id}>
+                <TableCell className="text-xs font-mono text-muted-foreground">
+                  {editId === g.id
+                    ? <Input className="h-7 text-xs w-20" value={editCode} onChange={e => setEditCode(e.target.value)} />
+                    : (g.code ?? "—")}
+                </TableCell>
                 <TableCell className="text-xs font-medium">
                   {editId === g.id
-                    ? <Input className="h-7 text-xs w-40" value={editName} onChange={e => setEditName(e.target.value)} />
+                    ? <Input className="h-7 text-xs w-36" value={editName} onChange={e => setEditName(e.target.value)} />
                     : g.name}
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground">
@@ -547,7 +643,7 @@ function UserGroupsPage() {
                   {editId === g.id ? (
                     <div className="flex gap-2">
                       <button className="text-primary text-xs hover:underline"
-                        onClick={() => updateGroup.mutate({ id: g.id, name: editName, description: editDesc || undefined })}>
+                        onClick={() => updateGroup.mutate({ id: g.id, code: editCode || undefined, name: editName, description: editDesc || undefined })}>
                         حفظ
                       </button>
                       <button className="text-muted-foreground text-xs hover:underline" onClick={() => setEditId(null)}>إلغاء</button>
@@ -555,7 +651,7 @@ function UserGroupsPage() {
                   ) : (
                     <div className="flex gap-2">
                       <button className="text-primary text-xs hover:underline"
-                        onClick={() => { setEditId(g.id); setEditName(g.name); setEditDesc(g.description ?? ""); }}>
+                        onClick={() => { setEditId(g.id); setEditCode(g.code ?? ""); setEditName(g.name); setEditDesc(g.description ?? ""); }}>
                         تعديل
                       </button>
                       <button className="text-destructive text-xs hover:underline"

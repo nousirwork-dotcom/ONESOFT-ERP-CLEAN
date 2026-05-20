@@ -34,6 +34,7 @@ export const organizations = pgTable('organizations', {
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
   orgId: integer('org_id').notNull().references(() => organizations.id),
+  code: varchar('code', { length: 50 }),
   username: varchar('username', { length: 100 }).notNull(),
   passwordHash: varchar('password_hash', { length: 255 }).notNull(),
   name: varchar('name', { length: 255 }).notNull(),
@@ -50,6 +51,7 @@ export const users = pgTable('users', {
 export const userGroups = pgTable('user_groups', {
   id: serial('id').primaryKey(),
   orgId: integer('org_id').notNull().references(() => organizations.id),
+  code: varchar('code', { length: 50 }),
   name: varchar('name', { length: 255 }).notNull(),
   description: text('description'),
   isActive: boolean('is_active').notNull().default(true),

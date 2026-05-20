@@ -19,6 +19,7 @@ export const usersRouter = router({
   // إضافة مستخدم جديد
   create: adminProcedure
     .input(z.object({
+      code: z.string().optional(),
       username: z.string().min(3),
       password: z.string().min(6),
       name: z.string().min(2),
@@ -35,6 +36,7 @@ export const usersRouter = router({
       const passwordHash = await hashPassword(input.password);
       const [user] = await db.insert(users).values({
         orgId: ctx.user.orgId,
+        code: input.code,
         username: input.username,
         passwordHash,
         name: input.name,
@@ -42,7 +44,7 @@ export const usersRouter = router({
         phone: input.phone,
         role: input.role,
         isActive: true,
-      }).returning({ id: users.id, name: users.name, username: users.username, role: users.role });
+      }).returning({ id: users.id, code: users.code, name: users.name, username: users.username, role: users.role });
 
       return user;
     }),

@@ -37,15 +37,15 @@ export const appRouter = router({
         .orderBy(userGroups.name);
     }),
     create: protectedProcedure
-      .input(z.object({ name: z.string().min(1), description: z.string().optional() }))
+      .input(z.object({ code: z.string().optional(), name: z.string().min(1), description: z.string().optional() }))
       .mutation(async ({ input, ctx }) => {
         const [g] = await db.insert(userGroups).values({
-          orgId: ctx.user.orgId, name: input.name, description: input.description,
+          orgId: ctx.user.orgId, code: input.code, name: input.name, description: input.description,
         }).returning();
         return g;
       }),
     update: protectedProcedure
-      .input(z.object({ id: z.number(), name: z.string().optional(), description: z.string().optional() }))
+      .input(z.object({ id: z.number(), code: z.string().optional(), name: z.string().optional(), description: z.string().optional() }))
       .mutation(async ({ input, ctx }) => {
         const { id, ...rest } = input;
         await db.update(userGroups).set(rest)
