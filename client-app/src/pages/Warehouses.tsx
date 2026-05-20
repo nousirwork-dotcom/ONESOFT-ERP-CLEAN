@@ -393,32 +393,57 @@ export default function Warehouses() {
           {/* ══ TAB: دفاتر المستندات ══ */}
           {formTab === "journals" && (() => {
             const ITEMS = [
-              { id: "sales",           label: "دفتر فاتورة المبيعات",    icon: <BookOpen className="w-3.5 h-3.5" /> },
-              { id: "sales-return",    label: "دفتر مردود المبيعات",     icon: <RotateCcw className="w-3.5 h-3.5" /> },
-              { id: "purchases",       label: "دفتر فاتورة المشتريات",   icon: <BookMarked className="w-3.5 h-3.5" /> },
-              { id: "purch-return",    label: "دفتر مردود المشتريات",    icon: <RotateCcw className="w-3.5 h-3.5" /> },
-              { id: "sales-order",     label: "دفتر أمر البيع",          icon: <ClipboardList className="w-3.5 h-3.5" /> },
-              { id: "sales-quote",     label: "دفتر عرض أسعار مبيعات",  icon: <Tag className="w-3.5 h-3.5" /> },
-              { id: "purch-quote",     label: "دفتر عرض أسعار مشتريات", icon: <Tag className="w-3.5 h-3.5" /> },
-              { id: "purchase-order",  label: "دفتر أمر شراء",           icon: <ClipboardList className="w-3.5 h-3.5" /> },
-              { id: "transfer",        label: "دفتر سند تحويل داخلي",    icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
-              { id: "dispatch",        label: "دفتر سند صرف أصناف",      icon: <Package className="w-3.5 h-3.5" /> },
-              { id: "supply",          label: "دفتر سند صرف توريد",      icon: <Package className="w-3.5 h-3.5" /> },
+              { id: "sales",          label: "دفتر فاتورة المبيعات",    icon: <BookOpen className="w-3.5 h-3.5" /> },
+              { id: "sales-return",   label: "دفتر مردود المبيعات",     icon: <RotateCcw className="w-3.5 h-3.5" /> },
+              { id: "purchases",      label: "دفتر فاتورة المشتريات",   icon: <BookMarked className="w-3.5 h-3.5" /> },
+              { id: "purch-return",   label: "دفتر مردود المشتريات",    icon: <RotateCcw className="w-3.5 h-3.5" /> },
+              { id: "sales-order",    label: "دفتر أمر البيع",          icon: <ClipboardList className="w-3.5 h-3.5" /> },
+              { id: "sales-quote",    label: "دفتر عرض أسعار مبيعات",  icon: <Tag className="w-3.5 h-3.5" /> },
+              { id: "purch-quote",    label: "دفتر عرض أسعار مشتريات", icon: <Tag className="w-3.5 h-3.5" /> },
+              { id: "purchase-order", label: "دفتر أمر شراء",           icon: <ClipboardList className="w-3.5 h-3.5" /> },
+              { id: "transfer",       label: "دفتر سند تحويل داخلي",    icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
+              { id: "dispatch",       label: "دفتر سند صرف أصناف",      icon: <Package className="w-3.5 h-3.5" /> },
+              { id: "supply",         label: "دفتر سند توريد أصناف",    icon: <Package className="w-3.5 h-3.5" /> },
+              { id: "inventory",      label: "دفتر تقييم المخزون",       icon: <FileText className="w-3.5 h-3.5" /> },
+              { id: "stocktake",      label: "دفتر الجرد والتسويات",     icon: <FileText className="w-3.5 h-3.5" /> },
             ];
-            const currentLabel = ITEMS.find(i => i.id === journalItem)?.label ?? "";
-            const journalLinks = links.filter(l =>
-              journalItem === "sales"        ? (l.label.includes("مبيعات") || l.label.includes("تكلفة")) && !l.label.includes("مردود") :
-              journalItem === "sales-return" ? l.label.includes("مردود") && l.label.includes("مبيعات") :
-              journalItem === "purchases"    ? l.label.includes("مشتريات") && !l.label.includes("مردود") :
-              journalItem === "purch-return" ? l.label.includes("مردود") && l.label.includes("مشتريات") :
-              false
+            const currentItem = ITEMS.find(i => i.id === journalItem);
+
+            /* ── compact row helper ── */
+            const R = ({ label, lw = 88, children }: { label: string; lw?: number; children: React.ReactNode }) => (
+              <div className="flex items-center gap-1.5 min-w-0">
+                <div className="flex-1 min-w-0">{children}</div>
+                <span className="text-[11px] text-slate-600 shrink-0 text-right" style={{ width: lw }}>{label}</span>
+              </div>
+            );
+            const CB = ({ label }: { label: string }) => (
+              <label className="flex items-center gap-1.5 cursor-pointer select-none shrink-0">
+                <input type="checkbox" className="w-3.5 h-3.5 accent-indigo-600" />
+                <span className="text-[11px] text-slate-600">{label}</span>
+              </label>
+            );
+            const RB = ({ name, label, defaultChecked }: { name: string; label: string; defaultChecked?: boolean }) => (
+              <label className="flex items-center gap-1.5 cursor-pointer select-none shrink-0">
+                <input type="radio" name={name} defaultChecked={defaultChecked} className="w-3.5 h-3.5 accent-indigo-600" />
+                <span className="text-[11px] text-slate-600">{label}</span>
+              </label>
+            );
+
+            /* ── section panel ── */
+            const P = ({ title, children }: { title: string; children: React.ReactNode }) => (
+              <div className="overflow-hidden" style={{ border: "1px solid #d1d5db", borderRadius: 6 }}>
+                <div className="px-2.5 py-1" style={{ background: "#e8edf5", borderBottom: "1px solid #d1d5db" }}>
+                  <span className="text-[11px] font-bold text-slate-700">{title}</span>
+                </div>
+                <div className="px-3 py-2" style={{ background: "#fff" }}>{children}</div>
+              </div>
             );
 
             return (
               <div className="flex gap-3" style={{ height: "calc(100vh - 260px)" }}>
-                {/* Sidebar */}
-                <div className="shrink-0 flex flex-col overflow-hidden" style={{ width: 210, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
-                  <div className="px-3 pt-3 pb-2 shrink-0" style={{ borderBottom: "1px solid #f1f5f9" }}>
+                {/* ── Sidebar ── */}
+                <div className="shrink-0 flex flex-col overflow-hidden" style={{ width: 205, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+                  <div className="px-3 pt-2.5 pb-2 shrink-0" style={{ borderBottom: "1px solid #f1f5f9" }}>
                     <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">الدفاتر</span>
                   </div>
                   <div className="flex-1 overflow-y-auto py-1">
@@ -426,67 +451,156 @@ export default function Warehouses() {
                       const active = journalItem === item.id;
                       return (
                         <button key={item.id} onClick={() => setJournalItem(item.id)}
-                          className="w-full flex items-center gap-2 px-3 py-1.5 text-right rounded-md mx-1 transition-colors"
-                          style={{ background: active ? "#eef2ff" : "transparent", color: active ? "#4338ca" : "#64748b", width: "calc(100% - 8px)" }}
+                          className="w-full flex items-center gap-2 px-3 py-1.5 text-right transition-colors"
+                          style={{ background: active ? "#dbeafe" : "transparent", color: active ? "#1d4ed8" : "#64748b", borderRight: active ? "3px solid #3b82f6" : "3px solid transparent" }}
                         >
-                          <span style={{ color: active ? "#6366f1" : "#94a3b8" }}>{item.icon}</span>
+                          <span style={{ color: active ? "#3b82f6" : "#94a3b8" }}>{item.icon}</span>
                           <span className="text-[12px] truncate">{item.label}</span>
                         </button>
                       );
                     })}
-                    <button
-                      className="w-full flex items-center gap-2 px-3 py-1.5 text-right text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
-                      onClick={() => toast.info("سيتم إضافة دفتر جديد")}
-                    >
-                      <Plus className="w-3.5 h-3.5" /> <span className="text-[12px]">إضافة دفتر</span>
-                    </button>
                   </div>
                 </div>
 
-                {/* Content */}
-                <div className="flex-1 min-w-0 flex flex-col gap-3 overflow-y-auto">
-                  <Section
-                    title={`حسابات — ${currentLabel}`}
-                    action={
-                      <button onClick={() => setLinks(p => [...p, { label: `حساب ${currentLabel} ${journalLinks.length + 1}`, accountId: "", sortOrder: p.length }])}
-                        className="flex items-center gap-1.5 text-[11px] font-medium text-indigo-600 border border-indigo-200 rounded px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 transition-colors"
-                      >
-                        <Plus className="w-3 h-3" /> إضافة سطر
-                      </button>
-                    }
-                  >
-                    <div className="overflow-hidden" style={{ border: "1px solid #e5e7eb", borderRadius: 6 }}>
+                {/* ── Content ── */}
+                <div className="flex-1 min-w-0 overflow-y-auto space-y-2 pb-4">
+                  {/* Title bar */}
+                  <div className="flex items-center justify-between py-1">
+                    <span className="text-[12px] font-bold text-indigo-700">{currentItem?.label}</span>
+                    <span className="text-[11px] text-slate-400">دفتر:{journalItem.substring(0,3).toUpperCase()}</span>
+                  </div>
+
+                  {/* بيانات الدفتر */}
+                  <P title="بيانات الدفتر">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                      <R label="نوع المستند">
+                        <FS value="" onValueChange={() => {}}>
+                          <SelectItem value="sales">فاتورة مبيعات</SelectItem>
+                          <SelectItem value="purchase">فاتورة مشتريات</SelectItem>
+                          <SelectItem value="return">مردودات</SelectItem>
+                          <SelectItem value="transfer">تحويل داخلي</SelectItem>
+                          <SelectItem value="dispatch">صرف أصناف</SelectItem>
+                        </FS>
+                      </R>
+                      <div className="flex items-center gap-2">
+                        <R label="الجزء الثابت" lw={72}>
+                          <FI value="" onChange={() => {}} placeholder="S01-" />
+                        </R>
+                        <CB label="نقل الملكية أوتوماتيكي" />
+                      </div>
+                      <R label="إسم عربي">
+                        <FI value="" onChange={() => {}} placeholder={currentItem?.label} />
+                      </R>
+                      <R label="إسم إنجليزي">
+                        <FI value="" onChange={() => {}} placeholder="Journal Name in English" />
+                      </R>
+                    </div>
+                  </P>
+
+                  {/* حدود الاستخدام */}
+                  <P title="حدود الاستخدام">
+                    <div className="grid grid-cols-3 gap-x-3 gap-y-1.5">
+                      <R label="مجموعة مستخدمين">
+                        <FS value="" onValueChange={() => {}}>
+                          <SelectItem value="all">الكل</SelectItem>
+                          {(users as any[])?.map((u: any) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
+                        </FS>
+                      </R>
+                      <R label="مستخدم">
+                        <FS value="" onValueChange={() => {}}>
+                          <SelectItem value="all">الكل</SelectItem>
+                          {(users as any[])?.map((u: any) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
+                        </FS>
+                      </R>
+                      <R label="مخزن">
+                        <FS value="" onValueChange={() => {}}>
+                          <SelectItem value="this">هذا المخزن</SelectItem>
+                          {(warehouses as any[])?.map((w: any) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
+                        </FS>
+                      </R>
+                    </div>
+                    <div className="mt-1.5">
+                      <CB label="للمستندات التي يصدرها النظام فقط" />
+                    </div>
+                  </P>
+
+                  {/* الأرقام */}
+                  <P title="الأرقام">
+                    <div className="grid grid-cols-4 gap-x-3 gap-y-1.5 items-center">
+                      <div className="col-span-1 flex items-center">
+                        <CB label="تسلسل أرقام أوتوماتيكي" />
+                      </div>
+                      <R label="أول رقم">
+                        <FI value="" onChange={() => {}} placeholder="1" />
+                      </R>
+                      <R label="عدد الخانات">
+                        <FI value="" onChange={() => {}} placeholder="7" />
+                      </R>
+                      <R label="آخر رقم">
+                        <FI value="" onChange={() => {}} placeholder="9,999,999" />
+                      </R>
+                    </div>
+                  </P>
+
+                  {/* خيارات الطباعة وأسلوب الترحيل */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <P title="خيارات الطباعة">
+                      <div className="space-y-1.5">
+                        <R label="نموذج الطباعة">
+                          <FI value="" onChange={() => {}} placeholder="نموذج A4 رئيسي" />
+                        </R>
+                        <R label="نموذج طباعة حراري">
+                          <FI value="" onChange={() => {}} placeholder="نموذج حراري 80mm" />
+                        </R>
+                        <div className="flex items-center gap-4 mt-1">
+                          <CB label="طباعة مع الحفظ" />
+                          <RB name={`status-${journalItem}`} label="مستعد" defaultChecked />
+                          <RB name={`status-${journalItem}`} label="معلق" />
+                        </div>
+                      </div>
+                    </P>
+                    <P title="أسلوب الترحيل">
+                      <div className="space-y-1.5 mt-0.5">
+                        <RB name={`post-${journalItem}`} label="ترحيل طبيعي (يدوي)" defaultChecked />
+                        <RB name={`post-${journalItem}`} label="ترحيل مع الحفظ" />
+                        <RB name={`post-${journalItem}`} label="ترحيل فوري" />
+                        <RB name={`post-${journalItem}`} label="ترحيل يومي دفعة واحدة" />
+                      </div>
+                    </P>
+                  </div>
+
+                  {/* الروابط المحاسبية */}
+                  <P title="الروابط المحاسبية">
+                    <div className="overflow-hidden" style={{ border: "1px solid #e5e7eb", borderRadius: 4 }}>
                       <table className="w-full text-sm">
                         <thead>
-                          <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e5e7eb" }}>
-                            <th className="w-9 py-2.5 text-center text-[11px] font-semibold text-slate-400 border-l border-slate-200">#</th>
-                            <th className="py-2.5 px-3 text-right text-[11px] font-semibold text-slate-500 border-l border-slate-200 w-52">عنوان الحساب</th>
-                            <th className="py-2.5 px-3 text-center text-[11px] font-semibold text-slate-500 border-l border-slate-200 w-24">كود</th>
-                            <th className="py-2.5 px-3 text-right text-[11px] font-semibold text-slate-500">إسم الحساب</th>
-                            <th className="w-9 border-l border-slate-200" />
+                          <tr style={{ background: "#f1f5f9", borderBottom: "1px solid #e5e7eb" }}>
+                            <th className="w-8 py-1.5 text-center text-[11px] font-semibold text-slate-400 border-l border-slate-200">#</th>
+                            <th className="py-1.5 px-3 text-right text-[11px] font-semibold text-slate-500 border-l border-slate-200">بيان الحساب</th>
+                            <th className="py-1.5 px-2 text-center text-[11px] font-semibold text-slate-500 border-l border-slate-200 w-20">كود</th>
+                            <th className="py-1.5 px-3 text-right text-[11px] font-semibold text-slate-500">الحساب</th>
+                            <th className="w-8 border-l border-slate-200" />
                           </tr>
                         </thead>
                         <tbody>
-                          {journalLinks.map((link, ri) => {
-                            const i = links.indexOf(link);
+                          {links.map((link, i) => {
                             const acc = (accounts as any[])?.find((a: any) => String(a.id) === link.accountId);
-                            const isEven = ri % 2 === 0;
+                            const isEven = i % 2 === 0;
                             return (
-                              <tr key={i} className="group hover:bg-indigo-50/40 transition-colors"
-                                style={{ height: 30, background: isEven ? "#fff" : "#f9fafb", borderBottom: "1px solid #f1f5f9" }}
-                              >
-                                <td className="text-center text-[11px] text-slate-400 border-l border-slate-100" style={{ background: isEven ? "#f8fafc" : "#f4f6f8" }}>{ri + 1}</td>
+                              <tr key={i} className="group hover:bg-blue-50/40 transition-colors"
+                                style={{ height: 28, background: isEven ? "#fff" : "#f9fafb", borderBottom: "1px solid #f1f5f9" }}>
+                                <td className="text-center text-[11px] text-slate-400 border-l border-slate-100" style={{ background: isEven ? "#f8fafc" : "#f4f6f8" }}>{i + 1}</td>
                                 <td className="border-l border-slate-100 py-0 px-0">
                                   <input value={link.label} onChange={e => updateLink(i, "label", e.target.value)}
-                                    className="w-full py-0 px-3 text-sm bg-transparent border-0 outline-none focus:bg-indigo-50/60 text-slate-700"
-                                    style={{ height: 30 }} />
+                                    className="w-full py-0 px-2 text-[12px] bg-transparent border-0 outline-none focus:bg-blue-50/60 text-slate-700"
+                                    style={{ height: 28 }} />
                                 </td>
-                                <td className="text-center border-l border-slate-100 px-2" style={{ background: isEven ? "#f8fafc" : "#f4f6f8" }}>
-                                  <span className="font-mono text-xs text-slate-500">{acc?.code ?? ""}</span>
+                                <td className="text-center border-l border-slate-100 px-1" style={{ background: isEven ? "#f8fafc" : "#f4f6f8" }}>
+                                  <span className="font-mono text-[11px] text-slate-500">{acc?.code ?? ""}</span>
                                 </td>
                                 <td className="py-0 px-0">
                                   <Select value={link.accountId} onValueChange={v => updateLink(i, "accountId", v)}>
-                                    <SelectTrigger className="border-0 shadow-none rounded-none focus:ring-0 bg-transparent text-slate-700 text-sm" style={{ height: 30 }}>
+                                    <SelectTrigger className="border-0 shadow-none rounded-none focus:ring-0 bg-transparent text-slate-700 text-[12px]" style={{ height: 28 }}>
                                       <SelectValue placeholder="— اختر الحساب —" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -500,20 +614,24 @@ export default function Warehouses() {
                                 <td className="border-l border-slate-100 text-center">
                                   <button onClick={() => removeLink(i)}
                                     className="w-full flex items-center justify-center text-slate-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
-                                    style={{ height: 30 }}>
-                                    <Trash2 className="w-3.5 h-3.5" />
+                                    style={{ height: 28 }}>
+                                    <Trash2 className="w-3 h-3" />
                                   </button>
                                 </td>
                               </tr>
                             );
                           })}
-                          {journalLinks.length === 0 && (
-                            <tr><td colSpan={5} className="py-8 text-center text-sm text-slate-400">لا توجد حسابات — اضغط "إضافة سطر"</td></tr>
+                          {links.length === 0 && (
+                            <tr><td colSpan={5} className="py-5 text-center text-[12px] text-slate-400">لا توجد روابط محاسبية بعد</td></tr>
                           )}
                         </tbody>
                       </table>
                     </div>
-                  </Section>
+                    <button onClick={() => setLinks(p => [...p, { label: "حساب جديد", accountId: "", sortOrder: p.length }])}
+                      className="mt-1.5 flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-800">
+                      <Plus className="w-3 h-3" /> إضافة سطر
+                    </button>
+                  </P>
                 </div>
               </div>
             );
@@ -522,78 +640,231 @@ export default function Warehouses() {
           {/* ══ TAB: أنواع المستندات ══ */}
           {formTab === "doctypes" && (() => {
             const DTYPE_ITEMS = [
-              { id: "sales",             label: "أنواع مستند فاتورة المبيعات",    icon: <BookOpen className="w-3.5 h-3.5" /> },
-              { id: "sales-return",      label: "أنواع مستند مردود المبيعات",     icon: <RotateCcw className="w-3.5 h-3.5" /> },
-              { id: "purchases",         label: "أنواع مستند فاتورة المشتريات",   icon: <BookMarked className="w-3.5 h-3.5" /> },
-              { id: "purchases-return",  label: "أنواع مستند مردود المشتريات",    icon: <RotateCcw className="w-3.5 h-3.5" /> },
-              { id: "sales-order",       label: "أنواع مستند أمر البيع",          icon: <ClipboardList className="w-3.5 h-3.5" /> },
-              { id: "sales-quote",       label: "أنواع مستند عرض أسعار مبيعات",  icon: <Tag className="w-3.5 h-3.5" /> },
-              { id: "purch-quote",       label: "أنواع مستند عرض أسعار مشتريات", icon: <Tag className="w-3.5 h-3.5" /> },
-              { id: "purchase-order",    label: "أنواع مستند أمر شراء",           icon: <ClipboardList className="w-3.5 h-3.5" /> },
-              { id: "transfer",          label: "أنواع مستند سند تحويل داخلي",    icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
+              { id: "sales",            label: "أنواع مستند فاتورة المبيعات",    icon: <BookOpen className="w-3.5 h-3.5" /> },
+              { id: "sales-return",     label: "أنواع مستند مردود المبيعات",     icon: <RotateCcw className="w-3.5 h-3.5" /> },
+              { id: "purchases",        label: "أنواع مستند فاتورة المشتريات",   icon: <BookMarked className="w-3.5 h-3.5" /> },
+              { id: "purchases-return", label: "أنواع مستند مردود المشتريات",    icon: <RotateCcw className="w-3.5 h-3.5" /> },
+              { id: "sales-order",      label: "أنواع مستند أمر البيع",          icon: <ClipboardList className="w-3.5 h-3.5" /> },
+              { id: "sales-quote",      label: "أنواع مستند عرض أسعار مبيعات",  icon: <Tag className="w-3.5 h-3.5" /> },
+              { id: "purch-quote",      label: "أنواع مستند عرض أسعار مشتريات", icon: <Tag className="w-3.5 h-3.5" /> },
+              { id: "purchase-order",   label: "أنواع مستند أمر شراء",           icon: <ClipboardList className="w-3.5 h-3.5" /> },
+              { id: "transfer",         label: "أنواع مستند سند تحويل داخلي",    icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
             ];
             const currentLabel = DTYPE_ITEMS.find(i => i.id === doctypeItem)?.label ?? "";
+
+            /* ── compact row helper ── */
+            const R = ({ label, lw = 88, children }: { label: string; lw?: number; children: React.ReactNode }) => (
+              <div className="flex items-center gap-1.5 min-w-0">
+                <div className="flex-1 min-w-0">{children}</div>
+                <span className="text-[11px] text-slate-600 shrink-0 text-right" style={{ width: lw }}>{label}</span>
+              </div>
+            );
+            const CB = ({ label }: { label: string }) => (
+              <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                <input type="checkbox" className="w-3.5 h-3.5 accent-indigo-600" />
+                <span className="text-[11px] text-slate-600">{label}</span>
+              </label>
+            );
+            const P = ({ title, children }: { title: string; children: React.ReactNode }) => (
+              <div className="overflow-hidden" style={{ border: "1px solid #d1d5db", borderRadius: 6 }}>
+                <div className="px-2.5 py-1" style={{ background: "#e8edf5", borderBottom: "1px solid #d1d5db" }}>
+                  <span className="text-[11px] font-bold text-slate-700">{title}</span>
+                </div>
+                <div className="px-3 py-2" style={{ background: "#fff" }}>{children}</div>
+              </div>
+            );
+
             return (
               <div className="flex gap-3" style={{ height: "calc(100vh - 260px)" }}>
-                {/* Sidebar */}
-                <div className="shrink-0 flex flex-col overflow-hidden" style={{ width: 210, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
-                  <div className="px-3 pt-3 pb-2 shrink-0" style={{ borderBottom: "1px solid #f1f5f9" }}>
+                {/* ── Sidebar ── */}
+                <div className="shrink-0 flex flex-col overflow-hidden" style={{ width: 205, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+                  <div className="px-3 pt-2.5 pb-2 shrink-0" style={{ borderBottom: "1px solid #f1f5f9" }}>
                     <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">الأنواع</span>
                   </div>
                   <div className="flex-1 overflow-y-auto py-1">
                     {DTYPE_ITEMS.map(item => {
                       const active = doctypeItem === item.id;
                       return (
-                        <button
-                          key={item.id}
-                          onClick={() => setDoctypeItem(item.id)}
-                          className="w-full flex items-center gap-2 px-3 py-1.5 text-right rounded-md mx-1 transition-colors"
-                          style={{ background: active ? "#eef2ff" : "transparent", color: active ? "#4338ca" : "#64748b", width: "calc(100% - 8px)" }}
+                        <button key={item.id} onClick={() => setDoctypeItem(item.id)}
+                          className="w-full flex items-center gap-2 px-3 py-1.5 text-right transition-colors"
+                          style={{ background: active ? "#dbeafe" : "transparent", color: active ? "#1d4ed8" : "#64748b", borderRight: active ? "3px solid #3b82f6" : "3px solid transparent" }}
                         >
-                          <span style={{ color: active ? "#6366f1" : "#94a3b8" }}>{item.icon}</span>
+                          <span style={{ color: active ? "#3b82f6" : "#94a3b8" }}>{item.icon}</span>
                           <span className="text-[12px] truncate flex-1">{item.label}</span>
                         </button>
                       );
                     })}
-                    <button
-                      className="w-full flex items-center gap-2 px-3 py-1.5 text-right text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
-                      onClick={() => toast.info("سيتم إضافة نوع مستند جديد")}
-                    >
-                      <Plus className="w-3.5 h-3.5" /> <span className="text-[12px]">إضافة نوع مستند</span>
-                    </button>
                   </div>
                 </div>
 
-                {/* Content */}
-                <div className="flex-1 min-w-0 overflow-y-auto">
-                  <Section title={`إعدادات — ${currentLabel}`}>
-                    <div className="grid grid-cols-4 gap-x-5 gap-y-3">
-                      <Field label="اسم النوع" span={2}>
-                        <FI value="" onChange={() => {}} placeholder={currentLabel} />
-                      </Field>
-                      <Field label="الكود">
-                        <FI value="" onChange={() => {}} placeholder="مثال: SJ-01" />
-                      </Field>
-                      <Field label="الفرع">
+                {/* ── Content ── */}
+                <div className="flex-1 min-w-0 overflow-y-auto space-y-2 pb-4">
+                  <div className="flex items-center justify-between py-1">
+                    <span className="text-[12px] font-bold text-indigo-700">{currentLabel}</span>
+                  </div>
+
+                  {/* بيانات نوع المستند */}
+                  <P title="بيانات نوع المستند">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                      <R label="نوع المستند">
                         <FS value="" onValueChange={() => {}}>
-                          {(branches ?? []).map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+                          <SelectItem value="sales">فاتورة مبيعات</SelectItem>
+                          <SelectItem value="purchase">فاتورة مشتريات</SelectItem>
+                          <SelectItem value="return-s">مردود مبيعات</SelectItem>
+                          <SelectItem value="return-p">مردود مشتريات</SelectItem>
                         </FS>
-                      </Field>
-                      <Field label="الدفتر المرتبط" span={2}>
-                        <FS value="" onValueChange={() => {}}>
-                          <SelectItem value="sales">دفتر المبيعات</SelectItem>
-                          <SelectItem value="purchases">دفتر المشتريات</SelectItem>
-                          <SelectItem value="transfer">سند التحويل</SelectItem>
-                        </FS>
-                      </Field>
-                      <Field label="الترقيم التلقائي" span={2}>
-                        <FS value="" onValueChange={() => {}}>
-                          <SelectItem value="yes">نعم</SelectItem>
-                          <SelectItem value="no">لا</SelectItem>
-                        </FS>
-                      </Field>
+                      </R>
+                      <div className="grid grid-cols-2 gap-x-2">
+                        <R label="كود إنجليزي" lw={64}>
+                          <FI value="" onChange={() => {}} placeholder="CASH" />
+                        </R>
+                        <R label="كود عربي" lw={56}>
+                          <FI value="" onChange={() => {}} placeholder="نقدا" />
+                        </R>
+                      </div>
+                      <R label="إسم عربي">
+                        <FI value="" onChange={() => {}} placeholder="مبيعات نقدية فرع 1" />
+                      </R>
+                      <R label="إسم إنجليزي">
+                        <FI value="" onChange={() => {}} placeholder="Cash Invoice Br. 1" />
+                      </R>
                     </div>
-                  </Section>
+                  </P>
+
+                  {/* حدود الاستخدام */}
+                  <P title="حدود الاستخدام">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                      <R label="مجموعة مستخدمين">
+                        <FS value="" onValueChange={() => {}}>
+                          <SelectItem value="all">الكل</SelectItem>
+                        </FS>
+                      </R>
+                      <R label="مستخدم">
+                        <FS value="" onValueChange={() => {}}>
+                          <SelectItem value="all">الكل</SelectItem>
+                          {(users as any[])?.map((u: any) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
+                        </FS>
+                      </R>
+                      <R label="دفتر المستندات">
+                        <FI value="" onChange={() => {}} placeholder="SAA" />
+                      </R>
+                      <R label="مخزن">
+                        <FS value="" onValueChange={() => {}}>
+                          <SelectItem value="this">هذا المخزن</SelectItem>
+                          {(warehouses as any[])?.map((w: any) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
+                        </FS>
+                      </R>
+                    </div>
+                    <div className="mt-1.5">
+                      <CB label="للمستندات التي يصدرها النظام فقط" />
+                    </div>
+                  </P>
+
+                  {/* خصائص السندات المصدرة */}
+                  <P title="خصائص السندات المصدرة">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                      <R label="نوع القيد">
+                        <FS value="" onValueChange={() => {}}>
+                          <SelectItem value="sales">مبيعات</SelectItem>
+                          <SelectItem value="purchase">مشتريات</SelectItem>
+                          <SelectItem value="receipt">قبض</SelectItem>
+                          <SelectItem value="payment">صرف</SelectItem>
+                        </FS>
+                      </R>
+                      <R label="دفتر القيد">
+                        <FI value="" onChange={() => {}} placeholder="SJ3" />
+                      </R>
+                      <R label="نوع مستند المخزون">
+                        <FS value="" onValueChange={() => {}}>
+                          <SelectItem value="sales">مبيعات 3</SelectItem>
+                          <SelectItem value="purchase">مشتريات</SelectItem>
+                          <SelectItem value="transfer">تحويل</SelectItem>
+                        </FS>
+                      </R>
+                      <R label="دفتر مستند المخزون">
+                        <FI value="" onChange={() => {}} placeholder="SI3" />
+                      </R>
+                    </div>
+                  </P>
+
+                  {/* الخيارات */}
+                  <P title="خيارات المستند">
+                    <div className="grid grid-cols-3 gap-x-4 gap-y-1.5">
+                      <R label="نموذج الطباعة">
+                        <FI value="" onChange={() => {}} placeholder="نموذج A4" />
+                      </R>
+                      <R label="نموذج طباعة حراري">
+                        <FI value="" onChange={() => {}} placeholder="80mm" />
+                      </R>
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 items-center pt-0.5">
+                        <CB label="متابعة الكميات بالفواتير" />
+                        <CB label="بدون ضريبة" />
+                        <CB label="تعديل التأثير المحاسبي المدين" />
+                        <CB label="تعديل التأثير المحاسبي الدائن" />
+                        <CB label="إحصاءات للبائع" />
+                        <CB label="إحصاءات للصنف" />
+                        <CB label="إحصاءات عميل/مورد" />
+                      </div>
+                    </div>
+                  </P>
+
+                  {/* الروابط المحاسبية */}
+                  <P title="الروابط المحاسبية">
+                    <div className="overflow-hidden" style={{ border: "1px solid #e5e7eb", borderRadius: 4 }}>
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr style={{ background: "#f1f5f9", borderBottom: "1px solid #e5e7eb" }}>
+                            <th className="w-8 py-1.5 text-center text-[11px] font-semibold text-slate-400 border-l border-slate-200">#</th>
+                            <th className="py-1.5 px-2 text-right text-[11px] font-semibold text-slate-500 border-l border-slate-200 w-16">طرف</th>
+                            <th className="py-1.5 px-3 text-right text-[11px] font-semibold text-slate-500 border-l border-slate-200">بيان</th>
+                            <th className="py-1.5 px-2 text-center text-[11px] font-semibold text-slate-500 border-l border-slate-200 w-16">كود</th>
+                            <th className="py-1.5 px-3 text-right text-[11px] font-semibold text-slate-500 border-l border-slate-200">الحساب</th>
+                            <th className="py-1.5 px-3 text-right text-[11px] font-semibold text-slate-500">مركز التكلفة</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[
+                            { side: "مدين",  label: "مخزن ← الصندوق" },
+                            { side: "دائن",  label: "مخزن ← مبيعات 1" },
+                            { side: "تخفيض", label: "مخزن ← مبيعات 3" },
+                            { side: "نقدي",  label: "مخزن ← الصندوق" },
+                            { side: "ثابت",  label: "ضريبة" },
+                          ].map((row, idx) => (
+                            <tr key={idx} style={{ height: 28, background: idx % 2 === 0 ? "#fff" : "#f9fafb", borderBottom: "1px solid #f1f5f9" }}>
+                              <td className="text-center text-[11px] text-slate-400 border-l border-slate-100">{idx + 1}</td>
+                              <td className="px-2 text-[11px] text-slate-600 border-l border-slate-100">{row.side}</td>
+                              <td className="px-3 text-[12px] text-slate-700 border-l border-slate-100">{row.label}</td>
+                              <td className="text-center border-l border-slate-100">
+                                <span className="font-mono text-[11px] text-slate-400">—</span>
+                              </td>
+                              <td className="py-0 px-0 border-l border-slate-100">
+                                <Select value="" onValueChange={() => {}}>
+                                  <SelectTrigger className="border-0 shadow-none rounded-none focus:ring-0 bg-transparent text-[12px] text-slate-600" style={{ height: 28 }}>
+                                    <SelectValue placeholder="— اختر —" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {(accounts as any[])?.map((a: any) => (
+                                      <SelectItem key={a.id} value={String(a.id)}>{a.code} - {a.name}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </td>
+                              <td className="py-0 px-0">
+                                <Select value="" onValueChange={() => {}}>
+                                  <SelectTrigger className="border-0 shadow-none rounded-none focus:ring-0 bg-transparent text-[12px] text-slate-600" style={{ height: 28 }}>
+                                    <SelectValue placeholder="— اختر —" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="main">المركز الرئيسي</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </P>
                 </div>
               </div>
             );
