@@ -6,7 +6,7 @@ import { usersRouter } from './users.js';
 import { salesRouter } from './sales.js';
 import { chatRouter } from './chat.js';
 import { db } from '../db.js';
-import { products, customers, suppliers, chartOfAccounts, warehouses, branches, units, productGroups, journalEntries, journalEntryLines, vouchers, inventory, stockVouchers, stockVoucherItems, inventoryCounts, inventoryCountItems, freeProducts, salesInvoices, salesInvoiceItems, warehouseAccountLinks } from '../schema.js';
+import { products, customers, suppliers, chartOfAccounts, warehouses, branches, units, productGroups, journalEntries, journalEntryLines, vouchers, inventory, stockVouchers, stockVoucherItems, inventoryCounts, inventoryCountItems, freeProducts, salesInvoices, salesInvoiceItems, warehouseAccountLinks, userGroups } from '../schema.js';
 import { eq, and, desc, like, or, sql, isNotNull } from 'drizzle-orm';
 
 export const appRouter = router({
@@ -28,6 +28,38 @@ export const appRouter = router({
 
   // ─── Users ───────────────────────────────────────────────────────────────────
   users: usersRouter,
+
+  // ─── User Groups ─────────────────────────────────────────────────────────────
+  userGroups: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return db.select().from(userGroups)
+        .where(and(eq(userGroups.orgId, ctx.user.orgId), eq(userGroups.isActive, true)))
+        .orderBy(userGroups.name);
+    }),
+    create: protectedProcedure
+      .input(z.object({ name: z.string().min(1), description: z.string().optional() }))
+      .mutation(async ({ input, ctx }) => {
+        const [g] = await db.insert(userGroups).values({
+          orgId: ctx.user.orgId, name: input.name, description: input.description,
+        }).returning();
+        return g;
+      }),
+    update: protectedProcedure
+      .input(z.object({ id: z.number(), name: z.string().optional(), description: z.string().optional() }))
+      .mutation(async ({ input, ctx }) => {
+        const { id, ...rest } = input;
+        await db.update(userGroups).set(rest)
+          .where(and(eq(userGroups.id, id), eq(userGroups.orgId, ctx.user.orgId)));
+        return { success: true };
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        await db.update(userGroups).set({ isActive: false })
+          .where(and(eq(userGroups.id, input.id), eq(userGroups.orgId, ctx.user.orgId)));
+        return { success: true };
+      }),
+  }),
 
   // ─── Sales ───────────────────────────────────────────────────────────────────
   sales: salesRouter,

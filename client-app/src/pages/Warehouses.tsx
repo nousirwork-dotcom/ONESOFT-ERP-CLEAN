@@ -164,6 +164,7 @@ export default function Warehouses() {
   const { data: branches } = trpc.branches.list.useQuery();
   const { data: accounts } = trpc.accounts.list.useQuery();
   const { data: users } = trpc.users.list.useQuery();
+  const { data: userGroupsList } = trpc.userGroups.list.useQuery();
   const { data: loadedLinks } = trpc.warehouses.accountLinks.list.useQuery(
     { warehouseId: editId! }, { enabled: !!editId },
   );
@@ -550,7 +551,7 @@ export default function Warehouses() {
                       <R label="مجموعة مستخدمين">
                         <FS value={jd.userGroup} onValueChange={v => setJournal(journalItem, { userGroup: v })}>
                           <SelectItem value="all">الكل</SelectItem>
-                          {(users as any[])?.map((u: any) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
+                          {(userGroupsList ?? []).map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>)}
                         </FS>
                       </R>
                       <R label="مستخدم">
@@ -823,7 +824,7 @@ export default function Warehouses() {
                       <R label="مجموعة مستخدمين">
                         <FS value={dd.userGroup} onValueChange={v => setDoctype(doctypeItem, { userGroup: v })}>
                           <SelectItem value="all">الكل</SelectItem>
-                          {(users as any[])?.map((u: any) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
+                          {(userGroupsList ?? []).map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>)}
                         </FS>
                       </R>
                       <R label="مستخدم">

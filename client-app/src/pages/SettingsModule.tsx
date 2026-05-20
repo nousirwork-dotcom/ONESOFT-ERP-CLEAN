@@ -460,41 +460,110 @@ function UsersListPage() {
 // ─── User Groups ───────────────────────────────────────────────────────────────
 
 function UserGroupsPage() {
-  const groups = [
-    { id: 1, name: "مديرو النظام",  users: 2, permissions: "كاملة" },
-    { id: 2, name: "المحاسبون",     users: 5, permissions: "الحسابات والتقارير" },
-    { id: 3, name: "فريق المبيعات", users: 8, permissions: "المبيعات والعملاء" },
-    { id: 4, name: "أمناء المخازن", users: 3, permissions: "المخزون فقط" },
-    { id: 5, name: "الموارد البشرية",users: 2, permissions: "HR فقط" },
-  ];
+  const utils = trpc.useUtils();
+  const { data: groups = [], isLoading } = trpc.userGroups.list.useQuery();
+  const createGroup = trpc.userGroups.create.useMutation({
+    onSuccess: () => { utils.userGroups.list.invalidate(); setShowAdd(false); setNewName(""); setNewDesc(""); toast.success("تم إضافة المجموعة"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const deleteGroup = trpc.userGroups.delete.useMutation({
+    onSuccess: () => { utils.userGroups.list.invalidate(); toast.success("تم حذف المجموعة"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const updateGroup = trpc.userGroups.update.useMutation({
+    onSuccess: () => { utils.userGroups.list.invalidate(); setEditId(null); toast.success("تم تعديل المجموعة"); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const [showAdd, setShowAdd] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newDesc, setNewDesc] = useState("");
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" dir="rtl">
       <div className="flex justify-between items-center">
         <h3 className="font-semibold text-sm">مجموعات المستخدمين</h3>
-        <Button className="h-8 text-sm" onClick={() => toast.info("إضافة مجموعة")}><Plus className="w-3.5 h-3.5 ml-1" />مجموعة جديدة</Button>
+        <Button className="h-8 text-sm" onClick={() => setShowAdd(true)}>
+          <Plus className="w-3.5 h-3.5 ml-1" />مجموعة جديدة
+        </Button>
       </div>
+
+      {showAdd && (
+        <Card className="border-indigo-200 bg-indigo-50/40 p-4">
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <Label className="text-xs mb-1 block">اسم المجموعة *</Label>
+              <Input className="h-8 text-sm" value={newName} onChange={e => setNewName(e.target.value)} placeholder="مثال: أمناء المخازن" />
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">الوصف</Label>
+              <Input className="h-8 text-sm" value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="وصف اختياري" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" className="h-7 text-xs" disabled={!newName.trim() || createGroup.isPending}
+              onClick={() => createGroup.mutate({ name: newName.trim(), description: newDesc || undefined })}>
+              {createGroup.isPending ? "جارٍ الحفظ..." : "حفظ"}
+            </Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setShowAdd(false); setNewName(""); setNewDesc(""); }}>
+              إلغاء
+            </Button>
+          </div>
+        </Card>
+      )}
+
       <Card className="border-border/50">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead className="text-xs">اسم المجموعة</TableHead>
-              <TableHead className="text-xs text-center">عدد المستخدمين</TableHead>
-              <TableHead className="text-xs">الصلاحيات</TableHead>
+              <TableHead className="text-xs">الوصف</TableHead>
               <TableHead className="text-xs">الإجراءات</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
+            {isLoading && (
+              <TableRow><TableCell colSpan={3} className="text-xs text-center text-muted-foreground py-6">جارٍ التحميل...</TableCell></TableRow>
+            )}
+            {!isLoading && groups.length === 0 && (
+              <TableRow><TableCell colSpan={3} className="text-xs text-center text-muted-foreground py-6">لا توجد مجموعات — أضف مجموعة جديدة</TableCell></TableRow>
+            )}
             {groups.map(g => (
               <TableRow key={g.id}>
-                <TableCell className="text-xs font-medium">{g.name}</TableCell>
-                <TableCell className="text-xs text-center">{g.users}</TableCell>
-                <TableCell className="text-xs text-muted-foreground">{g.permissions}</TableCell>
+                <TableCell className="text-xs font-medium">
+                  {editId === g.id
+                    ? <Input className="h-7 text-xs w-40" value={editName} onChange={e => setEditName(e.target.value)} />
+                    : g.name}
+                </TableCell>
+                <TableCell className="text-xs text-muted-foreground">
+                  {editId === g.id
+                    ? <Input className="h-7 text-xs w-48" value={editDesc} onChange={e => setEditDesc(e.target.value)} />
+                    : (g.description ?? "—")}
+                </TableCell>
                 <TableCell>
-                  <div className="flex gap-2">
-                    <button className="text-primary text-xs hover:underline" onClick={() => toast.info("تعديل المجموعة")}>تعديل</button>
-                    <button className="text-primary text-xs hover:underline" onClick={() => toast.info("إدارة الصلاحيات")}>الصلاحيات</button>
-                    <button className="text-destructive text-xs hover:underline" onClick={() => toast.error("حذف المجموعة")}>حذف</button>
-                  </div>
+                  {editId === g.id ? (
+                    <div className="flex gap-2">
+                      <button className="text-primary text-xs hover:underline"
+                        onClick={() => updateGroup.mutate({ id: g.id, name: editName, description: editDesc || undefined })}>
+                        حفظ
+                      </button>
+                      <button className="text-muted-foreground text-xs hover:underline" onClick={() => setEditId(null)}>إلغاء</button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <button className="text-primary text-xs hover:underline"
+                        onClick={() => { setEditId(g.id); setEditName(g.name); setEditDesc(g.description ?? ""); }}>
+                        تعديل
+                      </button>
+                      <button className="text-destructive text-xs hover:underline"
+                        onClick={() => deleteGroup.mutate({ id: g.id })}>
+                        حذف
+                      </button>
+                    </div>
+                  )}
                 </TableCell>
               </TableRow>
             ))}

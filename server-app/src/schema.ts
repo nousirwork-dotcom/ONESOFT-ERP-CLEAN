@@ -46,6 +46,16 @@ export const users = pgTable('users', {
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
+// ─── User Groups ──────────────────────────────────────────────────────────────
+export const userGroups = pgTable('user_groups', {
+  id: serial('id').primaryKey(),
+  orgId: integer('org_id').notNull().references(() => organizations.id),
+  name: varchar('name', { length: 255 }).notNull(),
+  description: text('description'),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
 // ─── Branches ─────────────────────────────────────────────────────────────────
 export const branches = pgTable('branches', {
   id: serial('id').primaryKey(),
