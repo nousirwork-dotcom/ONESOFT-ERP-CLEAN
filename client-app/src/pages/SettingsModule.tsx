@@ -468,12 +468,12 @@ function UsersListPage() {
             <div>
               <Label className="text-xs mb-1 block">فئة المستخدم</Label>
               <Select
-                value={categoryId ? String(categoryId) : ""}
-                onValueChange={v => setCategoryId(v ? Number(v) : null)}
+                value={categoryId ? String(categoryId) : "none"}
+                onValueChange={v => setCategoryId(v === "none" ? null : Number(v))}
               >
                 <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="بدون فئة" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">بدون فئة</SelectItem>
+                  <SelectItem value="none">بدون فئة</SelectItem>
                   {(cats as any[]).map((c: any) => (
                     <SelectItem key={c.id} value={String(c.id)}>
                       {c.code ? `${c.code} — ` : ""}{c.name}
@@ -1029,7 +1029,7 @@ function SavedMembersTable({ groupId }: { groupId: number }) {
   );
 }
 
-function AddMemberToGroup({ groupId, users, groups }: { groupId: number; users: any[]; groups: any[] }) {
+function AddMemberToGroup({ groupId, users, groups, onErrorChange }: { groupId: number; users: any[]; groups: any[]; onErrorChange?: (hasError: boolean) => void }) {
   const utils = trpc.useUtils();
   const { data: savedMembers = [] } = trpc.groupMembers.list.useQuery({ groupId });
   const addMember = trpc.groupMembers.add.useMutation({
@@ -1044,6 +1044,9 @@ function AddMemberToGroup({ groupId, users, groups }: { groupId: number; users: 
     .filter((m: any) => m.memberType === type)
     .map((m: any) => m.memberCode)
     .filter(Boolean);
+
+  const isDuplicate = !!code.trim() && existingCodes.includes(code.trim());
+  useEffect(() => { onErrorChange?.(isDuplicate); }, [isDuplicate]);
 
   return (
     <Table>
@@ -1110,6 +1113,10 @@ function UserGroupsPage() {
   const [editId, setEditId] = useState<number | null>(null);
   const [editCode, setEditCode] = useState("");
   const [editName, setEditName] = useState("");
+  const [editMemberHasError, setEditMemberHasError] = useState(false);
+
+  // block add-form "حفظ" if the current member input row has a duplicate
+  const addRowIsDup = !!rowCode.trim() && pendingMembers.some(m => m.memberCode === rowCode.trim() && m.memberType === rowType);
 
   const addPending = () => {
     if (!rowCode.trim() || !rowName.trim()) return;
@@ -1185,15 +1192,23 @@ function UserGroupsPage() {
             </Table>
           </div>
 
-          <div className="flex gap-2">
-            <Button size="sm" className="h-7 text-xs" disabled={!newName.trim() || createGroup.isPending}
-              onClick={() => createGroup.mutate({ code: newCode || undefined, name: newName.trim() })}>
+          <div className="flex gap-2 items-center flex-wrap">
+            <Button size="sm" className="h-7 text-xs" disabled={!newName.trim() || addRowIsDup || createGroup.isPending}
+              onClick={() => {
+                if (addRowIsDup) { toast.error("يوجد كود عضو مكرر — أزل الكود المكرر أولاً"); return; }
+                createGroup.mutate({ code: newCode || undefined, name: newName.trim() });
+              }}>
               {createGroup.isPending ? "جارٍ الحفظ..." : "حفظ"}
             </Button>
             <Button size="sm" variant="outline" className="h-7 text-xs"
               onClick={() => { setShowAdd(false); setNewCode(""); setNewName(""); setPendingMembers([]); }}>
               إلغاء
             </Button>
+            {addRowIsDup && (
+              <span className="text-[11px] text-destructive font-medium flex items-center gap-1">
+                ⚠ العضو تم تكرار بالجدول — لا يمكن الحفظ
+              </span>
+            )}
           </div>
         </Card>
       )}
@@ -1220,16 +1235,24 @@ function UserGroupsPage() {
             </div>
             <SavedMembersTable groupId={editId} />
             <div className="border-t border-border/40">
-              <AddMemberToGroup groupId={editId} users={allUsers} groups={groups} />
+              <AddMemberToGroup groupId={editId} users={allUsers} groups={groups} onErrorChange={setEditMemberHasError} />
             </div>
           </div>
 
-          <div className="flex gap-2">
-            <Button size="sm" className="h-7 text-xs" disabled={!editName.trim() || updateGroup.isPending}
-              onClick={() => updateGroup.mutate({ id: editId, code: editCode || undefined, name: editName })}>
+          <div className="flex gap-2 items-center flex-wrap">
+            <Button size="sm" className="h-7 text-xs" disabled={!editName.trim() || editMemberHasError || updateGroup.isPending}
+              onClick={() => {
+                if (editMemberHasError) { toast.error("يوجد كود عضو مكرر — أزل الكود المكرر أولاً"); return; }
+                updateGroup.mutate({ id: editId, code: editCode || undefined, name: editName });
+              }}>
               {updateGroup.isPending ? "جارٍ الحفظ..." : "حفظ"}
             </Button>
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditId(null)}>إلغاء</Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setEditId(null); setEditMemberHasError(false); }}>إلغاء</Button>
+            {editMemberHasError && (
+              <span className="text-[11px] text-destructive font-medium flex items-center gap-1">
+                ⚠ العضو تم تكرار بالجدول — لا يمكن الحفظ
+              </span>
+            )}
           </div>
         </Card>
       )}
