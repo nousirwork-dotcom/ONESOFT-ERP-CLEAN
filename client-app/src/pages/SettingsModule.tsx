@@ -11,6 +11,7 @@ import {
   AlertTriangle, CheckCircle, XCircle, BarChart2, Lock,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -544,11 +545,81 @@ function UsersListPage() {
 
 // ─── User Categories ───────────────────────────────────────────────────────────
 
+function buildCatPreview(prefix: string, totalDigits: number, firstNum: number, inc: number) {
+  if (!prefix || totalDigits <= prefix.length) return null;
+  const seqLen = totalDigits - prefix.length;
+  const first = String(firstNum).padStart(seqLen, "0");
+  const second = String(firstNum + inc).padStart(seqLen, "0");
+  return { first: prefix + first, second: prefix + second, seqLen };
+}
+
+const emptyCatForm = {
+  code: "", name: "",
+  autoNumbering: true, firstNumber: 1, lastNumber: 99999, increment: 1, codeDigits: 5,
+};
+
+function CatNumberingSection({ form, set }: { form: typeof emptyCatForm; set: (k: string, v: any) => void }) {
+  const preview = buildCatPreview(form.code, form.codeDigits, form.firstNumber, form.increment);
+  return (
+    <div className="border border-border/60 rounded-md overflow-hidden mt-3">
+      <div className="px-3 py-1.5 bg-primary/5 text-xs font-semibold text-primary border-b border-border/60 flex items-center justify-between">
+        <span>إعدادات الترقيم التلقائي</span>
+        <label className="flex items-center gap-1.5 cursor-pointer font-normal">
+          <Checkbox checked={form.autoNumbering} onCheckedChange={v => set("autoNumbering", !!v)} />
+          <span className="text-xs">تفعيل تسلسل تلقائي</span>
+        </label>
+      </div>
+      <div className={`${!form.autoNumbering ? "opacity-40 pointer-events-none" : ""}`}>
+        <div className="grid grid-cols-4 divide-x divide-x-reverse divide-border/60 border-b border-border/60">
+          <div className="px-2 py-1">
+            <p className="text-[10px] text-muted-foreground mb-0.5">أول رقم</p>
+            <Input type="number" min={1} value={form.firstNumber}
+              onChange={e => set("firstNumber", parseInt(e.target.value) || 1)}
+              className="h-7 text-xs border-0 p-0 focus-visible:ring-0 bg-transparent font-mono" dir="ltr" />
+          </div>
+          <div className="px-2 py-1">
+            <p className="text-[10px] text-muted-foreground mb-0.5">آخر رقم</p>
+            <Input type="number" min={1} value={form.lastNumber}
+              onChange={e => set("lastNumber", parseInt(e.target.value) || 99999)}
+              className="h-7 text-xs border-0 p-0 focus-visible:ring-0 bg-transparent font-mono" dir="ltr" />
+          </div>
+          <div className="px-2 py-1">
+            <p className="text-[10px] text-muted-foreground mb-0.5">معدل الزيادة</p>
+            <Input type="number" min={1} value={form.increment}
+              onChange={e => set("increment", parseInt(e.target.value) || 1)}
+              className="h-7 text-xs border-0 p-0 focus-visible:ring-0 bg-transparent font-mono" dir="ltr" />
+          </div>
+          <div className="px-2 py-1">
+            <p className="text-[10px] text-muted-foreground mb-0.5">عدد الخانات</p>
+            <Input type="number" min={2} max={12} value={form.codeDigits}
+              onChange={e => set("codeDigits", parseInt(e.target.value) || 5)}
+              className="h-7 text-xs border-0 p-0 focus-visible:ring-0 bg-transparent font-mono" dir="ltr" />
+          </div>
+        </div>
+        {preview && form.code && (
+          <div className="px-3 py-2 bg-emerald-50/60 flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] text-muted-foreground">معاينة:</span>
+            <code className="font-mono text-xs font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">{preview.first}</code>
+            <span className="text-muted-foreground text-xs">،</span>
+            <code className="font-mono text-xs font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">{preview.second}</code>
+            <span className="text-[10px] text-muted-foreground mr-auto">
+              بادئة: <b>{form.code}</b> | تسلسل: <b>{preview.seqLen}</b> خانة
+            </span>
+          </div>
+        )}
+        {form.autoNumbering && form.code && form.codeDigits <= form.code.length && (
+          <p className="text-[11px] text-red-500 px-3 pb-2">⚠️ عدد الخانات أقل من أو يساوي طول البادئة!</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function UserCategoriesPage() {
   const utils = trpc.useUtils();
   const { data: cats = [], isLoading } = trpc.userCategories.list.useQuery();
   const createCat = trpc.userCategories.create.useMutation({
-    onSuccess: () => { utils.userCategories.list.invalidate(); setShowAdd(false); setNewCode(""); setNewName(""); toast.success("تم إضافة الفئة"); },
+    onSuccess: () => { utils.userCategories.list.invalidate(); setShowAdd(false); setAddForm({ ...emptyCatForm }); toast.success("تم إضافة الفئة"); },
     onError: (e) => toast.error(e.message),
   });
   const updateCat = trpc.userCategories.update.useMutation({
@@ -561,11 +632,45 @@ function UserCategoriesPage() {
   });
 
   const [showAdd, setShowAdd] = useState(false);
-  const [newCode, setNewCode] = useState("");
-  const [newName, setNewName] = useState("");
+  const [addForm, setAddForm] = useState({ ...emptyCatForm });
   const [editId, setEditId] = useState<number | null>(null);
-  const [editCode, setEditCode] = useState("");
-  const [editName, setEditName] = useState("");
+  const [editForm, setEditForm] = useState({ ...emptyCatForm });
+
+  const setAdd = (k: string, v: any) => setAddForm(p => ({ ...p, [k]: v }));
+  const setEdit = (k: string, v: any) => setEditForm(p => ({ ...p, [k]: v }));
+
+  const addCodeDup = !!addForm.code.trim() && (cats as any[]).some((c: any) => c.code === addForm.code.trim());
+  const editCodeDup = !!editForm.code.trim() && (cats as any[]).some((c: any) => c.code === editForm.code.trim() && c.id !== editId);
+
+  const handleCreate = () => {
+    if (!addForm.name.trim()) return toast.error("اسم الفئة مطلوب");
+    if (addCodeDup) return toast.error("الكود مكرر — يوجد فئة بنفس الكود");
+    createCat.mutate({
+      code: addForm.code.trim() || undefined,
+      name: addForm.name.trim(),
+      autoNumbering: addForm.autoNumbering,
+      firstNumber: addForm.firstNumber,
+      lastNumber: addForm.lastNumber,
+      increment: addForm.increment,
+      codeDigits: addForm.codeDigits,
+    });
+  };
+
+  const handleUpdate = () => {
+    if (!editId) return;
+    if (!editForm.name.trim()) return toast.error("اسم الفئة مطلوب");
+    if (editCodeDup) return toast.error("الكود مكرر — يوجد فئة بنفس الكود");
+    updateCat.mutate({
+      id: editId,
+      code: editForm.code.trim() || undefined,
+      name: editForm.name.trim(),
+      autoNumbering: editForm.autoNumbering,
+      firstNumber: editForm.firstNumber,
+      lastNumber: editForm.lastNumber,
+      increment: editForm.increment,
+      codeDigits: editForm.codeDigits,
+    });
+  };
 
   return (
     <div className="space-y-4" dir="rtl">
@@ -578,23 +683,27 @@ function UserCategoriesPage() {
 
       {showAdd && (
         <Card className="border-indigo-200 bg-indigo-50/40 p-4">
-          <div className="grid grid-cols-2 gap-3 mb-3">
+          <div className="grid grid-cols-2 gap-3 mb-1">
             <div>
-              <Label className="text-xs mb-1 block">الكود</Label>
-              <Input className="h-8 text-sm" value={newCode} onChange={e => setNewCode(e.target.value)} placeholder="CAT01" autoFocus />
+              <Label className="text-xs mb-1 block">الكود / البادئة</Label>
+              <Input
+                className={`h-8 text-sm font-mono ${addCodeDup ? "border-destructive focus-visible:ring-destructive" : ""}`}
+                value={addForm.code} onChange={e => setAdd("code", e.target.value)}
+                placeholder="CAT" autoFocus dir="ltr" />
+              {addCodeDup && <p className="text-[10px] text-destructive mt-0.5">الكود مكرر</p>}
             </div>
             <div>
               <Label className="text-xs mb-1 block">اسم الفئة *</Label>
-              <Input className="h-8 text-sm" value={newName} onChange={e => setNewName(e.target.value)} placeholder="مثال: المحاسبون" />
+              <Input className="h-8 text-sm" value={addForm.name} onChange={e => setAdd("name", e.target.value)} placeholder="مثال: المحاسبون" />
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button size="sm" className="h-7 text-xs" disabled={!newName.trim() || createCat.isPending}
-              onClick={() => createCat.mutate({ code: newCode || undefined, name: newName.trim() })}>
+          <CatNumberingSection form={addForm} set={setAdd} />
+          <div className="flex gap-2 mt-3">
+            <Button size="sm" className="h-7 text-xs" disabled={!addForm.name.trim() || addCodeDup || createCat.isPending} onClick={handleCreate}>
               {createCat.isPending ? "جارٍ الحفظ..." : "حفظ"}
             </Button>
             <Button size="sm" variant="outline" className="h-7 text-xs"
-              onClick={() => { setShowAdd(false); setNewCode(""); setNewName(""); }}>
+              onClick={() => { setShowAdd(false); setAddForm({ ...emptyCatForm }); }}>
               إلغاء
             </Button>
           </div>
@@ -603,19 +712,24 @@ function UserCategoriesPage() {
 
       {editId !== null && (
         <Card className="border-amber-200 bg-amber-50/30 p-4">
-          <div className="grid grid-cols-2 gap-3 mb-3">
+          <p className="text-xs font-semibold text-amber-700 mb-2">تعديل الفئة</p>
+          <div className="grid grid-cols-2 gap-3 mb-1">
             <div>
-              <Label className="text-xs mb-1 block">الكود</Label>
-              <Input className="h-8 text-sm" value={editCode} onChange={e => setEditCode(e.target.value)} autoFocus />
+              <Label className="text-xs mb-1 block">الكود / البادئة</Label>
+              <Input
+                className={`h-8 text-sm font-mono ${editCodeDup ? "border-destructive focus-visible:ring-destructive" : ""}`}
+                value={editForm.code} onChange={e => setEdit("code", e.target.value)}
+                autoFocus dir="ltr" />
+              {editCodeDup && <p className="text-[10px] text-destructive mt-0.5">الكود مكرر</p>}
             </div>
             <div>
               <Label className="text-xs mb-1 block">اسم الفئة *</Label>
-              <Input className="h-8 text-sm" value={editName} onChange={e => setEditName(e.target.value)} />
+              <Input className="h-8 text-sm" value={editForm.name} onChange={e => setEdit("name", e.target.value)} />
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button size="sm" className="h-7 text-xs" disabled={!editName.trim() || updateCat.isPending}
-              onClick={() => updateCat.mutate({ id: editId, code: editCode || undefined, name: editName.trim() })}>
+          <CatNumberingSection form={editForm} set={setEdit} />
+          <div className="flex gap-2 mt-3">
+            <Button size="sm" className="h-7 text-xs" disabled={!editForm.name.trim() || editCodeDup || updateCat.isPending} onClick={handleUpdate}>
               {updateCat.isPending ? "جارٍ الحفظ..." : "حفظ"}
             </Button>
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditId(null)}>إلغاء</Button>
@@ -627,36 +741,63 @@ function UserCategoriesPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="text-xs w-20">الكود</TableHead>
+              <TableHead className="text-xs w-24">الكود</TableHead>
               <TableHead className="text-xs">اسم الفئة</TableHead>
+              <TableHead className="text-xs text-center">الترقيم</TableHead>
+              <TableHead className="text-xs text-center">خانات</TableHead>
+              <TableHead className="text-xs">معاينة</TableHead>
               <TableHead className="text-xs">الإجراءات</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={3} className="text-xs text-center text-muted-foreground py-6">جارٍ التحميل...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="text-xs text-center text-muted-foreground py-6">جارٍ التحميل...</TableCell></TableRow>
             )}
-            {!isLoading && cats.length === 0 && (
-              <TableRow><TableCell colSpan={3} className="text-xs text-center text-muted-foreground py-6">لا توجد فئات — أضف فئة جديدة</TableCell></TableRow>
+            {!isLoading && (cats as any[]).length === 0 && (
+              <TableRow><TableCell colSpan={6} className="text-xs text-center text-muted-foreground py-6">لا توجد فئات — أضف فئة جديدة</TableCell></TableRow>
             )}
-            {cats.map((c: any) => (
-              <TableRow key={c.id} className={editId === c.id ? "bg-amber-50/40" : ""}>
-                <TableCell className="text-xs font-mono text-muted-foreground">{c.code ?? "—"}</TableCell>
-                <TableCell className="text-xs font-medium">{c.name}</TableCell>
-                <TableCell>
-                  <div className="flex gap-2">
-                    <button className="text-primary text-xs hover:underline"
-                      onClick={() => { setEditId(c.id); setEditCode(c.code ?? ""); setEditName(c.name); setShowAdd(false); }}>
-                      تعديل
-                    </button>
-                    <button className="text-destructive text-xs hover:underline"
-                      onClick={() => deleteCat.mutate({ id: c.id })}>
-                      حذف
-                    </button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
+            {(cats as any[]).map((c: any) => {
+              const pv = buildCatPreview(c.code ?? "", c.codeDigits ?? 5, c.firstNumber ?? 1, c.increment ?? 1);
+              return (
+                <TableRow key={c.id} className={editId === c.id ? "bg-amber-50/40" : ""}>
+                  <TableCell className="text-xs font-mono text-muted-foreground">{c.code ?? "—"}</TableCell>
+                  <TableCell className="text-xs font-medium">{c.name}</TableCell>
+                  <TableCell className="text-center">
+                    <Badge variant={c.autoNumbering ? "default" : "outline"} className="text-[9px] h-4">
+                      {c.autoNumbering ? "تلقائي" : "يدوي"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-center font-mono text-xs">{c.codeDigits ?? 5}</TableCell>
+                  <TableCell>
+                    {pv && c.autoNumbering
+                      ? <code className="font-mono text-[10px] text-emerald-600">{pv.first}، {pv.second}...</code>
+                      : <span className="text-muted-foreground text-xs">—</span>}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-2">
+                      <button className="text-primary text-xs hover:underline"
+                        onClick={() => {
+                          setEditId(c.id);
+                          setEditForm({
+                            code: c.code ?? "", name: c.name,
+                            autoNumbering: c.autoNumbering ?? true,
+                            firstNumber: c.firstNumber ?? 1,
+                            lastNumber: c.lastNumber ?? 99999,
+                            increment: c.increment ?? 1,
+                            codeDigits: c.codeDigits ?? 5,
+                          });
+                          setShowAdd(false);
+                        }}>
+                        تعديل
+                      </button>
+                      <button className="text-destructive text-xs hover:underline" onClick={() => deleteCat.mutate({ id: c.id })}>
+                        حذف
+                      </button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </Card>

@@ -69,17 +69,53 @@ export const appRouter = router({
         .orderBy(userCategories.name);
     }),
     create: protectedProcedure
-      .input(z.object({ code: z.string().optional(), name: z.string().min(1) }))
+      .input(z.object({
+        code: z.string().optional(),
+        name: z.string().min(1),
+        autoNumbering: z.boolean().optional(),
+        firstNumber: z.number().optional(),
+        lastNumber: z.number().optional(),
+        increment: z.number().optional(),
+        codeDigits: z.number().optional(),
+      }))
       .mutation(async ({ input, ctx }) => {
+        if (input.code) {
+          const dup = await db.select({ id: userCategories.id }).from(userCategories)
+            .where(and(eq(userCategories.orgId, ctx.user.orgId), eq(userCategories.code, input.code), eq(userCategories.isActive, true)))
+            .limit(1);
+          if (dup.length) throw new TRPCError({ code: 'BAD_REQUEST', message: 'الكود مكرر — يوجد فئة بنفس الكود' });
+        }
         const [c] = await db.insert(userCategories).values({
-          orgId: ctx.user.orgId, code: input.code, name: input.name,
+          orgId: ctx.user.orgId,
+          code: input.code,
+          name: input.name,
+          autoNumbering: input.autoNumbering ?? true,
+          firstNumber: input.firstNumber ?? 1,
+          lastNumber: input.lastNumber ?? 99999,
+          increment: input.increment ?? 1,
+          codeDigits: input.codeDigits ?? 5,
         }).returning();
         return c;
       }),
     update: protectedProcedure
-      .input(z.object({ id: z.number(), code: z.string().optional(), name: z.string().optional() }))
+      .input(z.object({
+        id: z.number(),
+        code: z.string().optional(),
+        name: z.string().optional(),
+        autoNumbering: z.boolean().optional(),
+        firstNumber: z.number().optional(),
+        lastNumber: z.number().optional(),
+        increment: z.number().optional(),
+        codeDigits: z.number().optional(),
+      }))
       .mutation(async ({ input, ctx }) => {
         const { id, ...rest } = input;
+        if (rest.code) {
+          const dup = await db.select({ id: userCategories.id }).from(userCategories)
+            .where(and(eq(userCategories.orgId, ctx.user.orgId), eq(userCategories.code, rest.code), eq(userCategories.isActive, true)))
+            .limit(1);
+          if (dup.length && dup[0].id !== id) throw new TRPCError({ code: 'BAD_REQUEST', message: 'الكود مكرر — يوجد فئة بنفس الكود' });
+        }
         await db.update(userCategories).set(rest)
           .where(and(eq(userCategories.id, id), eq(userCategories.orgId, ctx.user.orgId)));
         return { success: true };

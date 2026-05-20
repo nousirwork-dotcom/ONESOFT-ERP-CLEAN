@@ -65,6 +65,11 @@ export const userCategories = pgTable('user_categories', {
   code: varchar('code', { length: 50 }),
   name: varchar('name', { length: 255 }).notNull(),
   isActive: boolean('is_active').notNull().default(true),
+  autoNumbering: boolean('auto_numbering').notNull().default(true),
+  firstNumber: integer('first_number').notNull().default(1),
+  lastNumber: integer('last_number').notNull().default(99999),
+  increment: integer('increment').notNull().default(1),
+  codeDigits: integer('code_digits').notNull().default(5),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
