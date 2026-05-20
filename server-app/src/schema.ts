@@ -58,6 +58,17 @@ export const userGroups = pgTable('user_groups', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
+// ─── User Group Members ───────────────────────────────────────────────────────
+export const userGroupMembers = pgTable('user_group_members', {
+  id: serial('id').primaryKey(),
+  groupId: integer('group_id').notNull().references(() => userGroups.id, { onDelete: 'cascade' }),
+  orgId: integer('org_id').notNull(),
+  memberType: varchar('member_type', { length: 10 }).notNull(),
+  memberCode: varchar('member_code', { length: 50 }),
+  memberName: varchar('member_name', { length: 255 }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
 // ─── Branches ─────────────────────────────────────────────────────────────────
 export const branches = pgTable('branches', {
   id: serial('id').primaryKey(),

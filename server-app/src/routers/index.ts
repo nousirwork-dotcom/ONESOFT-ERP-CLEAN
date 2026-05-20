@@ -6,7 +6,7 @@ import { usersRouter } from './users.js';
 import { salesRouter } from './sales.js';
 import { chatRouter } from './chat.js';
 import { db } from '../db.js';
-import { products, customers, suppliers, chartOfAccounts, warehouses, branches, units, productGroups, journalEntries, journalEntryLines, vouchers, inventory, stockVouchers, stockVoucherItems, inventoryCounts, inventoryCountItems, freeProducts, salesInvoices, salesInvoiceItems, warehouseAccountLinks, userGroups } from '../schema.js';
+import { products, customers, suppliers, chartOfAccounts, warehouses, branches, units, productGroups, journalEntries, journalEntryLines, vouchers, inventory, stockVouchers, stockVoucherItems, inventoryCounts, inventoryCountItems, freeProducts, salesInvoices, salesInvoiceItems, warehouseAccountLinks, userGroups, userGroupMembers } from '../schema.js';
 import { eq, and, desc, like, or, sql, isNotNull } from 'drizzle-orm';
 
 export const appRouter = router({
@@ -58,6 +58,62 @@ export const appRouter = router({
         await db.update(userGroups).set({ isActive: false })
           .where(and(eq(userGroups.id, input.id), eq(userGroups.orgId, ctx.user.orgId)));
         return { success: true };
+      }),
+  }),
+
+  // ─── User Group Members ───────────────────────────────────────────────────────
+  groupMembers: router({
+    list: protectedProcedure
+      .input(z.object({ groupId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        return db.select().from(userGroupMembers)
+          .where(and(eq(userGroupMembers.groupId, input.groupId), eq(userGroupMembers.orgId, ctx.user.orgId)))
+          .orderBy(userGroupMembers.createdAt);
+      }),
+    add: protectedProcedure
+      .input(z.object({
+        groupId: z.number(),
+        memberType: z.enum(['user', 'group']),
+        memberCode: z.string().min(1),
+        memberName: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const [m] = await db.insert(userGroupMembers).values({
+          groupId: input.groupId,
+          orgId: ctx.user.orgId,
+          memberType: input.memberType,
+          memberCode: input.memberCode,
+          memberName: input.memberName,
+        }).returning();
+        return m;
+      }),
+    remove: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        await db.delete(userGroupMembers)
+          .where(and(eq(userGroupMembers.id, input.id), eq(userGroupMembers.orgId, ctx.user.orgId)));
+        return { success: true };
+      }),
+    addBulk: protectedProcedure
+      .input(z.object({
+        groupId: z.number(),
+        members: z.array(z.object({
+          memberType: z.enum(['user', 'group']),
+          memberCode: z.string().min(1),
+          memberName: z.string().optional(),
+        })),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        if (!input.members.length) return { count: 0 };
+        const rows = input.members.map(m => ({
+          groupId: input.groupId,
+          orgId: ctx.user.orgId,
+          memberType: m.memberType,
+          memberCode: m.memberCode,
+          memberName: m.memberName,
+        }));
+        await db.insert(userGroupMembers).values(rows);
+        return { count: rows.length };
       }),
   }),
 

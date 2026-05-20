@@ -541,15 +541,143 @@ function UsersListPage() {
   );
 }
 
+// ─── Group Members Section ────────────────────────────────────────────────────
+
+type PendingMember = { memberType: 'user' | 'group'; memberCode: string; memberName: string };
+
+function MemberRow({ memberType, setMemberType, memberCode, setMemberCode, memberName, setMemberName, onAdd, users, groups }:
+  { memberType: 'user'|'group'; setMemberType: (v:'user'|'group')=>void; memberCode:string; setMemberCode:(v:string)=>void; memberName:string; setMemberName:(v:string)=>void; onAdd:()=>void; users:any[]; groups:any[] }) {
+
+  const handleCodeBlur = () => {
+    if (!memberCode.trim()) return;
+    if (memberType === 'user') {
+      const found = users.find((u:any) => u.code === memberCode.trim());
+      if (found) setMemberName(found.name);
+    } else {
+      const found = groups.find((g:any) => g.code === memberCode.trim());
+      if (found) setMemberName(found.name);
+    }
+  };
+
+  return (
+    <TableRow>
+      <TableCell className="py-1 pe-1">
+        <Select value={memberType} onValueChange={v => { setMemberType(v as any); setMemberCode(""); setMemberName(""); }}>
+          <SelectTrigger className="h-7 text-xs w-28"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="user">مستخدم</SelectItem>
+            <SelectItem value="group">مجموعة</SelectItem>
+          </SelectContent>
+        </Select>
+      </TableCell>
+      <TableCell className="py-1 pe-1">
+        <Input className="h-7 text-xs w-24" placeholder="الكود" value={memberCode}
+          onChange={e => { setMemberCode(e.target.value); setMemberName(""); }}
+          onBlur={handleCodeBlur} />
+      </TableCell>
+      <TableCell className="py-1 pe-1">
+        <Input className="h-7 text-xs w-40 bg-muted/40" placeholder="الاسم (تلقائي)" value={memberName}
+          onChange={e => setMemberName(e.target.value)} />
+      </TableCell>
+      <TableCell className="py-1">
+        <Button size="sm" variant="outline" className="h-7 text-xs px-2" disabled={!memberCode.trim()}
+          onClick={onAdd}>
+          <Plus className="w-3 h-3" />
+        </Button>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+function SavedMembersTable({ groupId }: { groupId: number }) {
+  const utils = trpc.useUtils();
+  const { data: members = [] } = trpc.groupMembers.list.useQuery({ groupId });
+  const removeMember = trpc.groupMembers.remove.useMutation({
+    onSuccess: () => utils.groupMembers.list.invalidate({ groupId }),
+    onError: (e) => toast.error(e.message),
+  });
+  if (!members.length) return (
+    <p className="text-xs text-muted-foreground text-center py-2">لا يوجد أعضاء بعد</p>
+  );
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="text-xs">نوع العضو</TableHead>
+          <TableHead className="text-xs">كود العضو</TableHead>
+          <TableHead className="text-xs">اسم العضو</TableHead>
+          <TableHead className="text-xs w-8"></TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {members.map((m: any) => (
+          <TableRow key={m.id}>
+            <TableCell className="text-xs">{m.memberType === 'user' ? 'مستخدم' : 'مجموعة'}</TableCell>
+            <TableCell className="text-xs font-mono">{m.memberCode ?? '—'}</TableCell>
+            <TableCell className="text-xs">{m.memberName ?? '—'}</TableCell>
+            <TableCell>
+              <button className="text-destructive text-xs hover:underline" onClick={() => removeMember.mutate({ id: m.id })}>
+                حذف
+              </button>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
+function AddMemberToGroup({ groupId, users, groups }: { groupId: number; users: any[]; groups: any[] }) {
+  const utils = trpc.useUtils();
+  const addMember = trpc.groupMembers.add.useMutation({
+    onSuccess: () => { utils.groupMembers.list.invalidate({ groupId }); setCode(""); setName(""); toast.success("تم إضافة العضو"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const [type, setType] = useState<'user'|'group'>('user');
+  const [code, setCode] = useState("");
+  const [name, setName] = useState("");
+
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="text-xs">نوع العضو</TableHead>
+          <TableHead className="text-xs">كود العضو</TableHead>
+          <TableHead className="text-xs">اسم العضو</TableHead>
+          <TableHead className="text-xs w-8"></TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        <MemberRow memberType={type} setMemberType={setType} memberCode={code} setMemberCode={setCode}
+          memberName={name} setMemberName={setName} users={users} groups={groups}
+          onAdd={() => addMember.mutate({ groupId, memberType: type, memberCode: code.trim(), memberName: name || undefined })} />
+      </TableBody>
+    </Table>
+  );
+}
+
 // ─── User Groups ───────────────────────────────────────────────────────────────
 
 function UserGroupsPage() {
   const utils = trpc.useUtils();
   const { data: groups = [], isLoading } = trpc.userGroups.list.useQuery();
+  const { data: allUsers = [] } = trpc.users.list.useQuery();
+
   const createGroup = trpc.userGroups.create.useMutation({
-    onSuccess: () => { utils.userGroups.list.invalidate(); setShowAdd(false); setNewCode(""); setNewName(""); setNewDesc(""); toast.success("تم إضافة المجموعة"); },
+    onSuccess: async (g) => {
+      if (pendingMembers.length) {
+        await addBulk.mutateAsync({ groupId: g.id, members: pendingMembers });
+      }
+      utils.userGroups.list.invalidate();
+      setShowAdd(false);
+      setNewCode(""); setNewName(""); setNewDesc("");
+      setPendingMembers([]);
+      toast.success("تم إضافة المجموعة");
+    },
     onError: (e) => toast.error(e.message),
   });
+  const addBulk = trpc.groupMembers.addBulk.useMutation();
+
   const deleteGroup = trpc.userGroups.delete.useMutation({
     onSuccess: () => { utils.userGroups.list.invalidate(); toast.success("تم حذف المجموعة"); },
     onError: (e) => toast.error(e.message),
@@ -563,23 +691,35 @@ function UserGroupsPage() {
   const [newCode, setNewCode] = useState("");
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
+  const [pendingMembers, setPendingMembers] = useState<PendingMember[]>([]);
+  const [rowType, setRowType] = useState<'user'|'group'>('user');
+  const [rowCode, setRowCode] = useState("");
+  const [rowName, setRowName] = useState("");
+
   const [editId, setEditId] = useState<number | null>(null);
   const [editCode, setEditCode] = useState("");
   const [editName, setEditName] = useState("");
   const [editDesc, setEditDesc] = useState("");
 
+  const addPending = () => {
+    if (!rowCode.trim()) return;
+    setPendingMembers(p => [...p, { memberType: rowType, memberCode: rowCode.trim(), memberName: rowName }]);
+    setRowCode(""); setRowName("");
+  };
+
   return (
     <div className="space-y-4" dir="rtl">
       <div className="flex justify-between items-center">
         <h3 className="font-semibold text-sm">مجموعات المستخدمين</h3>
-        <Button className="h-8 text-sm" onClick={() => setShowAdd(true)}>
+        <Button className="h-8 text-sm" onClick={() => { setShowAdd(v => !v); setEditId(null); }}>
           <Plus className="w-3.5 h-3.5 ml-1" />مجموعة جديدة
         </Button>
       </div>
 
+      {/* ── نموذج إضافة مجموعة ── */}
       {showAdd && (
-        <Card className="border-indigo-200 bg-indigo-50/40 p-4">
-          <div className="grid grid-cols-3 gap-3 mb-3">
+        <Card className="border-indigo-200 bg-indigo-50/40 p-4 space-y-3">
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <Label className="text-xs mb-1 block">الكود</Label>
               <Input className="h-8 text-sm" value={newCode} onChange={e => setNewCode(e.target.value)} placeholder="GRP01" />
@@ -593,18 +733,93 @@ function UserGroupsPage() {
               <Input className="h-8 text-sm" value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="وصف اختياري" />
             </div>
           </div>
+
+          {/* ─ جدول الأعضاء المؤقتين ─ */}
+          <div className="border border-border/60 rounded-md overflow-hidden bg-white">
+            <div className="bg-muted/30 px-3 py-1.5 border-b border-border/40">
+              <span className="text-xs font-medium text-muted-foreground">أعضاء المجموعة</span>
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">نوع العضو</TableHead>
+                  <TableHead className="text-xs">كود العضو</TableHead>
+                  <TableHead className="text-xs">اسم العضو</TableHead>
+                  <TableHead className="text-xs w-8"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pendingMembers.map((m, i) => (
+                  <TableRow key={i}>
+                    <TableCell className="text-xs">{m.memberType === 'user' ? 'مستخدم' : 'مجموعة'}</TableCell>
+                    <TableCell className="text-xs font-mono">{m.memberCode}</TableCell>
+                    <TableCell className="text-xs">{m.memberName || '—'}</TableCell>
+                    <TableCell>
+                      <button className="text-destructive text-xs" onClick={() => setPendingMembers(p => p.filter((_, j) => j !== i))}>حذف</button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                <MemberRow memberType={rowType} setMemberType={setRowType} memberCode={rowCode} setMemberCode={setRowCode}
+                  memberName={rowName} setMemberName={setRowName} users={allUsers} groups={groups}
+                  onAdd={addPending} />
+              </TableBody>
+            </Table>
+          </div>
+
           <div className="flex gap-2">
             <Button size="sm" className="h-7 text-xs" disabled={!newName.trim() || createGroup.isPending}
               onClick={() => createGroup.mutate({ code: newCode || undefined, name: newName.trim(), description: newDesc || undefined })}>
               {createGroup.isPending ? "جارٍ الحفظ..." : "حفظ"}
             </Button>
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setShowAdd(false); setNewCode(""); setNewName(""); setNewDesc(""); }}>
+            <Button size="sm" variant="outline" className="h-7 text-xs"
+              onClick={() => { setShowAdd(false); setNewCode(""); setNewName(""); setNewDesc(""); setPendingMembers([]); }}>
               إلغاء
             </Button>
           </div>
         </Card>
       )}
 
+      {/* ── نموذج تعديل مجموعة ── */}
+      {editId !== null && (
+        <Card className="border-amber-200 bg-amber-50/30 p-4 space-y-3">
+          <p className="text-xs font-semibold text-amber-700">تعديل المجموعة</p>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <Label className="text-xs mb-1 block">الكود</Label>
+              <Input className="h-8 text-sm" value={editCode} onChange={e => setEditCode(e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">اسم المجموعة *</Label>
+              <Input className="h-8 text-sm" value={editName} onChange={e => setEditName(e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">الوصف</Label>
+              <Input className="h-8 text-sm" value={editDesc} onChange={e => setEditDesc(e.target.value)} />
+            </div>
+          </div>
+
+          {/* ─ أعضاء المجموعة الحالية ─ */}
+          <div className="border border-border/60 rounded-md overflow-hidden bg-white">
+            <div className="bg-muted/30 px-3 py-1.5 border-b border-border/40">
+              <span className="text-xs font-medium text-muted-foreground">أعضاء المجموعة</span>
+            </div>
+            <SavedMembersTable groupId={editId} />
+            <div className="border-t border-border/40">
+              <AddMemberToGroup groupId={editId} users={allUsers} groups={groups} />
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <Button size="sm" className="h-7 text-xs" disabled={!editName.trim() || updateGroup.isPending}
+              onClick={() => updateGroup.mutate({ id: editId, code: editCode || undefined, name: editName, description: editDesc || undefined })}>
+              {updateGroup.isPending ? "جارٍ الحفظ..." : "حفظ"}
+            </Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditId(null)}>إلغاء</Button>
+          </div>
+        </Card>
+      )}
+
+      {/* ── جدول المجموعات ── */}
       <Card className="border-border/50">
         <Table>
           <TableHeader>
@@ -623,43 +838,21 @@ function UserGroupsPage() {
               <TableRow><TableCell colSpan={4} className="text-xs text-center text-muted-foreground py-6">لا توجد مجموعات — أضف مجموعة جديدة</TableCell></TableRow>
             )}
             {groups.map((g: any) => (
-              <TableRow key={g.id}>
-                <TableCell className="text-xs font-mono text-muted-foreground">
-                  {editId === g.id
-                    ? <Input className="h-7 text-xs w-20" value={editCode} onChange={e => setEditCode(e.target.value)} />
-                    : (g.code ?? "—")}
-                </TableCell>
-                <TableCell className="text-xs font-medium">
-                  {editId === g.id
-                    ? <Input className="h-7 text-xs w-36" value={editName} onChange={e => setEditName(e.target.value)} />
-                    : g.name}
-                </TableCell>
-                <TableCell className="text-xs text-muted-foreground">
-                  {editId === g.id
-                    ? <Input className="h-7 text-xs w-48" value={editDesc} onChange={e => setEditDesc(e.target.value)} />
-                    : (g.description ?? "—")}
-                </TableCell>
+              <TableRow key={g.id} className={editId === g.id ? "bg-amber-50/40" : ""}>
+                <TableCell className="text-xs font-mono text-muted-foreground">{g.code ?? "—"}</TableCell>
+                <TableCell className="text-xs font-medium">{g.name}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{g.description ?? "—"}</TableCell>
                 <TableCell>
-                  {editId === g.id ? (
-                    <div className="flex gap-2">
-                      <button className="text-primary text-xs hover:underline"
-                        onClick={() => updateGroup.mutate({ id: g.id, code: editCode || undefined, name: editName, description: editDesc || undefined })}>
-                        حفظ
-                      </button>
-                      <button className="text-muted-foreground text-xs hover:underline" onClick={() => setEditId(null)}>إلغاء</button>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      <button className="text-primary text-xs hover:underline"
-                        onClick={() => { setEditId(g.id); setEditCode(g.code ?? ""); setEditName(g.name); setEditDesc(g.description ?? ""); }}>
-                        تعديل
-                      </button>
-                      <button className="text-destructive text-xs hover:underline"
-                        onClick={() => deleteGroup.mutate({ id: g.id })}>
-                        حذف
-                      </button>
-                    </div>
-                  )}
+                  <div className="flex gap-2">
+                    <button className="text-primary text-xs hover:underline"
+                      onClick={() => { setEditId(g.id); setEditCode(g.code ?? ""); setEditName(g.name); setEditDesc(g.description ?? ""); setShowAdd(false); }}>
+                      تعديل
+                    </button>
+                    <button className="text-destructive text-xs hover:underline"
+                      onClick={() => deleteGroup.mutate({ id: g.id })}>
+                      حذف
+                    </button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
