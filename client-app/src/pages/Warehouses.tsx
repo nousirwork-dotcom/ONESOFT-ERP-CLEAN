@@ -136,6 +136,42 @@ const FS = ({
   </Select>
 );
 
+/** ERP compact section panel — رأس رمادي + محتوى أبيض */
+const P = ({ title, children }: { title: string; children: React.ReactNode }) => (
+  <div className="overflow-hidden" style={{ border: "1px solid #d1d5db", borderRadius: 6 }}>
+    <div className="px-2.5 py-1" style={{ background: "#e8edf5", borderBottom: "1px solid #d1d5db" }}>
+      <span className="text-[11px] font-bold text-slate-700">{title}</span>
+    </div>
+    <div className="px-3 py-2" style={{ background: "#fff" }}>{children}</div>
+  </div>
+);
+
+/** Inline label-right + input-left row (RTL) */
+const R = ({ label, lw = 88, children }: { label: string; lw?: number; children: React.ReactNode }) => (
+  <div className="flex items-center gap-1.5 min-w-0">
+    <span className="text-[11px] text-slate-600 shrink-0" style={{ width: lw }}>{label}</span>
+    <div className="flex-1 min-w-0">{children}</div>
+  </div>
+);
+
+/** Compact checkbox */
+const CB = ({ label, checked, onChange }: { label: string; checked?: boolean; onChange?: (v: boolean) => void }) => (
+  <label className="flex items-center gap-1.5 cursor-pointer select-none shrink-0">
+    <input type="checkbox" className="w-3.5 h-3.5 accent-indigo-600"
+      checked={checked} onChange={onChange ? e => onChange(e.target.checked) : undefined} />
+    <span className="text-[11px] text-slate-600">{label}</span>
+  </label>
+);
+
+/** Compact radio */
+const RB = ({ name, label, checked, onChange }: { name: string; label: string; checked?: boolean; onChange?: () => void }) => (
+  <label className="flex items-center gap-1.5 cursor-pointer select-none shrink-0">
+    <input type="radio" name={name} className="w-3.5 h-3.5 accent-indigo-600"
+      checked={checked} onChange={onChange} />
+    <span className="text-[11px] text-slate-600">{label}</span>
+  </label>
+);
+
 /* ─────────────────────────── main component ─────────────────────────── */
 export default function Warehouses() {
   const [view, setView] = useState<"list" | "form">("list");
@@ -449,35 +485,6 @@ export default function Warehouses() {
             ];
             const currentItem = ITEMS.find(i => i.id === journalItem);
 
-            /* ── compact row helper ── */
-            const R = ({ label, lw = 88, children }: { label: string; lw?: number; children: React.ReactNode }) => (
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span className="text-[11px] text-slate-600 shrink-0" style={{ width: lw }}>{label}</span>
-                <div className="flex-1 min-w-0">{children}</div>
-              </div>
-            );
-            const CB = ({ label }: { label: string }) => (
-              <label className="flex items-center gap-1.5 cursor-pointer select-none shrink-0">
-                <input type="checkbox" className="w-3.5 h-3.5 accent-indigo-600" />
-                <span className="text-[11px] text-slate-600">{label}</span>
-              </label>
-            );
-            const RB = ({ name, label, defaultChecked }: { name: string; label: string; defaultChecked?: boolean }) => (
-              <label className="flex items-center gap-1.5 cursor-pointer select-none shrink-0">
-                <input type="radio" name={name} defaultChecked={defaultChecked} className="w-3.5 h-3.5 accent-indigo-600" />
-                <span className="text-[11px] text-slate-600">{label}</span>
-              </label>
-            );
-
-            /* ── section panel ── */
-            const P = ({ title, children }: { title: string; children: React.ReactNode }) => (
-              <div className="overflow-hidden" style={{ border: "1px solid #d1d5db", borderRadius: 6 }}>
-                <div className="px-2.5 py-1" style={{ background: "#e8edf5", borderBottom: "1px solid #d1d5db" }}>
-                  <span className="text-[11px] font-bold text-slate-700">{title}</span>
-                </div>
-                <div className="px-3 py-2" style={{ background: "#fff" }}>{children}</div>
-              </div>
-            );
 
             return (
               <div className="flex gap-3" style={{ height: "calc(100vh - 260px)" }}>
@@ -736,27 +743,6 @@ export default function Warehouses() {
             ];
             const currentLabel = DTYPE_ITEMS.find(i => i.id === doctypeItem)?.label ?? "";
 
-            /* ── compact row helper ── */
-            const R = ({ label, lw = 88, children }: { label: string; lw?: number; children: React.ReactNode }) => (
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span className="text-[11px] text-slate-600 shrink-0" style={{ width: lw }}>{label}</span>
-                <div className="flex-1 min-w-0">{children}</div>
-              </div>
-            );
-            const CB = ({ label }: { label: string }) => (
-              <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                <input type="checkbox" className="w-3.5 h-3.5 accent-indigo-600" />
-                <span className="text-[11px] text-slate-600">{label}</span>
-              </label>
-            );
-            const P = ({ title, children }: { title: string; children: React.ReactNode }) => (
-              <div className="overflow-hidden" style={{ border: "1px solid #d1d5db", borderRadius: 6 }}>
-                <div className="px-2.5 py-1" style={{ background: "#e8edf5", borderBottom: "1px solid #d1d5db" }}>
-                  <span className="text-[11px] font-bold text-slate-700">{title}</span>
-                </div>
-                <div className="px-3 py-2" style={{ background: "#fff" }}>{children}</div>
-              </div>
-            );
 
             return (
               <div className="flex gap-3" style={{ height: "calc(100vh - 260px)" }}>
