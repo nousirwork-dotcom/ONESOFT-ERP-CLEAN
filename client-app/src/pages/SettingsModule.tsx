@@ -548,21 +548,27 @@ type PendingMember = { memberType: 'user' | 'group'; memberCode: string; memberN
 function MemberRow({ memberType, setMemberType, memberCode, setMemberCode, memberName, setMemberName, onAdd, users, groups }:
   { memberType: 'user'|'group'; setMemberType: (v:'user'|'group')=>void; memberCode:string; setMemberCode:(v:string)=>void; memberName:string; setMemberName:(v:string)=>void; onAdd:()=>void; users:any[]; groups:any[] }) {
 
+  const [notFound, setNotFound] = useState(false);
+
   const handleCodeBlur = () => {
-    if (!memberCode.trim()) return;
+    if (!memberCode.trim()) { setNotFound(false); return; }
     if (memberType === 'user') {
       const found = users.find((u:any) => u.code === memberCode.trim());
-      if (found) setMemberName(found.name);
+      if (found) { setMemberName(found.name); setNotFound(false); }
+      else { setMemberName(""); setNotFound(true); }
     } else {
       const found = groups.find((g:any) => g.code === memberCode.trim());
-      if (found) setMemberName(found.name);
+      if (found) { setMemberName(found.name); setNotFound(false); }
+      else { setMemberName(""); setNotFound(true); }
     }
   };
+
+  const canAdd = memberCode.trim() && memberName.trim() && !notFound;
 
   return (
     <TableRow>
       <TableCell className="py-1 pe-1">
-        <Select value={memberType} onValueChange={v => { setMemberType(v as any); setMemberCode(""); setMemberName(""); }}>
+        <Select value={memberType} onValueChange={v => { setMemberType(v as any); setMemberCode(""); setMemberName(""); setNotFound(false); }}>
           <SelectTrigger className="h-7 text-xs w-28"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="user">مستخدم</SelectItem>
@@ -571,16 +577,22 @@ function MemberRow({ memberType, setMemberType, memberCode, setMemberCode, membe
         </Select>
       </TableCell>
       <TableCell className="py-1 pe-1">
-        <Input className="h-7 text-xs w-24" placeholder="الكود" value={memberCode}
-          onChange={e => { setMemberCode(e.target.value); setMemberName(""); }}
-          onBlur={handleCodeBlur} />
+        <div className="space-y-0.5">
+          <Input
+            className={`h-7 text-xs w-24 ${notFound ? "border-destructive focus-visible:ring-destructive" : ""}`}
+            placeholder="الكود"
+            value={memberCode}
+            onChange={e => { setMemberCode(e.target.value); setMemberName(""); setNotFound(false); }}
+            onBlur={handleCodeBlur}
+          />
+          {notFound && <p className="text-[10px] text-destructive">كود غير موجود</p>}
+        </div>
       </TableCell>
       <TableCell className="py-1 pe-1">
-        <Input className="h-7 text-xs w-40 bg-muted/40" placeholder="الاسم (تلقائي)" value={memberName}
-          onChange={e => setMemberName(e.target.value)} />
+        <Input className="h-7 text-xs w-40 bg-muted/40" placeholder="يُحمَّل تلقائياً" value={memberName} readOnly />
       </TableCell>
       <TableCell className="py-1">
-        <Button size="sm" variant="outline" className="h-7 text-xs px-2" disabled={!memberCode.trim()}
+        <Button size="sm" variant="outline" className="h-7 text-xs px-2" disabled={!canAdd}
           onClick={onAdd}>
           <Plus className="w-3 h-3" />
         </Button>
@@ -670,7 +682,7 @@ function UserGroupsPage() {
       }
       utils.userGroups.list.invalidate();
       setShowAdd(false);
-      setNewCode(""); setNewName(""); setNewDesc("");
+      setNewCode(""); setNewName("");
       setPendingMembers([]);
       toast.success("تم إضافة المجموعة");
     },
@@ -690,7 +702,6 @@ function UserGroupsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [newCode, setNewCode] = useState("");
   const [newName, setNewName] = useState("");
-  const [newDesc, setNewDesc] = useState("");
   const [pendingMembers, setPendingMembers] = useState<PendingMember[]>([]);
   const [rowType, setRowType] = useState<'user'|'group'>('user');
   const [rowCode, setRowCode] = useState("");
@@ -699,10 +710,9 @@ function UserGroupsPage() {
   const [editId, setEditId] = useState<number | null>(null);
   const [editCode, setEditCode] = useState("");
   const [editName, setEditName] = useState("");
-  const [editDesc, setEditDesc] = useState("");
 
   const addPending = () => {
-    if (!rowCode.trim()) return;
+    if (!rowCode.trim() || !rowName.trim()) return;
     setPendingMembers(p => [...p, { memberType: rowType, memberCode: rowCode.trim(), memberName: rowName }]);
     setRowCode(""); setRowName("");
   };
@@ -719,7 +729,7 @@ function UserGroupsPage() {
       {/* ── نموذج إضافة مجموعة ── */}
       {showAdd && (
         <Card className="border-indigo-200 bg-indigo-50/40 p-4 space-y-3">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs mb-1 block">الكود</Label>
               <Input className="h-8 text-sm" value={newCode} onChange={e => setNewCode(e.target.value)} placeholder="GRP01" />
@@ -727,10 +737,6 @@ function UserGroupsPage() {
             <div>
               <Label className="text-xs mb-1 block">اسم المجموعة *</Label>
               <Input className="h-8 text-sm" value={newName} onChange={e => setNewName(e.target.value)} placeholder="مثال: أمناء المخازن" />
-            </div>
-            <div>
-              <Label className="text-xs mb-1 block">الوصف</Label>
-              <Input className="h-8 text-sm" value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="وصف اختياري" />
             </div>
           </div>
 
@@ -768,11 +774,11 @@ function UserGroupsPage() {
 
           <div className="flex gap-2">
             <Button size="sm" className="h-7 text-xs" disabled={!newName.trim() || createGroup.isPending}
-              onClick={() => createGroup.mutate({ code: newCode || undefined, name: newName.trim(), description: newDesc || undefined })}>
+              onClick={() => createGroup.mutate({ code: newCode || undefined, name: newName.trim() })}>
               {createGroup.isPending ? "جارٍ الحفظ..." : "حفظ"}
             </Button>
             <Button size="sm" variant="outline" className="h-7 text-xs"
-              onClick={() => { setShowAdd(false); setNewCode(""); setNewName(""); setNewDesc(""); setPendingMembers([]); }}>
+              onClick={() => { setShowAdd(false); setNewCode(""); setNewName(""); setPendingMembers([]); }}>
               إلغاء
             </Button>
           </div>
@@ -783,7 +789,7 @@ function UserGroupsPage() {
       {editId !== null && (
         <Card className="border-amber-200 bg-amber-50/30 p-4 space-y-3">
           <p className="text-xs font-semibold text-amber-700">تعديل المجموعة</p>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs mb-1 block">الكود</Label>
               <Input className="h-8 text-sm" value={editCode} onChange={e => setEditCode(e.target.value)} />
@@ -791,10 +797,6 @@ function UserGroupsPage() {
             <div>
               <Label className="text-xs mb-1 block">اسم المجموعة *</Label>
               <Input className="h-8 text-sm" value={editName} onChange={e => setEditName(e.target.value)} />
-            </div>
-            <div>
-              <Label className="text-xs mb-1 block">الوصف</Label>
-              <Input className="h-8 text-sm" value={editDesc} onChange={e => setEditDesc(e.target.value)} />
             </div>
           </div>
 
@@ -811,7 +813,7 @@ function UserGroupsPage() {
 
           <div className="flex gap-2">
             <Button size="sm" className="h-7 text-xs" disabled={!editName.trim() || updateGroup.isPending}
-              onClick={() => updateGroup.mutate({ id: editId, code: editCode || undefined, name: editName, description: editDesc || undefined })}>
+              onClick={() => updateGroup.mutate({ id: editId, code: editCode || undefined, name: editName })}>
               {updateGroup.isPending ? "جارٍ الحفظ..." : "حفظ"}
             </Button>
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditId(null)}>إلغاء</Button>
@@ -826,26 +828,24 @@ function UserGroupsPage() {
             <TableRow>
               <TableHead className="text-xs w-20">الكود</TableHead>
               <TableHead className="text-xs">اسم المجموعة</TableHead>
-              <TableHead className="text-xs">الوصف</TableHead>
               <TableHead className="text-xs">الإجراءات</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={4} className="text-xs text-center text-muted-foreground py-6">جارٍ التحميل...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={3} className="text-xs text-center text-muted-foreground py-6">جارٍ التحميل...</TableCell></TableRow>
             )}
             {!isLoading && groups.length === 0 && (
-              <TableRow><TableCell colSpan={4} className="text-xs text-center text-muted-foreground py-6">لا توجد مجموعات — أضف مجموعة جديدة</TableCell></TableRow>
+              <TableRow><TableCell colSpan={3} className="text-xs text-center text-muted-foreground py-6">لا توجد مجموعات — أضف مجموعة جديدة</TableCell></TableRow>
             )}
             {groups.map((g: any) => (
               <TableRow key={g.id} className={editId === g.id ? "bg-amber-50/40" : ""}>
                 <TableCell className="text-xs font-mono text-muted-foreground">{g.code ?? "—"}</TableCell>
                 <TableCell className="text-xs font-medium">{g.name}</TableCell>
-                <TableCell className="text-xs text-muted-foreground">{g.description ?? "—"}</TableCell>
                 <TableCell>
                   <div className="flex gap-2">
                     <button className="text-primary text-xs hover:underline"
-                      onClick={() => { setEditId(g.id); setEditCode(g.code ?? ""); setEditName(g.name); setEditDesc(g.description ?? ""); setShowAdd(false); }}>
+                      onClick={() => { setEditId(g.id); setEditCode(g.code ?? ""); setEditName(g.name); setShowAdd(false); }}>
                       تعديل
                     </button>
                     <button className="text-destructive text-xs hover:underline"

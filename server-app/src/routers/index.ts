@@ -6,7 +6,7 @@ import { usersRouter } from './users.js';
 import { salesRouter } from './sales.js';
 import { chatRouter } from './chat.js';
 import { db } from '../db.js';
-import { products, customers, suppliers, chartOfAccounts, warehouses, branches, units, productGroups, journalEntries, journalEntryLines, vouchers, inventory, stockVouchers, stockVoucherItems, inventoryCounts, inventoryCountItems, freeProducts, salesInvoices, salesInvoiceItems, warehouseAccountLinks, userGroups, userGroupMembers } from '../schema.js';
+import { products, customers, suppliers, chartOfAccounts, warehouses, branches, units, productGroups, journalEntries, journalEntryLines, vouchers, inventory, stockVouchers, stockVoucherItems, inventoryCounts, inventoryCountItems, freeProducts, salesInvoices, salesInvoiceItems, warehouseAccountLinks, userGroups, userGroupMembers, users } from '../schema.js';
 import { eq, and, desc, like, or, sql, isNotNull } from 'drizzle-orm';
 
 export const appRouter = router({
@@ -78,12 +78,28 @@ export const appRouter = router({
         memberName: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
+        let resolvedName = input.memberName;
+        if (input.memberType === 'user') {
+          const found = await db.select({ id: users.id, name: users.name })
+            .from(users)
+            .where(and(eq(users.orgId, ctx.user.orgId), eq(users.code, input.memberCode)))
+            .limit(1);
+          if (!found.length) throw new TRPCError({ code: 'BAD_REQUEST', message: `كود المستخدم "${input.memberCode}" غير موجود في النظام` });
+          resolvedName = found[0].name;
+        } else {
+          const found = await db.select({ id: userGroups.id, name: userGroups.name })
+            .from(userGroups)
+            .where(and(eq(userGroups.orgId, ctx.user.orgId), eq(userGroups.code, input.memberCode), eq(userGroups.isActive, true)))
+            .limit(1);
+          if (!found.length) throw new TRPCError({ code: 'BAD_REQUEST', message: `كود المجموعة "${input.memberCode}" غير موجود في النظام` });
+          resolvedName = found[0].name;
+        }
         const [m] = await db.insert(userGroupMembers).values({
           groupId: input.groupId,
           orgId: ctx.user.orgId,
           memberType: input.memberType,
           memberCode: input.memberCode,
-          memberName: input.memberName,
+          memberName: resolvedName,
         }).returning();
         return m;
       }),
@@ -105,15 +121,23 @@ export const appRouter = router({
       }))
       .mutation(async ({ input, ctx }) => {
         if (!input.members.length) return { count: 0 };
-        const rows = input.members.map(m => ({
-          groupId: input.groupId,
-          orgId: ctx.user.orgId,
-          memberType: m.memberType,
-          memberCode: m.memberCode,
-          memberName: m.memberName,
+        const resolved = await Promise.all(input.members.map(async m => {
+          let name = m.memberName;
+          if (m.memberType === 'user') {
+            const found = await db.select({ name: users.name }).from(users)
+              .where(and(eq(users.orgId, ctx.user.orgId), eq(users.code, m.memberCode))).limit(1);
+            if (!found.length) throw new TRPCError({ code: 'BAD_REQUEST', message: `كود المستخدم "${m.memberCode}" غير موجود في النظام` });
+            name = found[0].name;
+          } else {
+            const found = await db.select({ name: userGroups.name }).from(userGroups)
+              .where(and(eq(userGroups.orgId, ctx.user.orgId), eq(userGroups.code, m.memberCode), eq(userGroups.isActive, true))).limit(1);
+            if (!found.length) throw new TRPCError({ code: 'BAD_REQUEST', message: `كود المجموعة "${m.memberCode}" غير موجود في النظام` });
+            name = found[0].name;
+          }
+          return { groupId: input.groupId, orgId: ctx.user.orgId, memberType: m.memberType, memberCode: m.memberCode, memberName: name };
         }));
-        await db.insert(userGroupMembers).values(rows);
-        return { count: rows.length };
+        await db.insert(userGroupMembers).values(resolved);
+        return { count: resolved.length };
       }),
   }),
 
