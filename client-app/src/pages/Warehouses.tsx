@@ -27,6 +27,36 @@ const DEFAULT_LINKS = [
 
 type LinkRow = { label: string; accountId: string; sortOrder: number };
 
+type JournalData = {
+  nameAr: string; nameEn: string; docType: string; fixedPart: string;
+  transferOwnership: boolean; userGroup: string; user: string; warehouse: string;
+  systemOnly: boolean; autoSerial: boolean; firstNum: string; digits: string;
+  lastNum: string; printTemplate: string; printTemplate2: string;
+  printOnSave: boolean; status: string; postingMethod: string;
+};
+const EMPTY_JOURNAL: JournalData = {
+  nameAr: "", nameEn: "", docType: "", fixedPart: "",
+  transferOwnership: false, userGroup: "", user: "", warehouse: "",
+  systemOnly: false, autoSerial: false, firstNum: "1", digits: "7",
+  lastNum: "9999999", printTemplate: "", printTemplate2: "",
+  printOnSave: false, status: "ready", postingMethod: "normal",
+};
+
+type DoctypeData = {
+  nameAr: string; nameEn: string; docType: string; codeEn: string; codeAr: string;
+  userGroup: string; user: string; warehouse: string; journal: string;
+  systemOnly: boolean; entryType: string; entryJournal: string;
+  stockDocType: string; stockJournal: string; printTemplate: string; printTemplate2: string;
+  trackQty: boolean; noTax: boolean; sellerStats: boolean; itemStats: boolean; customerStats: boolean;
+};
+const EMPTY_DOCTYPE: DoctypeData = {
+  nameAr: "", nameEn: "", docType: "", codeEn: "", codeAr: "",
+  userGroup: "", user: "", warehouse: "", journal: "", systemOnly: false,
+  entryType: "", entryJournal: "", stockDocType: "", stockJournal: "",
+  printTemplate: "", printTemplate2: "", trackQty: false, noTax: false,
+  sellerStats: false, itemStats: false, customerStats: false,
+};
+
 const EMPTY_FORM = {
   code: "", name: "", name2: "", fullName1: "", fullName2: "",
   branchId: "", description: "", allowedUserGroup: "",
@@ -119,6 +149,15 @@ export default function Warehouses() {
   const [links, setLinks] = useState<LinkRow[]>(DEFAULT_LINKS.map(l => ({ ...l })));
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [journalData, setJournalData] = useState<Record<string, JournalData>>({});
+  const [doctypeData, setDoctypeData] = useState<Record<string, DoctypeData>>({});
+
+  const getJournal = (id: string): JournalData => journalData[id] ?? { ...EMPTY_JOURNAL };
+  const setJournal = (id: string, patch: Partial<JournalData>) =>
+    setJournalData(p => ({ ...p, [id]: { ...(p[id] ?? EMPTY_JOURNAL), ...patch } }));
+  const getDoctype = (id: string): DoctypeData => doctypeData[id] ?? { ...EMPTY_DOCTYPE };
+  const setDoctype = (id: string, patch: Partial<DoctypeData>) =>
+    setDoctypeData(p => ({ ...p, [id]: { ...(p[id] ?? EMPTY_DOCTYPE), ...patch } }));
 
   const utils = trpc.useUtils();
   const { data: warehouses, isLoading } = trpc.warehouses.list.useQuery();
@@ -471,10 +510,11 @@ export default function Warehouses() {
                   </div>
 
                   {/* بيانات الدفتر */}
+                  {(() => { const jd = getJournal(journalItem); return (
                   <P title="بيانات الدفتر">
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
                       <R label="نوع المستند">
-                        <FS value="" onValueChange={() => {}}>
+                        <FS value={jd.docType} onValueChange={v => setJournal(journalItem, { docType: v })}>
                           <SelectItem value="sales">فاتورة مبيعات</SelectItem>
                           <SelectItem value="purchase">فاتورة مشتريات</SelectItem>
                           <SelectItem value="return">مردودات</SelectItem>
@@ -484,90 +524,133 @@ export default function Warehouses() {
                       </R>
                       <div className="flex items-center gap-2">
                         <R label="الجزء الثابت" lw={72}>
-                          <FI value="" onChange={() => {}} placeholder="S01-" />
+                          <FI value={jd.fixedPart} onChange={v => setJournal(journalItem, { fixedPart: v })} placeholder="S01-" />
                         </R>
-                        <CB label="نقل الملكية أوتوماتيكي" />
+                        <label className="flex items-center gap-1.5 cursor-pointer select-none shrink-0">
+                          <input type="checkbox" className="w-3.5 h-3.5 accent-indigo-600"
+                            checked={jd.transferOwnership}
+                            onChange={e => setJournal(journalItem, { transferOwnership: e.target.checked })} />
+                          <span className="text-[11px] text-slate-600">نقل الملكية أوتوماتيكي</span>
+                        </label>
                       </div>
                       <R label="إسم عربي">
-                        <FI value="" onChange={() => {}} placeholder={currentItem?.label} />
+                        <FI value={jd.nameAr} onChange={v => setJournal(journalItem, { nameAr: v })} placeholder={currentItem?.label} />
                       </R>
                       <R label="إسم إنجليزي">
-                        <FI value="" onChange={() => {}} placeholder="Journal Name in English" />
+                        <FI value={jd.nameEn} onChange={v => setJournal(journalItem, { nameEn: v })} placeholder="Journal Name in English" />
                       </R>
                     </div>
                   </P>
+                  ); })()}
 
                   {/* حدود الاستخدام */}
+                  {(() => { const jd = getJournal(journalItem); return (
                   <P title="حدود الاستخدام">
                     <div className="grid grid-cols-3 gap-x-3 gap-y-1.5">
                       <R label="مجموعة مستخدمين">
-                        <FS value="" onValueChange={() => {}}>
+                        <FS value={jd.userGroup} onValueChange={v => setJournal(journalItem, { userGroup: v })}>
                           <SelectItem value="all">الكل</SelectItem>
                           {(users as any[])?.map((u: any) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
                         </FS>
                       </R>
                       <R label="مستخدم">
-                        <FS value="" onValueChange={() => {}}>
+                        <FS value={jd.user} onValueChange={v => setJournal(journalItem, { user: v })}>
                           <SelectItem value="all">الكل</SelectItem>
                           {(users as any[])?.map((u: any) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
                         </FS>
                       </R>
                       <R label="مخزن">
-                        <FS value="" onValueChange={() => {}}>
+                        <FS value={jd.warehouse} onValueChange={v => setJournal(journalItem, { warehouse: v })}>
                           <SelectItem value="this">هذا المخزن</SelectItem>
                           {(warehouses as any[])?.map((w: any) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
                         </FS>
                       </R>
                     </div>
                     <div className="mt-1.5">
-                      <CB label="للمستندات التي يصدرها النظام فقط" />
+                      <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                        <input type="checkbox" className="w-3.5 h-3.5 accent-indigo-600"
+                          checked={jd.systemOnly}
+                          onChange={e => setJournal(journalItem, { systemOnly: e.target.checked })} />
+                        <span className="text-[11px] text-slate-600">للمستندات التي يصدرها النظام فقط</span>
+                      </label>
                     </div>
                   </P>
+                  ); })()}
 
                   {/* الأرقام */}
+                  {(() => { const jd = getJournal(journalItem); return (
                   <P title="الأرقام">
                     <div className="grid grid-cols-4 gap-x-3 gap-y-1.5 items-center">
                       <div className="col-span-1 flex items-center">
-                        <CB label="تسلسل أرقام أوتوماتيكي" />
+                        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                          <input type="checkbox" className="w-3.5 h-3.5 accent-indigo-600"
+                            checked={jd.autoSerial}
+                            onChange={e => setJournal(journalItem, { autoSerial: e.target.checked })} />
+                          <span className="text-[11px] text-slate-600">تسلسل أرقام أوتوماتيكي</span>
+                        </label>
                       </div>
                       <R label="أول رقم">
-                        <FI value="" onChange={() => {}} placeholder="1" />
+                        <FI value={jd.firstNum} onChange={v => setJournal(journalItem, { firstNum: v })} placeholder="1" />
                       </R>
                       <R label="عدد الخانات">
-                        <FI value="" onChange={() => {}} placeholder="7" />
+                        <FI value={jd.digits} onChange={v => setJournal(journalItem, { digits: v })} placeholder="7" />
                       </R>
                       <R label="آخر رقم">
-                        <FI value="" onChange={() => {}} placeholder="9,999,999" />
+                        <FI value={jd.lastNum} onChange={v => setJournal(journalItem, { lastNum: v })} placeholder="9999999" />
                       </R>
                     </div>
                   </P>
+                  ); })()}
 
                   {/* خيارات الطباعة وأسلوب الترحيل */}
+                  {(() => { const jd = getJournal(journalItem); return (
                   <div className="grid grid-cols-2 gap-2">
                     <P title="خيارات الطباعة">
                       <div className="space-y-1.5">
                         <R label="نموذج الطباعة">
-                          <FI value="" onChange={() => {}} placeholder="نموذج A4 رئيسي" />
+                          <FI value={jd.printTemplate} onChange={v => setJournal(journalItem, { printTemplate: v })} placeholder="نموذج A4 رئيسي" />
                         </R>
                         <R label="نموذج طباعة حراري">
-                          <FI value="" onChange={() => {}} placeholder="نموذج حراري 80mm" />
+                          <FI value={jd.printTemplate2} onChange={v => setJournal(journalItem, { printTemplate2: v })} placeholder="نموذج حراري 80mm" />
                         </R>
                         <div className="flex items-center gap-4 mt-1">
-                          <CB label="طباعة مع الحفظ" />
-                          <RB name={`status-${journalItem}`} label="مستعد" defaultChecked />
-                          <RB name={`status-${journalItem}`} label="معلق" />
+                          <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                            <input type="checkbox" className="w-3.5 h-3.5 accent-indigo-600"
+                              checked={jd.printOnSave}
+                              onChange={e => setJournal(journalItem, { printOnSave: e.target.checked })} />
+                            <span className="text-[11px] text-slate-600">طباعة مع الحفظ</span>
+                          </label>
+                          <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                            <input type="radio" className="w-3.5 h-3.5 accent-indigo-600"
+                              checked={jd.status === "ready"}
+                              onChange={() => setJournal(journalItem, { status: "ready" })} />
+                            <span className="text-[11px] text-slate-600">مستعد</span>
+                          </label>
+                          <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                            <input type="radio" className="w-3.5 h-3.5 accent-indigo-600"
+                              checked={jd.status === "pending"}
+                              onChange={() => setJournal(journalItem, { status: "pending" })} />
+                            <span className="text-[11px] text-slate-600">معلق</span>
+                          </label>
                         </div>
                       </div>
                     </P>
                     <P title="أسلوب الترحيل">
                       <div className="space-y-1.5 mt-0.5">
-                        <RB name={`post-${journalItem}`} label="ترحيل طبيعي (يدوي)" defaultChecked />
-                        <RB name={`post-${journalItem}`} label="ترحيل مع الحفظ" />
-                        <RB name={`post-${journalItem}`} label="ترحيل فوري" />
-                        <RB name={`post-${journalItem}`} label="ترحيل يومي دفعة واحدة" />
+                        {(["normal","onSave","immediate","daily"] as const).map((v, idx) => (
+                          <label key={v} className="flex items-center gap-1.5 cursor-pointer select-none">
+                            <input type="radio" className="w-3.5 h-3.5 accent-indigo-600"
+                              checked={jd.postingMethod === v}
+                              onChange={() => setJournal(journalItem, { postingMethod: v })} />
+                            <span className="text-[11px] text-slate-600">
+                              {["ترحيل طبيعي (يدوي)","ترحيل مع الحفظ","ترحيل فوري","ترحيل يومي دفعة واحدة"][idx]}
+                            </span>
+                          </label>
+                        ))}
                       </div>
                     </P>
                   </div>
+                  ); })()}
 
                   {/* الروابط المحاسبية */}
                   <P title="الروابط المحاسبية">
@@ -704,10 +787,11 @@ export default function Warehouses() {
                   </div>
 
                   {/* بيانات نوع المستند */}
+                  {(() => { const dd = getDoctype(doctypeItem); return (
                   <P title="بيانات نوع المستند">
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
                       <R label="نوع المستند">
-                        <FS value="" onValueChange={() => {}}>
+                        <FS value={dd.docType} onValueChange={v => setDoctype(doctypeItem, { docType: v })}>
                           <SelectItem value="sales">فاتورة مبيعات</SelectItem>
                           <SelectItem value="purchase">فاتورة مشتريات</SelectItem>
                           <SelectItem value="return-s">مردود مبيعات</SelectItem>
@@ -716,55 +800,65 @@ export default function Warehouses() {
                       </R>
                       <div className="grid grid-cols-2 gap-x-2">
                         <R label="كود إنجليزي" lw={64}>
-                          <FI value="" onChange={() => {}} placeholder="CASH" />
+                          <FI value={dd.codeEn} onChange={v => setDoctype(doctypeItem, { codeEn: v })} placeholder="CASH" />
                         </R>
                         <R label="كود عربي" lw={56}>
-                          <FI value="" onChange={() => {}} placeholder="نقدا" />
+                          <FI value={dd.codeAr} onChange={v => setDoctype(doctypeItem, { codeAr: v })} placeholder="نقدا" />
                         </R>
                       </div>
                       <R label="إسم عربي">
-                        <FI value="" onChange={() => {}} placeholder="مبيعات نقدية فرع 1" />
+                        <FI value={dd.nameAr} onChange={v => setDoctype(doctypeItem, { nameAr: v })} placeholder="مبيعات نقدية فرع 1" />
                       </R>
                       <R label="إسم إنجليزي">
-                        <FI value="" onChange={() => {}} placeholder="Cash Invoice Br. 1" />
+                        <FI value={dd.nameEn} onChange={v => setDoctype(doctypeItem, { nameEn: v })} placeholder="Cash Invoice Br. 1" />
                       </R>
                     </div>
                   </P>
+                  ); })()}
 
                   {/* حدود الاستخدام */}
+                  {(() => { const dd = getDoctype(doctypeItem); return (
                   <P title="حدود الاستخدام">
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
                       <R label="مجموعة مستخدمين">
-                        <FS value="" onValueChange={() => {}}>
+                        <FS value={dd.userGroup} onValueChange={v => setDoctype(doctypeItem, { userGroup: v })}>
                           <SelectItem value="all">الكل</SelectItem>
+                          {(users as any[])?.map((u: any) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
                         </FS>
                       </R>
                       <R label="مستخدم">
-                        <FS value="" onValueChange={() => {}}>
+                        <FS value={dd.user} onValueChange={v => setDoctype(doctypeItem, { user: v })}>
                           <SelectItem value="all">الكل</SelectItem>
                           {(users as any[])?.map((u: any) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
                         </FS>
                       </R>
                       <R label="دفتر المستندات">
-                        <FI value="" onChange={() => {}} placeholder="SAA" />
+                        <FI value={dd.journal} onChange={v => setDoctype(doctypeItem, { journal: v })} placeholder="SAA" />
                       </R>
                       <R label="مخزن">
-                        <FS value="" onValueChange={() => {}}>
+                        <FS value={dd.warehouse} onValueChange={v => setDoctype(doctypeItem, { warehouse: v })}>
                           <SelectItem value="this">هذا المخزن</SelectItem>
                           {(warehouses as any[])?.map((w: any) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
                         </FS>
                       </R>
                     </div>
                     <div className="mt-1.5">
-                      <CB label="للمستندات التي يصدرها النظام فقط" />
+                      <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                        <input type="checkbox" className="w-3.5 h-3.5 accent-indigo-600"
+                          checked={dd.systemOnly}
+                          onChange={e => setDoctype(doctypeItem, { systemOnly: e.target.checked })} />
+                        <span className="text-[11px] text-slate-600">للمستندات التي يصدرها النظام فقط</span>
+                      </label>
                     </div>
                   </P>
+                  ); })()}
 
                   {/* خصائص السندات المصدرة */}
+                  {(() => { const dd = getDoctype(doctypeItem); return (
                   <P title="خصائص السندات المصدرة">
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
                       <R label="نوع القيد">
-                        <FS value="" onValueChange={() => {}}>
+                        <FS value={dd.entryType} onValueChange={v => setDoctype(doctypeItem, { entryType: v })}>
                           <SelectItem value="sales">مبيعات</SelectItem>
                           <SelectItem value="purchase">مشتريات</SelectItem>
                           <SelectItem value="receipt">قبض</SelectItem>
@@ -772,41 +866,51 @@ export default function Warehouses() {
                         </FS>
                       </R>
                       <R label="دفتر القيد">
-                        <FI value="" onChange={() => {}} placeholder="SJ3" />
+                        <FI value={dd.entryJournal} onChange={v => setDoctype(doctypeItem, { entryJournal: v })} placeholder="SJ3" />
                       </R>
                       <R label="نوع مستند المخزون">
-                        <FS value="" onValueChange={() => {}}>
+                        <FS value={dd.stockDocType} onValueChange={v => setDoctype(doctypeItem, { stockDocType: v })}>
                           <SelectItem value="sales">مبيعات 3</SelectItem>
                           <SelectItem value="purchase">مشتريات</SelectItem>
                           <SelectItem value="transfer">تحويل</SelectItem>
                         </FS>
                       </R>
                       <R label="دفتر مستند المخزون">
-                        <FI value="" onChange={() => {}} placeholder="SI3" />
+                        <FI value={dd.stockJournal} onChange={v => setDoctype(doctypeItem, { stockJournal: v })} placeholder="SI3" />
                       </R>
                     </div>
                   </P>
+                  ); })()}
 
                   {/* الخيارات */}
+                  {(() => { const dd = getDoctype(doctypeItem); return (
                   <P title="خيارات المستند">
                     <div className="grid grid-cols-3 gap-x-4 gap-y-1.5">
                       <R label="نموذج الطباعة">
-                        <FI value="" onChange={() => {}} placeholder="نموذج A4" />
+                        <FI value={dd.printTemplate} onChange={v => setDoctype(doctypeItem, { printTemplate: v })} placeholder="نموذج A4" />
                       </R>
                       <R label="نموذج طباعة حراري">
-                        <FI value="" onChange={() => {}} placeholder="80mm" />
+                        <FI value={dd.printTemplate2} onChange={v => setDoctype(doctypeItem, { printTemplate2: v })} placeholder="80mm" />
                       </R>
                       <div className="flex flex-wrap gap-x-3 gap-y-1 items-center pt-0.5">
-                        <CB label="متابعة الكميات بالفواتير" />
-                        <CB label="بدون ضريبة" />
-                        <CB label="تعديل التأثير المحاسبي المدين" />
-                        <CB label="تعديل التأثير المحاسبي الدائن" />
-                        <CB label="إحصاءات للبائع" />
-                        <CB label="إحصاءات للصنف" />
-                        <CB label="إحصاءات عميل/مورد" />
+                        {([
+                          ["trackQty",      "متابعة الكميات بالفواتير"],
+                          ["noTax",         "بدون ضريبة"],
+                          ["sellerStats",   "إحصاءات للبائع"],
+                          ["itemStats",     "إحصاءات للصنف"],
+                          ["customerStats", "إحصاءات عميل/مورد"],
+                        ] as [keyof DoctypeData, string][]).map(([key, lbl]) => (
+                          <label key={key} className="flex items-center gap-1.5 cursor-pointer select-none">
+                            <input type="checkbox" className="w-3.5 h-3.5 accent-indigo-600"
+                              checked={!!dd[key]}
+                              onChange={e => setDoctype(doctypeItem, { [key]: e.target.checked })} />
+                            <span className="text-[11px] text-slate-600">{lbl}</span>
+                          </label>
+                        ))}
                       </div>
                     </div>
                   </P>
+                  ); })()}
 
                   {/* الروابط المحاسبية */}
                   <P title="الروابط المحاسبية">
