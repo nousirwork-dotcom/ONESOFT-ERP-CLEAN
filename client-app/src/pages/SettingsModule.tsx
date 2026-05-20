@@ -869,6 +869,7 @@ function MemberRow({ memberType, setMemberType, memberCode, setMemberCode, membe
   const pickerRef = useRef<HTMLDivElement>(null);
   const pickerListRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const skipOpenPicker = useRef(false);
 
   const availableList: any[] = memberType === 'user' ? users : groups;
   const filteredList = availableList.filter((item: any) => {
@@ -910,6 +911,7 @@ function MemberRow({ memberType, setMemberType, memberCode, setMemberCode, membe
     setNotFound(false);
     setShowPicker(false);
     setPickerFocusIdx(-1);
+    skipOpenPicker.current = true;
     setTimeout(() => inputRef.current?.focus(), 0);
   };
 
@@ -973,7 +975,7 @@ function MemberRow({ memberType, setMemberType, memberCode, setMemberCode, membe
               placeholder="الكود"
               value={memberCode}
               onChange={e => { setMemberCode(e.target.value); setMemberName(""); setNotFound(false); setShowPicker(true); setPickerFocusIdx(-1); }}
-              onFocus={() => setShowPicker(true)}
+              onFocus={() => { if (skipOpenPicker.current) { skipOpenPicker.current = false; return; } setShowPicker(true); }}
               onBlur={handleCodeBlur}
               onKeyDown={handleKeyDown}
               onContextMenu={e => { e.preventDefault(); setShowPicker(v => !v); }}
