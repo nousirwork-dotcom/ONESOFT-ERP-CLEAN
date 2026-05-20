@@ -198,7 +198,22 @@ export const appRouter = router({
       }))
       .mutation(async ({ input, ctx }) => {
         if (!input.members.length) return { count: 0 };
-        const resolved = await Promise.all(input.members.map(async m => {
+        // deduplicate the input array by (memberType + memberCode)
+        const seen = new Set<string>();
+        const unique = input.members.filter(m => {
+          const key = `${m.memberType}:${m.memberCode}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        // check for duplicates against existing members in the group
+        const existingMembers = await db.select({ memberType: userGroupMembers.memberType, memberCode: userGroupMembers.memberCode })
+          .from(userGroupMembers)
+          .where(and(eq(userGroupMembers.groupId, input.groupId), eq(userGroupMembers.orgId, ctx.user.orgId)));
+        const existingSet = new Set(existingMembers.map(m => `${m.memberType}:${m.memberCode}`));
+        const toInsert = unique.filter(m => !existingSet.has(`${m.memberType}:${m.memberCode}`));
+        if (!toInsert.length) return { count: 0 };
+        const resolved = await Promise.all(toInsert.map(async m => {
           let name = m.memberName;
           if (m.memberType === 'user') {
             const found = await db.select({ name: users.name }).from(users)
