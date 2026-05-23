@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@replit/connectors-sdk": "^0.4.1",
     "vite": "^8.0.12"
   }
 }
