@@ -1323,10 +1323,10 @@ function ChartOfAccountsPage() {
                   {/* عمود يمين */}
                   <div className="space-y-1.5">
                     <div className="flex items-center gap-2">
-                      <Select value={form.parentId} onValueChange={v => setF("parentId", v)}>
-                        <SelectTrigger className="h-7 text-xs flex-1"><SelectValue placeholder="— لا يوجد —" /></SelectTrigger>
+                      <Select value={form.parentId || "none"} onValueChange={v => setF("parentId", v === "none" ? "" : v)}>
+                        <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">— لا يوجد —</SelectItem>
+                          <SelectItem value="none">— لا يوجد —</SelectItem>
                           {listQuery.data?.filter(a => a.isParent).map(a => (
                             <SelectItem key={a.id} value={String(a.id)}>{a.code} — {a.name}</SelectItem>
                           ))}
