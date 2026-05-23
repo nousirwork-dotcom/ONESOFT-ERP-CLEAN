@@ -1068,6 +1068,7 @@ function ChartOfAccountsPage() {
     level: 1, parentId: "",
     isParent: false, allowPosting: true,
     openingBalance: "", openingBalanceType: "debit" as const,
+    costCenterType: "optional" as "optional" | "not_allowed" | "mandatory",
     notes: "",
   });
   const setF = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }));
@@ -1308,9 +1309,15 @@ function ChartOfAccountsPage() {
                       <Label className="text-xs w-14 text-right shrink-0 text-muted-foreground">الجانب الطبيعي :</Label>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Input value={form.notes} onChange={e => setF("notes", e.target.value)}
-                        className="h-7 text-xs flex-1" placeholder="ملاحظات..." />
-                      <Label className="text-xs w-10 text-right shrink-0 text-muted-foreground">ملاحظات :</Label>
+                      <Select value={form.costCenterType} onValueChange={v => setF("costCenterType", v)}>
+                        <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="optional">اختياري</SelectItem>
+                          <SelectItem value="not_allowed">غير مسموح</SelectItem>
+                          <SelectItem value="mandatory">إجباري</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Label className="text-xs w-14 text-right shrink-0 text-muted-foreground">مركز تكلفة :</Label>
                     </div>
                   </div>
                   {/* عمود يمين */}
@@ -1385,8 +1392,13 @@ function ChartOfAccountsPage() {
             </TabsContent>
 
             {/* ── وصف إضافي ── */}
-            <TabsContent value="desc" className="mt-0 p-3">
-              <p className="text-xs text-muted-foreground text-center py-6">لا توجد بيانات إضافية في هذا التبويب</p>
+            <TabsContent value="desc" className="mt-0 p-3 space-y-3">
+              <div>
+                <div className="text-[11px] font-bold text-red-600 mb-1 border-b border-red-200 pb-0.5">ملاحظات</div>
+                <textarea value={form.notes} onChange={e => setF("notes", e.target.value)}
+                  className="w-full h-24 text-xs rounded border border-border px-2 py-1.5 resize-none bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                  placeholder="ملاحظات إضافية على الحساب..." dir="rtl" />
+              </div>
             </TabsContent>
             <TabsContent value="moves" className="mt-0 p-3">
               <p className="text-xs text-muted-foreground text-center py-6">توزيع الحركات — قيد التطوير</p>
