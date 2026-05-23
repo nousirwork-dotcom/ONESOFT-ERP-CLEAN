@@ -1222,97 +1222,200 @@ function ChartOfAccountsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-xl" dir="rtl">
-          <DialogHeader>
-            <DialogTitle className="text-sm">إضافة حساب جديد</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">كود الحساب *</Label>
-                <Input value={form.code} onChange={e => setF("code", e.target.value)} className="h-8 text-xs" placeholder="مثال: 1110" />
+      <Dialog open={showForm} onOpenChange={v => { setShowForm(v); }}>
+        <DialogContent className="max-w-2xl p-0 gap-0 overflow-hidden" dir="rtl">
+          {/* ── شريط العنوان ── */}
+          <div className="bg-gradient-to-l from-blue-700 to-blue-500 px-4 py-2 flex items-center justify-between">
+            <span className="text-white text-sm font-bold flex items-center gap-2">
+              <BookOpen className="w-4 h-4" /> إضافة حساب جديد
+            </span>
+          </div>
+
+          {/* ── Tabs ── */}
+          <Tabs defaultValue="main" className="w-full">
+            <TabsList className="w-full justify-start rounded-none border-b bg-muted/40 h-8 px-2 gap-0">
+              {[["main","بافقة رئيسية"],["desc","وصف إضافي"],["moves","توزيع الحركات"],["balances","أرصدة"]].map(([v,l]) => (
+                <TabsTrigger key={v} value={v} className="text-xs h-7 rounded-sm px-3 data-[state=active]:bg-white data-[state=active]:shadow-sm">{l}</TabsTrigger>
+              ))}
+            </TabsList>
+
+            {/* ── التبويب الرئيسي ── */}
+            <TabsContent value="main" className="mt-0 p-3 space-y-0">
+
+              {/* قسم: مواصفات */}
+              <div className="mb-2">
+                <div className="text-[11px] font-bold text-red-600 mb-1 border-b border-red-200 pb-0.5">مواصفات</div>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <Input value={form.code} onChange={e => setF("code", e.target.value)}
+                      className="h-7 text-xs flex-1 bg-blue-50 border-blue-300 focus:bg-white font-mono" placeholder="مثال: 1101" />
+                    <Label className="text-xs w-10 text-right shrink-0 text-muted-foreground">رقم :</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Input value={form.name} onChange={e => setF("name", e.target.value)}
+                      className="h-7 text-xs flex-1" placeholder="الاسم بالعربي" />
+                    <Label className="text-xs w-10 text-right shrink-0 text-muted-foreground">اسم 1 :</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Input value={form.nameEn} onChange={e => setF("nameEn", e.target.value)}
+                      className="h-7 text-xs flex-1" placeholder="English name" dir="ltr" />
+                    <Label className="text-xs w-10 text-right shrink-0 text-muted-foreground">اسم 2 :</Label>
+                  </div>
+                </div>
               </div>
-              <div>
-                <Label className="text-xs">اسم الحساب *</Label>
-                <Input value={form.name} onChange={e => setF("name", e.target.value)} className="h-8 text-xs" placeholder="اسم الحساب بالعربي" />
+
+              {/* قسم: متغيرات */}
+              <div className="mb-2">
+                <div className="text-[11px] font-bold text-red-600 mb-1 border-b border-red-200 pb-0.5">متغيرات</div>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
+                  {/* عمود يسار */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <Select value={form.accountType} onValueChange={v => setF("accountType", v)}>
+                        <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="assets">أصول</SelectItem>
+                          <SelectItem value="liabilities">خصوم</SelectItem>
+                          <SelectItem value="equity">حقوق ملكية</SelectItem>
+                          <SelectItem value="revenue">إيرادات</SelectItem>
+                          <SelectItem value="expenses">مصروفات</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Label className="text-xs w-10 text-right shrink-0 text-muted-foreground">نوع :</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 flex items-center gap-1">
+                        <Input value={form.openingBalance} onChange={e => setF("openingBalance", e.target.value)}
+                          type="number" className="h-7 text-xs w-24" placeholder="0.000" dir="ltr" />
+                        <Select value={form.openingBalanceType} onValueChange={v => setF("openingBalanceType", v)}>
+                          <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="debit">مدين</SelectItem>
+                            <SelectItem value="credit">دائن</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Label className="text-xs w-14 text-right shrink-0 text-muted-foreground">رصيد افت. :</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Select value={form.nature} onValueChange={v => setF("nature", v)}>
+                        <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="debit">مدين</SelectItem>
+                          <SelectItem value="credit">دائن</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Label className="text-xs w-14 text-right shrink-0 text-muted-foreground">الجانب الطبيعي :</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input value={form.notes} onChange={e => setF("notes", e.target.value)}
+                        className="h-7 text-xs flex-1" placeholder="ملاحظات..." />
+                      <Label className="text-xs w-10 text-right shrink-0 text-muted-foreground">ملاحظات :</Label>
+                    </div>
+                  </div>
+                  {/* عمود يمين */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <Select value={form.parentId} onValueChange={v => setF("parentId", v)}>
+                        <SelectTrigger className="h-7 text-xs flex-1"><SelectValue placeholder="— لا يوجد —" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">— لا يوجد —</SelectItem>
+                          {listQuery.data?.filter(a => a.isParent).map(a => (
+                            <SelectItem key={a.id} value={String(a.id)}>{a.code} — {a.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Label className="text-xs w-10 text-right shrink-0 text-muted-foreground">جذري :</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input type="number" value={form.level} onChange={e => setF("level", parseInt(e.target.value))}
+                        className="h-7 text-xs flex-1" min={1} max={6} dir="ltr" />
+                      <Label className="text-xs w-10 text-right shrink-0 text-muted-foreground">مستوى :</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 flex gap-3 items-center ps-1">
+                        <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
+                          <input type="checkbox" checked={form.isParent} onChange={e => setF("isParent", e.target.checked)}
+                            className="w-3.5 h-3.5 accent-primary" />
+                          حساب رئيسي
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
+                          <input type="checkbox" checked={form.allowPosting} onChange={e => setF("allowPosting", e.target.checked)}
+                            className="w-3.5 h-3.5 accent-primary" />
+                          يقبل الترحيل
+                        </label>
+                      </div>
+                      <Label className="text-xs w-10 text-right shrink-0 text-muted-foreground">يصنف كـ :</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 flex items-center h-7 px-2 bg-muted/40 rounded border border-border/40 text-xs text-muted-foreground">ر.س</div>
+                      <Label className="text-xs w-10 text-right shrink-0 text-muted-foreground">عملة :</Label>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">نوع الحساب</Label>
-                <Select value={form.accountType} onValueChange={v => setF("accountType", v)}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="assets">أصول</SelectItem>
-                    <SelectItem value="liabilities">خصوم</SelectItem>
-                    <SelectItem value="equity">حقوق ملكية</SelectItem>
-                    <SelectItem value="revenue">إيرادات</SelectItem>
-                    <SelectItem value="expenses">مصروفات</SelectItem>
-                  </SelectContent>
-                </Select>
+
+              {/* قسم: فئات انتقال + فئات — صف واحد */}
+              <div className="grid grid-cols-2 gap-x-4">
+                <div>
+                  <div className="text-[11px] font-bold text-red-600 mb-1 border-b border-red-200 pb-0.5">فئات انتقال</div>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <Input className="h-7 text-xs flex-1" placeholder="تصنيف الحساب" />
+                      <Label className="text-xs w-20 text-right shrink-0 text-muted-foreground">تصنيف الحساب :</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input className="h-7 text-xs flex-1" placeholder="لدى تقارير الأستاذ..." />
+                      <Label className="text-xs w-8 text-right shrink-0 text-muted-foreground">نوع :</Label>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[11px] font-bold text-red-600 mb-1 border-b border-red-200 pb-0.5">فئات</div>
+                  <div className="space-y-1.5">
+                    {["فئة 1","فئة 2","فئة 3"].map((lbl, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <Input className="h-7 text-xs flex-1" />
+                        <Label className="text-xs w-12 text-right shrink-0 text-muted-foreground">{lbl} :</Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
-              <div>
-                <Label className="text-xs">طبيعة الحساب</Label>
-                <Select value={form.nature} onValueChange={v => setF("nature", v)}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="debit">مدين</SelectItem>
-                    <SelectItem value="credit">دائن</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <Label className="text-xs">المستوى</Label>
-                <Input type="number" value={form.level} onChange={e => setF("level", parseInt(e.target.value))} className="h-8 text-xs" min={1} max={6} />
-              </div>
-              <div>
-                <Label className="text-xs">رصيد افتتاحي</Label>
-                <Input type="number" value={form.openingBalance} onChange={e => setF("openingBalance", e.target.value)} className="h-8 text-xs" placeholder="0.000" />
-              </div>
-              <div>
-                <Label className="text-xs">نوع الرصيد الافتتاحي</Label>
-                <Select value={form.openingBalanceType} onValueChange={v => setF("openingBalanceType", v)}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="debit">مدين</SelectItem>
-                    <SelectItem value="credit">دائن</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 text-xs cursor-pointer">
-                <input type="checkbox" checked={form.isParent} onChange={e => setF("isParent", e.target.checked)} />
-                حساب رئيسي (مجموعة)
-              </label>
-              <label className="flex items-center gap-2 text-xs cursor-pointer">
-                <input type="checkbox" checked={form.allowPosting} onChange={e => setF("allowPosting", e.target.checked)} />
-                يقبل الترحيل
-              </label>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>إلغاء</Button>
-              <Button size="sm" disabled={!form.code || !form.name || createMutation.isPending}
-                onClick={() => createMutation.mutate({
-                  code: form.code,
-                  name: form.name,
-                  nameEn: form.nameEn || undefined,
-                  accountType: form.accountType,
-                  nature: form.nature,
-                  level: form.level,
-                  parentId: form.parentId ? parseInt(form.parentId) : undefined,
-                  isParent: form.isParent,
-                  allowPosting: form.allowPosting,
-                  openingBalance: form.openingBalance || undefined,
-                  openingBalanceType: form.openingBalanceType,
-                  notes: form.notes || undefined,
-                })}>
-                <Check className="w-3 h-3 ml-1" /> حفظ
-              </Button>
-            </div>
+            </TabsContent>
+
+            {/* ── وصف إضافي ── */}
+            <TabsContent value="desc" className="mt-0 p-3">
+              <p className="text-xs text-muted-foreground text-center py-6">لا توجد بيانات إضافية في هذا التبويب</p>
+            </TabsContent>
+            <TabsContent value="moves" className="mt-0 p-3">
+              <p className="text-xs text-muted-foreground text-center py-6">توزيع الحركات — قيد التطوير</p>
+            </TabsContent>
+            <TabsContent value="balances" className="mt-0 p-3">
+              <p className="text-xs text-muted-foreground text-center py-6">الأرصدة — قيد التطوير</p>
+            </TabsContent>
+          </Tabs>
+
+          {/* ── شريط الأزرار السفلي ── */}
+          <div className="border-t bg-muted/30 px-4 py-2 flex items-center justify-between gap-2">
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowForm(false)}>
+              <X className="w-3 h-3 ml-1" /> إغلاق
+            </Button>
+            <Button size="sm" className="h-7 text-xs gap-1 bg-blue-600 hover:bg-blue-700"
+              disabled={!form.code || !form.name || createMutation.isPending}
+              onClick={() => createMutation.mutate({
+                code: form.code, name: form.name,
+                nameEn: form.nameEn || undefined,
+                accountType: form.accountType, nature: form.nature,
+                level: form.level,
+                parentId: form.parentId ? parseInt(form.parentId) : undefined,
+                isParent: form.isParent, allowPosting: form.allowPosting,
+                openingBalance: form.openingBalance || undefined,
+                openingBalanceType: form.openingBalanceType,
+                notes: form.notes || undefined,
+              })}>
+              <Check className="w-3 h-3" /> {createMutation.isPending ? "جارٍ الحفظ..." : "حفظ"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
