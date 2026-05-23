@@ -6,7 +6,7 @@ import {
   ClipboardList, Plus, Search, DollarSign, ArrowRight,
   TrendingUp, TrendingDown, Scale, Wallet, Building,
   Printer, Download, X, Check, RefreshCw, Edit2, Trash2,
-  ArrowUpCircle, ArrowDownCircle,
+  ArrowUpCircle, ArrowDownCircle, Upload, AlertCircle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -988,10 +988,79 @@ function ChartOfAccountsPage() {
   });
   const deleteMutation = trpc.accounts.delete.useMutation({
     onSuccess: () => { toast.success("تم حذف الحساب"); listQuery.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const importMutation = trpc.accounts.import.useMutation({
+    onSuccess: (r) => {
+      toast.success(`تم استيراد ${r.inserted} حساب${r.skipped > 0 ? ` (تم تجاهل ${r.skipped} مكرر)` : ""}`);
+      listQuery.refetch();
+      setShowImport(false);
+      setImportRows([]);
+      setImportError(null);
+    },
+    onError: (e) => toast.error(e.message),
   });
 
   const [showForm, setShowForm] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [importRows, setImportRows] = useState<any[]>([]);
+  const [importError, setImportError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState("");
+
+  const typeMap: Record<string, string> = {
+    أصول: "assets", assets: "assets",
+    خصوم: "liabilities", liabilities: "liabilities",
+    "حقوق ملكية": "equity", equity: "equity",
+    إيرادات: "revenue", revenue: "revenue",
+    مصروفات: "expenses", expenses: "expenses",
+  };
+  const natureMap: Record<string, string> = { مدين: "debit", debit: "debit", دائن: "credit", credit: "credit" };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportError(null);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const text = ev.target?.result as string;
+        const lines = text.split(/\r?\n/).filter(l => l.trim());
+        if (lines.length < 2) { setImportError("الملف فارغ أو لا يحتوي على بيانات"); return; }
+        const headers = lines[0].split(",").map(h => h.trim().replace(/^"|"$/g, "").toLowerCase());
+        const rows = lines.slice(1).map(line => {
+          const cols = line.split(",").map(c => c.trim().replace(/^"|"$/g, ""));
+          const row: Record<string, string> = {};
+          headers.forEach((h, i) => { row[h] = cols[i] ?? ""; });
+          return row;
+        }).filter(r => r["code"] || r["كود"] || r["كود الحساب"]);
+        const parsed = rows.map(r => ({
+          code: (r["code"] || r["كود"] || r["كود الحساب"] || "").trim(),
+          name: (r["name"] || r["اسم"] || r["اسم الحساب"] || "").trim(),
+          nameEn: (r["name_en"] || r["الاسم بالانجليزية"] || "").trim() || undefined,
+          accountType: typeMap[(r["account_type"] || r["نوع الحساب"] || r["النوع"] || "").trim()] ?? "assets",
+          nature: natureMap[(r["nature"] || r["الطبيعة"] || "").trim()] ?? "debit",
+          level: parseInt(r["level"] || r["المستوى"] || "1") || 1,
+          isParent: ["true", "1", "نعم", "yes"].includes((r["is_parent"] || r["حساب رئيسي"] || "false").toLowerCase()),
+          allowPosting: !["false", "0", "لا", "no"].includes((r["allow_posting"] || r["يقبل الترحيل"] || "true").toLowerCase()),
+          openingBalance: (r["opening_balance"] || r["رصيد افتتاحي"] || "").trim() || undefined,
+          openingBalanceType: natureMap[(r["opening_balance_type"] || r["نوع الرصيد"] || "").trim()] ?? "debit",
+        })).filter(r => r.code && r.name);
+        if (parsed.length === 0) { setImportError("لم يتم العثور على بيانات صالحة — تأكد من وجود أعمدة code و name"); return; }
+        setImportRows(parsed);
+      } catch {
+        setImportError("خطأ في قراءة الملف");
+      }
+    };
+    reader.readAsText(file, "UTF-8");
+    e.target.value = "";
+  };
+
+  const downloadTemplate = () => {
+    const csv = "code,name,name_en,account_type,nature,level,is_parent,allow_posting,opening_balance,opening_balance_type\n1,الأصول,,assets,debit,1,true,false,,debit\n11,الأصول المتداولة,,assets,debit,2,true,false,,debit\n1101,الصندوق,Cash,assets,debit,3,false,true,,debit";
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "chart_of_accounts_template.csv"; a.click();
+  };
   const [form, setForm] = useState({
     code: "", name: "", nameEn: "",
     accountType: "assets" as const,
@@ -1020,6 +1089,9 @@ function ChartOfAccountsPage() {
             <Search className="absolute right-2 top-1.5 w-3 h-3 text-muted-foreground" />
             <Input value={search} onChange={e => setSearch(e.target.value)} className="h-7 text-xs pr-7 w-48" placeholder="بحث بالكود أو الاسم..." />
           </div>
+          <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setShowImport(true)}>
+            <Upload className="w-3 h-3" /> استيراد
+          </Button>
           <Button size="sm" className="h-7 text-xs gap-1" onClick={() => setShowForm(true)}>
             <Plus className="w-3 h-3" /> إضافة حساب
           </Button>
@@ -1078,6 +1150,77 @@ function ChartOfAccountsPage() {
           </TableBody>
         </Table>
       </Card>
+
+      {/* ── dialog الاستيراد ── */}
+      <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
+      <Dialog open={showImport} onOpenChange={v => { setShowImport(v); if (!v) { setImportRows([]); setImportError(null); } }}>
+        <DialogContent className="max-w-3xl" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-sm flex items-center gap-2">
+              <Upload className="w-4 h-4 text-primary" /> استيراد شجرة الحسابات من CSV
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="bg-muted/30 rounded-md p-3 text-xs text-muted-foreground space-y-1 border border-border/50">
+              <p className="font-medium text-foreground">تنسيق الملف المطلوب (CSV):</p>
+              <p>الأعمدة المطلوبة: <span className="font-mono text-primary">code, name</span></p>
+              <p>الأعمدة الاختيارية: <span className="font-mono">name_en, account_type, nature, level, is_parent, allow_posting, opening_balance, opening_balance_type</span></p>
+              <p>قيم account_type: assets / liabilities / equity / revenue / expenses</p>
+              <p>قيم nature و opening_balance_type: debit / credit</p>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={downloadTemplate}>
+                <Download className="w-3 h-3" /> تحميل نموذج CSV
+              </Button>
+              <Button size="sm" className="h-7 text-xs gap-1" onClick={() => fileInputRef.current?.click()}>
+                <Upload className="w-3 h-3" /> اختر ملف CSV
+              </Button>
+            </div>
+            {importError && (
+              <div className="flex items-center gap-2 text-xs text-destructive bg-destructive/5 rounded p-2 border border-destructive/20">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {importError}
+              </div>
+            )}
+            {importRows.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">معاينة — {importRows.length} حساب جاهز للاستيراد:</p>
+                <div className="border border-border/50 rounded overflow-auto max-h-52">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/30">
+                        {["الكود","الاسم","النوع","الطبيعة","المستوى","رئيسي","ترحيل"].map(h => (
+                          <TableHead key={h} className="text-xs py-1 px-2">{h}</TableHead>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {importRows.slice(0, 50).map((r, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="text-xs font-mono py-1 px-2">{r.code}</TableCell>
+                          <TableCell className="text-xs py-1 px-2">{r.name}</TableCell>
+                          <TableCell className="text-xs py-1 px-2">{typeLabel(r.accountType)}</TableCell>
+                          <TableCell className="text-xs py-1 px-2">{r.nature === "debit" ? "مدين" : "دائن"}</TableCell>
+                          <TableCell className="text-xs py-1 px-2 text-center">{r.level}</TableCell>
+                          <TableCell className="text-xs py-1 px-2 text-center">{r.isParent ? "نعم" : "لا"}</TableCell>
+                          <TableCell className="text-xs py-1 px-2 text-center">{r.allowPosting ? "نعم" : "لا"}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                {importRows.length > 50 && <p className="text-xs text-muted-foreground">... و {importRows.length - 50} حساب آخر</p>}
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => { setImportRows([]); setImportError(null); }}>مسح</Button>
+                  <Button size="sm" className="h-7 text-xs gap-1" disabled={importMutation.isPending}
+                    onClick={() => importMutation.mutate({ accounts: importRows, skipDuplicates: true })}>
+                    <Check className="w-3 h-3" /> {importMutation.isPending ? "جارٍ الاستيراد..." : `استيراد ${importRows.length} حساب`}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="max-w-xl" dir="rtl">

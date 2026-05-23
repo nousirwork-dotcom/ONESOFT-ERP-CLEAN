@@ -853,6 +853,64 @@ export const appRouter = router({
         orderBy: (a, { asc }) => [asc(a.code)],
       });
     }),
+    create: protectedProcedure
+      .input(z.object({
+        code: z.string().min(1),
+        name: z.string().min(1),
+        nameEn: z.string().optional(),
+        accountType: z.string().default('assets'),
+        nature: z.string().default('debit'),
+        level: z.number().int().min(1).max(10).default(1),
+        parentId: z.number().int().optional(),
+        isParent: z.boolean().default(false),
+        allowPosting: z.boolean().default(true),
+        openingBalance: z.string().optional(),
+        openingBalanceType: z.string().default('debit'),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const exists = await db.select({ id: chartOfAccounts.id }).from(chartOfAccounts)
+          .where(and(eq(chartOfAccounts.orgId, ctx.user.orgId), eq(chartOfAccounts.code, input.code), eq(chartOfAccounts.isActive, true)))
+          .limit(1);
+        if (exists.length > 0) throw new TRPCError({ code: 'BAD_REQUEST', message: `كود الحساب "${input.code}" موجود بالفعل` });
+        const [account] = await db.insert(chartOfAccounts).values({
+          ...input,
+          orgId: ctx.user.orgId,
+        }).returning();
+        return account;
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        await db.update(chartOfAccounts).set({ isActive: false })
+          .where(and(eq(chartOfAccounts.id, input.id), eq(chartOfAccounts.orgId, ctx.user.orgId)));
+        return { success: true };
+      }),
+    import: protectedProcedure
+      .input(z.object({
+        accounts: z.array(z.object({
+          code: z.string().min(1),
+          name: z.string().min(1),
+          nameEn: z.string().optional(),
+          accountType: z.string().default('assets'),
+          nature: z.string().default('debit'),
+          level: z.number().int().min(1).max(10).default(1),
+          isParent: z.boolean().default(false),
+          allowPosting: z.boolean().default(true),
+          openingBalance: z.string().optional(),
+          openingBalanceType: z.string().default('debit'),
+        })),
+        skipDuplicates: z.boolean().default(true),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const existing = await db.select({ code: chartOfAccounts.code }).from(chartOfAccounts)
+          .where(and(eq(chartOfAccounts.orgId, ctx.user.orgId), eq(chartOfAccounts.isActive, true)));
+        const existingCodes = new Set(existing.map(r => r.code));
+        const toInsert = input.accounts.filter(a => !existingCodes.has(a.code) || !input.skipDuplicates);
+        if (toInsert.length === 0) return { inserted: 0, skipped: input.accounts.length };
+        await db.insert(chartOfAccounts).values(toInsert.map(a => ({ ...a, orgId: ctx.user.orgId })));
+        return { inserted: toInsert.length, skipped: input.accounts.length - toInsert.length };
+      }),
   }),
 
   // ─── Journal Entries ─────────────────────────────────────────────────────────
