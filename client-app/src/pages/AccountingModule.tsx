@@ -1292,9 +1292,6 @@ function ChartOfAccountsPage() {
               <TabsTrigger value="main" className="text-xs h-7 rounded px-4 gap-1.5 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-sm">
                 <FileText className="w-3 h-3" /> البيانات الرئيسية
               </TabsTrigger>
-              <TabsTrigger value="balances" className="text-xs h-7 rounded px-4 gap-1.5 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-sm">
-                <Scale className="w-3 h-3" /> الأرصدة الافتتاحية
-              </TabsTrigger>
             </TabsList>
 
             {/* ══ Tab 1: البيانات الرئيسية ══ */}
@@ -1467,84 +1464,6 @@ function ChartOfAccountsPage() {
               </div>
             </TabsContent>
 
-            {/* ══ Tab 2: الأرصدة الافتتاحية ══ */}
-            <TabsContent value="balances" className="mt-0 p-5 space-y-5">
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-1 h-4 rounded-full bg-amber-500" />
-                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">الأرصدة الافتتاحية</span>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  {/* رصيد مدين */}
-                  <div className="space-y-1">
-                    <Label className="text-[11px] font-semibold text-slate-600">الرصيد الافتتاحي مدين</Label>
-                    <div className="relative">
-                      <Input value={form.openingDebit} onChange={e => setF("openingDebit", e.target.value)}
-                        type="number" min="0" step="0.001"
-                        className="h-8 text-sm font-mono pe-10 border-blue-200 bg-blue-50/40 focus:bg-white"
-                        placeholder="0.000" dir="ltr" />
-                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-blue-500">مدين</span>
-                    </div>
-                  </div>
-                  {/* رصيد دائن */}
-                  <div className="space-y-1">
-                    <Label className="text-[11px] font-semibold text-slate-600">الرصيد الافتتاحي دائن</Label>
-                    <div className="relative">
-                      <Input value={form.openingCredit} onChange={e => setF("openingCredit", e.target.value)}
-                        type="number" min="0" step="0.001"
-                        className="h-8 text-sm font-mono pe-10 border-rose-200 bg-rose-50/40 focus:bg-white"
-                        placeholder="0.000" dir="ltr" />
-                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-rose-500">دائن</span>
-                    </div>
-                  </div>
-                  {/* تاريخ الرصيد */}
-                  <div className="space-y-1">
-                    <Label className="text-[11px] font-semibold text-slate-600">تاريخ الرصيد الافتتاحي</Label>
-                    <Input value={form.openingDate} onChange={e => setF("openingDate", e.target.value)}
-                      type="date" className="h-8 text-xs" dir="ltr" />
-                  </div>
-                  {/* مركز تكلفة الرصيد */}
-                  {form.costCenterType !== "not_allowed" && (
-                    <div className="space-y-1">
-                      <Label className="text-[11px] font-semibold text-slate-600">
-                        مركز تكلفة الرصيد {form.costCenterType === "mandatory" && <span className="text-red-500">*</span>}
-                      </Label>
-                      <Input value={form.openingCostCenter} onChange={e => setF("openingCostCenter", e.target.value)}
-                        className="h-8 text-xs" placeholder="كود مركز التكلفة" />
-                    </div>
-                  )}
-                </div>
-
-                {/* ملخص الرصيد */}
-                {(parseFloat(form.openingDebit || "0") > 0 || parseFloat(form.openingCredit || "0") > 0) && (
-                  <div className="mt-4 rounded-lg bg-slate-50 border border-slate-200 p-3">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-slate-500">إجمالي مدين:</span>
-                      <span className="font-bold text-blue-700">{parseFloat(form.openingDebit || "0").toLocaleString("ar-SA", { minimumFractionDigits: 3 })} ر.س</span>
-                    </div>
-                    <div className="flex justify-between text-xs mt-1">
-                      <span className="text-slate-500">إجمالي دائن:</span>
-                      <span className="font-bold text-rose-600">{parseFloat(form.openingCredit || "0").toLocaleString("ar-SA", { minimumFractionDigits: 3 })} ر.س</span>
-                    </div>
-                    <div className="border-t border-slate-200 mt-2 pt-2 flex justify-between text-xs">
-                      <span className="text-slate-600 font-medium">الصافي:</span>
-                      <span className={`font-bold ${parseFloat(form.openingDebit||"0") >= parseFloat(form.openingCredit||"0") ? "text-blue-700" : "text-rose-600"}`}>
-                        {Math.abs(parseFloat(form.openingDebit||"0") - parseFloat(form.openingCredit||"0")).toLocaleString("ar-SA", { minimumFractionDigits: 3 })} ر.س
-                        {" "}{parseFloat(form.openingDebit||"0") >= parseFloat(form.openingCredit||"0") ? "(مدين)" : "(دائن)"}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {/* ملاحظات */}
-                <div className="mt-4 space-y-1">
-                  <Label className="text-[11px] font-semibold text-slate-600">ملاحظات</Label>
-                  <textarea value={form.notes} onChange={e => setF("notes", e.target.value)}
-                    className="w-full h-20 text-xs rounded-lg border border-slate-200 px-3 py-2 resize-none bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                    placeholder="ملاحظات إضافية على الحساب..." dir="rtl" />
-                </div>
-              </div>
-            </TabsContent>
           </Tabs>
 
           {/* ══ Footer ══ */}
