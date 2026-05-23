@@ -1061,17 +1061,66 @@ function ChartOfAccountsPage() {
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "chart_of_accounts_template.csv"; a.click();
   };
-  const [form, setForm] = useState({
+  type AccountLevelType = "root" | "general" | "sub";
+  type AccountFinType = "assets" | "liabilities" | "equity" | "revenue" | "expenses";
+  type NatureType = "debit" | "credit";
+  type CostCenterType = "not_allowed" | "optional" | "mandatory";
+
+  const initForm = () => ({
     code: "", name: "", nameEn: "",
-    accountType: "assets" as const,
-    nature: "debit" as const,
-    level: 1, parentId: "",
-    isParent: false, allowPosting: true,
-    openingBalance: "", openingBalanceType: "debit" as const,
-    costCenterType: "optional" as "optional" | "not_allowed" | "mandatory",
+    parentId: "",
+    accountLevelType: "sub" as AccountLevelType,
+    accountType: "assets" as AccountFinType,
+    nature: "debit" as NatureType,
+    costCenterType: "optional" as CostCenterType,
+    allowPosting: true,
+    status: "active" as "active" | "suspended",
+    openingDebit: "", openingCredit: "", openingDate: "", openingCostCenter: "",
     notes: "",
   });
-  const setF = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }));
+
+  const [form, setForm] = useState(initForm());
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const setF = (k: string, v: any) => {
+    setForm(p => {
+      const next = { ...p, [k]: v };
+      // Business rules
+      if (k === "accountLevelType") {
+        if (v === "root") { next.parentId = ""; next.allowPosting = false; }
+        if (v === "general") { next.allowPosting = false; }
+        if (v === "sub") { next.allowPosting = true; }
+      }
+      if (k === "parentId" && v !== "" && v !== "none") {
+        const parent = listQuery.data?.find(a => String(a.id) === v);
+        if (parent) {
+          const pLevel = parent.level ?? 1;
+          (next as any).computedLevel = pLevel + 1;
+        }
+      }
+      return next;
+    });
+    if (formErrors[k]) setFormErrors(p => { const n = { ...p }; delete n[k]; return n; });
+  };
+
+  const computedLevel = (() => {
+    if (form.parentId && form.parentId !== "none") {
+      const p = listQuery.data?.find(a => String(a.id) === form.parentId);
+      return (p?.level ?? 1) + 1;
+    }
+    return 1;
+  })();
+
+  const validateForm = () => {
+    const errs: Record<string, string> = {};
+    if (!form.code.trim()) errs.code = "كود الحساب مطلوب";
+    if (!form.name.trim()) errs.name = "اسم الحساب مطلوب";
+    if (form.accountLevelType !== "root" && (!form.parentId || form.parentId === "none"))
+      errs.parentId = "الحساب الأب مطلوب للحسابات غير الجذرية";
+    if (listQuery.data?.some(a => a.code === form.code.trim()))
+      errs.code = "كود الحساب مكرر — يرجى اختيار كود مختلف";
+    setFormErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
 
   const filtered = listQuery.data?.filter(a =>
     !search || a.code?.includes(search) || a.name?.includes(search)
@@ -1223,211 +1272,319 @@ function ChartOfAccountsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showForm} onOpenChange={v => { setShowForm(v); }}>
-        <DialogContent className="max-w-2xl p-0 gap-0 overflow-hidden" dir="rtl">
-          {/* ── شريط العنوان ── */}
-          <div className="bg-gradient-to-l from-blue-700 to-blue-500 px-4 py-2 flex items-center justify-between">
-            <span className="text-white text-sm font-bold flex items-center gap-2">
-              <BookOpen className="w-4 h-4" /> إضافة حساب جديد
-            </span>
+      <Dialog open={showForm} onOpenChange={v => { setShowForm(v); if (!v) { setForm(initForm()); setFormErrors({}); } }}>
+        <DialogContent className="max-w-2xl p-0 gap-0 overflow-hidden rounded-xl shadow-2xl" dir="rtl">
+
+          {/* ══ Header ══ */}
+          <div className="bg-gradient-to-l from-blue-800 to-blue-600 px-5 py-3 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
+              <BookOpen className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <h2 className="text-white text-sm font-bold leading-none">إضافة حساب جديد</h2>
+              <p className="text-blue-200 text-[10px] mt-0.5">شجرة الحسابات — دليل الحسابات</p>
+            </div>
           </div>
 
-          {/* ── Tabs ── */}
+          {/* ══ Tabs ══ */}
           <Tabs defaultValue="main" className="w-full">
-            <TabsList className="w-full justify-start rounded-none border-b bg-muted/40 h-8 px-2 gap-0">
-              {[["main","بافقة رئيسية"],["desc","وصف إضافي"],["moves","توزيع الحركات"],["balances","أرصدة"]].map(([v,l]) => (
-                <TabsTrigger key={v} value={v} className="text-xs h-7 rounded-sm px-3 data-[state=active]:bg-white data-[state=active]:shadow-sm">{l}</TabsTrigger>
-              ))}
+            <TabsList className="w-full justify-start rounded-none border-b bg-slate-50 h-9 px-4 gap-1">
+              <TabsTrigger value="main" className="text-xs h-7 rounded px-4 gap-1.5 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-sm">
+                <FileText className="w-3 h-3" /> البيانات الرئيسية
+              </TabsTrigger>
+              <TabsTrigger value="balances" className="text-xs h-7 rounded px-4 gap-1.5 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-sm">
+                <Scale className="w-3 h-3" /> الأرصدة الافتتاحية
+              </TabsTrigger>
             </TabsList>
 
-            {/* ── التبويب الرئيسي ── */}
-            <TabsContent value="main" className="mt-0 p-3 space-y-0">
+            {/* ══ Tab 1: البيانات الرئيسية ══ */}
+            <TabsContent value="main" className="mt-0 p-5 space-y-5">
 
-              {/* قسم: مواصفات */}
-              <div className="mb-2">
-                <div className="text-[11px] font-bold text-red-600 mb-1 border-b border-red-200 pb-0.5">مواصفات</div>
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <Input value={form.code} onChange={e => setF("code", e.target.value)}
-                      className="h-7 text-xs flex-1 bg-blue-50 border-blue-300 focus:bg-white font-mono" placeholder="مثال: 1101" />
-                    <Label className="text-xs w-10 text-right shrink-0 text-muted-foreground">رقم :</Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Input value={form.name} onChange={e => setF("name", e.target.value)}
-                      className="h-7 text-xs flex-1" placeholder="الاسم بالعربي" />
-                    <Label className="text-xs w-10 text-right shrink-0 text-muted-foreground">اسم 1 :</Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Input value={form.nameEn} onChange={e => setF("nameEn", e.target.value)}
-                      className="h-7 text-xs flex-1" placeholder="English name" dir="ltr" />
-                    <Label className="text-xs w-10 text-right shrink-0 text-muted-foreground">اسم 2 :</Label>
-                  </div>
-                </div>
-              </div>
-
-              {/* قسم: متغيرات */}
-              <div className="mb-2">
-                <div className="text-[11px] font-bold text-red-600 mb-1 border-b border-red-200 pb-0.5">متغيرات</div>
-                <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
-                  {/* عمود يسار */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <Select value={form.accountType} onValueChange={v => setF("accountType", v)}>
-                        <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="assets">أصول</SelectItem>
-                          <SelectItem value="liabilities">خصوم</SelectItem>
-                          <SelectItem value="equity">حقوق ملكية</SelectItem>
-                          <SelectItem value="revenue">إيرادات</SelectItem>
-                          <SelectItem value="expenses">مصروفات</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Label className="text-xs w-10 text-right shrink-0 text-muted-foreground">نوع :</Label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 flex items-center gap-1">
-                        <Input value={form.openingBalance} onChange={e => setF("openingBalance", e.target.value)}
-                          type="number" className="h-7 text-xs w-24" placeholder="0.000" dir="ltr" />
-                        <Select value={form.openingBalanceType} onValueChange={v => setF("openingBalanceType", v)}>
-                          <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="debit">مدين</SelectItem>
-                            <SelectItem value="credit">دائن</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <Label className="text-xs w-14 text-right shrink-0 text-muted-foreground">رصيد افت. :</Label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Select value={form.nature} onValueChange={v => setF("nature", v)}>
-                        <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="debit">مدين</SelectItem>
-                          <SelectItem value="credit">دائن</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Label className="text-xs w-14 text-right shrink-0 text-muted-foreground">الجانب الطبيعي :</Label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Select value={form.costCenterType} onValueChange={v => setF("costCenterType", v)}>
-                        <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="optional">اختياري</SelectItem>
-                          <SelectItem value="not_allowed">غير مسموح</SelectItem>
-                          <SelectItem value="mandatory">إجباري</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Label className="text-xs w-14 text-right shrink-0 text-muted-foreground">مركز تكلفة :</Label>
-                    </div>
-                  </div>
-                  {/* عمود يمين */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <Select value={form.parentId || "none"} onValueChange={v => setF("parentId", v === "none" ? "" : v)}>
-                        <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">— لا يوجد —</SelectItem>
-                          {listQuery.data?.filter(a => a.isParent).map(a => (
-                            <SelectItem key={a.id} value={String(a.id)}>{a.code} — {a.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Label className="text-xs w-10 text-right shrink-0 text-muted-foreground">جذري :</Label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Input type="number" value={form.level} onChange={e => setF("level", parseInt(e.target.value))}
-                        className="h-7 text-xs flex-1" min={1} max={6} dir="ltr" />
-                      <Label className="text-xs w-10 text-right shrink-0 text-muted-foreground">مستوى :</Label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 flex gap-3 items-center ps-1">
-                        <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
-                          <input type="checkbox" checked={form.isParent} onChange={e => setF("isParent", e.target.checked)}
-                            className="w-3.5 h-3.5 accent-primary" />
-                          حساب رئيسي
-                        </label>
-                        <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
-                          <input type="checkbox" checked={form.allowPosting} onChange={e => setF("allowPosting", e.target.checked)}
-                            className="w-3.5 h-3.5 accent-primary" />
-                          يقبل الترحيل
-                        </label>
-                      </div>
-                      <Label className="text-xs w-10 text-right shrink-0 text-muted-foreground">يصنف كـ :</Label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 flex items-center h-7 px-2 bg-muted/40 rounded border border-border/40 text-xs text-muted-foreground">ر.س</div>
-                      <Label className="text-xs w-10 text-right shrink-0 text-muted-foreground">عملة :</Label>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* قسم: فئات انتقال + فئات — صف واحد */}
-              <div className="grid grid-cols-2 gap-x-4">
-                <div>
-                  <div className="text-[11px] font-bold text-red-600 mb-1 border-b border-red-200 pb-0.5">فئات انتقال</div>
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <Input className="h-7 text-xs flex-1" placeholder="تصنيف الحساب" />
-                      <Label className="text-xs w-20 text-right shrink-0 text-muted-foreground">تصنيف الحساب :</Label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Input className="h-7 text-xs flex-1" placeholder="لدى تقارير الأستاذ..." />
-                      <Label className="text-xs w-8 text-right shrink-0 text-muted-foreground">نوع :</Label>
-                    </div>
-                  </div>
-                </div>
-                <div>
-                  <div className="text-[11px] font-bold text-red-600 mb-1 border-b border-red-200 pb-0.5">فئات</div>
-                  <div className="space-y-1.5">
-                    {["فئة 1","فئة 2","فئة 3"].map((lbl, i) => (
-                      <div key={i} className="flex items-center gap-2">
-                        <Input className="h-7 text-xs flex-1" />
-                        <Label className="text-xs w-12 text-right shrink-0 text-muted-foreground">{lbl} :</Label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </TabsContent>
-
-            {/* ── وصف إضافي ── */}
-            <TabsContent value="desc" className="mt-0 p-3 space-y-3">
+              {/* ── قسم: بيانات الحساب الأساسية ── */}
               <div>
-                <div className="text-[11px] font-bold text-red-600 mb-1 border-b border-red-200 pb-0.5">ملاحظات</div>
-                <textarea value={form.notes} onChange={e => setF("notes", e.target.value)}
-                  className="w-full h-24 text-xs rounded border border-border px-2 py-1.5 resize-none bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-                  placeholder="ملاحظات إضافية على الحساب..." dir="rtl" />
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-1 h-4 rounded-full bg-blue-600" />
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">بيانات الحساب الأساسية</span>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  {/* كود الحساب */}
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-semibold text-slate-600">كود الحساب <span className="text-red-500">*</span></Label>
+                    <Input
+                      value={form.code} onChange={e => setF("code", e.target.value)}
+                      className={`h-8 text-sm font-mono bg-blue-50/60 border-blue-200 focus:border-blue-500 focus:bg-white ${formErrors.code ? "border-red-400 bg-red-50" : ""}`}
+                      placeholder="مثال: 1101" dir="ltr" />
+                    {formErrors.code && <p className="text-[10px] text-red-500 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{formErrors.code}</p>}
+                  </div>
+                  {/* نوع الحساب */}
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-semibold text-slate-600">نوع الحساب <span className="text-red-500">*</span></Label>
+                    <div className="grid grid-cols-3 gap-1 h-8">
+                      {([["root","جذري","bg-purple-100 border-purple-400 text-purple-800"],["general","عام","bg-amber-100 border-amber-400 text-amber-800"],["sub","فرعي","bg-emerald-100 border-emerald-400 text-emerald-800"]] as const).map(([val, lbl, cls]) => (
+                        <button key={val} type="button"
+                          onClick={() => setF("accountLevelType", val)}
+                          className={`h-8 rounded text-[11px] font-semibold border-2 transition-all ${form.accountLevelType === val ? cls + " ring-2 ring-offset-1 ring-current" : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"}`}>
+                          {lbl}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* اسم 1 */}
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-semibold text-slate-600">اسم الحساب (عربي) <span className="text-red-500">*</span></Label>
+                    <Input
+                      value={form.name} onChange={e => setF("name", e.target.value)}
+                      className={`h-8 text-xs ${formErrors.name ? "border-red-400 bg-red-50" : ""}`}
+                      placeholder="اسم الحساب بالعربي" />
+                    {formErrors.name && <p className="text-[10px] text-red-500 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{formErrors.name}</p>}
+                  </div>
+                  {/* اسم 2 */}
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-semibold text-slate-600">اسم الحساب (إنجليزي)</Label>
+                    <Input
+                      value={form.nameEn} onChange={e => setF("nameEn", e.target.value)}
+                      className="h-8 text-xs" placeholder="Account name in English" dir="ltr" />
+                  </div>
+                  {/* الحساب الأب */}
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-semibold text-slate-600">
+                      الحساب الأب {form.accountLevelType !== "root" && <span className="text-red-500">*</span>}
+                    </Label>
+                    <Select
+                      value={form.parentId || "none"}
+                      onValueChange={v => setF("parentId", v === "none" ? "" : v)}
+                      disabled={form.accountLevelType === "root"}>
+                      <SelectTrigger className={`h-8 text-xs ${form.accountLevelType === "root" ? "opacity-50 bg-slate-50" : ""} ${formErrors.parentId ? "border-red-400 bg-red-50" : ""}`}>
+                        <SelectValue placeholder="اختر الحساب الأب..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">— بدون حساب أب —</SelectItem>
+                        {listQuery.data?.filter(a => a.isParent || a.accountType).map(a => (
+                          <SelectItem key={a.id} value={String(a.id)}>
+                            <span className="font-mono text-[10px] text-muted-foreground ml-1">{a.code}</span> {a.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {form.accountLevelType === "root" && <p className="text-[10px] text-purple-600">الحساب الجذري لا يحتاج حساباً أباً</p>}
+                    {formErrors.parentId && <p className="text-[10px] text-red-500 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{formErrors.parentId}</p>}
+                  </div>
+                  {/* المستوى (auto) */}
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-semibold text-slate-600">المستوى (تلقائي)</Label>
+                    <div className="h-8 rounded border border-slate-200 bg-slate-50 px-3 flex items-center gap-2">
+                      <span className="text-lg font-bold text-blue-700">{computedLevel}</span>
+                      <span className="text-xs text-slate-400">
+                        {computedLevel === 1 ? "المستوى الأول" : computedLevel === 2 ? "المستوى الثاني" : computedLevel === 3 ? "المستوى الثالث" : `المستوى ${computedLevel}`}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ── قسم: الخصائص والإعدادات ── */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-1 h-4 rounded-full bg-emerald-500" />
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">الخصائص والإعدادات</span>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  {/* طبيعة الحساب */}
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-semibold text-slate-600">طبيعة الحساب</Label>
+                    <div className="grid grid-cols-2 gap-1 h-8">
+                      {([["debit","مدين","bg-blue-100 border-blue-400 text-blue-800"],["credit","دائن","bg-rose-100 border-rose-400 text-rose-800"]] as const).map(([val,lbl,cls]) => (
+                        <button key={val} type="button"
+                          onClick={() => setF("nature", val)}
+                          className={`h-8 rounded text-[11px] font-semibold border-2 transition-all ${form.nature === val ? cls + " ring-2 ring-offset-1 ring-current" : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"}`}>
+                          {lbl}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* نوع الحساب المالي */}
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-semibold text-slate-600">التصنيف المالي</Label>
+                    <Select value={form.accountType} onValueChange={v => setF("accountType", v)}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="assets">أصول</SelectItem>
+                        <SelectItem value="liabilities">خصوم</SelectItem>
+                        <SelectItem value="equity">حقوق ملكية</SelectItem>
+                        <SelectItem value="revenue">إيرادات</SelectItem>
+                        <SelectItem value="expenses">مصروفات</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {/* مركز التكلفة */}
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-semibold text-slate-600">مركز التكلفة</Label>
+                    <Select value={form.costCenterType} onValueChange={v => setF("costCenterType", v)}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="not_allowed">غير مسموح</SelectItem>
+                        <SelectItem value="optional">اختياري</SelectItem>
+                        <SelectItem value="mandatory">إجباري</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {form.costCenterType === "mandatory" && (
+                      <p className="text-[10px] text-amber-600 flex items-center gap-1"><AlertCircle className="w-3 h-3" />يجب تحديد مركز تكلفة عند الترحيل</p>
+                    )}
+                  </div>
+                  {/* حالة الحساب */}
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-semibold text-slate-600">حالة الحساب</Label>
+                    <div className="grid grid-cols-2 gap-1 h-8">
+                      {([["active","نشط","bg-emerald-100 border-emerald-400 text-emerald-800"],["suspended","موقوف","bg-slate-100 border-slate-400 text-slate-600"]] as const).map(([val,lbl,cls]) => (
+                        <button key={val} type="button"
+                          onClick={() => setF("status", val)}
+                          className={`h-8 rounded text-[11px] font-semibold border-2 transition-all ${form.status === val ? cls + " ring-2 ring-offset-1 ring-current" : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"}`}>
+                          {lbl}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* يقبل الحركات اليومية */}
+                <div className={`mt-3 rounded-lg border-2 p-3 flex items-center gap-3 transition-all ${form.accountLevelType === "sub" ? "border-emerald-200 bg-emerald-50/50" : "border-slate-100 bg-slate-50 opacity-60"}`}>
+                  <input
+                    id="allowPosting"
+                    type="checkbox"
+                    checked={form.allowPosting}
+                    disabled={form.accountLevelType !== "sub"}
+                    onChange={e => setF("allowPosting", e.target.checked)}
+                    className="w-4 h-4 accent-emerald-600 cursor-pointer" />
+                  <div>
+                    <label htmlFor="allowPosting" className={`text-xs font-semibold cursor-pointer ${form.accountLevelType !== "sub" ? "text-slate-400" : "text-slate-700"}`}>
+                      يقبل الحركات اليومية (القيود المحاسبية)
+                    </label>
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      {form.accountLevelType === "root" ? "الحساب الجذري لا يقبل حركات مباشرة" : form.accountLevelType === "general" ? "الحساب العام لا يقبل حركات مباشرة — يُستخدم للتجميع فقط" : "الحساب الفرعي يقبل تسجيل القيود اليومية"}
+                    </p>
+                  </div>
+                </div>
               </div>
             </TabsContent>
-            <TabsContent value="moves" className="mt-0 p-3">
-              <p className="text-xs text-muted-foreground text-center py-6">توزيع الحركات — قيد التطوير</p>
-            </TabsContent>
-            <TabsContent value="balances" className="mt-0 p-3">
-              <p className="text-xs text-muted-foreground text-center py-6">الأرصدة — قيد التطوير</p>
+
+            {/* ══ Tab 2: الأرصدة الافتتاحية ══ */}
+            <TabsContent value="balances" className="mt-0 p-5 space-y-5">
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-1 h-4 rounded-full bg-amber-500" />
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">الأرصدة الافتتاحية</span>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  {/* رصيد مدين */}
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-semibold text-slate-600">الرصيد الافتتاحي مدين</Label>
+                    <div className="relative">
+                      <Input value={form.openingDebit} onChange={e => setF("openingDebit", e.target.value)}
+                        type="number" min="0" step="0.001"
+                        className="h-8 text-sm font-mono pe-10 border-blue-200 bg-blue-50/40 focus:bg-white"
+                        placeholder="0.000" dir="ltr" />
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-blue-500">مدين</span>
+                    </div>
+                  </div>
+                  {/* رصيد دائن */}
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-semibold text-slate-600">الرصيد الافتتاحي دائن</Label>
+                    <div className="relative">
+                      <Input value={form.openingCredit} onChange={e => setF("openingCredit", e.target.value)}
+                        type="number" min="0" step="0.001"
+                        className="h-8 text-sm font-mono pe-10 border-rose-200 bg-rose-50/40 focus:bg-white"
+                        placeholder="0.000" dir="ltr" />
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-rose-500">دائن</span>
+                    </div>
+                  </div>
+                  {/* تاريخ الرصيد */}
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-semibold text-slate-600">تاريخ الرصيد الافتتاحي</Label>
+                    <Input value={form.openingDate} onChange={e => setF("openingDate", e.target.value)}
+                      type="date" className="h-8 text-xs" dir="ltr" />
+                  </div>
+                  {/* مركز تكلفة الرصيد */}
+                  {form.costCenterType !== "not_allowed" && (
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-semibold text-slate-600">
+                        مركز تكلفة الرصيد {form.costCenterType === "mandatory" && <span className="text-red-500">*</span>}
+                      </Label>
+                      <Input value={form.openingCostCenter} onChange={e => setF("openingCostCenter", e.target.value)}
+                        className="h-8 text-xs" placeholder="كود مركز التكلفة" />
+                    </div>
+                  )}
+                </div>
+
+                {/* ملخص الرصيد */}
+                {(parseFloat(form.openingDebit || "0") > 0 || parseFloat(form.openingCredit || "0") > 0) && (
+                  <div className="mt-4 rounded-lg bg-slate-50 border border-slate-200 p-3">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-500">إجمالي مدين:</span>
+                      <span className="font-bold text-blue-700">{parseFloat(form.openingDebit || "0").toLocaleString("ar-SA", { minimumFractionDigits: 3 })} ر.س</span>
+                    </div>
+                    <div className="flex justify-between text-xs mt-1">
+                      <span className="text-slate-500">إجمالي دائن:</span>
+                      <span className="font-bold text-rose-600">{parseFloat(form.openingCredit || "0").toLocaleString("ar-SA", { minimumFractionDigits: 3 })} ر.س</span>
+                    </div>
+                    <div className="border-t border-slate-200 mt-2 pt-2 flex justify-between text-xs">
+                      <span className="text-slate-600 font-medium">الصافي:</span>
+                      <span className={`font-bold ${parseFloat(form.openingDebit||"0") >= parseFloat(form.openingCredit||"0") ? "text-blue-700" : "text-rose-600"}`}>
+                        {Math.abs(parseFloat(form.openingDebit||"0") - parseFloat(form.openingCredit||"0")).toLocaleString("ar-SA", { minimumFractionDigits: 3 })} ر.س
+                        {" "}{parseFloat(form.openingDebit||"0") >= parseFloat(form.openingCredit||"0") ? "(مدين)" : "(دائن)"}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* ملاحظات */}
+                <div className="mt-4 space-y-1">
+                  <Label className="text-[11px] font-semibold text-slate-600">ملاحظات</Label>
+                  <textarea value={form.notes} onChange={e => setF("notes", e.target.value)}
+                    className="w-full h-20 text-xs rounded-lg border border-slate-200 px-3 py-2 resize-none bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                    placeholder="ملاحظات إضافية على الحساب..." dir="rtl" />
+                </div>
+              </div>
             </TabsContent>
           </Tabs>
 
-          {/* ── شريط الأزرار السفلي ── */}
-          <div className="border-t bg-muted/30 px-4 py-2 flex items-center justify-between gap-2">
-            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowForm(false)}>
+          {/* ══ Footer ══ */}
+          <div className="border-t bg-slate-50 px-5 py-3 flex items-center justify-between gap-3">
+            <Button variant="outline" size="sm" className="h-8 text-xs px-4"
+              onClick={() => { setShowForm(false); setForm(initForm()); setFormErrors({}); }}>
               <X className="w-3 h-3 ml-1" /> إغلاق
             </Button>
-            <Button size="sm" className="h-7 text-xs gap-1 bg-blue-600 hover:bg-blue-700"
-              disabled={!form.code || !form.name || createMutation.isPending}
-              onClick={() => createMutation.mutate({
-                code: form.code, name: form.name,
-                nameEn: form.nameEn || undefined,
-                accountType: form.accountType, nature: form.nature,
-                level: form.level,
-                parentId: form.parentId ? parseInt(form.parentId) : undefined,
-                isParent: form.isParent, allowPosting: form.allowPosting,
-                openingBalance: form.openingBalance || undefined,
-                openingBalanceType: form.openingBalanceType,
-                notes: form.notes || undefined,
-              })}>
-              <Check className="w-3 h-3" /> {createMutation.isPending ? "جارٍ الحفظ..." : "حفظ"}
-            </Button>
+            <div className="flex items-center gap-2">
+              {Object.keys(formErrors).length > 0 && (
+                <span className="text-[10px] text-red-500 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" /> {Object.keys(formErrors).length} خطأ في البيانات
+                </span>
+              )}
+              <Button
+                size="sm"
+                className="h-8 text-xs px-6 gap-2 bg-blue-600 hover:bg-blue-700 shadow-sm"
+                disabled={createMutation.isPending}
+                onClick={() => {
+                  if (!validateForm()) return;
+                  createMutation.mutate({
+                    code: form.code.trim(),
+                    name: form.name.trim(),
+                    nameEn: form.nameEn.trim() || undefined,
+                    accountType: form.accountType,
+                    nature: form.nature,
+                    level: computedLevel,
+                    parentId: form.parentId && form.parentId !== "none" ? parseInt(form.parentId) : undefined,
+                    isParent: form.accountLevelType !== "sub",
+                    allowPosting: form.accountLevelType === "sub" && form.allowPosting,
+                    openingBalance: form.openingDebit || form.openingCredit || undefined,
+                    openingBalanceType: parseFloat(form.openingDebit || "0") >= parseFloat(form.openingCredit || "0") ? "debit" : "credit",
+                    notes: form.notes || undefined,
+                  });
+                }}>
+                {createMutation.isPending
+                  ? <><RefreshCw className="w-3 h-3 animate-spin" /> جارٍ الحفظ...</>
+                  : <><Check className="w-3 h-3" /> حفظ الحساب</>}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
