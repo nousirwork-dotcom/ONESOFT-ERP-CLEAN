@@ -6,6 +6,15 @@ import { organizations, users } from '../schema.js';
 import { hashPassword } from '../auth.js';
 
 export const orgsRouter = router({
+  // بيانات المؤسسة الحالية للمستخدم
+  currentOrg: protectedProcedure.query(async ({ ctx }) => {
+    const [org] = await db
+      .select({ id: organizations.id, name: organizations.name, code: organizations.code })
+      .from(organizations)
+      .where(eq(organizations.id, ctx.user.orgId));
+    return org ?? null;
+  }),
+
   // قائمة المؤسسات (للمدير العام فقط)
   list: superAdminProcedure.query(async () => {
     return db.query.organizations.findMany({

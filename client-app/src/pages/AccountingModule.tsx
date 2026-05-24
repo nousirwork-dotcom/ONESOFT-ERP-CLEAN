@@ -1,6 +1,11 @@
 import { useState, useMemo, useRef, useCallback } from "react";
 import { useTabManager } from "@/contexts/TabManagerContext";
 import type { KeyboardEvent } from "react";
+import { useAuth } from "@/_core/hooks/useAuth";
+import {
+  buildTreeFlat, exportToExcel, exportToWord, openPrintPreview,
+  type AccountForExport,
+} from "@/utils/chartOfAccountsExport";
 import {
   ChevronDown, ChevronRight, BookOpen, FileText, BarChart3,
   ClipboardList, Plus, Search, DollarSign, ArrowRight,
@@ -8,6 +13,7 @@ import {
   Printer, Download, X, Check, RefreshCw, Edit2, Trash2,
   ArrowUpCircle, ArrowDownCircle, Upload, AlertCircle,
   Folder, FolderOpen, LayoutList, Network,
+  FileDown, FileSpreadsheet, ChevronDown as ChevronDownIcon,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1124,6 +1130,149 @@ function AccountTreeRootView({ selectedId, onSelect, onDelete }: {
   );
 }
 
+// ─── Export Options Dialog ────────────────────────────────────────────────────
+type ExportFormat = "print" | "pdf" | "excel" | "word";
+
+function ExportOptionsDialog({
+  open, onClose, accounts, companyName, userName,
+}: {
+  open: boolean;
+  onClose: () => void;
+  accounts: AccountForExport[];
+  companyName: string;
+  userName: string;
+}) {
+  const [activeOnly, setActiveOnly] = useState(true);
+  const [maxLevel, setMaxLevel] = useState(0);
+
+  const rows = useMemo(
+    () => buildTreeFlat(accounts, { activeOnly, maxLevel }),
+    [accounts, activeOnly, maxLevel],
+  );
+
+  const doExport = (fmt: ExportFormat) => {
+    if (fmt === "print") openPrintPreview(rows, companyName, userName, false);
+    else if (fmt === "pdf")   openPrintPreview(rows, companyName, userName, true);
+    else if (fmt === "excel") exportToExcel(rows, companyName, userName);
+    else if (fmt === "word")  exportToWord(rows, companyName, userName);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-md" dir="rtl">
+        <DialogHeader>
+          <DialogTitle className="text-sm flex items-center gap-2">
+            <Download className="w-4 h-4 text-primary" /> خيارات التصدير والطباعة
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* ── Options ── */}
+          <div className="bg-muted/30 rounded-lg p-4 space-y-3 border border-border/50">
+            <p className="text-xs font-semibold text-foreground/70 mb-1">نطاق التصدير</p>
+
+            {/* active only */}
+            <label className="flex items-center gap-2.5 text-xs cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={activeOnly}
+                onChange={e => setActiveOnly(e.target.checked)}
+                className="w-3.5 h-3.5 accent-primary"
+              />
+              <span>الحسابات النشطة فقط</span>
+            </label>
+
+            {/* max level */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs shrink-0 w-32">الحد الأقصى للمستوى</span>
+              <Select value={String(maxLevel)} onValueChange={v => setMaxLevel(Number(v))}>
+                <SelectTrigger className="h-7 text-xs flex-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">جميع المستويات (1–5)</SelectItem>
+                  <SelectItem value="1">المستوى 1 فقط (الجذور)</SelectItem>
+                  <SelectItem value="2">حتى المستوى 2</SelectItem>
+                  <SelectItem value="3">حتى المستوى 3</SelectItem>
+                  <SelectItem value="4">حتى المستوى 4</SelectItem>
+                  <SelectItem value="5">حتى المستوى 5</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* count */}
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-background rounded-md px-2.5 py-1.5 border border-border/50">
+              <Check className="w-3 h-3 text-emerald-500" />
+              عدد الحسابات المؤهلة للتصدير:
+              <strong className="text-foreground">{rows.length}</strong> حساب
+            </div>
+          </div>
+
+          {/* ── Format buttons ── */}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-foreground/70">صيغة التصدير</p>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant="outline" size="sm"
+                className="h-10 text-xs gap-2 justify-start border-slate-200 hover:bg-slate-50"
+                onClick={() => doExport("print")}
+              >
+                <Printer className="w-4 h-4 text-slate-500" />
+                <div className="text-right">
+                  <div className="font-semibold">طباعة</div>
+                  <div className="text-[9px] text-muted-foreground">معاينة قبل الطباعة</div>
+                </div>
+              </Button>
+
+              <Button
+                variant="outline" size="sm"
+                className="h-10 text-xs gap-2 justify-start border-red-200 hover:bg-red-50 text-red-700"
+                onClick={() => doExport("pdf")}
+              >
+                <FileDown className="w-4 h-4 text-red-500" />
+                <div className="text-right">
+                  <div className="font-semibold">PDF</div>
+                  <div className="text-[9px] text-muted-foreground">احفظ كـ PDF من الطابعة</div>
+                </div>
+              </Button>
+
+              <Button
+                variant="outline" size="sm"
+                className="h-10 text-xs gap-2 justify-start border-green-200 hover:bg-green-50 text-green-700"
+                onClick={() => doExport("excel")}
+              >
+                <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                <div className="text-right">
+                  <div className="font-semibold">Excel</div>
+                  <div className="text-[9px] text-muted-foreground">مع تجميع هرمي للمستويات</div>
+                </div>
+              </Button>
+
+              <Button
+                variant="outline" size="sm"
+                className="h-10 text-xs gap-2 justify-start border-blue-200 hover:bg-blue-50 text-blue-700"
+                onClick={() => doExport("word")}
+              >
+                <FileText className="w-4 h-4 text-blue-600" />
+                <div className="text-right">
+                  <div className="font-semibold">Word</div>
+                  <div className="text-[9px] text-muted-foreground">جاهز للطباعة المباشرة</div>
+                </div>
+              </Button>
+            </div>
+
+            <p className="text-[10px] text-muted-foreground flex items-start gap-1 bg-amber-50/60 rounded p-2 border border-amber-100">
+              <AlertCircle className="w-3 h-3 text-amber-500 shrink-0 mt-0.5" />
+              جميع الصيغ تدعم العربية RTL والتسلسل الهرمي الكامل للشجرة.
+              يدعم Excel فتح وإغلاق المستويات (Grouping) بعد الفتح.
+            </p>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Chart of Accounts (شجرة الحسابات) ───────────────────────────────────────
 function ChartOfAccountsPage() {
   const listQuery = trpc.accounts.list.useQuery();
@@ -1146,6 +1295,11 @@ function ChartOfAccountsPage() {
     onError: (e) => toast.error(e.message),
   });
 
+  const { user } = useAuth();
+  const orgQuery = trpc.orgs.currentOrg.useQuery();
+  const companyName = orgQuery.data?.name ?? "OneSoft ERP";
+  const userName = user?.name ?? user?.username ?? "—";
+
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importRows, setImportRows] = useState<any[]>([]);
@@ -1154,6 +1308,7 @@ function ChartOfAccountsPage() {
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<"tree" | "table">("tree");
   const [selectedAccount, setSelectedAccount] = useState<TAccount | null>(null);
+  const [showExport, setShowExport] = useState(false);
 
   const typeMap: Record<string, string> = {
     أصول: "assets", assets: "assets",
@@ -1312,6 +1467,37 @@ function ChartOfAccountsPage() {
               <Input value={search} onChange={e => setSearch(e.target.value)} className="h-7 text-xs pr-7 w-44" placeholder="بحث بالكود أو الاسم..." />
             </div>
           )}
+          {/* export buttons */}
+          <div className="flex rounded-md border border-border overflow-hidden">
+            <button
+              onClick={() => setShowExport(true)}
+              className="flex items-center gap-1 px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50 transition-colors"
+              title="طباعة"
+            >
+              <Printer className="w-3 h-3" /> طباعة
+            </button>
+            <button
+              onClick={() => setShowExport(true)}
+              className="flex items-center gap-1 px-2.5 py-1 text-xs text-red-600 hover:bg-red-50 transition-colors border-r border-border"
+              title="تصدير PDF"
+            >
+              <FileDown className="w-3 h-3" /> PDF
+            </button>
+            <button
+              onClick={() => setShowExport(true)}
+              className="flex items-center gap-1 px-2.5 py-1 text-xs text-green-700 hover:bg-green-50 transition-colors border-r border-border"
+              title="تصدير Excel"
+            >
+              <FileSpreadsheet className="w-3 h-3" /> Excel
+            </button>
+            <button
+              onClick={() => setShowExport(true)}
+              className="flex items-center gap-1 px-2.5 py-1 text-xs text-blue-700 hover:bg-blue-50 transition-colors border-r border-border"
+              title="تصدير Word"
+            >
+              <FileText className="w-3 h-3" /> Word
+            </button>
+          </div>
           <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setShowImport(true)}>
             <Upload className="w-3 h-3" /> استيراد
           </Button>
@@ -1790,6 +1976,15 @@ function ChartOfAccountsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ── Export Dialog ── */}
+      <ExportOptionsDialog
+        open={showExport}
+        onClose={() => setShowExport(false)}
+        accounts={(listQuery.data ?? []) as AccountForExport[]}
+        companyName={companyName}
+        userName={userName}
+      />
     </div>
   );
 }
