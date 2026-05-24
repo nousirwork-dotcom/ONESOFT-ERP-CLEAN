@@ -1467,37 +1467,102 @@ function ChartOfAccountsPage() {
               <Input value={search} onChange={e => setSearch(e.target.value)} className="h-7 text-xs pr-7 w-44" placeholder="بحث بالكود أو الاسم..." />
             </div>
           )}
-          {/* export buttons */}
-          <div className="flex rounded-md border border-border overflow-hidden">
-            <button
-              onClick={() => setShowExport(true)}
-              className="flex items-center gap-1 px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50 transition-colors"
-              title="طباعة"
-            >
-              <Printer className="w-3 h-3" /> طباعة
-            </button>
-            <button
-              onClick={() => setShowExport(true)}
-              className="flex items-center gap-1 px-2.5 py-1 text-xs text-red-600 hover:bg-red-50 transition-colors border-r border-border"
-              title="تصدير PDF"
-            >
-              <FileDown className="w-3 h-3" /> PDF
-            </button>
-            <button
-              onClick={() => setShowExport(true)}
-              className="flex items-center gap-1 px-2.5 py-1 text-xs text-green-700 hover:bg-green-50 transition-colors border-r border-border"
-              title="تصدير Excel"
-            >
-              <FileSpreadsheet className="w-3 h-3" /> Excel
-            </button>
-            <button
-              onClick={() => setShowExport(true)}
-              className="flex items-center gap-1 px-2.5 py-1 text-xs text-blue-700 hover:bg-blue-50 transition-colors border-r border-border"
-              title="تصدير Word"
-            >
-              <FileText className="w-3 h-3" /> Word
-            </button>
-          </div>
+          {/* ── طباعة مباشرة ── */}
+          <Button
+            size="sm" variant="outline"
+            className="h-7 text-xs gap-1 border-slate-200 hover:bg-slate-50"
+            onClick={() => {
+              const rows = buildTreeFlat((listQuery.data ?? []) as AccountForExport[], { activeOnly: true, maxLevel: 0 });
+              openPrintPreview(rows, companyName, userName, false);
+            }}
+          >
+            <Printer className="w-3 h-3" /> طباعة
+          </Button>
+
+          {/* ── تصدير Dropdown ── */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-primary/30 hover:bg-primary/5 text-primary hover:text-primary">
+                <Download className="w-3 h-3" />
+                تصدير
+                <ChevronDownIcon className="w-3 h-3 opacity-60" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-52 p-1.5" dir="rtl">
+              {/* PDF */}
+              <button
+                className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs rounded-md hover:bg-red-50 text-red-700 transition-colors"
+                onClick={() => {
+                  const rows = buildTreeFlat((listQuery.data ?? []) as AccountForExport[], { activeOnly: true, maxLevel: 0 });
+                  openPrintPreview(rows, companyName, userName, true);
+                }}
+              >
+                <FileDown className="w-3.5 h-3.5 shrink-0" />
+                <div className="text-right">
+                  <div className="font-semibold">تصدير PDF</div>
+                  <div className="text-[10px] text-muted-foreground">احفظ كـ PDF من الطابعة</div>
+                </div>
+              </button>
+
+              {/* Excel */}
+              <button
+                className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs rounded-md hover:bg-green-50 text-green-700 transition-colors"
+                onClick={() => {
+                  const rows = buildTreeFlat((listQuery.data ?? []) as AccountForExport[], { activeOnly: true, maxLevel: 0 });
+                  exportToExcel(rows, companyName, userName);
+                }}
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" />
+                <div className="text-right">
+                  <div className="font-semibold">تصدير Excel</div>
+                  <div className="text-[10px] text-muted-foreground">مع تجميع هرمي للمستويات</div>
+                </div>
+              </button>
+
+              {/* Word */}
+              <button
+                className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs rounded-md hover:bg-blue-50 text-blue-700 transition-colors"
+                onClick={() => {
+                  const rows = buildTreeFlat((listQuery.data ?? []) as AccountForExport[], { activeOnly: true, maxLevel: 0 });
+                  exportToWord(rows, companyName, userName);
+                }}
+              >
+                <FileText className="w-3.5 h-3.5 shrink-0" />
+                <div className="text-right">
+                  <div className="font-semibold">تصدير Word</div>
+                  <div className="text-[10px] text-muted-foreground">جاهز للطباعة المباشرة</div>
+                </div>
+              </button>
+
+              <div className="border-t border-border/60 my-1" />
+
+              {/* معاينة */}
+              <button
+                className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs rounded-md hover:bg-slate-50 text-slate-700 transition-colors"
+                onClick={() => {
+                  const rows = buildTreeFlat((listQuery.data ?? []) as AccountForExport[], { activeOnly: true, maxLevel: 0 });
+                  openPrintPreview(rows, companyName, userName, false);
+                }}
+              >
+                <Printer className="w-3.5 h-3.5 shrink-0 text-slate-500" />
+                <div className="text-right">
+                  <div className="font-semibold">معاينة قبل الطباعة</div>
+                  <div className="text-[10px] text-muted-foreground">نافذة معاينة كاملة</div>
+                </div>
+              </button>
+
+              <div className="border-t border-border/60 my-1" />
+
+              {/* خيارات متقدمة */}
+              <button
+                className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs rounded-md hover:bg-muted/60 text-muted-foreground transition-colors"
+                onClick={() => setShowExport(true)}
+              >
+                <Download className="w-3.5 h-3.5 shrink-0" />
+                <span>خيارات تصدير متقدمة...</span>
+              </button>
+            </PopoverContent>
+          </Popover>
           <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setShowImport(true)}>
             <Upload className="w-3 h-3" /> استيراد
           </Button>
