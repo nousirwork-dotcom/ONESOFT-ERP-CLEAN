@@ -399,12 +399,6 @@ function SmartAccountInput({
           focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/60
           ${selected ? "font-medium text-foreground" : "text-muted-foreground"}`}
       />
-      {/* nature badge */}
-      {selected && !open && (
-        <span className="absolute left-1 top-1/2 -translate-y-1/2 pointer-events-none">
-          {natBadge(selected.nature)}
-        </span>
-      )}
       {/* dropdown */}
       {open && (
         <div className="absolute top-full right-0 z-[9990] mt-0.5 w-80 bg-popover border border-border rounded-lg shadow-xl overflow-hidden" dir="rtl">
