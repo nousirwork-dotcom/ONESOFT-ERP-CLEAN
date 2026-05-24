@@ -358,29 +358,20 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
     if (!balanced) return toast.error("القيد غير متوازن");
     const entryNumber = `${voucherType.toUpperCase()}-${Date.now()}`;
     createMutation.mutate({
-      entry: {
-        entryNumber,
-        entryDate: new Date(entryDate),
-        voucherType: voucherType as any,
-        description,
-        analyticCode,
-        basedOn,
-        totalDebit: totalDebit.toFixed(3),
-        totalCredit: totalCredit.toFixed(3),
-      },
+      entryNumber,
+      entryDate,
+      description,
+      totalDebit: totalDebit.toFixed(3),
+      totalCredit: totalCredit.toFixed(3),
       lines: lines
         .filter(l => l.accountId && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0))
         .map((l, i) => ({
-          lineNumber: i + 1,
+          sortOrder: i + 1,
           accountId: parseInt(l.accountId),
           accountName: l.accountName,
           description: l.description,
           debit: l.debit || "0",
           credit: l.credit || "0",
-          currency: l.currency || "SAR",
-          exchangeRate: "1",
-          costCenterId: l.costCenterId ? parseInt(l.costCenterId) : undefined,
-          transferRelation: l.transferRelation,
         })),
     });
   };
