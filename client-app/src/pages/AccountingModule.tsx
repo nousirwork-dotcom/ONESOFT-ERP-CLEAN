@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback, useEffect } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect, createContext, useContext } from "react";
 import { useTabManager } from "@/contexts/TabManagerContext";
 import type { KeyboardEvent } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -14,7 +14,7 @@ import {
   ArrowUpCircle, ArrowDownCircle, Upload, AlertCircle,
   Folder, FolderOpen, LayoutList, Network,
   FileDown, FileSpreadsheet, ChevronDown as ChevronDownIcon,
-  Eye, Copy, PowerOff, PlusCircle, MoreVertical,
+  Eye, Copy, PowerOff, PlusCircle, MoreVertical, AlertTriangle, Save,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -545,6 +545,10 @@ const JE_DRAFT_PREFIX = "onesoft_je_draft_";
 
 function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string }) {
   const DRAFT_KEY = JE_DRAFT_PREFIX + voucherType;
+  const { setDirty, registerSave, confirmIfDirty } = useContext(DirtyCtx);
+  const justLoadedRef  = useRef(true);
+  const saveResolveRef = useRef<((ok: boolean) => void) | null>(null);
+  const handleSaveRef  = useRef<() => void>(() => {});
 
   const accountsQuery    = trpc.accounts.list.useQuery();
   const costCentersQuery = trpc.costCenters.list.useQuery();
@@ -559,8 +563,15 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
       setEntryStatus("posted");
       localStorage.removeItem(DRAFT_KEY);
       journalListQuery.refetch();
+      setDirty(false);
+      saveResolveRef.current?.(true);
+      saveResolveRef.current = null;
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => {
+      toast.error(e.message);
+      saveResolveRef.current?.(false);
+      saveResolveRef.current = null;
+    },
   });
   const deleteMutation = trpc.journal.delete.useMutation({
     onSuccess: () => {
@@ -611,6 +622,7 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
   );
   useEffect(() => {
     if (!entryQuery.data || loadedRef.current === loadEntryId) return;
+    justLoadedRef.current = true;
     loadedRef.current = loadEntryId;
     const e = entryQuery.data;
     setEntryDate(new Date(e.entryDate).toISOString().split("T")[0]);
@@ -682,6 +694,7 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
   const addLine = useCallback(() => setLines(prev => [...prev, emptyLine()]), []);
 
   const handleNew = useCallback(() => {
+    justLoadedRef.current = true;
     setLines([emptyLine(), emptyLine()]);
     setDescription(""); setAnalyticCode(""); setBasedOn("");
     setSelectedLineIdx(0);
@@ -692,6 +705,14 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
 
   const handleSave = useCallback(() => {
     if (!balanced) return toast.error("القيد غير متوازن — المدين ≠ الدائن");
+    const badLines = lines.filter(l => {
+      const hasAmount = parseFloat(l.debit || "0") > 0 || parseFloat(l.credit || "0") > 0;
+      const hasText   = l.accountName.trim() !== "";
+      if (!hasAmount && !hasText) return false;
+      return !l.accountId || l.accountId === "0";
+    });
+    if (badLines.length > 0)
+      return toast.error(`يوجد ${badLines.length > 1 ? badLines.length + " بنود" : "بند"} بحساب غير محدد — اختر من الدليل أو احذف البند`);
     const entryNumber = nextNumberQuery.data ?? `JE-${Date.now()}`;
     createMutation.mutate({
       entryNumber, entryDate, description,
@@ -779,11 +800,11 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
       if (e.ctrlKey && e.key === "s") { e.preventDefault(); handleSave(); }
       if (e.ctrlKey && e.key === "d") { e.preventDefault(); handleDuplicate(); }
       if (e.ctrlKey && e.key === "p") { e.preventDefault(); handlePrint(); }
-      if (e.key === "F3") { e.preventDefault(); handleNew(); }
+      if (e.key === "F3") { e.preventDefault(); confirmIfDirty(handleNew); }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [selectedLineIdx, handleSave, handleDuplicate, handlePrint, handleNew]);
+  }, [selectedLineIdx, handleSave, handleDuplicate, handlePrint, handleNew, confirmIfDirty]);
 
   // ── Account select ─────────────────────────────────────────────────────────
   const handleAccountSelect = useCallback((lineIdx: number, id: string, name: string, nature: string) => {
@@ -847,6 +868,29 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
     return <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${s.cls}`}>{s.label}</span>;
   }, [entryStatus]);
 
+  // ── Dirty tracking + save registration ────────────────────────────────────
+  handleSaveRef.current = handleSave;
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (justLoadedRef.current) { justLoadedRef.current = false; return; }
+    setDirty(true);
+  }, [lines, description, entryDate, basedOn]);
+
+  useEffect(() => {
+    registerSave(() =>
+      new Promise<boolean>(resolve => {
+        saveResolveRef.current = resolve;
+        handleSaveRef.current();
+        setTimeout(() => {
+          if (saveResolveRef.current) { saveResolveRef.current(false); saveResolveRef.current = null; }
+        }, 10000);
+      })
+    );
+    return () => registerSave(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registerSave]);
+
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-2" dir="rtl">
@@ -856,7 +900,7 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
 
         {/* Group: New / Save */}
         <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 px-2 hover:bg-emerald-50 hover:text-emerald-700"
-          onClick={handleNew} title="F3">
+          onClick={() => confirmIfDirty(handleNew)} title="F3">
           <Plus className="w-3.5 h-3.5" /> جديد
         </Button>
         <Button variant="ghost" size="sm"
@@ -902,22 +946,22 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
 
         {/* Group: Navigation */}
         <Button variant="ghost" size="sm" className="h-7 text-xs px-1.5 hover:bg-muted"
-          disabled={navList.length === 0} onClick={() => navigateTo(0)} title="أول قيد">
+          disabled={navList.length === 0} onClick={() => confirmIfDirty(() => navigateTo(0))} title="أول قيد">
           <span className="text-[10px] font-mono">|◀</span>
         </Button>
         <Button variant="ghost" size="sm" className="h-7 text-xs px-1.5 hover:bg-muted"
-          disabled={navIdx <= 0} onClick={() => navigateTo(navIdx - 1)} title="السابق">
+          disabled={navIdx <= 0} onClick={() => confirmIfDirty(() => navigateTo(navIdx - 1))} title="السابق">
           <ChevronRight className="w-3.5 h-3.5" />
         </Button>
         <span className="text-[10px] text-muted-foreground px-1 min-w-[48px] text-center">
           {navIdx >= 0 ? `${navIdx + 1}/${navList.length}` : `—/${navList.length}`}
         </span>
         <Button variant="ghost" size="sm" className="h-7 text-xs px-1.5 hover:bg-muted"
-          disabled={navIdx >= navList.length - 1} onClick={() => navigateTo(navIdx + 1)} title="التالي">
+          disabled={navIdx >= navList.length - 1} onClick={() => confirmIfDirty(() => navigateTo(navIdx + 1))} title="التالي">
           <ChevronDown className="w-3.5 h-3.5 -rotate-90" />
         </Button>
         <Button variant="ghost" size="sm" className="h-7 text-xs px-1.5 hover:bg-muted"
-          disabled={navList.length === 0} onClick={() => navigateTo(navList.length - 1)} title="آخر قيد">
+          disabled={navList.length === 0} onClick={() => confirmIfDirty(() => navigateTo(navList.length - 1))} title="آخر قيد">
           <span className="text-[10px] font-mono">▶|</span>
         </Button>
 
@@ -1134,12 +1178,27 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
 
 // ─── Receipt Voucher (سند قبض) ────────────────────────────────────────────────
 function ReceiptVoucherPage() {
+  const { setDirty, registerSave } = useContext(DirtyCtx);
+  const saveResolveRef = useRef<((ok: boolean) => void) | null>(null);
+  const handleSaveRef  = useRef<() => void>(() => {});
+
   const accountsQuery = trpc.accounts.list.useQuery();
   const costCentersQuery = trpc.costCenters.list.useQuery();
   const listQuery = trpc.receiptVouchers.list.useQuery();
   const createMutation = trpc.receiptVouchers.create.useMutation({
-    onSuccess: () => { toast.success("تم حفظ سند القبض"); listQuery.refetch(); setShowForm(false); },
-    onError: (e) => toast.error(e.message),
+    onSuccess: () => {
+      toast.success("تم حفظ سند القبض");
+      listQuery.refetch();
+      setShowForm(false);
+      setDirty(false);
+      saveResolveRef.current?.(true);
+      saveResolveRef.current = null;
+    },
+    onError: (e) => {
+      toast.error(e.message);
+      saveResolveRef.current?.(false);
+      saveResolveRef.current = null;
+    },
   });
 
   const [showForm, setShowForm] = useState(false);
@@ -1169,6 +1228,29 @@ function ReceiptVoucherPage() {
       notes: form.notes,
     });
   };
+
+  handleSaveRef.current = handleSave;
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!showForm) { setDirty(false); return; }
+    const changed = form.receivedFrom.trim() !== "" || form.amount !== "" ||
+      form.description.trim() !== "" || form.accountId !== "" || form.contraAccountId !== "";
+    setDirty(changed);
+  }, [showForm, form.receivedFrom, form.amount, form.description, form.accountId, form.contraAccountId]);
+
+  useEffect(() => {
+    if (!showForm) { registerSave(null); return; }
+    registerSave(() =>
+      new Promise<boolean>(resolve => {
+        saveResolveRef.current = resolve;
+        handleSaveRef.current();
+        setTimeout(() => { if (saveResolveRef.current) { saveResolveRef.current(false); saveResolveRef.current = null; } }, 10000);
+      })
+    );
+    return () => registerSave(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showForm, registerSave]);
 
   return (
     <div className="space-y-3">
@@ -1219,7 +1301,7 @@ function ReceiptVoucherPage() {
       </Card>
 
       {/* Form Dialog */}
-      <Dialog open={showForm} onOpenChange={setShowForm}>
+      <Dialog open={showForm} onOpenChange={v => { if (!v) setDirty(false); setShowForm(v); }}>
         <DialogContent className="max-w-2xl" dir="rtl">
           <DialogHeader>
             <DialogTitle className="text-sm flex items-center gap-2">
@@ -1308,11 +1390,26 @@ function ReceiptVoucherPage() {
 
 // ─── Payment Voucher (سند صرف) ────────────────────────────────────────────────
 function PaymentVoucherPage() {
+  const { setDirty, registerSave } = useContext(DirtyCtx);
+  const saveResolveRef = useRef<((ok: boolean) => void) | null>(null);
+  const handleSaveRef  = useRef<() => void>(() => {});
+
   const accountsQuery = trpc.accounts.list.useQuery();
   const listQuery = trpc.paymentVouchers.list.useQuery();
   const createMutation = trpc.paymentVouchers.create.useMutation({
-    onSuccess: () => { toast.success("تم حفظ سند الصرف"); listQuery.refetch(); setShowForm(false); },
-    onError: (e) => toast.error(e.message),
+    onSuccess: () => {
+      toast.success("تم حفظ سند الصرف");
+      listQuery.refetch();
+      setShowForm(false);
+      setDirty(false);
+      saveResolveRef.current?.(true);
+      saveResolveRef.current = null;
+    },
+    onError: (e) => {
+      toast.error(e.message);
+      saveResolveRef.current?.(false);
+      saveResolveRef.current = null;
+    },
   });
 
   const [showForm, setShowForm] = useState(false);
@@ -1340,6 +1437,29 @@ function PaymentVoucherPage() {
       notes: form.notes,
     });
   };
+
+  handleSaveRef.current = handleSave;
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!showForm) { setDirty(false); return; }
+    const changed = form.paidTo.trim() !== "" || form.amount !== "" ||
+      form.description.trim() !== "" || form.accountId !== "" || form.contraAccountId !== "";
+    setDirty(changed);
+  }, [showForm, form.paidTo, form.amount, form.description, form.accountId, form.contraAccountId]);
+
+  useEffect(() => {
+    if (!showForm) { registerSave(null); return; }
+    registerSave(() =>
+      new Promise<boolean>(resolve => {
+        saveResolveRef.current = resolve;
+        handleSaveRef.current();
+        setTimeout(() => { if (saveResolveRef.current) { saveResolveRef.current(false); saveResolveRef.current = null; } }, 10000);
+      })
+    );
+    return () => registerSave(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showForm, registerSave]);
 
   return (
     <div className="space-y-3">
@@ -1388,7 +1508,7 @@ function PaymentVoucherPage() {
         </Table>
       </Card>
 
-      <Dialog open={showForm} onOpenChange={setShowForm}>
+      <Dialog open={showForm} onOpenChange={v => { if (!v) setDirty(false); setShowForm(v); }}>
         <DialogContent className="max-w-2xl" dir="rtl">
           <DialogHeader>
             <DialogTitle className="text-sm flex items-center gap-2">
@@ -3642,9 +3762,23 @@ function CashFlowPage() {
   );
 }
 
+// ─── Dirty State Context ───────────────────────────────────────────────────────
+const DirtyCtx = createContext<{
+  isDirty: boolean;
+  setDirty: (v: boolean) => void;
+  registerSave: (fn: (() => Promise<boolean>) | null) => void;
+  confirmIfDirty: (action: () => void) => void;
+}>({ isDirty: false, setDirty: () => {}, registerSave: () => {}, confirmIfDirty: a => a() });
+
 // ─── Content Router ────────────────────────────────────────────────────────────
 function AccountingContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
   const [ledgerCtx, setLedgerCtx] = useState<{ accountId: number; fromDate: string; toDate: string } | null>(null);
+  const { setDirty, registerSave } = useContext(DirtyCtx);
+
+  useEffect(() => {
+    setDirty(false);
+    registerSave(null);
+  }, [activeId]);
 
   switch (activeId) {
     case "overview":           return <AccountingOverview onSelect={onSelect} />;
@@ -3681,13 +3815,91 @@ function AccountingContent({ activeId, onSelect }: { activeId: MenuId; onSelect:
 // ─── Root ──────────────────────────────────────────────────────────────────────
 export default function AccountingModule() {
   const [activeId, setActiveId] = useState<MenuId>("overview");
+
+  // ── Dirty guard state ──────────────────────────────────────────────────────
+  const [isDirty,      setIsDirtyState] = useState(false);
+  const [showDirtyDlg, setShowDirtyDlg] = useState(false);
+  const isDirtyRef       = useRef(false);
+  const pendingActionRef = useRef<(() => void) | null>(null);
+  const saveFnRef        = useRef<(() => Promise<boolean>) | null>(null);
+
+  const setDirty = useCallback((v: boolean) => {
+    isDirtyRef.current = v;
+    setIsDirtyState(v);
+  }, []);
+
+  const registerSave = useCallback((fn: (() => Promise<boolean>) | null) => {
+    saveFnRef.current = fn;
+  }, []);
+
+  const confirmIfDirty = useCallback((action: () => void) => {
+    if (!isDirtyRef.current) { action(); return; }
+    pendingActionRef.current = action;
+    setShowDirtyDlg(true);
+  }, []);
+
+  const navigate = useCallback((id: MenuId) => confirmIfDirty(() => setActiveId(id)), [confirmIfDirty]);
+
+  const ctxVal = useMemo(() => ({ isDirty, setDirty, registerSave, confirmIfDirty }), [isDirty, setDirty, registerSave, confirmIfDirty]);
+
+  const executePending = () => {
+    const action = pendingActionRef.current;
+    pendingActionRef.current = null;
+    setDirty(false);
+    setShowDirtyDlg(false);
+    action?.();
+  };
+
   return (
-    <div className="flex h-full" dir="rtl">
-      <AccountingMenu activeId={activeId} onSelect={setActiveId} />
-      <div className="flex-1 overflow-auto p-5">
-        <AccountingContent activeId={activeId} onSelect={setActiveId} />
+    <DirtyCtx.Provider value={ctxVal}>
+      <div className="flex h-full" dir="rtl">
+        <AccountingMenu activeId={activeId} onSelect={navigate} />
+        <div className="flex-1 overflow-auto p-5">
+          <AccountingContent activeId={activeId} onSelect={navigate} />
+        </div>
       </div>
-    </div>
+
+      {/* ── Unsaved Changes Dialog ── */}
+      <Dialog open={showDirtyDlg} onOpenChange={open => { if (!open) { setShowDirtyDlg(false); pendingActionRef.current = null; } }}>
+        <DialogContent className="max-w-sm" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-sm flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-500" />
+              تغييرات غير محفوظة
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground py-1">
+            يوجد تغييرات غير محفوظة، هل تريد حفظها؟
+          </p>
+          <div className="flex gap-2 justify-end pt-2">
+            <Button
+              size="sm" className="h-8 text-xs gap-1"
+              onClick={async () => {
+                if (saveFnRef.current) {
+                  const ok = await saveFnRef.current();
+                  if (!ok) return;
+                }
+                executePending();
+              }}
+            >
+              <Save className="w-3 h-3" /> نعم — احفظ وتابع
+            </Button>
+            <Button
+              size="sm" variant="outline" className="h-8 text-xs"
+              onClick={executePending}
+            >
+              لا — تجاهل التعديلات
+            </Button>
+            <Button
+              size="sm" variant="ghost" className="h-8 text-xs"
+              onClick={() => { setShowDirtyDlg(false); pendingActionRef.current = null; }}
+            >
+              إلغاء
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </DirtyCtx.Provider>
   );
 }
 
