@@ -228,87 +228,90 @@ function DateMaskInput({
   className?: string;
   placeholder?: string;
 }) {
-  const toAr = (s: string) => s.replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
-
-  const fromISO = (iso: string): string => {
-    if (!iso || iso.length < 10) return "";
-    const [y, m, d] = iso.split("-");
+  const mask  = (v: string) => {
+    const d = v.replace(/[٠-٩]/g, c => String("٠١٢٣٤٥٦٧٨٩".indexOf(c))).replace(/\D/g, "").slice(0, 8);
+    if (d.length <= 2) return d;
+    if (d.length <= 4) return `${d.slice(0,2)}/${d.slice(2)}`;
+    return `${d.slice(0,2)}/${d.slice(2,4)}/${d.slice(4)}`;
+  };
+  const toISO = (v: string) => {
+    const n = v.replace(/\D/g, "");
+    if (n.length < 8) return "";
+    const dd = n.slice(0,2), mm = n.slice(2,4), yy = n.slice(4,8);
+    if (+dd<1||+dd>31||+mm<1||+mm>12||+yy<1000) return "";
+    return `${yy}-${mm}-${dd}`;
+  };
+  const fromISO = (v: string) => {
+    if (!v || v.length < 10) return "";
+    const [y, m, d] = v.split("-");
     return `${d}/${m}/${y}`;
   };
 
-  const toISO = (display: string): string => {
-    const cleaned = display.replace(/\D/g, "");
-    if (cleaned.length < 8) return "";
-    const d = cleaned.slice(0, 2);
-    const m = cleaned.slice(2, 4);
-    const y = cleaned.slice(4, 8);
-    const di = parseInt(d), mi = parseInt(m), yi = parseInt(y);
-    if (di < 1 || di > 31 || mi < 1 || mi > 12 || yi < 1000) return "";
-    return `${y}-${m.padStart(2,"0")}-${d.padStart(2,"0")}`;
-  };
-
-  const applyMask = (raw: string): string => {
-    const digits = raw.replace(/\D/g, "").slice(0, 8);
-    let out = "";
-    for (let i = 0; i < digits.length; i++) {
-      if (i === 2 || i === 4) out += "/";
-      out += digits[i];
-    }
-    return out;
-  };
-
-  const [display, setDisplay] = useState(() => fromISO(value));
   const ref = useRef<HTMLInputElement>(null);
+  const [disp, setDisp] = useState(() => fromISO(value));
 
   useEffect(() => {
-    const expected = fromISO(value);
-    if (expected !== display) setDisplay(expected);
+    setDisp(prev => toISO(prev) === value ? prev : fromISO(value));
   }, [value]);
 
-  const handleKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    const el = ref.current;
-    if (!el) return;
-
-    if (e.key === "Backspace") {
-      e.preventDefault();
-      let pos = el.selectionStart ?? display.length;
-      if (pos > 0 && display[pos - 1] === "/") pos--;
-      const digits = (display.slice(0, pos - 1) + display.slice(pos)).replace(/\D/g, "");
-      if (digits.length === 0) { setDisplay(""); onChange(""); return; }
-      const masked = applyMask(digits);
-      setDisplay(masked);
-      onChange(toISO(masked));
-      setTimeout(() => el.setSelectionRange(Math.max(0, pos - 1), Math.max(0, pos - 1)), 0);
-      return;
-    }
-
-    const digit = toAr(e.key);
-    if (!/^\d$/.test(digit)) return;
-    e.preventDefault();
-
-    const pos = el.selectionStart ?? 0;
-    const raw = display.replace(/\D/g, "");
-    const idx = pos <= 2 ? 0 : pos <= 5 ? 2 : 4;
-    const before = raw.slice(0, idx) + digit + raw.slice(idx + 1);
-    const masked = applyMask(before.slice(0, 8));
-    setDisplay(masked);
-    onChange(toISO(masked));
-
-    const newPos = pos >= 2 && pos < 3 ? 3 : pos >= 5 && pos < 6 ? 6 : Math.min(pos + 1, masked.length);
-    setTimeout(() => el.setSelectionRange(newPos, newPos), 0);
+  const commit = (newDisp: string) => {
+    setDisp(newDisp);
+    onChange(toISO(newDisp));
   };
 
   return (
     <Input
       ref={ref}
-      value={display}
-      placeholder={placeholder ?? "يي/شش/سسسس"}
+      type="text"
+      inputMode="numeric"
+      value={disp}
+      placeholder={placeholder ?? "DD/MM/YYYY"}
       dir="ltr"
-      className={className}
-      onChange={() => {}}
-      onKeyDown={handleKey}
+      className={`text-left ${className ?? ""}`}
+      onKeyDown={e => {
+        const el = ref.current;
+        if (!el) return;
+        const pos = el.selectionStart ?? disp.length;
+
+        if (e.key === "Backspace") {
+          e.preventDefault();
+          const realPos = pos > 0 && disp[pos-1] === "/" ? pos - 1 : pos;
+          if (realPos === 0) { commit(""); return; }
+          const digits = (disp.slice(0, realPos-1) + disp.slice(realPos)).replace(/\D/g, "");
+          const nd = mask(digits);
+          commit(nd);
+          setTimeout(() => el.setSelectionRange(realPos-1, realPos-1), 0);
+          return;
+        }
+        if (e.key === "Delete") {
+          e.preventDefault();
+          const realPos = disp[pos] === "/" ? pos + 1 : pos;
+          if (realPos >= disp.length) return;
+          const digits = (disp.slice(0, realPos) + disp.slice(realPos+1)).replace(/\D/g, "");
+          commit(mask(digits));
+          setTimeout(() => el.setSelectionRange(pos, pos), 0);
+          return;
+        }
+        const key = e.key.replace(/[٠-٩]/g, c => String("٠١٢٣٤٥٦٧٨٩".indexOf(c)));
+        if (!/^\d$/.test(key)) {
+          if (!["Tab","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Home","End","Enter"].includes(e.key))
+            e.preventDefault();
+          return;
+        }
+        e.preventDefault();
+        const digPos = pos <= 2 ? pos : pos <= 5 ? pos-1 : pos-2;
+        const digits = disp.replace(/\D/g, "").padEnd(Math.max(digPos+1, disp.replace(/\D/g,"").length), "0");
+        const newDigs = digits.slice(0,digPos) + key + digits.slice(digPos+1);
+        const nd = mask(newDigs.slice(0,8));
+        commit(nd);
+        const ncp = digPos < 2 ? digPos+1 : digPos < 4 ? digPos+2 : digPos+3;
+        setTimeout(() => el.setSelectionRange(Math.min(ncp, nd.length), Math.min(ncp, nd.length)), 0);
+      }}
+      onChange={e => {
+        const nd = mask(e.target.value);
+        commit(nd);
+      }}
       onFocus={e => e.target.select()}
-      maxLength={10}
     />
   );
 }
@@ -2747,11 +2750,17 @@ function ChartOfAccountsPage() {
   );
 }
 // ─── Account Statement (كشف حساب أستاذ) ───────────────────────────────────────
-function AccountLedgerPage() {
+function AccountLedgerPage({
+  initialAccountId, initialFromDate, initialToDate,
+}: {
+  initialAccountId?: number | null;
+  initialFromDate?: string;
+  initialToDate?: string;
+} = {}) {
   const accountsQuery = trpc.accounts.list.useQuery();
-  const [accountId, setAccountId] = useState<number | null>(null);
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
+  const [accountId, setAccountId] = useState<number | null>(initialAccountId ?? null);
+  const [fromDate, setFromDate] = useState(initialFromDate ?? "");
+  const [toDate, setToDate] = useState(initialToDate ?? "");
 
   const stmtQuery = trpc.accounting.accountStatement.useQuery(
     { accountId: accountId!, fromDate: fromDate ? new Date(fromDate) : undefined, toDate: toDate ? new Date(toDate) : undefined },
@@ -3115,39 +3124,73 @@ function CostAllocationPage() {
 }
 
 // ─── Trial Balance (ميزان مراجعة الأستاذ العام) ───────────────────────────────
-function TrialBalancePage({ onOpenAccount }: { onOpenAccount?: (id: number) => void }) {
+type TBRow = {
+  accountId: number; code: string; name: string; nature: string; isParent: boolean;
+  openingBalance: number; openingBalanceType: string;
+  movementDebit: number; movementCredit: number;
+  closingBalance: number; closingBalanceType: string;
+};
+
+function TrialBalancePage({
+  onDrillDown,
+}: {
+  onDrillDown?: (accountId: number, fromDate: string, toDate: string) => void;
+}) {
   const costCentersQuery = trpc.costCenters.list.useQuery();
   const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
+  const [toDate,   setToDate]   = useState("");
   const [costCenterId, setCostCenterId] = useState<number | undefined>(undefined);
+  const [tbMode, setTbMode]     = useState<"simple" | "full">("simple");
+  const [acctCard, setAcctCard] = useState<TBRow | null>(null);
 
   const tbQuery = trpc.accounting.trialBalance.useQuery(
     { fromDate: fromDate ? new Date(fromDate) : undefined, toDate: toDate ? new Date(toDate) : undefined, costCenterId },
     { enabled: true }
   );
 
-  const data = tbQuery.data ?? [];
-  const totalOpeningDebit  = data.filter(r => r.openingBalanceType === "debit").reduce((s, r) => s + r.openingBalance, 0);
-  const totalOpeningCredit = data.filter(r => r.openingBalanceType === "credit").reduce((s, r) => s + r.openingBalance, 0);
-  const totalMoveDebit     = data.reduce((s, r) => s + r.movementDebit, 0);
-  const totalMoveCredit    = data.reduce((s, r) => s + r.movementCredit, 0);
-  const totalClosingDebit  = data.filter(r => r.closingBalanceType === "debit").reduce((s, r) => s + r.closingBalance, 0);
-  const totalClosingCredit = data.filter(r => r.closingBalanceType === "credit").reduce((s, r) => s + r.closingBalance, 0);
+  const data  = (tbQuery.data ?? []) as TBRow[];
+  const fmt   = (n: number) => n === 0 ? "-" : n.toLocaleString();
+  const fmtB  = (n: number, t: string) => {
+    if (n === 0) return <span className="text-muted-foreground text-xs">-</span>;
+    return (
+      <span className={`text-xs font-semibold ${t === "debit" ? "text-primary" : "text-amber-700"}`}>
+        {n.toLocaleString()}
+        <span className={`mr-1 text-[9px] px-0.5 rounded ${t === "debit" ? "bg-sky-50 text-sky-600" : "bg-amber-50 text-amber-600"}`}>
+          {t === "debit" ? "م" : "د"}
+        </span>
+      </span>
+    );
+  };
 
-  const fmt = (n: number) => n < 0 ? `(${Math.abs(n).toLocaleString()})` : n.toLocaleString();
+  const drill = (r: TBRow) => { onDrillDown?.(r.accountId, fromDate, toDate); };
+
+  const totalMoveDebit   = data.reduce((s, r) => s + r.movementDebit, 0);
+  const totalMoveCredit  = data.reduce((s, r) => s + r.movementCredit, 0);
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h3 className="font-bold text-sm flex items-center gap-2">
           <Scale className="w-4 h-4 text-primary" /> ميزان مراجعة الأستاذ العام
         </h3>
-        <div className="flex gap-2">
+        <div className="flex gap-1.5 flex-wrap">
+          <div className="flex rounded-lg overflow-hidden border border-border text-xs">
+            <button onClick={() => setTbMode("simple")}
+              className={`px-3 py-1 ${tbMode === "simple" ? "bg-primary text-primary-foreground" : "hover:bg-muted/40"}`}>
+              مبسّط
+            </button>
+            <button onClick={() => setTbMode("full")}
+              className={`px-3 py-1 border-r border-border ${tbMode === "full" ? "bg-primary text-primary-foreground" : "hover:bg-muted/40"}`}>
+              تفصيلي
+            </button>
+          </div>
           <Button variant="outline" size="sm" className="h-7 text-xs gap-1"><Printer className="w-3 h-3" /> طباعة</Button>
           <Button variant="outline" size="sm" className="h-7 text-xs gap-1"><Download className="w-3 h-3" /> تصدير</Button>
         </div>
       </div>
 
+      {/* ── Filters ── */}
       <Card className="border-border/60">
         <CardContent className="p-3">
           <div className="grid grid-cols-4 gap-3">
@@ -3180,69 +3223,214 @@ function TrialBalancePage({ onOpenAccount }: { onOpenAccount?: (id: number) => v
         </CardContent>
       </Card>
 
+      {/* ── Table ── */}
       <Card className="border-border/60">
         <div className="overflow-x-auto">
           <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs w-24">كود الحساب</TableHead>
-                <TableHead className="text-xs">اسم الحساب</TableHead>
-                <TableHead className="text-xs text-center" colSpan={2}>رصيد أول المدة</TableHead>
-                <TableHead className="text-xs text-center" colSpan={2}>الحركة</TableHead>
-                <TableHead className="text-xs text-center" colSpan={2}>رصيد آخر المدة</TableHead>
-              </TableRow>
-              <TableRow className="bg-muted/20">
-                <TableHead className="text-xs"></TableHead>
-                <TableHead className="text-xs"></TableHead>
-                <TableHead className="text-xs text-center">مدين</TableHead>
-                <TableHead className="text-xs text-center">دائن</TableHead>
-                <TableHead className="text-xs text-center">مدين</TableHead>
-                <TableHead className="text-xs text-center">دائن</TableHead>
-                <TableHead className="text-xs text-center">مدين</TableHead>
-                <TableHead className="text-xs text-center">دائن</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.length === 0 && (
-                <TableRow><TableCell colSpan={8} className="text-center text-xs text-muted-foreground py-8">
-                  {tbQuery.isLoading ? "جاري التحميل..." : "لا توجد بيانات - أضف حسابات وقيود أولاً"}
-                </TableCell></TableRow>
-              )}
-              {data.map(r => (
-                <TableRow key={r.accountId} className="hover:bg-muted/10 cursor-pointer"
-                  onClick={() => onOpenAccount?.(r.accountId)}>
-                  <TableCell className="text-xs font-mono text-primary hover:underline">{r.code}</TableCell>
-                  <TableCell className="text-xs hover:underline">{r.name}</TableCell>
-                  <TableCell className={`text-center text-xs ${r.openingBalanceType === "debit" && r.openingBalance < 0 ? "text-destructive" : ""}`}>
-                    {r.openingBalanceType === "debit" ? (r.openingBalance < 0 ? `(${Math.abs(r.openingBalance).toLocaleString()})` : r.openingBalance.toLocaleString()) : "-"}
-                  </TableCell>
-                  <TableCell className="text-center text-xs">
-                    {r.openingBalanceType === "credit" ? r.openingBalance.toLocaleString() : "-"}
-                  </TableCell>
-                  <TableCell className="text-center text-xs">{r.movementDebit > 0 ? r.movementDebit.toLocaleString() : "-"}</TableCell>
-                  <TableCell className="text-center text-xs">{r.movementCredit > 0 ? r.movementCredit.toLocaleString() : "-"}</TableCell>
-                  <TableCell className={`text-center text-xs font-semibold ${r.closingBalanceType === "debit" ? "text-primary" : ""}`}>
-                    {r.closingBalanceType === "debit" ? (r.closingBalance < 0 ? `(${Math.abs(r.closingBalance).toLocaleString()})` : r.closingBalance.toLocaleString()) : "-"}
-                  </TableCell>
-                  <TableCell className={`text-center text-xs font-semibold ${r.closingBalanceType === "credit" ? "text-amber-600" : ""}`}>
-                    {r.closingBalanceType === "credit" ? r.closingBalance.toLocaleString() : "-"}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {/* Totals */}
-              <TableRow className="bg-primary/5 font-bold border-t-2 border-primary/20">
-                <TableCell colSpan={2} className="text-xs font-bold">الإجمالي</TableCell>
-                <TableCell className="text-center text-xs font-bold text-primary">{totalOpeningDebit.toLocaleString()}</TableCell>
-                <TableCell className="text-center text-xs font-bold text-primary">{totalOpeningCredit.toLocaleString()}</TableCell>
-                <TableCell className="text-center text-xs font-bold text-primary">{totalMoveDebit.toLocaleString()}</TableCell>
-                <TableCell className="text-center text-xs font-bold text-primary">{totalMoveCredit.toLocaleString()}</TableCell>
-                <TableCell className="text-center text-xs font-bold text-primary">{totalClosingDebit.toLocaleString()}</TableCell>
-                <TableCell className="text-center text-xs font-bold text-primary">{totalClosingCredit.toLocaleString()}</TableCell>
-              </TableRow>
-            </TableBody>
+            {tbMode === "simple" ? (
+              <>
+                <TableHeader>
+                  <TableRow className="bg-muted/30">
+                    <TableHead className="text-xs w-24">كود الحساب</TableHead>
+                    <TableHead className="text-xs">اسم الحساب</TableHead>
+                    <TableHead className="text-xs text-center">رصيد أول المدة</TableHead>
+                    <TableHead className="text-xs text-center">حركة مدين</TableHead>
+                    <TableHead className="text-xs text-center">حركة دائن</TableHead>
+                    <TableHead className="text-xs text-center">رصيد آخر المدة</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.length === 0 && (
+                    <TableRow><TableCell colSpan={6} className="text-center text-xs text-muted-foreground py-8">
+                      {tbQuery.isLoading ? "جاري التحميل..." : "لا توجد بيانات — أضف حسابات وقيود مرحّلة"}
+                    </TableCell></TableRow>
+                  )}
+                  {data.map(r => (
+                    <TableRow key={r.accountId} className="hover:bg-muted/10">
+                      <TableCell className="text-xs font-mono text-primary">{r.code}</TableCell>
+                      <TableCell
+                        className="text-xs cursor-pointer hover:text-primary hover:underline"
+                        onClick={() => setAcctCard(r)}>
+                        {r.name}
+                      </TableCell>
+                      <TableCell className="text-center cursor-pointer hover:bg-sky-50/50" onClick={() => drill(r)}>
+                        {fmtB(r.openingBalance, r.openingBalanceType)}
+                      </TableCell>
+                      <TableCell className="text-center text-xs cursor-pointer hover:bg-sky-50/50 text-primary" onClick={() => drill(r)}>
+                        {fmt(r.movementDebit)}
+                      </TableCell>
+                      <TableCell className="text-center text-xs cursor-pointer hover:bg-amber-50/50 text-amber-700" onClick={() => drill(r)}>
+                        {fmt(r.movementCredit)}
+                      </TableCell>
+                      <TableCell className="text-center cursor-pointer hover:bg-sky-50/50" onClick={() => drill(r)}>
+                        {fmtB(r.closingBalance, r.closingBalanceType)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow className="bg-primary/5 font-bold border-t-2 border-primary/20">
+                    <TableCell colSpan={2} className="text-xs font-bold">الإجمالي</TableCell>
+                    <TableCell className="text-center text-xs text-muted-foreground">—</TableCell>
+                    <TableCell className="text-center text-xs font-bold text-primary">{totalMoveDebit.toLocaleString()}</TableCell>
+                    <TableCell className="text-center text-xs font-bold text-amber-700">{totalMoveCredit.toLocaleString()}</TableCell>
+                    <TableCell className="text-center text-xs text-muted-foreground">—</TableCell>
+                  </TableRow>
+                </TableBody>
+              </>
+            ) : (
+              <>
+                <TableHeader>
+                  <TableRow className="bg-muted/30">
+                    <TableHead className="text-xs w-24">كود الحساب</TableHead>
+                    <TableHead className="text-xs">اسم الحساب</TableHead>
+                    <TableHead className="text-xs text-center" colSpan={2}>رصيد أول المدة</TableHead>
+                    <TableHead className="text-xs text-center" colSpan={2}>الحركة</TableHead>
+                    <TableHead className="text-xs text-center" colSpan={2}>رصيد آخر المدة</TableHead>
+                  </TableRow>
+                  <TableRow className="bg-muted/20">
+                    <TableHead className="text-xs" colSpan={2}></TableHead>
+                    <TableHead className="text-xs text-center text-primary">مدين</TableHead>
+                    <TableHead className="text-xs text-center text-amber-700">دائن</TableHead>
+                    <TableHead className="text-xs text-center text-primary">مدين</TableHead>
+                    <TableHead className="text-xs text-center text-amber-700">دائن</TableHead>
+                    <TableHead className="text-xs text-center text-primary">مدين</TableHead>
+                    <TableHead className="text-xs text-center text-amber-700">دائن</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.length === 0 && (
+                    <TableRow><TableCell colSpan={8} className="text-center text-xs text-muted-foreground py-8">
+                      {tbQuery.isLoading ? "جاري التحميل..." : "لا توجد بيانات — أضف حسابات وقيود مرحّلة"}
+                    </TableCell></TableRow>
+                  )}
+                  {data.map(r => (
+                    <TableRow key={r.accountId} className="hover:bg-muted/10">
+                      <TableCell className="text-xs font-mono text-primary">{r.code}</TableCell>
+                      <TableCell
+                        className="text-xs cursor-pointer hover:text-primary hover:underline"
+                        onClick={() => setAcctCard(r)}>
+                        {r.name}
+                      </TableCell>
+                      <TableCell className="text-center text-xs text-primary cursor-pointer hover:bg-sky-50/50" onClick={() => drill(r)}>
+                        {r.openingBalanceType === "debit" ? fmt(r.openingBalance) : "-"}
+                      </TableCell>
+                      <TableCell className="text-center text-xs text-amber-700 cursor-pointer hover:bg-amber-50/50" onClick={() => drill(r)}>
+                        {r.openingBalanceType === "credit" ? fmt(r.openingBalance) : "-"}
+                      </TableCell>
+                      <TableCell className="text-center text-xs text-primary cursor-pointer hover:bg-sky-50/50" onClick={() => drill(r)}>
+                        {fmt(r.movementDebit)}
+                      </TableCell>
+                      <TableCell className="text-center text-xs text-amber-700 cursor-pointer hover:bg-amber-50/50" onClick={() => drill(r)}>
+                        {fmt(r.movementCredit)}
+                      </TableCell>
+                      <TableCell className="text-center text-xs text-primary font-semibold cursor-pointer hover:bg-sky-50/50" onClick={() => drill(r)}>
+                        {r.closingBalanceType === "debit" ? fmt(r.closingBalance) : "-"}
+                      </TableCell>
+                      <TableCell className="text-center text-xs text-amber-700 font-semibold cursor-pointer hover:bg-amber-50/50" onClick={() => drill(r)}>
+                        {r.closingBalanceType === "credit" ? fmt(r.closingBalance) : "-"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow className="bg-primary/5 font-bold border-t-2 border-primary/20">
+                    <TableCell colSpan={2} className="text-xs font-bold">الإجمالي</TableCell>
+                    <TableCell className="text-center text-xs font-bold text-primary">
+                      {data.filter(r => r.openingBalanceType==="debit").reduce((s,r)=>s+r.openingBalance,0).toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-center text-xs font-bold text-amber-700">
+                      {data.filter(r => r.openingBalanceType==="credit").reduce((s,r)=>s+r.openingBalance,0).toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-center text-xs font-bold text-primary">{totalMoveDebit.toLocaleString()}</TableCell>
+                    <TableCell className="text-center text-xs font-bold text-amber-700">{totalMoveCredit.toLocaleString()}</TableCell>
+                    <TableCell className="text-center text-xs font-bold text-primary">
+                      {data.filter(r => r.closingBalanceType==="debit").reduce((s,r)=>s+r.closingBalance,0).toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-center text-xs font-bold text-amber-700">
+                      {data.filter(r => r.closingBalanceType==="credit").reduce((s,r)=>s+r.closingBalance,0).toLocaleString()}
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </>
+            )}
           </Table>
         </div>
       </Card>
+
+      {/* ── Account Card Dialog ── */}
+      <Dialog open={!!acctCard} onOpenChange={() => setAcctCard(null)}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-sm flex items-center gap-2">
+              <BookOpen className="w-4 h-4 text-primary" />
+              كارت الحساب — {acctCard?.code}
+            </DialogTitle>
+          </DialogHeader>
+          {acctCard && (
+            <div className="space-y-3 text-sm">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">كود الحساب</p>
+                  <p className="font-mono font-bold text-primary">{acctCard.code}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">اسم الحساب</p>
+                  <p className="font-semibold">{acctCard.name}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">طبيعة الحساب</p>
+                  <Badge variant="outline" className={acctCard.nature === "debit" ? "border-sky-300 text-sky-700 bg-sky-50" : "border-amber-300 text-amber-700 bg-amber-50"}>
+                    {acctCard.nature === "debit" ? "مدينة" : "دائنة"}
+                  </Badge>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">نوع الحساب</p>
+                  <p className="text-xs">{acctCard.isParent ? "حساب رئيسي" : "حساب تفصيلي"}</p>
+                </div>
+              </div>
+              <div className="border border-border/60 rounded-lg overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted/30">
+                    <tr>
+                      <th className="text-right p-2 font-medium">البيان</th>
+                      <th className="text-center p-2 font-medium">مدين</th>
+                      <th className="text-center p-2 font-medium">دائن</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-t border-border/30">
+                      <td className="p-2 text-muted-foreground">رصيد أول المدة</td>
+                      <td className="text-center p-2 text-primary">
+                        {acctCard.openingBalanceType==="debit" ? acctCard.openingBalance.toLocaleString() : "-"}
+                      </td>
+                      <td className="text-center p-2 text-amber-700">
+                        {acctCard.openingBalanceType==="credit" ? acctCard.openingBalance.toLocaleString() : "-"}
+                      </td>
+                    </tr>
+                    <tr className="border-t border-border/30">
+                      <td className="p-2 text-muted-foreground">الحركة خلال الفترة</td>
+                      <td className="text-center p-2 text-primary">{acctCard.movementDebit.toLocaleString()}</td>
+                      <td className="text-center p-2 text-amber-700">{acctCard.movementCredit.toLocaleString()}</td>
+                    </tr>
+                    <tr className="border-t-2 border-primary/20 bg-primary/5 font-bold">
+                      <td className="p-2">رصيد آخر المدة</td>
+                      <td className="text-center p-2 text-primary">
+                        {acctCard.closingBalanceType==="debit" ? acctCard.closingBalance.toLocaleString() : "-"}
+                      </td>
+                      <td className="text-center p-2 text-amber-700">
+                        {acctCard.closingBalanceType==="credit" ? acctCard.closingBalance.toLocaleString() : "-"}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <Button size="sm" className="h-7 text-xs flex-1" onClick={() => { drill(acctCard); setAcctCard(null); }}>
+                  <FileText className="w-3 h-3 ml-1" /> عرض كشف الحساب
+                </Button>
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setAcctCard(null)}>إغلاق</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -3456,6 +3644,8 @@ function CashFlowPage() {
 
 // ─── Content Router ────────────────────────────────────────────────────────────
 function AccountingContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
+  const [ledgerCtx, setLedgerCtx] = useState<{ accountId: number; fromDate: string; toDate: string } | null>(null);
+
   switch (activeId) {
     case "overview":           return <AccountingOverview onSelect={onSelect} />;
     case "journal-list":       return <JournalListPage onOpenEntry={() => {}} />;
@@ -3464,10 +3654,23 @@ function AccountingContent({ activeId, onSelect }: { activeId: MenuId; onSelect:
     case "new-journal":        return <JournalEntryPage voucherType="journal" />;
     case "opening-entry":      return <JournalEntryPage voucherType="opening" />;
     case "accounts-tree":      return <ChartOfAccountsPage />;
-    case "account-ledger":     return <AccountLedgerPage />;
+    case "account-ledger":     return (
+      <AccountLedgerPage
+        initialAccountId={ledgerCtx?.accountId}
+        initialFromDate={ledgerCtx?.fromDate}
+        initialToDate={ledgerCtx?.toDate}
+      />
+    );
     case "cost-centers-list":  return <CostCentersPage />;
     case "cost-allocation":    return <CostAllocationPage />;
-    case "trial-balance":      return <TrialBalancePage onOpenAccount={(id) => onSelect("account-ledger")} />;
+    case "trial-balance":      return (
+      <TrialBalancePage
+        onDrillDown={(id, fd, td) => {
+          setLedgerCtx({ accountId: id, fromDate: fd, toDate: td });
+          onSelect("account-ledger");
+        }}
+      />
+    );
     case "income-statement":   return <IncomeStatementPage />;
     case "balance-sheet":      return <BalanceSheetPage />;
     case "cash-flow":          return <CashFlowPage />;

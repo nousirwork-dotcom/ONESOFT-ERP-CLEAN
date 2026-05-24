@@ -7,7 +7,7 @@ import { salesRouter } from './sales.js';
 import { chatRouter } from './chat.js';
 import { db } from '../db.js';
 import { products, customers, suppliers, chartOfAccounts, warehouses, branches, units, productGroups, journalEntries, journalEntryLines, vouchers, inventory, stockVouchers, stockVoucherItems, inventoryCounts, inventoryCountItems, freeProducts, salesInvoices, salesInvoiceItems, warehouseAccountLinks, userGroups, userGroupMembers, userCategories, users } from '../schema.js';
-import { eq, and, desc, like, or, sql, isNotNull, isNull, asc } from 'drizzle-orm';
+import { eq, and, desc, like, or, sql, isNotNull, isNull, asc, gte, lte } from 'drizzle-orm';
 
 export const appRouter = router({
   // ─── Auth ────────────────────────────────────────────────────────────────────
@@ -1709,6 +1709,54 @@ export const appRouter = router({
           });
         }
         return rows;
+      }),
+
+    accountStatement: protectedProcedure
+      .input(z.object({
+        accountId: z.number(),
+        fromDate:  z.date().optional(),
+        toDate:    z.date().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const { accountId, fromDate, toDate } = input;
+        const endOfDay = (d: Date) => new Date(d.getTime() + 86399999);
+
+        const conds: ReturnType<typeof eq>[] = [
+          eq(journalEntryLines.accountId, accountId),
+          eq(journalEntryLines.orgId, ctx.user.orgId),
+          eq(journalEntries.status, 'posted'),
+        ];
+        if (fromDate) conds.push(gte(journalEntries.entryDate, fromDate) as any);
+        if (toDate)   conds.push(lte(journalEntries.entryDate, endOfDay(toDate)) as any);
+
+        const lines = await db
+          .select({
+            entryId:     journalEntryLines.entryId,
+            entryDate:   journalEntries.entryDate,
+            entryNumber: journalEntries.entryNumber,
+            description: journalEntries.description,
+            lineDesc:    journalEntryLines.description,
+            voucherType: sql<string>`'قيد'`,
+            debit:       journalEntryLines.debit,
+            credit:      journalEntryLines.credit,
+          })
+          .from(journalEntryLines)
+          .innerJoin(journalEntries, and(
+            eq(journalEntries.id, journalEntryLines.entryId),
+            eq(journalEntries.orgId, ctx.user.orgId),
+          ))
+          .where(and(...conds))
+          .orderBy(asc(journalEntries.entryDate), asc(journalEntries.id));
+
+        return lines.map(l => ({
+          entryId:     l.entryId,
+          entryDate:   l.entryDate,
+          entryNumber: l.entryNumber,
+          voucherType: l.voucherType,
+          description: l.lineDesc ?? l.description,
+          debit:       l.debit,
+          credit:      l.credit,
+        }));
       }),
   }),
 });
