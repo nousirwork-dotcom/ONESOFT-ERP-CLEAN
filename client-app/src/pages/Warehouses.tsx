@@ -12,9 +12,13 @@ import {
   Eye, LogOut, Save, SkipForward,
   BookOpen, FileText, ChevronDown,
   RotateCcw, ClipboardList, ArrowLeftRight, Package, BookMarked, Tag,
+  Minimize2, Maximize2,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, createContext, useContext } from "react";
 import { toast } from "sonner";
+
+/* ─────────────────────────── density context ─────────────────────── */
+const Density = createContext<"compact" | "comfortable">("comfortable");
 
 /* ─────────────────────────── constants ─────────────────────────── */
 const DEFAULT_LINKS = [
@@ -71,109 +75,132 @@ type FormState = typeof EMPTY_FORM;
  */
 const Section = ({
   title, children, action,
-}: { title: string; children: React.ReactNode; action?: React.ReactNode }) => (
-  <div
-    className="bg-white overflow-hidden"
-    style={{
-      border: "1px solid #e5e7eb",
-      borderRadius: 10,
-      boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-    }}
-  >
+}: { title: string; children: React.ReactNode; action?: React.ReactNode }) => {
+  const c = useContext(Density) === "compact";
+  return (
     <div
-      className="flex items-center justify-between px-4 py-2.5"
-      style={{ borderBottom: "1px solid #f1f5f9" }}
+      className="bg-white overflow-hidden"
+      style={{ border: "1px solid #e5e7eb", borderRadius: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}
     >
-      <span
-        className="font-semibold text-indigo-700"
-        style={{ fontSize: 14 }}
+      <div
+        className={`flex items-center justify-between ${c ? "px-3 py-1.5" : "px-4 py-2.5"}`}
+        style={{ borderBottom: "1px solid #f1f5f9" }}
       >
-        {title}
-      </span>
-      {action}
+        <span className="font-semibold text-indigo-700" style={{ fontSize: c ? 12 : 14 }}>
+          {title}
+        </span>
+        {action}
+      </div>
+      <div className={c ? "p-2.5" : "p-4"}>{children}</div>
     </div>
-    <div className="p-4">{children}</div>
-  </div>
-);
+  );
+};
 
 /** Label + child stacked */
 const Field = ({
   label, children, span = 1,
-}: { label: string; children: React.ReactNode; span?: number }) => (
-  <div className={
-    span === 4 ? "col-span-4" :
-    span === 3 ? "col-span-3" :
-    span === 2 ? "col-span-2" : ""
-  }>
-    <Label className="block text-xs font-medium text-slate-500 mb-1">
-      {label}
-    </Label>
-    {children}
-  </div>
-);
+}: { label: string; children: React.ReactNode; span?: number }) => {
+  const c = useContext(Density) === "compact";
+  return (
+    <div className={span === 4 ? "col-span-4" : span === 3 ? "col-span-3" : span === 2 ? "col-span-2" : ""}>
+      <Label className={`block font-medium text-slate-500 ${c ? "text-[10px] mb-0.5" : "text-xs mb-1"}`}>
+        {label}
+      </Label>
+      {children}
+    </div>
+  );
+};
 
-/** Standard 36-px input */
+/** Input — height adapts to density */
 const FI = ({
   value, onChange, placeholder,
-}: { value: string; onChange: (v: string) => void; placeholder?: string }) => (
-  <Input
-    value={value}
-    onChange={e => onChange(e.target.value)}
-    placeholder={placeholder}
-    className="h-9 text-sm border-slate-200 focus:border-indigo-400 focus-visible:ring-1 focus-visible:ring-indigo-200 bg-white rounded"
-  />
-);
+}: { value: string; onChange: (v: string) => void; placeholder?: string }) => {
+  const c = useContext(Density) === "compact";
+  return (
+    <Input
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      placeholder={placeholder}
+      className={`${c ? "h-6 text-[11px] px-2" : "h-9 text-sm"} border-slate-200 focus:border-indigo-400 focus-visible:ring-1 focus-visible:ring-indigo-200 bg-white rounded`}
+    />
+  );
+};
 
-/** Standard 36-px select */
+/** Select — height adapts to density */
 const FS = ({
   value, onValueChange, placeholder, children,
-}: { value: string; onValueChange: (v: string) => void; placeholder?: string; children: React.ReactNode }) => (
-  <Select value={value} onValueChange={onValueChange}>
-    <SelectTrigger className="h-9 text-sm border-slate-200 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200 bg-white rounded">
-      <SelectValue placeholder={placeholder ?? "— اختر —"} />
-    </SelectTrigger>
-    <SelectContent>{children}</SelectContent>
-  </Select>
-);
+}: { value: string; onValueChange: (v: string) => void; placeholder?: string; children: React.ReactNode }) => {
+  const c = useContext(Density) === "compact";
+  return (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger className={`${c ? "h-6 text-[11px] px-2" : "h-9 text-sm"} border-slate-200 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200 bg-white rounded`}>
+        <SelectValue placeholder={placeholder ?? "— اختر —"} />
+      </SelectTrigger>
+      <SelectContent>{children}</SelectContent>
+    </Select>
+  );
+};
 
 /** ERP compact section panel — رأس رمادي + محتوى أبيض */
-const P = ({ title, children }: { title: string; children: React.ReactNode }) => (
-  <div className="overflow-hidden" style={{ border: "1px solid #d1d5db", borderRadius: 6 }}>
-    <div className="px-2.5 py-1" style={{ background: "#e8edf5", borderBottom: "1px solid #d1d5db" }}>
-      <span className="text-[11px] font-bold text-slate-700">{title}</span>
+const P = ({ title, children }: { title: string; children: React.ReactNode }) => {
+  const c = useContext(Density) === "compact";
+  return (
+    <div className="overflow-hidden" style={{ border: "1px solid #d1d5db", borderRadius: 6 }}>
+      <div className={`${c ? "px-2 py-0.5" : "px-2.5 py-1"}`} style={{ background: "#e8edf5", borderBottom: "1px solid #d1d5db" }}>
+        <span className={`font-bold text-slate-700 ${c ? "text-[10px]" : "text-[11px]"}`}>{title}</span>
+      </div>
+      <div className={`${c ? "px-2 py-1.5" : "px-3 py-2"}`} style={{ background: "#fff" }}>{children}</div>
     </div>
-    <div className="px-3 py-2" style={{ background: "#fff" }}>{children}</div>
-  </div>
-);
+  );
+};
 
 /** Inline label-right + input-left row (RTL) */
-const R = ({ label, lw = 88, children }: { label: string; lw?: number; children: React.ReactNode }) => (
-  <div className="flex items-center gap-1.5 min-w-0">
-    <span className="text-[11px] text-slate-600 shrink-0" style={{ width: lw }}>{label}</span>
-    <div className="flex-1 min-w-0">{children}</div>
-  </div>
-);
+const R = ({ label, lw = 88, children }: { label: string; lw?: number; children: React.ReactNode }) => {
+  const c = useContext(Density) === "compact";
+  return (
+    <div className="flex items-center gap-1 min-w-0">
+      <span className={`${c ? "text-[10px]" : "text-[11px]"} text-slate-600 shrink-0`} style={{ width: c ? 72 : lw }}>{label}</span>
+      <div className="flex-1 min-w-0">{children}</div>
+    </div>
+  );
+};
 
 /** Compact checkbox */
-const CB = ({ label, checked, onChange }: { label: string; checked?: boolean; onChange?: (v: boolean) => void }) => (
-  <label className="flex items-center gap-1.5 cursor-pointer select-none shrink-0">
-    <input type="checkbox" className="w-3.5 h-3.5 accent-indigo-600"
-      checked={checked} onChange={onChange ? e => onChange(e.target.checked) : undefined} />
-    <span className="text-[11px] text-slate-600">{label}</span>
-  </label>
-);
+const CB = ({ label, checked, onChange }: { label: string; checked?: boolean; onChange?: (v: boolean) => void }) => {
+  const c = useContext(Density) === "compact";
+  return (
+    <label className="flex items-center gap-1 cursor-pointer select-none shrink-0">
+      <input type="checkbox" className={`${c ? "w-3 h-3" : "w-3.5 h-3.5"} accent-indigo-600`}
+        checked={checked} onChange={onChange ? e => onChange(e.target.checked) : undefined} />
+      <span className={`${c ? "text-[10px]" : "text-[11px]"} text-slate-600`}>{label}</span>
+    </label>
+  );
+};
 
 /** Compact radio */
-const RB = ({ name, label, checked, onChange }: { name: string; label: string; checked?: boolean; onChange?: () => void }) => (
-  <label className="flex items-center gap-1.5 cursor-pointer select-none shrink-0">
-    <input type="radio" name={name} className="w-3.5 h-3.5 accent-indigo-600"
-      checked={checked} onChange={onChange} />
-    <span className="text-[11px] text-slate-600">{label}</span>
-  </label>
-);
+const RB = ({ name, label, checked, onChange }: { name: string; label: string; checked?: boolean; onChange?: () => void }) => {
+  const c = useContext(Density) === "compact";
+  return (
+    <label className="flex items-center gap-1 cursor-pointer select-none shrink-0">
+      <input type="radio" name={name} className={`${c ? "w-3 h-3" : "w-3.5 h-3.5"} accent-indigo-600`}
+        checked={checked} onChange={onChange} />
+      <span className={`${c ? "text-[10px]" : "text-[11px]"} text-slate-600`}>{label}</span>
+    </label>
+  );
+};
 
 /* ─────────────────────────── main component ─────────────────────────── */
 export default function Warehouses() {
+  const [density, setDensity] = useState<"compact" | "comfortable">(() =>
+    (localStorage.getItem("onesoft_density") as any) ?? "comfortable"
+  );
+  const toggleDensity = () => setDensity(d => {
+    const next = d === "comfortable" ? "compact" : "comfortable";
+    localStorage.setItem("onesoft_density", next);
+    return next;
+  });
+  const c = density === "compact";
+
   const [view, setView] = useState<"list" | "form">("list");
   const [editId, setEditId] = useState<number | null>(null);
   const [formTab, setFormTab] = useState<"basic" | "journals" | "doctypes">("basic");
@@ -308,32 +335,44 @@ export default function Warehouses() {
     ];
 
     return (
+      <Density.Provider value={density}>
       <div
-        className="flex flex-col min-h-full -mx-6 -mt-6 px-6 pt-5"
+        className="flex flex-col min-h-full -mx-6 -mt-6 px-6 pt-4"
         style={{ background: "#f8f9fb" }}
         dir="rtl"
       >
         {/* ── Page title ── */}
-        <div className="flex items-center gap-3 mb-4">
-          <button
-            onClick={() => setView("list")}
-            className="w-7 h-7 flex items-center justify-center rounded-full bg-white border border-slate-200 shadow-sm text-slate-400 hover:text-indigo-600 hover:border-indigo-300 transition-colors"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-          </button>
+        <div className={`flex items-center justify-between ${c ? "mb-2" : "mb-3"}`}>
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center border border-indigo-100">
-              <Warehouse className="w-3.5 h-3.5 text-indigo-600" />
+            <button
+              onClick={() => setView("list")}
+              className="w-6 h-6 flex items-center justify-center rounded-full bg-white border border-slate-200 shadow-sm text-slate-400 hover:text-indigo-600 hover:border-indigo-300 transition-colors"
+            >
+              <ArrowLeft className="w-3 h-3" />
+            </button>
+            <div className={`${c ? "w-5 h-5" : "w-7 h-7"} rounded-lg bg-indigo-50 flex items-center justify-center border border-indigo-100`}>
+              <Warehouse className={`${c ? "w-3 h-3" : "w-3.5 h-3.5"} text-indigo-600`} />
             </div>
-            <h1 className="text-[15px] font-bold text-slate-700">
+            <h1 className={`${c ? "text-[13px]" : "text-[15px]"} font-bold text-slate-700`}>
               {editId ? "تعديل بيانات المخزن" : "إضافة مخزن جديد"}
             </h1>
           </div>
+          {/* ── Density toggle ── */}
+          <button
+            onClick={toggleDensity}
+            className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-indigo-600 border border-slate-200 hover:border-indigo-300 rounded px-2 py-1 bg-white transition-colors"
+            title={c ? "تبديل للوضع المريح" : "تبديل للوضع المضغوط"}
+          >
+            {c
+              ? <><Maximize2 className="w-3 h-3" /> مريح</>
+              : <><Minimize2 className="w-3 h-3" /> مضغوط</>
+            }
+          </button>
         </div>
 
         {/* ── Tab bar ── */}
         <div
-          className="flex items-center gap-0 shrink-0 mb-3"
+          className={`flex items-center gap-0 shrink-0 ${c ? "mb-2" : "mb-3"}`}
           style={{ borderBottom: "2px solid #e5e7eb" }}
         >
           {([
@@ -344,7 +383,7 @@ export default function Warehouses() {
             <button
               key={tab.id}
               onClick={() => setFormTab(tab.id)}
-              className="px-5 py-2 text-[13px] font-medium transition-colors relative"
+              className={`${c ? "px-3 py-1 text-[11px]" : "px-5 py-2 text-[13px]"} font-medium transition-colors relative`}
               style={{
                 color: formTab === tab.id ? "#4338ca" : "#64748b",
                 borderBottom: formTab === tab.id ? "2px solid #4338ca" : "2px solid transparent",
@@ -358,39 +397,74 @@ export default function Warehouses() {
         </div>
 
         {/* ── Sections ── */}
-        <div className="flex-1 space-y-3 pb-16">
+        <div className={`flex-1 ${c ? "space-y-2 pb-12" : "space-y-3 pb-16"}`}>
 
           {/* ══ TAB: البيانات الأساسية ══ */}
           {formTab === "basic" && <>
             {/* ── بيانات المخزن ── */}
             <Section title="بيانات المخزن">
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                <Field label="رقم">
-                  <FI value={form.code} onChange={v => set("code", v)} placeholder="001" />
-                </Field>
-                <Field label="موقع">
-                  <FS value={form.branchId} onValueChange={v => set("branchId", v)} placeholder="المقر الرئيسي">
-                    <SelectItem value="none">المقر الرئيسي</SelectItem>
-                    {branches?.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
-                  </FS>
-                </Field>
-                <Field label="إسم 1 *">
-                  <FI value={form.name} onChange={v => set("name", v)} placeholder="الاسم بالعربي" />
-                </Field>
-                <Field label="إسم 2">
-                  <FI value={form.name2} onChange={v => set("name2", v)} placeholder="Name in English" />
-                </Field>
-                <Field label="إسم كامل 1">
-                  <FI value={form.fullName1} onChange={v => set("fullName1", v)} placeholder="الاسم الكامل بالعربي" />
-                </Field>
-                <Field label="إسم كامل 2">
-                  <FI value={form.fullName2} onChange={v => set("fullName2", v)} placeholder="Full name in English" />
-                </Field>
-                <div className="col-span-2">
-                  <Field label="ملحوظة">
-                    <FI value={form.description} onChange={v => set("description", v)} placeholder="ملاحظات إضافية..." />
-                  </Field>
-                </div>
+              <div className={`grid ${c ? "grid-cols-3 gap-x-2 gap-y-1" : "grid-cols-2 gap-x-4 gap-y-2"}`}>
+                {c ? (
+                  /* ── Compact: 3 أعمدة ── */
+                  <>
+                    <Field label="رقم">
+                      <FI value={form.code} onChange={v => set("code", v)} placeholder="001" />
+                    </Field>
+                    <Field label="إسم 1 *">
+                      <FI value={form.name} onChange={v => set("name", v)} placeholder="الاسم بالعربي" />
+                    </Field>
+                    <Field label="موقع">
+                      <FS value={form.branchId} onValueChange={v => set("branchId", v)} placeholder="المقر الرئيسي">
+                        <SelectItem value="none">المقر الرئيسي</SelectItem>
+                        {branches?.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+                      </FS>
+                    </Field>
+                    <Field label="إسم 2">
+                      <FI value={form.name2} onChange={v => set("name2", v)} placeholder="Name in English" />
+                    </Field>
+                    <Field label="إسم كامل 1">
+                      <FI value={form.fullName1} onChange={v => set("fullName1", v)} placeholder="الاسم الكامل بالعربي" />
+                    </Field>
+                    <Field label="إسم كامل 2">
+                      <FI value={form.fullName2} onChange={v => set("fullName2", v)} placeholder="Full name in English" />
+                    </Field>
+                    <div className="col-span-3">
+                      <Field label="ملحوظة">
+                        <FI value={form.description} onChange={v => set("description", v)} placeholder="ملاحظات إضافية..." />
+                      </Field>
+                    </div>
+                  </>
+                ) : (
+                  /* ── Comfortable: 2 أعمدة ── */
+                  <>
+                    <Field label="رقم">
+                      <FI value={form.code} onChange={v => set("code", v)} placeholder="001" />
+                    </Field>
+                    <Field label="موقع">
+                      <FS value={form.branchId} onValueChange={v => set("branchId", v)} placeholder="المقر الرئيسي">
+                        <SelectItem value="none">المقر الرئيسي</SelectItem>
+                        {branches?.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+                      </FS>
+                    </Field>
+                    <Field label="إسم 1 *">
+                      <FI value={form.name} onChange={v => set("name", v)} placeholder="الاسم بالعربي" />
+                    </Field>
+                    <Field label="إسم 2">
+                      <FI value={form.name2} onChange={v => set("name2", v)} placeholder="Name in English" />
+                    </Field>
+                    <Field label="إسم كامل 1">
+                      <FI value={form.fullName1} onChange={v => set("fullName1", v)} placeholder="الاسم الكامل بالعربي" />
+                    </Field>
+                    <Field label="إسم كامل 2">
+                      <FI value={form.fullName2} onChange={v => set("fullName2", v)} placeholder="Full name in English" />
+                    </Field>
+                    <div className="col-span-2">
+                      <Field label="ملحوظة">
+                        <FI value={form.description} onChange={v => set("description", v)} placeholder="ملاحظات إضافية..." />
+                      </Field>
+                    </div>
+                  </>
+                )}
               </div>
               <div className="mt-3 pt-2 flex justify-end" style={{ borderTop: "1px solid #f1f5f9" }}>
                 <button className="text-[12px] font-medium text-indigo-600 hover:text-indigo-800 hover:underline"
@@ -416,7 +490,7 @@ export default function Warehouses() {
                 </Field>
                 <div className="col-span-1">
                   <button
-                    className="h-9 px-4 text-[12px] rounded border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-600 transition-colors"
+                    className={`${c ? "h-6 text-[11px] px-2" : "h-9 px-4 text-[12px]"} rounded border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-600 transition-colors`}
                     onClick={() => {
                       if (otherWarehouses.length === 0) { toast.info("لا يوجد مخازن أخرى للنسخ منها"); return; }
                       toast.info("نسخ من مخزن آخر");
@@ -975,7 +1049,7 @@ export default function Warehouses() {
               onClick={action}
               disabled={(label === "حفظ" && isSaving) || (label === "حذف" && !editId)}
               className={[
-                "flex flex-col items-center justify-center gap-0.5 flex-1 py-2 text-[11px] font-medium transition-colors",
+                `flex flex-col items-center justify-center gap-0.5 flex-1 ${c ? "py-1 text-[10px]" : "py-2 text-[11px]"} font-medium transition-colors`,
                 "border-l border-slate-100 last:border-0",
                 primary
                   ? "bg-indigo-600 text-white hover:bg-indigo-700"
@@ -984,7 +1058,7 @@ export default function Warehouses() {
                     : "text-slate-600 hover:bg-slate-50",
               ].join(" ")}
             >
-              {icon}
+              <span className={c ? "w-3 h-3" : "w-3.5 h-3.5"}>{icon}</span>
               <span className="leading-none mt-0.5">
                 {label === "حفظ" && isSaving ? "..." : label}
               </span>
@@ -1021,6 +1095,7 @@ export default function Warehouses() {
           </DialogContent>
         </Dialog>
       </div>
+      </Density.Provider>
     );
   }
 
