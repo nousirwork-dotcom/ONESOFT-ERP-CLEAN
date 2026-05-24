@@ -48,3 +48,9 @@ id = "m_KDDC4kGSNWrHUQwu4m2"
 uri = "file://ONESOFT-ERP-source.tar.gz"
 type = "unspecified"
 title = "ONESOFT-ERP — كود المصدر (292 KB)"
+
+[[outputs]]
+id = "fJI0PG_ZROhT2RAYpXpvq"
+uri = "file://ONESOFT-ERP-full.tar.gz"
+type = "unspecified"
+title = "ONESOFT-ERP — كامل المشروع (103 MB)"
