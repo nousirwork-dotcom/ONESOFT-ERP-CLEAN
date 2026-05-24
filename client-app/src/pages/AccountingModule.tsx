@@ -213,6 +213,9 @@ const natBadge = (n: string | null) =>
     ? <span className="text-[9px] px-1 py-0.5 rounded bg-blue-50 text-blue-600 font-medium shrink-0">مدين</span>
     : <span className="text-[9px] px-1 py-0.5 rounded bg-red-50 text-red-600 font-medium shrink-0">دائن</span>;
 
+const normalizeAr = (s: string) =>
+  s.replace(/[أإآا]/g, "ا").replace(/ة/g, "ه").replace(/ى/g, "ي").toLowerCase();
+
 const typeLabel = (t: string | null) =>
   ({ assets:"أصول", liabilities:"خصوم", equity:"حقوق ملكية", revenue:"إيرادات", expenses:"مصروفات" }[t ?? ""] ?? "");
 
@@ -233,14 +236,14 @@ function AccountPickerDialog({
   const postable = useMemo(() => accounts.filter(a => a.allowPosting === true && !a.isParent), [accounts]);
 
   const filtered = useMemo(() => {
-    const sq = q.trim().toLowerCase();
+    const sq = normalizeAr(q.trim());
     if (!sq) {
       const recent = recentIds.map(id => postable.find(a => a.id.toString() === id)).filter(Boolean) as TJAcc[];
       const rest   = postable.filter(a => !recentIds.includes(a.id.toString())).slice(0, 40);
       return [...recent, ...rest];
     }
-    const codeMatches = postable.filter(a => a.code.toLowerCase().startsWith(sq));
-    const nameMatches = postable.filter(a => !a.code.toLowerCase().startsWith(sq) && (a.code.toLowerCase().includes(sq) || a.name.toLowerCase().includes(sq)));
+    const codeMatches = postable.filter(a => normalizeAr(a.code).startsWith(sq));
+    const nameMatches = postable.filter(a => !normalizeAr(a.code).startsWith(sq) && (normalizeAr(a.code).includes(sq) || normalizeAr(a.name).includes(sq)));
     return [...codeMatches, ...nameMatches].slice(0, 60);
   }, [q, postable, recentIds]);
 
@@ -293,15 +296,10 @@ function AccountPickerDialog({
           {filtered.map((a, idx) => (
             <button key={a.id} onClick={() => pick(a)}
               className={`w-full flex items-center gap-3 px-4 py-2.5 text-xs transition-colors border-b border-border/30
-                ${idx === hi ? "bg-primary/10 text-primary" : "hover:bg-accent/50"}
-                ${a.isParent ? "opacity-50" : ""}`}
+                ${idx === hi ? "bg-primary/10 text-primary" : "hover:bg-accent/50"}`}
             >
-              <span className="font-mono w-20 shrink-0 text-right text-[11px]">{a.code}</span>
+              <span className="font-mono w-20 shrink-0 text-right text-[11px] text-muted-foreground">{a.code}</span>
               <span className="flex-1 text-right truncate font-medium">{a.name}</span>
-              <span className="text-[10px] text-muted-foreground shrink-0 w-16 text-right">{typeLabel(a.accountType)}</span>
-              <span className="text-[10px] text-muted-foreground shrink-0 w-8 text-center">م{a.level}</span>
-              {natBadge(a.nature)}
-              {a.isParent && <span className="text-[9px] px-1 py-0.5 rounded bg-amber-50 text-amber-600 shrink-0">رئيسي</span>}
               {recentIds.includes(a.id.toString()) && !q && <RefreshCw className="w-2.5 h-2.5 text-muted-foreground/50 shrink-0" />}
             </button>
           ))}
@@ -343,14 +341,14 @@ function SmartAccountInput({
   const postable = useMemo(() => accounts.filter(a => a.allowPosting === true && !a.isParent), [accounts]);
 
   const filtered = useMemo(() => {
-    const sq = q.trim().toLowerCase();
+    const sq = normalizeAr(q.trim());
     if (!sq) {
       const recent = recentIds.map(id => postable.find(a => a.id.toString() === id)).filter(Boolean) as TJAcc[];
       const rest   = postable.filter(a => !recentIds.includes(a.id.toString())).slice(0, 20);
       return [...recent, ...rest];
     }
-    const codeMatches = postable.filter(a => a.code.toLowerCase().startsWith(sq));
-    const nameMatches = postable.filter(a => !a.code.toLowerCase().startsWith(sq) && (a.code.toLowerCase().includes(sq) || a.name.toLowerCase().includes(sq)));
+    const codeMatches = postable.filter(a => normalizeAr(a.code).startsWith(sq));
+    const nameMatches = postable.filter(a => !normalizeAr(a.code).startsWith(sq) && (normalizeAr(a.code).includes(sq) || normalizeAr(a.name).includes(sq)));
     return [...codeMatches, ...nameMatches].slice(0, 30);
   }, [q, postable, recentIds]);
 
@@ -420,13 +418,10 @@ function SmartAccountInput({
             {filtered.map((a, idx) => (
               <button key={a.id} onMouseDown={() => pick(a)}
                 className={`w-full flex items-center gap-2 px-3 py-2 text-xs transition-colors
-                  ${idx === hi ? "bg-primary/10" : "hover:bg-accent/50"}
-                  ${a.isParent ? "opacity-50" : ""}`}
+                  ${idx === hi ? "bg-primary/10" : "hover:bg-accent/50"}`}
               >
                 <span className="font-mono text-[11px] text-muted-foreground w-16 text-right shrink-0">{a.code}</span>
                 <span className="flex-1 text-right truncate">{a.name}</span>
-                {natBadge(a.nature)}
-                {a.isParent && <span className="text-[9px] px-1 py-0.5 rounded bg-amber-50 text-amber-500 shrink-0">رئيسي</span>}
               </button>
             ))}
           </div>
@@ -460,7 +455,8 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
   const [basedOn, setBasedOn] = useState("");
   const [selectedLineIdx, setSelectedLineIdx] = useState(0);
   const [copiedLine, setCopiedLine] = useState<typeof lines[0] | null>(null);
-  const cellRefs = useRef<Map<string, HTMLInputElement>>(new Map());
+  const cellRefs    = useRef<Map<string, HTMLInputElement>>(new Map());
+  const accountRefs = useRef<Map<number, HTMLInputElement>>(new Map());
 
   const emptyLine = () => ({ accountId: "", accountName: "", description: "", debit: "", credit: "", costCenterId: "", transferRelation: "", currency: "SAR", nature: "" });
   const [lines, setLines] = useState([emptyLine(), emptyLine()]);
@@ -548,12 +544,13 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
       if (nextCol < JCOLS) {
         cellRefs.current.get(`${rowIdx}-${nextCol}`)?.focus();
       } else {
-        if (rowIdx + 1 < lines.length) {
-          setSelectedLineIdx(rowIdx + 1);
-          cellRefs.current.get(`${rowIdx + 1}-0`)?.focus();
+        const nextRow = rowIdx + 1;
+        if (nextRow < lines.length) {
+          setSelectedLineIdx(nextRow);
+          accountRefs.current.get(nextRow)?.focus();
         } else {
           addLine();
-          setTimeout(() => cellRefs.current.get(`${rowIdx + 1}-0`)?.focus(), 50);
+          setTimeout(() => { setSelectedLineIdx(nextRow); accountRefs.current.get(nextRow)?.focus(); }, 50);
         }
       }
       return;
@@ -562,8 +559,12 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
     if (e.key === "Tab" && e.shiftKey) {
       e.preventDefault();
       const prevCol = colIdx - 1;
-      if (prevCol >= 0) {
-        cellRefs.current.get(`${rowIdx}-${prevCol}`)?.focus();
+      if (prevCol >= -1) {
+        if (prevCol === -1) {
+          accountRefs.current.get(rowIdx)?.focus();
+        } else {
+          cellRefs.current.get(`${rowIdx}-${prevCol}`)?.focus();
+        }
       } else if (rowIdx > 0) {
         setSelectedLineIdx(rowIdx - 1);
         cellRefs.current.get(`${rowIdx - 1}-${JCOLS - 1}`)?.focus();
@@ -688,6 +689,7 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
                       onOpenPicker={() => { setPickerTarget(i); setShowPicker(true); }}
                       onFocusCb={() => setSelectedLineIdx(i)}
                       externalKeyDown={e => handleCellKeyDown(e as any, i, -1)}
+                      inputRef={el => { if (el) accountRefs.current.set(i, el); else accountRefs.current.delete(i); }}
                     />
                   </TableCell>
                   <TableCell>
