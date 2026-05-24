@@ -439,7 +439,7 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
   const accountsQuery = trpc.accounts.list.useQuery();
   const costCentersQuery = trpc.costCenters.list.useQuery();
   const createMutation = trpc.journal.create.useMutation({
-    onSuccess: () => { toast.success("تم حفظ القيد بنجاح"); handleNew(); },
+    onSuccess: () => { toast.success("تم حفظ القيد بنجاح"); },
     onError: (e) => toast.error(e.message),
   });
 
