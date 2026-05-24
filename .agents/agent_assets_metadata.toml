@@ -42,3 +42,9 @@ id = "YbNr2K1SzXt0hBYdkhDOc"
 uri = "file://onesoft-erp-source.zip"
 type = "unspecified"
 title = "OneSoft ERP — كود المصدر (نسخة احتياطية)"
+
+[[outputs]]
+id = "m_KDDC4kGSNWrHUQwu4m2"
+uri = "file://ONESOFT-ERP-source.tar.gz"
+type = "unspecified"
+title = "ONESOFT-ERP — كود المصدر (292 KB)"
