@@ -435,148 +435,170 @@ function SmartAccountInput({
 }
 
 // ─── Journal Entry (سند قيد) ──────────────────────────────────────────────────
+// ─── Print styles (injected once) ────────────────────────────────────────────
+const PRINT_STYLE_ID = "je-print-style";
+if (!document.getElementById(PRINT_STYLE_ID)) {
+  const s = document.createElement("style");
+  s.id = PRINT_STYLE_ID;
+  s.textContent = `@media print{body>*:not(#je-print-root){display:none!important}#je-print-root{display:block!important;position:fixed;inset:0;z-index:99999;background:#fff;padding:24px;font-family:Arial,sans-serif;direction:rtl}#je-print-root table{width:100%;border-collapse:collapse}#je-print-root th,#je-print-root td{border:1px solid #ccc;padding:4px 8px;font-size:11px}#je-print-root th{background:#f5f5f5}@page{margin:15mm}}`;
+  document.head.appendChild(s);
+}
+
+const JE_DRAFT_PREFIX = "onesoft_je_draft_";
+
 function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string }) {
-  const accountsQuery = trpc.accounts.list.useQuery();
+  const DRAFT_KEY = JE_DRAFT_PREFIX + voucherType;
+
+  const accountsQuery    = trpc.accounts.list.useQuery();
   const costCentersQuery = trpc.costCenters.list.useQuery();
+  const journalListQuery = trpc.journal.list.useQuery();
+  const nextNumberQuery  = trpc.journal.nextNumber.useQuery();
+
   const createMutation = trpc.journal.create.useMutation({
-    onSuccess: () => { toast.success("تم حفظ القيد بنجاح"); },
+    onSuccess: (data) => {
+      toast.success("تم حفظ القيد بنجاح ✓");
+      setSavedEntryId(data.id);
+      setSavedEntryNumber(data.entryNumber);
+      setEntryStatus("posted");
+      localStorage.removeItem(DRAFT_KEY);
+      journalListQuery.refetch();
+    },
     onError: (e) => toast.error(e.message),
   });
-
-  const [entryDate, setEntryDate] = useState(new Date().toISOString().split("T")[0]);
-  const [description, setDescription] = useState("");
-  const [analyticCode, setAnalyticCode] = useState("");
-  const [basedOn, setBasedOn] = useState("");
-  const [selectedLineIdx, setSelectedLineIdx] = useState(0);
-  const [copiedLine, setCopiedLine] = useState<typeof lines[0] | null>(null);
-  const cellRefs    = useRef<Map<string, HTMLInputElement>>(new Map());
-  const accountRefs = useRef<Map<number, HTMLInputElement>>(new Map());
-
-  const emptyLine = () => ({ accountId: "", accountName: "", description: "", debit: "", credit: "", costCenterId: "", transferRelation: "", currency: "SAR", nature: "" });
-  const [lines, setLines] = useState([emptyLine(), emptyLine()]);
-
-  const [recentIds, setRecentIds] = useState<string[]>(() => getRecentIds());
-  const [showPicker, setShowPicker]       = useState(false);
-  const [pickerTarget, setPickerTarget]   = useState<number>(0);
-
-  // F2 / Ctrl+K → open account picker for selected line
-  useEffect(() => {
-    const handler = (e: globalThis.KeyboardEvent) => {
-      if (e.key === "F2" || (e.ctrlKey && e.key === "k")) {
-        e.preventDefault();
-        setPickerTarget(selectedLineIdx);
-        setShowPicker(true);
-      }
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [selectedLineIdx]);
-
-  const handleAccountSelect = useCallback((lineIdx: number, id: string, name: string, nature: string) => {
-    setLines(prev => prev.map((l, i) => i === lineIdx ? { ...l, accountId: id, accountName: name, nature } : l));
-    setRecentIds(getRecentIds());
-    setTimeout(() => cellRefs.current.get(`${lineIdx}-0`)?.focus(), 50);
-  }, []);
-
-  const totalDebit  = lines.reduce((s, l) => s + (parseFloat(l.debit)  || 0), 0);
-  const totalCredit = lines.reduce((s, l) => s + (parseFloat(l.credit) || 0), 0);
-  const diff = Math.abs(totalDebit - totalCredit);
-  const balanced = diff < 0.001 && totalDebit > 0;
-
-  const updateLine = useCallback((i: number, field: string, value: string) =>
-    setLines(prev => prev.map((l, idx) => idx === i ? { ...l, [field]: value } : l)), []);
-
-  const addLine = useCallback(() => {
-    setLines(prev => [...prev, emptyLine()]);
-  }, []);
-
-  const handleNew = useCallback(() => {
-    setLines([emptyLine(), emptyLine()]);
-    setDescription("");
-    setAnalyticCode("");
-    setBasedOn("");
-    setSelectedLineIdx(0);
-  }, []);
-
-  // أعمدة الجدول للتنقل بـ Tab (SmartAccountInput → colIdx -1)
-  // 0: description, 1: debit, 2: credit, 3: transferRelation
-  const JCOLS = 4;
-
-  const handleCellKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>, rowIdx: number, colIdx: number) => {
-    // Ctrl+C: نسخ السطر
-    if (e.ctrlKey && e.key === "c") {
-      e.preventDefault();
-      setCopiedLine({ ...lines[rowIdx] });
-      toast.info(`تم نسخ السطر ${rowIdx + 1}`);
-      return;
-    }
-    // Ctrl+V: لصق السطر
-    if (e.ctrlKey && e.key === "v") {
-      e.preventDefault();
-      if (!copiedLine) { toast.warning("لا يوجد سطر منسوخ"); return; }
-      setLines(prev => {
-        const updated = [...prev];
-        updated.splice(rowIdx + 1, 0, { ...copiedLine });
-        return updated;
-      });
-      setTimeout(() => cellRefs.current.get(`${rowIdx + 1}-0`)?.focus(), 50);
-      return;
-    }
-    // Ctrl+Delete: حذف السطر
-    if (e.ctrlKey && e.key === "Delete") {
-      e.preventDefault();
-      if (lines.length > 2) {
-        setLines(prev => prev.filter((_, i) => i !== rowIdx));
-        setSelectedLineIdx(Math.max(0, rowIdx - 1));
-      }
-      return;
-    }
-    // Tab أو Enter
-    if ((e.key === "Tab" && !e.shiftKey) || e.key === "Enter") {
-      e.preventDefault();
-      const nextCol = colIdx + 1;
-      if (nextCol < JCOLS) {
-        cellRefs.current.get(`${rowIdx}-${nextCol}`)?.focus();
-      } else {
-        const nextRow = rowIdx + 1;
-        if (nextRow < lines.length) {
-          setSelectedLineIdx(nextRow);
-          accountRefs.current.get(nextRow)?.focus();
-        } else {
-          addLine();
-          setTimeout(() => { setSelectedLineIdx(nextRow); accountRefs.current.get(nextRow)?.focus(); }, 50);
-        }
-      }
-      return;
-    }
-    // Shift+Tab
-    if (e.key === "Tab" && e.shiftKey) {
-      e.preventDefault();
-      const prevCol = colIdx - 1;
-      if (prevCol >= -1) {
-        if (prevCol === -1) {
-          accountRefs.current.get(rowIdx)?.focus();
-        } else {
-          cellRefs.current.get(`${rowIdx}-${prevCol}`)?.focus();
-        }
-      } else if (rowIdx > 0) {
-        setSelectedLineIdx(rowIdx - 1);
-        cellRefs.current.get(`${rowIdx - 1}-${JCOLS - 1}`)?.focus();
-      }
-    }
-  }, [lines, copiedLine, addLine]);
+  const deleteMutation = trpc.journal.delete.useMutation({
+    onSuccess: () => {
+      toast.success("تم إلغاء القيد");
+      setEntryStatus("cancelled");
+      journalListQuery.refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   const titleMap: Record<string, string> = {
     journal: "سند قيد", opening: "سند قيد افتتاحي", receipt: "سند قبض", payment: "سند صرف",
   };
 
-  const handleSave = () => {
-    if (!balanced) return toast.error("القيد غير متوازن");
-    const entryNumber = `${voucherType.toUpperCase()}-${Date.now()}`;
+  const emptyLine = () => ({ accountId: "", accountName: "", description: "", debit: "", credit: "", costCenterId: "", transferRelation: "", currency: "SAR", nature: "" });
+
+  // ── Saved entry tracking ───────────────────────────────────────────────────
+  const [savedEntryId,     setSavedEntryId]     = useState<number | null>(null);
+  const [savedEntryNumber, setSavedEntryNumber] = useState<string>("");
+  const [entryStatus,      setEntryStatus]      = useState<"new"|"draft"|"posted"|"cancelled">("new");
+
+  // ── Form state ─────────────────────────────────────────────────────────────
+  const [entryDate,     setEntryDate]     = useState(new Date().toISOString().split("T")[0]);
+  const [description,   setDescription]   = useState("");
+  const [analyticCode,  setAnalyticCode]  = useState("");
+  const [basedOn,       setBasedOn]       = useState("");
+  const [lines,         setLines]         = useState([emptyLine(), emptyLine()]);
+  const [selectedLineIdx, setSelectedLineIdx] = useState(0);
+  const [copiedLine,    setCopiedLine]    = useState<typeof lines[0] | null>(null);
+  const cellRefs    = useRef<Map<string, HTMLInputElement>>(new Map());
+  const accountRefs = useRef<Map<number, HTMLInputElement>>(new Map());
+
+  const [recentIds,    setRecentIds]    = useState<string[]>(() => getRecentIds());
+  const [showPicker,   setShowPicker]   = useState(false);
+  const [pickerTarget, setPickerTarget] = useState<number>(0);
+
+  // ── Navigation ─────────────────────────────────────────────────────────────
+  const navList = useMemo(() =>
+    (journalListQuery.data ?? []).map(e => ({ id: e.id, entryNumber: e.entryNumber })).reverse(),
+    [journalListQuery.data]);
+  const [navIdx, setNavIdx] = useState(-1);
+
+  const [loadEntryId, setLoadEntryId] = useState<number | null>(null);
+  const loadedRef = useRef<number | null>(null);
+  const entryQuery = trpc.journal.get.useQuery(
+    { id: loadEntryId! },
+    { enabled: !!loadEntryId }
+  );
+  useEffect(() => {
+    if (!entryQuery.data || loadedRef.current === loadEntryId) return;
+    loadedRef.current = loadEntryId;
+    const e = entryQuery.data;
+    setEntryDate(new Date(e.entryDate).toISOString().split("T")[0]);
+    setDescription(e.description ?? "");
+    setBasedOn(e.reference ?? "");
+    setSavedEntryId(e.id);
+    setSavedEntryNumber(e.entryNumber);
+    setEntryStatus(e.status as "posted"|"cancelled"|"draft");
+    setLines(e.lines.length > 0
+      ? e.lines.map(l => ({
+          accountId: l.accountId?.toString() ?? "",
+          accountName: l.accountName ?? "",
+          description: l.description ?? "",
+          debit: parseFloat(l.debit ?? "0") > 0 ? parseFloat(l.debit ?? "0").toFixed(3) : "",
+          credit: parseFloat(l.credit ?? "0") > 0 ? parseFloat(l.credit ?? "0").toFixed(3) : "",
+          costCenterId: l.costCenter ?? "",
+          transferRelation: "",
+          currency: "SAR",
+          nature: "",
+        }))
+      : [emptyLine(), emptyLine()]);
+  }, [entryQuery.data, loadEntryId]);
+
+  const navigateTo = (idx: number) => {
+    if (idx < 0 || idx >= navList.length) return;
+    setNavIdx(idx);
+    loadedRef.current = null;
+    setLoadEntryId(navList[idx].id);
+  };
+
+  // ── Auto-draft ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    try {
+      const draft = localStorage.getItem(DRAFT_KEY);
+      if (draft) {
+        const d = JSON.parse(draft);
+        if (d.lines?.length) {
+          setLines(d.lines);
+          setDescription(d.description ?? "");
+          setEntryDate(d.entryDate ?? new Date().toISOString().split("T")[0]);
+          setBasedOn(d.basedOn ?? "");
+          setEntryStatus("draft");
+          toast.info("تم استرجاع مسودة القيد");
+        }
+      }
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (entryStatus !== "posted" && entryStatus !== "cancelled") {
+      const hasDraft = lines.some(l => l.accountId || l.debit || l.credit);
+      if (hasDraft) {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ lines, description, entryDate, basedOn }));
+      }
+    }
+  }, [lines, description, entryDate, basedOn, entryStatus, DRAFT_KEY]);
+
+  // ── Totals ─────────────────────────────────────────────────────────────────
+  const totalDebit  = lines.reduce((s, l) => s + (parseFloat(l.debit)  || 0), 0);
+  const totalCredit = lines.reduce((s, l) => s + (parseFloat(l.credit) || 0), 0);
+  const diff     = Math.abs(totalDebit - totalCredit);
+  const balanced = diff < 0.001 && totalDebit > 0;
+
+  // ── Mutations helpers ──────────────────────────────────────────────────────
+  const updateLine = useCallback((i: number, field: string, value: string) =>
+    setLines(prev => prev.map((l, idx) => idx === i ? { ...l, [field]: value } : l)), []);
+
+  const addLine = useCallback(() => setLines(prev => [...prev, emptyLine()]), []);
+
+  const handleNew = useCallback(() => {
+    setLines([emptyLine(), emptyLine()]);
+    setDescription(""); setAnalyticCode(""); setBasedOn("");
+    setSelectedLineIdx(0);
+    setSavedEntryId(null); setSavedEntryNumber(""); setEntryStatus("new");
+    setNavIdx(-1); setLoadEntryId(null); loadedRef.current = null;
+    localStorage.removeItem(DRAFT_KEY);
+  }, [DRAFT_KEY]);
+
+  const handleSave = useCallback(() => {
+    if (!balanced) return toast.error("القيد غير متوازن — المدين ≠ الدائن");
+    const entryNumber = nextNumberQuery.data ?? `JE-${Date.now()}`;
     createMutation.mutate({
-      entryNumber,
-      entryDate,
-      description,
+      entryNumber, entryDate, description,
+      reference: basedOn || undefined,
       totalDebit: totalDebit.toFixed(3),
       totalCredit: totalCredit.toFixed(3),
       lines: lines
@@ -590,30 +612,236 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
           credit: l.credit || "0",
         })),
     });
-  };
+  }, [balanced, nextNumberQuery.data, entryDate, description, basedOn, totalDebit, totalCredit, lines, createMutation]);
 
+  const handleDuplicate = useCallback(() => {
+    setSavedEntryId(null); setSavedEntryNumber(""); setEntryStatus("new");
+    setNavIdx(-1); setLoadEntryId(null); loadedRef.current = null;
+    setDescription(d => `نسخة من: ${d}`);
+    setEntryDate(new Date().toISOString().split("T")[0]);
+    toast.info("تم إنشاء نسخة — راجع البيانات ثم احفظ");
+  }, []);
+
+  const handleReverse = useCallback(() => {
+    if (!savedEntryId) return toast.warning("احفظ القيد أولاً");
+    setSavedEntryId(null); setSavedEntryNumber(""); setEntryStatus("new");
+    setNavIdx(-1); setLoadEntryId(null); loadedRef.current = null;
+    setLines(prev => prev.map(l => ({ ...l, debit: l.credit, credit: l.debit })));
+    setDescription(d => `عكس القيد: ${savedEntryNumber} — ${d}`);
+    setEntryDate(new Date().toISOString().split("T")[0]);
+    toast.info("تم قلب المدين والدائن — راجع ثم احفظ");
+  }, [savedEntryId, savedEntryNumber]);
+
+  const handleDelete = useCallback(() => {
+    if (!savedEntryId) return toast.warning("لا يوجد قيد محفوظ");
+    if (!confirm(`هل تريد إلغاء القيد ${savedEntryNumber}؟`)) return;
+    deleteMutation.mutate({ id: savedEntryId });
+  }, [savedEntryId, savedEntryNumber, deleteMutation]);
+
+  const handlePrint = useCallback(() => {
+    const root = document.getElementById("je-print-root") ?? document.createElement("div");
+    root.id = "je-print-root";
+    root.innerHTML = `
+      <div style="display:flex;justify-content:space-between;margin-bottom:12px">
+        <div><strong style="font-size:14px">${titleMap[voucherType] ?? "سند قيد"}</strong></div>
+        <div style="font-size:11px;color:#555">
+          ${savedEntryNumber ? `رقم القيد: <strong>${savedEntryNumber}</strong> &nbsp;&nbsp;` : ""}
+          التاريخ: <strong>${entryDate}</strong>
+        </div>
+      </div>
+      ${description ? `<div style="margin-bottom:8px;font-size:11px">البيان: <strong>${description}</strong></div>` : ""}
+      <table>
+        <thead><tr><th>#</th><th>الحساب</th><th>البيان</th><th>مدين</th><th>دائن</th></tr></thead>
+        <tbody>
+          ${lines.filter(l => l.accountId).map((l, i) => `
+            <tr>
+              <td style="text-align:center">${i + 1}</td>
+              <td>${l.accountName}</td>
+              <td>${l.description}</td>
+              <td style="text-align:center">${parseFloat(l.debit||"0")>0 ? parseFloat(l.debit||"0").toFixed(3) : ""}</td>
+              <td style="text-align:center">${parseFloat(l.credit||"0")>0 ? parseFloat(l.credit||"0").toFixed(3) : ""}</td>
+            </tr>`).join("")}
+          <tr style="background:#f5f5f5;font-weight:bold">
+            <td colspan="3" style="text-align:right">الإجمالي</td>
+            <td style="text-align:center">${totalDebit.toFixed(3)}</td>
+            <td style="text-align:center">${totalCredit.toFixed(3)}</td>
+          </tr>
+        </tbody>
+      </table>`;
+    if (!root.parentElement) document.body.appendChild(root);
+    window.print();
+    setTimeout(() => root.remove(), 500);
+  }, [lines, description, entryDate, savedEntryNumber, totalDebit, totalCredit, voucherType, titleMap]);
+
+  // ── F2 / Ctrl+K / Ctrl+S / Ctrl+D / Ctrl+P / F3 ──────────────────────────
+  useEffect(() => {
+    const handler = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "F2" || (e.ctrlKey && e.key === "k")) {
+        e.preventDefault(); setPickerTarget(selectedLineIdx); setShowPicker(true);
+      }
+      if (e.ctrlKey && e.key === "s") { e.preventDefault(); handleSave(); }
+      if (e.ctrlKey && e.key === "d") { e.preventDefault(); handleDuplicate(); }
+      if (e.ctrlKey && e.key === "p") { e.preventDefault(); handlePrint(); }
+      if (e.key === "F3") { e.preventDefault(); handleNew(); }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [selectedLineIdx, handleSave, handleDuplicate, handlePrint, handleNew]);
+
+  // ── Account select ─────────────────────────────────────────────────────────
+  const handleAccountSelect = useCallback((lineIdx: number, id: string, name: string, nature: string) => {
+    setLines(prev => prev.map((l, i) => i === lineIdx ? { ...l, accountId: id, accountName: name, nature } : l));
+    setRecentIds(getRecentIds());
+    setTimeout(() => cellRefs.current.get(`${lineIdx}-0`)?.focus(), 50);
+  }, []);
+
+  // ── Cell keyboard navigation ───────────────────────────────────────────────
+  const JCOLS = 4;
+  const handleCellKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>, rowIdx: number, colIdx: number) => {
+    if (e.ctrlKey && e.key === "c") {
+      e.preventDefault(); setCopiedLine({ ...lines[rowIdx] }); toast.info(`نسخ السطر ${rowIdx + 1}`); return;
+    }
+    if (e.ctrlKey && e.key === "v") {
+      e.preventDefault();
+      if (!copiedLine) { toast.warning("لا يوجد سطر منسوخ"); return; }
+      setLines(prev => { const u = [...prev]; u.splice(rowIdx + 1, 0, { ...copiedLine }); return u; });
+      setTimeout(() => cellRefs.current.get(`${rowIdx + 1}-0`)?.focus(), 50); return;
+    }
+    if (e.ctrlKey && e.key === "Delete") {
+      e.preventDefault();
+      if (lines.length > 2) { setLines(prev => prev.filter((_, i) => i !== rowIdx)); setSelectedLineIdx(Math.max(0, rowIdx - 1)); }
+      return;
+    }
+    if ((e.key === "Tab" && !e.shiftKey) || e.key === "Enter") {
+      e.preventDefault();
+      const nextCol = colIdx + 1;
+      if (nextCol < JCOLS) {
+        cellRefs.current.get(`${rowIdx}-${nextCol}`)?.focus();
+      } else {
+        const nextRow = rowIdx + 1;
+        if (nextRow < lines.length) {
+          setSelectedLineIdx(nextRow); accountRefs.current.get(nextRow)?.focus();
+        } else {
+          addLine(); setTimeout(() => { setSelectedLineIdx(nextRow); accountRefs.current.get(nextRow)?.focus(); }, 50);
+        }
+      }
+      return;
+    }
+    if (e.key === "Tab" && e.shiftKey) {
+      e.preventDefault();
+      const prevCol = colIdx - 1;
+      if (prevCol >= -1) {
+        prevCol === -1 ? accountRefs.current.get(rowIdx)?.focus() : cellRefs.current.get(`${rowIdx}-${prevCol}`)?.focus();
+      } else if (rowIdx > 0) {
+        setSelectedLineIdx(rowIdx - 1); cellRefs.current.get(`${rowIdx - 1}-${JCOLS - 1}`)?.focus();
+      }
+    }
+  }, [lines, copiedLine, addLine]);
+
+  // ── Status badge ───────────────────────────────────────────────────────────
+  const statusBadge = useMemo(() => {
+    const map: Record<string, { label: string; cls: string }> = {
+      new:       { label: "جديد",      cls: "bg-sky-50 text-sky-600 border-sky-200" },
+      draft:     { label: "مسودة",     cls: "bg-amber-50 text-amber-600 border-amber-200" },
+      posted:    { label: "مرحّل",     cls: "bg-emerald-50 text-emerald-600 border-emerald-200" },
+      cancelled: { label: "ملغي",      cls: "bg-rose-50 text-rose-600 border-rose-200" },
+    };
+    const s = map[entryStatus] ?? map.new;
+    return <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${s.cls}`}>{s.label}</span>;
+  }, [entryStatus]);
+
+  // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-3">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h3 className="font-bold text-sm flex items-center gap-2">
-          <FileText className="w-4 h-4 text-primary" />
-          {titleMap[voucherType] ?? "سند قيد"}
-        </h3>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={handleNew}><RefreshCw className="w-3 h-3" /> جديد</Button>
-          <Button variant="outline" size="sm" className="h-7 text-xs gap-1"><Printer className="w-3 h-3" /> طباعة</Button>
-          <Button variant="outline" size="sm" className="h-7 text-xs gap-1"><Download className="w-3 h-3" /> تصدير</Button>
+    <div className="space-y-2" dir="rtl">
+
+      {/* ── Professional Toolbar ── */}
+      <div className="flex items-center gap-0.5 bg-muted/40 border border-border/60 rounded-lg px-2 py-1.5 flex-wrap">
+
+        {/* Group: New / Save */}
+        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 px-2 hover:bg-emerald-50 hover:text-emerald-700"
+          onClick={handleNew} title="F3">
+          <Plus className="w-3.5 h-3.5" /> جديد
+        </Button>
+        <Button variant="ghost" size="sm"
+          className={`h-7 text-xs gap-1 px-2 ${balanced ? "hover:bg-emerald-50 hover:text-emerald-700" : "opacity-50"}`}
+          disabled={!balanced || createMutation.isPending || entryStatus === "posted"}
+          onClick={handleSave} title="Ctrl+S">
+          <Check className="w-3.5 h-3.5" /> حفظ
+        </Button>
+
+        <div className="w-px h-5 bg-border/60 mx-1" />
+
+        {/* Group: Duplicate / Reverse */}
+        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 px-2 hover:bg-sky-50 hover:text-sky-700"
+          onClick={handleDuplicate} title="Ctrl+D" disabled={!savedEntryId}>
+          <Copy className="w-3.5 h-3.5" /> نسخة مماثلة
+        </Button>
+        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 px-2 hover:bg-purple-50 hover:text-purple-700"
+          onClick={handleReverse} title="Ctrl+R" disabled={!savedEntryId}>
+          <RefreshCw className="w-3.5 h-3.5" /> عكس القيد
+        </Button>
+
+        <div className="w-px h-5 bg-border/60 mx-1" />
+
+        {/* Group: Print / PDF */}
+        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 px-2 hover:bg-slate-100"
+          onClick={handlePrint} title="Ctrl+P">
+          <Printer className="w-3.5 h-3.5" /> طباعة
+        </Button>
+        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 px-2 hover:bg-slate-100"
+          onClick={handlePrint}>
+          <FileDown className="w-3.5 h-3.5" /> PDF
+        </Button>
+
+        <div className="w-px h-5 bg-border/60 mx-1" />
+
+        {/* Group: Delete */}
+        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 px-2 hover:bg-rose-50 hover:text-rose-700"
+          onClick={handleDelete} disabled={!savedEntryId || entryStatus === "cancelled"}>
+          <Trash2 className="w-3.5 h-3.5" /> حذف
+        </Button>
+
+        <div className="w-px h-5 bg-border/60 mx-1" />
+
+        {/* Group: Navigation */}
+        <Button variant="ghost" size="sm" className="h-7 text-xs px-1.5 hover:bg-muted"
+          disabled={navList.length === 0} onClick={() => navigateTo(0)} title="أول قيد">
+          <span className="text-[10px] font-mono">|◀</span>
+        </Button>
+        <Button variant="ghost" size="sm" className="h-7 text-xs px-1.5 hover:bg-muted"
+          disabled={navIdx <= 0} onClick={() => navigateTo(navIdx - 1)} title="السابق">
+          <ChevronRight className="w-3.5 h-3.5" />
+        </Button>
+        <span className="text-[10px] text-muted-foreground px-1 min-w-[48px] text-center">
+          {navIdx >= 0 ? `${navIdx + 1}/${navList.length}` : `—/${navList.length}`}
+        </span>
+        <Button variant="ghost" size="sm" className="h-7 text-xs px-1.5 hover:bg-muted"
+          disabled={navIdx >= navList.length - 1} onClick={() => navigateTo(navIdx + 1)} title="التالي">
+          <ChevronDown className="w-3.5 h-3.5 -rotate-90" />
+        </Button>
+        <Button variant="ghost" size="sm" className="h-7 text-xs px-1.5 hover:bg-muted"
+          disabled={navList.length === 0} onClick={() => navigateTo(navList.length - 1)} title="آخر قيد">
+          <span className="text-[10px] font-mono">▶|</span>
+        </Button>
+
+        {/* Status + Entry Number */}
+        <div className="mr-auto flex items-center gap-2">
+          {savedEntryNumber && (
+            <span className="text-[11px] font-mono text-muted-foreground bg-muted/60 px-2 py-0.5 rounded">
+              {savedEntryNumber}
+            </span>
+          )}
+          {statusBadge}
         </div>
       </div>
 
-      {/* Header Fields */}
+      {/* ── Header Fields ── */}
       <Card className="border-border/60">
         <CardContent className="p-3">
           <div className="grid grid-cols-4 gap-3 mb-3">
             <div>
               <Label className="text-xs text-muted-foreground">قيد #</Label>
-              <Input value={`${voucherType.toUpperCase()}-AUTO`} readOnly className="h-7 text-xs bg-muted/30" />
+              <Input value={savedEntryNumber || nextNumberQuery.data || "..."} readOnly className="h-7 text-xs bg-muted/30 font-mono" />
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">نوع السند</Label>
@@ -641,8 +869,7 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
         </CardContent>
       </Card>
 
-      {/* Lines Table */}
-      {/* Account Picker Dialog (F2 / Ctrl+K) */}
+      {/* ── Lines Table ── */}
       <AccountPickerDialog
         open={showPicker}
         onClose={() => setShowPicker(false)}
@@ -659,8 +886,8 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
                 <TableHead className="text-xs w-8 text-center">#</TableHead>
                 <TableHead className="text-xs min-w-[220px]">الحساب</TableHead>
                 <TableHead className="text-xs">شرح</TableHead>
-                <TableHead className="text-xs text-center w-28">مدين</TableHead>
-                <TableHead className="text-xs text-center w-28">دائن</TableHead>
+                <TableHead className="text-xs text-center w-28 text-sky-700">مدين</TableHead>
+                <TableHead className="text-xs text-center w-28 text-rose-700">دائن</TableHead>
                 <TableHead className="text-xs w-24">عملة</TableHead>
                 <TableHead className="text-xs w-28">مركز التكلفة</TableHead>
                 <TableHead className="text-xs w-28">علاقة التحويل</TableHead>
@@ -668,126 +895,138 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
               </TableRow>
             </TableHeader>
             <TableBody>
-              {lines.map((line, i) => (
-                <TableRow key={i}
-                  className={`${selectedLineIdx === i ? "bg-primary/5 ring-1 ring-inset ring-primary/20" : "hover:bg-muted/10"}`}
-                  onClick={() => setSelectedLineIdx(i)}
-                >
-                  <TableCell className="text-center text-xs text-muted-foreground">{i + 1}</TableCell>
-                  <TableCell className="min-w-[220px] py-1">
-                    <SmartAccountInput
-                      accounts={(accountsQuery.data ?? []) as TJAcc[]}
-                      selectedId={line.accountId}
-                      recentIds={recentIds}
-                      onSelect={(id, name, nature) => handleAccountSelect(i, id, name, nature)}
-                      onOpenPicker={() => { setPickerTarget(i); setShowPicker(true); }}
-                      onFocusCb={() => setSelectedLineIdx(i)}
-                      externalKeyDown={e => handleCellKeyDown(e as any, i, -1)}
-                      inputRef={el => { if (el) accountRefs.current.set(i, el); else accountRefs.current.delete(i); }}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      ref={el => { if (el) cellRefs.current.set(`${i}-0`, el); }}
-                      value={line.description}
-                      onChange={e => updateLine(i, "description", e.target.value)}
-                      onFocus={() => setSelectedLineIdx(i)}
-                      onKeyDown={e => handleCellKeyDown(e, i, 0)}
-                      className="h-7 text-xs" placeholder="البيان..."
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      ref={el => { if (el) cellRefs.current.set(`${i}-1`, el); }}
-                      type="number" value={line.debit} min={0}
-                      onChange={e => { updateLine(i, "debit", e.target.value); if (e.target.value) updateLine(i, "credit", ""); }}
-                      onFocus={e => { setSelectedLineIdx(i); e.target.select(); }}
-                      onKeyDown={e => handleCellKeyDown(e, i, 1)}
-                      className="h-7 text-xs text-center"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      ref={el => { if (el) cellRefs.current.set(`${i}-2`, el); }}
-                      type="number" value={line.credit} min={0}
-                      onChange={e => { updateLine(i, "credit", e.target.value); if (e.target.value) updateLine(i, "debit", ""); }}
-                      onFocus={e => { setSelectedLineIdx(i); e.target.select(); }}
-                      onKeyDown={e => handleCellKeyDown(e, i, 2)}
-                      className="h-7 text-xs text-center"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Select value={line.currency} onValueChange={v => updateLine(i, "currency", v)}>
-                      <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="SAR">SAR</SelectItem>
-                        <SelectItem value="USD">USD</SelectItem>
-                        <SelectItem value="EUR">EUR</SelectItem>
-                        <SelectItem value="AED">AED</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell>
-                    <Select value={line.costCenterId} onValueChange={v => updateLine(i, "costCenterId", v)}>
-                      <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="مركز..." /></SelectTrigger>
-                      <SelectContent>
-                        {costCentersQuery.data?.map(c => (
-                          <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      ref={el => { if (el) cellRefs.current.set(`${i}-3`, el); }}
-                      value={line.transferRelation}
-                      onChange={e => updateLine(i, "transferRelation", e.target.value)}
-                      onFocus={() => setSelectedLineIdx(i)}
-                      onKeyDown={e => handleCellKeyDown(e, i, 3)}
-                      className="h-7 text-xs" placeholder="علاقة..."
-                    />
-                  </TableCell>
-                  <TableCell>
-                    {lines.length > 2 && (
-                      <button onClick={() => setLines(prev => prev.filter((_, idx) => idx !== i))}
-                        className="text-destructive hover:text-destructive/70 text-xs p-1"><X className="w-3 h-3" /></button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {/* Totals Row */}
+              {lines.map((line, i) => {
+                const hasDebit  = parseFloat(line.debit  || "0") > 0;
+                const hasCredit = parseFloat(line.credit || "0") > 0;
+                const rowColor  = selectedLineIdx === i
+                  ? "bg-primary/5 ring-1 ring-inset ring-primary/20"
+                  : hasDebit  ? "bg-sky-50/40 hover:bg-sky-50/60"
+                  : hasCredit ? "bg-rose-50/30 hover:bg-rose-50/50"
+                  : "hover:bg-muted/10";
+                return (
+                  <TableRow key={i} className={rowColor} onClick={() => setSelectedLineIdx(i)}>
+                    <TableCell className="text-center text-xs text-muted-foreground">{i + 1}</TableCell>
+                    <TableCell className="min-w-[220px] py-1">
+                      <SmartAccountInput
+                        accounts={(accountsQuery.data ?? []) as TJAcc[]}
+                        selectedId={line.accountId}
+                        recentIds={recentIds}
+                        onSelect={(id, name, nature) => handleAccountSelect(i, id, name, nature)}
+                        onOpenPicker={() => { setPickerTarget(i); setShowPicker(true); }}
+                        onFocusCb={() => setSelectedLineIdx(i)}
+                        externalKeyDown={e => handleCellKeyDown(e as any, i, -1)}
+                        inputRef={el => { if (el) accountRefs.current.set(i, el); else accountRefs.current.delete(i); }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        ref={el => { if (el) cellRefs.current.set(`${i}-0`, el); }}
+                        value={line.description}
+                        onChange={e => updateLine(i, "description", e.target.value)}
+                        onFocus={() => setSelectedLineIdx(i)}
+                        onKeyDown={e => handleCellKeyDown(e, i, 0)}
+                        className="h-7 text-xs" placeholder="البيان..."
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        ref={el => { if (el) cellRefs.current.set(`${i}-1`, el); }}
+                        type="number" value={line.debit} min={0}
+                        onChange={e => { updateLine(i, "debit", e.target.value); if (e.target.value) updateLine(i, "credit", ""); }}
+                        onFocus={e => { setSelectedLineIdx(i); e.target.select(); }}
+                        onKeyDown={e => handleCellKeyDown(e, i, 1)}
+                        className="h-7 text-xs text-center bg-sky-50/30 focus:bg-white"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        ref={el => { if (el) cellRefs.current.set(`${i}-2`, el); }}
+                        type="number" value={line.credit} min={0}
+                        onChange={e => { updateLine(i, "credit", e.target.value); if (e.target.value) updateLine(i, "debit", ""); }}
+                        onFocus={e => { setSelectedLineIdx(i); e.target.select(); }}
+                        onKeyDown={e => handleCellKeyDown(e, i, 2)}
+                        className="h-7 text-xs text-center bg-rose-50/30 focus:bg-white"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Select value={line.currency} onValueChange={v => updateLine(i, "currency", v)}>
+                        <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="SAR">SAR</SelectItem>
+                          <SelectItem value="USD">USD</SelectItem>
+                          <SelectItem value="EUR">EUR</SelectItem>
+                          <SelectItem value="AED">AED</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell>
+                      <Select value={line.costCenterId} onValueChange={v => updateLine(i, "costCenterId", v)}>
+                        <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="مركز..." /></SelectTrigger>
+                        <SelectContent>
+                          {costCentersQuery.data?.map(c => (
+                            <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        ref={el => { if (el) cellRefs.current.set(`${i}-3`, el); }}
+                        value={line.transferRelation}
+                        onChange={e => updateLine(i, "transferRelation", e.target.value)}
+                        onFocus={() => setSelectedLineIdx(i)}
+                        onKeyDown={e => handleCellKeyDown(e, i, 3)}
+                        className="h-7 text-xs" placeholder="علاقة..."
+                      />
+                    </TableCell>
+                    <TableCell>
+                      {lines.length > 2 && (
+                        <button onClick={() => setLines(prev => prev.filter((_, idx) => idx !== i))}
+                          className="text-muted-foreground hover:text-destructive p-1"><X className="w-3 h-3" /></button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
               <TableRow className="bg-muted/30 font-bold">
-                <TableCell colSpan={3} className="text-xs font-bold text-right">الإجمالي</TableCell>
-                <TableCell className="text-center text-sm font-bold text-primary">{totalDebit.toFixed(3)}</TableCell>
-                <TableCell className="text-center text-sm font-bold text-primary">{totalCredit.toFixed(3)}</TableCell>
+                <TableCell colSpan={3} className="text-xs font-bold text-right pr-4">الإجمالي</TableCell>
+                <TableCell className="text-center text-sm font-bold text-sky-700">{totalDebit.toFixed(3)}</TableCell>
+                <TableCell className="text-center text-sm font-bold text-rose-700">{totalCredit.toFixed(3)}</TableCell>
                 <TableCell colSpan={4}></TableCell>
               </TableRow>
             </TableBody>
           </Table>
         </div>
-        <div className="p-3 flex items-center justify-between border-t border-border bg-muted/10">
+
+        {/* Footer */}
+        <div className="p-3 flex items-center justify-between border-t border-border bg-muted/10 flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={addLine}>
               <Plus className="w-3 h-3" /> إضافة سطر
             </Button>
-            <span className="text-[10px] text-muted-foreground">Tab/Enter: التالي · ↑↓: تنقل القائمة · F2/Ctrl+K: بحث موسّع · Ctrl+C: نسخ سطر · Ctrl+V: لصق · Ctrl+Del: حذف</span>
+            <span className="text-[10px] text-muted-foreground hidden sm:block">
+              Tab/Enter: التالي · F2: بحث موسّع · Ctrl+S: حفظ · Ctrl+D: نسخة · F3: جديد
+            </span>
           </div>
           <div className="flex items-center gap-4">
-            <div className="text-xs">
-              <span className="text-muted-foreground ml-1">إجمالي مدين:</span>
-              <span className="font-bold text-primary">{totalDebit.toFixed(3)}</span>
+            <div className="text-xs flex items-center gap-1">
+              <span className="text-muted-foreground">مدين:</span>
+              <span className="font-bold text-sky-700">{totalDebit.toFixed(3)}</span>
             </div>
-            <div className="text-xs">
-              <span className="text-muted-foreground ml-1">الفرق:</span>
-              <span className={`font-bold ${diff < 0.001 ? "text-emerald-500" : "text-destructive"}`}>{diff.toFixed(3)}</span>
+            <div className="text-xs flex items-center gap-1">
+              <span className="text-muted-foreground">الفرق:</span>
+              <span className={`font-bold ${diff < 0.001 ? "text-emerald-600" : "text-rose-600"}`}>{diff.toFixed(3)}</span>
             </div>
-            <div className="text-xs">
-              <span className="text-muted-foreground ml-1">إجمالي دائن:</span>
-              <span className="font-bold text-primary">{totalCredit.toFixed(3)}</span>
+            <div className="text-xs flex items-center gap-1">
+              <span className="text-muted-foreground">دائن:</span>
+              <span className="font-bold text-rose-700">{totalCredit.toFixed(3)}</span>
             </div>
-            <Button size="sm" className="h-7 text-xs gap-1" disabled={!balanced || createMutation.isPending}
+            <Button size="sm"
+              className={`h-7 text-xs gap-1 ${balanced ? "bg-emerald-600 hover:bg-emerald-700" : ""}`}
+              disabled={!balanced || createMutation.isPending || entryStatus === "posted"}
               onClick={handleSave}>
-              <Check className="w-3 h-3" /> حفظ القيد
+              <Check className="w-3 h-3" />
+              {createMutation.isPending ? "جاري الحفظ..." : "حفظ القيد"}
             </Button>
           </div>
         </div>

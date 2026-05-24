@@ -1046,6 +1046,27 @@ export const appRouter = router({
         }
         return entry;
       }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        await db.update(journalEntries)
+          .set({ status: 'cancelled' })
+          .where(and(eq(journalEntries.id, input.id), eq(journalEntries.orgId, ctx.user.orgId)));
+        return { success: true };
+      }),
+    getByNumber: protectedProcedure
+      .input(z.object({ entryNumber: z.string() }))
+      .query(async ({ ctx, input }) => {
+        const entry = await db.query.journalEntries.findFirst({
+          where: and(eq(journalEntries.entryNumber, input.entryNumber), eq(journalEntries.orgId, ctx.user.orgId)),
+        });
+        if (!entry) return null;
+        const lines = await db.query.journalEntryLines.findMany({
+          where: eq(journalEntryLines.entryId, entry.id),
+          orderBy: (l, { asc }) => [asc(l.sortOrder)],
+        });
+        return { ...entry, lines };
+      }),
   }),
 
   // ─── Vouchers ────────────────────────────────────────────────────────────────
