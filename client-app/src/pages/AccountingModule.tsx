@@ -1295,83 +1295,85 @@ function ChartOfAccountsPage() {
             </TabsList>
 
             {/* ══ Tab 1: البيانات الرئيسية ══ */}
-            <TabsContent value="main" className="mt-0 p-5 space-y-5 overflow-y-auto flex-1">
+            <TabsContent value="main" className="mt-0 overflow-y-auto flex-1" dir="rtl">
+              <div className="p-4 space-y-4">
 
               {/* ── قسم: بيانات الحساب الأساسية ── */}
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-1 h-4 rounded-full bg-blue-600" />
-                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">بيانات الحساب الأساسية</span>
+              <div className="rounded-xl border border-blue-100 bg-blue-50/30 overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-2 bg-blue-600/10 border-b border-blue-100">
+                  <div className="w-2 h-2 rounded-full bg-blue-600" />
+                  <span className="text-[11px] font-bold text-blue-800 tracking-wide">بيانات الحساب الأساسية</span>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  {/* كود الحساب */}
+                <div className="p-4 grid grid-cols-2 gap-3" dir="rtl">
+                  {/* كود الحساب — يمين أولاً */}
                   <div className="space-y-1">
-                    <Label className="text-[11px] font-semibold text-slate-600">كود الحساب <span className="text-red-500">*</span></Label>
+                    <Label className="text-[11px] font-bold text-slate-700">كود الحساب <span className="text-red-500">*</span></Label>
                     <Input
                       value={form.code} onChange={e => setF("code", e.target.value)}
-                      className={`h-8 text-sm font-mono bg-blue-50/60 border-blue-200 focus:border-blue-500 focus:bg-white ${formErrors.code ? "border-red-400 bg-red-50" : ""}`}
-                      placeholder="مثال: 1101" dir="ltr" />
+                      className={`h-9 text-base font-mono font-bold tracking-widest border-2 text-blue-700 ${formErrors.code ? "border-red-400 bg-red-50" : "border-blue-200 bg-white focus:border-blue-500"}`}
+                      placeholder="1101" dir="ltr" />
                     {formErrors.code && <p className="text-[10px] text-red-500 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{formErrors.code}</p>}
                   </div>
                   {/* نوع الحساب */}
                   <div className="space-y-1">
-                    <Label className="text-[11px] font-semibold text-slate-600">نوع الحساب <span className="text-red-500">*</span></Label>
+                    <Label className="text-[11px] font-bold text-slate-700">نوع الحساب <span className="text-red-500">*</span></Label>
                     <Select value={form.accountLevelType} onValueChange={v => setF("accountLevelType", v)}>
-                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="h-9 text-xs border-2 border-slate-200 bg-white"><SelectValue /></SelectTrigger>
                       <SelectContent dir="rtl">
-                        <SelectItem value="root">جذري — حساب رئيسي بلا أب</SelectItem>
-                        <SelectItem value="general">عام — حساب تجميعي</SelectItem>
-                        <SelectItem value="sub">فرعي — يقبل الحركات</SelectItem>
+                        <SelectItem value="root">🔷 جذري — حساب رئيسي بلا أب</SelectItem>
+                        <SelectItem value="general">🔶 عام — حساب تجميعي</SelectItem>
+                        <SelectItem value="sub">🟢 فرعي — يقبل الحركات</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  {/* اسم 1 */}
-                  <div className="space-y-1">
-                    <Label className="text-[11px] font-semibold text-slate-600">اسم الحساب (عربي) <span className="text-red-500">*</span></Label>
+                  {/* اسم الحساب العربي — عرض كامل */}
+                  <div className="col-span-2 space-y-1">
+                    <Label className="text-[11px] font-bold text-slate-700">اسم الحساب (عربي) <span className="text-red-500">*</span></Label>
                     <Input
                       value={form.name} onChange={e => setF("name", e.target.value)}
-                      className={`h-8 text-xs ${formErrors.name ? "border-red-400 bg-red-50" : ""}`}
-                      placeholder="اسم الحساب بالعربي" />
+                      className={`h-9 text-sm border-2 ${formErrors.name ? "border-red-400 bg-red-50" : "border-slate-200 bg-white focus:border-blue-400"}`}
+                      placeholder="اسم الحساب بالعربية" />
                     {formErrors.name && <p className="text-[10px] text-red-500 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{formErrors.name}</p>}
                   </div>
-                  {/* اسم 2 */}
-                  <div className="space-y-1">
-                    <Label className="text-[11px] font-semibold text-slate-600">اسم الحساب (إنجليزي)</Label>
+                  {/* اسم الحساب الإنجليزي — عرض كامل */}
+                  <div className="col-span-2 space-y-1">
+                    <Label className="text-[11px] font-bold text-slate-700">اسم الحساب (إنجليزي)</Label>
                     <Input
                       value={form.nameEn} onChange={e => setF("nameEn", e.target.value)}
-                      className="h-8 text-xs" placeholder="Account name in English" dir="ltr" />
+                      className="h-9 text-sm border-2 border-slate-200 bg-white focus:border-blue-400"
+                      placeholder="Account name in English" dir="ltr" />
                   </div>
                   {/* الحساب الأب */}
                   <div className="space-y-1">
-                    <Label className="text-[11px] font-semibold text-slate-600">
-                      الحساب الأب {form.accountLevelType !== "root" && <span className="text-red-500">*</span>}
+                    <Label className="text-[11px] font-bold text-slate-700">
+                      يصبّ في (الحساب الأب) {form.accountLevelType !== "root" && <span className="text-red-500">*</span>}
                     </Label>
                     <Select
                       value={form.parentId || "none"}
                       onValueChange={v => setF("parentId", v === "none" ? "" : v)}
                       disabled={form.accountLevelType === "root"}>
-                      <SelectTrigger className={`h-8 text-xs ${form.accountLevelType === "root" ? "opacity-50 bg-slate-50" : ""} ${formErrors.parentId ? "border-red-400 bg-red-50" : ""}`}>
+                      <SelectTrigger className={`h-9 text-xs border-2 ${form.accountLevelType === "root" ? "opacity-40 bg-slate-50 border-slate-100" : formErrors.parentId ? "border-red-400 bg-red-50" : "border-slate-200 bg-white"}`}>
                         <SelectValue placeholder="اختر الحساب الأب..." />
                       </SelectTrigger>
                       <SelectContent dir="rtl">
                         <SelectItem value="none">— بدون حساب أب —</SelectItem>
                         {listQuery.data?.filter(a => a.isParent === true).map(a => (
                           <SelectItem key={a.id} value={String(a.id)}>
-                            <span className="font-mono text-[10px] text-muted-foreground ml-1">{a.code}</span> {a.name}
+                            <span className="font-mono text-[10px] text-blue-600 ml-1">{a.code}</span> {a.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    {form.accountLevelType === "root" && <p className="text-[10px] text-purple-600">الحساب الجذري لا يحتاج حساباً أباً</p>}
+                    {form.accountLevelType === "root" && <p className="text-[10px] text-blue-500">الجذري لا يحتاج حساباً أباً</p>}
                     {formErrors.parentId && <p className="text-[10px] text-red-500 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{formErrors.parentId}</p>}
                   </div>
                   {/* المستوى (auto) */}
                   <div className="space-y-1">
-                    <Label className="text-[11px] font-semibold text-slate-600">المستوى (تلقائي)</Label>
-                    <div className="h-8 rounded border border-slate-200 bg-slate-50 px-3 flex items-center gap-2">
-                      <span className="text-lg font-bold text-blue-700">{computedLevel}</span>
-                      <span className="text-xs text-slate-400">
-                        {computedLevel === 1 ? "المستوى الأول" : computedLevel === 2 ? "المستوى الثاني" : computedLevel === 3 ? "المستوى الثالث" : `المستوى ${computedLevel}`}
+                    <Label className="text-[11px] font-bold text-slate-700">المستوى (تلقائي)</Label>
+                    <div className="h-9 rounded-lg border-2 border-slate-200 bg-slate-50 px-3 flex items-center gap-2">
+                      <span className="text-xl font-black text-blue-600">{computedLevel}</span>
+                      <span className="text-[10px] text-slate-400 font-medium">
+                        {["","الأول","الثاني","الثالث","الرابع","الخامس"][computedLevel] ?? `المستوى ${computedLevel}`}
                       </span>
                     </div>
                   </div>
@@ -1379,28 +1381,28 @@ function ChartOfAccountsPage() {
               </div>
 
               {/* ── قسم: الخصائص والإعدادات ── */}
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-1 h-4 rounded-full bg-emerald-500" />
-                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">الخصائص والإعدادات</span>
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50/20 overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-2 bg-emerald-600/10 border-b border-emerald-100">
+                  <div className="w-2 h-2 rounded-full bg-emerald-600" />
+                  <span className="text-[11px] font-bold text-emerald-800 tracking-wide">الخصائص والإعدادات</span>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 grid grid-cols-2 gap-3" dir="rtl">
                   {/* طبيعة الحساب */}
                   <div className="space-y-1">
-                    <Label className="text-[11px] font-semibold text-slate-600">طبيعة الحساب</Label>
+                    <Label className="text-[11px] font-bold text-slate-700">طبيعة الحساب</Label>
                     <Select value={form.nature} onValueChange={v => setF("nature", v)}>
-                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="h-9 text-xs border-2 border-slate-200 bg-white"><SelectValue /></SelectTrigger>
                       <SelectContent dir="rtl">
-                        <SelectItem value="debit">مدين</SelectItem>
-                        <SelectItem value="credit">دائن</SelectItem>
+                        <SelectItem value="debit">🔵 مدين</SelectItem>
+                        <SelectItem value="credit">🔴 دائن</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  {/* نوع الحساب المالي */}
+                  {/* التصنيف المالي */}
                   <div className="space-y-1">
-                    <Label className="text-[11px] font-semibold text-slate-600">التصنيف المالي</Label>
+                    <Label className="text-[11px] font-bold text-slate-700">التصنيف المالي</Label>
                     <Select value={form.accountType} onValueChange={v => setF("accountType", v)}>
-                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="h-9 text-xs border-2 border-slate-200 bg-white"><SelectValue /></SelectTrigger>
                       <SelectContent dir="rtl">
                         <SelectItem value="assets">أصول</SelectItem>
                         <SelectItem value="liabilities">خصوم</SelectItem>
@@ -1412,13 +1414,13 @@ function ChartOfAccountsPage() {
                   </div>
                   {/* مركز التكلفة */}
                   <div className="space-y-1">
-                    <Label className="text-[11px] font-semibold text-slate-600">مركز التكلفة</Label>
+                    <Label className="text-[11px] font-bold text-slate-700">مركز التكلفة</Label>
                     <Select value={form.costCenterType} onValueChange={v => setF("costCenterType", v)}>
-                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="h-9 text-xs border-2 border-slate-200 bg-white"><SelectValue /></SelectTrigger>
                       <SelectContent dir="rtl">
                         <SelectItem value="not_allowed">غير مسموح</SelectItem>
                         <SelectItem value="optional">اختياري</SelectItem>
-                        <SelectItem value="mandatory">إجباري</SelectItem>
+                        <SelectItem value="mandatory">إجباري ⚠️</SelectItem>
                       </SelectContent>
                     </Select>
                     {form.costCenterType === "mandatory" && (
@@ -1427,48 +1429,52 @@ function ChartOfAccountsPage() {
                   </div>
                   {/* حالة الحساب */}
                   <div className="space-y-1">
-                    <Label className="text-[11px] font-semibold text-slate-600">حالة الحساب</Label>
+                    <Label className="text-[11px] font-bold text-slate-700">حالة الحساب</Label>
                     <Select value={form.status} onValueChange={v => setF("status", v)}>
-                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className={`h-9 text-xs border-2 bg-white ${form.status === "active" ? "border-emerald-300 text-emerald-700" : "border-red-200 text-red-600"}`}><SelectValue /></SelectTrigger>
                       <SelectContent dir="rtl">
-                        <SelectItem value="active">نشط</SelectItem>
-                        <SelectItem value="suspended">موقوف</SelectItem>
+                        <SelectItem value="active">✅ نشط</SelectItem>
+                        <SelectItem value="suspended">🔴 موقوف</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
 
                 {/* يقبل الحركات اليومية */}
-                <div className={`mt-3 rounded-lg border-2 p-3 flex items-center gap-3 transition-all ${form.accountLevelType === "sub" ? "border-emerald-200 bg-emerald-50/50" : "border-slate-100 bg-slate-50 opacity-60"}`}>
+                <div className={`mx-4 mb-4 rounded-lg border-2 p-3 flex items-start gap-3 transition-all ${form.accountLevelType === "sub" ? "border-emerald-300 bg-emerald-50" : "border-slate-100 bg-slate-50/60 opacity-50"}`}>
                   <input
                     id="allowPosting"
                     type="checkbox"
                     checked={form.allowPosting}
                     disabled={form.accountLevelType !== "sub"}
                     onChange={e => setF("allowPosting", e.target.checked)}
-                    className="w-4 h-4 accent-emerald-600 cursor-pointer" />
+                    className="w-4 h-4 mt-0.5 accent-emerald-600 cursor-pointer shrink-0" />
                   <div>
-                    <label htmlFor="allowPosting" className={`text-xs font-semibold cursor-pointer ${form.accountLevelType !== "sub" ? "text-slate-400" : "text-slate-700"}`}>
+                    <label htmlFor="allowPosting" className={`text-xs font-bold cursor-pointer ${form.accountLevelType !== "sub" ? "text-slate-400" : "text-slate-700"}`}>
                       يقبل الحركات اليومية (القيود المحاسبية)
                     </label>
                     <p className="text-[10px] text-slate-400 mt-0.5">
-                      {form.accountLevelType === "root" ? "الحساب الجذري لا يقبل حركات مباشرة" : form.accountLevelType === "general" ? "الحساب العام لا يقبل حركات مباشرة — يُستخدم للتجميع فقط" : "الحساب الفرعي يقبل تسجيل القيود اليومية"}
+                      {form.accountLevelType === "root" ? "الجذري لا يقبل حركات مباشرة" : form.accountLevelType === "general" ? "العام للتجميع فقط — لا يقبل حركات مباشرة" : "الفرعي يقبل تسجيل القيود اليومية مباشرةً"}
                     </p>
                   </div>
                 </div>
               </div>
 
               {/* ── قسم: ملاحظات ── */}
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-1 h-4 rounded-full bg-slate-400" />
-                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">ملاحظات</span>
+              <div className="rounded-xl border border-slate-200 bg-slate-50/40 overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 border-b border-slate-200">
+                  <div className="w-2 h-2 rounded-full bg-slate-400" />
+                  <span className="text-[11px] font-bold text-slate-600 tracking-wide">ملاحظات</span>
                 </div>
-                <textarea
-                  value={form.notes}
-                  onChange={e => setF("notes", e.target.value)}
-                  className="w-full h-16 text-xs rounded-lg border border-slate-200 px-3 py-2 resize-none bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                  placeholder="ملاحظات إضافية على الحساب (اختياري)..." dir="rtl" />
+                <div className="p-3">
+                  <textarea
+                    value={form.notes}
+                    onChange={e => setF("notes", e.target.value)}
+                    className="w-full h-14 text-xs rounded-lg border-2 border-slate-200 px-3 py-2 resize-none bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300"
+                    placeholder="ملاحظات إضافية على الحساب (اختياري)..." dir="rtl" />
+                </div>
+              </div>
+
               </div>
             </TabsContent>
 
