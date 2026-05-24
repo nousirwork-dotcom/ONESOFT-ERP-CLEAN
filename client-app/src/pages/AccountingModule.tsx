@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useTabManager } from "@/contexts/TabManagerContext";
 import type { KeyboardEvent } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -14,6 +14,7 @@ import {
   ArrowUpCircle, ArrowDownCircle, Upload, AlertCircle,
   Folder, FolderOpen, LayoutList, Network,
   FileDown, FileSpreadsheet, ChevronDown as ChevronDownIcon,
+  Eye, Copy, PowerOff, PlusCircle, MoreVertical,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1014,12 +1015,114 @@ const lvlText = (l: number) => [
 const treeTypeLabel = (t: string | null) =>
   ({ assets:"أصول", liabilities:"خصوم", equity:"حقوق ملكية", revenue:"إيرادات", expenses:"مصروفات" }[t ?? ""] ?? (t ?? ""));
 
-function AccountTreeNode({ account, depth, selectedId, onSelect, onDelete }: {
+// ─── Tree Context Menu ────────────────────────────────────────────────────────
+type CtxMenuState = { account: TAccount; x: number; y: number } | null;
+
+function TreeContextMenu({
+  state, onClose, onAddChild, onView, onCopy, onDelete,
+}: {
+  state: CtxMenuState;
+  onClose: () => void;
+  onAddChild: (a: TAccount) => void;
+  onView: (a: TAccount) => void;
+  onCopy: (a: TAccount) => void;
+  onDelete: (id: number, name: string) => void;
+}) {
+  useEffect(() => {
+    if (!state) return;
+    const handleClick = () => onClose();
+    const handleKey = (e: globalThis.KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    setTimeout(() => document.addEventListener("click", handleClick, { once: true }), 0);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("click", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [state, onClose]);
+
+  if (!state) return null;
+
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const menuW = 210;
+  const menuH = state.account.isParent ? 280 : 230;
+  const x = state.x + menuW > vw ? state.x - menuW : state.x;
+  const y = state.y + menuH > vh ? state.y - menuH : state.y;
+
+  const sep = <div className="my-1 border-t border-border/60" />;
+
+  const item = (
+    icon: React.ReactNode,
+    label: string,
+    onClick: () => void,
+    colorCls = "text-foreground hover:bg-accent",
+  ) => (
+    <button
+      className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-xs rounded transition-colors ${colorCls}`}
+      onClick={e => { e.stopPropagation(); onClick(); onClose(); }}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+
+  return (
+    <div
+      dir="rtl"
+      className="fixed z-[9999] bg-popover border border-border rounded-lg shadow-lg p-1.5 min-w-[210px]"
+      style={{ left: x, top: y }}
+      onClick={e => e.stopPropagation()}
+      onContextMenu={e => e.preventDefault()}
+    >
+      {/* header */}
+      <div className="px-3 py-1.5 mb-1 border-b border-border/60">
+        <p className="text-[10px] text-muted-foreground">حساب</p>
+        <p className="text-xs font-semibold truncate max-w-[180px]">{state.account.code} — {state.account.name}</p>
+      </div>
+
+      {/* إضافة حساب فرعي — only if parent */}
+      {state.account.isParent && item(
+        <PlusCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />,
+        "إضافة حساب فرعي",
+        () => onAddChild(state.account),
+        "text-emerald-700 hover:bg-emerald-50",
+      )}
+
+      {item(<Eye className="w-3.5 h-3.5 shrink-0" />, "عرض الحساب", () => onView(state.account))}
+      {item(<Edit2 className="w-3.5 h-3.5 shrink-0" />, "تعديل الحساب", () => {
+        toast.info("قريباً — تعديل الحساب");
+      })}
+      {item(<Copy className="w-3.5 h-3.5 shrink-0" />, "نسخ الحساب", () => onCopy(state.account))}
+
+      {sep}
+
+      {item(
+        <PowerOff className="w-3.5 h-3.5 shrink-0" />,
+        "تعطيل الحساب",
+        () => toast.info("قريباً — تعطيل الحساب"),
+        "text-amber-700 hover:bg-amber-50",
+      )}
+
+      {sep}
+
+      {item(
+        <Trash2 className="w-3.5 h-3.5 shrink-0" />,
+        "حذف الحساب",
+        () => onDelete(state.account.id, state.account.name ?? ""),
+        "text-red-600 hover:bg-red-50",
+      )}
+    </div>
+  );
+}
+
+// ─── Tree Node ────────────────────────────────────────────────────────────────
+function AccountTreeNode({ account, depth, selectedId, onSelect, onDelete, onContextMenu }: {
   account: TAccount;
   depth: number;
   selectedId: number | null;
   onSelect: (a: TAccount) => void;
   onDelete: (id: number, name: string) => void;
+  onContextMenu: (a: TAccount, e: React.MouseEvent) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const lvl = account.level ?? 1;
@@ -1038,6 +1141,7 @@ function AccountTreeNode({ account, depth, selectedId, onSelect, onDelete }: {
           ${lvlBg(lvl)} ${isSelected ? "!bg-blue-100 ring-1 ring-inset ring-blue-400" : "hover:!bg-blue-50/60"}`}
         style={{ paddingRight: `${8 + depth * TREE_INDENT}px`, paddingLeft: "8px" }}
         onClick={() => onSelect(account)}
+        onContextMenu={e => { e.preventDefault(); onContextMenu(account, e); }}
       >
         {/* toggle */}
         <span className="w-4 h-4 shrink-0 flex items-center justify-center">
@@ -1075,19 +1179,23 @@ function AccountTreeNode({ account, depth, selectedId, onSelect, onDelete }: {
         {/* level pill */}
         <span className="text-[10px] text-slate-300 w-4 text-center shrink-0">{account.level}</span>
 
-        {/* delete */}
-        <span className="opacity-0 group-hover:opacity-100 shrink-0 w-5 flex justify-center">
-          {account.isParent
-            ? <AlertCircle className="w-3 h-3 text-amber-300" title="يحتوي أبناء" />
-            : (
-              <button
-                className="text-red-300 hover:text-red-500"
-                onClick={e => { e.stopPropagation(); onDelete(account.id, account.name ?? ""); }}
-              >
-                <Trash2 className="w-3 h-3" />
-              </button>
-            )
-          }
+        {/* context menu trigger (hover) */}
+        <span className="opacity-0 group-hover:opacity-100 shrink-0 flex items-center gap-0.5">
+          <button
+            className="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-200/80 text-slate-400 hover:text-slate-600"
+            onClick={e => { e.stopPropagation(); onContextMenu(account, e); }}
+            title="خيارات"
+          >
+            <MoreVertical className="w-3 h-3" />
+          </button>
+          {!account.isParent && (
+            <button
+              className="text-red-300 hover:text-red-500"
+              onClick={e => { e.stopPropagation(); onDelete(account.id, account.name ?? ""); }}
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          )}
         </span>
       </div>
 
@@ -1100,17 +1208,19 @@ function AccountTreeNode({ account, depth, selectedId, onSelect, onDelete }: {
             </div>
           : childrenQ.data?.map(child => (
               <AccountTreeNode key={child.id} account={child} depth={depth + 1}
-                selectedId={selectedId} onSelect={onSelect} onDelete={onDelete} />
+                selectedId={selectedId} onSelect={onSelect} onDelete={onDelete}
+                onContextMenu={onContextMenu} />
             ))
       )}
     </>
   );
 }
 
-function AccountTreeRootView({ selectedId, onSelect, onDelete }: {
+function AccountTreeRootView({ selectedId, onSelect, onDelete, onContextMenu }: {
   selectedId: number | null;
   onSelect: (a: TAccount) => void;
   onDelete: (id: number, name: string) => void;
+  onContextMenu: (a: TAccount, e: React.MouseEvent) => void;
 }) {
   const rootQ = trpc.accounts.children.useQuery({ parentId: null }, { staleTime: 30_000 });
 
@@ -1124,7 +1234,8 @@ function AccountTreeRootView({ selectedId, onSelect, onDelete }: {
     <div>
       {rootQ.data?.map(account => (
         <AccountTreeNode key={account.id} account={account} depth={0}
-          selectedId={selectedId} onSelect={onSelect} onDelete={onDelete} />
+          selectedId={selectedId} onSelect={onSelect} onDelete={onDelete}
+          onContextMenu={onContextMenu} />
       ))}
     </div>
   );
@@ -1309,6 +1420,39 @@ function ChartOfAccountsPage() {
   const [viewMode, setViewMode] = useState<"tree" | "table">("tree");
   const [selectedAccount, setSelectedAccount] = useState<TAccount | null>(null);
   const [showExport, setShowExport] = useState(false);
+  const [ctxMenu, setCtxMenu] = useState<CtxMenuState>(null);
+
+  const handleTreeContextMenu = useCallback((account: TAccount, e: React.MouseEvent) => {
+    e.preventDefault();
+    setCtxMenu({ account, x: e.clientX, y: e.clientY });
+  }, []);
+
+  const handleCtxAddChild = useCallback((parent: TAccount) => {
+    setCtxMenu(null);
+    setForm({
+      ...initForm(),
+      parentId: String(parent.id),
+      accountLevelType: "sub",
+      accountType: (parent.accountType as any) ?? "assets",
+      nature: (parent.nature as any) ?? "debit",
+    });
+    setFormErrors({});
+    setShowForm(true);
+  }, []);
+
+  const handleCtxView = useCallback((account: TAccount) => {
+    setCtxMenu(null);
+    setSelectedAccount(account);
+  }, []);
+
+  const handleCtxCopy = useCallback((account: TAccount) => {
+    setCtxMenu(null);
+    const text = `${account.code} - ${account.name}`;
+    navigator.clipboard.writeText(text).then(
+      () => toast.success(`تم نسخ: ${text}`),
+      () => toast.error("فشل النسخ"),
+    );
+  }, []);
 
   const typeMap: Record<string, string> = {
     أصول: "assets", assets: "assets",
@@ -1586,9 +1730,20 @@ function ChartOfAccountsPage() {
                 selectedId={selectedAccount?.id ?? null}
                 onSelect={setSelectedAccount}
                 onDelete={handleTreeDelete}
+                onContextMenu={handleTreeContextMenu}
               />
             </div>
           </Card>
+
+          {/* ── Context Menu ── */}
+          <TreeContextMenu
+            state={ctxMenu}
+            onClose={() => setCtxMenu(null)}
+            onAddChild={handleCtxAddChild}
+            onView={handleCtxView}
+            onCopy={handleCtxCopy}
+            onDelete={(id, name) => { setCtxMenu(null); handleTreeDelete(id, name); }}
+          />
 
           {/* detail panel */}
           {selectedAccount && (
