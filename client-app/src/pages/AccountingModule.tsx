@@ -1273,7 +1273,7 @@ function ChartOfAccountsPage() {
       </Dialog>
 
       <Dialog open={showForm} onOpenChange={v => { setShowForm(v); if (!v) { setForm(initForm()); setFormErrors({}); } }}>
-        <DialogContent className="max-w-2xl p-0 gap-0 overflow-hidden rounded-xl shadow-2xl" dir="rtl">
+        <DialogContent className="max-w-2xl p-0 gap-0 rounded-xl shadow-2xl flex flex-col max-h-[90vh]" dir="rtl">
 
           {/* ══ Header ══ */}
           <div className="bg-gradient-to-l from-blue-800 to-blue-600 px-5 py-3 flex items-center gap-3">
@@ -1287,15 +1287,15 @@ function ChartOfAccountsPage() {
           </div>
 
           {/* ══ Tabs ══ */}
-          <Tabs defaultValue="main" className="w-full">
-            <TabsList className="w-full justify-start rounded-none border-b bg-slate-50 h-9 px-4 gap-1">
+          <Tabs defaultValue="main" className="w-full flex flex-col flex-1 min-h-0">
+            <TabsList className="w-full justify-start rounded-none border-b bg-slate-50 h-9 px-4 gap-1 shrink-0">
               <TabsTrigger value="main" className="text-xs h-7 rounded px-4 gap-1.5 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-sm">
                 <FileText className="w-3 h-3" /> البيانات الرئيسية
               </TabsTrigger>
             </TabsList>
 
             {/* ══ Tab 1: البيانات الرئيسية ══ */}
-            <TabsContent value="main" className="mt-0 p-5 space-y-5">
+            <TabsContent value="main" className="mt-0 p-5 space-y-5 overflow-y-auto flex-1">
 
               {/* ── قسم: بيانات الحساب الأساسية ── */}
               <div>
@@ -1316,15 +1316,14 @@ function ChartOfAccountsPage() {
                   {/* نوع الحساب */}
                   <div className="space-y-1">
                     <Label className="text-[11px] font-semibold text-slate-600">نوع الحساب <span className="text-red-500">*</span></Label>
-                    <div className="grid grid-cols-3 gap-1 h-8">
-                      {([["root","جذري","bg-purple-100 border-purple-400 text-purple-800"],["general","عام","bg-amber-100 border-amber-400 text-amber-800"],["sub","فرعي","bg-emerald-100 border-emerald-400 text-emerald-800"]] as const).map(([val, lbl, cls]) => (
-                        <button key={val} type="button"
-                          onClick={() => setF("accountLevelType", val)}
-                          className={`h-8 rounded text-[11px] font-semibold border-2 transition-all ${form.accountLevelType === val ? cls + " ring-2 ring-offset-1 ring-current" : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"}`}>
-                          {lbl}
-                        </button>
-                      ))}
-                    </div>
+                    <Select value={form.accountLevelType} onValueChange={v => setF("accountLevelType", v)}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent dir="rtl">
+                        <SelectItem value="root">جذري — حساب رئيسي بلا أب</SelectItem>
+                        <SelectItem value="general">عام — حساب تجميعي</SelectItem>
+                        <SelectItem value="sub">فرعي — يقبل الحركات</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                   {/* اسم 1 */}
                   <div className="space-y-1">
@@ -1354,7 +1353,7 @@ function ChartOfAccountsPage() {
                       <SelectTrigger className={`h-8 text-xs ${form.accountLevelType === "root" ? "opacity-50 bg-slate-50" : ""} ${formErrors.parentId ? "border-red-400 bg-red-50" : ""}`}>
                         <SelectValue placeholder="اختر الحساب الأب..." />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent dir="rtl">
                         <SelectItem value="none">— بدون حساب أب —</SelectItem>
                         {listQuery.data?.filter(a => a.isParent === true).map(a => (
                           <SelectItem key={a.id} value={String(a.id)}>
@@ -1389,22 +1388,20 @@ function ChartOfAccountsPage() {
                   {/* طبيعة الحساب */}
                   <div className="space-y-1">
                     <Label className="text-[11px] font-semibold text-slate-600">طبيعة الحساب</Label>
-                    <div className="grid grid-cols-2 gap-1 h-8">
-                      {([["debit","مدين","bg-blue-100 border-blue-400 text-blue-800"],["credit","دائن","bg-rose-100 border-rose-400 text-rose-800"]] as const).map(([val,lbl,cls]) => (
-                        <button key={val} type="button"
-                          onClick={() => setF("nature", val)}
-                          className={`h-8 rounded text-[11px] font-semibold border-2 transition-all ${form.nature === val ? cls + " ring-2 ring-offset-1 ring-current" : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"}`}>
-                          {lbl}
-                        </button>
-                      ))}
-                    </div>
+                    <Select value={form.nature} onValueChange={v => setF("nature", v)}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent dir="rtl">
+                        <SelectItem value="debit">مدين</SelectItem>
+                        <SelectItem value="credit">دائن</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                   {/* نوع الحساب المالي */}
                   <div className="space-y-1">
                     <Label className="text-[11px] font-semibold text-slate-600">التصنيف المالي</Label>
                     <Select value={form.accountType} onValueChange={v => setF("accountType", v)}>
                       <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>
+                      <SelectContent dir="rtl">
                         <SelectItem value="assets">أصول</SelectItem>
                         <SelectItem value="liabilities">خصوم</SelectItem>
                         <SelectItem value="equity">حقوق ملكية</SelectItem>
@@ -1418,7 +1415,7 @@ function ChartOfAccountsPage() {
                     <Label className="text-[11px] font-semibold text-slate-600">مركز التكلفة</Label>
                     <Select value={form.costCenterType} onValueChange={v => setF("costCenterType", v)}>
                       <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>
+                      <SelectContent dir="rtl">
                         <SelectItem value="not_allowed">غير مسموح</SelectItem>
                         <SelectItem value="optional">اختياري</SelectItem>
                         <SelectItem value="mandatory">إجباري</SelectItem>
@@ -1431,15 +1428,13 @@ function ChartOfAccountsPage() {
                   {/* حالة الحساب */}
                   <div className="space-y-1">
                     <Label className="text-[11px] font-semibold text-slate-600">حالة الحساب</Label>
-                    <div className="grid grid-cols-2 gap-1 h-8">
-                      {([["active","نشط","bg-emerald-100 border-emerald-400 text-emerald-800"],["suspended","موقوف","bg-slate-100 border-slate-400 text-slate-600"]] as const).map(([val,lbl,cls]) => (
-                        <button key={val} type="button"
-                          onClick={() => setF("status", val)}
-                          className={`h-8 rounded text-[11px] font-semibold border-2 transition-all ${form.status === val ? cls + " ring-2 ring-offset-1 ring-current" : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"}`}>
-                          {lbl}
-                        </button>
-                      ))}
-                    </div>
+                    <Select value={form.status} onValueChange={v => setF("status", v)}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent dir="rtl">
+                        <SelectItem value="active">نشط</SelectItem>
+                        <SelectItem value="suspended">موقوف</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
