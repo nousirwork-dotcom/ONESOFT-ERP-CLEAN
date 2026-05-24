@@ -882,21 +882,23 @@ export const appRouter = router({
           if (!parent.length) throw new TRPCError({ code: 'BAD_REQUEST', message: 'الحساب الأب غير موجود' });
           if (!parent[0].isParent) throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن إضافة حساب تحت حساب فرعي — الحساب الفرعي لا يقبل حسابات تحته' });
         }
-        const [account] = await db.insert(chartOfAccounts).values({
+        const insertData: Record<string, unknown> = {
           orgId: ctx.user.orgId,
           code: input.code,
           name: input.name,
-          nameEn: input.nameEn,
           accountType: input.accountType,
           nature: input.nature,
           level: input.level,
-          parentId: input.parentId,
           isParent: input.isParent,
           allowPosting: input.allowPosting,
           costCenterType: input.costCenterType,
           isActive: input.isActive,
-          notes: input.notes,
-        }).returning();
+        };
+        if (input.nameEn)   insertData.nameEn  = input.nameEn;
+        if (input.parentId) insertData.parentId = input.parentId;
+        if (input.notes)    insertData.notes    = input.notes;
+
+        const [account] = await db.insert(chartOfAccounts).values(insertData as any).returning();
         // تحديث الحساب الأب: اضبط isParent=true إذا لم يكن كذلك
         if (input.parentId) {
           await db.update(chartOfAccounts).set({ isParent: true })
