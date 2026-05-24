@@ -196,54 +196,244 @@ function AccountingOverview({ onSelect }: { onSelect: (id: MenuId) => void }) {
   );
 }
 
-// ─── Account Search Combobox ─────────────────────────────────────────────────
-function AccountSearchCombobox({
-  accounts,
-  value,
-  onChange,
+// ─── Smart Account Search ─────────────────────────────────────────────────────
+type TJAcc = {
+  id: number; code: string; name: string;
+  nature: string | null; allowPosting: boolean | null;
+  isParent: boolean | null; level: number | null;
+  accountType: string | null;
+};
+
+const RECENT_KEY = "onesoft_recent_accs";
+const getRecentIds = (): string[] => { try { return JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]"); } catch { return []; } };
+const addRecentId  = (id: string) => { const ids = [id, ...getRecentIds().filter(x => x !== id)].slice(0, 10); localStorage.setItem(RECENT_KEY, JSON.stringify(ids)); };
+
+const natBadge = (n: string | null) =>
+  n === "debit"
+    ? <span className="text-[9px] px-1 py-0.5 rounded bg-blue-50 text-blue-600 font-medium shrink-0">مدين</span>
+    : <span className="text-[9px] px-1 py-0.5 rounded bg-red-50 text-red-600 font-medium shrink-0">دائن</span>;
+
+const typeLabel = (t: string | null) =>
+  ({ assets:"أصول", liabilities:"خصوم", equity:"حقوق ملكية", revenue:"إيرادات", expenses:"مصروفات" }[t ?? ""] ?? "");
+
+// ── Full-screen Account Picker Dialog (F2 / Ctrl+K) ──────────────────────────
+function AccountPickerDialog({
+  open, onClose, accounts, recentIds, onSelect,
 }: {
-  accounts: { id: number; code: string; name: string; allowPosting: boolean }[];
-  value: string;
-  onChange: (id: string, name: string) => void;
+  open: boolean; onClose: () => void;
+  accounts: TJAcc[];
+  recentIds: string[];
+  onSelect: (id: string, name: string, nature: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
+  const [q, setQ] = useState("");
+  const [hi, setHi] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef  = useRef<HTMLDivElement>(null);
+
   const filtered = useMemo(() => {
-    if (!search) return accounts.filter(a => a.allowPosting).slice(0, 50);
-    const q = search.toLowerCase();
-    return accounts.filter(a => a.allowPosting && (a.code.includes(q) || a.name.toLowerCase().includes(q))).slice(0, 50);
-  }, [accounts, search]);
-  const selected = accounts.find(a => a.id.toString() === value);
+    const sq = q.trim().toLowerCase();
+    if (!sq) {
+      const recent = recentIds.map(id => accounts.find(a => a.id.toString() === id)).filter(Boolean) as TJAcc[];
+      const rest   = accounts.filter(a => a.allowPosting && !recentIds.includes(a.id.toString())).slice(0, 40);
+      return [...recent, ...rest];
+    }
+    return accounts.filter(a => a.code.includes(sq) || a.name.toLowerCase().includes(sq)).slice(0, 60);
+  }, [q, accounts, recentIds]);
+
+  useEffect(() => { if (open) { setQ(""); setHi(0); setTimeout(() => inputRef.current?.focus(), 50); } }, [open]);
+  useEffect(() => { setHi(0); }, [filtered]);
+  useEffect(() => {
+    const el = listRef.current?.children[hi] as HTMLElement;
+    el?.scrollIntoView({ block: "nearest" });
+  }, [hi]);
+
+  const pick = (a: TJAcc) => {
+    if (a.isParent) { toast.warning("لا يمكن التقييد على حساب رئيسي"); return; }
+    addRecentId(a.id.toString());
+    onSelect(a.id.toString(), a.name, a.nature ?? "debit");
+    onClose();
+  };
+
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); setHi(h => Math.min(h + 1, filtered.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setHi(h => Math.max(h - 1, 0)); }
+    else if (e.key === "Enter" && filtered[hi]) pick(filtered[hi]);
+    else if (e.key === "Escape") onClose();
+  };
+
+  if (!open) return null;
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button variant="outline" role="combobox" className="h-7 text-xs w-full justify-between font-normal px-2">
-          <span className="truncate">{selected ? `${selected.code} - ${selected.name}` : "اختر حساب..."}</span>
-          <ChevronDown className="w-3 h-3 shrink-0 text-muted-foreground" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-72 p-0" align="start">
-        <Command>
-          <CommandInput placeholder="بحث بالكود أو الاسم..." value={search} onValueChange={setSearch} className="text-xs h-8" />
-          <CommandList>
-            <CommandEmpty className="text-xs py-3 text-center text-muted-foreground">لا توجد نتائج</CommandEmpty>
-            <CommandGroup>
-              {filtered.map(a => (
-                <CommandItem key={a.id} value={`${a.code} ${a.name}`} onSelect={() => {
-                  onChange(a.id.toString(), a.name);
-                  setOpen(false);
-                  setSearch("");
-                }} className="text-xs cursor-pointer">
-                  <span className="font-mono text-muted-foreground ml-2">{a.code}</span>
-                  <span>{a.name}</span>
-                  {value === a.id.toString() && <Check className="w-3 h-3 mr-auto text-primary" />}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+    <div className="fixed inset-0 z-[9998] flex items-start justify-center pt-20 bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-popover border border-border rounded-xl shadow-2xl w-[560px] max-h-[70vh] flex flex-col overflow-hidden" dir="rtl" onClick={e => e.stopPropagation()}>
+        {/* header */}
+        <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-3">
+          <Search className="w-4 h-4 text-muted-foreground shrink-0" />
+          <input
+            ref={inputRef} value={q} onChange={e => setQ(e.target.value)} onKeyDown={onKey}
+            placeholder="ابحث بكود الحساب أو اسمه..." dir="rtl"
+            className="flex-1 text-sm bg-transparent border-none outline-none placeholder:text-muted-foreground"
+          />
+          <kbd className="text-[10px] px-1.5 py-0.5 rounded bg-muted border border-border text-muted-foreground">Esc</kbd>
+        </div>
+        {/* section label */}
+        {!q.trim() && (
+          <div className="px-4 py-1.5 text-[10px] text-muted-foreground bg-muted/20 border-b border-border flex items-center gap-1.5">
+            <RefreshCw className="w-2.5 h-2.5" /> آخر الحسابات المستخدمة تظهر أولاً
+          </div>
+        )}
+        {/* list */}
+        <div ref={listRef} className="overflow-y-auto flex-1">
+          {filtered.length === 0 && (
+            <div className="text-xs text-center text-muted-foreground py-8">لا توجد نتائج مطابقة</div>
+          )}
+          {filtered.map((a, idx) => (
+            <button key={a.id} onClick={() => pick(a)}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-xs transition-colors border-b border-border/30
+                ${idx === hi ? "bg-primary/10 text-primary" : "hover:bg-accent/50"}
+                ${a.isParent ? "opacity-50" : ""}`}
+            >
+              <span className="font-mono w-20 shrink-0 text-right text-[11px]">{a.code}</span>
+              <span className="flex-1 text-right truncate font-medium">{a.name}</span>
+              <span className="text-[10px] text-muted-foreground shrink-0 w-16 text-right">{typeLabel(a.accountType)}</span>
+              <span className="text-[10px] text-muted-foreground shrink-0 w-8 text-center">م{a.level}</span>
+              {natBadge(a.nature)}
+              {a.isParent && <span className="text-[9px] px-1 py-0.5 rounded bg-amber-50 text-amber-600 shrink-0">رئيسي</span>}
+              {recentIds.includes(a.id.toString()) && !q && <RefreshCw className="w-2.5 h-2.5 text-muted-foreground/50 shrink-0" />}
+            </button>
+          ))}
+        </div>
+        {/* footer */}
+        <div className="px-4 py-2 border-t border-border bg-muted/20 flex items-center gap-4 text-[10px] text-muted-foreground">
+          <span>↑↓ تنقل</span><span>Enter اختيار</span><span>Esc إغلاق</span>
+          <span className="mr-auto">{filtered.length} حساب</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Inline Smart Account Input ────────────────────────────────────────────────
+function SmartAccountInput({
+  accounts, selectedId, onSelect, recentIds, onOpenPicker,
+  externalKeyDown, onFocusCb,
+  inputRef: externalInputRef,
+}: {
+  accounts: TJAcc[];
+  selectedId: string;
+  onSelect: (id: string, name: string, nature: string) => void;
+  recentIds: string[];
+  onOpenPicker?: () => void;
+  externalKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  onFocusCb?: () => void;
+  inputRef?: (el: HTMLInputElement | null) => void;
+}) {
+  const selected = useMemo(() => accounts.find(a => a.id.toString() === selectedId), [accounts, selectedId]);
+  const [q, setQ]     = useState(selected?.code ?? "");
+  const [open, setOpen] = useState(false);
+  const [hi, setHi]   = useState(0);
+  const wrapRef  = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { setQ(selected?.code ?? ""); }, [selected?.code]);
+
+  const filtered = useMemo(() => {
+    const sq = q.trim().toLowerCase();
+    if (!sq) {
+      const recent = recentIds.map(id => accounts.find(a => a.id.toString() === id)).filter(Boolean) as TJAcc[];
+      const rest   = accounts.filter(a => a.allowPosting && !recentIds.includes(a.id.toString())).slice(0, 20);
+      return [...recent, ...rest];
+    }
+    return accounts.filter(a => a.code.includes(sq) || a.name.toLowerCase().includes(sq)).slice(0, 30);
+  }, [q, accounts, recentIds]);
+
+  useEffect(() => { setHi(0); }, [filtered]);
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const pick = (a: TJAcc) => {
+    if (a.isParent) { toast.warning("لا يمكن التقييد على حساب رئيسي"); return; }
+    addRecentId(a.id.toString());
+    onSelect(a.id.toString(), a.name ?? "", a.nature ?? "debit");
+    setQ(a.code ?? "");
+    setOpen(false);
+  };
+
+  const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); setHi(h => Math.min(h + 1, filtered.length - 1)); setOpen(true); return; }
+    if (e.key === "ArrowUp")   { e.preventDefault(); setHi(h => Math.max(h - 1, 0)); return; }
+    if (e.key === "Escape")    { setOpen(false); setQ(selected?.code ?? ""); return; }
+    if (e.key === "F2")        { e.preventDefault(); onOpenPicker?.(); return; }
+    if ((e.key === "Enter" || (e.key === "Tab" && !e.shiftKey)) && open && filtered[hi]) {
+      e.preventDefault();
+      pick(filtered[hi]);
+      return;
+    }
+    externalKeyDown?.(e);
+  };
+
+  const displayText = open || !selected ? q : `${selected.code} — ${selected.name}`;
+
+  return (
+    <div ref={wrapRef} className="relative w-full">
+      <input
+        ref={el => { (inputRef as any).current = el; externalInputRef?.(el); }}
+        value={displayText}
+        dir="rtl"
+        onChange={e => { setQ(e.target.value); setOpen(true); setHi(0); }}
+        onFocus={() => { setOpen(true); onFocusCb?.(); if (selected) setQ(""); }}
+        onBlur={() => { setTimeout(() => { if (!wrapRef.current?.contains(document.activeElement)) { setOpen(false); setQ(selected?.code ?? ""); } }, 120); }}
+        onKeyDown={onKey}
+        placeholder="كود أو اسم الحساب..."
+        className={`h-7 w-full text-xs px-2 py-1 border border-input rounded-md bg-background
+          focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/60
+          ${selected ? "font-medium text-foreground" : "text-muted-foreground"}`}
+      />
+      {/* nature badge */}
+      {selected && !open && (
+        <span className="absolute left-1 top-1/2 -translate-y-1/2 pointer-events-none">
+          {natBadge(selected.nature)}
+        </span>
+      )}
+      {/* dropdown */}
+      {open && (
+        <div className="absolute top-full right-0 z-[9990] mt-0.5 w-80 bg-popover border border-border rounded-lg shadow-xl overflow-hidden" dir="rtl">
+          {!q.trim() && recentIds.length > 0 && (
+            <div className="px-3 py-1 text-[10px] text-muted-foreground bg-muted/30 border-b border-border flex items-center gap-1">
+              <RefreshCw className="w-2.5 h-2.5" /> آخر المستخدمة
+            </div>
+          )}
+          <div className="overflow-y-auto max-h-52">
+            {filtered.length === 0 && <div className="text-xs text-center text-muted-foreground py-4">لا توجد نتائج</div>}
+            {filtered.map((a, idx) => (
+              <button key={a.id} onMouseDown={() => pick(a)}
+                className={`w-full flex items-center gap-2 px-3 py-2 text-xs transition-colors
+                  ${idx === hi ? "bg-primary/10" : "hover:bg-accent/50"}
+                  ${a.isParent ? "opacity-50" : ""}`}
+              >
+                <span className="font-mono text-[11px] text-muted-foreground w-16 text-right shrink-0">{a.code}</span>
+                <span className="flex-1 text-right truncate">{a.name}</span>
+                {natBadge(a.nature)}
+                {a.isParent && <span className="text-[9px] px-1 py-0.5 rounded bg-amber-50 text-amber-500 shrink-0">رئيسي</span>}
+              </button>
+            ))}
+          </div>
+          <div className="px-3 py-1.5 border-t border-border bg-muted/20 flex items-center justify-between">
+            <span className="text-[10px] text-muted-foreground">↑↓ تنقل · Enter اختيار</span>
+            {onOpenPicker && (
+              <button onMouseDown={e => { e.preventDefault(); onOpenPicker(); }}
+                className="text-[10px] text-primary hover:underline flex items-center gap-1">
+                <Search className="w-2.5 h-2.5" /> F2 بحث موسّع
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -264,8 +454,31 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
   const [copiedLine, setCopiedLine] = useState<typeof lines[0] | null>(null);
   const cellRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
-  const emptyLine = () => ({ accountId: "", accountName: "", description: "", debit: "", credit: "", costCenterId: "", transferRelation: "", currency: "SAR" });
+  const emptyLine = () => ({ accountId: "", accountName: "", description: "", debit: "", credit: "", costCenterId: "", transferRelation: "", currency: "SAR", nature: "" });
   const [lines, setLines] = useState([emptyLine(), emptyLine()]);
+
+  const [recentIds, setRecentIds] = useState<string[]>(() => getRecentIds());
+  const [showPicker, setShowPicker]       = useState(false);
+  const [pickerTarget, setPickerTarget]   = useState<number>(0);
+
+  // F2 / Ctrl+K → open account picker for selected line
+  useEffect(() => {
+    const handler = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "F2" || (e.ctrlKey && e.key === "k")) {
+        e.preventDefault();
+        setPickerTarget(selectedLineIdx);
+        setShowPicker(true);
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [selectedLineIdx]);
+
+  const handleAccountSelect = useCallback((lineIdx: number, id: string, name: string, nature: string) => {
+    setLines(prev => prev.map((l, i) => i === lineIdx ? { ...l, accountId: id, accountName: name, nature } : l));
+    setRecentIds(getRecentIds());
+    setTimeout(() => cellRefs.current.get(`${lineIdx}-0`)?.focus(), 50);
+  }, []);
 
   const totalDebit  = lines.reduce((s, l) => s + (parseFloat(l.debit)  || 0), 0);
   const totalCredit = lines.reduce((s, l) => s + (parseFloat(l.credit) || 0), 0);
@@ -287,9 +500,9 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
     setSelectedLineIdx(0);
   }, []);
 
-  // أعمدة الجدول للتنقل بـ Tab
-  // 0: accountName, 1: description, 2: debit, 3: credit, 4: transferRelation
-  const JCOLS = 5;
+  // أعمدة الجدول للتنقل بـ Tab (SmartAccountInput → colIdx -1)
+  // 0: description, 1: debit, 2: credit, 3: transferRelation
+  const JCOLS = 4;
 
   const handleCellKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>, rowIdx: number, colIdx: number) => {
     // Ctrl+C: نسخ السطر
@@ -426,14 +639,22 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
       </Card>
 
       {/* Lines Table */}
+      {/* Account Picker Dialog (F2 / Ctrl+K) */}
+      <AccountPickerDialog
+        open={showPicker}
+        onClose={() => setShowPicker(false)}
+        accounts={(accountsQuery.data ?? []) as TJAcc[]}
+        recentIds={recentIds}
+        onSelect={(id, name, nature) => { handleAccountSelect(pickerTarget, id, name, nature); setShowPicker(false); }}
+      />
+
       <Card className="border-border/60">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/30">
                 <TableHead className="text-xs w-8 text-center">#</TableHead>
-                <TableHead className="text-xs w-40">كود الحساب</TableHead>
-                <TableHead className="text-xs">اسم الحساب</TableHead>
+                <TableHead className="text-xs min-w-[220px]">الحساب</TableHead>
                 <TableHead className="text-xs">شرح</TableHead>
                 <TableHead className="text-xs text-center w-28">مدين</TableHead>
                 <TableHead className="text-xs text-center w-28">دائن</TableHead>
@@ -450,55 +671,44 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
                   onClick={() => setSelectedLineIdx(i)}
                 >
                   <TableCell className="text-center text-xs text-muted-foreground">{i + 1}</TableCell>
-                  <TableCell className="min-w-[160px]">
-                    <AccountSearchCombobox
-                      accounts={accountsQuery.data ?? []}
-                      value={line.accountId}
-                      onChange={(id, name) => {
-                        updateLine(i, "accountId", id);
-                        updateLine(i, "accountName", name);
-                        // انتقل لحقل الاسم بعد الاختيار
-                        setTimeout(() => cellRefs.current.get(`${i}-0`)?.focus(), 50);
-                      }}
+                  <TableCell className="min-w-[220px] py-1">
+                    <SmartAccountInput
+                      accounts={(accountsQuery.data ?? []) as TJAcc[]}
+                      selectedId={line.accountId}
+                      recentIds={recentIds}
+                      onSelect={(id, name, nature) => handleAccountSelect(i, id, name, nature)}
+                      onOpenPicker={() => { setPickerTarget(i); setShowPicker(true); }}
+                      onFocusCb={() => setSelectedLineIdx(i)}
+                      externalKeyDown={e => handleCellKeyDown(e as any, i, -1)}
                     />
                   </TableCell>
                   <TableCell>
                     <Input
                       ref={el => { if (el) cellRefs.current.set(`${i}-0`, el); }}
-                      value={line.accountName}
-                      onChange={e => updateLine(i, "accountName", e.target.value)}
-                      onFocus={() => setSelectedLineIdx(i)}
-                      onKeyDown={e => handleCellKeyDown(e, i, 0)}
-                      className="h-7 text-xs" placeholder="اسم الحساب..."
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      ref={el => { if (el) cellRefs.current.set(`${i}-1`, el); }}
                       value={line.description}
                       onChange={e => updateLine(i, "description", e.target.value)}
                       onFocus={() => setSelectedLineIdx(i)}
-                      onKeyDown={e => handleCellKeyDown(e, i, 1)}
+                      onKeyDown={e => handleCellKeyDown(e, i, 0)}
                       className="h-7 text-xs" placeholder="البيان..."
                     />
                   </TableCell>
                   <TableCell>
                     <Input
-                      ref={el => { if (el) cellRefs.current.set(`${i}-2`, el); }}
+                      ref={el => { if (el) cellRefs.current.set(`${i}-1`, el); }}
                       type="number" value={line.debit} min={0}
                       onChange={e => { updateLine(i, "debit", e.target.value); if (e.target.value) updateLine(i, "credit", ""); }}
                       onFocus={e => { setSelectedLineIdx(i); e.target.select(); }}
-                      onKeyDown={e => handleCellKeyDown(e, i, 2)}
+                      onKeyDown={e => handleCellKeyDown(e, i, 1)}
                       className="h-7 text-xs text-center"
                     />
                   </TableCell>
                   <TableCell>
                     <Input
-                      ref={el => { if (el) cellRefs.current.set(`${i}-3`, el); }}
+                      ref={el => { if (el) cellRefs.current.set(`${i}-2`, el); }}
                       type="number" value={line.credit} min={0}
                       onChange={e => { updateLine(i, "credit", e.target.value); if (e.target.value) updateLine(i, "debit", ""); }}
                       onFocus={e => { setSelectedLineIdx(i); e.target.select(); }}
-                      onKeyDown={e => handleCellKeyDown(e, i, 3)}
+                      onKeyDown={e => handleCellKeyDown(e, i, 2)}
                       className="h-7 text-xs text-center"
                     />
                   </TableCell>
@@ -525,11 +735,11 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
                   </TableCell>
                   <TableCell>
                     <Input
-                      ref={el => { if (el) cellRefs.current.set(`${i}-4`, el); }}
+                      ref={el => { if (el) cellRefs.current.set(`${i}-3`, el); }}
                       value={line.transferRelation}
                       onChange={e => updateLine(i, "transferRelation", e.target.value)}
                       onFocus={() => setSelectedLineIdx(i)}
-                      onKeyDown={e => handleCellKeyDown(e, i, 4)}
+                      onKeyDown={e => handleCellKeyDown(e, i, 3)}
                       className="h-7 text-xs" placeholder="علاقة..."
                     />
                   </TableCell>
@@ -543,7 +753,7 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
               ))}
               {/* Totals Row */}
               <TableRow className="bg-muted/30 font-bold">
-                <TableCell colSpan={4} className="text-xs font-bold text-right">الإجمالي</TableCell>
+                <TableCell colSpan={3} className="text-xs font-bold text-right">الإجمالي</TableCell>
                 <TableCell className="text-center text-sm font-bold text-primary">{totalDebit.toFixed(3)}</TableCell>
                 <TableCell className="text-center text-sm font-bold text-primary">{totalCredit.toFixed(3)}</TableCell>
                 <TableCell colSpan={4}></TableCell>
@@ -556,7 +766,7 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
             <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={addLine}>
               <Plus className="w-3 h-3" /> إضافة سطر
             </Button>
-            <span className="text-[10px] text-muted-foreground">Tab/Enter: التالي | Ctrl+C: نسخ | Ctrl+V: لصق | Ctrl+Del: حذف</span>
+            <span className="text-[10px] text-muted-foreground">Tab/Enter: التالي · ↑↓: تنقل القائمة · F2/Ctrl+K: بحث موسّع · Ctrl+C: نسخ سطر · Ctrl+V: لصق · Ctrl+Del: حذف</span>
           </div>
           <div className="flex items-center gap-4">
             <div className="text-xs">
