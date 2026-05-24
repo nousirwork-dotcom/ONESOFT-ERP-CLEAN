@@ -313,6 +313,10 @@ export const journalEntries = pgTable('journal_entries', {
   totalCredit: decimal('total_credit', { precision: 18, scale: 4 }).default('0'),
   status: journalStatusEnum('status').notNull().default('draft'),
   userId: integer('user_id').references(() => users.id),
+  sourceDocType:   varchar('source_doc_type',   { length: 50 }),
+  sourceDocId:     integer('source_doc_id'),
+  sourceDocNumber: varchar('source_doc_number', { length: 100 }),
+  entryType:       varchar('entry_type',         { length: 20 }).notNull().default('manual'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
@@ -349,6 +353,49 @@ export const vouchers = pgTable('vouchers', {
   description: text('description'),
   reference: varchar('reference', { length: 100 }),
   status: journalStatusEnum('status').notNull().default('draft'),
+  userId: integer('user_id').references(() => users.id),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+// ─── Receipt Vouchers (سندات القبض) ──────────────────────────────────────────
+export const receiptVouchers = pgTable('receipt_vouchers', {
+  id: serial('id').primaryKey(),
+  orgId: integer('org_id').notNull().references(() => organizations.id),
+  voucherNumber: varchar('voucher_number', { length: 50 }).notNull(),
+  voucherDate: timestamp('voucher_date').notNull().defaultNow(),
+  receivedFrom: varchar('received_from', { length: 500 }),
+  amount: decimal('amount', { precision: 18, scale: 4 }).notNull(),
+  paymentMethod: paymentMethodEnum('payment_method').default('cash'),
+  bankAccount: varchar('bank_account', { length: 100 }),
+  checkNumber: varchar('check_number', { length: 100 }),
+  description: text('description'),
+  accountId: integer('account_id').references(() => chartOfAccounts.id),
+  contraAccountId: integer('contra_account_id').references(() => chartOfAccounts.id),
+  costCenterId: integer('cost_center_id'),
+  notes: text('notes'),
+  journalEntryId: integer('journal_entry_id'),
+  status: varchar('status', { length: 20 }).notNull().default('posted'),
+  userId: integer('user_id').references(() => users.id),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+// ─── Payment Vouchers (سندات الصرف) ──────────────────────────────────────────
+export const paymentVouchers = pgTable('payment_vouchers', {
+  id: serial('id').primaryKey(),
+  orgId: integer('org_id').notNull().references(() => organizations.id),
+  voucherNumber: varchar('voucher_number', { length: 50 }).notNull(),
+  voucherDate: timestamp('voucher_date').notNull().defaultNow(),
+  paidTo: varchar('paid_to', { length: 500 }),
+  amount: decimal('amount', { precision: 18, scale: 4 }).notNull(),
+  paymentMethod: paymentMethodEnum('payment_method').default('cash'),
+  bankAccount: varchar('bank_account', { length: 100 }),
+  checkNumber: varchar('check_number', { length: 100 }),
+  description: text('description'),
+  accountId: integer('account_id').references(() => chartOfAccounts.id),
+  contraAccountId: integer('contra_account_id').references(() => chartOfAccounts.id),
+  notes: text('notes'),
+  journalEntryId: integer('journal_entry_id'),
+  status: varchar('status', { length: 20 }).notNull().default('posted'),
   userId: integer('user_id').references(() => users.id),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
@@ -463,3 +510,5 @@ export type SalesInvoiceItem = typeof salesInvoiceItems.$inferSelect;
 export type JournalEntry = typeof journalEntries.$inferSelect;
 export type JournalEntryLine = typeof journalEntryLines.$inferSelect;
 export type Voucher = typeof vouchers.$inferSelect;
+export type ReceiptVoucher = typeof receiptVouchers.$inferSelect;
+export type PaymentVoucher = typeof paymentVouchers.$inferSelect;

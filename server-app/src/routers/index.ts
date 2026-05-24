@@ -6,7 +6,7 @@ import { usersRouter } from './users.js';
 import { salesRouter } from './sales.js';
 import { chatRouter } from './chat.js';
 import { db } from '../db.js';
-import { products, customers, suppliers, chartOfAccounts, warehouses, branches, units, productGroups, journalEntries, journalEntryLines, vouchers, inventory, stockVouchers, stockVoucherItems, inventoryCounts, inventoryCountItems, freeProducts, salesInvoices, salesInvoiceItems, warehouseAccountLinks, userGroups, userGroupMembers, userCategories, users } from '../schema.js';
+import { products, customers, suppliers, chartOfAccounts, warehouses, branches, units, productGroups, journalEntries, journalEntryLines, vouchers, receiptVouchers, paymentVouchers, inventory, stockVouchers, stockVoucherItems, inventoryCounts, inventoryCountItems, freeProducts, salesInvoices, salesInvoiceItems, warehouseAccountLinks, userGroups, userGroupMembers, userCategories, users } from '../schema.js';
 import { eq, and, desc, like, or, sql, isNotNull, isNull, asc, gte, lte } from 'drizzle-orm';
 
 export const appRouter = router({
@@ -1020,6 +1020,10 @@ export const appRouter = router({
         reference: z.string().optional(),
         totalDebit: z.string(),
         totalCredit: z.string(),
+        sourceDocType:   z.string().optional(),
+        sourceDocId:     z.number().optional(),
+        sourceDocNumber: z.string().optional(),
+        entryType: z.enum(['manual', 'auto']).optional(),
         lines: z.array(z.object({
           accountId: z.number().optional(),
           accountCode: z.string().optional(),
@@ -1034,6 +1038,7 @@ export const appRouter = router({
         const { lines, entryDate, ...rest } = input;
         const [entry] = await db.insert(journalEntries).values({
           ...rest,
+          entryType: rest.entryType ?? 'manual',
           orgId: ctx.user.orgId,
           userId: ctx.user.id,
           entryDate: new Date(entryDate),
@@ -1112,6 +1117,168 @@ export const appRouter = router({
           status: 'posted',
         }).returning();
         return v;
+      }),
+  }),
+
+  // ─── Receipt Vouchers ────────────────────────────────────────────────────────
+  receiptVouchers: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return db.select().from(receiptVouchers)
+        .where(eq(receiptVouchers.orgId, ctx.user.orgId))
+        .orderBy(desc(receiptVouchers.createdAt))
+        .limit(200);
+    }),
+    create: protectedProcedure
+      .input(z.object({
+        voucherNumber: z.string(),
+        voucherDate: z.date(),
+        receivedFrom: z.string().optional(),
+        amount: z.string(),
+        paymentMethod: z.enum(['cash', 'bank', 'credit', 'check', 'other']).default('cash'),
+        bankAccount: z.string().optional(),
+        checkNumber: z.string().optional(),
+        description: z.string().optional(),
+        accountId: z.number().optional(),
+        contraAccountId: z.number().optional(),
+        costCenterId: z.number().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        let journalEntryId: number | undefined;
+        let journalEntryNumber: string | undefined;
+
+        if (input.accountId && input.contraAccountId) {
+          const last = await db.query.journalEntries.findFirst({
+            where: eq(journalEntries.orgId, ctx.user.orgId),
+            orderBy: [desc(journalEntries.id)],
+          });
+          const num = last ? parseInt(last.entryNumber.replace(/\D/g, '') || '0') + 1 : 1;
+          journalEntryNumber = `JE-${String(num).padStart(4, '0')}`;
+
+          const accDebitName = await db.query.chartOfAccounts.findFirst({ where: eq(chartOfAccounts.id, input.accountId) });
+          const accCreditName = await db.query.chartOfAccounts.findFirst({ where: eq(chartOfAccounts.id, input.contraAccountId) });
+
+          const [je] = await db.insert(journalEntries).values({
+            orgId: ctx.user.orgId,
+            userId: ctx.user.id,
+            entryNumber: journalEntryNumber,
+            entryDate: input.voucherDate,
+            description: `سند قبض رقم ${input.voucherNumber}${input.receivedFrom ? ` - ${input.receivedFrom}` : ""}`,
+            reference: input.voucherNumber,
+            totalDebit: input.amount,
+            totalCredit: input.amount,
+            sourceDocType: 'receipt_voucher',
+            sourceDocNumber: input.voucherNumber,
+            entryType: 'auto',
+            status: 'posted',
+          }).returning();
+          journalEntryId = je.id;
+
+          await db.insert(journalEntryLines).values([
+            { entryId: je.id, orgId: ctx.user.orgId, accountId: input.accountId,        accountName: accDebitName?.name  ?? '', debit:  input.amount, credit: '0',           sortOrder: 1, description: input.description },
+            { entryId: je.id, orgId: ctx.user.orgId, accountId: input.contraAccountId,  accountName: accCreditName?.name ?? '', debit: '0',           credit: input.amount,  sortOrder: 2, description: input.description },
+          ]);
+        }
+
+        const [v] = await db.insert(receiptVouchers).values({
+          orgId: ctx.user.orgId,
+          userId: ctx.user.id,
+          voucherNumber: input.voucherNumber,
+          voucherDate: input.voucherDate,
+          receivedFrom: input.receivedFrom,
+          amount: input.amount,
+          paymentMethod: input.paymentMethod,
+          bankAccount: input.bankAccount,
+          checkNumber: input.checkNumber,
+          description: input.description,
+          accountId: input.accountId,
+          contraAccountId: input.contraAccountId,
+          costCenterId: input.costCenterId,
+          notes: input.notes,
+          journalEntryId,
+          status: 'posted',
+        }).returning();
+        return { ...v, journalEntryNumber };
+      }),
+  }),
+
+  // ─── Payment Vouchers ────────────────────────────────────────────────────────
+  paymentVouchers: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return db.select().from(paymentVouchers)
+        .where(eq(paymentVouchers.orgId, ctx.user.orgId))
+        .orderBy(desc(paymentVouchers.createdAt))
+        .limit(200);
+    }),
+    create: protectedProcedure
+      .input(z.object({
+        voucherNumber: z.string(),
+        voucherDate: z.date(),
+        paidTo: z.string().optional(),
+        amount: z.string(),
+        paymentMethod: z.enum(['cash', 'bank', 'credit', 'check', 'other']).default('cash'),
+        bankAccount: z.string().optional(),
+        checkNumber: z.string().optional(),
+        description: z.string().optional(),
+        accountId: z.number().optional(),
+        contraAccountId: z.number().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        let journalEntryId: number | undefined;
+        let journalEntryNumber: string | undefined;
+
+        if (input.accountId && input.contraAccountId) {
+          const last = await db.query.journalEntries.findFirst({
+            where: eq(journalEntries.orgId, ctx.user.orgId),
+            orderBy: [desc(journalEntries.id)],
+          });
+          const num = last ? parseInt(last.entryNumber.replace(/\D/g, '') || '0') + 1 : 1;
+          journalEntryNumber = `JE-${String(num).padStart(4, '0')}`;
+
+          const accDebitName  = await db.query.chartOfAccounts.findFirst({ where: eq(chartOfAccounts.id, input.contraAccountId) });
+          const accCreditName = await db.query.chartOfAccounts.findFirst({ where: eq(chartOfAccounts.id, input.accountId) });
+
+          const [je] = await db.insert(journalEntries).values({
+            orgId: ctx.user.orgId,
+            userId: ctx.user.id,
+            entryNumber: journalEntryNumber,
+            entryDate: input.voucherDate,
+            description: `سند صرف رقم ${input.voucherNumber}${input.paidTo ? ` - ${input.paidTo}` : ""}`,
+            reference: input.voucherNumber,
+            totalDebit: input.amount,
+            totalCredit: input.amount,
+            sourceDocType: 'payment_voucher',
+            sourceDocNumber: input.voucherNumber,
+            entryType: 'auto',
+            status: 'posted',
+          }).returning();
+          journalEntryId = je.id;
+
+          await db.insert(journalEntryLines).values([
+            { entryId: je.id, orgId: ctx.user.orgId, accountId: input.contraAccountId, accountName: accDebitName?.name  ?? '', debit:  input.amount, credit: '0',          sortOrder: 1, description: input.description },
+            { entryId: je.id, orgId: ctx.user.orgId, accountId: input.accountId,       accountName: accCreditName?.name ?? '', debit: '0',           credit: input.amount, sortOrder: 2, description: input.description },
+          ]);
+        }
+
+        const [v] = await db.insert(paymentVouchers).values({
+          orgId: ctx.user.orgId,
+          userId: ctx.user.id,
+          voucherNumber: input.voucherNumber,
+          voucherDate: input.voucherDate,
+          paidTo: input.paidTo,
+          amount: input.amount,
+          paymentMethod: input.paymentMethod,
+          bankAccount: input.bankAccount,
+          checkNumber: input.checkNumber,
+          description: input.description,
+          accountId: input.accountId,
+          contraAccountId: input.contraAccountId,
+          notes: input.notes,
+          journalEntryId,
+          status: 'posted',
+        }).returning();
+        return { ...v, journalEntryNumber };
       }),
   }),
 

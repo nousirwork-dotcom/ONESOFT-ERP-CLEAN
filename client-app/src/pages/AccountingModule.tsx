@@ -15,6 +15,7 @@ import {
   Folder, FolderOpen, LayoutList, Network,
   FileDown, FileSpreadsheet, ChevronDown as ChevronDownIcon,
   Eye, Copy, PowerOff, PlusCircle, MoreVertical, AlertTriangle, Save,
+  ExternalLink, Zap,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -543,7 +544,22 @@ if (!document.getElementById(PRINT_STYLE_ID)) {
 
 const JE_DRAFT_PREFIX = "onesoft_je_draft_";
 
-function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string }) {
+// ─── Source document metadata ─────────────────────────────────────────────────
+const SOURCE_DOC_LABELS: Record<string, string> = {
+  receipt_voucher:       "سند قبض",
+  payment_voucher:       "سند صرف",
+  purchase_invoice:      "فاتورة مشتريات",
+  sales_invoice:         "فاتورة مبيعات",
+  inventory_adjustment:  "تسوية مخزون",
+  manufacturing:         "تصنيع",
+  payroll:               "مرتبات",
+};
+const SOURCE_DOC_PAGE: Record<string, MenuId> = {
+  receipt_voucher:  "receipt-voucher",
+  payment_voucher:  "payment-voucher",
+};
+
+function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherType?: string; onNavigateTo?: (id: MenuId) => void }) {
   const DRAFT_KEY = JE_DRAFT_PREFIX + voucherType;
   const { setDirty, registerSave, confirmIfDirty } = useContext(DirtyCtx);
   const justLoadedRef  = useRef(true);
@@ -598,6 +614,10 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
   const [description,   setDescription]   = useState("");
   const [analyticCode,  setAnalyticCode]  = useState("");
   const [basedOn,       setBasedOn]       = useState("");
+  const [sourceDocType,   setSourceDocType]   = useState("");
+  const [sourceDocId,     setSourceDocId]     = useState<number | null>(null);
+  const [sourceDocNumber, setSourceDocNumber] = useState("");
+  const [entryType,       setEntryType]       = useState<"manual" | "auto">("manual");
   const [lines,         setLines]         = useState([emptyLine(), emptyLine()]);
   const [selectedLineIdx, setSelectedLineIdx] = useState(0);
   const [copiedLine,    setCopiedLine]    = useState<typeof lines[0] | null>(null);
@@ -628,6 +648,10 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
     setEntryDate(new Date(e.entryDate).toISOString().split("T")[0]);
     setDescription(e.description ?? "");
     setBasedOn(e.reference ?? "");
+    setSourceDocType(e.sourceDocType ?? "");
+    setSourceDocId(e.sourceDocId ?? null);
+    setSourceDocNumber(e.sourceDocNumber ?? "");
+    setEntryType((e.entryType as "manual" | "auto") ?? "manual");
     setSavedEntryId(e.id);
     setSavedEntryNumber(e.entryNumber);
     setEntryStatus(e.status as "posted"|"cancelled"|"draft");
@@ -697,6 +721,7 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
     justLoadedRef.current = true;
     setLines([emptyLine(), emptyLine()]);
     setDescription(""); setAnalyticCode(""); setBasedOn("");
+    setSourceDocType(""); setSourceDocId(null); setSourceDocNumber(""); setEntryType("manual");
     setSelectedLineIdx(0);
     setSavedEntryId(null); setSavedEntryNumber(""); setEntryStatus("new");
     setNavIdx(-1); setLoadEntryId(null); loadedRef.current = null;
@@ -719,6 +744,7 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
       reference: basedOn || undefined,
       totalDebit: totalDebit.toFixed(3),
       totalCredit: totalCredit.toFixed(3),
+      entryType: "manual",
       lines: lines
         .filter(l => l.accountId && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0))
         .map((l, i) => ({
@@ -979,6 +1005,7 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
       {/* ── Header Fields ── */}
       <Card className="border-border/60">
         <CardContent className="p-3">
+          {/* Row 1: رقم القيد | نوع السند | نوع القيد | تاريخ التحرير */}
           <div className="grid grid-cols-4 gap-3 mb-3">
             <div>
               <Label className="text-xs text-muted-foreground">قيد #</Label>
@@ -989,23 +1016,72 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
               <Input value={titleMap[voucherType] ?? "سند قيد"} readOnly className="h-7 text-xs bg-muted/30" />
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">تاريخ التحرير</Label>
-              <DateMaskInput value={entryDate} onChange={setEntryDate} className="h-7 text-xs" />
+              <Label className="text-xs text-muted-foreground">نوع القيد</Label>
+              <div className="h-7 flex items-center">
+                {entryType === "auto"
+                  ? <span className="text-[11px] px-2.5 py-1 rounded-full border font-medium bg-amber-50 text-amber-700 border-amber-200 flex items-center gap-1">
+                      <Zap className="w-3 h-3" /> آلي
+                    </span>
+                  : <span className="text-[11px] px-2.5 py-1 rounded-full border font-medium bg-slate-50 text-slate-600 border-slate-200 flex items-center gap-1">
+                      <Edit2 className="w-3 h-3" /> يدوي
+                    </span>
+                }
+              </div>
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">بناء على</Label>
-              <Input value={basedOn} onChange={e => setBasedOn(e.target.value)} className="h-7 text-xs" placeholder="رقم المستند..." />
+              <Label className="text-xs text-muted-foreground">تاريخ التحرير</Label>
+              <DateMaskInput value={entryDate} onChange={setEntryDate} className="h-7 text-xs" disabled={entryType === "auto"} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs text-muted-foreground">شرح</Label>
-              <Input value={description} onChange={e => setDescription(e.target.value)} className="h-7 text-xs" placeholder="وصف القيد..." />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">الكود التحليلي</Label>
-              <Input value={analyticCode} onChange={e => setAnalyticCode(e.target.value)} className="h-7 text-xs" placeholder="كود تحليلي..." />
-            </div>
+
+          {/* Row 2: بيانات الربط (آلي) أو مرجع (يدوي) + شرح + كود تحليلي */}
+          <div className="grid grid-cols-4 gap-3">
+            {entryType === "auto" ? (
+              <>
+                <div>
+                  <Label className="text-xs text-muted-foreground">بناء على</Label>
+                  <Input
+                    value={SOURCE_DOC_LABELS[sourceDocType] ?? sourceDocType}
+                    readOnly
+                    className="h-7 text-xs bg-amber-50/40 border-amber-200/60 text-amber-800"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">رقم المستند</Label>
+                  <button
+                    onClick={() => {
+                      const page = SOURCE_DOC_PAGE[sourceDocType];
+                      if (page && onNavigateTo) { onNavigateTo(page); }
+                      else toast.info(`المستند: ${sourceDocNumber}`);
+                    }}
+                    className="h-7 w-full flex items-center gap-1.5 text-xs px-2 bg-amber-50/40 border border-amber-200/60 rounded-md text-amber-700 hover:bg-amber-100 hover:text-amber-800 transition-colors font-mono"
+                    title="انقر لفتح المستند الأصلي"
+                  >
+                    <ExternalLink className="w-3 h-3 shrink-0" />
+                    {sourceDocNumber || "—"}
+                  </button>
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs text-muted-foreground">شرح</Label>
+                  <Input value={description} readOnly className="h-7 text-xs bg-muted/20" />
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <Label className="text-xs text-muted-foreground">مرجع</Label>
+                  <Input value={basedOn} onChange={e => setBasedOn(e.target.value)} className="h-7 text-xs" placeholder="رقم مرجعي..." />
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs text-muted-foreground">شرح</Label>
+                  <Input value={description} onChange={e => setDescription(e.target.value)} className="h-7 text-xs" placeholder="وصف القيد..." />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">الكود التحليلي</Label>
+                  <Input value={analyticCode} onChange={e => setAnalyticCode(e.target.value)} className="h-7 text-xs" placeholder="كود تحليلي..." />
+                </div>
+              </>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -1186,8 +1262,11 @@ function ReceiptVoucherPage() {
   const costCentersQuery = trpc.costCenters.list.useQuery();
   const listQuery = trpc.receiptVouchers.list.useQuery();
   const createMutation = trpc.receiptVouchers.create.useMutation({
-    onSuccess: () => {
-      toast.success("تم حفظ سند القبض");
+    onSuccess: (data) => {
+      if (data.journalEntryNumber)
+        toast.success(`تم حفظ سند القبض وإنشاء القيد ${data.journalEntryNumber} تلقائياً ✓`);
+      else
+        toast.success("تم حفظ سند القبض");
       listQuery.refetch();
       setShowForm(false);
       setDirty(false);
@@ -1397,8 +1476,11 @@ function PaymentVoucherPage() {
   const accountsQuery = trpc.accounts.list.useQuery();
   const listQuery = trpc.paymentVouchers.list.useQuery();
   const createMutation = trpc.paymentVouchers.create.useMutation({
-    onSuccess: () => {
-      toast.success("تم حفظ سند الصرف");
+    onSuccess: (data) => {
+      if (data.journalEntryNumber)
+        toast.success(`تم حفظ سند الصرف وإنشاء القيد ${data.journalEntryNumber} تلقائياً ✓`);
+      else
+        toast.success("تم حفظ سند الصرف");
       listQuery.refetch();
       setShowForm(false);
       setDirty(false);
@@ -3785,8 +3867,8 @@ function AccountingContent({ activeId, onSelect }: { activeId: MenuId; onSelect:
     case "journal-list":       return <JournalListPage onOpenEntry={() => {}} />;
     case "receipt-voucher":    return <ReceiptVoucherPage />;
     case "payment-voucher":    return <PaymentVoucherPage />;
-    case "new-journal":        return <JournalEntryPage voucherType="journal" />;
-    case "opening-entry":      return <JournalEntryPage voucherType="opening" />;
+    case "new-journal":        return <JournalEntryPage voucherType="journal" onNavigateTo={onSelect} />;
+    case "opening-entry":      return <JournalEntryPage voucherType="opening" onNavigateTo={onSelect} />;
     case "accounts-tree":      return <ChartOfAccountsPage />;
     case "account-ledger":     return (
       <AccountLedgerPage
