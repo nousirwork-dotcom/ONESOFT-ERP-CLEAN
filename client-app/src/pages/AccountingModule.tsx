@@ -230,15 +230,19 @@ function AccountPickerDialog({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef  = useRef<HTMLDivElement>(null);
 
+  const postable = useMemo(() => accounts.filter(a => a.allowPosting === true && !a.isParent), [accounts]);
+
   const filtered = useMemo(() => {
     const sq = q.trim().toLowerCase();
     if (!sq) {
-      const recent = recentIds.map(id => accounts.find(a => a.id.toString() === id)).filter(Boolean) as TJAcc[];
-      const rest   = accounts.filter(a => a.allowPosting && !recentIds.includes(a.id.toString())).slice(0, 40);
+      const recent = recentIds.map(id => postable.find(a => a.id.toString() === id)).filter(Boolean) as TJAcc[];
+      const rest   = postable.filter(a => !recentIds.includes(a.id.toString())).slice(0, 40);
       return [...recent, ...rest];
     }
-    return accounts.filter(a => a.code.includes(sq) || a.name.toLowerCase().includes(sq)).slice(0, 60);
-  }, [q, accounts, recentIds]);
+    const codeMatches = postable.filter(a => a.code.toLowerCase().startsWith(sq));
+    const nameMatches = postable.filter(a => !a.code.toLowerCase().startsWith(sq) && (a.code.toLowerCase().includes(sq) || a.name.toLowerCase().includes(sq)));
+    return [...codeMatches, ...nameMatches].slice(0, 60);
+  }, [q, postable, recentIds]);
 
   useEffect(() => { if (open) { setQ(""); setHi(0); setTimeout(() => inputRef.current?.focus(), 50); } }, [open]);
   useEffect(() => { setHi(0); }, [filtered]);
@@ -336,15 +340,19 @@ function SmartAccountInput({
 
   useEffect(() => { setQ(selected?.code ?? ""); }, [selected?.code]);
 
+  const postable = useMemo(() => accounts.filter(a => a.allowPosting === true && !a.isParent), [accounts]);
+
   const filtered = useMemo(() => {
     const sq = q.trim().toLowerCase();
     if (!sq) {
-      const recent = recentIds.map(id => accounts.find(a => a.id.toString() === id)).filter(Boolean) as TJAcc[];
-      const rest   = accounts.filter(a => a.allowPosting && !recentIds.includes(a.id.toString())).slice(0, 20);
+      const recent = recentIds.map(id => postable.find(a => a.id.toString() === id)).filter(Boolean) as TJAcc[];
+      const rest   = postable.filter(a => !recentIds.includes(a.id.toString())).slice(0, 20);
       return [...recent, ...rest];
     }
-    return accounts.filter(a => a.code.includes(sq) || a.name.toLowerCase().includes(sq)).slice(0, 30);
-  }, [q, accounts, recentIds]);
+    const codeMatches = postable.filter(a => a.code.toLowerCase().startsWith(sq));
+    const nameMatches = postable.filter(a => !a.code.toLowerCase().startsWith(sq) && (a.code.toLowerCase().includes(sq) || a.name.toLowerCase().includes(sq)));
+    return [...codeMatches, ...nameMatches].slice(0, 30);
+  }, [q, postable, recentIds]);
 
   useEffect(() => { setHi(0); }, [filtered]);
 
@@ -356,7 +364,7 @@ function SmartAccountInput({
   }, []);
 
   const pick = (a: TJAcc) => {
-    if (a.isParent) { toast.warning("لا يمكن التقييد على حساب رئيسي"); return; }
+    if (a.isParent || !a.allowPosting) { toast.warning("لا يمكن التقييد على حساب رئيسي أو عام"); return; }
     addRecentId(a.id.toString());
     onSelect(a.id.toString(), a.name ?? "", a.nature ?? "debit");
     setQ(a.code ?? "");
