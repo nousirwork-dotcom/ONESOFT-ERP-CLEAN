@@ -909,6 +909,22 @@ export const appRouter = router({
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
+        // تحقق: هل يوجد حسابات فرعية نشطة مرتبطة بهذا الحساب؟
+        const children = await db
+          .select({ id: chartOfAccounts.id, code: chartOfAccounts.code, name: chartOfAccounts.name })
+          .from(chartOfAccounts)
+          .where(and(
+            eq(chartOfAccounts.parentId, input.id),
+            eq(chartOfAccounts.orgId, ctx.user.orgId),
+            eq(chartOfAccounts.isActive, true),
+          ))
+          .limit(1);
+        if (children.length > 0) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `لا يمكن حذف هذا الحساب لأنه يحتوي على حسابات فرعية — يجب حذف الحسابات الفرعية أولاً`,
+          });
+        }
         await db.update(chartOfAccounts).set({ isActive: false })
           .where(and(eq(chartOfAccounts.id, input.id), eq(chartOfAccounts.orgId, ctx.user.orgId)));
         return { success: true };

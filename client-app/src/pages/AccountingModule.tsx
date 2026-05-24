@@ -1190,10 +1190,22 @@ function ChartOfAccountsPage() {
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <Button variant="ghost" size="sm" className="h-6 text-xs text-destructive hover:text-destructive"
-                    onClick={() => deleteMutation.mutate({ id: a.id })}>
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
+                  {a.isParent ? (
+                    <div title="لا يمكن الحذف — يحتوي على حسابات فرعية"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-amber-600 bg-amber-50 border border-amber-200 cursor-not-allowed select-none">
+                      <AlertCircle className="w-3 h-3" /> له أبناء
+                    </div>
+                  ) : (
+                    <Button variant="ghost" size="sm" className="h-6 text-xs text-destructive hover:text-destructive hover:bg-red-50"
+                      disabled={deleteMutation.isPending}
+                      onClick={() => {
+                        if (confirm(`هل تريد حذف الحساب "${a.name}" (${a.code})؟`)) {
+                          deleteMutation.mutate({ id: a.id });
+                        }
+                      }}>
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
