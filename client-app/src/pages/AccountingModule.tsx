@@ -219,6 +219,100 @@ const normalizeAr = (s: string) =>
 const typeLabel = (t: string | null) =>
   ({ assets:"أصول", liabilities:"خصوم", equity:"حقوق ملكية", revenue:"إيرادات", expenses:"مصروفات" }[t ?? ""] ?? "");
 
+// ── Date Mask Input (DD/MM/YYYY) ──────────────────────────────────────────────
+function DateMaskInput({
+  value, onChange, className, placeholder,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  className?: string;
+  placeholder?: string;
+}) {
+  const toAr = (s: string) => s.replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
+
+  const fromISO = (iso: string): string => {
+    if (!iso || iso.length < 10) return "";
+    const [y, m, d] = iso.split("-");
+    return `${d}/${m}/${y}`;
+  };
+
+  const toISO = (display: string): string => {
+    const cleaned = display.replace(/\D/g, "");
+    if (cleaned.length < 8) return "";
+    const d = cleaned.slice(0, 2);
+    const m = cleaned.slice(2, 4);
+    const y = cleaned.slice(4, 8);
+    const di = parseInt(d), mi = parseInt(m), yi = parseInt(y);
+    if (di < 1 || di > 31 || mi < 1 || mi > 12 || yi < 1000) return "";
+    return `${y}-${m.padStart(2,"0")}-${d.padStart(2,"0")}`;
+  };
+
+  const applyMask = (raw: string): string => {
+    const digits = raw.replace(/\D/g, "").slice(0, 8);
+    let out = "";
+    for (let i = 0; i < digits.length; i++) {
+      if (i === 2 || i === 4) out += "/";
+      out += digits[i];
+    }
+    return out;
+  };
+
+  const [display, setDisplay] = useState(() => fromISO(value));
+  const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const expected = fromISO(value);
+    if (expected !== display) setDisplay(expected);
+  }, [value]);
+
+  const handleKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const el = ref.current;
+    if (!el) return;
+
+    if (e.key === "Backspace") {
+      e.preventDefault();
+      let pos = el.selectionStart ?? display.length;
+      if (pos > 0 && display[pos - 1] === "/") pos--;
+      const digits = (display.slice(0, pos - 1) + display.slice(pos)).replace(/\D/g, "");
+      if (digits.length === 0) { setDisplay(""); onChange(""); return; }
+      const masked = applyMask(digits);
+      setDisplay(masked);
+      onChange(toISO(masked));
+      setTimeout(() => el.setSelectionRange(Math.max(0, pos - 1), Math.max(0, pos - 1)), 0);
+      return;
+    }
+
+    const digit = toAr(e.key);
+    if (!/^\d$/.test(digit)) return;
+    e.preventDefault();
+
+    const pos = el.selectionStart ?? 0;
+    const raw = display.replace(/\D/g, "");
+    const idx = pos <= 2 ? 0 : pos <= 5 ? 2 : 4;
+    const before = raw.slice(0, idx) + digit + raw.slice(idx + 1);
+    const masked = applyMask(before.slice(0, 8));
+    setDisplay(masked);
+    onChange(toISO(masked));
+
+    const newPos = pos >= 2 && pos < 3 ? 3 : pos >= 5 && pos < 6 ? 6 : Math.min(pos + 1, masked.length);
+    setTimeout(() => el.setSelectionRange(newPos, newPos), 0);
+  };
+
+  return (
+    <Input
+      ref={ref}
+      value={display}
+      placeholder={placeholder ?? "يي/شش/سسسس"}
+      dir="ltr"
+      className={className}
+      onChange={() => {}}
+      onKeyDown={handleKey}
+      onFocus={e => e.target.select()}
+      maxLength={10}
+    />
+  );
+}
+
 // ── Full-screen Account Picker Dialog (F2 / Ctrl+K) ──────────────────────────
 function AccountPickerDialog({
   open, onClose, accounts, recentIds, onSelect,
@@ -849,7 +943,7 @@ function JournalEntryPage({ voucherType = "journal" }: { voucherType?: string })
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">تاريخ التحرير</Label>
-              <Input type="date" value={entryDate} onChange={e => setEntryDate(e.target.value)} className="h-7 text-xs" />
+              <DateMaskInput value={entryDate} onChange={setEntryDate} className="h-7 text-xs" />
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">بناء على</Label>
@@ -1133,7 +1227,7 @@ function ReceiptVoucherPage() {
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <Label className="text-xs">التاريخ</Label>
-                <Input type="date" value={form.voucherDate} onChange={e => setF("voucherDate", e.target.value)} className="h-8 text-xs" />
+                <DateMaskInput value={form.voucherDate} onChange={v => setF("voucherDate", v)} className="h-8 text-xs" />
               </div>
               <div>
                 <Label className="text-xs">المستلم من</Label>
@@ -1302,7 +1396,7 @@ function PaymentVoucherPage() {
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <Label className="text-xs">التاريخ</Label>
-                <Input type="date" value={form.voucherDate} onChange={e => setF("voucherDate", e.target.value)} className="h-8 text-xs" />
+                <DateMaskInput value={form.voucherDate} onChange={v => setF("voucherDate", v)} className="h-8 text-xs" />
               </div>
               <div>
                 <Label className="text-xs">المدفوع لـ</Label>
@@ -2692,11 +2786,11 @@ function AccountLedgerPage() {
             </div>
             <div>
               <Label className="text-xs">من تاريخ</Label>
-              <Input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="h-8 text-xs" />
+              <DateMaskInput value={fromDate} onChange={setFromDate} className="h-8 text-xs" />
             </div>
             <div>
               <Label className="text-xs">إلى تاريخ</Label>
-              <Input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="h-8 text-xs" />
+              <DateMaskInput value={toDate} onChange={setToDate} className="h-8 text-xs" />
             </div>
             <div className="flex items-end">
               <Button size="sm" className="h-8 text-xs w-full gap-1" onClick={() => stmtQuery.refetch()}>
@@ -2919,7 +3013,7 @@ function CostAllocationPage() {
           <div className="grid grid-cols-3 gap-3">
             <div>
               <Label className="text-xs">تاريخ التوزيع</Label>
-              <Input type="date" defaultValue={new Date().toISOString().split("T")[0]} className="h-8 text-xs" />
+              <DateMaskInput value={new Date().toISOString().split("T")[0]} onChange={() => {}} className="h-8 text-xs" />
             </div>
             <div>
               <Label className="text-xs">الحساب الأصلي</Label>
@@ -3059,11 +3153,11 @@ function TrialBalancePage({ onOpenAccount }: { onOpenAccount?: (id: number) => v
           <div className="grid grid-cols-4 gap-3">
             <div>
               <Label className="text-xs">من تاريخ</Label>
-              <Input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="h-8 text-xs" />
+              <DateMaskInput value={fromDate} onChange={setFromDate} className="h-8 text-xs" />
             </div>
             <div>
               <Label className="text-xs">إلى تاريخ</Label>
-              <Input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="h-8 text-xs" />
+              <DateMaskInput value={toDate} onChange={setToDate} className="h-8 text-xs" />
             </div>
             <div>
               <Label className="text-xs">مركز التكلفة</Label>
