@@ -7,6 +7,7 @@ import {
   TrendingUp, TrendingDown, Scale, Wallet, Building,
   Printer, Download, X, Check, RefreshCw, Edit2, Trash2,
   ArrowUpCircle, ArrowDownCircle, Upload, AlertCircle,
+  Folder, FolderOpen, LayoutList, Network,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -979,6 +980,150 @@ function JournalListPage({ onOpenEntry }: { onOpenEntry?: (id: number) => void }
   );
 }
 
+// ─── Tree View Types & Components ────────────────────────────────────────────
+type TAccount = {
+  id: number;
+  code: string | null;
+  name: string | null;
+  accountType: string | null;
+  nature: string | null;
+  level: number | null;
+  isParent: boolean | null;
+  allowPosting: boolean | null;
+  parentId: number | null;
+};
+
+const TREE_INDENT = 18;
+
+const lvlBg = (l: number) => [
+  "", "bg-blue-50/70 border-b border-blue-100", "bg-slate-50/50 border-b border-slate-100",
+  "border-b border-slate-100/70", "border-b border-slate-100/50", "border-b border-slate-100/30"
+][Math.min(l, 5)] ?? "";
+
+const lvlText = (l: number) => [
+  "", "text-blue-900 font-black text-sm", "text-blue-700 font-bold text-xs",
+  "text-slate-700 font-semibold text-xs", "text-slate-600 text-xs", "text-slate-500 text-[11px]"
+][Math.min(l, 5)] ?? "text-xs";
+
+const treeTypeLabel = (t: string | null) =>
+  ({ assets:"أصول", liabilities:"خصوم", equity:"حقوق ملكية", revenue:"إيرادات", expenses:"مصروفات" }[t ?? ""] ?? (t ?? ""));
+
+function AccountTreeNode({ account, depth, selectedId, onSelect, onDelete }: {
+  account: TAccount;
+  depth: number;
+  selectedId: number | null;
+  onSelect: (a: TAccount) => void;
+  onDelete: (id: number, name: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const lvl = account.level ?? 1;
+
+  const childrenQ = trpc.accounts.children.useQuery(
+    { parentId: account.id },
+    { enabled: expanded && !!account.isParent, staleTime: 30_000 }
+  );
+
+  const isSelected = selectedId === account.id;
+
+  return (
+    <>
+      <div
+        className={`flex items-center gap-1 py-1.5 cursor-pointer group transition-colors
+          ${lvlBg(lvl)} ${isSelected ? "!bg-blue-100 ring-1 ring-inset ring-blue-400" : "hover:!bg-blue-50/60"}`}
+        style={{ paddingRight: `${8 + depth * TREE_INDENT}px`, paddingLeft: "8px" }}
+        onClick={() => onSelect(account)}
+      >
+        {/* toggle */}
+        <span className="w-4 h-4 shrink-0 flex items-center justify-center">
+          {account.isParent ? (
+            <button
+              className="w-4 h-4 flex items-center justify-center rounded hover:bg-blue-200/70 text-blue-500"
+              onClick={e => { e.stopPropagation(); setExpanded(v => !v); }}
+            >
+              {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+            </button>
+          ) : <span className="w-3.5" />}
+        </span>
+
+        {/* icon */}
+        {account.isParent
+          ? (expanded
+              ? <FolderOpen className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              : <Folder     className="w-3.5 h-3.5 text-amber-400 shrink-0" />)
+          : <FileText className="w-3 h-3 text-slate-300 shrink-0" />}
+
+        {/* code */}
+        <span className={`font-mono shrink-0 w-24 ${lvlText(lvl)}`}>{account.code}</span>
+
+        {/* name */}
+        <span className={`flex-1 truncate ${lvlText(lvl)}`}>{account.name}</span>
+
+        {/* meta — visible on hover */}
+        <span className="hidden group-hover:flex items-center gap-1.5 shrink-0">
+          <span className="text-[10px] text-slate-400">{treeTypeLabel(account.accountType)}</span>
+          <span className={`text-[10px] px-1 rounded font-medium ${account.nature === "debit" ? "text-blue-600 bg-blue-50" : "text-red-600 bg-red-50"}`}>
+            {account.nature === "debit" ? "مدين" : "دائن"}
+          </span>
+        </span>
+
+        {/* level pill */}
+        <span className="text-[10px] text-slate-300 w-4 text-center shrink-0">{account.level}</span>
+
+        {/* delete */}
+        <span className="opacity-0 group-hover:opacity-100 shrink-0 w-5 flex justify-center">
+          {account.isParent
+            ? <AlertCircle className="w-3 h-3 text-amber-300" title="يحتوي أبناء" />
+            : (
+              <button
+                className="text-red-300 hover:text-red-500"
+                onClick={e => { e.stopPropagation(); onDelete(account.id, account.name ?? ""); }}
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            )
+          }
+        </span>
+      </div>
+
+      {/* children */}
+      {expanded && (
+        childrenQ.isLoading
+          ? <div className="text-[10px] text-slate-400 py-1.5 border-b border-slate-100"
+              style={{ paddingRight: `${8 + (depth + 1) * TREE_INDENT + 22}px` }}>
+              جاري التحميل...
+            </div>
+          : childrenQ.data?.map(child => (
+              <AccountTreeNode key={child.id} account={child} depth={depth + 1}
+                selectedId={selectedId} onSelect={onSelect} onDelete={onDelete} />
+            ))
+      )}
+    </>
+  );
+}
+
+function AccountTreeRootView({ selectedId, onSelect, onDelete }: {
+  selectedId: number | null;
+  onSelect: (a: TAccount) => void;
+  onDelete: (id: number, name: string) => void;
+}) {
+  const rootQ = trpc.accounts.children.useQuery({ parentId: null }, { staleTime: 30_000 });
+
+  if (rootQ.isLoading) return (
+    <div className="flex items-center justify-center py-16 text-xs text-muted-foreground gap-2">
+      <RefreshCw className="w-3 h-3 animate-spin" /> جاري تحميل الشجرة...
+    </div>
+  );
+
+  return (
+    <div>
+      {rootQ.data?.map(account => (
+        <AccountTreeNode key={account.id} account={account} depth={0}
+          selectedId={selectedId} onSelect={onSelect} onDelete={onDelete} />
+      ))}
+    </div>
+  );
+}
+
 // ─── Chart of Accounts (شجرة الحسابات) ───────────────────────────────────────
 function ChartOfAccountsPage() {
   const listQuery = trpc.accounts.list.useQuery();
@@ -1007,6 +1152,8 @@ function ChartOfAccountsPage() {
   const [importError, setImportError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState("");
+  const [viewMode, setViewMode] = useState<"tree" | "table">("tree");
+  const [selectedAccount, setSelectedAccount] = useState<TAccount | null>(null);
 
   const typeMap: Record<string, string> = {
     أصول: "assets", assets: "assets",
@@ -1128,17 +1275,43 @@ function ChartOfAccountsPage() {
 
   const typeLabel = (t: string) => ({ assets: "أصول", liabilities: "خصوم", equity: "حقوق ملكية", revenue: "إيرادات", expenses: "مصروفات" }[t] ?? t);
 
+  const handleTreeDelete = (id: number, name: string) => {
+    if (confirm(`هل تريد حذف الحساب "${name}"؟`)) {
+      deleteMutation.mutate({ id });
+    }
+  };
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="font-bold text-sm flex items-center gap-2">
           <BookOpen className="w-4 h-4 text-primary" /> شجرة الحسابات
+          <Badge variant="secondary" className="text-[10px] font-normal">
+            {listQuery.data?.length ?? 0} حساب
+          </Badge>
         </h3>
-        <div className="flex gap-2">
-          <div className="relative">
-            <Search className="absolute right-2 top-1.5 w-3 h-3 text-muted-foreground" />
-            <Input value={search} onChange={e => setSearch(e.target.value)} className="h-7 text-xs pr-7 w-48" placeholder="بحث بالكود أو الاسم..." />
+        <div className="flex gap-2 items-center">
+          {/* view toggle */}
+          <div className="flex rounded-md border border-border overflow-hidden">
+            <button
+              onClick={() => setViewMode("tree")}
+              className={`flex items-center gap-1 px-2.5 py-1 text-xs transition-colors ${viewMode === "tree" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+            >
+              <Network className="w-3 h-3" /> شجري
+            </button>
+            <button
+              onClick={() => setViewMode("table")}
+              className={`flex items-center gap-1 px-2.5 py-1 text-xs transition-colors border-r border-border ${viewMode === "table" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+            >
+              <LayoutList className="w-3 h-3" /> جدول
+            </button>
           </div>
+          {viewMode === "table" && (
+            <div className="relative">
+              <Search className="absolute right-2 top-1.5 w-3 h-3 text-muted-foreground" />
+              <Input value={search} onChange={e => setSearch(e.target.value)} className="h-7 text-xs pr-7 w-44" placeholder="بحث بالكود أو الاسم..." />
+            </div>
+          )}
           <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setShowImport(true)}>
             <Upload className="w-3 h-3" /> استيراد
           </Button>
@@ -1148,6 +1321,89 @@ function ChartOfAccountsPage() {
         </div>
       </div>
 
+      {/* ── Tree View ── */}
+      {viewMode === "tree" && (
+        <div className="flex gap-3">
+          {/* tree panel */}
+          <Card className="border-border/60 flex-1 overflow-hidden">
+            <div className="bg-muted/30 px-3 py-1.5 border-b flex items-center gap-2 text-[11px] text-muted-foreground">
+              <Network className="w-3 h-3" />
+              <span>اضغط على ▶ لفتح الحساب | اضغط على الاسم لعرض التفاصيل</span>
+            </div>
+            <div className="overflow-y-auto max-h-[65vh]">
+              <AccountTreeRootView
+                selectedId={selectedAccount?.id ?? null}
+                onSelect={setSelectedAccount}
+                onDelete={handleTreeDelete}
+              />
+            </div>
+          </Card>
+
+          {/* detail panel */}
+          {selectedAccount && (
+            <Card className="border-border/60 w-64 shrink-0 self-start sticky top-3">
+              <div className="bg-blue-600 text-white px-3 py-2 flex items-center justify-between rounded-t-lg">
+                <span className="text-xs font-bold">تفاصيل الحساب</span>
+                <button onClick={() => setSelectedAccount(null)} className="text-white/70 hover:text-white">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="p-3 space-y-2 text-xs" dir="rtl">
+                <div className="text-center">
+                  <span className="font-mono text-2xl font-black text-blue-700">{selectedAccount.code}</span>
+                  <p className="font-bold text-slate-800 mt-0.5">{selectedAccount.name}</p>
+                </div>
+                <div className="border-t pt-2 space-y-1.5">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">النوع</span>
+                    <Badge variant="outline" className="text-[10px]">{treeTypeLabel(selectedAccount.accountType)}</Badge>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">الطبيعة</span>
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${selectedAccount.nature === "debit" ? "bg-blue-50 text-blue-700" : "bg-red-50 text-red-700"}`}>
+                      {selectedAccount.nature === "debit" ? "مدين" : "دائن"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">المستوى</span>
+                    <span className="font-bold text-slate-700">{selectedAccount.level}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">نوع الحساب</span>
+                    <span className={`text-[10px] font-medium ${selectedAccount.isParent ? "text-amber-600" : "text-emerald-600"}`}>
+                      {selectedAccount.isParent ? "🗂 مجمّع" : "📄 فرعي نهائي"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">يقبل ترحيل</span>
+                    <span className={selectedAccount.allowPosting ? "text-emerald-600" : "text-slate-400"}>
+                      {selectedAccount.allowPosting ? "نعم" : "لا"}
+                    </span>
+                  </div>
+                </div>
+                {!selectedAccount.isParent && (
+                  <Button
+                    variant="destructive" size="sm"
+                    className="w-full h-7 text-xs mt-2"
+                    disabled={deleteMutation.isPending}
+                    onClick={() => handleTreeDelete(selectedAccount.id, selectedAccount.name ?? "")}
+                  >
+                    <Trash2 className="w-3 h-3 ml-1" /> حذف الحساب
+                  </Button>
+                )}
+                {selectedAccount.isParent && (
+                  <p className="text-[10px] text-amber-600 flex items-center gap-1 bg-amber-50 rounded p-1.5 border border-amber-100">
+                    <AlertCircle className="w-3 h-3 shrink-0" /> لا يمكن حذف هذا الحساب لأنه يحتوي على حسابات فرعية
+                  </p>
+                )}
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* ── Table View ── */}
+      {viewMode === "table" && (
       <Card className="border-border/60">
         <Table>
           <TableHeader>
@@ -1212,6 +1468,7 @@ function ChartOfAccountsPage() {
           </TableBody>
         </Table>
       </Card>
+      )}
 
       {/* ── dialog الاستيراد ── */}
       <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />

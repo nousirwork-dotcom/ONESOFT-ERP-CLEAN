@@ -7,7 +7,7 @@ import { salesRouter } from './sales.js';
 import { chatRouter } from './chat.js';
 import { db } from '../db.js';
 import { products, customers, suppliers, chartOfAccounts, warehouses, branches, units, productGroups, journalEntries, journalEntryLines, vouchers, inventory, stockVouchers, stockVoucherItems, inventoryCounts, inventoryCountItems, freeProducts, salesInvoices, salesInvoiceItems, warehouseAccountLinks, userGroups, userGroupMembers, userCategories, users } from '../schema.js';
-import { eq, and, desc, like, or, sql, isNotNull } from 'drizzle-orm';
+import { eq, and, desc, like, or, sql, isNotNull, isNull, asc } from 'drizzle-orm';
 
 export const appRouter = router({
   // ─── Auth ────────────────────────────────────────────────────────────────────
@@ -853,6 +853,32 @@ export const appRouter = router({
         orderBy: (a, { asc }) => [asc(a.code)],
       });
     }),
+    children: protectedProcedure
+      .input(z.object({ parentId: z.number().int().nullable() }))
+      .query(async ({ ctx, input }) => {
+        const parentCond = input.parentId === null
+          ? isNull(chartOfAccounts.parentId)
+          : eq(chartOfAccounts.parentId, input.parentId);
+        return db
+          .select({
+            id:          chartOfAccounts.id,
+            code:        chartOfAccounts.code,
+            name:        chartOfAccounts.name,
+            accountType: chartOfAccounts.accountType,
+            nature:      chartOfAccounts.nature,
+            level:       chartOfAccounts.level,
+            isParent:    chartOfAccounts.isParent,
+            allowPosting:chartOfAccounts.allowPosting,
+            parentId:    chartOfAccounts.parentId,
+          })
+          .from(chartOfAccounts)
+          .where(and(
+            eq(chartOfAccounts.orgId, ctx.user.orgId),
+            eq(chartOfAccounts.isActive, true),
+            parentCond,
+          ))
+          .orderBy(asc(chartOfAccounts.code));
+      }),
     create: protectedProcedure
       .input(z.object({
         code: z.string().min(1),
