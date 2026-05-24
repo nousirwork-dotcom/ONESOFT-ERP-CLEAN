@@ -864,19 +864,44 @@ export const appRouter = router({
         parentId: z.number().int().optional(),
         isParent: z.boolean().default(false),
         allowPosting: z.boolean().default(true),
-        openingBalance: z.string().optional(),
-        openingBalanceType: z.string().default('debit'),
+        costCenterType: z.enum(['not_allowed', 'optional', 'mandatory']).default('not_allowed'),
+        isActive: z.boolean().default(true),
         notes: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        // تحقق تكرار الكود
         const exists = await db.select({ id: chartOfAccounts.id }).from(chartOfAccounts)
           .where(and(eq(chartOfAccounts.orgId, ctx.user.orgId), eq(chartOfAccounts.code, input.code), eq(chartOfAccounts.isActive, true)))
           .limit(1);
         if (exists.length > 0) throw new TRPCError({ code: 'BAD_REQUEST', message: `كود الحساب "${input.code}" موجود بالفعل` });
+        // تحقق الحساب الأب: يجب أن يكون isParent = true
+        if (input.parentId) {
+          const parent = await db.select({ id: chartOfAccounts.id, isParent: chartOfAccounts.isParent }).from(chartOfAccounts)
+            .where(and(eq(chartOfAccounts.id, input.parentId), eq(chartOfAccounts.orgId, ctx.user.orgId)))
+            .limit(1);
+          if (!parent.length) throw new TRPCError({ code: 'BAD_REQUEST', message: 'الحساب الأب غير موجود' });
+          if (!parent[0].isParent) throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن إضافة حساب تحت حساب فرعي — الحساب الفرعي لا يقبل حسابات تحته' });
+        }
         const [account] = await db.insert(chartOfAccounts).values({
-          ...input,
           orgId: ctx.user.orgId,
+          code: input.code,
+          name: input.name,
+          nameEn: input.nameEn,
+          accountType: input.accountType,
+          nature: input.nature,
+          level: input.level,
+          parentId: input.parentId,
+          isParent: input.isParent,
+          allowPosting: input.allowPosting,
+          costCenterType: input.costCenterType,
+          isActive: input.isActive,
+          notes: input.notes,
         }).returning();
+        // تحديث الحساب الأب: اضبط isParent=true إذا لم يكن كذلك
+        if (input.parentId) {
+          await db.update(chartOfAccounts).set({ isParent: true })
+            .where(and(eq(chartOfAccounts.id, input.parentId), eq(chartOfAccounts.orgId, ctx.user.orgId)));
+        }
         return account;
       }),
     delete: protectedProcedure

@@ -221,6 +221,7 @@ export const chartOfAccounts = pgTable('chart_of_accounts', {
   nature: varchar('nature', { length: 10 }).default('debit'),
   isParent: boolean('is_parent').default(false),
   allowPosting: boolean('allow_posting').default(true),
+  costCenterType: varchar('cost_center_type', { length: 20 }).default('not_allowed'),
   openingBalance: decimal('opening_balance', { precision: 18, scale: 4 }).default('0'),
   openingBalanceType: varchar('opening_balance_type', { length: 10 }).default('debit'),
   notes: text('notes'),

@@ -1356,7 +1356,7 @@ function ChartOfAccountsPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">— بدون حساب أب —</SelectItem>
-                        {listQuery.data?.filter(a => a.isParent || a.accountType).map(a => (
+                        {listQuery.data?.filter(a => a.isParent === true).map(a => (
                           <SelectItem key={a.id} value={String(a.id)}>
                             <span className="font-mono text-[10px] text-muted-foreground ml-1">{a.code}</span> {a.name}
                           </SelectItem>
@@ -1462,6 +1462,19 @@ function ChartOfAccountsPage() {
                   </div>
                 </div>
               </div>
+
+              {/* ── قسم: ملاحظات ── */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-1 h-4 rounded-full bg-slate-400" />
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">ملاحظات</span>
+                </div>
+                <textarea
+                  value={form.notes}
+                  onChange={e => setF("notes", e.target.value)}
+                  className="w-full h-16 text-xs rounded-lg border border-slate-200 px-3 py-2 resize-none bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                  placeholder="ملاحظات إضافية على الحساب (اختياري)..." dir="rtl" />
+              </div>
             </TabsContent>
 
           </Tabs>
@@ -1493,10 +1506,10 @@ function ChartOfAccountsPage() {
                     level: computedLevel,
                     parentId: form.parentId && form.parentId !== "none" ? parseInt(form.parentId) : undefined,
                     isParent: form.accountLevelType !== "sub",
-                    allowPosting: form.accountLevelType === "sub" && form.allowPosting,
-                    openingBalance: form.openingDebit || form.openingCredit || undefined,
-                    openingBalanceType: parseFloat(form.openingDebit || "0") >= parseFloat(form.openingCredit || "0") ? "debit" : "credit",
-                    notes: form.notes || undefined,
+                    allowPosting: form.accountLevelType === "sub" ? form.allowPosting : false,
+                    costCenterType: form.costCenterType,
+                    isActive: form.status === "active",
+                    notes: form.notes.trim() || undefined,
                   });
                 }}>
                 {createMutation.isPending
