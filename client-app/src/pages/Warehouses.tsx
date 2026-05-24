@@ -96,7 +96,7 @@ const Section = ({
   );
 };
 
-/** Label + child stacked */
+/** Label + child stacked (kept for legacy/tabs) */
 const Field = ({
   label, children, span = 1,
 }: { label: string; children: React.ReactNode; span?: number }) => {
@@ -107,6 +107,25 @@ const Field = ({
         {label}
       </Label>
       {children}
+    </div>
+  );
+};
+
+/** Horizontal field — label to the right, input to the left (RTL) */
+const HF = ({
+  label, children, full = false, lw,
+}: { label: string; children: React.ReactNode; full?: boolean; lw?: number }) => {
+  const c = useContext(Density) === "compact";
+  const w = lw ?? (c ? 52 : 76);
+  return (
+    <div className={`flex items-center gap-2${full ? (c ? " col-span-3" : " col-span-2") : ""}`}>
+      <span
+        className={`shrink-0 text-right ${c ? "text-[10px]" : "text-xs"} text-slate-500 font-medium`}
+        style={{ width: w }}
+      >
+        {label}
+      </span>
+      <div className="flex-1 min-w-0">{children}</div>
     </div>
   );
 };
@@ -403,68 +422,31 @@ export default function Warehouses() {
           {formTab === "basic" && <>
             {/* ── بيانات المخزن ── */}
             <Section title="بيانات المخزن">
-              <div className={`grid ${c ? "grid-cols-3 gap-x-2 gap-y-1" : "grid-cols-2 gap-x-4 gap-y-2"}`}>
-                {c ? (
-                  /* ── Compact: 3 أعمدة ── */
-                  <>
-                    <Field label="رقم">
-                      <FI value={form.code} onChange={v => set("code", v)} placeholder="001" />
-                    </Field>
-                    <Field label="إسم 1 *">
-                      <FI value={form.name} onChange={v => set("name", v)} placeholder="الاسم بالعربي" />
-                    </Field>
-                    <Field label="موقع">
-                      <FS value={form.branchId} onValueChange={v => set("branchId", v)} placeholder="المقر الرئيسي">
-                        <SelectItem value="none">المقر الرئيسي</SelectItem>
-                        {branches?.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
-                      </FS>
-                    </Field>
-                    <Field label="إسم 2">
-                      <FI value={form.name2} onChange={v => set("name2", v)} placeholder="Name in English" />
-                    </Field>
-                    <Field label="إسم كامل 1">
-                      <FI value={form.fullName1} onChange={v => set("fullName1", v)} placeholder="الاسم الكامل بالعربي" />
-                    </Field>
-                    <Field label="إسم كامل 2">
-                      <FI value={form.fullName2} onChange={v => set("fullName2", v)} placeholder="Full name in English" />
-                    </Field>
-                    <div className="col-span-3">
-                      <Field label="ملحوظة">
-                        <FI value={form.description} onChange={v => set("description", v)} placeholder="ملاحظات إضافية..." />
-                      </Field>
-                    </div>
-                  </>
-                ) : (
-                  /* ── Comfortable: 2 أعمدة ── */
-                  <>
-                    <Field label="رقم">
-                      <FI value={form.code} onChange={v => set("code", v)} placeholder="001" />
-                    </Field>
-                    <Field label="موقع">
-                      <FS value={form.branchId} onValueChange={v => set("branchId", v)} placeholder="المقر الرئيسي">
-                        <SelectItem value="none">المقر الرئيسي</SelectItem>
-                        {branches?.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
-                      </FS>
-                    </Field>
-                    <Field label="إسم 1 *">
-                      <FI value={form.name} onChange={v => set("name", v)} placeholder="الاسم بالعربي" />
-                    </Field>
-                    <Field label="إسم 2">
-                      <FI value={form.name2} onChange={v => set("name2", v)} placeholder="Name in English" />
-                    </Field>
-                    <Field label="إسم كامل 1">
-                      <FI value={form.fullName1} onChange={v => set("fullName1", v)} placeholder="الاسم الكامل بالعربي" />
-                    </Field>
-                    <Field label="إسم كامل 2">
-                      <FI value={form.fullName2} onChange={v => set("fullName2", v)} placeholder="Full name in English" />
-                    </Field>
-                    <div className="col-span-2">
-                      <Field label="ملحوظة">
-                        <FI value={form.description} onChange={v => set("description", v)} placeholder="ملاحظات إضافية..." />
-                      </Field>
-                    </div>
-                  </>
-                )}
+              <div className={`grid ${c ? "grid-cols-3 gap-x-3 gap-y-1" : "grid-cols-2 gap-x-4 gap-y-1.5"}`}>
+                <HF label="رقم">
+                  <FI value={form.code} onChange={v => set("code", v)} placeholder="001" />
+                </HF>
+                <HF label="إسم 1 *">
+                  <FI value={form.name} onChange={v => set("name", v)} placeholder="الاسم بالعربي" />
+                </HF>
+                <HF label="موقع">
+                  <FS value={form.branchId} onValueChange={v => set("branchId", v)} placeholder="المقر الرئيسي">
+                    <SelectItem value="none">المقر الرئيسي</SelectItem>
+                    {branches?.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+                  </FS>
+                </HF>
+                <HF label="إسم 2">
+                  <FI value={form.name2} onChange={v => set("name2", v)} placeholder="Name in English" />
+                </HF>
+                <HF label="إسم كامل 1">
+                  <FI value={form.fullName1} onChange={v => set("fullName1", v)} placeholder="الاسم الكامل بالعربي" />
+                </HF>
+                <HF label="إسم كامل 2">
+                  <FI value={form.fullName2} onChange={v => set("fullName2", v)} placeholder="Full name in English" />
+                </HF>
+                <HF label="ملحوظة" full>
+                  <FI value={form.description} onChange={v => set("description", v)} placeholder="ملاحظات إضافية..." />
+                </HF>
               </div>
               <div className="mt-3 pt-2 flex justify-end" style={{ borderTop: "1px solid #f1f5f9" }}>
                 <button className="text-[12px] font-medium text-indigo-600 hover:text-indigo-800 hover:underline"
@@ -476,21 +458,21 @@ export default function Warehouses() {
 
             {/* ── حدود الاستخدام ── */}
             <Section title="حدود الاستخدام">
-              <div className="grid grid-cols-4 gap-x-5 gap-y-3 items-end">
-                <Field label="مجموعة مستخدمين" span={2}>
+              <div className={`grid ${c ? "grid-cols-3 gap-x-3 gap-y-1" : "grid-cols-2 gap-x-4 gap-y-1.5"} items-center`}>
+                <HF label="مجموعة مستخدمين" lw={c ? 88 : 108}>
                   <FI value={form.allowedUserGroup} onChange={v => set("allowedUserGroup", v)} placeholder="— الكل —" />
-                </Field>
-                <Field label="مستخدم" span={2}>
+                </HF>
+                <HF label="مستخدم" lw={c ? 88 : 108}>
                   <FS value={form.allowedUserId} onValueChange={v => set("allowedUserId", v)} placeholder="— الكل —">
                     <SelectItem value="none">— الكل —</SelectItem>
                     {(users as any[])?.map((u: any) => (
                       <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
                     ))}
                   </FS>
-                </Field>
-                <div className="col-span-1">
+                </HF>
+                <div className="flex justify-start">
                   <button
-                    className={`${c ? "h-6 text-[11px] px-2" : "h-9 px-4 text-[12px]"} rounded border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-600 transition-colors`}
+                    className={`${c ? "h-6 text-[11px] px-2" : "h-7 px-3 text-[12px]"} rounded border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-600 transition-colors`}
                     onClick={() => {
                       if (otherWarehouses.length === 0) { toast.info("لا يوجد مخازن أخرى للنسخ منها"); return; }
                       toast.info("نسخ من مخزن آخر");
