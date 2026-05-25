@@ -340,16 +340,14 @@ export default function Warehouses() {
   );
 
   useEffect(() => {
-    if (loadedLinks && loadedLinks.length > 0) {
+    if (loadedLinks !== undefined) {
       setLinks(loadedLinks.map(l => ({
         label: l.label,
         accountId: l.accountId ? String(l.accountId) : "",
         sortOrder: l.sortOrder,
       })));
-    } else if (editId) {
-      setLinks([]);
     }
-  }, [loadedLinks, editId]);
+  }, [loadedLinks]);
 
   const saveLinks = trpc.warehouses.accountLinks.save.useMutation();
   const deleteWarehouse = trpc.warehouses.delete.useMutation({
@@ -365,8 +363,8 @@ export default function Warehouses() {
     onError: (e) => toast.error(e.message),
   });
 
-  const doSaveLinks = async (warehouseId: number) =>
-    saveLinks.mutateAsync({
+  const doSaveLinks = async (warehouseId: number) => {
+    await saveLinks.mutateAsync({
       warehouseId,
       links: links.filter(l => l.label.trim()).map((l, i) => ({
         label: l.label,
@@ -374,6 +372,8 @@ export default function Warehouses() {
         sortOrder: i,
       })),
     });
+    utils.warehouses.accountLinks.list.invalidate({ warehouseId });
+  };
 
   const set = (k: keyof FormState, v: string) => setForm(p => ({ ...p, [k]: v }));
   const f = (v: string) => v || undefined;
