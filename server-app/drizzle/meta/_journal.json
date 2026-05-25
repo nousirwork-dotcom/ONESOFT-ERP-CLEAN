@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1779675771549,
+      "tag": "0000_set_null_inventory_counts_warehouse_id",
+      "breakpoints": true
+    }
+  ]
+}

@@ -450,7 +450,7 @@ export const inventoryCounts = pgTable('inventory_counts', {
   id: serial('id').primaryKey(),
   orgId: integer('org_id').notNull().references(() => organizations.id),
   countNumber: varchar('count_number', { length: 50 }).notNull(),
-  warehouseId: integer('warehouse_id').references(() => warehouses.id),
+  warehouseId: integer('warehouse_id').references(() => warehouses.id, { onDelete: 'set null' }),
   branchId: integer('branch_id').references(() => branches.id),
   status: inventoryCountStatusEnum('status').notNull().default('draft'),
   notes: text('notes'),
