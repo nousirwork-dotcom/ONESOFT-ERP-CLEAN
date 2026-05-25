@@ -448,17 +448,11 @@ export default function Warehouses() {
                   <FI value={form.description} onChange={v => set("description", v)} placeholder="ملاحظات إضافية..." />
                 </HF>
               </div>
-              <div className="mt-3 pt-2 flex justify-end" style={{ borderTop: "1px solid #f1f5f9" }}>
-                <button className="text-[12px] font-medium text-indigo-600 hover:text-indigo-800 hover:underline"
-                  onClick={() => toast.info("الروابط المحاسبية")}>
-                  الروابط المحاسبية
-                </button>
-              </div>
             </Section>
 
             {/* ── حدود الاستخدام ── */}
             <Section title="حدود الاستخدام">
-              <div className={`grid ${c ? "grid-cols-3 gap-x-3 gap-y-1" : "grid-cols-2 gap-x-4 gap-y-1.5"} items-center`}>
+              <div className={`grid ${c ? "grid-cols-2 gap-x-3 gap-y-1" : "grid-cols-2 gap-x-4 gap-y-1.5"} items-center`}>
                 <HF label="مجموعة مستخدمين" lw={c ? 88 : 108}>
                   <FI value={form.allowedUserGroup} onChange={v => set("allowedUserGroup", v)} placeholder="— الكل —" />
                 </HF>
@@ -470,17 +464,6 @@ export default function Warehouses() {
                     ))}
                   </FS>
                 </HF>
-                <div className="flex justify-start">
-                  <button
-                    className={`${c ? "h-6 text-[11px] px-2" : "h-7 px-3 text-[12px]"} rounded border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-600 transition-colors`}
-                    onClick={() => {
-                      if (otherWarehouses.length === 0) { toast.info("لا يوجد مخازن أخرى للنسخ منها"); return; }
-                      toast.info("نسخ من مخزن آخر");
-                    }}
-                  >
-                    نسخ من
-                  </button>
-                </div>
               </div>
             </Section>
 
