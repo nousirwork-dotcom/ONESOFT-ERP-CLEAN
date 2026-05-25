@@ -13,7 +13,7 @@ import { toast } from "sonner";
 
 /* ──────────────── types ──────────────── */
 type JournalForm = {
-  nameAr: string; nameEn: string; fixedPart: string;
+  nameAr: string; nameEn: string; fixedPart: string; docType: string;
   transferOwnership: boolean; userGroup: string; user: string; warehouse: string;
   systemOnly: boolean; autoSerial: boolean; firstNum: string; digits: string;
   lastNum: string; printTemplate: string; printTemplate2: string;
@@ -22,7 +22,7 @@ type JournalForm = {
 type Journal = { id: string; typeId: string } & JournalForm;
 
 const EMPTY: JournalForm = {
-  nameAr: "", nameEn: "", fixedPart: "",
+  nameAr: "", nameEn: "", fixedPart: "", docType: "",
   transferOwnership: false, userGroup: "", user: "", warehouse: "",
   systemOnly: false, autoSerial: false, firstNum: "1", digits: "7",
   lastNum: "9999999", printTemplate: "", printTemplate2: "",
@@ -119,7 +119,7 @@ export default function DocumentJournalsPage() {
   const openEdit = useCallback((j: Journal) => {
     setEditId(j.id);
     setForm({
-      nameAr: j.nameAr, nameEn: j.nameEn, fixedPart: j.fixedPart,
+      nameAr: j.nameAr, nameEn: j.nameEn, fixedPart: j.fixedPart, docType: j.docType,
       transferOwnership: j.transferOwnership, userGroup: j.userGroup,
       user: j.user, warehouse: j.warehouse, systemOnly: j.systemOnly,
       autoSerial: j.autoSerial, firstNum: j.firstNum, digits: j.digits,
@@ -333,7 +333,14 @@ export default function DocumentJournalsPage() {
                   <R label="الجزء الثابت">
                     <FI value={form.fixedPart} onChange={v => set("fixedPart", v)} placeholder="S01-" />
                   </R>
-                  <div className="flex items-center">
+                  <R label="نوع المستند">
+                    <FS value={form.docType} onValueChange={v => set("docType", v)}>
+                      {DOC_TYPES.map(dt => (
+                        <SelectItem key={dt.id} value={dt.id}>{dt.label}</SelectItem>
+                      ))}
+                    </FS>
+                  </R>
+                  <div className="flex items-center col-span-2">
                     <CB label="نقل الملكية أوتوماتيكي" checked={form.transferOwnership} onChange={v => set("transferOwnership", v)} />
                   </div>
                 </div>
