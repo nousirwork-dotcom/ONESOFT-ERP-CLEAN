@@ -460,7 +460,7 @@ export default function Warehouses() {
       <div
         className="flex flex-col w-full"
         style={{
-          maxWidth: 450,
+          maxWidth: c ? 450 : 480,
           background: "#fff",
           borderRadius: 12,
           border: "1px solid rgba(255,255,255,0.18)",
