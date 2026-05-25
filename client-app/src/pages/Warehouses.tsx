@@ -568,7 +568,7 @@ export default function Warehouses() {
 
             {/* ── جدول الروابط المحاسبية ── */}
             <Section title="الروابط المحاسبية">
-              <table className="w-full text-right" style={{ borderCollapse: "collapse" }}>
+              <table className="text-right" style={{ borderCollapse: "collapse", width: "100%", maxWidth: 400 }}>
                 <thead>
                   <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e5e7eb" }}>
                     <th className="text-[9px] font-semibold text-slate-400 px-1 py-0.5 text-right" style={{ width: 20 }}>#</th>
