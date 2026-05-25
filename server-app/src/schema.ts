@@ -560,6 +560,7 @@ export const documentTemplates = pgTable('document_templates', {
   paperSize:   varchar('paper_size', { length: 20 }).default('A4'),
   orientation: varchar('orientation', { length: 20 }).default('portrait'),
   isDefault:   boolean('is_default').notNull().default(false),
+  layoutJson:  text('layout_json'),
   notes:       text('notes'),
   isActive:    boolean('is_active').notNull().default(true),
   sortOrder:   integer('sort_order').notNull().default(0),
