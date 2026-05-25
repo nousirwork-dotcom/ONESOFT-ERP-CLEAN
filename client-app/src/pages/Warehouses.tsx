@@ -418,6 +418,7 @@ export default function Warehouses() {
       utils.warehouses.accountLinks.list.invalidate({ warehouseId });
       utils.warehouses.list.invalidate();
       toast.success(editId ? "تم تحديث المخزن" : "تم إنشاء المخزن");
+      setEditId(null);
       setView("list");
     } catch (e: any) {
       toast.error(e.message ?? "حدث خطأ أثناء الحفظ");
