@@ -318,6 +318,7 @@ export default function Warehouses() {
   const [links, setLinks] = useState<LinkRow[]>(DEFAULT_LINKS.map(l => ({ ...l })));
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [journalData, setJournalData] = useState<Record<string, JournalData>>({});
   const [doctypeData, setDoctypeData] = useState<Record<string, DoctypeData>>({});
 
@@ -351,8 +352,8 @@ export default function Warehouses() {
 
   const saveLinks = trpc.warehouses.accountLinks.save.useMutation();
   const deleteWarehouse = trpc.warehouses.delete.useMutation({
-    onSuccess: () => { utils.warehouses.list.invalidate(); toast.success("تم حذف المخزن"); setEditId(null); setShowDeleteDialog(false); setView("list"); },
-    onError: (e) => toast.error(e.message),
+    onSuccess: () => { utils.warehouses.list.invalidate(); toast.success("تم حذف المخزن"); setDeleteError(null); setEditId(null); setShowDeleteDialog(false); setView("list"); },
+    onError: (e) => { setDeleteError(e.message); toast.error(e.message); },
   });
   const create = trpc.warehouses.create.useMutation({ onError: (e) => toast.error(e.message) });
   const update = trpc.warehouses.update.useMutation({ onError: (e) => toast.error(e.message) });
@@ -438,7 +439,7 @@ export default function Warehouses() {
       { label: "التالي", icon: <CLeft className="w-3.5 h-3.5" />,        action: () => currentIndex < warehouseList.length - 1 && openEdit(warehouseList[currentIndex + 1]) },
       { label: "السابق", icon: <CRight className="w-3.5 h-3.5" />,       action: () => currentIndex > 0 && openEdit(warehouseList[currentIndex - 1]) },
       { label: "الأول",  icon: <ChevronFirst className="w-3.5 h-3.5" />, action: () => warehouseList[0] && openEdit(warehouseList[0]) },
-      { label: "حذف",    icon: <Trash2 className="w-3.5 h-3.5" />,       action: () => editId && setShowDeleteDialog(true), danger: true },
+      { label: "حذف",    icon: <Trash2 className="w-3.5 h-3.5" />,       action: () => { if (editId) { setDeleteError(null); setShowDeleteDialog(true); } }, danger: true },
       { label: "عرض",    icon: <Eye className="w-3.5 h-3.5" />,          action: () => {} },
       { label: "طباعة",  icon: <Printer className="w-3.5 h-3.5" />,      action: () => {} },
       { label: "خروج",   icon: <LogOut className="w-3.5 h-3.5" />,       action: () => setView("list") },
@@ -1005,7 +1006,7 @@ export default function Warehouses() {
         </div>
 
         {/* ══ نافذة تأكيد الحذف ══ */}
-        <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <Dialog open={showDeleteDialog} onOpenChange={(open) => { setShowDeleteDialog(open); if (!open) setDeleteError(null); }}>
           <DialogContent className="max-w-sm" dir="rtl">
             <DialogHeader>
               <DialogTitle className="text-right text-base">هل تريد حذف هذا المخزن؟</DialogTitle>
@@ -1013,11 +1014,16 @@ export default function Warehouses() {
             <p className="text-sm text-slate-500 text-right">
               سيتم إلغاء تفعيل المخزن وإخفاؤه من القوائم. يمكن استعادته لاحقاً عند الحاجة.
             </p>
+            {deleteError && (
+              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 text-right">
+                {deleteError}
+              </div>
+            )}
             <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
               <Button
                 variant="destructive"
                 className="flex-1"
-                onClick={() => { setShowDeleteDialog(false); deleteWarehouse.mutate({ id: editId! }); }}
+                onClick={() => { setDeleteError(null); deleteWarehouse.mutate({ id: editId! }); }}
                 disabled={deleteWarehouse.isPending}
               >
                 {deleteWarehouse.isPending ? "جارٍ الحذف..." : "حذف"}
@@ -1025,7 +1031,7 @@ export default function Warehouses() {
               <Button
                 variant="outline"
                 className="flex-1"
-                onClick={() => setShowDeleteDialog(false)}
+                onClick={() => { setShowDeleteDialog(false); setDeleteError(null); }}
               >
                 إلغاء
               </Button>
@@ -1156,7 +1162,7 @@ export default function Warehouses() {
                       <Edit className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      onClick={e => { e.stopPropagation(); setEditId(w.id); setShowDeleteDialog(true); }}
+                      onClick={e => { e.stopPropagation(); setEditId(w.id); setDeleteError(null); setShowDeleteDialog(true); }}
                       className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                       title="حذف"
                     >
@@ -1171,7 +1177,7 @@ export default function Warehouses() {
       </div>
 
       {/* ══ نافذة تأكيد الحذف (list view) ══ */}
-      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+      <Dialog open={showDeleteDialog} onOpenChange={(open) => { setShowDeleteDialog(open); if (!open) setDeleteError(null); }}>
         <DialogContent className="max-w-sm" dir="rtl">
           <DialogHeader>
             <DialogTitle className="text-right text-base">هل تريد حذف هذا المخزن؟</DialogTitle>
@@ -1179,11 +1185,16 @@ export default function Warehouses() {
           <p className="text-sm text-slate-500 text-right">
             سيتم إلغاء تفعيل المخزن وإخفاؤه من القوائم. يمكن استعادته لاحقاً عند الحاجة.
           </p>
+          {deleteError && (
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 text-right">
+              {deleteError}
+            </div>
+          )}
           <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
             <Button
               variant="destructive"
               className="flex-1"
-              onClick={() => { setShowDeleteDialog(false); deleteWarehouse.mutate({ id: editId! }); }}
+              onClick={() => { setDeleteError(null); deleteWarehouse.mutate({ id: editId! }); }}
               disabled={deleteWarehouse.isPending}
             >
               {deleteWarehouse.isPending ? "جارٍ الحذف..." : "حذف"}
@@ -1191,7 +1202,7 @@ export default function Warehouses() {
             <Button
               variant="outline"
               className="flex-1"
-              onClick={() => setShowDeleteDialog(false)}
+              onClick={() => { setShowDeleteDialog(false); setDeleteError(null); }}
             >
               إلغاء
             </Button>
