@@ -14,7 +14,7 @@ import {
   RotateCcw, ClipboardList, ArrowLeftRight, Package, BookMarked, Tag,
   Minimize2, Maximize2,
 } from "lucide-react";
-import { useEffect, useState, createContext, useContext } from "react";
+import { useEffect, useState, useRef, useMemo, createContext, useContext } from "react";
 import { toast } from "sonner";
 
 /* ─────────────────────────── density context ─────────────────────── */
@@ -207,6 +207,93 @@ const RB = ({ name, label, checked, onChange }: { name: string; label: string; c
     </label>
   );
 };
+
+/* ─────────────────────────── account code input ─────────────────────── */
+const normalizeAr = (s: string) =>
+  (s ?? "").toLowerCase().replace(/[أإآ]/g, "ا").replace(/ة/g, "ه").replace(/ى/g, "ي");
+
+function AccountCodeInput({
+  allAccounts, selectedId, onChange,
+}: {
+  allAccounts: any[];
+  selectedId: string;
+  onChange: (id: string) => void;
+}) {
+  const postable = useMemo(
+    () => (allAccounts ?? []).filter((a: any) => a.allowPosting === true && !a.isParent),
+    [allAccounts],
+  );
+  const selected = useMemo(() => postable.find((a: any) => String(a.id) === selectedId), [postable, selectedId]);
+  const [q, setQ]     = useState(selected?.code ?? "");
+  const [open, setOpen] = useState(false);
+  const [hi, setHi]   = useState(0);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { setQ(selected?.code ?? ""); }, [selected?.code]);
+
+  const filtered = useMemo(() => {
+    const sq = normalizeAr(q.trim());
+    if (!sq) return postable.slice(0, 30);
+    const codeFirst = postable.filter((a: any) => normalizeAr(a.code).startsWith(sq));
+    const rest      = postable.filter((a: any) => !normalizeAr(a.code).startsWith(sq) &&
+                        (normalizeAr(a.code).includes(sq) || normalizeAr(a.name).includes(sq)));
+    return [...codeFirst, ...rest].slice(0, 30);
+  }, [q, postable]);
+
+  useEffect(() => { setHi(0); }, [filtered]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const pick = (a: any) => {
+    onChange(String(a.id));
+    setQ(a.code ?? "");
+    setOpen(false);
+  };
+
+  const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); setHi(h => Math.min(h + 1, filtered.length - 1)); setOpen(true); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setHi(h => Math.max(h - 1, 0)); }
+    else if (e.key === "Escape") { setOpen(false); setQ(selected?.code ?? ""); }
+    else if ((e.key === "Enter" || e.key === "Tab") && open && filtered[hi]) { e.preventDefault(); pick(filtered[hi]); }
+  };
+
+  return (
+    <div ref={wrapRef} className="relative w-full">
+      <input
+        value={open || !selected ? q : selected.code}
+        dir="ltr"
+        onChange={e => { setQ(e.target.value); setOpen(true); setHi(0); }}
+        onFocus={() => { setOpen(true); if (selected) setQ(""); }}
+        onBlur={() => setTimeout(() => { if (!wrapRef.current?.contains(document.activeElement)) { setOpen(false); setQ(selected?.code ?? ""); } }, 120)}
+        onKeyDown={onKey}
+        placeholder="كود..."
+        className="h-5 w-full text-[10px] px-1.5 border-0 bg-transparent outline-none focus:bg-indigo-50 font-mono text-slate-700 placeholder:text-slate-300"
+      />
+      {open && (
+        <div className="absolute top-full right-0 z-[9990] mt-0.5 w-72 bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden" dir="rtl">
+          <div className="overflow-y-auto max-h-48">
+            {filtered.length === 0 && <div className="text-[11px] text-center text-slate-400 py-3">لا نتائج</div>}
+            {filtered.map((a: any, idx: number) => (
+              <button key={a.id} onMouseDown={() => pick(a)}
+                className={`w-full flex items-center gap-2 px-2 py-1 text-[11px] transition-colors ${idx === hi ? "bg-indigo-50" : "hover:bg-slate-50"}`}
+              >
+                <span className="font-mono text-[10px] text-slate-400 w-14 text-left shrink-0">{a.code}</span>
+                <span className="flex-1 text-right truncate text-slate-700">{a.name}</span>
+              </button>
+            ))}
+          </div>
+          <div className="px-2 py-1 border-t border-slate-100 bg-slate-50 text-[9px] text-slate-400">↑↓ تنقل · Enter اختيار</div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* ─────────────────────────── main component ─────────────────────────── */
 export default function Warehouses() {
@@ -480,7 +567,7 @@ export default function Warehouses() {
                   <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e5e7eb" }}>
                     <th className="text-[9px] font-semibold text-slate-400 px-1 py-0.5 text-right" style={{ width: 20 }}>#</th>
                     <th className="text-[9px] font-semibold text-slate-400 px-1 py-0.5 text-right">بيان</th>
-                    <th className="text-[9px] font-semibold text-slate-400 px-1 py-0.5 text-right" style={{ width: 148 }}>كود الحساب</th>
+                    <th className="text-[9px] font-semibold text-slate-400 px-1 py-0.5 text-right" style={{ width: 90 }}>كود</th>
                     <th className="text-[9px] font-semibold text-slate-400 px-1 py-0.5 text-right">إسم الحساب</th>
                   </tr>
                 </thead>
@@ -492,14 +579,14 @@ export default function Warehouses() {
                       <tr key={idx} style={{ borderBottom: "1px solid #f1f5f9", background: idx % 2 === 0 ? "#fff" : "#fafafa" }}>
                         <td className="px-1 text-[9px] text-slate-400 text-center">{idx + 1}</td>
                         <td className="px-1 text-[10px] text-slate-700 font-medium whitespace-nowrap">{row.label}</td>
-                        <td className="px-0.5 py-0">
-                          <FS value={row.accountId} onValueChange={v => setLinks(prev => prev.map((l, i) => i === idx ? { ...l, accountId: v } : l))} placeholder="— اختر —">
-                            {postableAccounts.map((a: any) => (
-                              <SelectItem key={a.id} value={String(a.id)}>{a.code} — {a.name}</SelectItem>
-                            ))}
-                          </FS>
+                        <td className="py-0" style={{ borderRight: "1px solid #f1f5f9" }}>
+                          <AccountCodeInput
+                            allAccounts={(accounts as any[]) ?? []}
+                            selectedId={row.accountId}
+                            onChange={v => setLinks(prev => prev.map((l, i) => i === idx ? { ...l, accountId: v } : l))}
+                          />
                         </td>
-                        <td className="px-1 text-[10px] text-slate-500">{acc?.name ?? "—"}</td>
+                        <td className="px-1 text-[10px] text-slate-500 truncate max-w-0" style={{ maxWidth: 160 }}>{acc?.name ?? <span className="text-slate-300">—</span>}</td>
                       </tr>
                     );
                   })}
