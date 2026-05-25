@@ -80,18 +80,18 @@ const Section = ({
   return (
     <div
       className="bg-white overflow-hidden"
-      style={{ border: "1px solid #e5e7eb", borderRadius: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}
+      style={{ border: "1px solid #e2e8f0", borderRadius: 6, boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}
     >
       <div
-        className={`flex items-center justify-between ${c ? "px-3 py-1.5" : "px-4 py-2.5"}`}
-        style={{ borderBottom: "1px solid #f1f5f9" }}
+        className={`flex items-center justify-between ${c ? "px-2.5 py-0.5" : "px-4 py-2.5"}`}
+        style={{ borderBottom: "1px solid #f1f5f9", background: c ? "#f8fafc" : undefined }}
       >
-        <span className="font-semibold text-indigo-700" style={{ fontSize: c ? 12 : 14 }}>
+        <span className="font-semibold text-indigo-700" style={{ fontSize: c ? 11 : 14 }}>
           {title}
         </span>
         {action}
       </div>
-      <div className={c ? "p-2.5" : "p-4"}>{children}</div>
+      <div className={c ? "p-1.5" : "p-4"}>{children}</div>
     </div>
   );
 };
@@ -116,9 +116,9 @@ const HF = ({
   label, children, full = false, lw,
 }: { label: string; children: React.ReactNode; full?: boolean; lw?: number }) => {
   const c = useContext(Density) === "compact";
-  const w = lw ?? (c ? 52 : 76);
+  const w = lw ?? (c ? 46 : 76);
   return (
-    <div className={`flex items-center gap-2${full ? (c ? " col-span-3" : " col-span-2") : ""}`}>
+    <div className={`flex items-center gap-1.5${full ? (c ? " col-span-3" : " col-span-2") : ""}`}>
       <span
         className={`shrink-0 text-right ${c ? "text-[10px]" : "text-xs"} text-slate-500 font-medium`}
         style={{ width: w }}
@@ -140,7 +140,7 @@ const FI = ({
       value={value}
       onChange={e => onChange(e.target.value)}
       placeholder={placeholder}
-      className={`${c ? "h-6 text-[11px] px-2" : "h-9 text-sm"} border-slate-200 focus:border-indigo-400 focus-visible:ring-1 focus-visible:ring-indigo-200 bg-white rounded`}
+      className={`${c ? "h-5 text-[10px] px-1.5 py-0" : "h-9 text-sm"} border-slate-200 focus:border-indigo-400 focus-visible:ring-0 focus-visible:ring-offset-0 bg-white rounded`}
     />
   );
 };
@@ -152,7 +152,7 @@ const FS = ({
   const c = useContext(Density) === "compact";
   return (
     <Select value={value} onValueChange={onValueChange}>
-      <SelectTrigger className={`${c ? "h-6 text-[11px] px-2" : "h-9 text-sm"} border-slate-200 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200 bg-white rounded`}>
+      <SelectTrigger className={`${c ? "h-5 text-[10px] px-1.5 py-0" : "h-9 text-sm"} border-slate-200 focus:ring-0 focus:ring-offset-0 bg-white rounded`}>
         <SelectValue placeholder={placeholder ?? "— اختر —"} />
       </SelectTrigger>
       <SelectContent>{children}</SelectContent>
@@ -164,11 +164,11 @@ const FS = ({
 const P = ({ title, children }: { title: string; children: React.ReactNode }) => {
   const c = useContext(Density) === "compact";
   return (
-    <div className="overflow-hidden" style={{ border: "1px solid #d1d5db", borderRadius: 6 }}>
-      <div className={`${c ? "px-2 py-0.5" : "px-2.5 py-1"}`} style={{ background: "#e8edf5", borderBottom: "1px solid #d1d5db" }}>
+    <div className="overflow-hidden" style={{ border: "1px solid #d1d5db", borderRadius: 4 }}>
+      <div className={`${c ? "px-1.5 py-px" : "px-2.5 py-1"}`} style={{ background: "#e8edf5", borderBottom: "1px solid #d1d5db" }}>
         <span className={`font-bold text-slate-700 ${c ? "text-[10px]" : "text-[11px]"}`}>{title}</span>
       </div>
-      <div className={`${c ? "px-2 py-1.5" : "px-3 py-2"}`} style={{ background: "#fff" }}>{children}</div>
+      <div className={`${c ? "px-1.5 py-1" : "px-3 py-2"}`} style={{ background: "#fff" }}>{children}</div>
     </div>
   );
 };
@@ -178,7 +178,7 @@ const R = ({ label, lw = 88, children }: { label: string; lw?: number; children:
   const c = useContext(Density) === "compact";
   return (
     <div className="flex items-center gap-1 min-w-0">
-      <span className={`${c ? "text-[10px]" : "text-[11px]"} text-slate-600 shrink-0`} style={{ width: c ? 72 : lw }}>{label}</span>
+      <span className={`${c ? "text-[10px]" : "text-[11px]"} text-slate-600 shrink-0`} style={{ width: c ? 64 : lw }}>{label}</span>
       <div className="flex-1 min-w-0">{children}</div>
     </div>
   );
@@ -211,7 +211,7 @@ const RB = ({ name, label, checked, onChange }: { name: string; label: string; c
 /* ─────────────────────────── main component ─────────────────────────── */
 export default function Warehouses() {
   const [density, setDensity] = useState<"compact" | "comfortable">(() =>
-    (localStorage.getItem("onesoft_density") as any) ?? "comfortable"
+    (localStorage.getItem("onesoft_density") as any) ?? "compact"
   );
   const toggleDensity = () => setDensity(d => {
     const next = d === "comfortable" ? "compact" : "comfortable";
@@ -362,38 +362,38 @@ export default function Warehouses() {
         dir="rtl"
       >
         {/* ── Page title ── */}
-        <div className={`flex items-center justify-between ${c ? "mb-2" : "mb-3"}`}>
-          <div className="flex items-center gap-2">
+        <div className={`flex items-center justify-between ${c ? "mb-1" : "mb-3"}`}>
+          <div className="flex items-center gap-1.5">
             <button
               onClick={() => setView("list")}
-              className="w-6 h-6 flex items-center justify-center rounded-full bg-white border border-slate-200 shadow-sm text-slate-400 hover:text-indigo-600 hover:border-indigo-300 transition-colors"
+              className="w-5 h-5 flex items-center justify-center rounded-full bg-white border border-slate-200 shadow-sm text-slate-400 hover:text-indigo-600 hover:border-indigo-300 transition-colors"
             >
-              <ArrowLeft className="w-3 h-3" />
+              <ArrowLeft className="w-2.5 h-2.5" />
             </button>
-            <div className={`${c ? "w-5 h-5" : "w-7 h-7"} rounded-lg bg-indigo-50 flex items-center justify-center border border-indigo-100`}>
-              <Warehouse className={`${c ? "w-3 h-3" : "w-3.5 h-3.5"} text-indigo-600`} />
+            <div className={`${c ? "w-4 h-4" : "w-7 h-7"} rounded bg-indigo-50 flex items-center justify-center border border-indigo-100`}>
+              <Warehouse className={`${c ? "w-2.5 h-2.5" : "w-3.5 h-3.5"} text-indigo-600`} />
             </div>
-            <h1 className={`${c ? "text-[13px]" : "text-[15px]"} font-bold text-slate-700`}>
+            <h1 className={`${c ? "text-[12px]" : "text-[15px]"} font-bold text-slate-700`}>
               {editId ? "تعديل بيانات المخزن" : "إضافة مخزن جديد"}
             </h1>
           </div>
           {/* ── Density toggle ── */}
           <button
             onClick={toggleDensity}
-            className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-indigo-600 border border-slate-200 hover:border-indigo-300 rounded px-2 py-1 bg-white transition-colors"
+            className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-indigo-600 border border-slate-200 hover:border-indigo-300 rounded px-1.5 py-0.5 bg-white transition-colors"
             title={c ? "تبديل للوضع المريح" : "تبديل للوضع المضغوط"}
           >
             {c
-              ? <><Maximize2 className="w-3 h-3" /> مريح</>
-              : <><Minimize2 className="w-3 h-3" /> مضغوط</>
+              ? <><Maximize2 className="w-2.5 h-2.5" /> مريح</>
+              : <><Minimize2 className="w-2.5 h-2.5" /> مضغوط</>
             }
           </button>
         </div>
 
         {/* ── Tab bar ── */}
         <div
-          className={`flex items-center gap-0 shrink-0 ${c ? "mb-2" : "mb-3"}`}
-          style={{ borderBottom: "2px solid #e5e7eb" }}
+          className={`flex items-center gap-0 shrink-0 ${c ? "mb-1" : "mb-3"}`}
+          style={{ borderBottom: "1px solid #e5e7eb" }}
         >
           {([
             { id: "basic",    label: "البيانات الأساسية" },
@@ -403,11 +403,11 @@ export default function Warehouses() {
             <button
               key={tab.id}
               onClick={() => setFormTab(tab.id)}
-              className={`${c ? "px-3 py-1 text-[11px]" : "px-5 py-2 text-[13px]"} font-medium transition-colors relative`}
+              className={`${c ? "px-2.5 py-0.5 text-[10px]" : "px-5 py-2 text-[13px]"} font-medium transition-colors relative`}
               style={{
                 color: formTab === tab.id ? "#4338ca" : "#64748b",
                 borderBottom: formTab === tab.id ? "2px solid #4338ca" : "2px solid transparent",
-                marginBottom: -2,
+                marginBottom: -1,
                 background: "transparent",
               }}
             >
@@ -417,13 +417,13 @@ export default function Warehouses() {
         </div>
 
         {/* ── Sections ── */}
-        <div className={`flex-1 ${c ? "space-y-2 pb-12" : "space-y-3 pb-16"}`}>
+        <div className={`flex-1 ${c ? "space-y-1 pb-8" : "space-y-3 pb-16"}`}>
 
           {/* ══ TAB: البيانات الأساسية ══ */}
           {formTab === "basic" && <>
             {/* ── بيانات المخزن ── */}
             <Section title="بيانات المخزن">
-              <div className={`grid ${c ? "grid-cols-3 gap-x-3 gap-y-1" : "grid-cols-2 gap-x-4 gap-y-1.5"}`}>
+              <div className={`grid ${c ? "grid-cols-3 gap-x-2 gap-y-0.5" : "grid-cols-2 gap-x-4 gap-y-1.5"}`}>
                 <HF label="رقم">
                   <FI value={form.code} onChange={v => set("code", v)} placeholder="001" />
                 </HF>
@@ -453,7 +453,7 @@ export default function Warehouses() {
 
             {/* ── حدود الاستخدام ── */}
             <Section title="حدود الاستخدام">
-              <div className={`grid ${c ? "grid-cols-2 gap-x-3 gap-y-1" : "grid-cols-2 gap-x-4 gap-y-1.5"} items-center`}>
+              <div className={`grid ${c ? "grid-cols-2 gap-x-2 gap-y-0.5" : "grid-cols-2 gap-x-4 gap-y-1.5"} items-center`}>
                 <HF label="مجموعة مستخدمين" lw={c ? 88 : 108}>
                   <FI value={form.allowedUserGroup} onChange={v => set("allowedUserGroup", v)} placeholder="— الكل —" />
                 </HF>
@@ -524,22 +524,22 @@ export default function Warehouses() {
 
 
             return (
-              <div className="flex gap-3" style={{ height: "calc(100vh - 260px)" }}>
+              <div className="flex gap-2" style={{ height: "calc(100vh - 220px)" }}>
                 {/* ── Sidebar ── */}
-                <div className="shrink-0 flex flex-col overflow-hidden" style={{ width: 205, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
-                  <div className="px-3 pt-2.5 pb-2 shrink-0" style={{ borderBottom: "1px solid #f1f5f9" }}>
-                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">الدفاتر</span>
+                <div className="shrink-0 flex flex-col overflow-hidden" style={{ width: c ? 158 : 205, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 6, boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+                  <div className={`${c ? "px-2 py-0.5" : "px-3 pt-2.5 pb-2"} shrink-0`} style={{ borderBottom: "1px solid #f1f5f9", background: "#f8fafc" }}>
+                    <span className={`${c ? "text-[10px]" : "text-[11px]"} font-semibold text-slate-400 uppercase tracking-wide`}>الدفاتر</span>
                   </div>
-                  <div className="flex-1 overflow-y-auto py-1">
+                  <div className="flex-1 overflow-y-auto">
                     {ITEMS.map(item => {
                       const active = journalItem === item.id;
                       return (
                         <button key={item.id} onClick={() => setJournalItem(item.id)}
-                          className="w-full flex items-center gap-2 px-3 py-1.5 text-right transition-colors"
-                          style={{ background: active ? "#dbeafe" : "transparent", color: active ? "#1d4ed8" : "#64748b", borderRight: active ? "3px solid #3b82f6" : "3px solid transparent" }}
+                          className={`w-full flex items-center gap-1.5 ${c ? "px-2 py-0.5" : "px-3 py-1.5"} text-right transition-colors`}
+                          style={{ background: active ? "#dbeafe" : "transparent", color: active ? "#1d4ed8" : "#64748b", borderRight: active ? "2px solid #3b82f6" : "2px solid transparent" }}
                         >
-                          <span style={{ color: active ? "#3b82f6" : "#94a3b8" }}>{item.icon}</span>
-                          <span className="text-[12px] truncate">{item.label}</span>
+                          <span style={{ color: active ? "#3b82f6" : "#94a3b8", flexShrink: 0 }}>{item.icon}</span>
+                          <span className={`${c ? "text-[10px]" : "text-[12px]"} truncate`}>{item.label}</span>
                         </button>
                       );
                     })}
@@ -547,7 +547,7 @@ export default function Warehouses() {
                 </div>
 
                 {/* ── Content ── */}
-                <div className="flex-1 min-w-0 overflow-y-auto space-y-2 pb-4">
+                <div className={`flex-1 min-w-0 overflow-y-auto ${c ? "space-y-1" : "space-y-2"} pb-4`}>
                   {/* Title bar */}
                   <div className="flex items-center justify-between py-1">
                     <span className="text-[12px] font-bold text-indigo-700">{currentItem?.label}</span>
@@ -782,22 +782,22 @@ export default function Warehouses() {
 
 
             return (
-              <div className="flex gap-3" style={{ height: "calc(100vh - 260px)" }}>
+              <div className="flex gap-2" style={{ height: "calc(100vh - 220px)" }}>
                 {/* ── Sidebar ── */}
-                <div className="shrink-0 flex flex-col overflow-hidden" style={{ width: 205, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
-                  <div className="px-3 pt-2.5 pb-2 shrink-0" style={{ borderBottom: "1px solid #f1f5f9" }}>
-                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">الأنواع</span>
+                <div className="shrink-0 flex flex-col overflow-hidden" style={{ width: c ? 158 : 205, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 6, boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+                  <div className={`${c ? "px-2 py-0.5" : "px-3 pt-2.5 pb-2"} shrink-0`} style={{ borderBottom: "1px solid #f1f5f9", background: "#f8fafc" }}>
+                    <span className={`${c ? "text-[10px]" : "text-[11px]"} font-semibold text-slate-400 uppercase tracking-wide`}>الأنواع</span>
                   </div>
-                  <div className="flex-1 overflow-y-auto py-1">
+                  <div className="flex-1 overflow-y-auto">
                     {DTYPE_ITEMS.map(item => {
                       const active = doctypeItem === item.id;
                       return (
                         <button key={item.id} onClick={() => setDoctypeItem(item.id)}
-                          className="w-full flex items-center gap-2 px-3 py-1.5 text-right transition-colors"
-                          style={{ background: active ? "#dbeafe" : "transparent", color: active ? "#1d4ed8" : "#64748b", borderRight: active ? "3px solid #3b82f6" : "3px solid transparent" }}
+                          className={`w-full flex items-center gap-1.5 ${c ? "px-2 py-0.5" : "px-3 py-1.5"} text-right transition-colors`}
+                          style={{ background: active ? "#dbeafe" : "transparent", color: active ? "#1d4ed8" : "#64748b", borderRight: active ? "2px solid #3b82f6" : "2px solid transparent" }}
                         >
-                          <span style={{ color: active ? "#3b82f6" : "#94a3b8" }}>{item.icon}</span>
-                          <span className="text-[12px] truncate flex-1">{item.label}</span>
+                          <span style={{ color: active ? "#3b82f6" : "#94a3b8", flexShrink: 0 }}>{item.icon}</span>
+                          <span className={`${c ? "text-[10px]" : "text-[12px]"} truncate flex-1`}>{item.label}</span>
                         </button>
                       );
                     })}
@@ -805,8 +805,8 @@ export default function Warehouses() {
                 </div>
 
                 {/* ── Content ── */}
-                <div className="flex-1 min-w-0 overflow-y-auto space-y-2 pb-4">
-                  <div className="flex items-center justify-between py-1">
+                <div className={`flex-1 min-w-0 overflow-y-auto ${c ? "space-y-1" : "space-y-2"} pb-4`}>
+                  <div className="flex items-center justify-between py-0.5">
                     <span className="text-[12px] font-bold text-indigo-700">{currentLabel}</span>
                   </div>
 
@@ -1012,7 +1012,7 @@ export default function Warehouses() {
               onClick={action}
               disabled={(label === "حفظ" && isSaving) || (label === "حذف" && !editId)}
               className={[
-                `flex flex-col items-center justify-center gap-0.5 flex-1 ${c ? "py-1 text-[10px]" : "py-2 text-[11px]"} font-medium transition-colors`,
+                `flex flex-col items-center justify-center gap-0 flex-1 ${c ? "py-0.5 text-[10px]" : "py-2 text-[11px]"} font-medium transition-colors`,
                 "border-l border-slate-100 last:border-0",
                 primary
                   ? "bg-indigo-600 text-white hover:bg-indigo-700"
@@ -1021,8 +1021,8 @@ export default function Warehouses() {
                     : "text-slate-600 hover:bg-slate-50",
               ].join(" ")}
             >
-              <span className={c ? "w-3 h-3" : "w-3.5 h-3.5"}>{icon}</span>
-              <span className="leading-none mt-0.5">
+              <span className={c ? "w-3 h-3" : "w-3.5 h-3.5"} style={{ display: "flex" }}>{icon}</span>
+              <span className="leading-none" style={{ marginTop: c ? 1 : 2 }}>
                 {label === "حفظ" && isSaving ? "..." : label}
               </span>
             </button>
