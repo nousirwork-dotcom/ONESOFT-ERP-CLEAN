@@ -171,7 +171,7 @@ export default function DocumentTemplatesPage() {
       orientation: form.orientation,
       isDefault:   form.isDefault,
       isActive:    form.isActive,
-      layoutJson:  form.layoutJson,
+      layoutJson:  form.layoutJson ?? undefined,
       notes:       form.notes || undefined,
       sortOrder:   0,
     };

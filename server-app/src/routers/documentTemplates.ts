@@ -27,7 +27,7 @@ export const documentTemplatesRouter = router({
       paperSize:   z.string().default('A4'),
       orientation: z.string().default('portrait'),
       isDefault:   z.boolean().default(false),
-      layoutJson:  z.string().optional(),
+      layoutJson:  z.string().nullable().optional(),
       notes:       z.string().optional(),
       sortOrder:   z.number().default(0),
     }))
