@@ -373,8 +373,13 @@ export default function Warehouses() {
             <div className={`${c ? "w-4 h-4" : "w-7 h-7"} rounded bg-indigo-50 flex items-center justify-center border border-indigo-100`}>
               <Warehouse className={`${c ? "w-2.5 h-2.5" : "w-3.5 h-3.5"} text-indigo-600`} />
             </div>
-            <h1 className={`${c ? "text-[12px]" : "text-[15px]"} font-bold text-slate-700`}>
+            <h1 className={`${c ? "text-[12px]" : "text-[15px]"} font-bold text-slate-700 flex items-center gap-1.5`}>
               {editId ? "تعديل بيانات المخزن" : "إضافة مخزن جديد"}
+              {editId && form.name && (
+                <span className={`${c ? "text-[11px]" : "text-[13px]"} font-semibold text-indigo-600`}>
+                  — {form.name}
+                </span>
+              )}
             </h1>
           </div>
           {/* ── Density toggle ── */}
