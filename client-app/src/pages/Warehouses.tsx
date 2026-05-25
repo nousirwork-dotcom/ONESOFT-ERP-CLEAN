@@ -452,20 +452,21 @@ export default function Warehouses() {
     return (
       <Density.Provider value={density}>
       <div
-        className="flex min-h-full -mx-6 -mt-6 items-start justify-center"
-        style={{ background: "#eef0f5", padding: "24px 16px" }}
+        className="fixed inset-0 z-[300] flex items-start justify-center overflow-y-auto"
+        style={{ background: "rgba(15,23,42,0.52)", backdropFilter: "blur(3px)", padding: "32px 16px" }}
         dir="rtl"
+        onClick={e => { if (e.target === e.currentTarget) setView("list"); }}
       >
       <div
         className="flex flex-col w-full"
         style={{
           maxWidth: 450,
           background: "#fff",
-          borderRadius: 10,
-          border: "1px solid #e2e8f0",
-          boxShadow: "0 4px 24px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06)",
+          borderRadius: 12,
+          border: "1px solid rgba(255,255,255,0.18)",
+          boxShadow: "0 25px 60px rgba(0,0,0,0.35), 0 8px 24px rgba(0,0,0,0.18), 0 2px 6px rgba(0,0,0,0.10)",
           padding: "16px 20px 20px",
-          animation: "fadeSlideIn 0.18s ease",
+          animation: "fadeSlideIn 0.22s cubic-bezier(0.34,1.56,0.64,1)",
         }}
       >
         {/* ── Page title ── */}
