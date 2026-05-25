@@ -473,10 +473,10 @@ export default function Warehouses() {
               <table className="w-full text-right" style={{ borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e5e7eb" }}>
-                    <th className="text-[10px] font-semibold text-slate-400 px-2 py-1 text-right w-6">#</th>
-                    <th className="text-[10px] font-semibold text-slate-400 px-2 py-1 text-right">بيان</th>
-                    <th className="text-[10px] font-semibold text-slate-400 px-2 py-1 text-right" style={{ width: 180 }}>كود الحساب</th>
-                    <th className="text-[10px] font-semibold text-slate-400 px-2 py-1 text-right">إسم الحساب</th>
+                    <th className="text-[9px] font-semibold text-slate-400 px-1 py-0.5 text-right" style={{ width: 20 }}>#</th>
+                    <th className="text-[9px] font-semibold text-slate-400 px-1 py-0.5 text-right">بيان</th>
+                    <th className="text-[9px] font-semibold text-slate-400 px-1 py-0.5 text-right" style={{ width: 148 }}>كود الحساب</th>
+                    <th className="text-[9px] font-semibold text-slate-400 px-1 py-0.5 text-right">إسم الحساب</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -485,16 +485,16 @@ export default function Warehouses() {
                              ?? (accounts as any[])?.find((a: any) => String(a.id) === row.accountId);
                     return (
                       <tr key={idx} style={{ borderBottom: "1px solid #f1f5f9", background: idx % 2 === 0 ? "#fff" : "#fafafa" }}>
-                        <td className="px-2 text-[10px] text-slate-400">{idx + 1}</td>
-                        <td className="px-2 text-[11px] text-slate-700 font-medium whitespace-nowrap">{row.label}</td>
-                        <td className="px-1 py-0.5">
+                        <td className="px-1 text-[9px] text-slate-400 text-center">{idx + 1}</td>
+                        <td className="px-1 text-[10px] text-slate-700 font-medium whitespace-nowrap">{row.label}</td>
+                        <td className="px-0.5 py-0">
                           <FS value={row.accountId} onValueChange={v => setLinks(prev => prev.map((l, i) => i === idx ? { ...l, accountId: v } : l))} placeholder="— اختر —">
                             {postableAccounts.map((a: any) => (
                               <SelectItem key={a.id} value={String(a.id)}>{a.code} — {a.name}</SelectItem>
                             ))}
                           </FS>
                         </td>
-                        <td className="px-2 text-[11px] text-slate-500">{acc?.name ?? "—"}</td>
+                        <td className="px-1 text-[10px] text-slate-500">{acc?.name ?? "—"}</td>
                       </tr>
                     );
                   })}
