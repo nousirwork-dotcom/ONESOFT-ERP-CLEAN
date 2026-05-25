@@ -276,7 +276,7 @@ export const salesInvoiceItems = pgTable('sales_invoice_items', {
   taxPercent: decimal('tax_percent', { precision: 5, scale: 2 }).default('0'),
   taxAmount: decimal('tax_amount', { precision: 18, scale: 4 }).default('0'),
   total: decimal('total', { precision: 18, scale: 4 }).notNull(),
-  warehouseId: integer('warehouse_id').references(() => warehouses.id),
+  warehouseId: integer('warehouse_id').references(() => warehouses.id, { onDelete: 'set null' }),
   notes: text('notes'),
   sortOrder: integer('sort_order').default(0),
 });
@@ -420,7 +420,7 @@ export const stockVouchers = pgTable('stock_vouchers', {
   voucherNumber: varchar('voucher_number', { length: 50 }).notNull(),
   type: stockVoucherTypeEnum('type').notNull(),
   voucherDate: timestamp('voucher_date').notNull().defaultNow(),
-  warehouseId: integer('warehouse_id').references(() => warehouses.id),
+  warehouseId: integer('warehouse_id').references(() => warehouses.id, { onDelete: 'set null' }),
   branchId: integer('branch_id').references(() => branches.id),
   supplierId: integer('supplier_id').references(() => suppliers.id),
   reason: varchar('reason', { length: 500 }),
@@ -521,7 +521,7 @@ export const documentJournals = pgTable('document_journals', {
   includeYear:   boolean('include_year').notNull().default(true),
   currentSeq:    integer('current_seq').notNull().default(0), // آخر رقم مستخدم
   // ── الربط بالكيانات ───────────────────────────────────────────────────────
-  warehouseId:   integer('warehouse_id').references(() => warehouses.id),
+  warehouseId:   integer('warehouse_id').references(() => warehouses.id, { onDelete: 'set null' }),
   branchId:      integer('branch_id').references(() => branches.id),
   // ── الحسابات الافتراضية ───────────────────────────────────────────────────
   salesAccountId:   integer('sales_account_id').references(() => chartOfAccounts.id),

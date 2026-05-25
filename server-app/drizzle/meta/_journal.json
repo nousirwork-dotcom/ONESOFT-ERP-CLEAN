@@ -8,6 +8,13 @@
       "when": 1779675771549,
       "tag": "0000_set_null_inventory_counts_warehouse_id",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779742635668,
+      "tag": "0001_set_null_warehouse_references",
+      "breakpoints": true
     }
   ]
 }
