@@ -47,15 +47,15 @@ const R = ({ label, lw = 88, children }: { label: string; lw?: number; children:
 );
 
 const DTYPE_ITEMS = [
-  { id: "sales",            label: "أنواع مستند فاتورة المبيعات",    icon: <BookOpen className="w-3.5 h-3.5" /> },
-  { id: "sales-return",     label: "أنواع مستند مردود المبيعات",     icon: <RotateCcw className="w-3.5 h-3.5" /> },
-  { id: "purchases",        label: "أنواع مستند فاتورة المشتريات",   icon: <BookMarked className="w-3.5 h-3.5" /> },
-  { id: "purchases-return", label: "أنواع مستند مردود المشتريات",    icon: <RotateCcw className="w-3.5 h-3.5" /> },
-  { id: "sales-order",      label: "أنواع مستند أمر البيع",          icon: <ClipboardList className="w-3.5 h-3.5" /> },
-  { id: "sales-quote",      label: "أنواع مستند عرض أسعار مبيعات",  icon: <Tag className="w-3.5 h-3.5" /> },
-  { id: "purch-quote",      label: "أنواع مستند عرض أسعار مشتريات", icon: <Tag className="w-3.5 h-3.5" /> },
-  { id: "purchase-order",   label: "أنواع مستند أمر شراء",           icon: <ClipboardList className="w-3.5 h-3.5" /> },
-  { id: "transfer",         label: "أنواع مستند سند تحويل داخلي",    icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
+  { id: "sales",            label: "فاتورة مبيعات",       icon: <BookOpen className="w-3.5 h-3.5" /> },
+  { id: "sales-return",     label: "مردود مبيعات",        icon: <RotateCcw className="w-3.5 h-3.5" /> },
+  { id: "purchases",        label: "فاتورة مشتريات",      icon: <BookMarked className="w-3.5 h-3.5" /> },
+  { id: "purchases-return", label: "مردود مشتريات",       icon: <RotateCcw className="w-3.5 h-3.5" /> },
+  { id: "sales-order",      label: "امر بيع",             icon: <ClipboardList className="w-3.5 h-3.5" /> },
+  { id: "sales-quote",      label: "عرض سعر مبيعات",     icon: <Tag className="w-3.5 h-3.5" /> },
+  { id: "purchase-order",   label: "امر شراء",            icon: <ClipboardList className="w-3.5 h-3.5" /> },
+  { id: "purch-quote",      label: "عرض سعر مشتريات",    icon: <Tag className="w-3.5 h-3.5" /> },
+  { id: "transfer",         label: "سند تحويل مخزنى",    icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
 ];
 
 export default function DocumentTypesPage() {
@@ -107,9 +107,14 @@ export default function DocumentTypesPage() {
             <R label="نوع المستند">
               <FS value={dd.docType} onValueChange={v => setDoctype(selectedItem, { docType: v })}>
                 <SelectItem value="sales">فاتورة مبيعات</SelectItem>
+                <SelectItem value="sales-return">مردود مبيعات</SelectItem>
                 <SelectItem value="purchase">فاتورة مشتريات</SelectItem>
-                <SelectItem value="return-s">مردود مبيعات</SelectItem>
-                <SelectItem value="return-p">مردود مشتريات</SelectItem>
+                <SelectItem value="purch-return">مردود مشتريات</SelectItem>
+                <SelectItem value="sales-order">امر بيع</SelectItem>
+                <SelectItem value="sales-quote">عرض سعر مبيعات</SelectItem>
+                <SelectItem value="purchase-order">امر شراء</SelectItem>
+                <SelectItem value="purch-quote">عرض سعر مشتريات</SelectItem>
+                <SelectItem value="transfer">سند تحويل مخزنى</SelectItem>
               </FS>
             </R>
             <div className="grid grid-cols-2 gap-x-2">

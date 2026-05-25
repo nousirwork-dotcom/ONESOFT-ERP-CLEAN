@@ -112,10 +112,14 @@ export default function DocumentJournalsPage() {
             <R label="نوع المستند">
               <FS value={jd.docType} onValueChange={v => setJournal(selectedItem, { docType: v })}>
                 <SelectItem value="sales">فاتورة مبيعات</SelectItem>
+                <SelectItem value="sales-return">مردود مبيعات</SelectItem>
                 <SelectItem value="purchase">فاتورة مشتريات</SelectItem>
-                <SelectItem value="return">مردودات</SelectItem>
-                <SelectItem value="transfer">تحويل داخلي</SelectItem>
-                <SelectItem value="dispatch">صرف أصناف</SelectItem>
+                <SelectItem value="purch-return">مردود مشتريات</SelectItem>
+                <SelectItem value="sales-order">امر بيع</SelectItem>
+                <SelectItem value="sales-quote">عرض سعر مبيعات</SelectItem>
+                <SelectItem value="purchase-order">امر شراء</SelectItem>
+                <SelectItem value="purch-quote">عرض سعر مشتريات</SelectItem>
+                <SelectItem value="transfer">سند تحويل مخزنى</SelectItem>
               </FS>
             </R>
             <div className="flex items-center gap-2">
