@@ -84,18 +84,27 @@ const Section = ({
   return (
     <div
       className="bg-white overflow-hidden"
-      style={{ border: "1px solid #e2e8f0", borderRadius: 6, boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}
+      style={{
+        border: "1px solid #e8edf3",
+        borderRadius: c ? 5 : 8,
+        boxShadow: "0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03)",
+      }}
     >
       <div
-        className={`flex items-center justify-between ${c ? "px-2.5 py-0.5" : "px-4 py-2.5"}`}
-        style={{ borderBottom: "1px solid #f1f5f9", background: c ? "#f8fafc" : undefined }}
+        className={`flex items-center justify-between ${c ? "px-2.5 py-0.5" : "px-5 py-3"}`}
+        style={{
+          borderBottom: `1px solid ${c ? "#f1f5f9" : "#edf2f7"}`,
+          background: c ? "#f8fafc" : "linear-gradient(to left, #f8faff, #f3f6fb)",
+        }}
       >
-        <span className="font-semibold text-indigo-700" style={{ fontSize: c ? 11 : 14 }}>
+        <span
+          className={`font-semibold ${c ? "text-[11px] text-indigo-700" : "text-[13px] text-indigo-800"}`}
+        >
           {title}
         </span>
         {action}
       </div>
-      <div className={c ? "p-1.5" : "p-4"}>{children}</div>
+      <div className={c ? "p-1.5" : "p-5"}>{children}</div>
     </div>
   );
 };
@@ -120,11 +129,11 @@ const HF = ({
   label, children, full = false, lw,
 }: { label: string; children: React.ReactNode; full?: boolean; lw?: number }) => {
   const c = useContext(Density) === "compact";
-  const w = lw ?? (c ? 46 : 76);
+  const w = lw ?? (c ? 46 : 84);
   return (
-    <div className={`flex items-center gap-1.5${full ? (c ? " col-span-3" : " col-span-2") : ""}`}>
+    <div className={`flex items-center gap-2${full ? (c ? " col-span-3" : " col-span-3") : ""}`}>
       <span
-        className={`shrink-0 text-right ${c ? "text-[10px]" : "text-xs"} text-slate-500 font-medium`}
+        className={`shrink-0 text-right ${c ? "text-[10px]" : "text-[12px]"} text-slate-500 font-medium`}
         style={{ width: w }}
       >
         {label}
@@ -535,7 +544,7 @@ export default function Warehouses() {
           {formTab === "basic" && <>
             {/* ── بيانات المخزن ── */}
             <Section title="بيانات المخزن">
-              <div className={`grid ${c ? "grid-cols-3 gap-x-2 gap-y-0.5" : "grid-cols-2 gap-x-4 gap-y-1.5"}`}>
+              <div className={`grid ${c ? "grid-cols-3 gap-x-2 gap-y-0.5" : "grid-cols-3 gap-x-6 gap-y-3"}`}>
                 <HF label="رقم">
                   <FI value={form.code} onChange={v => set("code", v)} placeholder="001" />
                 </HF>
@@ -565,7 +574,7 @@ export default function Warehouses() {
 
             {/* ── حدود الاستخدام ── */}
             <Section title="حدود الاستخدام">
-              <div className={`grid ${c ? "grid-cols-2 gap-x-2 gap-y-0.5" : "grid-cols-2 gap-x-4 gap-y-1.5"} items-center`}>
+              <div className={`grid ${c ? "grid-cols-2 gap-x-2 gap-y-0.5" : "grid-cols-3 gap-x-6 gap-y-3"} items-center`}>
                 <HF label="مجموعة مستخدمين" lw={c ? 88 : 108}>
                   <FI value={form.allowedUserGroup} onChange={v => set("allowedUserGroup", v)} placeholder="— الكل —" />
                 </HF>
@@ -582,36 +591,72 @@ export default function Warehouses() {
 
             {/* ── جدول الروابط المحاسبية ── */}
             <Section title="الروابط المحاسبية">
-              <table className="text-right" style={{ borderCollapse: "collapse", width: "100%", maxWidth: 400 }}>
-                <thead>
-                  <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e5e7eb" }}>
-                    <th className="text-[9px] font-semibold text-slate-400 px-1 py-0.5 text-right" style={{ width: 20 }}>#</th>
-                    <th className="text-[9px] font-semibold text-slate-400 px-1 py-0.5 text-right">بيان</th>
-                    <th className="text-[9px] font-semibold text-slate-400 px-1 py-0.5 text-right" style={{ width: 90 }}>كود</th>
-                    <th className="text-[9px] font-semibold text-slate-400 px-1 py-0.5 text-right">إسم الحساب</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {links.map((row, idx) => {
-                    const acc = postableAccounts.find((a: any) => String(a.id) === row.accountId)
-                             ?? (accounts as any[])?.find((a: any) => String(a.id) === row.accountId);
-                    return (
-                      <tr key={idx} style={{ borderBottom: "1px solid #f1f5f9", background: idx % 2 === 0 ? "#fff" : "#fafafa" }}>
-                        <td className="px-1 text-[9px] text-slate-400 text-center">{idx + 1}</td>
-                        <td className="px-1 text-[10px] text-slate-700 font-medium whitespace-nowrap">{row.label}</td>
-                        <td className="py-0" style={{ borderRight: "1px solid #f1f5f9" }}>
-                          <AccountCodeInput
-                            allAccounts={(accounts as any[]) ?? []}
-                            selectedId={row.accountId}
-                            onChange={v => { setLinks(prev => prev.map((l, i) => i === idx ? { ...l, accountId: v } : l)); setIsDirty(true); }}
-                          />
-                        </td>
-                        <td className="px-1 text-[10px] text-slate-500 truncate max-w-0" style={{ maxWidth: 160 }}>{acc?.name ?? <span className="text-slate-300">—</span>}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <div className={c ? "" : "overflow-x-auto"}>
+                <table
+                  className="text-right w-full"
+                  style={{ borderCollapse: "separate", borderSpacing: 0, maxWidth: c ? 420 : 580 }}
+                >
+                  <thead>
+                    <tr style={{ background: "linear-gradient(to left, #f1f5f9, #eef2f7)" }}>
+                      <th
+                        className={`font-semibold text-slate-400 text-right ${c ? "px-1 py-0.5 text-[9px]" : "px-3 py-2 text-[11px]"}`}
+                        style={{ width: c ? 20 : 28, borderBottom: "2px solid #e2e8f0" }}
+                      >#</th>
+                      <th
+                        className={`font-semibold text-slate-500 text-right ${c ? "px-1 py-0.5 text-[9px]" : "px-3 py-2 text-[11px]"}`}
+                        style={{ borderBottom: "2px solid #e2e8f0" }}
+                      >بيان</th>
+                      <th
+                        className={`font-semibold text-slate-500 text-right ${c ? "px-1 py-0.5 text-[9px]" : "px-3 py-2 text-[11px]"}`}
+                        style={{ width: c ? 90 : 110, borderBottom: "2px solid #e2e8f0", borderRight: "1px solid #e8edf3" }}
+                      >كود الحساب</th>
+                      <th
+                        className={`font-semibold text-slate-500 text-right ${c ? "px-1 py-0.5 text-[9px]" : "px-3 py-2 text-[11px]"}`}
+                        style={{ borderBottom: "2px solid #e2e8f0" }}
+                      >إسم الحساب</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {links.map((row, idx) => {
+                      const acc = postableAccounts.find((a: any) => String(a.id) === row.accountId)
+                               ?? (accounts as any[])?.find((a: any) => String(a.id) === row.accountId);
+                      const even = idx % 2 === 0;
+                      return (
+                        <tr
+                          key={idx}
+                          style={{
+                            background: even ? "#ffffff" : "#f8fafc",
+                            borderBottom: "1px solid #f0f4f8",
+                            transition: "background 0.1s",
+                          }}
+                          className="hover:bg-indigo-50/30"
+                        >
+                          <td className={`text-center text-slate-400 ${c ? "px-1 text-[9px]" : "px-2 py-1.5 text-[11px]"}`}>
+                            {idx + 1}
+                          </td>
+                          <td className={`font-medium text-slate-700 whitespace-nowrap ${c ? "px-1 text-[10px]" : "px-3 py-1.5 text-[12px]"}`}>
+                            {row.label}
+                          </td>
+                          <td
+                            className="py-0"
+                            style={{ borderRight: "1px solid #eef2f7", borderLeft: "1px solid #eef2f7" }}
+                          >
+                            <AccountCodeInput
+                              allAccounts={(accounts as any[]) ?? []}
+                              selectedId={row.accountId}
+                              onChange={v => { setLinks(prev => prev.map((l, i) => i === idx ? { ...l, accountId: v } : l)); setIsDirty(true); }}
+                            />
+                          </td>
+                          <td className={`text-slate-500 truncate ${c ? "px-1 text-[10px]" : "px-3 py-1.5 text-[12px]"}`}
+                              style={{ maxWidth: c ? 140 : 200 }}>
+                            {acc?.name ?? <span className="text-slate-300 text-[10px]">—</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </Section>
           </>}
 
