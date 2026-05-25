@@ -452,22 +452,9 @@ export default function Warehouses() {
     return (
       <Density.Provider value={density}>
       <div
-        className="fixed inset-0 z-[300] flex items-start justify-center overflow-y-auto"
-        style={{ background: "rgba(15,23,42,0.52)", backdropFilter: "blur(3px)", padding: "32px 16px" }}
+        className="flex flex-col min-h-full -mx-6 -mt-6 px-6 pt-4"
+        style={{ background: "#f8f9fb" }}
         dir="rtl"
-        onClick={e => { if (e.target === e.currentTarget) setView("list"); }}
-      >
-      <div
-        className="flex flex-col w-full"
-        style={{
-          maxWidth: c ? 450 : 480,
-          background: "#fff",
-          borderRadius: 12,
-          border: "1px solid rgba(255,255,255,0.18)",
-          boxShadow: "0 25px 60px rgba(0,0,0,0.35), 0 8px 24px rgba(0,0,0,0.18), 0 2px 6px rgba(0,0,0,0.10)",
-          padding: "16px 20px 20px",
-          animation: "fadeSlideIn 0.22s cubic-bezier(0.34,1.56,0.64,1)",
-        }}
       >
         {/* ── Page title ── */}
         <div className={`flex items-center justify-between ${c ? "mb-1" : "mb-3"}`}>
@@ -1039,7 +1026,6 @@ export default function Warehouses() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
       </div>
       </Density.Provider>
     );
