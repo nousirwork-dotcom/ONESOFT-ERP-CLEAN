@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import { useTabManager } from "@/contexts/TabManagerContext";
 import { trpc } from "@/lib/trpc";
 import Warehouses from "./Warehouses";
+import DocumentJournalsPage from "./DocumentJournalsPage";
+import DocumentTypesPage from "./DocumentTypesPage";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   ChevronDown, ChevronRight, Settings, Building2, DollarSign,
@@ -77,10 +79,12 @@ const menuSections = [
     color: "#a855f7",
     emoji: "📁",
     children: [
-      { id: "warehouses-config", label: "المخازن",           status: "partial", path: "/cfg/warehouses" },
-      { id: "field-design",      label: "تصميم الحقول",       status: "missing", path: "/cfg/field-design" },
-      { id: "backup",            label: "النسخ الاحتياطي",    status: "done",    path: "/cfg/backup" },
-      { id: "audit-log",         label: "سجل العمليات",       status: "done",    path: "/cfg/audit-log" },
+      { id: "warehouses-config",   label: "المخازن",             status: "partial", path: "/cfg/warehouses" },
+      { id: "document-journals",   label: "دفاتر المستندات",     status: "partial", path: "/cfg/document-journals" },
+      { id: "document-types",      label: "أنواع المستندات",     status: "partial", path: "/cfg/document-types" },
+      { id: "field-design",        label: "تصميم الحقول",        status: "missing", path: "/cfg/field-design" },
+      { id: "backup",              label: "النسخ الاحتياطي",     status: "done",    path: "/cfg/backup" },
+      { id: "audit-log",           label: "سجل العمليات",        status: "done",    path: "/cfg/audit-log" },
     ],
   },
   {
@@ -2101,6 +2105,8 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
     case "notif-pending":        return <NotificationSettingsPage title="تنبيه مستندات بانتظار الاعتماد" description="تنبيه عند وجود مستندات تحتاج اعتماداً" />;
     // النظام
     case "warehouses-config":    return <Warehouses />;
+    case "document-journals":    return <DocumentJournalsPage />;
+    case "document-types":       return <DocumentTypesPage />;
     case "field-design":         return <FieldDesignPage />;
     case "backup":               return <BackupPage />;
     case "audit-log":            return <AuditLogPage />;

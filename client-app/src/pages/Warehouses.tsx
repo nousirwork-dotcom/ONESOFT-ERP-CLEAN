@@ -309,7 +309,7 @@ export default function Warehouses() {
 
   const [view, setView] = useState<"list" | "form">("list");
   const [editId, setEditId] = useState<number | null>(null);
-  const [formTab, setFormTab] = useState<"basic" | "journals" | "doctypes">("basic");
+  const [formTab, setFormTab] = useState<"basic">("basic");
   const [journalItem, setJournalItem] = useState("sales");
   const [doctypeItem, setDoctypeItem] = useState("sales");
   const [journalsOpen, setJournalsOpen] = useState(true);
@@ -492,9 +492,7 @@ export default function Warehouses() {
           style={{ borderBottom: "1px solid #e5e7eb" }}
         >
           {([
-            { id: "basic",    label: "البيانات الأساسية" },
-            { id: "journals", label: "دفاتر المستندات" },
-            { id: "doctypes", label: "أنواع المستندات" },
+            { id: "basic", label: "البيانات الأساسية" },
           ] as const).map(tab => (
             <button
               key={tab.id}
@@ -599,23 +597,9 @@ export default function Warehouses() {
             </Section>
           </>}
 
-          {/* ══ TAB: دفاتر المستندات ══ */}
-          {formTab === "journals" && (() => {
-            const ITEMS = [
-              { id: "sales",          label: "دفتر فاتورة المبيعات",    icon: <BookOpen className="w-3.5 h-3.5" /> },
-              { id: "sales-return",   label: "دفتر مردود المبيعات",     icon: <RotateCcw className="w-3.5 h-3.5" /> },
-              { id: "purchases",      label: "دفتر فاتورة المشتريات",   icon: <BookMarked className="w-3.5 h-3.5" /> },
-              { id: "purch-return",   label: "دفتر مردود المشتريات",    icon: <RotateCcw className="w-3.5 h-3.5" /> },
-              { id: "sales-order",    label: "دفتر أمر البيع",          icon: <ClipboardList className="w-3.5 h-3.5" /> },
-              { id: "sales-quote",    label: "دفتر عرض أسعار مبيعات",  icon: <Tag className="w-3.5 h-3.5" /> },
-              { id: "purch-quote",    label: "دفتر عرض أسعار مشتريات", icon: <Tag className="w-3.5 h-3.5" /> },
-              { id: "purchase-order", label: "دفتر أمر شراء",           icon: <ClipboardList className="w-3.5 h-3.5" /> },
-              { id: "transfer",       label: "دفتر سند تحويل داخلي",    icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
-              { id: "dispatch",       label: "دفتر سند صرف أصناف",      icon: <Package className="w-3.5 h-3.5" /> },
-              { id: "supply",         label: "دفتر سند توريد أصناف",    icon: <Package className="w-3.5 h-3.5" /> },
-              { id: "inventory",      label: "دفتر تقييم المخزون",       icon: <FileText className="w-3.5 h-3.5" /> },
-              { id: "stocktake",      label: "دفتر الجرد والتسويات",     icon: <FileText className="w-3.5 h-3.5" /> },
-            ];
+          {/* ══ TAB: دفاتر المستندات (انتقل إلى الإعدادات ← النظام) ══ */}
+          {(false as any) && (() => {
+            const ITEMS: any[] = [];
             const currentItem = ITEMS.find(i => i.id === journalItem);
 
 
@@ -798,8 +782,8 @@ export default function Warehouses() {
             );
           })()}
 
-          {/* ══ TAB: أنواع المستندات ══ */}
-          {formTab === "doctypes" && (() => {
+          {/* ══ TAB: أنواع المستندات (انتقل إلى الإعدادات ← النظام) ══ */}
+          {(false as any) && (() => {
             const DTYPE_ITEMS = [
               { id: "sales",            label: "أنواع مستند فاتورة المبيعات",    icon: <BookOpen className="w-3.5 h-3.5" /> },
               { id: "sales-return",     label: "أنواع مستند مردود المبيعات",     icon: <RotateCcw className="w-3.5 h-3.5" /> },
