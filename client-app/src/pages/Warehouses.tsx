@@ -473,29 +473,27 @@ export default function Warehouses() {
                 <table className="w-full text-right" style={{ borderCollapse: "collapse" }}>
                   <thead>
                     <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e5e7eb" }}>
-                      <th className="text-[11px] font-semibold text-slate-500 px-3 py-2 text-right">#</th>
+                      <th className="text-[11px] font-semibold text-slate-500 px-3 py-2 text-right w-8">#</th>
                       <th className="text-[11px] font-semibold text-slate-500 px-3 py-2 text-right">بيان</th>
-                      <th className="text-[11px] font-semibold text-slate-500 px-3 py-2 text-right">كود الحساب</th>
+                      <th className="text-[11px] font-semibold text-slate-500 px-3 py-2 text-right w-44">كود الحساب</th>
                       <th className="text-[11px] font-semibold text-slate-500 px-3 py-2 text-right">إسم الحساب</th>
-                      <th className="text-[11px] font-semibold text-slate-500 px-3 py-2"></th>
                     </tr>
                   </thead>
                   <tbody>
                     {links.map((row, idx) => {
                       const acc = (accounts as any[])?.find((a: any) => String(a.id) === row.accountId);
                       return (
-                        <tr key={idx} style={{ borderBottom: "1px solid #f1f5f9", background: idx % 2 === 0 ? "#fff" : "#fafafa", height: 30 }}>
+                        <tr key={idx} style={{ borderBottom: "1px solid #f1f5f9", background: idx % 2 === 0 ? "#fff" : "#fafafa" }}>
                           <td className="px-3 text-[11px] text-slate-400">{idx + 1}</td>
                           <td className="px-3 text-[12px] text-slate-700 font-medium">{row.label}</td>
-                          <td className="px-3 text-[12px] font-mono text-slate-500">{acc?.code ?? "—"}</td>
-                          <td className="px-3 text-[12px] text-slate-600">{acc?.name ?? "— اختر الحساب —"}</td>
-                          <td className="px-3 py-1">
-                            <FS value={row.accountId} onValueChange={v => setLinks(prev => prev.map((l, i) => i === idx ? { ...l, accountId: v } : l))}>
+                          <td className="px-2 py-1">
+                            <FS value={row.accountId} onValueChange={v => setLinks(prev => prev.map((l, i) => i === idx ? { ...l, accountId: v } : l))} placeholder="— اختر —">
                               {(accounts as any[])?.map((a: any) => (
                                 <SelectItem key={a.id} value={String(a.id)}>{a.code} — {a.name}</SelectItem>
                               ))}
                             </FS>
                           </td>
+                          <td className="px-3 text-[12px] text-slate-500">{acc?.name ?? "—"}</td>
                         </tr>
                       );
                     })}
