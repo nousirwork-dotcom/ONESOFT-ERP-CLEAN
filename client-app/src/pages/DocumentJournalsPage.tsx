@@ -324,12 +324,6 @@ export default function DocumentJournalsPage() {
 
               <P title="بيانات الدفتر">
                 <div className="grid grid-cols-2 gap-x-5 gap-y-2">
-                  <R label="إسم عربي *">
-                    <FI value={form.nameAr} onChange={v => set("nameAr", v)} placeholder={`دفتر ${currentType?.label}`} />
-                  </R>
-                  <R label="إسم إنجليزي">
-                    <FI value={form.nameEn} onChange={v => set("nameEn", v)} placeholder="Journal Name in English" />
-                  </R>
                   <R label="نوع المستند">
                     <FS value={form.docType} onValueChange={v => set("docType", v)}>
                       {DOC_TYPES.map(dt => (
@@ -339,6 +333,12 @@ export default function DocumentJournalsPage() {
                   </R>
                   <R label="الجزء الثابت">
                     <FI value={form.fixedPart} onChange={v => set("fixedPart", v)} placeholder="S01-" />
+                  </R>
+                  <R label="إسم عربي *">
+                    <FI value={form.nameAr} onChange={v => set("nameAr", v)} placeholder={`دفتر ${currentType?.label}`} />
+                  </R>
+                  <R label="إسم إنجليزي">
+                    <FI value={form.nameEn} onChange={v => set("nameEn", v)} placeholder="Journal Name in English" />
                   </R>
                   <div className="flex items-center col-span-2">
                     <CB label="نقل الملكية أوتوماتيكي" checked={form.transferOwnership} onChange={v => set("transferOwnership", v)} />
