@@ -67,6 +67,7 @@ import SuperAdminPage from "./pages/SuperAdminPage";
 import { createElement, useEffect } from "react";
 import { trpc } from "./lib/trpc";
 import { Settings } from "lucide-react";
+import AppWindow from "./components/AppWindow";
 
 // ─── خريطة المسارات إلى المكونات ──────────────────────────────────────────
 export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
@@ -249,33 +250,32 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// ─── محتوى التبويبات ─────────────────────────────────────────────────────
+// ─── نوافذ عائمة Windows-style ───────────────────────────────────────────
 function TabContent() {
-  const { tabs, activeTabId, dashboardVisible } = useTabManager();
+  const { tabs, dashboardVisible } = useTabManager();
   const showDashboard = dashboardVisible || tabs.length === 0;
+
   return (
-    <div className="h-full" dir="rtl">
-      {/* لوحة التحكم — تُعرض خارج التبويبات */}
-      <div
-        style={{ display: showDashboard ? "flex" : "none", flexDirection: "column" }}
-        className="h-full"
-      >
-        <Dashboard />
-      </div>
-      {/* التبويبات الأخرى */}
+    <>
+      {/* لوحة التحكم في الخلفية */}
+      {showDashboard && (
+        <div className="absolute inset-0 overflow-auto" dir="rtl">
+          <Dashboard />
+        </div>
+      )}
+
+      {/* النوافذ العائمة */}
       {tabs.map(tab => {
         const Component = PAGE_MAP[tab.path];
         return (
-          <div
-            key={tab.id}
-            style={{ display: tab.id === activeTabId && !showDashboard ? "flex" : "none", flexDirection: "column" }}
-            className="h-full"
-          >
-            {Component ? <Component /> : <NotFound />}
-          </div>
+          <AppWindow key={tab.id} tab={tab}>
+            <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }} dir="rtl">
+              {Component ? <Component /> : <NotFound />}
+            </div>
+          </AppWindow>
         );
       })}
-    </div>
+    </>
   );
 }
 

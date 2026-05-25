@@ -59,7 +59,7 @@ import {
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import ChatWidget from "./ChatWidget";
-import TabBar from "./TabBar";
+import WindowTaskbar from "./WindowTaskbar";
 import { useTabManager } from "@/contexts/TabManagerContext";
 import { WorkspaceContext } from "@/contexts/WorkspaceContext";
 import { useLang } from "@/contexts/LanguageContext";
@@ -503,20 +503,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
 
-        {/* Tab Bar */}
-        <TabBar />
-
-        {/* Main Content */}
+        {/* Main Content — desktop area */}
         <WorkspaceContext.Provider value={workspaceEl}>
           <main
             ref={setWorkspaceEl as any}
             className="flex-1 overflow-hidden"
-            style={{ position: "relative" }}
+            style={{ position: "relative", paddingBottom: 48 }}
           >
             {children}
           </main>
         </WorkspaceContext.Provider>
       </div>
+      <WindowTaskbar />
       <ChatWidget />
       </>
     );
@@ -619,21 +617,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
 
-        {/* Tab Bar */}
-        <TabBar />
-
-        {/* Main Content */}
+        {/* Main Content — desktop area */}
         <WorkspaceContext.Provider value={workspaceEl}>
           <main
             ref={setWorkspaceEl as any}
             className="flex-1 overflow-hidden"
-            style={{ position: "relative" }}
+            style={{ position: "relative", paddingBottom: 48 }}
           >
             {children}
           </main>
         </WorkspaceContext.Provider>
       </SidebarInset>
     </SidebarProvider>
+    <WindowTaskbar />
     <ChatWidget />
     </>
   );
