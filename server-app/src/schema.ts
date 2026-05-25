@@ -544,6 +544,27 @@ export const documentJournals = pgTable('document_journals', {
 
 export type DocumentJournal = typeof documentJournals.$inferSelect;
 
+// ─── Document Templates (نماذج المستندات) ────────────────────────────────────
+// كل نموذج يحدد شكل الطباعة لنوع مستند معين
+export const documentTemplates = pgTable('document_templates', {
+  id:          serial('id').primaryKey(),
+  orgId:       integer('org_id').notNull().references(() => organizations.id),
+  code:        varchar('code', { length: 30 }).notNull(),       // رقم النموذج مثال: T001
+  nameAr:      varchar('name_ar', { length: 255 }).notNull(),   // اسم النموذج بالعربي
+  nameEn:      varchar('name_en', { length: 255 }),             // اسم النموذج بالإنجليزي
+  docType:     varchar('doc_type', { length: 30 }).notNull(),   // نوع المستند المرتبط
+  paperSize:   varchar('paper_size', { length: 20 }).default('A4'),
+  orientation: varchar('orientation', { length: 20 }).default('portrait'),
+  isDefault:   boolean('is_default').notNull().default(false),
+  notes:       text('notes'),
+  isActive:    boolean('is_active').notNull().default(true),
+  sortOrder:   integer('sort_order').notNull().default(0),
+  createdAt:   timestamp('created_at').notNull().defaultNow(),
+  updatedAt:   timestamp('updated_at').notNull().defaultNow(),
+});
+
+export type DocumentTemplate = typeof documentTemplates.$inferSelect;
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type Organization = typeof organizations.$inferSelect;
 export type User = typeof users.$inferSelect;

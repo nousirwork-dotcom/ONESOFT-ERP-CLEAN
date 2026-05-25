@@ -4,6 +4,7 @@ import { trpc } from "@/lib/trpc";
 import Warehouses from "./Warehouses";
 import DocumentJournalsPage from "./DocumentJournalsPage";
 import DocumentTypesPage from "./DocumentTypesPage";
+import DocumentTemplatesPage from "./DocumentTemplatesPage";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   ChevronDown, ChevronRight, Settings, Building2, DollarSign,
@@ -82,6 +83,7 @@ const menuSections = [
       { id: "warehouses-config",   label: "المخازن",             status: "partial", path: "/cfg/warehouses" },
       { id: "document-journals",   label: "دفاتر المستندات",     status: "partial", path: "/cfg/document-journals" },
       { id: "document-types",      label: "أنواع المستندات",     status: "partial", path: "/cfg/document-types" },
+      { id: "document-templates",  label: "نماذج المستندات",     status: "partial", path: "/cfg/document-templates" },
       { id: "field-design",        label: "تصميم الحقول",        status: "missing", path: "/cfg/field-design" },
       { id: "backup",              label: "النسخ الاحتياطي",     status: "done",    path: "/cfg/backup" },
       { id: "audit-log",           label: "سجل العمليات",        status: "done",    path: "/cfg/audit-log" },
@@ -2107,6 +2109,7 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
     case "warehouses-config":    return <Warehouses />;
     case "document-journals":    return <DocumentJournalsPage />;
     case "document-types":       return <DocumentTypesPage />;
+    case "document-templates":   return <DocumentTemplatesPage />;
     case "field-design":         return <FieldDesignPage />;
     case "backup":               return <BackupPage />;
     case "audit-log":            return <AuditLogPage />;
@@ -2170,6 +2173,7 @@ export function CfgDocTypesTab()          { return <CfgSubPage activeId="doc-typ
 export function CfgDocBooksTab()          { return <CfgSubPage activeId="doc-books" />; }
 export function CfgDocumentJournalsTab()  { return <CfgSubPage activeId="document-journals" />; }
 export function CfgDocumentTypesTab()     { return <CfgSubPage activeId="document-types" />; }
+export function CfgDocumentTemplatesTab() { return <CfgSubPage activeId="document-templates" />; }
 export function CfgFieldDesignTab()      { return <CfgSubPage activeId="field-design" />; }
 export function CfgBackupTab()           { return <CfgSubPage activeId="backup" />; }
 export function CfgAuditLogTab()         { return <CfgSubPage activeId="audit-log" />; }
