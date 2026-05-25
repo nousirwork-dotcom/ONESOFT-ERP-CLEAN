@@ -354,26 +354,8 @@ export default function Warehouses() {
     onSuccess: () => { utils.warehouses.list.invalidate(); toast.success("تم حذف المخزن"); setEditId(null); setShowDeleteDialog(false); setView("list"); },
     onError: (e) => toast.error(e.message),
   });
-  const create = trpc.warehouses.create.useMutation({
-    onSuccess: async (w) => { await doSaveLinks(w.id); utils.warehouses.list.invalidate(); toast.success("تم إنشاء المخزن"); setView("list"); },
-    onError: (e) => toast.error(e.message),
-  });
-  const update = trpc.warehouses.update.useMutation({
-    onSuccess: async () => { await doSaveLinks(editId!); utils.warehouses.list.invalidate(); toast.success("تم تحديث المخزن"); setView("list"); },
-    onError: (e) => toast.error(e.message),
-  });
-
-  const doSaveLinks = async (warehouseId: number) => {
-    await saveLinks.mutateAsync({
-      warehouseId,
-      links: links.filter(l => l.label.trim()).map((l, i) => ({
-        label: l.label,
-        accountId: l.accountId && l.accountId !== "none" ? Number(l.accountId) : null,
-        sortOrder: i,
-      })),
-    });
-    utils.warehouses.accountLinks.list.invalidate({ warehouseId });
-  };
+  const create = trpc.warehouses.create.useMutation({ onError: (e) => toast.error(e.message) });
+  const update = trpc.warehouses.update.useMutation({ onError: (e) => toast.error(e.message) });
 
   const set = (k: keyof FormState, v: string) => setForm(p => ({ ...p, [k]: v }));
   const f = (v: string) => v || undefined;
@@ -397,7 +379,7 @@ export default function Warehouses() {
     setLinks([]); setView("form");
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name.trim()) { toast.error("إسم 1 مطلوب"); return; }
     const payload = {
       name: form.name, code: f(form.code), name2: f(form.name2),
@@ -407,8 +389,29 @@ export default function Warehouses() {
       allowedUserId: fNum(form.allowedUserId),
       copyFromWarehouseId: fNum(form.copyFromWarehouseId),
     };
-    if (editId) update.mutate({ id: editId, ...payload });
-    else create.mutate(payload);
+    // التقط الروابط الحالية الآن (قبل أي re-render)
+    const linksSnapshot = links.filter(l => l.label.trim()).map((l, i) => ({
+      label: l.label,
+      accountId: l.accountId && l.accountId !== "none" ? Number(l.accountId) : null,
+      sortOrder: i,
+    }));
+    try {
+      let warehouseId: number;
+      if (editId) {
+        await update.mutateAsync({ id: editId, ...payload });
+        warehouseId = editId;
+      } else {
+        const w = await create.mutateAsync(payload);
+        warehouseId = w.id;
+      }
+      await saveLinks.mutateAsync({ warehouseId, links: linksSnapshot });
+      utils.warehouses.accountLinks.list.invalidate({ warehouseId });
+      utils.warehouses.list.invalidate();
+      toast.success(editId ? "تم تحديث المخزن" : "تم إنشاء المخزن");
+      setView("list");
+    } catch (e: any) {
+      toast.error(e.message ?? "حدث خطأ أثناء الحفظ");
+    }
   };
 
   const addLink = () => setLinks(p => [...p, { label: "", accountId: "", sortOrder: p.length }]);
