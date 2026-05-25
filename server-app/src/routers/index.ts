@@ -5,8 +5,9 @@ import { orgsRouter } from './orgs.js';
 import { usersRouter } from './users.js';
 import { salesRouter } from './sales.js';
 import { chatRouter } from './chat.js';
+import { documentJournalsRouter } from './documentJournals.js';
 import { db } from '../db.js';
-import { products, customers, suppliers, chartOfAccounts, warehouses, branches, units, productGroups, journalEntries, journalEntryLines, vouchers, receiptVouchers, paymentVouchers, inventory, stockVouchers, stockVoucherItems, inventoryCounts, inventoryCountItems, freeProducts, salesInvoices, salesInvoiceItems, warehouseAccountLinks, userGroups, userGroupMembers, userCategories, users } from '../schema.js';
+import { products, customers, suppliers, chartOfAccounts, warehouses, branches, units, productGroups, journalEntries, journalEntryLines, vouchers, receiptVouchers, paymentVouchers, inventory, stockVouchers, stockVoucherItems, inventoryCounts, inventoryCountItems, freeProducts, salesInvoices, salesInvoiceItems, warehouseAccountLinks, userGroups, userGroupMembers, userCategories, users, documentJournals } from '../schema.js';
 import { eq, and, desc, like, or, sql, isNotNull, isNull, asc, gte, lte } from 'drizzle-orm';
 
 export const appRouter = router({
@@ -264,6 +265,7 @@ export const appRouter = router({
 
   // ─── Chat ────────────────────────────────────────────────────────────────────
   chat: chatRouter,
+  documentJournals: documentJournalsRouter,
 
   // ─── Dashboard ───────────────────────────────────────────────────────────────
   dashboard: router({

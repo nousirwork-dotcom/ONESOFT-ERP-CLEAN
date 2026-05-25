@@ -499,6 +499,51 @@ export const messages = pgTable('messages', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
+// ─── Document Journals (دفاتر المستندات) ─────────────────────────────────────
+// كل دفتر هو وحدة تشغيلية مستقلة: ترقيم + مخزن + فرع + حسابات + صلاحيات
+export const documentJournals = pgTable('document_journals', {
+  id:            serial('id').primaryKey(),
+  orgId:         integer('org_id').notNull().references(() => organizations.id),
+  // نوع المستند المرتبط
+  docType:       varchar('doc_type', { length: 30 }).notNull(),
+  // مثال: 'sales_invoice' | 'purchase_invoice' | 'receipt_voucher' | 'payment_voucher'
+  //        | 'stock_transfer' | 'stock_receipt' | 'stock_issue' | 'inventory_count'
+  code:          varchar('code', { length: 30 }).notNull(),   // مثال: SLS-BR1
+  name:          varchar('name', { length: 255 }).notNull(),  // مبيعات فرع 1
+  name2:         varchar('name2', { length: 255 }),           // اسم إنجليزي
+  description:   text('description'),
+  // ── الترقيم التسلسلي ──────────────────────────────────────────────────────
+  numberPrefix:  varchar('number_prefix', { length: 20 }).notNull().default('INV'),
+  firstNumber:   integer('first_number').notNull().default(1),
+  lastNumber:    integer('last_number').notNull().default(999999),
+  increment:     integer('increment').notNull().default(1),
+  numDigits:     integer('num_digits').notNull().default(6),
+  includeYear:   boolean('include_year').notNull().default(true),
+  currentSeq:    integer('current_seq').notNull().default(0), // آخر رقم مستخدم
+  // ── الربط بالكيانات ───────────────────────────────────────────────────────
+  warehouseId:   integer('warehouse_id').references(() => warehouses.id),
+  branchId:      integer('branch_id').references(() => branches.id),
+  // ── الحسابات الافتراضية ───────────────────────────────────────────────────
+  salesAccountId:   integer('sales_account_id').references(() => chartOfAccounts.id),
+  cashAccountId:    integer('cash_account_id').references(() => chartOfAccounts.id),
+  creditAccountId:  integer('credit_account_id').references(() => chartOfAccounts.id),
+  taxAccountId:     integer('tax_account_id').references(() => chartOfAccounts.id),
+  discountAccountId:integer('discount_account_id').references(() => chartOfAccounts.id),
+  // ── الإعدادات ─────────────────────────────────────────────────────────────
+  defaultCurrency:  varchar('default_currency', { length: 10 }).default('SAR'),
+  defaultPayMethod: varchar('default_pay_method', { length: 20 }).default('cash'),
+  allowedUserGroup: varchar('allowed_user_group', { length: 255 }),
+  allowedUserId:    integer('allowed_user_id').references(() => users.id),
+  printTemplate:    varchar('print_template', { length: 100 }),
+  notes:            text('notes'),
+  isActive:         boolean('is_active').notNull().default(true),
+  sortOrder:        integer('sort_order').notNull().default(0),
+  createdAt:        timestamp('created_at').notNull().defaultNow(),
+  updatedAt:        timestamp('updated_at').notNull().defaultNow(),
+});
+
+export type DocumentJournal = typeof documentJournals.$inferSelect;
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type Organization = typeof organizations.$inferSelect;
 export type User = typeof users.$inferSelect;

@@ -85,16 +85,23 @@ export default function SalesInvoicePage() {
   const [selectedLineIdx, setSelectedLineIdx] = useState<number>(0);
   const [copiedLine, setCopiedLine] = useState<InvoiceLine | null>(null);
 
+  // ── Document Journal ──────────────────────────────────────────────────────
+  const [journalId, setJournalId] = useState<number | null>(null);
+  const [journalOpen, setJournalOpen] = useState(false);
+
   // ── ERP mode ──────────────────────────────────────────────────────────────
   const [erpMode, setErpMode] = useState<ERPMode>("new");
 
   const cellRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
   // ── Queries ───────────────────────────────────────────────────────────────
-  const customersQuery = trpc.customers.list.useQuery({});
-  const warehousesQuery = trpc.warehouses.list.useQuery();
-  const productsQuery = trpc.products.list.useQuery({});
-  const nextNumberQuery = trpc.salesInvoices.nextNumber.useQuery({ prefix: "INV" });
+  const customersQuery   = trpc.customers.list.useQuery({});
+  const warehousesQuery  = trpc.warehouses.list.useQuery();
+  const productsQuery    = trpc.products.list.useQuery({});
+  const journalsQuery    = trpc.documentJournals.list.useQuery({ docType: "sales_invoice" });
+  const nextNumberQuery  = trpc.salesInvoices.nextNumber.useQuery({ prefix: "INV" });
+
+  const nextJournalNumberMutation = trpc.documentJournals.nextNumber.useMutation();
 
   const createMutation = trpc.salesInvoices.create.useMutation({
     onSuccess: (data) => {
@@ -107,9 +114,28 @@ export default function SalesInvoicePage() {
     onError: (e) => toast.error(`خطأ في الحفظ: ${e.message}`),
   });
 
-  // ── Auto number on load ───────────────────────────────────────────────────
+  // عند اختيار دفتر: أحضر الرقم التالي له وطبّق إعداداته
+  const handleJournalSelect = useCallback(async (id: number) => {
+    setJournalId(id);
+    setJournalOpen(false);
+    const journals = journalsQuery.data ?? [];
+    const j = journals.find((x: any) => x.id === id);
+    if (j) {
+      if (j.warehouseId) setWarehouseId(j.warehouseId);
+      if (j.defaultCurrency) setCurrency(j.defaultCurrency);
+      if (j.defaultPayMethod) setPaymentType(j.defaultPayMethod as any);
+    }
+    try {
+      const num = await nextJournalNumberMutation.mutateAsync({ journalId: id });
+      setInvoiceNumber(num);
+    } catch {
+      toast.error("تعذّر توليد رقم الفاتورة من الدفتر");
+    }
+  }, [journalsQuery.data, nextJournalNumberMutation]);
+
+  // ── Auto number on load (fallback when no journal selected) ───────────────
   useEffect(() => {
-    if (nextNumberQuery.data && !invoiceNumber) {
+    if (nextNumberQuery.data && !invoiceNumber && !journalId) {
       setInvoiceNumber(nextNumberQuery.data);
     }
   }, [nextNumberQuery.data]);
@@ -336,10 +362,15 @@ export default function SalesInvoicePage() {
     setSalesperson("");
     setPaidAmountOverride("");
     setErpMode("new");
-    nextNumberQuery.refetch().then(r => {
-      if (r.data) setInvoiceNumber(r.data);
-    });
-  }, [nextNumberQuery]);
+    // إذا كان هناك دفتر محدد، احضر الرقم التالي منه
+    if (journalId) {
+      nextJournalNumberMutation.mutateAsync({ journalId }).then(num => {
+        setInvoiceNumber(num);
+      }).catch(() => nextNumberQuery.refetch().then(r => { if (r.data) setInvoiceNumber(r.data); }));
+    } else {
+      nextNumberQuery.refetch().then(r => { if (r.data) setInvoiceNumber(r.data); });
+    }
+  }, [nextNumberQuery, journalId, nextJournalNumberMutation]);
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
@@ -374,6 +405,98 @@ export default function SalesInvoicePage() {
 
       {/* ── Header Form ─────────────────────────────────────────────────── */}
       <div className="bg-white border-b border-[#b0a89a] px-3 pt-2 pb-1.5" style={{ boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }}>
+
+        {/* ── شريط اختيار الدفتر ── */}
+        {(() => {
+          const journals = journalsQuery.data ?? [];
+          const selected = journals.find((j: any) => j.id === journalId);
+          return (
+            <div className="relative flex items-center gap-2 mb-2 pb-1.5" style={{ borderBottom: "1px dashed #e5e7eb" }}>
+              <span className="text-[10px] font-semibold text-slate-400 shrink-0">الدفتر:</span>
+              <button
+                onClick={() => setJournalOpen(o => !o)}
+                className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded border transition-colors"
+                style={{
+                  background: selected ? "#eff6ff" : "#f8fafc",
+                  borderColor: selected ? "#3b82f6" : "#d1d5db",
+                  color: selected ? "#1d4ed8" : "#6b7280",
+                  minWidth: 160,
+                }}
+              >
+                {selected
+                  ? <><span className="font-mono text-[10px] text-blue-400">{selected.code}</span> {selected.name}</>
+                  : <span className="text-slate-400">— اختر الدفتر —</span>
+                }
+                <span className="mr-auto text-[10px] opacity-40">▼</span>
+              </button>
+              {selected && (
+                <div className="flex items-center gap-3 text-[10px] text-slate-500">
+                  {selected.warehouseId && warehousesQuery.data && (
+                    <span className="flex items-center gap-1">
+                      <span className="text-slate-300">|</span>
+                      <span className="text-slate-400">مخزن:</span>
+                      <span className="font-medium text-slate-600">
+                        {warehousesQuery.data.find((w: any) => w.id === selected.warehouseId)?.name ?? "—"}
+                      </span>
+                    </span>
+                  )}
+                  <span className="flex items-center gap-1">
+                    <span className="text-slate-300">|</span>
+                    <span className="text-slate-400">بادئة:</span>
+                    <span className="font-mono font-medium text-slate-600">{selected.numberPrefix}</span>
+                  </span>
+                  <button
+                    onClick={() => { setJournalId(null); setJournalOpen(false); }}
+                    className="text-red-400 hover:text-red-600 mr-1"
+                    title="إلغاء اختيار الدفتر"
+                  >✕</button>
+                </div>
+              )}
+              {/* Dropdown قائمة الدفاتر */}
+              {journalOpen && (
+                <div
+                  className="absolute top-full right-0 z-[9999] mt-1 bg-white border border-slate-200 rounded-lg shadow-2xl overflow-hidden"
+                  style={{ minWidth: 340 }}
+                  dir="rtl"
+                >
+                  <div className="px-3 py-1.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-600">دفاتر فاتورة المبيعات</span>
+                    <button onClick={() => setJournalOpen(false)} className="text-slate-400 hover:text-slate-600 text-[10px]">✕</button>
+                  </div>
+                  {journals.length === 0 ? (
+                    <div className="px-4 py-6 text-center text-[11px] text-slate-400">
+                      لا توجد دفاتر مُعرَّفة لفاتورة المبيعات<br/>
+                      <span className="text-[10px] text-slate-300">أضف دفاتر من شاشة المخازن ← دفاتر المستندات</span>
+                    </div>
+                  ) : (
+                    <div className="overflow-y-auto max-h-56">
+                      {journals.map((j: any) => (
+                        <button
+                          key={j.id}
+                          onClick={() => handleJournalSelect(j.id)}
+                          className="w-full flex items-center gap-3 px-3 py-2 text-right hover:bg-blue-50 transition-colors border-b border-slate-50 last:border-0"
+                        >
+                          <span className="font-mono text-[10px] text-slate-400 shrink-0 w-14">{j.code}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[12px] font-semibold text-slate-700 truncate">{j.name}</div>
+                            {j.description && <div className="text-[10px] text-slate-400 truncate">{j.description}</div>}
+                          </div>
+                          <div className="text-[10px] text-slate-300 shrink-0">
+                            {j.numberPrefix}-{new Date().getFullYear()}-...
+                          </div>
+                          {j.id === journalId && <span className="text-blue-500 text-[10px]">✓</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="px-3 py-1 bg-slate-50 border-t border-slate-100 text-[9px] text-slate-400">
+                    كل دفتر له ترقيم ومخزن وحسابات مستقلة
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ── رقم الفاتورة (بارز أعلى يمين) + حقول الصف الأول ── */}
         <div className="flex items-start gap-2 mb-1.5">
