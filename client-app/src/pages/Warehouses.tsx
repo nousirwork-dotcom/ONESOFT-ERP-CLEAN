@@ -325,6 +325,9 @@ export default function Warehouses() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [journalData, setJournalData] = useState<Record<string, JournalData>>({});
   const [doctypeData, setDoctypeData] = useState<Record<string, DoctypeData>>({});
+  const [isDirty, setIsDirty] = useState(false);
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
   const getJournal = (id: string): JournalData => journalData[id] ?? { ...EMPTY_JOURNAL };
   const setJournal = (id: string, patch: Partial<JournalData>) =>
@@ -367,13 +370,18 @@ export default function Warehouses() {
   const create = trpc.warehouses.create.useMutation({ onError: (e) => toast.error(e.message) });
   const update = trpc.warehouses.update.useMutation({ onError: (e) => toast.error(e.message) });
 
-  const set = (k: keyof FormState, v: string) => setForm(p => ({ ...p, [k]: v }));
+  const set = (k: keyof FormState, v: string) => { setForm(p => ({ ...p, [k]: v })); setIsDirty(true); };
   const f = (v: string) => v || undefined;
   const fNum = (v: string) => (v && v !== "none" ? Number(v) : undefined);
 
+  const safeNavigate = (action: () => void) => {
+    if (isDirty) { setPendingAction(() => action); setShowUnsavedDialog(true); }
+    else { action(); }
+  };
+
   const openCreate = () => {
     setEditId(null); setForm(EMPTY_FORM);
-    setLinks(DEFAULT_LINKS.map(l => ({ ...l }))); setFormTab("basic"); setView("form");
+    setLinks(DEFAULT_LINKS.map(l => ({ ...l }))); setFormTab("basic"); setIsDirty(false); setView("form");
   };
   const openEdit = (w: any) => {
     setEditId(w.id); setFormTab("basic");
@@ -386,7 +394,7 @@ export default function Warehouses() {
       allowedUserId: w.allowedUserId ? String(w.allowedUserId) : "",
       copyFromWarehouseId: w.copyFromWarehouseId ? String(w.copyFromWarehouseId) : "",
     });
-    setLinks([]); setView("form");
+    setLinks([]); setIsDirty(false); setView("form");
   };
 
   const handleSave = async () => {
@@ -417,9 +425,9 @@ export default function Warehouses() {
       await saveLinks.mutateAsync({ warehouseId, links: linksSnapshot });
       utils.warehouses.accountLinks.list.invalidate({ warehouseId });
       utils.warehouses.list.invalidate();
-      toast.success(editId ? "تم تحديث المخزن" : "تم إنشاء المخزن");
-      setEditId(null);
-      setView("list");
+      if (!editId) setEditId(warehouseId);
+      setIsDirty(false);
+      toast.success("تم الحفظ بنجاح ✓");
     } catch (e: any) {
       toast.error(e.message ?? "حدث خطأ أثناء الحفظ");
     }
@@ -442,17 +450,17 @@ export default function Warehouses() {
   if (view === "form") {
     const toolbar = [
       { label: "حفظ",    icon: <Save className="w-3.5 h-3.5" />,         action: handleSave, primary: true },
-      { label: "جديد",   icon: <Plus className="w-3.5 h-3.5" />,         action: openCreate },
+      { label: "جديد",   icon: <Plus className="w-3.5 h-3.5" />,         action: () => safeNavigate(openCreate) },
       { label: "بحث",    icon: <Search className="w-3.5 h-3.5" />,       action: () => {} },
       { label: "الحل",   icon: <SkipForward className="w-3.5 h-3.5" />,  action: () => {} },
-      { label: "الأخير", icon: <ChevronLast className="w-3.5 h-3.5" />,  action: () => warehouseList.at(-1) && openEdit(warehouseList.at(-1)!) },
-      { label: "التالي", icon: <CLeft className="w-3.5 h-3.5" />,        action: () => currentIndex < warehouseList.length - 1 && openEdit(warehouseList[currentIndex + 1]) },
-      { label: "السابق", icon: <CRight className="w-3.5 h-3.5" />,       action: () => currentIndex > 0 && openEdit(warehouseList[currentIndex - 1]) },
-      { label: "الأول",  icon: <ChevronFirst className="w-3.5 h-3.5" />, action: () => warehouseList[0] && openEdit(warehouseList[0]) },
+      { label: "الأخير", icon: <ChevronLast className="w-3.5 h-3.5" />,  action: () => warehouseList.at(-1) && safeNavigate(() => openEdit(warehouseList.at(-1)!)) },
+      { label: "التالي", icon: <CLeft className="w-3.5 h-3.5" />,        action: () => currentIndex < warehouseList.length - 1 && safeNavigate(() => openEdit(warehouseList[currentIndex + 1])) },
+      { label: "السابق", icon: <CRight className="w-3.5 h-3.5" />,       action: () => currentIndex > 0 && safeNavigate(() => openEdit(warehouseList[currentIndex - 1])) },
+      { label: "الأول",  icon: <ChevronFirst className="w-3.5 h-3.5" />, action: () => warehouseList[0] && safeNavigate(() => openEdit(warehouseList[0])) },
       { label: "حذف",    icon: <Trash2 className="w-3.5 h-3.5" />,       action: () => { if (editId) { setDeleteError(null); setShowDeleteDialog(true); } }, danger: true },
       { label: "عرض",    icon: <Eye className="w-3.5 h-3.5" />,          action: () => {} },
       { label: "طباعة",  icon: <Printer className="w-3.5 h-3.5" />,      action: () => {} },
-      { label: "خروج",   icon: <LogOut className="w-3.5 h-3.5" />,       action: () => setView("list") },
+      { label: "خروج",   icon: <LogOut className="w-3.5 h-3.5" />,       action: () => safeNavigate(() => { setEditId(null); setView("list"); }) },
     ];
 
     return (
@@ -466,7 +474,7 @@ export default function Warehouses() {
         <div className={`flex items-center justify-between ${c ? "mb-1" : "mb-3"}`}>
           <div className="flex items-center gap-1.5">
             <button
-              onClick={() => setView("list")}
+              onClick={() => safeNavigate(() => { setEditId(null); setView("list"); })}
               className="w-5 h-5 flex items-center justify-center rounded-full bg-white border border-slate-200 shadow-sm text-slate-400 hover:text-indigo-600 hover:border-indigo-300 transition-colors"
             >
               <ArrowLeft className="w-2.5 h-2.5" />
@@ -595,7 +603,7 @@ export default function Warehouses() {
                           <AccountCodeInput
                             allAccounts={(accounts as any[]) ?? []}
                             selectedId={row.accountId}
-                            onChange={v => setLinks(prev => prev.map((l, i) => i === idx ? { ...l, accountId: v } : l))}
+                            onChange={v => { setLinks(prev => prev.map((l, i) => i === idx ? { ...l, accountId: v } : l)); setIsDirty(true); }}
                           />
                         </td>
                         <td className="px-1 text-[10px] text-slate-500 truncate max-w-0" style={{ maxWidth: 160 }}>{acc?.name ?? <span className="text-slate-300">—</span>}</td>
@@ -970,10 +978,15 @@ export default function Warehouses() {
 
         </div>
 
-        {/* ══ شريط الأدوات السفلي ══ */}
+        {/* ══ شريط الأدوات السفلي Sticky ══ */}
         <div
-          className="fixed bottom-0 left-0 right-0 z-30 flex items-stretch"
-          style={{ borderTop: "1px solid #e5e7eb", background: "#ffffff", boxShadow: "0 -2px 8px rgba(0,0,0,0.05)" }}
+          className="sticky bottom-0 z-30 flex items-center gap-1 px-3 shrink-0"
+          style={{
+            borderTop: "1px solid #e2e8f0",
+            background: "#ffffff",
+            boxShadow: "0 -2px 10px rgba(0,0,0,0.07)",
+            height: c ? 36 : 44,
+          }}
           dir="rtl"
         >
           {toolbar.map(({ label, icon, action, primary, danger }: any) => (
@@ -982,22 +995,66 @@ export default function Warehouses() {
               onClick={action}
               disabled={(label === "حفظ" && isSaving) || (label === "حذف" && !editId)}
               className={[
-                `flex flex-col items-center justify-center gap-0 flex-1 ${c ? "py-0.5 text-[10px]" : "py-2 text-[11px]"} font-medium transition-colors`,
-                "border-l border-slate-100 last:border-0",
+                `flex items-center gap-1 rounded-md ${c ? "px-2 h-[26px] text-[10px]" : "px-3 h-8 text-[11px]"} font-medium transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed`,
                 primary
-                  ? "bg-indigo-600 text-white hover:bg-indigo-700"
+                  ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm"
                   : danger
-                    ? "text-red-500 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed"
-                    : "text-slate-600 hover:bg-slate-50",
+                    ? "text-red-500 hover:bg-red-50 border border-red-200"
+                    : "text-slate-600 hover:bg-slate-100 border border-slate-200",
               ].join(" ")}
             >
-              <span className={c ? "w-3 h-3" : "w-3.5 h-3.5"} style={{ display: "flex" }}>{icon}</span>
-              <span className="leading-none" style={{ marginTop: c ? 1 : 2 }}>
-                {label === "حفظ" && isSaving ? "..." : label}
-              </span>
+              <span className={c ? "w-3 h-3 flex" : "w-3.5 h-3.5 flex"}>{icon}</span>
+              <span>{label === "حفظ" && isSaving ? "جارٍ الحفظ..." : label}</span>
             </button>
           ))}
+          {isDirty && (
+            <span className={`${c ? "text-[9px]" : "text-[10px]"} text-amber-600 mr-auto flex items-center gap-1`}>
+              ● تعديلات غير محفوظة
+            </span>
+          )}
         </div>
+
+        {/* ══ نافذة تعديلات غير محفوظة ══ */}
+        <Dialog open={showUnsavedDialog} onOpenChange={setShowUnsavedDialog}>
+          <DialogContent className="max-w-sm" dir="rtl">
+            <DialogHeader>
+              <DialogTitle className="text-right text-base">تعديلات غير محفوظة</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-slate-500 text-right">
+              يوجد تعديلات غير محفوظة، هل تريد الحفظ قبل الخروج؟
+            </p>
+            <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
+              <Button
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700"
+                onClick={async () => {
+                  setShowUnsavedDialog(false);
+                  await handleSave();
+                  if (pendingAction) { pendingAction(); setPendingAction(null); }
+                }}
+              >
+                حفظ
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setIsDirty(false);
+                  setShowUnsavedDialog(false);
+                  if (pendingAction) { pendingAction(); setPendingAction(null); }
+                }}
+              >
+                تجاهل
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => { setShowUnsavedDialog(false); setPendingAction(null); }}
+              >
+                إلغاء
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* ══ نافذة تأكيد الحذف ══ */}
         <Dialog open={showDeleteDialog} onOpenChange={(open) => { setShowDeleteDialog(open); if (!open) setDeleteError(null); }}>
