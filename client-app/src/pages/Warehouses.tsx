@@ -702,69 +702,6 @@ export default function Warehouses() {
                   </div>
                   ); })()}
 
-                  {/* الروابط المحاسبية */}
-                  <P title="الروابط المحاسبية">
-                    <div className="overflow-hidden" style={{ border: "1px solid #e5e7eb", borderRadius: 4 }}>
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr style={{ background: "#f1f5f9", borderBottom: "1px solid #e5e7eb" }}>
-                            <th className="w-8 py-1.5 text-center text-[11px] font-semibold text-slate-400 border-l border-slate-200">#</th>
-                            <th className="py-1.5 px-3 text-right text-[11px] font-semibold text-slate-500 border-l border-slate-200">بيان الحساب</th>
-                            <th className="py-1.5 px-2 text-center text-[11px] font-semibold text-slate-500 border-l border-slate-200 w-20">كود</th>
-                            <th className="py-1.5 px-3 text-right text-[11px] font-semibold text-slate-500">الحساب</th>
-                            <th className="w-8 border-l border-slate-200" />
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {links.map((link, i) => {
-                            const acc = (accounts as any[])?.find((a: any) => String(a.id) === link.accountId);
-                            const isEven = i % 2 === 0;
-                            return (
-                              <tr key={i} className="group hover:bg-blue-50/40 transition-colors"
-                                style={{ height: 28, background: isEven ? "#fff" : "#f9fafb", borderBottom: "1px solid #f1f5f9" }}>
-                                <td className="text-center text-[11px] text-slate-400 border-l border-slate-100" style={{ background: isEven ? "#f8fafc" : "#f4f6f8" }}>{i + 1}</td>
-                                <td className="border-l border-slate-100 py-0 px-0">
-                                  <input value={link.label} onChange={e => updateLink(i, "label", e.target.value)}
-                                    className="w-full py-0 px-2 text-[12px] bg-transparent border-0 outline-none focus:bg-blue-50/60 text-slate-700"
-                                    style={{ height: 28 }} />
-                                </td>
-                                <td className="text-center border-l border-slate-100 px-1" style={{ background: isEven ? "#f8fafc" : "#f4f6f8" }}>
-                                  <span className="font-mono text-[11px] text-slate-500">{acc?.code ?? ""}</span>
-                                </td>
-                                <td className="py-0 px-0">
-                                  <Select value={link.accountId} onValueChange={v => updateLink(i, "accountId", v)}>
-                                    <SelectTrigger className="border-0 shadow-none rounded-none focus:ring-0 bg-transparent text-slate-700 text-[12px]" style={{ height: 28 }}>
-                                      <SelectValue placeholder="— اختر الحساب —" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="none">— بدون —</SelectItem>
-                                      {(accounts as any[])?.map((a: any) => (
-                                        <SelectItem key={a.id} value={String(a.id)}>{a.code} - {a.name}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </td>
-                                <td className="border-l border-slate-100 text-center">
-                                  <button onClick={() => removeLink(i)}
-                                    className="w-full flex items-center justify-center text-slate-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
-                                    style={{ height: 28 }}>
-                                    <Trash2 className="w-3 h-3" />
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                          {links.length === 0 && (
-                            <tr><td colSpan={5} className="py-5 text-center text-[12px] text-slate-400">لا توجد روابط محاسبية بعد</td></tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                    <button onClick={() => setLinks(p => [...p, { label: "حساب جديد", accountId: "", sortOrder: p.length }])}
-                      className="mt-1.5 flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-800">
-                      <Plus className="w-3 h-3" /> إضافة سطر
-                    </button>
-                  </P>
                 </div>
               </div>
             );
@@ -941,63 +878,6 @@ export default function Warehouses() {
                   </P>
                   ); })()}
 
-                  {/* الروابط المحاسبية */}
-                  <P title="الروابط المحاسبية">
-                    <div className="overflow-hidden" style={{ border: "1px solid #e5e7eb", borderRadius: 4 }}>
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr style={{ background: "#f1f5f9", borderBottom: "1px solid #e5e7eb" }}>
-                            <th className="w-8 py-1.5 text-center text-[11px] font-semibold text-slate-400 border-l border-slate-200">#</th>
-                            <th className="py-1.5 px-2 text-right text-[11px] font-semibold text-slate-500 border-l border-slate-200 w-16">طرف</th>
-                            <th className="py-1.5 px-3 text-right text-[11px] font-semibold text-slate-500 border-l border-slate-200">بيان</th>
-                            <th className="py-1.5 px-2 text-center text-[11px] font-semibold text-slate-500 border-l border-slate-200 w-16">كود</th>
-                            <th className="py-1.5 px-3 text-right text-[11px] font-semibold text-slate-500 border-l border-slate-200">الحساب</th>
-                            <th className="py-1.5 px-3 text-right text-[11px] font-semibold text-slate-500">مركز التكلفة</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {[
-                            { side: "مدين",  label: "مخزن ← الصندوق" },
-                            { side: "دائن",  label: "مخزن ← مبيعات 1" },
-                            { side: "تخفيض", label: "مخزن ← مبيعات 3" },
-                            { side: "نقدي",  label: "مخزن ← الصندوق" },
-                            { side: "ثابت",  label: "ضريبة" },
-                          ].map((row, idx) => (
-                            <tr key={idx} style={{ height: 28, background: idx % 2 === 0 ? "#fff" : "#f9fafb", borderBottom: "1px solid #f1f5f9" }}>
-                              <td className="text-center text-[11px] text-slate-400 border-l border-slate-100">{idx + 1}</td>
-                              <td className="px-2 text-[11px] text-slate-600 border-l border-slate-100">{row.side}</td>
-                              <td className="px-3 text-[12px] text-slate-700 border-l border-slate-100">{row.label}</td>
-                              <td className="text-center border-l border-slate-100">
-                                <span className="font-mono text-[11px] text-slate-400">—</span>
-                              </td>
-                              <td className="py-0 px-0 border-l border-slate-100">
-                                <Select value="" onValueChange={() => {}}>
-                                  <SelectTrigger className="border-0 shadow-none rounded-none focus:ring-0 bg-transparent text-[12px] text-slate-600" style={{ height: 28 }}>
-                                    <SelectValue placeholder="— اختر —" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {(accounts as any[])?.map((a: any) => (
-                                      <SelectItem key={a.id} value={String(a.id)}>{a.code} - {a.name}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </td>
-                              <td className="py-0 px-0">
-                                <Select value="" onValueChange={() => {}}>
-                                  <SelectTrigger className="border-0 shadow-none rounded-none focus:ring-0 bg-transparent text-[12px] text-slate-600" style={{ height: 28 }}>
-                                    <SelectValue placeholder="— اختر —" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="main">المركز الرئيسي</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </P>
                 </div>
               </div>
             );
