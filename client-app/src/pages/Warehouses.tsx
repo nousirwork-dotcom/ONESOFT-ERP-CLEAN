@@ -346,11 +346,16 @@ export default function Warehouses() {
 
   useEffect(() => {
     if (loadedLinks !== undefined) {
-      setLinks(loadedLinks.map(l => ({
-        label: l.label,
-        accountId: l.accountId ? String(l.accountId) : "",
-        sortOrder: l.sortOrder,
-      })));
+      const savedMap = new Map(loadedLinks.map((l: any) => [l.label, l]));
+      const defaultLabels = new Set(DEFAULT_LINKS.map(d => d.label));
+      const merged = DEFAULT_LINKS.map(def => {
+        const saved = savedMap.get(def.label) as any;
+        return { label: def.label, accountId: saved?.accountId ? String(saved.accountId) : "", sortOrder: def.sortOrder };
+      });
+      const extras = (loadedLinks as any[])
+        .filter((l: any) => !defaultLabels.has(l.label))
+        .map((l: any) => ({ label: l.label, accountId: l.accountId ? String(l.accountId) : "", sortOrder: l.sortOrder }));
+      setLinks([...merged, ...extras]);
     }
   }, [loadedLinks]);
 
