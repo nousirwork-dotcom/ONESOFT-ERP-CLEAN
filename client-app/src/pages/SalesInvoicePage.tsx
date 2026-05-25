@@ -406,114 +406,150 @@ export default function SalesInvoicePage() {
       {/* ── Header Form ─────────────────────────────────────────────────── */}
       <div className="bg-white border-b border-[#b0a89a] px-3 pt-2 pb-1.5" style={{ boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }}>
 
-        {/* ── شريط اختيار الدفتر ── */}
-        {(() => {
-          const journals = journalsQuery.data ?? [];
-          const selected = journals.find((j: any) => j.id === journalId);
-          return (
-            <div className="relative flex items-center gap-2 mb-2 pb-1.5" style={{ borderBottom: "1px dashed #e5e7eb" }}>
-              <span className="text-[10px] font-semibold text-slate-400 shrink-0">الدفتر:</span>
-              <button
-                onClick={() => setJournalOpen(o => !o)}
-                className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded border transition-colors"
-                style={{
-                  background: selected ? "#eff6ff" : "#f8fafc",
-                  borderColor: selected ? "#3b82f6" : "#d1d5db",
-                  color: selected ? "#1d4ed8" : "#6b7280",
-                  minWidth: 160,
-                }}
-              >
-                {selected
-                  ? <><span className="font-mono text-[10px] text-blue-400">{selected.code}</span> {selected.name}</>
-                  : <span className="text-slate-400">— اختر الدفتر —</span>
-                }
-                <span className="mr-auto text-[10px] opacity-40">▼</span>
-              </button>
-              {selected && (
-                <div className="flex items-center gap-3 text-[10px] text-slate-500">
-                  {selected.warehouseId && warehousesQuery.data && (
-                    <span className="flex items-center gap-1">
-                      <span className="text-slate-300">|</span>
-                      <span className="text-slate-400">مخزن:</span>
-                      <span className="font-medium text-slate-600">
-                        {warehousesQuery.data.find((w: any) => w.id === selected.warehouseId)?.name ?? "—"}
-                      </span>
-                    </span>
-                  )}
-                  <span className="flex items-center gap-1">
-                    <span className="text-slate-300">|</span>
-                    <span className="text-slate-400">بادئة:</span>
-                    <span className="font-mono font-medium text-slate-600">{selected.numberPrefix}</span>
-                  </span>
-                  <button
-                    onClick={() => { setJournalId(null); setJournalOpen(false); }}
-                    className="text-red-400 hover:text-red-600 mr-1"
-                    title="إلغاء اختيار الدفتر"
-                  >✕</button>
-                </div>
-              )}
-              {/* Dropdown قائمة الدفاتر */}
-              {journalOpen && (
-                <div
-                  className="absolute top-full right-0 z-[9999] mt-1 bg-white border border-slate-200 rounded-lg shadow-2xl overflow-hidden"
-                  style={{ minWidth: 340 }}
-                  dir="rtl"
-                >
-                  <div className="px-3 py-1.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-slate-600">دفاتر فاتورة المبيعات</span>
-                    <button onClick={() => setJournalOpen(false)} className="text-slate-400 hover:text-slate-600 text-[10px]">✕</button>
-                  </div>
-                  {journals.length === 0 ? (
-                    <div className="px-4 py-6 text-center text-[11px] text-slate-400">
-                      لا توجد دفاتر مُعرَّفة لفاتورة المبيعات<br/>
-                      <span className="text-[10px] text-slate-300">أضف دفاتر من شاشة المخازن ← دفاتر المستندات</span>
-                    </div>
-                  ) : (
-                    <div className="overflow-y-auto max-h-56">
-                      {journals.map((j: any) => (
-                        <button
-                          key={j.id}
-                          onClick={() => handleJournalSelect(j.id)}
-                          className="w-full flex items-center gap-3 px-3 py-2 text-right hover:bg-blue-50 transition-colors border-b border-slate-50 last:border-0"
-                        >
-                          <span className="font-mono text-[10px] text-slate-400 shrink-0 w-14">{j.code}</span>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-[12px] font-semibold text-slate-700 truncate">{j.name}</div>
-                            {j.description && <div className="text-[10px] text-slate-400 truncate">{j.description}</div>}
-                          </div>
-                          <div className="text-[10px] text-slate-300 shrink-0">
-                            {j.numberPrefix}-{new Date().getFullYear()}-...
-                          </div>
-                          {j.id === journalId && <span className="text-blue-500 text-[10px]">✓</span>}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <div className="px-3 py-1 bg-slate-50 border-t border-slate-100 text-[9px] text-slate-400">
-                    كل دفتر له ترقيم ومخزن وحسابات مستقلة
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })()}
-
         {/* ── رقم الفاتورة (بارز أعلى يمين) + حقول الصف الأول ── */}
         <div className="flex items-start gap-2 mb-1.5">
-          {/* رقم الفاتورة — بارز */}
-          <div className="flex flex-col gap-0.5 flex-shrink-0">
-            <label className="text-[10px] font-bold text-[#406B93] uppercase tracking-wide">رقم الفاتورة</label>
-            <input
-              value={invoiceNumber}
-              onChange={e => setInvoiceNumber(e.target.value)}
-              className="classic-input text-center font-bold"
-              style={{
-                width: 148, background: "#FFFDE7", borderColor: "#F59E0B",
-                color: "#1a1a1a", fontSize: "13px", fontWeight: 700,
-                letterSpacing: "0.03em",
-              }}
-            />
-          </div>
+          {/* رقم الفاتورة — مدمج مع منتقي الدفتر */}
+          {(() => {
+            const journals = journalsQuery.data ?? [];
+            const selected = journals.find((j: any) => j.id === journalId);
+            // حساب الرقم التالي للعرض في القائمة (بدون استدعاء API)
+            const previewNum = (j: any): string => {
+              const seq = (j.currentSeq ?? 0) === 0
+                ? (j.firstNumber ?? 1)
+                : (j.currentSeq ?? 0) + (j.increment ?? 1);
+              const digits = j.numDigits ?? 6;
+              const padded = String(seq).padStart(digits, "0");
+              const year = j.includeYear ? `-${new Date().getFullYear()}` : "";
+              return `${j.numberPrefix}${year}-${padded}`;
+            };
+            return (
+              <div className="flex flex-col gap-0.5 flex-shrink-0 relative" style={{ minWidth: 176 }}>
+                {/* Label مع اسم الدفتر المختار */}
+                <div className="flex items-center gap-1">
+                  <label className="text-[10px] font-bold text-[#406B93] uppercase tracking-wide">رقم الفاتورة</label>
+                  {selected && (
+                    <span
+                      className="text-[9px] px-1 py-0 rounded font-medium cursor-pointer"
+                      style={{ background: "#dbeafe", color: "#1d4ed8", lineHeight: "14px" }}
+                      onClick={() => { setJournalId(null); }}
+                      title="إلغاء الدفتر"
+                    >
+                      {selected.name} ✕
+                    </span>
+                  )}
+                </div>
+                {/* حقل الرقم + زر السهم */}
+                <div className="flex items-stretch">
+                  <input
+                    value={invoiceNumber}
+                    onChange={e => setInvoiceNumber(e.target.value)}
+                    onContextMenu={e => { e.preventDefault(); setJournalOpen(o => !o); }}
+                    onKeyDown={e => { if (e.key === "F4" || (e.key === "ArrowDown" && e.altKey)) { e.preventDefault(); setJournalOpen(o => !o); } }}
+                    className="classic-input text-center font-bold"
+                    style={{
+                      width: 148, background: selected ? "#eff6ff" : "#FFFDE7",
+                      borderColor: selected ? "#3b82f6" : "#F59E0B",
+                      borderRadius: "4px 0 0 4px", borderLeft: "none",
+                      color: "#1a1a1a", fontSize: "13px", fontWeight: 700,
+                      letterSpacing: "0.03em",
+                    }}
+                    title="كليك يمين أو F4 لاختيار الدفتر"
+                  />
+                  <button
+                    onClick={() => setJournalOpen(o => !o)}
+                    className="flex items-center justify-center transition-colors"
+                    style={{
+                      width: 22, borderRadius: "0 4px 4px 0",
+                      background: selected ? "#3b82f6" : "#F59E0B",
+                      border: `1px solid ${selected ? "#2563eb" : "#d97706"}`,
+                      color: "white", fontSize: "9px",
+                    }}
+                    title="اختيار الدفتر"
+                  >▼</button>
+                </div>
+                {/* Dropdown قائمة الدفاتر */}
+                {journalOpen && (
+                  <>
+                    {/* Overlay لإغلاق عند الضغط خارجاً */}
+                    <div className="fixed inset-0 z-[9998]" onClick={() => setJournalOpen(false)} />
+                    <div
+                      className="absolute top-full right-0 z-[9999] mt-1 bg-white rounded-lg overflow-hidden"
+                      style={{ minWidth: 320, boxShadow: "0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.10)", border: "1px solid #e2e8f0" }}
+                      dir="rtl"
+                    >
+                      {/* Header */}
+                      <div className="flex items-center justify-between px-3 py-2" style={{ background: "#1e40af" }}>
+                        <div className="flex items-center gap-2">
+                          <span className="text-white text-[11px] font-bold">دفاتر فاتورة المبيعات</span>
+                          {journals.length > 0 && (
+                            <span className="text-[9px] px-1.5 py-0 rounded-full font-medium" style={{ background: "rgba(255,255,255,0.2)", color: "white" }}>
+                              {journals.length}
+                            </span>
+                          )}
+                        </div>
+                        <button onClick={() => setJournalOpen(false)} style={{ color: "rgba(255,255,255,0.7)", fontSize: "11px" }}>✕</button>
+                      </div>
+                      {/* الدفاتر */}
+                      {journals.length === 0 ? (
+                        <div className="px-4 py-5 text-center">
+                          <div className="text-[20px] mb-1">📒</div>
+                          <div className="text-[11px] text-slate-500 font-medium">لا توجد دفاتر مُعرَّفة</div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">أضف دفاتر من إعدادات المستندات</div>
+                        </div>
+                      ) : (
+                        <div className="overflow-y-auto" style={{ maxHeight: 240 }}>
+                          {journals.map((j: any, idx: number) => {
+                            const isSelected = j.id === journalId;
+                            const preview = previewNum(j);
+                            return (
+                              <button
+                                key={j.id}
+                                onClick={() => handleJournalSelect(j.id)}
+                                className="w-full flex items-center gap-0 text-right transition-colors"
+                                style={{
+                                  background: isSelected ? "#eff6ff" : idx % 2 === 0 ? "#fafafa" : "white",
+                                  borderBottom: "1px solid #f1f5f9",
+                                  padding: "6px 12px",
+                                }}
+                              >
+                                {/* أيقونة التحديد */}
+                                <span style={{ width: 16, color: isSelected ? "#3b82f6" : "transparent", fontSize: "11px", flexShrink: 0 }}>✓</span>
+                                {/* اسم الدفتر الكامل */}
+                                <div className="flex-1 min-w-0 mx-2">
+                                  <div className="text-[12px] font-semibold truncate" style={{ color: isSelected ? "#1d4ed8" : "#1e293b" }}>
+                                    فاتورة مبيعات – {j.name}
+                                  </div>
+                                  {j.description && (
+                                    <div className="text-[10px] text-slate-400 truncate">{j.description}</div>
+                                  )}
+                                </div>
+                                {/* معاينة الرقم التالي */}
+                                <div className="shrink-0 text-left">
+                                  <div className="font-mono text-[11px] font-bold px-2 py-0.5 rounded" style={{ background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0" }}>
+                                    {preview}
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {/* Footer */}
+                      <div className="px-3 py-1.5 flex items-center justify-between" style={{ background: "#f8fafc", borderTop: "1px solid #e2e8f0" }}>
+                        <span className="text-[9px] text-slate-400">كليك يمين أو F4 لفتح القائمة</span>
+                        {journalId && (
+                          <button
+                            onClick={() => { setJournalId(null); setJournalOpen(false); }}
+                            className="text-[9px] text-red-400 hover:text-red-600"
+                          >إلغاء اختيار الدفتر</button>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Grid الحقول الرئيسية */}
           <div className="grid gap-x-2 gap-y-1 flex-1" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
