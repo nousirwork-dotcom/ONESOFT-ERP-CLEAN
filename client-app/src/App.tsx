@@ -15,6 +15,7 @@ import PurchasesModule, {
   PurchaseReturnsPage, PurchaseRptSupplierPage, PurchaseRptItemPage,
 } from "./pages/PurchasesModule";
 import SalesModule, {
+  SalesTransactionsTab,
   SalesInvoiceTab, SalesReturnTab, SalesCreditNoteTab, SalesQuotationTab,
   SalesOrderTab, SalesDeliveryTab, SalesPosTab, SalesShiftsTab,
   SalesPaymentMethodsTab, SalesPosSettingsTab, SalesPosReportsTab,
@@ -89,6 +90,7 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/purchases/returns":      PurchaseReturnsPage,
   "/purchases/rpt-supplier": PurchaseRptSupplierPage,
   "/purchases/rpt-item":     PurchaseRptItemPage,
+  "/sales/transactions":      SalesTransactionsTab,
   "/sales/invoice":           SalesInvoiceTab,
   "/sales/return":            SalesReturnTab,
   "/sales/credit-note":       SalesCreditNoteTab,
