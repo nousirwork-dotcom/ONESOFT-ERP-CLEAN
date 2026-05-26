@@ -127,14 +127,18 @@ export const documentJournalsRouter = router({
         where: and(eq(documentJournals.id, input.journalId), eq(documentJournals.orgId, ctx.user.orgId)),
       });
       if (!journal) throw new Error('الدفتر غير موجود');
-      const nextSeq = (journal.currentSeq ?? 0) + (journal.increment ?? 1);
+      const currentSeq  = journal.currentSeq ?? 0;
+      const firstNumber = journal.firstNumber ?? 1;
+      const increment   = journal.increment ?? 1;
+      // إذا لم يُستخدم الدفتر بعد (currentSeq=0) ابدأ من firstNumber، وإلا زِد بمقدار increment
+      const nextSeq = currentSeq === 0 ? firstNumber : Math.max(currentSeq + increment, firstNumber);
       const clamped = Math.min(nextSeq, journal.lastNumber ?? 999999);
       await db.update(documentJournals)
         .set({ currentSeq: clamped, updatedAt: new Date() })
         .where(eq(documentJournals.id, journal.id));
-      const prefix   = journal.numberPrefix ?? 'INV';
-      const digits   = journal.numDigits ?? 6;
-      const numPart  = String(clamped).padStart(digits, '0');
+      const prefix  = journal.numberPrefix ?? 'INV';
+      const digits  = journal.numDigits ?? 6;
+      const numPart = String(clamped).padStart(digits, '0');
       if (journal.includeYear) {
         return `${prefix}${new Date().getFullYear()}-${numPart}`;
       }
@@ -148,7 +152,10 @@ export const documentJournalsRouter = router({
         where: and(eq(documentJournals.id, input.journalId), eq(documentJournals.orgId, ctx.user.orgId)),
       });
       if (!journal) return null;
-      const nextSeq = (journal.currentSeq ?? 0) + (journal.increment ?? 1);
+      const currentSeq  = journal.currentSeq ?? 0;
+      const firstNumber = journal.firstNumber ?? 1;
+      const increment   = journal.increment ?? 1;
+      const nextSeq = currentSeq === 0 ? firstNumber : Math.max(currentSeq + increment, firstNumber);
       const clamped = Math.min(nextSeq, journal.lastNumber ?? 999999);
       const prefix  = journal.numberPrefix ?? 'INV';
       const digits  = journal.numDigits ?? 6;
