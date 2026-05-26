@@ -1155,6 +1155,292 @@ function DeliveryOrderPage() {
   );
 }
 
+// ─── Sales Invoice List View ───────────────────────────────────────────────────
+
+function SalesInvoiceListView() {
+  const today = new Date().toISOString().split("T")[0];
+  const [dateFrom, setDateFrom] = useState(today);
+  const [dateTo, setDateTo]     = useState(today);
+  const [search, setSearch]     = useState("");
+  const [mode, setMode]         = useState<"list" | "form">("list");
+
+  const { data: invoices = [], isLoading, refetch } = trpc.salesInvoices.list.useQuery({
+    invoiceType: "sale",
+    dateFrom,
+    dateTo,
+    search: search || undefined,
+    limit: 500,
+  });
+
+  const fmt = (v: string | null | undefined) =>
+    v ? parseFloat(v).toLocaleString("ar-EG", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00";
+
+  const totalAmount = invoices.reduce((s, r) => s + parseFloat(r.total ?? "0"), 0);
+
+  const statusLabel: Record<string, { label: string; color: string }> = {
+    draft:     { label: "مسودة",    color: "#6B7280" },
+    confirmed: { label: "مؤكدة",    color: "#2563EB" },
+    posted:    { label: "محاسبية",  color: "#7C3AED" },
+    paid:      { label: "مدفوعة",   color: "#059669" },
+    cancelled: { label: "ملغاة",    color: "#DC2626" },
+  };
+
+  if (mode === "form") {
+    return (
+      <div className="h-full flex flex-col" dir="rtl">
+        {/* شريط الرجوع */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "6px 12px", borderBottom: "1px solid #E5E7EB",
+          background: "#F9FAFB",
+        }}>
+          <button
+            onClick={() => { setMode("list"); refetch(); }}
+            style={{
+              display: "flex", alignItems: "center", gap: 5, padding: "4px 10px",
+              border: "1px solid #D1D5DB", borderRadius: 6,
+              background: "#fff", cursor: "pointer", fontSize: 12,
+              color: "#374151", fontFamily: "'Cairo', Tahoma, sans-serif",
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = "#F3F4F6")}
+            onMouseLeave={e => (e.currentTarget.style.background = "#fff")}
+          >
+            <ArrowRight style={{ width: 13, height: 13 }} />
+            العودة إلى القائمة
+          </button>
+          <span style={{ fontSize: 12, color: "#9CA3AF", fontFamily: "'Cairo', Tahoma, sans-serif" }}>
+            إنشاء فاتورة مبيعات جديدة
+          </span>
+        </div>
+        <div className="flex-1 overflow-auto">
+          <SalesInvoicePageNew />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div dir="rtl" style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "'Cairo', Tahoma, sans-serif" }}>
+
+      {/* ── شريط العنوان + الأدوات ── */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+        padding: "8px 12px", borderBottom: "1px solid #E5E7EB",
+        background: "#F9FAFB", flexShrink: 0,
+      }}>
+        {/* عنوان */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
+          <div style={{
+            width: 30, height: 30, borderRadius: 7,
+            background: "rgba(37,99,235,0.1)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <Receipt style={{ width: 15, height: 15, color: "#2563EB" }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>فواتير المبيعات</div>
+            <div style={{ fontSize: 11, color: "#9CA3AF" }}>
+              {isLoading ? "جاري التحميل..." : `${invoices.length} فاتورة`}
+            </div>
+          </div>
+        </div>
+
+        {/* فلتر التاريخ */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 12, color: "#6B7280" }}>من</span>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={e => setDateFrom(e.target.value)}
+            style={{
+              padding: "3px 8px", border: "1px solid #D1D5DB", borderRadius: 6,
+              fontSize: 12, background: "#fff", color: "#111827", cursor: "pointer",
+            }}
+          />
+          <span style={{ fontSize: 12, color: "#6B7280" }}>إلى</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={e => setDateTo(e.target.value)}
+            style={{
+              padding: "3px 8px", border: "1px solid #D1D5DB", borderRadius: 6,
+              fontSize: 12, background: "#fff", color: "#111827", cursor: "pointer",
+            }}
+          />
+        </div>
+
+        {/* بحث */}
+        <div style={{ position: "relative" }}>
+          <Search style={{
+            position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+            width: 13, height: 13, color: "#9CA3AF", pointerEvents: "none",
+          }} />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="بحث برقم أو عميل..."
+            style={{
+              paddingRight: 28, paddingLeft: 8, paddingTop: 4, paddingBottom: 4,
+              border: "1px solid #D1D5DB", borderRadius: 6,
+              fontSize: 12, background: "#fff", color: "#111827", width: 180,
+            }}
+          />
+        </div>
+
+        {/* تحديث */}
+        <button
+          onClick={() => refetch()}
+          title="تحديث"
+          style={{
+            width: 30, height: 30, borderRadius: 6, border: "1px solid #D1D5DB",
+            background: "#fff", cursor: "pointer", color: "#6B7280",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = "#F3F4F6")}
+          onMouseLeave={e => (e.currentTarget.style.background = "#fff")}
+        >
+          <RefreshCw style={{ width: 13, height: 13 }} />
+        </button>
+
+        {/* زر إضافة فاتورة */}
+        <button
+          onClick={() => setMode("form")}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "5px 14px", borderRadius: 7, border: "none",
+            background: "#2563EB", color: "#fff", cursor: "pointer",
+            fontSize: 12, fontWeight: 700, fontFamily: "'Cairo', Tahoma, sans-serif",
+            boxShadow: "0 1px 4px rgba(37,99,235,0.3)",
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = "#1D4ED8")}
+          onMouseLeave={e => (e.currentTarget.style.background = "#2563EB")}
+        >
+          <Plus style={{ width: 14, height: 14 }} />
+          فاتورة جديدة
+        </button>
+      </div>
+
+      {/* ── الجدول ── */}
+      <div style={{ flex: 1, overflowY: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+          <thead>
+            <tr style={{ background: "#F3F4F6", position: "sticky", top: 0, zIndex: 2 }}>
+              {["رقم الفاتورة", "العميل", "التاريخ", "المخزن", "نوع السداد", "الإجمالي", "الحالة"].map(h => (
+                <th key={h} style={{
+                  padding: "8px 12px", textAlign: "right",
+                  color: "#6B7280", fontWeight: 600, fontSize: 11.5,
+                  borderBottom: "1px solid #E5E7EB", whiteSpace: "nowrap",
+                }}>
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading ? (
+              <tr>
+                <td colSpan={7} style={{ textAlign: "center", padding: 32, color: "#9CA3AF" }}>
+                  جاري التحميل...
+                </td>
+              </tr>
+            ) : invoices.length === 0 ? (
+              <tr>
+                <td colSpan={7} style={{ textAlign: "center", padding: 40, color: "#9CA3AF" }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+                    <Receipt style={{ width: 32, height: 32, color: "#D1D5DB" }} />
+                    <span style={{ fontSize: 13 }}>لا توجد فواتير لهذه الفترة</span>
+                    <button
+                      onClick={() => setMode("form")}
+                      style={{
+                        marginTop: 4, padding: "5px 16px", borderRadius: 6,
+                        border: "none", background: "#2563EB", color: "#fff",
+                        cursor: "pointer", fontSize: 12, fontWeight: 600,
+                        fontFamily: "'Cairo', Tahoma, sans-serif",
+                      }}
+                    >
+                      + إنشاء فاتورة جديدة
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              invoices.map((inv, i) => {
+                const st = statusLabel[inv.status] ?? { label: inv.status, color: "#6B7280" };
+                const payLabel = inv.paymentMethod === "cash" ? "نقداً" : "آجل";
+                const invDate = new Date(inv.invoiceDate).toLocaleDateString("ar-EG", {
+                  year: "numeric", month: "2-digit", day: "2-digit",
+                });
+                return (
+                  <tr
+                    key={inv.id}
+                    style={{
+                      borderBottom: "1px solid #F3F4F6",
+                      background: i % 2 === 0 ? "#fff" : "#FAFAFA",
+                      cursor: "default",
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.background = "#EFF6FF")}
+                    onMouseLeave={e => (e.currentTarget.style.background = i % 2 === 0 ? "#fff" : "#FAFAFA")}
+                  >
+                    <td style={{ padding: "7px 12px", color: "#2563EB", fontWeight: 600 }}>
+                      {inv.invoiceNumber}
+                    </td>
+                    <td style={{ padding: "7px 12px", color: "#374151" }}>
+                      {inv.customerName ?? "—"}
+                    </td>
+                    <td style={{ padding: "7px 12px", color: "#6B7280", direction: "ltr", textAlign: "right" }}>
+                      {invDate}
+                    </td>
+                    <td style={{ padding: "7px 12px", color: "#6B7280" }}>
+                      {(inv as any).warehouseId ?? "—"}
+                    </td>
+                    <td style={{ padding: "7px 12px" }}>
+                      <span style={{
+                        padding: "2px 8px", borderRadius: 12, fontSize: 11,
+                        background: inv.paymentMethod === "cash" ? "#F0FDF4" : "#FFF7ED",
+                        color: inv.paymentMethod === "cash" ? "#059669" : "#D97706",
+                        fontWeight: 600,
+                      }}>
+                        {payLabel}
+                      </span>
+                    </td>
+                    <td style={{ padding: "7px 12px", color: "#111827", fontWeight: 700, textAlign: "left", direction: "ltr" }}>
+                      {fmt(inv.total)} {inv.currency ?? ""}
+                    </td>
+                    <td style={{ padding: "7px 12px" }}>
+                      <span style={{
+                        padding: "2px 8px", borderRadius: 12, fontSize: 11,
+                        background: `${st.color}18`, color: st.color, fontWeight: 600,
+                      }}>
+                        {st.label}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ── شريط الإجمالي ── */}
+      {invoices.length > 0 && (
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "6px 16px", borderTop: "2px solid #E5E7EB",
+          background: "#F9FAFB", flexShrink: 0,
+        }}>
+          <span style={{ fontSize: 12, color: "#6B7280" }}>
+            إجمالي {invoices.length} فاتورة
+          </span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>
+            الإجمالي الكلي: {totalAmount.toLocaleString("ar-EG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Content Router ────────────────────────────────────────────────────────────
 
 function SalesContent({ activeId, onSelect, settings, onSettingsChange }: {
@@ -1165,7 +1451,7 @@ function SalesContent({ activeId, onSelect, settings, onSettingsChange }: {
 }) {
   switch (activeId) {
     case "overview":              return <SalesOverview onSelect={onSelect} settings={settings} onSettingsChange={onSettingsChange} />;
-    case "sales-invoice":         return <SalesInvoicePageNew />;
+    case "sales-invoice":         return <SalesInvoiceListView />;
     case "sales-return":          return <ComingSoon title="مردود المبيعات" />;
     case "credit-note":           return <ComingSoon title="إشعار دائن" />;
     case "quotation":             return <SalesQuotation />;
@@ -1188,7 +1474,7 @@ function SalesContent({ activeId, onSelect, settings, onSettingsChange }: {
 }
 
 // ─── Exported Sub-Page Wrappers (for MDI tab system) ──────────────────────────
-export function SalesInvoiceTab()       { return <div className="h-full overflow-auto p-5" dir="rtl"><SalesInvoicePageNew /></div>; }
+export function SalesInvoiceTab()       { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesInvoiceListView /></div>; }
 export function SalesReturnTab()        { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="مردود المبيعات" /></div>; }
 export function SalesCreditNoteTab()    { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="إشعار دائن" /></div>; }
 export function SalesQuotationTab()     { return <div className="h-full overflow-auto p-5" dir="rtl"><SalesQuotation /></div>; }

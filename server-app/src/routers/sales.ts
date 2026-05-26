@@ -9,16 +9,18 @@ export const salesRouter = router({
   list: protectedProcedure
     .input(z.object({
       page: z.number().default(1),
-      limit: z.number().default(50),
+      limit: z.number().default(200),
       search: z.string().optional(),
       status: z.string().optional(),
       invoiceType: z.enum(['sale', 'return', 'quote']).optional(),
+      dateFrom: z.string().optional(), // YYYY-MM-DD
+      dateTo: z.string().optional(),   // YYYY-MM-DD
     }).optional())
     .query(async ({ ctx, input }) => {
       const orgId = ctx.user.orgId;
       const allRecords = await db.query.salesInvoices.findMany({
         where: eq(salesInvoices.orgId, orgId),
-        orderBy: [desc(salesInvoices.createdAt)],
+        orderBy: [desc(salesInvoices.invoiceDate)],
       });
       let filtered = allRecords;
       if (input?.invoiceType) {
@@ -34,7 +36,17 @@ export const salesRouter = router({
           r.customerName?.toLowerCase().includes(q)
         );
       }
-      const limit = input?.limit || 50;
+      if (input?.dateFrom) {
+        const from = new Date(input.dateFrom);
+        from.setHours(0, 0, 0, 0);
+        filtered = filtered.filter(r => new Date(r.invoiceDate) >= from);
+      }
+      if (input?.dateTo) {
+        const to = new Date(input.dateTo);
+        to.setHours(23, 59, 59, 999);
+        filtered = filtered.filter(r => new Date(r.invoiceDate) <= to);
+      }
+      const limit = input?.limit || 200;
       const page = input?.page || 1;
       return filtered.slice((page - 1) * limit, page * limit);
     }),
