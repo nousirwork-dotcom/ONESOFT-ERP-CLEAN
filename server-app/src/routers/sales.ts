@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { eq, and, desc, like, or } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { salesInvoices, salesInvoiceItems, products, customers } from '../schema.js';
+import { salesInvoices, salesInvoiceItems, products, customers, stockVouchers, stockVoucherItems } from '../schema.js';
 
 export const salesRouter = router({
   // قائمة الفواتير/عروض الأسعار
@@ -187,6 +187,84 @@ export const salesRouter = router({
         }
       }
       return { success: true };
+    }),
+
+  // بحث عن مستند مصدر (بناءً على)
+  getByNumber: protectedProcedure
+    .input(z.object({
+      type: z.enum(['sale', 'quote', 'order', 'transfer']),
+      number: z.string().min(1),
+    }))
+    .query(async ({ ctx, input }) => {
+      if (input.type === 'transfer') {
+        const voucher = await db.query.stockVouchers.findFirst({
+          where: and(
+            eq(stockVouchers.orgId, ctx.user.orgId),
+            eq(stockVouchers.voucherNumber, input.number),
+            eq(stockVouchers.type, 'transfer'),
+          ),
+        });
+        if (!voucher) return null;
+        const items = await db.query.stockVoucherItems.findMany({
+          where: eq(stockVoucherItems.voucherId, voucher.id),
+          orderBy: (i, { asc }) => [asc(i.sortOrder)],
+        });
+        return {
+          sourceType: 'transfer' as const,
+          number: voucher.voucherNumber,
+          customerId: null as number | null,
+          customerName: null as string | null,
+          warehouseId: voucher.warehouseId,
+          currency: 'SAR',
+          notes: voucher.notes,
+          items: items.map(i => ({
+            productId: i.productId,
+            productCode: '',
+            productName: i.productName,
+            unit: '',
+            quantity: i.quantity,
+            unitPrice: i.unitCost ?? '0',
+            discountPct: '0',
+            discountAmt: '0',
+            taxPct: '0',
+            taxAmt: '0',
+            total: i.totalCost ?? '0',
+          })),
+        };
+      }
+      const invoice = await db.query.salesInvoices.findFirst({
+        where: and(
+          eq(salesInvoices.orgId, ctx.user.orgId),
+          eq(salesInvoices.invoiceNumber, input.number),
+        ),
+      });
+      if (!invoice) return null;
+      const items = await db.query.salesInvoiceItems.findMany({
+        where: eq(salesInvoiceItems.invoiceId, invoice.id),
+        orderBy: (i, { asc }) => [asc(i.sortOrder)],
+      });
+      return {
+        sourceType: input.type,
+        number: invoice.invoiceNumber,
+        customerId: invoice.customerId,
+        customerName: invoice.customerName,
+        warehouseId: invoice.warehouseId,
+        currency: invoice.currency ?? 'SAR',
+        notes: invoice.notes,
+        items: items.map(i => ({
+          productId: i.productId,
+          productCode: i.productCode ?? '',
+          productName: i.productName,
+          unit: i.unit ?? '',
+          quantity: i.quantity,
+          unitPrice: i.unitPrice,
+          discountPct: i.discountPercent ?? '0',
+          discountAmt: i.discountAmount ?? '0',
+          taxPct: i.taxPercent ?? '0',
+          taxAmt: i.taxAmount ?? '0',
+          total: i.total,
+        })),
+      };
     }),
 
   // حذف مستند

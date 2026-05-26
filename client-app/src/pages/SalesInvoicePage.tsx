@@ -77,7 +77,9 @@ export default function SalesInvoicePage() {
   const [currency, setCurrency] = useState("SAR");
   const [exchangeRate, setExchangeRate] = useState("1.000");
   const [salesperson, setSalesperson] = useState("");
-  const [basedOn, setBasedOn] = useState("");
+  const [basedOnType, setBasedOnType] = useState<'sale' | 'quote' | 'order' | 'transfer' | ''>('');
+  const [basedOnNum, setBasedOnNum]   = useState("");
+  const [basedOnTrigger, setBasedOnTrigger] = useState(""); // يُحرِّك جلب البيانات
   const [notes, setNotes] = useState("");
   const [paidAmountOverride, setPaidAmountOverride] = useState<string>("");
 
@@ -104,6 +106,40 @@ export default function SalesInvoicePage() {
 
   const nextJournalNumberMutation = trpc.documentJournals.nextNumber.useMutation();
   const utils = trpc.useUtils();
+
+  // جلب المستند المصدر (بناءً على)
+  const basedOnQuery = trpc.salesInvoices.getByNumber.useQuery(
+    { type: basedOnType as 'sale' | 'quote' | 'order' | 'transfer', number: basedOnTrigger },
+    { enabled: !!basedOnType && !!basedOnTrigger }
+  );
+
+  // عند ورود بيانات المستند المصدر: ملء حقول الفاتورة
+  useEffect(() => {
+    const src = basedOnQuery.data;
+    if (!src) return;
+    if (src.customerName) setCustomerName(src.customerName);
+    if (src.customerId)   setCustomerId(src.customerId);
+    if (src.warehouseId && !journalWarehouseId) setWarehouseId(src.warehouseId);
+    if (src.currency)     setCurrency(src.currency);
+    if (src.notes)        setNotes(src.notes ?? "");
+    if (src.items.length > 0) {
+      setLines(src.items.map(i => ({
+        id: crypto.randomUUID(),
+        productCode:  i.productCode,
+        productName:  i.productName,
+        unit:         i.unit || "",
+        quantity:     i.quantity,
+        unitPrice:    i.unitPrice,
+        discountPct:  i.discountPct,
+        discountAmt:  i.discountAmt,
+        taxPct:       i.taxPct,
+        taxAmt:       i.taxAmt,
+        total:        i.total,
+        productId:    i.productId ?? undefined,
+      })));
+    }
+    toast.success(`✓ تم استيراد بيانات المستند ${src.number}`);
+  }, [basedOnQuery.data]);
 
   const createMutation = trpc.salesInvoices.create.useMutation({
     onSuccess: (data) => {
@@ -369,7 +405,9 @@ export default function SalesInvoicePage() {
     setCustomerName("");
     setWarehouseId(null);
     setPaymentType("cash");
-    setBasedOn("");
+    setBasedOnType('');
+    setBasedOnNum('');
+    setBasedOnTrigger('');
     setNotes("");
     setDueDate("");
     setSalesperson("");
@@ -668,11 +706,50 @@ export default function SalesInvoicePage() {
             />
           </HF>
           <HF label="بناءً على">
-            <input
-              value={basedOn}
-              onChange={e => setBasedOn(e.target.value)}
-              className="classic-input w-full"
-            />
+            <div className="flex gap-1 w-full">
+              <select
+                value={basedOnType}
+                onChange={e => {
+                  setBasedOnType(e.target.value as any);
+                  setBasedOnNum('');
+                  setBasedOnTrigger('');
+                }}
+                className="classic-input"
+                style={{ minWidth: 100, flex: '0 0 auto' }}
+              >
+                <option value="">-- النوع --</option>
+                <option value="order">أمر بيع</option>
+                <option value="quote">عرض أسعار</option>
+                <option value="transfer">تحويل داخلي</option>
+                <option value="sale">فاتورة مبيعات</option>
+              </select>
+              <div className="relative flex-1">
+                <input
+                  value={basedOnNum}
+                  onChange={e => setBasedOnNum(e.target.value)}
+                  onBlur={() => {
+                    if (basedOnType && basedOnNum.trim())
+                      setBasedOnTrigger(basedOnNum.trim());
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && basedOnType && basedOnNum.trim())
+                      setBasedOnTrigger(basedOnNum.trim());
+                  }}
+                  placeholder={basedOnType ? "رقم المستند..." : ""}
+                  disabled={!basedOnType}
+                  className="classic-input w-full"
+                />
+                {basedOnQuery.isFetching && (
+                  <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[10px] text-blue-500">⏳</span>
+                )}
+                {basedOnTrigger && !basedOnQuery.isFetching && basedOnQuery.data === null && (
+                  <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[10px] text-red-500">✗</span>
+                )}
+                {basedOnTrigger && !basedOnQuery.isFetching && basedOnQuery.data && (
+                  <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[10px] text-green-600">✓</span>
+                )}
+              </div>
+            </div>
           </HF>
           <HF label="ملحوظة">
             <input
