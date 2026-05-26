@@ -21,7 +21,7 @@ import SalesModule, {
   SalesPaymentMethodsTab, SalesPosSettingsTab, SalesPosReportsTab,
   SalesCustomersTab, SalesCustomerGroupsTab, SalesCustomerBalancesTab,
   SalesCustomerStatementTab, SalesCustomerReportsTab,
-  SalesTotalsReportsTab, SalesItemsReportsTab,
+  SalesTotalsReportsTab, SalesInvoicesReportTab, SalesItemsReportsTab,
 } from "./pages/SalesModule";
 import Users from "./pages/Users";
 import ManufacturingModule, {
@@ -108,6 +108,7 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/sales/customer-statement":SalesCustomerStatementTab,
   "/sales/customer-reports":  SalesCustomerReportsTab,
   "/sales/totals-reports":    SalesTotalsReportsTab,
+  "/sales/invoices-report":   SalesInvoicesReportTab,
   "/sales/items-reports":     SalesItemsReportsTab,
   // Manufacturing
   "/mfg/new-order":           MfgNewOrderTab,

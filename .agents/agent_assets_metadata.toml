@@ -54,3 +54,9 @@ id = "fJI0PG_ZROhT2RAYpXpvq"
 uri = "file://ONESOFT-ERP-full.tar.gz"
 type = "unspecified"
 title = "ONESOFT-ERP — كامل المشروع (103 MB)"
+
+[[outputs]]
+id = "OcyPqy9fZKw1_6QTmNv5u"
+uri = "file://ONESOFT-ERP-source-20260526.tar.gz"
+type = "unspecified"
+title = "ONESOFT-ERP — نسخة احتياطية 26 مايو 2026"
