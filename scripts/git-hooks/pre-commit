@@ -1,0 +1,24 @@
+#!/bin/sh
+# pre-commit hook – runs FK delete-rule checks before every commit.
+#
+# Installed via:  bash scripts/install-hooks.sh
+# To skip once:   git commit --no-verify
+
+# Only run the check when schema.ts is among the staged files.
+if git diff --cached --name-only | grep -q 'server-app/src/schema\.ts'; then
+  echo "▶  schema.ts staged – running FK delete-rule check …"
+  ROOT="$(git rev-parse --show-toplevel)"
+  cd "$ROOT" || exit 1
+  (cd server-app && pnpm check-fk)
+  STATUS=$?
+  if [ "$STATUS" -ne 0 ]; then
+    echo ""
+    echo "❌  Commit blocked: nullable FK columns with missing ON DELETE rules detected."
+    echo "    Fix the issues listed above, then commit again."
+    echo "    Emergency bypass: git commit --no-verify"
+    exit 1
+  fi
+  echo "✅  FK delete-rule check passed."
+fi
+
+exit 0

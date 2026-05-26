@@ -7,7 +7,8 @@
     "start": "node dist/index.mjs",
     "build": "esbuild src/index.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/index.mjs",
     "setup-db": "tsx scripts/setup-db.ts",
-    "migrate": "drizzle-kit push"
+    "migrate": "drizzle-kit push",
+    "check-fk": "tsx ../scripts/check-fk-delete-rules.ts"
   },
   "dependencies": {
     "@trpc/server": "^11.6.0",
