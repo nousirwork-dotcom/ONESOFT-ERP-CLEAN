@@ -72,6 +72,7 @@ export default function SalesInvoicePage() {
   const [customerId, setCustomerId] = useState<number | null>(null);
   const [customerName, setCustomerName] = useState("");
   const [warehouseId, setWarehouseId] = useState<number | null>(null);
+  const [journalWarehouseId, setJournalWarehouseId] = useState<number | null>(null); // مخزن مقيَّد من الدفتر
   const [paymentType, setPaymentType] = useState<PaymentType>("cash");
   const [currency, setCurrency] = useState("SAR");
   const [exchangeRate, setExchangeRate] = useState("1.000");
@@ -122,7 +123,12 @@ export default function SalesInvoicePage() {
     const journals = journalsQuery.data ?? [];
     const j = journals.find((x: any) => x.id === id);
     if (j) {
-      if (j.warehouseId) setWarehouseId(j.warehouseId);
+      if (j.warehouseId) {
+        setWarehouseId(j.warehouseId);
+        setJournalWarehouseId(j.warehouseId); // قيِّد dropdown المخزن
+      } else {
+        setJournalWarehouseId(null); // أي مخزن مسموح
+      }
       if (j.defaultCurrency) setCurrency(j.defaultCurrency);
       if (j.defaultPayMethod) setPaymentType(j.defaultPayMethod as any);
     }
@@ -369,6 +375,7 @@ export default function SalesInvoicePage() {
     setSalesperson("");
     setPaidAmountOverride("");
     setErpMode("new");
+    setJournalWarehouseId(null);
     // إذا كان هناك دفتر محدد، اعرض الرقم المتوقع — وإلا يبقى الحقل فارغاً
     if (journalId) {
       utils.documentJournals.previewNextNumber.fetch({ journalId }).then(preview => {
@@ -596,11 +603,16 @@ export default function SalesInvoicePage() {
             <HF label="المخزن">
               <select
                 value={warehouseId ?? ""}
-                onChange={e => setWarehouseId(parseInt(e.target.value) || null)}
+                onChange={e => !journalWarehouseId && setWarehouseId(parseInt(e.target.value) || null)}
                 className="classic-input w-full"
+                disabled={!!journalWarehouseId}
+                title={journalWarehouseId ? "المخزن محدد من الدفتر ولا يمكن تغييره" : undefined}
               >
                 <option value="">-- اختر مخزن --</option>
-                {warehousesQuery.data?.map(w => (
+                {(journalWarehouseId
+                  ? warehousesQuery.data?.filter(w => w.id === journalWarehouseId)
+                  : warehousesQuery.data
+                )?.map(w => (
                   <option key={w.id} value={w.id}>{w.name}</option>
                 ))}
               </select>
