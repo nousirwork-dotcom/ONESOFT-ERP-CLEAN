@@ -263,6 +263,7 @@ export const appRouter = router({
 
   // ─── Sales ───────────────────────────────────────────────────────────────────
   sales: salesRouter,
+  salesInvoices: salesRouter,
 
   // ─── Chat ────────────────────────────────────────────────────────────────────
   chat: chatRouter,
