@@ -102,6 +102,7 @@ export default function SalesInvoicePage() {
   const nextNumberQuery  = trpc.salesInvoices.nextNumber.useQuery({ prefix: "INV" });
 
   const nextJournalNumberMutation = trpc.documentJournals.nextNumber.useMutation();
+  const utils = trpc.useUtils();
 
   const createMutation = trpc.salesInvoices.create.useMutation({
     onSuccess: (data) => {
@@ -114,7 +115,7 @@ export default function SalesInvoicePage() {
     onError: (e) => toast.error(`خطأ في الحفظ: ${e.message}`),
   });
 
-  // عند اختيار دفتر: أحضر الرقم التالي له وطبّق إعداداته
+  // عند اختيار دفتر: اعرض الرقم المتوقع فقط (بدون حجزه في قاعدة البيانات)
   const handleJournalSelect = useCallback(async (id: number) => {
     setJournalId(id);
     setJournalOpen(false);
@@ -126,12 +127,12 @@ export default function SalesInvoicePage() {
       if (j.defaultPayMethod) setPaymentType(j.defaultPayMethod as any);
     }
     try {
-      const num = await nextJournalNumberMutation.mutateAsync({ journalId: id });
-      setInvoiceNumber(num);
+      const preview = await utils.documentJournals.previewNextNumber.fetch({ journalId: id });
+      if (preview) setInvoiceNumber(preview);
     } catch {
-      toast.error("تعذّر توليد رقم الفاتورة من الدفتر");
+      toast.error("تعذّر جلب رقم الفاتورة من الدفتر");
     }
-  }, [journalsQuery.data, nextJournalNumberMutation]);
+  }, [journalsQuery.data, utils]);
 
   // ── Auto number on load (fallback when no journal selected) ───────────────
   useEffect(() => {
@@ -280,7 +281,7 @@ export default function SalesInvoicePage() {
   }, [lines, copiedLine, addLine, deleteLine]);
 
   // ── Validation & Save ─────────────────────────────────────────────────────
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     // Validation
     if (!invoiceNumber.trim()) {
       toast.error("رقم الفاتورة مطلوب");
@@ -302,13 +303,25 @@ export default function SalesInvoicePage() {
       }
     }
 
+    // احجز الرقم التسلسلي من الدفتر فقط عند الحفظ الفعلي
+    let finalInvoiceNumber = invoiceNumber;
+    if (journalId) {
+      try {
+        finalInvoiceNumber = await nextJournalNumberMutation.mutateAsync({ journalId });
+        setInvoiceNumber(finalInvoiceNumber);
+      } catch {
+        toast.error("تعذّر حجز رقم الفاتورة من الدفتر");
+        return;
+      }
+    }
+
     const paid = paymentType === "cash" ? fmt(netTotal) : fmt(paidAmount);
     const remaining = paymentType === "cash" ? "0.000" : fmt(remainingAmount);
     const payMethod = paymentType === "cash" ? "cash" : "credit";
     const status = paymentType === "cash" ? "paid" : (remainingAmount <= 0 ? "paid" : "confirmed");
 
     createMutation.mutate({
-      invoiceNumber,
+      invoiceNumber: finalInvoiceNumber,
       invoiceType: "sale",
       invoiceDate,
       dueDate: dueDate || undefined,
@@ -345,7 +358,7 @@ export default function SalesInvoicePage() {
     invoiceNumber, invoiceDate, dueDate, customerId, customerName,
     warehouseId, currency, exchangeRate, paymentType, paidAmount,
     remainingAmount, notes, lines, subtotal, totalDiscount, totalTax,
-    netTotal, createMutation,
+    netTotal, createMutation, journalId, nextJournalNumberMutation,
   ]);
 
   // ── New Invoice ───────────────────────────────────────────────────────────
@@ -362,15 +375,15 @@ export default function SalesInvoicePage() {
     setSalesperson("");
     setPaidAmountOverride("");
     setErpMode("new");
-    // إذا كان هناك دفتر محدد، احضر الرقم التالي منه
+    // إذا كان هناك دفتر محدد، اعرض الرقم المتوقع بدون حجزه
     if (journalId) {
-      nextJournalNumberMutation.mutateAsync({ journalId }).then(num => {
-        setInvoiceNumber(num);
+      utils.documentJournals.previewNextNumber.fetch({ journalId }).then(preview => {
+        if (preview) setInvoiceNumber(preview);
       }).catch(() => nextNumberQuery.refetch().then(r => { if (r.data) setInvoiceNumber(r.data); }));
     } else {
       nextNumberQuery.refetch().then(r => { if (r.data) setInvoiceNumber(r.data); });
     }
-  }, [nextNumberQuery, journalId, nextJournalNumberMutation]);
+  }, [nextNumberQuery, journalId, utils]);
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
