@@ -20,7 +20,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  LineChart, Line, Legend,
+} from "recharts";
 
 // ─── Menu Structure ───────────────────────────────────────────────────────────
 
@@ -866,46 +869,348 @@ function PaymentMethodsPage() {
 
 // ─── Sales Totals Report ───────────────────────────────────────────────────────
 
+const ARABIC_MONTHS = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+
+function getPreset(preset: string): { from: string; to: string } {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const today = fmt(now);
+  if (preset === "today")  return { from: today, to: today };
+  if (preset === "week") {
+    const d = new Date(now); d.setDate(now.getDate() - 6);
+    return { from: fmt(d), to: today };
+  }
+  if (preset === "month") {
+    return { from: `${now.getFullYear()}-${pad(now.getMonth()+1)}-01`, to: today };
+  }
+  if (preset === "year")  return { from: `${now.getFullYear()}-01-01`, to: today };
+  if (preset === "lastyear") {
+    const y = now.getFullYear() - 1;
+    return { from: `${y}-01-01`, to: `${y}-12-31` };
+  }
+  return { from: `${now.getFullYear()}-01-01`, to: today };
+}
+
 function SalesTotalsReports() {
-  const salesData = [
-    { month: "يناير", sales: 45000, returns: 2000 },
-    { month: "فبراير", sales: 52000, returns: 1500 },
-    { month: "مارس",   sales: 48000, returns: 3000 },
-    { month: "أبريل",  sales: 61000, returns: 2500 },
-    { month: "مايو",   sales: 55000, returns: 1800 },
-    { month: "يونيو",  sales: 67000, returns: 2200 },
+  const [preset, setPreset] = useState("year");
+  const [dateFrom, setDateFrom] = useState(() => getPreset("year").from);
+  const [dateTo,   setDateTo]   = useState(() => getPreset("year").to);
+  const [tab, setTab] = useState<"summary" | "monthly" | "customer">("summary");
+
+  const applyPreset = (p: string) => {
+    setPreset(p);
+    const { from, to } = getPreset(p);
+    setDateFrom(from); setDateTo(to);
+  };
+
+  const { data: rows = [], isLoading, refetch } = trpc.salesInvoices.list.useQuery({
+    dateFrom, dateTo, limit: 2000,
+  });
+
+  // ── تجميع البيانات ──────────────────────────────────────────────
+  const sales   = rows.filter(r => r.invoiceType === "sale");
+  const returns = rows.filter(r => r.invoiceType === "return");
+
+  const sum = (arr: typeof rows) => arr.reduce((s, r) => s + parseFloat(r.total ?? "0"), 0);
+  const sumPaid = (arr: typeof rows) => arr.reduce((s, r) => s + parseFloat(r.paidAmount ?? "0"), 0);
+  const sumRemain = (arr: typeof rows) => arr.reduce((s, r) => s + parseFloat(r.remainingAmount ?? "0"), 0);
+
+  const totalSales   = sum(sales);
+  const totalReturns = sum(returns);
+  const netSales     = totalSales - totalReturns;
+  const totalPaid    = sumPaid(sales);
+  const totalRemain  = sumRemain(sales);
+  const avgInvoice   = sales.length > 0 ? totalSales / sales.length : 0;
+
+  const fmtNum = (n: number) => n.toLocaleString("ar-EG", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // ── بيانات رسم شهري ─────────────────────────────────────────────
+  const monthlyMap: Record<string, { label: string; sales: number; returns: number; count: number }> = {};
+  rows.forEach(r => {
+    const d = new Date(r.invoiceDate);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+    const label = `${ARABIC_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+    if (!monthlyMap[key]) monthlyMap[key] = { label, sales: 0, returns: 0, count: 0 };
+    const v = parseFloat(r.total ?? "0");
+    if (r.invoiceType === "sale")   { monthlyMap[key].sales += v; monthlyMap[key].count++; }
+    if (r.invoiceType === "return") { monthlyMap[key].returns += v; }
+  });
+  const monthlyData = Object.entries(monthlyMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, v]) => ({ ...v, net: v.sales - v.returns }));
+
+  // ── بيانات بالعميل ─────────────────────────────────────────────
+  const customerMap: Record<string, { name: string; total: number; count: number; paid: number; remain: number }> = {};
+  sales.forEach(r => {
+    const name = r.customerName || "غير محدد";
+    if (!customerMap[name]) customerMap[name] = { name, total: 0, count: 0, paid: 0, remain: 0 };
+    customerMap[name].total  += parseFloat(r.total ?? "0");
+    customerMap[name].paid   += parseFloat(r.paidAmount ?? "0");
+    customerMap[name].remain += parseFloat(r.remainingAmount ?? "0");
+    customerMap[name].count++;
+  });
+  const customerData = Object.values(customerMap).sort((a, b) => b.total - a.total);
+
+  const PRESETS = [
+    { id: "today",    label: "اليوم" },
+    { id: "week",     label: "آخر 7 أيام" },
+    { id: "month",    label: "هذا الشهر" },
+    { id: "year",     label: "هذه السنة" },
+    { id: "lastyear", label: "السنة الماضية" },
   ];
+
+  const KPI_TABS = [
+    { id: "summary",  label: "ملخص" },
+    { id: "monthly",  label: "بالشهر" },
+    { id: "customer", label: "بالعميل" },
+  ];
+
+  const tooltipStyle = {
+    backgroundColor: "#fff", border: "1px solid #E5E7EB",
+    borderRadius: 8, fontSize: 12, fontFamily: "'Cairo', Tahoma, sans-serif",
+    direction: "rtl" as const,
+  };
+
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-4">
+    <div dir="rtl" style={{ display: "flex", flexDirection: "column", gap: 16, fontFamily: "'Cairo', Tahoma, sans-serif" }}>
+
+      {/* ── شريط الفلاتر ── */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+        padding: "10px 14px", background: "#F9FAFB",
+        border: "1px solid #E5E7EB", borderRadius: 10,
+      }}>
+        {/* عنوان */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
+          <div style={{ width: 28, height: 28, borderRadius: 7, background: "rgba(37,99,235,0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <BarChart3 style={{ width: 14, height: 14, color: "#2563EB" }} />
+          </div>
+          <span style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>تقارير إجماليات المبيعات</span>
+        </div>
+
+        {/* أزرار الفترة */}
+        <div style={{ display: "flex", gap: 4 }}>
+          {PRESETS.map(p => (
+            <button key={p.id} onClick={() => applyPreset(p.id)}
+              style={{
+                padding: "4px 10px", borderRadius: 6, fontSize: 11.5, cursor: "pointer",
+                border: preset === p.id ? "1px solid #2563EB" : "1px solid #E5E7EB",
+                background: preset === p.id ? "#EFF6FF" : "#fff",
+                color: preset === p.id ? "#2563EB" : "#6B7280",
+                fontWeight: preset === p.id ? 700 : 400,
+                fontFamily: "'Cairo', Tahoma, sans-serif",
+              }}
+            >{p.label}</button>
+          ))}
+        </div>
+
+        {/* تاريخ يدوي */}
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <span style={{ fontSize: 11, color: "#9CA3AF" }}>من</span>
+          <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPreset("custom"); }}
+            style={{ padding: "3px 7px", border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 11.5 }} />
+          <span style={{ fontSize: 11, color: "#9CA3AF" }}>إلى</span>
+          <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPreset("custom"); }}
+            style={{ padding: "3px 7px", border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 11.5 }} />
+        </div>
+
+        <button onClick={() => refetch()} title="تحديث"
+          style={{ width: 28, height: 28, borderRadius: 6, border: "1px solid #D1D5DB", background: "#fff", cursor: "pointer", color: "#6B7280", display: "flex", alignItems: "center", justifyContent: "center" }}
+          onMouseEnter={e => (e.currentTarget.style.background = "#F3F4F6")}
+          onMouseLeave={e => (e.currentTarget.style.background = "#fff")}
+        >
+          <RefreshCw style={{ width: 13, height: 13 }} />
+        </button>
+      </div>
+
+      {/* ── بطاقات KPI ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
         {[
-          { label: "إجمالي المبيعات",  value: "328,000", color: "text-emerald-500" },
-          { label: "إجمالي المرتجعات", value: "13,000",  color: "text-destructive" },
-          { label: "صافي المبيعات",    value: "315,000", color: "text-primary" },
-        ].map(s => (
-          <Card key={s.label} className="border-border/50">
-            <CardContent className="p-4 text-center">
-              <p className="text-muted-foreground text-xs mb-1">{s.label}</p>
-              <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
-            </CardContent>
-          </Card>
+          { label: "إجمالي المبيعات",  value: fmtNum(totalSales),   sub: `${sales.length} فاتورة`,        icon: TrendingUp, color: "#059669", bg: "#F0FDF4" },
+          { label: "إجمالي المرتجعات", value: fmtNum(totalReturns), sub: `${returns.length} مردود`,       icon: RotateCcw,  color: "#DC2626", bg: "#FEF2F2" },
+          { label: "صافي المبيعات",    value: fmtNum(netSales),     sub: "المبيعات − المرتجعات",           icon: BarChart3,  color: "#2563EB", bg: "#EFF6FF" },
+          { label: "متوسط الفاتورة",   value: fmtNum(avgInvoice),   sub: "لكل فاتورة مبيعات",              icon: Receipt,    color: "#7C3AED", bg: "#F5F3FF" },
+          { label: "المحصَّل",          value: fmtNum(totalPaid),    sub: "مبالغ مدفوعة",                  icon: CheckCircle,color: "#059669", bg: "#F0FDF4" },
+          { label: "المتبقي",           value: fmtNum(totalRemain),  sub: "مبالغ غير محصَّلة",              icon: Clock,      color: totalRemain > 0 ? "#D97706" : "#6B7280", bg: totalRemain > 0 ? "#FFFBEB" : "#F9FAFB" },
+        ].map(k => (
+          <div key={k.label} style={{
+            padding: "12px 14px", borderRadius: 10, border: "1px solid #E5E7EB",
+            background: k.bg, display: "flex", alignItems: "center", gap: 12,
+          }}>
+            <div style={{ width: 36, height: 36, borderRadius: 9, background: `${k.color}20`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <k.icon style={{ width: 18, height: 18, color: k.color }} />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 2 }}>{k.label}</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: k.color, lineHeight: 1.1 }}>{isLoading ? "..." : k.value}</div>
+              <div style={{ fontSize: 10.5, color: "#9CA3AF", marginTop: 2 }}>{k.sub}</div>
+            </div>
+          </div>
         ))}
       </div>
-      <Card className="border-border/50">
-        <CardHeader><CardTitle className="text-sm">مبيعات ومرتجعات الأشهر الستة الأخيرة</CardTitle></CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={salesData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="month" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} />
-              <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} />
-              <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", color: "hsl(var(--foreground))" }} />
-              <Bar dataKey="sales"   fill="hsl(var(--primary))"  name="المبيعات"    radius={[4,4,0,0]} />
-              <Bar dataKey="returns" fill="hsl(var(--destructive))" name="المرتجعات" radius={[4,4,0,0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
+
+      {/* ── تبويبات التقرير ── */}
+      <div style={{ display: "flex", borderBottom: "2px solid #E5E7EB", gap: 0 }}>
+        {KPI_TABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id as any)}
+            style={{
+              padding: "8px 18px", fontSize: 13, fontWeight: tab === t.id ? 700 : 500,
+              color: tab === t.id ? "#2563EB" : "#6B7280",
+              background: "transparent", border: "none", cursor: "pointer",
+              borderBottom: tab === t.id ? "2px solid #2563EB" : "2px solid transparent",
+              marginBottom: -2, fontFamily: "'Cairo', Tahoma, sans-serif",
+            }}
+          >{t.label}</button>
+        ))}
+      </div>
+
+      {/* ── تبويب: ملخص ── */}
+      {tab === "summary" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* رسم شهري */}
+          <div style={{ padding: 16, border: "1px solid #E5E7EB", borderRadius: 10, background: "#fff" }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#111827", marginBottom: 12 }}>المبيعات والمرتجعات حسب الشهر</div>
+            {isLoading ? (
+              <div style={{ textAlign: "center", padding: 32, color: "#9CA3AF" }}>جاري التحميل...</div>
+            ) : monthlyData.length === 0 ? (
+              <div style={{ textAlign: "center", padding: 32, color: "#9CA3AF" }}>لا توجد بيانات للفترة المختارة</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={monthlyData} barGap={4}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
+                  <XAxis dataKey="label" tick={{ fill: "#6B7280", fontSize: 11, fontFamily: "'Cairo', Tahoma, sans-serif" }} />
+                  <YAxis tick={{ fill: "#6B7280", fontSize: 11 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={(v: number, n) => [fmtNum(v), n === "sales" ? "المبيعات" : n === "returns" ? "المرتجعات" : "الصافي"]} />
+                  <Legend formatter={v => v === "sales" ? "المبيعات" : v === "returns" ? "المرتجعات" : "الصافي"} />
+                  <Bar dataKey="sales"   name="sales"   fill="#2563EB" radius={[4,4,0,0]} />
+                  <Bar dataKey="returns" name="returns" fill="#EF4444" radius={[4,4,0,0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+
+          {/* رسم صافي المبيعات */}
+          {monthlyData.length > 0 && (
+            <div style={{ padding: 16, border: "1px solid #E5E7EB", borderRadius: 10, background: "#fff" }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#111827", marginBottom: 12 }}>اتجاه صافي المبيعات</div>
+              <ResponsiveContainer width="100%" height={180}>
+                <LineChart data={monthlyData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
+                  <XAxis dataKey="label" tick={{ fill: "#6B7280", fontSize: 11, fontFamily: "'Cairo', Tahoma, sans-serif" }} />
+                  <YAxis tick={{ fill: "#6B7280", fontSize: 11 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
+                  <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [fmtNum(v), "صافي المبيعات"]} />
+                  <Line type="monotone" dataKey="net" name="net" stroke="#059669" strokeWidth={2.5} dot={{ r: 4, fill: "#059669" }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── تبويب: بالشهر ── */}
+      {tab === "monthly" && (
+        <div style={{ border: "1px solid #E5E7EB", borderRadius: 10, overflow: "hidden", background: "#fff" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: "#F3F4F6" }}>
+                {["الشهر", "عدد الفواتير", "إجمالي المبيعات", "المرتجعات", "الصافي"].map(h => (
+                  <th key={h} style={{ padding: "10px 14px", textAlign: "right", color: "#6B7280", fontWeight: 600, fontSize: 12, borderBottom: "1px solid #E5E7EB" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading ? (
+                <tr><td colSpan={5} style={{ textAlign: "center", padding: 32, color: "#9CA3AF" }}>جاري التحميل...</td></tr>
+              ) : monthlyData.length === 0 ? (
+                <tr><td colSpan={5} style={{ textAlign: "center", padding: 32, color: "#9CA3AF" }}>لا توجد بيانات</td></tr>
+              ) : (
+                <>
+                  {monthlyData.map((m, i) => (
+                    <tr key={m.label} style={{ borderBottom: "1px solid #F3F4F6", background: i % 2 === 0 ? "#fff" : "#FAFAFA" }}
+                      onMouseEnter={e => (e.currentTarget.style.background = "#EFF6FF")}
+                      onMouseLeave={e => (e.currentTarget.style.background = i % 2 === 0 ? "#fff" : "#FAFAFA")}
+                    >
+                      <td style={{ padding: "9px 14px", color: "#374151", fontWeight: 600 }}>{m.label}</td>
+                      <td style={{ padding: "9px 14px", color: "#6B7280" }}>{m.count}</td>
+                      <td style={{ padding: "9px 14px", color: "#2563EB", fontWeight: 600, direction: "ltr", textAlign: "right" }}>{fmtNum(m.sales)}</td>
+                      <td style={{ padding: "9px 14px", color: "#DC2626", direction: "ltr", textAlign: "right" }}>{fmtNum(m.returns)}</td>
+                      <td style={{ padding: "9px 14px", color: "#059669", fontWeight: 700, direction: "ltr", textAlign: "right" }}>{fmtNum(m.net)}</td>
+                    </tr>
+                  ))}
+                  {/* سطر الإجمالي */}
+                  <tr style={{ background: "#F3F4F6", fontWeight: 700, borderTop: "2px solid #E5E7EB" }}>
+                    <td style={{ padding: "9px 14px", color: "#111827" }}>الإجمالي</td>
+                    <td style={{ padding: "9px 14px", color: "#374151" }}>{sales.length}</td>
+                    <td style={{ padding: "9px 14px", color: "#2563EB", direction: "ltr", textAlign: "right" }}>{fmtNum(totalSales)}</td>
+                    <td style={{ padding: "9px 14px", color: "#DC2626", direction: "ltr", textAlign: "right" }}>{fmtNum(totalReturns)}</td>
+                    <td style={{ padding: "9px 14px", color: "#059669", direction: "ltr", textAlign: "right" }}>{fmtNum(netSales)}</td>
+                  </tr>
+                </>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ── تبويب: بالعميل ── */}
+      {tab === "customer" && (
+        <div style={{ border: "1px solid #E5E7EB", borderRadius: 10, overflow: "hidden", background: "#fff" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: "#F3F4F6" }}>
+                {["#", "العميل", "عدد الفواتير", "إجمالي المبيعات", "المحصَّل", "المتبقي", "نسبة الإجمالي"].map(h => (
+                  <th key={h} style={{ padding: "10px 14px", textAlign: "right", color: "#6B7280", fontWeight: 600, fontSize: 12, borderBottom: "1px solid #E5E7EB" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading ? (
+                <tr><td colSpan={7} style={{ textAlign: "center", padding: 32, color: "#9CA3AF" }}>جاري التحميل...</td></tr>
+              ) : customerData.length === 0 ? (
+                <tr><td colSpan={7} style={{ textAlign: "center", padding: 32, color: "#9CA3AF" }}>لا توجد بيانات</td></tr>
+              ) : (
+                <>
+                  {customerData.map((c, i) => {
+                    const pct = totalSales > 0 ? (c.total / totalSales) * 100 : 0;
+                    return (
+                      <tr key={c.name} style={{ borderBottom: "1px solid #F3F4F6", background: i % 2 === 0 ? "#fff" : "#FAFAFA" }}
+                        onMouseEnter={e => (e.currentTarget.style.background = "#EFF6FF")}
+                        onMouseLeave={e => (e.currentTarget.style.background = i % 2 === 0 ? "#fff" : "#FAFAFA")}
+                      >
+                        <td style={{ padding: "9px 14px", color: "#9CA3AF", fontSize: 12 }}>{i+1}</td>
+                        <td style={{ padding: "9px 14px", color: "#374151", fontWeight: 600 }}>{c.name}</td>
+                        <td style={{ padding: "9px 14px", color: "#6B7280" }}>{c.count}</td>
+                        <td style={{ padding: "9px 14px", color: "#2563EB", fontWeight: 600, direction: "ltr", textAlign: "right" }}>{fmtNum(c.total)}</td>
+                        <td style={{ padding: "9px 14px", color: "#059669", direction: "ltr", textAlign: "right" }}>{fmtNum(c.paid)}</td>
+                        <td style={{ padding: "9px 14px", color: c.remain > 0 ? "#DC2626" : "#6B7280", direction: "ltr", textAlign: "right" }}>{fmtNum(c.remain)}</td>
+                        <td style={{ padding: "9px 14px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{ flex: 1, height: 6, borderRadius: 3, background: "#E5E7EB", overflow: "hidden" }}>
+                              <div style={{ width: `${pct}%`, height: "100%", background: "#2563EB", borderRadius: 3 }} />
+                            </div>
+                            <span style={{ fontSize: 11, color: "#6B7280", minWidth: 32 }}>{pct.toFixed(1)}%</span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {/* سطر الإجمالي */}
+                  <tr style={{ background: "#F3F4F6", fontWeight: 700, borderTop: "2px solid #E5E7EB" }}>
+                    <td style={{ padding: "9px 14px" }} />
+                    <td style={{ padding: "9px 14px", color: "#111827" }}>الإجمالي</td>
+                    <td style={{ padding: "9px 14px", color: "#374151" }}>{sales.length}</td>
+                    <td style={{ padding: "9px 14px", color: "#2563EB", direction: "ltr", textAlign: "right" }}>{fmtNum(totalSales)}</td>
+                    <td style={{ padding: "9px 14px", color: "#059669", direction: "ltr", textAlign: "right" }}>{fmtNum(totalPaid)}</td>
+                    <td style={{ padding: "9px 14px", color: totalRemain > 0 ? "#DC2626" : "#6B7280", direction: "ltr", textAlign: "right" }}>{fmtNum(totalRemain)}</td>
+                    <td style={{ padding: "9px 14px" }} />
+                  </tr>
+                </>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
