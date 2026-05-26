@@ -72,9 +72,10 @@ const menuSections = [
     label: "التقارير",
     icon: BarChart3,
     children: [
-      { id: "customer-reports",      label: "تقارير العملاء",              icon: Users,     path: "/sales/customer-reports" },
-      { id: "sales-totals-reports",  label: "تقارير إجماليات المبيعات",    icon: TrendingUp,path: "/sales/totals-reports" },
-      { id: "sales-items-reports",   label: "تقارير أصناف المبيعات",       icon: BarChart3, path: "/sales/items-reports" },
+      { id: "customer-reports",          label: "تقارير العملاء",                             icon: Users,      path: "/sales/customer-reports" },
+      { id: "sales-totals-reports",      label: "تقارير إجماليات المبيعات",                   icon: TrendingUp, path: "/sales/totals-reports" },
+      { id: "sales-invoices-report",     label: "تقرير فواتير ومردودات المبيعات خلال فترة",   icon: FileText,   path: "/sales/invoices-report" },
+      { id: "sales-items-reports",       label: "تقارير أصناف المبيعات",                      icon: BarChart3,  path: "/sales/items-reports" },
     ],
   },
 ];
@@ -1215,6 +1216,336 @@ function SalesTotalsReports() {
   );
 }
 
+// ─── Sales Invoices Period Report ─────────────────────────────────────────────
+
+function SalesInvoicesReport() {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const firstOfMonth = `${now.getFullYear()}-${pad(now.getMonth()+1)}-01`;
+  const today = fmt(now);
+
+  // ── حالة الفلاتر ──
+  const [dateFrom,       setDateFrom]       = useState(firstOfMonth);
+  const [dateTo,         setDateTo]         = useState(today);
+  const [showReturns,    setShowReturns]    = useState(true);
+  const [selectedWh,     setSelectedWh]     = useState<string>("all");
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [runKey,         setRunKey]         = useState(0);   // يزيد عند تشغيل التقرير
+
+  // نستخدم enabled: false مع refetch يدوي لتشغيل التقرير فقط عند الضغط
+  const [queryInput, setQueryInput] = useState<{
+    dateFrom: string; dateTo: string;
+    warehouseId?: number; customerSearch?: string;
+    excludeReturns: boolean; limit: number;
+  } | null>(null);
+
+  const { data: warehouses = [] } = trpc.warehouses.list.useQuery();
+
+  const { data: rows = [], isFetching, isLoading } = trpc.salesInvoices.list.useQuery(
+    queryInput ?? { dateFrom, dateTo, limit: 2000 },
+    { enabled: queryInput !== null }
+  );
+
+  const handleRun = () => {
+    setQueryInput({
+      dateFrom,
+      dateTo,
+      warehouseId: selectedWh !== "all" ? parseInt(selectedWh) : undefined,
+      customerSearch: customerSearch.trim() || undefined,
+      excludeReturns: !showReturns,
+      limit: 2000,
+    });
+    setRunKey(k => k + 1);
+  };
+
+  const loading = isFetching || isLoading;
+
+  // ── تجميع الإجماليات ──
+  const sales   = rows.filter(r => r.invoiceType === "sale");
+  const returns = rows.filter(r => r.invoiceType === "return");
+  const totalSales    = sales.reduce((s, r)   => s + parseFloat(r.total ?? "0"), 0);
+  const totalReturns  = returns.reduce((s, r) => s + parseFloat(r.total ?? "0"), 0);
+  const totalPaid     = sales.reduce((s, r)   => s + parseFloat(r.paidAmount ?? "0"), 0);
+  const totalRemain   = sales.reduce((s, r)   => s + parseFloat(r.remainingAmount ?? "0"), 0);
+  const netSales      = totalSales - totalReturns;
+
+  const fmtNum = (n: number) =>
+    n.toLocaleString("ar-EG", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtDate = (d: string | Date) => {
+    const dt = new Date(d);
+    return `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}`;
+  };
+
+  const TYPE_LABELS: Record<string, { label: string; color: string; bg: string }> = {
+    sale:   { label: "فاتورة مبيعات", color: "#059669", bg: "#ECFDF5" },
+    return: { label: "مردود مبيعات",  color: "#DC2626", bg: "#FEF2F2" },
+    quote:  { label: "عرض سعر",       color: "#7C3AED", bg: "#F5F3FF" },
+  };
+
+  const whMap: Record<number, string> = {};
+  warehouses.forEach((w: any) => { whMap[w.id] = w.name; });
+
+  const inputStyle: React.CSSProperties = {
+    padding: "5px 10px", border: "1px solid #D1D5DB", borderRadius: 7,
+    fontSize: 12.5, fontFamily: "'Cairo', Tahoma, sans-serif",
+    color: "#374151", background: "#fff", outline: "none",
+  };
+  const labelStyle: React.CSSProperties = {
+    fontSize: 11.5, color: "#6B7280", fontWeight: 600, marginBottom: 3,
+    fontFamily: "'Cairo', Tahoma, sans-serif",
+  };
+
+  const hasRun = queryInput !== null;
+
+  return (
+    <div dir="rtl" style={{ display: "flex", flexDirection: "column", gap: 14, fontFamily: "'Cairo', Tahoma, sans-serif" }}>
+
+      {/* ── لوحة الفلاتر ── */}
+      <div style={{
+        border: "1px solid #E5E7EB", borderRadius: 12, background: "#F9FAFB", overflow: "hidden",
+      }}>
+        {/* رأس اللوحة */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 10,
+          padding: "10px 16px", borderBottom: "1px solid #E5E7EB", background: "#fff",
+        }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: 8, background: "#EFF6FF",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <FileText style={{ width: 16, height: 16, color: "#2563EB" }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>تقرير فواتير ومردودات المبيعات خلال فترة</div>
+            <div style={{ fontSize: 11, color: "#9CA3AF" }}>اختر الفلاتر ثم اضغط «تشغيل التقرير»</div>
+          </div>
+        </div>
+
+        {/* صف الفلاتر */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 16, padding: "14px 16px", alignItems: "flex-end" }}>
+
+          {/* من تاريخ */}
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <span style={labelStyle}>من تاريخ</span>
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ ...inputStyle, width: 140 }} />
+          </div>
+
+          {/* إلى تاريخ */}
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <span style={labelStyle}>إلى تاريخ</span>
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ ...inputStyle, width: 140 }} />
+          </div>
+
+          {/* المخزن */}
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <span style={labelStyle}>المخزن</span>
+            <select value={selectedWh} onChange={e => setSelectedWh(e.target.value)}
+              style={{ ...inputStyle, width: 180, cursor: "pointer" }}>
+              <option value="all">كل المخازن</option>
+              {warehouses.map((w: any) => (
+                <option key={w.id} value={String(w.id)}>{w.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* بحث بالعميل */}
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <span style={labelStyle}>حسب كود / اسم العميل</span>
+            <div style={{ position: "relative" }}>
+              <Search style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", width: 13, height: 13, color: "#9CA3AF" }} />
+              <input
+                type="text"
+                value={customerSearch}
+                onChange={e => setCustomerSearch(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleRun()}
+                placeholder="اسم أو كود العميل..."
+                style={{ ...inputStyle, width: 190, paddingRight: 28 }}
+              />
+            </div>
+          </div>
+
+          {/* خيار إظهار المردودات */}
+          <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", paddingBottom: 2 }}>
+            <label style={{
+              display: "flex", alignItems: "center", gap: 7, cursor: "pointer",
+              fontSize: 12.5, color: "#374151", fontFamily: "'Cairo', Tahoma, sans-serif",
+            }}>
+              <div
+                onClick={() => setShowReturns(v => !v)}
+                style={{
+                  width: 36, height: 20, borderRadius: 10, cursor: "pointer",
+                  background: showReturns ? "#2563EB" : "#D1D5DB",
+                  position: "relative", transition: "background 0.2s",
+                  flexShrink: 0,
+                }}
+              >
+                <div style={{
+                  position: "absolute", top: 2, width: 16, height: 16, borderRadius: "50%",
+                  background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,.2)",
+                  transition: "left 0.2s",
+                  left: showReturns ? 18 : 2,
+                }} />
+              </div>
+              إظهار المردودات
+            </label>
+          </div>
+
+          {/* زر التشغيل */}
+          <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
+            <button
+              onClick={handleRun}
+              disabled={loading}
+              style={{
+                padding: "7px 22px", borderRadius: 8, border: "none",
+                background: loading ? "#93C5FD" : "#2563EB",
+                color: "#fff", fontSize: 13, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer",
+                display: "flex", alignItems: "center", gap: 7,
+                fontFamily: "'Cairo', Tahoma, sans-serif",
+                boxShadow: "0 1px 4px rgba(37,99,235,.25)",
+              }}
+            >
+              {loading ? (
+                <RefreshCw style={{ width: 14, height: 14, animation: "spin 1s linear infinite" }} />
+              ) : (
+                <Activity style={{ width: 14, height: 14 }} />
+              )}
+              {loading ? "جاري التحميل..." : "تشغيل التقرير"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── نتائج التقرير ── */}
+      {!hasRun ? (
+        <div style={{
+          textAlign: "center", padding: "52px 20px", border: "2px dashed #E5E7EB",
+          borderRadius: 12, color: "#9CA3AF", background: "#FAFAFA",
+        }}>
+          <Filter style={{ width: 36, height: 36, margin: "0 auto 10px", opacity: 0.3 }} />
+          <div style={{ fontSize: 14, fontWeight: 600 }}>اختر الفلاتر واضغط «تشغيل التقرير» لعرض النتائج</div>
+        </div>
+      ) : (
+        <>
+          {/* بطاقات الإجماليات */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10 }}>
+            {[
+              { label: "إجمالي المبيعات",  value: fmtNum(totalSales),   icon: TrendingUp,  color: "#059669", bg: "#ECFDF5", sub: `${sales.length} فاتورة` },
+              { label: "إجمالي المرتجعات", value: fmtNum(totalReturns), icon: RotateCcw,   color: "#DC2626", bg: "#FEF2F2", sub: `${returns.length} مردود` },
+              { label: "صافي المبيعات",    value: fmtNum(netSales),     icon: BarChart3,   color: "#2563EB", bg: "#EFF6FF", sub: "مبيعات − مرتجعات" },
+              { label: "المحصَّل",          value: fmtNum(totalPaid),    icon: CheckCircle, color: "#059669", bg: "#ECFDF5", sub: "مبالغ مدفوعة" },
+              { label: "المتبقي",           value: fmtNum(totalRemain),  icon: Clock,       color: totalRemain > 0 ? "#D97706" : "#6B7280", bg: totalRemain > 0 ? "#FFFBEB" : "#F9FAFB", sub: "غير محصَّل" },
+            ].map(k => (
+              <div key={k.label} style={{
+                padding: "10px 12px", borderRadius: 10, border: "1px solid #E5E7EB",
+                background: k.bg, display: "flex", alignItems: "center", gap: 10,
+              }}>
+                <div style={{ width: 34, height: 34, borderRadius: 8, background: `${k.color}20`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <k.icon style={{ width: 16, height: 16, color: k.color }} />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 10.5, color: "#6B7280" }}>{k.label}</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: k.color, direction: "ltr", textAlign: "right" }}>{k.value}</div>
+                  <div style={{ fontSize: 10, color: "#9CA3AF" }}>{k.sub}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* جدول الحركات */}
+          <div style={{ border: "1px solid #E5E7EB", borderRadius: 10, overflow: "hidden", background: "#fff" }}>
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "10px 14px", borderBottom: "1px solid #E5E7EB", background: "#F9FAFB",
+            }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>
+                الحركات ({rows.length})
+              </span>
+              <span style={{ fontSize: 11, color: "#9CA3AF" }}>
+                الفترة: {dateFrom} — {dateTo}
+              </span>
+            </div>
+
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 800 }}>
+                <thead>
+                  <tr style={{ background: "#F3F4F6" }}>
+                    {["#", "رقم المستند", "التاريخ", "النوع", "العميل", "المخزن", "الإجمالي", "المدفوع", "المتبقي"].map(h => (
+                      <th key={h} style={{
+                        padding: "9px 12px", textAlign: "right", color: "#6B7280",
+                        fontWeight: 600, fontSize: 11.5, borderBottom: "1px solid #E5E7EB",
+                        whiteSpace: "nowrap",
+                      }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr><td colSpan={9} style={{ textAlign: "center", padding: 36, color: "#9CA3AF" }}>جاري التحميل...</td></tr>
+                  ) : rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} style={{ textAlign: "center", padding: 40, color: "#9CA3AF" }}>
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+                          <FileText style={{ width: 32, height: 32, opacity: 0.2 }} />
+                          <span>لا توجد حركات للفترة والفلاتر المختارة</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    rows.map((r, i) => {
+                      const typeInfo = TYPE_LABELS[r.invoiceType] ?? { label: r.invoiceType, color: "#6B7280", bg: "#F9FAFB" };
+                      const total   = parseFloat(r.total ?? "0");
+                      const paid    = parseFloat(r.paidAmount ?? "0");
+                      const remain  = parseFloat(r.remainingAmount ?? "0");
+                      const whName  = r.warehouseId ? (whMap[r.warehouseId] ?? `#${r.warehouseId}`) : "—";
+                      return (
+                        <tr key={r.id}
+                          style={{ borderBottom: "1px solid #F3F4F6", background: i % 2 === 0 ? "#fff" : "#FAFAFA" }}
+                          onMouseEnter={e => (e.currentTarget.style.background = "#EFF6FF")}
+                          onMouseLeave={e => (e.currentTarget.style.background = i % 2 === 0 ? "#fff" : "#FAFAFA")}
+                        >
+                          <td style={{ padding: "8px 12px", color: "#9CA3AF", fontSize: 11 }}>{i + 1}</td>
+                          <td style={{ padding: "8px 12px", color: "#2563EB", fontWeight: 700, direction: "ltr" }}>{r.invoiceNumber}</td>
+                          <td style={{ padding: "8px 12px", color: "#374151", direction: "ltr" }}>{fmtDate(r.invoiceDate)}</td>
+                          <td style={{ padding: "8px 12px" }}>
+                            <span style={{
+                              padding: "2px 8px", borderRadius: 5, fontSize: 11,
+                              background: typeInfo.bg, color: typeInfo.color, fontWeight: 600,
+                            }}>{typeInfo.label}</span>
+                          </td>
+                          <td style={{ padding: "8px 12px", color: "#374151" }}>{r.customerName || "—"}</td>
+                          <td style={{ padding: "8px 12px", color: "#6B7280" }}>{whName}</td>
+                          <td style={{ padding: "8px 12px", color: typeInfo.color, fontWeight: 700, direction: "ltr", textAlign: "right" }}>{fmtNum(total)}</td>
+                          <td style={{ padding: "8px 12px", color: "#059669", direction: "ltr", textAlign: "right" }}>{fmtNum(paid)}</td>
+                          <td style={{ padding: "8px 12px", color: remain > 0 ? "#D97706" : "#9CA3AF", direction: "ltr", textAlign: "right" }}>{fmtNum(remain)}</td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+                {/* سطر الإجماليات */}
+                {rows.length > 0 && !loading && (
+                  <tfoot>
+                    <tr style={{ background: "#F3F4F6", fontWeight: 700, borderTop: "2px solid #E5E7EB" }}>
+                      <td colSpan={5} style={{ padding: "9px 12px", color: "#111827", fontSize: 12.5 }}>
+                        الإجمالي — {rows.length} حركة ({sales.length} مبيعات, {returns.length} مردودات)
+                      </td>
+                      <td style={{ padding: "9px 12px" }} />
+                      <td style={{ padding: "9px 12px", color: "#2563EB", direction: "ltr", textAlign: "right" }}>{fmtNum(totalSales)}</td>
+                      <td style={{ padding: "9px 12px", color: "#059669", direction: "ltr", textAlign: "right" }}>{fmtNum(totalPaid)}</td>
+                      <td style={{ padding: "9px 12px", color: totalRemain > 0 ? "#D97706" : "#9CA3AF", direction: "ltr", textAlign: "right" }}>{fmtNum(totalRemain)}</td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── Coming Soon ───────────────────────────────────────────────────────────────
 
 function ComingSoon({ title }: { title: string }) {
@@ -2042,8 +2373,9 @@ function SalesContent({ activeId, onSelect, settings, onSettingsChange }: {
     case "customer-balances":
     case "customer-statement":    return <CustomersPage />;
     case "customer-reports":      return <ComingSoon title="تقارير العملاء" />;
-    case "sales-totals-reports":  return <SalesTotalsReports />;
-    case "sales-items-reports":   return <ComingSoon title="تقارير أصناف المبيعات" />;
+    case "sales-totals-reports":   return <SalesTotalsReports />;
+    case "sales-invoices-report":  return <SalesInvoicesReport />;
+    case "sales-items-reports":    return <ComingSoon title="تقارير أصناف المبيعات" />;
     default:                      return <SalesOverview onSelect={onSelect} />;
   }
 }
@@ -2066,8 +2398,9 @@ export function SalesCustomerGroupsTab()    { return <div className="h-full over
 export function SalesCustomerBalancesTab()  { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="أرصدة العملاء" /></div>; }
 export function SalesCustomerStatementTab() { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="كشف حساب عميل" /></div>; }
 export function SalesCustomerReportsTab()   { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="تقارير العملاء" /></div>; }
-export function SalesTotalsReportsTab() { return <div className="h-full overflow-auto p-5" dir="rtl"><SalesTotalsReports /></div>; }
-export function SalesItemsReportsTab()  { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="تقارير أصناف المبيعات" /></div>; }
+export function SalesTotalsReportsTab()    { return <div className="h-full overflow-auto p-5" dir="rtl"><SalesTotalsReports /></div>; }
+export function SalesInvoicesReportTab()   { return <div className="h-full overflow-auto p-5" dir="rtl"><SalesInvoicesReport /></div>; }
+export function SalesItemsReportsTab()     { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="تقارير أصناف المبيعات" /></div>; }
 
 // ─── Root ──────────────────────────────────────────────────────────────────────
 

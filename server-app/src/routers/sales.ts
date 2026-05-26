@@ -13,8 +13,11 @@ export const salesRouter = router({
       search: z.string().optional(),
       status: z.string().optional(),
       invoiceType: z.enum(['sale', 'return', 'quote']).optional(),
-      dateFrom: z.string().optional(), // YYYY-MM-DD
-      dateTo: z.string().optional(),   // YYYY-MM-DD
+      dateFrom: z.string().optional(),      // YYYY-MM-DD
+      dateTo: z.string().optional(),        // YYYY-MM-DD
+      warehouseId: z.number().optional(),   // فلتر المخزن
+      customerSearch: z.string().optional(),// بحث باسم/كود العميل
+      excludeReturns: z.boolean().optional(),// استثناء المردودات
     }).optional())
     .query(async ({ ctx, input }) => {
       const orgId = ctx.user.orgId;
@@ -26,13 +29,25 @@ export const salesRouter = router({
       if (input?.invoiceType) {
         filtered = filtered.filter(r => r.invoiceType === input.invoiceType);
       }
+      if (input?.excludeReturns) {
+        filtered = filtered.filter(r => r.invoiceType !== 'return');
+      }
       if (input?.status) {
         filtered = filtered.filter(r => r.status === input.status);
+      }
+      if (input?.warehouseId) {
+        filtered = filtered.filter(r => r.warehouseId === input.warehouseId);
       }
       if (input?.search) {
         const q = input.search.toLowerCase();
         filtered = filtered.filter(r =>
           r.invoiceNumber?.toLowerCase().includes(q) ||
+          r.customerName?.toLowerCase().includes(q)
+        );
+      }
+      if (input?.customerSearch) {
+        const q = input.customerSearch.toLowerCase();
+        filtered = filtered.filter(r =>
           r.customerName?.toLowerCase().includes(q)
         );
       }
