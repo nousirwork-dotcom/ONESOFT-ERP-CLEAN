@@ -134,12 +134,6 @@ export default function SalesInvoicePage() {
     }
   }, [journalsQuery.data, utils]);
 
-  // ── Auto number on load (fallback when no journal selected) ───────────────
-  useEffect(() => {
-    if (nextNumberQuery.data && !invoiceNumber && !journalId) {
-      setInvoiceNumber(nextNumberQuery.data);
-    }
-  }, [nextNumberQuery.data]);
 
   // ── Calculations ──────────────────────────────────────────────────────────
   const subtotal = lines.reduce((s, l) => {
@@ -375,15 +369,15 @@ export default function SalesInvoicePage() {
     setSalesperson("");
     setPaidAmountOverride("");
     setErpMode("new");
-    // إذا كان هناك دفتر محدد، اعرض الرقم المتوقع بدون حجزه
+    // إذا كان هناك دفتر محدد، اعرض الرقم المتوقع — وإلا يبقى الحقل فارغاً
     if (journalId) {
       utils.documentJournals.previewNextNumber.fetch({ journalId }).then(preview => {
         if (preview) setInvoiceNumber(preview);
-      }).catch(() => nextNumberQuery.refetch().then(r => { if (r.data) setInvoiceNumber(r.data); }));
+      }).catch(() => setInvoiceNumber(""));
     } else {
-      nextNumberQuery.refetch().then(r => { if (r.data) setInvoiceNumber(r.data); });
+      setInvoiceNumber("");
     }
-  }, [nextNumberQuery, journalId, utils]);
+  }, [journalId, utils]);
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
