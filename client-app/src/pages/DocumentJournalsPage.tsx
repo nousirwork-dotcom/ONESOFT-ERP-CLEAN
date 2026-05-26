@@ -146,7 +146,7 @@ export default function DocumentJournalsPage() {
 
   const { data: warehousesList } = trpc.warehouses.list.useQuery();
   const { data: userGroupsList }  = trpc.userGroups.list.useQuery();
-  const { data: users }           = trpc.users.list.useQuery();
+  const { data: users }           = trpc.users.listBasic.useQuery();
   const { data: templates }       = trpc.documentTemplates.list.useQuery({ docType: selectedType });
 
   /* ── mutations ── */

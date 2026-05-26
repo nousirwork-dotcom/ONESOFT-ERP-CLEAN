@@ -7,7 +7,14 @@ import { hashPassword } from '../auth.js';
 import { TRPCError } from '@trpc/server';
 
 export const usersRouter = router({
-  // قائمة مستخدمي المؤسسة
+  // قائمة مبسّطة (id + name) لقوائم الاختيار — متاحة لجميع المستخدمين
+  listBasic: protectedProcedure.query(async ({ ctx }) => {
+    return db.select({ id: users.id, name: users.name, username: users.username })
+      .from(users)
+      .where(and(eq(users.orgId, ctx.user.orgId), eq(users.isActive, true)));
+  }),
+
+  // قائمة مستخدمي المؤسسة (للمديرين فقط)
   list: adminProcedure.query(async ({ ctx }) => {
     return db.query.users.findMany({
       where: and(eq(users.orgId, ctx.user.orgId), eq(users.isActive, true)),
