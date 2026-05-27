@@ -105,6 +105,10 @@ export default function SalesInvoicePage() {
   const journalsQuery    = trpc.documentJournals.list.useQuery({ docType: "sales_invoice" });
   const nextNumberQuery  = trpc.salesInvoices.nextNumber.useQuery({ prefix: "INV" });
   const docTypesQuery    = trpc.documentTypes.list.useQuery({ typeId: "sales" });
+  const stockQuery       = trpc.reports.stockByWarehouse.useQuery(
+    { warehouseId: warehouseId! },
+    { enabled: !!warehouseId }
+  );
 
   const nextJournalNumberMutation = trpc.documentJournals.nextNumber.useMutation();
   const utils = trpc.useUtils();
@@ -341,6 +345,40 @@ export default function SalesInvoicePage() {
       }
     }
 
+    // ── التحقق من خيارات نوع المستند ──────────────────────────────────────
+    const selectedDocType = docTypeId
+      ? (docTypesQuery.data ?? []).find((dt: any) => String(dt.id) === docTypeId)
+      : null;
+    if (selectedDocType) {
+      if (selectedDocType.requireNote && !notes.trim()) {
+        toast.error("يجب إدخال ملاحظة للمستند (مطلوب في نوع المستند المختار)");
+        return;
+      }
+      if (selectedDocType.requireCustomerCode && !customerId) {
+        toast.error("يجب اختيار العميل (مطلوب في نوع المستند المختار)");
+        return;
+      }
+      if (selectedDocType.requireEmployeeCode && !salesperson.trim()) {
+        toast.error("يجب إدخال كود الموظف (مطلوب في نوع المستند المختار)");
+        return;
+      }
+      if (selectedDocType.noStockDispatch && warehouseId) {
+        const stockData = stockQuery.data ?? [];
+        for (const line of validLines) {
+          if (!line.productId) continue;
+          const inv = stockData.find((s: any) => s.productId === line.productId);
+          const available = Number(inv?.totalQuantity ?? 0);
+          const requested = parseFloat(line.quantity) || 0;
+          if (requested > available) {
+            toast.error(
+              `⛔ لا يوجد رصيد كافٍ للصنف "${line.productName}"\nالمتاح: ${available.toFixed(3)} — المطلوب: ${requested.toFixed(3)}`
+            );
+            return;
+          }
+        }
+      }
+    }
+
     // احجز الرقم التسلسلي من الدفتر فقط عند الحفظ الفعلي
     let finalInvoiceNumber = invoiceNumber;
     if (journalId) {
@@ -397,6 +435,7 @@ export default function SalesInvoicePage() {
     warehouseId, currency, exchangeRate, paymentType, paidAmount,
     remainingAmount, notes, lines, subtotal, totalDiscount, totalTax,
     netTotal, createMutation, journalId, nextJournalNumberMutation,
+    docTypeId, docTypesQuery.data, salesperson, stockQuery.data,
   ]);
 
   // ── New Invoice ───────────────────────────────────────────────────────────
