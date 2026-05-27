@@ -609,7 +609,7 @@ export default function DocumentTypesPage() {
                       ))}
                     </FS>
                   </R>
-                  <R label="نوع صرف الأصناف">
+                  <R label="نوع مستند المخزون">
                     <FS value={form.stockDocType} onValueChange={v => set("stockDocType", v)}>
                       <SelectItem value="__none__">— بدون —</SelectItem>
                       {(stockIssueItemsTypes as any[]).map((dt: any) => (
