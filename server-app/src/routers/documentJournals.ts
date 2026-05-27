@@ -11,10 +11,13 @@ export const DOC_TYPES = [
   { id: 'payment_voucher',  label: 'سند صرف' },
   { id: 'stock_receipt',    label: 'إذن استلام مخزني' },
   { id: 'stock_issue',      label: 'إذن صرف مخزني' },
-  { id: 'stock_transfer',   label: 'تحويل مخزني' },
-  { id: 'inventory_count',  label: 'جرد مخزني' },
-  { id: 'sales_return',     label: 'مردود مبيعات' },
-  { id: 'purchase_return',  label: 'مردود مشتريات' },
+  { id: 'stock_transfer',      label: 'سند تحويل مخزني' },
+  { id: 'inventory_count',     label: 'جرد مخزني' },
+  { id: 'sales_return',        label: 'مردود مبيعات' },
+  { id: 'purchase_return',     label: 'مردود مشتريات' },
+  { id: 'journal_entry',       label: 'سند قيد' },
+  { id: 'stock_issue_items',   label: 'سند صرف أصناف' },
+  { id: 'stock_receipt_items', label: 'سند توريد أصناف' },
 ];
 
 const journalInputShape = {
