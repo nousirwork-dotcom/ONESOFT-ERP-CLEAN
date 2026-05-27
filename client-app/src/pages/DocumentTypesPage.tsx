@@ -239,6 +239,7 @@ export default function DocumentTypesPage() {
   const { data: users }           = trpc.users.list.useQuery();
   const { data: acctLinks = [] }  = trpc.warehouses.accountLinks.listAll.useQuery();
   const { data: journalsList = [] } = trpc.documentJournals.list.useQuery();
+  const { data: salesInvoiceJournals = [] }    = trpc.documentJournals.list.useQuery({ docType: "sales_invoice" });
   const { data: journalEntryJournals = [] }    = trpc.documentJournals.list.useQuery({ docType: "journal_entry" });
   const { data: stockIssueItemsJournals = [] } = trpc.documentJournals.list.useQuery({ docType: "stock_issue_items" });
   const { data: journalEntryTypes = [] }    = trpc.documentTypes.list.useQuery({ typeId: "journal-entry" });
@@ -541,9 +542,9 @@ export default function DocumentTypesPage() {
                   <R label="دفتر المستندات">
                     <FS value={form.journal} onValueChange={v => set("journal", v)}>
                       <SelectItem value="none">— بدون دفتر —</SelectItem>
-                      {(journalsList as any[]).map((j: any) => (
+                      {(salesInvoiceJournals as any[]).map((j: any) => (
                         <SelectItem key={j.id} value={String(j.id)}>
-                          {j.name}{j.numberPrefix ? ` (${j.numberPrefix})` : ""}
+                          {j.numberPrefix ? `${j.numberPrefix} — ${j.name}` : j.name}
                         </SelectItem>
                       ))}
                     </FS>
