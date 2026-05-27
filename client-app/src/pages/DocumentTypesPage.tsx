@@ -229,6 +229,7 @@ export default function DocumentTypesPage() {
   const { data: userGroupsList }  = trpc.userGroups.list.useQuery();
   const { data: users }           = trpc.users.list.useQuery();
   const { data: acctLinks = [] }  = trpc.warehouses.accountLinks.listAll.useQuery();
+  const { data: journalsList = [] } = trpc.documentJournals.list.useQuery();
 
   const set = <K extends keyof DoctypeForm>(k: K, v: DoctypeForm[K]) => {
     setForm(p => ({ ...p, [k]: v }));
@@ -495,7 +496,14 @@ export default function DocumentTypesPage() {
                     </FS>
                   </R>
                   <R label="دفتر المستندات">
-                    <FI value={form.journal} onChange={v => set("journal", v)} placeholder="SAA" />
+                    <FS value={form.journal} onValueChange={v => set("journal", v)}>
+                      <SelectItem value="none">— بدون دفتر —</SelectItem>
+                      {(journalsList as any[]).map((j: any) => (
+                        <SelectItem key={j.id} value={String(j.id)}>
+                          {j.name}{j.numberPrefix ? ` (${j.numberPrefix})` : ""}
+                        </SelectItem>
+                      ))}
+                    </FS>
                   </R>
                   <R label="مخزن">
                     <FS value={form.warehouse} onValueChange={v => set("warehouse", v)}>
