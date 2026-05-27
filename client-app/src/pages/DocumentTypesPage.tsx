@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -7,7 +7,7 @@ import { trpc } from "@/lib/trpc";
 import {
   BookOpen, BookMarked, RotateCcw, ClipboardList, ArrowLeftRight, Tag,
   Plus, Save, Trash2, ChevronFirst, ChevronLast,
-  ChevronLeft as CLeft, ChevronRight as CRight, ArrowLeft, FileText,
+  ChevronLeft as CLeft, ChevronRight as CRight, ArrowLeft, FileText, Search, X, Link2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -22,6 +22,8 @@ type DoctypeForm = {
   trackQty: boolean; noTax: boolean; sellerStats: boolean; itemStats: boolean; customerStats: boolean;
   noStockDispatch: boolean; requireNote: boolean; preventEditIfLinked: boolean;
   requireCustomerCode: boolean; requireEmployeeCode: boolean;
+  acctDebit: string; acctCredit: string; acctDiscount: string;
+  acctCash: string; acctTax: string;
 };
 type Doctype = { id: string; typeId: string } & DoctypeForm;
 
@@ -34,6 +36,7 @@ const EMPTY: DoctypeForm = {
   trackQty: false, noTax: false, sellerStats: false, itemStats: false, customerStats: false,
   noStockDispatch: false, requireNote: false, preventEditIfLinked: false,
   requireCustomerCode: false, requireEmployeeCode: false,
+  acctDebit: "", acctCredit: "", acctDiscount: "", acctCash: "", acctTax: "",
 };
 
 /* ──────────────── document categories ──────────────── */
@@ -82,6 +85,108 @@ const CB = ({ label, checked, onChange }: { label: string; checked: boolean; onC
     <span className="text-[11px] text-slate-600">{label}</span>
   </label>
 );
+
+/* ──────────────── AccountPicker ──────────────── */
+function AccountPicker({
+  value, onChange, placeholder = "— اختر حساب —",
+}: { value: string; onChange: (id: string, name: string) => void; placeholder?: string }) {
+  const [open, setOpen]       = useState(false);
+  const [q,    setQ]          = useState("");
+  const [label, setLabel]     = useState("");
+  const ref                   = useRef<HTMLDivElement>(null);
+
+  const { data: accounts = [] } = trpc.accounts.list.useQuery();
+
+  useEffect(() => {
+    if (value && accounts.length) {
+      const found = (accounts as any[]).find((a: any) => String(a.id) === value);
+      setLabel(found ? `${found.code} — ${found.name}` : value);
+    } else if (!value) setLabel("");
+  }, [value, accounts]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const filtered = (accounts as any[]).filter((a: any) =>
+    !a.isParent && (
+      a.code?.toLowerCase().includes(q.toLowerCase()) ||
+      a.name?.toLowerCase().includes(q.toLowerCase())
+    )
+  ).slice(0, 60);
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <div
+        onClick={() => { setOpen(v => !v); setQ(""); }}
+        style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          height: 28, padding: "0 8px", borderRadius: 6, cursor: "pointer",
+          border: "1px solid #e2e8f0", background: value ? "#f0f9ff" : "#fff",
+          fontSize: 11, color: value ? "#1d4ed8" : "#9ca3af",
+          fontFamily: "'Cairo', Tahoma, sans-serif",
+        }}
+      >
+        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {label || placeholder}
+        </span>
+        {value && (
+          <X style={{ width: 12, height: 12, color: "#94a3b8", flexShrink: 0, marginRight: 4 }}
+            onClick={e => { e.stopPropagation(); onChange("", ""); setLabel(""); }} />
+        )}
+        <Search style={{ width: 12, height: 12, color: "#94a3b8", flexShrink: 0 }} />
+      </div>
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 9999,
+          background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8,
+          boxShadow: "0 8px 24px rgba(0,0,0,0.12)", width: 300,
+        }}>
+          <div style={{ padding: "8px 8px 4px" }}>
+            <div style={{ position: "relative" }}>
+              <Search style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", width: 12, height: 12, color: "#94a3b8" }} />
+              <input
+                autoFocus
+                value={q} onChange={e => setQ(e.target.value)}
+                placeholder="بحث بالكود أو الاسم..."
+                style={{
+                  width: "100%", height: 28, padding: "0 28px 0 8px", borderRadius: 6,
+                  border: "1px solid #ddd", fontSize: 11, outline: "none",
+                  fontFamily: "'Cairo', Tahoma, sans-serif", direction: "rtl",
+                }}
+              />
+            </div>
+          </div>
+          <div style={{ maxHeight: 240, overflowY: "auto" }}>
+            {filtered.length === 0 && (
+              <div style={{ padding: "12px 12px", fontSize: 11, color: "#94a3b8", textAlign: "center" }}>لا توجد نتائج</div>
+            )}
+            {filtered.map((a: any) => (
+              <div
+                key={a.id}
+                onClick={() => { onChange(String(a.id), `${a.code} — ${a.name}`); setLabel(`${a.code} — ${a.name}`); setOpen(false); }}
+                style={{
+                  padding: "6px 12px", cursor: "pointer", fontSize: 11,
+                  background: String(a.id) === value ? "#eff6ff" : undefined,
+                  color: String(a.id) === value ? "#1d4ed8" : "#374151",
+                  display: "flex", alignItems: "center", gap: 8,
+                  borderBottom: "1px solid #f8fafc",
+                }}
+                onMouseEnter={e => { if (String(a.id) !== value) (e.currentTarget as HTMLElement).style.background = "#f8fafc"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = String(a.id) === value ? "#eff6ff" : ""; }}
+              >
+                <span style={{ fontFamily: "monospace", color: "#6366f1", minWidth: 60, fontSize: 10 }}>{a.code}</span>
+                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 let _nextId = 1;
 const newId = () => String(_nextId++);
@@ -138,6 +243,8 @@ export default function DocumentTypesPage() {
       noStockDispatch: d.noStockDispatch, requireNote: d.requireNote,
       preventEditIfLinked: d.preventEditIfLinked,
       requireCustomerCode: d.requireCustomerCode, requireEmployeeCode: d.requireEmployeeCode,
+      acctDebit: d.acctDebit, acctCredit: d.acctCredit, acctDiscount: d.acctDiscount,
+      acctCash: d.acctCash, acctTax: d.acctTax,
     });
     setIsDirty(false);
     setView("form");
@@ -376,6 +483,25 @@ export default function DocumentTypesPage() {
                 </div>
                 <div className="mt-2">
                   <CB label="للمستندات التي يصدرها النظام فقط" checked={form.systemOnly} onChange={v => set("systemOnly", v)} />
+                </div>
+              </P>
+
+              <P title="الروابط المحاسبية">
+                <div className="grid grid-cols-2 gap-x-5 gap-y-2">
+                  {([
+                    ["acctDebit",    "مدين"],
+                    ["acctCredit",   "دائن"],
+                    ["acctDiscount", "تخفيض"],
+                    ["acctCash",     "نقدى"],
+                    ["acctTax",      "ضريبة"],
+                  ] as [keyof DoctypeForm, string][]).map(([key, lbl]) => (
+                    <R key={key} label={lbl}>
+                      <AccountPicker
+                        value={form[key] as string}
+                        onChange={(id) => set(key, id as any)}
+                      />
+                    </R>
+                  ))}
                 </div>
               </P>
 
