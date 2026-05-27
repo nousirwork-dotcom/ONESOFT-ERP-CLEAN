@@ -8,6 +8,7 @@ import {
   BookOpen, BookMarked, RotateCcw, ClipboardList, ArrowLeftRight, Tag,
   Plus, Save, Trash2, ChevronFirst, ChevronLast,
   ChevronLeft as CLeft, ChevronRight as CRight, ArrowLeft, FileText, Search, X, Link2,
+  BookText, PackageMinus, PackagePlus,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -49,7 +50,10 @@ const DOC_TYPES = [
   { id: "sales-quote",    label: "عرض سعر مبيعات",   icon: <Tag className="w-3.5 h-3.5" /> },
   { id: "purchase-order", label: "امر شراء",          icon: <ClipboardList className="w-3.5 h-3.5" /> },
   { id: "purch-quote",    label: "عرض سعر مشتريات",  icon: <Tag className="w-3.5 h-3.5" /> },
-  { id: "transfer",       label: "سند تحويل مخزنى",  icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
+  { id: "transfer",             label: "سند تحويل مخزنى",   icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
+  { id: "journal-entry",        label: "سند قيد",            icon: <BookText className="w-3.5 h-3.5" /> },
+  { id: "stock-issue-items",    label: "سند صرف أصناف",      icon: <PackageMinus className="w-3.5 h-3.5" /> },
+  { id: "stock-receipt-items",  label: "سند توريد أصناف",    icon: <PackagePlus className="w-3.5 h-3.5" /> },
 ];
 
 /* ──────────────── small atoms ──────────────── */
