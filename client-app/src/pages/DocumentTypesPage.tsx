@@ -13,6 +13,7 @@ import { toast } from "sonner";
 
 /* ──────────────── types ──────────────── */
 type DoctypeForm = {
+  docType: string;
   nameAr: string; nameEn: string; codeEn: string; codeAr: string;
   userGroup: string; user: string; warehouse: string; journal: string;
   systemOnly: boolean; entryType: string; entryJournal: string;
@@ -23,6 +24,7 @@ type DoctypeForm = {
 type Doctype = { id: string; typeId: string } & DoctypeForm;
 
 const EMPTY: DoctypeForm = {
+  docType: "sales",
   nameAr: "", nameEn: "", codeEn: "", codeAr: "",
   userGroup: "", user: "", warehouse: "", journal: "", systemOnly: false,
   entryType: "", entryJournal: "", stockDocType: "", stockJournal: "",
@@ -112,14 +114,15 @@ export default function DocumentTypesPage() {
 
   const openCreate = useCallback(() => {
     setEditId(null);
-    setForm({ ...EMPTY });
+    setForm({ ...EMPTY, docType: selectedType });
     setIsDirty(false);
     setView("form");
-  }, []);
+  }, [selectedType]);
 
   const openEdit = useCallback((d: Doctype) => {
     setEditId(d.id);
     setForm({
+      docType: d.typeId,
       nameAr: d.nameAr, nameEn: d.nameEn, codeEn: d.codeEn, codeAr: d.codeAr,
       userGroup: d.userGroup, user: d.user, warehouse: d.warehouse,
       journal: d.journal, systemOnly: d.systemOnly,
@@ -135,11 +138,12 @@ export default function DocumentTypesPage() {
 
   const handleSave = () => {
     if (!form.nameAr.trim()) { toast.error("إسم نوع المستند مطلوب"); return; }
+    const typeId = form.docType || selectedType;
     if (editId) {
-      setDoctypes(prev => prev.map(d => d.id === editId ? { ...d, ...form } : d));
+      setDoctypes(prev => prev.map(d => d.id === editId ? { ...d, typeId, ...form } : d));
     } else {
       const id = newId();
-      setDoctypes(prev => [...prev, { id, typeId: selectedType, ...form }]);
+      setDoctypes(prev => [...prev, { id, typeId, ...form }]);
       setEditId(id);
     }
     setIsDirty(false);
@@ -314,6 +318,16 @@ export default function DocumentTypesPage() {
 
               <P title="بيانات نوع المستند">
                 <div className="grid grid-cols-2 gap-x-5 gap-y-2">
+                  <R label="نوع المستند *" lw={100}>
+                    <FS value={form.docType} onValueChange={v => set("docType", v)}>
+                      {DOC_TYPES.map(dt => (
+                        <SelectItem key={dt.id} value={dt.id}>
+                          <span className="flex items-center gap-1.5">{dt.icon}{dt.label}</span>
+                        </SelectItem>
+                      ))}
+                    </FS>
+                  </R>
+                  <div />
                   <R label="إسم عربي *">
                     <FI value={form.nameAr} onChange={v => set("nameAr", v)} placeholder={`نوع ${currentType?.label}`} />
                   </R>
