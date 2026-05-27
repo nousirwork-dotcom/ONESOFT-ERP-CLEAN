@@ -239,6 +239,7 @@ export default function DocumentTypesPage() {
   const { data: users }           = trpc.users.list.useQuery();
   const { data: acctLinks = [] }  = trpc.warehouses.accountLinks.listAll.useQuery();
   const { data: journalsList = [] } = trpc.documentJournals.list.useQuery();
+  const { data: journalEntryJournals = [] } = trpc.documentJournals.list.useQuery({ docType: "journal_entry" });
   const { data: journalEntryTypes = [] } = trpc.documentTypes.list.useQuery({ typeId: "journal-entry" });
 
   const doctypes = dbDoctypes as any[];
@@ -598,7 +599,14 @@ export default function DocumentTypesPage() {
                     </FS>
                   </R>
                   <R label="دفتر القيد">
-                    <FI value={form.entryJournal} onChange={v => set("entryJournal", v)} placeholder="SJ3" />
+                    <FS value={form.entryJournal} onValueChange={v => set("entryJournal", v)}>
+                      <SelectItem value="__none__">— بدون —</SelectItem>
+                      {(journalEntryJournals as any[]).map((j: any) => (
+                        <SelectItem key={j.id} value={String(j.id)}>
+                          {j.numberPrefix ? `${j.numberPrefix} — ${j.name}` : j.name}
+                        </SelectItem>
+                      ))}
+                    </FS>
                   </R>
                   <R label="نوع مستند المخزون">
                     <FS value={form.stockDocType} onValueChange={v => set("stockDocType", v)}>
