@@ -86,27 +86,18 @@ const CB = ({ label, checked, onChange }: { label: string; checked: boolean; onC
   </label>
 );
 
-/* ──────────────── AccountPicker — لوحتين (مخزن ← روابط) ──────────────── */
+/* ──────────────── AccountPicker — روابط المخزن المختار ──────────────── */
 function AccountPicker({
-  value, onChange, placeholder = "— اختر رابط محاسبي —",
-  warehouses = [], links = [],
+  value, onChange, placeholder = "— اختر —",
+  links = [], noWarehouse = false,
 }: {
   value: string; onChange: (id: string) => void; placeholder?: string;
-  warehouses?: any[]; links?: any[];
+  links?: any[]; noWarehouse?: boolean;
 }) {
-  const [open,       setOpen]       = useState(false);
-  const [label,      setLabel]      = useState("");
-  const [activeWh,   setActiveWh]   = useState<number | null>(null);
+  const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  /* ── مزامنة الـ label مع القيمة المحفوظة ── */
-  useEffect(() => {
-    if (!value) { setLabel(""); return; }
-    const found = (links as any[]).find((l: any) => String(l.id) === value);
-    if (found) setLabel(`${found.label}${found.accountCode ? `  ${found.accountCode}` : ""}`);
-  }, [value, links]);
-
-  /* ── إغلاق الـ popup عند الضغط خارجه ── */
+  /* ── إغلاق عند الضغط خارجه ── */
   useEffect(() => {
     const h = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
@@ -115,180 +106,104 @@ function AccountPicker({
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  /* ── تحديد المخزن الافتراضي عند فتح الـ popup ── */
-  const handleOpen = () => {
-    if (!open) {
-      const whs = (warehouses as any[]);
-      if (whs.length && activeWh === null) setActiveWh(whs[0].id);
-    }
-    setOpen(v => !v);
-  };
-
-  /* ── الروابط الخاصة بالمخزن المحدد ── */
-  const whLinks = (links as any[]).filter((l: any) => l.warehouseId === activeWh);
+  const selected = links.find((l: any) => String(l.id) === value);
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
 
       {/* ── حقل الاختيار ── */}
       <div
-        onClick={handleOpen}
+        onClick={() => { if (!noWarehouse) setOpen(v => !v); }}
         style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          height: 28, padding: "0 8px", borderRadius: 6, cursor: "pointer",
+          display: "flex", alignItems: "center", gap: 6,
+          height: 28, padding: "0 8px", borderRadius: 6,
+          cursor: noWarehouse ? "not-allowed" : "pointer",
           border: "1px solid #e2e8f0",
-          background: value ? "#f0f9ff" : "#fff",
+          background: noWarehouse ? "#f8fafc" : selected ? "#f0f9ff" : "#fff",
           fontSize: 11,
-          color: value ? "#1d4ed8" : "#9ca3af",
           fontFamily: "'Cairo', Tahoma, sans-serif",
+          opacity: noWarehouse ? 0.55 : 1,
         }}
       >
-        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {label || placeholder}
+        <span style={{
+          flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          color: selected ? "#1d4ed8" : "#9ca3af",
+        }}>
+          {noWarehouse
+            ? "اختر مخزناً أولاً"
+            : selected
+              ? `${selected.label}${selected.accountCode ? `  (${selected.accountCode})` : ""}`
+              : placeholder}
         </span>
-        {value && (
+        {selected && !noWarehouse && (
           <X
-            style={{ width: 12, height: 12, color: "#94a3b8", flexShrink: 0, marginLeft: 4 }}
-            onClick={e => { e.stopPropagation(); onChange(""); setLabel(""); }}
+            style={{ width: 11, height: 11, color: "#94a3b8", flexShrink: 0 }}
+            onClick={e => { e.stopPropagation(); onChange(""); }}
           />
         )}
-        <Link2 style={{ width: 12, height: 12, color: "#94a3b8", flexShrink: 0 }} />
+        {!noWarehouse && (
+          <Link2 style={{ width: 11, height: 11, color: "#94a3b8", flexShrink: 0 }} />
+        )}
       </div>
 
-      {/* ── الـ popup ── */}
-      {open && (
+      {/* ── الـ dropdown ── */}
+      {open && !noWarehouse && (
         <div style={{
           position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 9999,
           background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8,
           boxShadow: "0 8px 28px rgba(0,0,0,0.14)",
-          display: "flex", overflow: "hidden",
-          minWidth: 480, maxWidth: 560,
+          minWidth: 380, maxWidth: 480,
           fontFamily: "'Cairo', Tahoma, sans-serif",
-          direction: "rtl",
+          direction: "rtl", overflow: "hidden",
         }}>
-
-          {/* ── عمود المخازن ── */}
+          {/* رأس */}
           <div style={{
-            width: 150, borderLeft: "1px solid #e2e8f0",
-            background: "#f8fafc", flexShrink: 0,
+            padding: "6px 12px", fontSize: 10, fontWeight: 700, color: "#64748b",
+            borderBottom: "1px solid #e2e8f0", background: "#f8fafc",
+            display: "flex", gap: 12,
           }}>
-            <div style={{
-              padding: "7px 10px", fontSize: 10, fontWeight: 700,
-              color: "#64748b", borderBottom: "1px solid #e2e8f0",
-              letterSpacing: ".3px", textTransform: "uppercase",
-            }}>
-              المخازن
-            </div>
-            <div style={{ overflowY: "auto", maxHeight: 260 }}>
-              {(warehouses as any[]).length === 0 && (
-                <div style={{ padding: 12, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>لا مخازن</div>
-              )}
-              {(warehouses as any[]).map((wh: any) => {
-                const count = (links as any[]).filter((l: any) => l.warehouseId === wh.id).length;
-                const active = activeWh === wh.id;
-                return (
-                  <div
-                    key={wh.id}
-                    onClick={() => setActiveWh(wh.id)}
-                    style={{
-                      padding: "8px 10px", cursor: "pointer", fontSize: 11,
-                      background: active ? "#eff6ff" : undefined,
-                      color: active ? "#1d4ed8" : "#374151",
-                      borderRight: active ? "3px solid #3b82f6" : "3px solid transparent",
-                      display: "flex", alignItems: "center", justifyContent: "space-between",
-                      gap: 4,
-                    }}
-                    onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = "#f1f5f9"; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = active ? "#eff6ff" : ""; }}
-                  >
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{wh.name}</span>
-                    {count > 0 && (
-                      <span style={{
-                        fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 10,
-                        background: active ? "#bfdbfe" : "#e2e8f0",
-                        color: active ? "#1e40af" : "#64748b", flexShrink: 0,
-                      }}>{count}</span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+            <span style={{ flex: 1 }}>البيان</span>
+            <span style={{ width: 72, flexShrink: 0, textAlign: "center" }}>كود الحساب</span>
+            <span style={{ width: 130, flexShrink: 0 }}>اسم الحساب</span>
           </div>
-
-          {/* ── عمود الروابط ── */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {/* رأس العمود */}
-            <div style={{
-              padding: "7px 12px", fontSize: 10, fontWeight: 700,
-              color: "#64748b", borderBottom: "1px solid #e2e8f0",
-              letterSpacing: ".3px", textTransform: "uppercase",
-              display: "flex", gap: 14,
-            }}>
-              <span style={{ flex: 1 }}>البيان</span>
-              <span style={{ width: 68, flexShrink: 0, textAlign: "center" }}>كود الحساب</span>
-              <span style={{ width: 110, flexShrink: 0 }}>اسم الحساب</span>
-            </div>
-
-            {/* صفوف الروابط */}
-            <div style={{ overflowY: "auto", maxHeight: 260 }}>
-              {activeWh === null && (
-                <div style={{ padding: 16, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>
-                  اختر مخزناً من القائمة
+          {/* صفوف */}
+          <div style={{ overflowY: "auto", maxHeight: 240 }}>
+            {links.length === 0 && (
+              <div style={{ padding: 14, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>
+                لا توجد روابط محاسبية لهذا المخزن
+              </div>
+            )}
+            {links.map((l: any) => {
+              const isSel = String(l.id) === value;
+              return (
+                <div
+                  key={l.id}
+                  onClick={() => { onChange(String(l.id)); setOpen(false); }}
+                  style={{
+                    padding: "7px 12px", cursor: "pointer", fontSize: 11,
+                    background: isSel ? "#eff6ff" : undefined,
+                    borderBottom: "1px solid #f8fafc",
+                    display: "flex", alignItems: "center", gap: 12,
+                  }}
+                  onMouseEnter={e => { if (!isSel) (e.currentTarget as HTMLElement).style.background = "#f8fafc"; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = isSel ? "#eff6ff" : ""; }}
+                >
+                  <span style={{
+                    flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    color: isSel ? "#1d4ed8" : "#1e293b", fontWeight: isSel ? 600 : 400,
+                  }}>{l.label}</span>
+                  <span style={{
+                    width: 72, flexShrink: 0, textAlign: "center",
+                    fontFamily: "monospace", fontSize: 10, color: "#6366f1", fontWeight: 600,
+                  }}>{l.accountCode || "—"}</span>
+                  <span style={{
+                    width: 130, flexShrink: 0, fontSize: 10, color: "#64748b",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>{l.accountName || "—"}</span>
                 </div>
-              )}
-              {activeWh !== null && whLinks.length === 0 && (
-                <div style={{ padding: 16, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>
-                  لا توجد روابط لهذا المخزن
-                </div>
-              )}
-              {whLinks.map((l: any) => {
-                const isSelected = String(l.id) === value;
-                return (
-                  <div
-                    key={l.id}
-                    onClick={() => {
-                      onChange(String(l.id));
-                      setLabel(`${l.label}${l.accountCode ? `  ${l.accountCode}` : ""}`);
-                      setOpen(false);
-                    }}
-                    style={{
-                      padding: "7px 12px", cursor: "pointer", fontSize: 11,
-                      background: isSelected ? "#eff6ff" : undefined,
-                      borderBottom: "1px solid #f8fafc",
-                      display: "flex", alignItems: "center", gap: 14,
-                    }}
-                    onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = "#f8fafc"; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = isSelected ? "#eff6ff" : ""; }}
-                  >
-                    {/* البيان */}
-                    <span style={{
-                      flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                      color: isSelected ? "#1d4ed8" : "#1e293b", fontWeight: isSelected ? 600 : 400,
-                    }}>
-                      {l.label}
-                    </span>
-                    {/* كود الحساب */}
-                    <span style={{
-                      width: 68, flexShrink: 0, textAlign: "center",
-                      fontFamily: "monospace", fontSize: 10,
-                      color: "#6366f1", fontWeight: 600,
-                    }}>
-                      {l.accountCode || "—"}
-                    </span>
-                    {/* اسم الحساب */}
-                    <span style={{
-                      width: 110, flexShrink: 0, fontSize: 10,
-                      color: "#64748b", overflow: "hidden",
-                      textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    }}>
-                      {l.accountName || "—"}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+              );
+            })}
           </div>
-
         </div>
       )}
     </div>
@@ -595,24 +510,31 @@ export default function DocumentTypesPage() {
               </P>
 
               <P title="الروابط المحاسبية">
-                <div className="grid grid-cols-2 gap-x-5 gap-y-2">
-                  {([
-                    ["acctDebit",    "مدين"],
-                    ["acctCredit",   "دائن"],
-                    ["acctDiscount", "تخفيض"],
-                    ["acctCash",     "نقدى"],
-                    ["acctTax",      "ضريبة"],
-                  ] as [keyof DoctypeForm, string][]).map(([key, lbl]) => (
-                    <R key={key} label={lbl}>
-                      <AccountPicker
-                        value={form[key] as string}
-                        onChange={(id) => set(key, id as any)}
-                        warehouses={warehousesList as any[] ?? []}
-                        links={acctLinks as any[]}
-                      />
-                    </R>
-                  ))}
-                </div>
+                {!form.warehouse || form.warehouse === "all" ? (
+                  <div className="text-[11px] text-amber-600 bg-amber-50 rounded px-3 py-2 text-center" style={{ border: "1px solid #fde68a" }}>
+                    اختر مخزناً في "حدود الاستخدام" لتظهر الروابط المحاسبية الخاصة به
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-x-5 gap-y-2">
+                    {([
+                      ["acctDebit",    "مدين"],
+                      ["acctCredit",   "دائن"],
+                      ["acctDiscount", "تخفيض"],
+                      ["acctCash",     "نقدى"],
+                      ["acctTax",      "ضريبة"],
+                    ] as [keyof DoctypeForm, string][]).map(([key, lbl]) => (
+                      <R key={key} label={lbl}>
+                        <AccountPicker
+                          value={form[key] as string}
+                          onChange={(id) => set(key, id as any)}
+                          links={(acctLinks as any[]).filter(
+                            (l: any) => String(l.warehouseId) === form.warehouse
+                          )}
+                        />
+                      </R>
+                    ))}
+                  </div>
+                )}
               </P>
 
               <P title="خصائص السندات المصدرة">
