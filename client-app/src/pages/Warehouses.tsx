@@ -421,6 +421,7 @@ export default function Warehouses() {
 
   const handleSave = async () => {
     if (!form.name.trim()) { toast.error("إسم 1 مطلوب"); return; }
+    if (!form.code.trim()) { toast.error("رقم المخزن مطلوب"); return; }
 
     /* ── التحقق من الحسابات الأساسية ── */
     const missing = REQUIRED_ACCOUNT_LABELS.filter(label => {
