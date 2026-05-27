@@ -89,14 +89,15 @@ const CB = ({ label, checked, onChange }: { label: string; checked: boolean; onC
 /* ──────────────── AccountPicker — لوحتين (مخزن ← روابط) ──────────────── */
 function AccountPicker({
   value, onChange, placeholder = "— اختر رابط محاسبي —",
-}: { value: string; onChange: (id: string) => void; placeholder?: string }) {
+  warehouses = [], links = [],
+}: {
+  value: string; onChange: (id: string) => void; placeholder?: string;
+  warehouses?: any[]; links?: any[];
+}) {
   const [open,       setOpen]       = useState(false);
   const [label,      setLabel]      = useState("");
   const [activeWh,   setActiveWh]   = useState<number | null>(null);
   const ref = useRef<HTMLDivElement>(null);
-
-  const { data: links = [] } = trpc.warehouses.accountLinks.listAll.useQuery();
-  const { data: warehouses = [] } = trpc.warehouses.list.useQuery();
 
   /* ── مزامنة الـ label مع القيمة المحفوظة ── */
   useEffect(() => {
@@ -309,9 +310,10 @@ export default function DocumentTypesPage() {
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [showDelete, setShowDelete]     = useState(false);
 
-  const { data: warehousesList } = trpc.warehouses.list.useQuery();
+  const { data: warehousesList }  = trpc.warehouses.list.useQuery();
   const { data: userGroupsList }  = trpc.userGroups.list.useQuery();
   const { data: users }           = trpc.users.list.useQuery();
+  const { data: acctLinks = [] }  = trpc.warehouses.accountLinks.listAll.useQuery();
 
   const set = <K extends keyof DoctypeForm>(k: K, v: DoctypeForm[K]) => {
     setForm(p => ({ ...p, [k]: v }));
@@ -605,6 +607,8 @@ export default function DocumentTypesPage() {
                       <AccountPicker
                         value={form[key] as string}
                         onChange={(id) => set(key, id as any)}
+                        warehouses={warehousesList as any[] ?? []}
+                        links={acctLinks as any[]}
                       />
                     </R>
                   ))}
