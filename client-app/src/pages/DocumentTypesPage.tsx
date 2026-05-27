@@ -239,6 +239,7 @@ export default function DocumentTypesPage() {
   const { data: users }           = trpc.users.list.useQuery();
   const { data: acctLinks = [] }  = trpc.warehouses.accountLinks.listAll.useQuery();
   const { data: journalsList = [] } = trpc.documentJournals.list.useQuery();
+  const { data: journalEntryTypes = [] } = trpc.documentTypes.list.useQuery({ typeId: "journal-entry" });
 
   const doctypes = dbDoctypes as any[];
 
@@ -588,10 +589,12 @@ export default function DocumentTypesPage() {
                 <div className="grid grid-cols-2 gap-x-5 gap-y-2">
                   <R label="نوع القيد">
                     <FS value={form.entryType} onValueChange={v => set("entryType", v)}>
-                      <SelectItem value="sales">مبيعات</SelectItem>
-                      <SelectItem value="purchase">مشتريات</SelectItem>
-                      <SelectItem value="receipt">قبض</SelectItem>
-                      <SelectItem value="payment">صرف</SelectItem>
+                      <SelectItem value="__none__">— بدون —</SelectItem>
+                      {(journalEntryTypes as any[]).map((dt: any) => (
+                        <SelectItem key={dt.id} value={String(dt.id)}>
+                          {dt.codeAr ? `${dt.codeAr} — ${dt.nameAr}` : dt.nameAr}
+                        </SelectItem>
+                      ))}
                     </FS>
                   </R>
                   <R label="دفتر القيد">
