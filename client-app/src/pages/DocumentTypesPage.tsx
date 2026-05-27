@@ -216,14 +216,19 @@ const newId = () => String(_nextId++);
 /* ──────────────── main component ──────────────── */
 export default function DocumentTypesPage() {
   const [selectedType, setSelectedType] = useState("sales");
-  const [doctypes, setDoctypes]         = useState<Doctype[]>([]);
   const [view, setView]                 = useState<"list" | "form">("list");
-  const [editId, setEditId]             = useState<string | null>(null);
+  const [editId, setEditId]             = useState<number | null>(null);
   const [form, setForm]                 = useState<DoctypeForm>({ ...EMPTY });
   const [isDirty, setIsDirty]           = useState(false);
   const [showUnsaved, setShowUnsaved]   = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [showDelete, setShowDelete]     = useState(false);
+
+  const utils = trpc.useUtils();
+  const { data: dbDoctypes = [] } = trpc.documentTypes.list.useQuery();
+  const createMut  = trpc.documentTypes.create.useMutation({ onSuccess: () => utils.documentTypes.list.invalidate() });
+  const updateMut  = trpc.documentTypes.update.useMutation({ onSuccess: () => utils.documentTypes.list.invalidate() });
+  const deleteMut  = trpc.documentTypes.delete.useMutation({ onSuccess: () => utils.documentTypes.list.invalidate() });
 
   const { data: warehousesList }  = trpc.warehouses.list.useQuery();
   const { data: userGroupsList }  = trpc.userGroups.list.useQuery();
@@ -231,13 +236,15 @@ export default function DocumentTypesPage() {
   const { data: acctLinks = [] }  = trpc.warehouses.accountLinks.listAll.useQuery();
   const { data: journalsList = [] } = trpc.documentJournals.list.useQuery();
 
+  const doctypes = dbDoctypes as any[];
+
   const set = <K extends keyof DoctypeForm>(k: K, v: DoctypeForm[K]) => {
     setForm(p => ({ ...p, [k]: v }));
     setIsDirty(true);
   };
 
-  const typeDoctypes   = doctypes.filter(d => d.typeId === selectedType);
-  const currentIndex   = editId ? typeDoctypes.findIndex(d => d.id === editId) : -1;
+  const typeDoctypes   = doctypes.filter((d: any) => d.typeId === selectedType);
+  const currentIndex   = editId ? typeDoctypes.findIndex((d: any) => d.id === editId) : -1;
   const currentType    = DOC_TYPES.find(t => t.id === selectedType);
 
   const safeNavigate = (action: () => void) => {
@@ -252,44 +259,68 @@ export default function DocumentTypesPage() {
     setView("form");
   }, [selectedType]);
 
-  const openEdit = useCallback((d: Doctype) => {
+  const openEdit = useCallback((d: any) => {
     setEditId(d.id);
     setForm({
       docType: d.typeId,
-      nameAr: d.nameAr, nameEn: d.nameEn, codeEn: d.codeEn, codeAr: d.codeAr,
-      userGroup: d.userGroup, user: d.user, warehouse: d.warehouse,
-      journal: d.journal, systemOnly: d.systemOnly,
-      entryType: d.entryType, entryJournal: d.entryJournal,
-      stockDocType: d.stockDocType, stockJournal: d.stockJournal,
-      printTemplate: d.printTemplate, printTemplate2: d.printTemplate2,
-      trackQty: d.trackQty, noTax: d.noTax, sellerStats: d.sellerStats,
-      itemStats: d.itemStats, customerStats: d.customerStats,
-      noStockDispatch: d.noStockDispatch, requireNote: d.requireNote,
-      preventEditIfLinked: d.preventEditIfLinked,
-      requireCustomerCode: d.requireCustomerCode, requireEmployeeCode: d.requireEmployeeCode,
-      acctDebit: d.acctDebit, acctCredit: d.acctCredit, acctDiscount: d.acctDiscount,
-      acctCash: d.acctCash, acctTax: d.acctTax,
+      nameAr: d.nameAr ?? "", nameEn: d.nameEn ?? "", codeEn: d.codeEn ?? "", codeAr: d.codeAr ?? "",
+      userGroup: d.userGroup ?? "", user: d.user_ ?? "", warehouse: d.warehouse ?? "",
+      journal: d.journal ?? "", systemOnly: d.systemOnly ?? false,
+      entryType: d.entryType ?? "", entryJournal: d.entryJournal ?? "",
+      stockDocType: d.stockDocType ?? "", stockJournal: d.stockJournal ?? "",
+      printTemplate: d.printTemplate ?? "", printTemplate2: d.printTemplate2 ?? "",
+      trackQty: d.trackQty ?? false, noTax: d.noTax ?? false, sellerStats: d.sellerStats ?? false,
+      itemStats: d.itemStats ?? false, customerStats: d.customerStats ?? false,
+      noStockDispatch: d.noStockDispatch ?? false, requireNote: d.requireNote ?? false,
+      preventEditIfLinked: d.preventEditIfLinked ?? false,
+      requireCustomerCode: d.requireCustomerCode ?? false, requireEmployeeCode: d.requireEmployeeCode ?? false,
+      acctDebit: d.acctDebit ?? "", acctCredit: d.acctCredit ?? "", acctDiscount: d.acctDiscount ?? "",
+      acctCash: d.acctCash ?? "", acctTax: d.acctTax ?? "",
     });
     setIsDirty(false);
     setView("form");
   }, []);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.nameAr.trim()) { toast.error("إسم نوع المستند مطلوب"); return; }
     const typeId = form.docType || selectedType;
-    if (editId) {
-      setDoctypes(prev => prev.map(d => d.id === editId ? { ...d, typeId, ...form } : d));
-    } else {
-      const id = newId();
-      setDoctypes(prev => [...prev, { id, typeId, ...form }]);
-      setEditId(id);
+    const payload = {
+      typeId,
+      nameAr: form.nameAr, nameEn: form.nameEn || undefined, codeEn: form.codeEn || undefined, codeAr: form.codeAr || undefined,
+      docType: form.docType || undefined, userGroup: form.userGroup || undefined,
+      user_: form.user || undefined, warehouse: form.warehouse || undefined,
+      journal: form.journal || undefined, systemOnly: form.systemOnly,
+      entryType: form.entryType || undefined, entryJournal: form.entryJournal || undefined,
+      stockDocType: form.stockDocType || undefined, stockJournal: form.stockJournal || undefined,
+      printTemplate: form.printTemplate || undefined, printTemplate2: form.printTemplate2 || undefined,
+      trackQty: form.trackQty, noTax: form.noTax, sellerStats: form.sellerStats,
+      itemStats: form.itemStats, customerStats: form.customerStats,
+      noStockDispatch: form.noStockDispatch, requireNote: form.requireNote,
+      preventEditIfLinked: form.preventEditIfLinked,
+      requireCustomerCode: form.requireCustomerCode, requireEmployeeCode: form.requireEmployeeCode,
+      acctDebit: form.acctDebit || undefined, acctCredit: form.acctCredit || undefined,
+      acctDiscount: form.acctDiscount || undefined, acctCash: form.acctCash || undefined,
+      acctTax: form.acctTax || undefined,
+    };
+    try {
+      if (editId) {
+        await updateMut.mutateAsync({ id: editId, ...payload });
+      } else {
+        const row = await createMut.mutateAsync(payload);
+        setEditId(row.id);
+      }
+      setIsDirty(false);
+      toast.success("تم الحفظ بنجاح ✓");
+    } catch (e: any) {
+      toast.error(e.message ?? "حدث خطأ أثناء الحفظ");
     }
-    setIsDirty(false);
-    toast.success("تم الحفظ بنجاح ✓");
   };
 
-  const handleDelete = () => {
-    setDoctypes(prev => prev.filter(d => d.id !== editId));
+  const handleDelete = async () => {
+    if (!editId) return;
+    try {
+      await deleteMut.mutateAsync({ id: editId });
+    } catch {}
     setIsDirty(false);
     setView("list");
     setEditId(null);

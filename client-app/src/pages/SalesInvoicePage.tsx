@@ -74,6 +74,7 @@ export default function SalesInvoicePage() {
   const [warehouseId, setWarehouseId] = useState<number | null>(null);
   const [journalWarehouseId, setJournalWarehouseId] = useState<number | null>(null); // مخزن مقيَّد من الدفتر
   const [paymentType, setPaymentType] = useState<PaymentType>("cash");
+  const [docTypeId, setDocTypeId] = useState<string>("");
   const [currency, setCurrency] = useState("SAR");
   const [exchangeRate, setExchangeRate] = useState("1.000");
   const [salesperson, setSalesperson] = useState("");
@@ -103,6 +104,7 @@ export default function SalesInvoicePage() {
   const productsQuery    = trpc.products.list.useQuery({});
   const journalsQuery    = trpc.documentJournals.list.useQuery({ docType: "sales_invoice" });
   const nextNumberQuery  = trpc.salesInvoices.nextNumber.useQuery({ prefix: "INV" });
+  const docTypesQuery    = trpc.documentTypes.list.useQuery({ typeId: "sales" });
 
   const nextJournalNumberMutation = trpc.documentJournals.nextNumber.useMutation();
   const utils = trpc.useUtils();
@@ -668,23 +670,37 @@ export default function SalesInvoicePage() {
         {/* ── الصف الثاني ── */}
         <div className="grid gap-x-2 gap-y-1" style={{ gridTemplateColumns: "150px 120px 90px 100px 1fr 1fr" }}>
           <HF label="نوع السند">
-            <select
-              value={paymentType}
-              onChange={e => {
-                setPaymentType(e.target.value as PaymentType);
-                setPaidAmountOverride("");
-              }}
-              className="classic-input w-full"
-              style={{
-                background: paymentType === "cash" ? "#F0FDF4" : "#FFF7ED",
-                borderColor: paymentType === "cash" ? "#16A34A" : "#D97706",
-                fontWeight: 700,
-                color: paymentType === "cash" ? "#15803D" : "#B45309",
-              }}
-            >
-              <option value="cash">نقدًا</option>
-              <option value="credit">آجل</option>
-            </select>
+            {(docTypesQuery.data ?? []).length > 0 ? (
+              <select
+                value={docTypeId}
+                onChange={e => setDocTypeId(e.target.value)}
+                className="classic-input w-full"
+                style={{ fontWeight: 600 }}
+              >
+                <option value="">— اختر —</option>
+                {(docTypesQuery.data ?? []).map((dt: any) => (
+                  <option key={dt.id} value={String(dt.id)}>{dt.nameAr}</option>
+                ))}
+              </select>
+            ) : (
+              <select
+                value={paymentType}
+                onChange={e => {
+                  setPaymentType(e.target.value as PaymentType);
+                  setPaidAmountOverride("");
+                }}
+                className="classic-input w-full"
+                style={{
+                  background: paymentType === "cash" ? "#F0FDF4" : "#FFF7ED",
+                  borderColor: paymentType === "cash" ? "#16A34A" : "#D97706",
+                  fontWeight: 700,
+                  color: paymentType === "cash" ? "#15803D" : "#B45309",
+                }}
+              >
+                <option value="cash">نقدًا</option>
+                <option value="credit">آجل</option>
+              </select>
+            )}
           </HF>
           <HF label="العملة">
             <select

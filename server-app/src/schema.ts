@@ -548,6 +548,50 @@ export const documentJournals = pgTable('document_journals', {
 
 export type DocumentJournal = typeof documentJournals.$inferSelect;
 
+// ─── Document Types (أنواع المستندات) ────────────────────────────────────────
+export const documentTypes = pgTable('document_types', {
+  id:                   serial('id').primaryKey(),
+  orgId:                integer('org_id').notNull().references(() => organizations.id),
+  typeId:               varchar('type_id', { length: 30 }).notNull(),
+  nameAr:               varchar('name_ar', { length: 255 }).notNull(),
+  nameEn:               varchar('name_en', { length: 255 }),
+  codeEn:               varchar('code_en', { length: 30 }),
+  codeAr:               varchar('code_ar', { length: 30 }),
+  docType:              varchar('doc_type', { length: 30 }),
+  userGroup:            varchar('user_group', { length: 50 }),
+  user_:               varchar('user_', { length: 50 }),
+  warehouse:            varchar('warehouse', { length: 50 }),
+  journal:              varchar('journal', { length: 50 }),
+  systemOnly:           boolean('system_only').notNull().default(false),
+  entryType:            varchar('entry_type', { length: 30 }),
+  entryJournal:         varchar('entry_journal', { length: 50 }),
+  stockDocType:         varchar('stock_doc_type', { length: 30 }),
+  stockJournal:         varchar('stock_journal', { length: 50 }),
+  printTemplate:        varchar('print_template', { length: 100 }),
+  printTemplate2:       varchar('print_template_2', { length: 100 }),
+  trackQty:             boolean('track_qty').notNull().default(false),
+  noTax:                boolean('no_tax').notNull().default(false),
+  sellerStats:          boolean('seller_stats').notNull().default(false),
+  itemStats:            boolean('item_stats').notNull().default(false),
+  customerStats:        boolean('customer_stats').notNull().default(false),
+  noStockDispatch:      boolean('no_stock_dispatch').notNull().default(false),
+  requireNote:          boolean('require_note').notNull().default(false),
+  preventEditIfLinked:  boolean('prevent_edit_if_linked').notNull().default(false),
+  requireCustomerCode:  boolean('require_customer_code').notNull().default(false),
+  requireEmployeeCode:  boolean('require_employee_code').notNull().default(false),
+  acctDebit:            varchar('acct_debit', { length: 50 }),
+  acctCredit:           varchar('acct_credit', { length: 50 }),
+  acctDiscount:         varchar('acct_discount', { length: 50 }),
+  acctCash:             varchar('acct_cash', { length: 50 }),
+  acctTax:              varchar('acct_tax', { length: 50 }),
+  sortOrder:            integer('sort_order').notNull().default(0),
+  isActive:             boolean('is_active').notNull().default(true),
+  createdAt:            timestamp('created_at').notNull().defaultNow(),
+  updatedAt:            timestamp('updated_at').notNull().defaultNow(),
+});
+
+export type DocumentType = typeof documentTypes.$inferSelect;
+
 // ─── Document Templates (نماذج المستندات) ────────────────────────────────────
 // كل نموذج يحدد شكل الطباعة لنوع مستند معين
 export const documentTemplates = pgTable('document_templates', {
