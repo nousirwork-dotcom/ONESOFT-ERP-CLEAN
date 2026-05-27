@@ -20,6 +20,8 @@ type DoctypeForm = {
   stockDocType: string; stockJournal: string;
   printTemplate: string; printTemplate2: string;
   trackQty: boolean; noTax: boolean; sellerStats: boolean; itemStats: boolean; customerStats: boolean;
+  noStockDispatch: boolean; requireNote: boolean; preventEditIfLinked: boolean;
+  requireCustomerCode: boolean; requireEmployeeCode: boolean;
 };
 type Doctype = { id: string; typeId: string } & DoctypeForm;
 
@@ -30,6 +32,8 @@ const EMPTY: DoctypeForm = {
   entryType: "", entryJournal: "", stockDocType: "", stockJournal: "",
   printTemplate: "", printTemplate2: "",
   trackQty: false, noTax: false, sellerStats: false, itemStats: false, customerStats: false,
+  noStockDispatch: false, requireNote: false, preventEditIfLinked: false,
+  requireCustomerCode: false, requireEmployeeCode: false,
 };
 
 /* ──────────────── document categories ──────────────── */
@@ -131,6 +135,9 @@ export default function DocumentTypesPage() {
       printTemplate: d.printTemplate, printTemplate2: d.printTemplate2,
       trackQty: d.trackQty, noTax: d.noTax, sellerStats: d.sellerStats,
       itemStats: d.itemStats, customerStats: d.customerStats,
+      noStockDispatch: d.noStockDispatch, requireNote: d.requireNote,
+      preventEditIfLinked: d.preventEditIfLinked,
+      requireCustomerCode: d.requireCustomerCode, requireEmployeeCode: d.requireEmployeeCode,
     });
     setIsDirty(false);
     setView("form");
@@ -417,6 +424,19 @@ export default function DocumentTypesPage() {
                   ] as [keyof DoctypeForm, string][]).map(([key, lbl]) => (
                     <CB key={key} label={lbl} checked={!!form[key]} onChange={v => set(key, v as any)} />
                   ))}
+                </div>
+                <div className="mt-3 pt-3" style={{ borderTop: "1px dashed #e2e8f0" }}>
+                  <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+                    {([
+                      ["noStockDispatch",      "إمنع الصرف بدون رصيد مخزنى"],
+                      ["requireNote",          "يجب ادخال الملحوظة"],
+                      ["preventEditIfLinked",  "منع التعديل اذا كانت مرتبطة"],
+                      ["requireCustomerCode",  "يجب ادخال كود العميل او المورد"],
+                      ["requireEmployeeCode",  "يجب ادخال كود الموظف"],
+                    ] as [keyof DoctypeForm, string][]).map(([key, lbl]) => (
+                      <CB key={key} label={lbl} checked={!!form[key]} onChange={v => set(key, v as any)} />
+                    ))}
+                  </div>
                 </div>
               </P>
 
