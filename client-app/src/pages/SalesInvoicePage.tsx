@@ -73,6 +73,7 @@ export default function SalesInvoicePage() {
   const [customerName, setCustomerName] = useState("");
   const [warehouseId, setWarehouseId] = useState<number | null>(null);
   const [journalWarehouseId, setJournalWarehouseId] = useState<number | null>(null); // مخزن مقيَّد من الدفتر
+  const [docTypeWarehouseId, setDocTypeWarehouseId] = useState<number | null>(null); // مخزن مقيَّد من نوع السند
   const [paymentType, setPaymentType] = useState<PaymentType>("cash");
   const [docTypeId, setDocTypeId] = useState<string>("");
   const [currency, setCurrency] = useState("SAR");
@@ -167,20 +168,44 @@ export default function SalesInvoicePage() {
     if (j) {
       if (j.warehouseId) {
         setWarehouseId(j.warehouseId);
-        setJournalWarehouseId(j.warehouseId); // قيِّد dropdown المخزن
+        setJournalWarehouseId(j.warehouseId);
       } else {
-        setJournalWarehouseId(null); // أي مخزن مسموح
+        setJournalWarehouseId(null);
       }
       if (j.defaultCurrency) setCurrency(j.defaultCurrency);
       if (j.defaultPayMethod) setPaymentType(j.defaultPayMethod as any);
     }
+    // أعد ضبط نوع السند إذا لم يعد ضمن الدفتر الجديد
+    setDocTypeId(prev => {
+      const newFiltered = (docTypesQuery.data ?? []).filter((dt: any) => dt.journal === String(id));
+      const still = newFiltered.some((dt: any) => String(dt.id) === prev);
+      return still ? prev : "";
+    });
+    setDocTypeWarehouseId(null);
     try {
       const preview = await utils.documentJournals.previewNextNumber.fetch({ journalId: id });
       if (preview) setInvoiceNumber(preview);
     } catch {
       toast.error("تعذّر جلب رقم الفاتورة من الدفتر");
     }
-  }, [journalsQuery.data, utils]);
+  }, [journalsQuery.data, docTypesQuery.data, utils]);
+
+  // عند اختيار نوع السند
+  const handleDocTypeSelect = useCallback((id: string) => {
+    setDocTypeId(id);
+    if (!id) { setDocTypeWarehouseId(null); return; }
+    const dt = (docTypesQuery.data ?? []).find((d: any) => String(d.id) === id);
+    const wStr = dt?.warehouse;
+    if (wStr && wStr !== "all" && wStr !== "none" && wStr !== "") {
+      const wId = parseInt(wStr);
+      if (!isNaN(wId)) {
+        setDocTypeWarehouseId(wId);
+        if (!journalWarehouseId) setWarehouseId(wId);
+        return;
+      }
+    }
+    setDocTypeWarehouseId(null);
+  }, [docTypesQuery.data, journalWarehouseId]);
 
 
   // ── Calculations ──────────────────────────────────────────────────────────
@@ -680,21 +705,31 @@ export default function SalesInvoicePage() {
               />
             </HF>
             <HF label="المخزن">
-              <select
-                value={warehouseId ?? ""}
-                onChange={e => !journalWarehouseId && setWarehouseId(parseInt(e.target.value) || null)}
-                className="classic-input w-full"
-                disabled={!!journalWarehouseId}
-                title={journalWarehouseId ? "المخزن محدد من الدفتر ولا يمكن تغييره" : undefined}
-              >
-                <option value="">-- اختر مخزن --</option>
-                {(journalWarehouseId
-                  ? warehousesQuery.data?.filter(w => w.id === journalWarehouseId)
-                  : warehousesQuery.data
-                )?.map(w => (
-                  <option key={w.id} value={w.id}>{w.name}</option>
-                ))}
-              </select>
+              {(() => {
+                const lockedWh = journalWarehouseId ?? docTypeWarehouseId;
+                const whTitle = journalWarehouseId
+                  ? "المخزن محدد من الدفتر ولا يمكن تغييره"
+                  : docTypeWarehouseId
+                  ? "المخزن محدد من نوع السند ولا يمكن تغييره"
+                  : undefined;
+                return (
+                  <select
+                    value={warehouseId ?? ""}
+                    onChange={e => !lockedWh && setWarehouseId(parseInt(e.target.value) || null)}
+                    className="classic-input w-full"
+                    disabled={!!lockedWh}
+                    title={whTitle}
+                  >
+                    <option value="">-- اختر مخزن --</option>
+                    {(lockedWh
+                      ? warehousesQuery.data?.filter(w => w.id === lockedWh)
+                      : warehousesQuery.data
+                    )?.map(w => (
+                      <option key={w.id} value={w.id}>{w.name}</option>
+                    ))}
+                  </select>
+                );
+              })()}
             </HF>
             <HF label="البائع">
               <input
@@ -709,37 +744,67 @@ export default function SalesInvoicePage() {
         {/* ── الصف الثاني ── */}
         <div className="grid gap-x-2 gap-y-1" style={{ gridTemplateColumns: "150px 120px 90px 100px 1fr 1fr" }}>
           <HF label="نوع السند">
-            {(docTypesQuery.data ?? []).length > 0 ? (
-              <select
-                value={docTypeId}
-                onChange={e => setDocTypeId(e.target.value)}
-                className="classic-input w-full"
-                style={{ fontWeight: 600 }}
-              >
-                <option value="">— اختر —</option>
-                {(docTypesQuery.data ?? []).map((dt: any) => (
-                  <option key={dt.id} value={String(dt.id)}>{dt.nameAr}</option>
-                ))}
-              </select>
-            ) : (
-              <select
-                value={paymentType}
-                onChange={e => {
-                  setPaymentType(e.target.value as PaymentType);
-                  setPaidAmountOverride("");
-                }}
-                className="classic-input w-full"
-                style={{
-                  background: paymentType === "cash" ? "#F0FDF4" : "#FFF7ED",
-                  borderColor: paymentType === "cash" ? "#16A34A" : "#D97706",
-                  fontWeight: 700,
-                  color: paymentType === "cash" ? "#15803D" : "#B45309",
-                }}
-              >
-                <option value="cash">نقدًا</option>
-                <option value="credit">آجل</option>
-              </select>
-            )}
+            {(() => {
+              const allDocTypes = docTypesQuery.data ?? [];
+              const filteredDocTypes = journalId
+                ? allDocTypes.filter((dt: any) => dt.journal === String(journalId))
+                : allDocTypes;
+              const selectedDT = docTypeId
+                ? allDocTypes.find((dt: any) => String(dt.id) === docTypeId)
+                : null;
+              if (allDocTypes.length > 0) {
+                return (
+                  <div className="relative w-full">
+                    {/* طبقة عرض الكود العربي فقط عند الاختيار */}
+                    {selectedDT && (
+                      <div
+                        className="absolute inset-0 flex items-center px-2 pointer-events-none z-10"
+                        style={{ background: "transparent" }}
+                      >
+                        <span className="font-bold text-blue-800 text-[12px] truncate">
+                          {selectedDT.codeAr || selectedDT.nameAr}
+                        </span>
+                      </div>
+                    )}
+                    <select
+                      value={docTypeId}
+                      onChange={e => handleDocTypeSelect(e.target.value)}
+                      className="classic-input w-full"
+                      style={{
+                        fontWeight: 600,
+                        color: selectedDT ? "transparent" : undefined,
+                      }}
+                    >
+                      <option value="">— اختر نوع السند —</option>
+                      {filteredDocTypes.map((dt: any) => (
+                        <option key={dt.id} value={String(dt.id)}>
+                          {dt.codeAr ? `${dt.codeAr} — ${dt.nameAr}` : dt.nameAr}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              }
+              return (
+                <select
+                  value={paymentType}
+                  onChange={e => {
+                    setPaymentType(e.target.value as PaymentType);
+                    setPaidAmountOverride("");
+                  }}
+                  className="classic-input w-full"
+                  style={{
+                    background: paymentType === "cash" ? "#F0FDF4" : "#FFF7ED",
+                    borderColor: paymentType === "cash" ? "#16A34A" : "#D97706",
+                    fontWeight: 700,
+                    color: paymentType === "cash" ? "#15803D" : "#B45309",
+                  }}
+                >
+                  <option value="cash">نقدًا</option>
+                  <option value="credit">آجل</option>
+                </select>
+              );
+            })()}
           </HF>
           <HF label="العملة">
             <select
