@@ -305,12 +305,16 @@ export default function DocumentTypesPage() {
     try {
       if (editId) {
         await updateMut.mutateAsync({ id: editId, ...payload });
+        setIsDirty(false);
+        toast.success("تم الحفظ بنجاح ✓");
       } else {
         const row = await createMut.mutateAsync(payload);
-        setEditId(row.id);
+        setIsDirty(false);
+        toast.success("تم الحفظ بنجاح ✓");
+        setSelectedType(typeId);
+        setEditId(null);
+        setView("list");
       }
-      setIsDirty(false);
-      toast.success("تم الحفظ بنجاح ✓");
     } catch (e: any) {
       toast.error(e.message ?? "حدث خطأ أثناء الحفظ");
     }
@@ -684,7 +688,7 @@ export default function DocumentTypesPage() {
           <p className="text-sm text-slate-500 text-right">يوجد تعديلات غير محفوظة، هل تريد الحفظ قبل المتابعة؟</p>
           <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
             <Button className="flex-1 bg-indigo-600 hover:bg-indigo-700"
-              onClick={() => { setShowUnsaved(false); handleSave(); if (pendingAction) { pendingAction(); setPendingAction(null); } }}>
+              onClick={async () => { setShowUnsaved(false); await handleSave(); if (pendingAction) { pendingAction(); setPendingAction(null); } }}>
               حفظ
             </Button>
             <Button variant="outline" className="flex-1"
