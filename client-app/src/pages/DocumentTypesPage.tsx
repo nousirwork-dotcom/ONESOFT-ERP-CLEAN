@@ -66,11 +66,11 @@ const FS = ({ value, onValueChange, children }: { value: string; onValueChange: 
   </Select>
 );
 const P = ({ title, children }: { title: string; children: React.ReactNode }) => (
-  <div className="overflow-hidden" style={{ border: "1px solid #e8edf3", borderRadius: 6, boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
-    <div className="px-3 py-1.5" style={{ background: "linear-gradient(to left, #f8faff, #f3f6fb)", borderBottom: "1px solid #edf2f7" }}>
+  <div style={{ border: "1px solid #e8edf3", borderRadius: 6, boxShadow: "0 1px 2px rgba(0,0,0,0.04)", overflow: "visible" }}>
+    <div className="px-3 py-1.5" style={{ background: "linear-gradient(to left, #f8faff, #f3f6fb)", borderBottom: "1px solid #edf2f7", borderRadius: "6px 6px 0 0" }}>
       <span className="font-semibold text-indigo-800 text-[12px]">{title}</span>
     </div>
-    <div className="px-3 py-2.5" style={{ background: "#fff" }}>{children}</div>
+    <div className="px-3 py-2.5" style={{ background: "#fff", borderRadius: "0 0 6px 6px" }}>{children}</div>
   </div>
 );
 const R = ({ label, lw = 100, children }: { label: string; lw?: number; children: React.ReactNode }) => (
