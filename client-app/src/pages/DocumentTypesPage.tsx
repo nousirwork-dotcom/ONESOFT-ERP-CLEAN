@@ -86,36 +86,45 @@ const CB = ({ label, checked, onChange }: { label: string; checked: boolean; onC
   </label>
 );
 
-/* ──────────────── AccountPicker ──────────────── */
+/* ──────────────── AccountPicker (من روابط المخازن) ──────────────── */
 function AccountPicker({
-  value, onChange, placeholder = "— اختر حساب —",
-}: { value: string; onChange: (id: string, name: string) => void; placeholder?: string }) {
-  const [open, setOpen]       = useState(false);
-  const [q,    setQ]          = useState("");
-  const [label, setLabel]     = useState("");
-  const ref                   = useRef<HTMLDivElement>(null);
+  value, onChange, placeholder = "— اختر من الروابط —",
+}: { value: string; onChange: (id: string) => void; placeholder?: string }) {
+  const [open, setOpen]   = useState(false);
+  const [q,    setQ]      = useState("");
+  const [label, setLabel] = useState("");
+  const ref               = useRef<HTMLDivElement>(null);
 
-  const { data: accounts = [] } = trpc.accounts.list.useQuery();
+  const { data: links = [] } = trpc.warehouses.accountLinks.listAll.useQuery();
 
   useEffect(() => {
-    if (value && accounts.length) {
-      const found = (accounts as any[]).find((a: any) => String(a.id) === value);
-      setLabel(found ? `${found.code} — ${found.name}` : value);
+    if (value && links.length) {
+      const found = (links as any[]).find((l: any) => String(l.id) === value);
+      if (found) setLabel(`${found.label}${found.accountCode ? ` (${found.accountCode})` : ""}`);
     } else if (!value) setLabel("");
-  }, [value, accounts]);
+  }, [value, links]);
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const filtered = (accounts as any[]).filter((a: any) =>
-    !a.isParent && (
-      a.code?.toLowerCase().includes(q.toLowerCase()) ||
-      a.name?.toLowerCase().includes(q.toLowerCase())
-    )
-  ).slice(0, 60);
+  const filtered = (links as any[]).filter((l: any) =>
+    l.label?.toLowerCase().includes(q.toLowerCase()) ||
+    l.accountCode?.toLowerCase().includes(q.toLowerCase()) ||
+    l.accountName?.toLowerCase().includes(q.toLowerCase()) ||
+    l.warehouseName?.toLowerCase().includes(q.toLowerCase())
+  );
+
+  const byWarehouse = filtered.reduce<Record<string, any[]>>((acc, l) => {
+    const wh = l.warehouseName ?? "—";
+    if (!acc[wh]) acc[wh] = [];
+    acc[wh].push(l);
+    return acc;
+  }, {});
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
@@ -133,52 +142,90 @@ function AccountPicker({
           {label || placeholder}
         </span>
         {value && (
-          <X style={{ width: 12, height: 12, color: "#94a3b8", flexShrink: 0, marginRight: 4 }}
-            onClick={e => { e.stopPropagation(); onChange("", ""); setLabel(""); }} />
+          <X style={{ width: 12, height: 12, color: "#94a3b8", flexShrink: 0, marginLeft: 4 }}
+            onClick={e => { e.stopPropagation(); onChange(""); setLabel(""); }} />
         )}
         <Search style={{ width: 12, height: 12, color: "#94a3b8", flexShrink: 0 }} />
       </div>
+
       {open && (
         <div style={{
           position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 9999,
           background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8,
-          boxShadow: "0 8px 24px rgba(0,0,0,0.12)", width: 300,
+          boxShadow: "0 8px 24px rgba(0,0,0,0.13)", width: 320,
         }}>
-          <div style={{ padding: "8px 8px 4px" }}>
+          {/* شريط البحث */}
+          <div style={{ padding: "8px 8px 4px", borderBottom: "1px solid #f1f5f9" }}>
             <div style={{ position: "relative" }}>
               <Search style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", width: 12, height: 12, color: "#94a3b8" }} />
               <input
                 autoFocus
                 value={q} onChange={e => setQ(e.target.value)}
-                placeholder="بحث بالكود أو الاسم..."
+                placeholder="بحث بالتسمية أو كود الحساب..."
                 style={{
                   width: "100%", height: 28, padding: "0 28px 0 8px", borderRadius: 6,
-                  border: "1px solid #ddd", fontSize: 11, outline: "none",
+                  border: "1px solid #e2e8f0", fontSize: 11, outline: "none",
                   fontFamily: "'Cairo', Tahoma, sans-serif", direction: "rtl",
                 }}
               />
             </div>
           </div>
-          <div style={{ maxHeight: 240, overflowY: "auto" }}>
-            {filtered.length === 0 && (
-              <div style={{ padding: "12px 12px", fontSize: 11, color: "#94a3b8", textAlign: "center" }}>لا توجد نتائج</div>
+
+          {/* القائمة */}
+          <div style={{ maxHeight: 260, overflowY: "auto" }}>
+            {Object.keys(byWarehouse).length === 0 && (
+              <div style={{ padding: 16, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>
+                {links.length === 0 ? "لا توجد روابط مُعرَّفة في المخازن" : "لا توجد نتائج"}
+              </div>
             )}
-            {filtered.map((a: any) => (
-              <div
-                key={a.id}
-                onClick={() => { onChange(String(a.id), `${a.code} — ${a.name}`); setLabel(`${a.code} — ${a.name}`); setOpen(false); }}
-                style={{
-                  padding: "6px 12px", cursor: "pointer", fontSize: 11,
-                  background: String(a.id) === value ? "#eff6ff" : undefined,
-                  color: String(a.id) === value ? "#1d4ed8" : "#374151",
-                  display: "flex", alignItems: "center", gap: 8,
-                  borderBottom: "1px solid #f8fafc",
-                }}
-                onMouseEnter={e => { if (String(a.id) !== value) (e.currentTarget as HTMLElement).style.background = "#f8fafc"; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = String(a.id) === value ? "#eff6ff" : ""; }}
-              >
-                <span style={{ fontFamily: "monospace", color: "#6366f1", minWidth: 60, fontSize: 10 }}>{a.code}</span>
-                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
+            {Object.entries(byWarehouse).map(([whName, rows]) => (
+              <div key={whName}>
+                {/* عنوان المخزن */}
+                <div style={{
+                  padding: "5px 12px", fontSize: 10, fontWeight: 700,
+                  color: "#6366f1", background: "#f8f8ff",
+                  borderBottom: "1px solid #ede9fe", borderTop: "1px solid #ede9fe",
+                  letterSpacing: ".3px",
+                }}>
+                  🏭 {whName}
+                </div>
+                {rows.map((l: any) => {
+                  const isSelected = String(l.id) === value;
+                  return (
+                    <div
+                      key={l.id}
+                      onClick={() => {
+                        const lbl = `${l.label}${l.accountCode ? ` (${l.accountCode})` : ""}`;
+                        onChange(String(l.id));
+                        setLabel(lbl);
+                        setOpen(false);
+                      }}
+                      style={{
+                        padding: "6px 14px", cursor: "pointer", fontSize: 11,
+                        background: isSelected ? "#eff6ff" : undefined,
+                        color: isSelected ? "#1d4ed8" : "#374151",
+                        display: "flex", alignItems: "center", gap: 8,
+                        borderBottom: "1px solid #fafafa",
+                      }}
+                      onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = "#f8fafc"; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = isSelected ? "#eff6ff" : ""; }}
+                    >
+                      <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {l.label}
+                      </span>
+                      {l.accountCode && (
+                        <span style={{ fontFamily: "monospace", fontSize: 10, color: "#6366f1", flexShrink: 0 }}>
+                          {l.accountCode}
+                        </span>
+                      )}
+                      {l.accountName && (
+                        <span style={{ fontSize: 10, color: "#94a3b8", flexShrink: 0, maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {l.accountName}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             ))}
           </div>

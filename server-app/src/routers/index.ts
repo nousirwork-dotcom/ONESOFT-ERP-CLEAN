@@ -1431,6 +1431,28 @@ export const appRouter = router({
             .where(eq(warehouseAccountLinks.warehouseId, input.warehouseId))
             .orderBy(warehouseAccountLinks.sortOrder);
         }),
+      listAll: protectedProcedure
+        .query(async ({ ctx }) => {
+          const rows = await db
+            .select({
+              id:          warehouseAccountLinks.id,
+              warehouseId: warehouseAccountLinks.warehouseId,
+              label:       warehouseAccountLinks.label,
+              accountId:   warehouseAccountLinks.accountId,
+              sortOrder:   warehouseAccountLinks.sortOrder,
+              accountCode: chartOfAccounts.code,
+              accountName: chartOfAccounts.name,
+              warehouseName: warehouses.name,
+            })
+            .from(warehouseAccountLinks)
+            .innerJoin(warehouses, and(
+              eq(warehouses.id, warehouseAccountLinks.warehouseId),
+              eq(warehouses.orgId, ctx.user.orgId),
+            ))
+            .leftJoin(chartOfAccounts, eq(chartOfAccounts.id, warehouseAccountLinks.accountId))
+            .orderBy(warehouses.name, warehouseAccountLinks.sortOrder);
+          return rows;
+        }),
       save: protectedProcedure
         .input(z.object({
           warehouseId: z.number(),
