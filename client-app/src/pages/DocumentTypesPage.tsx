@@ -86,55 +86,59 @@ const CB = ({ label, checked, onChange }: { label: string; checked: boolean; onC
   </label>
 );
 
-/* ──────────────── AccountPicker (من روابط المخازن) ──────────────── */
+/* ──────────────── AccountPicker — لوحتين (مخزن ← روابط) ──────────────── */
 function AccountPicker({
-  value, onChange, placeholder = "— اختر من الروابط —",
+  value, onChange, placeholder = "— اختر رابط محاسبي —",
 }: { value: string; onChange: (id: string) => void; placeholder?: string }) {
-  const [open, setOpen]   = useState(false);
-  const [q,    setQ]      = useState("");
-  const [label, setLabel] = useState("");
-  const ref               = useRef<HTMLDivElement>(null);
+  const [open,       setOpen]       = useState(false);
+  const [label,      setLabel]      = useState("");
+  const [activeWh,   setActiveWh]   = useState<number | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
 
   const { data: links = [] } = trpc.warehouses.accountLinks.listAll.useQuery();
+  const { data: warehouses = [] } = trpc.warehouses.list.useQuery();
 
+  /* ── مزامنة الـ label مع القيمة المحفوظة ── */
   useEffect(() => {
-    if (value && links.length) {
-      const found = (links as any[]).find((l: any) => String(l.id) === value);
-      if (found) setLabel(`${found.label}${found.accountCode ? ` (${found.accountCode})` : ""}`);
-    } else if (!value) setLabel("");
+    if (!value) { setLabel(""); return; }
+    const found = (links as any[]).find((l: any) => String(l.id) === value);
+    if (found) setLabel(`${found.label}${found.accountCode ? `  ${found.accountCode}` : ""}`);
   }, [value, links]);
 
+  /* ── إغلاق الـ popup عند الضغط خارجه ── */
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
+    const h = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  const filtered = (links as any[]).filter((l: any) =>
-    l.label?.toLowerCase().includes(q.toLowerCase()) ||
-    l.accountCode?.toLowerCase().includes(q.toLowerCase()) ||
-    l.accountName?.toLowerCase().includes(q.toLowerCase()) ||
-    l.warehouseName?.toLowerCase().includes(q.toLowerCase())
-  );
+  /* ── تحديد المخزن الافتراضي عند فتح الـ popup ── */
+  const handleOpen = () => {
+    if (!open) {
+      const whs = (warehouses as any[]);
+      if (whs.length && activeWh === null) setActiveWh(whs[0].id);
+    }
+    setOpen(v => !v);
+  };
 
-  const byWarehouse = filtered.reduce<Record<string, any[]>>((acc, l) => {
-    const wh = l.warehouseName ?? "—";
-    if (!acc[wh]) acc[wh] = [];
-    acc[wh].push(l);
-    return acc;
-  }, {});
+  /* ── الروابط الخاصة بالمخزن المحدد ── */
+  const whLinks = (links as any[]).filter((l: any) => l.warehouseId === activeWh);
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
+
+      {/* ── حقل الاختيار ── */}
       <div
-        onClick={() => { setOpen(v => !v); setQ(""); }}
+        onClick={handleOpen}
         style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
           height: 28, padding: "0 8px", borderRadius: 6, cursor: "pointer",
-          border: "1px solid #e2e8f0", background: value ? "#f0f9ff" : "#fff",
-          fontSize: 11, color: value ? "#1d4ed8" : "#9ca3af",
+          border: "1px solid #e2e8f0",
+          background: value ? "#f0f9ff" : "#fff",
+          fontSize: 11,
+          color: value ? "#1d4ed8" : "#9ca3af",
           fontFamily: "'Cairo', Tahoma, sans-serif",
         }}
       >
@@ -142,93 +146,148 @@ function AccountPicker({
           {label || placeholder}
         </span>
         {value && (
-          <X style={{ width: 12, height: 12, color: "#94a3b8", flexShrink: 0, marginLeft: 4 }}
-            onClick={e => { e.stopPropagation(); onChange(""); setLabel(""); }} />
+          <X
+            style={{ width: 12, height: 12, color: "#94a3b8", flexShrink: 0, marginLeft: 4 }}
+            onClick={e => { e.stopPropagation(); onChange(""); setLabel(""); }}
+          />
         )}
-        <Search style={{ width: 12, height: 12, color: "#94a3b8", flexShrink: 0 }} />
+        <Link2 style={{ width: 12, height: 12, color: "#94a3b8", flexShrink: 0 }} />
       </div>
 
+      {/* ── الـ popup ── */}
       {open && (
         <div style={{
           position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 9999,
           background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8,
-          boxShadow: "0 8px 24px rgba(0,0,0,0.13)", width: 320,
+          boxShadow: "0 8px 28px rgba(0,0,0,0.14)",
+          display: "flex", overflow: "hidden",
+          minWidth: 480, maxWidth: 560,
+          fontFamily: "'Cairo', Tahoma, sans-serif",
+          direction: "rtl",
         }}>
-          {/* شريط البحث */}
-          <div style={{ padding: "8px 8px 4px", borderBottom: "1px solid #f1f5f9" }}>
-            <div style={{ position: "relative" }}>
-              <Search style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", width: 12, height: 12, color: "#94a3b8" }} />
-              <input
-                autoFocus
-                value={q} onChange={e => setQ(e.target.value)}
-                placeholder="بحث بالتسمية أو كود الحساب..."
-                style={{
-                  width: "100%", height: 28, padding: "0 28px 0 8px", borderRadius: 6,
-                  border: "1px solid #e2e8f0", fontSize: 11, outline: "none",
-                  fontFamily: "'Cairo', Tahoma, sans-serif", direction: "rtl",
-                }}
-              />
+
+          {/* ── عمود المخازن ── */}
+          <div style={{
+            width: 150, borderLeft: "1px solid #e2e8f0",
+            background: "#f8fafc", flexShrink: 0,
+          }}>
+            <div style={{
+              padding: "7px 10px", fontSize: 10, fontWeight: 700,
+              color: "#64748b", borderBottom: "1px solid #e2e8f0",
+              letterSpacing: ".3px", textTransform: "uppercase",
+            }}>
+              المخازن
+            </div>
+            <div style={{ overflowY: "auto", maxHeight: 260 }}>
+              {(warehouses as any[]).length === 0 && (
+                <div style={{ padding: 12, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>لا مخازن</div>
+              )}
+              {(warehouses as any[]).map((wh: any) => {
+                const count = (links as any[]).filter((l: any) => l.warehouseId === wh.id).length;
+                const active = activeWh === wh.id;
+                return (
+                  <div
+                    key={wh.id}
+                    onClick={() => setActiveWh(wh.id)}
+                    style={{
+                      padding: "8px 10px", cursor: "pointer", fontSize: 11,
+                      background: active ? "#eff6ff" : undefined,
+                      color: active ? "#1d4ed8" : "#374151",
+                      borderRight: active ? "3px solid #3b82f6" : "3px solid transparent",
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      gap: 4,
+                    }}
+                    onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = "#f1f5f9"; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = active ? "#eff6ff" : ""; }}
+                  >
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{wh.name}</span>
+                    {count > 0 && (
+                      <span style={{
+                        fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 10,
+                        background: active ? "#bfdbfe" : "#e2e8f0",
+                        color: active ? "#1e40af" : "#64748b", flexShrink: 0,
+                      }}>{count}</span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          {/* القائمة */}
-          <div style={{ maxHeight: 260, overflowY: "auto" }}>
-            {Object.keys(byWarehouse).length === 0 && (
-              <div style={{ padding: 16, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>
-                {links.length === 0 ? "لا توجد روابط مُعرَّفة في المخازن" : "لا توجد نتائج"}
-              </div>
-            )}
-            {Object.entries(byWarehouse).map(([whName, rows]) => (
-              <div key={whName}>
-                {/* عنوان المخزن */}
-                <div style={{
-                  padding: "5px 12px", fontSize: 10, fontWeight: 700,
-                  color: "#6366f1", background: "#f8f8ff",
-                  borderBottom: "1px solid #ede9fe", borderTop: "1px solid #ede9fe",
-                  letterSpacing: ".3px",
-                }}>
-                  🏭 {whName}
+          {/* ── عمود الروابط ── */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {/* رأس العمود */}
+            <div style={{
+              padding: "7px 12px", fontSize: 10, fontWeight: 700,
+              color: "#64748b", borderBottom: "1px solid #e2e8f0",
+              letterSpacing: ".3px", textTransform: "uppercase",
+              display: "flex", gap: 14,
+            }}>
+              <span style={{ flex: 1 }}>البيان</span>
+              <span style={{ width: 68, flexShrink: 0, textAlign: "center" }}>كود الحساب</span>
+              <span style={{ width: 110, flexShrink: 0 }}>اسم الحساب</span>
+            </div>
+
+            {/* صفوف الروابط */}
+            <div style={{ overflowY: "auto", maxHeight: 260 }}>
+              {activeWh === null && (
+                <div style={{ padding: 16, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>
+                  اختر مخزناً من القائمة
                 </div>
-                {rows.map((l: any) => {
-                  const isSelected = String(l.id) === value;
-                  return (
-                    <div
-                      key={l.id}
-                      onClick={() => {
-                        const lbl = `${l.label}${l.accountCode ? ` (${l.accountCode})` : ""}`;
-                        onChange(String(l.id));
-                        setLabel(lbl);
-                        setOpen(false);
-                      }}
-                      style={{
-                        padding: "6px 14px", cursor: "pointer", fontSize: 11,
-                        background: isSelected ? "#eff6ff" : undefined,
-                        color: isSelected ? "#1d4ed8" : "#374151",
-                        display: "flex", alignItems: "center", gap: 8,
-                        borderBottom: "1px solid #fafafa",
-                      }}
-                      onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = "#f8fafc"; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = isSelected ? "#eff6ff" : ""; }}
-                    >
-                      <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {l.label}
-                      </span>
-                      {l.accountCode && (
-                        <span style={{ fontFamily: "monospace", fontSize: 10, color: "#6366f1", flexShrink: 0 }}>
-                          {l.accountCode}
-                        </span>
-                      )}
-                      {l.accountName && (
-                        <span style={{ fontSize: 10, color: "#94a3b8", flexShrink: 0, maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {l.accountName}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
+              )}
+              {activeWh !== null && whLinks.length === 0 && (
+                <div style={{ padding: 16, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>
+                  لا توجد روابط لهذا المخزن
+                </div>
+              )}
+              {whLinks.map((l: any) => {
+                const isSelected = String(l.id) === value;
+                return (
+                  <div
+                    key={l.id}
+                    onClick={() => {
+                      onChange(String(l.id));
+                      setLabel(`${l.label}${l.accountCode ? `  ${l.accountCode}` : ""}`);
+                      setOpen(false);
+                    }}
+                    style={{
+                      padding: "7px 12px", cursor: "pointer", fontSize: 11,
+                      background: isSelected ? "#eff6ff" : undefined,
+                      borderBottom: "1px solid #f8fafc",
+                      display: "flex", alignItems: "center", gap: 14,
+                    }}
+                    onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = "#f8fafc"; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = isSelected ? "#eff6ff" : ""; }}
+                  >
+                    {/* البيان */}
+                    <span style={{
+                      flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      color: isSelected ? "#1d4ed8" : "#1e293b", fontWeight: isSelected ? 600 : 400,
+                    }}>
+                      {l.label}
+                    </span>
+                    {/* كود الحساب */}
+                    <span style={{
+                      width: 68, flexShrink: 0, textAlign: "center",
+                      fontFamily: "monospace", fontSize: 10,
+                      color: "#6366f1", fontWeight: 600,
+                    }}>
+                      {l.accountCode || "—"}
+                    </span>
+                    {/* اسم الحساب */}
+                    <span style={{
+                      width: 110, flexShrink: 0, fontSize: 10,
+                      color: "#64748b", overflow: "hidden",
+                      textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}>
+                      {l.accountName || "—"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
+
         </div>
       )}
     </div>
