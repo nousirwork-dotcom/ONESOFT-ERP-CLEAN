@@ -21,6 +21,15 @@ import { toast } from "sonner";
 const Density = createContext<"compact" | "comfortable">("comfortable");
 
 /* ─────────────────────────── constants ─────────────────────────── */
+const REQUIRED_ACCOUNT_LABELS = [
+  "حساب المخزون",
+  "حساب تكلفة مبيعات 1",
+  "حساب الصندوق",
+  "حساب البنك",
+  "حساب مبيعات 1",
+  "حساب مشتريات 1",
+];
+
 const DEFAULT_LINKS = [
   "حساب المخزون", "حساب تكلفة مبيعات 1", "حساب تكلفة مبيعات 2",
   "حساب الصندوق", "حساب البنك",
@@ -408,6 +417,23 @@ export default function Warehouses() {
 
   const handleSave = async () => {
     if (!form.name.trim()) { toast.error("إسم 1 مطلوب"); return; }
+
+    /* ── التحقق من الحسابات الأساسية ── */
+    const missing = REQUIRED_ACCOUNT_LABELS.filter(label => {
+      const row = links.find(l => l.label === label);
+      return !row || !row.accountId || row.accountId === "none";
+    });
+    if (missing.length > 0) {
+      toast.error(
+        <div dir="rtl" style={{ lineHeight: 1.7 }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>الحسابات الأساسية مطلوبة:</div>
+          {missing.map(m => <div key={m} style={{ fontSize: 12 }}>• {m}</div>)}
+        </div>,
+        { duration: 5000 }
+      );
+      return;
+    }
+
     const payload = {
       name: form.name, code: f(form.code), name2: f(form.name2),
       fullName1: f(form.fullName1), fullName2: f(form.fullName2),
@@ -621,12 +647,14 @@ export default function Warehouses() {
                       const acc = postableAccounts.find((a: any) => String(a.id) === row.accountId)
                                ?? (accounts as any[])?.find((a: any) => String(a.id) === row.accountId);
                       const even = idx % 2 === 0;
+                      const isRequired = REQUIRED_ACCOUNT_LABELS.includes(row.label);
+                      const isMissing  = isRequired && (!row.accountId || row.accountId === "none");
                       return (
                         <tr
                           key={idx}
                           style={{
-                            background: even ? "#ffffff" : "#f8fafc",
-                            borderBottom: "1px solid #f0f4f8",
+                            background: isMissing ? "#fff9f0" : even ? "#ffffff" : "#f8fafc",
+                            borderBottom: isMissing ? "1px solid #fed7aa" : "1px solid #f0f4f8",
                             transition: "background 0.1s",
                           }}
                           className="hover:bg-indigo-50/30"
@@ -634,7 +662,10 @@ export default function Warehouses() {
                           <td className={`text-center text-slate-400 ${c ? "px-1 text-[9px]" : "px-2 py-1.5 text-[11px]"}`}>
                             {idx + 1}
                           </td>
-                          <td className={`font-medium text-slate-700 whitespace-nowrap ${c ? "px-1 text-[10px]" : "px-3 py-1.5 text-[12px]"}`}>
+                          <td className={`font-medium whitespace-nowrap ${c ? "px-1 text-[10px]" : "px-3 py-1.5 text-[12px]"} ${isMissing ? "text-orange-700" : "text-slate-700"}`}>
+                            {isRequired && (
+                              <span title="حساب أساسي مطلوب" style={{ color: "#ef4444", marginLeft: 2, fontSize: 10 }}>*</span>
+                            )}
                             {row.label}
                           </td>
                           <td
