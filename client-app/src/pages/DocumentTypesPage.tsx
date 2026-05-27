@@ -240,7 +240,8 @@ export default function DocumentTypesPage() {
   const { data: acctLinks = [] }  = trpc.warehouses.accountLinks.listAll.useQuery();
   const { data: journalsList = [] } = trpc.documentJournals.list.useQuery();
   const { data: journalEntryJournals = [] } = trpc.documentJournals.list.useQuery({ docType: "journal_entry" });
-  const { data: journalEntryTypes = [] } = trpc.documentTypes.list.useQuery({ typeId: "journal-entry" });
+  const { data: journalEntryTypes = [] }    = trpc.documentTypes.list.useQuery({ typeId: "journal-entry" });
+  const { data: stockIssueItemsTypes = [] } = trpc.documentTypes.list.useQuery({ typeId: "stock-issue-items" });
 
   const doctypes = dbDoctypes as any[];
 
@@ -608,11 +609,14 @@ export default function DocumentTypesPage() {
                       ))}
                     </FS>
                   </R>
-                  <R label="نوع مستند المخزون">
+                  <R label="نوع صرف الأصناف">
                     <FS value={form.stockDocType} onValueChange={v => set("stockDocType", v)}>
-                      <SelectItem value="sales">مبيعات</SelectItem>
-                      <SelectItem value="purchase">مشتريات</SelectItem>
-                      <SelectItem value="transfer">تحويل</SelectItem>
+                      <SelectItem value="__none__">— بدون —</SelectItem>
+                      {(stockIssueItemsTypes as any[]).map((dt: any) => (
+                        <SelectItem key={dt.id} value={String(dt.id)}>
+                          {dt.codeAr ? `${dt.codeAr} — ${dt.nameAr}` : dt.nameAr}
+                        </SelectItem>
+                      ))}
                     </FS>
                   </R>
                   <R label="دفتر مستند المخزون">
