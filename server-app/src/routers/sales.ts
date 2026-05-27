@@ -15,9 +15,10 @@ export const salesRouter = router({
       invoiceType: z.enum(['sale', 'return', 'quote']).optional(),
       dateFrom: z.string().optional(),      // YYYY-MM-DD
       dateTo: z.string().optional(),        // YYYY-MM-DD
-      warehouseId: z.number().optional(),   // فلتر المخزن
-      customerSearch: z.string().optional(),// بحث باسم/كود العميل
+      warehouseId: z.number().optional(),    // فلتر المخزن
+      customerSearch: z.string().optional(), // بحث باسم/كود العميل
       excludeReturns: z.boolean().optional(),// استثناء المردودات
+      numberPrefix: z.string().optional(),   // فلتر دفتر المستند (بادئة الرقم)
     }).optional())
     .query(async ({ ctx, input }) => {
       const orgId = ctx.user.orgId;
@@ -60,6 +61,10 @@ export const salesRouter = router({
         const to = new Date(input.dateTo);
         to.setHours(23, 59, 59, 999);
         filtered = filtered.filter(r => new Date(r.invoiceDate) <= to);
+      }
+      if (input?.numberPrefix) {
+        const pfx = input.numberPrefix.toLowerCase();
+        filtered = filtered.filter(r => r.invoiceNumber?.toLowerCase().startsWith(pfx));
       }
       const limit = input?.limit || 200;
       const page = input?.page || 1;

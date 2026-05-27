@@ -1236,14 +1236,19 @@ function SalesInvoicesReport() {
   const [customerSearch, setCustomerSearch] = useState("");
   const [sortMode,       setSortMode]       = useState<SortMode>("document");
   const [displayMode,    setDisplayMode]    = useState<DisplayMode>("totals");
+  const [selectedJournal, setSelectedJournal] = useState<string>("all");
 
   const [queryInput, setQueryInput] = useState<{
     dateFrom: string; dateTo: string;
     warehouseId?: number; customerSearch?: string;
     excludeReturns: boolean; limit: number;
+    numberPrefix?: string;
   } | null>(null);
 
   const { data: warehouses = [] } = trpc.warehouses.list.useQuery();
+  const { data: allJournals = [] } = trpc.documentJournals.list.useQuery({ docType: "sales_invoice" });
+  const { data: returnJournals = [] } = trpc.documentJournals.list.useQuery({ docType: "return" });
+  const journals = [...allJournals, ...returnJournals];
 
   const { data: rows = [], isFetching, isLoading } = trpc.salesInvoices.list.useQuery(
     queryInput ?? { dateFrom, dateTo, limit: 2000 },
@@ -1251,11 +1256,13 @@ function SalesInvoicesReport() {
   );
 
   const handleRun = () => {
+    const journal = journals.find((j: any) => String(j.id) === selectedJournal);
     setQueryInput({
       dateFrom, dateTo,
       warehouseId: selectedWh !== "all" ? parseInt(selectedWh) : undefined,
       customerSearch: customerSearch.trim() || undefined,
       excludeReturns: !showReturns,
+      numberPrefix: journal ? journal.numberPrefix : undefined,
       limit: 2000,
     });
   };
@@ -1421,6 +1428,37 @@ function SalesInvoicesReport() {
               {warehouses.map((w: any) => (
                 <option key={w.id} value={String(w.id)}>{w.name}</option>
               ))}
+            </select>
+          </div>
+
+          {/* دفتر المستند */}
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <span style={labelStyle}>دفتر المستند</span>
+            <select value={selectedJournal} onChange={e => setSelectedJournal(e.target.value)}
+              style={{ ...inputStyle, width: 210, cursor: "pointer" }}>
+              <option value="all">كل الدفاتر</option>
+              {journals.length > 0 && (
+                <>
+                  {allJournals.length > 0 && (
+                    <optgroup label="── فواتير المبيعات ──">
+                      {allJournals.map((j: any) => (
+                        <option key={j.id} value={String(j.id)}>
+                          {j.name}{j.numberPrefix ? ` (${j.numberPrefix})` : ""}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {returnJournals.length > 0 && (
+                    <optgroup label="── مردودات المبيعات ──">
+                      {returnJournals.map((j: any) => (
+                        <option key={j.id} value={String(j.id)}>
+                          {j.name}{j.numberPrefix ? ` (${j.numberPrefix})` : ""}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </>
+              )}
             </select>
           </div>
 
