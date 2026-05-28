@@ -914,7 +914,6 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                         color: selectedDT ? "transparent" : undefined,
                       }}
                     >
-                      <option value="">— اختر نوع السند —</option>
                       {filteredDocTypes.map((dt: any) => (
                         <option key={dt.id} value={String(dt.id)}>
                           {dt.codeAr ? `${dt.codeAr} — ${dt.nameAr}` : dt.nameAr}
