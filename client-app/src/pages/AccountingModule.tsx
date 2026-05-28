@@ -16,7 +16,7 @@ import {
   Folder, FolderOpen, LayoutList, Network,
   FileDown, FileSpreadsheet, ChevronDown as ChevronDownIcon,
   Eye, Copy, PowerOff, PlusCircle, MoreVertical, AlertTriangle, Save,
-  ExternalLink, Zap,
+  ExternalLink, Zap, PackageCheck, Layers,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -81,12 +81,20 @@ const menuSections = [
       { id: "cash-flow",        label: "قائمة التدفقات النقدية",      icon: Wallet,    path: "/accounting/cash-flow" },
     ],
   },
+  {
+    id: "posting-ops",
+    label: "الترحيل المحاسبي والمخزني",
+    icon: PackageCheck,
+    children: [
+      { id: "posting-operations", label: "عمليات الترحيل (المرحلة الثانية)", icon: Layers, path: "/accounting/posting-ops" },
+    ],
+  },
 ];
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 function AccountingMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
-    journal: true, "chart-of-accounts": true, "cost-centers": true, "financial-reports": true,
+    journal: true, "chart-of-accounts": true, "cost-centers": true, "financial-reports": true, "posting-ops": true,
   });
   const toggle = (id: string) => setExpanded(p => ({ ...p, [id]: !p[id] }));
   const { openTab } = useTabManager();

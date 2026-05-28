@@ -162,6 +162,7 @@ export const purchasesRouter = router({
       remainingAmount: z.string().optional(),
       status: z.enum(['draft', 'confirmed', 'cancelled', 'paid']).optional(),
       notes: z.string().optional(),
+      docTypeId: z.number().optional(),
       items: z.array(z.object({
         productId: z.number().optional(),
         productCode: z.string().optional(),
@@ -179,6 +180,11 @@ export const purchasesRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const { id, items, invoiceDate, ...rest } = input;
+      const existing = await db.query.purchaseInvoices.findFirst({
+        where: and(eq(purchaseInvoices.id, id), eq(purchaseInvoices.orgId, ctx.user.orgId)),
+      });
+      if (existing?.isPosted)
+        throw new Error('لا يمكن تعديل مستند مرحَّل — يجب فك الترحيل أولاً');
       await db.update(purchaseInvoices).set({
         ...rest,
         ...(invoiceDate ? { invoiceDate: new Date(invoiceDate) } : {}),
@@ -204,6 +210,11 @@ export const purchasesRouter = router({
   delete: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
+      const existing = await db.query.purchaseInvoices.findFirst({
+        where: and(eq(purchaseInvoices.id, input.id), eq(purchaseInvoices.orgId, ctx.user.orgId)),
+      });
+      if (existing?.isPosted)
+        throw new Error('لا يمكن حذف مستند مرحَّل — يجب فك الترحيل أولاً');
       await db.delete(purchaseInvoices).where(
         and(eq(purchaseInvoices.id, input.id), eq(purchaseInvoices.orgId, ctx.user.orgId))
       );

@@ -261,6 +261,8 @@ export const salesInvoices = pgTable('sales_invoices', {
   isPosted: boolean('is_posted').notNull().default(false),
   postedAt: timestamp('posted_at'),
   postedJournalEntryId: integer('posted_journal_entry_id'),
+  costPosted: boolean('cost_posted').notNull().default(false),
+  costPostedJournalEntryId: integer('cost_posted_journal_entry_id'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -312,9 +314,12 @@ export const purchaseInvoices = pgTable('purchase_invoices', {
   status: invoiceStatusEnum('status').notNull().default('draft'),
   notes: text('notes'),
   userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+  docTypeId: integer('doc_type_id'),
   isPosted: boolean('is_posted').notNull().default(false),
   postedAt: timestamp('posted_at'),
   postedJournalEntryId: integer('posted_journal_entry_id'),
+  inventoryPosted: boolean('inventory_posted').notNull().default(false),
+  costPostedJournalEntryId: integer('cost_posted_journal_entry_id'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -566,6 +571,12 @@ export const documentJournals = pgTable('document_journals', {
   creditAccountId:  integer('credit_account_id').references(() => chartOfAccounts.id, { onDelete: 'set null' }),
   taxAccountId:     integer('tax_account_id').references(() => chartOfAccounts.id, { onDelete: 'set null' }),
   discountAccountId:integer('discount_account_id').references(() => chartOfAccounts.id, { onDelete: 'set null' }),
+  // حسابات المشتريات
+  purchaseAccountId:integer('purchase_account_id').references(() => chartOfAccounts.id, { onDelete: 'set null' }),
+  supplierAccountId:integer('supplier_account_id').references(() => chartOfAccounts.id, { onDelete: 'set null' }),
+  // حسابات المخزون والتكلفة (المرحلة الثانية)
+  inventoryAccountId:integer('inventory_account_id').references(() => chartOfAccounts.id, { onDelete: 'set null' }),
+  cogsAccountId:    integer('cogs_account_id').references(() => chartOfAccounts.id, { onDelete: 'set null' }),
   // ── الإعدادات ─────────────────────────────────────────────────────────────
   defaultCurrency:  varchar('default_currency', { length: 10 }).default('SAR'),
   defaultPayMethod: varchar('default_pay_method', { length: 20 }).default('cash'),
@@ -624,6 +635,8 @@ export const documentTypes = pgTable('document_types', {
   acctDiscount:         varchar('acct_discount', { length: 50 }),
   acctCash:             varchar('acct_cash', { length: 50 }),
   acctTax:              varchar('acct_tax', { length: 50 }),
+  acctInventory:        varchar('acct_inventory', { length: 50 }),
+  acctCogs:             varchar('acct_cogs', { length: 50 }),
   sortOrder:            integer('sort_order').notNull().default(0),
   isActive:             boolean('is_active').notNull().default(true),
   createdAt:            timestamp('created_at').notNull().defaultNow(),

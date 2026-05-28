@@ -64,6 +64,7 @@ import SettingsModule, {
   CfgShiftsTab, CfgReportDesignerTab, CfgTestSetupTab, CfgTestEditTab, CfgFieldSpecsTab,
 } from "./pages/SettingsModule";
 import PostingSettingsPage from "./pages/PostingSettingsPage";
+import PostingOperationsPage from "./pages/PostingOperationsPage";
 import LoginPage from "./pages/LoginPage";
 import SuperAdminPage from "./pages/SuperAdminPage";
 import { createElement, useEffect } from "react";
@@ -210,6 +211,7 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/cfg/doc-books":           CfgDocBooksTab,
   "/cfg/document-journals":   CfgDocumentJournalsTab,
   "/cfg/posting-settings":    PostingSettingsPage,
+  "/accounting/posting-ops":  PostingOperationsPage,
   "/cfg/document-types":      CfgDocumentTypesTab,
   "/cfg/document-templates":  CfgDocumentTemplatesTab,
   "/cfg/field-design":      CfgFieldDesignTab,
