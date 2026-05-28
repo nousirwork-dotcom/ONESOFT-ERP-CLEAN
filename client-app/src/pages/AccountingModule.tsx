@@ -3879,12 +3879,12 @@ function TrialBalancePage({
             {tbMode === "full" && (
               <tr style={{ background: "#F0EDE6", color: "#3A3228", position: "sticky", top: 38, zIndex: 3, borderBottom: "1px solid #C8C3B8" }}>
                 <th colSpan={3}></th>
-                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10 }}>مدين</th>
-                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10, borderLeft: "1px solid #9CA3AF" }}>دائن</th>
-                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10 }}>مدين</th>
-                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10, borderLeft: "1px solid #9CA3AF" }}>دائن</th>
-                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10 }}>مدين</th>
-                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10 }}>دائن</th>
+                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 15 }}>مدين</th>
+                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 15, borderLeft: "1px solid #9CA3AF" }}>دائن</th>
+                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 15 }}>مدين</th>
+                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 15, borderLeft: "1px solid #9CA3AF" }}>دائن</th>
+                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 15 }}>مدين</th>
+                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 15 }}>دائن</th>
               </tr>
             )}
           </thead>
