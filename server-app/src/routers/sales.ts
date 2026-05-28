@@ -332,10 +332,14 @@ export const salesRouter = router({
           })),
         };
       }
+      const typeFilter = input.type === 'order' ? 'order'
+        : input.type === 'quote' ? 'quote'
+        : 'sale';
       const invoice = await db.query.salesInvoices.findFirst({
         where: and(
           eq(salesInvoices.orgId, ctx.user.orgId),
           eq(salesInvoices.invoiceNumber, input.number),
+          eq(salesInvoices.invoiceType, typeFilter as any),
         ),
       });
       if (!invoice) return null;

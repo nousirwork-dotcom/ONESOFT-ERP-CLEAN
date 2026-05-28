@@ -963,7 +963,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
               <div className="relative flex-1">
                 <input
                   value={basedOnNum}
-                  onChange={e => setBasedOnNum(e.target.value)}
+                  onChange={e => { setBasedOnNum(e.target.value); setBasedOnTrigger(""); }}
                   onBlur={() => {
                     if (basedOnType && basedOnNum.trim())
                       setBasedOnTrigger(basedOnNum.trim());
@@ -972,18 +972,19 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                     if (e.key === 'Enter' && basedOnType && basedOnNum.trim())
                       setBasedOnTrigger(basedOnNum.trim());
                   }}
-                  placeholder={basedOnType ? "رقم المستند..." : ""}
+                  placeholder={basedOnType ? "رقم المستند ثم Enter ↵" : "اختر النوع أولاً"}
                   disabled={!basedOnType}
                   className="classic-input w-full"
+                  style={!basedOnType ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
                 />
                 {basedOnQuery.isFetching && (
-                  <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[10px] text-blue-500">⏳</span>
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-blue-500">⏳</span>
                 )}
                 {basedOnTrigger && !basedOnQuery.isFetching && basedOnQuery.data === null && (
-                  <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[10px] text-red-500">✗</span>
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-red-500 font-bold" title="لم يُوجد المستند">✗</span>
                 )}
                 {basedOnTrigger && !basedOnQuery.isFetching && basedOnQuery.data && (
-                  <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[10px] text-green-600">✓</span>
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-green-600 font-bold" title="تم استيراد البيانات">✓</span>
                 )}
               </div>
             </div>
