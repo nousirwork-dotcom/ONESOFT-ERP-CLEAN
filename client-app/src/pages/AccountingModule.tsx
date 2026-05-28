@@ -3546,34 +3546,34 @@ function TrialBalancePage({
       <div style={{ flex: 1, overflowY: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5 }}>
           <thead>
-            <tr style={{ background: "#1E3A5F", color: "#fff", position: "sticky", top: 0, zIndex: 3 }}>
+            <tr style={{ background: "#4B5563", color: "#fff", position: "sticky", top: 0, zIndex: 3 }}>
               <th style={{ width: 28, padding: "7px 4px" }}></th>
               <th style={{ padding: "7px 10px", textAlign: "right", fontWeight: 600, width: 90, whiteSpace: "nowrap" }}>كود</th>
               <th style={{ padding: "7px 10px", textAlign: "right", fontWeight: 600 }}>اسم الحساب</th>
               {tbMode === "full" ? (
                 <>
-                  <th colSpan={2} style={{ padding: "7px 10px", textAlign: "center", fontSize: 10.5, borderRight: "1px solid #2E5F96", borderLeft: "1px solid #2E5F96" }}>رصيد أول المدة</th>
-                  <th colSpan={2} style={{ padding: "7px 10px", textAlign: "center", fontSize: 10.5, borderLeft: "1px solid #2E5F96" }}>الحركة</th>
+                  <th colSpan={2} style={{ padding: "7px 10px", textAlign: "center", fontSize: 10.5, borderRight: "1px solid #6B7280", borderLeft: "1px solid #6B7280" }}>رصيد أول المدة</th>
+                  <th colSpan={2} style={{ padding: "7px 10px", textAlign: "center", fontSize: 10.5, borderLeft: "1px solid #6B7280" }}>الحركة</th>
                   <th colSpan={2} style={{ padding: "7px 10px", textAlign: "center", fontSize: 10.5 }}>رصيد آخر المدة</th>
                 </>
               ) : (
                 <>
                   <th style={{ padding: "7px 10px", textAlign: "center", fontSize: 10.5, whiteSpace: "nowrap" }}>رصيد أول المدة</th>
-                  <th style={{ padding: "7px 10px", textAlign: "center", fontSize: 10.5, color: "#93C5FD", whiteSpace: "nowrap" }}>حركة مدين</th>
-                  <th style={{ padding: "7px 10px", textAlign: "center", fontSize: 10.5, color: "#FCD34D", whiteSpace: "nowrap" }}>حركة دائن</th>
+                  <th style={{ padding: "7px 10px", textAlign: "center", fontSize: 10.5, whiteSpace: "nowrap" }}>حركة مدين</th>
+                  <th style={{ padding: "7px 10px", textAlign: "center", fontSize: 10.5, whiteSpace: "nowrap" }}>حركة دائن</th>
                   <th style={{ padding: "7px 10px", textAlign: "center", fontSize: 10.5, whiteSpace: "nowrap" }}>رصيد آخر المدة</th>
                 </>
               )}
             </tr>
             {tbMode === "full" && (
-              <tr style={{ background: "#2E4F7A", color: "#CBD5E1", position: "sticky", top: 38, zIndex: 3 }}>
+              <tr style={{ background: "#6B7280", color: "#F9FAFB", position: "sticky", top: 38, zIndex: 3 }}>
                 <th colSpan={3}></th>
-                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10, color: "#93C5FD" }}>مدين</th>
-                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10, color: "#FCD34D", borderLeft: "1px solid #3A6094" }}>دائن</th>
-                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10, color: "#93C5FD" }}>مدين</th>
-                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10, color: "#FCD34D", borderLeft: "1px solid #3A6094" }}>دائن</th>
-                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10, color: "#93C5FD" }}>مدين</th>
-                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10, color: "#FCD34D" }}>دائن</th>
+                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10 }}>مدين</th>
+                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10, borderLeft: "1px solid #9CA3AF" }}>دائن</th>
+                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10 }}>مدين</th>
+                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10, borderLeft: "1px solid #9CA3AF" }}>دائن</th>
+                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10 }}>مدين</th>
+                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10 }}>دائن</th>
               </tr>
             )}
           </thead>
@@ -3648,23 +3648,23 @@ function TrialBalancePage({
             })}
           </tbody>
           <tfoot>
-            <tr style={{ background: "#1E3A5F", color: "#fff", position: "sticky", bottom: 0, zIndex: 2 }}>
+            <tr style={{ background: "#4B5563", color: "#fff", position: "sticky", bottom: 0, zIndex: 2 }}>
               <td colSpan={3} style={{ padding: "7px 12px", fontWeight: 700, fontSize: 12 }}>الإجمالي الكلي</td>
               {tbMode === "full" ? (
                 <>
-                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#93C5FD", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.openD)}</td>
-                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#FCD34D", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.openC)}</td>
-                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#93C5FD", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.moveD)}</td>
-                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#FCD34D", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.moveC)}</td>
-                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#93C5FD", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.closeD)}</td>
-                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#FCD34D", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.closeC)}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#FCA5A5", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.openD)}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#6EE7B7", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.openC)}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#FCA5A5", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.moveD)}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#6EE7B7", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.moveC)}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#FCA5A5", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.closeD)}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#6EE7B7", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.closeC)}</td>
                 </>
               ) : (
                 <>
-                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#9CA3AF" }}>—</td>
-                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#93C5FD", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.moveD)}</td>
-                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#FCD34D", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.moveC)}</td>
-                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#9CA3AF" }}>—</td>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#D1D5DB" }}>—</td>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#FCA5A5", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.moveD)}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#6EE7B7", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.moveC)}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#D1D5DB" }}>—</td>
                 </>
               )}
             </tr>
