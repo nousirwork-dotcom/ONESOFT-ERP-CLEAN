@@ -570,6 +570,7 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
   const costCentersQuery = trpc.costCenters.list.useQuery();
   const journalListQuery = trpc.journal.list.useQuery();
   const nextNumberQuery  = trpc.journal.nextNumber.useQuery();
+  const jeBooksQuery     = trpc.documentJournals.list.useQuery({ docType: "journal_entry" });
 
   const createMutation = trpc.journal.create.useMutation({
     onSuccess: (data) => {
@@ -612,8 +613,10 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
   // ── Form state ─────────────────────────────────────────────────────────────
   const [entryDate,     setEntryDate]     = useState(new Date().toISOString().split("T")[0]);
   const [description,   setDescription]   = useState("");
-  const [analyticCode,  setAnalyticCode]  = useState("");
+  const [analyticCode,  setAnalyticCode]  = useState(""); // kept for backward compat (not shown)
   const [basedOn,       setBasedOn]       = useState("");
+  const [basedOnDocType, setBasedOnDocType] = useState("");
+  const [jeJournalId,   setJeJournalId]   = useState<number | null>(null);
   const [sourceDocType,   setSourceDocType]   = useState("");
   const [sourceDocId,     setSourceDocId]     = useState<number | null>(null);
   const [sourceDocNumber, setSourceDocNumber] = useState("");
@@ -720,7 +723,8 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
   const handleNew = useCallback(() => {
     justLoadedRef.current = true;
     setLines([emptyLine(), emptyLine()]);
-    setDescription(""); setAnalyticCode(""); setBasedOn("");
+    setDescription(""); setAnalyticCode(""); setBasedOn(""); setBasedOnDocType("");
+    setJeJournalId(null);
     setSourceDocType(""); setSourceDocId(null); setSourceDocNumber(""); setEntryType("manual");
     setSelectedLineIdx(0);
     setSavedEntryId(null); setSavedEntryNumber(""); setEntryStatus("new");
@@ -1005,28 +1009,32 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
       {/* ── Header Fields ── */}
       <Card className="border-border/60">
         <CardContent className="p-3">
-          {/* Row 1: رقم القيد | نوع السند | نوع القيد | تاريخ التحرير */}
+          {/* Row 1: رقم القيد | دفتر القيد | الاسم | تاريخ التحرير */}
           <div className="grid grid-cols-4 gap-3 mb-3">
             <div>
               <Label className="text-xs text-muted-foreground">قيد #</Label>
               <Input value={savedEntryNumber || nextNumberQuery.data || "..."} readOnly className="h-7 text-xs bg-muted/30 font-mono" />
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">نوع السند</Label>
-              <Input value={titleMap[voucherType] ?? "سند قيد"} readOnly className="h-7 text-xs bg-muted/30" />
+              <Label className="text-xs text-muted-foreground">دفتر القيد</Label>
+              <FS value={jeJournalId?.toString() ?? ""} onValueChange={v => setJeJournalId(v ? parseInt(v) : null)} disabled={entryType === "auto"}>
+                <FSTrigger className="h-7 text-xs w-full">
+                  <FSValue placeholder="اختر الدفتر..." />
+                </FSTrigger>
+                <FSContent>
+                  {(jeBooksQuery.data ?? []).map(j => (
+                    <FSItem key={j.id} value={j.id.toString()}>{j.name}</FSItem>
+                  ))}
+                </FSContent>
+              </FS>
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">نوع القيد</Label>
-              <div className="h-7 flex items-center">
-                {entryType === "auto"
-                  ? <span className="text-[11px] px-2.5 py-1 rounded-full border font-medium bg-amber-50 text-amber-700 border-amber-200 flex items-center gap-1">
-                      <Zap className="w-3 h-3" /> آلي
-                    </span>
-                  : <span className="text-[11px] px-2.5 py-1 rounded-full border font-medium bg-slate-50 text-slate-600 border-slate-200 flex items-center gap-1">
-                      <Edit2 className="w-3 h-3" /> يدوي
-                    </span>
-                }
-              </div>
+              <Label className="text-xs text-muted-foreground">الاسم</Label>
+              <Input
+                value={(jeBooksQuery.data ?? []).find(j => j.id === jeJournalId)?.name ?? (titleMap[voucherType] ?? "سند قيد")}
+                readOnly
+                className="h-7 text-xs bg-muted/30"
+              />
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">تاريخ التحرير</Label>
@@ -1034,21 +1042,39 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
             </div>
           </div>
 
-          {/* Row 2: بيانات الربط (آلي) أو مرجع (يدوي) + شرح + كود تحليلي */}
+          {/* Row 2: شرح | بناءا على | رقم المستند */}
           <div className="grid grid-cols-4 gap-3">
-            {entryType === "auto" ? (
-              <>
-                <div>
-                  <Label className="text-xs text-muted-foreground">بناء على</Label>
-                  <Input
-                    value={SOURCE_DOC_LABELS[sourceDocType] ?? sourceDocType}
-                    readOnly
-                    className="h-7 text-xs bg-amber-50/40 border-amber-200/60 text-amber-800"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">رقم المستند</Label>
-                  <button
+            <div className="col-span-2">
+              <Label className="text-xs text-muted-foreground">شرح</Label>
+              {entryType === "auto"
+                ? <Input value={description} readOnly className="h-7 text-xs bg-muted/20" />
+                : <Input value={description} onChange={e => setDescription(e.target.value)} className="h-7 text-xs" placeholder="وصف القيد..." />
+              }
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">بناءا على</Label>
+              {entryType === "auto"
+                ? <Input value={SOURCE_DOC_LABELS[sourceDocType] ?? sourceDocType} readOnly className="h-7 text-xs bg-amber-50/40 border-amber-200/60 text-amber-800" />
+                : <FS value={basedOnDocType} onValueChange={setBasedOnDocType}>
+                    <FSTrigger className="h-7 text-xs w-full">
+                      <FSValue placeholder="نوع المستند..." />
+                    </FSTrigger>
+                    <FSContent>
+                      <FSItem value="">— بدون —</FSItem>
+                      <FSItem value="sales_invoice">فاتورة مبيعات</FSItem>
+                      <FSItem value="purchase_invoice">فاتورة مشتريات</FSItem>
+                      <FSItem value="receipt_voucher">سند قبض</FSItem>
+                      <FSItem value="payment_voucher">سند صرف</FSItem>
+                      <FSItem value="journal_entry">سند قيد</FSItem>
+                      <FSItem value="other">أخرى</FSItem>
+                    </FSContent>
+                  </FS>
+              }
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">رقم المستند</Label>
+              {entryType === "auto"
+                ? <button
                     onClick={() => {
                       const page = SOURCE_DOC_PAGE[sourceDocType];
                       if (page && onNavigateTo) { onNavigateTo(page); }
@@ -1060,28 +1086,9 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
                     <ExternalLink className="w-3 h-3 shrink-0" />
                     {sourceDocNumber || "—"}
                   </button>
-                </div>
-                <div className="col-span-2">
-                  <Label className="text-xs text-muted-foreground">شرح</Label>
-                  <Input value={description} readOnly className="h-7 text-xs bg-muted/20" />
-                </div>
-              </>
-            ) : (
-              <>
-                <div>
-                  <Label className="text-xs text-muted-foreground">مرجع</Label>
-                  <Input value={basedOn} onChange={e => setBasedOn(e.target.value)} className="h-7 text-xs" placeholder="رقم مرجعي..." />
-                </div>
-                <div className="col-span-2">
-                  <Label className="text-xs text-muted-foreground">شرح</Label>
-                  <Input value={description} onChange={e => setDescription(e.target.value)} className="h-7 text-xs" placeholder="وصف القيد..." />
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">الكود التحليلي</Label>
-                  <Input value={analyticCode} onChange={e => setAnalyticCode(e.target.value)} className="h-7 text-xs" placeholder="كود تحليلي..." />
-                </div>
-              </>
-            )}
+                : <Input value={basedOn} onChange={e => setBasedOn(e.target.value)} className="h-7 text-xs font-mono" placeholder="رقم المستند..." />
+              }
+            </div>
           </div>
         </CardContent>
       </Card>
