@@ -9,6 +9,14 @@ import {
 } from '../schema.js';
 
 // ─── مساعد: تحليل حسابات نوع المستند عبر warehouseAccountLinks ─────────────
+async function resolveDocTypeAccountsByJournal(journalId: number, orgId: number) {
+  const docType = await db.query.documentTypes.findFirst({
+    where: and(eq(documentTypes.journal, String(journalId)), eq(documentTypes.orgId, orgId)),
+  });
+  if (!docType) return null;
+  return resolveDocTypeAccounts(docType.id, orgId);
+}
+
 async function resolveDocTypeAccounts(docTypeId: number, orgId: number) {
   const docType = await db.query.documentTypes.findFirst({
     where: and(eq(documentTypes.id, docTypeId), eq(documentTypes.orgId, orgId)),
@@ -356,7 +364,9 @@ export const postingRouter = router({
 
       const docTypeAccs = invoice.docTypeId
         ? await resolveDocTypeAccounts(invoice.docTypeId, orgId)
-        : null;
+        : invoice.journalId
+          ? await resolveDocTypeAccountsByJournal(invoice.journalId, orgId)
+          : null;
 
       const effectiveJournal = {
         ...(journal ?? {}),
@@ -408,7 +418,9 @@ export const postingRouter = router({
 
       const docTypeAccs = invoice.docTypeId
         ? await resolveDocTypeAccounts(invoice.docTypeId, orgId)
-        : null;
+        : invoice.journalId
+          ? await resolveDocTypeAccountsByJournal(invoice.journalId, orgId)
+          : null;
 
       const effectiveJournal = {
         ...(journal ?? {}),
@@ -507,7 +519,9 @@ export const postingRouter = router({
 
       const docTypeAccs = invoice.docTypeId
         ? await resolveDocTypeAccounts(invoice.docTypeId, orgId)
-        : null;
+        : invoice.journalId
+          ? await resolveDocTypeAccountsByJournal(invoice.journalId, orgId)
+          : null;
 
       const effectiveJournal = {
         purchaseAccountId: docTypeAccs?.purchaseAccountId ?? journal?.purchaseAccountId ?? null,
@@ -557,7 +571,9 @@ export const postingRouter = router({
 
       const docTypeAccs = invoice.docTypeId
         ? await resolveDocTypeAccounts(invoice.docTypeId, orgId)
-        : null;
+        : invoice.journalId
+          ? await resolveDocTypeAccountsByJournal(invoice.journalId, orgId)
+          : null;
 
       const effectiveJournal = {
         purchaseAccountId: docTypeAccs?.purchaseAccountId ?? journal?.purchaseAccountId ?? null,
