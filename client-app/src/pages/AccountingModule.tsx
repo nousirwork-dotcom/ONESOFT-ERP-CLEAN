@@ -1017,16 +1017,16 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">دفتر القيد</Label>
-              <FS value={jeJournalId?.toString() ?? ""} onValueChange={v => setJeJournalId(v ? parseInt(v) : null)} disabled={entryType === "auto"}>
-                <FSTrigger className="h-7 text-xs w-full">
-                  <FSValue placeholder="اختر الدفتر..." />
-                </FSTrigger>
-                <FSContent>
+              <Select value={jeJournalId?.toString() ?? ""} onValueChange={v => setJeJournalId(v ? parseInt(v) : null)} disabled={entryType === "auto"}>
+                <SelectTrigger className="h-7 text-xs w-full">
+                  <SelectValue placeholder="اختر الدفتر..." />
+                </SelectTrigger>
+                <SelectContent>
                   {(jeBooksQuery.data ?? []).map(j => (
-                    <FSItem key={j.id} value={j.id.toString()}>{j.name}</FSItem>
+                    <SelectItem key={j.id} value={j.id.toString()}>{j.name}</SelectItem>
                   ))}
-                </FSContent>
-              </FS>
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">الاسم</Label>
@@ -1055,20 +1055,20 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
               <Label className="text-xs text-muted-foreground">بناءا على</Label>
               {entryType === "auto"
                 ? <Input value={SOURCE_DOC_LABELS[sourceDocType] ?? sourceDocType} readOnly className="h-7 text-xs bg-amber-50/40 border-amber-200/60 text-amber-800" />
-                : <FS value={basedOnDocType} onValueChange={setBasedOnDocType}>
-                    <FSTrigger className="h-7 text-xs w-full">
-                      <FSValue placeholder="نوع المستند..." />
-                    </FSTrigger>
-                    <FSContent>
-                      <FSItem value="">— بدون —</FSItem>
-                      <FSItem value="sales_invoice">فاتورة مبيعات</FSItem>
-                      <FSItem value="purchase_invoice">فاتورة مشتريات</FSItem>
-                      <FSItem value="receipt_voucher">سند قبض</FSItem>
-                      <FSItem value="payment_voucher">سند صرف</FSItem>
-                      <FSItem value="journal_entry">سند قيد</FSItem>
-                      <FSItem value="other">أخرى</FSItem>
-                    </FSContent>
-                  </FS>
+                : <Select value={basedOnDocType} onValueChange={setBasedOnDocType}>
+                    <SelectTrigger className="h-7 text-xs w-full">
+                      <SelectValue placeholder="نوع المستند..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">— بدون —</SelectItem>
+                      <SelectItem value="sales_invoice">فاتورة مبيعات</SelectItem>
+                      <SelectItem value="purchase_invoice">فاتورة مشتريات</SelectItem>
+                      <SelectItem value="receipt_voucher">سند قبض</SelectItem>
+                      <SelectItem value="payment_voucher">سند صرف</SelectItem>
+                      <SelectItem value="journal_entry">سند قيد</SelectItem>
+                      <SelectItem value="other">أخرى</SelectItem>
+                    </SelectContent>
+                  </Select>
               }
             </div>
             <div>
