@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useCallback, useEffect, createContext, useContext } from "react";
+import type { CSSProperties } from "react";
 import { useTabManager } from "@/contexts/TabManagerContext";
 import type { KeyboardEvent } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -3647,7 +3648,7 @@ function TrialBalancePage({
               const canDrill    = isLeaf && hasData;
               const canDrillCl  = isLeaf && hasClose;
               const openDlg     = () => { if (isLeaf) setLedgerDlg({ accountId: n.accountId, code: n.code, name: n.name }); };
-              const numCellStyle = (active: boolean, extra?: React.CSSProperties): React.CSSProperties => ({
+              const numCellStyle = (active: boolean, extra?: CSSProperties): CSSProperties => ({
                 padding: "5px 10px", textAlign: "center",
                 cursor: active ? "pointer" : "default",
                 transition: "background 0.1s",
@@ -3656,7 +3657,7 @@ function TrialBalancePage({
               const numSpan = (value: number, color: string, active: boolean, bold = false) =>
                 value === 0 ? <span style={{ color: "#9CA3AF" }}>—</span> : (
                   <span style={{
-                    color: active ? undefined : color,
+                    color,
                     fontWeight: bold ? 700 : fw,
                     fontSize: fs,
                     textDecoration: active ? "underline dotted" : "none",
