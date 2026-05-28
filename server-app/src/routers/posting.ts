@@ -233,7 +233,51 @@ export const postingRouter = router({
         postingMode:      journal?.postingMode ?? 'manual',
       } as typeof documentJournals.$inferSelect;
 
+      // ══════════════════════════════════════════════════════════════════════
+      // القاعدة الأولى: منع الترحيل بدون روابط محاسبية مكتملة
+      // ══════════════════════════════════════════════════════════════════════
+      const isCredit = invoice.paymentMethod === 'credit';
+      const missingAccounts: string[] = [];
+      if (!effectiveJournal.salesAccountId)
+        missingAccounts.push('حساب المبيعات/الإيرادات');
+      if (isCredit && !effectiveJournal.creditAccountId)
+        missingAccounts.push('حساب ذمم العملاء (آجل)');
+      if (!isCredit && !effectiveJournal.cashAccountId)
+        missingAccounts.push('حساب الصندوق/النقد');
+      if (missingAccounts.length > 0)
+        throw new Error(
+          `لا يمكن ترحيل المستند لعدم اكتمال الروابط المحاسبية لنوع المستند\n` +
+          `الحسابات الناقصة: ${missingAccounts.join('، ')}`
+        );
+
       const { lines, isBalanced } = await buildSalesInvoiceLines(invoice, effectiveJournal, orgId);
+
+      // ══════════════════════════════════════════════════════════════════════
+      // القاعدة الثانية: التحقق من توازن القيد (المدين = الدائن)
+      // ══════════════════════════════════════════════════════════════════════
+      if (!isBalanced)
+        throw new Error('لا يمكن ترحيل المستند: المدين لا يساوي الدائن في القيد المحاسبي');
+
+      // ══════════════════════════════════════════════════════════════════════
+      // القاعدة الثالثة: التحقق من سلامة الحسابات
+      //   - الحساب موجود وغير موقوف
+      //   - ليس حساباً تجميعياً
+      //   - يقبل الترحيل
+      // ══════════════════════════════════════════════════════════════════════
+      const accountIds = lines.map(l => l.accountId).filter((id): id is number => id !== null);
+      if (accountIds.length > 0) {
+        const accs = await db.query.chartOfAccounts.findMany({
+          where: inArray(chartOfAccounts.id, accountIds),
+        });
+        for (const acc of accs) {
+          if (!acc.isActive)
+            throw new Error(`الحساب "${acc.code} - ${acc.name}" موقوف ولا يمكن الترحيل عليه`);
+          if (acc.isParent)
+            throw new Error(`الحساب "${acc.code} - ${acc.name}" تجميعي ولا يمكن الترحيل عليه — يجب اختيار حساب فرعي`);
+          if (acc.allowPosting === false)
+            throw new Error(`الحساب "${acc.code} - ${acc.name}" لا يسمح بالترحيل`);
+        }
+      }
 
       // رقم القيد التالي
       const lastEntry = await db.query.journalEntries.findFirst({

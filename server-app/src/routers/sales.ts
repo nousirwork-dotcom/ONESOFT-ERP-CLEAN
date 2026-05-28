@@ -329,6 +329,12 @@ export const salesRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const { id, items, invoiceDate, ...rest } = input;
+      // القاعدة الخامسة: منع تعديل المستندات المرحّلة
+      const existing = await db.query.salesInvoices.findFirst({
+        where: and(eq(salesInvoices.id, id), eq(salesInvoices.orgId, ctx.user.orgId)),
+      });
+      if (existing?.isPosted)
+        throw new Error('لا يمكن تعديل مستند مرحّل — يجب فك الترحيل أولاً');
       await db.update(salesInvoices).set({
         ...rest,
         ...(invoiceDate ? { invoiceDate: new Date(invoiceDate) } : {}),
@@ -436,6 +442,12 @@ export const salesRouter = router({
   delete: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
+      // القاعدة الخامسة: منع حذف المستندات المرحّلة
+      const existing = await db.query.salesInvoices.findFirst({
+        where: and(eq(salesInvoices.id, input.id), eq(salesInvoices.orgId, ctx.user.orgId)),
+      });
+      if (existing?.isPosted)
+        throw new Error('لا يمكن حذف مستند مرحّل — يجب فك الترحيل أولاً');
       await db.delete(salesInvoiceItems).where(eq(salesInvoiceItems.invoiceId, input.id));
       await db.delete(salesInvoices).where(
         and(eq(salesInvoices.id, input.id), eq(salesInvoices.orgId, ctx.user.orgId))

@@ -12,7 +12,7 @@ import { documentTypesRouter } from './documentTypes.js';
 import { postingRouter } from './posting.js';
 import { db } from '../db.js';
 import { products, customers, suppliers, chartOfAccounts, warehouses, branches, units, productGroups, journalEntries, journalEntryLines, vouchers, receiptVouchers, paymentVouchers, inventory, stockVouchers, stockVoucherItems, inventoryCounts, inventoryCountItems, freeProducts, salesInvoices, salesInvoiceItems, warehouseAccountLinks, userGroups, userGroupMembers, userCategories, users, documentJournals, documentTypes } from '../schema.js';
-import { eq, and, desc, like, or, sql, isNotNull, isNull, asc, gte, lte } from 'drizzle-orm';
+import { eq, and, desc, like, or, sql, isNotNull, isNull, asc, gte, lte, inArray } from 'drizzle-orm';
 
 export const appRouter = router({
   // ─── Auth ────────────────────────────────────────────────────────────────────
@@ -1047,6 +1047,37 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         const { lines, entryDate, ...rest } = input;
+
+        // ══════════════════════════════════════════════════════════════════
+        // القاعدة الثامنة: قواعد سلامة القيود اليدوية
+        // ══════════════════════════════════════════════════════════════════
+        // 1) المدين = الدائن
+        const totalD = lines.reduce((s, l) => s + parseFloat(l.debit ?? '0'), 0);
+        const totalC = lines.reduce((s, l) => s + parseFloat(l.credit ?? '0'), 0);
+        if (Math.abs(totalD - totalC) > 0.001)
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن حفظ القيد: المدين لا يساوي الدائن' });
+
+        // 2) التحقق من سلامة الحسابات
+        const accountIds = lines.map(l => l.accountId).filter((id): id is number => !!id);
+        if (accountIds.length > 0) {
+          const accs = await db.query.chartOfAccounts.findMany({
+            where: inArray(chartOfAccounts.id, accountIds),
+          });
+          const accMap = new Map(accs.map(a => [a.id, a]));
+          for (const l of lines) {
+            if (!l.accountId) continue;
+            const acc = accMap.get(l.accountId);
+            if (!acc)
+              throw new TRPCError({ code: 'BAD_REQUEST', message: `الحساب بالكود ${l.accountCode ?? l.accountId} غير موجود` });
+            if (!acc.isActive)
+              throw new TRPCError({ code: 'BAD_REQUEST', message: `الحساب "${acc.code} - ${acc.name}" موقوف ولا يمكن الترحيل عليه` });
+            if (acc.isParent)
+              throw new TRPCError({ code: 'BAD_REQUEST', message: `الحساب "${acc.code} - ${acc.name}" تجميعي — يجب اختيار حساب فرعي` });
+            if (acc.allowPosting === false)
+              throw new TRPCError({ code: 'BAD_REQUEST', message: `الحساب "${acc.code} - ${acc.name}" لا يسمح بالترحيل` });
+          }
+        }
+
         const [entry] = await db.insert(journalEntries).values({
           ...rest,
           entryType: rest.entryType ?? 'manual',
