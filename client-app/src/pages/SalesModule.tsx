@@ -2281,10 +2281,18 @@ function SalesTransactionsView() {
 
 function SalesInvoiceListView() {
   const today = new Date().toISOString().split("T")[0];
-  const [dateFrom, setDateFrom] = useState(today);
-  const [dateTo, setDateTo]     = useState(today);
-  const [search, setSearch]     = useState("");
-  const [mode, setMode]         = useState<"list" | "form">("list");
+  const [datePeriod, setDatePeriod] = useState("today");
+  const [dateFrom, setDateFrom]     = useState(today);
+  const [dateTo, setDateTo]         = useState(today);
+  const [search, setSearch]         = useState("");
+  const [mode, setMode]             = useState<"list" | "form">("list");
+
+  const applyPeriod = (p: string) => {
+    setDatePeriod(p);
+    const { from, to } = getPreset(p);
+    setDateFrom(from);
+    setDateTo(to);
+  };
 
   const { data: invoices = [], isLoading, refetch } = trpc.salesInvoices.list.useQuery({
     invoiceType: "sale",
@@ -2367,13 +2375,38 @@ function SalesInvoiceListView() {
           </div>
         </div>
 
-        {/* فلتر التاريخ */}
+        {/* فلتر الفترة — اختصارات سريعة */}
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          {[
+            { id: "today", label: "اليوم" },
+            { id: "week",  label: "الأسبوع" },
+            { id: "month", label: "الشهر" },
+            { id: "year",  label: "العام" },
+          ].map(p => (
+            <button
+              key={p.id}
+              onClick={() => applyPeriod(p.id)}
+              style={{
+                padding: "3px 10px", borderRadius: 6, fontSize: 11.5, fontWeight: 600,
+                border: `1px solid ${datePeriod === p.id ? "#2563EB" : "#D1D5DB"}`,
+                background: datePeriod === p.id ? "#EFF6FF" : "#fff",
+                color: datePeriod === p.id ? "#2563EB" : "#6B7280",
+                cursor: "pointer", fontFamily: "'Cairo', Tahoma, sans-serif",
+                transition: "all 0.12s",
+              }}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        {/* فلتر التاريخ — يدوي */}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ fontSize: 12, color: "#6B7280" }}>من</span>
           <input
             type="date"
             value={dateFrom}
-            onChange={e => setDateFrom(e.target.value)}
+            onChange={e => { setDateFrom(e.target.value); setDatePeriod("custom"); }}
             style={{
               padding: "3px 8px", border: "1px solid #D1D5DB", borderRadius: 6,
               fontSize: 12, background: "#fff", color: "#111827", cursor: "pointer",
@@ -2383,7 +2416,7 @@ function SalesInvoiceListView() {
           <input
             type="date"
             value={dateTo}
-            onChange={e => setDateTo(e.target.value)}
+            onChange={e => { setDateTo(e.target.value); setDatePeriod("custom"); }}
             style={{
               padding: "3px 8px", border: "1px solid #D1D5DB", borderRadius: 6,
               fontSize: 12, background: "#fff", color: "#111827", cursor: "pointer",
