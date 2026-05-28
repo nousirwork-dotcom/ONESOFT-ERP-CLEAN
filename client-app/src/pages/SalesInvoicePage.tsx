@@ -65,7 +65,7 @@ function calcLineTotal(line: InvoiceLine): string {
 function fmt(n: number) { return n.toFixed(3); }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export default function SalesInvoicePage() {
+export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceId?: number } = {}) {
   // ── Header state ─────────────────────────────────────────────────────────
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().split("T")[0]);
@@ -153,6 +153,48 @@ export default function SalesInvoicePage() {
     }
     toast.success(`✓ تم استيراد بيانات المستند ${src.number}`);
   }, [basedOnQuery.data]);
+
+  // ── فتح فاتورة موجودة بالـ ID (من القائمة) ───────────────────────────────
+  const initialInvoiceQuery = trpc.salesInvoices.get.useQuery(
+    { id: initialInvoiceId! },
+    { enabled: !!initialInvoiceId }
+  );
+
+  useEffect(() => {
+    const inv = initialInvoiceQuery.data;
+    if (!inv) return;
+    setInvoiceNumber(inv.invoiceNumber);
+    setInvoiceDate(inv.invoiceDate ? new Date(inv.invoiceDate).toISOString().split("T")[0] : "");
+    setDueDate(inv.dueDate ? new Date(inv.dueDate).toISOString().split("T")[0] : "");
+    setCustomerId(inv.customerId ?? null);
+    setCustomerName(inv.customerName ?? "");
+    setWarehouseId(inv.warehouseId ?? null);
+    setJournalId(inv.journalId ?? null);
+    setCurrency(inv.currency ?? "SAR");
+    setExchangeRate(inv.exchangeRate ?? "1.000");
+    setPaymentType((inv.paymentMethod ?? "cash") as PaymentType);
+    setNotes(inv.notes ?? "");
+    setPaidAmountOverride(inv.paidAmount ?? "");
+    setSavedInvoiceId(inv.id);
+    setIsPosted(inv.isPosted ?? false);
+    setErpMode("view");
+    if (inv.items && inv.items.length > 0) {
+      setLines(inv.items.map(item => ({
+        id: crypto.randomUUID(),
+        productCode:  item.productCode ?? "",
+        productName:  item.productName,
+        unit:         item.unit ?? "",
+        quantity:     item.quantity,
+        unitPrice:    item.unitPrice,
+        discountPct:  item.discountPercent ?? "0",
+        discountAmt:  item.discountAmount ?? "0",
+        taxPct:       item.taxPercent ?? "0",
+        taxAmt:       item.taxAmount ?? "0",
+        total:        item.total,
+        productId:    item.productId ?? undefined,
+      })));
+    }
+  }, [initialInvoiceQuery.data]);
 
   const createMutation = trpc.salesInvoices.create.useMutation({
     onSuccess: (data) => {

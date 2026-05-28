@@ -2285,7 +2285,8 @@ function SalesInvoiceListView() {
   const [dateFrom, setDateFrom]     = useState(today);
   const [dateTo, setDateTo]         = useState(today);
   const [search, setSearch]         = useState("");
-  const [mode, setMode]             = useState<"list" | "form">("list");
+  const [mode, setMode]             = useState<"list" | "form" | "view">("list");
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
 
   const applyPeriod = (p: string) => {
     setDatePeriod(p);
@@ -2315,7 +2316,8 @@ function SalesInvoiceListView() {
     cancelled: { label: "ملغاة",    color: "#DC2626" },
   };
 
-  if (mode === "form") {
+  if (mode === "form" || mode === "view") {
+    const isView = mode === "view";
     return (
       <div className="h-full flex flex-col" dir="rtl">
         {/* شريط الرجوع */}
@@ -2325,7 +2327,7 @@ function SalesInvoiceListView() {
           background: "#F9FAFB",
         }}>
           <button
-            onClick={() => { setMode("list"); refetch(); }}
+            onClick={() => { setMode("list"); setSelectedInvoiceId(null); refetch(); }}
             style={{
               display: "flex", alignItems: "center", gap: 5, padding: "4px 10px",
               border: "1px solid #D1D5DB", borderRadius: 6,
@@ -2339,11 +2341,11 @@ function SalesInvoiceListView() {
             العودة إلى القائمة
           </button>
           <span style={{ fontSize: 12, color: "#9CA3AF", fontFamily: "'Cairo', Tahoma, sans-serif" }}>
-            إنشاء فاتورة مبيعات جديدة
+            {isView ? "عرض / تعديل فاتورة مبيعات" : "إنشاء فاتورة مبيعات جديدة"}
           </span>
         </div>
         <div className="flex-1 overflow-auto">
-          <SalesInvoicePageNew />
+          <SalesInvoicePageNew initialInvoiceId={isView ? selectedInvoiceId! : undefined} />
         </div>
       </div>
     );
@@ -2536,8 +2538,17 @@ function SalesInvoiceListView() {
                     onMouseEnter={e => (e.currentTarget.style.background = "#EFF6FF")}
                     onMouseLeave={e => (e.currentTarget.style.background = i % 2 === 0 ? "#fff" : "#FAFAFA")}
                   >
-                    <td style={{ padding: "7px 12px", color: "#2563EB", fontWeight: 600 }}>
-                      {inv.invoiceNumber}
+                    <td style={{ padding: "7px 12px" }}>
+                      <span
+                        onClick={() => { setSelectedInvoiceId(inv.id); setMode("view"); }}
+                        style={{
+                          color: "#2563EB", fontWeight: 600, cursor: "pointer",
+                          textDecoration: "underline", textUnderlineOffset: 3,
+                        }}
+                        title="انقر لفتح الفاتورة"
+                      >
+                        {inv.invoiceNumber}
+                      </span>
                     </td>
                     <td style={{ padding: "7px 12px", color: "#374151" }}>
                       {inv.customerName ?? "—"}
