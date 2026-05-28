@@ -9,7 +9,7 @@ import {
 } from '../schema.js';
 
 // ─── مساعد: تحليل حسابات نوع المستند عبر warehouseAccountLinks ─────────────
-async function resolveDocTypeAccountsByJournal(journalId: number, orgId: number) {
+export async function resolveDocTypeAccountsByJournal(journalId: number, orgId: number) {
   const docType = await db.query.documentTypes.findFirst({
     where: and(eq(documentTypes.journal, String(journalId)), eq(documentTypes.orgId, orgId)),
   });
@@ -17,7 +17,7 @@ async function resolveDocTypeAccountsByJournal(journalId: number, orgId: number)
   return resolveDocTypeAccounts(docType.id, orgId);
 }
 
-async function resolveDocTypeAccounts(docTypeId: number, orgId: number) {
+export async function resolveDocTypeAccounts(docTypeId: number, orgId: number) {
   const docType = await db.query.documentTypes.findFirst({
     where: and(eq(documentTypes.id, docTypeId), eq(documentTypes.orgId, orgId)),
   });

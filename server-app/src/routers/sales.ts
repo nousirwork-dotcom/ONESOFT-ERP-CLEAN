@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { eq, and, desc, like, or, inArray } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { salesInvoices, salesInvoiceItems, products, customers, stockVouchers, stockVoucherItems, documentJournals, journalEntries, journalEntryLines, documentTypes, warehouseAccountLinks } from '../schema.js';
-import { buildSalesInvoiceLines } from './posting.js';
+import { salesInvoices, salesInvoiceItems, products, customers, stockVouchers, stockVoucherItems, documentJournals, journalEntries, journalEntryLines } from '../schema.js';
+import { buildSalesInvoiceLines, resolveDocTypeAccounts, resolveDocTypeAccountsByJournal } from './posting.js';
 
 export const salesRouter = router({
   // قائمة الفواتير/عروض الأسعار
@@ -169,79 +169,36 @@ export const salesRouter = router({
         );
       }
 
-      // ── ترحيل تلقائي بناءً على نوع المستند ──────────────────────────────────
-      // يستخدم أولاً حسابات الدفتر، ثم روابط نوع المستند كـ fallback
+      // ── ترحيل تلقائي فور الحفظ ──────────────────────────────────────────────
       if (invoice.invoiceType === 'sale' && (input.journalId || input.docTypeId)) {
-        // ── تحميل الدفتر ──
-        let journal = input.journalId
+        const journal = input.journalId
           ? await db.query.documentJournals.findFirst({
               where: and(eq(documentJournals.id, input.journalId), eq(documentJournals.orgId, orgId)),
             })
-          : undefined;
+          : null;
 
-        // ── بناء حسابات من روابط نوع المستند إذا كانت حسابات الدفتر غير مكتملة ──
-        let effectiveCashAccountId    = journal?.cashAccountId    ?? null;
-        let effectiveSalesAccountId   = journal?.salesAccountId   ?? null;
-        let effectiveCreditAccountId  = journal?.creditAccountId  ?? null;
-        let effectiveTaxAccountId     = journal?.taxAccountId     ?? null;
-        let effectiveDiscountAccountId= journal?.discountAccountId?? null;
+        if (journal?.postingMode !== 'disabled') {
+          // حل الحسابات: نوع السند أولاً، ثم الدفتر المرتبط بالجورنال كـ fallback
+          const docTypeAccs = input.docTypeId
+            ? await resolveDocTypeAccounts(input.docTypeId, orgId)
+            : input.journalId
+              ? await resolveDocTypeAccountsByJournal(input.journalId, orgId)
+              : null;
 
-        if (input.docTypeId && (!effectiveCashAccountId || !effectiveSalesAccountId)) {
-          const docType = await db.query.documentTypes.findFirst({
-            where: and(eq(documentTypes.id, input.docTypeId), eq(documentTypes.orgId, orgId)),
-          });
-          if (docType) {
-            const linkIdRaw = [
-              docType.acctCash,
-              docType.acctDebit,
-              docType.acctCredit,
-              docType.acctTax,
-              docType.acctDiscount,
-            ];
-            const linkIds = linkIdRaw
-              .map(v => (v ? parseInt(v) : NaN))
-              .filter(v => !isNaN(v));
-            if (linkIds.length > 0) {
-              const walRows = await db.query.warehouseAccountLinks.findMany({
-                where: inArray(warehouseAccountLinks.id, linkIds),
-              });
-              const walById = new Map(walRows.map(w => [w.id, w]));
-              const getAccId = (code: string | null | undefined) => {
-                if (!code) return null;
-                const id = parseInt(code);
-                return isNaN(id) ? null : (walById.get(id)?.accountId ?? null);
-              };
-              // نقدي/بنك → acctCash → cashAccountId
-              if (!effectiveCashAccountId)    effectiveCashAccountId    = getAccId(docType.acctCash);
-              // آجل → acctDebit → creditAccountId (ذمم العملاء)
-              if (!effectiveCreditAccountId)  effectiveCreditAccountId  = getAccId(docType.acctDebit);
-              // إيرادات → acctCredit → salesAccountId
-              if (!effectiveSalesAccountId)   effectiveSalesAccountId   = getAccId(docType.acctCredit);
-              // ضريبة → acctTax
-              if (!effectiveTaxAccountId)     effectiveTaxAccountId     = getAccId(docType.acctTax);
-              // خصم → acctDiscount
-              if (!effectiveDiscountAccountId)effectiveDiscountAccountId= getAccId(docType.acctDiscount);
-            }
-          }
-        }
+          const effectiveJournal = {
+            ...(journal ?? {}),
+            cashAccountId:    docTypeAccs?.cashAccountId    ?? journal?.cashAccountId    ?? null,
+            salesAccountId:   docTypeAccs?.salesAccountId   ?? journal?.salesAccountId   ?? null,
+            creditAccountId:  docTypeAccs?.creditAccountId  ?? journal?.creditAccountId  ?? null,
+            taxAccountId:     docTypeAccs?.taxAccountId     ?? journal?.taxAccountId     ?? null,
+            discountAccountId:docTypeAccs?.discountAccountId?? journal?.discountAccountId?? null,
+            postingMode:      journal?.postingMode ?? 'auto',
+          } as typeof documentJournals.$inferSelect;
 
-        // ── بناء كائن دفتر فعّال يجمع مصادر الحسابات ──
-        const effectiveJournal = {
-          ...(journal ?? {}),
-          cashAccountId:    effectiveCashAccountId,
-          salesAccountId:   effectiveSalesAccountId,
-          creditAccountId:  effectiveCreditAccountId,
-          taxAccountId:     effectiveTaxAccountId,
-          discountAccountId:effectiveDiscountAccountId,
-          postingMode:      journal?.postingMode ?? 'auto',
-        } as typeof documentJournals.$inferSelect;
-
-        const shouldPost = effectiveJournal.postingMode !== 'disabled';
-
-        if (shouldPost) {
           const { lines } = await buildSalesInvoiceLines(invoice, effectiveJournal, orgId);
+          const validLines = lines.filter(l => l.accountId !== null);
 
-          if (lines.length > 0 && lines.some(l => l.accountId !== null)) {
+          if (validLines.length > 0) {
             const lastEntry = await db.query.journalEntries.findFirst({
               where: eq(journalEntries.orgId, orgId),
               orderBy: [desc(journalEntries.id)],
@@ -250,24 +207,23 @@ export const salesRouter = router({
               ? parseInt(lastEntry.entryNumber.replace(/\D/g, '') || '0') + 1
               : 1;
             const entryNumber = `JE-${String(nextNum).padStart(4, '0')}`;
-
-            const totalDebit  = lines.reduce((s, l) => s + Number(l.debit),  0);
+            const totalDebit  = lines.reduce((s, l) => s + Number(l.debit), 0);
             const totalCredit = lines.reduce((s, l) => s + Number(l.credit), 0);
 
             const [entry] = await db.insert(journalEntries).values({
               orgId,
               entryNumber,
-              entryDate:    invoice.invoiceDate,
-              description:  `ترحيل تلقائي - فاتورة مبيعات ${invoice.invoiceNumber}`,
-              reference:    invoice.invoiceNumber,
-              totalDebit:   totalDebit.toFixed(4),
-              totalCredit:  totalCredit.toFixed(4),
-              status:       'posted',
-              userId:       ctx.user.id,
-              sourceDocType:'sales_invoice',
-              sourceDocId:  invoice.id,
+              entryDate:       invoice.invoiceDate,
+              description:     `ترحيل تلقائي - ${invoice.invoiceNumber}`,
+              reference:       invoice.invoiceNumber,
+              totalDebit:      totalDebit.toFixed(4),
+              totalCredit:     totalCredit.toFixed(4),
+              status:          'posted',
+              userId:          ctx.user.id,
+              sourceDocType:   'sales_invoice',
+              sourceDocId:     invoice.id,
               sourceDocNumber: invoice.invoiceNumber,
-              entryType:    'auto',
+              entryType:       'auto',
             }).returning();
 
             await db.insert(journalEntryLines).values(
