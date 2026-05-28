@@ -3934,8 +3934,8 @@ function TrialBalancePage({
                       <td onClick={canDrill ? openDlg : undefined} style={numCellStyle(canDrill, { borderLeft: "1px solid #E5E7EB" })} title={canDrill ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>{numSpan(n.aggOpenC, C, canDrill)}</td>
                       <td onClick={canDrill ? openDlg : undefined} style={numCellStyle(canDrill)} title={canDrill ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>{numSpan(n.aggMoveD, D, canDrill)}</td>
                       <td onClick={canDrill ? openDlg : undefined} style={numCellStyle(canDrill, { borderLeft: "1px solid #E5E7EB" })} title={canDrill ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>{numSpan(n.aggMoveC, C, canDrill)}</td>
-                      <td onClick={canDrillCl ? () => drill(n) : undefined} style={numCellStyle(canDrillCl)} title={canDrillCl ? "انقر لفتح كشف حساب أستاذ" : !isLeaf ? "حساب تجميعي" : ""}>{numSpan(n.aggCloseD, D, canDrillCl, true)}</td>
-                      <td onClick={canDrillCl ? () => drill(n) : undefined} style={numCellStyle(canDrillCl)} title={canDrillCl ? "انقر لفتح كشف حساب أستاذ" : !isLeaf ? "حساب تجميعي" : ""}>{numSpan(n.aggCloseC, C, canDrillCl, true)}</td>
+                      <td onClick={canDrillCl ? openDlg : undefined} style={numCellStyle(canDrillCl)} title={canDrillCl ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>{numSpan(n.aggCloseD, D, canDrillCl, true)}</td>
+                      <td onClick={canDrillCl ? openDlg : undefined} style={numCellStyle(canDrillCl)} title={canDrillCl ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>{numSpan(n.aggCloseC, C, canDrillCl, true)}</td>
                     </>
                   ) : (
                     <>
@@ -3948,7 +3948,7 @@ function TrialBalancePage({
                       </td>
                       <td onClick={canDrill ? openDlg : undefined} style={numCellStyle(canDrill)} title={canDrill ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>{numSpan(n.aggMoveD, D, canDrill)}</td>
                       <td onClick={canDrill ? openDlg : undefined} style={numCellStyle(canDrill)} title={canDrill ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>{numSpan(n.aggMoveC, C, canDrill)}</td>
-                      <td onClick={canDrillCl ? () => drill(n) : undefined} style={numCellStyle(canDrillCl)} title={canDrillCl ? "انقر لفتح كشف حساب أستاذ" : !isLeaf ? "حساب تجميعي" : ""}>
+                      <td onClick={canDrillCl ? openDlg : undefined} style={numCellStyle(canDrillCl)} title={canDrillCl ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>
                         {n.aggCloseD > 0
                           ? <span style={{ color: D, fontWeight: 700, fontSize: fs, textDecoration: canDrillCl ? "underline dotted" : "none" }}>{fmtN(n.aggCloseD)} <span style={{ fontSize: 9 }}>م</span></span>
                           : n.aggCloseC > 0
@@ -4048,14 +4048,27 @@ function TrialBalancePage({
 
       {/* ── كشف حساب popup ── */}
       <Dialog open={!!ledgerDlg} onOpenChange={() => setLedgerDlg(null)}>
-        <DialogContent className="max-w-5xl w-[92vw]" dir="rtl">
-          <DialogHeader>
+        <DialogContent className="max-w-5xl w-[95vw]" dir="rtl" style={{ maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
+          <DialogHeader style={{ borderBottom: "1px solid #E5E7EB", paddingBottom: 10, flexShrink: 0 }}>
             <DialogTitle className="flex items-center gap-2 text-sm">
-              <FileText className="w-4 h-4 text-primary" /> كشف حساب أستاذ
+              <div style={{ width: 28, height: 28, borderRadius: 6, background: "rgba(64,107,147,0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <FileText style={{ width: 14, height: 14, color: "#406B93" }} />
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 13, color: "#111827" }}>كشف حساب الأستاذ</div>
+                {ledgerDlg && (
+                  <div style={{ fontSize: 11, color: "#406B93", fontWeight: 600 }}>
+                    {ledgerDlg.code} — {ledgerDlg.name}
+                    <span style={{ color: "#9CA3AF", fontWeight: 400, marginRight: 8 }}>
+                      {fromDate} : {toDate}
+                    </span>
+                  </div>
+                )}
+              </div>
             </DialogTitle>
           </DialogHeader>
           {ledgerDlg && (
-            <div className="max-h-[70vh] overflow-y-auto">
+            <div style={{ flex: 1, overflowY: "auto", paddingTop: 8 }}>
               <LedgerDialogBody
                 accountId={ledgerDlg.accountId}
                 accountCode={ledgerDlg.code}
@@ -4065,12 +4078,14 @@ function TrialBalancePage({
               />
             </div>
           )}
-          <div className="flex gap-2 pt-1">
-            <Button size="sm" className="gap-1 text-xs h-8"
-              onClick={() => { if (ledgerDlg) { onDrillDown?.(ledgerDlg.accountId, fromDate, toDate); setLedgerDlg(null); } }}
-            >
-              <FileText className="w-3 h-3" /> فتح في كشف الحساب الكامل
-            </Button>
+          <div className="flex gap-2 pt-2" style={{ borderTop: "1px solid #E5E7EB", flexShrink: 0 }}>
+            {onDrillDown && (
+              <Button size="sm" variant="outline" className="gap-1 text-xs h-8"
+                onClick={() => { if (ledgerDlg) { onDrillDown(ledgerDlg.accountId, fromDate, toDate); setLedgerDlg(null); } }}
+              >
+                <FileText className="w-3 h-3" /> فتح في صفحة كشف الحساب
+              </Button>
+            )}
             <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => setLedgerDlg(null)}>
               إغلاق
             </Button>
