@@ -3413,52 +3413,66 @@ function flattenTBTree(roots: TBNode[], expanded: Set<number>, search: string, h
   return result;
 }
 
-function LedgerDialogBody({ accountId, fromDate, toDate }: { accountId: number; fromDate: string; toDate: string }) {
+function LedgerDialogBody({
+  accountId, accountCode, accountName, fromDate, toDate,
+}: {
+  accountId: number; accountCode: string; accountName: string;
+  fromDate: string; toDate: string;
+}) {
   const stmtQuery = trpc.accounting.accountStatement.useQuery(
     { accountId, fromDate: fromDate ? new Date(fromDate) : undefined, toDate: toDate ? new Date(toDate) : undefined },
     { enabled: true }
   );
-  const D = "#C0392B", C = "#1A7A4A";
-  let running = 0;
+  let runningBalance = 0;
   const rows = (stmtQuery.data ?? []).map(l => {
-    running += parseFloat(l.debit ?? "0") - parseFloat(l.credit ?? "0");
-    return { ...l, running };
+    runningBalance += parseFloat(l.debit ?? "0") - parseFloat(l.credit ?? "0");
+    return { ...l, runningBalance };
   });
-  if (stmtQuery.isLoading) return <div style={{ textAlign: "center", padding: 32, color: "#9CA3AF", fontSize: 12 }}>جاري تحميل الكشف...</div>;
-  if (rows.length === 0) return <div style={{ textAlign: "center", padding: 32, color: "#9CA3AF", fontSize: 12 }}>لا توجد حركات في هذه الفترة</div>;
+
   return (
-    <div style={{ overflowX: "auto", maxHeight: 380, overflowY: "auto" }}>
-      <table style={{ width: "100%", fontSize: 11, borderCollapse: "collapse", minWidth: 560 }}>
-        <thead style={{ position: "sticky", top: 0, zIndex: 1 }}>
-          <tr style={{ background: "#4B5563", color: "#fff" }}>
-            <th style={{ padding: "6px 8px", textAlign: "right", fontWeight: 600, whiteSpace: "nowrap" }}>التاريخ</th>
-            <th style={{ padding: "6px 8px", textAlign: "right", fontWeight: 600, whiteSpace: "nowrap" }}>رقم القيد</th>
-            <th style={{ padding: "6px 8px", textAlign: "right", fontWeight: 600, whiteSpace: "nowrap" }}>البيان</th>
-            <th style={{ padding: "6px 8px", textAlign: "center", color: "#FCA5A5", fontWeight: 600 }}>مدين</th>
-            <th style={{ padding: "6px 8px", textAlign: "center", color: "#6EE7B7", fontWeight: 600 }}>دائن</th>
-            <th style={{ padding: "6px 8px", textAlign: "center", fontWeight: 600 }}>الرصيد</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => {
-            const d = parseFloat(r.debit ?? "0"), c = parseFloat(r.credit ?? "0");
-            const fmt = (n: number) => n > 0 ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
-            const bg = i % 2 === 0 ? "#fff" : "#F3F8FE";
-            return (
-              <tr key={i} style={{ background: bg, borderBottom: "1px solid #F3F4F6" }}>
-                <td style={{ padding: "5px 8px", whiteSpace: "nowrap" }}>{new Date(r.entryDate).toLocaleDateString("ar-EG")}</td>
-                <td style={{ padding: "5px 8px", fontFamily: "monospace", color: "#2563EB", whiteSpace: "nowrap" }}>{r.entryNumber}</td>
-                <td style={{ padding: "5px 8px", color: "#374151" }}>{r.description ?? "—"}</td>
-                <td style={{ padding: "5px 8px", textAlign: "center", color: D, fontWeight: d > 0 ? 600 : 400 }}>{fmt(d)}</td>
-                <td style={{ padding: "5px 8px", textAlign: "center", color: C, fontWeight: c > 0 ? 600 : 400 }}>{fmt(c)}</td>
-                <td style={{ padding: "5px 8px", textAlign: "center", fontWeight: 700, color: r.running < 0 ? C : D }}>
-                  {r.running < 0 ? `(${Math.abs(r.running).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})` : r.running.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+    <div className="space-y-3">
+      <Card className="border-border/60">
+        <CardHeader className="pb-2 border-b border-border">
+          <div className="text-center">
+            <p className="font-bold text-sm">كشف حساب: {accountCode} - {accountName}</p>
+            {fromDate && toDate && <p className="text-xs text-muted-foreground">من {fromDate} إلى {toDate}</p>}
+          </div>
+        </CardHeader>
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/30">
+              <TableHead className="text-xs">التاريخ</TableHead>
+              <TableHead className="text-xs">رقم القيد</TableHead>
+              <TableHead className="text-xs">نوع السند</TableHead>
+              <TableHead className="text-xs">البيان</TableHead>
+              <TableHead className="text-xs text-center">مدين</TableHead>
+              <TableHead className="text-xs text-center">دائن</TableHead>
+              <TableHead className="text-xs text-center">الرصيد</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {stmtQuery.isLoading && (
+              <TableRow><TableCell colSpan={7} className="text-center text-xs text-muted-foreground py-8">جاري تحميل البيانات...</TableCell></TableRow>
+            )}
+            {!stmtQuery.isLoading && rows.length === 0 && (
+              <TableRow><TableCell colSpan={7} className="text-center text-xs text-muted-foreground py-8">لا توجد حركات في هذه الفترة</TableCell></TableRow>
+            )}
+            {rows.map((r, i) => (
+              <TableRow key={i} className="hover:bg-muted/10">
+                <TableCell className="text-xs">{new Date(r.entryDate).toLocaleDateString("ar-SA")}</TableCell>
+                <TableCell className="text-xs font-mono text-primary">{r.entryNumber}</TableCell>
+                <TableCell className="text-xs">{r.voucherType}</TableCell>
+                <TableCell className="text-xs">{r.description ?? "-"}</TableCell>
+                <TableCell className="text-center text-xs">{parseFloat(r.debit ?? "0") > 0 ? parseFloat(r.debit ?? "0").toLocaleString() : "-"}</TableCell>
+                <TableCell className="text-center text-xs">{parseFloat(r.credit ?? "0") > 0 ? parseFloat(r.credit ?? "0").toLocaleString() : "-"}</TableCell>
+                <TableCell className={`text-center text-xs font-bold ${r.runningBalance < 0 ? "text-destructive" : "text-emerald-600"}`}>
+                  {r.runningBalance < 0 ? `(${Math.abs(r.runningBalance).toLocaleString()})` : r.runningBalance.toLocaleString()}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
     </div>
   );
 }
@@ -3808,32 +3822,32 @@ function TrialBalancePage({
 
       {/* ── كشف حساب popup ── */}
       <Dialog open={!!ledgerDlg} onOpenChange={() => setLedgerDlg(null)}>
-        <DialogContent className="max-w-3xl" dir="rtl">
+        <DialogContent className="max-w-5xl w-[92vw]" dir="rtl">
           <DialogHeader>
-            <DialogTitle style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
-              <FileText style={{ width: 14, height: 14, color: "#2563EB" }} />
-              كشف حساب — <span style={{ fontFamily: "monospace", color: "#2563EB" }}>{ledgerDlg?.code}</span>&nbsp;{ledgerDlg?.name}
+            <DialogTitle className="flex items-center gap-2 text-sm">
+              <FileText className="w-4 h-4 text-primary" /> كشف حساب أستاذ
             </DialogTitle>
-            {fromDate && toDate && (
-              <p style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>من {fromDate} إلى {toDate}</p>
-            )}
           </DialogHeader>
           {ledgerDlg && (
-            <LedgerDialogBody accountId={ledgerDlg.accountId} fromDate={fromDate} toDate={toDate} />
+            <div className="max-h-[70vh] overflow-y-auto">
+              <LedgerDialogBody
+                accountId={ledgerDlg.accountId}
+                accountCode={ledgerDlg.code}
+                accountName={ledgerDlg.name}
+                fromDate={fromDate}
+                toDate={toDate}
+              />
+            </div>
           )}
-          <div style={{ display: "flex", justifyContent: "flex-start", gap: 8, paddingTop: 8 }}>
-            <button
+          <div className="flex gap-2 pt-1">
+            <Button size="sm" className="gap-1 text-xs h-8"
               onClick={() => { if (ledgerDlg) { onDrillDown?.(ledgerDlg.accountId, fromDate, toDate); setLedgerDlg(null); } }}
-              style={{ padding: "6px 16px", borderRadius: 6, border: "none", background: "#2563EB", color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "'Cairo',Tahoma,sans-serif", display: "flex", alignItems: "center", gap: 5 }}
             >
-              <FileText style={{ width: 12, height: 12 }} /> فتح في كشف الحساب الكامل
-            </button>
-            <button
-              onClick={() => setLedgerDlg(null)}
-              style={{ padding: "6px 16px", borderRadius: 6, border: "1px solid #D1D5DB", background: "#fff", cursor: "pointer", fontSize: 12, fontFamily: "'Cairo',Tahoma,sans-serif" }}
-            >
+              <FileText className="w-3 h-3" /> فتح في كشف الحساب الكامل
+            </Button>
+            <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => setLedgerDlg(null)}>
               إغلاق
-            </button>
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
