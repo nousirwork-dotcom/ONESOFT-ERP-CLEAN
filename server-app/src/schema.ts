@@ -585,6 +585,7 @@ export const documentJournals = pgTable('document_journals', {
   printTemplate:    varchar('print_template', { length: 100 }),
   printTemplate2:   varchar('print_template_2', { length: 100 }),
   resetFrequency:   varchar('reset_frequency', { length: 20 }).default('none'),
+  entityType:       varchar('entity_type', { length: 20 }).default('both'),
   autoSerial:       boolean('auto_serial').notNull().default(false),
   printOnSave:      boolean('print_on_save').notNull().default(false),
   postingMode:      varchar('posting_mode', { length: 20 }).default('manual'),

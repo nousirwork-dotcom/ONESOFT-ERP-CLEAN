@@ -19,7 +19,7 @@ type JournalForm = {
   systemOnly: boolean; autoSerial: boolean; firstNum: string; digits: string;
   lastNum: string; printTemplate: string; printTemplate2: string;
   printOnSave: boolean; status: string; postingMethod: string;
-  resetFrequency: string;
+  resetFrequency: string; entityType: string;
 };
 
 type DBJournal = {
@@ -29,7 +29,8 @@ type DBJournal = {
   increment: number; numDigits: number; includeYear: boolean; currentSeq: number;
   warehouseId?: number | null; allowedUserGroup?: string | null; allowedUserId?: number | null;
   printTemplate?: string | null; printTemplate2?: string | null;
-  resetFrequency?: string | null; autoSerial: boolean; printOnSave: boolean;
+  resetFrequency?: string | null; entityType?: string | null;
+  autoSerial: boolean; printOnSave: boolean;
   isActive: boolean; sortOrder: number;
 };
 
@@ -39,7 +40,7 @@ const EMPTY: JournalForm = {
   systemOnly: false, autoSerial: false, firstNum: "1", digits: "6",
   lastNum: "999999", printTemplate: "", printTemplate2: "",
   printOnSave: false, status: "ready", postingMethod: "normal",
-  resetFrequency: "none",
+  resetFrequency: "none", entityType: "both",
 };
 
 /* ──────────────── document types ──────────────── */
@@ -119,6 +120,7 @@ function dbToForm(j: DBJournal): JournalForm {
     status:            "ready",
     postingMethod:     "normal",
     resetFrequency:    j.resetFrequency ?? "none",
+    entityType:        j.entityType ?? "both",
   };
 }
 
@@ -235,6 +237,7 @@ export default function DocumentJournalsPage() {
       printTemplate:  form.printTemplate || null,
       printTemplate2: form.printTemplate2 || null,
       resetFrequency: form.resetFrequency,
+      entityType:     form.entityType || "both",
       autoSerial:     form.autoSerial,
       printOnSave:    form.printOnSave,
       sortOrder:      0,
@@ -412,6 +415,24 @@ export default function DocumentJournalsPage() {
                   <div className="flex items-center col-span-2">
                     <CB label="نقل الملكية أوتوماتيكي" checked={form.transferOwnership} onChange={v => set("transferOwnership", v)} />
                   </div>
+                  {(form.docType === "stock_receipt_items" || form.docType === "stock_issue_items") && (
+                    <R label="نوع الطرف" lw={100}>
+                      <div className="flex items-center gap-3">
+                        {[
+                          { value: "customers", label: "العملاء" },
+                          { value: "suppliers", label: "الموردين" },
+                          { value: "both",      label: "الكل" },
+                        ].map(opt => (
+                          <label key={opt.value} className="flex items-center gap-1.5 cursor-pointer select-none">
+                            <input type="radio" className="w-3.5 h-3.5 accent-indigo-600"
+                              checked={form.entityType === opt.value}
+                              onChange={() => set("entityType", opt.value)} />
+                            <span className="text-[11px] text-slate-600">{opt.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </R>
+                  )}
                 </div>
               </P>
 
