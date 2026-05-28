@@ -215,58 +215,75 @@ async function runDbCheck(): Promise<DbIssue[]> {
 }
 
 // ─── main ─────────────────────────────────────────────────────────────────────
+//
+// Modes (mutually exclusive flags):
+//   --static   Run only the static schema analysis (no DB required).
+//              Used before drizzle-kit push to gate the migration.
+//   --db       Run only the live database check (information_schema).
+//              Used after drizzle-kit push to confirm constraints landed.
+//   (none)     Run both checks in sequence (default — for manual / pre-commit use).
 
 async function main() {
+  const args = process.argv.slice(2);
+  const staticOnly = args.includes('--static');
+  const dbOnly     = args.includes('--db');
+
   let exitCode = 0;
 
   // ── Static check ────────────────────────────────────────────────────────────
-  console.log(bold('\n🔍  [1/2] Static schema analysis …'));
-  console.log(`    File: ${SCHEMA_FILE}\n`);
+  if (!dbOnly) {
+    const label = staticOnly ? '🔍  Static schema analysis …' : '🔍  [1/2] Static schema analysis …';
+    console.log(bold('\n' + label));
+    console.log(`    File: ${SCHEMA_FILE}\n`);
 
-  const staticIssues = runStaticCheck();
+    const staticIssues = runStaticCheck();
 
-  if (staticIssues.length === 0) {
-    console.log(green('  ✓  No nullable FK columns with missing ON DELETE rule found.'));
-  } else {
-    exitCode = 1;
-    console.log(red(`  ✗  Found ${staticIssues.length} nullable FK column(s) with no ON DELETE rule:\n`));
-    for (const issue of staticIssues) {
-      console.log(
-        `     ${bold(red(issue.column))} → ${issue.referencedTable}` +
-        `  (schema.ts line ~${issue.line})`
-      );
+    if (staticIssues.length === 0) {
+      console.log(green('  ✓  No nullable FK columns with missing ON DELETE rule found.'));
+    } else {
+      exitCode = 1;
+      console.log(red(`  ✗  Found ${staticIssues.length} nullable FK column(s) with no ON DELETE rule:\n`));
+      for (const issue of staticIssues) {
+        console.log(
+          `     ${bold(red(issue.column))} → ${issue.referencedTable}` +
+          `  (schema.ts line ~${issue.line})`
+        );
+      }
+      console.log();
+      console.log('  Fix: add an explicit onDelete option to each .references() call, e.g.:');
+      console.log(yellow("    .references(() => table.col, { onDelete: 'set null' })   ← for optional links"));
+      console.log(yellow("    .references(() => table.col, { onDelete: 'cascade' })    ← for owned children"));
+      console.log(yellow("    .references(() => table.col, { onDelete: 'restrict' })   ← to prevent deletion"));
+      console.log();
+      console.log('  To bypass in an emergency: git commit --no-verify');
     }
-    console.log();
-    console.log('  Fix: add an explicit onDelete option to each .references() call, e.g.:');
-    console.log(yellow("    .references(() => table.col, { onDelete: 'set null' })   ← for optional links"));
-    console.log(yellow("    .references(() => table.col, { onDelete: 'cascade' })    ← for owned children"));
-    console.log(yellow("    .references(() => table.col, { onDelete: 'restrict' })   ← to prevent deletion"));
-    console.log();
-    console.log('  To bypass in an emergency: git commit --no-verify');
   }
 
   // ── Live DB check ───────────────────────────────────────────────────────────
-  console.log(bold('\n🔍  [2/2] Live database check (information_schema) …'));
+  if (!staticOnly) {
+    const label = dbOnly ? '🔍  Live database check (information_schema) …' : '🔍  [2/2] Live database check (information_schema) …';
+    console.log(bold('\n' + label));
 
-  const dbIssues = await runDbCheck();
+    const dbIssues = await runDbCheck();
 
-  if (dbIssues.length === 0) {
-    console.log(green('  ✓  No issues found in the connected database.\n'));
-  } else {
-    exitCode = 1;
-    console.log(
-      red(`  ✗  Found ${dbIssues.length} nullable FK(s) with delete_rule = NO ACTION in the database:\n`)
-    );
-    for (const issue of dbIssues) {
+    if (dbIssues.length === 0) {
+      console.log(green('  ✓  No issues found in the connected database.\n'));
+    } else {
+      exitCode = 1;
       console.log(
-        `     ${bold(red(issue.table + '.' + issue.column))} → ${issue.referencedTable}` +
-        `  (delete_rule: ${issue.deleteRule})`
+        red(`  ✗  Found ${dbIssues.length} nullable FK(s) with delete_rule = NO ACTION in the database:\n`)
+      );
+      for (const issue of dbIssues) {
+        console.log(
+          `     ${bold(red(issue.table + '.' + issue.column))} → ${issue.referencedTable}` +
+          `  (delete_rule: ${issue.deleteRule})`
+        );
+      }
+      console.log(
+        '\n  These constraints exist in the live database but carry no explicit ON DELETE rule.' +
+        '\n  Update the Drizzle schema and run `pnpm migrate` to apply the fix.\n'
       );
     }
-    console.log(
-      '\n  These constraints exist in the live database but carry no explicit ON DELETE rule.' +
-      '\n  Update the Drizzle schema and run `pnpm migrate` to apply the fix.\n'
-    );
   }
 
   // ── Summary ─────────────────────────────────────────────────────────────────

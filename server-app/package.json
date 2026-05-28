@@ -7,8 +7,10 @@
     "start": "node dist/index.mjs",
     "build": "esbuild src/index.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/index.mjs",
     "setup-db": "tsx scripts/setup-db.ts",
-    "migrate": "drizzle-kit push",
-    "check-fk": "tsx ../scripts/check-fk-delete-rules.ts"
+    "migrate": "pnpm check-fk:static && drizzle-kit push && pnpm check-fk:db",
+    "check-fk": "tsx ../scripts/check-fk-delete-rules.ts",
+    "check-fk:static": "tsx ../scripts/check-fk-delete-rules.ts --static",
+    "check-fk:db": "tsx ../scripts/check-fk-delete-rules.ts --db"
   },
   "dependencies": {
     "@trpc/server": "^11.6.0",
