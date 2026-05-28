@@ -3414,15 +3414,24 @@ function flattenTBTree(roots: TBNode[], expanded: Set<number>, search: string, h
 }
 
 function LedgerDialogBody({
-  accountId, accountCode, accountName, fromDate, toDate,
+  accountId: initAccountId, accountCode, accountName, fromDate: initFrom, toDate: initTo,
 }: {
   accountId: number; accountCode: string; accountName: string;
   fromDate: string; toDate: string;
 }) {
+  const accountsQuery = trpc.accounts.list.useQuery();
+  const [accountId, setAccountId] = useState<number>(initAccountId);
+  const [fromDate, setFromDate] = useState(initFrom);
+  const [toDate, setToDate] = useState(initTo);
+  const [queried, setQueried] = useState({ accountId: initAccountId, fromDate: initFrom, toDate: initTo });
+
   const stmtQuery = trpc.accounting.accountStatement.useQuery(
-    { accountId, fromDate: fromDate ? new Date(fromDate) : undefined, toDate: toDate ? new Date(toDate) : undefined },
+    { accountId: queried.accountId, fromDate: queried.fromDate ? new Date(queried.fromDate) : undefined, toDate: queried.toDate ? new Date(queried.toDate) : undefined },
     { enabled: true }
   );
+
+  const queriedAccount = accountsQuery.data?.find(a => a.id === queried.accountId);
+
   let runningBalance = 0;
   const rows = (stmtQuery.data ?? []).map(l => {
     runningBalance += parseFloat(l.debit ?? "0") - parseFloat(l.credit ?? "0");
@@ -3432,47 +3441,81 @@ function LedgerDialogBody({
   return (
     <div className="space-y-3">
       <Card className="border-border/60">
-        <CardHeader className="pb-2 border-b border-border">
-          <div className="text-center">
-            <p className="font-bold text-sm">كشف حساب: {accountCode} - {accountName}</p>
-            {fromDate && toDate && <p className="text-xs text-muted-foreground">من {fromDate} إلى {toDate}</p>}
+        <CardContent className="p-3">
+          <div className="grid grid-cols-4 gap-3">
+            <div>
+              <Label className="text-xs">الحساب</Label>
+              <Select value={accountId.toString()} onValueChange={v => setAccountId(parseInt(v))}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="اختر حساب..." /></SelectTrigger>
+                <SelectContent>
+                  {accountsQuery.data?.filter(a => a.allowPosting).map(a => (
+                    <SelectItem key={a.id} value={a.id.toString()}>{a.code} - {a.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">من تاريخ</Label>
+              <DateMaskInput value={fromDate} onChange={setFromDate} className="h-8 text-xs" />
+            </div>
+            <div>
+              <Label className="text-xs">إلى تاريخ</Label>
+              <DateMaskInput value={toDate} onChange={setToDate} className="h-8 text-xs" />
+            </div>
+            <div className="flex items-end">
+              <Button size="sm" className="h-8 text-xs w-full gap-1"
+                onClick={() => setQueried({ accountId, fromDate, toDate })}>
+                <Search className="w-3 h-3" /> عرض الكشف
+              </Button>
+            </div>
           </div>
-        </CardHeader>
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/30">
-              <TableHead className="text-xs">التاريخ</TableHead>
-              <TableHead className="text-xs">رقم القيد</TableHead>
-              <TableHead className="text-xs">نوع السند</TableHead>
-              <TableHead className="text-xs">البيان</TableHead>
-              <TableHead className="text-xs text-center">مدين</TableHead>
-              <TableHead className="text-xs text-center">دائن</TableHead>
-              <TableHead className="text-xs text-center">الرصيد</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {stmtQuery.isLoading && (
-              <TableRow><TableCell colSpan={7} className="text-center text-xs text-muted-foreground py-8">جاري تحميل البيانات...</TableCell></TableRow>
-            )}
-            {!stmtQuery.isLoading && rows.length === 0 && (
-              <TableRow><TableCell colSpan={7} className="text-center text-xs text-muted-foreground py-8">لا توجد حركات في هذه الفترة</TableCell></TableRow>
-            )}
-            {rows.map((r, i) => (
-              <TableRow key={i} className="hover:bg-muted/10">
-                <TableCell className="text-xs">{new Date(r.entryDate).toLocaleDateString("ar-SA")}</TableCell>
-                <TableCell className="text-xs font-mono text-primary">{r.entryNumber}</TableCell>
-                <TableCell className="text-xs">{r.voucherType}</TableCell>
-                <TableCell className="text-xs">{r.description ?? "-"}</TableCell>
-                <TableCell className="text-center text-xs">{parseFloat(r.debit ?? "0") > 0 ? parseFloat(r.debit ?? "0").toLocaleString() : "-"}</TableCell>
-                <TableCell className="text-center text-xs">{parseFloat(r.credit ?? "0") > 0 ? parseFloat(r.credit ?? "0").toLocaleString() : "-"}</TableCell>
-                <TableCell className={`text-center text-xs font-bold ${r.runningBalance < 0 ? "text-destructive" : "text-emerald-600"}`}>
-                  {r.runningBalance < 0 ? `(${Math.abs(r.runningBalance).toLocaleString()})` : r.runningBalance.toLocaleString()}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        </CardContent>
       </Card>
+
+      {queriedAccount && (
+        <Card className="border-border/60">
+          <CardHeader className="pb-2 border-b border-border">
+            <div className="text-center">
+              <p className="font-bold text-sm">كشف حساب: {queriedAccount.code} - {queriedAccount.name}</p>
+              {queried.fromDate && queried.toDate && <p className="text-xs text-muted-foreground">من {queried.fromDate} إلى {queried.toDate}</p>}
+            </div>
+          </CardHeader>
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/30">
+                <TableHead className="text-xs">التاريخ</TableHead>
+                <TableHead className="text-xs">رقم القيد</TableHead>
+                <TableHead className="text-xs">نوع السند</TableHead>
+                <TableHead className="text-xs">البيان</TableHead>
+                <TableHead className="text-xs text-center">مدين</TableHead>
+                <TableHead className="text-xs text-center">دائن</TableHead>
+                <TableHead className="text-xs text-center">الرصيد</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {stmtQuery.isLoading && (
+                <TableRow><TableCell colSpan={7} className="text-center text-xs text-muted-foreground py-8">جاري تحميل البيانات...</TableCell></TableRow>
+              )}
+              {!stmtQuery.isLoading && rows.length === 0 && (
+                <TableRow><TableCell colSpan={7} className="text-center text-xs text-muted-foreground py-8">لا توجد حركات في هذه الفترة</TableCell></TableRow>
+              )}
+              {rows.map((r, i) => (
+                <TableRow key={i} className="hover:bg-muted/10">
+                  <TableCell className="text-xs">{new Date(r.entryDate).toLocaleDateString("ar-SA")}</TableCell>
+                  <TableCell className="text-xs font-mono text-primary">{r.entryNumber}</TableCell>
+                  <TableCell className="text-xs">{r.voucherType}</TableCell>
+                  <TableCell className="text-xs">{r.description ?? "-"}</TableCell>
+                  <TableCell className="text-center text-xs">{parseFloat(r.debit ?? "0") > 0 ? parseFloat(r.debit ?? "0").toLocaleString() : "-"}</TableCell>
+                  <TableCell className="text-center text-xs">{parseFloat(r.credit ?? "0") > 0 ? parseFloat(r.credit ?? "0").toLocaleString() : "-"}</TableCell>
+                  <TableCell className={`text-center text-xs font-bold ${r.runningBalance < 0 ? "text-destructive" : "text-emerald-600"}`}>
+                    {r.runningBalance < 0 ? `(${Math.abs(r.runningBalance).toLocaleString()})` : r.runningBalance.toLocaleString()}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
     </div>
   );
 }
