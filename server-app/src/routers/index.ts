@@ -11,7 +11,7 @@ import { documentTemplatesRouter } from './documentTemplates.js';
 import { documentTypesRouter } from './documentTypes.js';
 import { postingRouter } from './posting.js';
 import { db } from '../db.js';
-import { products, customers, suppliers, chartOfAccounts, warehouses, branches, units, productGroups, journalEntries, journalEntryLines, vouchers, receiptVouchers, paymentVouchers, inventory, stockVouchers, stockVoucherItems, inventoryCounts, inventoryCountItems, freeProducts, salesInvoices, salesInvoiceItems, warehouseAccountLinks, userGroups, userGroupMembers, userCategories, users, documentJournals, documentTypes } from '../schema.js';
+import { products, customers, suppliers, chartOfAccounts, warehouses, branches, units, productGroups, journalEntries, journalEntryLines, vouchers, receiptVouchers, paymentVouchers, inventory, stockVouchers, stockVoucherItems, inventoryCounts, inventoryCountItems, freeProducts, salesInvoices, salesInvoiceItems, warehouseAccountLinks, userGroups, userGroupMembers, userCategories, users, documentJournals, documentTypes, costCenters } from '../schema.js';
 import { eq, and, desc, like, or, sql, isNotNull, isNull, asc, gte, lte, inArray } from 'drizzle-orm';
 
 export const appRouter = router({
@@ -1372,6 +1372,40 @@ export const appRouter = router({
       }),
   }),
 
+  // ─── Cost Centers (مراكز التكلفة) ────────────────────────────────────────────
+  costCenters: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return db.select().from(costCenters)
+        .where(and(eq(costCenters.orgId, ctx.user.orgId), eq(costCenters.isActive, true)))
+        .orderBy(asc(costCenters.code));
+    }),
+    create: protectedProcedure
+      .input(z.object({
+        code:       z.string().min(1),
+        name:       z.string().min(1),
+        name2:      z.string().optional(),
+        centerType: z.enum(['root', 'general', 'branch']).default('branch'),
+        parentId:   z.number().optional(),
+        level:      z.number().default(1),
+        notes:      z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const [c] = await db.insert(costCenters).values({
+          ...input,
+          orgId: ctx.user.orgId,
+        }).returning();
+        return c;
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        await db.update(costCenters)
+          .set({ isActive: false })
+          .where(and(eq(costCenters.id, input.id), eq(costCenters.orgId, ctx.user.orgId)));
+        return { success: true };
+      }),
+  }),
+
   // ─── Warehouses ──────────────────────────────────────────────────────────────
   warehouses: router({
     list: protectedProcedure.query(async ({ ctx }) => {
@@ -1965,14 +1999,15 @@ export const appRouter = router({
 
         const lines = await db
           .select({
-            entryId:     journalEntryLines.entryId,
-            entryDate:   journalEntries.entryDate,
-            entryNumber: journalEntries.entryNumber,
-            description: journalEntries.description,
-            lineDesc:    journalEntryLines.description,
-            voucherType: sql<string>`'قيد'`,
-            debit:       journalEntryLines.debit,
-            credit:      journalEntryLines.credit,
+            entryId:       journalEntryLines.entryId,
+            entryDate:     journalEntries.entryDate,
+            entryNumber:   journalEntries.entryNumber,
+            reference:     journalEntries.reference,
+            sourceDocType: journalEntries.sourceDocType,
+            description:   journalEntries.description,
+            lineDesc:      journalEntryLines.description,
+            debit:         journalEntryLines.debit,
+            credit:        journalEntryLines.credit,
           })
           .from(journalEntryLines)
           .innerJoin(journalEntries, and(
@@ -1982,11 +2017,24 @@ export const appRouter = router({
           .where(and(...conds))
           .orderBy(asc(journalEntries.entryDate), asc(journalEntries.id));
 
+        const docTypeLabel = (src: string | null) => {
+          switch (src) {
+            case 'sales_invoice':    return 'فاتورة مبيعات';
+            case 'sales_return':     return 'مردود مبيعات';
+            case 'purchase_invoice': return 'فاتورة مشتريات';
+            case 'purchase_return':  return 'مردود مشتريات';
+            case 'receipt_voucher':  return 'سند قبض';
+            case 'payment_voucher':  return 'سند صرف';
+            default:                 return 'قيد';
+          }
+        };
+
         return lines.map(l => ({
           entryId:     l.entryId,
           entryDate:   l.entryDate,
           entryNumber: l.entryNumber,
-          voucherType: l.voucherType,
+          reference:   l.reference,
+          voucherType: docTypeLabel(l.sourceDocType),
           description: l.lineDesc ?? l.description,
           debit:       l.debit,
           credit:      l.credit,

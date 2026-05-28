@@ -337,16 +337,20 @@ export async function autoPostSalesInvoice(
 
   // مردود المبيعات: عكس المدين/الدائن
   const isReturn = invoice.invoiceType === 'return';
-  const lines = isReturn
+  const reversedLines = isReturn
     ? rawLines.map(l => ({ ...l, debit: l.credit, credit: l.debit }))
     : rawLines;
 
   const docLabel = isReturn ? 'مردود مبيعات' : 'فاتورة مبيعات';
+  const docTypeName = docTypeAccs?.docType?.nameAr ?? docLabel;
+  const lineDesc = `${docTypeName} - ${invoice.invoiceNumber}`;
+  const lines = reversedLines.map(l => ({ ...l, description: lineDesc }));
+
   const entry = await insertJournalEntry({
     orgId,
     userId,
     date: invoice.invoiceDate,
-    description: `ترحيل تلقائي - ${docLabel} ${invoice.invoiceNumber}`,
+    description: docTypeName,
     reference: invoice.invoiceNumber,
     sourceDocType: isReturn ? 'sales_return' : 'sales_invoice',
     sourceDocId: invoice.id,
@@ -405,16 +409,20 @@ export async function autoPostPurchaseInvoice(
 
   // مردود المشتريات: عكس المدين/الدائن
   const isReturn = invoice.invoiceType === 'return';
-  const lines = isReturn
+  const reversedLines = isReturn
     ? rawLines.map(l => ({ ...l, debit: l.credit, credit: l.debit }))
     : rawLines;
 
   const docLabel = isReturn ? 'مردود مشتريات' : 'فاتورة مشتريات';
+  const docTypeName = docTypeAccs?.docType?.nameAr ?? docLabel;
+  const lineDesc = `${docTypeName} - ${invoice.invoiceNumber}`;
+  const lines = reversedLines.map(l => ({ ...l, description: lineDesc }));
+
   const entry = await insertJournalEntry({
     orgId,
     userId,
     date: invoice.invoiceDate,
-    description: `ترحيل تلقائي - ${docLabel} ${invoice.invoiceNumber}`,
+    description: docTypeName,
     reference: invoice.invoiceNumber,
     sourceDocType: isReturn ? 'purchase_return' : 'purchase_invoice',
     sourceDocId: invoice.id,

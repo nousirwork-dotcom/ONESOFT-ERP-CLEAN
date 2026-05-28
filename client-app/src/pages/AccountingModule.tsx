@@ -3195,7 +3195,7 @@ function AccountLedgerPage({
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: fs, direction: "rtl" }}>
                 <thead>
                   <tr style={{ background: "#4B5563", color: "#fff" }}>
-                    {["التاريخ","رقم القيد","نوع السند","البيان","مدين","دائن","الرصيد"].map((h, i) => (
+                    {["التاريخ","بناءً على","نوع المستند","الشرح","مدين","دائن","الرصيد"].map((h, i) => (
                       <th key={i} style={{ padding: "7px 10px", textAlign: i >= 4 ? "center" : "right", fontWeight: 600, whiteSpace: "nowrap",
                         color: showColors && i === 4 ? "#FCA5A5" : showColors && i === 5 ? "#6EE7B7" : "#fff" }}>{h}</th>
                     ))}
@@ -3210,9 +3210,9 @@ function AccountLedgerPage({
                     return (
                       <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#F3F8FE", borderBottom: "1px solid #F3F4F6" }}>
                         <td style={{ padding: "5px 10px", whiteSpace: "nowrap" }}>{new Date(r.entryDate).toLocaleDateString("ar-EG")}</td>
-                        <td style={{ padding: "5px 10px", fontFamily: "monospace", color: "#2563EB", whiteSpace: "nowrap" }}>{r.entryNumber}</td>
+                        <td style={{ padding: "5px 10px", fontFamily: "monospace", color: "#2563EB", whiteSpace: "nowrap" }}>{(r as any).reference ?? r.entryNumber}</td>
                         <td style={{ padding: "5px 10px" }}>{r.voucherType}</td>
-                        <td style={{ padding: "5px 10px", color: "#374151", maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.description ?? r.lineDesc ?? "—"}</td>
+                        <td style={{ padding: "5px 10px", color: "#374151", maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.description ?? "—"}</td>
                         <td style={{ padding: "5px 10px", textAlign: "center", color: D, fontWeight: d > 0 ? 700 : 400 }}>{fmt(d)}</td>
                         <td style={{ padding: "5px 10px", textAlign: "center", color: C, fontWeight: c > 0 ? 700 : 400 }}>{fmt(c)}</td>
                         <td style={{ padding: "5px 10px", textAlign: "center", fontWeight: 700,
@@ -3685,7 +3685,7 @@ function LedgerDialogBody({
               {rows.map((r, i) => (
                 <TableRow key={i} className="hover:bg-muted/10">
                   <TableCell className="text-xs">{new Date(r.entryDate).toLocaleDateString("ar-SA")}</TableCell>
-                  <TableCell className="text-xs font-mono text-primary">{r.entryNumber}</TableCell>
+                  <TableCell className="text-xs font-mono text-primary">{(r as any).reference ?? r.entryNumber}</TableCell>
                   <TableCell className="text-xs">{r.voucherType}</TableCell>
                   <TableCell className="text-xs">{r.description ?? "-"}</TableCell>
                   <TableCell className="text-center text-xs">{parseFloat(r.debit ?? "0") > 0 ? parseFloat(r.debit ?? "0").toLocaleString() : "-"}</TableCell>

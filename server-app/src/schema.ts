@@ -674,6 +674,21 @@ export const documentTemplates = pgTable('document_templates', {
 
 export type DocumentTemplate = typeof documentTemplates.$inferSelect;
 
+// ─── Cost Centers (مراكز التكلفة) ─────────────────────────────────────────────
+export const costCenters = pgTable('cost_centers', {
+  id:         serial('id').primaryKey(),
+  orgId:      integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  code:       varchar('code', { length: 30 }).notNull(),
+  name:       varchar('name', { length: 255 }).notNull(),
+  name2:      varchar('name2', { length: 255 }),
+  centerType: varchar('center_type', { length: 20 }).notNull().default('branch'), // root | general | branch
+  parentId:   integer('parent_id'),
+  level:      integer('level').notNull().default(1),
+  notes:      text('notes'),
+  isActive:   boolean('is_active').notNull().default(true),
+  createdAt:  timestamp('created_at').notNull().defaultNow(),
+});
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type Organization = typeof organizations.$inferSelect;
 export type User = typeof users.$inferSelect;
