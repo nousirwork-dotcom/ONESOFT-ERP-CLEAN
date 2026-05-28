@@ -2970,17 +2970,23 @@ function AccountLedgerPage({
   initialToDate?: string;
 } = {}) {
   const accountsQuery = trpc.accounts.list.useQuery();
+  const leafAccounts  = accountsQuery.data?.filter(a => a.allowPosting) ?? [];
 
   // Filter state
-  const [accountId,    setAccountId]    = useState<number | null>(initialAccountId ?? null);
-  const [fromDate,     setFromDate]     = useState(initialFromDate ?? "");
-  const [toDate,       setToDate]       = useState(initialToDate ?? "");
-  const [subTitle,     setSubTitle]     = useState("");
-  const [footer,       setFooter]       = useState("");
-  const [showColors,   setShowColors]   = useState(true);
-  const [fontSize,     setFontSize]     = useState<"sm"|"md"|"lg">("md");
+  const [fromAccountId, setFromAccountId] = useState<number | null>(initialAccountId ?? null);
+  const [toAccountId,   setToAccountId]   = useState<number | null>(null);
+  const [fromDate,      setFromDate]      = useState(initialFromDate ?? "");
+  const [toDate,        setToDate]        = useState(initialToDate   ?? "");
+  const [subTitle,      setSubTitle]      = useState("");
+  const [showColors,    setShowColors]    = useState(true);
+  const [fontSize,      setFontSize]      = useState<"sm"|"md"|"lg">("md");
 
-  // Auto-run if opened with initial params (drill-down from trial balance)
+  // View mode: "filters" | "results"
+  const [view, setView] = useState<"filters"|"results">(
+    initialAccountId ? "results" : "filters"
+  );
+
+  // Queried snapshot (what was actually run)
   const [queried, setQueried] = useState<{accountId:number;fromDate:string;toDate:string}|null>(
     initialAccountId ? { accountId: initialAccountId, fromDate: initialFromDate ?? "", toDate: initialToDate ?? "" } : null
   );
@@ -2990,7 +2996,7 @@ function AccountLedgerPage({
     { enabled: !!queried }
   );
 
-  const queriedAccount = accountsQuery.data?.find(a => a.id === queried?.accountId);
+  const queriedAccount = leafAccounts.find(a => a.id === queried?.accountId);
 
   let runningBalance = 0;
   const rows = (stmtQuery.data ?? []).map(l => {
@@ -2999,29 +3005,43 @@ function AccountLedgerPage({
   });
 
   const handleRun = () => {
-    if (!accountId) return;
-    setQueried({ accountId, fromDate, toDate });
+    if (!fromAccountId) return;
+    setQueried({ accountId: fromAccountId, fromDate, toDate });
+    setView("results");
   };
 
   const handleReset = () => {
-    setAccountId(null);
+    setFromAccountId(null);
+    setToAccountId(null);
     setFromDate("");
     setToDate("");
     setSubTitle("");
-    setFooter("");
     setQueried(null);
+    setView("filters");
   };
 
-  const D = showColors ? "#C0392B" : "#374151";
-  const C = showColors ? "#1A7A4A" : "#374151";
+  const D  = showColors ? "#C0392B" : "#374151";
+  const C  = showColors ? "#1A7A4A" : "#374151";
   const fs = fontSize === "sm" ? 11 : fontSize === "lg" ? 14 : 12;
 
-  // Classic ERP field row style
-  const fieldRow: CSSProperties = { display: "flex", alignItems: "center", gap: 0, marginBottom: 5 };
-  const fieldLabel: CSSProperties = { width: 130, textAlign: "right", fontSize: 12, fontWeight: 600, color: "#374151", paddingLeft: 8, flexShrink: 0 };
-  const fieldInput: CSSProperties = { flex: 1, height: 24, fontSize: 12, border: "1px solid #9CA3AF", borderRadius: 2, padding: "0 6px", background: "#fff", fontFamily: "'Cairo',Tahoma,sans-serif", direction: "rtl" };
-  const panelStyle: CSSProperties = { background: "#F9FAFB", border: "1px solid #D1D5DB", borderRadius: 4, padding: "12px 14px" };
-  const sectionTitle: CSSProperties = { fontSize: 11, fontWeight: 700, color: "#6B7280", marginBottom: 8, borderBottom: "1px solid #E5E7EB", paddingBottom: 4 };
+  const fieldRow:   CSSProperties = { display: "flex", alignItems: "center", marginBottom: 6 };
+  const fieldLabel: CSSProperties = { width: 130, textAlign: "right", fontSize: 12, fontWeight: 600, color: "#374151", paddingLeft: 10, flexShrink: 0 };
+  const fieldInput: CSSProperties = { flex: 1, height: 26, fontSize: 12, border: "1px solid #9CA3AF", borderRadius: 2, padding: "0 6px", background: "#fff", fontFamily: "'Cairo',Tahoma,sans-serif", direction: "rtl" };
+  const panelStyle: CSSProperties = { background: "#F9FAFB", border: "1px solid #D1D5DB", borderRadius: 4, padding: "14px 16px", marginBottom: 12 };
+  const sTitle:     CSSProperties = { fontSize: 11, fontWeight: 700, color: "#6B7280", marginBottom: 10, borderBottom: "1px solid #E5E7EB", paddingBottom: 5 };
+
+  const AccSelect = ({ value, onChange, placeholder }: { value: number|null; onChange:(v:number|null)=>void; placeholder:string }) => (
+    <Select value={value?.toString() ?? ""} onValueChange={v => onChange(v ? parseInt(v) : null)}>
+      <SelectTrigger style={{ height: 26, fontSize: 12, direction: "rtl" }}>
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {leafAccounts.map(a => (
+          <SelectItem key={a.id} value={a.id.toString()}>{a.code} - {a.name}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
 
   return (
     <div style={{ fontFamily: "'Cairo',Tahoma,sans-serif", direction: "rtl", padding: 8 }}>
@@ -3031,112 +3051,110 @@ function AccountLedgerPage({
         <FileText style={{ width: 18, height: 18, color: "#2563EB" }} />
         <span style={{ fontSize: 15, fontWeight: 700, color: "#1E3A5F" }}>كشف حساب أستاذ</span>
         <span style={{ marginRight: "auto", fontSize: 11, color: "#9CA3AF" }}>accstat.sysrep</span>
+        {view === "results" && (
+          <button onClick={() => setView("filters")}
+            style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, padding: "4px 12px", border: "1px solid #D1D5DB", borderRadius: 4, background: "#fff", cursor: "pointer", color: "#374151", fontFamily: "'Cairo',Tahoma,sans-serif" }}>
+            <Search style={{ width: 12, height: 12 }} /> تعديل الضوابط
+          </button>
+        )}
       </div>
 
-      {/* ── Filter Panel ── */}
-      <div style={{ ...panelStyle, marginBottom: 10 }}>
-        <p style={sectionTitle}>ضوابط التقرير</p>
+      {/* ══ FILTER PANEL ══ */}
+      {view === "filters" && (
+        <>
+          <div style={panelStyle}>
+            <p style={sTitle}>ضوابط التقرير</p>
 
-        {/* Row 1: dates */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 24px", marginBottom: 4 }}>
-          <div style={fieldRow}>
-            <span style={fieldLabel}>تاريخ أول الفترة</span>
-            <div style={{ flex: 1 }}>
-              <DateMaskInput value={fromDate} onChange={setFromDate} className="h-6 text-xs" />
+            {/* dates */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 32px", marginBottom: 6 }}>
+              <div style={fieldRow}>
+                <span style={fieldLabel}>تاريخ أول الفترة</span>
+                <div style={{ flex: 1 }}><DateMaskInput value={fromDate} onChange={setFromDate} className="h-6 text-xs" /></div>
+              </div>
+              <div style={fieldRow}>
+                <span style={fieldLabel}>تاريخ نهاية الفترة</span>
+                <div style={{ flex: 1 }}><DateMaskInput value={toDate} onChange={setToDate} className="h-6 text-xs" /></div>
+              </div>
+            </div>
+
+            {/* account range */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 32px", marginBottom: 6 }}>
+              <div style={fieldRow}>
+                <span style={fieldLabel}>من حساب</span>
+                <div style={{ flex: 1 }}><AccSelect value={fromAccountId} onChange={setFromAccountId} placeholder="من..." /></div>
+              </div>
+              <div style={fieldRow}>
+                <span style={fieldLabel}>إلى حساب</span>
+                <div style={{ flex: 1 }}><AccSelect value={toAccountId} onChange={setToAccountId} placeholder="إلى..." /></div>
+              </div>
+            </div>
+
+            {/* cost center + currency */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 32px", marginBottom: 6 }}>
+              <div style={fieldRow}>
+                <span style={fieldLabel}>مركز التكلفة</span>
+                <input style={fieldInput} disabled placeholder="الكل" />
+              </div>
+              <div style={fieldRow}>
+                <span style={fieldLabel}>العملة</span>
+                <input style={fieldInput} disabled placeholder="العملة الأساسية" />
+              </div>
+            </div>
+
+            {/* subtitle */}
+            <div style={fieldRow}>
+              <span style={fieldLabel}>عنوان فرعي</span>
+              <input style={fieldInput} value={subTitle} onChange={e => setSubTitle(e.target.value)} placeholder="اختياري..." />
+            </div>
+
+            {/* style options */}
+            <div style={{ display: "flex", alignItems: "center", gap: 24, marginTop: 10, paddingTop: 8, borderTop: "1px solid #E5E7EB" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>حجم الخط</span>
+                <select value={fontSize} onChange={e => setFontSize(e.target.value as any)}
+                  style={{ height: 24, fontSize: 11, border: "1px solid #9CA3AF", borderRadius: 2, padding: "0 4px", background: "#fff" }}>
+                  <option value="sm">صغير</option>
+                  <option value="md">طبيعي</option>
+                  <option value="lg">كبير</option>
+                </select>
+              </div>
+              <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, cursor: "pointer" }}>
+                <input type="checkbox" checked={showColors} onChange={e => setShowColors(e.target.checked)} />
+                <span style={{ color: "#374151", fontWeight: 600 }}>إظهار الألوان</span>
+              </label>
             </div>
           </div>
-          <div style={fieldRow}>
-            <span style={fieldLabel}>تاريخ نهاية الفترة</span>
-            <div style={{ flex: 1 }}>
-              <DateMaskInput value={toDate} onChange={setToDate} className="h-6 text-xs" />
-            </div>
+
+          {/* action buttons */}
+          <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+            <button onClick={handleRun} disabled={!fromAccountId}
+              style={{ padding: "7px 32px", background: fromAccountId ? "#2563EB" : "#9CA3AF", color: "#fff", border: "none", borderRadius: 4, fontSize: 13, fontWeight: 700, cursor: fromAccountId ? "pointer" : "not-allowed", fontFamily: "'Cairo',Tahoma,sans-serif", display: "flex", alignItems: "center", gap: 6 }}>
+              <Search style={{ width: 13, height: 13 }} /> تشغيل (F5)
+            </button>
+            <button onClick={handleReset}
+              style={{ padding: "7px 20px", background: "#fff", color: "#374151", border: "1px solid #D1D5DB", borderRadius: 4, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Cairo',Tahoma,sans-serif" }}>
+              إلغاء الأمر
+            </button>
           </div>
-        </div>
+        </>
+      )}
 
-        {/* Row 2: account */}
-        <div style={fieldRow}>
-          <span style={fieldLabel}>الحساب</span>
-          <div style={{ flex: 1 }}>
-            <Select value={accountId?.toString() ?? ""} onValueChange={v => setAccountId(parseInt(v))}>
-              <SelectTrigger style={{ height: 26, fontSize: 12, direction: "rtl" }}>
-                <SelectValue placeholder="اختر حساباً..." />
-              </SelectTrigger>
-              <SelectContent>
-                {accountsQuery.data?.filter(a => a.allowPosting).map(a => (
-                  <SelectItem key={a.id} value={a.id.toString()}>{a.code} - {a.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {/* Row 3: subtitle */}
-        <div style={fieldRow}>
-          <span style={fieldLabel}>عنوان فرعي</span>
-          <input style={fieldInput} value={subTitle} onChange={e => setSubTitle(e.target.value)} placeholder="اختياري..." />
-        </div>
-
-        {/* Row 4: footer */}
-        <div style={fieldRow}>
-          <span style={fieldLabel}>تذييل</span>
-          <input style={fieldInput} value={footer} onChange={e => setFooter(e.target.value)} placeholder="اختياري..." />
-        </div>
-
-        {/* Row 5: style options */}
-        <div style={{ display: "flex", alignItems: "center", gap: 20, marginTop: 8, paddingTop: 8, borderTop: "1px solid #E5E7EB" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>حجم الخط</span>
-            <select value={fontSize} onChange={e => setFontSize(e.target.value as any)}
-              style={{ height: 24, fontSize: 11, border: "1px solid #9CA3AF", borderRadius: 2, padding: "0 4px", background: "#fff" }}>
-              <option value="sm">صغير</option>
-              <option value="md">طبيعي</option>
-              <option value="lg">كبير</option>
-            </select>
-          </div>
-          <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, cursor: "pointer" }}>
-            <input type="checkbox" checked={showColors} onChange={e => setShowColors(e.target.checked)} />
-            <span style={{ color: "#374151", fontWeight: 600 }}>إظهار الألوان</span>
-          </label>
-        </div>
-      </div>
-
-      {/* ── Action Buttons ── */}
-      <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 14 }}>
-        <button
-          onClick={handleRun}
-          disabled={!accountId}
-          style={{ padding: "6px 28px", background: accountId ? "#2563EB" : "#9CA3AF", color: "#fff", border: "none", borderRadius: 4, fontSize: 13, fontWeight: 700, cursor: accountId ? "pointer" : "not-allowed", fontFamily: "'Cairo',Tahoma,sans-serif", display: "flex", alignItems: "center", gap: 6 }}
-        >
-          <Search style={{ width: 13, height: 13 }} /> تشغيل (F5)
-        </button>
-        <button
-          onClick={handleReset}
-          style={{ padding: "6px 20px", background: "#fff", color: "#374151", border: "1px solid #D1D5DB", borderRadius: 4, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Cairo',Tahoma,sans-serif" }}
-        >
-          إلغاء الأمر
-        </button>
-      </div>
-
-      {/* ── Results ── */}
-      {queried && queriedAccount && (
+      {/* ══ RESULTS ══ */}
+      {view === "results" && queried && queriedAccount && (
         <div style={{ border: "1px solid #D1D5DB", borderRadius: 4, overflow: "hidden" }}>
-          {/* Report header */}
+          {/* report header */}
           <div style={{ background: "#1E3A5F", color: "#fff", textAlign: "center", padding: "10px 16px" }}>
             <p style={{ fontSize: fs + 2, fontWeight: 700, margin: 0 }}>كشف حساب أستاذ</p>
             {subTitle && <p style={{ fontSize: fs, margin: "2px 0 0", opacity: 0.85 }}>{subTitle}</p>}
-            <p style={{ fontSize: fs, margin: "4px 0 0", opacity: 0.8 }}>
-              {queriedAccount.code} — {queriedAccount.name}
-            </p>
+            <p style={{ fontSize: fs + 1, margin: "4px 0 0", opacity: 0.9 }}>{queriedAccount.code} — {queriedAccount.name}</p>
             {queried.fromDate && queried.toDate && (
-              <p style={{ fontSize: fs - 1, margin: "2px 0 0", opacity: 0.7 }}>
-                الفترة: من {queried.fromDate} إلى {queried.toDate}
-              </p>
+              <p style={{ fontSize: fs - 1, margin: "2px 0 0", opacity: 0.7 }}>الفترة: من {queried.fromDate} إلى {queried.toDate}</p>
             )}
           </div>
 
-          {/* Table */}
+          {/* table */}
           {stmtQuery.isLoading ? (
-            <div style={{ textAlign: "center", padding: 32, color: "#9CA3AF", fontSize: 12 }}>جاري تحميل البيانات...</div>
+            <div style={{ textAlign: "center", padding: 40, color: "#9CA3AF", fontSize: 12 }}>جاري تحميل البيانات...</div>
           ) : (
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: fs, direction: "rtl" }}>
@@ -3144,29 +3162,26 @@ function AccountLedgerPage({
                   <tr style={{ background: "#4B5563", color: "#fff" }}>
                     {["التاريخ","رقم القيد","نوع السند","البيان","مدين","دائن","الرصيد"].map((h, i) => (
                       <th key={i} style={{ padding: "7px 10px", textAlign: i >= 4 ? "center" : "right", fontWeight: 600, whiteSpace: "nowrap",
-                        color: showColors && i === 4 ? "#FCA5A5" : showColors && i === 5 ? "#6EE7B7" : "#fff" }}>
-                        {h}
-                      </th>
+                        color: showColors && i === 4 ? "#FCA5A5" : showColors && i === 5 ? "#6EE7B7" : "#fff" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {rows.length === 0 ? (
-                    <tr><td colSpan={7} style={{ textAlign: "center", padding: "32px 0", color: "#9CA3AF", fontSize: 12 }}>لا توجد حركات في هذه الفترة</td></tr>
+                    <tr><td colSpan={7} style={{ textAlign: "center", padding: "40px 0", color: "#9CA3AF", fontSize: 12 }}>لا توجد حركات في هذه الفترة</td></tr>
                   ) : rows.map((r, i) => {
                     const d = parseFloat(r.debit ?? "0"), c = parseFloat(r.credit ?? "0");
                     const fmt = (n: number) => n > 0 ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
-                    const bg = i % 2 === 0 ? "#fff" : "#F3F8FE";
                     return (
-                      <tr key={i} style={{ background: bg, borderBottom: "1px solid #F3F4F6" }}>
+                      <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#F3F8FE", borderBottom: "1px solid #F3F4F6" }}>
                         <td style={{ padding: "5px 10px", whiteSpace: "nowrap" }}>{new Date(r.entryDate).toLocaleDateString("ar-EG")}</td>
                         <td style={{ padding: "5px 10px", fontFamily: "monospace", color: "#2563EB", whiteSpace: "nowrap" }}>{r.entryNumber}</td>
                         <td style={{ padding: "5px 10px" }}>{r.voucherType}</td>
-                        <td style={{ padding: "5px 10px", color: "#374151", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.description ?? r.lineDesc ?? "—"}</td>
+                        <td style={{ padding: "5px 10px", color: "#374151", maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.description ?? r.lineDesc ?? "—"}</td>
                         <td style={{ padding: "5px 10px", textAlign: "center", color: D, fontWeight: d > 0 ? 700 : 400 }}>{fmt(d)}</td>
                         <td style={{ padding: "5px 10px", textAlign: "center", color: C, fontWeight: c > 0 ? 700 : 400 }}>{fmt(c)}</td>
                         <td style={{ padding: "5px 10px", textAlign: "center", fontWeight: 700,
-                          color: r.runningBalance < 0 ? C : r.runningBalance > 0 ? D : "#9CA3AF" }}>
+                          color: r.runningBalance === 0 ? "#9CA3AF" : r.runningBalance < 0 ? C : D }}>
                           {r.runningBalance === 0 ? "—"
                             : r.runningBalance < 0
                               ? `(${Math.abs(r.runningBalance).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})})`
@@ -3186,19 +3201,12 @@ function AccountLedgerPage({
                         <td colSpan={4} style={{ padding: "6px 10px", textAlign: "right" }}>الإجمالي</td>
                         <td style={{ padding: "6px 10px", textAlign: "center", color: showColors ? "#FCA5A5" : "#fff" }}>{fmt2(totD)}</td>
                         <td style={{ padding: "6px 10px", textAlign: "center", color: showColors ? "#6EE7B7" : "#fff" }}>{fmt2(totC)}</td>
-                        <td style={{ padding: "6px 10px", textAlign: "center" }}></td>
+                        <td style={{ padding: "6px 10px" }}></td>
                       </tr>
                     </tfoot>
                   );
                 })()}
               </table>
-            </div>
-          )}
-
-          {/* Report footer */}
-          {footer && (
-            <div style={{ background: "#F3F4F6", borderTop: "1px solid #E5E7EB", padding: "6px 16px", textAlign: "center", fontSize: fs - 1, color: "#6B7280" }}>
-              {footer}
             </div>
           )}
         </div>
