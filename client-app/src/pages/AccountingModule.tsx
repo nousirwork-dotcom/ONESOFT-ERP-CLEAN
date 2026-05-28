@@ -4048,8 +4048,8 @@ function TrialBalancePage({
 
       {/* ── كشف حساب popup ── */}
       <Dialog open={!!ledgerDlg} onOpenChange={() => setLedgerDlg(null)}>
-        <DialogContent className="max-w-none" dir="rtl" style={{ width: "100vw", height: "100vh", maxWidth: "100vw", maxHeight: "100vh", margin: 0, borderRadius: 0, display: "flex", flexDirection: "column", top: 0, left: 0, transform: "none", position: "fixed" }}>
-          <DialogHeader style={{ borderBottom: "1px solid #E5E7EB", paddingBottom: 10, flexShrink: 0 }}>
+        <DialogContent className="!fixed !inset-0 !translate-x-0 !translate-y-0 !max-w-none !rounded-none !w-screen !h-screen !m-0 !p-0" dir="rtl" style={{ display: "flex", flexDirection: "column" }}>
+          <DialogHeader style={{ borderBottom: "1px solid #E5E7EB", padding: "10px 16px", flexShrink: 0 }}>
             <DialogTitle className="flex items-center gap-2 text-sm">
               <div style={{ width: 28, height: 28, borderRadius: 6, background: "rgba(64,107,147,0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 <FileText style={{ width: 14, height: 14, color: "#406B93" }} />
@@ -4078,7 +4078,7 @@ function TrialBalancePage({
               />
             </div>
           )}
-          <div className="flex gap-2 pt-2" style={{ borderTop: "1px solid #E5E7EB", flexShrink: 0 }}>
+          <div className="flex gap-2" style={{ borderTop: "1px solid #E5E7EB", flexShrink: 0, padding: "10px 16px" }}>
             {onDrillDown && (
               <Button size="sm" variant="outline" className="gap-1 text-xs h-8"
                 onClick={() => { if (ledgerDlg) { onDrillDown(ledgerDlg.accountId, fromDate, toDate); setLedgerDlg(null); } }}
