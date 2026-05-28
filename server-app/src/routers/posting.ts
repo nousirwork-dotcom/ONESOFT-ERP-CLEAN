@@ -21,18 +21,15 @@ async function resolveDocTypeAccounts(docTypeId: number, orgId: number) {
     docType.acctInventory, docType.acctCogs,
   ];
   const linkIds = rawIds.map(v => (v ? parseInt(v) : NaN)).filter(v => !isNaN(v));
-  if (!linkIds.length) return {
-    docType,
-    cashAccountId: null, creditAccountId: null, salesAccountId: null,
-    taxAccountId: null, discountAccountId: null,
-    purchaseAccountId: null, supplierAccountId: null,
-    inventoryAccountId: null, cogsAccountId: null,
-  };
 
-  const walRows = await db.query.warehouseAccountLinks.findMany({
-    where: inArray(warehouseAccountLinks.id, linkIds),
-  });
-  const walById = new Map(walRows.map(w => [w.id, w]));
+  const walById = new Map<number, { accountId: number | null }>();
+  if (linkIds.length > 0) {
+    const walRows = await db.query.warehouseAccountLinks.findMany({
+      where: inArray(warehouseAccountLinks.id, linkIds),
+    });
+    walRows.forEach(w => walById.set(w.id, w));
+  }
+
   const getAccId = (code: string | null | undefined): number | null => {
     if (!code) return null;
     const id = parseInt(code);
