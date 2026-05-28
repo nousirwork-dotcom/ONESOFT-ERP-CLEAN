@@ -170,8 +170,14 @@ export const salesRouter = router({
       }
 
       // ── ترحيل تلقائي فور الحفظ ──────────────────────────────────────────────
-      const posted = await autoPostSalesInvoice(invoice.id, orgId, ctx.user.id);
-      if (posted) return { ...invoice, autoPostedEntryNumber: posted.entryNumber };
+      try {
+        const posted = await autoPostSalesInvoice(invoice.id, orgId, ctx.user.id);
+        if (posted) {
+          return { ...invoice, isPosted: true, autoPostedEntryNumber: posted.entryNumber };
+        }
+      } catch (e) {
+        console.error('[sales.create] autoPostSalesInvoice error:', e);
+      }
 
       return invoice;
     }),

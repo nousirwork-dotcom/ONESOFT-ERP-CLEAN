@@ -284,12 +284,15 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   // ── Mutations ──────────────────────────────────────────────────────────────
   const salesCreateMutation = trpc.salesInvoices.create.useMutation({
     onSuccess: (data) => {
+      const autoPosted = (data as any).isPosted === true;
       toast.success(`✓ تم حفظ المستند ${data.invoiceNumber} بنجاح`, {
-        description: `الإجمالي: ${fmt(netTotal)} ${currency} — اضغط "ترحيل" لترحيل القيد`,
+        description: autoPosted
+          ? `الإجمالي: ${fmt(netTotal)} ${currency} — تم الترحيل المحاسبي تلقائياً ✓`
+          : `الإجمالي: ${fmt(netTotal)} ${currency} — اضغط "ترحيل" لترحيل القيد`,
         duration: 5000,
       });
       setSavedInvoiceId(data.id);
-      setIsPosted(data.isPosted ?? false);
+      setIsPosted(autoPosted);
       setErpMode("view");
     },
     onError: (e) => toast.error(`خطأ في الحفظ: ${e.message}`),
