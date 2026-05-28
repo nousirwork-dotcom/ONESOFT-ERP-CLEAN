@@ -3412,6 +3412,56 @@ function flattenTBTree(roots: TBNode[], expanded: Set<number>, search: string, h
   return result;
 }
 
+function LedgerDialogBody({ accountId, fromDate, toDate }: { accountId: number; fromDate: string; toDate: string }) {
+  const stmtQuery = trpc.accounting.accountStatement.useQuery(
+    { accountId, fromDate: fromDate ? new Date(fromDate) : undefined, toDate: toDate ? new Date(toDate) : undefined },
+    { enabled: true }
+  );
+  const D = "#C0392B", C = "#1A7A4A";
+  let running = 0;
+  const rows = (stmtQuery.data ?? []).map(l => {
+    running += parseFloat(l.debit ?? "0") - parseFloat(l.credit ?? "0");
+    return { ...l, running };
+  });
+  if (stmtQuery.isLoading) return <div style={{ textAlign: "center", padding: 32, color: "#9CA3AF", fontSize: 12 }}>جاري تحميل الكشف...</div>;
+  if (rows.length === 0) return <div style={{ textAlign: "center", padding: 32, color: "#9CA3AF", fontSize: 12 }}>لا توجد حركات في هذه الفترة</div>;
+  return (
+    <div style={{ overflowX: "auto", maxHeight: 380, overflowY: "auto" }}>
+      <table style={{ width: "100%", fontSize: 11, borderCollapse: "collapse", minWidth: 560 }}>
+        <thead style={{ position: "sticky", top: 0, zIndex: 1 }}>
+          <tr style={{ background: "#4B5563", color: "#fff" }}>
+            <th style={{ padding: "6px 8px", textAlign: "right", fontWeight: 600, whiteSpace: "nowrap" }}>التاريخ</th>
+            <th style={{ padding: "6px 8px", textAlign: "right", fontWeight: 600, whiteSpace: "nowrap" }}>رقم القيد</th>
+            <th style={{ padding: "6px 8px", textAlign: "right", fontWeight: 600, whiteSpace: "nowrap" }}>البيان</th>
+            <th style={{ padding: "6px 8px", textAlign: "center", color: "#FCA5A5", fontWeight: 600 }}>مدين</th>
+            <th style={{ padding: "6px 8px", textAlign: "center", color: "#6EE7B7", fontWeight: 600 }}>دائن</th>
+            <th style={{ padding: "6px 8px", textAlign: "center", fontWeight: 600 }}>الرصيد</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => {
+            const d = parseFloat(r.debit ?? "0"), c = parseFloat(r.credit ?? "0");
+            const fmt = (n: number) => n > 0 ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
+            const bg = i % 2 === 0 ? "#fff" : "#F3F8FE";
+            return (
+              <tr key={i} style={{ background: bg, borderBottom: "1px solid #F3F4F6" }}>
+                <td style={{ padding: "5px 8px", whiteSpace: "nowrap" }}>{new Date(r.entryDate).toLocaleDateString("ar-EG")}</td>
+                <td style={{ padding: "5px 8px", fontFamily: "monospace", color: "#2563EB", whiteSpace: "nowrap" }}>{r.entryNumber}</td>
+                <td style={{ padding: "5px 8px", color: "#374151" }}>{r.description ?? "—"}</td>
+                <td style={{ padding: "5px 8px", textAlign: "center", color: D, fontWeight: d > 0 ? 600 : 400 }}>{fmt(d)}</td>
+                <td style={{ padding: "5px 8px", textAlign: "center", color: C, fontWeight: c > 0 ? 600 : 400 }}>{fmt(c)}</td>
+                <td style={{ padding: "5px 8px", textAlign: "center", fontWeight: 700, color: r.running < 0 ? C : D }}>
+                  {r.running < 0 ? `(${Math.abs(r.running).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})` : r.running.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function TrialBalancePage({
   onDrillDown,
 }: {
@@ -3427,6 +3477,7 @@ function TrialBalancePage({
   const [tbMode,   setTbMode]   = useState<"full" | "simple">("full");
   const [showZero, setShowZero] = useState(false);
   const [acctCard, setAcctCard] = useState<TBNode | null>(null);
+  const [ledgerDlg, setLedgerDlg] = useState<{ accountId: number; code: string; name: string } | null>(null);
   const initDone = useRef(false);
   const costCentersQuery = trpc.costCenters.list.useQuery();
 
@@ -3593,7 +3644,7 @@ function TrialBalancePage({
               const hasData     = n.aggMoveD > 0 || n.aggMoveC > 0 || n.aggOpenD > 0 || n.aggOpenC > 0;
               const hasClose    = n.aggCloseD > 0 || n.aggCloseC > 0;
               const isLeaf      = !hasChildren;
-              const drillClose  = () => hasClose && drill(n);
+              const drillClose  = () => isLeaf && hasClose && setLedgerDlg({ accountId: n.accountId, code: n.code, name: n.name });
               return (
                 <tr key={n.accountId}
                   style={{ background: bg, borderBottom: `1px solid ${depth === 0 ? "#D1D5DB" : "#F3F4F6"}` }}
@@ -3621,8 +3672,8 @@ function TrialBalancePage({
                       <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: C, fontWeight: fw, fontSize: fs, cursor: hasData ? "pointer" : "default", borderLeft: "1px solid #E5E7EB" }}>{fmtN(n.aggOpenC)}</td>
                       <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: D, fontWeight: fw, fontSize: fs, cursor: hasData ? "pointer" : "default" }}>{fmtN(n.aggMoveD)}</td>
                       <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: C, fontWeight: fw, fontSize: fs, cursor: hasData ? "pointer" : "default", borderLeft: "1px solid #E5E7EB" }}>{fmtN(n.aggMoveC)}</td>
-                      <td onClick={drillClose} style={{ padding: "5px 10px", textAlign: "center", color: D, fontWeight: 700, fontSize: fs, cursor: hasClose ? "pointer" : "default", textDecoration: hasClose ? "underline dotted" : "none" }} title={hasClose ? "انقر لفتح كشف الحساب" : ""}>{fmtN(n.aggCloseD)}</td>
-                      <td onClick={drillClose} style={{ padding: "5px 10px", textAlign: "center", color: C, fontWeight: 700, fontSize: fs, cursor: hasClose ? "pointer" : "default", textDecoration: hasClose ? "underline dotted" : "none" }} title={hasClose ? "انقر لفتح كشف الحساب" : ""}>{fmtN(n.aggCloseC)}</td>
+                      <td onClick={drillClose} style={{ padding: "5px 10px", textAlign: "center", color: D, fontWeight: 700, fontSize: fs, cursor: isLeaf && hasClose ? "pointer" : "default", textDecoration: isLeaf && hasClose ? "underline dotted" : "none" }} title={isLeaf && hasClose ? "انقر لفتح كشف الحساب" : ""}>{fmtN(n.aggCloseD)}</td>
+                      <td onClick={drillClose} style={{ padding: "5px 10px", textAlign: "center", color: C, fontWeight: 700, fontSize: fs, cursor: isLeaf && hasClose ? "pointer" : "default", textDecoration: isLeaf && hasClose ? "underline dotted" : "none" }} title={isLeaf && hasClose ? "انقر لفتح كشف الحساب" : ""}>{fmtN(n.aggCloseC)}</td>
                     </>
                   ) : (
                     <>
@@ -3635,11 +3686,11 @@ function TrialBalancePage({
                       </td>
                       <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: D, fontWeight: fw, fontSize: fs, cursor: hasData ? "pointer" : "default" }}>{fmtN(n.aggMoveD)}</td>
                       <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: C, fontWeight: fw, fontSize: fs, cursor: hasData ? "pointer" : "default" }}>{fmtN(n.aggMoveC)}</td>
-                      <td onClick={drillClose} style={{ padding: "5px 10px", textAlign: "center", cursor: hasClose ? "pointer" : "default" }} title={hasClose ? "انقر لفتح كشف الحساب" : ""}>
+                      <td onClick={drillClose} style={{ padding: "5px 10px", textAlign: "center", cursor: isLeaf && hasClose ? "pointer" : "default" }} title={isLeaf && hasClose ? "انقر لفتح كشف الحساب" : ""}>
                         {n.aggCloseD > 0
-                          ? <span style={{ color: D, fontWeight: 700, fontSize: fs, textDecoration: "underline dotted" }}>{fmtN(n.aggCloseD)} <span style={{ fontSize: 9 }}>م</span></span>
+                          ? <span style={{ color: D, fontWeight: 700, fontSize: fs, textDecoration: isLeaf ? "underline dotted" : "none" }}>{fmtN(n.aggCloseD)} <span style={{ fontSize: 9 }}>م</span></span>
                           : n.aggCloseC > 0
-                            ? <span style={{ color: C, fontWeight: 700, fontSize: fs, textDecoration: "underline dotted" }}>({fmtN(n.aggCloseC)}) <span style={{ fontSize: 9 }}>د</span></span>
+                            ? <span style={{ color: C, fontWeight: 700, fontSize: fs, textDecoration: isLeaf ? "underline dotted" : "none" }}>({fmtN(n.aggCloseC)}) <span style={{ fontSize: 9 }}>د</span></span>
                             : <span style={{ color: "#9CA3AF" }}>—</span>}
                       </td>
                     </>
@@ -3730,6 +3781,38 @@ function TrialBalancePage({
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── كشف حساب popup ── */}
+      <Dialog open={!!ledgerDlg} onOpenChange={() => setLedgerDlg(null)}>
+        <DialogContent className="max-w-3xl" dir="rtl">
+          <DialogHeader>
+            <DialogTitle style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+              <FileText style={{ width: 14, height: 14, color: "#2563EB" }} />
+              كشف حساب — <span style={{ fontFamily: "monospace", color: "#2563EB" }}>{ledgerDlg?.code}</span>&nbsp;{ledgerDlg?.name}
+            </DialogTitle>
+            {fromDate && toDate && (
+              <p style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>من {fromDate} إلى {toDate}</p>
+            )}
+          </DialogHeader>
+          {ledgerDlg && (
+            <LedgerDialogBody accountId={ledgerDlg.accountId} fromDate={fromDate} toDate={toDate} />
+          )}
+          <div style={{ display: "flex", justifyContent: "flex-start", gap: 8, paddingTop: 8 }}>
+            <button
+              onClick={() => { if (ledgerDlg) { onDrillDown?.(ledgerDlg.accountId, fromDate, toDate); setLedgerDlg(null); } }}
+              style={{ padding: "6px 16px", borderRadius: 6, border: "none", background: "#2563EB", color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "'Cairo',Tahoma,sans-serif", display: "flex", alignItems: "center", gap: 5 }}
+            >
+              <FileText style={{ width: 12, height: 12 }} /> فتح في كشف الحساب الكامل
+            </button>
+            <button
+              onClick={() => setLedgerDlg(null)}
+              style={{ padding: "6px 16px", borderRadius: 6, border: "1px solid #D1D5DB", background: "#fff", cursor: "pointer", fontSize: 12, fontFamily: "'Cairo',Tahoma,sans-serif" }}
+            >
+              إغلاق
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
