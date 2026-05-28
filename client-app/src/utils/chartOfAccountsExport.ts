@@ -325,8 +325,10 @@ tr{border-bottom:1px solid #e2e8f0;page-break-inside:avoid;}
 ${autoPrint ? `<script>window.onload=function(){setTimeout(function(){window.print();},600);};<\/script>` : ""}
 </body></html>`;
 
-  const win = window.open("", "_blank", "width=1050,height=780,scrollbars=yes");
-  if (win) { win.document.write(html); win.document.close(); }
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, "_blank", "width=1050,height=780,scrollbars=yes");
+  if (win) setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 
 // ── Trial Balance Export Types ────────────────────────────────────────────────
@@ -563,8 +565,10 @@ table{width:100%;border-collapse:collapse;font-size:9.5pt;}
 ${autoPrint ? `<script>window.onload=function(){setTimeout(function(){window.print();},600);};<\/script>` : ""}
 </body></html>`;
 
-  const win = window.open("", "_blank", "width=1100,height=820,scrollbars=yes");
-  if (win) { win.document.write(html); win.document.close(); }
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, "_blank", "width=1100,height=820,scrollbars=yes");
+  if (win) setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
