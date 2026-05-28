@@ -3576,18 +3576,27 @@ function buildTBTree(rows: TBRow[]): TBNode[] {
 
 type FlatTBRow = { node: TBNode; depth: number; hasChildren: boolean };
 
-function flattenTBTree(roots: TBNode[], expanded: Set<number>, search: string, hideZero: boolean): FlatTBRow[] {
+function flattenTBTree(roots: TBNode[], expanded: Set<number>, search: string, showZero: boolean): FlatTBRow[] {
   const q = search.trim().toLowerCase();
-  const selfMatch   = (n: TBNode) => !q || n.code.toLowerCase().includes(q) || n.name.toLowerCase().includes(q);
-  const anyMatch    = (n: TBNode): boolean => selfMatch(n) || n.children.some(c => anyMatch(c));
-  const hasActivity = (n: TBNode): boolean =>
-    n.aggMoveD > 0 || n.aggMoveC > 0 || n.aggOpenD > 0 || n.aggOpenC > 0 ||
-    n.children.some(c => hasActivity(c));
+  const selfMatch = (n: TBNode) => !q || n.code.toLowerCase().includes(q) || n.name.toLowerCase().includes(q);
+  const anyMatch  = (n: TBNode): boolean => selfMatch(n) || n.children.some(c => anyMatch(c));
+
+  // حساب له رصيد آخر مدة ≠ صفر
+  const hasClose = (n: TBNode): boolean =>
+    n.aggCloseD > 0 || n.aggCloseC > 0 || n.children.some(c => hasClose(c));
+
+  // حساب عليه حركة فقط ورصيد آخر مدته = صفر
+  const hasMoveWithZeroClose = (n: TBNode): boolean =>
+    ((n.aggMoveD > 0 || n.aggMoveC > 0) && n.aggCloseD === 0 && n.aggCloseC === 0) ||
+    n.children.some(c => hasMoveWithZeroClose(c));
+
+  const shouldInclude = (n: TBNode) => hasClose(n) || (showZero && hasMoveWithZeroClose(n));
+
   const result: FlatTBRow[] = [];
   const go = (nodes: TBNode[], depth: number) => {
     for (const n of nodes) {
       if (!anyMatch(n)) continue;
-      if (hideZero && !hasActivity(n)) continue;
+      if (!shouldInclude(n)) continue;
       result.push({ node: n, depth, hasChildren: n.children.length > 0 });
       if ((expanded.has(n.accountId) || !!q) && n.children.length > 0) go(n.children, depth + 1);
     }
@@ -3737,7 +3746,7 @@ function TrialBalancePage({
     }
   }, [tree]);
 
-  const flatRows = useMemo(() => flattenTBTree(tree, expanded, search, !showZero), [tree, expanded, search, showZero]);
+  const flatRows = useMemo(() => flattenTBTree(tree, expanded, search, showZero), [tree, expanded, search, showZero]);
 
   const totals = useMemo(() =>
     tree.reduce((acc, n) => ({
@@ -3826,9 +3835,9 @@ function TrialBalancePage({
             <button
               onClick={() => setShowZero(v => !v)}
               style={{ padding: "3px 9px", border: `1px solid ${showZero ? "#406B93" : "#D1D5DB"}`, borderRadius: 6, background: showZero ? "#E8F0F8" : "#fff", cursor: "pointer", fontSize: 11, color: showZero ? "#406B93" : "#6B7280", fontFamily: "'Cairo',Tahoma,sans-serif", fontWeight: showZero ? 600 : 400 }}
-              title={showZero ? "الآن: تظهر الحسابات الصفرية — اضغط للإخفاء" : "الآن: الحسابات الصفرية مخفية — اضغط للإظهار"}
+              title={showZero ? "يظهر الآن: الحسابات التي عليها حركة ورصيدها آخر المدة = صفر — اضغط للإخفاء" : "اضغط لإظهار الحسابات التي عليها حركة ورصيدها آخر المدة صفر"}
             >
-              {showZero ? "✓ إظهار الصفرية" : "إظهار الصفرية"}
+              {showZero ? "✓ ذات الرصيد الصفري" : "ذات الرصيد الصفري"}
             </button>
           </div>
           <div style={{ display: "flex", borderRadius: 6, overflow: "hidden", border: "1px solid #D1D5DB" }} title="حجم الخط">
