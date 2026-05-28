@@ -1055,12 +1055,12 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
               <Label className="text-xs text-muted-foreground">بناءا على</Label>
               {entryType === "auto"
                 ? <Input value={SOURCE_DOC_LABELS[sourceDocType] ?? sourceDocType} readOnly className="h-7 text-xs bg-amber-50/40 border-amber-200/60 text-amber-800" />
-                : <Select value={basedOnDocType} onValueChange={setBasedOnDocType}>
+                : <Select value={basedOnDocType || "none"} onValueChange={v => setBasedOnDocType(v === "none" ? "" : v)}>
                     <SelectTrigger className="h-7 text-xs w-full">
                       <SelectValue placeholder="نوع المستند..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">— بدون —</SelectItem>
+                      <SelectItem value="none">— بدون —</SelectItem>
                       <SelectItem value="sales_invoice">فاتورة مبيعات</SelectItem>
                       <SelectItem value="purchase_invoice">فاتورة مشتريات</SelectItem>
                       <SelectItem value="receipt_voucher">سند قبض</SelectItem>
