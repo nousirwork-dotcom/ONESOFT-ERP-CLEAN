@@ -290,6 +290,70 @@ export async function buildPurchaseInvoiceLines(
 }
 
 // ─── مساعد: تنفيذ قيد وإدراجه في جدولي journalEntries + journalEntryLines ──
+// ─── ترحيل تلقائي عند الحفظ (يُستدعى من sales router) ──────────────────────
+export async function autoPostSalesInvoice(
+  invoiceId: number,
+  orgId: number,
+  userId: number,
+): Promise<{ entryNumber: string } | null> {
+  const invoice = await db.query.salesInvoices.findFirst({
+    where: and(eq(salesInvoices.id, invoiceId), eq(salesInvoices.orgId, orgId)),
+  });
+  if (!invoice || invoice.isPosted) return null;
+  if (invoice.invoiceType !== 'sale') return null;
+  if (!invoice.journalId && !invoice.docTypeId) return null;
+
+  const journal = invoice.journalId
+    ? await db.query.documentJournals.findFirst({
+        where: and(eq(documentJournals.id, invoice.journalId), eq(documentJournals.orgId, orgId)),
+      })
+    : null;
+
+  if (journal?.postingMode === 'disabled') return null;
+
+  const docTypeAccs = invoice.docTypeId
+    ? await resolveDocTypeAccounts(invoice.docTypeId, orgId)
+    : invoice.journalId
+      ? await resolveDocTypeAccountsByJournal(invoice.journalId, orgId)
+      : null;
+
+  const effectiveJournal = {
+    ...(journal ?? {}),
+    cashAccountId:     docTypeAccs?.cashAccountId     ?? journal?.cashAccountId     ?? null,
+    salesAccountId:    docTypeAccs?.salesAccountId    ?? journal?.salesAccountId    ?? null,
+    creditAccountId:   docTypeAccs?.creditAccountId   ?? journal?.creditAccountId   ?? null,
+    taxAccountId:      docTypeAccs?.taxAccountId      ?? journal?.taxAccountId      ?? null,
+    discountAccountId: docTypeAccs?.discountAccountId ?? journal?.discountAccountId ?? null,
+    postingMode:       journal?.postingMode ?? 'auto',
+  } as typeof documentJournals.$inferSelect;
+
+  // لا ترحيل إذا كانت الحسابات الأساسية ناقصة
+  const isCredit = invoice.paymentMethod === 'credit';
+  const hasDebitAcc = isCredit ? !!effectiveJournal.creditAccountId : !!effectiveJournal.cashAccountId;
+  if (!effectiveJournal.salesAccountId || !hasDebitAcc) return null;
+
+  const { lines, isBalanced } = await buildSalesInvoiceLines(invoice, effectiveJournal, orgId);
+  if (!isBalanced || lines.length === 0) return null;
+
+  const entry = await insertJournalEntry({
+    orgId,
+    userId,
+    date: invoice.invoiceDate,
+    description: `ترحيل تلقائي - ${invoice.invoiceNumber}`,
+    reference: invoice.invoiceNumber,
+    sourceDocType: 'sales_invoice',
+    sourceDocId: invoice.id,
+    sourceDocNumber: invoice.invoiceNumber,
+    lines,
+  });
+
+  await db.update(salesInvoices)
+    .set({ isPosted: true, postedAt: new Date(), postedJournalEntryId: entry.id, updatedAt: new Date() })
+    .where(and(eq(salesInvoices.id, invoiceId), eq(salesInvoices.orgId, orgId)));
+
+  return { entryNumber: entry.entryNumber };
+}
+
 async function insertJournalEntry(opts: {
   orgId: number;
   userId: number;

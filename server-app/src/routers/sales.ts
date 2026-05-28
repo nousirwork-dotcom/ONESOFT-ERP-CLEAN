@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { eq, and, desc, like, or, inArray } from 'drizzle-orm';
+import { eq, and, desc, like, or } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { salesInvoices, salesInvoiceItems, products, customers, stockVouchers, stockVoucherItems, documentJournals, journalEntries, journalEntryLines } from '../schema.js';
-import { buildSalesInvoiceLines, resolveDocTypeAccounts, resolveDocTypeAccountsByJournal } from './posting.js';
+import { salesInvoices, salesInvoiceItems, products, customers, stockVouchers, stockVoucherItems } from '../schema.js';
+import { autoPostSalesInvoice } from './posting.js';
 
 export const salesRouter = router({
   // قائمة الفواتير/عروض الأسعار
@@ -170,85 +170,8 @@ export const salesRouter = router({
       }
 
       // ── ترحيل تلقائي فور الحفظ ──────────────────────────────────────────────
-      if (invoice.invoiceType === 'sale' && (input.journalId || input.docTypeId)) {
-        const journal = input.journalId
-          ? await db.query.documentJournals.findFirst({
-              where: and(eq(documentJournals.id, input.journalId), eq(documentJournals.orgId, orgId)),
-            })
-          : null;
-
-        if (journal?.postingMode !== 'disabled') {
-          // حل الحسابات: نوع السند أولاً، ثم الدفتر المرتبط بالجورنال كـ fallback
-          const docTypeAccs = input.docTypeId
-            ? await resolveDocTypeAccounts(input.docTypeId, orgId)
-            : input.journalId
-              ? await resolveDocTypeAccountsByJournal(input.journalId, orgId)
-              : null;
-
-          const effectiveJournal = {
-            ...(journal ?? {}),
-            cashAccountId:    docTypeAccs?.cashAccountId    ?? journal?.cashAccountId    ?? null,
-            salesAccountId:   docTypeAccs?.salesAccountId   ?? journal?.salesAccountId   ?? null,
-            creditAccountId:  docTypeAccs?.creditAccountId  ?? journal?.creditAccountId  ?? null,
-            taxAccountId:     docTypeAccs?.taxAccountId     ?? journal?.taxAccountId     ?? null,
-            discountAccountId:docTypeAccs?.discountAccountId?? journal?.discountAccountId?? null,
-            postingMode:      journal?.postingMode ?? 'auto',
-          } as typeof documentJournals.$inferSelect;
-
-          const { lines } = await buildSalesInvoiceLines(invoice, effectiveJournal, orgId);
-          const validLines = lines.filter(l => l.accountId !== null);
-
-          if (validLines.length > 0) {
-            const lastEntry = await db.query.journalEntries.findFirst({
-              where: eq(journalEntries.orgId, orgId),
-              orderBy: [desc(journalEntries.id)],
-            });
-            const nextNum = lastEntry
-              ? parseInt(lastEntry.entryNumber.replace(/\D/g, '') || '0') + 1
-              : 1;
-            const entryNumber = `JE-${String(nextNum).padStart(4, '0')}`;
-            const totalDebit  = lines.reduce((s, l) => s + Number(l.debit), 0);
-            const totalCredit = lines.reduce((s, l) => s + Number(l.credit), 0);
-
-            const [entry] = await db.insert(journalEntries).values({
-              orgId,
-              entryNumber,
-              entryDate:       invoice.invoiceDate,
-              description:     `ترحيل تلقائي - ${invoice.invoiceNumber}`,
-              reference:       invoice.invoiceNumber,
-              totalDebit:      totalDebit.toFixed(4),
-              totalCredit:     totalCredit.toFixed(4),
-              status:          'posted',
-              userId:          ctx.user.id,
-              sourceDocType:   'sales_invoice',
-              sourceDocId:     invoice.id,
-              sourceDocNumber: invoice.invoiceNumber,
-              entryType:       'auto',
-            }).returning();
-
-            await db.insert(journalEntryLines).values(
-              lines.map((l, i) => ({
-                entryId:     entry.id,
-                orgId,
-                accountId:   l.accountId ?? undefined,
-                accountCode: l.accountCode,
-                accountName: l.accountName,
-                description: l.description,
-                debit:       l.debit,
-                credit:      l.credit,
-                sortOrder:   i,
-              }))
-            );
-
-            const [updated] = await db.update(salesInvoices)
-              .set({ isPosted: true, postedAt: new Date(), postedJournalEntryId: entry.id, updatedAt: new Date() })
-              .where(and(eq(salesInvoices.id, invoice.id), eq(salesInvoices.orgId, orgId)))
-              .returning();
-
-            return { ...updated, autoPostedEntryNumber: entryNumber };
-          }
-        }
-      }
+      const posted = await autoPostSalesInvoice(invoice.id, orgId, ctx.user.id);
+      if (posted) return { ...invoice, autoPostedEntryNumber: posted.entryNumber };
 
       return invoice;
     }),
