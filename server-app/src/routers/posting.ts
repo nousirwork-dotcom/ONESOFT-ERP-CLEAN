@@ -1,11 +1,42 @@
 import { z } from 'zod';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, inArray } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import {
   salesInvoices, journalEntries, journalEntryLines,
-  documentJournals, chartOfAccounts,
+  documentJournals, chartOfAccounts, documentTypes, warehouseAccountLinks,
 } from '../schema.js';
+
+// مساعد: تحليل حسابات نوع المستند عبر warehouseAccountLinks
+async function resolveDocTypeAccounts(docTypeId: number, orgId: number) {
+  const docType = await db.query.documentTypes.findFirst({
+    where: and(eq(documentTypes.id, docTypeId), eq(documentTypes.orgId, orgId)),
+  });
+  if (!docType) return null;
+
+  const rawIds = [docType.acctCash, docType.acctDebit, docType.acctCredit, docType.acctTax, docType.acctDiscount];
+  const linkIds = rawIds.map(v => (v ? parseInt(v) : NaN)).filter(v => !isNaN(v));
+  if (!linkIds.length) return { docType, cashAccountId: null, creditAccountId: null, salesAccountId: null, taxAccountId: null, discountAccountId: null };
+
+  const walRows = await db.query.warehouseAccountLinks.findMany({
+    where: inArray(warehouseAccountLinks.id, linkIds),
+  });
+  const walById = new Map(walRows.map(w => [w.id, w]));
+  const getAccId = (code: string | null | undefined): number | null => {
+    if (!code) return null;
+    const id = parseInt(code);
+    return isNaN(id) ? null : (walById.get(id)?.accountId ?? null);
+  };
+
+  return {
+    docType,
+    cashAccountId:    getAccId(docType.acctCash),
+    creditAccountId:  getAccId(docType.acctDebit),    // مدين آجل = ذمم عملاء
+    salesAccountId:   getAccId(docType.acctCredit),   // دائن = إيرادات
+    taxAccountId:     getAccId(docType.acctTax),
+    discountAccountId:getAccId(docType.acctDiscount),
+  };
+}
 
 // ── مساعد: بناء أسطر القيد من فاتورة مبيعات ─────────────────────────────────
 export async function buildSalesInvoiceLines(
@@ -132,7 +163,21 @@ export const postingRouter = router({
           })
         : null;
 
-      const { lines, warnings, totalDebit, totalCredit, isBalanced } = await buildSalesInvoiceLines(invoice, journal ?? null, orgId);
+      const docTypeAccs = invoice.docTypeId
+        ? await resolveDocTypeAccounts(invoice.docTypeId, orgId)
+        : null;
+
+      const effectiveJournal = {
+        ...(journal ?? {}),
+        cashAccountId:    journal?.cashAccountId    ?? docTypeAccs?.cashAccountId    ?? null,
+        salesAccountId:   journal?.salesAccountId   ?? docTypeAccs?.salesAccountId   ?? null,
+        creditAccountId:  journal?.creditAccountId  ?? docTypeAccs?.creditAccountId  ?? null,
+        taxAccountId:     journal?.taxAccountId     ?? docTypeAccs?.taxAccountId     ?? null,
+        discountAccountId:journal?.discountAccountId?? docTypeAccs?.discountAccountId?? null,
+        postingMode:      journal?.postingMode ?? 'manual',
+      } as typeof documentJournals.$inferSelect;
+
+      const { lines, warnings, totalDebit, totalCredit, isBalanced } = await buildSalesInvoiceLines(invoice, effectiveJournal, orgId);
 
       return {
         invoiceNumber: invoice.invoiceNumber,
@@ -140,7 +185,7 @@ export const postingRouter = router({
         customerName: invoice.customerName,
         total: invoice.total,
         paymentMethod: invoice.paymentMethod,
-        journalName: journal?.name ?? null,
+        journalName: journal?.name ?? docTypeAccs?.docType?.nameAr ?? null,
         lines,
         warnings,
         totalDebit,
@@ -173,7 +218,22 @@ export const postingRouter = router({
         throw new Error('الترحيل معطَّل لهذا الدفتر');
       }
 
-      const { lines, isBalanced } = await buildSalesInvoiceLines(invoice, journal ?? null, orgId);
+      // دمج حسابات الدفتر + حسابات نوع المستند (نوع المستند كـ fallback)
+      const docTypeAccs = invoice.docTypeId
+        ? await resolveDocTypeAccounts(invoice.docTypeId, orgId)
+        : null;
+
+      const effectiveJournal = {
+        ...(journal ?? {}),
+        cashAccountId:    journal?.cashAccountId    ?? docTypeAccs?.cashAccountId    ?? null,
+        salesAccountId:   journal?.salesAccountId   ?? docTypeAccs?.salesAccountId   ?? null,
+        creditAccountId:  journal?.creditAccountId  ?? docTypeAccs?.creditAccountId  ?? null,
+        taxAccountId:     journal?.taxAccountId     ?? docTypeAccs?.taxAccountId     ?? null,
+        discountAccountId:journal?.discountAccountId?? docTypeAccs?.discountAccountId?? null,
+        postingMode:      journal?.postingMode ?? 'manual',
+      } as typeof documentJournals.$inferSelect;
+
+      const { lines, isBalanced } = await buildSalesInvoiceLines(invoice, effectiveJournal, orgId);
 
       // رقم القيد التالي
       const lastEntry = await db.query.journalEntries.findFirst({

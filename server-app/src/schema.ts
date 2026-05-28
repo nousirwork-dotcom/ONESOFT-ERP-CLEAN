@@ -257,6 +257,7 @@ export const salesInvoices = pgTable('sales_invoices', {
   notes: text('notes'),
   refInvoiceId: integer('ref_invoice_id'),
   journalId: integer('journal_id'),
+  docTypeId: integer('doc_type_id'),
   isPosted: boolean('is_posted').notNull().default(false),
   postedAt: timestamp('posted_at'),
   postedJournalEntryId: integer('posted_journal_entry_id'),
