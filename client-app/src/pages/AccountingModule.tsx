@@ -2978,6 +2978,7 @@ function AccountLedgerPage({
   const [fromDate,      setFromDate]      = useState(initialFromDate ?? "");
   const [toDate,        setToDate]        = useState(initialToDate   ?? "");
   const [subTitle,      setSubTitle]      = useState("");
+  const [currency,      setCurrency]      = useState("SAR");
   const [showColors,    setShowColors]    = useState(true);
   const [fontSize,      setFontSize]      = useState<"sm"|"md"|"lg">("md");
 
@@ -3024,24 +3025,27 @@ function AccountLedgerPage({
   const C  = showColors ? "#1A7A4A" : "#374151";
   const fs = fontSize === "sm" ? 11 : fontSize === "lg" ? 14 : 12;
 
+  const CURRENCIES = [
+    { code: "SAR", name: "ريال سعودي" },
+    { code: "USD", name: "دولار أمريكي" },
+    { code: "EUR", name: "يورو" },
+    { code: "GBP", name: "جنيه إسترليني" },
+    { code: "AED", name: "درهم إماراتي" },
+    { code: "KWD", name: "دينار كويتي" },
+    { code: "BHD", name: "دينار بحريني" },
+    { code: "OMR", name: "ريال عُماني" },
+    { code: "QAR", name: "ريال قطري" },
+    { code: "EGP", name: "جنيه مصري" },
+    { code: "JOD", name: "دينار أردني" },
+    { code: "TRY", name: "ليرة تركية" },
+  ];
+
   const fieldRow:   CSSProperties = { display: "flex", alignItems: "center", marginBottom: 6 };
   const fieldLabel: CSSProperties = { width: 130, textAlign: "right", fontSize: 12, fontWeight: 600, color: "#374151", paddingLeft: 10, flexShrink: 0 };
   const fieldInput: CSSProperties = { flex: 1, height: 26, fontSize: 12, border: "1px solid #9CA3AF", borderRadius: 2, padding: "0 6px", background: "#fff", fontFamily: "'Cairo',Tahoma,sans-serif", direction: "rtl" };
   const panelStyle: CSSProperties = { background: "#F9FAFB", border: "1px solid #D1D5DB", borderRadius: 4, padding: "14px 16px", marginBottom: 12 };
   const sTitle:     CSSProperties = { fontSize: 11, fontWeight: 700, color: "#6B7280", marginBottom: 10, borderBottom: "1px solid #E5E7EB", paddingBottom: 5 };
-
-  const AccSelect = ({ value, onChange, placeholder }: { value: number|null; onChange:(v:number|null)=>void; placeholder:string }) => (
-    <Select value={value?.toString() ?? ""} onValueChange={v => onChange(v ? parseInt(v) : null)}>
-      <SelectTrigger style={{ height: 26, fontSize: 12, direction: "rtl" }}>
-        <SelectValue placeholder={placeholder} />
-      </SelectTrigger>
-      <SelectContent>
-        {leafAccounts.map(a => (
-          <SelectItem key={a.id} value={a.id.toString()}>{a.code} - {a.name}</SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
+  const selStyle:   CSSProperties = { height: 26, fontSize: 12, direction: "rtl" as const };
 
   return (
     <div style={{ fontFamily: "'Cairo',Tahoma,sans-serif", direction: "rtl", padding: 8 }}>
@@ -3081,11 +3085,25 @@ function AccountLedgerPage({
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 32px", marginBottom: 6 }}>
               <div style={fieldRow}>
                 <span style={fieldLabel}>من حساب</span>
-                <div style={{ flex: 1 }}><AccSelect value={fromAccountId} onChange={setFromAccountId} placeholder="من..." /></div>
+                <div style={{ flex: 1 }}>
+                  <Select value={fromAccountId?.toString() ?? ""} onValueChange={v => setFromAccountId(v ? parseInt(v) : null)}>
+                    <SelectTrigger style={selStyle}><SelectValue placeholder="من..." /></SelectTrigger>
+                    <SelectContent>
+                      {leafAccounts.map(a => <SelectItem key={a.id} value={a.id.toString()}>{a.code} - {a.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div style={fieldRow}>
                 <span style={fieldLabel}>إلى حساب</span>
-                <div style={{ flex: 1 }}><AccSelect value={toAccountId} onChange={setToAccountId} placeholder="إلى..." /></div>
+                <div style={{ flex: 1 }}>
+                  <Select value={toAccountId?.toString() ?? ""} onValueChange={v => setToAccountId(v ? parseInt(v) : null)}>
+                    <SelectTrigger style={selStyle}><SelectValue placeholder="إلى..." /></SelectTrigger>
+                    <SelectContent>
+                      {leafAccounts.map(a => <SelectItem key={a.id} value={a.id.toString()}>{a.code} - {a.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 
@@ -3097,7 +3115,16 @@ function AccountLedgerPage({
               </div>
               <div style={fieldRow}>
                 <span style={fieldLabel}>العملة</span>
-                <input style={fieldInput} disabled placeholder="العملة الأساسية" />
+                <div style={{ flex: 1 }}>
+                  <Select value={currency} onValueChange={setCurrency}>
+                    <SelectTrigger style={selStyle}><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CURRENCIES.map(c => (
+                        <SelectItem key={c.code} value={c.code}>{c.code} — {c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 
