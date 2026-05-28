@@ -3459,8 +3459,8 @@ function TrialBalancePage({
   const drill = (n: TBNode) => onDrillDown?.(n.accountId, fromDate, toDate);
 
   const fmtN = (n: number) => n === 0 ? "—" : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const D = "#1D4ED8";
-  const C = "#92400E";
+  const D = "#C0392B";
+  const C = "#1A7A4A";
   const PERIODS = [
     { id: "today", l: "اليوم" }, { id: "week",  l: "الأسبوع" },
     { id: "month", l: "الشهر" }, { id: "year",  l: "السنة"   },
@@ -3583,8 +3583,8 @@ function TrialBalancePage({
               <tr><td colSpan={NCOLS} style={{ textAlign: "center", padding: 48, color: "#9CA3AF", fontSize: 12 }}>
                 {search ? "لا توجد حسابات تطابق البحث" : "لا توجد بيانات للفترة المحددة — أضف قيوداً مرحّلة"}
               </td></tr>
-            ) : flatRows.map(({ node: n, depth, hasChildren }) => {
-              const bg    = depth === 0 ? "#EBF0FF" : depth === 1 ? "#F5F8FF" : "#fff";
+            ) : flatRows.map(({ node: n, depth, hasChildren }, rowIdx) => {
+              const bg    = depth === 0 ? "#D6E4F7" : depth === 1 ? "#EBF3FB" : rowIdx % 2 === 0 ? "#fff" : "#F3F8FE";
               const fw    = depth === 0 ? 700 : depth === 1 ? 600 : 400;
               const fs    = depth === 0 ? 12.5 : 11.5;
               const indent = depth * 18;
@@ -3595,7 +3595,7 @@ function TrialBalancePage({
               return (
                 <tr key={n.accountId}
                   style={{ background: bg, borderBottom: `1px solid ${depth === 0 ? "#D1D5DB" : "#F3F4F6"}` }}
-                  onMouseEnter={e => (e.currentTarget.style.background = "#DBEAFE40")}
+                  onMouseEnter={e => (e.currentTarget.style.background = "#BDD7F0")}
                   onMouseLeave={e => (e.currentTarget.style.background = bg)}
                 >
                   <td style={{ padding: "5px 4px", textAlign: "center" }}>
