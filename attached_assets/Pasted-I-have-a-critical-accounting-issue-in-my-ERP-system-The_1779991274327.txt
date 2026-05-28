@@ -1,0 +1,39 @@
+I have a critical accounting issue in my ERP system.
+The Problem:
+When a sales invoice is saved, it does NOT automatically create journal entries in the accounting ledger. The accounts should be pulled from the document type's accounting links (الروابط المحاسبية), not entered manually.
+Required Logic:
+When any document is saved (sales invoice, purchase invoice, sales return, purchase receipt, cash payment, cash receipt, warehouse transfer, journal entry, inventory adjustment, inventory valuation), the system must:
+
+Read the accounting links defined in the document type (نوع المستند) - fields like: debit account, credit account, cash account, tax account, discount account
+Automatically create a journal entry using those accounts
+The journal entry must appear immediately in the account statement (كشف الحساب)
+
+Document Types that need this:
+
+فاتورة مبيعات (Sales Invoice) → debit: cash/receivable, credit: sales revenue, tax account
+مردود مبيعات (Sales Return) → reverse of above
+فاتورة مشتريات (Purchase Invoice) → debit: purchases, credit: payable
+مردود مشتريات (Purchase Return) → reverse of above
+سند صرف (Cash Payment) → debit: expense account, credit: cash
+سند قبض (Cash Receipt) → debit: cash, credit: receivable
+تحويل مخزني (Warehouse Transfer) → debit: destination warehouse account, credit: source warehouse account
+قيد يومية (Journal Entry) → as entered
+تسوية مخزون (Inventory Adjustment) → debit/credit: inventory account
+تقييم مخزون (Inventory Valuation) → debit/credit: inventory valuation account
+
+Key Rule:
+The journal entry accounts must come ONLY from the document type's accounting links table — never from manually entered values during the transaction.
+What I need:
+
+Show me the function that runs when a document is saved (the save/post handler)
+Create a function createJournalEntryFromDocumentType(documentId, documentType) that:
+
+Fetches accounting links from the document type
+Creates the correct debit/credit entries
+Saves them to the journal entries table
+
+
+Call this function automatically on every document save
+Make sure it reflects immediately in account statements
+
+Please find the relevant files and implement this fix.

@@ -3,6 +3,7 @@ import { eq, and, desc } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import { purchaseInvoices, purchaseInvoiceItems } from '../schema.js';
+import { autoPostPurchaseInvoice } from './posting.js';
 
 export const purchasesRouter = router({
   // قائمة فواتير المشتريات
@@ -144,6 +145,14 @@ export const purchasesRouter = router({
           }))
         );
       }
+
+      // ترحيل تلقائي عند الحفظ
+      try {
+        await autoPostPurchaseInvoice(invoice.id, orgId, ctx.user.id);
+      } catch (e) {
+        console.warn('[autoPostPurchaseInvoice] skipped:', e);
+      }
+
       return invoice;
     }),
 
