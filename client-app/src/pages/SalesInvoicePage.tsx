@@ -69,7 +69,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
   // ── Header state ─────────────────────────────────────────────────────────
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().split("T")[0]);
-  const [dueDate, setDueDate] = useState("");
+  const [dueDate, setDueDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [customerId, setCustomerId] = useState<number | null>(null);
   const [customerName, setCustomerName] = useState("");
   const [warehouseId, setWarehouseId] = useState<number | null>(null);
@@ -97,6 +97,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
 
   // ── Posting state ─────────────────────────────────────────────────────────
   const [savedInvoiceId, setSavedInvoiceId]       = useState<number | null>(null);
+  const [navInvoiceId,   setNavInvoiceId]         = useState<number | null>(initialInvoiceId ?? null);
   const [isPosted, setIsPosted]                   = useState(false);
   const [showPostingPreview, setShowPostingPreview] = useState(false);
 
@@ -112,6 +113,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
   const journalsQuery    = trpc.documentJournals.list.useQuery({ docType: "sales_invoice" });
   const nextNumberQuery  = trpc.salesInvoices.nextNumber.useQuery({ prefix: "INV" });
   const docTypesQuery    = trpc.documentTypes.list.useQuery({ typeId: "sales" });
+  const allInvoicesQuery = trpc.salesInvoices.list.useQuery({});
   const stockQuery       = trpc.reports.stockByWarehouse.useQuery(
     { warehouseId: warehouseId! },
     { enabled: !!warehouseId }
@@ -154,14 +156,14 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
     toast.success(`✓ تم استيراد بيانات المستند ${src.number}`);
   }, [basedOnQuery.data]);
 
-  // ── فتح فاتورة موجودة بالـ ID (من القائمة) ───────────────────────────────
-  const initialInvoiceQuery = trpc.salesInvoices.get.useQuery(
-    { id: initialInvoiceId! },
-    { enabled: !!initialInvoiceId }
+  // ── فتح فاتورة موجودة بالـ ID (من القائمة أو التنقل) ────────────────────
+  const navInvoiceQuery = trpc.salesInvoices.get.useQuery(
+    { id: navInvoiceId! },
+    { enabled: !!navInvoiceId }
   );
 
   useEffect(() => {
-    const inv = initialInvoiceQuery.data;
+    const inv = navInvoiceQuery.data;
     if (!inv) return;
     setInvoiceNumber(inv.invoiceNumber);
     setInvoiceDate(inv.invoiceDate ? new Date(inv.invoiceDate).toISOString().split("T")[0] : "");
@@ -194,7 +196,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         productId:    item.productId ?? undefined,
       })));
     }
-  }, [initialInvoiceQuery.data]);
+  }, [navInvoiceQuery.data]);
 
   const createMutation = trpc.salesInvoices.create.useMutation({
     onSuccess: (data) => {
@@ -211,6 +213,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         });
       }
       setSavedInvoiceId(data.id);
+      setNavInvoiceId(data.id);
       setIsPosted(data.isPosted ?? false);
       setErpMode("view");
     },
@@ -551,12 +554,13 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
     setBasedOnNum('');
     setBasedOnTrigger('');
     setNotes("");
-    setDueDate("");
+    setDueDate(new Date().toISOString().split("T")[0]);
     setSalesperson("");
     setPaidAmountOverride("");
     setErpMode("new");
     setJournalWarehouseId(null);
     setSavedInvoiceId(null);
+    setNavInvoiceId(null);
     setIsPosted(false);
     setShowPostingPreview(false);
     // إذا كان هناك دفتر محدد، اعرض الرقم المتوقع — وإلا يبقى الحقل فارغاً
@@ -608,10 +612,28 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         onApprove={() => toast.success("تم الاعتماد")}
         onCancel={() => { setErpMode("view"); toast.info("تم الإلغاء"); }}
         onPrint={() => toast.info("جاري الطباعة...")}
-        onFirst={() => {}}
-        onPrev={() => {}}
-        onNext={() => {}}
-        onLast={() => {}}
+        onFirst={() => {
+          const ids = [...(allInvoicesQuery.data ?? [])].sort((a, b) => a.id - b.id).map(i => i.id);
+          if (ids.length) { setNavInvoiceId(ids[0]); setErpMode("view"); }
+        }}
+        onPrev={() => {
+          const ids = [...(allInvoicesQuery.data ?? [])].sort((a, b) => a.id - b.id).map(i => i.id);
+          const cur = navInvoiceId ?? savedInvoiceId;
+          const idx = cur ? ids.indexOf(cur) : -1;
+          if (idx > 0) { setNavInvoiceId(ids[idx - 1]); setErpMode("view"); }
+          else if (idx === -1 && ids.length) { setNavInvoiceId(ids[ids.length - 1]); setErpMode("view"); }
+        }}
+        onNext={() => {
+          const ids = [...(allInvoicesQuery.data ?? [])].sort((a, b) => a.id - b.id).map(i => i.id);
+          const cur = navInvoiceId ?? savedInvoiceId;
+          const idx = cur ? ids.indexOf(cur) : -1;
+          if (idx >= 0 && idx < ids.length - 1) { setNavInvoiceId(ids[idx + 1]); setErpMode("view"); }
+          else if (idx === -1 && ids.length) { setNavInvoiceId(ids[0]); setErpMode("view"); }
+        }}
+        onLast={() => {
+          const ids = [...(allInvoicesQuery.data ?? [])].sort((a, b) => a.id - b.id).map(i => i.id);
+          if (ids.length) { setNavInvoiceId(ids[ids.length - 1]); setErpMode("view"); }
+        }}
         onClose={() => toast.info("إغلاق")}
         enableShortcuts
       />
