@@ -3763,7 +3763,7 @@ function TrialBalancePage({
   const drill = (n: TBNode) => onDrillDown?.(n.accountId, fromDate, toDate);
 
   const fmtN = (n: number) => n === 0 ? "—" : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const fsBase = fontSize === "s" ? 10 : fontSize === "m" ? 11.5 : 13.5;
+  const fsBase = fontSize === "s" ? 11.5 : fontSize === "m" ? 13 : 15;
   const D = "#C0392B";
   const C = "#1A7A4A";
   const PERIODS = [
