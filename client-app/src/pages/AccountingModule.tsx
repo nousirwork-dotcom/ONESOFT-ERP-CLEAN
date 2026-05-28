@@ -1009,39 +1009,40 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
       {/* ── Header Fields ── */}
       <Card className="border-border/60">
         <CardContent className="p-3">
-          {/* Row 1: رقم القيد | دفتر القيد | الاسم | تاريخ التحرير */}
-          <div className="grid grid-cols-4 gap-3 mb-3">
-            <div>
-              <Label className="text-xs text-muted-foreground">قيد #</Label>
-              <Input value={savedEntryNumber || nextNumberQuery.data || "..."} readOnly className="h-7 text-xs bg-muted/30 font-mono" />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">دفتر القيد</Label>
-              <Select value={jeJournalId ? jeJournalId.toString() : "none"} onValueChange={v => setJeJournalId(v === "none" ? null : parseInt(v))} disabled={entryType === "auto"}>
-                <SelectTrigger className="h-7 text-xs w-full">
-                  <SelectValue placeholder="اختر الدفتر..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">— اختر الدفتر —</SelectItem>
-                  {(jeBooksQuery.data ?? []).map(j => (
-                    <SelectItem key={j.id} value={j.id.toString()}>{j.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">الاسم</Label>
-              <Input
-                value={(jeBooksQuery.data ?? []).find(j => j.id === jeJournalId)?.name ?? (titleMap[voucherType] ?? "سند قيد")}
-                readOnly
-                className="h-7 text-xs bg-muted/30"
-              />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">تاريخ التحرير</Label>
-              <DateMaskInput value={entryDate} onChange={setEntryDate} className="h-7 text-xs" disabled={entryType === "auto"} />
-            </div>
-          </div>
+          {/* Row 1: قيد # (dropdown) | تاريخ التحرير */}
+          {(() => {
+            const selBook = (jeBooksQuery.data ?? []).find(j => j.id === jeJournalId);
+            const nextSerial = selBook
+              ? `${selBook.numberPrefix}-${String((selBook.currentSeq ?? 0) + 1).padStart(selBook.numDigits ?? 4, '0')}`
+              : savedEntryNumber || nextNumberQuery.data || "...";
+            return (
+              <div className="grid grid-cols-3 gap-3 mb-3">
+                <div className="col-span-2">
+                  <Label className="text-xs text-muted-foreground">قيد #</Label>
+                  <Select value={jeJournalId ? jeJournalId.toString() : "none"} onValueChange={v => setJeJournalId(v === "none" ? null : parseInt(v))} disabled={entryType === "auto"}>
+                    <SelectTrigger className="h-7 text-xs w-full font-mono">
+                      {jeJournalId && selBook
+                        ? <span className="font-mono text-xs">{nextSerial} — {selBook.code} {selBook.name}</span>
+                        : <span className="text-muted-foreground text-xs">اختر الدفتر...</span>
+                      }
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">— اختر الدفتر —</SelectItem>
+                      {(jeBooksQuery.data ?? []).map(j => (
+                        <SelectItem key={j.id} value={j.id.toString()}>
+                          <span className="font-mono text-xs text-muted-foreground ml-2">{j.code}</span> {j.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">تاريخ التحرير</Label>
+                  <DateMaskInput value={entryDate} onChange={setEntryDate} className="h-7 text-xs" disabled={entryType === "auto"} />
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Row 2: شرح | بناءا على | رقم المستند */}
           <div className="grid grid-cols-4 gap-3">
