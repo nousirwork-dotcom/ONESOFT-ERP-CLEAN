@@ -99,6 +99,34 @@ const CB = ({ label, checked, onChange }: { label: string; checked: boolean; onC
   </label>
 );
 
+/* ──────────────── AccSel — منتقي حساب من دليل الحسابات ──────────────── */
+function AccSel({ value, onChange, accounts }: {
+  value: number | null;
+  onChange: (v: number | null) => void;
+  accounts: any[];
+}) {
+  return (
+    <select
+      value={value ?? ""}
+      onChange={e => onChange(e.target.value ? Number(e.target.value) : null)}
+      style={{
+        width: "100%", height: 28, fontSize: 11, paddingInline: 8,
+        border: "1px solid #e2e8f0", borderRadius: 6,
+        background: value ? "#f0f9ff" : "#fff",
+        color: value ? "#1d4ed8" : "#6b7280",
+        fontFamily: "'Cairo', Tahoma, sans-serif",
+        direction: "rtl", textAlign: "right",
+        outline: "none",
+      }}
+    >
+      <option value="">— بدون —</option>
+      {accounts.map((a: any) => (
+        <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
+      ))}
+    </select>
+  );
+}
+
 /* ──────────────── AccountPicker — روابط المخزن المختار ──────────────── */
 function AccountPicker({
   value, onChange, placeholder = "— اختر —",
@@ -587,52 +615,39 @@ export default function DocumentTypesPage() {
 
               <P title="الروابط المحاسبية لنوع السند">
                 {(() => {
-                  const accs = chartAccounts as any[];
-                  const AccSel = ({ value, onChange }: { value: number | null; onChange: (v: number | null) => void }) => (
-                    <select
-                      value={value ?? ""}
-                      onChange={e => onChange(e.target.value ? Number(e.target.value) : null)}
-                      style={{
-                        width: "100%", height: 28, fontSize: 11, paddingInline: 8,
-                        border: "1px solid #e2e8f0", borderRadius: 6, background: value ? "#f0f9ff" : "#fff",
-                        color: value ? "#1d4ed8" : "#6b7280", fontFamily: "'Cairo', Tahoma, sans-serif",
-                        outline: "none",
-                      }}
-                    >
-                      <option value="">— بدون —</option>
-                      {accs.filter((a: any) => !a.isGroup).map((a: any) => (
-                        <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
-                      ))}
-                    </select>
-                  );
+                  const accs = (chartAccounts as any[]).filter((a: any) => !a.isParent && a.allowPosting !== false);
                   const isSales = ["sales","sales-return"].includes(form.docType);
                   const isPurch = ["purchases","purch-return"].includes(form.docType);
                   return (
                     <div className="grid grid-cols-2 gap-x-5 gap-y-2">
-                      {(isSales || (!isSales && !isPurch)) && (<>
+                      {(isSales || (!isSales && !isPurch)) && (
                         <R label="إيرادات المبيعات" lw={120}>
-                          <AccSel value={form.salesAccountId} onChange={v => set("salesAccountId", v)} />
+                          <AccSel value={form.salesAccountId} onChange={v => set("salesAccountId", v)} accounts={accs} />
                         </R>
+                      )}
+                      {(isSales || (!isSales && !isPurch)) && (
                         <R label="ذمم العملاء (آجل)" lw={120}>
-                          <AccSel value={form.creditAccountId} onChange={v => set("creditAccountId", v)} />
+                          <AccSel value={form.creditAccountId} onChange={v => set("creditAccountId", v)} accounts={accs} />
                         </R>
-                      </>)}
-                      {(isPurch || (!isSales && !isPurch)) && (<>
+                      )}
+                      {(isPurch || (!isSales && !isPurch)) && (
                         <R label="حساب المشتريات" lw={120}>
-                          <AccSel value={form.purchaseAccountId} onChange={v => set("purchaseAccountId", v)} />
+                          <AccSel value={form.purchaseAccountId} onChange={v => set("purchaseAccountId", v)} accounts={accs} />
                         </R>
+                      )}
+                      {(isPurch || (!isSales && !isPurch)) && (
                         <R label="ذمم الموردين (آجل)" lw={120}>
-                          <AccSel value={form.supplierAccountId} onChange={v => set("supplierAccountId", v)} />
+                          <AccSel value={form.supplierAccountId} onChange={v => set("supplierAccountId", v)} accounts={accs} />
                         </R>
-                      </>)}
+                      )}
                       <R label="الصندوق / النقد" lw={120}>
-                        <AccSel value={form.cashAccountId} onChange={v => set("cashAccountId", v)} />
+                        <AccSel value={form.cashAccountId} onChange={v => set("cashAccountId", v)} accounts={accs} />
                       </R>
                       <R label="ضريبة القيمة المضافة" lw={120}>
-                        <AccSel value={form.taxAccountId} onChange={v => set("taxAccountId", v)} />
+                        <AccSel value={form.taxAccountId} onChange={v => set("taxAccountId", v)} accounts={accs} />
                       </R>
                       <R label="الخصم الممنوح" lw={120}>
-                        <AccSel value={form.discountAccountId} onChange={v => set("discountAccountId", v)} />
+                        <AccSel value={form.discountAccountId} onChange={v => set("discountAccountId", v)} accounts={accs} />
                       </R>
                     </div>
                   );
