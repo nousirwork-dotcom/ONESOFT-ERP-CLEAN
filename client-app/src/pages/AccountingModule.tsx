@@ -4048,7 +4048,7 @@ function TrialBalancePage({
 
       {/* ── كشف حساب popup ── */}
       <Dialog open={!!ledgerDlg} onOpenChange={() => setLedgerDlg(null)}>
-        <DialogContent className="max-w-5xl w-[95vw]" dir="rtl" style={{ maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
+        <DialogContent className="max-w-none" dir="rtl" style={{ width: "100vw", height: "100vh", maxWidth: "100vw", maxHeight: "100vh", margin: 0, borderRadius: 0, display: "flex", flexDirection: "column", top: 0, left: 0, transform: "none", position: "fixed" }}>
           <DialogHeader style={{ borderBottom: "1px solid #E5E7EB", paddingBottom: 10, flexShrink: 0 }}>
             <DialogTitle className="flex items-center gap-2 text-sm">
               <div style={{ width: 28, height: 28, borderRadius: 6, background: "rgba(64,107,147,0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
