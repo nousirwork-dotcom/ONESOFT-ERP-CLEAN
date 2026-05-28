@@ -37,6 +37,13 @@ const inputShape = {
   acctDiscount:         z.string().optional(),
   acctCash:             z.string().optional(),
   acctTax:              z.string().optional(),
+  salesAccountId:       z.number().nullable().optional(),
+  cashAccountId:        z.number().nullable().optional(),
+  creditAccountId:      z.number().nullable().optional(),
+  taxAccountId:         z.number().nullable().optional(),
+  discountAccountId:    z.number().nullable().optional(),
+  purchaseAccountId:    z.number().nullable().optional(),
+  supplierAccountId:    z.number().nullable().optional(),
   sortOrder:            z.number().default(0),
 };
 

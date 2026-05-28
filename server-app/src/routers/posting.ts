@@ -41,14 +41,13 @@ async function resolveDocTypeAccounts(docTypeId: number, orgId: number) {
 
   return {
     docType,
-    cashAccountId:      getAccId(docType.acctCash),
-    creditAccountId:    getAccId(docType.acctDebit),    // ذمم العملاء / ذمم الموردين
-    salesAccountId:     getAccId(docType.acctCredit),   // دائن = إيرادات
-    taxAccountId:       getAccId(docType.acctTax),
-    discountAccountId:  getAccId(docType.acctDiscount),
-    // للمشتريات: acctDebit = حساب المشتريات، acctCredit = حساب المورد
-    purchaseAccountId:  getAccId(docType.acctDebit),    // مدين = المشتريات
-    supplierAccountId:  getAccId(docType.acctCredit),   // دائن = المورد
+    cashAccountId:      docType.cashAccountId     ?? getAccId(docType.acctCash)     ?? null,
+    creditAccountId:    docType.creditAccountId   ?? getAccId(docType.acctDebit)    ?? null,
+    salesAccountId:     docType.salesAccountId    ?? getAccId(docType.acctCredit)   ?? null,
+    taxAccountId:       docType.taxAccountId      ?? getAccId(docType.acctTax)      ?? null,
+    discountAccountId:  docType.discountAccountId ?? getAccId(docType.acctDiscount) ?? null,
+    purchaseAccountId:  docType.purchaseAccountId ?? getAccId(docType.acctDebit)    ?? null,
+    supplierAccountId:  docType.supplierAccountId ?? getAccId(docType.acctCredit)   ?? null,
     inventoryAccountId: getAccId(docType.acctInventory),
     cogsAccountId:      getAccId(docType.acctCogs),
   };

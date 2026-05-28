@@ -25,6 +25,13 @@ type DoctypeForm = {
   requireCustomerCode: boolean; requireEmployeeCode: boolean;
   acctDebit: string; acctCredit: string; acctDiscount: string;
   acctCash: string; acctTax: string;
+  salesAccountId: number | null;
+  cashAccountId: number | null;
+  creditAccountId: number | null;
+  taxAccountId: number | null;
+  discountAccountId: number | null;
+  purchaseAccountId: number | null;
+  supplierAccountId: number | null;
 };
 type Doctype = { id: string; typeId: string } & DoctypeForm;
 
@@ -38,6 +45,8 @@ const EMPTY: DoctypeForm = {
   noStockDispatch: false, requireNote: false, preventEditIfLinked: false,
   requireCustomerCode: false, requireEmployeeCode: false,
   acctDebit: "", acctCredit: "", acctDiscount: "", acctCash: "", acctTax: "",
+  salesAccountId: null, cashAccountId: null, creditAccountId: null,
+  taxAccountId: null, discountAccountId: null, purchaseAccountId: null, supplierAccountId: null,
 };
 
 /* ──────────────── document categories ──────────────── */
@@ -238,6 +247,7 @@ export default function DocumentTypesPage() {
   const { data: userGroupsList }  = trpc.userGroups.list.useQuery();
   const { data: users }           = trpc.users.list.useQuery();
   const { data: acctLinks = [] }  = trpc.warehouses.accountLinks.listAll.useQuery();
+  const { data: chartAccounts = [] } = trpc.accounts.list.useQuery();
   const { data: journalsList = [] } = trpc.documentJournals.list.useQuery();
   const { data: salesInvoiceJournals = [] }    = trpc.documentJournals.list.useQuery({ docType: "sales_invoice" });
   const { data: journalEntryJournals = [] }    = trpc.documentJournals.list.useQuery({ docType: "journal_entry" });
@@ -285,6 +295,13 @@ export default function DocumentTypesPage() {
       requireCustomerCode: d.requireCustomerCode ?? false, requireEmployeeCode: d.requireEmployeeCode ?? false,
       acctDebit: d.acctDebit ?? "", acctCredit: d.acctCredit ?? "", acctDiscount: d.acctDiscount ?? "",
       acctCash: d.acctCash ?? "", acctTax: d.acctTax ?? "",
+      salesAccountId: d.salesAccountId ?? null,
+      cashAccountId: d.cashAccountId ?? null,
+      creditAccountId: d.creditAccountId ?? null,
+      taxAccountId: d.taxAccountId ?? null,
+      discountAccountId: d.discountAccountId ?? null,
+      purchaseAccountId: d.purchaseAccountId ?? null,
+      supplierAccountId: d.supplierAccountId ?? null,
     });
     setIsDirty(false);
     setView("form");
@@ -310,6 +327,13 @@ export default function DocumentTypesPage() {
       acctDebit: form.acctDebit || undefined, acctCredit: form.acctCredit || undefined,
       acctDiscount: form.acctDiscount || undefined, acctCash: form.acctCash || undefined,
       acctTax: form.acctTax || undefined,
+      salesAccountId: form.salesAccountId ?? undefined,
+      cashAccountId: form.cashAccountId ?? undefined,
+      creditAccountId: form.creditAccountId ?? undefined,
+      taxAccountId: form.taxAccountId ?? undefined,
+      discountAccountId: form.discountAccountId ?? undefined,
+      purchaseAccountId: form.purchaseAccountId ?? undefined,
+      supplierAccountId: form.supplierAccountId ?? undefined,
     };
     try {
       if (editId) {
@@ -561,32 +585,58 @@ export default function DocumentTypesPage() {
                 </div>
               </P>
 
-              <P title="الروابط المحاسبية">
-                {!form.warehouse || form.warehouse === "all" ? (
-                  <div className="text-[11px] text-amber-600 bg-amber-50 rounded px-3 py-2 text-center" style={{ border: "1px solid #fde68a" }}>
-                    اختر مخزناً في "حدود الاستخدام" لتظهر الروابط المحاسبية الخاصة به
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-x-5 gap-y-2">
-                    {([
-                      ["acctDebit",    "مدين"],
-                      ["acctCredit",   "دائن"],
-                      ["acctDiscount", "تخفيض"],
-                      ["acctCash",     "نقدى"],
-                      ["acctTax",      "ضريبة"],
-                    ] as [keyof DoctypeForm, string][]).map(([key, lbl]) => (
-                      <R key={key} label={lbl}>
-                        <AccountPicker
-                          value={form[key] as string}
-                          onChange={(id) => set(key, id as any)}
-                          links={(acctLinks as any[]).filter(
-                            (l: any) => String(l.warehouseId) === form.warehouse
-                          )}
-                        />
+              <P title="الروابط المحاسبية لنوع السند">
+                {(() => {
+                  const accs = chartAccounts as any[];
+                  const AccSel = ({ value, onChange }: { value: number | null; onChange: (v: number | null) => void }) => (
+                    <select
+                      value={value ?? ""}
+                      onChange={e => onChange(e.target.value ? Number(e.target.value) : null)}
+                      style={{
+                        width: "100%", height: 28, fontSize: 11, paddingInline: 8,
+                        border: "1px solid #e2e8f0", borderRadius: 6, background: value ? "#f0f9ff" : "#fff",
+                        color: value ? "#1d4ed8" : "#6b7280", fontFamily: "'Cairo', Tahoma, sans-serif",
+                        outline: "none",
+                      }}
+                    >
+                      <option value="">— بدون —</option>
+                      {accs.filter((a: any) => !a.isGroup).map((a: any) => (
+                        <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
+                      ))}
+                    </select>
+                  );
+                  const isSales = ["sales","sales-return"].includes(form.docType);
+                  const isPurch = ["purchases","purch-return"].includes(form.docType);
+                  return (
+                    <div className="grid grid-cols-2 gap-x-5 gap-y-2">
+                      {(isSales || (!isSales && !isPurch)) && (<>
+                        <R label="إيرادات المبيعات" lw={120}>
+                          <AccSel value={form.salesAccountId} onChange={v => set("salesAccountId", v)} />
+                        </R>
+                        <R label="ذمم العملاء (آجل)" lw={120}>
+                          <AccSel value={form.creditAccountId} onChange={v => set("creditAccountId", v)} />
+                        </R>
+                      </>)}
+                      {(isPurch || (!isSales && !isPurch)) && (<>
+                        <R label="حساب المشتريات" lw={120}>
+                          <AccSel value={form.purchaseAccountId} onChange={v => set("purchaseAccountId", v)} />
+                        </R>
+                        <R label="ذمم الموردين (آجل)" lw={120}>
+                          <AccSel value={form.supplierAccountId} onChange={v => set("supplierAccountId", v)} />
+                        </R>
+                      </>)}
+                      <R label="الصندوق / النقد" lw={120}>
+                        <AccSel value={form.cashAccountId} onChange={v => set("cashAccountId", v)} />
                       </R>
-                    ))}
-                  </div>
-                )}
+                      <R label="ضريبة القيمة المضافة" lw={120}>
+                        <AccSel value={form.taxAccountId} onChange={v => set("taxAccountId", v)} />
+                      </R>
+                      <R label="الخصم الممنوح" lw={120}>
+                        <AccSel value={form.discountAccountId} onChange={v => set("discountAccountId", v)} />
+                      </R>
+                    </div>
+                  );
+                })()}
               </P>
 
               <P title="خصائص السندات المصدرة">
