@@ -26,11 +26,18 @@ import Products from "./Products";
 
 import Transfers from "./Transfers";
 
+type MenuChild = {
+  id: string;
+  label: string;
+  icon: React.ElementType;
+  path: string;
+};
 type MenuSection = {
   id: string;
   label: string;
   icon: React.ElementType;
-  children?: { id: string; label: string; icon: React.ElementType }[];
+  path?: string;
+  children?: MenuChild[];
 };
 
 const menuSections: MenuSection[] = [
@@ -228,7 +235,7 @@ function InventoryMenu({ activeId, onSelect }: { activeId: string; onSelect: (id
                     {section.children.map(child => (
                       <button
                         key={child.id}
-                        onClick={() => { onSelect(child.id); openTab((child as any).path, child.label, child.icon); }}
+                        onClick={() => { onSelect(child.id); openTab(child.path, child.label, child.icon); }}
                         className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors ${
                           activeId === child.id
                             ? "bg-primary/10 text-primary font-medium border-r-2 border-primary"
@@ -244,7 +251,7 @@ function InventoryMenu({ activeId, onSelect }: { activeId: string; onSelect: (id
               </>
             ) : (
               <button
-                onClick={() => { onSelect(section.id); openTab((section as any).path, section.label, section.icon); }}
+                onClick={() => { onSelect(section.id); openTab(section.path ?? "", section.label, section.icon); }}
                 className={`w-full flex items-center gap-2 px-3 py-2 text-sm font-semibold transition-colors ${
                   activeId === section.id
                     ? "bg-primary/10 text-primary font-medium"
@@ -304,7 +311,13 @@ export default function InventoryModule() {
 
 // ─── Tab Sub-Pages ─────────────────────────────────────────────────────────────
 function InvSubPage({ activeId }: { activeId: string }) {
-  return <div className="h-full overflow-auto p-6" dir="rtl"><InventoryContent activeId={activeId} /></div>;
+  return (
+    <div className="flex flex-col overflow-hidden" style={{ height: "100%" }} dir="rtl">
+      <div className="flex-1 overflow-auto p-6">
+        <InventoryContent activeId={activeId} />
+      </div>
+    </div>
+  );
 }
 export function InvProductsTab()       { return <InvSubPage activeId="products-list" />; }
 export function InvUnitsTab()          { return <InvSubPage activeId="units" />; }

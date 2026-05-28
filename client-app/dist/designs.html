@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ONESOFT ERP — معرض التصاميم</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #0f0f0f; color: #fff; }
+
+  /* ===== HEADER ===== */
+  .page-header {
+    text-align: center;
+    padding: 48px 24px 32px;
+    background: linear-gradient(135deg, #0f0f0f 0%, #1a1a2e 100%);
+    border-bottom: 1px solid #222;
+  }
+  .page-header h1 { font-size: 2rem; font-weight: 700; letter-spacing: 4px; color: #fff; }
+  .page-header p { color: #888; margin-top: 8px; font-size: 0.95rem; }
+
+  /* ===== TABS ===== */
+  .tabs {
+    display: flex; justify-content: center; gap: 8px;
+    padding: 24px; background: #0f0f0f; position: sticky; top: 0; z-index: 100;
+    border-bottom: 1px solid #1e1e1e;
+  }
+  .tab-btn {
+    padding: 10px 24px; border-radius: 8px; border: 1px solid #333;
+    background: #1a1a1a; color: #aaa; cursor: pointer; font-size: 0.85rem;
+    transition: all 0.2s; font-family: inherit;
+  }
+  .tab-btn.active { border-color: transparent; color: #fff; font-weight: 600; }
+  .tab-btn:nth-child(1).active { background: linear-gradient(135deg, #1e3a5f, #2563eb); }
+  .tab-btn:nth-child(2).active { background: linear-gradient(135deg, #1a1a1a, #6d28d9); }
+  .tab-btn:nth-child(3).active { background: linear-gradient(135deg, #064e3b, #059669); }
+  .tab-btn:nth-child(4).active { background: linear-gradient(135deg, #7c2d12, #ea580c); }
+
+  /* ===== DESIGN PANELS ===== */
+  .design-panel { display: none; padding: 32px 24px; max-width: 1400px; margin: 0 auto; }
+  .design-panel.active { display: block; }
+
+  .design-label {
+    text-align: center; margin-bottom: 32px;
+  }
+  .design-label h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: 6px; }
+  .design-label p { color: #888; font-size: 0.9rem; }
+
+  /* ===== MOCKUP WRAPPER ===== */
+  .mockup {
+    border-radius: 16px; overflow: hidden;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+    border: 1px solid #2a2a2a;
+    height: 580px; display: flex; flex-direction: column;
+  }
+
+  /* ============================================================
+     DESIGN 1: CORPORATE BLUE — احترافي أزرق داكن
+  ============================================================ */
+  .d1 .topbar {
+    height: 52px; background: #0f2044; display: flex; align-items: center;
+    padding: 0 20px; gap: 16px; border-bottom: 1px solid #1a3a6e;
+  }
+  .d1 .topbar .logo { font-size: 1rem; font-weight: 800; letter-spacing: 2px; color: #60a5fa; }
+  .d1 .topbar .logo span { color: #fff; }
+  .d1 .topbar .breadcrumb { color: #4a7ab5; font-size: 0.78rem; margin-right: auto; }
+  .d1 .topbar .user { display: flex; align-items: center; gap: 8px; }
+  .d1 .topbar .avatar { width: 30px; height: 30px; border-radius: 50%; background: #2563eb; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; }
+  .d1 .body { display: flex; flex: 1; overflow: hidden; }
+  .d1 .sidebar {
+    width: 220px; background: #0a1628; border-left: 1px solid #1a2d4e; overflow-y: auto;
+    padding: 12px 0;
+  }
+  .d1 .sidebar .section-title { color: #3a5a8a; font-size: 0.65rem; font-weight: 700; letter-spacing: 2px; padding: 12px 16px 4px; text-transform: uppercase; }
+  .d1 .sidebar .nav-item {
+    display: flex; align-items: center; gap: 10px; padding: 9px 16px;
+    color: #6b8db5; font-size: 0.8rem; cursor: pointer; transition: all 0.15s;
+  }
+  .d1 .sidebar .nav-item:hover { background: #0f2044; color: #93c5fd; }
+  .d1 .sidebar .nav-item.active { background: #1e3a6e; color: #60a5fa; border-right: 3px solid #2563eb; }
+  .d1 .sidebar .nav-icon { width: 16px; height: 16px; opacity: 0.8; }
+  .d1 .main { flex: 1; background: #0d1b2e; padding: 24px; overflow-y: auto; }
+  .d1 .page-title { font-size: 1.1rem; font-weight: 700; color: #e2e8f0; margin-bottom: 4px; }
+  .d1 .page-sub { color: #4a7ab5; font-size: 0.78rem; margin-bottom: 20px; }
+  .d1 .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .d1 .kpi {
+    background: #0f2044; border: 1px solid #1a3a6e; border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .d1 .kpi .kpi-val { font-size: 1.3rem; font-weight: 700; color: #60a5fa; }
+  .d1 .kpi .kpi-lbl { color: #4a7ab5; font-size: 0.72rem; margin-top: 2px; }
+  .d1 .chart-area {
+    background: #0f2044; border: 1px solid #1a3a6e; border-radius: 10px;
+    padding: 16px; height: 180px; display: flex; align-items: flex-end; gap: 8px;
+  }
+  .d1 .bar { background: #2563eb; border-radius: 4px 4px 0 0; flex: 1; opacity: 0.8; transition: opacity 0.2s; }
+  .d1 .bar:hover { opacity: 1; }
+
+  /* ============================================================
+     DESIGN 2: DARK PURPLE — عصري بنفسجي داكن
+  ============================================================ */
+  .d2 .topbar {
+    height: 56px; background: #0d0d1a; display: flex; align-items: center;
+    padding: 0 20px; gap: 16px; border-bottom: 1px solid #1e1e3a;
+  }
+  .d2 .topbar .logo { font-size: 1rem; font-weight: 900; letter-spacing: 3px; }
+  .d2 .topbar .logo .one { color: #a78bfa; }
+  .d2 .topbar .logo .soft { color: #fff; }
+  .d2 .topbar .logo .erp { color: #6d28d9; font-size: 0.7rem; vertical-align: super; }
+  .d2 .topbar .search {
+    flex: 1; max-width: 300px; background: #1a1a2e; border: 1px solid #2a2a4e;
+    border-radius: 20px; padding: 6px 14px; color: #888; font-size: 0.8rem; font-family: inherit;
+    margin: 0 auto;
+  }
+  .d2 .topbar .notif { width: 32px; height: 32px; border-radius: 8px; background: #1a1a2e; border: 1px solid #2a2a4e; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .d2 .topbar .avatar { width: 32px; height: 32px; border-radius: 10px; background: linear-gradient(135deg, #7c3aed, #a78bfa); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; }
+  .d2 .body { display: flex; flex: 1; overflow: hidden; }
+  .d2 .sidebar {
+    width: 200px; background: #0d0d1a; border-left: 1px solid #1a1a2e; padding: 16px 8px;
+  }
+  .d2 .sidebar .nav-group { margin-bottom: 8px; }
+  .d2 .sidebar .nav-group-title { color: #4a4a6a; font-size: 0.62rem; font-weight: 700; letter-spacing: 1.5px; padding: 4px 8px; text-transform: uppercase; }
+  .d2 .sidebar .nav-item {
+    display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+    color: #6b6b9b; font-size: 0.78rem; cursor: pointer; border-radius: 8px; transition: all 0.15s;
+  }
+  .d2 .sidebar .nav-item:hover { background: #1a1a2e; color: #c4b5fd; }
+  .d2 .sidebar .nav-item.active { background: linear-gradient(135deg, #1e1040, #2d1b69); color: #a78bfa; }
+  .d2 .sidebar .dot { width: 6px; height: 6px; border-radius: 50%; background: #6d28d9; }
+  .d2 .sidebar .dot.green { background: #10b981; }
+  .d2 .sidebar .dot.orange { background: #f59e0b; }
+  .d2 .main { flex: 1; background: #0f0f1e; padding: 20px; overflow-y: auto; }
+  .d2 .welcome { background: linear-gradient(135deg, #1e1040 0%, #2d1b69 50%, #1e1040 100%); border-radius: 14px; padding: 20px; margin-bottom: 16px; border: 1px solid #3b1f8c; }
+  .d2 .welcome h3 { font-size: 1rem; font-weight: 700; color: #e9d5ff; }
+  .d2 .welcome p { color: #9f7aea; font-size: 0.78rem; margin-top: 4px; }
+  .d2 .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+  .d2 .kpi { background: #0d0d1a; border: 1px solid #1e1e3a; border-radius: 12px; padding: 14px; }
+  .d2 .kpi .kpi-icon { width: 32px; height: 32px; border-radius: 8px; margin-bottom: 8px; display: flex; align-items: center; justify-content: center; font-size: 1rem; }
+  .d2 .kpi .kpi-val { font-size: 1.2rem; font-weight: 700; color: #e9d5ff; }
+  .d2 .kpi .kpi-lbl { color: #6b6b9b; font-size: 0.7rem; }
+  .d2 .kpi .kpi-change { font-size: 0.68rem; color: #10b981; margin-top: 2px; }
+  .d2 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .d2 .card { background: #0d0d1a; border: 1px solid #1e1e3a; border-radius: 12px; padding: 14px; }
+  .d2 .card h4 { font-size: 0.8rem; color: #9f7aea; margin-bottom: 10px; }
+  .d2 .list-item { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #1a1a2e; font-size: 0.75rem; color: #c4b5fd; }
+
+  /* ============================================================
+     DESIGN 3: EMERALD GREEN — أخضر زمردي نظيف
+  ============================================================ */
+  .d3 .topbar {
+    height: 54px; background: #fff; display: flex; align-items: center;
+    padding: 0 20px; gap: 16px; border-bottom: 2px solid #d1fae5;
+  }
+  .d3 .topbar .logo { font-size: 1rem; font-weight: 900; letter-spacing: 2px; }
+  .d3 .topbar .logo .one { color: #059669; }
+  .d3 .topbar .logo .soft { color: #1f2937; }
+  .d3 .topbar .logo .erp { color: #6ee7b7; font-size: 0.65rem; background: #059669; padding: 1px 5px; border-radius: 4px; color: #fff; margin-right: 4px; }
+  .d3 .topbar .actions { margin-right: auto; display: flex; gap: 8px; }
+  .d3 .topbar .btn-primary { background: #059669; color: #fff; border: none; padding: 6px 14px; border-radius: 6px; font-size: 0.78rem; cursor: pointer; font-family: inherit; }
+  .d3 .topbar .user-info { display: flex; align-items: center; gap: 8px; }
+  .d3 .topbar .avatar { width: 32px; height: 32px; border-radius: 50%; background: #059669; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; color: #fff; }
+  .d3 .topbar .user-name { font-size: 0.78rem; color: #374151; font-weight: 600; }
+  .d3 .body { display: flex; flex: 1; overflow: hidden; }
+  .d3 .sidebar {
+    width: 220px; background: #f0fdf4; border-left: 1px solid #d1fae5; padding: 12px 0;
+  }
+  .d3 .sidebar .nav-item {
+    display: flex; align-items: center; gap: 10px; padding: 9px 16px;
+    color: #6b7280; font-size: 0.8rem; cursor: pointer; transition: all 0.15s;
+  }
+  .d3 .sidebar .nav-item:hover { background: #d1fae5; color: #065f46; }
+  .d3 .sidebar .nav-item.active { background: #059669; color: #fff; }
+  .d3 .sidebar .nav-badge { background: #059669; color: #fff; font-size: 0.6rem; padding: 1px 5px; border-radius: 10px; margin-right: auto; }
+  .d3 .sidebar .nav-item.active .nav-badge { background: rgba(255,255,255,0.3); }
+  .d3 .main { flex: 1; background: #f9fafb; padding: 20px; overflow-y: auto; }
+  .d3 .page-title { font-size: 1.1rem; font-weight: 700; color: #111827; margin-bottom: 4px; }
+  .d3 .page-sub { color: #9ca3af; font-size: 0.78rem; margin-bottom: 18px; }
+  .d3 .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+  .d3 .kpi { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+  .d3 .kpi .kpi-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+  .d3 .kpi .kpi-icon { width: 36px; height: 36px; border-radius: 8px; background: #d1fae5; display: flex; align-items: center; justify-content: center; font-size: 1rem; }
+  .d3 .kpi .kpi-val { font-size: 1.3rem; font-weight: 700; color: #111827; }
+  .d3 .kpi .kpi-lbl { color: #9ca3af; font-size: 0.72rem; }
+  .d3 .kpi .kpi-change { font-size: 0.68rem; color: #059669; background: #d1fae5; padding: 2px 6px; border-radius: 10px; }
+  .d3 .table-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+  .d3 .table-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid #f3f4f6; }
+  .d3 .table-header h4 { font-size: 0.85rem; font-weight: 600; color: #111827; }
+  .d3 .table-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; padding: 10px 16px; border-bottom: 1px solid #f9fafb; font-size: 0.75rem; color: #374151; align-items: center; }
+  .d3 .table-row.header { background: #f9fafb; color: #9ca3af; font-weight: 600; font-size: 0.7rem; }
+  .d3 .badge { padding: 2px 8px; border-radius: 10px; font-size: 0.68rem; font-weight: 600; }
+  .d3 .badge.green { background: #d1fae5; color: #065f46; }
+  .d3 .badge.yellow { background: #fef3c7; color: #92400e; }
+  .d3 .badge.red { background: #fee2e2; color: #991b1b; }
+
+  /* ============================================================
+     DESIGN 4: WARM SLATE — رمادي دافئ برتقالي
+  ============================================================ */
+  .d4 .topbar {
+    height: 54px; background: #1c1917; display: flex; align-items: center;
+    padding: 0 20px; gap: 16px; border-bottom: 1px solid #292524;
+  }
+  .d4 .topbar .logo { font-size: 1rem; font-weight: 900; letter-spacing: 2px; }
+  .d4 .topbar .logo .one { color: #fb923c; }
+  .d4 .topbar .logo .soft { color: #e7e5e4; }
+  .d4 .topbar .logo .erp { color: #78716c; font-size: 0.75rem; margin-right: 6px; }
+  .d4 .topbar .divider { width: 1px; height: 24px; background: #292524; }
+  .d4 .topbar .module-name { color: #a8a29e; font-size: 0.8rem; }
+  .d4 .topbar .right { margin-right: auto; display: flex; align-items: center; gap: 12px; }
+  .d4 .topbar .notif-dot { position: relative; }
+  .d4 .topbar .notif-dot::after { content: ''; position: absolute; top: 0; right: 0; width: 7px; height: 7px; background: #fb923c; border-radius: 50%; border: 1.5px solid #1c1917; }
+  .d4 .topbar .avatar { width: 32px; height: 32px; border-radius: 8px; background: linear-gradient(135deg, #c2410c, #fb923c); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; color: #fff; }
+  .d4 .body { display: flex; flex: 1; overflow: hidden; }
+  .d4 .sidebar {
+    width: 210px; background: #1c1917; border-left: 1px solid #292524; padding: 16px 8px;
+  }
+  .d4 .sidebar .section { margin-bottom: 16px; }
+  .d4 .sidebar .section-title { color: #57534e; font-size: 0.62rem; font-weight: 700; letter-spacing: 1.5px; padding: 4px 8px 6px; text-transform: uppercase; }
+  .d4 .sidebar .nav-item {
+    display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+    color: #78716c; font-size: 0.78rem; cursor: pointer; border-radius: 6px; transition: all 0.15s;
+  }
+  .d4 .sidebar .nav-item:hover { background: #292524; color: #d6d3d1; }
+  .d4 .sidebar .nav-item.active { background: #431407; color: #fb923c; }
+  .d4 .sidebar .nav-item .icon { font-size: 0.9rem; }
+  .d4 .main { flex: 1; background: #0c0a09; padding: 20px; overflow-y: auto; }
+  .d4 .page-title { font-size: 1.1rem; font-weight: 700; color: #e7e5e4; margin-bottom: 4px; }
+  .d4 .page-sub { color: #57534e; font-size: 0.78rem; margin-bottom: 18px; }
+  .d4 .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+  .d4 .kpi { background: #1c1917; border: 1px solid #292524; border-radius: 10px; padding: 14px; }
+  .d4 .kpi .kpi-accent { width: 3px; height: 32px; border-radius: 2px; float: right; margin-left: 10px; }
+  .d4 .kpi .kpi-val { font-size: 1.2rem; font-weight: 700; color: #e7e5e4; }
+  .d4 .kpi .kpi-lbl { color: #57534e; font-size: 0.72rem; margin-top: 2px; }
+  .d4 .kpi .kpi-change { font-size: 0.68rem; color: #fb923c; margin-top: 4px; }
+  .d4 .row2 { display: grid; grid-template-columns: 1.5fr 1fr; gap: 12px; }
+  .d4 .card { background: #1c1917; border: 1px solid #292524; border-radius: 10px; padding: 14px; }
+  .d4 .card h4 { font-size: 0.8rem; color: #a8a29e; margin-bottom: 10px; border-bottom: 1px solid #292524; padding-bottom: 8px; }
+  .d4 .list-item { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid #1c1917; font-size: 0.75rem; color: #d6d3d1; }
+  .d4 .list-item .amount { color: #fb923c; font-weight: 600; }
+  .d4 .progress-bar { background: #292524; border-radius: 4px; height: 6px; margin-top: 4px; }
+  .d4 .progress-fill { background: linear-gradient(90deg, #c2410c, #fb923c); border-radius: 4px; height: 100%; }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>ONESOFT ERP</h1>
+  <p>اختر التصميم الذي يناسب هوية علامتك التجارية</p>
+</div>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="showDesign(1, this)">1 — أزرق احترافي</button>
+  <button class="tab-btn" onclick="showDesign(2, this)">2 — بنفسجي عصري</button>
+  <button class="tab-btn" onclick="showDesign(3, this)">3 — أخضر نظيف</button>
+  <button class="tab-btn" onclick="showDesign(4, this)">4 — رمادي دافئ</button>
+</div>
+
+<!-- ===== DESIGN 1 ===== -->
+<div class="design-panel active" id="panel-1">
+  <div class="design-label">
+    <h2 style="color:#60a5fa">التصميم الأول — Corporate Blue</h2>
+    <p>أزرق داكن احترافي مناسب للشركات الكبيرة والمؤسسات المالية</p>
+  </div>
+  <div class="mockup d1">
+    <div class="topbar">
+      <div class="logo"><span>ONE</span>SOFT ERP</div>
+      <div class="breadcrumb">الرئيسية ← لوحة التحكم</div>
+      <div class="user">
+        <div style="color:#4a7ab5;font-size:0.75rem">الخميس، 8 مايو 2026</div>
+        <div class="avatar">NM</div>
+      </div>
+    </div>
+    <div class="body">
+      <div class="sidebar">
+        <div class="section-title">الرئيسية</div>
+        <div class="nav-item active">⊞ لوحة التحكم</div>
+        <div class="section-title">المبيعات</div>
+        <div class="nav-item">↗ إدارة المبيعات</div>
+        <div class="nav-item">↙ إدارة المشتريات</div>
+        <div class="section-title">المخزون</div>
+        <div class="nav-item">⊡ إدارة المخزون</div>
+        <div class="nav-item">⚙ إدارة التصنيع</div>
+        <div class="section-title">المالية</div>
+        <div class="nav-item">≡ الحسابات العامة</div>
+        <div class="nav-item">♟ الموارد البشرية</div>
+        <div class="nav-item">◈ الأصول الثابتة</div>
+        <div class="section-title">النظام</div>
+        <div class="nav-item">⚙ الإعدادات</div>
+      </div>
+      <div class="main">
+        <div class="page-title">لوحة التحكم</div>
+        <div class="page-sub">نظرة عامة على أداء النظام — الخميس، 8 مايو 2026</div>
+        <div class="kpi-grid">
+          <div class="kpi"><div class="kpi-val">ر.س. ٢١,٧٥٠</div><div class="kpi-lbl">مبيعات الشهر</div></div>
+          <div class="kpi"><div class="kpi-val">ر.س. ١٦,٠٠٠</div><div class="kpi-lbl">مبيعات اليوم</div></div>
+          <div class="kpi"><div class="kpi-val">١٢</div><div class="kpi-lbl">الأصناف</div></div>
+          <div class="kpi"><div class="kpi-val">٠</div><div class="kpi-lbl">تحويلات معلقة</div></div>
+        </div>
+        <div class="chart-area">
+          <div class="bar" style="height:40%"></div>
+          <div class="bar" style="height:55%"></div>
+          <div class="bar" style="height:35%"></div>
+          <div class="bar" style="height:70%"></div>
+          <div class="bar" style="height:50%"></div>
+          <div class="bar" style="height:80%"></div>
+          <div class="bar" style="height:65%"></div>
+          <div class="bar" style="height:90%"></div>
+          <div class="bar" style="height:75%"></div>
+          <div class="bar" style="height:85%"></div>
+          <div class="bar" style="height:60%"></div>
+          <div class="bar" style="height:95%"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== DESIGN 2 ===== -->
+<div class="design-panel" id="panel-2">
+  <div class="design-label">
+    <h2 style="color:#a78bfa">التصميم الثاني — Dark Purple</h2>
+    <p>بنفسجي داكن عصري مناسب للشركات التقنية والناشئة</p>
+  </div>
+  <div class="mockup d2">
+    <div class="topbar">
+      <div class="logo"><span class="one">ONE</span><span class="soft">SOFT</span> <span class="erp">ERP</span></div>
+      <input class="search" placeholder="🔍  بحث في النظام..." />
+      <div class="notif">🔔</div>
+      <div class="avatar">NM</div>
+    </div>
+    <div class="body">
+      <div class="sidebar">
+        <div class="nav-group">
+          <div class="nav-group-title">الرئيسية</div>
+          <div class="nav-item active"><div class="dot"></div> لوحة التحكم</div>
+        </div>
+        <div class="nav-group">
+          <div class="nav-group-title">التجارة</div>
+          <div class="nav-item"><div class="dot green"></div> إدارة المبيعات</div>
+          <div class="nav-item"><div class="dot orange"></div> إدارة المشتريات</div>
+          <div class="nav-item"><div class="dot"></div> إدارة المخزون</div>
+        </div>
+        <div class="nav-group">
+          <div class="nav-group-title">الإنتاج</div>
+          <div class="nav-item"><div class="dot orange"></div> إدارة التصنيع</div>
+        </div>
+        <div class="nav-group">
+          <div class="nav-group-title">المالية</div>
+          <div class="nav-item"><div class="dot green"></div> الحسابات العامة</div>
+          <div class="nav-item"><div class="dot"></div> الموارد البشرية</div>
+          <div class="nav-item"><div class="dot"></div> الأصول الثابتة</div>
+        </div>
+        <div class="nav-group">
+          <div class="nav-group-title">النظام</div>
+          <div class="nav-item"><div class="dot orange"></div> الإعدادات</div>
+        </div>
+      </div>
+      <div class="main">
+        <div class="welcome">
+          <h3>مرحباً، نوسير محمد 👋</h3>
+          <p>لديك 3 فواتير تحتاج موافقة اليوم</p>
+        </div>
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="kpi-icon" style="background:#1e1040">💰</div>
+            <div class="kpi-val">٢١,٧٥٠</div>
+            <div class="kpi-lbl">مبيعات الشهر</div>
+            <div class="kpi-change">↑ 12% عن الشهر الماضي</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-icon" style="background:#1a0a2e">📦</div>
+            <div class="kpi-val">١٢</div>
+            <div class="kpi-lbl">الأصناف النشطة</div>
+            <div class="kpi-change">↑ 3 جديدة</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-icon" style="background:#0a1a0a">👥</div>
+            <div class="kpi-val">٨</div>
+            <div class="kpi-lbl">الموظفون</div>
+            <div class="kpi-change">↑ موظف جديد</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-icon" style="background:#1a0a0a">⚠️</div>
+            <div class="kpi-val">٣</div>
+            <div class="kpi-lbl">تحتاج موافقة</div>
+            <div class="kpi-change" style="color:#f59e0b">⚡ عاجل</div>
+          </div>
+        </div>
+        <div class="row2">
+          <div class="card">
+            <h4>أحدث الفواتير</h4>
+            <div class="list-item"><span>فاتورة #1001</span><span style="color:#10b981">مدفوعة</span></div>
+            <div class="list-item"><span>فاتورة #1002</span><span style="color:#f59e0b">معلقة</span></div>
+            <div class="list-item"><span>فاتورة #1003</span><span style="color:#10b981">مدفوعة</span></div>
+          </div>
+          <div class="card">
+            <h4>أكثر الأصناف مبيعاً</h4>
+            <div class="list-item"><span>لابتوب Dell XPS</span><span style="color:#a78bfa">5 وحدة</span></div>
+            <div class="list-item"><span>سيارة كيا</span><span style="color:#a78bfa">37 وحدة</span></div>
+            <div class="list-item"><span>سماعات Sony</span><span style="color:#a78bfa">1 وحدة</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== DESIGN 3 ===== -->
+<div class="design-panel" id="panel-3">
+  <div class="design-label">
+    <h2 style="color:#059669">التصميم الثالث — Emerald Clean</h2>
+    <p>أخضر زمردي فاتح نظيف مناسب للشركات التجارية والتوزيع</p>
+  </div>
+  <div class="mockup d3">
+    <div class="topbar">
+      <div class="logo"><span class="one">ONE</span><span class="soft">SOFT</span> <span class="erp">ERP</span></div>
+      <div class="actions">
+        <button class="btn-primary">+ فاتورة جديدة</button>
+      </div>
+      <div class="user-info">
+        <div class="avatar">NM</div>
+        <div class="user-name">نوسير محمد</div>
+      </div>
+    </div>
+    <div class="body">
+      <div class="sidebar">
+        <div class="nav-item active">⊞ لوحة التحكم</div>
+        <div class="nav-item">↗ إدارة المبيعات <span class="nav-badge">5</span></div>
+        <div class="nav-item">↙ إدارة المشتريات</div>
+        <div class="nav-item">⊡ إدارة المخزون</div>
+        <div class="nav-item">⚙ إدارة التصنيع</div>
+        <div class="nav-item">≡ الحسابات العامة</div>
+        <div class="nav-item">♟ الموارد البشرية</div>
+        <div class="nav-item">◈ الأصول الثابتة</div>
+        <div class="nav-item">⚙ الإعدادات</div>
+      </div>
+      <div class="main">
+        <div class="page-title">لوحة التحكم</div>
+        <div class="page-sub">الخميس، 8 مايو 2026</div>
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="kpi-top">
+              <div><div class="kpi-val">٢١,٧٥٠</div><div class="kpi-lbl">مبيعات الشهر</div></div>
+              <div class="kpi-icon">💰</div>
+            </div>
+            <div class="kpi-change">↑ 12%</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-top">
+              <div><div class="kpi-val">١٦,٠٠٠</div><div class="kpi-lbl">مبيعات اليوم</div></div>
+              <div class="kpi-icon">📊</div>
+            </div>
+            <div class="kpi-change">↑ 8%</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-top">
+              <div><div class="kpi-val">١٢</div><div class="kpi-lbl">الأصناف</div></div>
+              <div class="kpi-icon">📦</div>
+            </div>
+            <div class="kpi-change">↑ 3 جديدة</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-top">
+              <div><div class="kpi-val">٠</div><div class="kpi-lbl">معلقة</div></div>
+              <div class="kpi-icon">✅</div>
+            </div>
+            <div class="kpi-change" style="color:#059669">كل شيء بخير</div>
+          </div>
+        </div>
+        <div class="table-card">
+          <div class="table-header">
+            <h4>آخر الفواتير</h4>
+            <span style="color:#059669;font-size:0.75rem;cursor:pointer">عرض الكل ←</span>
+          </div>
+          <div class="table-row header"><span>العميل</span><span>المبلغ</span><span>التاريخ</span><span>الحالة</span></div>
+          <div class="table-row"><span>شركة الأمل</span><span>ر.س. 5,200</span><span>2026-05-07</span><span><span class="badge green">مدفوعة</span></span></div>
+          <div class="table-row"><span>مؤسسة النور</span><span>ر.س. 3,800</span><span>2026-05-06</span><span><span class="badge yellow">معلقة</span></span></div>
+          <div class="table-row"><span>شركة الخليج</span><span>ر.س. 7,000</span><span>2026-05-05</span><span><span class="badge green">مدفوعة</span></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== DESIGN 4 ===== -->
+<div class="design-panel" id="panel-4">
+  <div class="design-label">
+    <h2 style="color:#fb923c">التصميم الرابع — Warm Slate</h2>
+    <p>رمادي دافئ مع لكنة برتقالية مناسب للصناعة والمقاولات</p>
+  </div>
+  <div class="mockup d4">
+    <div class="topbar">
+      <div class="logo"><span class="one">ONE</span><span class="soft">SOFT</span><span class="erp"> ERP</span></div>
+      <div class="divider"></div>
+      <div class="module-name">لوحة التحكم</div>
+      <div class="right">
+        <div class="notif-dot">🔔</div>
+        <div class="avatar">NM</div>
+      </div>
+    </div>
+    <div class="body">
+      <div class="sidebar">
+        <div class="section">
+          <div class="section-title">الرئيسية</div>
+          <div class="nav-item active"><span class="icon">⊞</span> لوحة التحكم</div>
+        </div>
+        <div class="section">
+          <div class="section-title">التجارة</div>
+          <div class="nav-item"><span class="icon">↗</span> إدارة المبيعات</div>
+          <div class="nav-item"><span class="icon">↙</span> إدارة المشتريات</div>
+          <div class="nav-item"><span class="icon">⊡</span> إدارة المخزون</div>
+        </div>
+        <div class="section">
+          <div class="section-title">الإنتاج</div>
+          <div class="nav-item"><span class="icon">⚙</span> إدارة التصنيع</div>
+        </div>
+        <div class="section">
+          <div class="section-title">المالية</div>
+          <div class="nav-item"><span class="icon">≡</span> الحسابات العامة</div>
+          <div class="nav-item"><span class="icon">♟</span> الموارد البشرية</div>
+          <div class="nav-item"><span class="icon">◈</span> الأصول الثابتة</div>
+        </div>
+        <div class="section">
+          <div class="section-title">النظام</div>
+          <div class="nav-item"><span class="icon">⚙</span> الإعدادات</div>
+        </div>
+      </div>
+      <div class="main">
+        <div class="page-title">لوحة التحكم</div>
+        <div class="page-sub">الخميس، 8 مايو 2026 — نظرة عامة على الأداء</div>
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="kpi-accent" style="background:#fb923c"></div>
+            <div class="kpi-val">٢١,٧٥٠</div>
+            <div class="kpi-lbl">مبيعات الشهر</div>
+            <div class="kpi-change">↑ 12% نمو</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-accent" style="background:#34d399"></div>
+            <div class="kpi-val">١٦,٠٠٠</div>
+            <div class="kpi-lbl">مبيعات اليوم</div>
+            <div class="kpi-change" style="color:#34d399">↑ 8%</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-accent" style="background:#60a5fa"></div>
+            <div class="kpi-val">١٢</div>
+            <div class="kpi-lbl">الأصناف</div>
+            <div class="kpi-change" style="color:#60a5fa">نشط</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-accent" style="background:#f87171"></div>
+            <div class="kpi-val">٣</div>
+            <div class="kpi-lbl">تحتاج موافقة</div>
+            <div class="kpi-change" style="color:#f87171">⚡ عاجل</div>
+          </div>
+        </div>
+        <div class="row2">
+          <div class="card">
+            <h4>أكثر الأصناف مبيعاً</h4>
+            <div class="list-item"><span>لابتوب Dell XPS 15</span><span class="amount">ر.س. 16,000</span></div>
+            <div style="padding: 0 0 8px">
+              <div class="progress-bar"><div class="progress-fill" style="width:85%"></div></div>
+            </div>
+            <div class="list-item"><span>سيارة كيا</span><span class="amount">ر.س. 4,440</span></div>
+            <div style="padding: 0 0 8px">
+              <div class="progress-bar"><div class="progress-fill" style="width:45%"></div></div>
+            </div>
+            <div class="list-item"><span>سماعات Sony WH</span><span class="amount">ر.س. 1,100</span></div>
+            <div style="padding: 0 0 8px">
+              <div class="progress-bar"><div class="progress-fill" style="width:20%"></div></div>
+            </div>
+          </div>
+          <div class="card">
+            <h4>آخر العمليات</h4>
+            <div class="list-item"><span>فاتورة #1001</span><span style="color:#34d399">مدفوعة</span></div>
+            <div class="list-item"><span>أمر شراء #501</span><span style="color:#f59e0b">معلق</span></div>
+            <div class="list-item"><span>تحويل مخزني</span><span style="color:#34d399">مكتمل</span></div>
+            <div class="list-item"><span>قيد يومية</span><span style="color:#60a5fa">مرحّل</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function showDesign(num, btn) {
+    document.querySelectorAll('.design-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('panel-' + num).classList.add('active');
+    btn.classList.add('active');
+  }
+</script>
+</body>
+</html>

@@ -156,10 +156,18 @@ export default function SalesInvoicePage() {
 
   const createMutation = trpc.salesInvoices.create.useMutation({
     onSuccess: (data) => {
-      toast.success(`✓ تم حفظ الفاتورة ${data.invoiceNumber} بنجاح`, {
-        description: `الإجمالي: ${fmt(netTotal)} ${currency} — اضغط "ترحيل" لترحيل القيد`,
-        duration: 5000,
-      });
+      const autoEntry = (data as any).autoPostedEntryNumber as string | undefined;
+      if (autoEntry) {
+        toast.success(`✓ تم حفظ الفاتورة ${data.invoiceNumber} وترحيلها تلقائياً`, {
+          description: `قيد محاسبي رقم ${autoEntry} — الإجمالي: ${fmt(netTotal)} ${currency}`,
+          duration: 6000,
+        });
+      } else {
+        toast.success(`✓ تم حفظ الفاتورة ${data.invoiceNumber} بنجاح`, {
+          description: `الإجمالي: ${fmt(netTotal)} ${currency} — اضغط "ترحيل" لترحيل القيد`,
+          duration: 5000,
+        });
+      }
       setSavedInvoiceId(data.id);
       setIsPosted(data.isPosted ?? false);
       setErpMode("view");

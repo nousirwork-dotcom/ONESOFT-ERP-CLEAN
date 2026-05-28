@@ -8,7 +8,7 @@ import {
 } from '../schema.js';
 
 // ── مساعد: بناء أسطر القيد من فاتورة مبيعات ─────────────────────────────────
-async function buildSalesInvoiceLines(
+export async function buildSalesInvoiceLines(
   invoice: typeof salesInvoices.$inferSelect,
   journal: typeof documentJournals.$inferSelect | null,
   orgId: number,
