@@ -3819,17 +3819,17 @@ function TrialBalancePage({
         </div>
         <div style={{ display: "flex", borderRadius: 6, overflow: "hidden", border: "1px solid #D1D5DB" }}>
           {(["full","simple"] as const).map(m => (
-            <button key={m} onClick={() => setTbMode(m)} style={{ padding: "3px 12px", fontSize: 11, cursor: "pointer", border: "none", background: tbMode === m ? "#406B93" : "#fff", color: tbMode === m ? "#fff" : "#6B7280", fontFamily: "'Cairo',Tahoma,sans-serif" }}>
+            <button key={m} onClick={() => setTbMode(m)} style={{ padding: "3px 14px", fontSize: 13, cursor: "pointer", border: "none", background: tbMode === m ? "#406B93" : "#fff", color: tbMode === m ? "#fff" : "#6B7280", fontFamily: "'Cairo',Tahoma,sans-serif" }}>
               {m === "full" ? "تفصيلي" : "مبسّط"}
             </button>
           ))}
         </div>
-        <button onClick={() => openTBPrintPreview(getTBExportRows(), { openD: totals.openD, openC: totals.openC, moveD: totals.moveD, moveC: totals.moveC, closeD: totals.closeD, closeC: totals.closeC }, tbMode, tbCompanyName, tbUserName, fromDate, toDate, false)} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", border: "1px solid #D1D5DB", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 11, color: "#374151", fontFamily: "'Cairo',Tahoma,sans-serif" }}>
-          <Printer style={{ width: 12, height: 12 }} /> طباعة
+        <button onClick={() => openTBPrintPreview(getTBExportRows(), { openD: totals.openD, openC: totals.openC, moveD: totals.moveD, moveC: totals.moveC, closeD: totals.closeD, closeC: totals.closeC }, tbMode, tbCompanyName, tbUserName, fromDate, toDate, false)} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 12px", border: "1px solid #D1D5DB", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 13, color: "#374151", fontFamily: "'Cairo',Tahoma,sans-serif" }}>
+          <Printer style={{ width: 13, height: 13 }} /> طباعة
         </button>
         <div style={{ position: "relative" }}>
-          <button onClick={() => setShowExportMenu(v => !v)} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", border: "1px solid #D1D5DB", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 11, color: "#374151", fontFamily: "'Cairo',Tahoma,sans-serif" }}>
-            <Download style={{ width: 12, height: 12 }} /> تصدير <ChevronDown style={{ width: 10, height: 10, marginRight: 2 }} />
+          <button onClick={() => setShowExportMenu(v => !v)} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 12px", border: "1px solid #D1D5DB", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 13, color: "#374151", fontFamily: "'Cairo',Tahoma,sans-serif" }}>
+            <Download style={{ width: 13, height: 13 }} /> تصدير <ChevronDown style={{ width: 11, height: 11, marginRight: 2 }} />
           </button>
           {showExportMenu && (
             <>
@@ -3853,33 +3853,33 @@ function TrialBalancePage({
       {/* ══ شريط الفلاتر ══ */}
       <div style={{ padding: "8px 14px", borderBottom: "1px solid #E5E7EB", background: "#F3F7FB", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 8, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 11, color: "#6B7280" }}>الفترة:</span>
+          <span style={{ fontSize: 13, color: "#6B7280" }}>الفترة:</span>
           {PERIODS.map(p => (
-            <button key={p.id} onClick={() => applyPeriod(p.id)} style={{ padding: "3px 10px", fontSize: 11, borderRadius: 6, cursor: "pointer", border: `1px solid ${period === p.id ? "#406B93" : "#D1D5DB"}`, background: period === p.id ? "#E8F0F8" : "#fff", color: period === p.id ? "#406B93" : "#6B7280", fontFamily: "'Cairo',Tahoma,sans-serif", fontWeight: 600 }}>
+            <button key={p.id} onClick={() => applyPeriod(p.id)} style={{ padding: "3px 10px", fontSize: 13, borderRadius: 6, cursor: "pointer", border: `1px solid ${period === p.id ? "#406B93" : "#D1D5DB"}`, background: period === p.id ? "#E8F0F8" : "#fff", color: period === p.id ? "#406B93" : "#6B7280", fontFamily: "'Cairo',Tahoma,sans-serif", fontWeight: 600 }}>
               {p.l}
             </button>
           ))}
-          <span style={{ fontSize: 11, color: "#9CA3AF" }}>أو مخصص:</span>
-          <span style={{ fontSize: 11, color: "#6B7280" }}>من</span>
-          <input type="date" value={fromDate} onChange={e => { setFromDate(e.target.value); setPeriod("custom"); }} style={{ padding: "3px 7px", border: `1px solid ${period === "custom" ? "#406B93" : "#D1D5DB"}`, borderRadius: 6, fontSize: 11, background: "#fff", color: "#111827" }} />
-          <span style={{ fontSize: 11, color: "#6B7280" }}>إلى</span>
-          <input type="date" value={toDate} onChange={e => { setToDate(e.target.value); setPeriod("custom"); }} style={{ padding: "3px 7px", border: `1px solid ${period === "custom" ? "#406B93" : "#D1D5DB"}`, borderRadius: 6, fontSize: 11, background: "#fff", color: "#111827" }} />
+          <span style={{ fontSize: 13, color: "#9CA3AF" }}>أو مخصص:</span>
+          <span style={{ fontSize: 13, color: "#6B7280" }}>من</span>
+          <input type="date" value={fromDate} onChange={e => { setFromDate(e.target.value); setPeriod("custom"); }} style={{ padding: "3px 7px", border: `1px solid ${period === "custom" ? "#406B93" : "#D1D5DB"}`, borderRadius: 6, fontSize: 13, background: "#fff", color: "#111827" }} />
+          <span style={{ fontSize: 13, color: "#6B7280" }}>إلى</span>
+          <input type="date" value={toDate} onChange={e => { setToDate(e.target.value); setPeriod("custom"); }} style={{ padding: "3px 7px", border: `1px solid ${period === "custom" ? "#406B93" : "#D1D5DB"}`, borderRadius: 6, fontSize: 13, background: "#fff", color: "#111827" }} />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-          <div style={{ position: "relative", flex: 1, minWidth: 180, maxWidth: 280 }}>
-            <Search style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", width: 12, height: 12, color: "#9CA3AF", pointerEvents: "none" }} />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="بحث بالاسم أو الكود..." style={{ width: "100%", paddingRight: 26, paddingLeft: 8, paddingTop: 4, paddingBottom: 4, border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 11, background: "#fff" }} />
+          <div style={{ position: "relative", flex: 1, minWidth: 180, maxWidth: 300 }}>
+            <Search style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", width: 13, height: 13, color: "#9CA3AF", pointerEvents: "none" }} />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="بحث بالاسم أو الكود..." style={{ width: "100%", paddingRight: 28, paddingLeft: 8, paddingTop: 4, paddingBottom: 4, border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 13, background: "#fff" }} />
           </div>
-          <select value={costCenterId?.toString() ?? ""} onChange={e => setCostCenterId(e.target.value ? parseInt(e.target.value) : undefined)} style={{ padding: "4px 8px", border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 11, background: "#fff", color: "#374151", fontFamily: "'Cairo',Tahoma,sans-serif" }}>
+          <select value={costCenterId?.toString() ?? ""} onChange={e => setCostCenterId(e.target.value ? parseInt(e.target.value) : undefined)} style={{ padding: "4px 8px", border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 13, background: "#fff", color: "#374151", fontFamily: "'Cairo',Tahoma,sans-serif" }}>
             <option value="">كل مراكز التكلفة</option>
             {costCentersQuery.data?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
           <div style={{ display: "flex", gap: 4 }}>
-            <button onClick={expandAll}   style={{ padding: "3px 9px", border: "1px solid #D1D5DB", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 11, color: "#374151", fontFamily: "'Cairo',Tahoma,sans-serif" }}>+ فتح الكل</button>
-            <button onClick={collapseAll} style={{ padding: "3px 9px", border: "1px solid #D1D5DB", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 11, color: "#374151", fontFamily: "'Cairo',Tahoma,sans-serif" }}>− طي الكل</button>
+            <button onClick={expandAll}   style={{ padding: "3px 9px", border: "1px solid #D1D5DB", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 13, color: "#374151", fontFamily: "'Cairo',Tahoma,sans-serif" }}>+ فتح الكل</button>
+            <button onClick={collapseAll} style={{ padding: "3px 9px", border: "1px solid #D1D5DB", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 13, color: "#374151", fontFamily: "'Cairo',Tahoma,sans-serif" }}>− طي الكل</button>
             <button
               onClick={() => setShowZero(v => !v)}
-              style={{ padding: "3px 9px", border: `1px solid ${showZero ? "#406B93" : "#D1D5DB"}`, borderRadius: 6, background: showZero ? "#E8F0F8" : "#fff", cursor: "pointer", fontSize: 11, color: showZero ? "#406B93" : "#6B7280", fontFamily: "'Cairo',Tahoma,sans-serif", fontWeight: showZero ? 600 : 400 }}
+              style={{ padding: "3px 9px", border: `1px solid ${showZero ? "#406B93" : "#D1D5DB"}`, borderRadius: 6, background: showZero ? "#E8F0F8" : "#fff", cursor: "pointer", fontSize: 13, color: showZero ? "#406B93" : "#6B7280", fontFamily: "'Cairo',Tahoma,sans-serif", fontWeight: showZero ? 600 : 400 }}
               title={showZero ? "يظهر الآن: الحسابات التي عليها حركة ورصيدها آخر المدة = صفر — اضغط للإخفاء" : "اضغط لإظهار الحسابات التي عليها حركة ورصيدها آخر المدة صفر"}
             >
               {showZero ? "✓ ذات الرصيد الصفري" : "ذات الرصيد الصفري"}
@@ -3887,7 +3887,7 @@ function TrialBalancePage({
           </div>
           <div style={{ display: "flex", borderRadius: 6, overflow: "hidden", border: "1px solid #D1D5DB" }} title="حجم الخط">
             {(["s","m","l"] as const).map(sz => (
-              <button key={sz} onClick={() => setFontSize(sz)} style={{ padding: "3px 8px", fontSize: sz === "s" ? 10 : sz === "m" ? 12 : 14, cursor: "pointer", border: "none", background: fontSize === sz ? "#406B93" : "#fff", color: fontSize === sz ? "#fff" : "#6B7280", fontFamily: "'Cairo',Tahoma,sans-serif", fontWeight: 600, lineHeight: 1 }}>
+              <button key={sz} onClick={() => setFontSize(sz)} style={{ padding: "3px 9px", fontSize: sz === "s" ? 12 : sz === "m" ? 14 : 16, cursor: "pointer", border: "none", background: fontSize === sz ? "#406B93" : "#fff", color: fontSize === sz ? "#fff" : "#6B7280", fontFamily: "'Cairo',Tahoma,sans-serif", fontWeight: 600, lineHeight: 1 }}>
                 {sz === "s" ? "ص" : sz === "m" ? "م" : "ك"}
               </button>
             ))}
