@@ -3943,8 +3943,6 @@ function TrialBalancePage({
                   </td>
                   <td style={{ padding: "5px 8px", fontWeight: fw, fontSize: fs, color: depth === 0 ? "#1E3A5F" : "#374151" }}>
                     <span onClick={() => setAcctCard(n)} style={{ cursor: "pointer" }} title="كارت الحساب">{n.name}</span>
-                    {n.level === 1 && <span style={{ marginRight: 8, fontSize: 9, padding: "1px 5px", borderRadius: 8, background: "#D4E8F5", color: "#2D5F85", fontWeight: 700 }}>جذري</span>}
-                    {n.level === 2 && <span style={{ marginRight: 8, fontSize: 9, padding: "1px 5px", borderRadius: 8, background: "#F3E8FF", color: "#7C3AED", fontWeight: 700 }}>رئيسي</span>}
                   </td>
                   {tbMode === "full" ? (
                     <>
@@ -3959,18 +3957,18 @@ function TrialBalancePage({
                     <>
                       <td onClick={canDrill ? openDlg : undefined} style={numCellStyle(canDrill)} title={canDrill ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>
                         {n.aggOpenD > n.aggOpenC
-                          ? <span style={{ color: D, fontWeight: fw, fontSize: fs, textDecoration: canDrill ? "underline dotted" : "none" }}>{fmtN(n.aggOpenD - n.aggOpenC)} <span style={{ fontSize: 9 }}>م</span></span>
+                          ? <span style={{ color: D, fontWeight: fw, fontSize: fs, textDecoration: canDrill ? "underline dotted" : "none" }}>{fmtN(n.aggOpenD - n.aggOpenC)}</span>
                           : n.aggOpenC > n.aggOpenD
-                            ? <span style={{ color: C, fontWeight: fw, fontSize: fs, textDecoration: canDrill ? "underline dotted" : "none" }}>({fmtN(n.aggOpenC - n.aggOpenD)}) <span style={{ fontSize: 9 }}>د</span></span>
+                            ? <span style={{ color: C, fontWeight: fw, fontSize: fs, textDecoration: canDrill ? "underline dotted" : "none" }}>({fmtN(n.aggOpenC - n.aggOpenD)})</span>
                             : <span style={{ color: "#9CA3AF" }}>—</span>}
                       </td>
                       <td onClick={canDrill ? openDlg : undefined} style={numCellStyle(canDrill)} title={canDrill ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>{numSpan(n.aggMoveD, D, canDrill)}</td>
                       <td onClick={canDrill ? openDlg : undefined} style={numCellStyle(canDrill)} title={canDrill ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>{numSpan(n.aggMoveC, C, canDrill)}</td>
                       <td onClick={canDrillCl ? openDlg : undefined} style={numCellStyle(canDrillCl)} title={canDrillCl ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>
                         {n.aggCloseD > 0
-                          ? <span style={{ color: D, fontWeight: 700, fontSize: fs, textDecoration: canDrillCl ? "underline dotted" : "none" }}>{fmtN(n.aggCloseD)} <span style={{ fontSize: 9 }}>م</span></span>
+                          ? <span style={{ color: D, fontWeight: 700, fontSize: fs, textDecoration: canDrillCl ? "underline dotted" : "none" }}>{fmtN(n.aggCloseD)}</span>
                           : n.aggCloseC > 0
-                            ? <span style={{ color: C, fontWeight: 700, fontSize: fs, textDecoration: canDrillCl ? "underline dotted" : "none" }}>({fmtN(n.aggCloseC)}) <span style={{ fontSize: 9 }}>د</span></span>
+                            ? <span style={{ color: C, fontWeight: 700, fontSize: fs, textDecoration: canDrillCl ? "underline dotted" : "none" }}>({fmtN(n.aggCloseC)})</span>
                             : <span style={{ color: "#9CA3AF" }}>—</span>}
                       </td>
                     </>
