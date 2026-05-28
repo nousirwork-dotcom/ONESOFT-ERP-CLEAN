@@ -3644,7 +3644,28 @@ function TrialBalancePage({
               const hasData     = n.aggMoveD > 0 || n.aggMoveC > 0 || n.aggOpenD > 0 || n.aggOpenC > 0;
               const hasClose    = n.aggCloseD > 0 || n.aggCloseC > 0;
               const isLeaf      = !hasChildren;
-              const drillClose  = () => isLeaf && hasClose && setLedgerDlg({ accountId: n.accountId, code: n.code, name: n.name });
+              const canDrill    = isLeaf && hasData;
+              const canDrillCl  = isLeaf && hasClose;
+              const openDlg     = () => { if (isLeaf) setLedgerDlg({ accountId: n.accountId, code: n.code, name: n.name }); };
+              const numCellStyle = (active: boolean, extra?: React.CSSProperties): React.CSSProperties => ({
+                padding: "5px 10px", textAlign: "center",
+                cursor: active ? "pointer" : "default",
+                transition: "background 0.1s",
+                ...extra,
+              });
+              const numSpan = (value: number, color: string, active: boolean, bold = false) =>
+                value === 0 ? <span style={{ color: "#9CA3AF" }}>—</span> : (
+                  <span style={{
+                    color: active ? undefined : color,
+                    fontWeight: bold ? 700 : fw,
+                    fontSize: fs,
+                    textDecoration: active ? "underline dotted" : "none",
+                    transition: "color 0.15s",
+                  }}
+                    onMouseEnter={e => { if (active) (e.currentTarget as HTMLElement).style.color = "#2563EB"; }}
+                    onMouseLeave={e => { if (active) (e.currentTarget as HTMLElement).style.color = color; }}
+                  >{fmtN(value)}</span>
+                );
               return (
                 <tr key={n.accountId}
                   style={{ background: bg, borderBottom: `1px solid ${depth === 0 ? "#D1D5DB" : "#F3F4F6"}` }}
@@ -3668,29 +3689,29 @@ function TrialBalancePage({
                   </td>
                   {tbMode === "full" ? (
                     <>
-                      <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: D, fontWeight: fw, fontSize: fs, cursor: hasData ? "pointer" : "default" }} title={hasData ? "عرض كشف الحساب" : ""}>{fmtN(n.aggOpenD)}</td>
-                      <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: C, fontWeight: fw, fontSize: fs, cursor: hasData ? "pointer" : "default", borderLeft: "1px solid #E5E7EB" }}>{fmtN(n.aggOpenC)}</td>
-                      <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: D, fontWeight: fw, fontSize: fs, cursor: hasData ? "pointer" : "default" }}>{fmtN(n.aggMoveD)}</td>
-                      <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: C, fontWeight: fw, fontSize: fs, cursor: hasData ? "pointer" : "default", borderLeft: "1px solid #E5E7EB" }}>{fmtN(n.aggMoveC)}</td>
-                      <td onClick={drillClose} style={{ padding: "5px 10px", textAlign: "center", color: D, fontWeight: 700, fontSize: fs, cursor: isLeaf && hasClose ? "pointer" : "default", textDecoration: isLeaf && hasClose ? "underline dotted" : "none" }} title={isLeaf && hasClose ? "انقر لفتح كشف الحساب" : ""}>{fmtN(n.aggCloseD)}</td>
-                      <td onClick={drillClose} style={{ padding: "5px 10px", textAlign: "center", color: C, fontWeight: 700, fontSize: fs, cursor: isLeaf && hasClose ? "pointer" : "default", textDecoration: isLeaf && hasClose ? "underline dotted" : "none" }} title={isLeaf && hasClose ? "انقر لفتح كشف الحساب" : ""}>{fmtN(n.aggCloseC)}</td>
+                      <td onClick={canDrill ? openDlg : undefined} style={numCellStyle(canDrill)} title={canDrill ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>{numSpan(n.aggOpenD, D, canDrill)}</td>
+                      <td onClick={canDrill ? openDlg : undefined} style={numCellStyle(canDrill, { borderLeft: "1px solid #E5E7EB" })} title={canDrill ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>{numSpan(n.aggOpenC, C, canDrill)}</td>
+                      <td onClick={canDrill ? openDlg : undefined} style={numCellStyle(canDrill)} title={canDrill ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>{numSpan(n.aggMoveD, D, canDrill)}</td>
+                      <td onClick={canDrill ? openDlg : undefined} style={numCellStyle(canDrill, { borderLeft: "1px solid #E5E7EB" })} title={canDrill ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>{numSpan(n.aggMoveC, C, canDrill)}</td>
+                      <td onClick={canDrillCl ? openDlg : undefined} style={numCellStyle(canDrillCl)} title={canDrillCl ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>{numSpan(n.aggCloseD, D, canDrillCl, true)}</td>
+                      <td onClick={canDrillCl ? openDlg : undefined} style={numCellStyle(canDrillCl)} title={canDrillCl ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>{numSpan(n.aggCloseC, C, canDrillCl, true)}</td>
                     </>
                   ) : (
                     <>
-                      <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", cursor: hasData ? "pointer" : "default" }}>
+                      <td onClick={canDrill ? openDlg : undefined} style={numCellStyle(canDrill)} title={canDrill ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>
                         {n.aggOpenD > n.aggOpenC
-                          ? <span style={{ color: D, fontWeight: fw, fontSize: fs }}>{fmtN(n.aggOpenD - n.aggOpenC)} <span style={{ fontSize: 9 }}>م</span></span>
+                          ? <span style={{ color: D, fontWeight: fw, fontSize: fs, textDecoration: canDrill ? "underline dotted" : "none" }}>{fmtN(n.aggOpenD - n.aggOpenC)} <span style={{ fontSize: 9 }}>م</span></span>
                           : n.aggOpenC > n.aggOpenD
-                            ? <span style={{ color: C, fontWeight: fw, fontSize: fs }}>({fmtN(n.aggOpenC - n.aggOpenD)}) <span style={{ fontSize: 9 }}>د</span></span>
+                            ? <span style={{ color: C, fontWeight: fw, fontSize: fs, textDecoration: canDrill ? "underline dotted" : "none" }}>({fmtN(n.aggOpenC - n.aggOpenD)}) <span style={{ fontSize: 9 }}>د</span></span>
                             : <span style={{ color: "#9CA3AF" }}>—</span>}
                       </td>
-                      <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: D, fontWeight: fw, fontSize: fs, cursor: hasData ? "pointer" : "default" }}>{fmtN(n.aggMoveD)}</td>
-                      <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: C, fontWeight: fw, fontSize: fs, cursor: hasData ? "pointer" : "default" }}>{fmtN(n.aggMoveC)}</td>
-                      <td onClick={drillClose} style={{ padding: "5px 10px", textAlign: "center", cursor: isLeaf && hasClose ? "pointer" : "default" }} title={isLeaf && hasClose ? "انقر لفتح كشف الحساب" : ""}>
+                      <td onClick={canDrill ? openDlg : undefined} style={numCellStyle(canDrill)} title={canDrill ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>{numSpan(n.aggMoveD, D, canDrill)}</td>
+                      <td onClick={canDrill ? openDlg : undefined} style={numCellStyle(canDrill)} title={canDrill ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>{numSpan(n.aggMoveC, C, canDrill)}</td>
+                      <td onClick={canDrillCl ? openDlg : undefined} style={numCellStyle(canDrillCl)} title={canDrillCl ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>
                         {n.aggCloseD > 0
-                          ? <span style={{ color: D, fontWeight: 700, fontSize: fs, textDecoration: isLeaf ? "underline dotted" : "none" }}>{fmtN(n.aggCloseD)} <span style={{ fontSize: 9 }}>م</span></span>
+                          ? <span style={{ color: D, fontWeight: 700, fontSize: fs, textDecoration: canDrillCl ? "underline dotted" : "none" }}>{fmtN(n.aggCloseD)} <span style={{ fontSize: 9 }}>م</span></span>
                           : n.aggCloseC > 0
-                            ? <span style={{ color: C, fontWeight: 700, fontSize: fs, textDecoration: isLeaf ? "underline dotted" : "none" }}>({fmtN(n.aggCloseC)}) <span style={{ fontSize: 9 }}>د</span></span>
+                            ? <span style={{ color: C, fontWeight: 700, fontSize: fs, textDecoration: canDrillCl ? "underline dotted" : "none" }}>({fmtN(n.aggCloseC)}) <span style={{ fontSize: 9 }}>د</span></span>
                             : <span style={{ color: "#9CA3AF" }}>—</span>}
                       </td>
                     </>
