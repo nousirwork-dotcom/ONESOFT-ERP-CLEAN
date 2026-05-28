@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { eq, and, desc, like, or } from 'drizzle-orm';
+import { eq, and, desc, like, or, inArray } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { salesInvoices, salesInvoiceItems, products, customers, stockVouchers, stockVoucherItems, documentJournals, journalEntries, journalEntryLines } from '../schema.js';
+import { salesInvoices, salesInvoiceItems, products, customers, stockVouchers, stockVoucherItems, documentJournals, journalEntries, journalEntryLines, documentTypes, warehouseAccountLinks } from '../schema.js';
 import { buildSalesInvoiceLines } from './posting.js';
 
 export const salesRouter = router({
@@ -132,6 +132,7 @@ export const salesRouter = router({
       paymentMethod: z.enum(['cash', 'bank', 'credit', 'check', 'other']).default('cash'),
       status: z.enum(['draft', 'confirmed', 'cancelled', 'paid']).default('confirmed'),
       notes: z.string().optional(),
+      docTypeId: z.number().optional(),
       items: z.array(z.object({
         productId: z.number().optional(),
         productCode: z.string().optional(),
@@ -169,16 +170,76 @@ export const salesRouter = router({
       }
 
       // ── ترحيل تلقائي بناءً على نوع المستند ──────────────────────────────────
-      // عند حفظ أي فاتورة مبيعات مرتبطة بدفتر، ينشأ القيد المحاسبي فوراً
-      // - نقدي / بنك / شيك → مدين: حساب الصندوق | دائن: إيرادات المبيعات
-      // - آجل              → مدين: ذمم العملاء   | دائن: إيرادات المبيعات
-      if (input.journalId && invoice.invoiceType === 'sale') {
-        const journal = await db.query.documentJournals.findFirst({
-          where: and(eq(documentJournals.id, input.journalId), eq(documentJournals.orgId, orgId)),
-        });
+      // يستخدم أولاً حسابات الدفتر، ثم روابط نوع المستند كـ fallback
+      if (invoice.invoiceType === 'sale' && (input.journalId || input.docTypeId)) {
+        // ── تحميل الدفتر ──
+        let journal = input.journalId
+          ? await db.query.documentJournals.findFirst({
+              where: and(eq(documentJournals.id, input.journalId), eq(documentJournals.orgId, orgId)),
+            })
+          : undefined;
 
-        if (journal && journal.postingMode !== 'disabled') {
-          const { lines } = await buildSalesInvoiceLines(invoice, journal, orgId);
+        // ── بناء حسابات من روابط نوع المستند إذا كانت حسابات الدفتر غير مكتملة ──
+        let effectiveCashAccountId    = journal?.cashAccountId    ?? null;
+        let effectiveSalesAccountId   = journal?.salesAccountId   ?? null;
+        let effectiveCreditAccountId  = journal?.creditAccountId  ?? null;
+        let effectiveTaxAccountId     = journal?.taxAccountId     ?? null;
+        let effectiveDiscountAccountId= journal?.discountAccountId?? null;
+
+        if (input.docTypeId && (!effectiveCashAccountId || !effectiveSalesAccountId)) {
+          const docType = await db.query.documentTypes.findFirst({
+            where: and(eq(documentTypes.id, input.docTypeId), eq(documentTypes.orgId, orgId)),
+          });
+          if (docType) {
+            const linkIdRaw = [
+              docType.acctCash,
+              docType.acctDebit,
+              docType.acctCredit,
+              docType.acctTax,
+              docType.acctDiscount,
+            ];
+            const linkIds = linkIdRaw
+              .map(v => (v ? parseInt(v) : NaN))
+              .filter(v => !isNaN(v));
+            if (linkIds.length > 0) {
+              const walRows = await db.query.warehouseAccountLinks.findMany({
+                where: inArray(warehouseAccountLinks.id, linkIds),
+              });
+              const walById = new Map(walRows.map(w => [w.id, w]));
+              const getAccId = (code: string | null | undefined) => {
+                if (!code) return null;
+                const id = parseInt(code);
+                return isNaN(id) ? null : (walById.get(id)?.accountId ?? null);
+              };
+              // نقدي/بنك → acctCash → cashAccountId
+              if (!effectiveCashAccountId)    effectiveCashAccountId    = getAccId(docType.acctCash);
+              // آجل → acctDebit → creditAccountId (ذمم العملاء)
+              if (!effectiveCreditAccountId)  effectiveCreditAccountId  = getAccId(docType.acctDebit);
+              // إيرادات → acctCredit → salesAccountId
+              if (!effectiveSalesAccountId)   effectiveSalesAccountId   = getAccId(docType.acctCredit);
+              // ضريبة → acctTax
+              if (!effectiveTaxAccountId)     effectiveTaxAccountId     = getAccId(docType.acctTax);
+              // خصم → acctDiscount
+              if (!effectiveDiscountAccountId)effectiveDiscountAccountId= getAccId(docType.acctDiscount);
+            }
+          }
+        }
+
+        // ── بناء كائن دفتر فعّال يجمع مصادر الحسابات ──
+        const effectiveJournal = {
+          ...(journal ?? {}),
+          cashAccountId:    effectiveCashAccountId,
+          salesAccountId:   effectiveSalesAccountId,
+          creditAccountId:  effectiveCreditAccountId,
+          taxAccountId:     effectiveTaxAccountId,
+          discountAccountId:effectiveDiscountAccountId,
+          postingMode:      journal?.postingMode ?? 'auto',
+        } as typeof documentJournals.$inferSelect;
+
+        const shouldPost = effectiveJournal.postingMode !== 'disabled';
+
+        if (shouldPost) {
+          const { lines } = await buildSalesInvoiceLines(invoice, effectiveJournal, orgId);
 
           if (lines.length > 0 && lines.some(l => l.accountId !== null)) {
             const lastEntry = await db.query.journalEntries.findFirst({

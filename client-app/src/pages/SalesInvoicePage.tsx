@@ -519,6 +519,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       paymentMethod: payMethod as any,
       status: status as any,
       notes: notes || undefined,
+      docTypeId: docTypeId ? parseInt(docTypeId) : undefined,
       items: validLines.map((l, idx) => ({
         productId: l.productId,
         productCode: l.productCode || undefined,
