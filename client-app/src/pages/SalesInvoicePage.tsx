@@ -237,6 +237,23 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
     onError: (e) => toast.error(`خطأ في إلغاء الترحيل: ${e.message}`),
   });
 
+  const deleteMutation = trpc.salesInvoices.delete.useMutation({
+    onSuccess: () => {
+      toast.success("تم حذف الفاتورة بنجاح");
+      allInvoicesQuery.refetch();
+      handleNew();
+    },
+    onError: (e) => toast.error(`خطأ في الحذف: ${e.message}`),
+  });
+
+  const handleDelete = useCallback(() => {
+    const targetId = navInvoiceId ?? savedInvoiceId;
+    if (!targetId) { toast.warning("لا توجد فاتورة محددة للحذف"); return; }
+    if (isPosted) { toast.error("لا يمكن حذف فاتورة مرحّلة — يجب إلغاء الترحيل أولاً"); return; }
+    if (!window.confirm(`هل أنت متأكد من حذف الفاتورة؟\nلا يمكن التراجع عن هذا الإجراء.`)) return;
+    deleteMutation.mutate({ id: targetId });
+  }, [navInvoiceId, savedInvoiceId, isPosted, deleteMutation]);
+
   // عند اختيار دفتر: اعرض الرقم المتوقع فقط (بدون حجزه في قاعدة البيانات)
   const handleJournalSelect = useCallback(async (id: number) => {
     setJournalId(id);
@@ -592,7 +609,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         onNew={() => { handleNew(); setErpMode("new"); }}
         onSave={() => handleSave()}
         onEdit={() => { setErpMode("edit"); toast.info("وضع التعديل"); }}
-        onDelete={() => toast.info("حذف الفاتورة...")}
+        onDelete={handleDelete}
         onSearch={() => { setErpMode("search"); toast.info("بحث..."); }}
         onRefresh={() => nextNumberQuery.refetch()}
         onCopy={() => copiedLine && toast.info("تم النسخ")}
