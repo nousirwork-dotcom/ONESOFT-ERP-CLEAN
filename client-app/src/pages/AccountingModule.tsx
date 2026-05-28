@@ -2970,98 +2970,238 @@ function AccountLedgerPage({
   initialToDate?: string;
 } = {}) {
   const accountsQuery = trpc.accounts.list.useQuery();
-  const [accountId, setAccountId] = useState<number | null>(initialAccountId ?? null);
-  const [fromDate, setFromDate] = useState(initialFromDate ?? "");
-  const [toDate, setToDate] = useState(initialToDate ?? "");
 
-  const stmtQuery = trpc.accounting.accountStatement.useQuery(
-    { accountId: accountId!, fromDate: fromDate ? new Date(fromDate) : undefined, toDate: toDate ? new Date(toDate) : undefined },
-    { enabled: !!accountId }
+  // Filter state
+  const [accountId,    setAccountId]    = useState<number | null>(initialAccountId ?? null);
+  const [fromDate,     setFromDate]     = useState(initialFromDate ?? "");
+  const [toDate,       setToDate]       = useState(initialToDate ?? "");
+  const [subTitle,     setSubTitle]     = useState("");
+  const [footer,       setFooter]       = useState("");
+  const [showColors,   setShowColors]   = useState(true);
+  const [fontSize,     setFontSize]     = useState<"sm"|"md"|"lg">("md");
+
+  // Auto-run if opened with initial params (drill-down from trial balance)
+  const [queried, setQueried] = useState<{accountId:number;fromDate:string;toDate:string}|null>(
+    initialAccountId ? { accountId: initialAccountId, fromDate: initialFromDate ?? "", toDate: initialToDate ?? "" } : null
   );
 
-  const selectedAccount = accountsQuery.data?.find(a => a.id === accountId);
+  const stmtQuery = trpc.accounting.accountStatement.useQuery(
+    { accountId: queried?.accountId ?? 0, fromDate: queried?.fromDate ? new Date(queried.fromDate) : undefined, toDate: queried?.toDate ? new Date(queried.toDate) : undefined },
+    { enabled: !!queried }
+  );
+
+  const queriedAccount = accountsQuery.data?.find(a => a.id === queried?.accountId);
+
   let runningBalance = 0;
-  const rows = stmtQuery.data?.map(l => {
+  const rows = (stmtQuery.data ?? []).map(l => {
     runningBalance += (parseFloat(l.debit ?? "0") - parseFloat(l.credit ?? "0"));
     return { ...l, runningBalance };
-  }) ?? [];
+  });
+
+  const handleRun = () => {
+    if (!accountId) return;
+    setQueried({ accountId, fromDate, toDate });
+  };
+
+  const handleReset = () => {
+    setAccountId(null);
+    setFromDate("");
+    setToDate("");
+    setSubTitle("");
+    setFooter("");
+    setQueried(null);
+  };
+
+  const D = showColors ? "#C0392B" : "#374151";
+  const C = showColors ? "#1A7A4A" : "#374151";
+  const fs = fontSize === "sm" ? 11 : fontSize === "lg" ? 14 : 12;
+
+  // Classic ERP field row style
+  const fieldRow: CSSProperties = { display: "flex", alignItems: "center", gap: 0, marginBottom: 5 };
+  const fieldLabel: CSSProperties = { width: 130, textAlign: "right", fontSize: 12, fontWeight: 600, color: "#374151", paddingLeft: 8, flexShrink: 0 };
+  const fieldInput: CSSProperties = { flex: 1, height: 24, fontSize: 12, border: "1px solid #9CA3AF", borderRadius: 2, padding: "0 6px", background: "#fff", fontFamily: "'Cairo',Tahoma,sans-serif", direction: "rtl" };
+  const panelStyle: CSSProperties = { background: "#F9FAFB", border: "1px solid #D1D5DB", borderRadius: 4, padding: "12px 14px" };
+  const sectionTitle: CSSProperties = { fontSize: 11, fontWeight: 700, color: "#6B7280", marginBottom: 8, borderBottom: "1px solid #E5E7EB", paddingBottom: 4 };
 
   return (
-    <div className="space-y-3">
-      <h3 className="font-bold text-sm flex items-center gap-2">
-        <FileText className="w-4 h-4 text-primary" /> كشف حساب أستاذ
-      </h3>
-      <Card className="border-border/60">
-        <CardContent className="p-3">
-          <div className="grid grid-cols-4 gap-3">
-            <div>
-              <Label className="text-xs">الحساب</Label>
-              <Select value={accountId?.toString() ?? ""} onValueChange={v => setAccountId(parseInt(v))}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="اختر حساب..." /></SelectTrigger>
-                <SelectContent>
-                  {accountsQuery.data?.filter(a => a.allowPosting).map(a => (
-                    <SelectItem key={a.id} value={a.id.toString()}>{a.code} - {a.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs">من تاريخ</Label>
-              <DateMaskInput value={fromDate} onChange={setFromDate} className="h-8 text-xs" />
-            </div>
-            <div>
-              <Label className="text-xs">إلى تاريخ</Label>
-              <DateMaskInput value={toDate} onChange={setToDate} className="h-8 text-xs" />
-            </div>
-            <div className="flex items-end">
-              <Button size="sm" className="h-8 text-xs w-full gap-1" onClick={() => stmtQuery.refetch()}>
-                <Search className="w-3 h-3" /> عرض الكشف
-              </Button>
+    <div style={{ fontFamily: "'Cairo',Tahoma,sans-serif", direction: "rtl", padding: 8 }}>
+
+      {/* ── Header ── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, borderBottom: "2px solid #2563EB", paddingBottom: 8 }}>
+        <FileText style={{ width: 18, height: 18, color: "#2563EB" }} />
+        <span style={{ fontSize: 15, fontWeight: 700, color: "#1E3A5F" }}>كشف حساب أستاذ</span>
+        <span style={{ marginRight: "auto", fontSize: 11, color: "#9CA3AF" }}>accstat.sysrep</span>
+      </div>
+
+      {/* ── Filter Panel ── */}
+      <div style={{ ...panelStyle, marginBottom: 10 }}>
+        <p style={sectionTitle}>ضوابط التقرير</p>
+
+        {/* Row 1: dates */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 24px", marginBottom: 4 }}>
+          <div style={fieldRow}>
+            <span style={fieldLabel}>تاريخ أول الفترة</span>
+            <div style={{ flex: 1 }}>
+              <DateMaskInput value={fromDate} onChange={setFromDate} className="h-6 text-xs" />
             </div>
           </div>
-        </CardContent>
-      </Card>
-
-      {selectedAccount && (
-        <Card className="border-border/60">
-          <CardHeader className="pb-2 border-b border-border">
-            <div className="text-center">
-              <p className="font-bold text-sm">كشف حساب: {selectedAccount.code} - {selectedAccount.name}</p>
-              {fromDate && toDate && <p className="text-xs text-muted-foreground">من {fromDate} إلى {toDate}</p>}
+          <div style={fieldRow}>
+            <span style={fieldLabel}>تاريخ نهاية الفترة</span>
+            <div style={{ flex: 1 }}>
+              <DateMaskInput value={toDate} onChange={setToDate} className="h-6 text-xs" />
             </div>
-          </CardHeader>
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">التاريخ</TableHead>
-                <TableHead className="text-xs">رقم القيد</TableHead>
-                <TableHead className="text-xs">نوع السند</TableHead>
-                <TableHead className="text-xs">البيان</TableHead>
-                <TableHead className="text-xs text-center">مدين</TableHead>
-                <TableHead className="text-xs text-center">دائن</TableHead>
-                <TableHead className="text-xs text-center">الرصيد</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.length === 0 && (
-                <TableRow><TableCell colSpan={7} className="text-center text-xs text-muted-foreground py-8">لا توجد حركات</TableCell></TableRow>
-              )}
-              {rows.map((r, i) => (
-                <TableRow key={i} className="hover:bg-muted/10">
-                  <TableCell className="text-xs">{new Date(r.entryDate).toLocaleDateString("ar-SA")}</TableCell>
-                  <TableCell className="text-xs font-mono text-primary">{r.entryNumber}</TableCell>
-                  <TableCell className="text-xs">{r.voucherType}</TableCell>
-                  <TableCell className="text-xs">{r.description ?? "-"}</TableCell>
-                  <TableCell className="text-center text-xs">{parseFloat(r.debit ?? "0") > 0 ? parseFloat(r.debit ?? "0").toLocaleString() : "-"}</TableCell>
-                  <TableCell className="text-center text-xs">{parseFloat(r.credit ?? "0") > 0 ? parseFloat(r.credit ?? "0").toLocaleString() : "-"}</TableCell>
-                  <TableCell className={`text-center text-xs font-bold ${r.runningBalance < 0 ? "text-destructive" : "text-emerald-600"}`}>
-                    {r.runningBalance < 0 ? `(${Math.abs(r.runningBalance).toLocaleString()})` : r.runningBalance.toLocaleString()}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
+          </div>
+        </div>
+
+        {/* Row 2: account */}
+        <div style={fieldRow}>
+          <span style={fieldLabel}>الحساب</span>
+          <div style={{ flex: 1 }}>
+            <Select value={accountId?.toString() ?? ""} onValueChange={v => setAccountId(parseInt(v))}>
+              <SelectTrigger style={{ height: 26, fontSize: 12, direction: "rtl" }}>
+                <SelectValue placeholder="اختر حساباً..." />
+              </SelectTrigger>
+              <SelectContent>
+                {accountsQuery.data?.filter(a => a.allowPosting).map(a => (
+                  <SelectItem key={a.id} value={a.id.toString()}>{a.code} - {a.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Row 3: subtitle */}
+        <div style={fieldRow}>
+          <span style={fieldLabel}>عنوان فرعي</span>
+          <input style={fieldInput} value={subTitle} onChange={e => setSubTitle(e.target.value)} placeholder="اختياري..." />
+        </div>
+
+        {/* Row 4: footer */}
+        <div style={fieldRow}>
+          <span style={fieldLabel}>تذييل</span>
+          <input style={fieldInput} value={footer} onChange={e => setFooter(e.target.value)} placeholder="اختياري..." />
+        </div>
+
+        {/* Row 5: style options */}
+        <div style={{ display: "flex", alignItems: "center", gap: 20, marginTop: 8, paddingTop: 8, borderTop: "1px solid #E5E7EB" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>حجم الخط</span>
+            <select value={fontSize} onChange={e => setFontSize(e.target.value as any)}
+              style={{ height: 24, fontSize: 11, border: "1px solid #9CA3AF", borderRadius: 2, padding: "0 4px", background: "#fff" }}>
+              <option value="sm">صغير</option>
+              <option value="md">طبيعي</option>
+              <option value="lg">كبير</option>
+            </select>
+          </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, cursor: "pointer" }}>
+            <input type="checkbox" checked={showColors} onChange={e => setShowColors(e.target.checked)} />
+            <span style={{ color: "#374151", fontWeight: 600 }}>إظهار الألوان</span>
+          </label>
+        </div>
+      </div>
+
+      {/* ── Action Buttons ── */}
+      <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 14 }}>
+        <button
+          onClick={handleRun}
+          disabled={!accountId}
+          style={{ padding: "6px 28px", background: accountId ? "#2563EB" : "#9CA3AF", color: "#fff", border: "none", borderRadius: 4, fontSize: 13, fontWeight: 700, cursor: accountId ? "pointer" : "not-allowed", fontFamily: "'Cairo',Tahoma,sans-serif", display: "flex", alignItems: "center", gap: 6 }}
+        >
+          <Search style={{ width: 13, height: 13 }} /> تشغيل (F5)
+        </button>
+        <button
+          onClick={handleReset}
+          style={{ padding: "6px 20px", background: "#fff", color: "#374151", border: "1px solid #D1D5DB", borderRadius: 4, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Cairo',Tahoma,sans-serif" }}
+        >
+          إلغاء الأمر
+        </button>
+      </div>
+
+      {/* ── Results ── */}
+      {queried && queriedAccount && (
+        <div style={{ border: "1px solid #D1D5DB", borderRadius: 4, overflow: "hidden" }}>
+          {/* Report header */}
+          <div style={{ background: "#1E3A5F", color: "#fff", textAlign: "center", padding: "10px 16px" }}>
+            <p style={{ fontSize: fs + 2, fontWeight: 700, margin: 0 }}>كشف حساب أستاذ</p>
+            {subTitle && <p style={{ fontSize: fs, margin: "2px 0 0", opacity: 0.85 }}>{subTitle}</p>}
+            <p style={{ fontSize: fs, margin: "4px 0 0", opacity: 0.8 }}>
+              {queriedAccount.code} — {queriedAccount.name}
+            </p>
+            {queried.fromDate && queried.toDate && (
+              <p style={{ fontSize: fs - 1, margin: "2px 0 0", opacity: 0.7 }}>
+                الفترة: من {queried.fromDate} إلى {queried.toDate}
+              </p>
+            )}
+          </div>
+
+          {/* Table */}
+          {stmtQuery.isLoading ? (
+            <div style={{ textAlign: "center", padding: 32, color: "#9CA3AF", fontSize: 12 }}>جاري تحميل البيانات...</div>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: fs, direction: "rtl" }}>
+                <thead>
+                  <tr style={{ background: "#4B5563", color: "#fff" }}>
+                    {["التاريخ","رقم القيد","نوع السند","البيان","مدين","دائن","الرصيد"].map((h, i) => (
+                      <th key={i} style={{ padding: "7px 10px", textAlign: i >= 4 ? "center" : "right", fontWeight: 600, whiteSpace: "nowrap",
+                        color: showColors && i === 4 ? "#FCA5A5" : showColors && i === 5 ? "#6EE7B7" : "#fff" }}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.length === 0 ? (
+                    <tr><td colSpan={7} style={{ textAlign: "center", padding: "32px 0", color: "#9CA3AF", fontSize: 12 }}>لا توجد حركات في هذه الفترة</td></tr>
+                  ) : rows.map((r, i) => {
+                    const d = parseFloat(r.debit ?? "0"), c = parseFloat(r.credit ?? "0");
+                    const fmt = (n: number) => n > 0 ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
+                    const bg = i % 2 === 0 ? "#fff" : "#F3F8FE";
+                    return (
+                      <tr key={i} style={{ background: bg, borderBottom: "1px solid #F3F4F6" }}>
+                        <td style={{ padding: "5px 10px", whiteSpace: "nowrap" }}>{new Date(r.entryDate).toLocaleDateString("ar-EG")}</td>
+                        <td style={{ padding: "5px 10px", fontFamily: "monospace", color: "#2563EB", whiteSpace: "nowrap" }}>{r.entryNumber}</td>
+                        <td style={{ padding: "5px 10px" }}>{r.voucherType}</td>
+                        <td style={{ padding: "5px 10px", color: "#374151", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.description ?? r.lineDesc ?? "—"}</td>
+                        <td style={{ padding: "5px 10px", textAlign: "center", color: D, fontWeight: d > 0 ? 700 : 400 }}>{fmt(d)}</td>
+                        <td style={{ padding: "5px 10px", textAlign: "center", color: C, fontWeight: c > 0 ? 700 : 400 }}>{fmt(c)}</td>
+                        <td style={{ padding: "5px 10px", textAlign: "center", fontWeight: 700,
+                          color: r.runningBalance < 0 ? C : r.runningBalance > 0 ? D : "#9CA3AF" }}>
+                          {r.runningBalance === 0 ? "—"
+                            : r.runningBalance < 0
+                              ? `(${Math.abs(r.runningBalance).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})})`
+                              : r.runningBalance.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                {rows.length > 0 && (() => {
+                  const totD = rows.reduce((s,r) => s + parseFloat(r.debit ?? "0"), 0);
+                  const totC = rows.reduce((s,r) => s + parseFloat(r.credit ?? "0"), 0);
+                  const fmt2 = (n:number) => n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+                  return (
+                    <tfoot>
+                      <tr style={{ background: "#374151", color: "#fff", fontWeight: 700 }}>
+                        <td colSpan={4} style={{ padding: "6px 10px", textAlign: "right" }}>الإجمالي</td>
+                        <td style={{ padding: "6px 10px", textAlign: "center", color: showColors ? "#FCA5A5" : "#fff" }}>{fmt2(totD)}</td>
+                        <td style={{ padding: "6px 10px", textAlign: "center", color: showColors ? "#6EE7B7" : "#fff" }}>{fmt2(totC)}</td>
+                        <td style={{ padding: "6px 10px", textAlign: "center" }}></td>
+                      </tr>
+                    </tfoot>
+                  );
+                })()}
+              </table>
+            </div>
+          )}
+
+          {/* Report footer */}
+          {footer && (
+            <div style={{ background: "#F3F4F6", borderTop: "1px solid #E5E7EB", padding: "6px 16px", textAlign: "center", fontSize: fs - 1, color: "#6B7280" }}>
+              {footer}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
