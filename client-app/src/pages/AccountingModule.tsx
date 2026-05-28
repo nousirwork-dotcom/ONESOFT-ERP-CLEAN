@@ -3863,16 +3863,16 @@ function TrialBalancePage({
               <th style={{ padding: "7px 10px", textAlign: "right", fontWeight: 600 }}>اسم الحساب</th>
               {tbMode === "full" ? (
                 <>
-                  <th colSpan={2} style={{ padding: "7px 10px", textAlign: "center", fontSize: 10.5, borderRight: "1px solid #6B7280", borderLeft: "1px solid #6B7280" }}>رصيد أول المدة</th>
-                  <th colSpan={2} style={{ padding: "7px 10px", textAlign: "center", fontSize: 10.5, borderLeft: "1px solid #6B7280" }}>الحركة</th>
-                  <th colSpan={2} style={{ padding: "7px 10px", textAlign: "center", fontSize: 10.5 }}>رصيد آخر المدة</th>
+                  <th colSpan={2} style={{ padding: "7px 10px", textAlign: "center", fontSize: 15, borderRight: "1px solid #6B7280", borderLeft: "1px solid #6B7280" }}>رصيد أول المدة</th>
+                  <th colSpan={2} style={{ padding: "7px 10px", textAlign: "center", fontSize: 15, borderLeft: "1px solid #6B7280" }}>الحركة</th>
+                  <th colSpan={2} style={{ padding: "7px 10px", textAlign: "center", fontSize: 15 }}>رصيد آخر المدة</th>
                 </>
               ) : (
                 <>
-                  <th style={{ padding: "7px 10px", textAlign: "center", fontSize: 10.5, whiteSpace: "nowrap" }}>رصيد أول المدة</th>
-                  <th style={{ padding: "7px 10px", textAlign: "center", fontSize: 10.5, whiteSpace: "nowrap" }}>حركة مدين</th>
-                  <th style={{ padding: "7px 10px", textAlign: "center", fontSize: 10.5, whiteSpace: "nowrap" }}>حركة دائن</th>
-                  <th style={{ padding: "7px 10px", textAlign: "center", fontSize: 10.5, whiteSpace: "nowrap" }}>رصيد آخر المدة</th>
+                  <th style={{ padding: "7px 10px", textAlign: "center", fontSize: 15, whiteSpace: "nowrap" }}>رصيد أول المدة</th>
+                  <th style={{ padding: "7px 10px", textAlign: "center", fontSize: 15, whiteSpace: "nowrap" }}>حركة مدين</th>
+                  <th style={{ padding: "7px 10px", textAlign: "center", fontSize: 15, whiteSpace: "nowrap" }}>حركة دائن</th>
+                  <th style={{ padding: "7px 10px", textAlign: "center", fontSize: 15, whiteSpace: "nowrap" }}>رصيد آخر المدة</th>
                 </>
               )}
             </tr>
