@@ -3593,7 +3593,7 @@ function TrialBalancePage({
               const hasData     = n.aggMoveD > 0 || n.aggMoveC > 0 || n.aggOpenD > 0 || n.aggOpenC > 0;
               const hasClose    = n.aggCloseD > 0 || n.aggCloseC > 0;
               const isLeaf      = !hasChildren;
-              const drillClose  = () => isLeaf && hasClose && drill(n);
+              const drillClose  = () => hasClose && drill(n);
               return (
                 <tr key={n.accountId}
                   style={{ background: bg, borderBottom: `1px solid ${depth === 0 ? "#D1D5DB" : "#F3F4F6"}` }}
@@ -3621,8 +3621,8 @@ function TrialBalancePage({
                       <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: C, fontWeight: fw, fontSize: fs, cursor: hasData ? "pointer" : "default", borderLeft: "1px solid #E5E7EB" }}>{fmtN(n.aggOpenC)}</td>
                       <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: D, fontWeight: fw, fontSize: fs, cursor: hasData ? "pointer" : "default" }}>{fmtN(n.aggMoveD)}</td>
                       <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: C, fontWeight: fw, fontSize: fs, cursor: hasData ? "pointer" : "default", borderLeft: "1px solid #E5E7EB" }}>{fmtN(n.aggMoveC)}</td>
-                      <td onClick={drillClose} style={{ padding: "5px 10px", textAlign: "center", color: D, fontWeight: 700, fontSize: fs, cursor: isLeaf && hasClose ? "pointer" : "default", textDecoration: isLeaf && hasClose ? "underline dotted" : "none" }} title={isLeaf && hasClose ? "انقر لفتح كشف الحساب" : ""}>{fmtN(n.aggCloseD)}</td>
-                      <td onClick={drillClose} style={{ padding: "5px 10px", textAlign: "center", color: C, fontWeight: 700, fontSize: fs, cursor: isLeaf && hasClose ? "pointer" : "default", textDecoration: isLeaf && hasClose ? "underline dotted" : "none" }} title={isLeaf && hasClose ? "انقر لفتح كشف الحساب" : ""}>{fmtN(n.aggCloseC)}</td>
+                      <td onClick={drillClose} style={{ padding: "5px 10px", textAlign: "center", color: D, fontWeight: 700, fontSize: fs, cursor: hasClose ? "pointer" : "default", textDecoration: hasClose ? "underline dotted" : "none" }} title={hasClose ? "انقر لفتح كشف الحساب" : ""}>{fmtN(n.aggCloseD)}</td>
+                      <td onClick={drillClose} style={{ padding: "5px 10px", textAlign: "center", color: C, fontWeight: 700, fontSize: fs, cursor: hasClose ? "pointer" : "default", textDecoration: hasClose ? "underline dotted" : "none" }} title={hasClose ? "انقر لفتح كشف الحساب" : ""}>{fmtN(n.aggCloseC)}</td>
                     </>
                   ) : (
                     <>
@@ -3635,11 +3635,11 @@ function TrialBalancePage({
                       </td>
                       <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: D, fontWeight: fw, fontSize: fs, cursor: hasData ? "pointer" : "default" }}>{fmtN(n.aggMoveD)}</td>
                       <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: C, fontWeight: fw, fontSize: fs, cursor: hasData ? "pointer" : "default" }}>{fmtN(n.aggMoveC)}</td>
-                      <td onClick={drillClose} style={{ padding: "5px 10px", textAlign: "center", cursor: isLeaf && hasClose ? "pointer" : "default" }} title={isLeaf && hasClose ? "انقر لفتح كشف الحساب" : ""}>
+                      <td onClick={drillClose} style={{ padding: "5px 10px", textAlign: "center", cursor: hasClose ? "pointer" : "default" }} title={hasClose ? "انقر لفتح كشف الحساب" : ""}>
                         {n.aggCloseD > 0
-                          ? <span style={{ color: D, fontWeight: 700, fontSize: fs, textDecoration: isLeaf ? "underline dotted" : "none" }}>{fmtN(n.aggCloseD)} <span style={{ fontSize: 9 }}>م</span></span>
+                          ? <span style={{ color: D, fontWeight: 700, fontSize: fs, textDecoration: "underline dotted" }}>{fmtN(n.aggCloseD)} <span style={{ fontSize: 9 }}>م</span></span>
                           : n.aggCloseC > 0
-                            ? <span style={{ color: C, fontWeight: 700, fontSize: fs, textDecoration: isLeaf ? "underline dotted" : "none" }}>({fmtN(n.aggCloseC)}) <span style={{ fontSize: 9 }}>د</span></span>
+                            ? <span style={{ color: C, fontWeight: 700, fontSize: fs, textDecoration: "underline dotted" }}>({fmtN(n.aggCloseC)}) <span style={{ fontSize: 9 }}>د</span></span>
                             : <span style={{ color: "#9CA3AF" }}>—</span>}
                       </td>
                     </>
