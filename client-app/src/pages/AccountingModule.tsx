@@ -3879,7 +3879,7 @@ function TrialBalancePage({
               </td></tr>
             ) : flatRows.map(({ node: n, depth, hasChildren }, rowIdx) => {
               const bg    = depth === 0 ? "#E8E4DA" : depth === 1 ? "#F0EDE6" : rowIdx % 2 === 0 ? "#fff" : "#E8E4DA";
-              const fw    = depth === 0 ? 700 : depth === 1 ? 600 : 400;
+              const fw    = depth === 0 ? 700 : depth === 1 ? 700 : 600;
               const fs    = depth === 0 ? 12.5 : 11.5;
               const indent = depth * 18;
               const hasData     = n.aggMoveD > 0 || n.aggMoveC > 0 || n.aggOpenD > 0 || n.aggOpenC > 0;
