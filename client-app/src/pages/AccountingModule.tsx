@@ -5,7 +5,8 @@ import type { KeyboardEvent } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
   buildTreeFlat, exportToExcel, exportToWord, openPrintPreview,
-  type AccountForExport,
+  exportTBToExcel, exportTBToWord, openTBPrintPreview,
+  type AccountForExport, type TBExportRow, type TBExportTotals,
 } from "@/utils/chartOfAccountsExport";
 import {
   ChevronDown, ChevronRight, BookOpen, FileText, BarChart3,
@@ -3729,7 +3730,12 @@ function TrialBalancePage({
   const [fontSize, setFontSize] = useState<"s" | "m" | "l">("m");
   const [acctCard, setAcctCard] = useState<TBNode | null>(null);
   const [ledgerDlg, setLedgerDlg] = useState<{ accountId: number; code: string; name: string } | null>(null);
+  const [showExportMenu, setShowExportMenu] = useState(false);
   const initDone = useRef(false);
+  const { user } = useAuth();
+  const tbOrgQuery = trpc.orgs.currentOrg.useQuery();
+  const tbCompanyName = tbOrgQuery.data?.name ?? "OneSoft ERP";
+  const tbUserName = user?.name ?? "";
   const costCentersQuery = trpc.costCenters.list.useQuery();
 
   const tbQuery = trpc.accounting.trialBalance.useQuery(
@@ -3764,6 +3770,27 @@ function TrialBalancePage({
 
   const fmtN = (n: number) => n === 0 ? "—" : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fsBase = fontSize === "s" ? 11.5 : fontSize === "m" ? 13 : 15;
+
+  const getTBExportRows = (): TBExportRow[] =>
+    flatRows.map(({ node: n, depth }) => ({
+      code: n.code, name: n.name, depth,
+      aggOpenD: n.aggOpenD, aggOpenC: n.aggOpenC,
+      aggMoveD: n.aggMoveD, aggMoveC: n.aggMoveC,
+      aggCloseD: n.aggCloseD, aggCloseC: n.aggCloseC,
+    }));
+
+  const doTBExport = (fmt: "excel" | "word" | "pdf") => {
+    setShowExportMenu(false);
+    const rows = getTBExportRows();
+    const tot: TBExportTotals = {
+      openD: totals.openD, openC: totals.openC,
+      moveD: totals.moveD, moveC: totals.moveC,
+      closeD: totals.closeD, closeC: totals.closeC,
+    };
+    if (fmt === "excel") exportTBToExcel(rows, tot, tbMode, tbCompanyName, tbUserName, fromDate, toDate);
+    else if (fmt === "word") exportTBToWord(rows, tot, tbMode, tbCompanyName, tbUserName, fromDate, toDate);
+    else openTBPrintPreview(rows, tot, tbMode, tbCompanyName, tbUserName, fromDate, toDate, true);
+  };
   const D = "#C0392B";
   const C = "#1A7A4A";
   const PERIODS = [
@@ -3797,12 +3824,30 @@ function TrialBalancePage({
             </button>
           ))}
         </div>
-        <button onClick={() => window.print()} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", border: "1px solid #D1D5DB", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 11, color: "#374151", fontFamily: "'Cairo',Tahoma,sans-serif" }}>
+        <button onClick={() => openTBPrintPreview(getTBExportRows(), { openD: totals.openD, openC: totals.openC, moveD: totals.moveD, moveC: totals.moveC, closeD: totals.closeD, closeC: totals.closeC }, tbMode, tbCompanyName, tbUserName, fromDate, toDate, false)} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", border: "1px solid #D1D5DB", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 11, color: "#374151", fontFamily: "'Cairo',Tahoma,sans-serif" }}>
           <Printer style={{ width: 12, height: 12 }} /> طباعة
         </button>
-        <button style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", border: "1px solid #D1D5DB", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 11, color: "#374151", fontFamily: "'Cairo',Tahoma,sans-serif" }}>
-          <Download style={{ width: 12, height: 12 }} /> تصدير
-        </button>
+        <div style={{ position: "relative" }}>
+          <button onClick={() => setShowExportMenu(v => !v)} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", border: "1px solid #D1D5DB", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 11, color: "#374151", fontFamily: "'Cairo',Tahoma,sans-serif" }}>
+            <Download style={{ width: 12, height: 12 }} /> تصدير <ChevronDown style={{ width: 10, height: 10, marginRight: 2 }} />
+          </button>
+          {showExportMenu && (
+            <>
+              <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setShowExportMenu(false)} />
+              <div style={{ position: "absolute", top: "110%", right: 0, zIndex: 50, background: "#fff", border: "1px solid #E5E7EB", borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,.12)", minWidth: 160, padding: "4px 0", fontFamily: "'Cairo',Tahoma,sans-serif" }}>
+                <button onClick={() => doTBExport("excel")} style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", border: "none", background: "none", cursor: "pointer", fontSize: 12, color: "#1A7A4A", textAlign: "right" }}>
+                  <span style={{ fontSize: 15 }}>📊</span> تصدير Excel
+                </button>
+                <button onClick={() => doTBExport("pdf")} style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", border: "none", background: "none", cursor: "pointer", fontSize: 12, color: "#C0392B", textAlign: "right" }}>
+                  <span style={{ fontSize: 15 }}>📄</span> تصدير PDF
+                </button>
+                <button onClick={() => doTBExport("word")} style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", border: "none", background: "none", cursor: "pointer", fontSize: 12, color: "#2563EB", textAlign: "right" }}>
+                  <span style={{ fontSize: 15 }}>📝</span> تصدير Word
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* ══ شريط الفلاتر ══ */}

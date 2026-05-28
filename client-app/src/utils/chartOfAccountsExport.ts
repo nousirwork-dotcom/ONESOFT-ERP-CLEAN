@@ -329,6 +329,244 @@ ${autoPrint ? `<script>window.onload=function(){setTimeout(function(){window.pri
   if (win) { win.document.write(html); win.document.close(); }
 }
 
+// ── Trial Balance Export Types ────────────────────────────────────────────────
+export interface TBExportRow {
+  code: string;
+  name: string;
+  depth: number;
+  aggOpenD: number; aggOpenC: number;
+  aggMoveD: number; aggMoveC: number;
+  aggCloseD: number; aggCloseC: number;
+}
+export interface TBExportTotals {
+  openD: number; openC: number;
+  moveD: number; moveC: number;
+  closeD: number; closeC: number;
+}
+
+function fmtTBNum(n: number) {
+  return n === 0 ? 0 : n;
+}
+
+// ── Trial Balance → Excel ─────────────────────────────────────────────────────
+export function exportTBToExcel(
+  rows: TBExportRow[],
+  totals: TBExportTotals,
+  tbMode: "full" | "simple",
+  companyName: string,
+  userName: string,
+  fromDate: string,
+  toDate: string,
+) {
+  const dateStr = new Date().toLocaleDateString("ar-EG", { year: "numeric", month: "long", day: "numeric" });
+  const period = `${fromDate || "—"} / ${toDate || "—"}`;
+
+  if (tbMode === "full") {
+    const cols = 8;
+    const merge = (r: number) => ({ s: { r, c: 0 }, e: { r, c: cols - 1 } });
+    const headerBlock: (string | number | null)[][] = [
+      [companyName, ...Array(cols - 1).fill("")],
+      [`ميزان المراجعة — ${period}`, ...Array(cols - 1).fill("")],
+      [`أعدّه: ${userName} | ${dateStr}`, ...Array(cols - 1).fill("")],
+      Array(cols).fill(""),
+      ["كود", "اسم الحساب", "رصيد أول (مدين)", "رصيد أول (دائن)", "حركة مدين", "حركة دائن", "رصيد آخر (مدين)", "رصيد آخر (دائن)"],
+    ];
+    const dataRows = rows.map(r => [
+      r.code, "  ".repeat(r.depth) + r.name,
+      fmtTBNum(r.aggOpenD), fmtTBNum(r.aggOpenC),
+      fmtTBNum(r.aggMoveD), fmtTBNum(r.aggMoveC),
+      fmtTBNum(r.aggCloseD), fmtTBNum(r.aggCloseC),
+    ]);
+    const totalRow = ["الإجمالي الكلي", "",
+      fmtTBNum(totals.openD), fmtTBNum(totals.openC),
+      fmtTBNum(totals.moveD), fmtTBNum(totals.moveC),
+      fmtTBNum(totals.closeD), fmtTBNum(totals.closeC),
+    ];
+    const ws = XLSX.utils.aoa_to_sheet([...headerBlock, ...dataRows, totalRow]);
+    ws["!cols"] = [{ wch: 14 }, { wch: 40 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }];
+    ws["!merges"] = [merge(0), merge(1), merge(2)];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "ميزان المراجعة");
+    XLSX.writeFile(wb, `ميزان-المراجعة-${ts()}.xlsx`);
+  } else {
+    const cols = 6;
+    const merge = (r: number) => ({ s: { r, c: 0 }, e: { r, c: cols - 1 } });
+    const netOpen = (r: TBExportRow) => r.aggOpenD > r.aggOpenC ? r.aggOpenD - r.aggOpenC : r.aggOpenC > r.aggOpenD ? -(r.aggOpenC - r.aggOpenD) : 0;
+    const netClose = (r: TBExportRow) => r.aggCloseD > 0 ? r.aggCloseD : r.aggCloseC > 0 ? -r.aggCloseC : 0;
+    const headerBlock: (string | number | null)[][] = [
+      [companyName, ...Array(cols - 1).fill("")],
+      [`ميزان المراجعة — ${period}`, ...Array(cols - 1).fill("")],
+      [`أعدّه: ${userName} | ${dateStr}`, ...Array(cols - 1).fill("")],
+      Array(cols).fill(""),
+      ["كود", "اسم الحساب", "رصيد أول المدة", "حركة مدين", "حركة دائن", "رصيد آخر المدة"],
+    ];
+    const dataRows = rows.map(r => [
+      r.code, "  ".repeat(r.depth) + r.name,
+      netOpen(r), fmtTBNum(r.aggMoveD), fmtTBNum(r.aggMoveC), netClose(r),
+    ]);
+    const totalRow = ["الإجمالي الكلي", "",
+      totals.openD - totals.openC,
+      fmtTBNum(totals.moveD), fmtTBNum(totals.moveC),
+      totals.closeD - totals.closeC,
+    ];
+    const ws = XLSX.utils.aoa_to_sheet([...headerBlock, ...dataRows, totalRow]);
+    ws["!cols"] = [{ wch: 14 }, { wch: 40 }, { wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 18 }];
+    ws["!merges"] = [merge(0), merge(1), merge(2)];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "ميزان المراجعة");
+    XLSX.writeFile(wb, `ميزان-المراجعة-${ts()}.xlsx`);
+  }
+}
+
+// ── Trial Balance → Word (.doc HTML) ──────────────────────────────────────────
+export function exportTBToWord(
+  rows: TBExportRow[],
+  totals: TBExportTotals,
+  tbMode: "full" | "simple",
+  companyName: string,
+  userName: string,
+  fromDate: string,
+  toDate: string,
+) {
+  const dateStr = new Date().toLocaleDateString("ar-EG", { year: "numeric", month: "long", day: "numeric" });
+  const period = `${fromDate || "—"} — ${toDate || "—"}`;
+  const D = "#C0392B"; const C2 = "#1A7A4A";
+  const numCell = (v: number, color: string) =>
+    `<td style="text-align:center;padding:4px 6px;border:1px solid #e2e8f0;font-size:9.5pt;color:${v !== 0 ? color : "#9ca3af"};">${v !== 0 ? v.toLocaleString("ar-EG", { minimumFractionDigits: 2 }) : "—"}</td>`;
+
+  const fullHeaders = `<tr style="background:#2D5F85;color:white;"><th colspan="2" style="padding:6px 8px;border:1px solid #1e4068;text-align:right;">الحساب</th><th colspan="2" style="padding:6px 8px;border:1px solid #1e4068;text-align:center;">رصيد أول المدة</th><th colspan="2" style="padding:6px 8px;border:1px solid #1e4068;text-align:center;">الحركة</th><th colspan="2" style="padding:6px 8px;border:1px solid #1e4068;text-align:center;">رصيد آخر المدة</th></tr><tr style="background:#406B93;color:white;"><th style="padding:4px 8px;border:1px solid #1e4068;width:80px;">كود</th><th style="padding:4px 8px;border:1px solid #1e4068;">اسم الحساب</th><th style="padding:4px 6px;border:1px solid #1e4068;width:80px;text-align:center;">مدين</th><th style="padding:4px 6px;border:1px solid #1e4068;width:80px;text-align:center;">دائن</th><th style="padding:4px 6px;border:1px solid #1e4068;width:80px;text-align:center;">مدين</th><th style="padding:4px 6px;border:1px solid #1e4068;width:80px;text-align:center;">دائن</th><th style="padding:4px 6px;border:1px solid #1e4068;width:80px;text-align:center;">مدين</th><th style="padding:4px 6px;border:1px solid #1e4068;width:80px;text-align:center;">دائن</th></tr>`;
+
+  const simpleHeaders = `<tr style="background:#2D5F85;color:white;"><th style="padding:6px 8px;border:1px solid #1e4068;width:80px;">كود</th><th style="padding:6px 8px;border:1px solid #1e4068;">اسم الحساب</th><th style="padding:6px 8px;border:1px solid #1e4068;width:100px;text-align:center;">رصيد أول المدة</th><th style="padding:6px 8px;border:1px solid #1e4068;width:90px;text-align:center;">حركة مدين</th><th style="padding:6px 8px;border:1px solid #1e4068;width:90px;text-align:center;">حركة دائن</th><th style="padding:6px 8px;border:1px solid #1e4068;width:100px;text-align:center;">رصيد آخر المدة</th></tr>`;
+
+  const tableRows = rows.map((r, i) => {
+    const bg = i % 2 === 0 ? "#ffffff" : "#f5f7fa";
+    const indent = `padding-right:${8 + r.depth * 14}px;`;
+    if (tbMode === "full") {
+      return `<tr style="background:${bg};">
+        <td style="font-family:Courier New;font-size:9pt;font-weight:700;color:#2D5F85;padding:3px 6px;border:1px solid #e2e8f0;white-space:nowrap;">${esc(r.code)}</td>
+        <td style="font-size:10pt;padding:3px 8px;${indent}border:1px solid #e2e8f0;">${esc(r.name)}</td>
+        ${numCell(r.aggOpenD, D)}${numCell(r.aggOpenC, C2)}${numCell(r.aggMoveD, D)}${numCell(r.aggMoveC, C2)}${numCell(r.aggCloseD, D)}${numCell(r.aggCloseC, C2)}
+      </tr>`;
+    } else {
+      const netOpen = r.aggOpenD > r.aggOpenC ? r.aggOpenD - r.aggOpenC : r.aggOpenC > r.aggOpenD ? -(r.aggOpenC - r.aggOpenD) : 0;
+      const netClose = r.aggCloseD > 0 ? r.aggCloseD : r.aggCloseC > 0 ? -r.aggCloseC : 0;
+      return `<tr style="background:${bg};">
+        <td style="font-family:Courier New;font-size:9pt;font-weight:700;color:#2D5F85;padding:3px 6px;border:1px solid #e2e8f0;white-space:nowrap;">${esc(r.code)}</td>
+        <td style="font-size:10pt;padding:3px 8px;${indent}border:1px solid #e2e8f0;">${esc(r.name)}</td>
+        ${numCell(netOpen, netOpen >= 0 ? D : C2)}${numCell(r.aggMoveD, D)}${numCell(r.aggMoveC, C2)}${numCell(netClose, netClose >= 0 ? D : C2)}
+      </tr>`;
+    }
+  }).join("\n");
+
+  const colSpan = tbMode === "full" ? 8 : 6;
+  const totalCells = tbMode === "full"
+    ? `${numCell(totals.openD, D)}${numCell(totals.openC, C2)}${numCell(totals.moveD, D)}${numCell(totals.moveC, C2)}${numCell(totals.closeD, D)}${numCell(totals.closeC, C2)}`
+    : `${numCell(totals.openD - totals.openC, D)}${numCell(totals.moveD, D)}${numCell(totals.moveC, C2)}${numCell(totals.closeD - totals.closeC, D)}`;
+
+  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8"/><meta name="ProgId" content="Word.Document"/>
+<style>@page{size:A4 landscape;margin:1.5cm;}body{font-family:Tahoma,Arial,sans-serif;direction:rtl;background:#fff;}table{border-collapse:collapse;width:100%;}h1{font-size:16pt;color:#1E3A5F;margin:0 0 4px 0;}h2{font-size:13pt;color:#2D5F85;margin:0 0 4px 0;}.meta{font-size:9.5pt;color:#64748b;}.footer{margin-top:14px;text-align:center;font-size:9pt;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:6px;}</style>
+</head><body dir="rtl">
+<div style="text-align:center;margin-bottom:16px;"><h1>${esc(companyName)}</h1><h2>ميزان مراجعة الأستاذ العام</h2><p class="meta">الفترة: ${esc(period)} &nbsp;|&nbsp; طُبع: ${dateStr} &nbsp;|&nbsp; أعدّه: ${esc(userName)}</p><hr style="border-top:2px solid #2D5F85;margin:10px 0;"/></div>
+<table><thead>${tbMode === "full" ? fullHeaders : simpleHeaders}</thead>
+<tbody>${tableRows}</tbody>
+<tfoot><tr style="background:#E8E4DA;font-weight:700;"><td colspan="2" style="padding:5px 8px;border:1px solid #C8C3B8;">الإجمالي الكلي</td>${totalCells}</tr></tfoot>
+</table>
+<div class="footer">إجمالي عدد الحسابات: ${rows.length} &nbsp;|&nbsp; OneSoft ERP</div>
+</body></html>`;
+
+  downloadBlob("\uFEFF" + html, `ميزان-المراجعة-${ts()}.doc`, "application/msword;charset=utf-8;");
+}
+
+// ── Trial Balance → Print / PDF ───────────────────────────────────────────────
+export function openTBPrintPreview(
+  rows: TBExportRow[],
+  totals: TBExportTotals,
+  tbMode: "full" | "simple",
+  companyName: string,
+  userName: string,
+  fromDate: string,
+  toDate: string,
+  autoPrint = false,
+) {
+  const dateStr = new Date().toLocaleDateString("ar-EG", { year: "numeric", month: "long", day: "numeric" });
+  const period = `${fromDate || "—"} — ${toDate || "—"}`;
+  const D = "#C0392B"; const C2 = "#1A7A4A";
+  const numTd = (v: number, col: string) =>
+    `<td class="num" style="color:${v !== 0 ? col : "#9CA3AF"};">${v !== 0 ? v.toLocaleString("ar-EG", { minimumFractionDigits: 2 }) : "—"}</td>`;
+
+  const fullHead = `<tr class="head1"><th colspan="2" class="hl">الحساب</th><th colspan="2" class="hl">رصيد أول المدة</th><th colspan="2" class="hl">الحركة</th><th colspan="2" class="hl">رصيد آخر المدة</th></tr><tr class="head2"><th class="hl" style="width:80px;">كود</th><th class="hl">اسم الحساب</th><th class="hl num">مدين</th><th class="hl num">دائن</th><th class="hl num">مدين</th><th class="hl num">دائن</th><th class="hl num">مدين</th><th class="hl num">دائن</th></tr>`;
+  const simHead = `<tr class="head1"><th class="hl" style="width:80px;">كود</th><th class="hl">اسم الحساب</th><th class="hl num">رصيد أول المدة</th><th class="hl num">حركة مدين</th><th class="hl num">حركة دائن</th><th class="hl num">رصيد آخر المدة</th></tr>`;
+
+  const tableRows = rows.map((r, i) => {
+    const bg = i % 2 === 0 ? "#ffffff" : "#F5F7FA";
+    const pad = 6 + r.depth * 12;
+    if (tbMode === "full") {
+      return `<tr style="background:${bg};">
+        <td class="code">${esc(r.code)}</td>
+        <td class="name" style="padding-right:${pad}px;">${esc(r.name)}</td>
+        ${numTd(r.aggOpenD, D)}${numTd(r.aggOpenC, C2)}${numTd(r.aggMoveD, D)}${numTd(r.aggMoveC, C2)}${numTd(r.aggCloseD, D)}${numTd(r.aggCloseC, C2)}
+      </tr>`;
+    } else {
+      const netOpen = r.aggOpenD > r.aggOpenC ? r.aggOpenD - r.aggOpenC : r.aggOpenC > r.aggOpenD ? -(r.aggOpenC - r.aggOpenD) : 0;
+      const netClose = r.aggCloseD > 0 ? r.aggCloseD : r.aggCloseC > 0 ? -r.aggCloseC : 0;
+      return `<tr style="background:${bg};">
+        <td class="code">${esc(r.code)}</td>
+        <td class="name" style="padding-right:${pad}px;">${esc(r.name)}</td>
+        ${numTd(netOpen, netOpen >= 0 ? D : C2)}${numTd(r.aggMoveD, D)}${numTd(r.aggMoveC, C2)}${numTd(netClose, netClose >= 0 ? D : C2)}
+      </tr>`;
+    }
+  }).join("\n");
+
+  const totalCells = tbMode === "full"
+    ? `${numTd(totals.openD, D)}${numTd(totals.openC, C2)}${numTd(totals.moveD, D)}${numTd(totals.moveC, C2)}${numTd(totals.closeD, D)}${numTd(totals.closeC, C2)}`
+    : `${numTd(totals.openD - totals.openC, D)}${numTd(totals.moveD, D)}${numTd(totals.moveC, C2)}${numTd(totals.closeD - totals.closeC, D)}`;
+
+  const html = `<!DOCTYPE html><html lang="ar" dir="rtl"><head>
+<meta charset="utf-8"/><title>ميزان المراجعة — ${esc(companyName)}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:Tahoma,'Segoe UI',Arial,sans-serif;direction:rtl;background:#fff;color:#1e293b;font-size:10.5pt;}
+.hdr{text-align:center;border-bottom:3px solid #2D5F85;padding-bottom:12px;margin-bottom:16px;}
+.co{font-size:17pt;font-weight:900;color:#1E3A5F;}
+.ti{font-size:13pt;font-weight:700;color:#2D5F85;margin:4px 0;}
+.me{font-size:9pt;color:#64748b;margin-top:4px;}
+table{width:100%;border-collapse:collapse;font-size:9.5pt;}
+.head1{background:#2D5F85;color:white;}
+.head2{background:#406B93;color:white;}
+.hl{padding:5px 7px;text-align:right;border:1px solid #1e4068;}
+.hl.num{text-align:center;}
+.code{font-family:'Courier New',monospace;font-size:9pt;font-weight:700;color:#2D5F85;padding:3px 6px;border:1px solid #e2e8f0;white-space:nowrap;}
+.name{padding:3px 8px;border:1px solid #e2e8f0;min-width:140px;}
+.num{text-align:center;padding:3px 6px;border:1px solid #e2e8f0;white-space:nowrap;}
+.tot{background:#E8E4DA;font-weight:700;border-top:2px solid #C8C3B8;}
+.tot td{padding:5px 6px;border:1px solid #C8C3B8;}
+.footer{margin-top:14px;text-align:center;font-size:8.5pt;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px;}
+.bar{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);display:flex;gap:10px;background:white;padding:9px 18px;border-radius:12px;box-shadow:0 4px 18px rgba(0,0,0,.15);border:1px solid #e2e8f0;}
+.btn{padding:7px 18px;border:none;border-radius:8px;cursor:pointer;font-size:11pt;font-family:Tahoma;font-weight:600;}
+.bp{background:#2D5F85;color:white;}.bc{background:#f1f5f9;color:#475569;}
+.hint{font-size:9pt;color:#64748b;align-self:center;}
+@media print{.bar{display:none;}thead{display:table-header-group;}@page{size:A4 landscape;margin:1.5cm;}}
+</style></head><body>
+<div class="hdr"><div class="co">${esc(companyName)}</div><div class="ti">ميزان مراجعة الأستاذ العام</div><div class="me">الفترة: ${esc(period)} &nbsp;|&nbsp; ${dateStr} &nbsp;|&nbsp; أعدّه: ${esc(userName)}</div></div>
+<table>
+<thead>${tbMode === "full" ? fullHead : simHead}</thead>
+<tbody>${tableRows}</tbody>
+<tfoot><tr class="tot"><td colspan="2" style="padding:5px 8px;border:1px solid #C8C3B8;">الإجمالي الكلي</td>${totalCells}</tr></tfoot>
+</table>
+<div class="footer">عدد الحسابات: ${rows.length} &nbsp;•&nbsp; OneSoft ERP &nbsp;•&nbsp; ${esc(companyName)}</div>
+<div class="bar">
+  <button class="btn bp" onclick="window.print()">🖨 طباعة / PDF</button>
+  <span class="hint">لحفظ كـ PDF اختر "حفظ كـ PDF" من قائمة الطابعات</span>
+  <button class="btn bc" onclick="window.close()">✕ إغلاق</button>
+</div>
+${autoPrint ? `<script>window.onload=function(){setTimeout(function(){window.print();},600);};<\/script>` : ""}
+</body></html>`;
+
+  const win = window.open("", "_blank", "width=1100,height=820,scrollbars=yes");
+  if (win) { win.document.write(html); win.document.close(); }
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function esc(s: string) {
   return s
