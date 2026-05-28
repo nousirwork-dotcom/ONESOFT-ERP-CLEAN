@@ -3839,7 +3839,7 @@ function TrialBalancePage({
       <div style={{ flex: 1, overflowY: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5 }}>
           <thead>
-            <tr style={{ background: "#E8EFF7", color: "#1E3A5F", position: "sticky", top: 0, zIndex: 3, borderBottom: "2px solid #406B93" }}>
+            <tr style={{ background: "#E8E4DA", color: "#1E2A1A", position: "sticky", top: 0, zIndex: 3, borderBottom: "1px solid #C8C3B8" }}>
               <th style={{ width: 28, padding: "7px 4px" }}></th>
               <th style={{ padding: "7px 10px", textAlign: "right", fontWeight: 600, width: 90, whiteSpace: "nowrap" }}>كود</th>
               <th style={{ padding: "7px 10px", textAlign: "right", fontWeight: 600 }}>اسم الحساب</th>
@@ -3859,7 +3859,7 @@ function TrialBalancePage({
               )}
             </tr>
             {tbMode === "full" && (
-              <tr style={{ background: "#F0F5FB", color: "#2D5F85", position: "sticky", top: 38, zIndex: 3, borderBottom: "1px solid #C5D8EF" }}>
+              <tr style={{ background: "#F0EDE6", color: "#3A3228", position: "sticky", top: 38, zIndex: 3, borderBottom: "1px solid #C8C3B8" }}>
                 <th colSpan={3}></th>
                 <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10 }}>مدين</th>
                 <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10, borderLeft: "1px solid #9CA3AF" }}>دائن</th>
@@ -3878,7 +3878,7 @@ function TrialBalancePage({
                 {search ? "لا توجد حسابات تطابق البحث" : "لا توجد بيانات للفترة المحددة — أضف قيوداً مرحّلة"}
               </td></tr>
             ) : flatRows.map(({ node: n, depth, hasChildren }, rowIdx) => {
-              const bg    = depth === 0 ? "#EAF1F9" : depth === 1 ? "#F5F9FD" : rowIdx % 2 === 0 ? "#fff" : "#FAFCFF";
+              const bg    = depth === 0 ? "#E8E4DA" : depth === 1 ? "#F0EDE6" : rowIdx % 2 === 0 ? "#fff" : "#E8E4DA";
               const fw    = depth === 0 ? 700 : depth === 1 ? 600 : 400;
               const fs    = depth === 0 ? 12.5 : 11.5;
               const indent = depth * 18;
@@ -3910,7 +3910,7 @@ function TrialBalancePage({
               return (
                 <tr key={n.accountId}
                   style={{ background: bg, borderBottom: `1px solid ${depth === 0 ? "#D1D5DB" : "#F3F4F6"}` }}
-                  onMouseEnter={e => (e.currentTarget.style.background = "#DDE8F5")}
+                  onMouseEnter={e => (e.currentTarget.style.background = "#D8D4CA")}
                   onMouseLeave={e => (e.currentTarget.style.background = bg)}
                 >
                   <td style={{ padding: "5px 4px", textAlign: "center" }}>
@@ -3962,7 +3962,7 @@ function TrialBalancePage({
             })}
           </tbody>
           <tfoot>
-            <tr style={{ background: "#E8EFF7", color: "#1E3A5F", position: "sticky", bottom: 0, zIndex: 2, borderTop: "2px solid #406B93", fontWeight: 700 }}>
+            <tr style={{ background: "#E8E4DA", color: "#1E2A1A", position: "sticky", bottom: 0, zIndex: 2, borderTop: "1px solid #C8C3B8", fontWeight: 700 }}>
               <td colSpan={3} style={{ padding: "7px 12px", fontWeight: 700, fontSize: 12 }}>الإجمالي الكلي</td>
               {tbMode === "full" ? (
                 <>
