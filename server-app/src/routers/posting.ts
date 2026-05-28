@@ -364,11 +364,11 @@ export const postingRouter = router({
 
       const effectiveJournal = {
         ...(journal ?? {}),
-        cashAccountId:    journal?.cashAccountId    ?? docTypeAccs?.cashAccountId    ?? null,
-        salesAccountId:   journal?.salesAccountId   ?? docTypeAccs?.salesAccountId   ?? null,
-        creditAccountId:  journal?.creditAccountId  ?? docTypeAccs?.creditAccountId  ?? null,
-        taxAccountId:     journal?.taxAccountId     ?? docTypeAccs?.taxAccountId     ?? null,
-        discountAccountId:journal?.discountAccountId?? docTypeAccs?.discountAccountId?? null,
+        cashAccountId:    docTypeAccs?.cashAccountId    ?? journal?.cashAccountId    ?? null,
+        salesAccountId:   docTypeAccs?.salesAccountId   ?? journal?.salesAccountId   ?? null,
+        creditAccountId:  docTypeAccs?.creditAccountId  ?? journal?.creditAccountId  ?? null,
+        taxAccountId:     docTypeAccs?.taxAccountId     ?? journal?.taxAccountId     ?? null,
+        discountAccountId:docTypeAccs?.discountAccountId?? journal?.discountAccountId?? null,
         postingMode:      journal?.postingMode ?? 'manual',
       } as typeof documentJournals.$inferSelect;
 
@@ -416,11 +416,11 @@ export const postingRouter = router({
 
       const effectiveJournal = {
         ...(journal ?? {}),
-        cashAccountId:    journal?.cashAccountId    ?? docTypeAccs?.cashAccountId    ?? null,
-        salesAccountId:   journal?.salesAccountId   ?? docTypeAccs?.salesAccountId   ?? null,
-        creditAccountId:  journal?.creditAccountId  ?? docTypeAccs?.creditAccountId  ?? null,
-        taxAccountId:     journal?.taxAccountId     ?? docTypeAccs?.taxAccountId     ?? null,
-        discountAccountId:journal?.discountAccountId?? docTypeAccs?.discountAccountId?? null,
+        cashAccountId:    docTypeAccs?.cashAccountId    ?? journal?.cashAccountId    ?? null,
+        salesAccountId:   docTypeAccs?.salesAccountId   ?? journal?.salesAccountId   ?? null,
+        creditAccountId:  docTypeAccs?.creditAccountId  ?? journal?.creditAccountId  ?? null,
+        taxAccountId:     docTypeAccs?.taxAccountId     ?? journal?.taxAccountId     ?? null,
+        discountAccountId:docTypeAccs?.discountAccountId?? journal?.discountAccountId?? null,
         postingMode:      journal?.postingMode ?? 'manual',
       } as typeof documentJournals.$inferSelect;
 
@@ -514,11 +514,11 @@ export const postingRouter = router({
         : null;
 
       const effectiveJournal = {
-        purchaseAccountId: journal?.purchaseAccountId ?? docTypeAccs?.purchaseAccountId ?? null,
-        supplierAccountId: journal?.supplierAccountId ?? docTypeAccs?.supplierAccountId ?? null,
-        cashAccountId:     journal?.cashAccountId     ?? docTypeAccs?.cashAccountId     ?? null,
-        taxAccountId:      journal?.taxAccountId      ?? docTypeAccs?.taxAccountId      ?? null,
-        discountAccountId: journal?.discountAccountId ?? docTypeAccs?.discountAccountId ?? null,
+        purchaseAccountId: docTypeAccs?.purchaseAccountId ?? journal?.purchaseAccountId ?? null,
+        supplierAccountId: docTypeAccs?.supplierAccountId ?? journal?.supplierAccountId ?? null,
+        cashAccountId:     docTypeAccs?.cashAccountId     ?? journal?.cashAccountId     ?? null,
+        taxAccountId:      docTypeAccs?.taxAccountId      ?? journal?.taxAccountId      ?? null,
+        discountAccountId: docTypeAccs?.discountAccountId ?? journal?.discountAccountId ?? null,
       };
 
       const { lines, warnings, totalDebit, totalCredit, isBalanced } = await buildPurchaseInvoiceLines(invoice, effectiveJournal, orgId);
@@ -564,11 +564,11 @@ export const postingRouter = router({
         : null;
 
       const effectiveJournal = {
-        purchaseAccountId: journal?.purchaseAccountId ?? docTypeAccs?.purchaseAccountId ?? null,
-        supplierAccountId: journal?.supplierAccountId ?? docTypeAccs?.supplierAccountId ?? null,
-        cashAccountId:     journal?.cashAccountId     ?? docTypeAccs?.cashAccountId     ?? null,
-        taxAccountId:      journal?.taxAccountId      ?? docTypeAccs?.taxAccountId      ?? null,
-        discountAccountId: journal?.discountAccountId ?? docTypeAccs?.discountAccountId ?? null,
+        purchaseAccountId: docTypeAccs?.purchaseAccountId ?? journal?.purchaseAccountId ?? null,
+        supplierAccountId: docTypeAccs?.supplierAccountId ?? journal?.supplierAccountId ?? null,
+        cashAccountId:     docTypeAccs?.cashAccountId     ?? journal?.cashAccountId     ?? null,
+        taxAccountId:      docTypeAccs?.taxAccountId      ?? journal?.taxAccountId      ?? null,
+        discountAccountId: docTypeAccs?.discountAccountId ?? journal?.discountAccountId ?? null,
       };
 
       const isCredit = invoice.paymentMethod === 'credit';
