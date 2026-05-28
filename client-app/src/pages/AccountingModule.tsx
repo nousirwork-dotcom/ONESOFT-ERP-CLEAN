@@ -3751,8 +3751,8 @@ function TrialBalancePage({
                       <td onClick={canDrill ? openDlg : undefined} style={numCellStyle(canDrill, { borderLeft: "1px solid #E5E7EB" })} title={canDrill ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>{numSpan(n.aggOpenC, C, canDrill)}</td>
                       <td onClick={canDrill ? openDlg : undefined} style={numCellStyle(canDrill)} title={canDrill ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>{numSpan(n.aggMoveD, D, canDrill)}</td>
                       <td onClick={canDrill ? openDlg : undefined} style={numCellStyle(canDrill, { borderLeft: "1px solid #E5E7EB" })} title={canDrill ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>{numSpan(n.aggMoveC, C, canDrill)}</td>
-                      <td onClick={canDrillCl ? openDlg : undefined} style={numCellStyle(canDrillCl)} title={canDrillCl ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>{numSpan(n.aggCloseD, D, canDrillCl, true)}</td>
-                      <td onClick={canDrillCl ? openDlg : undefined} style={numCellStyle(canDrillCl)} title={canDrillCl ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>{numSpan(n.aggCloseC, C, canDrillCl, true)}</td>
+                      <td onClick={canDrillCl ? () => drill(n) : undefined} style={numCellStyle(canDrillCl)} title={canDrillCl ? "انقر لفتح كشف حساب أستاذ" : !isLeaf ? "حساب تجميعي" : ""}>{numSpan(n.aggCloseD, D, canDrillCl, true)}</td>
+                      <td onClick={canDrillCl ? () => drill(n) : undefined} style={numCellStyle(canDrillCl)} title={canDrillCl ? "انقر لفتح كشف حساب أستاذ" : !isLeaf ? "حساب تجميعي" : ""}>{numSpan(n.aggCloseC, C, canDrillCl, true)}</td>
                     </>
                   ) : (
                     <>
@@ -3765,7 +3765,7 @@ function TrialBalancePage({
                       </td>
                       <td onClick={canDrill ? openDlg : undefined} style={numCellStyle(canDrill)} title={canDrill ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>{numSpan(n.aggMoveD, D, canDrill)}</td>
                       <td onClick={canDrill ? openDlg : undefined} style={numCellStyle(canDrill)} title={canDrill ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>{numSpan(n.aggMoveC, C, canDrill)}</td>
-                      <td onClick={canDrillCl ? openDlg : undefined} style={numCellStyle(canDrillCl)} title={canDrillCl ? "انقر لفتح كشف الحساب" : !isLeaf ? "حساب تجميعي" : ""}>
+                      <td onClick={canDrillCl ? () => drill(n) : undefined} style={numCellStyle(canDrillCl)} title={canDrillCl ? "انقر لفتح كشف حساب أستاذ" : !isLeaf ? "حساب تجميعي" : ""}>
                         {n.aggCloseD > 0
                           ? <span style={{ color: D, fontWeight: 700, fontSize: fs, textDecoration: canDrillCl ? "underline dotted" : "none" }}>{fmtN(n.aggCloseD)} <span style={{ fontSize: 9 }}>م</span></span>
                           : n.aggCloseC > 0
