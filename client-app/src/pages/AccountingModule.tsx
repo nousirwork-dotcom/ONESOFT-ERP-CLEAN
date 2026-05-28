@@ -3839,7 +3839,7 @@ function TrialBalancePage({
       <div style={{ flex: 1, overflowY: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5 }}>
           <thead>
-            <tr style={{ background: "#406B93", color: "#fff", position: "sticky", top: 0, zIndex: 3 }}>
+            <tr style={{ background: "#E8EFF7", color: "#1E3A5F", position: "sticky", top: 0, zIndex: 3, borderBottom: "2px solid #406B93" }}>
               <th style={{ width: 28, padding: "7px 4px" }}></th>
               <th style={{ padding: "7px 10px", textAlign: "right", fontWeight: 600, width: 90, whiteSpace: "nowrap" }}>كود</th>
               <th style={{ padding: "7px 10px", textAlign: "right", fontWeight: 600 }}>اسم الحساب</th>
@@ -3859,7 +3859,7 @@ function TrialBalancePage({
               )}
             </tr>
             {tbMode === "full" && (
-              <tr style={{ background: "#5A7D99", color: "#F9FAFB", position: "sticky", top: 38, zIndex: 3 }}>
+              <tr style={{ background: "#F0F5FB", color: "#2D5F85", position: "sticky", top: 38, zIndex: 3, borderBottom: "1px solid #C5D8EF" }}>
                 <th colSpan={3}></th>
                 <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10 }}>مدين</th>
                 <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10, borderLeft: "1px solid #9CA3AF" }}>دائن</th>
@@ -3878,7 +3878,7 @@ function TrialBalancePage({
                 {search ? "لا توجد حسابات تطابق البحث" : "لا توجد بيانات للفترة المحددة — أضف قيوداً مرحّلة"}
               </td></tr>
             ) : flatRows.map(({ node: n, depth, hasChildren }, rowIdx) => {
-              const bg    = depth === 0 ? "#D6E4F7" : depth === 1 ? "#EBF3FB" : rowIdx % 2 === 0 ? "#fff" : "#F3F8FE";
+              const bg    = depth === 0 ? "#EAF1F9" : depth === 1 ? "#F5F9FD" : rowIdx % 2 === 0 ? "#fff" : "#FAFCFF";
               const fw    = depth === 0 ? 700 : depth === 1 ? 600 : 400;
               const fs    = depth === 0 ? 12.5 : 11.5;
               const indent = depth * 18;
@@ -3910,7 +3910,7 @@ function TrialBalancePage({
               return (
                 <tr key={n.accountId}
                   style={{ background: bg, borderBottom: `1px solid ${depth === 0 ? "#D1D5DB" : "#F3F4F6"}` }}
-                  onMouseEnter={e => (e.currentTarget.style.background = "#BDD7F0")}
+                  onMouseEnter={e => (e.currentTarget.style.background = "#DDE8F5")}
                   onMouseLeave={e => (e.currentTarget.style.background = bg)}
                 >
                   <td style={{ padding: "5px 4px", textAlign: "center" }}>
@@ -3962,23 +3962,23 @@ function TrialBalancePage({
             })}
           </tbody>
           <tfoot>
-            <tr style={{ background: "#406B93", color: "#fff", position: "sticky", bottom: 0, zIndex: 2 }}>
+            <tr style={{ background: "#E8EFF7", color: "#1E3A5F", position: "sticky", bottom: 0, zIndex: 2, borderTop: "2px solid #406B93", fontWeight: 700 }}>
               <td colSpan={3} style={{ padding: "7px 12px", fontWeight: 700, fontSize: 12 }}>الإجمالي الكلي</td>
               {tbMode === "full" ? (
                 <>
-                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#FCA5A5", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.openD)}</td>
-                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#6EE7B7", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.openC)}</td>
-                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#FCA5A5", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.moveD)}</td>
-                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#6EE7B7", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.moveC)}</td>
-                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#FCA5A5", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.closeD)}</td>
-                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#6EE7B7", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.closeC)}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#C0392B", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.openD)}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#1A7A4A", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.openC)}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#C0392B", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.moveD)}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#1A7A4A", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.moveC)}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#C0392B", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.closeD)}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#1A7A4A", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.closeC)}</td>
                 </>
               ) : (
                 <>
-                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#D1D5DB" }}>—</td>
-                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#FCA5A5", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.moveD)}</td>
-                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#6EE7B7", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.moveC)}</td>
-                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#D1D5DB" }}>—</td>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#9CA3AF" }}>—</td>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#C0392B", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.moveD)}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#1A7A4A", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.moveC)}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#9CA3AF" }}>—</td>
                 </>
               )}
             </tr>
