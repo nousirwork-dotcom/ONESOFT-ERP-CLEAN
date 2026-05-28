@@ -3383,14 +3383,18 @@ function buildTBTree(rows: TBRow[]): TBNode[] {
 
 type FlatTBRow = { node: TBNode; depth: number; hasChildren: boolean };
 
-function flattenTBTree(roots: TBNode[], expanded: Set<number>, search: string): FlatTBRow[] {
+function flattenTBTree(roots: TBNode[], expanded: Set<number>, search: string, hideZero: boolean): FlatTBRow[] {
   const q = search.trim().toLowerCase();
-  const selfMatch = (n: TBNode) => !q || n.code.toLowerCase().includes(q) || n.name.toLowerCase().includes(q);
-  const anyMatch  = (n: TBNode): boolean => selfMatch(n) || n.children.some(c => anyMatch(c));
+  const selfMatch   = (n: TBNode) => !q || n.code.toLowerCase().includes(q) || n.name.toLowerCase().includes(q);
+  const anyMatch    = (n: TBNode): boolean => selfMatch(n) || n.children.some(c => anyMatch(c));
+  const hasActivity = (n: TBNode): boolean =>
+    n.aggMoveD > 0 || n.aggMoveC > 0 || n.aggOpenD > 0 || n.aggOpenC > 0 ||
+    n.children.some(c => hasActivity(c));
   const result: FlatTBRow[] = [];
   const go = (nodes: TBNode[], depth: number) => {
     for (const n of nodes) {
       if (!anyMatch(n)) continue;
+      if (hideZero && !hasActivity(n)) continue;
       result.push({ node: n, depth, hasChildren: n.children.length > 0 });
       if ((expanded.has(n.accountId) || !!q) && n.children.length > 0) go(n.children, depth + 1);
     }
@@ -3412,6 +3416,7 @@ function TrialBalancePage({
   const [search,   setSearch]   = useState("");
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [tbMode,   setTbMode]   = useState<"full" | "simple">("full");
+  const [showZero, setShowZero] = useState(false);
   const [acctCard, setAcctCard] = useState<TBNode | null>(null);
   const initDone = useRef(false);
   const costCentersQuery = trpc.costCenters.list.useQuery();
@@ -3430,7 +3435,7 @@ function TrialBalancePage({
     }
   }, [tree]);
 
-  const flatRows = useMemo(() => flattenTBTree(tree, expanded, search), [tree, expanded, search]);
+  const flatRows = useMemo(() => flattenTBTree(tree, expanded, search, !showZero), [tree, expanded, search, showZero]);
 
   const totals = useMemo(() =>
     tree.reduce((acc, n) => ({
@@ -3515,6 +3520,13 @@ function TrialBalancePage({
           <div style={{ display: "flex", gap: 4 }}>
             <button onClick={expandAll}   style={{ padding: "3px 9px", border: "1px solid #D1D5DB", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 11, color: "#374151", fontFamily: "'Cairo',Tahoma,sans-serif" }}>+ فتح الكل</button>
             <button onClick={collapseAll} style={{ padding: "3px 9px", border: "1px solid #D1D5DB", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 11, color: "#374151", fontFamily: "'Cairo',Tahoma,sans-serif" }}>− طي الكل</button>
+            <button
+              onClick={() => setShowZero(v => !v)}
+              style={{ padding: "3px 9px", border: `1px solid ${showZero ? "#2563EB" : "#D1D5DB"}`, borderRadius: 6, background: showZero ? "#EFF6FF" : "#fff", cursor: "pointer", fontSize: 11, color: showZero ? "#2563EB" : "#6B7280", fontFamily: "'Cairo',Tahoma,sans-serif", fontWeight: showZero ? 600 : 400 }}
+              title={showZero ? "الآن: تظهر الحسابات الصفرية — اضغط للإخفاء" : "الآن: الحسابات الصفرية مخفية — اضغط للإظهار"}
+            >
+              {showZero ? "✓ إظهار الصفرية" : "إظهار الصفرية"}
+            </button>
           </div>
           <button onClick={() => tbQuery.refetch()} style={{ width: 28, height: 28, border: "1px solid #D1D5DB", borderRadius: 6, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#6B7280" }} title="تحديث">
             <RefreshCw style={{ width: 12, height: 12 }} />
@@ -3569,7 +3581,10 @@ function TrialBalancePage({
               const fw    = depth === 0 ? 700 : depth === 1 ? 600 : 400;
               const fs    = depth === 0 ? 12.5 : 11.5;
               const indent = depth * 18;
-              const hasData = n.aggMoveD > 0 || n.aggMoveC > 0 || n.aggOpenD > 0 || n.aggOpenC > 0;
+              const hasData     = n.aggMoveD > 0 || n.aggMoveC > 0 || n.aggOpenD > 0 || n.aggOpenC > 0;
+              const hasClose    = n.aggCloseD > 0 || n.aggCloseC > 0;
+              const isLeaf      = !hasChildren;
+              const drillClose  = () => isLeaf && hasClose && drill(n);
               return (
                 <tr key={n.accountId}
                   style={{ background: bg, borderBottom: `1px solid ${depth === 0 ? "#D1D5DB" : "#F3F4F6"}` }}
@@ -3597,8 +3612,8 @@ function TrialBalancePage({
                       <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: C, fontWeight: fw, fontSize: fs, cursor: hasData ? "pointer" : "default", borderLeft: "1px solid #E5E7EB" }}>{fmtN(n.aggOpenC)}</td>
                       <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: D, fontWeight: fw, fontSize: fs, cursor: hasData ? "pointer" : "default" }}>{fmtN(n.aggMoveD)}</td>
                       <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: C, fontWeight: fw, fontSize: fs, cursor: hasData ? "pointer" : "default", borderLeft: "1px solid #E5E7EB" }}>{fmtN(n.aggMoveC)}</td>
-                      <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: D, fontWeight: 700,  fontSize: fs, cursor: hasData ? "pointer" : "default" }}>{fmtN(n.aggCloseD)}</td>
-                      <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: C, fontWeight: 700,  fontSize: fs, cursor: hasData ? "pointer" : "default" }}>{fmtN(n.aggCloseC)}</td>
+                      <td onClick={drillClose} style={{ padding: "5px 10px", textAlign: "center", color: D, fontWeight: 700, fontSize: fs, cursor: isLeaf && hasClose ? "pointer" : "default", textDecoration: isLeaf && hasClose ? "underline dotted" : "none" }} title={isLeaf && hasClose ? "انقر لفتح كشف الحساب" : ""}>{fmtN(n.aggCloseD)}</td>
+                      <td onClick={drillClose} style={{ padding: "5px 10px", textAlign: "center", color: C, fontWeight: 700, fontSize: fs, cursor: isLeaf && hasClose ? "pointer" : "default", textDecoration: isLeaf && hasClose ? "underline dotted" : "none" }} title={isLeaf && hasClose ? "انقر لفتح كشف الحساب" : ""}>{fmtN(n.aggCloseC)}</td>
                     </>
                   ) : (
                     <>
@@ -3611,11 +3626,11 @@ function TrialBalancePage({
                       </td>
                       <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: D, fontWeight: fw, fontSize: fs, cursor: hasData ? "pointer" : "default" }}>{fmtN(n.aggMoveD)}</td>
                       <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: C, fontWeight: fw, fontSize: fs, cursor: hasData ? "pointer" : "default" }}>{fmtN(n.aggMoveC)}</td>
-                      <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", cursor: hasData ? "pointer" : "default" }}>
+                      <td onClick={drillClose} style={{ padding: "5px 10px", textAlign: "center", cursor: isLeaf && hasClose ? "pointer" : "default" }} title={isLeaf && hasClose ? "انقر لفتح كشف الحساب" : ""}>
                         {n.aggCloseD > 0
-                          ? <span style={{ color: D, fontWeight: 700, fontSize: fs }}>{fmtN(n.aggCloseD)} <span style={{ fontSize: 9 }}>م</span></span>
+                          ? <span style={{ color: D, fontWeight: 700, fontSize: fs, textDecoration: isLeaf ? "underline dotted" : "none" }}>{fmtN(n.aggCloseD)} <span style={{ fontSize: 9 }}>م</span></span>
                           : n.aggCloseC > 0
-                            ? <span style={{ color: C, fontWeight: 700, fontSize: fs }}>({fmtN(n.aggCloseC)}) <span style={{ fontSize: 9 }}>د</span></span>
+                            ? <span style={{ color: C, fontWeight: 700, fontSize: fs, textDecoration: isLeaf ? "underline dotted" : "none" }}>({fmtN(n.aggCloseC)}) <span style={{ fontSize: 9 }}>د</span></span>
                             : <span style={{ color: "#9CA3AF" }}>—</span>}
                       </td>
                     </>
