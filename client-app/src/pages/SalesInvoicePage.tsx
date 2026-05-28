@@ -445,6 +445,10 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
   // ── Validation & Save ─────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
     // Validation
+    if (!journalId) {
+      toast.error("يجب اختيار نوع السند قبل الحفظ");
+      return;
+    }
     if (!invoiceNumber.trim()) {
       toast.error("رقم الفاتورة مطلوب");
       return;
