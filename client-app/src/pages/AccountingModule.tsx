@@ -1017,11 +1017,12 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">دفتر القيد</Label>
-              <Select value={jeJournalId?.toString() ?? ""} onValueChange={v => setJeJournalId(v ? parseInt(v) : null)} disabled={entryType === "auto"}>
+              <Select value={jeJournalId ? jeJournalId.toString() : "none"} onValueChange={v => setJeJournalId(v === "none" ? null : parseInt(v))} disabled={entryType === "auto"}>
                 <SelectTrigger className="h-7 text-xs w-full">
                   <SelectValue placeholder="اختر الدفتر..." />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="none">— اختر الدفتر —</SelectItem>
                   {(jeBooksQuery.data ?? []).map(j => (
                     <SelectItem key={j.id} value={j.id.toString()}>{j.name}</SelectItem>
                   ))}
