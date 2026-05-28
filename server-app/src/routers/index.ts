@@ -1831,6 +1831,8 @@ export const appRouter = router({
             nature:             chartOfAccounts.nature,
             isParent:           chartOfAccounts.isParent,
             level:              chartOfAccounts.level,
+            parentId:           chartOfAccounts.parentId,
+            accountType:        chartOfAccounts.accountType,
             openingBalance:     chartOfAccounts.openingBalance,
             openingBalanceType: chartOfAccounts.openingBalanceType,
           })
@@ -1892,14 +1894,15 @@ export const appRouter = router({
 
           const netOpen  = openD - openC;
           const netClose = netOpen + moveD - moveC;
-          if (netOpen === 0 && moveD === 0 && moveC === 0) continue;
-
           rows.push({
             accountId:          acc.id,
             code:               acc.code,
             name:               acc.name,
             nature:             acc.nature ?? 'debit',
             isParent:           acc.isParent ?? false,
+            level:              acc.level,
+            parentId:           acc.parentId ?? null,
+            accountType:        acc.accountType,
             openingBalance:     Math.abs(netOpen),
             openingBalanceType: netOpen >= 0 ? 'debit' : 'credit',
             movementDebit:      moveD,

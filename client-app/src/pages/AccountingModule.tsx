@@ -3327,307 +3327,382 @@ function CostAllocationPage() {
 
 // ─── Trial Balance (ميزان مراجعة الأستاذ العام) ───────────────────────────────
 type TBRow = {
-  accountId: number; code: string; name: string; nature: string; isParent: boolean;
+  accountId: number; code: string; name: string; nature: string;
+  isParent: boolean; level: number; parentId: number | null; accountType: string;
   openingBalance: number; openingBalanceType: string;
   movementDebit: number; movementCredit: number;
   closingBalance: number; closingBalanceType: string;
 };
+
+type TBNode = TBRow & {
+  children: TBNode[];
+  aggOpenD: number; aggOpenC: number;
+  aggMoveD: number; aggMoveC: number;
+  aggCloseD: number; aggCloseC: number;
+};
+
+function tbPeriodPreset(p: string): { from: string; to: string } {
+  const now = new Date();
+  const iso = (d: Date) => d.toISOString().split("T")[0];
+  if (p === "today")  return { from: iso(now), to: iso(now) };
+  if (p === "week")   { const d = new Date(now); d.setDate(d.getDate() - 6); return { from: iso(d), to: iso(now) }; }
+  if (p === "month")  return { from: iso(new Date(now.getFullYear(), now.getMonth(), 1)), to: iso(now) };
+  if (p === "year")   return { from: iso(new Date(now.getFullYear(), 0, 1)), to: iso(now) };
+  return { from: "", to: iso(now) };
+}
+
+function buildTBTree(rows: TBRow[]): TBNode[] {
+  const map = new Map<number, TBNode>();
+  for (const r of rows) {
+    map.set(r.accountId, { ...r, children: [], aggOpenD: 0, aggOpenC: 0, aggMoveD: 0, aggMoveC: 0, aggCloseD: 0, aggCloseC: 0 });
+  }
+  const roots: TBNode[] = [];
+  for (const [, n] of map) {
+    const par = n.parentId !== null ? map.get(n.parentId) : null;
+    if (par) par.children.push(n); else roots.push(n);
+  }
+  const sortAll = (ns: TBNode[]) => { ns.sort((a, b) => a.code.localeCompare(b.code)); ns.forEach(n => sortAll(n.children)); };
+  sortAll(roots);
+  const computeAgg = (n: TBNode) => {
+    n.aggOpenD = n.openingBalanceType === "debit"  ? n.openingBalance : 0;
+    n.aggOpenC = n.openingBalanceType === "credit" ? n.openingBalance : 0;
+    n.aggMoveD = n.movementDebit;
+    n.aggMoveC = n.movementCredit;
+    for (const c of n.children) {
+      computeAgg(c);
+      n.aggOpenD += c.aggOpenD; n.aggOpenC += c.aggOpenC;
+      n.aggMoveD += c.aggMoveD; n.aggMoveC += c.aggMoveC;
+    }
+    const netC = (n.aggOpenD + n.aggMoveD) - (n.aggOpenC + n.aggMoveC);
+    n.aggCloseD = netC > 0 ? netC : 0;
+    n.aggCloseC = netC < 0 ? -netC : 0;
+  };
+  for (const r of roots) computeAgg(r);
+  return roots;
+}
+
+type FlatTBRow = { node: TBNode; depth: number; hasChildren: boolean };
+
+function flattenTBTree(roots: TBNode[], expanded: Set<number>, search: string): FlatTBRow[] {
+  const q = search.trim().toLowerCase();
+  const selfMatch = (n: TBNode) => !q || n.code.toLowerCase().includes(q) || n.name.toLowerCase().includes(q);
+  const anyMatch  = (n: TBNode): boolean => selfMatch(n) || n.children.some(c => anyMatch(c));
+  const result: FlatTBRow[] = [];
+  const go = (nodes: TBNode[], depth: number) => {
+    for (const n of nodes) {
+      if (!anyMatch(n)) continue;
+      result.push({ node: n, depth, hasChildren: n.children.length > 0 });
+      if ((expanded.has(n.accountId) || !!q) && n.children.length > 0) go(n.children, depth + 1);
+    }
+  };
+  go(roots, 0);
+  return result;
+}
 
 function TrialBalancePage({
   onDrillDown,
 }: {
   onDrillDown?: (accountId: number, fromDate: string, toDate: string) => void;
 }) {
-  const costCentersQuery = trpc.costCenters.list.useQuery();
-  const [fromDate, setFromDate] = useState("");
-  const [toDate,   setToDate]   = useState("");
+  const initP = tbPeriodPreset("year");
+  const [fromDate, setFromDate] = useState(initP.from);
+  const [toDate,   setToDate]   = useState(initP.to);
+  const [period,   setPeriod]   = useState("year");
   const [costCenterId, setCostCenterId] = useState<number | undefined>(undefined);
-  const [tbMode, setTbMode]     = useState<"simple" | "full">("simple");
-  const [acctCard, setAcctCard] = useState<TBRow | null>(null);
+  const [search,   setSearch]   = useState("");
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const [tbMode,   setTbMode]   = useState<"full" | "simple">("full");
+  const [acctCard, setAcctCard] = useState<TBNode | null>(null);
+  const initDone = useRef(false);
+  const costCentersQuery = trpc.costCenters.list.useQuery();
 
   const tbQuery = trpc.accounting.trialBalance.useQuery(
     { fromDate: fromDate ? new Date(fromDate) : undefined, toDate: toDate ? new Date(toDate) : undefined, costCenterId },
     { enabled: true }
   );
 
-  const data  = (tbQuery.data ?? []) as TBRow[];
-  const fmt   = (n: number) => n === 0 ? "-" : n.toLocaleString();
-  const fmtB  = (n: number, t: string) => {
-    if (n === 0) return <span className="text-muted-foreground text-xs">-</span>;
-    return (
-      <span className={`text-xs font-semibold ${t === "debit" ? "text-primary" : "text-amber-700"}`}>
-        {n.toLocaleString()}
-        <span className={`mr-1 text-[9px] px-0.5 rounded ${t === "debit" ? "bg-sky-50 text-sky-600" : "bg-amber-50 text-amber-600"}`}>
-          {t === "debit" ? "م" : "د"}
-        </span>
-      </span>
-    );
-  };
+  const tree = useMemo(() => buildTBTree((tbQuery.data ?? []) as TBRow[]), [tbQuery.data]);
 
-  const drill = (r: TBRow) => { onDrillDown?.(r.accountId, fromDate, toDate); };
+  useEffect(() => {
+    if (!initDone.current && tree.length > 0) {
+      initDone.current = true;
+      setExpanded(new Set(tree.map(n => n.accountId)));
+    }
+  }, [tree]);
 
-  const totalMoveDebit   = data.reduce((s, r) => s + r.movementDebit, 0);
-  const totalMoveCredit  = data.reduce((s, r) => s + r.movementCredit, 0);
+  const flatRows = useMemo(() => flattenTBTree(tree, expanded, search), [tree, expanded, search]);
+
+  const totals = useMemo(() =>
+    tree.reduce((acc, n) => ({
+      openD:  acc.openD  + n.aggOpenD,  openC:  acc.openC  + n.aggOpenC,
+      moveD:  acc.moveD  + n.aggMoveD,  moveC:  acc.moveC  + n.aggMoveC,
+      closeD: acc.closeD + n.aggCloseD, closeC: acc.closeC + n.aggCloseC,
+    }), { openD: 0, openC: 0, moveD: 0, moveC: 0, closeD: 0, closeC: 0 }),
+  [tree]);
+
+  const applyPeriod = (p: string) => { setPeriod(p); const { from, to } = tbPeriodPreset(p); setFromDate(from); setToDate(to); };
+  const toggle = (id: number) => setExpanded(prev => { const s = new Set(prev); if (s.has(id)) s.delete(id); else s.add(id); return s; });
+  const expandAll   = () => { const s = new Set<number>(); const go = (ns: TBNode[]) => { for (const n of ns) { s.add(n.accountId); go(n.children); } }; go(tree); setExpanded(s); };
+  const collapseAll = () => setExpanded(new Set());
+  const drill = (n: TBNode) => onDrillDown?.(n.accountId, fromDate, toDate);
+
+  const fmtN = (n: number) => n === 0 ? "—" : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const D = "#1D4ED8";
+  const C = "#92400E";
+  const PERIODS = [
+    { id: "today", l: "اليوم" }, { id: "week",  l: "الأسبوع" },
+    { id: "month", l: "الشهر" }, { id: "year",  l: "السنة"   },
+  ];
+  const NCOLS = tbMode === "full" ? 9 : 7;
 
   return (
-    <div className="space-y-3">
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h3 className="font-bold text-sm flex items-center gap-2">
-          <Scale className="w-4 h-4 text-primary" /> ميزان مراجعة الأستاذ العام
-        </h3>
-        <div className="flex gap-1.5 flex-wrap">
-          <div className="flex rounded-lg overflow-hidden border border-border text-xs">
-            <button onClick={() => setTbMode("simple")}
-              className={`px-3 py-1 ${tbMode === "simple" ? "bg-primary text-primary-foreground" : "hover:bg-muted/40"}`}>
-              مبسّط
-            </button>
-            <button onClick={() => setTbMode("full")}
-              className={`px-3 py-1 border-r border-border ${tbMode === "full" ? "bg-primary text-primary-foreground" : "hover:bg-muted/40"}`}>
-              تفصيلي
-            </button>
+    <div dir="rtl" style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "'Cairo', Tahoma, sans-serif", background: "#F9FAFB" }}>
+
+      {/* ══ شريط العنوان ══ */}
+      <div style={{ padding: "8px 14px", borderBottom: "1px solid #E5E7EB", background: "#fff", display: "flex", alignItems: "center", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
+          <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(37,99,235,0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Scale style={{ width: 16, height: 16, color: "#2563EB" }} />
           </div>
-          <Button variant="outline" size="sm" className="h-7 text-xs gap-1"><Printer className="w-3 h-3" /> طباعة</Button>
-          <Button variant="outline" size="sm" className="h-7 text-xs gap-1"><Download className="w-3 h-3" /> تصدير</Button>
+          <div>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: "#111827" }}>ميزان مراجعة الأستاذ العام</div>
+            <div style={{ fontSize: 10.5, color: "#9CA3AF" }}>
+              {tbQuery.isLoading ? "جاري التحميل..." : `${flatRows.length} حساب`}
+              {fromDate ? ` · ${fromDate}` : ""}
+              {toDate   ? ` — ${toDate}` : ""}
+            </div>
+          </div>
+        </div>
+        <div style={{ display: "flex", borderRadius: 6, overflow: "hidden", border: "1px solid #D1D5DB" }}>
+          {(["full","simple"] as const).map(m => (
+            <button key={m} onClick={() => setTbMode(m)} style={{ padding: "3px 12px", fontSize: 11, cursor: "pointer", border: "none", background: tbMode === m ? "#2563EB" : "#fff", color: tbMode === m ? "#fff" : "#6B7280", fontFamily: "'Cairo',Tahoma,sans-serif" }}>
+              {m === "full" ? "تفصيلي" : "مبسّط"}
+            </button>
+          ))}
+        </div>
+        <button onClick={() => window.print()} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", border: "1px solid #D1D5DB", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 11, color: "#374151", fontFamily: "'Cairo',Tahoma,sans-serif" }}>
+          <Printer style={{ width: 12, height: 12 }} /> طباعة
+        </button>
+        <button style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", border: "1px solid #D1D5DB", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 11, color: "#374151", fontFamily: "'Cairo',Tahoma,sans-serif" }}>
+          <Download style={{ width: 12, height: 12 }} /> تصدير
+        </button>
+      </div>
+
+      {/* ══ شريط الفلاتر ══ */}
+      <div style={{ padding: "8px 14px", borderBottom: "1px solid #E5E7EB", background: "#F8FAFF", flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 8, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 11, color: "#6B7280" }}>الفترة:</span>
+          {PERIODS.map(p => (
+            <button key={p.id} onClick={() => applyPeriod(p.id)} style={{ padding: "3px 10px", fontSize: 11, borderRadius: 6, cursor: "pointer", border: `1px solid ${period === p.id ? "#2563EB" : "#D1D5DB"}`, background: period === p.id ? "#EFF6FF" : "#fff", color: period === p.id ? "#2563EB" : "#6B7280", fontFamily: "'Cairo',Tahoma,sans-serif", fontWeight: 600 }}>
+              {p.l}
+            </button>
+          ))}
+          <span style={{ fontSize: 11, color: "#9CA3AF" }}>أو مخصص:</span>
+          <span style={{ fontSize: 11, color: "#6B7280" }}>من</span>
+          <input type="date" value={fromDate} onChange={e => { setFromDate(e.target.value); setPeriod("custom"); }} style={{ padding: "3px 7px", border: `1px solid ${period === "custom" ? "#2563EB" : "#D1D5DB"}`, borderRadius: 6, fontSize: 11, background: "#fff", color: "#111827" }} />
+          <span style={{ fontSize: 11, color: "#6B7280" }}>إلى</span>
+          <input type="date" value={toDate} onChange={e => { setToDate(e.target.value); setPeriod("custom"); }} style={{ padding: "3px 7px", border: `1px solid ${period === "custom" ? "#2563EB" : "#D1D5DB"}`, borderRadius: 6, fontSize: 11, background: "#fff", color: "#111827" }} />
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          <div style={{ position: "relative", flex: 1, minWidth: 180, maxWidth: 280 }}>
+            <Search style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", width: 12, height: 12, color: "#9CA3AF", pointerEvents: "none" }} />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="بحث بالاسم أو الكود..." style={{ width: "100%", paddingRight: 26, paddingLeft: 8, paddingTop: 4, paddingBottom: 4, border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 11, background: "#fff" }} />
+          </div>
+          <select value={costCenterId?.toString() ?? ""} onChange={e => setCostCenterId(e.target.value ? parseInt(e.target.value) : undefined)} style={{ padding: "4px 8px", border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 11, background: "#fff", color: "#374151", fontFamily: "'Cairo',Tahoma,sans-serif" }}>
+            <option value="">كل مراكز التكلفة</option>
+            {costCentersQuery.data?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <div style={{ display: "flex", gap: 4 }}>
+            <button onClick={expandAll}   style={{ padding: "3px 9px", border: "1px solid #D1D5DB", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 11, color: "#374151", fontFamily: "'Cairo',Tahoma,sans-serif" }}>+ فتح الكل</button>
+            <button onClick={collapseAll} style={{ padding: "3px 9px", border: "1px solid #D1D5DB", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 11, color: "#374151", fontFamily: "'Cairo',Tahoma,sans-serif" }}>− طي الكل</button>
+          </div>
+          <button onClick={() => tbQuery.refetch()} style={{ width: 28, height: 28, border: "1px solid #D1D5DB", borderRadius: 6, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#6B7280" }} title="تحديث">
+            <RefreshCw style={{ width: 12, height: 12 }} />
+          </button>
         </div>
       </div>
 
-      {/* ── Filters ── */}
-      <Card className="border-border/60">
-        <CardContent className="p-3">
-          <div className="grid grid-cols-4 gap-3">
-            <div>
-              <Label className="text-xs">من تاريخ</Label>
-              <DateMaskInput value={fromDate} onChange={setFromDate} className="h-8 text-xs" />
-            </div>
-            <div>
-              <Label className="text-xs">إلى تاريخ</Label>
-              <DateMaskInput value={toDate} onChange={setToDate} className="h-8 text-xs" />
-            </div>
-            <div>
-              <Label className="text-xs">مركز التكلفة</Label>
-              <Select value={costCenterId?.toString() ?? "all"} onValueChange={v => setCostCenterId(v === "all" ? undefined : parseInt(v))}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">الكل</SelectItem>
-                  {costCentersQuery.data?.map(c => (
-                    <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-end">
-              <Button size="sm" className="h-8 text-xs w-full gap-1" onClick={() => tbQuery.refetch()}>
-                <RefreshCw className="w-3 h-3" /> تحديث
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ── Table ── */}
-      <Card className="border-border/60">
-        <div className="overflow-x-auto">
-          <Table>
-            {tbMode === "simple" ? (
-              <>
-                <TableHeader>
-                  <TableRow className="bg-muted/30">
-                    <TableHead className="text-xs w-24">كود الحساب</TableHead>
-                    <TableHead className="text-xs">اسم الحساب</TableHead>
-                    <TableHead className="text-xs text-center">رصيد أول المدة</TableHead>
-                    <TableHead className="text-xs text-center">حركة مدين</TableHead>
-                    <TableHead className="text-xs text-center">حركة دائن</TableHead>
-                    <TableHead className="text-xs text-center">رصيد آخر المدة</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.length === 0 && (
-                    <TableRow><TableCell colSpan={6} className="text-center text-xs text-muted-foreground py-8">
-                      {tbQuery.isLoading ? "جاري التحميل..." : "لا توجد بيانات — أضف حسابات وقيود مرحّلة"}
-                    </TableCell></TableRow>
-                  )}
-                  {data.map(r => (
-                    <TableRow key={r.accountId} className="hover:bg-muted/10">
-                      <TableCell className="text-xs font-mono text-primary">{r.code}</TableCell>
-                      <TableCell
-                        className="text-xs cursor-pointer hover:text-primary hover:underline"
-                        onClick={() => setAcctCard(r)}>
-                        {r.name}
-                      </TableCell>
-                      <TableCell className="text-center cursor-pointer hover:bg-sky-50/50" onClick={() => drill(r)}>
-                        {fmtB(r.openingBalance, r.openingBalanceType)}
-                      </TableCell>
-                      <TableCell className="text-center text-xs cursor-pointer hover:bg-sky-50/50 text-primary" onClick={() => drill(r)}>
-                        {fmt(r.movementDebit)}
-                      </TableCell>
-                      <TableCell className="text-center text-xs cursor-pointer hover:bg-amber-50/50 text-amber-700" onClick={() => drill(r)}>
-                        {fmt(r.movementCredit)}
-                      </TableCell>
-                      <TableCell className="text-center cursor-pointer hover:bg-sky-50/50" onClick={() => drill(r)}>
-                        {fmtB(r.closingBalance, r.closingBalanceType)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  <TableRow className="bg-primary/5 font-bold border-t-2 border-primary/20">
-                    <TableCell colSpan={2} className="text-xs font-bold">الإجمالي</TableCell>
-                    <TableCell className="text-center text-xs text-muted-foreground">—</TableCell>
-                    <TableCell className="text-center text-xs font-bold text-primary">{totalMoveDebit.toLocaleString()}</TableCell>
-                    <TableCell className="text-center text-xs font-bold text-amber-700">{totalMoveCredit.toLocaleString()}</TableCell>
-                    <TableCell className="text-center text-xs text-muted-foreground">—</TableCell>
-                  </TableRow>
-                </TableBody>
-              </>
-            ) : (
-              <>
-                <TableHeader>
-                  <TableRow className="bg-muted/30">
-                    <TableHead className="text-xs w-24">كود الحساب</TableHead>
-                    <TableHead className="text-xs">اسم الحساب</TableHead>
-                    <TableHead className="text-xs text-center" colSpan={2}>رصيد أول المدة</TableHead>
-                    <TableHead className="text-xs text-center" colSpan={2}>الحركة</TableHead>
-                    <TableHead className="text-xs text-center" colSpan={2}>رصيد آخر المدة</TableHead>
-                  </TableRow>
-                  <TableRow className="bg-muted/20">
-                    <TableHead className="text-xs" colSpan={2}></TableHead>
-                    <TableHead className="text-xs text-center text-primary">مدين</TableHead>
-                    <TableHead className="text-xs text-center text-amber-700">دائن</TableHead>
-                    <TableHead className="text-xs text-center text-primary">مدين</TableHead>
-                    <TableHead className="text-xs text-center text-amber-700">دائن</TableHead>
-                    <TableHead className="text-xs text-center text-primary">مدين</TableHead>
-                    <TableHead className="text-xs text-center text-amber-700">دائن</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.length === 0 && (
-                    <TableRow><TableCell colSpan={8} className="text-center text-xs text-muted-foreground py-8">
-                      {tbQuery.isLoading ? "جاري التحميل..." : "لا توجد بيانات — أضف حسابات وقيود مرحّلة"}
-                    </TableCell></TableRow>
-                  )}
-                  {data.map(r => (
-                    <TableRow key={r.accountId} className="hover:bg-muted/10">
-                      <TableCell className="text-xs font-mono text-primary">{r.code}</TableCell>
-                      <TableCell
-                        className="text-xs cursor-pointer hover:text-primary hover:underline"
-                        onClick={() => setAcctCard(r)}>
-                        {r.name}
-                      </TableCell>
-                      <TableCell className="text-center text-xs text-primary cursor-pointer hover:bg-sky-50/50" onClick={() => drill(r)}>
-                        {r.openingBalanceType === "debit" ? fmt(r.openingBalance) : "-"}
-                      </TableCell>
-                      <TableCell className="text-center text-xs text-amber-700 cursor-pointer hover:bg-amber-50/50" onClick={() => drill(r)}>
-                        {r.openingBalanceType === "credit" ? fmt(r.openingBalance) : "-"}
-                      </TableCell>
-                      <TableCell className="text-center text-xs text-primary cursor-pointer hover:bg-sky-50/50" onClick={() => drill(r)}>
-                        {fmt(r.movementDebit)}
-                      </TableCell>
-                      <TableCell className="text-center text-xs text-amber-700 cursor-pointer hover:bg-amber-50/50" onClick={() => drill(r)}>
-                        {fmt(r.movementCredit)}
-                      </TableCell>
-                      <TableCell className="text-center text-xs text-primary font-semibold cursor-pointer hover:bg-sky-50/50" onClick={() => drill(r)}>
-                        {r.closingBalanceType === "debit" ? fmt(r.closingBalance) : "-"}
-                      </TableCell>
-                      <TableCell className="text-center text-xs text-amber-700 font-semibold cursor-pointer hover:bg-amber-50/50" onClick={() => drill(r)}>
-                        {r.closingBalanceType === "credit" ? fmt(r.closingBalance) : "-"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  <TableRow className="bg-primary/5 font-bold border-t-2 border-primary/20">
-                    <TableCell colSpan={2} className="text-xs font-bold">الإجمالي</TableCell>
-                    <TableCell className="text-center text-xs font-bold text-primary">
-                      {data.filter(r => r.openingBalanceType==="debit").reduce((s,r)=>s+r.openingBalance,0).toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-center text-xs font-bold text-amber-700">
-                      {data.filter(r => r.openingBalanceType==="credit").reduce((s,r)=>s+r.openingBalance,0).toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-center text-xs font-bold text-primary">{totalMoveDebit.toLocaleString()}</TableCell>
-                    <TableCell className="text-center text-xs font-bold text-amber-700">{totalMoveCredit.toLocaleString()}</TableCell>
-                    <TableCell className="text-center text-xs font-bold text-primary">
-                      {data.filter(r => r.closingBalanceType==="debit").reduce((s,r)=>s+r.closingBalance,0).toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-center text-xs font-bold text-amber-700">
-                      {data.filter(r => r.closingBalanceType==="credit").reduce((s,r)=>s+r.closingBalance,0).toLocaleString()}
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </>
+      {/* ══ الجدول ══ */}
+      <div style={{ flex: 1, overflowY: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5 }}>
+          <thead>
+            <tr style={{ background: "#1E3A5F", color: "#fff", position: "sticky", top: 0, zIndex: 3 }}>
+              <th style={{ width: 28, padding: "7px 4px" }}></th>
+              <th style={{ padding: "7px 10px", textAlign: "right", fontWeight: 600, width: 90, whiteSpace: "nowrap" }}>كود</th>
+              <th style={{ padding: "7px 10px", textAlign: "right", fontWeight: 600 }}>اسم الحساب</th>
+              {tbMode === "full" ? (
+                <>
+                  <th colSpan={2} style={{ padding: "7px 10px", textAlign: "center", fontSize: 10.5, borderRight: "1px solid #2E5F96", borderLeft: "1px solid #2E5F96" }}>رصيد أول المدة</th>
+                  <th colSpan={2} style={{ padding: "7px 10px", textAlign: "center", fontSize: 10.5, borderLeft: "1px solid #2E5F96" }}>الحركة</th>
+                  <th colSpan={2} style={{ padding: "7px 10px", textAlign: "center", fontSize: 10.5 }}>رصيد آخر المدة</th>
+                </>
+              ) : (
+                <>
+                  <th style={{ padding: "7px 10px", textAlign: "center", fontSize: 10.5, whiteSpace: "nowrap" }}>رصيد أول المدة</th>
+                  <th style={{ padding: "7px 10px", textAlign: "center", fontSize: 10.5, color: "#93C5FD", whiteSpace: "nowrap" }}>حركة مدين</th>
+                  <th style={{ padding: "7px 10px", textAlign: "center", fontSize: 10.5, color: "#FCD34D", whiteSpace: "nowrap" }}>حركة دائن</th>
+                  <th style={{ padding: "7px 10px", textAlign: "center", fontSize: 10.5, whiteSpace: "nowrap" }}>رصيد آخر المدة</th>
+                </>
+              )}
+            </tr>
+            {tbMode === "full" && (
+              <tr style={{ background: "#2E4F7A", color: "#CBD5E1", position: "sticky", top: 38, zIndex: 3 }}>
+                <th colSpan={3}></th>
+                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10, color: "#93C5FD" }}>مدين</th>
+                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10, color: "#FCD34D", borderLeft: "1px solid #3A6094" }}>دائن</th>
+                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10, color: "#93C5FD" }}>مدين</th>
+                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10, color: "#FCD34D", borderLeft: "1px solid #3A6094" }}>دائن</th>
+                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10, color: "#93C5FD" }}>مدين</th>
+                <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10, color: "#FCD34D" }}>دائن</th>
+              </tr>
             )}
-          </Table>
-        </div>
-      </Card>
+          </thead>
+          <tbody>
+            {tbQuery.isLoading ? (
+              <tr><td colSpan={NCOLS} style={{ textAlign: "center", padding: 48, color: "#9CA3AF", fontSize: 12 }}>جاري تحميل البيانات...</td></tr>
+            ) : flatRows.length === 0 ? (
+              <tr><td colSpan={NCOLS} style={{ textAlign: "center", padding: 48, color: "#9CA3AF", fontSize: 12 }}>
+                {search ? "لا توجد حسابات تطابق البحث" : "لا توجد بيانات للفترة المحددة — أضف قيوداً مرحّلة"}
+              </td></tr>
+            ) : flatRows.map(({ node: n, depth, hasChildren }) => {
+              const bg    = depth === 0 ? "#EBF0FF" : depth === 1 ? "#F5F8FF" : "#fff";
+              const fw    = depth === 0 ? 700 : depth === 1 ? 600 : 400;
+              const fs    = depth === 0 ? 12.5 : 11.5;
+              const indent = depth * 18;
+              const hasData = n.aggMoveD > 0 || n.aggMoveC > 0 || n.aggOpenD > 0 || n.aggOpenC > 0;
+              return (
+                <tr key={n.accountId}
+                  style={{ background: bg, borderBottom: `1px solid ${depth === 0 ? "#D1D5DB" : "#F3F4F6"}` }}
+                  onMouseEnter={e => (e.currentTarget.style.background = "#DBEAFE40")}
+                  onMouseLeave={e => (e.currentTarget.style.background = bg)}
+                >
+                  <td style={{ padding: "5px 4px", textAlign: "center" }}>
+                    {hasChildren && (
+                      <button onClick={() => toggle(n.accountId)} style={{ background: "none", border: "none", cursor: "pointer", color: "#6B7280", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto", padding: 2 }}>
+                        {expanded.has(n.accountId) ? <ChevronDown style={{ width: 13, height: 13 }} /> : <ChevronRight style={{ width: 13, height: 13 }} />}
+                      </button>
+                    )}
+                  </td>
+                  <td style={{ padding: "5px 8px", fontFamily: "monospace", fontWeight: fw, fontSize: fs, paddingRight: 8 + indent }}>
+                    <span onClick={() => setAcctCard(n)} style={{ color: "#2563EB", cursor: "pointer" }} title="كارت الحساب">{n.code}</span>
+                  </td>
+                  <td style={{ padding: "5px 8px", fontWeight: fw, fontSize: fs, color: depth === 0 ? "#1E3A5F" : "#374151" }}>
+                    <span onClick={() => setAcctCard(n)} style={{ cursor: "pointer" }} title="كارت الحساب">{n.name}</span>
+                    {n.level === 1 && <span style={{ marginRight: 8, fontSize: 9, padding: "1px 5px", borderRadius: 8, background: "#DBEAFE", color: "#1D4ED8", fontWeight: 700 }}>جذري</span>}
+                    {n.level === 2 && <span style={{ marginRight: 8, fontSize: 9, padding: "1px 5px", borderRadius: 8, background: "#F3E8FF", color: "#7C3AED", fontWeight: 700 }}>رئيسي</span>}
+                  </td>
+                  {tbMode === "full" ? (
+                    <>
+                      <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: D, fontWeight: fw, fontSize: fs, cursor: hasData ? "pointer" : "default" }} title={hasData ? "عرض كشف الحساب" : ""}>{fmtN(n.aggOpenD)}</td>
+                      <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: C, fontWeight: fw, fontSize: fs, cursor: hasData ? "pointer" : "default", borderLeft: "1px solid #E5E7EB" }}>{fmtN(n.aggOpenC)}</td>
+                      <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: D, fontWeight: fw, fontSize: fs, cursor: hasData ? "pointer" : "default" }}>{fmtN(n.aggMoveD)}</td>
+                      <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: C, fontWeight: fw, fontSize: fs, cursor: hasData ? "pointer" : "default", borderLeft: "1px solid #E5E7EB" }}>{fmtN(n.aggMoveC)}</td>
+                      <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: D, fontWeight: 700,  fontSize: fs, cursor: hasData ? "pointer" : "default" }}>{fmtN(n.aggCloseD)}</td>
+                      <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: C, fontWeight: 700,  fontSize: fs, cursor: hasData ? "pointer" : "default" }}>{fmtN(n.aggCloseC)}</td>
+                    </>
+                  ) : (
+                    <>
+                      <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", cursor: hasData ? "pointer" : "default" }}>
+                        {n.aggOpenD > n.aggOpenC
+                          ? <span style={{ color: D, fontWeight: fw, fontSize: fs }}>{fmtN(n.aggOpenD - n.aggOpenC)} <span style={{ fontSize: 9 }}>م</span></span>
+                          : n.aggOpenC > n.aggOpenD
+                            ? <span style={{ color: C, fontWeight: fw, fontSize: fs }}>({fmtN(n.aggOpenC - n.aggOpenD)}) <span style={{ fontSize: 9 }}>د</span></span>
+                            : <span style={{ color: "#9CA3AF" }}>—</span>}
+                      </td>
+                      <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: D, fontWeight: fw, fontSize: fs, cursor: hasData ? "pointer" : "default" }}>{fmtN(n.aggMoveD)}</td>
+                      <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", color: C, fontWeight: fw, fontSize: fs, cursor: hasData ? "pointer" : "default" }}>{fmtN(n.aggMoveC)}</td>
+                      <td onClick={() => hasData && drill(n)} style={{ padding: "5px 10px", textAlign: "center", cursor: hasData ? "pointer" : "default" }}>
+                        {n.aggCloseD > 0
+                          ? <span style={{ color: D, fontWeight: 700, fontSize: fs }}>{fmtN(n.aggCloseD)} <span style={{ fontSize: 9 }}>م</span></span>
+                          : n.aggCloseC > 0
+                            ? <span style={{ color: C, fontWeight: 700, fontSize: fs }}>({fmtN(n.aggCloseC)}) <span style={{ fontSize: 9 }}>د</span></span>
+                            : <span style={{ color: "#9CA3AF" }}>—</span>}
+                      </td>
+                    </>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr style={{ background: "#1E3A5F", color: "#fff", position: "sticky", bottom: 0, zIndex: 2 }}>
+              <td colSpan={3} style={{ padding: "7px 12px", fontWeight: 700, fontSize: 12 }}>الإجمالي الكلي</td>
+              {tbMode === "full" ? (
+                <>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#93C5FD", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.openD)}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#FCD34D", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.openC)}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#93C5FD", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.moveD)}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#FCD34D", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.moveC)}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#93C5FD", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.closeD)}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#FCD34D", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.closeC)}</td>
+                </>
+              ) : (
+                <>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#9CA3AF" }}>—</td>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#93C5FD", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.moveD)}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#FCD34D", fontWeight: 700, fontSize: 12 }}>{fmtN(totals.moveC)}</td>
+                  <td style={{ padding: "7px 10px", textAlign: "center", color: "#9CA3AF" }}>—</td>
+                </>
+              )}
+            </tr>
+          </tfoot>
+        </table>
+      </div>
 
-      {/* ── Account Card Dialog ── */}
+      {/* ══ كارت الحساب ══ */}
       <Dialog open={!!acctCard} onOpenChange={() => setAcctCard(null)}>
         <DialogContent className="max-w-md" dir="rtl">
           <DialogHeader>
-            <DialogTitle className="text-sm flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-primary" />
+            <DialogTitle style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+              <BookOpen style={{ width: 14, height: 14, color: "#2563EB" }} />
               كارت الحساب — {acctCard?.code}
             </DialogTitle>
           </DialogHeader>
           {acctCard && (
-            <div className="space-y-3 text-sm">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">كود الحساب</p>
-                  <p className="font-mono font-bold text-primary">{acctCard.code}</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">اسم الحساب</p>
-                  <p className="font-semibold">{acctCard.name}</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">طبيعة الحساب</p>
-                  <Badge variant="outline" className={acctCard.nature === "debit" ? "border-sky-300 text-sky-700 bg-sky-50" : "border-amber-300 text-amber-700 bg-amber-50"}>
-                    {acctCard.nature === "debit" ? "مدينة" : "دائنة"}
-                  </Badge>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">نوع الحساب</p>
-                  <p className="text-xs">{acctCard.isParent ? "حساب رئيسي" : "حساب تفصيلي"}</p>
-                </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, fontSize: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div><div style={{ fontSize: 10.5, color: "#9CA3AF", marginBottom: 2 }}>كود الحساب</div><div style={{ fontFamily: "monospace", fontWeight: 700, color: "#2563EB" }}>{acctCard.code}</div></div>
+                <div><div style={{ fontSize: 10.5, color: "#9CA3AF", marginBottom: 2 }}>اسم الحساب</div><div style={{ fontWeight: 600 }}>{acctCard.name}</div></div>
+                <div><div style={{ fontSize: 10.5, color: "#9CA3AF", marginBottom: 2 }}>النوع</div><div>{acctCard.isParent ? "حساب رئيسي" : "حساب تفصيلي"}</div></div>
+                <div><div style={{ fontSize: 10.5, color: "#9CA3AF", marginBottom: 2 }}>طبيعة الحساب</div><div style={{ color: acctCard.nature === "debit" ? D : C, fontWeight: 600 }}>{acctCard.nature === "debit" ? "مدينة" : "دائنة"}</div></div>
+                <div><div style={{ fontSize: 10.5, color: "#9CA3AF", marginBottom: 2 }}>التصنيف</div><div style={{ fontSize: 11 }}>{acctCard.accountType}</div></div>
+                <div><div style={{ fontSize: 10.5, color: "#9CA3AF", marginBottom: 2 }}>المستوى</div><div style={{ fontSize: 11 }}>مستوى {acctCard.level}</div></div>
               </div>
-              <div className="border border-border/60 rounded-lg overflow-hidden">
-                <table className="w-full text-xs">
-                  <thead className="bg-muted/30">
-                    <tr>
-                      <th className="text-right p-2 font-medium">البيان</th>
-                      <th className="text-center p-2 font-medium">مدين</th>
-                      <th className="text-center p-2 font-medium">دائن</th>
+              <div style={{ border: "1px solid #E5E7EB", borderRadius: 8, overflow: "hidden" }}>
+                <table style={{ width: "100%", fontSize: 11.5, borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: "#1E3A5F", color: "#fff" }}>
+                      <th style={{ padding: "6px 10px", textAlign: "right", fontWeight: 600 }}>البيان</th>
+                      <th style={{ padding: "6px 10px", textAlign: "center", color: "#93C5FD", fontWeight: 600 }}>مدين</th>
+                      <th style={{ padding: "6px 10px", textAlign: "center", color: "#FCD34D", fontWeight: 600 }}>دائن</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr className="border-t border-border/30">
-                      <td className="p-2 text-muted-foreground">رصيد أول المدة</td>
-                      <td className="text-center p-2 text-primary">
-                        {acctCard.openingBalanceType==="debit" ? acctCard.openingBalance.toLocaleString() : "-"}
-                      </td>
-                      <td className="text-center p-2 text-amber-700">
-                        {acctCard.openingBalanceType==="credit" ? acctCard.openingBalance.toLocaleString() : "-"}
-                      </td>
+                    <tr style={{ borderBottom: "1px solid #F3F4F6" }}>
+                      <td style={{ padding: "6px 10px", color: "#6B7280" }}>رصيد أول المدة</td>
+                      <td style={{ padding: "6px 10px", textAlign: "center", color: D, fontWeight: 600 }}>{fmtN(acctCard.aggOpenD)}</td>
+                      <td style={{ padding: "6px 10px", textAlign: "center", color: C, fontWeight: 600 }}>{fmtN(acctCard.aggOpenC)}</td>
                     </tr>
-                    <tr className="border-t border-border/30">
-                      <td className="p-2 text-muted-foreground">الحركة خلال الفترة</td>
-                      <td className="text-center p-2 text-primary">{acctCard.movementDebit.toLocaleString()}</td>
-                      <td className="text-center p-2 text-amber-700">{acctCard.movementCredit.toLocaleString()}</td>
+                    <tr style={{ borderBottom: "1px solid #F3F4F6" }}>
+                      <td style={{ padding: "6px 10px", color: "#6B7280" }}>الحركة خلال الفترة</td>
+                      <td style={{ padding: "6px 10px", textAlign: "center", color: D, fontWeight: 600 }}>{fmtN(acctCard.aggMoveD)}</td>
+                      <td style={{ padding: "6px 10px", textAlign: "center", color: C, fontWeight: 600 }}>{fmtN(acctCard.aggMoveC)}</td>
                     </tr>
-                    <tr className="border-t-2 border-primary/20 bg-primary/5 font-bold">
-                      <td className="p-2">رصيد آخر المدة</td>
-                      <td className="text-center p-2 text-primary">
-                        {acctCard.closingBalanceType==="debit" ? acctCard.closingBalance.toLocaleString() : "-"}
-                      </td>
-                      <td className="text-center p-2 text-amber-700">
-                        {acctCard.closingBalanceType==="credit" ? acctCard.closingBalance.toLocaleString() : "-"}
-                      </td>
+                    <tr style={{ background: "#EFF6FF" }}>
+                      <td style={{ padding: "6px 10px", fontWeight: 700 }}>رصيد آخر المدة</td>
+                      <td style={{ padding: "6px 10px", textAlign: "center", color: D, fontWeight: 700 }}>{fmtN(acctCard.aggCloseD)}</td>
+                      <td style={{ padding: "6px 10px", textAlign: "center", color: C, fontWeight: 700 }}>{fmtN(acctCard.aggCloseC)}</td>
                     </tr>
                   </tbody>
                 </table>
               </div>
-              <div className="flex gap-2 pt-1">
-                <Button size="sm" className="h-7 text-xs flex-1" onClick={() => { drill(acctCard); setAcctCard(null); }}>
-                  <FileText className="w-3 h-3 ml-1" /> عرض كشف الحساب
-                </Button>
-                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setAcctCard(null)}>إغلاق</Button>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => { drill(acctCard); setAcctCard(null); }} style={{ flex: 1, padding: "6px 0", borderRadius: 6, border: "none", background: "#2563EB", color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "'Cairo',Tahoma,sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+                  <FileText style={{ width: 12, height: 12 }} /> كشف الحساب
+                </button>
+                <button onClick={() => setAcctCard(null)} style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid #D1D5DB", background: "#fff", cursor: "pointer", fontSize: 12, fontFamily: "'Cairo',Tahoma,sans-serif" }}>
+                  إغلاق
+                </button>
               </div>
             </div>
           )}
