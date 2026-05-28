@@ -32,7 +32,11 @@ export async function buildSalesInvoiceLines(
   const subtotal = Number(invoice.subtotal ?? 0);
   const taxAmount = Number(invoice.taxAmount ?? 0);
   const discountAmount = Number(invoice.discountAmount ?? 0);
-  const isCash = invoice.paymentMethod === 'cash';
+
+  // تحديد حساب المدين حسب طريقة الدفع
+  // - آجل (credit) → ذمم العملاء (creditAccountId)
+  // - نقدي / بنك / شيك / أخرى → الصندوق أو البنك (cashAccountId)
+  const isCredit = invoice.paymentMethod === 'credit';
 
   const lines: {
     accountId: number | null;
@@ -45,14 +49,15 @@ export async function buildSalesInvoiceLines(
 
   const warnings: string[] = [];
 
-  // مدين: الصندوق أو ذمم العملاء
-  const debitAccId = isCash ? journal?.cashAccountId : journal?.creditAccountId;
+  // مدين: الصندوق/البنك أو ذمم العملاء حسب طريقة الدفع
+  const debitAccId = isCredit ? journal?.creditAccountId : journal?.cashAccountId;
   const debitAcc = debitAccId ? accMap.get(debitAccId) : null;
-  if (!debitAccId) warnings.push(isCash ? 'حساب الصندوق غير محدد في الدفتر' : 'حساب ذمم العملاء غير محدد في الدفتر');
+  const defaultDebitName = isCredit ? 'ذمم العملاء' : 'الصندوق / النقد';
+  if (!debitAccId) warnings.push(isCredit ? 'حساب ذمم العملاء غير محدد في الدفتر' : 'حساب الصندوق غير محدد في الدفتر');
   lines.push({
     accountId: debitAccId ?? null,
     accountCode: debitAcc?.code ?? '---',
-    accountName: debitAcc?.name ?? (isCash ? 'الصندوق / النقد' : 'ذمم العملاء'),
+    accountName: debitAcc?.name ?? defaultDebitName,
     debit: total.toFixed(4),
     credit: '0.0000',
     description: `فاتورة مبيعات ${invoice.invoiceNumber}`,

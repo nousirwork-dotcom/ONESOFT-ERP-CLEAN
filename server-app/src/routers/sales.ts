@@ -168,9 +168,11 @@ export const salesRouter = router({
         );
       }
 
-      // ── ترحيل تلقائي للفواتير النقدية ───────────────────────────────────────
-      // عند حفظ فاتورة نقدية، ينشأ القيد المحاسبي فوراً من حسابات الدفتر
-      if (input.paymentMethod === 'cash' && input.journalId && invoice.invoiceType === 'sale') {
+      // ── ترحيل تلقائي بناءً على نوع المستند ──────────────────────────────────
+      // عند حفظ أي فاتورة مبيعات مرتبطة بدفتر، ينشأ القيد المحاسبي فوراً
+      // - نقدي / بنك / شيك → مدين: حساب الصندوق | دائن: إيرادات المبيعات
+      // - آجل              → مدين: ذمم العملاء   | دائن: إيرادات المبيعات
+      if (input.journalId && invoice.invoiceType === 'sale') {
         const journal = await db.query.documentJournals.findFirst({
           where: and(eq(documentJournals.id, input.journalId), eq(documentJournals.orgId, orgId)),
         });
