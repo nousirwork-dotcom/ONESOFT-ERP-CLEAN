@@ -8,6 +8,7 @@ import { chatRouter } from './chat.js';
 import { documentJournalsRouter } from './documentJournals.js';
 import { documentTemplatesRouter } from './documentTemplates.js';
 import { documentTypesRouter } from './documentTypes.js';
+import { postingRouter } from './posting.js';
 import { db } from '../db.js';
 import { products, customers, suppliers, chartOfAccounts, warehouses, branches, units, productGroups, journalEntries, journalEntryLines, vouchers, receiptVouchers, paymentVouchers, inventory, stockVouchers, stockVoucherItems, inventoryCounts, inventoryCountItems, freeProducts, salesInvoices, salesInvoiceItems, warehouseAccountLinks, userGroups, userGroupMembers, userCategories, users, documentJournals, documentTypes } from '../schema.js';
 import { eq, and, desc, like, or, sql, isNotNull, isNull, asc, gte, lte } from 'drizzle-orm';
@@ -271,6 +272,7 @@ export const appRouter = router({
   documentJournals: documentJournalsRouter,
   documentTemplates: documentTemplatesRouter,
   documentTypes: documentTypesRouter,
+  posting: postingRouter,
 
   // ─── Dashboard ───────────────────────────────────────────────────────────────
   dashboard: router({

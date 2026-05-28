@@ -82,6 +82,7 @@ const menuSections = [
     children: [
       { id: "warehouses-config",   label: "المخازن",             status: "partial", path: "/cfg/warehouses" },
       { id: "document-journals",   label: "دفاتر المستندات",     status: "partial", path: "/cfg/document-journals" },
+      { id: "posting-settings",    label: "ترحيل المستندات",     status: "partial", path: "/cfg/posting-settings" },
       { id: "document-types",      label: "أنواع المستندات",     status: "partial", path: "/cfg/document-types" },
       { id: "document-templates",  label: "نماذج المستندات",     status: "partial", path: "/cfg/document-templates" },
       { id: "field-design",        label: "تصميم الحقول",        status: "missing", path: "/cfg/field-design" },

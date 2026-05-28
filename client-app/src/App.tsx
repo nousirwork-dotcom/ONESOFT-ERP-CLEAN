@@ -63,6 +63,7 @@ import SettingsModule, {
   CfgMissingDocsTab, CfgPayrollPeriodsTab, CfgOrgChartTab, CfgWageCalendarTab,
   CfgShiftsTab, CfgReportDesignerTab, CfgTestSetupTab, CfgTestEditTab, CfgFieldSpecsTab,
 } from "./pages/SettingsModule";
+import PostingSettingsPage from "./pages/PostingSettingsPage";
 import LoginPage from "./pages/LoginPage";
 import SuperAdminPage from "./pages/SuperAdminPage";
 import { createElement, useEffect } from "react";
@@ -208,6 +209,7 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/cfg/doc-types":           CfgDocTypesTab,
   "/cfg/doc-books":           CfgDocBooksTab,
   "/cfg/document-journals":   CfgDocumentJournalsTab,
+  "/cfg/posting-settings":    PostingSettingsPage,
   "/cfg/document-types":      CfgDocumentTypesTab,
   "/cfg/document-templates":  CfgDocumentTemplatesTab,
   "/cfg/field-design":      CfgFieldDesignTab,

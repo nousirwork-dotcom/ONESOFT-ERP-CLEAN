@@ -118,6 +118,7 @@ export const salesRouter = router({
       customerId: z.number().optional(),
       customerName: z.string().optional(),
       warehouseId: z.number().optional(),
+      journalId: z.number().optional(),
       currency: z.string().default('SAR'),
       exchangeRate: z.string().default('1'),
       subtotal: z.string().default('0'),

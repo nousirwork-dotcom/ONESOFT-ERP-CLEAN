@@ -12,6 +12,7 @@ import { Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import ERPToolbar, { ERPMode } from "@/components/ERPToolbar";
+import PostingPreviewModal from "@/components/PostingPreviewModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface InvoiceLine {
@@ -94,6 +95,11 @@ export default function SalesInvoicePage() {
   const [journalId, setJournalId] = useState<number | null>(null);
   const [journalOpen, setJournalOpen] = useState(false);
 
+  // ── Posting state ─────────────────────────────────────────────────────────
+  const [savedInvoiceId, setSavedInvoiceId]       = useState<number | null>(null);
+  const [isPosted, setIsPosted]                   = useState(false);
+  const [showPostingPreview, setShowPostingPreview] = useState(false);
+
   // ── ERP mode ──────────────────────────────────────────────────────────────
   const [erpMode, setErpMode] = useState<ERPMode>("new");
 
@@ -151,12 +157,31 @@ export default function SalesInvoicePage() {
   const createMutation = trpc.salesInvoices.create.useMutation({
     onSuccess: (data) => {
       toast.success(`✓ تم حفظ الفاتورة ${data.invoiceNumber} بنجاح`, {
-        description: `الإجمالي: ${fmt(netTotal)} ${currency}`,
-        duration: 4000,
+        description: `الإجمالي: ${fmt(netTotal)} ${currency} — اضغط "ترحيل" لترحيل القيد`,
+        duration: 5000,
       });
-      handleNew();
+      setSavedInvoiceId(data.id);
+      setIsPosted(data.isPosted ?? false);
+      setErpMode("view");
     },
     onError: (e) => toast.error(`خطأ في الحفظ: ${e.message}`),
+  });
+
+  const postMutation = trpc.posting.postSalesInvoice.useMutation({
+    onSuccess: (data) => {
+      toast.success(`✓ تم الترحيل — قيد رقم ${data.entryNumber}`);
+      setIsPosted(true);
+      setShowPostingPreview(false);
+    },
+    onError: (e) => toast.error(`خطأ في الترحيل: ${e.message}`),
+  });
+
+  const unpostMutation = trpc.posting.unpostSalesInvoice.useMutation({
+    onSuccess: () => {
+      toast.success("تم إلغاء الترحيل");
+      setIsPosted(false);
+    },
+    onError: (e) => toast.error(`خطأ في إلغاء الترحيل: ${e.message}`),
   });
 
   // عند اختيار دفتر: اعرض الرقم المتوقع فقط (بدون حجزه في قاعدة البيانات)
@@ -429,6 +454,7 @@ export default function SalesInvoicePage() {
       customerId: customerId ?? undefined,
       customerName: customerName || undefined,
       warehouseId: warehouseId ?? undefined,
+      journalId: journalId ?? undefined,
       currency,
       exchangeRate,
       subtotal: fmt(subtotal),
@@ -480,6 +506,9 @@ export default function SalesInvoicePage() {
     setPaidAmountOverride("");
     setErpMode("new");
     setJournalWarehouseId(null);
+    setSavedInvoiceId(null);
+    setIsPosted(false);
+    setShowPostingPreview(false);
     // إذا كان هناك دفتر محدد، اعرض الرقم المتوقع — وإلا يبقى الحقل فارغاً
     if (journalId) {
       utils.documentJournals.previewNextNumber.fetch({ journalId }).then(preview => {
@@ -501,7 +530,10 @@ export default function SalesInvoicePage() {
       <ERPToolbar
         pageTitle="فواتير المبيعات"
         mode={erpMode}
-        saveDisabled={createMutation.isPending}
+        saveDisabled={createMutation.isPending || erpMode === "view"}
+        isSaved={savedInvoiceId !== null}
+        isPosted={isPosted}
+        postingStatus={savedInvoiceId !== null ? (isPosted ? "posted" : "unposted") : null}
         onNew={() => { handleNew(); setErpMode("new"); }}
         onSave={() => handleSave()}
         onEdit={() => { setErpMode("edit"); toast.info("وضع التعديل"); }}
@@ -509,7 +541,20 @@ export default function SalesInvoicePage() {
         onSearch={() => { setErpMode("search"); toast.info("بحث..."); }}
         onRefresh={() => nextNumberQuery.refetch()}
         onCopy={() => copiedLine && toast.info("تم النسخ")}
-        onPost={() => toast.info("جاري الترحيل...")}
+        onPost={() => {
+          if (!savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً"); return; }
+          setShowPostingPreview(true);
+        }}
+        onUnpost={() => {
+          if (!savedInvoiceId) return;
+          if (window.confirm("هل أنت متأكد من إلغاء ترحيل هذه الفاتورة؟")) {
+            unpostMutation.mutate({ invoiceId: savedInvoiceId });
+          }
+        }}
+        onPreviewJournal={() => {
+          if (!savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً"); return; }
+          setShowPostingPreview(true);
+        }}
         onApprove={() => toast.success("تم الاعتماد")}
         onCancel={() => { setErpMode("view"); toast.info("تم الإلغاء"); }}
         onPrint={() => toast.info("جاري الطباعة...")}
@@ -1176,6 +1221,16 @@ export default function SalesInvoicePage() {
         input[type=number]::-webkit-inner-spin-button,
         input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
       `}</style>
+
+      {/* ── نافذة معاينة القيد المحاسبي ─────────────────────────────────── */}
+      {showPostingPreview && savedInvoiceId && (
+        <PostingPreviewModal
+          invoiceId={savedInvoiceId}
+          onClose={() => setShowPostingPreview(false)}
+          onConfirmPost={() => postMutation.mutate({ invoiceId: savedInvoiceId! })}
+          isPosting={postMutation.isPending}
+        />
+      )}
     </div>
   );
 }

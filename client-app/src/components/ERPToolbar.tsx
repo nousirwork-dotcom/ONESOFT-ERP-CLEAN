@@ -2,7 +2,7 @@ import {
   FilePlus, Save, Pencil, Trash2, Search, Printer,
   RefreshCw, Copy, SendHorizonal, CheckCircle2, XCircle,
   ChevronRight, ChevronLeft, ChevronsRight, ChevronsLeft,
-  X, LucideIcon,
+  X, LucideIcon, Undo2, Eye,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 
@@ -10,24 +10,21 @@ import { useState, useEffect, useCallback } from "react";
 export type ERPAction =
   | "new" | "save" | "edit" | "delete"
   | "search" | "refresh" | "copy"
-  | "post" | "approve" | "cancel"
+  | "post" | "unpost" | "preview-journal" | "approve" | "cancel"
   | "print"
   | "first" | "prev" | "next" | "last"
   | "close";
 
 export type ERPMode = "view" | "new" | "edit" | "search";
 
+export type PostingStatus = "unposted" | "posted" | "cancelled" | null;
+
 export interface ERPToolbarProps {
-  /** أي الأزرار تظهر — الافتراضي: كل الأزرار */
   buttons?: ERPAction[];
-  /** الوضع الحالي للصفحة */
   mode?: ERPMode;
-  /** رقم السجل الحالي / الإجمالي */
   record?: number;
   total?: number;
-  /** عنوان الصفحة (يظهر في شريط الحالة) */
   pageTitle?: string;
-  /** Callbacks لكل زر */
   onNew?: () => void;
   onSave?: () => void;
   onEdit?: () => void;
@@ -36,6 +33,8 @@ export interface ERPToolbarProps {
   onRefresh?: () => void;
   onCopy?: () => void;
   onPost?: () => void;
+  onUnpost?: () => void;
+  onPreviewJournal?: () => void;
   onApprove?: () => void;
   onCancel?: () => void;
   onPrint?: () => void;
@@ -44,14 +43,16 @@ export interface ERPToolbarProps {
   onNext?: () => void;
   onLast?: () => void;
   onClose?: () => void;
-  /** تفعيل اختصارات لوحة المفاتيح */
   enableShortcuts?: boolean;
-  /** إخفاء شريط الحالة السفلي */
   hideStatusBar?: boolean;
-  /** حالة تعطيل الحفظ (مثلاً أثناء الإرسال) */
   saveDisabled?: boolean;
-  /** تسمية بديلة لزر "جديد" — مثال: "إضافة صنف" */
   newLabel?: string;
+  /** حالة الترحيل — تُظهر badge في شريط الحالة */
+  postingStatus?: PostingStatus;
+  /** هل المستند محفوظ (له ID في قاعدة البيانات) */
+  isSaved?: boolean;
+  /** هل المستند مرحَّل */
+  isPosted?: boolean;
 }
 
 // ─── Button definition ────────────────────────────────────────────────────────
@@ -65,22 +66,24 @@ type BtnDef = {
 };
 
 const ALL_BUTTONS: BtnDef[] = [
-  { id: "new",     label: "جديد",    icon: FilePlus,      shortcut: "F1", variant: "primary" },
-  { id: "save",    label: "حفظ",     icon: Save,          shortcut: "F2", variant: "primary" },
-  { id: "edit",    label: "تعديل",   icon: Pencil,        shortcut: "F4" },
-  { id: "delete",  label: "حذف",     icon: Trash2,        shortcut: "Del", variant: "danger", dividerAfter: true },
-  { id: "search",  label: "بحث",     icon: Search,        shortcut: "F3" },
-  { id: "refresh", label: "تحديث",   icon: RefreshCw },
-  { id: "copy",    label: "نسخ",     icon: Copy,          dividerAfter: true },
-  { id: "post",    label: "ترحيل",   icon: SendHorizonal, variant: "gold" },
-  { id: "approve", label: "اعتماد",  icon: CheckCircle2,  variant: "gold" },
-  { id: "cancel",  label: "إلغاء",   icon: XCircle,       variant: "danger", dividerAfter: true },
-  { id: "print",   label: "طباعة",   icon: Printer,       dividerAfter: true },
-  { id: "first",   label: "أول",     icon: ChevronsRight },
-  { id: "prev",    label: "السابق",  icon: ChevronRight },
-  { id: "next",    label: "التالي",  icon: ChevronLeft },
-  { id: "last",    label: "آخر",     icon: ChevronsLeft,  dividerAfter: true },
-  { id: "close",   label: "إغلاق",   icon: X,             variant: "ghost" },
+  { id: "new",             label: "جديد",           icon: FilePlus,      shortcut: "F1", variant: "primary" },
+  { id: "save",            label: "حفظ",             icon: Save,          shortcut: "F2", variant: "primary" },
+  { id: "edit",            label: "تعديل",           icon: Pencil,        shortcut: "F4" },
+  { id: "delete",          label: "حذف",             icon: Trash2,        shortcut: "Del", variant: "danger", dividerAfter: true },
+  { id: "search",          label: "بحث",             icon: Search,        shortcut: "F3" },
+  { id: "refresh",         label: "تحديث",           icon: RefreshCw },
+  { id: "copy",            label: "نسخ",             icon: Copy,          dividerAfter: true },
+  { id: "post",            label: "ترحيل",           icon: SendHorizonal, variant: "gold" },
+  { id: "unpost",          label: "إلغاء الترحيل",  icon: Undo2,         variant: "danger" },
+  { id: "preview-journal", label: "معاينة القيد",    icon: Eye },
+  { id: "approve",         label: "اعتماد",          icon: CheckCircle2,  variant: "gold" },
+  { id: "cancel",          label: "إلغاء",           icon: XCircle,       variant: "danger", dividerAfter: true },
+  { id: "print",           label: "طباعة",           icon: Printer,       dividerAfter: true },
+  { id: "first",           label: "أول",             icon: ChevronsRight },
+  { id: "prev",            label: "السابق",          icon: ChevronRight },
+  { id: "next",            label: "التالي",          icon: ChevronLeft },
+  { id: "last",            label: "آخر",             icon: ChevronsLeft,  dividerAfter: true },
+  { id: "close",           label: "إغلاق",           icon: X,             variant: "ghost" },
 ];
 
 const MODE_LABELS: Record<ERPMode, string> = {
@@ -90,16 +93,22 @@ const MODE_LABELS: Record<ERPMode, string> = {
   search: "بحث",
 };
 
-// ─── Colors (CSS variables fallback to hardcoded ERP palette) ─────────────────
+const POSTING_BADGE: Record<NonNullable<PostingStatus>, { label: string; bg: string; color: string }> = {
+  unposted:  { label: "غير مرحَّل",  bg: "#EFF6FF", color: "#1D4ED8" },
+  posted:    { label: "✓ مرحَّل",    bg: "#F0FDF4", color: "#15803D" },
+  cancelled: { label: "✕ ملغي",     bg: "#FEF2F2", color: "#DC2626" },
+};
+
+// ─── Colors ─────────────────────────────────────────────────────────────────
 const C = {
-  bg:        "#F8F7F4",
-  border:    "#DDD8CE",
-  text:      "#2B2B2B",
-  muted:     "#6B7280",
-  primary:   "#406B93",
-  gold:      "#B89B5E",
-  danger:    "#C0392B",
-  divider:   "#D5D0C8",
+  bg:      "#F8F7F4",
+  border:  "#DDD8CE",
+  text:    "#2B2B2B",
+  muted:   "#6B7280",
+  primary: "#406B93",
+  gold:    "#B89B5E",
+  danger:  "#C0392B",
+  divider: "#D5D0C8",
 };
 
 // ─── Single Toolbar Button ─────────────────────────────────────────────────────
@@ -191,7 +200,7 @@ export default function ERPToolbar({
   pageTitle,
   onNew, onSave, onEdit, onDelete,
   onSearch, onRefresh, onCopy,
-  onPost, onApprove, onCancel,
+  onPost, onUnpost, onPreviewJournal, onApprove, onCancel,
   onPrint,
   onFirst, onPrev, onNext, onLast,
   onClose,
@@ -199,13 +208,17 @@ export default function ERPToolbar({
   hideStatusBar = false,
   saveDisabled = false,
   newLabel,
+  postingStatus,
+  isSaved = false,
+  isPosted = false,
 }: ERPToolbarProps) {
   const [activeBtn, setActiveBtn] = useState<ERPAction | "">("");
 
   const callbacks: Partial<Record<ERPAction, (() => void) | undefined>> = {
     new: onNew, save: onSave, edit: onEdit, delete: onDelete,
     search: onSearch, refresh: onRefresh, copy: onCopy,
-    post: onPost, approve: onApprove, cancel: onCancel,
+    post: onPost, unpost: onUnpost, "preview-journal": onPreviewJournal,
+    approve: onApprove, cancel: onCancel,
     print: onPrint,
     first: onFirst, prev: onPrev, next: onNext, last: onLast,
     close: onClose,
@@ -237,11 +250,21 @@ export default function ERPToolbar({
     ? ALL_BUTTONS.filter(b => buttons.includes(b.id))
     : ALL_BUTTONS.filter(b => callbacks[b.id] !== undefined);
 
-  // Determine whether a divider should show after a button (only if next visible button exists)
   const getShowDivider = (btn: BtnDef, idx: number) => {
     if (!btn.dividerAfter) return false;
     return idx < visibleButtons.length - 1;
   };
+
+  // حالة تعطيل أزرار الترحيل
+  const isDisabled = (id: ERPAction) => {
+    if (id === "save")   return saveDisabled;
+    if (id === "post")   return !isSaved || isPosted;
+    if (id === "unpost") return !isPosted;
+    if (id === "preview-journal") return !isSaved;
+    return false;
+  };
+
+  const badge = postingStatus ? POSTING_BADGE[postingStatus] : null;
 
   return (
     <div dir="rtl" style={{ display: "flex", flexDirection: "column", flexShrink: 0 }}>
@@ -264,7 +287,7 @@ export default function ERPToolbar({
             <TBtn
               btn={btn.id === "new" && newLabel ? { ...btn, label: newLabel } : btn}
               active={activeBtn === btn.id}
-              disabled={btn.id === "save" && saveDisabled}
+              disabled={isDisabled(btn.id)}
               onClick={() => handleClick(btn.id)}
             />
             {getShowDivider(btn, idx) && (
@@ -293,11 +316,25 @@ export default function ERPToolbar({
           flexShrink: 0,
           fontFamily: "'Cairo', 'Tahoma', sans-serif",
         }}>
-          <div style={{ display: "flex", gap: 16 }}>
+          <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
             {pageTitle && <span style={{ fontWeight: 600, color: C.text }}>{pageTitle}</span>}
             <span>الوضع: <strong style={{ color: C.primary }}>{MODE_LABELS[mode]}</strong></span>
             {record !== undefined && total !== undefined && (
               <span>السجل: <strong style={{ color: C.text }}>{record} / {total}</strong></span>
+            )}
+            {badge && (
+              <span style={{
+                padding: "1px 8px",
+                borderRadius: 10,
+                background: badge.bg,
+                color: badge.color,
+                fontWeight: 700,
+                fontSize: 10.5,
+                border: `1px solid ${badge.color}33`,
+                letterSpacing: 0.3,
+              }}>
+                {badge.label}
+              </span>
             )}
           </div>
           <span style={{ fontSize: 10.5, opacity: 0.8 }}>
