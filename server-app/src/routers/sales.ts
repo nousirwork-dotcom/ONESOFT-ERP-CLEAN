@@ -112,7 +112,7 @@ export const salesRouter = router({
   create: protectedProcedure
     .input(z.object({
       invoiceNumber: z.string(),
-      invoiceType: z.enum(['sale', 'return', 'quote']).default('sale'),
+      invoiceType: z.enum(['sale', 'return', 'quote', 'order']).default('sale'),
       invoiceDate: z.string(),
       dueDate: z.string().optional(),
       customerId: z.number().optional(),

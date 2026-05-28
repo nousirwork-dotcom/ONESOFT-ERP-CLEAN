@@ -4,7 +4,7 @@ import { relations } from 'drizzle-orm';
 // ─── Enums ────────────────────────────────────────────────────────────────────
 export const userRoleEnum = pgEnum('user_role', ['superadmin', 'admin', 'cashier', 'accountant', 'warehouse_manager', 'viewer']);
 export const orgStatusEnum = pgEnum('org_status', ['active', 'suspended', 'trial', 'expired']);
-export const invoiceTypeEnum = pgEnum('invoice_type', ['sale', 'return', 'quote']);
+export const invoiceTypeEnum = pgEnum('invoice_type', ['sale', 'return', 'quote', 'order']);
 export const invoiceStatusEnum = pgEnum('invoice_status', ['draft', 'confirmed', 'cancelled', 'paid']);
 export const paymentMethodEnum = pgEnum('payment_method', ['cash', 'bank', 'credit', 'check', 'other']);
 export const voucherTypeEnum = pgEnum('voucher_type', ['receipt', 'payment']);
@@ -290,19 +290,51 @@ export const purchaseInvoices = pgTable('purchase_invoices', {
   id: serial('id').primaryKey(),
   orgId: integer('org_id').notNull().references(() => organizations.id),
   invoiceNumber: varchar('invoice_number', { length: 50 }).notNull(),
+  invoiceType: varchar('invoice_type', { length: 20 }).notNull().default('invoice'),
   supplierInvoiceNumber: varchar('supplier_invoice_number', { length: 100 }),
   invoiceDate: timestamp('invoice_date').notNull().defaultNow(),
+  dueDate: timestamp('due_date'),
   supplierId: integer('supplier_id').references(() => suppliers.id),
   supplierName: varchar('supplier_name', { length: 500 }),
   warehouseId: integer('warehouse_id').references(() => warehouses.id, { onDelete: 'set null' }),
+  journalId: integer('journal_id'),
+  currency: varchar('currency', { length: 10 }).default('SAR'),
+  exchangeRate: decimal('exchange_rate', { precision: 18, scale: 6 }).default('1'),
   subtotal: decimal('subtotal', { precision: 18, scale: 4 }).default('0'),
+  discountPercent: decimal('discount_percent', { precision: 5, scale: 2 }).default('0'),
   discountAmount: decimal('discount_amount', { precision: 18, scale: 4 }).default('0'),
   taxAmount: decimal('tax_amount', { precision: 18, scale: 4 }).default('0'),
   total: decimal('total', { precision: 18, scale: 4 }).default('0'),
   paidAmount: decimal('paid_amount', { precision: 18, scale: 4 }).default('0'),
+  remainingAmount: decimal('remaining_amount', { precision: 18, scale: 4 }).default('0'),
+  paymentMethod: varchar('payment_method', { length: 20 }).default('cash'),
   status: invoiceStatusEnum('status').notNull().default('draft'),
   notes: text('notes'),
+  userId: integer('user_id').references(() => users.id),
+  isPosted: boolean('is_posted').notNull().default(false),
+  postedAt: timestamp('posted_at'),
+  postedJournalEntryId: integer('posted_journal_entry_id'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+// ─── Purchase Invoice Items ───────────────────────────────────────────────────
+export const purchaseInvoiceItems = pgTable('purchase_invoice_items', {
+  id: serial('id').primaryKey(),
+  invoiceId: integer('invoice_id').notNull().references(() => purchaseInvoices.id, { onDelete: 'cascade' }),
+  orgId: integer('org_id').notNull().references(() => organizations.id),
+  productId: integer('product_id').references(() => products.id),
+  productCode: varchar('product_code', { length: 100 }),
+  productName: varchar('product_name', { length: 500 }).notNull(),
+  unit: varchar('unit', { length: 100 }),
+  quantity: decimal('quantity', { precision: 18, scale: 4 }).notNull(),
+  unitPrice: decimal('unit_price', { precision: 18, scale: 4 }).notNull(),
+  discountPercent: decimal('discount_percent', { precision: 5, scale: 2 }).default('0'),
+  discountAmount: decimal('discount_amount', { precision: 18, scale: 4 }).default('0'),
+  taxPercent: decimal('tax_percent', { precision: 5, scale: 2 }).default('0'),
+  taxAmount: decimal('tax_amount', { precision: 18, scale: 4 }).default('0'),
+  total: decimal('total', { precision: 18, scale: 4 }).notNull(),
+  sortOrder: integer('sort_order').default(0),
 });
 
 // ─── Journal Entries ──────────────────────────────────────────────────────────

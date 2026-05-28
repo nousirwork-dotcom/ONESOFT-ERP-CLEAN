@@ -4,6 +4,7 @@ import { router, publicProcedure, protectedProcedure, superAdminProcedure } from
 import { orgsRouter } from './orgs.js';
 import { usersRouter } from './users.js';
 import { salesRouter } from './sales.js';
+import { purchasesRouter } from './purchases.js';
 import { chatRouter } from './chat.js';
 import { documentJournalsRouter } from './documentJournals.js';
 import { documentTemplatesRouter } from './documentTemplates.js';
@@ -266,6 +267,7 @@ export const appRouter = router({
   // ─── Sales ───────────────────────────────────────────────────────────────────
   sales: salesRouter,
   salesInvoices: salesRouter,
+  purchases: purchasesRouter,
 
   // ─── Chat ────────────────────────────────────────────────────────────────────
   chat: chatRouter,

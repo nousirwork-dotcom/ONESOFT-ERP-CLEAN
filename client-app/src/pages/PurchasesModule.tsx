@@ -1,4 +1,7 @@
 import { useState, useMemo } from "react";
+import PurchaseInvoicePage from "./PurchaseInvoicePage";
+import PurchaseReturnPage from "./PurchaseReturnPage";
+import PurchaseOrderPage from "./PurchaseOrderPage";
 import {
   ChevronDown, ChevronRight, ShoppingCart, FileText, Users,
   Plus, Search, Printer, X, Check, Trash2, Edit2, ArrowLeft,
@@ -873,9 +876,9 @@ function PurchasesContent({ activeId, onSelect }: { activeId: MenuId; onSelect: 
   switch (activeId) {
     case "overview":          return <PurchasesOverview onSelect={onSelect} />;
     case "suppliers-list":    return <SuppliersListPage />;
-    case "purchase-orders":   return <PurchaseDocPage invoiceType="order" />;
-    case "purchase-invoices": return <PurchaseDocPage invoiceType="invoice" />;
-    case "purchase-returns":  return <PurchaseDocPage invoiceType="return" />;
+    case "purchase-orders":   return <PurchaseOrderPage />;
+    case "purchase-invoices": return <PurchaseInvoicePage />;
+    case "purchase-returns":  return <PurchaseReturnPage />;
     case "rpt-by-supplier":   return <ReportBySupplier />;
     case "rpt-by-item":       return <div className="text-xs text-muted-foreground p-4">تقرير المشتريات حسب الصنف - قريباً</div>;
     default:                  return <PurchasesOverview onSelect={onSelect} />;
@@ -887,13 +890,13 @@ export function PurchaseSuppliersPage() {
   return <div className="h-full overflow-auto p-5" dir="rtl"><SuppliersListPage /></div>;
 }
 export function PurchaseOrdersPage() {
-  return <div className="h-full overflow-auto p-5" dir="rtl"><PurchaseDocPage invoiceType="order" /></div>;
+  return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><PurchaseOrderPage /></div>;
 }
 export function PurchaseInvoicesPage() {
-  return <div className="h-full overflow-auto p-5" dir="rtl"><PurchaseDocPage invoiceType="invoice" /></div>;
+  return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><PurchaseInvoicePage /></div>;
 }
 export function PurchaseReturnsPage() {
-  return <div className="h-full overflow-auto p-5" dir="rtl"><PurchaseDocPage invoiceType="return" /></div>;
+  return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><PurchaseReturnPage /></div>;
 }
 export function PurchaseRptSupplierPage() {
   return <div className="h-full overflow-auto p-5" dir="rtl"><ReportBySupplier /></div>;

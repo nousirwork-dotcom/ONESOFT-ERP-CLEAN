@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import SalesInvoicePageNew from "./SalesInvoicePage";
 import SalesQuotation from "./sales/SalesQuotation";
+import SalesReturnPage from "./SalesReturnPage";
+import SalesQuotePage from "./SalesQuotePage";
+import SalesOrderPage from "./SalesOrderPage";
 import { useTabManager } from "@/contexts/TabManagerContext";
 import {
   ChevronDown, ChevronRight, TrendingUp, FileText, RotateCcw,
@@ -2597,10 +2600,10 @@ function SalesContent({ activeId, onSelect, settings, onSettingsChange }: {
 // ─── Exported Sub-Page Wrappers (for MDI tab system) ──────────────────────────
 export function SalesTransactionsTab()  { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesTransactionsView /></div>; }
 export function SalesInvoiceTab()       { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesInvoiceListView /></div>; }
-export function SalesReturnTab()        { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="مردود المبيعات" /></div>; }
+export function SalesReturnTab()        { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesReturnPage /></div>; }
 export function SalesCreditNoteTab()    { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="إشعار دائن" /></div>; }
-export function SalesQuotationTab()     { return <div className="h-full overflow-auto p-5" dir="rtl"><SalesQuotation /></div>; }
-export function SalesOrderTab()         { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="أمر بيع" /></div>; }
+export function SalesQuotationTab()     { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesQuotePage /></div>; }
+export function SalesOrderTab()         { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesOrderPage /></div>; }
 export function SalesDeliveryTab()      { return <div className="h-full overflow-auto p-5" dir="rtl"><DeliveryOrderPage /></div>; }
 export function SalesPosTab()           { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="شاشة البيع" /></div>; }
 export function SalesShiftsTab()        { return <div className="h-full overflow-auto p-5" dir="rtl"><ShiftsPage /></div>; }
