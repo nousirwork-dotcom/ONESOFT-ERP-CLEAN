@@ -3767,8 +3767,8 @@ function TrialBalancePage({
       {/* ══ شريط العنوان ══ */}
       <div style={{ padding: "8px 14px", borderBottom: "1px solid #E5E7EB", background: "#fff", display: "flex", alignItems: "center", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
-          <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(37,99,235,0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Scale style={{ width: 16, height: 16, color: "#2563EB" }} />
+          <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(64,107,147,0.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Scale style={{ width: 16, height: 16, color: "#406B93" }} />
           </div>
           <div>
             <div style={{ fontSize: 13.5, fontWeight: 700, color: "#111827" }}>ميزان مراجعة الأستاذ العام</div>
@@ -3781,7 +3781,7 @@ function TrialBalancePage({
         </div>
         <div style={{ display: "flex", borderRadius: 6, overflow: "hidden", border: "1px solid #D1D5DB" }}>
           {(["full","simple"] as const).map(m => (
-            <button key={m} onClick={() => setTbMode(m)} style={{ padding: "3px 12px", fontSize: 11, cursor: "pointer", border: "none", background: tbMode === m ? "#2563EB" : "#fff", color: tbMode === m ? "#fff" : "#6B7280", fontFamily: "'Cairo',Tahoma,sans-serif" }}>
+            <button key={m} onClick={() => setTbMode(m)} style={{ padding: "3px 12px", fontSize: 11, cursor: "pointer", border: "none", background: tbMode === m ? "#406B93" : "#fff", color: tbMode === m ? "#fff" : "#6B7280", fontFamily: "'Cairo',Tahoma,sans-serif" }}>
               {m === "full" ? "تفصيلي" : "مبسّط"}
             </button>
           ))}
@@ -3795,19 +3795,19 @@ function TrialBalancePage({
       </div>
 
       {/* ══ شريط الفلاتر ══ */}
-      <div style={{ padding: "8px 14px", borderBottom: "1px solid #E5E7EB", background: "#F8FAFF", flexShrink: 0 }}>
+      <div style={{ padding: "8px 14px", borderBottom: "1px solid #E5E7EB", background: "#F3F7FB", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 8, flexWrap: "wrap" }}>
           <span style={{ fontSize: 11, color: "#6B7280" }}>الفترة:</span>
           {PERIODS.map(p => (
-            <button key={p.id} onClick={() => applyPeriod(p.id)} style={{ padding: "3px 10px", fontSize: 11, borderRadius: 6, cursor: "pointer", border: `1px solid ${period === p.id ? "#2563EB" : "#D1D5DB"}`, background: period === p.id ? "#EFF6FF" : "#fff", color: period === p.id ? "#2563EB" : "#6B7280", fontFamily: "'Cairo',Tahoma,sans-serif", fontWeight: 600 }}>
+            <button key={p.id} onClick={() => applyPeriod(p.id)} style={{ padding: "3px 10px", fontSize: 11, borderRadius: 6, cursor: "pointer", border: `1px solid ${period === p.id ? "#406B93" : "#D1D5DB"}`, background: period === p.id ? "#E8F0F8" : "#fff", color: period === p.id ? "#406B93" : "#6B7280", fontFamily: "'Cairo',Tahoma,sans-serif", fontWeight: 600 }}>
               {p.l}
             </button>
           ))}
           <span style={{ fontSize: 11, color: "#9CA3AF" }}>أو مخصص:</span>
           <span style={{ fontSize: 11, color: "#6B7280" }}>من</span>
-          <input type="date" value={fromDate} onChange={e => { setFromDate(e.target.value); setPeriod("custom"); }} style={{ padding: "3px 7px", border: `1px solid ${period === "custom" ? "#2563EB" : "#D1D5DB"}`, borderRadius: 6, fontSize: 11, background: "#fff", color: "#111827" }} />
+          <input type="date" value={fromDate} onChange={e => { setFromDate(e.target.value); setPeriod("custom"); }} style={{ padding: "3px 7px", border: `1px solid ${period === "custom" ? "#406B93" : "#D1D5DB"}`, borderRadius: 6, fontSize: 11, background: "#fff", color: "#111827" }} />
           <span style={{ fontSize: 11, color: "#6B7280" }}>إلى</span>
-          <input type="date" value={toDate} onChange={e => { setToDate(e.target.value); setPeriod("custom"); }} style={{ padding: "3px 7px", border: `1px solid ${period === "custom" ? "#2563EB" : "#D1D5DB"}`, borderRadius: 6, fontSize: 11, background: "#fff", color: "#111827" }} />
+          <input type="date" value={toDate} onChange={e => { setToDate(e.target.value); setPeriod("custom"); }} style={{ padding: "3px 7px", border: `1px solid ${period === "custom" ? "#406B93" : "#D1D5DB"}`, borderRadius: 6, fontSize: 11, background: "#fff", color: "#111827" }} />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <div style={{ position: "relative", flex: 1, minWidth: 180, maxWidth: 280 }}>
@@ -3823,7 +3823,7 @@ function TrialBalancePage({
             <button onClick={collapseAll} style={{ padding: "3px 9px", border: "1px solid #D1D5DB", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 11, color: "#374151", fontFamily: "'Cairo',Tahoma,sans-serif" }}>− طي الكل</button>
             <button
               onClick={() => setShowZero(v => !v)}
-              style={{ padding: "3px 9px", border: `1px solid ${showZero ? "#2563EB" : "#D1D5DB"}`, borderRadius: 6, background: showZero ? "#EFF6FF" : "#fff", cursor: "pointer", fontSize: 11, color: showZero ? "#2563EB" : "#6B7280", fontFamily: "'Cairo',Tahoma,sans-serif", fontWeight: showZero ? 600 : 400 }}
+              style={{ padding: "3px 9px", border: `1px solid ${showZero ? "#406B93" : "#D1D5DB"}`, borderRadius: 6, background: showZero ? "#E8F0F8" : "#fff", cursor: "pointer", fontSize: 11, color: showZero ? "#406B93" : "#6B7280", fontFamily: "'Cairo',Tahoma,sans-serif", fontWeight: showZero ? 600 : 400 }}
               title={showZero ? "الآن: تظهر الحسابات الصفرية — اضغط للإخفاء" : "الآن: الحسابات الصفرية مخفية — اضغط للإظهار"}
             >
               {showZero ? "✓ إظهار الصفرية" : "إظهار الصفرية"}
@@ -3839,7 +3839,7 @@ function TrialBalancePage({
       <div style={{ flex: 1, overflowY: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5 }}>
           <thead>
-            <tr style={{ background: "#4B5563", color: "#fff", position: "sticky", top: 0, zIndex: 3 }}>
+            <tr style={{ background: "#406B93", color: "#fff", position: "sticky", top: 0, zIndex: 3 }}>
               <th style={{ width: 28, padding: "7px 4px" }}></th>
               <th style={{ padding: "7px 10px", textAlign: "right", fontWeight: 600, width: 90, whiteSpace: "nowrap" }}>كود</th>
               <th style={{ padding: "7px 10px", textAlign: "right", fontWeight: 600 }}>اسم الحساب</th>
@@ -3859,7 +3859,7 @@ function TrialBalancePage({
               )}
             </tr>
             {tbMode === "full" && (
-              <tr style={{ background: "#6B7280", color: "#F9FAFB", position: "sticky", top: 38, zIndex: 3 }}>
+              <tr style={{ background: "#5A7D99", color: "#F9FAFB", position: "sticky", top: 38, zIndex: 3 }}>
                 <th colSpan={3}></th>
                 <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10 }}>مدين</th>
                 <th style={{ padding: "3px 10px", textAlign: "center", fontSize: 10, borderLeft: "1px solid #9CA3AF" }}>دائن</th>
@@ -3903,7 +3903,7 @@ function TrialBalancePage({
                     textDecoration: active ? "underline dotted" : "none",
                     transition: "color 0.15s",
                   }}
-                    onMouseEnter={e => { if (active) (e.currentTarget as HTMLElement).style.color = "#2563EB"; }}
+                    onMouseEnter={e => { if (active) (e.currentTarget as HTMLElement).style.color = "#406B93"; }}
                     onMouseLeave={e => { if (active) (e.currentTarget as HTMLElement).style.color = color; }}
                   >{fmtN(value)}</span>
                 );
@@ -3921,11 +3921,11 @@ function TrialBalancePage({
                     )}
                   </td>
                   <td style={{ padding: "5px 8px", fontFamily: "monospace", fontWeight: fw, fontSize: fs, paddingRight: 8 + indent }}>
-                    <span onClick={() => setAcctCard(n)} style={{ color: "#2563EB", cursor: "pointer" }} title="كارت الحساب">{n.code}</span>
+                    <span onClick={() => setAcctCard(n)} style={{ color: "#406B93", cursor: "pointer" }} title="كارت الحساب">{n.code}</span>
                   </td>
                   <td style={{ padding: "5px 8px", fontWeight: fw, fontSize: fs, color: depth === 0 ? "#1E3A5F" : "#374151" }}>
                     <span onClick={() => setAcctCard(n)} style={{ cursor: "pointer" }} title="كارت الحساب">{n.name}</span>
-                    {n.level === 1 && <span style={{ marginRight: 8, fontSize: 9, padding: "1px 5px", borderRadius: 8, background: "#DBEAFE", color: "#1D4ED8", fontWeight: 700 }}>جذري</span>}
+                    {n.level === 1 && <span style={{ marginRight: 8, fontSize: 9, padding: "1px 5px", borderRadius: 8, background: "#D4E8F5", color: "#2D5F85", fontWeight: 700 }}>جذري</span>}
                     {n.level === 2 && <span style={{ marginRight: 8, fontSize: 9, padding: "1px 5px", borderRadius: 8, background: "#F3E8FF", color: "#7C3AED", fontWeight: 700 }}>رئيسي</span>}
                   </td>
                   {tbMode === "full" ? (
@@ -3962,7 +3962,7 @@ function TrialBalancePage({
             })}
           </tbody>
           <tfoot>
-            <tr style={{ background: "#4B5563", color: "#fff", position: "sticky", bottom: 0, zIndex: 2 }}>
+            <tr style={{ background: "#406B93", color: "#fff", position: "sticky", bottom: 0, zIndex: 2 }}>
               <td colSpan={3} style={{ padding: "7px 12px", fontWeight: 700, fontSize: 12 }}>الإجمالي الكلي</td>
               {tbMode === "full" ? (
                 <>
@@ -3991,14 +3991,14 @@ function TrialBalancePage({
         <DialogContent className="max-w-md" dir="rtl">
           <DialogHeader>
             <DialogTitle style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
-              <BookOpen style={{ width: 14, height: 14, color: "#2563EB" }} />
+              <BookOpen style={{ width: 14, height: 14, color: "#406B93" }} />
               كارت الحساب — {acctCard?.code}
             </DialogTitle>
           </DialogHeader>
           {acctCard && (
             <div style={{ display: "flex", flexDirection: "column", gap: 12, fontSize: 12 }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <div><div style={{ fontSize: 10.5, color: "#9CA3AF", marginBottom: 2 }}>كود الحساب</div><div style={{ fontFamily: "monospace", fontWeight: 700, color: "#2563EB" }}>{acctCard.code}</div></div>
+                <div><div style={{ fontSize: 10.5, color: "#9CA3AF", marginBottom: 2 }}>كود الحساب</div><div style={{ fontFamily: "monospace", fontWeight: 700, color: "#406B93" }}>{acctCard.code}</div></div>
                 <div><div style={{ fontSize: 10.5, color: "#9CA3AF", marginBottom: 2 }}>اسم الحساب</div><div style={{ fontWeight: 600 }}>{acctCard.name}</div></div>
                 <div><div style={{ fontSize: 10.5, color: "#9CA3AF", marginBottom: 2 }}>النوع</div><div>{acctCard.isParent ? "حساب رئيسي" : "حساب تفصيلي"}</div></div>
                 <div><div style={{ fontSize: 10.5, color: "#9CA3AF", marginBottom: 2 }}>طبيعة الحساب</div><div style={{ color: acctCard.nature === "debit" ? D : C, fontWeight: 600 }}>{acctCard.nature === "debit" ? "مدينة" : "دائنة"}</div></div>

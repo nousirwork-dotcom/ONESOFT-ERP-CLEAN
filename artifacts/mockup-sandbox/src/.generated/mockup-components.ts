@@ -2,8 +2,8 @@
 type ModuleMap = Record<string, () => Promise<Record<string, unknown>>>;
 export const modules: ModuleMap = {
   "./components/mockups/erp-toolbar/Toolbar.tsx": () => import("../components/mockups/erp-toolbar/Toolbar.tsx"),
-  "./components/mockups/erp-elegant/Dashboard.tsx": () => import("../components/mockups/erp-elegant/Dashboard.tsx"),
   "./components/mockups/tabs/Current.tsx": () => import("../components/mockups/tabs/Current.tsx"),
   "./components/mockups/tabs/Pill.tsx": () => import("../components/mockups/tabs/Pill.tsx"),
-  "./components/mockups/tabs/Underline.tsx": () => import("../components/mockups/tabs/Underline.tsx")
+  "./components/mockups/tabs/Underline.tsx": () => import("../components/mockups/tabs/Underline.tsx"),
+  "./components/mockups/erp-elegant/Dashboard.tsx": () => import("../components/mockups/erp-elegant/Dashboard.tsx")
 };
