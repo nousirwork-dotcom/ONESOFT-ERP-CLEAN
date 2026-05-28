@@ -3717,6 +3717,7 @@ function TrialBalancePage({
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [tbMode,   setTbMode]   = useState<"full" | "simple">("full");
   const [showZero, setShowZero] = useState(false);
+  const [fontSize, setFontSize] = useState<"s" | "m" | "l">("m");
   const [acctCard, setAcctCard] = useState<TBNode | null>(null);
   const [ledgerDlg, setLedgerDlg] = useState<{ accountId: number; code: string; name: string } | null>(null);
   const initDone = useRef(false);
@@ -3753,6 +3754,7 @@ function TrialBalancePage({
   const drill = (n: TBNode) => onDrillDown?.(n.accountId, fromDate, toDate);
 
   const fmtN = (n: number) => n === 0 ? "—" : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fsBase = fontSize === "s" ? 10 : fontSize === "m" ? 11.5 : 13.5;
   const D = "#C0392B";
   const C = "#1A7A4A";
   const PERIODS = [
@@ -3829,6 +3831,13 @@ function TrialBalancePage({
               {showZero ? "✓ إظهار الصفرية" : "إظهار الصفرية"}
             </button>
           </div>
+          <div style={{ display: "flex", borderRadius: 6, overflow: "hidden", border: "1px solid #D1D5DB" }} title="حجم الخط">
+            {(["s","m","l"] as const).map(sz => (
+              <button key={sz} onClick={() => setFontSize(sz)} style={{ padding: "3px 8px", fontSize: sz === "s" ? 10 : sz === "m" ? 12 : 14, cursor: "pointer", border: "none", background: fontSize === sz ? "#406B93" : "#fff", color: fontSize === sz ? "#fff" : "#6B7280", fontFamily: "'Cairo',Tahoma,sans-serif", fontWeight: 600, lineHeight: 1 }}>
+                {sz === "s" ? "ص" : sz === "m" ? "م" : "ك"}
+              </button>
+            ))}
+          </div>
           <button onClick={() => tbQuery.refetch()} style={{ width: 28, height: 28, border: "1px solid #D1D5DB", borderRadius: 6, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#6B7280" }} title="تحديث">
             <RefreshCw style={{ width: 12, height: 12 }} />
           </button>
@@ -3837,7 +3846,7 @@ function TrialBalancePage({
 
       {/* ══ الجدول ══ */}
       <div style={{ flex: 1, overflowY: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: fsBase }}>
           <thead>
             <tr style={{ background: "#E8E4DA", color: "#1E2A1A", position: "sticky", top: 0, zIndex: 3, borderBottom: "1px solid #C8C3B8" }}>
               <th style={{ width: 28, padding: "7px 4px" }}></th>
@@ -3880,7 +3889,7 @@ function TrialBalancePage({
             ) : flatRows.map(({ node: n, depth, hasChildren }, rowIdx) => {
               const bg    = depth === 0 ? "#E8E4DA" : depth === 1 ? "#F0EDE6" : rowIdx % 2 === 0 ? "#fff" : "#E8E4DA";
               const fw    = depth === 0 ? 700 : depth === 1 ? 700 : 600;
-              const fs    = depth === 0 ? 12.5 : 11.5;
+              const fs    = depth === 0 ? fsBase + 1 : fsBase;
               const indent = depth * 18;
               const hasData     = n.aggMoveD > 0 || n.aggMoveC > 0 || n.aggOpenD > 0 || n.aggOpenC > 0;
               const hasClose    = n.aggCloseD > 0 || n.aggCloseC > 0;
