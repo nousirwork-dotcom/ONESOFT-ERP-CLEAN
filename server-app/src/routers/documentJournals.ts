@@ -18,6 +18,8 @@ export const DOC_TYPES = [
   { id: 'journal_entry',       label: 'سند قيد' },
   { id: 'stock_issue_items',   label: 'سند صرف أصناف' },
   { id: 'stock_receipt_items', label: 'سند توريد أصناف' },
+  { id: 'customers_journal',   label: 'دفتر العملاء' },
+  { id: 'suppliers_journal',   label: 'دفتر الموردين' },
 ];
 
 const journalInputShape = {
