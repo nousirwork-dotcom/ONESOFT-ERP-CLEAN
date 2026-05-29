@@ -610,26 +610,6 @@ export default function DocumentTypesPage() {
                       {(warehousesList as any[])?.map((w: any) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
                     </FS>
                   </R>
-                  <R label="تكويد العملاء" lw={120}>
-                    <FS value={form.customersJournal} onValueChange={v => set("customersJournal", v)}>
-                      <SelectItem value="none">— بدون —</SelectItem>
-                      {(customersJournalsList as any[]).map((j: any) => (
-                        <SelectItem key={j.id} value={String(j.id)}>
-                          {j.numberPrefix ? `${j.numberPrefix} — ${j.name}` : j.name}
-                        </SelectItem>
-                      ))}
-                    </FS>
-                  </R>
-                  <R label="تكويد الموردين" lw={120}>
-                    <FS value={form.suppliersJournal} onValueChange={v => set("suppliersJournal", v)}>
-                      <SelectItem value="none">— بدون —</SelectItem>
-                      {(suppliersJournalsList as any[]).map((j: any) => (
-                        <SelectItem key={j.id} value={String(j.id)}>
-                          {j.numberPrefix ? `${j.numberPrefix} — ${j.name}` : j.name}
-                        </SelectItem>
-                      ))}
-                    </FS>
-                  </R>
                 </div>
                 <div className="mt-2">
                   <CB label="للمستندات التي يصدرها النظام فقط" checked={form.systemOnly} onChange={v => set("systemOnly", v)} />
