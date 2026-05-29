@@ -50,6 +50,8 @@ const journalInputShape = {
   resetFrequency:   z.string().default('none'),
   autoSerial:       z.boolean().default(false),
   printOnSave:      z.boolean().default(false),
+  customersJournal: z.string().nullable().optional(),
+  suppliersJournal: z.string().nullable().optional(),
   notes:            z.string().optional(),
   sortOrder:        z.number().default(0),
 };

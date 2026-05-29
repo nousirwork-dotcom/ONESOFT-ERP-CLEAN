@@ -596,6 +596,8 @@ export const documentJournals = pgTable('document_journals', {
   resetFrequency:   varchar('reset_frequency', { length: 20 }).default('none'),
   autoSerial:       boolean('auto_serial').notNull().default(false),
   printOnSave:      boolean('print_on_save').notNull().default(false),
+  customersJournal: varchar('customers_journal', { length: 50 }),
+  suppliersJournal: varchar('suppliers_journal', { length: 50 }),
   postingMode:      varchar('posting_mode', { length: 20 }).default('manual'),
   allowUnpost:      boolean('allow_unpost').notNull().default(true),
   allowEditAfterPost: boolean('allow_edit_after_post').notNull().default(false),

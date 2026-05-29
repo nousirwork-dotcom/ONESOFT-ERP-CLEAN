@@ -20,6 +20,7 @@ type JournalForm = {
   lastNum: string; printTemplate: string; printTemplate2: string;
   printOnSave: boolean; status: string; postingMethod: string;
   resetFrequency: string;
+  customersJournal: string; suppliersJournal: string;
 };
 
 type DBJournal = {
@@ -41,6 +42,7 @@ const EMPTY: JournalForm = {
   lastNum: "999999", printTemplate: "", printTemplate2: "",
   printOnSave: false, status: "ready", postingMethod: "normal",
   resetFrequency: "none",
+  customersJournal: "", suppliersJournal: "",
 };
 
 /* ──────────────── document types ──────────────── */
@@ -122,6 +124,8 @@ function dbToForm(j: DBJournal): JournalForm {
     status:            "ready",
     postingMethod:     "normal",
     resetFrequency:    j.resetFrequency ?? "none",
+    customersJournal:  (j as any).customersJournal ?? "",
+    suppliersJournal:  (j as any).suppliersJournal ?? "",
   };
 }
 
@@ -155,6 +159,8 @@ export default function DocumentJournalsPage() {
   const { data: userGroupsList }  = trpc.userGroups.list.useQuery();
   const { data: users }           = trpc.users.listBasic.useQuery();
   const { data: templates }       = trpc.documentTemplates.list.useQuery({ docType: selectedType });
+  const { data: custJournalsList }  = trpc.documentJournals.list.useQuery({ docType: "customers_journal" });
+  const { data: suppJournalsList }  = trpc.documentJournals.list.useQuery({ docType: "suppliers_journal" });
 
   /* ── mutations ── */
   const createMut = trpc.documentJournals.create.useMutation({
@@ -237,10 +243,12 @@ export default function DocumentJournalsPage() {
       allowedUserId:  form.user ? parseInt(form.user) : null,
       printTemplate:  form.printTemplate || null,
       printTemplate2: form.printTemplate2 || null,
-      resetFrequency: form.resetFrequency,
-      autoSerial:     form.autoSerial,
-      printOnSave:    form.printOnSave,
-      sortOrder:      0,
+      resetFrequency:   form.resetFrequency,
+      autoSerial:       form.autoSerial,
+      printOnSave:      form.printOnSave,
+      customersJournal: form.customersJournal || null,
+      suppliersJournal: form.suppliersJournal || null,
+      sortOrder:        0,
     };
     if (editId != null) {
       updateMut.mutate({ id: editId, ...payload });
@@ -418,32 +426,60 @@ export default function DocumentJournalsPage() {
                 </div>
               </P>
 
-              {/* ── حدود الاستخدام ── */}
-              <P title="حدود الاستخدام">
-                <div className="grid grid-cols-3 gap-x-4 gap-y-2">
-                  <R label="مجموعة مستخدمين" lw={120}>
-                    <FS value={form.userGroup} onValueChange={v => set("userGroup", v)}>
-                      <SelectItem value="__none__">الكل</SelectItem>
-                      {(userGroupsList ?? []).map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>)}
-                    </FS>
-                  </R>
-                  <R label="مستخدم">
-                    <FS value={form.user} onValueChange={v => set("user", v)}>
-                      <SelectItem value="__none__">الكل</SelectItem>
-                      {(users as any[])?.map((u: any) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
-                    </FS>
-                  </R>
-                  <R label="مخزن">
-                    <FS value={form.warehouse} onValueChange={v => set("warehouse", v)}>
-                      <SelectItem value="__none__">الكل</SelectItem>
-                      {(warehousesList as any[])?.map((w: any) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
-                    </FS>
-                  </R>
-                </div>
-                <div className="mt-2">
-                  <CB label="للمستندات التي يصدرها النظام فقط" checked={form.systemOnly} onChange={v => set("systemOnly", v)} />
-                </div>
-              </P>
+              {/* ── حدود الاستخدام + ربط العملاء والموردين (جنباً إلى جنب) ── */}
+              <div className="grid grid-cols-2 gap-3">
+                <P title="حدود الاستخدام">
+                  <div className="grid grid-cols-1 gap-y-2">
+                    <R label="مجموعة مستخدمين" lw={130}>
+                      <FS value={form.userGroup} onValueChange={v => set("userGroup", v)}>
+                        <SelectItem value="__none__">الكل</SelectItem>
+                        {(userGroupsList ?? []).map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>)}
+                      </FS>
+                    </R>
+                    <R label="مستخدم" lw={130}>
+                      <FS value={form.user} onValueChange={v => set("user", v)}>
+                        <SelectItem value="__none__">الكل</SelectItem>
+                        {(users as any[])?.map((u: any) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
+                      </FS>
+                    </R>
+                    <R label="مخزن" lw={130}>
+                      <FS value={form.warehouse} onValueChange={v => set("warehouse", v)}>
+                        <SelectItem value="__none__">الكل</SelectItem>
+                        {(warehousesList as any[])?.map((w: any) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
+                      </FS>
+                    </R>
+                  </div>
+                  <div className="mt-2">
+                    <CB label="للمستندات التي يصدرها النظام فقط" checked={form.systemOnly} onChange={v => set("systemOnly", v)} />
+                  </div>
+                </P>
+
+                <P title="ربط العملاء والموردين بالدفتر">
+                  <div className="grid grid-cols-1 gap-y-2">
+                    <R label="تكويد العملاء" lw={120}>
+                      <FS value={form.customersJournal} onValueChange={v => set("customersJournal", v)}>
+                        <SelectItem value="__none__">— بدون ربط —</SelectItem>
+                        {(custJournalsList as any[] ?? []).map((j: any) => (
+                          <SelectItem key={j.id} value={String(j.id)}>{j.name}</SelectItem>
+                        ))}
+                      </FS>
+                    </R>
+                    <R label="تكويد الموردين" lw={120}>
+                      <FS value={form.suppliersJournal} onValueChange={v => set("suppliersJournal", v)}>
+                        <SelectItem value="__none__">— بدون ربط —</SelectItem>
+                        {(suppJournalsList as any[] ?? []).map((j: any) => (
+                          <SelectItem key={j.id} value={String(j.id)}>{j.name}</SelectItem>
+                        ))}
+                      </FS>
+                    </R>
+                  </div>
+                  <div className="mt-2 pt-2" style={{ borderTop: "1px solid #f1f5f9" }}>
+                    <p className="text-[10px] text-slate-400 leading-relaxed">
+                      يتم ربط الدفتر بدفاتر العملاء والموردين لتحديد نظام تكويد الأرقام عند إنشاء أو تعديل كارتات العملاء والموردين من خلال هذا الدفتر.
+                    </p>
+                  </div>
+                </P>
+              </div>
 
               {/* ── الأرقام والترقيم ── */}
               <P title="الأرقام والترقيم"
