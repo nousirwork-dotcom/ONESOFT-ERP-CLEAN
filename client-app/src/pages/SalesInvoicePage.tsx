@@ -104,12 +104,18 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
   // ── ERP mode ──────────────────────────────────────────────────────────────
   const [erpMode, setErpMode] = useState<ERPMode>("new");
 
+  // ── Customer type & tax ───────────────────────────────────────────────────
+  const [customerType, setCustomerType]         = useState<'individual' | 'organization'>('individual');
+  const [customerTaxNumber, setCustomerTaxNumber] = useState("");
+
   // ── Add Customer Modal ────────────────────────────────────────────────────
   const [showAddCustomer, setShowAddCustomer] = useState(false);
-  const [newCustName, setNewCustName]   = useState("");
-  const [newCustPhone, setNewCustPhone] = useState("");
-  const [newCustEmail, setNewCustEmail] = useState("");
-  const [newCustAddr, setNewCustAddr]   = useState("");
+  const [newCustName, setNewCustName]     = useState("");
+  const [newCustPhone, setNewCustPhone]   = useState("");
+  const [newCustEmail, setNewCustEmail]   = useState("");
+  const [newCustAddr, setNewCustAddr]     = useState("");
+  const [newCustType, setNewCustType]     = useState<'individual' | 'organization'>('individual');
+  const [newCustTaxNum, setNewCustTaxNum] = useState("");
 
   const cellRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
@@ -134,8 +140,11 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       customersQuery.refetch();
       setCustomerId(data.id);
       setCustomerName(data.name);
+      setCustomerType((data.customerType as any) ?? 'individual');
+      setCustomerTaxNumber((data as any).taxNumber ?? "");
       setShowAddCustomer(false);
       setNewCustName(""); setNewCustPhone(""); setNewCustEmail(""); setNewCustAddr("");
+      setNewCustType('individual'); setNewCustTaxNum("");
       toast.success(`✓ تم إضافة العميل: ${data.name}`);
     },
     onError: (e) => toast.error(`خطأ في إضافة العميل: ${e.message}`),
@@ -189,6 +198,8 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
     setDueDate(inv.dueDate ? new Date(inv.dueDate).toISOString().split("T")[0] : "");
     setCustomerId(inv.customerId ?? null);
     setCustomerName(inv.customerName ?? "");
+    setCustomerType((inv.customerType as any) ?? 'individual');
+    setCustomerTaxNumber(inv.customerTaxNumber ?? "");
     setWarehouseId(inv.warehouseId ?? null);
     setJournalId(inv.journalId ?? null);
     setCurrency(inv.currency ?? "SAR");
@@ -499,6 +510,11 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       toast.error("يجب إضافة صنف واحد على الأقل في الفاتورة");
       return;
     }
+    // تحقق من الرقم الضريبي للمؤسسات
+    if (customerType === 'organization' && !customerTaxNumber.trim()) {
+      toast.error("الرقم الضريبي مطلوب للعملاء من نوع مؤسسة");
+      return;
+    }
     for (const l of validLines) {
       if (!l.unitPrice || parseFloat(l.unitPrice) === 0) {
         toast.error(`سعر الصنف "${l.productName}" يجب أن يكون أكبر من صفر`);
@@ -568,6 +584,8 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       dueDate: dueDate || undefined,
       customerId: customerId ?? undefined,
       customerName: customerName || undefined,
+      customerType,
+      customerTaxNumber: customerTaxNumber || undefined,
       warehouseId: warehouseId ?? undefined,
       journalId: journalId ?? undefined,
       currency,
@@ -599,6 +617,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
     });
   }, [
     invoiceNumber, invoiceDate, dueDate, customerId, customerName,
+    customerType, customerTaxNumber,
     warehouseId, currency, exchangeRate, paymentType, paidAmount,
     remainingAmount, notes, lines, subtotal, totalDiscount, totalTax,
     netTotal, createMutation, journalId, nextJournalNumberMutation,
@@ -611,6 +630,8 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
     setSelectedLineIdx(0);
     setCustomerId(null);
     setCustomerName("");
+    setCustomerType('individual');
+    setCustomerTaxNumber("");
     setWarehouseId(null);
     setPaymentType("cash");
     setBasedOnType('');
@@ -860,6 +881,10 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                     setCustomerId(isNaN(id) ? null : id);
                     const c = customersQuery.data?.find(x => x.id === id);
                     setCustomerName(c?.name ?? "");
+                    if (c) {
+                      setCustomerType((c.customerType as any) ?? 'individual');
+                      setCustomerTaxNumber((c as any).taxNumber ?? "");
+                    }
                   }}
                   className="classic-input flex-1 min-w-0"
                 >
@@ -928,6 +953,76 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
               />
             </HF>
           </div>
+        </div>
+
+        {/* ── صف نوع العميل والرقم الضريبي ── */}
+        <div className="flex items-center gap-3 mb-1.5 mt-1">
+          {/* نوع الفاتورة (مؤشر) */}
+          <div
+            className="flex items-center gap-1 px-2 py-0.5 rounded font-bold text-[11px] flex-shrink-0"
+            style={{
+              background: customerType === 'organization' ? '#EFF6FF' : '#F0FDF4',
+              border: `1px solid ${customerType === 'organization' ? '#93C5FD' : '#86EFAC'}`,
+              color: customerType === 'organization' ? '#1D4ED8' : '#15803D',
+            }}
+          >
+            {customerType === 'organization' ? '📋 فاتورة ضريبية' : '🧾 فاتورة ضريبية مبسطة'}
+          </div>
+
+          {/* نوع العميل toggle */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <span className="text-[10px] font-bold text-gray-500">نوع العميل:</span>
+            <button
+              type="button"
+              onClick={() => { setCustomerType('individual'); setCustomerTaxNumber(""); }}
+              className="px-2 py-0.5 rounded text-[11px] font-bold transition-colors"
+              style={{
+                background: customerType === 'individual' ? '#15803D' : '#F3F4F6',
+                color: customerType === 'individual' ? 'white' : '#374151',
+                border: `1px solid ${customerType === 'individual' ? '#15803D' : '#D1D5DB'}`,
+              }}
+            >فرد</button>
+            <button
+              type="button"
+              onClick={() => setCustomerType('organization')}
+              className="px-2 py-0.5 rounded text-[11px] font-bold transition-colors"
+              style={{
+                background: customerType === 'organization' ? '#1D4ED8' : '#F3F4F6',
+                color: customerType === 'organization' ? 'white' : '#374151',
+                border: `1px solid ${customerType === 'organization' ? '#1D4ED8' : '#D1D5DB'}`,
+              }}
+            >مؤسسة</button>
+          </div>
+
+          {/* الرقم الضريبي (يظهر فقط عند مؤسسة) */}
+          {customerType === 'organization' && (
+            <div className="flex items-center gap-1.5">
+              <label className="text-[10px] font-bold whitespace-nowrap" style={{ color: customerTaxNumber.trim() ? '#15803D' : '#DC2626' }}>
+                الرقم الضريبي <span className="text-red-500">*</span>
+              </label>
+              <input
+                value={customerTaxNumber}
+                onChange={e => setCustomerTaxNumber(e.target.value)}
+                className="classic-input"
+                placeholder="3xxxxxxxxxxxxxxxxx"
+                style={{
+                  width: 200,
+                  borderColor: customerTaxNumber.trim() ? '#86EFAC' : '#FCA5A5',
+                  background: customerTaxNumber.trim() ? '#F0FDF4' : '#FFF5F5',
+                }}
+              />
+            </div>
+          )}
+
+          {/* اسم العميل المحدد (للعرض السريع) */}
+          {customerName && (
+            <span className="text-[11px] font-medium text-gray-600 truncate flex-1 min-w-0">
+              👤 {customerName}
+              {customerType === 'organization' && customerTaxNumber && (
+                <span className="text-[10px] text-blue-600 mr-2">| ض: {customerTaxNumber}</span>
+              )}
+            </span>
+          )}
         </div>
 
         {/* ── الصف الثاني ── */}
@@ -1401,18 +1496,65 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
 
             {/* Body */}
             <div className="px-4 py-4 flex flex-col gap-3">
+              {/* نوع العميل */}
               <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-bold text-gray-600">اسم العميل <span className="text-red-500">*</span></label>
+                <label className="text-[11px] font-bold text-gray-600">نوع العميل</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setNewCustType('individual'); setNewCustTaxNum(""); }}
+                    className="flex-1 py-1.5 rounded text-[12px] font-bold transition-colors"
+                    style={{
+                      background: newCustType === 'individual' ? '#15803D' : '#F3F4F6',
+                      color: newCustType === 'individual' ? 'white' : '#374151',
+                      border: `1px solid ${newCustType === 'individual' ? '#15803D' : '#D1D5DB'}`,
+                    }}
+                  >🧾 فرد (فاتورة مبسطة)</button>
+                  <button
+                    type="button"
+                    onClick={() => setNewCustType('organization')}
+                    className="flex-1 py-1.5 rounded text-[12px] font-bold transition-colors"
+                    style={{
+                      background: newCustType === 'organization' ? '#1D4ED8' : '#F3F4F6',
+                      color: newCustType === 'organization' ? 'white' : '#374151',
+                      border: `1px solid ${newCustType === 'organization' ? '#1D4ED8' : '#D1D5DB'}`,
+                    }}
+                  >📋 مؤسسة (فاتورة ضريبية)</button>
+                </div>
+              </div>
+
+              {/* اسم العميل */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-bold text-gray-600">
+                  {newCustType === 'organization' ? 'اسم المؤسسة' : 'اسم العميل'} <span className="text-red-500">*</span>
+                </label>
                 <input
                   autoFocus
                   value={newCustName}
                   onChange={e => setNewCustName(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter" && newCustName.trim()) createCustomerMutation.mutate({ name: newCustName.trim(), phone: newCustPhone || undefined, email: newCustEmail || undefined, address: newCustAddr || undefined }); }}
+                  onKeyDown={e => { if (e.key === "Enter" && newCustName.trim()) createCustomerMutation.mutate({ name: newCustName.trim(), phone: newCustPhone || undefined, email: newCustEmail || undefined, address: newCustAddr || undefined, taxNumber: newCustTaxNum || undefined, customerType: newCustType }); }}
                   className="classic-input w-full"
-                  placeholder="أدخل اسم العميل..."
+                  placeholder={newCustType === 'organization' ? 'اسم الشركة أو المؤسسة...' : 'أدخل اسم العميل...'}
                   style={{ height: 28, fontSize: 13 }}
                 />
               </div>
+
+              {/* الرقم الضريبي (فقط للمؤسسات) */}
+              {newCustType === 'organization' && (
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] font-bold" style={{ color: '#DC2626' }}>
+                    الرقم الضريبي <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    value={newCustTaxNum}
+                    onChange={e => setNewCustTaxNum(e.target.value)}
+                    className="classic-input w-full"
+                    placeholder="3xxxxxxxxxxxxxxxxx"
+                    style={{ height: 28, borderColor: newCustTaxNum.trim() ? '#86EFAC' : '#FCA5A5', background: newCustTaxNum.trim() ? '#F0FDF4' : '#FFF5F5' }}
+                  />
+                </div>
+              )}
+
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] font-bold text-gray-600">رقم الجوال</label>
                 <input
@@ -1453,7 +1595,20 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                 style={{ background: "#e5e7eb", color: "#374151" }}
               >إلغاء</button>
               <button
-                onClick={() => { if (newCustName.trim()) createCustomerMutation.mutate({ name: newCustName.trim(), phone: newCustPhone || undefined, email: newCustEmail || undefined, address: newCustAddr || undefined }); }}
+                onClick={() => {
+                  if (!newCustName.trim()) return;
+                  if (newCustType === 'organization' && !newCustTaxNum.trim()) {
+                    toast.error("الرقم الضريبي مطلوب للمؤسسات"); return;
+                  }
+                  createCustomerMutation.mutate({
+                    name: newCustName.trim(),
+                    phone: newCustPhone || undefined,
+                    email: newCustEmail || undefined,
+                    address: newCustAddr || undefined,
+                    taxNumber: newCustTaxNum || undefined,
+                    customerType: newCustType,
+                  });
+                }}
                 disabled={!newCustName.trim() || createCustomerMutation.isPending}
                 className="px-4 py-1.5 rounded text-[12px] font-bold transition-colors"
                 style={{

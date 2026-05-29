@@ -835,14 +835,33 @@ export const appRouter = router({
         phone: z.string().optional(),
         email: z.string().optional(),
         address: z.string().optional(),
+        taxNumber: z.string().optional(),
+        customerType: z.enum(['individual', 'organization']).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const [c] = await db.insert(customers).values({
           ...input,
+          customerType: input.customerType ?? 'individual',
           orgId: ctx.user.orgId,
           isActive: true,
         }).returning();
         return c;
+      }),
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().min(1).optional(),
+        phone: z.string().optional(),
+        email: z.string().optional(),
+        address: z.string().optional(),
+        taxNumber: z.string().optional(),
+        customerType: z.enum(['individual', 'organization']).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { id, ...rest } = input;
+        await db.update(customers).set(rest)
+          .where(and(eq(customers.id, id), eq(customers.orgId, ctx.user.orgId)));
+        return { success: true };
       }),
   }),
 
