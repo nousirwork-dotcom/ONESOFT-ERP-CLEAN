@@ -98,6 +98,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
   // ── Document Journal ──────────────────────────────────────────────────────
   const [journalId, setJournalId] = useState<number | null>(null);
   const [journalOpen, setJournalOpen] = useState(false);
+  const [journalCustomersJournalId, setJournalCustomersJournalId] = useState<number | null>(null);
 
   // ── Posting state ─────────────────────────────────────────────────────────
   const [savedInvoiceId, setSavedInvoiceId]       = useState<number | null>(null);
@@ -115,6 +116,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
   // ── Add Customer Modal ────────────────────────────────────────────────────
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [newCustName, setNewCustName]     = useState("");
+  const [newCustCode, setNewCustCode]     = useState("");
   const [newCustPhone, setNewCustPhone]   = useState("");
   const [newCustEmail, setNewCustEmail]   = useState("");
   const [newCustAddr, setNewCustAddr]     = useState("");
@@ -150,10 +152,11 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       customersQuery.refetch();
       setCustomerId(data.id);
       setCustomerName(data.name);
+      setCustomerCode((data as any).code ?? "");
       setCustomerType((data.customerType as any) ?? 'individual');
       setCustomerTaxNumber((data as any).taxNumber ?? "");
       setShowAddCustomer(false);
-      setNewCustName(""); setNewCustPhone(""); setNewCustEmail(""); setNewCustAddr("");
+      setNewCustName(""); setNewCustCode(""); setNewCustPhone(""); setNewCustEmail(""); setNewCustAddr("");
       setNewCustType('individual'); setNewCustTaxNum(""); setNewCustRegNum("");
       setNewCustShortAddr(""); setNewCustBuilding(""); setNewCustAdditional("");
       setNewCustPostal(""); setNewCustCity("");
@@ -323,6 +326,8 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       }
       if (j.defaultCurrency) setCurrency(j.defaultCurrency);
       if (j.defaultPayMethod) setPaymentType(j.defaultPayMethod as any);
+      const custJId = (j as any).customersJournal ? parseInt((j as any).customersJournal) : null;
+      setJournalCustomersJournalId(custJId && !isNaN(custJId) ? custJId : null);
     }
     // أعد ضبط نوع السند إذا لم يعد ضمن الدفتر الجديد
     setDocTypeId(prev => {
@@ -938,11 +943,17 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                 {/* زر إضافة عميل جديد */}
                 <button
                   type="button"
-                  onClick={() => {
-                    setNewCustName(custSearch.trim()); setNewCustPhone(""); setNewCustEmail(""); setNewCustAddr("");
+                  onClick={async () => {
+                    setNewCustName(custSearch.trim()); setNewCustCode(""); setNewCustPhone(""); setNewCustEmail(""); setNewCustAddr("");
                     setNewCustType('individual'); setNewCustTaxNum(""); setNewCustRegNum("");
                     setNewCustShortAddr(""); setNewCustBuilding(""); setNewCustAdditional("");
                     setNewCustPostal(""); setNewCustCity("");
+                    if (journalCustomersJournalId) {
+                      try {
+                        const preview = await utils.documentJournals.previewNextNumber.fetch({ journalId: journalCustomersJournalId });
+                        if (preview) setNewCustCode(preview);
+                      } catch {}
+                    }
                     setShowAddCustomer(true); setShowCustDrop(false);
                   }}
                   className="flex-shrink-0 flex items-center justify-center transition-colors hover:opacity-80"
@@ -999,11 +1010,17 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                       {/* خيار إضافة الاسم المكتوب مباشرة */}
                       {custSearch.trim() && !exactMatch && (
                         <div
-                          onMouseDown={() => {
-                            setNewCustName(custSearch.trim()); setNewCustPhone(""); setNewCustEmail(""); setNewCustAddr("");
+                          onMouseDown={async () => {
+                            setNewCustName(custSearch.trim()); setNewCustCode(""); setNewCustPhone(""); setNewCustEmail(""); setNewCustAddr("");
                             setNewCustType('individual'); setNewCustTaxNum(""); setNewCustRegNum("");
                             setNewCustShortAddr(""); setNewCustBuilding(""); setNewCustAdditional("");
                             setNewCustPostal(""); setNewCustCity("");
+                            if (journalCustomersJournalId) {
+                              try {
+                                const preview = await utils.documentJournals.previewNextNumber.fetch({ journalId: journalCustomersJournalId });
+                                if (preview) setNewCustCode(preview);
+                              } catch {}
+                            }
                             setShowAddCustomer(true); setShowCustDrop(false);
                           }}
                           className="flex items-center gap-2 px-3 py-2 cursor-pointer text-[12px] font-bold"
@@ -1605,6 +1622,14 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
 
             {/* Body */}
             <div className="px-4 py-4 flex flex-col gap-3">
+              {/* الكود التلقائي */}
+              {newCustCode && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded" style={{ background: "#e0eaf4", border: "1px solid #b8cfe0" }}>
+                  <span className="text-[11px] font-bold text-[#406B93]">كود العميل:</span>
+                  <span className="font-mono font-bold text-[13px] text-[#406B93] tracking-wider">{newCustCode}</span>
+                  <span className="text-[10px] text-slate-400 mr-auto">(يُحدَّد تلقائياً من دفتر التكويد)</span>
+                </div>
+              )}
               {/* نوع العميل */}
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] font-bold text-gray-600">نوع العميل</label>
@@ -1730,13 +1755,22 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                 style={{ background: "#e5e7eb", color: "#374151" }}
               >إلغاء</button>
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (!newCustName.trim()) return;
                   if (newCustType === 'organization' && !newCustTaxNum.trim()) {
                     toast.error("الرقم الضريبي مطلوب للمؤسسات"); return;
                   }
+                  let finalCode: string | undefined = undefined;
+                  if (journalCustomersJournalId && newCustCode) {
+                    try {
+                      finalCode = await nextJournalNumberMutation.mutateAsync({ journalId: journalCustomersJournalId });
+                    } catch {
+                      toast.error("تعذّر توليد كود العميل"); return;
+                    }
+                  }
                   createCustomerMutation.mutate({
                     name: newCustName.trim(),
+                    code: finalCode || undefined,
                     phone: newCustPhone || undefined,
                     email: newCustEmail || undefined,
                     address: newCustType === 'individual' ? (newCustAddr || undefined) : undefined,
@@ -1750,7 +1784,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                     city: newCustCity || undefined,
                   });
                 }}
-                disabled={!newCustName.trim() || createCustomerMutation.isPending}
+                disabled={!newCustName.trim() || createCustomerMutation.isPending || nextJournalNumberMutation.isPending}
                 className="px-4 py-1.5 rounded text-[12px] font-bold transition-colors"
                 style={{
                   background: newCustName.trim() ? "#406B93" : "#9ca3af",
