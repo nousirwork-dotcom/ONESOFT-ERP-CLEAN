@@ -46,7 +46,6 @@ const journalInputShape = {
   printTemplate:    z.string().nullable().optional(),
   printTemplate2:   z.string().nullable().optional(),
   resetFrequency:   z.string().default('none'),
-  entityType:       z.string().default('both'),
   autoSerial:       z.boolean().default(false),
   printOnSave:      z.boolean().default(false),
   notes:            z.string().optional(),
