@@ -104,6 +104,13 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
   // ── ERP mode ──────────────────────────────────────────────────────────────
   const [erpMode, setErpMode] = useState<ERPMode>("new");
 
+  // ── Add Customer Modal ────────────────────────────────────────────────────
+  const [showAddCustomer, setShowAddCustomer] = useState(false);
+  const [newCustName, setNewCustName]   = useState("");
+  const [newCustPhone, setNewCustPhone] = useState("");
+  const [newCustEmail, setNewCustEmail] = useState("");
+  const [newCustAddr, setNewCustAddr]   = useState("");
+
   const cellRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
   // ── Queries ───────────────────────────────────────────────────────────────
@@ -121,6 +128,18 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
 
   const nextJournalNumberMutation = trpc.documentJournals.nextNumber.useMutation();
   const utils = trpc.useUtils();
+
+  const createCustomerMutation = trpc.customers.create.useMutation({
+    onSuccess: (data) => {
+      customersQuery.refetch();
+      setCustomerId(data.id);
+      setCustomerName(data.name);
+      setShowAddCustomer(false);
+      setNewCustName(""); setNewCustPhone(""); setNewCustEmail(""); setNewCustAddr("");
+      toast.success(`✓ تم إضافة العميل: ${data.name}`);
+    },
+    onError: (e) => toast.error(`خطأ في إضافة العميل: ${e.message}`),
+  });
 
   // جلب المستند المصدر (بناءً على)
   const basedOnQuery = trpc.salesInvoices.getByNumber.useQuery(
@@ -286,21 +305,43 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
   }, [journalsQuery.data, docTypesQuery.data, utils]);
 
   // عند اختيار نوع السند
-  const handleDocTypeSelect = useCallback((id: string) => {
+  const handleDocTypeSelect = useCallback(async (id: string) => {
     setDocTypeId(id);
     if (!id) { setDocTypeWarehouseId(null); return; }
     const dt = (docTypesQuery.data ?? []).find((d: any) => String(d.id) === id);
+
+    // ── تحديد المخزن من نوع السند ────────────────────────────────────────
     const wStr = dt?.warehouse;
     if (wStr && wStr !== "all" && wStr !== "none" && wStr !== "") {
       const wId = parseInt(wStr);
       if (!isNaN(wId)) {
         setDocTypeWarehouseId(wId);
         if (!journalWarehouseId) setWarehouseId(wId);
-        return;
+      }
+    } else {
+      setDocTypeWarehouseId(null);
+    }
+
+    // ── اختيار الدفتر تلقائياً من نوع السند (السيريال) ──────────────────
+    if (dt?.journal) {
+      const jId = parseInt(dt.journal);
+      if (!isNaN(jId) && jId !== journalId) {
+        setJournalId(jId);
+        const j = (journalsQuery.data ?? []).find((x: any) => x.id === jId);
+        if (j) {
+          if (j.warehouseId) { setWarehouseId(j.warehouseId); setJournalWarehouseId(j.warehouseId); }
+          if (j.defaultCurrency) setCurrency(j.defaultCurrency);
+          if (j.defaultPayMethod) setPaymentType(j.defaultPayMethod as any);
+        }
+        try {
+          const preview = await utils.documentJournals.previewNextNumber.fetch({ journalId: jId });
+          if (preview) setInvoiceNumber(preview);
+        } catch {
+          // تجاهل خطأ جلب الرقم
+        }
       }
     }
-    setDocTypeWarehouseId(null);
-  }, [docTypesQuery.data, journalWarehouseId]);
+  }, [docTypesQuery.data, journalWarehouseId, journalId, journalsQuery.data, utils]);
 
 
   // ── Calculations ──────────────────────────────────────────────────────────
@@ -811,21 +852,30 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
           {/* Grid الحقول الرئيسية */}
           <div className="grid gap-x-2 gap-y-1 flex-1" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
             <HF label="العميل">
-              <select
-                value={customerId ?? ""}
-                onChange={e => {
-                  const id = parseInt(e.target.value);
-                  setCustomerId(isNaN(id) ? null : id);
-                  const c = customersQuery.data?.find(x => x.id === id);
-                  setCustomerName(c?.name ?? "");
-                }}
-                className="classic-input w-full"
-              >
-                <option value="">-- اختر عميل --</option>
-                {customersQuery.data?.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+              <div className="flex gap-1 w-full">
+                <select
+                  value={customerId ?? ""}
+                  onChange={e => {
+                    const id = parseInt(e.target.value);
+                    setCustomerId(isNaN(id) ? null : id);
+                    const c = customersQuery.data?.find(x => x.id === id);
+                    setCustomerName(c?.name ?? "");
+                  }}
+                  className="classic-input flex-1 min-w-0"
+                >
+                  <option value="">-- اختر عميل --</option>
+                  {customersQuery.data?.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => { setNewCustName(""); setNewCustPhone(""); setNewCustEmail(""); setNewCustAddr(""); setShowAddCustomer(true); }}
+                  className="flex-shrink-0 flex items-center justify-center transition-colors hover:opacity-80"
+                  style={{ width: 24, height: 22, borderRadius: 3, background: "#406B93", color: "white", fontSize: 16, fontWeight: 700, border: "1px solid #2f5475", lineHeight: 1 }}
+                  title="إضافة عميل جديد"
+                >+</button>
+              </div>
             </HF>
             <HF label="تاريخ التحرير">
               <input
@@ -1324,6 +1374,99 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
           onConfirmPost={() => postMutation.mutate({ invoiceId: savedInvoiceId! })}
           isPosting={postMutation.isPending}
         />
+      )}
+
+      {/* ── نافذة إضافة عميل جديد ──────────────────────────────────────── */}
+      {showAddCustomer && (
+        <>
+          <div
+            className="fixed inset-0 z-[10000]"
+            style={{ background: "rgba(0,0,0,0.45)" }}
+            onClick={() => setShowAddCustomer(false)}
+          />
+          <div
+            className="fixed z-[10001] bg-white rounded-lg overflow-hidden"
+            style={{
+              top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+              width: 380, boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+              border: "1px solid #d1d5db",
+            }}
+            dir="rtl"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-2.5" style={{ background: "#406B93" }}>
+              <span className="text-white font-bold text-[13px]">إضافة عميل جديد</span>
+              <button onClick={() => setShowAddCustomer(false)} style={{ color: "rgba(255,255,255,0.8)", fontSize: 16, lineHeight: 1 }}>✕</button>
+            </div>
+
+            {/* Body */}
+            <div className="px-4 py-4 flex flex-col gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-bold text-gray-600">اسم العميل <span className="text-red-500">*</span></label>
+                <input
+                  autoFocus
+                  value={newCustName}
+                  onChange={e => setNewCustName(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && newCustName.trim()) createCustomerMutation.mutate({ name: newCustName.trim(), phone: newCustPhone || undefined, email: newCustEmail || undefined, address: newCustAddr || undefined }); }}
+                  className="classic-input w-full"
+                  placeholder="أدخل اسم العميل..."
+                  style={{ height: 28, fontSize: 13 }}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-bold text-gray-600">رقم الجوال</label>
+                <input
+                  value={newCustPhone}
+                  onChange={e => setNewCustPhone(e.target.value)}
+                  className="classic-input w-full"
+                  placeholder="05xxxxxxxx"
+                  style={{ height: 28 }}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-bold text-gray-600">البريد الإلكتروني</label>
+                <input
+                  value={newCustEmail}
+                  onChange={e => setNewCustEmail(e.target.value)}
+                  className="classic-input w-full"
+                  placeholder="example@domain.com"
+                  style={{ height: 28 }}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-bold text-gray-600">العنوان</label>
+                <input
+                  value={newCustAddr}
+                  onChange={e => setNewCustAddr(e.target.value)}
+                  className="classic-input w-full"
+                  placeholder="العنوان..."
+                  style={{ height: 28 }}
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end gap-2 px-4 py-3" style={{ borderTop: "1px solid #e5e7eb", background: "#f9fafb" }}>
+              <button
+                onClick={() => setShowAddCustomer(false)}
+                className="px-4 py-1.5 rounded text-[12px] font-medium transition-colors"
+                style={{ background: "#e5e7eb", color: "#374151" }}
+              >إلغاء</button>
+              <button
+                onClick={() => { if (newCustName.trim()) createCustomerMutation.mutate({ name: newCustName.trim(), phone: newCustPhone || undefined, email: newCustEmail || undefined, address: newCustAddr || undefined }); }}
+                disabled={!newCustName.trim() || createCustomerMutation.isPending}
+                className="px-4 py-1.5 rounded text-[12px] font-bold transition-colors"
+                style={{
+                  background: newCustName.trim() ? "#406B93" : "#9ca3af",
+                  color: "white",
+                  opacity: createCustomerMutation.isPending ? 0.7 : 1,
+                }}
+              >
+                {createCustomerMutation.isPending ? "جاري الحفظ..." : "✓ حفظ العميل"}
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
