@@ -985,31 +985,6 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
             {customerType === 'organization' ? '📋 فاتورة ضريبية' : '🧾 فاتورة ضريبية مبسطة'}
           </div>
 
-          {/* نوع العميل toggle */}
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            <span className="text-[10px] font-bold text-gray-500">نوع العميل:</span>
-            <button
-              type="button"
-              onClick={() => { setCustomerType('individual'); setCustomerTaxNumber(""); }}
-              className="px-2 py-0.5 rounded text-[11px] font-bold transition-colors"
-              style={{
-                background: customerType === 'individual' ? '#15803D' : '#F3F4F6',
-                color: customerType === 'individual' ? 'white' : '#374151',
-                border: `1px solid ${customerType === 'individual' ? '#15803D' : '#D1D5DB'}`,
-              }}
-            >فرد</button>
-            <button
-              type="button"
-              onClick={() => setCustomerType('organization')}
-              className="px-2 py-0.5 rounded text-[11px] font-bold transition-colors"
-              style={{
-                background: customerType === 'organization' ? '#1D4ED8' : '#F3F4F6',
-                color: customerType === 'organization' ? 'white' : '#374151',
-                border: `1px solid ${customerType === 'organization' ? '#1D4ED8' : '#D1D5DB'}`,
-              }}
-            >مؤسسة</button>
-          </div>
-
           {/* الرقم الضريبي (يظهر فقط عند مؤسسة) */}
           {customerType === 'organization' && (
             <div className="flex items-center gap-1.5">
