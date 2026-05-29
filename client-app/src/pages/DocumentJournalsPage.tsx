@@ -246,8 +246,8 @@ export default function DocumentJournalsPage() {
       resetFrequency:   form.resetFrequency,
       autoSerial:       form.autoSerial,
       printOnSave:      form.printOnSave,
-      customersJournal: form.customersJournal || null,
-      suppliersJournal: form.suppliersJournal || null,
+      customersJournal: (form.customersJournal && form.customersJournal !== "none") ? form.customersJournal : null,
+      suppliersJournal: (form.suppliersJournal && form.suppliersJournal !== "none") ? form.suppliersJournal : null,
       sortOrder:        0,
     };
     if (editId != null) {
@@ -458,17 +458,21 @@ export default function DocumentJournalsPage() {
                   <div className="grid grid-cols-1 gap-y-2">
                     <R label="تكويد العملاء" lw={120}>
                       <FS value={form.customersJournal} onValueChange={v => set("customersJournal", v)}>
-                        <SelectItem value="__none__">— بدون ربط —</SelectItem>
+                        <SelectItem value="none">— بدون ربط —</SelectItem>
                         {(custJournalsList as any[] ?? []).map((j: any) => (
-                          <SelectItem key={j.id} value={String(j.id)}>{j.name}</SelectItem>
+                          <SelectItem key={j.id} value={String(j.id)}>
+                            {j.numberPrefix ? `${j.numberPrefix} — ${j.name}` : j.name}
+                          </SelectItem>
                         ))}
                       </FS>
                     </R>
                     <R label="تكويد الموردين" lw={120}>
                       <FS value={form.suppliersJournal} onValueChange={v => set("suppliersJournal", v)}>
-                        <SelectItem value="__none__">— بدون ربط —</SelectItem>
+                        <SelectItem value="none">— بدون ربط —</SelectItem>
                         {(suppJournalsList as any[] ?? []).map((j: any) => (
-                          <SelectItem key={j.id} value={String(j.id)}>{j.name}</SelectItem>
+                          <SelectItem key={j.id} value={String(j.id)}>
+                            {j.numberPrefix ? `${j.numberPrefix} — ${j.name}` : j.name}
+                          </SelectItem>
                         ))}
                       </FS>
                     </R>
