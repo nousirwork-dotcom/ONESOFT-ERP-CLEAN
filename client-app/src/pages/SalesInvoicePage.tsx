@@ -72,6 +72,9 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
   const [dueDate, setDueDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [customerId, setCustomerId] = useState<number | null>(null);
   const [customerName, setCustomerName] = useState("");
+  const [custSearch, setCustSearch]     = useState("");
+  const [showCustDrop, setShowCustDrop] = useState(false);
+  const custDropRef = useRef<HTMLDivElement>(null);
   const [warehouseId, setWarehouseId] = useState<number | null>(null);
   const [journalWarehouseId, setJournalWarehouseId] = useState<number | null>(null); // مخزن مقيَّد من الدفتر
   const [docTypeWarehouseId, setDocTypeWarehouseId] = useState<number | null>(null); // مخزن مقيَّد من نوع السند
@@ -163,6 +166,17 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
     { type: basedOnType as 'sale' | 'quote' | 'order' | 'transfer', number: basedOnTrigger },
     { enabled: !!basedOnType && !!basedOnTrigger }
   );
+
+  // إغلاق dropdown العميل عند الضغط خارجه
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (custDropRef.current && !custDropRef.current.contains(e.target as Node)) {
+        setShowCustDrop(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   // عند ورود بيانات المستند المصدر: ملء حقول الفاتورة
   useEffect(() => {
@@ -638,6 +652,8 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
     setSelectedLineIdx(0);
     setCustomerId(null);
     setCustomerName("");
+    setCustSearch("");
+    setShowCustDrop(false);
     setCustomerType('individual');
     setCustomerTaxNumber("");
     setWarehouseId(null);
@@ -881,41 +897,117 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
           {/* Grid الحقول الرئيسية */}
           <div className="grid gap-x-2 gap-y-1 flex-1" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
             <HF label="العميل">
-              <div className="flex gap-1 w-full">
-                <select
-                  value={customerId ?? ""}
+              <div className="flex gap-1 w-full" ref={custDropRef} style={{ position: "relative" }}>
+                {/* حقل البحث */}
+                <input
+                  value={customerId ? customerName : custSearch}
                   onChange={e => {
-                    const id = parseInt(e.target.value);
-                    setCustomerId(isNaN(id) ? null : id);
-                    const c = customersQuery.data?.find(x => x.id === id);
-                    setCustomerName(c?.name ?? "");
-                    if (c) {
-                      setCustomerType((c.customerType as any) ?? 'individual');
-                      setCustomerTaxNumber((c as any).taxNumber ?? "");
-                    }
+                    if (customerId) return; // مقفول بعد الاختيار
+                    setCustSearch(e.target.value);
+                    setShowCustDrop(true);
                   }}
+                  onFocus={() => { if (!customerId) setShowCustDrop(true); }}
+                  readOnly={!!customerId}
+                  placeholder="ابحث عن عميل..."
                   className="classic-input flex-1 min-w-0"
-                >
-                  <option value="">-- اختر عميل --</option>
-                  {customersQuery.data?.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {(c as any).customerType === 'organization' ? '📋 ' : '🧾 '}{c.name}
-                    </option>
-                  ))}
-                </select>
+                  style={{ cursor: customerId ? "default" : "text", paddingLeft: customerId ? 22 : undefined }}
+                />
+                {/* زر مسح العميل المحدد */}
+                {customerId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomerId(null); setCustomerName(""); setCustSearch("");
+                      setCustomerType('individual'); setCustomerTaxNumber("");
+                      setShowCustDrop(false);
+                    }}
+                    style={{ position: "absolute", left: 66, top: "50%", transform: "translateY(-50%)", color: "#9ca3af", fontSize: 13, lineHeight: 1, background: "none", border: "none", cursor: "pointer", padding: "0 2px" }}
+                    title="إلغاء اختيار العميل"
+                  >✕</button>
+                )}
+                {/* زر السهم (عرض كل العملاء) */}
+                <button
+                  type="button"
+                  onClick={() => { if (!customerId) { setCustSearch(""); setShowCustDrop(v => !v); } }}
+                  className="flex-shrink-0 flex items-center justify-center transition-colors hover:opacity-80"
+                  style={{ width: 22, height: 22, borderRadius: 3, background: "#6B7280", color: "white", fontSize: 11, border: "1px solid #4B5563", lineHeight: 1 }}
+                  title="عرض قائمة العملاء"
+                >▾</button>
+                {/* زر إضافة عميل جديد */}
                 <button
                   type="button"
                   onClick={() => {
-                    setNewCustName(""); setNewCustPhone(""); setNewCustEmail(""); setNewCustAddr("");
+                    setNewCustName(custSearch.trim()); setNewCustPhone(""); setNewCustEmail(""); setNewCustAddr("");
                     setNewCustType('individual'); setNewCustTaxNum(""); setNewCustRegNum("");
                     setNewCustShortAddr(""); setNewCustBuilding(""); setNewCustAdditional("");
                     setNewCustPostal(""); setNewCustCity("");
-                    setShowAddCustomer(true);
+                    setShowAddCustomer(true); setShowCustDrop(false);
                   }}
                   className="flex-shrink-0 flex items-center justify-center transition-colors hover:opacity-80"
-                  style={{ width: 24, height: 22, borderRadius: 3, background: "#406B93", color: "white", fontSize: 16, fontWeight: 700, border: "1px solid #2f5475", lineHeight: 1 }}
+                  style={{ width: 22, height: 22, borderRadius: 3, background: "#406B93", color: "white", fontSize: 16, fontWeight: 700, border: "1px solid #2f5475", lineHeight: 1 }}
                   title="إضافة عميل جديد"
                 >+</button>
+
+                {/* Dropdown نتائج البحث */}
+                {showCustDrop && !customerId && (() => {
+                  const all = customersQuery.data ?? [];
+                  const q = custSearch.trim().toLowerCase();
+                  const filtered = q ? all.filter(c => c.name.toLowerCase().includes(q)) : all;
+                  const exactMatch = all.some(c => c.name.toLowerCase() === q);
+                  return (
+                    <div
+                      style={{
+                        position: "absolute", top: "100%", right: 0, left: 0, zIndex: 9999,
+                        background: "white", border: "1px solid #d1d5db",
+                        borderRadius: 4, boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+                        maxHeight: 220, overflowY: "auto", marginTop: 2,
+                      }}
+                      dir="rtl"
+                    >
+                      {filtered.length === 0 && !custSearch.trim() && (
+                        <div className="px-3 py-2 text-[11px] text-gray-400 text-center">لا يوجد عملاء مضافون</div>
+                      )}
+                      {filtered.map(c => (
+                        <div
+                          key={c.id}
+                          onMouseDown={() => {
+                            setCustomerId(c.id);
+                            setCustomerName(c.name);
+                            setCustomerType((c as any).customerType ?? 'individual');
+                            setCustomerTaxNumber((c as any).taxNumber ?? "");
+                            setCustSearch("");
+                            setShowCustDrop(false);
+                          }}
+                          className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-blue-50 text-[12px]"
+                          style={{ borderBottom: "1px solid #f3f4f6" }}
+                        >
+                          <span style={{ fontSize: 13 }}>{(c as any).customerType === 'organization' ? '🏢' : '👤'}</span>
+                          <span className="font-medium text-gray-800">{c.name}</span>
+                          {(c as any).customerType === 'organization' && (
+                            <span className="text-[10px] text-blue-500 mr-auto">مؤسسة</span>
+                          )}
+                        </div>
+                      ))}
+                      {/* خيار إضافة الاسم المكتوب مباشرة */}
+                      {custSearch.trim() && !exactMatch && (
+                        <div
+                          onMouseDown={() => {
+                            setNewCustName(custSearch.trim()); setNewCustPhone(""); setNewCustEmail(""); setNewCustAddr("");
+                            setNewCustType('individual'); setNewCustTaxNum(""); setNewCustRegNum("");
+                            setNewCustShortAddr(""); setNewCustBuilding(""); setNewCustAdditional("");
+                            setNewCustPostal(""); setNewCustCity("");
+                            setShowAddCustomer(true); setShowCustDrop(false);
+                          }}
+                          className="flex items-center gap-2 px-3 py-2 cursor-pointer text-[12px] font-bold"
+                          style={{ background: "#EFF6FF", borderTop: "1px solid #BFDBFE", color: "#1D4ED8" }}
+                        >
+                          <span>➕</span>
+                          <span>إضافة "{custSearch.trim()}" كعميل جديد</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             </HF>
             <HF label="تاريخ التحرير">
