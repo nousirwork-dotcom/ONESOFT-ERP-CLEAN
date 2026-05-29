@@ -1007,13 +1007,17 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
               </label>
               <input
                 value={customerTaxNumber}
-                onChange={e => setCustomerTaxNumber(e.target.value)}
+                onChange={e => !customerId && setCustomerTaxNumber(e.target.value)}
+                readOnly={!!customerId}
                 className="classic-input"
                 placeholder="3xxxxxxxxxxxxxxxxx"
+                title={customerId ? "الرقم الضريبي محدد من كارت العميل — يُعدَّل من هناك" : ""}
                 style={{
                   width: 200,
                   borderColor: customerTaxNumber.trim() ? '#86EFAC' : '#FCA5A5',
-                  background: customerTaxNumber.trim() ? '#F0FDF4' : '#FFF5F5',
+                  background: customerId ? '#F1F5F9' : (customerTaxNumber.trim() ? '#F0FDF4' : '#FFF5F5'),
+                  cursor: customerId ? 'not-allowed' : 'text',
+                  color: customerId ? '#475569' : undefined,
                 }}
               />
             </div>
