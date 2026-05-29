@@ -72,6 +72,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
   const [dueDate, setDueDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [customerId, setCustomerId] = useState<number | null>(null);
   const [customerName, setCustomerName] = useState("");
+  const [customerCode, setCustomerCode] = useState("");
   const [custSearch, setCustSearch]     = useState("");
   const [showCustDrop, setShowCustDrop] = useState(false);
   const custDropRef = useRef<HTMLDivElement>(null);
@@ -220,6 +221,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
     setDueDate(inv.dueDate ? new Date(inv.dueDate).toISOString().split("T")[0] : "");
     setCustomerId(inv.customerId ?? null);
     setCustomerName(inv.customerName ?? "");
+    setCustomerCode(inv.customerId ? ((customersQuery.data ?? []).find(c => c.id === inv.customerId)?.code ?? "") : "");
     setCustomerType((inv.customerType as any) ?? 'individual');
     setCustomerTaxNumber(inv.customerTaxNumber ?? "");
     setWarehouseId(inv.warehouseId ?? null);
@@ -900,7 +902,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
               <div className="flex gap-1 w-full" ref={custDropRef} style={{ position: "relative" }}>
                 {/* حقل البحث */}
                 <input
-                  value={customerId ? customerName : custSearch}
+                  value={customerId ? (customerCode ? `${customerCode} - ${customerName}` : customerName) : custSearch}
                   onChange={e => {
                     if (customerId) return; // مقفول بعد الاختيار
                     setCustSearch(e.target.value);
@@ -917,7 +919,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                   <button
                     type="button"
                     onClick={() => {
-                      setCustomerId(null); setCustomerName(""); setCustSearch("");
+                      setCustomerId(null); setCustomerName(""); setCustomerCode(""); setCustSearch("");
                       setCustomerType('individual'); setCustomerTaxNumber("");
                       setShowCustDrop(false);
                     }}
@@ -952,8 +954,10 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                 {showCustDrop && !customerId && (() => {
                   const all = customersQuery.data ?? [];
                   const q = custSearch.trim().toLowerCase();
-                  const filtered = q ? all.filter(c => c.name.toLowerCase().includes(q)) : all;
-                  const exactMatch = all.some(c => c.name.toLowerCase() === q);
+                  const filtered = q
+                    ? all.filter(c => c.name.toLowerCase().includes(q) || (c.code ?? "").toLowerCase().includes(q))
+                    : all;
+                  const exactMatch = all.some(c => c.name.toLowerCase() === q || (c.code ?? "").toLowerCase() === q);
                   return (
                     <div
                       style={{
@@ -973,6 +977,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                           onMouseDown={() => {
                             setCustomerId(c.id);
                             setCustomerName(c.name);
+                            setCustomerCode((c as any).code ?? "");
                             setCustomerType((c as any).customerType ?? 'individual');
                             setCustomerTaxNumber((c as any).taxNumber ?? "");
                             setCustSearch("");
@@ -982,6 +987,9 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                           style={{ borderBottom: "1px solid #f3f4f6" }}
                         >
                           <span style={{ fontSize: 13 }}>{(c as any).customerType === 'organization' ? '🏢' : '👤'}</span>
+                          {(c as any).code && (
+                            <span className="font-mono text-[11px] font-bold px-1 rounded" style={{ background: "#e0eaf4", color: "#406B93", letterSpacing: "0.04em" }}>{(c as any).code}</span>
+                          )}
                           <span className="font-medium text-gray-800">{c.name}</span>
                           {(c as any).customerType === 'organization' && (
                             <span className="text-[10px] text-blue-500 mr-auto">مؤسسة</span>
