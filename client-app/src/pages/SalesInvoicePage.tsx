@@ -114,8 +114,14 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
   const [newCustPhone, setNewCustPhone]   = useState("");
   const [newCustEmail, setNewCustEmail]   = useState("");
   const [newCustAddr, setNewCustAddr]     = useState("");
-  const [newCustType, setNewCustType]     = useState<'individual' | 'organization'>('individual');
-  const [newCustTaxNum, setNewCustTaxNum] = useState("");
+  const [newCustType, setNewCustType]         = useState<'individual' | 'organization'>('individual');
+  const [newCustTaxNum, setNewCustTaxNum]     = useState("");
+  const [newCustRegNum, setNewCustRegNum]     = useState("");
+  const [newCustShortAddr, setNewCustShortAddr] = useState("");
+  const [newCustBuilding, setNewCustBuilding] = useState("");
+  const [newCustAdditional, setNewCustAdditional] = useState("");
+  const [newCustPostal, setNewCustPostal]     = useState("");
+  const [newCustCity, setNewCustCity]         = useState("");
 
   const cellRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
@@ -144,7 +150,9 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       setCustomerTaxNumber((data as any).taxNumber ?? "");
       setShowAddCustomer(false);
       setNewCustName(""); setNewCustPhone(""); setNewCustEmail(""); setNewCustAddr("");
-      setNewCustType('individual'); setNewCustTaxNum("");
+      setNewCustType('individual'); setNewCustTaxNum(""); setNewCustRegNum("");
+      setNewCustShortAddr(""); setNewCustBuilding(""); setNewCustAdditional("");
+      setNewCustPostal(""); setNewCustCity("");
       toast.success(`✓ تم إضافة العميل: ${data.name}`);
     },
     onError: (e) => toast.error(`خطأ في إضافة العميل: ${e.message}`),
@@ -1523,68 +1531,94 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                 </div>
               </div>
 
-              {/* اسم العميل */}
-              <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-bold text-gray-600">
-                  {newCustType === 'organization' ? 'اسم المؤسسة' : 'اسم العميل'} <span className="text-red-500">*</span>
-                </label>
-                <input
-                  autoFocus
-                  value={newCustName}
-                  onChange={e => setNewCustName(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter" && newCustName.trim()) createCustomerMutation.mutate({ name: newCustName.trim(), phone: newCustPhone || undefined, email: newCustEmail || undefined, address: newCustAddr || undefined, taxNumber: newCustTaxNum || undefined, customerType: newCustType }); }}
-                  className="classic-input w-full"
-                  placeholder={newCustType === 'organization' ? 'اسم الشركة أو المؤسسة...' : 'أدخل اسم العميل...'}
-                  style={{ height: 28, fontSize: 13 }}
-                />
-              </div>
+              {/* ── حقول الفرد ── */}
+              {newCustType === 'individual' && (<>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] font-bold text-gray-600">اسم العميل <span className="text-red-500">*</span></label>
+                  <input autoFocus value={newCustName} onChange={e => setNewCustName(e.target.value)}
+                    className="classic-input w-full" placeholder="أدخل اسم العميل..."
+                    style={{ height: 28, fontSize: 13 }} />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] font-bold text-gray-600">رقم الجوال</label>
+                  <input value={newCustPhone} onChange={e => setNewCustPhone(e.target.value)}
+                    className="classic-input w-full" placeholder="05xxxxxxxx" style={{ height: 28 }} />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] font-bold text-gray-600">البريد الإلكتروني</label>
+                  <input value={newCustEmail} onChange={e => setNewCustEmail(e.target.value)}
+                    className="classic-input w-full" placeholder="example@domain.com" style={{ height: 28 }} />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] font-bold text-gray-600">العنوان</label>
+                  <input value={newCustAddr} onChange={e => setNewCustAddr(e.target.value)}
+                    className="classic-input w-full" placeholder="العنوان..." style={{ height: 28 }} />
+                </div>
+              </>)}
 
-              {/* الرقم الضريبي (فقط للمؤسسات) */}
-              {newCustType === 'organization' && (
+              {/* ── حقول المؤسسة ── */}
+              {newCustType === 'organization' && (<>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] font-bold text-gray-600">اسم المؤسسة <span className="text-red-500">*</span></label>
+                  <input autoFocus value={newCustName} onChange={e => setNewCustName(e.target.value)}
+                    className="classic-input w-full" placeholder="اسم الشركة أو المؤسسة..."
+                    style={{ height: 28, fontSize: 13 }} />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] font-bold text-gray-600">رقم الجوال</label>
+                  <input value={newCustPhone} onChange={e => setNewCustPhone(e.target.value)}
+                    className="classic-input w-full" placeholder="05xxxxxxxx" style={{ height: 28 }} />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] font-bold text-gray-600">البريد الإلكتروني</label>
+                  <input value={newCustEmail} onChange={e => setNewCustEmail(e.target.value)}
+                    className="classic-input w-full" placeholder="example@domain.com" style={{ height: 28 }} />
+                </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] font-bold" style={{ color: '#DC2626' }}>
                     الرقم الضريبي <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    value={newCustTaxNum}
-                    onChange={e => setNewCustTaxNum(e.target.value)}
-                    className="classic-input w-full"
-                    placeholder="3xxxxxxxxxxxxxxxxx"
-                    style={{ height: 28, borderColor: newCustTaxNum.trim() ? '#86EFAC' : '#FCA5A5', background: newCustTaxNum.trim() ? '#F0FDF4' : '#FFF5F5' }}
-                  />
+                  <input value={newCustTaxNum} onChange={e => setNewCustTaxNum(e.target.value)}
+                    className="classic-input w-full" placeholder="3xxxxxxxxxxxxxxxxx"
+                    style={{ height: 28, borderColor: newCustTaxNum.trim() ? '#86EFAC' : '#FCA5A5', background: newCustTaxNum.trim() ? '#F0FDF4' : '#FFF5F5' }} />
                 </div>
-              )}
-
-              <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-bold text-gray-600">رقم الجوال</label>
-                <input
-                  value={newCustPhone}
-                  onChange={e => setNewCustPhone(e.target.value)}
-                  className="classic-input w-full"
-                  placeholder="05xxxxxxxx"
-                  style={{ height: 28 }}
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-bold text-gray-600">البريد الإلكتروني</label>
-                <input
-                  value={newCustEmail}
-                  onChange={e => setNewCustEmail(e.target.value)}
-                  className="classic-input w-full"
-                  placeholder="example@domain.com"
-                  style={{ height: 28 }}
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-bold text-gray-600">العنوان</label>
-                <input
-                  value={newCustAddr}
-                  onChange={e => setNewCustAddr(e.target.value)}
-                  className="classic-input w-full"
-                  placeholder="العنوان..."
-                  style={{ height: 28 }}
-                />
-              </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] font-bold text-gray-600">رقم السجل التجاري</label>
+                  <input value={newCustRegNum} onChange={e => setNewCustRegNum(e.target.value)}
+                    className="classic-input w-full" placeholder="1010xxxxxx" style={{ height: 28 }} />
+                </div>
+                {/* صف: العنوان المختصر + المدينة */}
+                <div className="flex gap-2">
+                  <div className="flex flex-col gap-1 flex-1">
+                    <label className="text-[11px] font-bold text-gray-600">العنوان المختصر</label>
+                    <input value={newCustShortAddr} onChange={e => setNewCustShortAddr(e.target.value)}
+                      className="classic-input w-full" placeholder="مثال: ABCD" style={{ height: 28 }} />
+                  </div>
+                  <div className="flex flex-col gap-1 flex-1">
+                    <label className="text-[11px] font-bold text-gray-600">المدينة</label>
+                    <input value={newCustCity} onChange={e => setNewCustCity(e.target.value)}
+                      className="classic-input w-full" placeholder="الرياض" style={{ height: 28 }} />
+                  </div>
+                </div>
+                {/* صف: رقم المبنى + الرقم الفرعي */}
+                <div className="flex gap-2">
+                  <div className="flex flex-col gap-1 flex-1">
+                    <label className="text-[11px] font-bold text-gray-600">رقم المبنى</label>
+                    <input value={newCustBuilding} onChange={e => setNewCustBuilding(e.target.value)}
+                      className="classic-input w-full" placeholder="1234" style={{ height: 28 }} />
+                  </div>
+                  <div className="flex flex-col gap-1 flex-1">
+                    <label className="text-[11px] font-bold text-gray-600">الرقم الفرعي</label>
+                    <input value={newCustAdditional} onChange={e => setNewCustAdditional(e.target.value)}
+                      className="classic-input w-full" placeholder="5678" style={{ height: 28 }} />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] font-bold text-gray-600">الرمز البريدي</label>
+                  <input value={newCustPostal} onChange={e => setNewCustPostal(e.target.value)}
+                    className="classic-input w-full" placeholder="12345" style={{ height: 28 }} />
+                </div>
+              </>)}
             </div>
 
             {/* Footer */}
@@ -1604,9 +1638,15 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                     name: newCustName.trim(),
                     phone: newCustPhone || undefined,
                     email: newCustEmail || undefined,
-                    address: newCustAddr || undefined,
+                    address: newCustType === 'individual' ? (newCustAddr || undefined) : undefined,
                     taxNumber: newCustTaxNum || undefined,
                     customerType: newCustType,
+                    registrationNumber: newCustRegNum || undefined,
+                    shortAddress: newCustShortAddr || undefined,
+                    buildingNumber: newCustBuilding || undefined,
+                    additionalNumber: newCustAdditional || undefined,
+                    postalCode: newCustPostal || undefined,
+                    city: newCustCity || undefined,
                   });
                 }}
                 disabled={!newCustName.trim() || createCustomerMutation.isPending}

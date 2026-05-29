@@ -837,6 +837,12 @@ export const appRouter = router({
         address: z.string().optional(),
         taxNumber: z.string().optional(),
         customerType: z.enum(['individual', 'organization']).optional(),
+        registrationNumber: z.string().optional(),
+        shortAddress: z.string().optional(),
+        buildingNumber: z.string().optional(),
+        additionalNumber: z.string().optional(),
+        postalCode: z.string().optional(),
+        city: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const [c] = await db.insert(customers).values({
@@ -856,6 +862,12 @@ export const appRouter = router({
         address: z.string().optional(),
         taxNumber: z.string().optional(),
         customerType: z.enum(['individual', 'organization']).optional(),
+        registrationNumber: z.string().optional(),
+        shortAddress: z.string().optional(),
+        buildingNumber: z.string().optional(),
+        additionalNumber: z.string().optional(),
+        postalCode: z.string().optional(),
+        city: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const { id, ...rest } = input;
