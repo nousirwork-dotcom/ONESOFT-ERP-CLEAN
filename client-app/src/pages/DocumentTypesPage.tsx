@@ -17,6 +17,7 @@ type DoctypeForm = {
   docType: string;
   nameAr: string; nameEn: string; codeEn: string; codeAr: string;
   userGroup: string; user: string; warehouse: string; journal: string;
+  customersJournal: string; suppliersJournal: string;
   systemOnly: boolean; entryType: string; entryJournal: string;
   stockDocType: string; stockJournal: string;
   printTemplate: string; printTemplate2: string;
@@ -38,7 +39,7 @@ type Doctype = { id: string; typeId: string } & DoctypeForm;
 const EMPTY: DoctypeForm = {
   docType: "sales",
   nameAr: "", nameEn: "", codeEn: "", codeAr: "",
-  userGroup: "", user: "", warehouse: "", journal: "", systemOnly: false,
+  userGroup: "", user: "", warehouse: "", journal: "", customersJournal: "", suppliersJournal: "", systemOnly: false,
   entryType: "", entryJournal: "", stockDocType: "", stockJournal: "",
   printTemplate: "", printTemplate2: "",
   trackQty: false, noTax: false, sellerStats: false, itemStats: false, customerStats: false,
@@ -280,6 +281,8 @@ export default function DocumentTypesPage() {
   const { data: salesInvoiceJournals = [] }    = trpc.documentJournals.list.useQuery({ docType: "sales_invoice" });
   const { data: journalEntryJournals = [] }    = trpc.documentJournals.list.useQuery({ docType: "journal_entry" });
   const { data: stockIssueItemsJournals = [] } = trpc.documentJournals.list.useQuery({ docType: "stock_issue_items" });
+  const { data: customersJournalsList = [] }   = trpc.documentJournals.list.useQuery({ docType: "customers_journal" });
+  const { data: suppliersJournalsList = [] }   = trpc.documentJournals.list.useQuery({ docType: "suppliers_journal" });
   const { data: journalEntryTypes = [] }    = trpc.documentTypes.list.useQuery({ typeId: "journal-entry" });
   const { data: stockIssueItemsTypes = [] } = trpc.documentTypes.list.useQuery({ typeId: "stock-issue-items" });
 
@@ -312,7 +315,7 @@ export default function DocumentTypesPage() {
       docType: d.typeId,
       nameAr: d.nameAr ?? "", nameEn: d.nameEn ?? "", codeEn: d.codeEn ?? "", codeAr: d.codeAr ?? "",
       userGroup: d.userGroup ?? "", user: d.user_ ?? "", warehouse: d.warehouse ?? "",
-      journal: d.journal ?? "", systemOnly: d.systemOnly ?? false,
+      journal: d.journal ?? "", customersJournal: d.customersJournal ?? "", suppliersJournal: d.suppliersJournal ?? "", systemOnly: d.systemOnly ?? false,
       entryType: d.entryType ?? "", entryJournal: d.entryJournal ?? "",
       stockDocType: d.stockDocType ?? "", stockJournal: d.stockJournal ?? "",
       printTemplate: d.printTemplate ?? "", printTemplate2: d.printTemplate2 ?? "",
@@ -343,7 +346,7 @@ export default function DocumentTypesPage() {
       nameAr: form.nameAr, nameEn: form.nameEn || undefined, codeEn: form.codeEn || undefined, codeAr: form.codeAr || undefined,
       docType: form.docType || undefined, userGroup: form.userGroup || undefined,
       user_: form.user || undefined, warehouse: form.warehouse || undefined,
-      journal: form.journal || undefined, systemOnly: form.systemOnly,
+      journal: form.journal || undefined, customersJournal: form.customersJournal || undefined, suppliersJournal: form.suppliersJournal || undefined, systemOnly: form.systemOnly,
       entryType: form.entryType || undefined, entryJournal: form.entryJournal || undefined,
       stockDocType: form.stockDocType || undefined, stockJournal: form.stockJournal || undefined,
       printTemplate: form.printTemplate || undefined, printTemplate2: form.printTemplate2 || undefined,
@@ -605,6 +608,26 @@ export default function DocumentTypesPage() {
                     <FS value={form.warehouse} onValueChange={v => set("warehouse", v)}>
                       <SelectItem value="all">الكل</SelectItem>
                       {(warehousesList as any[])?.map((w: any) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
+                    </FS>
+                  </R>
+                  <R label="تكويد العملاء" lw={120}>
+                    <FS value={form.customersJournal} onValueChange={v => set("customersJournal", v)}>
+                      <SelectItem value="none">— بدون —</SelectItem>
+                      {(customersJournalsList as any[]).map((j: any) => (
+                        <SelectItem key={j.id} value={String(j.id)}>
+                          {j.numberPrefix ? `${j.numberPrefix} — ${j.name}` : j.name}
+                        </SelectItem>
+                      ))}
+                    </FS>
+                  </R>
+                  <R label="تكويد الموردين" lw={120}>
+                    <FS value={form.suppliersJournal} onValueChange={v => set("suppliersJournal", v)}>
+                      <SelectItem value="none">— بدون —</SelectItem>
+                      {(suppliersJournalsList as any[]).map((j: any) => (
+                        <SelectItem key={j.id} value={String(j.id)}>
+                          {j.numberPrefix ? `${j.numberPrefix} — ${j.name}` : j.name}
+                        </SelectItem>
+                      ))}
                     </FS>
                   </R>
                 </div>

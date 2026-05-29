@@ -613,6 +613,8 @@ export const documentTypes = pgTable('document_types', {
   user_:               varchar('user_', { length: 50 }),
   warehouse:            varchar('warehouse', { length: 50 }),
   journal:              varchar('journal', { length: 50 }),
+  customersJournal:     varchar('customers_journal', { length: 50 }),
+  suppliersJournal:     varchar('suppliers_journal', { length: 50 }),
   systemOnly:           boolean('system_only').notNull().default(false),
   entryType:            varchar('entry_type', { length: 30 }),
   entryJournal:         varchar('entry_journal', { length: 50 }),

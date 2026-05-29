@@ -15,6 +15,8 @@ const inputShape = {
   user_:               z.string().optional(),
   warehouse:            z.string().optional(),
   journal:              z.string().optional(),
+  customersJournal:     z.string().optional(),
+  suppliersJournal:     z.string().optional(),
   systemOnly:           z.boolean().default(false),
   entryType:            z.string().optional(),
   entryJournal:         z.string().optional(),
