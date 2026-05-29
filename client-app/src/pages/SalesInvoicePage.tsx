@@ -985,6 +985,20 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
             {customerType === 'organization' ? '📋 فاتورة ضريبية' : '🧾 فاتورة ضريبية مبسطة'}
           </div>
 
+          {/* نوع العميل (يظهر عند اختيار عميل) */}
+          {customerId && (
+            <div
+              className="flex items-center gap-1 px-2 py-0.5 rounded font-bold text-[11px] flex-shrink-0"
+              style={{
+                background: customerType === 'organization' ? '#1D4ED8' : '#15803D',
+                color: 'white',
+                border: `1px solid ${customerType === 'organization' ? '#1e40af' : '#166534'}`,
+              }}
+            >
+              {customerType === 'organization' ? '🏢 مؤسسة' : '👤 فرد'}
+            </div>
+          )}
+
           {/* الرقم الضريبي (يظهر فقط عند مؤسسة) */}
           {customerType === 'organization' && (
             <div className="flex items-center gap-1.5">
