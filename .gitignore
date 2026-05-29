@@ -1,0 +1,6 @@
+
+# Backup archives
+*.tar.gz
+*.zip
+*backup*
+*-source-*.tar.gz
