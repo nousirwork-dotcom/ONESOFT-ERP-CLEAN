@@ -898,12 +898,20 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                 >
                   <option value="">-- اختر عميل --</option>
                   {customersQuery.data?.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
+                    <option key={c.id} value={c.id}>
+                      {(c as any).customerType === 'organization' ? '📋 ' : '🧾 '}{c.name}
+                    </option>
                   ))}
                 </select>
                 <button
                   type="button"
-                  onClick={() => { setNewCustName(""); setNewCustPhone(""); setNewCustEmail(""); setNewCustAddr(""); setShowAddCustomer(true); }}
+                  onClick={() => {
+                    setNewCustName(""); setNewCustPhone(""); setNewCustEmail(""); setNewCustAddr("");
+                    setNewCustType('individual'); setNewCustTaxNum(""); setNewCustRegNum("");
+                    setNewCustShortAddr(""); setNewCustBuilding(""); setNewCustAdditional("");
+                    setNewCustPostal(""); setNewCustCity("");
+                    setShowAddCustomer(true);
+                  }}
                   className="flex-shrink-0 flex items-center justify-center transition-colors hover:opacity-80"
                   style={{ width: 24, height: 22, borderRadius: 3, background: "#406B93", color: "white", fontSize: 16, fontWeight: 700, border: "1px solid #2f5475", lineHeight: 1 }}
                   title="إضافة عميل جديد"
