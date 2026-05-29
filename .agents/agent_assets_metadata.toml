@@ -60,3 +60,9 @@ id = "OcyPqy9fZKw1_6QTmNv5u"
 uri = "file://ONESOFT-ERP-source-20260526.tar.gz"
 type = "unspecified"
 title = "ONESOFT-ERP — نسخة احتياطية 26 مايو 2026"
+
+[[outputs]]
+id = "x3dJBJtNIyndged1w6dT_"
+uri = "file://OneSoft-ERP-source.zip"
+type = "unspecified"
+title = "OneSoft ERP — ملفات البرنامج الكاملة"
