@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import POSReceiptModal, { parsePosConfig, type POSReceiptData } from "@/components/POSReceiptModal";
+import type { QrSettings } from "@/lib/qrUtils";
 import {
   Barcode,
   ChevronDown,
@@ -49,16 +51,22 @@ export default function POS() {
   const [discount, setDiscount] = useState(0);
   const [notes, setNotes] = useState("");
   const [activeCategory, setActiveCategory] = useState<number | undefined>();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitting, setIsSubmitting]   = useState(false);
+  const [paidAmount, setPaidAmount]       = useState(0);
+  const [showReceipt, setShowReceipt]     = useState(false);
+  const [receiptData, setReceiptData]     = useState<POSReceiptData | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const utils = trpc.useUtils();
 
-  const { data: products } = trpc.products.list.useQuery(
+  const { data: products }  = trpc.products.list.useQuery(
     { search: search.length >= 1 ? search : undefined, categoryId: activeCategory },
     { staleTime: 30000 }
   );
-  const { data: categories } = trpc.categories.list.useQuery(undefined, { staleTime: 60000 });
-  const { data: customers } = trpc.customers.list.useQuery(undefined, { staleTime: 60000 });
+  const { data: categories }       = trpc.categories.list.useQuery(undefined, { staleTime: 60000 });
+  const { data: customers }        = trpc.customers.list.useQuery(undefined, { staleTime: 60000 });
+  const { data: orgData }          = trpc.orgs.currentOrg.useQuery();
+  const { data: qrSettingsData }   = trpc.qrSettings.get.useQuery();
+  const { data: posTemplateData }  = trpc.documentTemplates.getDefault.useQuery({ docType: "pos_receipt" });
   const createInvoice = trpc.invoices.create.useMutation({
     onSuccess: () => {
       utils.dashboard.stats.invalidate();
@@ -158,8 +166,42 @@ export default function POS() {
         notes: notes || undefined,
       });
       toast.success(`تم حفظ الفاتورة #${id} بنجاح ✓`);
+      const now = new Date();
+      const customerName = selectedCustomerId
+        ? customers?.find(c => c.id === selectedCustomerId)?.name
+        : undefined;
+      const rData: POSReceiptData = {
+        invoiceNumber: id,
+        invoiceDate: now.toLocaleDateString("ar-SA"),
+        invoiceTime: now.toTimeString().slice(0, 8),
+        cashierName: user?.name ?? (user as any)?.username ?? undefined,
+        branchName: "الفرع الرئيسي",
+        customerName: customerName ?? undefined,
+        paymentMethod,
+        lines: cart.map(i => ({
+          productCode: i.barcode ?? "",
+          productName: i.productName,
+          quantity: i.quantity,
+          unitPrice: i.unitPrice,
+          discount: i.discount,
+          total: i.total,
+        })),
+        subtotal,
+        discountTotal: totalDiscount,
+        grandTotal: total,
+        paidAmount: paidAmount > 0 ? paidAmount : (paymentMethod === "cash" ? total : 0),
+        changeAmount: paidAmount > total ? paidAmount - total : 0,
+        sellerName: orgData?.name ?? "OneSoft ERP",
+        sellerTaxNumber: orgData?.taxNumber ?? undefined,
+        sellerAddress: orgData?.address ?? undefined,
+        sellerPhone: orgData?.phone ?? undefined,
+        currency: "SAR",
+      };
+      setReceiptData(rData);
+      setShowReceipt(true);
       setCart([]);
       setDiscount(0);
+      setPaidAmount(0);
       setNotes("");
       setSelectedCustomerId(undefined);
       searchRef.current?.focus();
@@ -400,6 +442,29 @@ export default function POS() {
               </div>
             </div>
 
+            {/* Cash Received */}
+            {paymentMethod === "cash" && (
+              <>
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs text-muted-foreground shrink-0">المبلغ المستلم:</Label>
+                  <Input
+                    type="number"
+                    value={paidAmount || ""}
+                    onChange={(e) => setPaidAmount(Number(e.target.value) || 0)}
+                    placeholder={formatCurrency(total)}
+                    className="h-8 text-xs"
+                    min={0}
+                  />
+                </div>
+                {paidAmount > 0 && paidAmount >= total && (
+                  <div className="flex justify-between text-sm font-bold text-green-600 bg-green-50 rounded px-2 py-1">
+                    <span>الباقي للعميل</span>
+                    <span>{formatCurrency(paidAmount - total)}</span>
+                  </div>
+                )}
+              </>
+            )}
+
             {/* Checkout Button */}
             <Button
               onClick={handleCheckout}
@@ -418,6 +483,28 @@ export default function POS() {
           </div>
         </div>
       </div>
+
+      {/* POS Receipt Modal */}
+      {showReceipt && receiptData && (
+        <POSReceiptModal
+          open={showReceipt}
+          onClose={() => setShowReceipt(false)}
+          data={receiptData}
+          templateConfig={parsePosConfig(posTemplateData?.layoutJson)}
+          qrSettings={qrSettingsData ? {
+            isEnabled: qrSettingsData.isEnabled,
+            countrySystem: qrSettingsData.countrySystem as any,
+            sellerName: qrSettingsData.sellerName ?? undefined,
+            taxNumber: qrSettingsData.taxNumber ?? undefined,
+            customFormat: qrSettingsData.customFormat ?? undefined,
+            showOnSalesInvoice: qrSettingsData.showOnSalesInvoice,
+            showOnPurchaseInvoice: qrSettingsData.showOnPurchaseInvoice,
+            showOnReceiptVoucher: qrSettingsData.showOnReceiptVoucher,
+            qrSize: qrSettingsData.qrSize,
+            qrPosition: qrSettingsData.qrPosition,
+          } as QrSettings : null}
+        />
+      )}
     </div>
   );
 }

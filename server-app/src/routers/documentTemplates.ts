@@ -4,6 +4,25 @@ import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import { documentTemplates } from '../schema.js';
 
+const POS01_CONFIG = JSON.stringify({
+  type: "pos_config_v1",
+  paperWidth: "80mm",
+  primaryColor: "#406B93",
+  taxPct: 15,
+  taxInclusive: true,
+  show: {
+    logo: false, taxNumber: true, commercialReg: true,
+    address: true, phone: true, customerName: false,
+    cashierName: true, itemCode: false, discount: true,
+    prices: true, branchName: true, qr: true,
+    amountInWords: false, thankYou: true,
+    paymentMethod: true, changeAmount: true,
+  },
+  printMode: "detailed",
+  thankYouMsg: "شكراً لتسوقكم معنا",
+  copies: 1,
+});
+
 const INV01_CONFIG = JSON.stringify({
   type: "config_v1",
   language: "bilingual",
@@ -50,28 +69,37 @@ export const documentTemplatesRouter = router({
 
   seedDefaults: protectedProcedure
     .mutation(async ({ ctx }) => {
-      const existing = await db.query.documentTemplates.findFirst({
-        where: and(
-          eq(documentTemplates.orgId, ctx.user.orgId),
-          eq(documentTemplates.docType, 'sales_invoice'),
-        ),
-      });
-      if (existing) return { seeded: false };
-      await db.insert(documentTemplates).values({
-        orgId:       ctx.user.orgId,
-        code:        'INV01',
-        nameAr:      'نموذج المبيعات الأساسي',
-        nameEn:      'Standard Sales Invoice',
-        docType:     'sales_invoice',
-        paperSize:   'A4',
-        orientation: 'portrait',
-        isDefault:   true,
-        isActive:    true,
-        sortOrder:   1,
-        layoutJson:  INV01_CONFIG,
-        notes:       'النموذج الافتراضي — فاتورة ضريبية ثنائية اللغة',
-      });
-      return { seeded: true };
+      const defaults = [
+        {
+          code: 'INV01', nameAr: 'نموذج المبيعات الأساسي', nameEn: 'Standard Sales Invoice',
+          docType: 'sales_invoice', paperSize: 'A4', layoutJson: INV01_CONFIG,
+          notes: 'النموذج الافتراضي — فاتورة ضريبية ثنائية اللغة',
+        },
+        {
+          code: 'POS01', nameAr: 'نموذج نقاط البيع الحراري', nameEn: 'POS Thermal Receipt',
+          docType: 'pos_receipt', paperSize: '80mm', layoutJson: POS01_CONFIG,
+          notes: 'إيصال حراري لنقاط البيع — ZATCA/ETA QR',
+        },
+      ];
+      let seededCount = 0;
+      for (const def of defaults) {
+        const existing = await db.query.documentTemplates.findFirst({
+          where: and(
+            eq(documentTemplates.orgId, ctx.user.orgId),
+            eq(documentTemplates.code, def.code),
+          ),
+        });
+        if (!existing) {
+          await db.insert(documentTemplates).values({
+            orgId: ctx.user.orgId, code: def.code, nameAr: def.nameAr, nameEn: def.nameEn,
+            docType: def.docType, paperSize: def.paperSize, orientation: 'portrait',
+            isDefault: true, isActive: true, sortOrder: 1,
+            layoutJson: def.layoutJson, notes: def.notes,
+          });
+          seededCount++;
+        }
+      }
+      return { seeded: seededCount > 0, count: seededCount };
     }),
 
   create: protectedProcedure
