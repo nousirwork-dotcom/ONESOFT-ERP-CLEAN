@@ -9,9 +9,10 @@ import { chatRouter } from './chat.js';
 import { documentJournalsRouter } from './documentJournals.js';
 import { documentTemplatesRouter } from './documentTemplates.js';
 import { documentTypesRouter } from './documentTypes.js';
+import { documentSendRouter } from './documentSend.js';
 import { postingRouter } from './posting.js';
 import { db } from '../db.js';
-import { products, customers, suppliers, chartOfAccounts, warehouses, branches, units, productGroups, journalEntries, journalEntryLines, vouchers, receiptVouchers, paymentVouchers, inventory, stockVouchers, stockVoucherItems, inventoryCounts, inventoryCountItems, freeProducts, salesInvoices, salesInvoiceItems, warehouseAccountLinks, userGroups, userGroupMembers, userCategories, users, documentJournals, documentTypes, costCenters, qrSettings } from '../schema.js';
+import { products, customers, suppliers, chartOfAccounts, warehouses, branches, units, productGroups, journalEntries, journalEntryLines, vouchers, receiptVouchers, paymentVouchers, inventory, stockVouchers, stockVoucherItems, inventoryCounts, inventoryCountItems, freeProducts, salesInvoices, salesInvoiceItems, warehouseAccountLinks, userGroups, userGroupMembers, userCategories, users, documentJournals, documentTypes, costCenters, qrSettings, documentSendLogs, sendSettings } from '../schema.js';
 import { eq, and, desc, like, or, sql, isNotNull, isNull, asc, gte, lte, inArray } from 'drizzle-orm';
 
 export const appRouter = router({
@@ -274,6 +275,7 @@ export const appRouter = router({
   documentJournals: documentJournalsRouter,
   documentTemplates: documentTemplatesRouter,
   documentTypes: documentTypesRouter,
+  documentSend: documentSendRouter,
   posting: postingRouter,
 
   // ─── QR Settings ─────────────────────────────────────────────────────────────
@@ -885,6 +887,9 @@ export const appRouter = router({
         additionalNumber: z.string().optional(),
         postalCode: z.string().optional(),
         city: z.string().optional(),
+        whatsappPhone: z.string().optional(),
+        telegramId: z.string().optional(),
+        defaultSendMethod: z.enum(['whatsapp', 'telegram', 'email']).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const [c] = await db.insert(customers).values({
@@ -910,6 +915,9 @@ export const appRouter = router({
         additionalNumber: z.string().optional(),
         postalCode: z.string().optional(),
         city: z.string().optional(),
+        whatsappPhone: z.string().optional(),
+        telegramId: z.string().optional(),
+        defaultSendMethod: z.enum(['whatsapp', 'telegram', 'email']).optional().nullable(),
       }))
       .mutation(async ({ ctx, input }) => {
         const { id, ...rest } = input;

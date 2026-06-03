@@ -198,6 +198,10 @@ export const customers = pgTable('customers', {
   balance: decimal('balance', { precision: 18, scale: 4 }).default('0'),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),
+  // ─── قنوات الإرسال الإلكتروني ──────────────────────────────────────────────
+  whatsappPhone: varchar('whatsapp_phone', { length: 50 }),
+  telegramId: varchar('telegram_id', { length: 100 }),
+  defaultSendMethod: varchar('default_send_method', { length: 20 }),
 });
 
 // ─── Suppliers ────────────────────────────────────────────────────────────────
@@ -719,6 +723,43 @@ export const qrSettings = pgTable('qr_settings', {
   notes:                 text('notes'),
   createdAt:             timestamp('created_at').notNull().defaultNow(),
   updatedAt:             timestamp('updated_at').notNull().defaultNow(),
+});
+
+// ─── Document Send Logs ───────────────────────────────────────────────────────
+export const documentSendLogs = pgTable('document_send_logs', {
+  id:               serial('id').primaryKey(),
+  orgId:            integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  docType:          varchar('doc_type', { length: 50 }).notNull(),
+  docId:            integer('doc_id'),
+  docNumber:        varchar('doc_number', { length: 100 }),
+  method:           varchar('method', { length: 20 }).notNull(),
+  status:           varchar('status', { length: 20 }).notNull().default('pending'),
+  recipientName:    varchar('recipient_name', { length: 255 }),
+  recipientContact: varchar('recipient_contact', { length: 500 }),
+  messageSent:      text('message_sent'),
+  errorMessage:     text('error_message'),
+  sentByUserId:     integer('sent_by_user_id').references(() => users.id),
+  sentAt:           timestamp('sent_at').notNull().defaultNow(),
+});
+
+// ─── Send Settings ────────────────────────────────────────────────────────────
+export const sendSettings = pgTable('send_settings', {
+  id:                      serial('id').primaryKey(),
+  orgId:                   integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  whatsappEnabled:         boolean('whatsapp_enabled').notNull().default(true),
+  telegramEnabled:         boolean('telegram_enabled').notNull().default(false),
+  emailEnabled:            boolean('email_enabled').notNull().default(false),
+  telegramBotToken:        text('telegram_bot_token'),
+  emailProvider:           varchar('email_provider', { length: 20 }).default('resend'),
+  emailApiKey:             text('email_api_key'),
+  emailFromName:           varchar('email_from_name', { length: 255 }),
+  emailFromEmail:          varchar('email_from_email', { length: 255 }),
+  whatsappMessageTemplate: text('whatsapp_message_template'),
+  telegramMessageTemplate: text('telegram_message_template'),
+  emailSubjectTemplate:    varchar('email_subject_template', { length: 500 }),
+  emailBodyTemplate:       text('email_body_template'),
+  createdAt:               timestamp('created_at').notNull().defaultNow(),
+  updatedAt:               timestamp('updated_at').notNull().defaultNow(),
 });
 
 // ─── Types ────────────────────────────────────────────────────────────────────

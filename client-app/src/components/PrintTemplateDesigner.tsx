@@ -5,6 +5,7 @@ import {
   LayoutGrid, Calculator, PenLine, MessageSquare, Minus,
   Trash2, Save, ArrowLeft, AlignRight, AlignLeft, AlignCenter,
   Bold, Plus, Eye, EyeOff, Layers, CornerDownLeft,
+  Settings2, Palette, Globe2, Table2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -29,11 +30,53 @@ export type LayoutElement = {
 };
 
 export type TemplateLayout = {
-  version: 1;
+  version:     1;
+  type:        "config_v1";
   paperSize:   string;
   orientation: "portrait" | "landscape";
   elements:    LayoutElement[];
+  // ─── config_v1 fields (used by InvoicePrintModal) ───────────────────
+  language:    "ar" | "bilingual";
+  primaryColor: string;
+  columns: {
+    num: boolean; code: boolean; name: boolean; unit: boolean;
+    qty: boolean; price: boolean; discount: boolean;
+    taxable: boolean; taxRate: boolean; taxAmt: boolean; total: boolean;
+  };
+  minRows:  number;
+  sections: {
+    sellerInfo: boolean; customerInfo: boolean;
+    amountInWords: boolean; pageNumber: boolean; signatures: boolean;
+  };
 };
+
+const DEFAULT_COLS: TemplateLayout["columns"] = {
+  num: true, code: true, name: true, unit: false,
+  qty: true, price: true, discount: true,
+  taxable: true, taxRate: true, taxAmt: true, total: true,
+};
+const DEFAULT_SECS: TemplateLayout["sections"] = {
+  sellerInfo: true, customerInfo: true,
+  amountInWords: true, pageNumber: true, signatures: false,
+};
+
+const COL_LIST: { key: keyof TemplateLayout["columns"]; ar: string; en: string }[] = [
+  { key: "num",      ar: "م",               en: "No."            },
+  { key: "code",     ar: "رمز الصنف",       en: "Item Code"      },
+  { key: "name",     ar: "اسم الصنف",       en: "Item Name"      },
+  { key: "unit",     ar: "وحدة",            en: "Unit"           },
+  { key: "qty",      ar: "الكمية",          en: "Qty"            },
+  { key: "price",    ar: "السعر",           en: "Price"          },
+  { key: "discount", ar: "الخصم",           en: "Discount"       },
+  { key: "taxable",  ar: "خاضع للضريبة",   en: "Taxable"        },
+  { key: "taxRate",  ar: "نسبة الضريبة",   en: "Tax Rate"       },
+  { key: "taxAmt",   ar: "مبلغ الضريبة",   en: "Tax Amt"        },
+  { key: "total",    ar: "الإجمالي",        en: "Total Incl VAT" },
+];
+
+const THEME_COLORS = [
+  "#406B93","#1D4ED8","#7C3AED","#059669","#DC2626","#D97706","#0891B2","#374151",
+];
 
 /* ─── Paper sizes (mm) ─── */
 const PAPERS: Record<string, { w: number; h: number; label: string }> = {
@@ -214,6 +257,22 @@ export default function PrintTemplateDesigner({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showGrid,   setShowGrid]   = useState(true);
   const [isDirty,    setIsDirty]    = useState(false);
+  const [rightTab,   setRightTab]   = useState<"element" | "settings">("element");
+
+  // ─── config_v1 state ──────────────────────────────────────────────────
+  const [cfgLanguage,     setCfgLanguage]     = useState<"ar"|"bilingual">(initialLayout?.language ?? "bilingual");
+  const [cfgColor,        setCfgColor]        = useState(initialLayout?.primaryColor ?? "#406B93");
+  const [cfgColumns,      setCfgColumns]      = useState<TemplateLayout["columns"]>({ ...DEFAULT_COLS, ...initialLayout?.columns });
+  const [cfgSections,     setCfgSections]     = useState<TemplateLayout["sections"]>({ ...DEFAULT_SECS, ...initialLayout?.sections });
+  const [cfgMinRows,      setCfgMinRows]      = useState(initialLayout?.minRows ?? 5);
+
+  const patchCol = (k: keyof TemplateLayout["columns"], v: boolean) => {
+    setCfgColumns(p => ({ ...p, [k]: v })); setIsDirty(true);
+  };
+  const patchSec = (k: keyof TemplateLayout["sections"], v: boolean) => {
+    setCfgSections(p => ({ ...p, [k]: v })); setIsDirty(true);
+  };
+
   const selected = elements.find(e => e.id === selectedId);
 
   const dragRef  = useRef<{ id: string; sx: number; sy: number; mx: number; my: number } | null>(null);
@@ -223,6 +282,11 @@ export default function PrintTemplateDesigner({
   useEffect(() => {
     if (initialLayout) {
       setElements(initialLayout.elements ?? []);
+      setCfgLanguage(initialLayout.language ?? "bilingual");
+      setCfgColor(initialLayout.primaryColor ?? "#406B93");
+      setCfgColumns({ ...DEFAULT_COLS, ...initialLayout.columns });
+      setCfgSections({ ...DEFAULT_SECS, ...initialLayout.sections });
+      setCfgMinRows(initialLayout.minRows ?? 5);
       setIsDirty(false);
     }
   }, [initialLayout]);
@@ -282,10 +346,16 @@ export default function PrintTemplateDesigner({
 
   const handleSave = () => {
     const layout: TemplateLayout = {
-      version: 1,
+      version:      1,
+      type:         "config_v1",
       paperSize,
-      orientation: orientation as any,
+      orientation:  orientation as any,
       elements,
+      language:     cfgLanguage,
+      primaryColor: cfgColor,
+      columns:      cfgColumns,
+      sections:     cfgSections,
+      minRows:      cfgMinRows,
     };
     onSave(layout);
     setIsDirty(false);
@@ -422,12 +492,117 @@ export default function PrintTemplateDesigner({
           </div>
         </div>
 
-        {/* ── Right: properties ── */}
-        <div className="w-52 shrink-0 flex flex-col bg-white border-r border-slate-200 overflow-y-auto">
-          <div className="px-2.5 py-2 border-b border-slate-100 bg-slate-50 sticky top-0 z-10">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">الخصائص</span>
+        {/* ── Right: properties + settings ── */}
+        <div className="w-56 shrink-0 flex flex-col bg-white border-r border-slate-200 overflow-y-auto">
+          {/* Tab header */}
+          <div className="flex border-b border-slate-200 shrink-0 sticky top-0 bg-white z-10">
+            <button
+              onClick={() => setRightTab("element")}
+              className={`flex-1 flex items-center justify-center gap-1 py-1.5 text-[10px] font-semibold transition-colors ${rightTab === "element" ? "border-b-2 border-indigo-500 text-indigo-700 bg-indigo-50" : "text-slate-500 hover:bg-slate-50"}`}
+            >
+              <Layers className="w-3 h-3" />العنصر
+            </button>
+            <button
+              onClick={() => setRightTab("settings")}
+              className={`flex-1 flex items-center justify-center gap-1 py-1.5 text-[10px] font-semibold transition-colors ${rightTab === "settings" ? "border-b-2 border-purple-500 text-purple-700 bg-purple-50" : "text-slate-500 hover:bg-slate-50"}`}
+            >
+              <Settings2 className="w-3 h-3" />الفاتورة
+            </button>
           </div>
 
+          {/* ── Settings Tab ── */}
+          {rightTab === "settings" && (
+            <div className="flex-1 overflow-y-auto p-2.5 space-y-4">
+              {/* اللغة */}
+              <div>
+                <div className="flex items-center gap-1 mb-1.5">
+                  <Globe2 className="w-3 h-3 text-purple-500" />
+                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wide">اللغة</span>
+                </div>
+                <div className="flex gap-1.5">
+                  {[{ v: "bilingual", ar: "ثنائي اللغة" }, { v: "ar", ar: "عربي فقط" }].map(o => (
+                    <button key={o.v} onClick={() => { setCfgLanguage(o.v as any); setIsDirty(true); }}
+                      className={`flex-1 py-1 rounded border text-[10px] transition-colors ${cfgLanguage === o.v ? "border-purple-400 bg-purple-50 text-purple-700 font-bold" : "border-slate-200 text-slate-500 hover:border-slate-300"}`}>
+                      {o.ar}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* اللون الرئيسي */}
+              <div>
+                <div className="flex items-center gap-1 mb-1.5">
+                  <Palette className="w-3 h-3 text-purple-500" />
+                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wide">اللون الرئيسي</span>
+                </div>
+                <div className="flex flex-wrap gap-1 mb-1.5">
+                  {THEME_COLORS.map(c => (
+                    <button key={c} onClick={() => { setCfgColor(c); setIsDirty(true); }}
+                      className="w-5 h-5 rounded-full border-2 hover:scale-110 transition-transform"
+                      style={{ background: c, borderColor: cfgColor === c ? "#fff" : "transparent", outline: cfgColor === c ? `2px solid ${c}` : "none", outlineOffset: 1 }} />
+                  ))}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <input type="color" value={cfgColor} onChange={e => { setCfgColor(e.target.value); setIsDirty(true); }}
+                    className="w-7 h-6 rounded cursor-pointer border border-slate-200 p-0.5" />
+                  <span className="text-[9px] font-mono text-slate-500">{cfgColor}</span>
+                </div>
+              </div>
+
+              {/* الأعمدة */}
+              <div>
+                <div className="flex items-center gap-1 mb-1.5">
+                  <Table2 className="w-3 h-3 text-purple-500" />
+                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wide">أعمدة الجدول</span>
+                </div>
+                <div className="space-y-1">
+                  {COL_LIST.map(c => (
+                    <label key={c.key} className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input type="checkbox" className="w-3 h-3 accent-indigo-600" checked={cfgColumns[c.key]} onChange={e => patchCol(c.key, e.target.checked)} />
+                      <span className={`text-[10px] ${cfgColumns[c.key] ? "text-slate-700" : "text-slate-300"}`}>{c.ar}</span>
+                      <span className={`text-[8px] mr-auto ${cfgColumns[c.key] ? "text-slate-400" : "text-slate-200"}`}>{c.en}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* الأقسام */}
+              <div>
+                <div className="flex items-center gap-1 mb-1.5">
+                  <FileText className="w-3 h-3 text-purple-500" />
+                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wide">الأقسام</span>
+                </div>
+                <div className="space-y-1">
+                  {([
+                    { key: "sellerInfo",    ar: "بيانات البائع"    },
+                    { key: "customerInfo",  ar: "بيانات العميل"    },
+                    { key: "amountInWords", ar: "المبلغ كتابةً"    },
+                    { key: "pageNumber",    ar: "رقم الصفحة"       },
+                    { key: "signatures",    ar: "خانات التوقيع"    },
+                  ] as { key: keyof TemplateLayout["sections"]; ar: string }[]).map(s => (
+                    <label key={s.key} className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input type="checkbox" className="w-3 h-3 accent-indigo-600" checked={cfgSections[s.key]} onChange={e => patchSec(s.key, e.target.checked)} />
+                      <span className={`text-[10px] ${cfgSections[s.key] ? "text-slate-700" : "text-slate-300"}`}>{s.ar}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* الصفوف الفارغة */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wide">الصفوف الفارغة</span>
+                  <span className="text-[11px] font-bold text-purple-700">{cfgMinRows}</span>
+                </div>
+                <input type="range" min={0} max={15} step={1} value={cfgMinRows}
+                  onChange={e => { setCfgMinRows(Number(e.target.value)); setIsDirty(true); }}
+                  className="w-full accent-purple-600" />
+              </div>
+            </div>
+          )}
+
+          {/* ── Element Properties Tab ── */}
+          {rightTab === "element" && (<>
           {selected ? (
             <div className="p-2.5 space-y-3">
               {/* type badge */}
@@ -548,6 +723,7 @@ export default function PrintTemplateDesigner({
               <p className="text-[11px] text-slate-400">اختر عنصراً من الورقة لعرض خصائصه</p>
             </div>
           )}
+          </>)}
         </div>
       </div>
     </div>

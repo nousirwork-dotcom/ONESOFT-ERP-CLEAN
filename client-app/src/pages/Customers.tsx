@@ -3,6 +3,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
 import { Edit, Plus, Search, Users } from "lucide-react";
@@ -10,7 +12,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import ERPToolbar from "@/components/ERPToolbar";
 
-const emptyForm = { code: "", name: "", phone: "", email: "", address: "" };
+const emptyForm = { code: "", name: "", phone: "", email: "", address: "", whatsappPhone: "", telegramId: "", defaultSendMethod: "" };
 
 export default function Customers() {
   const [search, setSearch] = useState("");
@@ -32,7 +34,12 @@ export default function Customers() {
   const openCreate = () => { setEditId(null); setForm(emptyForm); setIsOpen(true); };
   const openEdit = (c: any) => {
     setEditId(c.id);
-    setForm({ code: c.code ?? "", name: c.name, phone: c.phone ?? "", email: c.email ?? "", address: c.address ?? "" });
+    setForm({
+      code: c.code ?? "", name: c.name, phone: c.phone ?? "",
+      email: c.email ?? "", address: c.address ?? "",
+      whatsappPhone: c.whatsappPhone ?? "", telegramId: c.telegramId ?? "",
+      defaultSendMethod: c.defaultSendMethod ?? "",
+    });
     setIsOpen(true);
   };
   const handleSubmit = () => {
@@ -43,6 +50,9 @@ export default function Customers() {
       phone: form.phone || undefined,
       email: form.email || undefined,
       address: form.address || undefined,
+      whatsappPhone: form.whatsappPhone || undefined,
+      telegramId: form.telegramId || undefined,
+      defaultSendMethod: (form.defaultSendMethod as any) || undefined,
     };
     if (editId) update.mutate({ id: editId, ...data });
     else create.mutate(data);
@@ -146,6 +156,30 @@ export default function Customers() {
             <div><Label>الهاتف</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="mt-1" /></div>
             <div><Label>البريد الإلكتروني</Label><Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="mt-1" /></div>
             <div><Label>العنوان</Label><Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="mt-1" /></div>
+
+            <Separator />
+            <p className="text-xs font-semibold text-muted-foreground">قنوات الإرسال الإلكتروني</p>
+            <div>
+              <Label className="text-xs">رقم واتساب</Label>
+              <Input value={form.whatsappPhone} onChange={(e) => setForm({ ...form, whatsappPhone: e.target.value })} className="mt-1 font-mono text-sm" placeholder="05xxxxxxxx" dir="ltr" />
+              <p className="text-[10px] text-muted-foreground mt-0.5">إن اختلف عن رقم الهاتف</p>
+            </div>
+            <div>
+              <Label className="text-xs">معرّف تيليجرام</Label>
+              <Input value={form.telegramId} onChange={(e) => setForm({ ...form, telegramId: e.target.value })} className="mt-1 font-mono text-sm" placeholder="@username أو Chat ID" dir="ltr" />
+            </div>
+            <div>
+              <Label className="text-xs">طريقة الإرسال الافتراضية</Label>
+              <Select value={form.defaultSendMethod || "none"} onValueChange={(v) => setForm({ ...form, defaultSendMethod: v === "none" ? "" : v })}>
+                <SelectTrigger className="mt-1 text-sm h-9"><SelectValue placeholder="اختر..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— بدون تفضيل —</SelectItem>
+                  <SelectItem value="whatsapp">واتساب</SelectItem>
+                  <SelectItem value="telegram">تيليجرام</SelectItem>
+                  <SelectItem value="email">بريد إلكتروني</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsOpen(false)}>إلغاء</Button>

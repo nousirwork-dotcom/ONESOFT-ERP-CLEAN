@@ -1,0 +1,2 @@
+- [JSX Fragment in conditional rendering](jsx-fragment-conditional.md) — use `{cond && (<>...</>)}` not `{cond && (\n{inner...})` — bare newline breaks JSX parser
+- [PrintTemplateDesigner config_v1](print-template-designer.md) — TemplateLayout must include type:"config_v1" + all config fields for InvoicePrintModal compatibility

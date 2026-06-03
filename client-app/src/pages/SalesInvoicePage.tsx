@@ -14,6 +14,7 @@ import { trpc } from "@/lib/trpc";
 import ERPToolbar, { ERPMode } from "@/components/ERPToolbar";
 import PostingPreviewModal from "@/components/PostingPreviewModal";
 import InvoicePrintModal, { type DocTemplateConfig } from "@/components/InvoicePrintModal";
+import SendDocumentPanel from "@/components/SendDocumentPanel";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface InvoiceLine {
@@ -107,6 +108,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
   const [isPosted, setIsPosted]                   = useState(false);
   const [showPostingPreview, setShowPostingPreview] = useState(false);
   const [showPrintModal, setShowPrintModal]         = useState(false);
+  const [showSendPanel, setShowSendPanel]           = useState(false);
 
   // ── ERP mode ──────────────────────────────────────────────────────────────
   const [erpMode, setErpMode] = useState<ERPMode>("new");
@@ -1603,6 +1605,27 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       )}
 
       {/* ── نافذة الطباعة مع QR Code ──────────────────────────────────── */}
+      {/* ── لوحة الإرسال الإلكتروني ──────────────────────────────────────── */}
+      {showSendPanel && (
+        <SendDocumentPanel
+          open={showSendPanel}
+          onClose={() => setShowSendPanel(false)}
+          docType="sales_invoice"
+          docId={savedInvoiceId ?? undefined}
+          docNumber={invoiceNumber || "—"}
+          docTypeName="فاتورة مبيعات"
+          amount={(() => {
+            try {
+              const n = Number(lines.reduce((s, l) => s + (parseFloat(l.total) || 0), 0) - (parseFloat(discountAmount) || 0));
+              return new Intl.NumberFormat("ar-SA", { minimumFractionDigits: 2 }).format(n);
+            } catch { return "0.00"; }
+          })()}
+          currency={currency || "SAR"}
+          customerId={selectedCustomerId ?? undefined}
+          customerName={customerName || "العميل"}
+        />
+      )}
+
       {showPrintModal && (
         <InvoicePrintModal
           open={showPrintModal}
