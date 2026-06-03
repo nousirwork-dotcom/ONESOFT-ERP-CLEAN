@@ -11,7 +11,7 @@ import { documentTemplatesRouter } from './documentTemplates.js';
 import { documentTypesRouter } from './documentTypes.js';
 import { postingRouter } from './posting.js';
 import { db } from '../db.js';
-import { products, customers, suppliers, chartOfAccounts, warehouses, branches, units, productGroups, journalEntries, journalEntryLines, vouchers, receiptVouchers, paymentVouchers, inventory, stockVouchers, stockVoucherItems, inventoryCounts, inventoryCountItems, freeProducts, salesInvoices, salesInvoiceItems, warehouseAccountLinks, userGroups, userGroupMembers, userCategories, users, documentJournals, documentTypes, costCenters } from '../schema.js';
+import { products, customers, suppliers, chartOfAccounts, warehouses, branches, units, productGroups, journalEntries, journalEntryLines, vouchers, receiptVouchers, paymentVouchers, inventory, stockVouchers, stockVoucherItems, inventoryCounts, inventoryCountItems, freeProducts, salesInvoices, salesInvoiceItems, warehouseAccountLinks, userGroups, userGroupMembers, userCategories, users, documentJournals, documentTypes, costCenters, qrSettings } from '../schema.js';
 import { eq, and, desc, like, or, sql, isNotNull, isNull, asc, gte, lte, inArray } from 'drizzle-orm';
 
 export const appRouter = router({
@@ -275,6 +275,48 @@ export const appRouter = router({
   documentTemplates: documentTemplatesRouter,
   documentTypes: documentTypesRouter,
   posting: postingRouter,
+
+  // ─── QR Settings ─────────────────────────────────────────────────────────────
+  qrSettings: router({
+    get: protectedProcedure.query(async ({ ctx }) => {
+      const rows = await db.select().from(qrSettings)
+        .where(eq(qrSettings.orgId, ctx.user.orgId))
+        .limit(1);
+      return rows[0] ?? null;
+    }),
+    upsert: protectedProcedure
+      .input(z.object({
+        isEnabled:             z.boolean().optional(),
+        countrySystem:         z.enum(['zatca', 'eta', 'custom']).optional(),
+        customFormat:          z.string().optional().nullable(),
+        sellerName:            z.string().optional().nullable(),
+        taxNumber:             z.string().optional().nullable(),
+        showOnSalesInvoice:    z.boolean().optional(),
+        showOnPurchaseInvoice: z.boolean().optional(),
+        showOnReceiptVoucher:  z.boolean().optional(),
+        qrSize:                z.number().min(50).max(300).optional(),
+        qrPosition:            z.string().optional(),
+        notes:                 z.string().optional().nullable(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const existing = await db.select({ id: qrSettings.id })
+          .from(qrSettings)
+          .where(eq(qrSettings.orgId, ctx.user.orgId))
+          .limit(1);
+        if (existing.length) {
+          const [updated] = await db.update(qrSettings)
+            .set({ ...input, updatedAt: new Date() })
+            .where(eq(qrSettings.orgId, ctx.user.orgId))
+            .returning();
+          return updated;
+        } else {
+          const [inserted] = await db.insert(qrSettings)
+            .values({ orgId: ctx.user.orgId, ...input })
+            .returning();
+          return inserted;
+        }
+      }),
+  }),
 
   // ─── Dashboard ───────────────────────────────────────────────────────────────
   dashboard: router({

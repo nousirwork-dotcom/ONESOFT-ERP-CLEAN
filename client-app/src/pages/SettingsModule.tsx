@@ -11,8 +11,10 @@ import {
   Calendar, Users, Shield, Database, FileText, History,
   Warehouse, Tag, BookOpen, Layout, Download, Bell,
   ArrowRight, Save, Plus, Trash2, Edit2, Clock, GitBranch,
-  AlertTriangle, CheckCircle, XCircle, BarChart2, Lock, List,
+  AlertTriangle, CheckCircle, XCircle, BarChart2, Lock, List, QrCode,
 } from "lucide-react";
+import QRCodeDisplay from "@/components/QRCodeDisplay";
+import { generateQrContent, QR_SYSTEMS, CUSTOM_TEMPLATE_HELP, type QrSystem } from "@/lib/qrUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -85,6 +87,7 @@ const menuSections = [
       { id: "posting-settings",    label: "ترحيل المستندات",     status: "partial", path: "/cfg/posting-settings" },
       { id: "document-types",      label: "أنواع المستندات",     status: "partial", path: "/cfg/document-types" },
       { id: "document-templates",  label: "نماذج المستندات",     status: "partial", path: "/cfg/document-templates" },
+      { id: "qr-settings",         label: "إعدادات QR Code",     status: "done",    path: "/cfg/qr-settings" },
       { id: "field-design",        label: "تصميم الحقول",        status: "missing", path: "/cfg/field-design" },
       { id: "backup",              label: "النسخ الاحتياطي",     status: "done",    path: "/cfg/backup" },
       { id: "audit-log",           label: "سجل العمليات",        status: "done",    path: "/cfg/audit-log" },
@@ -2076,6 +2079,298 @@ function ComingSoon({ title }: { title: string }) {
   );
 }
 
+// ─── QR Settings Page ──────────────────────────────────────────────────────────
+
+function QRSettingsPage() {
+  const qrQuery = trpc.qrSettings.get.useQuery();
+  const upsertMutation = trpc.qrSettings.upsert.useMutation({
+    onSuccess: () => {
+      toast.success("✓ تم حفظ إعدادات QR Code");
+      qrQuery.refetch();
+    },
+    onError: (e) => toast.error(`خطأ: ${e.message}`),
+  });
+
+  const s = qrQuery.data;
+
+  const [isEnabled, setIsEnabled] = useState(true);
+  const [system, setSystem] = useState<QrSystem>("zatca");
+  const [sellerName, setSellerName] = useState("");
+  const [taxNumber, setTaxNumber] = useState("");
+  const [customFormat, setCustomFormat] = useState("{{sellerName}}\n{{taxNumber}}\n{{invoiceDateTime}}\n{{totalAmount}}\n{{vatAmount}}");
+  const [showOnSales, setShowOnSales] = useState(true);
+  const [showOnPurchase, setShowOnPurchase] = useState(false);
+  const [showOnReceipt, setShowOnReceipt] = useState(false);
+  const [qrSize, setQrSize] = useState(100);
+  const [qrPosition, setQrPosition] = useState("top-right");
+  const [showHelp, setShowHelp] = useState(false);
+
+  useEffect(() => {
+    if (!s) return;
+    setIsEnabled(s.isEnabled);
+    setSystem((s.countrySystem as QrSystem) ?? "zatca");
+    setSellerName(s.sellerName ?? "");
+    setTaxNumber(s.taxNumber ?? "");
+    setCustomFormat(s.customFormat ?? "{{sellerName}}\n{{taxNumber}}\n{{invoiceDateTime}}\n{{totalAmount}}\n{{vatAmount}}");
+    setShowOnSales(s.showOnSalesInvoice);
+    setShowOnPurchase(s.showOnPurchaseInvoice);
+    setShowOnReceipt(s.showOnReceiptVoucher);
+    setQrSize(s.qrSize ?? 100);
+    setQrPosition(s.qrPosition ?? "top-right");
+  }, [s]);
+
+  // معاينة QR
+  const previewContent = (() => {
+    const sampleData = {
+      sellerName: sellerName || "OneSoft Company",
+      taxNumber: taxNumber || "300000000000003",
+      invoiceDateTime: new Date().toISOString(),
+      totalAmount: 1150.00,
+      vatAmount: 150.00,
+      invoiceNumber: "INV-2026-000001",
+    };
+    try {
+      return generateQrContent(system, sampleData, customFormat);
+    } catch {
+      return "";
+    }
+  })();
+
+  const handleSave = () => {
+    upsertMutation.mutate({
+      isEnabled, countrySystem: system,
+      sellerName: sellerName || null,
+      taxNumber: taxNumber || null,
+      customFormat: system === "custom" ? customFormat : null,
+      showOnSalesInvoice: showOnSales,
+      showOnPurchaseInvoice: showOnPurchase,
+      showOnReceiptVoucher: showOnReceipt,
+      qrSize, qrPosition,
+    });
+  };
+
+  if (qrQuery.isLoading) return <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">جاري التحميل...</div>;
+
+  return (
+    <div className="space-y-5 max-w-3xl" dir="rtl">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="font-bold text-base flex items-center gap-2">
+            <QrCode className="w-5 h-5 text-[#406B93]" />
+            إعدادات QR Code
+          </h3>
+          <p className="text-muted-foreground text-xs mt-0.5">تهيئة نظام QR Code للفواتير ونماذج الطباعة</p>
+        </div>
+        <Button onClick={handleSave} disabled={upsertMutation.isPending} className="h-8 text-sm bg-[#406B93] hover:bg-[#315578]">
+          <Save className="w-3.5 h-3.5 ml-1" />
+          {upsertMutation.isPending ? "جاري الحفظ..." : "حفظ الإعدادات"}
+        </Button>
+      </div>
+
+      {/* تفعيل QR */}
+      <Card className="border-border/50">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold">تفعيل نظام QR Code</p>
+              <p className="text-xs text-muted-foreground mt-0.5">عند التفعيل يظهر QR تلقائياً في نماذج الطباعة المحددة</p>
+            </div>
+            <Switch checked={isEnabled} onCheckedChange={setIsEnabled} />
+          </div>
+        </CardContent>
+      </Card>
+
+      {isEnabled && (<>
+        {/* اختيار النظام */}
+        <Card className="border-border/50">
+          <CardHeader className="pb-2 pt-4 px-4">
+            <CardTitle className="text-sm font-bold">نظام QR Code</CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4 space-y-3">
+            {QR_SYSTEMS.map(sys => (
+              <div key={sys.id}
+                onClick={() => setSystem(sys.id)}
+                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                  system === sys.id
+                    ? "border-[#406B93] bg-[#406B93]/5"
+                    : "border-border hover:border-[#406B93]/40 hover:bg-accent/10"
+                }`}
+              >
+                <div className={`w-4 h-4 rounded-full border-2 mt-0.5 flex-shrink-0 transition-all ${
+                  system === sys.id ? "border-[#406B93] bg-[#406B93]" : "border-gray-300"
+                }`}>
+                  {system === sys.id && <div className="w-2 h-2 rounded-full bg-white m-auto mt-0.5" />}
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold">{sys.label}</span>
+                    <Badge variant="outline" className="text-[10px] py-0 px-1.5">{sys.country}</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">{sys.description}</p>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        {/* بيانات المنشأة */}
+        <Card className="border-border/50">
+          <CardHeader className="pb-2 pt-4 px-4">
+            <CardTitle className="text-sm font-bold">بيانات المنشأة في QR</CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs text-muted-foreground">اسم المنشأة</Label>
+                <Input value={sellerName} onChange={e => setSellerName(e.target.value)}
+                  placeholder="اسم الشركة أو المنشأة..." className="h-8 text-sm mt-1" />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">الرقم الضريبي</Label>
+                <Input value={taxNumber} onChange={e => setTaxNumber(e.target.value)}
+                  placeholder="300000000000003" className="h-8 text-sm mt-1 font-mono" />
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground bg-blue-50 border border-blue-100 rounded px-2 py-1.5">
+              ℹ️ إذا تُركت فارغة، يُستخدم الرقم الضريبي واسم المنشأة من بيانات الفاتورة تلقائياً
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* قالب مخصص */}
+        {system === "custom" && (
+          <Card className="border-border/50">
+            <CardHeader className="pb-2 pt-4 px-4">
+              <div className="flex justify-between items-center">
+                <CardTitle className="text-sm font-bold">قالب QR المخصص</CardTitle>
+                <button onClick={() => setShowHelp(h => !h)} className="text-xs text-[#406B93] hover:underline">
+                  {showHelp ? "إخفاء المساعدة" : "عرض المتغيرات المتاحة"}
+                </button>
+              </div>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 space-y-2">
+              {showHelp && (
+                <pre className="text-[10px] bg-gray-50 border border-gray-200 rounded p-2 text-gray-600 leading-5 whitespace-pre-wrap font-mono">
+                  {CUSTOM_TEMPLATE_HELP}
+                </pre>
+              )}
+              <Textarea
+                value={customFormat}
+                onChange={e => setCustomFormat(e.target.value)}
+                rows={5}
+                className="font-mono text-xs"
+                placeholder="اكتب قالب QR المخصص هنا..."
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        {/* نماذج الطباعة */}
+        <Card className="border-border/50">
+          <CardHeader className="pb-2 pt-4 px-4">
+            <CardTitle className="text-sm font-bold">نماذج الطباعة التي تعرض QR</CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4 space-y-3">
+            {[
+              { id: "sales", label: "فاتورة المبيعات", val: showOnSales, set: setShowOnSales },
+              { id: "purchase", label: "فاتورة المشتريات", val: showOnPurchase, set: setShowOnPurchase },
+              { id: "receipt", label: "سند القبض", val: showOnReceipt, set: setShowOnReceipt },
+            ].map(item => (
+              <div key={item.id} className="flex items-center justify-between py-1">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-sm">{item.label}</span>
+                </div>
+                <Switch checked={item.val} onCheckedChange={item.set} />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        {/* مظهر QR */}
+        <Card className="border-border/50">
+          <CardHeader className="pb-2 pt-4 px-4">
+            <CardTitle className="text-sm font-bold">مظهر QR Code</CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs text-muted-foreground">حجم QR (بكسل)</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  <Input
+                    type="number" min={50} max={300} value={qrSize}
+                    onChange={e => setQrSize(Number(e.target.value))}
+                    className="h-8 text-sm w-24"
+                  />
+                  <span className="text-xs text-muted-foreground">{qrSize}×{qrSize} px</span>
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">موضع QR في الفاتورة</Label>
+                <Select value={qrPosition} onValueChange={setQrPosition}>
+                  <SelectTrigger className="h-8 text-sm mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="top-right">أعلى اليمين</SelectItem>
+                    <SelectItem value="top-left">أعلى اليسار</SelectItem>
+                    <SelectItem value="bottom-right">أسفل اليمين</SelectItem>
+                    <SelectItem value="bottom-left">أسفل اليسار</SelectItem>
+                    <SelectItem value="bottom-center">أسفل الوسط</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* معاينة QR */}
+        <Card className="border-border/50">
+          <CardHeader className="pb-2 pt-4 px-4">
+            <CardTitle className="text-sm font-bold">معاينة QR Code</CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            <div className="flex items-center gap-6">
+              {previewContent ? (
+                <div className="flex flex-col items-center gap-2">
+                  <QRCodeDisplay content={previewContent} size={Math.min(qrSize, 160)} />
+                  <span className="text-[10px] text-muted-foreground">
+                    معاينة ({QR_SYSTEMS.find(s => s.id === system)?.country})
+                  </span>
+                </div>
+              ) : (
+                <div className="w-32 h-32 bg-gray-100 border border-dashed border-gray-300 rounded flex items-center justify-center text-gray-400 text-xs">
+                  لا توجد معاينة
+                </div>
+              )}
+              <div className="flex-1 space-y-2">
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-0.5">النظام المختار</p>
+                  <Badge className="text-[11px]">{QR_SYSTEMS.find(s => s.id === system)?.label}</Badge>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-0.5">بيانات المعاينة (عيّنة)</p>
+                  <p className="text-xs text-gray-500">إجمالي: 1,150.000 — ضريبة: 150.000</p>
+                </div>
+                {system === "zatca" && (
+                  <div className="bg-amber-50 border border-amber-200 rounded p-2 text-[11px] text-amber-700">
+                    ✓ متوافق مع معيار ZATCA e-invoice Phase 2 (TLV → Base64)
+                  </div>
+                )}
+                {system === "eta" && (
+                  <div className="bg-blue-50 border border-blue-200 rounded p-2 text-[11px] text-blue-700">
+                    ✓ متوافق مع معيار ETA (النظام الضريبي المصري) — JSON
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </>)}
+    </div>
+  );
+}
+
 // ─── Content Router ────────────────────────────────────────────────────────────
 
 function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
@@ -2111,6 +2406,7 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
     case "document-journals":    return <DocumentJournalsPage />;
     case "document-types":       return <DocumentTypesPage />;
     case "document-templates":   return <DocumentTemplatesPage />;
+    case "qr-settings":          return <QRSettingsPage />;
     case "field-design":         return <FieldDesignPage />;
     case "backup":               return <BackupPage />;
     case "audit-log":            return <AuditLogPage />;

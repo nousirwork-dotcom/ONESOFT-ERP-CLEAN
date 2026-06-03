@@ -702,6 +702,25 @@ export const costCenters = pgTable('cost_centers', {
   createdAt:  timestamp('created_at').notNull().defaultNow(),
 });
 
+// ─── QR Settings ──────────────────────────────────────────────────────────────
+export const qrSettings = pgTable('qr_settings', {
+  id:                    serial('id').primaryKey(),
+  orgId:                 integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  isEnabled:             boolean('is_enabled').notNull().default(true),
+  countrySystem:         varchar('country_system', { length: 20 }).notNull().default('zatca'),
+  customFormat:          text('custom_format'),
+  sellerName:            varchar('seller_name', { length: 255 }),
+  taxNumber:             varchar('tax_number', { length: 50 }),
+  showOnSalesInvoice:    boolean('show_on_sales_invoice').notNull().default(true),
+  showOnPurchaseInvoice: boolean('show_on_purchase_invoice').notNull().default(false),
+  showOnReceiptVoucher:  boolean('show_on_receipt_voucher').notNull().default(false),
+  qrSize:                integer('qr_size').notNull().default(100),
+  qrPosition:            varchar('qr_position', { length: 30 }).notNull().default('top-right'),
+  notes:                 text('notes'),
+  createdAt:             timestamp('created_at').notNull().defaultNow(),
+  updatedAt:             timestamp('updated_at').notNull().defaultNow(),
+});
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type Organization = typeof organizations.$inferSelect;
 export type User = typeof users.$inferSelect;

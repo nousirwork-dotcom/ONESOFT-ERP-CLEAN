@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import ERPToolbar, { ERPMode } from "@/components/ERPToolbar";
 import PostingPreviewModal from "@/components/PostingPreviewModal";
+import InvoicePrintModal from "@/components/InvoicePrintModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface InvoiceLine {
@@ -105,6 +106,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
   const [navInvoiceId,   setNavInvoiceId]         = useState<number | null>(initialInvoiceId ?? null);
   const [isPosted, setIsPosted]                   = useState(false);
   const [showPostingPreview, setShowPostingPreview] = useState(false);
+  const [showPrintModal, setShowPrintModal]         = useState(false);
 
   // ── ERP mode ──────────────────────────────────────────────────────────────
   const [erpMode, setErpMode] = useState<ERPMode>("new");
@@ -139,6 +141,8 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
   const nextNumberQuery  = trpc.salesInvoices.nextNumber.useQuery({ prefix: "INV" });
   const docTypesQuery    = trpc.documentTypes.list.useQuery({ typeId: "sales" });
   const allInvoicesQuery = trpc.salesInvoices.list.useQuery({});
+  const qrSettingsQuery  = trpc.qrSettings.get.useQuery();
+  const orgQuery         = trpc.orgs.currentOrg.useQuery();
   const stockQuery       = trpc.reports.stockByWarehouse.useQuery(
     { warehouseId: warehouseId! },
     { enabled: !!warehouseId }
@@ -726,7 +730,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         }}
         onApprove={() => toast.success("تم الاعتماد")}
         onCancel={() => { setErpMode("view"); toast.info("تم الإلغاء"); }}
-        onPrint={() => toast.info("جاري الطباعة...")}
+        onPrint={() => setShowPrintModal(true)}
         onFirst={() => {
           const ids = [...(allInvoicesQuery.data ?? [])].sort((a, b) => a.id - b.id).map(i => i.id);
           if (ids.length) { setNavInvoiceId(ids[0]); setErpMode("view"); }
@@ -1594,6 +1598,61 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
           onClose={() => setShowPostingPreview(false)}
           onConfirmPost={() => postMutation.mutate({ invoiceId: savedInvoiceId! })}
           isPosting={postMutation.isPending}
+        />
+      )}
+
+      {/* ── نافذة الطباعة مع QR Code ──────────────────────────────────── */}
+      {showPrintModal && (
+        <InvoicePrintModal
+          open={showPrintModal}
+          onClose={() => setShowPrintModal(false)}
+          qrSettings={qrSettingsQuery.data ? {
+            isEnabled: qrSettingsQuery.data.isEnabled,
+            countrySystem: qrSettingsQuery.data.countrySystem as any,
+            sellerName: qrSettingsQuery.data.sellerName ?? undefined,
+            taxNumber: qrSettingsQuery.data.taxNumber ?? undefined,
+            customFormat: qrSettingsQuery.data.customFormat ?? undefined,
+            showOnSalesInvoice: qrSettingsQuery.data.showOnSalesInvoice,
+            showOnPurchaseInvoice: qrSettingsQuery.data.showOnPurchaseInvoice,
+            showOnReceiptVoucher: qrSettingsQuery.data.showOnReceiptVoucher,
+            qrSize: qrSettingsQuery.data.qrSize,
+            qrPosition: qrSettingsQuery.data.qrPosition,
+          } : null}
+          data={{
+            invoiceNumber: invoiceNumber || "—",
+            invoiceDate,
+            invoiceTime: new Date().toTimeString().slice(0, 8),
+            customerName: customerName || "عميل نقدي",
+            customerCode: customerCode || undefined,
+            customerTaxNumber: customerTaxNumber || undefined,
+            salesperson: salesperson || undefined,
+            paymentType,
+            currency,
+            notes: notes || undefined,
+            lines: lines
+              .filter(l => l.productName.trim())
+              .map(l => ({
+                productCode: l.productCode,
+                productName: l.productName,
+                quantity: l.quantity,
+                unit: l.unit,
+                unitPrice: l.unitPrice,
+                discountPct: l.discountPct,
+                taxPct: l.taxPct,
+                taxAmt: l.taxAmt,
+                total: l.total,
+              })),
+            subtotal,
+            discountTotal: totalDiscount,
+            taxTotal: totalTax,
+            grandTotal: netTotal,
+            paidAmount,
+            remainingAmount,
+            sellerName: orgQuery.data?.name ?? qrSettingsQuery.data?.sellerName ?? "OneSoft ERP",
+            sellerTaxNumber: orgQuery.data?.taxNumber ?? qrSettingsQuery.data?.taxNumber ?? "",
+            sellerAddress: orgQuery.data?.address ?? undefined,
+            sellerPhone: orgQuery.data?.phone ?? undefined,
+          }}
         />
       )}
 
