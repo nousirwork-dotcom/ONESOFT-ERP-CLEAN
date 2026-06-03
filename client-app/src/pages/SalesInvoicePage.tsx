@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import ERPToolbar, { ERPMode } from "@/components/ERPToolbar";
 import PostingPreviewModal from "@/components/PostingPreviewModal";
-import InvoicePrintModal from "@/components/InvoicePrintModal";
+import InvoicePrintModal, { type DocTemplateConfig } from "@/components/InvoicePrintModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface InvoiceLine {
@@ -141,8 +141,9 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
   const nextNumberQuery  = trpc.salesInvoices.nextNumber.useQuery({ prefix: "INV" });
   const docTypesQuery    = trpc.documentTypes.list.useQuery({ typeId: "sales" });
   const allInvoicesQuery = trpc.salesInvoices.list.useQuery({});
-  const qrSettingsQuery  = trpc.qrSettings.get.useQuery();
-  const orgQuery         = trpc.orgs.currentOrg.useQuery();
+  const qrSettingsQuery       = trpc.qrSettings.get.useQuery();
+  const orgQuery              = trpc.orgs.currentOrg.useQuery();
+  const defaultTemplateQuery  = trpc.documentTemplates.getDefault.useQuery({ docType: "sales_invoice" });
   const stockQuery       = trpc.reports.stockByWarehouse.useQuery(
     { warehouseId: warehouseId! },
     { enabled: !!warehouseId }
@@ -1606,6 +1607,14 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         <InvoicePrintModal
           open={showPrintModal}
           onClose={() => setShowPrintModal(false)}
+          templateConfig={(() => {
+            try {
+              const raw = defaultTemplateQuery.data?.layoutJson;
+              if (!raw) return null;
+              const parsed = JSON.parse(raw);
+              return parsed.type === "config_v1" ? (parsed as DocTemplateConfig) : null;
+            } catch { return null; }
+          })()}
           qrSettings={qrSettingsQuery.data ? {
             isEnabled: qrSettingsQuery.data.isEnabled,
             countrySystem: qrSettingsQuery.data.countrySystem as any,

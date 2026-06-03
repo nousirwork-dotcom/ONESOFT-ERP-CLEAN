@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -91,8 +91,17 @@ export default function DocumentTemplatesPage() {
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [showDelete, setShowDelete]     = useState(false);
 
-  const listQuery = trpc.documentTemplates.list.useQuery({ docType: selectedType });
+  const listQuery  = trpc.documentTemplates.list.useQuery({ docType: selectedType });
   const templates: Tpl[] = (listQuery.data ?? []) as Tpl[];
+
+  const seedMut = trpc.documentTemplates.seedDefaults.useMutation({
+    onSuccess: r => { if (r.seeded) listQuery.refetch(); },
+  });
+
+  useEffect(() => {
+    if (listQuery.data && listQuery.data.length === 0 && selectedType === "sales_invoice")
+      seedMut.mutate();
+  }, [listQuery.data]);
 
   const createMut = trpc.documentTemplates.create.useMutation({
     onSuccess: row => {
