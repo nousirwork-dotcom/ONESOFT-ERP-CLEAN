@@ -2474,6 +2474,7 @@ export function CfgDocumentTemplatesTab() { return <CfgSubPage activeId="documen
 export function CfgFieldDesignTab()      { return <CfgSubPage activeId="field-design" />; }
 export function CfgBackupTab()           { return <CfgSubPage activeId="backup" />; }
 export function CfgAuditLogTab()         { return <CfgSubPage activeId="audit-log" />; }
+export function CfgQrSettingsTab()       { return <CfgSubPage activeId="qr-settings" />; }
 export function CfgMissingDocsTab()      { return <CfgSubPage activeId="missing-doc-numbers" />; }
 export function CfgPayrollPeriodsTab()   { return <CfgSubPage activeId="payroll-periods" />; }
 export function CfgOrgChartTab()         { return <CfgSubPage activeId="org-chart" />; }

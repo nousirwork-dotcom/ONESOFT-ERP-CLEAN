@@ -59,7 +59,7 @@ import SettingsModule, {
   CfgNotifStockTab, CfgNotifCreditTab, CfgNotifOverdueTab, CfgNotifExpiryTab,
   CfgNotifMaintenanceTab, CfgNotifPendingTab, CfgWarehousesTab,
   CfgDocTypesTab, CfgDocBooksTab, CfgDocumentJournalsTab, CfgDocumentTypesTab, CfgDocumentTemplatesTab,
-  CfgFieldDesignTab, CfgBackupTab, CfgAuditLogTab,
+  CfgFieldDesignTab, CfgBackupTab, CfgAuditLogTab, CfgQrSettingsTab,
   CfgMissingDocsTab, CfgPayrollPeriodsTab, CfgOrgChartTab, CfgWageCalendarTab,
   CfgShiftsTab, CfgReportDesignerTab, CfgTestSetupTab, CfgTestEditTab, CfgFieldSpecsTab,
 } from "./pages/SettingsModule";
@@ -214,6 +214,7 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/accounting/posting-ops":  PostingOperationsPage,
   "/cfg/document-types":      CfgDocumentTypesTab,
   "/cfg/document-templates":  CfgDocumentTemplatesTab,
+  "/cfg/qr-settings":       CfgQrSettingsTab,
   "/cfg/field-design":      CfgFieldDesignTab,
   "/cfg/backup":            CfgBackupTab,
   "/cfg/audit-log":         CfgAuditLogTab,
