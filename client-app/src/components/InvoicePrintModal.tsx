@@ -161,6 +161,11 @@ export default function InvoicePrintModal({ open, onClose, data, qrSettings, tem
   const color = cfg.primaryColor;
   const isBilingual = cfg.language === "bilingual";
   const visibleCols = COL_DEFS.filter(c => cfg.columns[c.key]);
+  /** أعمدة الأرقام التي تظهر في سطر المجموع (تُحسب ديناميكياً) */
+  const METRIC_KEYS: ColKey[] = ["qty", "discount", "taxable", "taxRate", "taxAmt", "total"];
+  const metricsCount = METRIC_KEYS.filter(k => visibleCols.some(c => c.key === k)).length;
+  /** عدد الأعمدة التي يمتد عليها خلية "المجموع" = ما تبقى بعد أعمدة الأرقام */
+  const labelColSpan = Math.max(1, visibleCols.length - metricsCount);
   const lineCalcs = computeLines(data);
   const minRows = cfg.minRows ?? 5;
   const emptyRows = Math.max(0, minRows - data.lines.length);
@@ -218,7 +223,7 @@ export default function InvoicePrintModal({ open, onClose, data, qrSettings, tem
       `<tr>${visibleCols.map(() => `<td style="${tdStyle}">&nbsp;</td>`).join("")}</tr>`
     ).join("");
 
-    const sumColSpan = Math.max(1, visibleCols.length - 3);
+    const sumColSpan = labelColSpan;
     const sumRow = `<tr style="background:#f5f5f5;font-weight:bold">
       <td style="${tdStyle}" colspan="${sumColSpan}">${isBilingual ? "المجموع / Total" : "المجموع"}</td>
       ${cfg.columns.qty ? `<td style="${tdStyle}">${data.lines.reduce((s,l)=>s+(parseFloat(l.quantity)||0),0).toFixed(2)}</td>` : ""}
@@ -540,7 +545,7 @@ export default function InvoicePrintModal({ open, onClose, data, qrSettings, tem
                 </tr>
               ))}
               <tr style={{ background: "#f5f5f5", fontWeight: "bold" }}>
-                <td style={tdStyle} colSpan={Math.max(1, visibleCols.length - 3)}>
+                <td style={tdStyle} colSpan={labelColSpan}>
                   {isBilingual ? "المجموع / Total" : "المجموع"}
                 </td>
                 {cfg.columns.qty      && <td style={tdStyle}>{data.lines.reduce((s,l)=>s+(parseFloat(l.quantity)||0),0).toFixed(2)}</td>}
