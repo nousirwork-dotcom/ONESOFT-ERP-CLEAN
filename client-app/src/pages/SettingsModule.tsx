@@ -94,6 +94,18 @@ const menuSections = [
     ],
   },
   {
+    id: "loyalty",
+    label: "إدارة الولاء والعروض",
+    color: "#f59e0b",
+    emoji: "🏆",
+    children: [
+      { id: "loyalty-points",   label: "إعدادات النقاط",     status: "partial", path: "/cfg/loyalty-points"   },
+      { id: "loyalty-tiers",    label: "مستويات العضوية",    status: "partial", path: "/cfg/loyalty-tiers"    },
+      { id: "loyalty-promos",   label: "العروض الترويجية",   status: "partial", path: "/cfg/loyalty-promos"   },
+      { id: "loyalty-messages", label: "رسائل الولاء",       status: "partial", path: "/cfg/loyalty-messages" },
+    ],
+  },
+  {
     id: "hr-settings",
     label: "باقي الإعدادات",
     color: "#a855f7",
@@ -128,6 +140,7 @@ function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id:
     approvals: false,
     notifications: false,
     system: false,
+    loyalty: false,
     "hr-settings": false,
   });
   const toggle = (id: string) => setExpanded(p => ({ ...p, [id]: !p[id] }));
@@ -2371,6 +2384,380 @@ function QRSettingsPage() {
   );
 }
 
+// ─── Loyalty: إعدادات النقاط ──────────────────────────────────────────────────
+
+function LoyaltyPointsPage() {
+  const [form, setForm] = useState({
+    enabled: true,
+    rateAmount: "100",
+    ratePoints: "1",
+    welcomePoints: "50",
+    validityDays: "365",
+    notifyBeforeDays: "30",
+    redeemRate: "1",
+    redeemMinPoints: "100",
+    allowRedeemOnDiscount: false,
+    calcOnNet: true,
+  });
+  const upd = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }));
+
+  return (
+    <div className="space-y-4 max-w-2xl" dir="rtl">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-sm">إعدادات نظام النقاط</h3>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">تفعيل النظام</span>
+          <Switch checked={form.enabled} onCheckedChange={v => upd("enabled", v)} />
+        </div>
+      </div>
+
+      <Card className="border-border/50">
+        <CardHeader className="pb-2 pt-4 px-5"><CardTitle className="text-xs text-muted-foreground font-semibold">معدل اكتساب النقاط</CardTitle></CardHeader>
+        <CardContent className="px-5 pb-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="flex-1">
+              <Label className="text-xs text-muted-foreground">المبلغ (ريال)</Label>
+              <Input value={form.rateAmount} onChange={e => upd("rateAmount", e.target.value)} className="h-8 text-sm mt-1" type="number" min="1" />
+            </div>
+            <span className="text-sm text-muted-foreground mt-5">=</span>
+            <div className="flex-1">
+              <Label className="text-xs text-muted-foreground">عدد النقاط</Label>
+              <Input value={form.ratePoints} onChange={e => upd("ratePoints", e.target.value)} className="h-8 text-sm mt-1" type="number" min="1" />
+            </div>
+          </div>
+          <div className="text-[11px] text-amber-600 bg-amber-50 rounded px-3 py-1.5 border border-amber-100">
+            مثال: كل {form.rateAmount} ريال = {form.ratePoints} نقطة
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox id="calcOnNet" checked={form.calcOnNet} onCheckedChange={v => upd("calcOnNet", !!v)} />
+            <label htmlFor="calcOnNet" className="text-xs cursor-pointer">احتساب النقاط على صافي المبلغ (بعد الخصم وقبل الضريبة)</label>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/50">
+        <CardHeader className="pb-2 pt-4 px-5"><CardTitle className="text-xs text-muted-foreground font-semibold">الاستبدال والصلاحية</CardTitle></CardHeader>
+        <CardContent className="px-5 pb-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs text-muted-foreground">نقاط الترحيب (للعميل الجديد)</Label>
+              <Input value={form.welcomePoints} onChange={e => upd("welcomePoints", e.target.value)} className="h-8 text-sm mt-1" type="number" min="0" />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">صلاحية النقاط (أيام)</Label>
+              <Input value={form.validityDays} onChange={e => upd("validityDays", e.target.value)} className="h-8 text-sm mt-1" type="number" min="0" placeholder="0 = بلا انتهاء" />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">تنبيه قبل انتهاء الصلاحية (أيام)</Label>
+              <Input value={form.notifyBeforeDays} onChange={e => upd("notifyBeforeDays", e.target.value)} className="h-8 text-sm mt-1" type="number" min="0" />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">قيمة النقطة عند الاستبدال (ريال)</Label>
+              <Input value={form.redeemRate} onChange={e => upd("redeemRate", e.target.value)} className="h-8 text-sm mt-1" type="number" min="0" step="0.01" />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">الحد الأدنى للاستبدال (نقاط)</Label>
+              <Input value={form.redeemMinPoints} onChange={e => upd("redeemMinPoints", e.target.value)} className="h-8 text-sm mt-1" type="number" min="0" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox id="redeemOnDiscount" checked={form.allowRedeemOnDiscount} onCheckedChange={v => upd("allowRedeemOnDiscount", !!v)} />
+            <label htmlFor="redeemOnDiscount" className="text-xs cursor-pointer">السماح باستخدام النقاط مع الخصم في نفس الفاتورة</label>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-end">
+        <Button size="sm" className="gap-1.5" onClick={() => toast.success("تم حفظ إعدادات النقاط")}>
+          <Save className="w-3.5 h-3.5" /> حفظ الإعدادات
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Loyalty: مستويات العضوية ─────────────────────────────────────────────────
+
+const DEFAULT_TIERS = [
+  { id: "standard",  label: "عادي",     labelEn: "Standard",  color: "#6b7280", minSpend: 0,      minInvoices: 0,  minPoints: 0,    multiplier: 1.0 },
+  { id: "silver",    label: "فضي",      labelEn: "Silver",    color: "#94a3b8", minSpend: 1000,   minInvoices: 5,  minPoints: 100,  multiplier: 1.5 },
+  { id: "gold",      label: "ذهبي",     labelEn: "Gold",      color: "#d97706", minSpend: 5000,   minInvoices: 15, minPoints: 500,  multiplier: 2.0 },
+  { id: "platinum",  label: "بلاتيني",  labelEn: "Platinum",  color: "#0891b2", minSpend: 15000,  minInvoices: 40, minPoints: 1500, multiplier: 2.5 },
+  { id: "vip",       label: "VIP",      labelEn: "VIP",       color: "#7c3aed", minSpend: 50000,  minInvoices: 100,minPoints: 5000, multiplier: 3.0 },
+];
+
+function LoyaltyTiersPage() {
+  const [tiers, setTiers] = useState(DEFAULT_TIERS);
+  const [upgradeBy, setUpgradeBy] = useState<"spend" | "invoices" | "points">("spend");
+  const upd = (idx: number, k: string, v: any) =>
+    setTiers(p => p.map((t, i) => i === idx ? { ...t, [k]: v } : t));
+
+  return (
+    <div className="space-y-4 max-w-3xl" dir="rtl">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-sm">مستويات العضوية</h3>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">معيار الترقية:</span>
+          <Select value={upgradeBy} onValueChange={v => setUpgradeBy(v as any)}>
+            <SelectTrigger className="h-7 text-xs w-40"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="spend">إجمالي المشتريات</SelectItem>
+              <SelectItem value="invoices">عدد الفواتير</SelectItem>
+              <SelectItem value="points">عدد النقاط</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {tiers.map((tier, idx) => (
+          <Card key={tier.id} className="border-border/50">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0"
+                  style={{ background: tier.color }}>
+                  {tier.label.charAt(0)}
+                </div>
+                <div className="flex-1 grid grid-cols-4 gap-3">
+                  <div>
+                    <Label className="text-[10px] text-muted-foreground">المستوى (عربي)</Label>
+                    <Input value={tier.label} onChange={e => upd(idx, "label", e.target.value)} className="h-7 text-xs mt-0.5" />
+                  </div>
+                  <div>
+                    <Label className="text-[10px] text-muted-foreground">
+                      {upgradeBy === "spend" ? "الحد الأدنى للمشتريات (ريال)" : upgradeBy === "invoices" ? "الحد الأدنى للفواتير" : "الحد الأدنى للنقاط"}
+                    </Label>
+                    <Input type="number" value={upgradeBy === "spend" ? tier.minSpend : upgradeBy === "invoices" ? tier.minInvoices : tier.minPoints}
+                      onChange={e => upd(idx, upgradeBy === "spend" ? "minSpend" : upgradeBy === "invoices" ? "minInvoices" : "minPoints", Number(e.target.value))}
+                      className="h-7 text-xs mt-0.5" disabled={idx === 0} />
+                  </div>
+                  <div>
+                    <Label className="text-[10px] text-muted-foreground">مضاعف النقاط</Label>
+                    <Input type="number" value={tier.multiplier} step="0.5" min="1"
+                      onChange={e => upd(idx, "multiplier", parseFloat(e.target.value) || 1)}
+                      className="h-7 text-xs mt-0.5" />
+                  </div>
+                  <div>
+                    <Label className="text-[10px] text-muted-foreground">اللون</Label>
+                    <div className="flex gap-1.5 items-center mt-0.5">
+                      <input type="color" value={tier.color} onChange={e => upd(idx, "color", e.target.value)}
+                        className="w-7 h-7 rounded cursor-pointer border border-border p-0.5" />
+                      <span className="text-[10px] font-mono text-muted-foreground">{tier.color}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {idx > 0 && (
+                <div className="mt-2 text-[10px] text-muted-foreground bg-muted/30 rounded px-2 py-1">
+                  الترقية من {tiers[idx-1].label}: عند تجاوز{" "}
+                  {upgradeBy === "spend" ? `${tier.minSpend.toLocaleString()} ريال` : upgradeBy === "invoices" ? `${tier.minInvoices} فاتورة` : `${tier.minPoints} نقطة`}
+                  {" "}· مضاعف النقاط: ×{tier.multiplier}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <div className="flex justify-end">
+        <Button size="sm" className="gap-1.5" onClick={() => toast.success("تم حفظ مستويات العضوية")}>
+          <Save className="w-3.5 h-3.5" /> حفظ المستويات
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Loyalty: العروض الترويجية ─────────────────────────────────────────────────
+
+type LoyaltyPromo = {
+  id: string; name: string; nameEn: string;
+  multiplier: number; startDate: string; endDate: string;
+  scope: "all" | "category" | "branch"; scopeValue: string;
+  enabled: boolean;
+};
+
+function LoyaltyPromosPage() {
+  const [promos, setPromos] = useState<LoyaltyPromo[]>([
+    { id: "1", name: "رمضان الكريم", nameEn: "Ramadan Offer", multiplier: 3, startDate: "2025-03-01", endDate: "2025-03-30", scope: "all", scopeValue: "", enabled: true },
+    { id: "2", name: "العيد الوطني", nameEn: "National Day",  multiplier: 2, startDate: "2025-09-20", endDate: "2025-09-25", scope: "all", scopeValue: "", enabled: false },
+  ]);
+  const [showForm, setShowForm] = useState(false);
+  const [editPromo, setEditPromo] = useState<LoyaltyPromo | null>(null);
+  const blank: LoyaltyPromo = { id: Date.now().toString(), name: "", nameEn: "", multiplier: 2, startDate: "", endDate: "", scope: "all", scopeValue: "", enabled: true };
+  const [form, setForm] = useState<LoyaltyPromo>(blank);
+  const updForm = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }));
+
+  const openNew = () => { setForm({ ...blank, id: Date.now().toString() }); setEditPromo(null); setShowForm(true); };
+  const openEdit = (p: LoyaltyPromo) => { setForm({ ...p }); setEditPromo(p); setShowForm(true); };
+  const savePromo = () => {
+    if (editPromo) setPromos(p => p.map(x => x.id === editPromo.id ? form : x));
+    else setPromos(p => [...p, form]);
+    setShowForm(false);
+    toast.success("تم حفظ العرض الترويجي");
+  };
+  const deletePromo = (id: string) => { setPromos(p => p.filter(x => x.id !== id)); toast.success("تم حذف العرض"); };
+  const toggleEnabled = (id: string) => setPromos(p => p.map(x => x.id === id ? { ...x, enabled: !x.enabled } : x));
+
+  return (
+    <div className="space-y-4 max-w-3xl" dir="rtl">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-sm">العروض الترويجية</h3>
+        <Button size="sm" className="gap-1.5" onClick={openNew}><Plus className="w-3.5 h-3.5" /> عرض جديد</Button>
+      </div>
+
+      <div className="space-y-2">
+        {promos.length === 0 && (
+          <div className="text-center py-10 text-muted-foreground text-sm">لا توجد عروض. أضف عرضاً جديداً.</div>
+        )}
+        {promos.map(promo => (
+          <Card key={promo.id} className={`border-border/50 ${!promo.enabled ? "opacity-50" : ""}`}>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                  <span className="text-lg">🎁</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm">{promo.name}</span>
+                    <Badge variant="outline" className="text-[10px] text-amber-700 border-amber-200 bg-amber-50">×{promo.multiplier} نقاط</Badge>
+                    {promo.enabled ? <Badge className="text-[10px] bg-green-100 text-green-700 border-green-200">نشط</Badge> : <Badge variant="outline" className="text-[10px]">متوقف</Badge>}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">
+                    {promo.startDate} — {promo.endDate}
+                    {promo.scope !== "all" && <span className="mr-2">· {promo.scope === "category" ? "فئة: " : "فرع: "}{promo.scopeValue}</span>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Switch checked={promo.enabled} onCheckedChange={() => toggleEnabled(promo.id)} />
+                  <Button variant="ghost" size="icon" className="w-7 h-7" onClick={() => openEdit(promo)}><Edit2 className="w-3.5 h-3.5" /></Button>
+                  <Button variant="ghost" size="icon" className="w-7 h-7 text-red-500" onClick={() => deletePromo(promo.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <Dialog open={showForm} onOpenChange={setShowForm}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader><DialogTitle className="text-sm">{editPromo ? "تعديل العرض" : "عرض ترويجي جديد"}</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs">اسم العرض (عربي)</Label><Input value={form.name} onChange={e => updForm("name", e.target.value)} className="h-8 text-sm mt-1" /></div>
+              <div><Label className="text-xs">اسم العرض (إنجليزي)</Label><Input value={form.nameEn} onChange={e => updForm("nameEn", e.target.value)} className="h-8 text-sm mt-1" /></div>
+              <div><Label className="text-xs">تاريخ البداية</Label><Input type="date" value={form.startDate} onChange={e => updForm("startDate", e.target.value)} className="h-8 text-sm mt-1" /></div>
+              <div><Label className="text-xs">تاريخ الانتهاء</Label><Input type="date" value={form.endDate} onChange={e => updForm("endDate", e.target.value)} className="h-8 text-sm mt-1" /></div>
+              <div><Label className="text-xs">مضاعف النقاط</Label><Input type="number" value={form.multiplier} min="1" step="0.5" onChange={e => updForm("multiplier", parseFloat(e.target.value) || 1)} className="h-8 text-sm mt-1" /></div>
+              <div>
+                <Label className="text-xs">نطاق التطبيق</Label>
+                <Select value={form.scope} onValueChange={v => updForm("scope", v)}>
+                  <SelectTrigger className="h-8 text-sm mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">جميع الأصناف</SelectItem>
+                    <SelectItem value="category">فئة محددة</SelectItem>
+                    <SelectItem value="branch">فرع محدد</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {form.scope !== "all" && (
+                <div className="col-span-2">
+                  <Label className="text-xs">{form.scope === "category" ? "الفئة" : "الفرع"}</Label>
+                  <Input value={form.scopeValue} onChange={e => updForm("scopeValue", e.target.value)} className="h-8 text-sm mt-1" placeholder={form.scope === "category" ? "اسم الفئة..." : "اسم الفرع..."} />
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch checked={form.enabled} onCheckedChange={v => updForm("enabled", v)} />
+              <span className="text-xs">تفعيل العرض فور الحفظ</span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setShowForm(false)}>إلغاء</Button>
+            <Button size="sm" onClick={savePromo}><Save className="w-3.5 h-3.5 ml-1" /> حفظ</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ─── Loyalty: رسائل الولاء ─────────────────────────────────────────────────────
+
+function LoyaltyMessagesPage() {
+  const [channels, setChannels] = useState({ whatsapp: true, sms: false, email: true });
+  const [templates, setTemplates] = useState({
+    earnPoints:  { enabled: true,  text: "مرحباً {{CustomerName}}! لقد اكتسبت {{Points}} نقطة من فاتورتك رقم {{InvoiceNo}}. رصيدك الحالي: {{Balance}} نقطة." },
+    tierUpgrade: { enabled: true,  text: "تهانينا {{CustomerName}}! تم ترقيتك إلى مستوى {{NewTier}}. استمتع بمزايا أكبر مع كل عملية شراء." },
+    expiryAlert: { enabled: true,  text: "تذكير: لديك {{Points}} نقطة ستنتهي صلاحيتها في {{ExpiryDate}}. استخدمها قبل انتهاء الصلاحية." },
+    welcomeMsg:  { enabled: true,  text: "أهلاً بك {{CustomerName}} في برنامج الولاء! حصلت على {{WelcomePoints}} نقطة كهدية ترحيب." },
+    redeemDone:  { enabled: false, text: "تم خصم {{RedeemedPoints}} نقطة من رصيدك. رصيدك المتبقي: {{Balance}} نقطة." },
+  });
+  const updTmpl = (k: string, field: string, v: any) =>
+    setTemplates(p => ({ ...p, [k]: { ...p[k as keyof typeof p], [field]: v } }));
+
+  const EVENTS = [
+    { key: "earnPoints",  label: "اكتساب نقاط جديدة",      icon: "⭐" },
+    { key: "tierUpgrade", label: "ترقية لمستوى أعلى",       icon: "🏆" },
+    { key: "expiryAlert", label: "قرب انتهاء صلاحية النقاط", icon: "⏰" },
+    { key: "welcomeMsg",  label: "ترحيب بعميل جديد",         icon: "🎉" },
+    { key: "redeemDone",  label: "استبدال نقاط",             icon: "🎁" },
+  ] as const;
+
+  const VARS_HINT = "المتغيرات: {{CustomerName}} {{Points}} {{Balance}} {{InvoiceNo}} {{NewTier}} {{ExpiryDate}} {{WelcomePoints}} {{RedeemedPoints}}";
+
+  return (
+    <div className="space-y-4 max-w-2xl" dir="rtl">
+      <h3 className="font-semibold text-sm">رسائل الولاء</h3>
+
+      <Card className="border-border/50">
+        <CardHeader className="pb-2 pt-4 px-5"><CardTitle className="text-xs text-muted-foreground font-semibold">قنوات الإرسال</CardTitle></CardHeader>
+        <CardContent className="px-5 pb-4">
+          <div className="flex gap-6">
+            {([["whatsapp","WhatsApp","#25D366"],["sms","SMS","#2563eb"],["email","البريد الإلكتروني","#7c3aed"]] as const).map(([k, label, color]) => (
+              <label key={k} className="flex items-center gap-2 cursor-pointer">
+                <Switch checked={channels[k]} onCheckedChange={v => setChannels(p => ({ ...p, [k]: v }))} />
+                <span className="text-sm font-medium" style={{ color }}>{label}</span>
+              </label>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="space-y-3">
+        {EVENTS.map(ev => {
+          const tmpl = templates[ev.key];
+          return (
+            <Card key={ev.key} className="border-border/50">
+              <CardContent className="p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">{ev.icon}</span>
+                    <span className="text-sm font-medium">{ev.label}</span>
+                  </div>
+                  <Switch checked={tmpl.enabled} onCheckedChange={v => updTmpl(ev.key, "enabled", v)} />
+                </div>
+                {tmpl.enabled && (
+                  <Textarea value={tmpl.text} onChange={e => updTmpl(ev.key, "text", e.target.value)}
+                    className="text-xs resize-none h-16 font-mono" dir="rtl" />
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      <div className="text-[10px] text-muted-foreground bg-muted/30 rounded px-3 py-2 border border-border/40">{VARS_HINT}</div>
+
+      <div className="flex justify-end">
+        <Button size="sm" className="gap-1.5" onClick={() => toast.success("تم حفظ إعدادات الرسائل")}>
+          <Save className="w-3.5 h-3.5" /> حفظ الإعدادات
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Content Router ────────────────────────────────────────────────────────────
 
 function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
@@ -2422,6 +2809,11 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
     case "test-files-setup":     return <ComingSoon title="إعداد ملفات الاختبار" />;
     case "test-files-edit":      return <ComingSoon title="تحرير ملفات الاختبار" />;
     case "field-specs":          return <ComingSoon title="مواصفات الحقول" />;
+    // إدارة الولاء والعروض
+    case "loyalty-points":       return <LoyaltyPointsPage />;
+    case "loyalty-tiers":        return <LoyaltyTiersPage />;
+    case "loyalty-promos":       return <LoyaltyPromosPage />;
+    case "loyalty-messages":     return <LoyaltyMessagesPage />;
     default:                     return <SettingsOverview onSelect={onSelect} />;
   }
 }
@@ -2484,3 +2876,7 @@ export function CfgReportDesignerTab()   { return <CfgSubPage activeId="report-d
 export function CfgTestSetupTab()        { return <CfgSubPage activeId="test-files-setup" />; }
 export function CfgTestEditTab()         { return <CfgSubPage activeId="test-files-edit" />; }
 export function CfgFieldSpecsTab()       { return <CfgSubPage activeId="field-specs" />; }
+export function CfgLoyaltyPointsTab()   { return <CfgSubPage activeId="loyalty-points" />; }
+export function CfgLoyaltyTiersTab()    { return <CfgSubPage activeId="loyalty-tiers" />; }
+export function CfgLoyaltyPromosTab()   { return <CfgSubPage activeId="loyalty-promos" />; }
+export function CfgLoyaltyMessagesTab() { return <CfgSubPage activeId="loyalty-messages" />; }

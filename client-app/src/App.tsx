@@ -62,6 +62,7 @@ import SettingsModule, {
   CfgFieldDesignTab, CfgBackupTab, CfgAuditLogTab, CfgQrSettingsTab,
   CfgMissingDocsTab, CfgPayrollPeriodsTab, CfgOrgChartTab, CfgWageCalendarTab,
   CfgShiftsTab, CfgReportDesignerTab, CfgTestSetupTab, CfgTestEditTab, CfgFieldSpecsTab,
+  CfgLoyaltyPointsTab, CfgLoyaltyTiersTab, CfgLoyaltyPromosTab, CfgLoyaltyMessagesTab,
 } from "./pages/SettingsModule";
 import PostingSettingsPage from "./pages/PostingSettingsPage";
 import PostingOperationsPage from "./pages/PostingOperationsPage";
@@ -227,6 +228,10 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/cfg/test-setup":        CfgTestSetupTab,
   "/cfg/test-edit":         CfgTestEditTab,
   "/cfg/field-specs":       CfgFieldSpecsTab,
+  "/cfg/loyalty-points":   CfgLoyaltyPointsTab,
+  "/cfg/loyalty-tiers":    CfgLoyaltyTiersTab,
+  "/cfg/loyalty-promos":   CfgLoyaltyPromosTab,
+  "/cfg/loyalty-messages": CfgLoyaltyMessagesTab,
 };
 
 // ─── Auth Guard ───────────────────────────────────────────────────────────
