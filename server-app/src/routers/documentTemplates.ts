@@ -24,7 +24,10 @@ const POS01_CONFIG = JSON.stringify({
 });
 
 const INV01_CONFIG = JSON.stringify({
+  version: 1,
   type: "config_v1",
+  paperSize: "A4",
+  orientation: "portrait",
   language: "bilingual",
   primaryColor: "#406B93",
   columns: {
@@ -37,6 +40,22 @@ const INV01_CONFIG = JSON.stringify({
     sellerInfo: true, customerInfo: true,
     amountInWords: true, pageNumber: true, signatures: false,
   },
+  elements: [
+    { id: "e_qr",    type: "qr",           x: 5,   y: 5,   w: 26,  h: 26,  border: false },
+    { id: "e_title", type: "text",          x: 72,  y: 7,   w: 62,  h: 16,  content: "فاتورة ضريبية\nTAX INVOICE", fontSize: 13, fontWeight: "bold", textAlign: "center", color: "#222222" },
+    { id: "e_co",    type: "company_info",  x: 112, y: 5,   w: 93,  h: 28,  fontSize: 9 },
+    { id: "e_d1",    type: "line",          x: 5,   y: 36,  w: 200, h: 1,   color: "#406B93" },
+    { id: "e_inv",   type: "invoice_info",  x: 5,   y: 39,  w: 200, h: 13,  fontSize: 9 },
+    { id: "e_d2",    type: "line",          x: 5,   y: 54,  w: 200, h: 1,   color: "#cccccc" },
+    { id: "e_cust",  type: "customer_info", x: 5,   y: 57,  w: 95,  h: 32,  fontSize: 9, border: true },
+    { id: "e_d3",    type: "line",          x: 5,   y: 92,  w: 200, h: 1,   color: "#cccccc" },
+    { id: "e_items", type: "items_table",   x: 5,   y: 95,  w: 200, h: 82,  fontSize: 9 },
+    { id: "e_total", type: "totals",        x: 115, y: 181, w: 90,  h: 44,  fontSize: 10, border: true },
+    { id: "e_words", type: "notes",         x: 5,   y: 181, w: 106, h: 12,  content: "المبلغ كتابةً: {{AmountInWords}}", fontSize: 9 },
+    { id: "e_notes", type: "notes",         x: 5,   y: 196, w: 106, h: 12,  content: "ملاحظات: {{Notes}}", fontSize: 9 },
+    { id: "e_d4",    type: "line",          x: 5,   y: 229, w: 200, h: 1,   color: "#cccccc" },
+    { id: "e_foot",  type: "text",          x: 5,   y: 232, w: 200, h: 8,   content: "OneSoft ERP  ·  صفحة 1 من 1 / Page 1 of 1", fontSize: 8, textAlign: "center", color: "#888888" },
+  ],
 });
 
 export const documentTemplatesRouter = router({
@@ -96,6 +115,12 @@ export const documentTemplatesRouter = router({
             isDefault: true, isActive: true, sortOrder: 1,
             layoutJson: def.layoutJson, notes: def.notes,
           });
+          seededCount++;
+        } else if (!existing.layoutJson) {
+          // تحديث النموذج الموجود إذا كان بدون تصميم
+          await db.update(documentTemplates)
+            .set({ layoutJson: def.layoutJson, isDefault: true, updatedAt: new Date() })
+            .where(and(eq(documentTemplates.id, existing.id), eq(documentTemplates.orgId, ctx.user.orgId)));
           seededCount++;
         }
       }

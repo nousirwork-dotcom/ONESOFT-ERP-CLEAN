@@ -1,6 +1,6 @@
 /**
  * documentSend.ts — الإرسال الإلكتروني للمستندات
- * يدعم: WhatsApp (wa.me) | Telegram (Bot API) | Email (Resend)
+ * يدعم: WhatsApp (wa.me + Business API) | Telegram (Bot API) | Email (Resend)
  */
 import { z } from 'zod';
 import { router, protectedProcedure } from '../trpc.js';
@@ -60,6 +60,8 @@ export const documentSendRouter = router({
     return row ?? {
       id: 0, orgId: ctx.user.orgId,
       whatsappEnabled: true, telegramEnabled: false, emailEnabled: false,
+      wabaEnabled: false, wabaApiUrl: null, wabaAccessToken: null,
+      wabaPhoneNumberId: null, wabaSenderName: null,
       telegramBotToken: null, emailProvider: 'resend' as const,
       emailApiKey: null, emailFromName: null, emailFromEmail: null,
       whatsappMessageTemplate: TPL_WA,
@@ -75,6 +77,11 @@ export const documentSendRouter = router({
       whatsappEnabled:         z.boolean().optional(),
       telegramEnabled:         z.boolean().optional(),
       emailEnabled:            z.boolean().optional(),
+      wabaEnabled:             z.boolean().optional(),
+      wabaApiUrl:              z.string().nullable().optional(),
+      wabaAccessToken:         z.string().nullable().optional(),
+      wabaPhoneNumberId:       z.string().nullable().optional(),
+      wabaSenderName:          z.string().nullable().optional(),
       telegramBotToken:        z.string().nullable().optional(),
       emailProvider:           z.enum(['resend', 'smtp']).optional(),
       emailApiKey:             z.string().nullable().optional(),
@@ -99,6 +106,49 @@ export const documentSendRouter = router({
       return { success: true };
     }),
 
+  /* ── اختبار اتصال WhatsApp Business API ──────────────────────── */
+  testWabaConnection: protectedProcedure.mutation(async ({ ctx }) => {
+    const cfg = await db.query.sendSettings.findFirst({
+      where: eq(sendSettings.orgId, ctx.user.orgId),
+    });
+    if (!cfg?.wabaApiUrl || !cfg?.wabaAccessToken || !cfg?.wabaPhoneNumberId) {
+      return { success: false, message: 'لم يتم إدخال بيانات الاتصال كاملة (API URL، Access Token، Phone Number ID)' };
+    }
+    try {
+      const url = `${cfg.wabaApiUrl.replace(/\/$/, '')}/${cfg.wabaPhoneNumberId}`;
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${cfg.wabaAccessToken}` },
+      });
+      const json = await res.json() as { id?: string; display_phone_number?: string; error?: { message?: string } };
+      if (res.ok && json.id) {
+        return { success: true, message: `✓ الاتصال ناجح — رقم الهاتف: ${json.display_phone_number ?? cfg.wabaPhoneNumberId}` };
+      }
+      return { success: false, message: json.error?.message || `فشل الاتصال (HTTP ${res.status})` };
+    } catch (e: any) {
+      return { success: false, message: e.message || 'خطأ في الشبكة' };
+    }
+  }),
+
+  /* ── اختبار اتصال Telegram Bot ───────────────────────────────── */
+  testTelegramConnection: protectedProcedure.mutation(async ({ ctx }) => {
+    const cfg = await db.query.sendSettings.findFirst({
+      where: eq(sendSettings.orgId, ctx.user.orgId),
+    });
+    if (!cfg?.telegramBotToken) {
+      return { success: false, message: 'لم يتم إدخال Bot Token' };
+    }
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${cfg.telegramBotToken}/getMe`);
+      const json = await res.json() as { ok: boolean; result?: { username?: string; first_name?: string }; description?: string };
+      if (json.ok && json.result) {
+        return { success: true, message: `✓ اتصال ناجح — البوت: @${json.result.username ?? json.result.first_name}` };
+      }
+      return { success: false, message: json.description || 'فشل التحقق من البوت' };
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
+  }),
+
   /* ── إرسال واتساب ─────────────────────────────────────────────── */
   sendWhatsApp: protectedProcedure
     .input(docInfoSchema.extend({
@@ -117,21 +167,48 @@ export const documentSendRouter = router({
         currency: input.currency, sellerName: org?.name ?? '',
       });
 
-      // تحويل الرقم: 05xxxxxxxx → 9665xxxxxxxx
       let phone = input.customerPhone.replace(/[\s\-\(\)]/g, '');
       if (phone.startsWith('0')) phone = '966' + phone.slice(1);
       if (!phone.startsWith('+')) phone = phone.replace(/^\+/, '');
       const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
 
+      let status: SendStatus = 'sent';
+      let errorMessage: string | undefined;
+
+      // إذا كان WhatsApp Business API مُفعَّلاً — استخدمه بدل wa.me
+      if (cfg?.wabaEnabled && cfg?.wabaApiUrl && cfg?.wabaAccessToken && cfg?.wabaPhoneNumberId) {
+        try {
+          const url = `${cfg.wabaApiUrl.replace(/\/$/, '')}/${cfg.wabaPhoneNumberId}/messages`;
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${cfg.wabaAccessToken}`,
+            },
+            body: JSON.stringify({
+              messaging_product: 'whatsapp',
+              to: phone,
+              type: 'text',
+              text: { body: message },
+            }),
+          });
+          const json = await res.json() as { messages?: { id: string }[]; error?: { message?: string } };
+          status = res.ok ? 'sent' : 'failed';
+          errorMessage = res.ok ? undefined : (json.error?.message || `HTTP ${res.status}`);
+        } catch (e: any) {
+          status = 'failed'; errorMessage = e.message;
+        }
+      }
+
       await db.insert(documentSendLogs).values({
         orgId: ctx.user.orgId, docType: input.docType,
         docId: input.docId, docNumber: input.docNumber,
-        method: 'whatsapp', status: 'sent',
+        method: 'whatsapp', status,
         recipientName: input.customerName, recipientContact: input.customerPhone,
-        messageSent: message, sentByUserId: ctx.user.id,
+        messageSent: message, errorMessage, sentByUserId: ctx.user.id,
       });
 
-      return { waUrl, message, status: 'sent' as SendStatus };
+      return { waUrl, message, status };
     }),
 
   /* ── إرسال تيليجرام ───────────────────────────────────────────── */
@@ -171,11 +248,8 @@ export const documentSendRouter = router({
           status = 'failed'; errorMessage = e.message;
         }
       } else {
-        // بدون Bot — رابط فتح المحادثة (إن كان username)
         const tid = input.telegramId.trim();
-        tgUrl  = tid.startsWith('@')
-          ? `https://t.me/${tid.slice(1)}`
-          : `https://t.me/${tid}`;
+        tgUrl  = tid.startsWith('@') ? `https://t.me/${tid.slice(1)}` : `https://t.me/${tid}`;
         status = 'pending';
       }
 
@@ -184,8 +258,7 @@ export const documentSendRouter = router({
         docId: input.docId, docNumber: input.docNumber,
         method: 'telegram', status,
         recipientName: input.customerName, recipientContact: input.telegramId,
-        messageSent: message, errorMessage,
-        sentByUserId: ctx.user.id,
+        messageSent: message, errorMessage, sentByUserId: ctx.user.id,
       });
 
       return { status, message, tgUrl, hasBotToken: !!botToken };
@@ -209,10 +282,8 @@ export const documentSendRouter = router({
         currency: input.currency, sellerName: org?.name ?? '',
       };
 
-      const subject = input.customSubject
-        || interpolate(cfg?.emailSubjectTemplate || TPL_EMAIL_SUBJECT, vars);
-      const bodyHtml = input.customMessage
-        || interpolate(cfg?.emailBodyTemplate || TPL_EMAIL_BODY, vars);
+      const subject  = input.customSubject || interpolate(cfg?.emailSubjectTemplate || TPL_EMAIL_SUBJECT, vars);
+      const bodyHtml = input.customMessage  || interpolate(cfg?.emailBodyTemplate    || TPL_EMAIL_BODY,    vars);
 
       const apiKey    = cfg?.emailApiKey;
       const fromEmail = cfg?.emailFromEmail || 'noreply@onesoft.sa';
@@ -272,6 +343,17 @@ export const documentSendRouter = router({
       return db.select()
         .from(documentSendLogs)
         .where(and(...where))
+        .orderBy(desc(documentSendLogs.sentAt))
+        .limit(input.limit);
+    }),
+
+  /* ── سجل إرسال كامل (للوحة الإدارة) ─────────────────────────── */
+  getAllLogs: protectedProcedure
+    .input(z.object({ limit: z.number().default(100) }))
+    .query(async ({ ctx, input }) => {
+      return db.select()
+        .from(documentSendLogs)
+        .where(eq(documentSendLogs.orgId, ctx.user.orgId))
         .orderBy(desc(documentSendLogs.sentAt))
         .limit(input.limit);
     }),

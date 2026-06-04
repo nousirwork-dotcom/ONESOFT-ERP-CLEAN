@@ -63,6 +63,8 @@ import SettingsModule, {
   CfgMissingDocsTab, CfgPayrollPeriodsTab, CfgOrgChartTab, CfgWageCalendarTab,
   CfgShiftsTab, CfgReportDesignerTab, CfgTestSetupTab, CfgTestEditTab, CfgFieldSpecsTab,
   CfgLoyaltyPointsTab, CfgLoyaltyTiersTab, CfgLoyaltyPromosTab, CfgLoyaltyMessagesTab,
+  CfgMessagingWhatsAppTab, CfgMessagingTelegramTab, CfgMessagingEmailTab,
+  CfgMessagingTemplatesTab, CfgMessagingLogTab,
 } from "./pages/SettingsModule";
 import PostingSettingsPage from "./pages/PostingSettingsPage";
 import PostingOperationsPage from "./pages/PostingOperationsPage";
@@ -231,7 +233,12 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/cfg/loyalty-points":   CfgLoyaltyPointsTab,
   "/cfg/loyalty-tiers":    CfgLoyaltyTiersTab,
   "/cfg/loyalty-promos":   CfgLoyaltyPromosTab,
-  "/cfg/loyalty-messages": CfgLoyaltyMessagesTab,
+  "/cfg/loyalty-messages":       CfgLoyaltyMessagesTab,
+  "/cfg/messaging-whatsapp":     CfgMessagingWhatsAppTab,
+  "/cfg/messaging-telegram":     CfgMessagingTelegramTab,
+  "/cfg/messaging-email":        CfgMessagingEmailTab,
+  "/cfg/messaging-templates":    CfgMessagingTemplatesTab,
+  "/cfg/messaging-log":          CfgMessagingLogTab,
 };
 
 // ─── Auth Guard ───────────────────────────────────────────────────────────

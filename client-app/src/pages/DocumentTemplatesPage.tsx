@@ -99,10 +99,14 @@ export default function DocumentTemplatesPage() {
     onSuccess: r => { if (r.seeded) listQuery.refetch(); },
   });
 
+  // تأكد دائماً من وجود نماذج افتراضية (INV01، POS01) عند تحميل الصفحة
+  const seedCalledRef = useRef(false);
   useEffect(() => {
-    if (listQuery.data && listQuery.data.length === 0 && selectedType === "sales_invoice")
+    if (!seedCalledRef.current) {
+      seedCalledRef.current = true;
       seedMut.mutate();
-  }, [listQuery.data]);
+    }
+  }, []);
 
   const createMut = trpc.documentTemplates.create.useMutation({
     onSuccess: row => {

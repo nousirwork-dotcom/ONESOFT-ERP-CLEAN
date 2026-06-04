@@ -5,9 +5,11 @@ import {
   LayoutGrid, Calculator, PenLine, MessageSquare, Minus,
   Trash2, Save, ArrowLeft, AlignRight, AlignLeft, AlignCenter,
   Bold, Plus, Eye, EyeOff, Layers, CornerDownLeft,
-  Settings2, Palette, Globe2, Table2,
+  Settings2, Palette, Globe2, Table2, Monitor,
 } from "lucide-react";
 import { toast } from "sonner";
+import { buildInvoiceHtml } from "@/lib/buildInvoiceHtml";
+import type { InvPrintData } from "@/lib/buildInvoiceHtml";
 
 /* ─── Types ─── */
 export type ElementType =
@@ -133,6 +135,37 @@ const VARS = [
   ["CashierName","أمين الصندوق"],
 ];
 
+/* ─── Sample invoice data for live preview ─── */
+const SAMPLE_DATA: InvPrintData = {
+  invoiceNumber: "INV-2024-00123",
+  invoiceDate: "2024-06-04",
+  invoiceTime: "10:30:00",
+  customerName: "شركة الأفق للتجارة",
+  customerCode: "C0042",
+  customerTaxNumber: "310012345600003",
+  salesperson: "أحمد السالم",
+  paymentType: "credit",
+  currency: "SAR",
+  notes: "يُرجى إرفاق نسخة من هذه الفاتورة عند الدفع",
+  lines: [
+    { productCode: "PRD-001", productName: "كمبيوتر محمول Dell XPS 15",         quantity: "2",  unit: "قطعة", unitPrice: "3500.00", discountPct: "5",  taxPct: "15", taxAmt: "997.50",  total: "7472.50"  },
+    { productCode: "PRD-002", productName: "شاشة LG 27 بوصة 4K",                quantity: "3",  unit: "قطعة", unitPrice: "1800.00", discountPct: "0",  taxPct: "15", taxAmt: "810.00",  total: "6210.00"  },
+    { productCode: "PRD-003", productName: "لوحة مفاتيح لاسلكية ميكانيكية",     quantity: "5",  unit: "قطعة", unitPrice: "250.00",  discountPct: "10", taxPct: "15", taxAmt: "168.75",  total: "1293.75"  },
+    { productCode: "PRD-004", productName: "ماوس Logitech MX Master 3",          quantity: "5",  unit: "قطعة", unitPrice: "180.00",  discountPct: "0",  taxPct: "15", taxAmt: "138.00",  total: "1058.00"  },
+    { productCode: "PRD-005", productName: "حقيبة لابتوب جلدية 15.6 بوصة",      quantity: "2",  unit: "قطعة", unitPrice: "320.00",  discountPct: "0",  taxPct: "15", taxAmt: "98.00",   total: "738.00"   },
+  ],
+  subtotal: 14750.00,
+  discountTotal: 477.50,
+  taxTotal: 2212.25,
+  grandTotal: 16484.75,
+  paidAmount: 0,
+  remainingAmount: 16484.75,
+  sellerName: "شركة ون سوفت لتقنية المعلومات",
+  sellerTaxNumber: "300123456700003",
+  sellerAddress: "الرياض، حي العليا، شارع العروبة",
+  sellerPhone: "+966 11 123 4567",
+};
+
 /* ─── ID generator ─── */
 let _seq = 0;
 const uid = () => `el_${Date.now()}_${++_seq}`;
@@ -253,11 +286,12 @@ export default function PrintTemplateDesigner({
   const scale    = CWIDTH / pW;
   const cHeight  = pH * scale;
 
-  const [elements,   setElements]   = useState<LayoutElement[]>(() => initialLayout?.elements ?? []);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [showGrid,   setShowGrid]   = useState(true);
-  const [isDirty,    setIsDirty]    = useState(false);
-  const [rightTab,   setRightTab]   = useState<"element" | "settings">("element");
+  const [elements,    setElements]   = useState<LayoutElement[]>(() => initialLayout?.elements ?? []);
+  const [selectedId,  setSelectedId] = useState<string | null>(null);
+  const [showGrid,    setShowGrid]   = useState(true);
+  const [isDirty,     setIsDirty]    = useState(false);
+  const [rightTab,    setRightTab]   = useState<"element" | "settings">("element");
+  const [showPreview, setShowPreview] = useState(false);
 
   // ─── config_v1 state ──────────────────────────────────────────────────
   const [cfgLanguage,     setCfgLanguage]     = useState<"ar"|"bilingual">(initialLayout?.language ?? "bilingual");
@@ -385,7 +419,12 @@ export default function PrintTemplateDesigner({
           {showGrid ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
           الشبكة
         </button>
-        {selected && (
+        <button onClick={() => setShowPreview(v => !v)}
+          className={`flex items-center gap-1 px-2 h-7 rounded border text-[10px] transition-colors ${showPreview ? "bg-emerald-50 border-emerald-300 text-emerald-700 font-semibold" : "border-slate-200 text-slate-500 hover:border-slate-300"}`}>
+          <Monitor className="w-3.5 h-3.5" />
+          {showPreview ? "إخفاء المعاينة" : "معاينة حقيقية"}
+        </button>
+        {selected && !showPreview && (
           <button onClick={deleteSelected}
             className="flex items-center gap-1 px-2 h-7 rounded text-[11px] text-red-600 hover:bg-red-50 border border-red-200 transition-colors">
             <Trash2 className="w-3.5 h-3.5" /> حذف
@@ -421,76 +460,100 @@ export default function PrintTemplateDesigner({
           </div>
         </div>
 
-        {/* ── Center: canvas ── */}
-        <div className="flex-1 overflow-auto flex items-start justify-center p-6 bg-slate-300"
-          style={{ backgroundImage: "radial-gradient(circle, #94a3b8 1px, transparent 1px)", backgroundSize: "16px 16px" }}>
-          <div className="relative bg-white shadow-2xl select-none"
-            ref={canvasRef}
-            style={{ width: CWIDTH, height: cHeight, flexShrink: 0, boxShadow: "0 4px 24px rgba(0,0,0,0.25)" }}
-            onMouseMove={onCanvasMove}
-            onMouseUp={() => { dragRef.current = null; }}
-            onClick={e => { if (e.target === canvasRef.current) setSelectedId(null); }}
-          >
-            {/* Margin guide */}
-            <div style={{
-              position: "absolute", inset: `${10 * scale}px`,
-              border: "1px dashed #bfdbfe",
-              pointerEvents: "none", zIndex: 0,
-            }} />
-            {/* Grid */}
-            {showGrid && (
-              <div style={{
-                position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0, opacity: 0.3,
-                backgroundImage: `repeating-linear-gradient(0deg,transparent,transparent ${5*scale-1}px,#e0e7ff ${5*scale-1}px,#e0e7ff ${5*scale}px),
-                  repeating-linear-gradient(90deg,transparent,transparent ${5*scale-1}px,#e0e7ff ${5*scale-1}px,#e0e7ff ${5*scale}px)`,
-              }} />
-            )}
-            {/* Elements */}
-            {elements.map(el => (
-              <div key={el.id} style={{ position: "absolute", left: el.x * scale, top: el.y * scale, width: el.w * scale, height: el.h * scale, zIndex: selectedId === el.id ? 10 : 1 }}
-                onMouseDown={e => {
-                  e.stopPropagation();
-                  setSelectedId(el.id);
-                  dragRef.current = { id: el.id, sx: el.x, sy: el.y, mx: e.clientX, my: e.clientY };
-                }}
-              >
-                <ElementPreview el={el} scale={scale} selected={selectedId === el.id} />
-                {selectedId === el.id && (
-                  <>
-                    {/* resize handles */}
-                    {[
-                      { cursor: "nw-resize", top: -4, left: -4 },
-                      { cursor: "ne-resize", top: -4, right: -4 },
-                      { cursor: "sw-resize", bottom: -4, left: -4 },
-                      { cursor: "se-resize", bottom: -4, right: -4 },
-                    ].map((h, i) => (
-                      <div key={i} style={{
-                        position: "absolute", width: 8, height: 8, background: "#3b82f6",
-                        border: "1px solid white", borderRadius: 2, ...h,
-                      }} />
-                    ))}
-                    {/* coordinates tooltip */}
-                    <div style={{
-                      position: "absolute", top: -18, right: 0,
-                      background: "#3b82f6", color: "#fff",
-                      fontSize: 8, padding: "1px 4px", borderRadius: 3, whiteSpace: "nowrap",
-                    }}>
-                      {Math.round(el.x)},{Math.round(el.y)} mm · {Math.round(el.w)}×{Math.round(el.h)} mm
-                    </div>
-                  </>
-                )}
-              </div>
-            ))}
-            {/* Empty state */}
-            {elements.length === 0 && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-center opacity-40 pointer-events-none">
-                <FileText className="w-12 h-12 text-slate-300 mb-3" />
-                <p className="text-[13px] font-medium text-slate-400">ورقة فارغة</p>
-                <p className="text-[11px] text-slate-300 mt-1">اضغط على عنصر من القائمة اليسرى لإضافته</p>
-              </div>
-            )}
+        {/* ── Center: canvas OR live preview ── */}
+        {showPreview ? (
+          /* ─── Live Preview (iframe) ─── */
+          <div className="flex-1 overflow-auto flex flex-col items-center p-4 bg-slate-400"
+            style={{ backgroundImage: "radial-gradient(circle, #64748b 1px, transparent 1px)", backgroundSize: "14px 14px" }}>
+            <div className="mb-2 flex items-center gap-2 bg-emerald-700 text-white text-[10px] px-3 py-1 rounded-full shadow">
+              <Monitor className="w-3 h-3" />
+              معاينة حقيقية بالبيانات النموذجية — التغييرات في تبويب «الفاتورة» تظهر فوراً
+            </div>
+            <iframe
+              key={`${cfgLanguage}_${cfgColor}_${JSON.stringify(cfgColumns)}_${JSON.stringify(cfgSections)}_${cfgMinRows}`}
+              srcDoc={buildInvoiceHtml(SAMPLE_DATA, {
+                type: "config_v1",
+                language: cfgLanguage,
+                primaryColor: cfgColor,
+                columns: cfgColumns,
+                minRows: cfgMinRows,
+                sections: cfgSections,
+              })}
+              className="bg-white shadow-2xl"
+              style={{ width: CWIDTH, height: cHeight * 1.15, border: "none", flexShrink: 0, boxShadow: "0 4px 24px rgba(0,0,0,0.3)" }}
+              title="معاينة الفاتورة"
+            />
           </div>
-        </div>
+        ) : (
+          /* ─── Element Canvas ─── */
+          <div className="flex-1 overflow-auto flex items-start justify-center p-6 bg-slate-300"
+            style={{ backgroundImage: "radial-gradient(circle, #94a3b8 1px, transparent 1px)", backgroundSize: "16px 16px" }}>
+            <div className="relative bg-white shadow-2xl select-none"
+              ref={canvasRef}
+              style={{ width: CWIDTH, height: cHeight, flexShrink: 0, boxShadow: "0 4px 24px rgba(0,0,0,0.25)" }}
+              onMouseMove={onCanvasMove}
+              onMouseUp={() => { dragRef.current = null; }}
+              onClick={e => { if (e.target === canvasRef.current) setSelectedId(null); }}
+            >
+              {/* Margin guide */}
+              <div style={{
+                position: "absolute", inset: `${10 * scale}px`,
+                border: "1px dashed #bfdbfe",
+                pointerEvents: "none", zIndex: 0,
+              }} />
+              {/* Grid */}
+              {showGrid && (
+                <div style={{
+                  position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0, opacity: 0.3,
+                  backgroundImage: `repeating-linear-gradient(0deg,transparent,transparent ${5*scale-1}px,#e0e7ff ${5*scale-1}px,#e0e7ff ${5*scale}px),
+                    repeating-linear-gradient(90deg,transparent,transparent ${5*scale-1}px,#e0e7ff ${5*scale-1}px,#e0e7ff ${5*scale}px)`,
+                }} />
+              )}
+              {/* Elements */}
+              {elements.map(el => (
+                <div key={el.id} style={{ position: "absolute", left: el.x * scale, top: el.y * scale, width: el.w * scale, height: el.h * scale, zIndex: selectedId === el.id ? 10 : 1 }}
+                  onMouseDown={e => {
+                    e.stopPropagation();
+                    setSelectedId(el.id);
+                    dragRef.current = { id: el.id, sx: el.x, sy: el.y, mx: e.clientX, my: e.clientY };
+                  }}
+                >
+                  <ElementPreview el={el} scale={scale} selected={selectedId === el.id} />
+                  {selectedId === el.id && (
+                    <>
+                      {[
+                        { cursor: "nw-resize", top: -4, left: -4 },
+                        { cursor: "ne-resize", top: -4, right: -4 },
+                        { cursor: "sw-resize", bottom: -4, left: -4 },
+                        { cursor: "se-resize", bottom: -4, right: -4 },
+                      ].map((h, i) => (
+                        <div key={i} style={{
+                          position: "absolute", width: 8, height: 8, background: "#3b82f6",
+                          border: "1px solid white", borderRadius: 2, ...h,
+                        }} />
+                      ))}
+                      <div style={{
+                        position: "absolute", top: -18, right: 0,
+                        background: "#3b82f6", color: "#fff",
+                        fontSize: 8, padding: "1px 4px", borderRadius: 3, whiteSpace: "nowrap",
+                      }}>
+                        {Math.round(el.x)},{Math.round(el.y)} mm · {Math.round(el.w)}×{Math.round(el.h)} mm
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+              {/* Empty state */}
+              {elements.length === 0 && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center opacity-40 pointer-events-none">
+                  <FileText className="w-12 h-12 text-slate-300 mb-3" />
+                  <p className="text-[13px] font-medium text-slate-400">ورقة فارغة</p>
+                  <p className="text-[11px] text-slate-300 mt-1">اضغط على عنصر من القائمة اليسرى لإضافته</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ── Right: properties + settings ── */}
         <div className="w-56 shrink-0 flex flex-col bg-white border-r border-slate-200 overflow-y-auto">

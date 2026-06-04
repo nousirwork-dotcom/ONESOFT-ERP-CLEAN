@@ -758,6 +758,12 @@ export const sendSettings = pgTable('send_settings', {
   telegramMessageTemplate: text('telegram_message_template'),
   emailSubjectTemplate:    varchar('email_subject_template', { length: 500 }),
   emailBodyTemplate:       text('email_body_template'),
+  // WhatsApp Business API (WABA)
+  wabaEnabled:             boolean('waba_enabled').notNull().default(false),
+  wabaApiUrl:              text('waba_api_url'),
+  wabaAccessToken:         text('waba_access_token'),
+  wabaPhoneNumberId:       varchar('waba_phone_number_id', { length: 100 }),
+  wabaSenderName:          varchar('waba_sender_name', { length: 255 }),
   createdAt:               timestamp('created_at').notNull().defaultNow(),
   updatedAt:               timestamp('updated_at').notNull().defaultNow(),
 });

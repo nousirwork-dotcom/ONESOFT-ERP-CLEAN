@@ -12,6 +12,7 @@ import {
   Warehouse, Tag, BookOpen, Layout, Download, Bell,
   ArrowRight, Save, Plus, Trash2, Edit2, Clock, GitBranch,
   AlertTriangle, CheckCircle, XCircle, BarChart2, Lock, List, QrCode,
+  MessageSquare, Send, Bot, Mail, Eye, RefreshCw,
 } from "lucide-react";
 import QRCodeDisplay from "@/components/QRCodeDisplay";
 import { generateQrContent, QR_SYSTEMS, CUSTOM_TEMPLATE_HELP, type QrSystem } from "@/lib/qrUtils";
@@ -106,6 +107,19 @@ const menuSections = [
     ],
   },
   {
+    id: "messaging",
+    label: "مركز الرسائل والتكاملات",
+    color: "#10b981",
+    emoji: "💬",
+    children: [
+      { id: "messaging-whatsapp",  label: "WhatsApp Business",    status: "partial", path: "/cfg/messaging-whatsapp"  },
+      { id: "messaging-telegram",  label: "Telegram Bot",         status: "partial", path: "/cfg/messaging-telegram"  },
+      { id: "messaging-email",     label: "البريد الإلكتروني",    status: "partial", path: "/cfg/messaging-email"     },
+      { id: "messaging-templates", label: "قوالب الرسائل",        status: "partial", path: "/cfg/messaging-templates" },
+      { id: "messaging-log",       label: "سجل الإرسال",          status: "partial", path: "/cfg/messaging-log"       },
+    ],
+  },
+  {
     id: "hr-settings",
     label: "باقي الإعدادات",
     color: "#a855f7",
@@ -141,6 +155,7 @@ function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id:
     notifications: false,
     system: false,
     loyalty: false,
+    messaging: false,
     "hr-settings": false,
   });
   const toggle = (id: string) => setExpanded(p => ({ ...p, [id]: !p[id] }));
@@ -2758,6 +2773,330 @@ function LoyaltyMessagesPage() {
   );
 }
 
+// ─── Messaging: WhatsApp Business API ─────────────────────────────────────────
+
+function MessagingWhatsAppPage() {
+  const settingsQ = trpc.documentSend.getSettings.useQuery();
+  const updateMut = trpc.documentSend.updateSettings.useMutation({
+    onSuccess: () => { toast.success("تم حفظ إعدادات WhatsApp ✓"); settingsQ.refetch(); },
+    onError: e => toast.error(e.message),
+  });
+  const testMut = trpc.documentSend.testWabaConnection.useMutation({
+    onSuccess: r => r.ok ? toast.success("✅ الاتصال ناجح: " + r.message) : toast.error("❌ " + r.message),
+    onError: e => toast.error(e.message),
+  });
+
+  const s = settingsQ.data;
+  const [form, setForm] = useState({ wabaEnabled: false, wabaApiUrl: "https://graph.facebook.com/v19.0", wabaAccessToken: "", wabaPhoneNumberId: "", wabaSenderName: "OneSoft ERP" });
+  const upd = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }));
+
+  useEffect(() => {
+    if (s) setForm({ wabaEnabled: s.wabaEnabled ?? false, wabaApiUrl: s.wabaApiUrl ?? "https://graph.facebook.com/v19.0", wabaAccessToken: s.wabaAccessToken ?? "", wabaPhoneNumberId: s.wabaPhoneNumberId ?? "", wabaSenderName: s.wabaSenderName ?? "OneSoft ERP" });
+  }, [s]);
+
+  return (
+    <div className="space-y-4 max-w-2xl" dir="rtl">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-sm flex items-center gap-2"><MessageSquare className="w-4 h-4 text-[#25D366]" />WhatsApp Business API</h3>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">تفعيل الإرسال</span>
+          <Switch checked={form.wabaEnabled} onCheckedChange={v => upd("wabaEnabled", v)} />
+        </div>
+      </div>
+
+      <Card className="border-border/50">
+        <CardHeader className="pb-2 pt-4 px-5"><CardTitle className="text-xs text-muted-foreground font-semibold">إعدادات الاتصال</CardTitle></CardHeader>
+        <CardContent className="px-5 pb-4 space-y-3">
+          <div>
+            <Label className="text-xs text-muted-foreground">رابط API (Graph URL)</Label>
+            <Input value={form.wabaApiUrl} onChange={e => upd("wabaApiUrl", e.target.value)} className="h-8 text-sm mt-1 font-mono text-xs" dir="ltr" placeholder="https://graph.facebook.com/v19.0" />
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Access Token</Label>
+            <Input value={form.wabaAccessToken} onChange={e => upd("wabaAccessToken", e.target.value)} className="h-8 text-sm mt-1 font-mono text-xs" dir="ltr" type="password" placeholder="EAAxxxxx..." />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs text-muted-foreground">Phone Number ID</Label>
+              <Input value={form.wabaPhoneNumberId} onChange={e => upd("wabaPhoneNumberId", e.target.value)} className="h-8 text-sm mt-1 font-mono text-xs" dir="ltr" placeholder="1234567890" />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">اسم المرسل</Label>
+              <Input value={form.wabaSenderName} onChange={e => upd("wabaSenderName", e.target.value)} className="h-8 text-sm mt-1" dir="rtl" placeholder="OneSoft ERP" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex items-center gap-2 justify-end">
+        <Button variant="outline" size="sm" className="gap-1.5" onClick={() => testMut.mutate()} disabled={testMut.isPending || !form.wabaEnabled}>
+          <Eye className="w-3.5 h-3.5" /> {testMut.isPending ? "جاري الاختبار…" : "اختبار الاتصال"}
+        </Button>
+        <Button size="sm" className="gap-1.5" onClick={() => updateMut.mutate(form)} disabled={updateMut.isPending}>
+          <Save className="w-3.5 h-3.5" /> {updateMut.isPending ? "جاري الحفظ…" : "حفظ الإعدادات"}
+        </Button>
+      </div>
+
+      <Card className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/20">
+        <CardContent className="p-3 text-xs text-amber-700 dark:text-amber-400 space-y-1">
+          <p className="font-semibold">📋 متطلبات WhatsApp Business API</p>
+          <p>• حساب Meta Business Manager مع التحقق</p>
+          <p>• رقم هاتف مسجل في WhatsApp Business Platform</p>
+          <p>• قوالب رسائل معتمدة من Meta لكل نوع إشعار</p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ─── Messaging: Telegram Bot ───────────────────────────────────────────────────
+
+function MessagingTelegramPage() {
+  const settingsQ = trpc.documentSend.getSettings.useQuery();
+  const updateMut = trpc.documentSend.updateSettings.useMutation({
+    onSuccess: () => { toast.success("تم حفظ إعدادات Telegram ✓"); settingsQ.refetch(); },
+    onError: e => toast.error(e.message),
+  });
+  const testMut = trpc.documentSend.testTelegramConnection.useMutation({
+    onSuccess: r => r.ok ? toast.success("✅ البوت متصل: " + r.message) : toast.error("❌ " + r.message),
+    onError: e => toast.error(e.message),
+  });
+
+  const s = settingsQ.data;
+  const [form, setForm] = useState({ telegramEnabled: false, telegramBotToken: "" });
+  const upd = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }));
+
+  useEffect(() => {
+    if (s) setForm({ telegramEnabled: s.telegramEnabled ?? false, telegramBotToken: s.telegramBotToken ?? "" });
+  }, [s]);
+
+  return (
+    <div className="space-y-4 max-w-2xl" dir="rtl">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-sm flex items-center gap-2"><Bot className="w-4 h-4 text-[#229ED9]" />Telegram Bot</h3>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">تفعيل الإرسال</span>
+          <Switch checked={form.telegramEnabled} onCheckedChange={v => upd("telegramEnabled", v)} />
+        </div>
+      </div>
+
+      <Card className="border-border/50">
+        <CardHeader className="pb-2 pt-4 px-5"><CardTitle className="text-xs text-muted-foreground font-semibold">إعدادات البوت</CardTitle></CardHeader>
+        <CardContent className="px-5 pb-4 space-y-3">
+          <div>
+            <Label className="text-xs text-muted-foreground">Bot Token</Label>
+            <Input value={form.telegramBotToken} onChange={e => upd("telegramBotToken", e.target.value)} className="h-8 text-sm mt-1 font-mono text-xs" dir="ltr" type="password" placeholder="123456789:AAFxxxx..." />
+            <p className="text-[10px] text-muted-foreground mt-1">احصل على توكن من @BotFather على Telegram</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex items-center gap-2 justify-end">
+        <Button variant="outline" size="sm" className="gap-1.5" onClick={() => testMut.mutate()} disabled={testMut.isPending || !form.telegramEnabled}>
+          <Eye className="w-3.5 h-3.5" /> {testMut.isPending ? "جاري الاختبار…" : "اختبار البوت"}
+        </Button>
+        <Button size="sm" className="gap-1.5" onClick={() => updateMut.mutate(form)} disabled={updateMut.isPending}>
+          <Save className="w-3.5 h-3.5" /> {updateMut.isPending ? "جاري الحفظ…" : "حفظ الإعدادات"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Messaging: Email (Resend) ─────────────────────────────────────────────────
+
+function MessagingEmailPage() {
+  const settingsQ = trpc.documentSend.getSettings.useQuery();
+  const updateMut = trpc.documentSend.updateSettings.useMutation({
+    onSuccess: () => { toast.success("تم حفظ إعدادات البريد ✓"); settingsQ.refetch(); },
+    onError: e => toast.error(e.message),
+  });
+
+  const s = settingsQ.data;
+  const [form, setForm] = useState({ emailEnabled: false, emailApiKey: "", emailFromEmail: "", emailFromName: "OneSoft ERP" });
+  const upd = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }));
+
+  useEffect(() => {
+    if (s) setForm({ emailEnabled: s.emailEnabled ?? false, emailApiKey: s.emailApiKey ?? "", emailFromEmail: s.emailFromEmail ?? "", emailFromName: s.emailFromName ?? "OneSoft ERP" });
+  }, [s]);
+
+  return (
+    <div className="space-y-4 max-w-2xl" dir="rtl">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-sm flex items-center gap-2"><Mail className="w-4 h-4 text-[#7c3aed]" />البريد الإلكتروني (Resend)</h3>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">تفعيل الإرسال</span>
+          <Switch checked={form.emailEnabled} onCheckedChange={v => upd("emailEnabled", v)} />
+        </div>
+      </div>
+
+      <Card className="border-border/50">
+        <CardHeader className="pb-2 pt-4 px-5"><CardTitle className="text-xs text-muted-foreground font-semibold">إعدادات Resend</CardTitle></CardHeader>
+        <CardContent className="px-5 pb-4 space-y-3">
+          <div>
+            <Label className="text-xs text-muted-foreground">Resend API Key</Label>
+            <Input value={form.emailApiKey} onChange={e => upd("emailApiKey", e.target.value)} className="h-8 text-sm mt-1 font-mono text-xs" dir="ltr" type="password" placeholder="re_xxxxxxxxxxxx" />
+            <p className="text-[10px] text-muted-foreground mt-1">احصل على مفتاح API من <span className="text-[#7c3aed]">resend.com</span></p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs text-muted-foreground">البريد المرسل (From)</Label>
+              <Input value={form.emailFromEmail} onChange={e => upd("emailFromEmail", e.target.value)} className="h-8 text-sm mt-1 font-mono text-xs" dir="ltr" placeholder="noreply@company.com" />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">اسم المرسل</Label>
+              <Input value={form.emailFromName} onChange={e => upd("emailFromName", e.target.value)} className="h-8 text-sm mt-1" dir="rtl" placeholder="OneSoft ERP" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-end">
+        <Button size="sm" className="gap-1.5" onClick={() => updateMut.mutate(form)} disabled={updateMut.isPending}>
+          <Save className="w-3.5 h-3.5" /> {updateMut.isPending ? "جاري الحفظ…" : "حفظ الإعدادات"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Messaging: قوالب الرسائل ──────────────────────────────────────────────────
+
+const DEFAULT_MSG_TEMPLATES = [
+  { key: "invoice_sent",    channel: "whatsapp", label: "إرسال فاتورة للعميل",      icon: "📄", text: "السلام عليكم {{CustomerName}}،\nمرفق فاتورتك رقم {{InvoiceNo}} بتاريخ {{Date}} بمبلغ {{Total}} {{Currency}}.\n\nشكراً لتعاملكم معنا 🙏" },
+  { key: "payment_receipt", channel: "whatsapp", label: "إيصال استلام دفعة",         icon: "💰", text: "تم استلام دفعتكم بمبلغ {{Amount}} {{Currency}} بتاريخ {{Date}}.\nالرصيد المتبقي: {{Balance}} {{Currency}}" },
+  { key: "overdue_notice",  channel: "whatsapp", label: "تذكير بفاتورة متأخرة",      icon: "⏰", text: "تذكير: لديكم فاتورة رقم {{InvoiceNo}} بمبلغ {{Total}} {{Currency}} متأخرة منذ {{DueDays}} يوم." },
+  { key: "quotation_sent",  channel: "email",    label: "إرسال عرض سعر",             icon: "📋", text: "يسعدنا تقديم عرض السعر المرفق رقم {{QuotNo}} الصالح حتى {{ValidUntil}}." },
+  { key: "purchase_order",  channel: "email",    label: "إرسال أمر شراء للمورد",     icon: "🛒", text: "برجاء الاطلاع على أمر الشراء رقم {{PONo}} المرفق والتأكيد في أقرب وقت." },
+];
+
+const CHANNEL_COLORS: Record<string, string> = { whatsapp: "#25D366", telegram: "#229ED9", email: "#7c3aed" };
+const CHANNEL_LABELS: Record<string, string> = { whatsapp: "WhatsApp", telegram: "Telegram", email: "Email" };
+
+function MessagingTemplatesPage() {
+  const [templates, setTemplates] = useState(DEFAULT_MSG_TEMPLATES);
+  const [editing, setEditing] = useState<string | null>(null);
+  const updText = (key: string, text: string) =>
+    setTemplates(p => p.map(t => t.key === key ? { ...t, text } : t));
+
+  return (
+    <div className="space-y-4 max-w-2xl" dir="rtl">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-sm flex items-center gap-2"><MessageSquare className="w-4 h-4 text-[#406B93]" />قوالب الرسائل</h3>
+        <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs">
+          <Plus className="w-3 h-3" /> قالب جديد
+        </Button>
+      </div>
+
+      <div className="space-y-2">
+        {templates.map(tmpl => (
+          <Card key={tmpl.key} className="border-border/50">
+            <CardContent className="p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">{tmpl.icon}</span>
+                  <span className="text-sm font-medium">{tmpl.label}</span>
+                  <Badge className="text-[10px] px-1.5 py-0" style={{ backgroundColor: CHANNEL_COLORS[tmpl.channel] + "20", color: CHANNEL_COLORS[tmpl.channel], borderColor: CHANNEL_COLORS[tmpl.channel] + "40" }}>
+                    {CHANNEL_LABELS[tmpl.channel]}
+                  </Badge>
+                </div>
+                <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setEditing(editing === tmpl.key ? null : tmpl.key)}>
+                  <Edit2 className="w-3 h-3" />
+                </Button>
+              </div>
+              {editing === tmpl.key ? (
+                <Textarea value={tmpl.text} onChange={e => updText(tmpl.key, e.target.value)}
+                  className="text-xs resize-none h-20 font-mono" dir="rtl" />
+              ) : (
+                <p className="text-[11px] text-muted-foreground whitespace-pre-line bg-muted/30 rounded p-2">{tmpl.text}</p>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <div className="text-[10px] text-muted-foreground bg-muted/30 rounded px-3 py-2 border border-border/40">
+        المتغيرات المتاحة: {"{{CustomerName}} {{InvoiceNo}} {{Date}} {{Total}} {{Currency}} {{Balance}} {{DueDays}} {{QuotNo}} {{ValidUntil}} {{PONo}} {{Amount}}"}
+      </div>
+
+      <div className="flex justify-end">
+        <Button size="sm" className="gap-1.5" onClick={() => toast.success("تم حفظ القوالب ✓")}>
+          <Save className="w-3.5 h-3.5" /> حفظ القوالب
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Messaging: سجل الإرسال ────────────────────────────────────────────────────
+
+function MessagingLogPage() {
+  const logsQ = trpc.documentSend.getAllLogs.useQuery({ limit: 50 });
+  const logs = logsQ.data ?? [];
+
+  const STATUS_COLORS: Record<string, string> = {
+    sent: "text-green-600",
+    failed: "text-red-600",
+    pending: "text-amber-600",
+  };
+  const CHANNEL_ICONS: Record<string, string> = {
+    whatsapp: "📱",
+    telegram: "🤖",
+    email: "📧",
+    pdf: "📄",
+  };
+
+  return (
+    <div className="space-y-4 max-w-3xl" dir="rtl">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-sm flex items-center gap-2"><Send className="w-4 h-4 text-[#406B93]" />سجل الإرسال</h3>
+        <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs" onClick={() => logsQ.refetch()} disabled={logsQ.isFetching}>
+          <RefreshCw className={`w-3 h-3 ${logsQ.isFetching ? "animate-spin" : ""}`} />
+          تحديث
+        </Button>
+      </div>
+
+      {logsQ.isLoading ? (
+        <div className="text-center py-10 text-muted-foreground text-sm">جاري التحميل…</div>
+      ) : logs.length === 0 ? (
+        <div className="text-center py-10 text-muted-foreground text-sm">لا يوجد سجلات إرسال بعد</div>
+      ) : (
+        <Card className="border-border/50">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="text-right text-xs">التاريخ</TableHead>
+                <TableHead className="text-right text-xs">القناة</TableHead>
+                <TableHead className="text-right text-xs">المستلم</TableHead>
+                <TableHead className="text-right text-xs">المستند</TableHead>
+                <TableHead className="text-right text-xs">الحالة</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {logs.map((log: any) => (
+                <TableRow key={log.id}>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {log.sentAt ? new Date(log.sentAt).toLocaleString("ar-SA") : "—"}
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {CHANNEL_ICONS[log.channel] ?? "📨"} {log.channel}
+                  </TableCell>
+                  <TableCell className="text-xs">{log.recipient ?? "—"}</TableCell>
+                  <TableCell className="text-xs">{log.docRef ?? "—"}</TableCell>
+                  <TableCell className={`text-xs font-medium ${STATUS_COLORS[log.status] ?? "text-muted-foreground"}`}>
+                    {log.status === "sent" ? "✓ أُرسل" : log.status === "failed" ? "✕ فشل" : "⏳ معلّق"}
+                    {log.errorMsg && <span className="block text-[10px] text-red-400">{log.errorMsg}</span>}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 // ─── Content Router ────────────────────────────────────────────────────────────
 
 function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
@@ -2814,6 +3153,12 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
     case "loyalty-tiers":        return <LoyaltyTiersPage />;
     case "loyalty-promos":       return <LoyaltyPromosPage />;
     case "loyalty-messages":     return <LoyaltyMessagesPage />;
+    // مركز الرسائل والتكاملات
+    case "messaging-whatsapp":   return <MessagingWhatsAppPage />;
+    case "messaging-telegram":   return <MessagingTelegramPage />;
+    case "messaging-email":      return <MessagingEmailPage />;
+    case "messaging-templates":  return <MessagingTemplatesPage />;
+    case "messaging-log":        return <MessagingLogPage />;
     default:                     return <SettingsOverview onSelect={onSelect} />;
   }
 }
@@ -2880,3 +3225,8 @@ export function CfgLoyaltyPointsTab()   { return <CfgSubPage activeId="loyalty-p
 export function CfgLoyaltyTiersTab()    { return <CfgSubPage activeId="loyalty-tiers" />; }
 export function CfgLoyaltyPromosTab()   { return <CfgSubPage activeId="loyalty-promos" />; }
 export function CfgLoyaltyMessagesTab() { return <CfgSubPage activeId="loyalty-messages" />; }
+export function CfgMessagingWhatsAppTab()  { return <CfgSubPage activeId="messaging-whatsapp" />; }
+export function CfgMessagingTelegramTab()  { return <CfgSubPage activeId="messaging-telegram" />; }
+export function CfgMessagingEmailTab()     { return <CfgSubPage activeId="messaging-email" />; }
+export function CfgMessagingTemplatesTab() { return <CfgSubPage activeId="messaging-templates" />; }
+export function CfgMessagingLogTab()       { return <CfgSubPage activeId="messaging-log" />; }
