@@ -129,7 +129,7 @@ const menuSections = [
   },
   {
     id: "hr-settings",
-    label: "باقي الإعدادات",
+    label: "إعدادات أخرى",
     color: "#a855f7",
     emoji: "📁",
     children: [
