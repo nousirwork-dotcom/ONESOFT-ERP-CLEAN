@@ -14,7 +14,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import {
   X, Send, MessageCircle, Mail, Clock,
-  CheckCircle, AlertCircle, Loader2, ExternalLink,
+  CheckCircle, AlertCircle, Loader2, ExternalLink, FileDown,
 } from "lucide-react";
 
 /* ── TelegramIcon (لا تحتوي lucide على Telegram) ─── */
@@ -36,6 +36,7 @@ export interface SendDocumentPanelProps {
   currency?: string;
   customerId?: number;
   customerName?: string;
+  onDownloadPdf?: () => void;
 }
 
 type Channel = "whatsapp" | "telegram" | "email";
@@ -50,7 +51,7 @@ const STATUS_LABELS: Record<string, string> = {
 /* ══════════════════════════════════════════════════════════════════ */
 export default function SendDocumentPanel({
   open, onClose, docType, docId, docNumber, docTypeName, amount,
-  currency = "SAR", customerId, customerName = "العميل",
+  currency = "SAR", customerId, customerName = "العميل", onDownloadPdf,
 }: SendDocumentPanelProps) {
 
   const [activeTab, setActiveTab] = useState<Channel>("whatsapp");
@@ -109,8 +110,12 @@ export default function SendDocumentPanel({
     if (!waPhone.trim()) { toast.error("أدخل رقم الواتساب"); return; }
     setIsSending(true);
     try {
+      if (onDownloadPdf) {
+        onDownloadPdf();
+        toast.info("تم فتح نافذة PDF — احفظه ثم أرفقه في واتساب");
+        await new Promise(r => setTimeout(r, 800));
+      }
       const res = await sendWA.mutateAsync({ ...baseInput, customerPhone: waPhone.trim(), customMessage: waMsg });
-      toast.success("جاري فتح واتساب...");
       window.open(res.waUrl, "_blank");
       await refetchLogs();
     } catch (e: any) { toast.error(e.message); }
@@ -198,10 +203,20 @@ export default function SendDocumentPanel({
               <TabsContent value="whatsapp" className="p-5 space-y-4 m-0">
                 <div className="flex items-start gap-3 p-3 rounded-lg bg-green-50 border border-green-200">
                   <MessageCircle className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
-                  <div className="text-xs text-green-800">
+                  <div className="text-xs text-green-800 flex-1">
                     <p className="font-semibold">إرسال عبر WhatsApp Web</p>
                     <p className="mt-0.5 text-green-700">يفتح تطبيق واتساب مع الرسالة جاهزة للإرسال</p>
                   </div>
+                  {onDownloadPdf && (
+                    <button
+                      onClick={onDownloadPdf}
+                      className="flex items-center gap-1 text-[11px] px-2 py-1 rounded bg-green-100 hover:bg-green-200 text-green-800 font-medium border border-green-300 transition-colors shrink-0"
+                      title="تحميل PDF الفاتورة"
+                    >
+                      <FileDown className="w-3.5 h-3.5" />
+                      PDF
+                    </button>
+                  )}
                 </div>
                 <div>
                   <Label className="text-xs">رقم الواتساب <span className="text-red-500">*</span></Label>

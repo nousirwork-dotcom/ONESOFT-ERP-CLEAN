@@ -15,6 +15,8 @@ import ERPToolbar, { ERPMode } from "@/components/ERPToolbar";
 import PostingPreviewModal from "@/components/PostingPreviewModal";
 import InvoicePrintModal, { type DocTemplateConfig } from "@/components/InvoicePrintModal";
 import SendDocumentPanel from "@/components/SendDocumentPanel";
+import { buildInvoiceHtml } from "@/lib/buildInvoiceHtml";
+import QRCode from "qrcode";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface InvoiceLine {
@@ -694,6 +696,89 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       setInvoiceNumber("");
     }
   }, [journalId, utils]);
+
+  /* ── تحميل PDF الفاتورة (تُستخدم في SendDocumentPanel) ── */
+  const handleDownloadPdf = useCallback(async () => {
+    try {
+      const qrEnabled = !!(qrSettingsQuery.data?.isEnabled && qrSettingsQuery.data?.showOnSalesInvoice);
+      let qrDataUrl = "";
+      if (qrEnabled) {
+        const { generateQrContent } = await import("@/lib/qrUtils");
+        const content = generateQrContent(
+          qrSettingsQuery.data!.countrySystem as any,
+          {
+            sellerName: orgQuery.data?.name ?? qrSettingsQuery.data?.sellerName ?? "OneSoft ERP",
+            taxNumber: orgQuery.data?.taxNumber ?? qrSettingsQuery.data?.taxNumber ?? "",
+            invoiceDateTime: `${invoiceDate}T${new Date().toTimeString().slice(0,8)}`,
+            totalAmount: netTotal, vatAmount: totalTax,
+            invoiceNumber: invoiceNumber,
+            buyerName: customerName, buyerTaxNumber: customerTaxNumber,
+          } as any,
+          qrSettingsQuery.data?.customFormat ?? undefined,
+        );
+        if (content) {
+          qrDataUrl = await QRCode.toDataURL(content, { width: 200, margin: 1 }).catch(() => "");
+        }
+      }
+      const html = buildInvoiceHtml(
+        {
+          invoiceNumber: invoiceNumber || "—",
+          invoiceDate,
+          invoiceTime: new Date().toTimeString().slice(0, 8),
+          customerName: customerName || "عميل نقدي",
+          customerCode: customerCode || undefined,
+          customerTaxNumber: customerTaxNumber || undefined,
+          salesperson: salesperson || undefined,
+          paymentType,
+          currency,
+          notes: notes || undefined,
+          lines: lines.filter(l => l.productName.trim()).map(l => ({
+            productCode: l.productCode,
+            productName: l.productName,
+            quantity: l.quantity,
+            unit: l.unit,
+            unitPrice: l.unitPrice,
+            discountPct: l.discountPct,
+            taxPct: l.taxPct,
+            taxAmt: l.taxAmt,
+            total: l.total,
+          })),
+          subtotal,
+          discountTotal: totalDiscount,
+          taxTotal: totalTax,
+          grandTotal: netTotal,
+          paidAmount,
+          remainingAmount,
+          sellerName: orgQuery.data?.name ?? qrSettingsQuery.data?.sellerName ?? "OneSoft ERP",
+          sellerTaxNumber: orgQuery.data?.taxNumber ?? qrSettingsQuery.data?.taxNumber ?? "",
+          sellerAddress: orgQuery.data?.address ?? undefined,
+          sellerPhone: orgQuery.data?.phone ?? undefined,
+        },
+        (() => {
+          try {
+            const raw = defaultTemplateQuery.data?.layoutJson;
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            return parsed.type === "config_v1" ? parsed : null;
+          } catch { return null; }
+        })(),
+        qrDataUrl || undefined,
+        qrSettingsQuery.data?.countrySystem === "zatca" ? "ZATCA QR"
+          : qrSettingsQuery.data?.countrySystem === "eta" ? "ETA QR" : "QR Code",
+        qrSettingsQuery.data?.qrSize ?? 100,
+      );
+      const win = window.open("", "_blank", "width=980,height=1100");
+      if (!win) { toast.error("تعذّر فتح نافذة PDF — تحقق من إعدادات المتصفح (السماح بالنوافذ المنبثقة)"); return; }
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+      setTimeout(() => { win.print(); }, 600);
+    } catch (e: any) {
+      toast.error("تعذّر توليد PDF");
+    }
+  }, [invoiceNumber, invoiceDate, customerName, customerCode, customerTaxNumber, salesperson,
+      paymentType, currency, notes, lines, subtotal, totalDiscount, totalTax, netTotal,
+      paidAmount, remainingAmount, orgQuery.data, qrSettingsQuery.data, defaultTemplateQuery.data]);
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
@@ -1627,6 +1712,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
           currency={currency || "SAR"}
           customerId={customerId ?? undefined}
           customerName={customerName || "العميل"}
+          onDownloadPdf={handleDownloadPdf}
         />
       )}
 
