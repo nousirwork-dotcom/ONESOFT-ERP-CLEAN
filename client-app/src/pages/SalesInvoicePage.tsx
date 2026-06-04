@@ -1625,7 +1625,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
             } catch { return "0.00"; }
           })()}
           currency={currency || "SAR"}
-          customerId={selectedCustomerId ?? undefined}
+          customerId={customerId ?? undefined}
           customerName={customerName || "العميل"}
         />
       )}
