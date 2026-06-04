@@ -43,7 +43,6 @@ const menuSections = [
       { id: "taxes",          label: "الضرائب",              status: "done",    path: "/cfg/taxes" },
       { id: "qr-settings",    label: "إعدادات QR Code",      status: "done",    path: "/cfg/qr-settings" },
       { id: "fiscal-periods",   label: "الفترات المحاسبية",    status: "done",    path: "/cfg/fiscal" },
-      { id: "user-categories", label: "فئات المستخدمين",      status: "done",    path: "/cfg/user-categories" },
       { id: "loyalty-points",   label: "إعدادات النقاط",     status: "partial", path: "/cfg/loyalty-points"   },
       { id: "loyalty-tiers",    label: "مستويات العضوية",    status: "partial", path: "/cfg/loyalty-tiers"    },
       { id: "loyalty-promos",   label: "العروض الترويجية",   status: "partial", path: "/cfg/loyalty-promos"   },
@@ -56,9 +55,10 @@ const menuSections = [
     color: "#406B93",
     emoji: "👥",
     children: [
-      { id: "users-list",   label: "المستخدمين",          status: "missing", path: "/cfg/users"       },
-      { id: "user-groups",  label: "مجموعات المستخدمين",  status: "missing", path: "/cfg/user-groups" },
-      { id: "permissions",  label: "صلاحيات المستخدمين",  status: "missing", path: "/cfg/permissions" },
+      { id: "user-categories", label: "فئات المستخدمين",     status: "done",    path: "/cfg/user-categories" },
+      { id: "users-list",      label: "المستخدمين",          status: "missing", path: "/cfg/users"           },
+      { id: "user-groups",     label: "مجموعات المستخدمين",  status: "missing", path: "/cfg/user-groups"     },
+      { id: "permissions",     label: "صلاحيات المستخدمين",  status: "missing", path: "/cfg/permissions"     },
     ],
   },
   {
