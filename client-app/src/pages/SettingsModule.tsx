@@ -47,6 +47,10 @@ const menuSections = [
       { id: "users-list",      label: "المستخدمين",           status: "missing", path: "/cfg/users" },
       { id: "user-groups",    label: "مجموعات المستخدمين",   status: "missing", path: "/cfg/user-groups" },
       { id: "permissions",    label: "صلاحيات المستخدمين",   status: "missing", path: "/cfg/permissions" },
+      { id: "loyalty-points",   label: "إعدادات النقاط",     status: "partial", path: "/cfg/loyalty-points"   },
+      { id: "loyalty-tiers",    label: "مستويات العضوية",    status: "partial", path: "/cfg/loyalty-tiers"    },
+      { id: "loyalty-promos",   label: "العروض الترويجية",   status: "partial", path: "/cfg/loyalty-promos"   },
+      { id: "loyalty-messages", label: "رسائل الولاء",       status: "partial", path: "/cfg/loyalty-messages" },
     ],
   },
   {
@@ -92,18 +96,6 @@ const menuSections = [
       { id: "field-design",        label: "تصميم الحقول",        status: "missing", path: "/cfg/field-design" },
       { id: "backup",              label: "النسخ الاحتياطي",     status: "done",    path: "/cfg/backup" },
       { id: "audit-log",           label: "سجل العمليات",        status: "done",    path: "/cfg/audit-log" },
-    ],
-  },
-  {
-    id: "loyalty",
-    label: "إدارة الولاء والعروض",
-    color: "#f59e0b",
-    emoji: "🏆",
-    children: [
-      { id: "loyalty-points",   label: "إعدادات النقاط",     status: "partial", path: "/cfg/loyalty-points"   },
-      { id: "loyalty-tiers",    label: "مستويات العضوية",    status: "partial", path: "/cfg/loyalty-tiers"    },
-      { id: "loyalty-promos",   label: "العروض الترويجية",   status: "partial", path: "/cfg/loyalty-promos"   },
-      { id: "loyalty-messages", label: "رسائل الولاء",       status: "partial", path: "/cfg/loyalty-messages" },
     ],
   },
   {
@@ -154,7 +146,6 @@ function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id:
     approvals: false,
     notifications: false,
     system: false,
-    loyalty: false,
     messaging: false,
     "hr-settings": false,
   });
