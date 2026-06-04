@@ -123,9 +123,6 @@ const menuSections = [
       { id: "wage-calendar",       label: "تقويم نظام الأجور",        status: "partial", path: "/cfg/wage-calendar" },
       { id: "shifts-setup",        label: "ملف الدوامات",             status: "partial", path: "/cfg/shifts" },
       { id: "report-designer",     label: "أدوات التقارير",           status: "partial", path: "/cfg/report-designer" },
-      { id: "test-files-setup",    label: "إعداد ملفات الاختبار",     status: "missing", path: "/cfg/test-setup" },
-      { id: "test-files-edit",     label: "تحرير ملفات الاختبار",     status: "missing", path: "/cfg/test-edit" },
-      { id: "field-specs",         label: "مواصفات الحقول",           status: "missing", path: "/cfg/field-specs" },
     ],
   },
 ];
