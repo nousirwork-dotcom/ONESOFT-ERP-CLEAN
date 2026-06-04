@@ -44,13 +44,21 @@ const menuSections = [
       { id: "qr-settings",    label: "إعدادات QR Code",      status: "done",    path: "/cfg/qr-settings" },
       { id: "fiscal-periods",   label: "الفترات المحاسبية",    status: "done",    path: "/cfg/fiscal" },
       { id: "user-categories", label: "فئات المستخدمين",      status: "done",    path: "/cfg/user-categories" },
-      { id: "users-list",      label: "المستخدمين",           status: "missing", path: "/cfg/users" },
-      { id: "user-groups",    label: "مجموعات المستخدمين",   status: "missing", path: "/cfg/user-groups" },
-      { id: "permissions",    label: "صلاحيات المستخدمين",   status: "missing", path: "/cfg/permissions" },
       { id: "loyalty-points",   label: "إعدادات النقاط",     status: "partial", path: "/cfg/loyalty-points"   },
       { id: "loyalty-tiers",    label: "مستويات العضوية",    status: "partial", path: "/cfg/loyalty-tiers"    },
       { id: "loyalty-promos",   label: "العروض الترويجية",   status: "partial", path: "/cfg/loyalty-promos"   },
       { id: "loyalty-messages", label: "رسائل الولاء",       status: "partial", path: "/cfg/loyalty-messages" },
+    ],
+  },
+  {
+    id: "user-management",
+    label: "إدارة المستخدمين",
+    color: "#406B93",
+    emoji: "👥",
+    children: [
+      { id: "users-list",   label: "المستخدمين",          status: "missing", path: "/cfg/users"       },
+      { id: "user-groups",  label: "مجموعات المستخدمين",  status: "missing", path: "/cfg/user-groups" },
+      { id: "permissions",  label: "صلاحيات المستخدمين",  status: "missing", path: "/cfg/permissions" },
     ],
   },
   {
@@ -140,6 +148,7 @@ function StatusIcon({ status }: { status: string }) {
 function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
     general: true,
+    "user-management": false,
     approvals: false,
     notifications: false,
     system: false,
