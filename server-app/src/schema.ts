@@ -738,8 +738,23 @@ export const documentSendLogs = pgTable('document_send_logs', {
   recipientContact: varchar('recipient_contact', { length: 500 }),
   messageSent:      text('message_sent'),
   errorMessage:     text('error_message'),
+  metaMessageId:    varchar('meta_message_id', { length: 100 }),
   sentByUserId:     integer('sent_by_user_id').references(() => users.id),
   sentAt:           timestamp('sent_at').notNull().defaultNow(),
+});
+
+// ─── WABA Message Templates ───────────────────────────────────────────────────
+export const wabaMessageTemplates = pgTable('waba_message_templates', {
+  id:        serial('id').primaryKey(),
+  orgId:     integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  key:       varchar('key', { length: 100 }).notNull(),
+  label:     varchar('label', { length: 255 }).notNull(),
+  docType:   varchar('doc_type', { length: 50 }),
+  channel:   varchar('channel', { length: 20 }).notNull().default('whatsapp'),
+  content:   text('content').notNull(),
+  isActive:  boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
 // ─── Send Settings ────────────────────────────────────────────────────────────
@@ -764,6 +779,9 @@ export const sendSettings = pgTable('send_settings', {
   wabaAccessToken:         text('waba_access_token'),
   wabaPhoneNumberId:       varchar('waba_phone_number_id', { length: 100 }),
   wabaSenderName:          varchar('waba_sender_name', { length: 255 }),
+  wabaBusinessAccountId:   varchar('waba_business_account_id', { length: 100 }),
+  wabaVerifyToken:         varchar('waba_verify_token', { length: 255 }),
+  wabaWebhookUrl:          varchar('waba_webhook_url', { length: 500 }),
   createdAt:               timestamp('created_at').notNull().defaultNow(),
   updatedAt:               timestamp('updated_at').notNull().defaultNow(),
 });

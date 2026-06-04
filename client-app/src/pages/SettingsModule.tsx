@@ -2781,76 +2781,401 @@ function LoyaltyMessagesPage() {
 
 // ─── Messaging: WhatsApp Business API ─────────────────────────────────────────
 
+const WABA_TABS = ["الإعدادات", "معلومات الاتصال", "قوالب الرسائل", "سجل الإرسال"] as const;
+type WabaTab = typeof WABA_TABS[number];
+
+// ─ الجودة badge ──────────────────────────────────────────────────────────────
+function QualityBadge({ quality }: { quality: string }) {
+  const map: Record<string, { label: string; cls: string }> = {
+    GREEN:  { label: "جودة عالية ●",  cls: "text-green-600 bg-green-50 border-green-200" },
+    YELLOW: { label: "جودة متوسطة ●", cls: "text-amber-600 bg-amber-50 border-amber-200" },
+    RED:    { label: "جودة منخفضة ●", cls: "text-red-600 bg-red-50 border-red-200" },
+  };
+  const m = map[quality?.toUpperCase()] ?? { label: quality || "—", cls: "text-muted-foreground bg-muted border-border" };
+  return <span className={`text-[10px] px-2 py-0.5 rounded border font-medium ${m.cls}`}>{m.label}</span>;
+}
+
 function MessagingWhatsAppPage() {
-  const settingsQ = trpc.documentSend.getSettings.useQuery();
-  const updateMut = trpc.documentSend.updateSettings.useMutation({
-    onSuccess: () => { toast.success("تم حفظ إعدادات WhatsApp ✓"); settingsQ.refetch(); },
+  const [activeTab, setActiveTab] = useState<WabaTab>("الإعدادات");
+
+  const settingsQ     = trpc.documentSend.getSettings.useQuery();
+  const wabaInfoQ     = trpc.documentSend.getWabaInfo.useQuery(undefined, { enabled: false });
+  const templatesQ    = trpc.documentSend.getWabaTemplates.useQuery();
+  const logsQ         = trpc.documentSend.getAllLogs.useQuery({ limit: 100, method: "whatsapp" });
+
+  const updateMut     = trpc.documentSend.updateSettings.useMutation({
+    onSuccess: () => { toast.success("تم حفظ الإعدادات ✓"); settingsQ.refetch(); },
     onError: e => toast.error(e.message),
   });
-  const testMut = trpc.documentSend.testWabaConnection.useMutation({
-    onSuccess: r => r.ok ? toast.success("✅ الاتصال ناجح: " + r.message) : toast.error("❌ " + r.message),
+  const testMut       = trpc.documentSend.testWabaConnection.useMutation();
+  const saveTemplates = trpc.documentSend.saveWabaTemplates.useMutation({
+    onSuccess: r => { toast.success(`تم حفظ ${r.count} قالب ✓`); templatesQ.refetch(); },
     onError: e => toast.error(e.message),
   });
 
   const s = settingsQ.data;
-  const [form, setForm] = useState({ wabaEnabled: false, wabaApiUrl: "https://graph.facebook.com/v19.0", wabaAccessToken: "", wabaPhoneNumberId: "", wabaSenderName: "OneSoft ERP" });
+  const [form, setForm] = useState({
+    wabaEnabled: false,
+    wabaApiUrl: "https://graph.facebook.com/v19.0",
+    wabaAccessToken: "", wabaPhoneNumberId: "", wabaSenderName: "OneSoft ERP",
+    wabaBusinessAccountId: "", wabaVerifyToken: "", wabaWebhookUrl: "",
+  });
   const upd = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }));
 
   useEffect(() => {
-    if (s) setForm({ wabaEnabled: s.wabaEnabled ?? false, wabaApiUrl: s.wabaApiUrl ?? "https://graph.facebook.com/v19.0", wabaAccessToken: s.wabaAccessToken ?? "", wabaPhoneNumberId: s.wabaPhoneNumberId ?? "", wabaSenderName: s.wabaSenderName ?? "OneSoft ERP" });
+    if (s) setForm({
+      wabaEnabled:           s.wabaEnabled ?? false,
+      wabaApiUrl:            s.wabaApiUrl ?? "https://graph.facebook.com/v19.0",
+      wabaAccessToken:       s.wabaAccessToken ?? "",
+      wabaPhoneNumberId:     s.wabaPhoneNumberId ?? "",
+      wabaSenderName:        s.wabaSenderName ?? "OneSoft ERP",
+      wabaBusinessAccountId: (s as any).wabaBusinessAccountId ?? "",
+      wabaVerifyToken:       (s as any).wabaVerifyToken ?? "",
+      wabaWebhookUrl:        (s as any).wabaWebhookUrl ?? "",
+    });
   }, [s]);
 
+  // نتيجة اختبار الاتصال
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string; phoneInfo?: any } | null>(null);
+
+  const handleTest = () => {
+    setTestResult(null);
+    testMut.mutate(undefined, {
+      onSuccess: r => {
+        setTestResult(r);
+        if (r.ok) toast.success("✅ الاتصال ناجح");
+        else toast.error("❌ " + r.message);
+      },
+      onError: e => toast.error(e.message),
+    });
+  };
+
+  // قوالب محلية قابلة للتحرير
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [editingTpl, setEditingTpl] = useState<number | null>(null);
+  useEffect(() => { if (templatesQ.data) setTemplates(templatesQ.data); }, [templatesQ.data]);
+  const updTpl = (idx: number, k: string, v: any) =>
+    setTemplates(p => p.map((t, i) => i === idx ? { ...t, [k]: v } : t));
+
+  const STATUS_COLORS: Record<string, string> = {
+    sent: "text-green-600", failed: "text-red-600", pending: "text-amber-600",
+  };
+
   return (
-    <div className="space-y-4 max-w-2xl" dir="rtl">
+    <div className="space-y-4 max-w-3xl" dir="rtl">
+      {/* ─ Header ─────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-sm flex items-center gap-2"><MessageSquare className="w-4 h-4 text-[#25D366]" />WhatsApp Business API</h3>
+        <h3 className="font-semibold text-sm flex items-center gap-2">
+          <MessageSquare className="w-4 h-4 text-[#25D366]" />
+          WhatsApp Business API
+        </h3>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">تفعيل الإرسال</span>
+          <span className="text-xs text-muted-foreground">تفعيل الإرسال عبر API</span>
           <Switch checked={form.wabaEnabled} onCheckedChange={v => upd("wabaEnabled", v)} />
         </div>
       </div>
 
-      <Card className="border-border/50">
-        <CardHeader className="pb-2 pt-4 px-5"><CardTitle className="text-xs text-muted-foreground font-semibold">إعدادات الاتصال</CardTitle></CardHeader>
-        <CardContent className="px-5 pb-4 space-y-3">
-          <div>
-            <Label className="text-xs text-muted-foreground">رابط API (Graph URL)</Label>
-            <Input value={form.wabaApiUrl} onChange={e => upd("wabaApiUrl", e.target.value)} className="h-8 text-sm mt-1 font-mono text-xs" dir="ltr" placeholder="https://graph.facebook.com/v19.0" />
-          </div>
-          <div>
-            <Label className="text-xs text-muted-foreground">Access Token</Label>
-            <Input value={form.wabaAccessToken} onChange={e => upd("wabaAccessToken", e.target.value)} className="h-8 text-sm mt-1 font-mono text-xs" dir="ltr" type="password" placeholder="EAAxxxxx..." />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs text-muted-foreground">Phone Number ID</Label>
-              <Input value={form.wabaPhoneNumberId} onChange={e => upd("wabaPhoneNumberId", e.target.value)} className="h-8 text-sm mt-1 font-mono text-xs" dir="ltr" placeholder="1234567890" />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">اسم المرسل</Label>
-              <Input value={form.wabaSenderName} onChange={e => upd("wabaSenderName", e.target.value)} className="h-8 text-sm mt-1" dir="rtl" placeholder="OneSoft ERP" />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="flex items-center gap-2 justify-end">
-        <Button variant="outline" size="sm" className="gap-1.5" onClick={() => testMut.mutate()} disabled={testMut.isPending || !form.wabaEnabled}>
-          <Eye className="w-3.5 h-3.5" /> {testMut.isPending ? "جاري الاختبار…" : "اختبار الاتصال"}
-        </Button>
-        <Button size="sm" className="gap-1.5" onClick={() => updateMut.mutate(form)} disabled={updateMut.isPending}>
-          <Save className="w-3.5 h-3.5" /> {updateMut.isPending ? "جاري الحفظ…" : "حفظ الإعدادات"}
-        </Button>
+      {/* ─ Tabs ────────────────────────────────────────────────────────── */}
+      <div className="flex gap-1 border-b border-border">
+        {WABA_TABS.map(tab => (
+          <button key={tab} onClick={() => setActiveTab(tab)}
+            className={`px-3 py-1.5 text-xs font-medium transition-colors border-b-2 -mb-px ${
+              activeTab === tab
+                ? "border-[#25D366] text-[#25D366]"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}>{tab}</button>
+        ))}
       </div>
 
-      <Card className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/20">
-        <CardContent className="p-3 text-xs text-amber-700 dark:text-amber-400 space-y-1">
-          <p className="font-semibold">📋 متطلبات WhatsApp Business API</p>
-          <p>• حساب Meta Business Manager مع التحقق</p>
-          <p>• رقم هاتف مسجل في WhatsApp Business Platform</p>
-          <p>• قوالب رسائل معتمدة من Meta لكل نوع إشعار</p>
-        </CardContent>
-      </Card>
+      {/* ══ تبويب: الإعدادات ═══════════════════════════════════════════ */}
+      {activeTab === "الإعدادات" && (
+        <div className="space-y-4">
+          <Card className="border-border/50">
+            <CardHeader className="pb-2 pt-4 px-5">
+              <CardTitle className="text-xs text-muted-foreground font-semibold">إعدادات الاتصال الأساسية</CardTitle>
+            </CardHeader>
+            <CardContent className="px-5 pb-4 space-y-3">
+              <div>
+                <Label className="text-xs text-muted-foreground">API URL (Graph)</Label>
+                <Input value={form.wabaApiUrl} onChange={e => upd("wabaApiUrl", e.target.value)}
+                  className="h-8 text-xs mt-1 font-mono" dir="ltr" placeholder="https://graph.facebook.com/v19.0" />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Access Token</Label>
+                <Input value={form.wabaAccessToken} onChange={e => upd("wabaAccessToken", e.target.value)}
+                  className="h-8 text-xs mt-1 font-mono" dir="ltr" type="password" placeholder="EAAxxxxx…" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Phone Number ID</Label>
+                  <Input value={form.wabaPhoneNumberId} onChange={e => upd("wabaPhoneNumberId", e.target.value)}
+                    className="h-8 text-xs mt-1 font-mono" dir="ltr" placeholder="1234567890" />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">اسم المرسل</Label>
+                  <Input value={form.wabaSenderName} onChange={e => upd("wabaSenderName", e.target.value)}
+                    className="h-8 text-sm mt-1" dir="rtl" placeholder="OneSoft ERP" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/50">
+            <CardHeader className="pb-2 pt-4 px-5">
+              <CardTitle className="text-xs text-muted-foreground font-semibold">إعدادات متقدمة</CardTitle>
+            </CardHeader>
+            <CardContent className="px-5 pb-4 space-y-3">
+              <div>
+                <Label className="text-xs text-muted-foreground">WhatsApp Business Account ID</Label>
+                <Input value={form.wabaBusinessAccountId} onChange={e => upd("wabaBusinessAccountId", e.target.value)}
+                  className="h-8 text-xs mt-1 font-mono" dir="ltr" placeholder="WABA ID من Meta Business Manager" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Verify Token (للـ Webhook)</Label>
+                  <Input value={form.wabaVerifyToken} onChange={e => upd("wabaVerifyToken", e.target.value)}
+                    className="h-8 text-xs mt-1 font-mono" dir="ltr" placeholder="my_verify_token" />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Webhook URL</Label>
+                  <Input value={form.wabaWebhookUrl} onChange={e => upd("wabaWebhookUrl", e.target.value)}
+                    className="h-8 text-xs mt-1 font-mono" dir="ltr" placeholder="https://domain.com/webhook/wa" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* نتيجة الاختبار */}
+          {testResult && (
+            <Card className={`border ${testResult.ok ? "border-green-200 bg-green-50 dark:bg-green-950/20" : "border-red-200 bg-red-50 dark:bg-red-950/20"}`}>
+              <CardContent className="p-4 space-y-2">
+                <p className={`text-sm font-semibold ${testResult.ok ? "text-green-700" : "text-red-700"}`}>
+                  {testResult.ok ? "✅ الاتصال ناجح" : "❌ " + testResult.message}
+                </p>
+                {testResult.ok && testResult.phoneInfo && (
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div><span className="text-muted-foreground">الرقم:</span> <span className="font-mono">{testResult.phoneInfo.displayNumber}</span></div>
+                    <div><span className="text-muted-foreground">الاسم المُحقَّق:</span> <span>{testResult.phoneInfo.verifiedName}</span></div>
+                    <div><span className="text-muted-foreground">الجودة:</span> <QualityBadge quality={testResult.phoneInfo.quality} /></div>
+                    <div><span className="text-muted-foreground">الحالة:</span> <span className="text-green-600 font-medium">{testResult.phoneInfo.status}</span></div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="flex items-center gap-2 justify-end">
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={handleTest} disabled={testMut.isPending}>
+              <Eye className="w-3.5 h-3.5" /> {testMut.isPending ? "جاري الاختبار…" : "اختبار الاتصال"}
+            </Button>
+            <Button size="sm" className="gap-1.5" onClick={() => updateMut.mutate(form)} disabled={updateMut.isPending}>
+              <Save className="w-3.5 h-3.5" /> {updateMut.isPending ? "جاري الحفظ…" : "حفظ الإعدادات"}
+            </Button>
+          </div>
+
+          <Card className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/20">
+            <CardContent className="p-3 text-xs text-amber-700 dark:text-amber-400 space-y-1">
+              <p className="font-semibold">📋 متطلبات WhatsApp Business API</p>
+              <p>• حساب Meta Business Manager مع التحقق الكامل</p>
+              <p>• رقم هاتف مسجل في WhatsApp Business Platform</p>
+              <p>• قوالب رسائل معتمدة من Meta لكل نوع إشعار</p>
+              <p>• Webhook مُعدّ لاستقبال إشعارات التسليم والقراءة</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ══ تبويب: معلومات الاتصال ════════════════════════════════════ */}
+      {activeTab === "معلومات الاتصال" && (
+        <div className="space-y-4">
+          <div className="flex justify-end">
+            <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs" onClick={handleTest} disabled={testMut.isPending}>
+              <RefreshCw className={`w-3 h-3 ${testMut.isPending ? "animate-spin" : ""}`} />
+              تحديث معلومات الاتصال
+            </Button>
+          </div>
+
+          {!testResult && !testMut.isPending && (
+            <div className="text-center py-10 text-muted-foreground text-sm space-y-3">
+              <MessageSquare className="w-10 h-10 mx-auto text-muted-foreground/40" />
+              <p>اضغط "تحديث" للحصول على معلومات الاتصال من Meta</p>
+            </div>
+          )}
+
+          {testMut.isPending && (
+            <div className="text-center py-10 text-muted-foreground text-sm">
+              <RefreshCw className="w-6 h-6 mx-auto animate-spin mb-2" />جاري الاتصال بـ Meta…
+            </div>
+          )}
+
+          {testResult && (
+            <div className="space-y-3">
+              <Card className={`border-2 ${testResult.ok ? "border-green-300" : "border-red-300"}`}>
+                <CardContent className="p-5">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${testResult.ok ? "bg-green-100" : "bg-red-100"}`}>
+                      <MessageSquare className={`w-5 h-5 ${testResult.ok ? "text-green-600" : "text-red-600"}`} />
+                    </div>
+                    <div>
+                      <p className={`font-semibold text-sm ${testResult.ok ? "text-green-700" : "text-red-700"}`}>
+                        {testResult.ok ? "متصل بـ WhatsApp Business API" : "غير متصل"}
+                      </p>
+                      {!testResult.ok && <p className="text-xs text-red-600 mt-0.5">{testResult.message}</p>}
+                    </div>
+                  </div>
+                  {testResult.ok && testResult.phoneInfo && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-3">
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">رقم الهاتف</p>
+                          <p className="text-base font-bold font-mono text-foreground">{testResult.phoneInfo.displayNumber}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">الاسم المُحقَّق من Meta</p>
+                          <p className="text-sm font-medium">{testResult.phoneInfo.verifiedName}</p>
+                        </div>
+                      </div>
+                      <div className="space-y-3">
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">جودة الرسائل</p>
+                          <QualityBadge quality={testResult.phoneInfo.quality} />
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">حالة الرقم</p>
+                          <p className={`text-sm font-semibold ${testResult.phoneInfo.status === "CONNECTED" ? "text-green-600" : "text-amber-600"}`}>
+                            {testResult.phoneInfo.status}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {testResult.ok && (
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: "إجمالي الرسائل المرسلة", value: (logsQ.data?.filter(l => l.status === "sent").length ?? 0).toLocaleString("ar-SA"), icon: Send, color: "text-green-600" },
+                    { label: "رسائل فاشلة", value: (logsQ.data?.filter(l => l.status === "failed").length ?? 0).toLocaleString("ar-SA"), icon: XCircle, color: "text-red-600" },
+                    { label: "آخر إرسال", value: logsQ.data?.[0]?.sentAt ? new Date(logsQ.data[0].sentAt).toLocaleDateString("ar-SA") : "—", icon: Clock, color: "text-[#406B93]" },
+                  ].map(stat => (
+                    <Card key={stat.label} className="border-border/50">
+                      <CardContent className="p-4 text-center">
+                        <stat.icon className={`w-5 h-5 mx-auto mb-1.5 ${stat.color}`} />
+                        <p className="text-lg font-bold">{stat.value}</p>
+                        <p className="text-[10px] text-muted-foreground">{stat.label}</p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ══ تبويب: قوالب الرسائل ══════════════════════════════════════ */}
+      {activeTab === "قوالب الرسائل" && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">القوالب المستخدمة عند إرسال المستندات عبر WhatsApp</p>
+            <Button size="sm" className="gap-1.5 h-7 text-xs"
+              onClick={() => saveTemplates.mutate(templates)} disabled={saveTemplates.isPending}>
+              <Save className="w-3 h-3" /> {saveTemplates.isPending ? "جاري الحفظ…" : "حفظ الكل"}
+            </Button>
+          </div>
+
+          {templates.map((tpl, idx) => (
+            <Card key={tpl.key} className="border-border/50">
+              <CardContent className="p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{tpl.label}</span>
+                    {tpl.docType && (
+                      <Badge className="text-[10px] px-1.5 py-0 bg-[#25D366]/10 text-[#25D366] border-[#25D366]/30">
+                        {tpl.docType}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch checked={tpl.isActive} onCheckedChange={v => updTpl(idx, "isActive", v)} />
+                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0"
+                      onClick={() => setEditingTpl(editingTpl === idx ? null : idx)}>
+                      <Edit2 className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
+                {editingTpl === idx ? (
+                  <Textarea value={tpl.content} onChange={e => updTpl(idx, "content", e.target.value)}
+                    className="text-xs resize-none h-24 font-mono" dir="rtl" />
+                ) : (
+                  <p className="text-[11px] text-muted-foreground whitespace-pre-line bg-muted/30 rounded p-2 leading-relaxed">
+                    {tpl.content}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+
+          <div className="text-[10px] text-muted-foreground bg-muted/30 rounded px-3 py-2 border border-border/40">
+            المتغيرات: {"{{customerName}} {{docNumber}} {{docTypeName}} {{amount}} {{currency}} {{sellerName}}"}
+          </div>
+        </div>
+      )}
+
+      {/* ══ تبويب: سجل الإرسال ════════════════════════════════════════ */}
+      {activeTab === "سجل الإرسال" && (
+        <div className="space-y-3">
+          <div className="flex justify-end">
+            <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs"
+              onClick={() => logsQ.refetch()} disabled={logsQ.isFetching}>
+              <RefreshCw className={`w-3 h-3 ${logsQ.isFetching ? "animate-spin" : ""}`} /> تحديث
+            </Button>
+          </div>
+
+          {logsQ.isLoading ? (
+            <div className="text-center py-10 text-muted-foreground text-sm">جاري التحميل…</div>
+          ) : !logsQ.data?.length ? (
+            <div className="text-center py-10 text-muted-foreground text-sm">لا يوجد سجلات إرسال بعد</div>
+          ) : (
+            <Card className="border-border/50">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-right text-xs">التاريخ والوقت</TableHead>
+                    <TableHead className="text-right text-xs">رقم المستند</TableHead>
+                    <TableHead className="text-right text-xs">العميل</TableHead>
+                    <TableHead className="text-right text-xs">الجوال</TableHead>
+                    <TableHead className="text-right text-xs">المستخدم</TableHead>
+                    <TableHead className="text-right text-xs">الحالة</TableHead>
+                    <TableHead className="text-right text-xs">رقم الرسالة (Meta)</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {logsQ.data.map((log: any) => (
+                    <TableRow key={log.id}>
+                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                        {log.sentAt ? new Date(log.sentAt).toLocaleString("ar-SA", { dateStyle: "short", timeStyle: "short" }) : "—"}
+                      </TableCell>
+                      <TableCell className="text-xs font-mono">{log.docNumber ?? "—"}</TableCell>
+                      <TableCell className="text-xs">{log.recipientName ?? "—"}</TableCell>
+                      <TableCell className="text-xs font-mono" dir="ltr">{log.recipientContact ?? "—"}</TableCell>
+                      <TableCell className="text-xs">{log.userName ?? "—"}</TableCell>
+                      <TableCell className={`text-xs font-semibold ${STATUS_COLORS[log.status] ?? "text-muted-foreground"}`}>
+                        {log.status === "sent" ? "✓ أُرسل" : log.status === "failed" ? "✕ فشل" : "⏳ معلّق"}
+                        {log.errorMessage && <span className="block text-[10px] text-red-400 font-normal">{log.errorMessage}</span>}
+                      </TableCell>
+                      <TableCell className="text-[10px] font-mono text-muted-foreground" dir="ltr">
+                        {(log as any).metaMessageId ?? "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
+          )}
+        </div>
+      )}
     </div>
   );
 }

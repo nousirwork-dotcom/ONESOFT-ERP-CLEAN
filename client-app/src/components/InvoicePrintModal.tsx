@@ -77,6 +77,61 @@ interface InvoicePrintModalProps {
   templateConfig?: DocTemplateConfig | null;
 }
 
+/* ═══════════════════ Column helpers ═══════════════════ */
+type ColKey = keyof DocTemplateConfig["columns"];
+
+type LineCalc = { discountAmt: number; beforeTax: number; taxAmt: number; lineTotal: number };
+
+const COL_DEFS: { key: ColKey; arH: string; enH: string; w?: number; alignRight?: boolean }[] = [
+  { key: "num",      arH: "م",                       enH: "No.",            w: 28  },
+  { key: "code",     arH: "رمز الصنف",               enH: "Item Code",      w: 60  },
+  { key: "name",     arH: "اسم الصنف",               enH: "Item Name",      alignRight: true },
+  { key: "unit",     arH: "وحدة",                    enH: "Unit",           w: 40  },
+  { key: "qty",      arH: "الكمية",                  enH: "Qty",            w: 45  },
+  { key: "price",    arH: "السعر",                   enH: "Unit Price",     w: 65  },
+  { key: "discount", arH: "الخصم%",                  enH: "Disc%",          w: 45  },
+  { key: "taxable",  arH: "المبلغ الخاضع",           enH: "Taxable Amt",    w: 65  },
+  { key: "taxRate",  arH: "الضريبة%",                enH: "Tax%",           w: 40  },
+  { key: "taxAmt",   arH: "مبلغ الضريبة",            enH: "VAT Amt",        w: 65  },
+  { key: "total",    arH: "الإجمالي شامل الضريبة",   enH: "Total Incl VAT", w: 75  },
+];
+
+function computeLines(data: PrintInvoiceData): LineCalc[] {
+  return data.lines.map(ln => {
+    const qty      = parseFloat(ln.quantity)    || 0;
+    const price    = parseFloat(ln.unitPrice)   || 0;
+    const discPct  = parseFloat(ln.discountPct) || 0;
+    const taxPct   = parseFloat(ln.taxPct)      || 0;
+    const gross    = qty * price;
+    const discAmt  = gross * discPct / 100;
+    const beforeTax = gross - discAmt;
+    const taxAmt   = parseFloat(ln.taxAmt) || (beforeTax * taxPct / 100);
+    const lineTotal = parseFloat(ln.total)  || (beforeTax + taxAmt);
+    return { discountAmt: discAmt, beforeTax, taxAmt, lineTotal };
+  });
+}
+
+function getColVal(
+  key: ColKey,
+  ln: PrintInvoiceData["lines"][0],
+  calc: LineCalc,
+  idx: number,
+): string {
+  switch (key) {
+    case "num":      return String(idx + 1);
+    case "code":     return ln.productCode;
+    case "name":     return ln.productName;
+    case "unit":     return ln.unit;
+    case "qty":      return (parseFloat(ln.quantity) || 0).toFixed(2);
+    case "price":    return (parseFloat(ln.unitPrice) || 0).toFixed(2);
+    case "discount": return `${ln.discountPct}%`;
+    case "taxable":  return calc.beforeTax.toFixed(2);
+    case "taxRate":  return `${ln.taxPct}%`;
+    case "taxAmt":   return calc.taxAmt.toFixed(2);
+    case "total":    return calc.lineTotal.toFixed(2);
+    default:         return "";
+  }
+}
 
 /* ═══════════════════ Main Component ═══════════════════ */
 export default function InvoicePrintModal({ open, onClose, data, qrSettings, templateConfig }: InvoicePrintModalProps) {
