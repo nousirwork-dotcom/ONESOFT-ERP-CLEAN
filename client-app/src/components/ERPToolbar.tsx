@@ -2,7 +2,7 @@ import {
   FilePlus, Save, Pencil, Trash2, Search, Printer,
   RefreshCw, Copy, SendHorizonal, CheckCircle2, XCircle,
   ChevronRight, ChevronLeft, ChevronsRight, ChevronsLeft,
-  X, LucideIcon, Undo2, Eye,
+  X, LucideIcon, Undo2, Eye, Share2,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 
@@ -11,7 +11,7 @@ export type ERPAction =
   | "new" | "save" | "edit" | "delete"
   | "search" | "refresh" | "copy"
   | "post" | "unpost" | "preview-journal" | "approve" | "cancel"
-  | "print"
+  | "print" | "send"
   | "first" | "prev" | "next" | "last"
   | "close";
 
@@ -38,6 +38,7 @@ export interface ERPToolbarProps {
   onApprove?: () => void;
   onCancel?: () => void;
   onPrint?: () => void;
+  onSend?: () => void;
   onFirst?: () => void;
   onPrev?: () => void;
   onNext?: () => void;
@@ -78,7 +79,8 @@ const ALL_BUTTONS: BtnDef[] = [
   { id: "preview-journal", label: "معاينة القيد",    icon: Eye },
   { id: "approve",         label: "اعتماد",          icon: CheckCircle2,  variant: "gold" },
   { id: "cancel",          label: "إلغاء",           icon: XCircle,       variant: "danger", dividerAfter: true },
-  { id: "print",           label: "طباعة",           icon: Printer,       dividerAfter: true },
+  { id: "print",           label: "طباعة",           icon: Printer },
+  { id: "send",            label: "إرسال",           icon: Share2,        dividerAfter: true, variant: "default" as any },
   { id: "first",           label: "أول",             icon: ChevronsRight },
   { id: "prev",            label: "السابق",          icon: ChevronRight },
   { id: "next",            label: "التالي",          icon: ChevronLeft },
@@ -201,7 +203,7 @@ export default function ERPToolbar({
   onNew, onSave, onEdit, onDelete,
   onSearch, onRefresh, onCopy,
   onPost, onUnpost, onPreviewJournal, onApprove, onCancel,
-  onPrint,
+  onPrint, onSend,
   onFirst, onPrev, onNext, onLast,
   onClose,
   enableShortcuts = true,
@@ -220,6 +222,7 @@ export default function ERPToolbar({
     post: onPost, unpost: onUnpost, "preview-journal": onPreviewJournal,
     approve: onApprove, cancel: onCancel,
     print: onPrint,
+    send:  onSend,
     first: onFirst, prev: onPrev, next: onNext, last: onLast,
     close: onClose,
   };

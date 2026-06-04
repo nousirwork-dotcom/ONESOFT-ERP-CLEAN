@@ -734,6 +734,10 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         onApprove={() => toast.success("تم الاعتماد")}
         onCancel={() => { setErpMode("view"); toast.info("تم الإلغاء"); }}
         onPrint={() => setShowPrintModal(true)}
+        onSend={() => {
+          if (!savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً قبل الإرسال"); return; }
+          setShowSendPanel(true);
+        }}
         onFirst={() => {
           const ids = [...(allInvoicesQuery.data ?? [])].sort((a, b) => a.id - b.id).map(i => i.id);
           if (ids.length) { setNavInvoiceId(ids[0]); setErpMode("view"); }
