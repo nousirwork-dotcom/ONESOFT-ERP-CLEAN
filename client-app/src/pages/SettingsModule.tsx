@@ -43,6 +43,14 @@ const menuSections = [
       { id: "taxes",          label: "الضرائب",              status: "done",    path: "/cfg/taxes" },
       { id: "qr-settings",    label: "إعدادات QR Code",      status: "done",    path: "/cfg/qr-settings" },
       { id: "fiscal-periods",   label: "الفترات المحاسبية",    status: "done",    path: "/cfg/fiscal" },
+    ],
+  },
+  {
+    id: "loyalty",
+    label: "إدارة الولاء والعروض",
+    color: "#f59e0b",
+    emoji: "🏆",
+    children: [
       { id: "loyalty-points",   label: "إعدادات النقاط",     status: "partial", path: "/cfg/loyalty-points"   },
       { id: "loyalty-tiers",    label: "مستويات العضوية",    status: "partial", path: "/cfg/loyalty-tiers"    },
       { id: "loyalty-promos",   label: "العروض الترويجية",   status: "partial", path: "/cfg/loyalty-promos"   },
@@ -148,6 +156,7 @@ function StatusIcon({ status }: { status: string }) {
 function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
     general: true,
+    loyalty: false,
     "user-management": false,
     approvals: false,
     notifications: false,
