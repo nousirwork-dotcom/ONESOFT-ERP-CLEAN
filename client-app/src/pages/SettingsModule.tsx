@@ -104,7 +104,7 @@ const menuSections = [
     color: "#0ea5e9",
     emoji: "🖨️",
     children: [
-      { id: "document-templates",  label: "نماذج المستندات",                status: "partial", path: "/cfg/document-templates" },
+      { id: "document-templates",  label: "نماذج وقوالب المستندات",         status: "partial", path: "/cfg/document-templates" },
       { id: "print-settings",   label: "إعدادات الطباعة",                status: "done",    path: "/cfg/print-settings"   },
       { id: "logo-stamp",       label: "إعدادات الشعار والختم",          status: "done",    path: "/cfg/logo-stamp"       },
       { id: "signatures",       label: "إعدادات التوقيع الإلكتروني",     status: "done",    path: "/cfg/signatures"       },
