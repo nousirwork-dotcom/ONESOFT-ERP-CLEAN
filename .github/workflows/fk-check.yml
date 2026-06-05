@@ -44,3 +44,18 @@ jobs:
       - name: Run static FK constraint check
         working-directory: server-app
         run: pnpm check-fk:static
+
+  merge-gate:
+    name: Merge gate — FK check required
+    runs-on: ubuntu-latest
+    needs: check-fk-static
+    if: always()
+    steps:
+      - name: Block merge if FK check failed
+        run: |
+          if [ "${{ needs.check-fk-static.result }}" != "success" ]; then
+            echo "ERROR: FK constraint check did not pass (result: ${{ needs.check-fk-static.result }})."
+            echo "All FK relationships must have explicit delete rules before this PR can be merged."
+            exit 1
+          fi
+          echo "FK constraint check passed. Merge is allowed."
