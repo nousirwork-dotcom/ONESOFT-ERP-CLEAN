@@ -786,6 +786,15 @@ export const sendSettings = pgTable('send_settings', {
   updatedAt:               timestamp('updated_at').notNull().defaultNow(),
 });
 
+// ─── App Settings (key-value JSON store) ─────────────────────────────────────
+export const appSettings = pgTable('app_settings', {
+  id:        serial('id').primaryKey(),
+  orgId:     integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  key:       varchar('key', { length: 100 }).notNull(),
+  value:     text('value'),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
 // ─── Currencies ───────────────────────────────────────────────────────────────
 export const currencies = pgTable('currencies', {
   id:             serial('id').primaryKey(),

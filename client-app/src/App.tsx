@@ -65,6 +65,7 @@ import SettingsModule, {
   CfgLoyaltyPointsTab, CfgLoyaltyTiersTab, CfgLoyaltyPromosTab, CfgLoyaltyMessagesTab,
   CfgMessagingWhatsAppTab, CfgMessagingTelegramTab, CfgMessagingEmailTab,
   CfgMessagingTemplatesTab, CfgMessagingLogTab,
+  CfgPrintSettingsTab, CfgLogoStampTab, CfgSignaturesTab, CfgEmailPdfTab,
 } from "./pages/SettingsModule";
 import PostingSettingsPage from "./pages/PostingSettingsPage";
 import PostingOperationsPage from "./pages/PostingOperationsPage";
@@ -239,6 +240,10 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/cfg/messaging-email":        CfgMessagingEmailTab,
   "/cfg/messaging-templates":    CfgMessagingTemplatesTab,
   "/cfg/messaging-log":          CfgMessagingLogTab,
+  "/cfg/print-settings":         CfgPrintSettingsTab,
+  "/cfg/logo-stamp":             CfgLogoStampTab,
+  "/cfg/signatures":             CfgSignaturesTab,
+  "/cfg/email-pdf":              CfgEmailPdfTab,
 };
 
 // ─── Auth Guard ───────────────────────────────────────────────────────────

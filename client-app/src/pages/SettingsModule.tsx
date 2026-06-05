@@ -99,6 +99,18 @@ const menuSections = [
     ],
   },
   {
+    id: "design-print",
+    label: "التصميم والطباعة",
+    color: "#0ea5e9",
+    emoji: "🖨️",
+    children: [
+      { id: "print-settings",   label: "إعدادات الطباعة",                status: "done",    path: "/cfg/print-settings"   },
+      { id: "logo-stamp",       label: "إعدادات الشعار والختم",          status: "done",    path: "/cfg/logo-stamp"       },
+      { id: "signatures",       label: "إعدادات التوقيع الإلكتروني",     status: "done",    path: "/cfg/signatures"       },
+      { id: "email-pdf",        label: "إعدادات البريد الإلكتروني وPDF", status: "done",    path: "/cfg/email-pdf"        },
+    ],
+  },
+  {
     id: "system",
     label: "النظام",
     color: "#a855f7",
@@ -3647,6 +3659,515 @@ function MessagingLogPage() {
   );
 }
 
+// ─── Print Settings ────────────────────────────────────────────────────────────
+
+const PRINT_KEY = "print_settings";
+type PrintCfg = {
+  paperSize: string; paperOrientation: string; copies: number;
+  marginTop: number; marginBottom: number; marginLeft: number; marginRight: number;
+  previewBeforePrint: boolean; autoPrintAfterSave: boolean;
+  thermalEnabled: boolean; thermalWidth: number; thermalFont: number;
+};
+const PRINT_DEFAULT: PrintCfg = {
+  paperSize: "A4", paperOrientation: "portrait", copies: 1,
+  marginTop: 10, marginBottom: 10, marginLeft: 10, marginRight: 10,
+  previewBeforePrint: true, autoPrintAfterSave: false,
+  thermalEnabled: false, thermalWidth: 80, thermalFont: 12,
+};
+
+function PrintSettingsPage() {
+  const utils = trpc.useUtils();
+  const settingQ = trpc.appSettings.get.useQuery({ key: PRINT_KEY });
+  const setMut = trpc.appSettings.set.useMutation({
+    onSuccess: () => { toast.success("تم حفظ إعدادات الطباعة"); utils.appSettings.get.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const cfg: PrintCfg = { ...PRINT_DEFAULT, ...(settingQ.data ?? {}) };
+  const [form, setForm] = useState<PrintCfg>(cfg);
+
+  useEffect(() => {
+    if (settingQ.data) setForm({ ...PRINT_DEFAULT, ...settingQ.data });
+  }, [settingQ.data]);
+
+  const up = (k: keyof PrintCfg, v: unknown) => setForm(f => ({ ...f, [k]: v }));
+
+  function save() { setMut.mutate({ key: PRINT_KEY, value: form }); }
+
+  return (
+    <div className="space-y-5 max-w-2xl" dir="rtl">
+      <h3 className="font-semibold text-sm flex items-center gap-2">
+        <span className="text-lg">🖨️</span> إعدادات الطباعة
+      </h3>
+
+      <Card className="border-border/50">
+        <CardHeader className="pb-2 pt-4 px-4">
+          <CardTitle className="text-sm">إعدادات الورق</CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-4 grid grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <Label className="text-xs">حجم الورق</Label>
+            <Select value={form.paperSize} onValueChange={v => up("paperSize", v)}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="A4">A4</SelectItem>
+                <SelectItem value="A5">A5</SelectItem>
+                <SelectItem value="Letter">Letter</SelectItem>
+                <SelectItem value="Legal">Legal</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">اتجاه الورق</Label>
+            <Select value={form.paperOrientation} onValueChange={v => up("paperOrientation", v)}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="portrait">عمودي (Portrait)</SelectItem>
+                <SelectItem value="landscape">أفقي (Landscape)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">عدد النسخ الافتراضي</Label>
+            <Input type="number" value={form.copies} min={1} max={10}
+              onChange={e => up("copies", Number(e.target.value))} className="h-8 text-xs" dir="ltr" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/50">
+        <CardHeader className="pb-2 pt-4 px-4">
+          <CardTitle className="text-sm">الهوامش (مم)</CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-4 grid grid-cols-2 gap-4">
+          {(["marginTop","marginBottom","marginLeft","marginRight"] as const).map(k => (
+            <div key={k} className="space-y-1">
+              <Label className="text-xs">
+                {k === "marginTop" ? "أعلى" : k === "marginBottom" ? "أسفل" : k === "marginLeft" ? "يسار" : "يمين"}
+              </Label>
+              <Input type="number" value={(form as any)[k]} min={0} max={50}
+                onChange={e => up(k, Number(e.target.value))} className="h-8 text-xs" dir="ltr" />
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/50">
+        <CardHeader className="pb-2 pt-4 px-4">
+          <CardTitle className="text-sm">خيارات الطباعة</CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <Switch checked={form.previewBeforePrint} onCheckedChange={v => up("previewBeforePrint", v)} />
+            <Label className="text-xs">معاينة قبل الطباعة</Label>
+          </div>
+          <div className="flex items-center gap-3">
+            <Switch checked={form.autoPrintAfterSave} onCheckedChange={v => up("autoPrintAfterSave", v)} />
+            <Label className="text-xs">الطباعة التلقائية بعد الحفظ</Label>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/50">
+        <CardHeader className="pb-2 pt-4 px-4">
+          <CardTitle className="text-sm">إعدادات الطباعة الحرارية</CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <Switch checked={form.thermalEnabled} onCheckedChange={v => up("thermalEnabled", v)} />
+            <Label className="text-xs">تفعيل الطباعة الحرارية</Label>
+          </div>
+          {form.thermalEnabled && (
+            <div className="grid grid-cols-2 gap-4 pt-1">
+              <div className="space-y-1">
+                <Label className="text-xs">عرض الورق (مم)</Label>
+                <Select value={String(form.thermalWidth)} onValueChange={v => up("thermalWidth", Number(v))}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="58">58 مم</SelectItem>
+                    <SelectItem value="80">80 مم</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">حجم الخط</Label>
+                <Input type="number" value={form.thermalFont} min={8} max={16}
+                  onChange={e => up("thermalFont", Number(e.target.value))} className="h-8 text-xs" dir="ltr" />
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-end">
+        <Button onClick={save} disabled={setMut.isPending} className="h-8 text-xs gap-1.5">
+          <Save className="w-3.5 h-3.5" />{setMut.isPending ? "جاري الحفظ..." : "حفظ الإعدادات"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Logo & Stamp Settings ──────────────────────────────────────────────────────
+
+const LOGO_KEY = "logo_stamp_settings";
+
+type LogoItem = { label: string; key: string; description: string };
+const LOGO_ITEMS: LogoItem[] = [
+  { key: "companyLogo",    label: "شعار الشركة الرئيسي", description: "يظهر في رأس جميع المستندات" },
+  { key: "branchLogo",     label: "شعار الفرع",           description: "يُستخدم بدلاً من شعار الشركة للفروع" },
+  { key: "officialStamp",  label: "الختم الرسمي",         description: "الختم الرسمي للشركة" },
+  { key: "paidStamp",      label: "ختم مدفوع",            description: "يظهر على الفواتير المدفوعة" },
+  { key: "approvedStamp",  label: "ختم معتمد",            description: "يظهر على المستندات المعتمدة" },
+  { key: "background",     label: "خلفية المستند",        description: "صورة خلفية شفافة للمستندات" },
+];
+
+function LogoStampPage() {
+  const utils = trpc.useUtils();
+  const settingQ = trpc.appSettings.get.useQuery({ key: LOGO_KEY });
+  const setMut = trpc.appSettings.set.useMutation({
+    onSuccess: () => { toast.success("تم حفظ إعدادات الشعار والختم"); utils.appSettings.get.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const [images, setImages] = useState<Record<string, string>>({});
+  useEffect(() => { if (settingQ.data) setImages(settingQ.data); }, [settingQ.data]);
+
+  function handleFile(key: string, file: File) {
+    if (file.size > 2 * 1024 * 1024) { toast.error("الحجم الأقصى 2 ميغابايت"); return; }
+    const reader = new FileReader();
+    reader.onload = e => setImages(prev => ({ ...prev, [key]: e.target?.result as string }));
+    reader.readAsDataURL(file);
+  }
+
+  function removeImage(key: string) { setImages(prev => { const n = { ...prev }; delete n[key]; return n; }); }
+
+  function save() { setMut.mutate({ key: LOGO_KEY, value: images }); }
+
+  return (
+    <div className="space-y-4 max-w-2xl" dir="rtl">
+      <h3 className="font-semibold text-sm flex items-center gap-2">
+        <span className="text-lg">🖼️</span> إعدادات الشعار والختم
+      </h3>
+      <p className="text-xs text-muted-foreground">يمكن رفع صور بصيغة PNG أو JPG أو SVG — الحجم الأقصى 2 ميغابايت لكل صورة</p>
+
+      <div className="grid grid-cols-1 gap-3">
+        {LOGO_ITEMS.map(item => (
+          <Card key={item.key} className="border-border/50">
+            <CardContent className="p-4 flex items-center gap-4">
+              <div className="w-24 h-20 border rounded-md border-dashed border-border flex items-center justify-center bg-muted/30 flex-shrink-0 overflow-hidden">
+                {images[item.key]
+                  ? <img src={images[item.key]} alt={item.label} className="max-w-full max-h-full object-contain" />
+                  : <span className="text-2xl opacity-30">🖼️</span>}
+              </div>
+              <div className="flex-1 min-w-0 space-y-2">
+                <div>
+                  <p className="text-sm font-medium">{item.label}</p>
+                  <p className="text-xs text-muted-foreground">{item.description}</p>
+                </div>
+                <div className="flex gap-2">
+                  <label className="cursor-pointer">
+                    <input type="file" accept="image/*" className="hidden"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(item.key, f); e.target.value = ""; }} />
+                    <span className="inline-flex items-center gap-1 px-2 py-1 text-xs border rounded-md hover:bg-accent cursor-pointer">
+                      <Plus className="w-3 h-3" />{images[item.key] ? "تغيير" : "رفع صورة"}
+                    </span>
+                  </label>
+                  {images[item.key] && (
+                    <button onClick={() => removeImage(item.key)}
+                      className="inline-flex items-center gap-1 px-2 py-1 text-xs text-destructive border border-destructive/30 rounded-md hover:bg-destructive/10">
+                      <Trash2 className="w-3 h-3" />حذف
+                    </button>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <div className="flex justify-end">
+        <Button onClick={save} disabled={setMut.isPending} className="h-8 text-xs gap-1.5">
+          <Save className="w-3.5 h-3.5" />{setMut.isPending ? "جاري الحفظ..." : "حفظ الإعدادات"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Signature Settings ─────────────────────────────────────────────────────────
+
+const SIG_KEY = "signature_settings";
+
+type SigItem = { key: string; label: string; role: string };
+const SIG_ITEMS: SigItem[] = [
+  { key: "director",    label: "توقيع المدير",            role: "مدير عام / CEO" },
+  { key: "accountant",  label: "توقيع المحاسب",           role: "محاسب / Accountant" },
+  { key: "warehouse",   label: "توقيع أمين المستودع",     role: "أمين مستودع / Warehouse Keeper" },
+  { key: "sales",       label: "توقيع مسؤول المبيعات",   role: "مسؤول مبيعات / Sales Manager" },
+];
+
+type SigData = {
+  image?: string;
+  name?: string;
+  jobTitle?: string;
+  showOnSales?: boolean;
+  showOnPurchase?: boolean;
+  showOnVouchers?: boolean;
+};
+
+function SignatureSettingsPage() {
+  const utils = trpc.useUtils();
+  const settingQ = trpc.appSettings.get.useQuery({ key: SIG_KEY });
+  const setMut = trpc.appSettings.set.useMutation({
+    onSuccess: () => { toast.success("تم حفظ إعدادات التوقيعات"); utils.appSettings.get.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const [sigs, setSigs] = useState<Record<string, SigData>>({});
+  useEffect(() => { if (settingQ.data) setSigs(settingQ.data); }, [settingQ.data]);
+
+  function updateSig(key: string, field: keyof SigData, val: unknown) {
+    setSigs(prev => ({ ...prev, [key]: { ...prev[key], [field]: val } }));
+  }
+
+  function handleFile(key: string, file: File) {
+    if (file.size > 1 * 1024 * 1024) { toast.error("الحجم الأقصى 1 ميغابايت"); return; }
+    const reader = new FileReader();
+    reader.onload = e => updateSig(key, "image", e.target?.result as string);
+    reader.readAsDataURL(file);
+  }
+
+  function save() { setMut.mutate({ key: SIG_KEY, value: sigs }); }
+
+  return (
+    <div className="space-y-4 max-w-2xl" dir="rtl">
+      <h3 className="font-semibold text-sm flex items-center gap-2">
+        <span className="text-lg">✍️</span> إعدادات التوقيع الإلكتروني
+      </h3>
+      <p className="text-xs text-muted-foreground">أضف توقيعات الموظفين لظهورها في المستندات المطبوعة — صور PNG شفافة مستحسنة</p>
+
+      <div className="space-y-3">
+        {SIG_ITEMS.map(item => {
+          const sig = sigs[item.key] ?? {};
+          return (
+            <Card key={item.key} className="border-border/50">
+              <CardHeader className="pb-2 pt-4 px-4">
+                <CardTitle className="text-sm flex items-center justify-between">
+                  <span>{item.label}</span>
+                  <span className="text-xs text-muted-foreground font-normal">{item.role}</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-4 grid grid-cols-2 gap-4">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-full h-20 border rounded-md border-dashed border-border flex items-center justify-center bg-muted/20 overflow-hidden">
+                    {sig.image
+                      ? <img src={sig.image} alt={item.label} className="max-h-full max-w-full object-contain" />
+                      : <span className="text-xs text-muted-foreground">لا يوجد توقيع</span>}
+                  </div>
+                  <div className="flex gap-2">
+                    <label className="cursor-pointer">
+                      <input type="file" accept="image/*" className="hidden"
+                        onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(item.key, f); e.target.value = ""; }} />
+                      <span className="inline-flex items-center gap-1 px-2 py-1 text-xs border rounded-md hover:bg-accent cursor-pointer">
+                        <Plus className="w-3 h-3" />رفع توقيع
+                      </span>
+                    </label>
+                    {sig.image && (
+                      <button onClick={() => updateSig(item.key, "image", undefined)}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs text-destructive border border-destructive/30 rounded-md hover:bg-destructive/10">
+                        <Trash2 className="w-3 h-3" />حذف
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">الاسم</Label>
+                    <Input value={sig.name ?? ""} onChange={e => updateSig(item.key, "name", e.target.value)}
+                      placeholder="اسم صاحب التوقيع" className="h-8 text-xs" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">المسمى الوظيفي</Label>
+                    <Input value={sig.jobTitle ?? ""} onChange={e => updateSig(item.key, "jobTitle", e.target.value)}
+                      placeholder="المسمى الوظيفي" className="h-8 text-xs" />
+                  </div>
+                  <div className="space-y-2 pt-1">
+                    <Label className="text-xs text-muted-foreground">إظهار في:</Label>
+                    <div className="flex flex-col gap-1.5">
+                      {([["showOnSales","فواتير المبيعات"],["showOnPurchase","فواتير المشتريات"],["showOnVouchers","السندات"]] as const).map(([field, label]) => (
+                        <div key={field} className="flex items-center gap-2">
+                          <Switch checked={!!(sig as any)[field]} onCheckedChange={v => updateSig(item.key, field as keyof SigData, v)} />
+                          <Label className="text-xs">{label}</Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      <div className="flex justify-end">
+        <Button onClick={save} disabled={setMut.isPending} className="h-8 text-xs gap-1.5">
+          <Save className="w-3.5 h-3.5" />{setMut.isPending ? "جاري الحفظ..." : "حفظ الإعدادات"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Email & PDF Settings ───────────────────────────────────────────────────────
+
+const EMAIL_PDF_KEY = "email_pdf_settings";
+
+type EmailPdfCfg = {
+  smtpHost: string; smtpPort: number; smtpSecure: boolean;
+  smtpUser: string; smtpPass: string;
+  fromEmail: string; fromName: string;
+  autoGeneratePdf: boolean;
+  emailSubject: string; emailBody: string;
+  sendInvoiceAsPdf: boolean;
+  sendQuoteAsPdf: boolean;
+  sendStatementAsPdf: boolean;
+};
+const EMAIL_PDF_DEFAULT: EmailPdfCfg = {
+  smtpHost: "", smtpPort: 587, smtpSecure: false,
+  smtpUser: "", smtpPass: "",
+  fromEmail: "", fromName: "",
+  autoGeneratePdf: true,
+  emailSubject: "مستند رقم {{docNumber}} من {{companyName}}",
+  emailBody: "السلام عليكم،\n\nيسعدنا إرسال {{docTypeName}} رقم {{docNumber}} المرفق.\n\nشكراً لتعاملكم معنا.\n\n{{companyName}}",
+  sendInvoiceAsPdf: true, sendQuoteAsPdf: true, sendStatementAsPdf: true,
+};
+
+function EmailPdfSettingsPage() {
+  const utils = trpc.useUtils();
+  const settingQ = trpc.appSettings.get.useQuery({ key: EMAIL_PDF_KEY });
+  const setMut = trpc.appSettings.set.useMutation({
+    onSuccess: () => { toast.success("تم حفظ إعدادات البريد الإلكتروني"); utils.appSettings.get.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const [form, setForm] = useState<EmailPdfCfg>(EMAIL_PDF_DEFAULT);
+  useEffect(() => { if (settingQ.data) setForm({ ...EMAIL_PDF_DEFAULT, ...settingQ.data }); }, [settingQ.data]);
+  const up = (k: keyof EmailPdfCfg, v: unknown) => setForm(f => ({ ...f, [k]: v }));
+
+  function save() { setMut.mutate({ key: EMAIL_PDF_KEY, value: form }); }
+
+  return (
+    <div className="space-y-5 max-w-2xl" dir="rtl">
+      <h3 className="font-semibold text-sm flex items-center gap-2">
+        <span className="text-lg">📧</span> إعدادات البريد الإلكتروني وPDF
+      </h3>
+
+      <Card className="border-border/50">
+        <CardHeader className="pb-2 pt-4 px-4">
+          <CardTitle className="text-sm">إعداد SMTP</CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-4 grid grid-cols-2 gap-3">
+          <div className="col-span-2 space-y-1">
+            <Label className="text-xs">خادم SMTP (Host)</Label>
+            <Input value={form.smtpHost} onChange={e => up("smtpHost", e.target.value)}
+              placeholder="smtp.gmail.com" className="h-8 text-xs" dir="ltr" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">المنفذ (Port)</Label>
+            <Input type="number" value={form.smtpPort} onChange={e => up("smtpPort", Number(e.target.value))}
+              className="h-8 text-xs" dir="ltr" />
+          </div>
+          <div className="flex items-end pb-1">
+            <div className="flex items-center gap-2">
+              <Switch checked={form.smtpSecure} onCheckedChange={v => up("smtpSecure", v)} />
+              <Label className="text-xs">SSL/TLS آمن</Label>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">اسم المستخدم</Label>
+            <Input value={form.smtpUser} onChange={e => up("smtpUser", e.target.value)}
+              placeholder="user@example.com" className="h-8 text-xs" dir="ltr" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">كلمة المرور / App Password</Label>
+            <Input type="password" value={form.smtpPass} onChange={e => up("smtpPass", e.target.value)}
+              className="h-8 text-xs" dir="ltr" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/50">
+        <CardHeader className="pb-2 pt-4 px-4">
+          <CardTitle className="text-sm">معلومات المرسل</CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-4 grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label className="text-xs">البريد المرسل منه</Label>
+            <Input value={form.fromEmail} onChange={e => up("fromEmail", e.target.value)}
+              placeholder="noreply@company.com" className="h-8 text-xs" dir="ltr" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">اسم المرسل</Label>
+            <Input value={form.fromName} onChange={e => up("fromName", e.target.value)}
+              placeholder="اسم الشركة" className="h-8 text-xs" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/50">
+        <CardHeader className="pb-2 pt-4 px-4">
+          <CardTitle className="text-sm">قالب البريد الإلكتروني</CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-4 space-y-3">
+          <div className="space-y-1">
+            <Label className="text-xs">موضوع الرسالة</Label>
+            <Input value={form.emailSubject} onChange={e => up("emailSubject", e.target.value)} className="h-8 text-xs" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">نص الرسالة</Label>
+            <Textarea value={form.emailBody} onChange={e => up("emailBody", e.target.value)}
+              rows={5} className="text-xs resize-none" />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            المتغيرات المتاحة: {"{{"+"docNumber"+"}}"} {"{{"+"docTypeName"+"}}"} {"{{"+"companyName"+"}}"} {"{{"+"customerName"+"}}"} {"{{"+"amount"+"}}"}
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/50">
+        <CardHeader className="pb-2 pt-4 px-4">
+          <CardTitle className="text-sm">إعدادات PDF</CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <Switch checked={form.autoGeneratePdf} onCheckedChange={v => up("autoGeneratePdf", v)} />
+            <Label className="text-xs">إنشاء PDF تلقائياً عند الحفظ</Label>
+          </div>
+          <div className="flex items-center gap-3">
+            <Switch checked={form.sendInvoiceAsPdf} onCheckedChange={v => up("sendInvoiceAsPdf", v)} />
+            <Label className="text-xs">إرسال الفواتير بصيغة PDF</Label>
+          </div>
+          <div className="flex items-center gap-3">
+            <Switch checked={form.sendQuoteAsPdf} onCheckedChange={v => up("sendQuoteAsPdf", v)} />
+            <Label className="text-xs">إرسال عروض الأسعار بصيغة PDF</Label>
+          </div>
+          <div className="flex items-center gap-3">
+            <Switch checked={form.sendStatementAsPdf} onCheckedChange={v => up("sendStatementAsPdf", v)} />
+            <Label className="text-xs">إرسال كشوف الحسابات بصيغة PDF</Label>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-end">
+        <Button onClick={save} disabled={setMut.isPending} className="h-8 text-xs gap-1.5">
+          <Save className="w-3.5 h-3.5" />{setMut.isPending ? "جاري الحفظ..." : "حفظ الإعدادات"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Content Router ────────────────────────────────────────────────────────────
 
 function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
@@ -3709,6 +4230,11 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
     case "messaging-email":      return <MessagingEmailPage />;
     case "messaging-templates":  return <MessagingTemplatesPage />;
     case "messaging-log":        return <MessagingLogPage />;
+    // التصميم والطباعة
+    case "print-settings":       return <PrintSettingsPage />;
+    case "logo-stamp":           return <LogoStampPage />;
+    case "signatures":           return <SignatureSettingsPage />;
+    case "email-pdf":            return <EmailPdfSettingsPage />;
     default:                     return <SettingsOverview onSelect={onSelect} />;
   }
 }
@@ -3780,3 +4306,7 @@ export function CfgMessagingTelegramTab()  { return <CfgSubPage activeId="messag
 export function CfgMessagingEmailTab()     { return <CfgSubPage activeId="messaging-email" />; }
 export function CfgMessagingTemplatesTab() { return <CfgSubPage activeId="messaging-templates" />; }
 export function CfgMessagingLogTab()       { return <CfgSubPage activeId="messaging-log" />; }
+export function CfgPrintSettingsTab()      { return <CfgSubPage activeId="print-settings" />; }
+export function CfgLogoStampTab()          { return <CfgSubPage activeId="logo-stamp" />; }
+export function CfgSignaturesTab()         { return <CfgSubPage activeId="signatures" />; }
+export function CfgEmailPdfTab()           { return <CfgSubPage activeId="email-pdf" />; }
