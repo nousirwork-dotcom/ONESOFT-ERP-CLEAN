@@ -786,6 +786,27 @@ export const sendSettings = pgTable('send_settings', {
   updatedAt:               timestamp('updated_at').notNull().defaultNow(),
 });
 
+// ─── Currencies ───────────────────────────────────────────────────────────────
+export const currencies = pgTable('currencies', {
+  id:             serial('id').primaryKey(),
+  orgId:          integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  code:           varchar('code', { length: 10 }).notNull(),
+  nameAr:         varchar('name_ar', { length: 100 }).notNull(),
+  nameEn:         varchar('name_en', { length: 100 }).notNull(),
+  symbol:         varchar('symbol', { length: 10 }).notNull(),
+  symbolIntl:     varchar('symbol_intl', { length: 10 }),
+  exchangeRate:   decimal('exchange_rate', { precision: 18, scale: 6 }).notNull().default('1'),
+  decimalPlaces:  integer('decimal_places').notNull().default(2),
+  isBase:         boolean('is_base').notNull().default(false),
+  mainUnitAr:     varchar('main_unit_ar', { length: 50 }),
+  subUnitAr:      varchar('sub_unit_ar', { length: 50 }),
+  mainUnitEn:     varchar('main_unit_en', { length: 50 }),
+  subUnitEn:      varchar('sub_unit_en', { length: 50 }),
+  isActive:       boolean('is_active').notNull().default(true),
+  createdAt:      timestamp('created_at').notNull().defaultNow(),
+  updatedAt:      timestamp('updated_at').notNull().defaultNow(),
+});
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type Organization = typeof organizations.$inferSelect;
 export type User = typeof users.$inferSelect;

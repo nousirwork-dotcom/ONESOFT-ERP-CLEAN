@@ -11,6 +11,7 @@ import { documentTemplatesRouter } from './documentTemplates.js';
 import { documentTypesRouter } from './documentTypes.js';
 import { documentSendRouter } from './documentSend.js';
 import { postingRouter } from './posting.js';
+import { currenciesRouter } from './currencies.js';
 import { db } from '../db.js';
 import { products, customers, suppliers, chartOfAccounts, warehouses, branches, units, productGroups, journalEntries, journalEntryLines, vouchers, receiptVouchers, paymentVouchers, inventory, stockVouchers, stockVoucherItems, inventoryCounts, inventoryCountItems, freeProducts, salesInvoices, salesInvoiceItems, warehouseAccountLinks, userGroups, userGroupMembers, userCategories, users, documentJournals, documentTypes, costCenters, qrSettings, documentSendLogs, sendSettings } from '../schema.js';
 import { eq, and, desc, like, or, sql, isNotNull, isNull, asc, gte, lte, inArray } from 'drizzle-orm';
@@ -277,6 +278,7 @@ export const appRouter = router({
   documentTypes: documentTypesRouter,
   documentSend: documentSendRouter,
   posting: postingRouter,
+  currencies: currenciesRouter,
 
   // ─── QR Settings ─────────────────────────────────────────────────────────────
   qrSettings: router({

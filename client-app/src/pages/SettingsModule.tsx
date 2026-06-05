@@ -301,46 +301,256 @@ function CompanyInfoPage() {
 
 // ─── Currencies ────────────────────────────────────────────────────────────────
 
+type CurrencyRow = {
+  id: number; code: string; nameAr: string; nameEn: string;
+  symbol: string; symbolIntl: string | null;
+  exchangeRate: string; decimalPlaces: number;
+  isBase: boolean; isActive: boolean;
+  mainUnitAr: string | null; subUnitAr: string | null;
+  mainUnitEn: string | null; subUnitEn: string | null;
+};
+
+const EMPTY_CURRENCY: Omit<CurrencyRow, "id"> = {
+  code: "", nameAr: "", nameEn: "", symbol: "", symbolIntl: "",
+  exchangeRate: "1", decimalPlaces: 2, isBase: false, isActive: true,
+  mainUnitAr: "", subUnitAr: "", mainUnitEn: "", subUnitEn: "",
+};
+
+function CurrencyDialog({
+  open, onClose, initial, isEdit,
+}: {
+  open: boolean; onClose: () => void;
+  initial: Omit<CurrencyRow, "id"> & { id?: number };
+  isEdit: boolean;
+}) {
+  const [form, setForm] = useState(initial);
+  const utils = trpc.useUtils();
+
+  useEffect(() => { setForm(initial); }, [open]);
+
+  const update = (k: keyof typeof form, v: unknown) => setForm(f => ({ ...f, [k]: v }));
+
+  const createMut = trpc.currencies.create.useMutation({
+    onSuccess: () => { toast.success("تمت إضافة العملة بنجاح"); utils.currencies.list.invalidate(); onClose(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const updateMut = trpc.currencies.update.useMutation({
+    onSuccess: () => { toast.success("تم تحديث العملة بنجاح"); utils.currencies.list.invalidate(); onClose(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const saving = createMut.isPending || updateMut.isPending;
+
+  function handleSave() {
+    const payload = {
+      code: form.code.trim().toUpperCase(),
+      nameAr: form.nameAr.trim(), nameEn: form.nameEn.trim(),
+      symbol: form.symbol.trim(),
+      symbolIntl: form.symbolIntl?.trim() || null,
+      exchangeRate: form.exchangeRate || "1",
+      decimalPlaces: form.decimalPlaces,
+      isBase: form.isBase, isActive: form.isActive,
+      mainUnitAr: form.mainUnitAr?.trim() || null,
+      subUnitAr: form.subUnitAr?.trim() || null,
+      mainUnitEn: form.mainUnitEn?.trim() || null,
+      subUnitEn: form.subUnitEn?.trim() || null,
+    };
+    if (!payload.code || !payload.nameAr || !payload.nameEn || !payload.symbol) {
+      toast.error("الكود واسم العملة والرمز مطلوبة"); return;
+    }
+    if (isEdit && initial.id) updateMut.mutate({ id: initial.id, ...payload });
+    else createMut.mutate(payload);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={v => !v && onClose()}>
+      <DialogContent className="max-w-2xl" dir="rtl">
+        <DialogHeader>
+          <DialogTitle className="text-base">{isEdit ? "تعديل العملة" : "إضافة عملة جديدة"}</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-3 text-sm mt-1">
+          {/* Row 1 */}
+          <div className="space-y-1">
+            <Label className="text-xs">كود العملة <span className="text-destructive">*</span></Label>
+            <Input value={form.code} onChange={e => update("code", e.target.value.toUpperCase())}
+              placeholder="SAR" maxLength={10} className="h-8 font-mono uppercase" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">الرمز الدولي (اختياري)</Label>
+            <Input value={form.symbolIntl ?? ""} onChange={e => update("symbolIntl", e.target.value)}
+              placeholder="SAR" maxLength={10} className="h-8 font-mono" />
+          </div>
+          {/* Row 2 */}
+          <div className="space-y-1">
+            <Label className="text-xs">اسم العملة بالعربية <span className="text-destructive">*</span></Label>
+            <Input value={form.nameAr} onChange={e => update("nameAr", e.target.value)}
+              placeholder="ريال سعودي" className="h-8" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Currency Name in English <span className="text-destructive">*</span></Label>
+            <Input value={form.nameEn} onChange={e => update("nameEn", e.target.value)}
+              placeholder="Saudi Riyal" className="h-8" dir="ltr" />
+          </div>
+          {/* Row 3 */}
+          <div className="space-y-1">
+            <Label className="text-xs">رمز العملة <span className="text-destructive">*</span></Label>
+            <Input value={form.symbol} onChange={e => update("symbol", e.target.value)}
+              placeholder="ر.س" maxLength={10} className="h-8" />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <Label className="text-xs">سعر الصرف</Label>
+              <Input type="number" value={form.exchangeRate} onChange={e => update("exchangeRate", e.target.value)}
+                min={0} step="0.000001" className="h-8" dir="ltr" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">المنازل العشرية</Label>
+              <Input type="number" value={form.decimalPlaces} onChange={e => update("decimalPlaces", Number(e.target.value))}
+                min={0} max={8} className="h-8" dir="ltr" />
+            </div>
+          </div>
+          {/* Amount in words section */}
+          <div className="col-span-2 border border-border/50 rounded-lg p-3 space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground">المبلغ بالحروف</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs">الوحدة الرئيسية عربي</Label>
+                <Input value={form.mainUnitAr ?? ""} onChange={e => update("mainUnitAr", e.target.value)}
+                  placeholder="ريال" className="h-8" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">الوحدة الفرعية عربي</Label>
+                <Input value={form.subUnitAr ?? ""} onChange={e => update("subUnitAr", e.target.value)}
+                  placeholder="هللة" className="h-8" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Main Unit English</Label>
+                <Input value={form.mainUnitEn ?? ""} onChange={e => update("mainUnitEn", e.target.value)}
+                  placeholder="Riyal" className="h-8" dir="ltr" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Sub Unit English</Label>
+                <Input value={form.subUnitEn ?? ""} onChange={e => update("subUnitEn", e.target.value)}
+                  placeholder="Halala" className="h-8" dir="ltr" />
+              </div>
+            </div>
+          </div>
+          {/* Flags */}
+          <div className="flex items-center gap-6 col-span-2">
+            <div className="flex items-center gap-2">
+              <Switch checked={form.isBase} onCheckedChange={v => update("isBase", v)} id="isBase" />
+              <Label htmlFor="isBase" className="text-xs cursor-pointer">عملة أساسية</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch checked={form.isActive} onCheckedChange={v => update("isActive", v)} id="isActive" />
+              <Label htmlFor="isActive" className="text-xs cursor-pointer">نشطة</Label>
+            </div>
+          </div>
+        </div>
+        <DialogFooter className="mt-2 gap-2">
+          <Button variant="outline" onClick={onClose} className="h-8 text-xs">إلغاء</Button>
+          <Button onClick={handleSave} disabled={saving} className="h-8 text-xs">
+            {saving ? "جاري الحفظ..." : (isEdit ? "حفظ التعديلات" : "إضافة العملة")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function CurrenciesPage() {
-  const currencies = [
-    { code: "SAR", name: "ريال سعودي",    symbol: "ر.س", rate: 1,    isBase: true },
-    { code: "USD", name: "دولار أمريكي",  symbol: "$",   rate: 3.75, isBase: false },
-    { code: "EUR", name: "يورو",           symbol: "€",   rate: 4.10, isBase: false },
-    { code: "AED", name: "درهم إماراتي",  symbol: "د.إ", rate: 1.02, isBase: false },
-    { code: "GBP", name: "جنيه إسترليني", symbol: "£",   rate: 4.75, isBase: false },
-  ];
+  const utils = trpc.useUtils();
+  const listQ = trpc.currencies.list.useQuery();
+  const seedMut = trpc.currencies.seedDefaults.useMutation({
+    onSuccess: (r) => { if (r.seeded) utils.currencies.list.invalidate(); },
+  });
+  const deleteMut = trpc.currencies.delete.useMutation({
+    onSuccess: () => { toast.success("تم إيقاف العملة"); utils.currencies.list.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (!seededRef.current && listQ.data && listQ.data.length === 0) {
+      seededRef.current = true;
+      seedMut.mutate();
+    }
+  }, [listQ.data]);
+
+  const [dlgOpen, setDlgOpen] = useState(false);
+  const [editing, setEditing] = useState<(Omit<CurrencyRow, "id"> & { id?: number }) | null>(null);
+
+  function openAdd() { setEditing({ ...EMPTY_CURRENCY }); setDlgOpen(true); }
+  function openEdit(c: CurrencyRow) {
+    setEditing({
+      id: c.id, code: c.code, nameAr: c.nameAr, nameEn: c.nameEn,
+      symbol: c.symbol, symbolIntl: c.symbolIntl ?? "",
+      exchangeRate: c.exchangeRate, decimalPlaces: c.decimalPlaces,
+      isBase: c.isBase, isActive: c.isActive,
+      mainUnitAr: c.mainUnitAr ?? "", subUnitAr: c.subUnitAr ?? "",
+      mainUnitEn: c.mainUnitEn ?? "", subUnitEn: c.subUnitEn ?? "",
+    });
+    setDlgOpen(true);
+  }
+
+  const rows = listQ.data ?? [];
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="font-semibold text-sm">إدارة العملات</h3>
-        <Button className="h-8 text-sm" onClick={() => toast.info("إضافة عملة جديدة")}><Plus className="w-3.5 h-3.5 ml-1" />إضافة عملة</Button>
+        <Button className="h-8 text-sm" onClick={openAdd}><Plus className="w-3.5 h-3.5 ml-1" />إضافة عملة</Button>
       </div>
+
       <Card className="border-border/50">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead className="text-xs">الكود</TableHead>
-              <TableHead className="text-xs">العملة</TableHead>
-              <TableHead className="text-xs">الرمز</TableHead>
+              <TableHead className="text-xs">اسم العملة عربي</TableHead>
+              <TableHead className="text-xs">Currency Name</TableHead>
+              <TableHead className="text-xs text-center">الرمز</TableHead>
               <TableHead className="text-xs text-center">سعر الصرف</TableHead>
+              <TableHead className="text-xs text-center">العملة الأساسية</TableHead>
               <TableHead className="text-xs text-center">الحالة</TableHead>
               <TableHead className="text-xs">الإجراءات</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {currencies.map(c => (
-              <TableRow key={c.code}>
+            {listQ.isLoading && (
+              <TableRow><TableCell colSpan={8} className="text-center text-xs text-muted-foreground py-6">جاري التحميل...</TableCell></TableRow>
+            )}
+            {!listQ.isLoading && rows.length === 0 && (
+              <TableRow><TableCell colSpan={8} className="text-center text-xs text-muted-foreground py-6">لا توجد عملات</TableCell></TableRow>
+            )}
+            {rows.map(c => (
+              <TableRow key={c.id} className={!c.isActive ? "opacity-50" : undefined}>
                 <TableCell className="text-xs font-mono font-bold">{c.code}</TableCell>
-                <TableCell className="text-xs">{c.name}</TableCell>
-                <TableCell className="text-xs">{c.symbol}</TableCell>
-                <TableCell className="text-xs text-center">{c.rate.toFixed(4)}</TableCell>
+                <TableCell className="text-xs">{c.nameAr}</TableCell>
+                <TableCell className="text-xs" dir="ltr">{c.nameEn}</TableCell>
+                <TableCell className="text-xs text-center font-mono">{c.symbol}</TableCell>
+                <TableCell className="text-xs text-center" dir="ltr">{Number(c.exchangeRate).toFixed(4)}</TableCell>
                 <TableCell className="text-center">
-                  {c.isBase ? <Badge className="text-xs">أساسية</Badge> : <Badge variant="secondary" className="text-xs">فعّالة</Badge>}
+                  {c.isBase
+                    ? <Badge className="text-xs bg-primary/10 text-primary border-primary/20">أساسية</Badge>
+                    : <span className="text-xs text-muted-foreground">—</span>}
+                </TableCell>
+                <TableCell className="text-center">
+                  {c.isActive
+                    ? <Badge variant="secondary" className="text-xs bg-green-50 text-green-700 border-green-200">نشطة</Badge>
+                    : <Badge variant="secondary" className="text-xs bg-red-50 text-red-700 border-red-200">موقوفة</Badge>}
                 </TableCell>
                 <TableCell>
-                  <div className="flex gap-2">
-                    <button className="text-primary text-xs hover:underline" onClick={() => toast.info("تعديل العملة")}>تعديل</button>
-                    {!c.isBase && <button className="text-destructive text-xs hover:underline" onClick={() => toast.error("حذف العملة")}>حذف</button>}
+                  <div className="flex gap-3">
+                    <button className="text-primary text-xs hover:underline" onClick={() => openEdit(c as CurrencyRow)}>
+                      تعديل
+                    </button>
+                    {!c.isBase && (
+                      <button className="text-destructive text-xs hover:underline"
+                        onClick={() => { if (confirm(`هل تريد إيقاف عملة ${c.nameAr}؟`)) deleteMut.mutate({ id: c.id }); }}>
+                        إيقاف
+                      </button>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>
@@ -348,6 +558,15 @@ function CurrenciesPage() {
           </TableBody>
         </Table>
       </Card>
+
+      {editing && (
+        <CurrencyDialog
+          open={dlgOpen}
+          onClose={() => setDlgOpen(false)}
+          initial={editing}
+          isEdit={!!editing.id}
+        />
+      )}
     </div>
   );
 }
