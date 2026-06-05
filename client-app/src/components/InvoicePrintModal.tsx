@@ -133,6 +133,34 @@ function getColVal(
   }
 }
 
+/* ═══════════════════ Amount in words ═══════════════════ */
+function toArabicWords(n: number, currency = "ريال"): string {
+  const ones    = ["","واحد","اثنان","ثلاثة","أربعة","خمسة","ستة","سبعة","ثمانية","تسعة","عشرة",
+    "أحد عشر","اثنا عشر","ثلاثة عشر","أربعة عشر","خمسة عشر","ستة عشر","سبعة عشر","ثمانية عشر","تسعة عشر"];
+  const tens    = ["","","عشرون","ثلاثون","أربعون","خمسون","ستون","سبعون","ثمانون","تسعون"];
+  const hundreds= ["","مئة","مئتان","ثلاثمائة","أربعمائة","خمسمائة","ستمائة","سبعمائة","ثمانمائة","تسعمائة"];
+  function b1000(x: number): string {
+    if (!x) return "";
+    const h = Math.floor(x/100), rem = x%100, t = Math.floor(rem/10), o = rem%10;
+    const p: string[] = [];
+    if (h) p.push(hundreds[h]);
+    if (rem < 20 && rem > 0) p.push(ones[rem]);
+    else { if (t) p.push(tens[t]); if (o) p.push(ones[o]); }
+    return p.join(" و");
+  }
+  const intPart = Math.floor(n);
+  const decPart = Math.round((n - intPart) * 100);
+  if (!intPart && !decPart) return `صفر ${currency}`;
+  const parts: string[] = [];
+  const M = Math.floor(intPart / 1_000_000), K = Math.floor((intPart % 1_000_000) / 1000), R = intPart % 1000;
+  if (M) parts.push(`${b1000(M)} مليون`);
+  if (K === 1) parts.push("ألف"); else if (K === 2) parts.push("ألفان"); else if (K > 2) parts.push(`${b1000(K)} آلاف`);
+  if (R) parts.push(b1000(R));
+  let result = `فقط ${parts.join(" و")} ${currency}`;
+  if (decPart) result += ` و${b1000(decPart)} هللة`;
+  return result + " لا غير";
+}
+
 /* ═══════════════════ Main Component ═══════════════════ */
 export default function InvoicePrintModal({ open, onClose, data, qrSettings, templateConfig }: InvoicePrintModalProps) {
   const [qrDataUrl, setQrDataUrl] = useState("");
