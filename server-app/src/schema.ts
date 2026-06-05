@@ -33,7 +33,7 @@ export const organizations = pgTable('organizations', {
 // ─── Users ────────────────────────────────────────────────────────────────────
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
-  orgId: integer('org_id').notNull().references(() => organizations.id),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   code: varchar('code', { length: 50 }),
   username: varchar('username', { length: 100 }).notNull(),
   passwordHash: varchar('password_hash', { length: 255 }).notNull(),
@@ -51,7 +51,7 @@ export const users = pgTable('users', {
 // ─── User Groups ──────────────────────────────────────────────────────────────
 export const userGroups = pgTable('user_groups', {
   id: serial('id').primaryKey(),
-  orgId: integer('org_id').notNull().references(() => organizations.id),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   code: varchar('code', { length: 50 }),
   name: varchar('name', { length: 255 }).notNull(),
   description: text('description'),
@@ -88,7 +88,7 @@ export const userGroupMembers = pgTable('user_group_members', {
 // ─── Branches ─────────────────────────────────────────────────────────────────
 export const branches = pgTable('branches', {
   id: serial('id').primaryKey(),
-  orgId: integer('org_id').notNull().references(() => organizations.id),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   name: varchar('name', { length: 255 }).notNull(),
   address: text('address'),
   phone: varchar('phone', { length: 50 }),
@@ -99,7 +99,7 @@ export const branches = pgTable('branches', {
 // ─── Warehouses ───────────────────────────────────────────────────────────────
 export const warehouses = pgTable('warehouses', {
   id: serial('id').primaryKey(),
-  orgId: integer('org_id').notNull().references(() => organizations.id),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   branchId: integer('branch_id').references(() => branches.id, { onDelete: 'set null' }),
   code: varchar('code', { length: 50 }),
   name: varchar('name', { length: 255 }).notNull(),
@@ -132,7 +132,7 @@ export const warehouseAccountLinks = pgTable('warehouse_account_links', {
 // ─── Units ────────────────────────────────────────────────────────────────────
 export const units = pgTable('units', {
   id: serial('id').primaryKey(),
-  orgId: integer('org_id').notNull().references(() => organizations.id),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   name: varchar('name', { length: 100 }).notNull(),
   symbol: varchar('symbol', { length: 20 }),
 });
@@ -140,7 +140,7 @@ export const units = pgTable('units', {
 // ─── Product Groups ───────────────────────────────────────────────────────────
 export const productGroups = pgTable('product_groups', {
   id: serial('id').primaryKey(),
-  orgId: integer('org_id').notNull().references(() => organizations.id),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   groupCode: varchar('group_code', { length: 50 }),
   name: varchar('name', { length: 255 }).notNull(),
   name2: varchar('name2', { length: 255 }),
@@ -160,7 +160,7 @@ export const productGroups = pgTable('product_groups', {
 // ─── Products ─────────────────────────────────────────────────────────────────
 export const products = pgTable('products', {
   id: serial('id').primaryKey(),
-  orgId: integer('org_id').notNull().references(() => organizations.id),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   code: varchar('code', { length: 100 }),
   barcode: varchar('barcode', { length: 100 }),
   name: varchar('name', { length: 500 }).notNull(),
@@ -180,7 +180,7 @@ export const products = pgTable('products', {
 // ─── Customers ────────────────────────────────────────────────────────────────
 export const customers = pgTable('customers', {
   id: serial('id').primaryKey(),
-  orgId: integer('org_id').notNull().references(() => organizations.id),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   code: varchar('code', { length: 50 }),
   name: varchar('name', { length: 500 }).notNull(),
   phone: varchar('phone', { length: 50 }),
@@ -207,7 +207,7 @@ export const customers = pgTable('customers', {
 // ─── Suppliers ────────────────────────────────────────────────────────────────
 export const suppliers = pgTable('suppliers', {
   id: serial('id').primaryKey(),
-  orgId: integer('org_id').notNull().references(() => organizations.id),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   code: varchar('code', { length: 50 }),
   name: varchar('name', { length: 500 }).notNull(),
   phone: varchar('phone', { length: 50 }),
@@ -222,7 +222,7 @@ export const suppliers = pgTable('suppliers', {
 // ─── Chart of Accounts ────────────────────────────────────────────────────────
 export const chartOfAccounts = pgTable('chart_of_accounts', {
   id: serial('id').primaryKey(),
-  orgId: integer('org_id').notNull().references(() => organizations.id),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   code: varchar('code', { length: 50 }).notNull(),
   name: varchar('name', { length: 500 }).notNull(),
   nameEn: varchar('name_en', { length: 500 }),
@@ -244,7 +244,7 @@ export const chartOfAccounts = pgTable('chart_of_accounts', {
 // ─── Sales Invoices ───────────────────────────────────────────────────────────
 export const salesInvoices = pgTable('sales_invoices', {
   id: serial('id').primaryKey(),
-  orgId: integer('org_id').notNull().references(() => organizations.id),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   invoiceNumber: varchar('invoice_number', { length: 50 }).notNull(),
   invoiceType: invoiceTypeEnum('invoice_type').notNull().default('sale'),
   invoiceDate: timestamp('invoice_date').notNull().defaultNow(),
@@ -284,7 +284,7 @@ export const salesInvoices = pgTable('sales_invoices', {
 export const salesInvoiceItems = pgTable('sales_invoice_items', {
   id: serial('id').primaryKey(),
   invoiceId: integer('invoice_id').notNull().references(() => salesInvoices.id, { onDelete: 'cascade' }),
-  orgId: integer('org_id').notNull().references(() => organizations.id),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   productId: integer('product_id').references(() => products.id, { onDelete: 'set null' }),
   productCode: varchar('product_code', { length: 100 }),
   productName: varchar('product_name', { length: 500 }).notNull(),
@@ -304,7 +304,7 @@ export const salesInvoiceItems = pgTable('sales_invoice_items', {
 // ─── Purchase Invoices ────────────────────────────────────────────────────────
 export const purchaseInvoices = pgTable('purchase_invoices', {
   id: serial('id').primaryKey(),
-  orgId: integer('org_id').notNull().references(() => organizations.id),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   invoiceNumber: varchar('invoice_number', { length: 50 }).notNull(),
   invoiceType: varchar('invoice_type', { length: 20 }).notNull().default('invoice'),
   supplierInvoiceNumber: varchar('supplier_invoice_number', { length: 100 }),
@@ -341,7 +341,7 @@ export const purchaseInvoices = pgTable('purchase_invoices', {
 export const purchaseInvoiceItems = pgTable('purchase_invoice_items', {
   id: serial('id').primaryKey(),
   invoiceId: integer('invoice_id').notNull().references(() => purchaseInvoices.id, { onDelete: 'cascade' }),
-  orgId: integer('org_id').notNull().references(() => organizations.id),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   productId: integer('product_id').references(() => products.id, { onDelete: 'set null' }),
   productCode: varchar('product_code', { length: 100 }),
   productName: varchar('product_name', { length: 500 }).notNull(),
@@ -359,7 +359,7 @@ export const purchaseInvoiceItems = pgTable('purchase_invoice_items', {
 // ─── Journal Entries ──────────────────────────────────────────────────────────
 export const journalEntries = pgTable('journal_entries', {
   id: serial('id').primaryKey(),
-  orgId: integer('org_id').notNull().references(() => organizations.id),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   entryNumber: varchar('entry_number', { length: 50 }).notNull(),
   entryDate: timestamp('entry_date').notNull().defaultNow(),
   description: text('description'),
@@ -379,7 +379,7 @@ export const journalEntries = pgTable('journal_entries', {
 export const journalEntryLines = pgTable('journal_entry_lines', {
   id: serial('id').primaryKey(),
   entryId: integer('entry_id').notNull().references(() => journalEntries.id, { onDelete: 'cascade' }),
-  orgId: integer('org_id').notNull().references(() => organizations.id),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   accountId: integer('account_id').references(() => chartOfAccounts.id, { onDelete: 'set null' }),
   accountCode: varchar('account_code', { length: 50 }),
   accountName: varchar('account_name', { length: 500 }),
@@ -393,7 +393,7 @@ export const journalEntryLines = pgTable('journal_entry_lines', {
 // ─── Vouchers ─────────────────────────────────────────────────────────────────
 export const vouchers = pgTable('vouchers', {
   id: serial('id').primaryKey(),
-  orgId: integer('org_id').notNull().references(() => organizations.id),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   voucherNumber: varchar('voucher_number', { length: 50 }).notNull(),
   voucherType: voucherTypeEnum('voucher_type').notNull(),
   voucherDate: timestamp('voucher_date').notNull().defaultNow(),
@@ -415,7 +415,7 @@ export const vouchers = pgTable('vouchers', {
 // ─── Receipt Vouchers (سندات القبض) ──────────────────────────────────────────
 export const receiptVouchers = pgTable('receipt_vouchers', {
   id: serial('id').primaryKey(),
-  orgId: integer('org_id').notNull().references(() => organizations.id),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   voucherNumber: varchar('voucher_number', { length: 50 }).notNull(),
   voucherDate: timestamp('voucher_date').notNull().defaultNow(),
   receivedFrom: varchar('received_from', { length: 500 }),
@@ -437,7 +437,7 @@ export const receiptVouchers = pgTable('receipt_vouchers', {
 // ─── Payment Vouchers (سندات الصرف) ──────────────────────────────────────────
 export const paymentVouchers = pgTable('payment_vouchers', {
   id: serial('id').primaryKey(),
-  orgId: integer('org_id').notNull().references(() => organizations.id),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   voucherNumber: varchar('voucher_number', { length: 50 }).notNull(),
   voucherDate: timestamp('voucher_date').notNull().defaultNow(),
   paidTo: varchar('paid_to', { length: 500 }),
@@ -458,8 +458,8 @@ export const paymentVouchers = pgTable('payment_vouchers', {
 // ─── Inventory ────────────────────────────────────────────────────────────────
 export const inventory = pgTable('inventory', {
   id: serial('id').primaryKey(),
-  orgId: integer('org_id').notNull().references(() => organizations.id),
-  productId: integer('product_id').notNull().references(() => products.id),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  productId: integer('product_id').notNull().references(() => products.id, { onDelete: 'cascade' }),
   warehouseId: integer('warehouse_id').references(() => warehouses.id, { onDelete: 'set null' }),
   quantity: decimal('quantity', { precision: 18, scale: 4 }).notNull().default('0'),
   avgCost: decimal('avg_cost', { precision: 18, scale: 4 }).default('0'),
@@ -471,7 +471,7 @@ export const stockVoucherTypeEnum = pgEnum('stock_voucher_type', ['receipt', 'is
 
 export const stockVouchers = pgTable('stock_vouchers', {
   id: serial('id').primaryKey(),
-  orgId: integer('org_id').notNull().references(() => organizations.id),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   voucherNumber: varchar('voucher_number', { length: 50 }).notNull(),
   type: stockVoucherTypeEnum('type').notNull(),
   voucherDate: timestamp('voucher_date').notNull().defaultNow(),
@@ -489,7 +489,7 @@ export const stockVouchers = pgTable('stock_vouchers', {
 export const stockVoucherItems = pgTable('stock_voucher_items', {
   id: serial('id').primaryKey(),
   voucherId: integer('voucher_id').notNull().references(() => stockVouchers.id, { onDelete: 'cascade' }),
-  orgId: integer('org_id').notNull().references(() => organizations.id),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   productId: integer('product_id').references(() => products.id, { onDelete: 'set null' }),
   productName: varchar('product_name', { length: 500 }).notNull(),
   quantity: decimal('quantity', { precision: 18, scale: 4 }).notNull(),
@@ -503,7 +503,7 @@ export const inventoryCountStatusEnum = pgEnum('inventory_count_status', ['draft
 
 export const inventoryCounts = pgTable('inventory_counts', {
   id: serial('id').primaryKey(),
-  orgId: integer('org_id').notNull().references(() => organizations.id),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   countNumber: varchar('count_number', { length: 50 }).notNull(),
   warehouseId: integer('warehouse_id').references(() => warehouses.id, { onDelete: 'set null' }),
   branchId: integer('branch_id').references(() => branches.id, { onDelete: 'set null' }),
@@ -517,7 +517,7 @@ export const inventoryCounts = pgTable('inventory_counts', {
 export const inventoryCountItems = pgTable('inventory_count_items', {
   id: serial('id').primaryKey(),
   countId: integer('count_id').notNull().references(() => inventoryCounts.id, { onDelete: 'cascade' }),
-  orgId: integer('org_id').notNull().references(() => organizations.id),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   productId: integer('product_id').references(() => products.id, { onDelete: 'set null' }),
   productName: varchar('product_name', { length: 500 }).notNull(),
   systemQuantity: decimal('system_quantity', { precision: 18, scale: 4 }).default('0'),
@@ -529,7 +529,7 @@ export const inventoryCountItems = pgTable('inventory_count_items', {
 // ─── Free Products (الأصناف المجانية) ─────────────────────────────────────────
 export const freeProducts = pgTable('free_products', {
   id: serial('id').primaryKey(),
-  orgId: integer('org_id').notNull().references(() => organizations.id),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   productId: integer('product_id').references(() => products.id, { onDelete: 'set null' }),
   productCode: varchar('product_code', { length: 100 }),
   productName: varchar('product_name', { length: 500 }).notNull(),
@@ -546,9 +546,9 @@ export const freeProducts = pgTable('free_products', {
 // ─── Messages (Internal Chat) ─────────────────────────────────────────────────
 export const messages = pgTable('messages', {
   id: serial('id').primaryKey(),
-  orgId: integer('org_id').notNull().references(() => organizations.id),
-  senderId: integer('sender_id').notNull().references(() => users.id),
-  receiverId: integer('receiver_id').notNull().references(() => users.id),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  senderId: integer('sender_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  receiverId: integer('receiver_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   content: text('content').notNull(),
   isRead: boolean('is_read').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -558,7 +558,7 @@ export const messages = pgTable('messages', {
 // كل دفتر هو وحدة تشغيلية مستقلة: ترقيم + مخزن + فرع + حسابات + صلاحيات
 export const documentJournals = pgTable('document_journals', {
   id:            serial('id').primaryKey(),
-  orgId:         integer('org_id').notNull().references(() => organizations.id),
+  orgId:         integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   // نوع المستند المرتبط
   docType:       varchar('doc_type', { length: 30 }).notNull(),
   // مثال: 'sales_invoice' | 'purchase_invoice' | 'receipt_voucher' | 'payment_voucher'
@@ -617,7 +617,7 @@ export type DocumentJournal = typeof documentJournals.$inferSelect;
 // ─── Document Types (أنواع المستندات) ────────────────────────────────────────
 export const documentTypes = pgTable('document_types', {
   id:                   serial('id').primaryKey(),
-  orgId:                integer('org_id').notNull().references(() => organizations.id),
+  orgId:                integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   typeId:               varchar('type_id', { length: 30 }).notNull(),
   nameAr:               varchar('name_ar', { length: 255 }).notNull(),
   nameEn:               varchar('name_en', { length: 255 }),
@@ -673,7 +673,7 @@ export type DocumentType = typeof documentTypes.$inferSelect;
 // كل نموذج يحدد شكل الطباعة لنوع مستند معين
 export const documentTemplates = pgTable('document_templates', {
   id:          serial('id').primaryKey(),
-  orgId:       integer('org_id').notNull().references(() => organizations.id),
+  orgId:       integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   code:        varchar('code', { length: 30 }).notNull(),       // رقم النموذج مثال: T001
   nameAr:      varchar('name_ar', { length: 255 }).notNull(),   // اسم النموذج بالعربي
   nameEn:      varchar('name_en', { length: 255 }),             // اسم النموذج بالإنجليزي
@@ -739,7 +739,7 @@ export const documentSendLogs = pgTable('document_send_logs', {
   messageSent:      text('message_sent'),
   errorMessage:     text('error_message'),
   metaMessageId:    varchar('meta_message_id', { length: 100 }),
-  sentByUserId:     integer('sent_by_user_id').references(() => users.id),
+  sentByUserId:     integer('sent_by_user_id').references(() => users.id, { onDelete: 'set null' }),
   sentAt:           timestamp('sent_at').notNull().defaultNow(),
 });
 
