@@ -1163,29 +1163,37 @@ export const appRouter = router({
           }
         }
 
-        // 3) توليد الرقم التسلسلي على الخادم (ذري — لا يعتمد على الواجهة)
-        const lastEntry = await db.query.journalEntries.findFirst({
-          where: eq(journalEntries.orgId, ctx.user.orgId),
-          orderBy: [desc(journalEntries.id)],
-        });
-        const lastNum = lastEntry ? parseInt(lastEntry.entryNumber.replace(/\D/g, '') || '0') : 0;
-        const safeLastNum = lastNum > 9_000_000 ? 0 : lastNum;
-        const entryNumber = `JE-${String(safeLastNum + 1).padStart(4, '0')}`;
+        // 3) توليد الرقم التسلسلي ذرياً داخل transaction مع advisory lock لمنع race conditions
+        const orgId = ctx.user.orgId;
+        const entry = await db.transaction(async (tx) => {
+          // advisory lock خاص بكل منظمة يمنع طلبين متزامنين من توليد نفس الرقم
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(${orgId}::bigint)`);
 
-        const [entry] = await db.insert(journalEntries).values({
-          ...rest,
-          entryNumber,
-          entryType: rest.entryType ?? 'manual',
-          orgId: ctx.user.orgId,
-          userId: ctx.user.id,
-          entryDate: new Date(entryDate),
-          status: 'posted',
-        }).returning();
-        if (lines.length > 0) {
-          await db.insert(journalEntryLines).values(
-            lines.map((l, i) => ({ ...l, entryId: entry.id, orgId: ctx.user.orgId, sortOrder: l.sortOrder ?? i }))
-          );
-        }
+          const lastEntry = await tx.query.journalEntries.findFirst({
+            where: eq(journalEntries.orgId, orgId),
+            orderBy: [desc(journalEntries.id)],
+          });
+          const lastNum = lastEntry ? parseInt(lastEntry.entryNumber.replace(/\D/g, '') || '0') : 0;
+          const safeLastNum = lastNum > 9_000_000 ? 0 : lastNum;
+          const entryNumber = `JE-${String(safeLastNum + 1).padStart(4, '0')}`;
+
+          const [newEntry] = await tx.insert(journalEntries).values({
+            ...rest,
+            entryNumber,
+            entryType: rest.entryType ?? 'manual',
+            orgId,
+            userId: ctx.user.id,
+            entryDate: new Date(entryDate),
+            status: 'posted',
+          }).returning();
+
+          if (lines.length > 0) {
+            await tx.insert(journalEntryLines).values(
+              lines.map((l, i) => ({ ...l, entryId: newEntry.id, orgId, sortOrder: l.sortOrder ?? i }))
+            );
+          }
+          return newEntry;
+        });
         return entry;
       }),
     delete: protectedProcedure

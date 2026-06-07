@@ -1,4 +1,4 @@
-import { pgTable, serial, varchar, text, integer, boolean, decimal, timestamp, pgEnum } from 'drizzle-orm/pg-core';
+import { pgTable, serial, varchar, text, integer, boolean, decimal, timestamp, pgEnum, uniqueIndex } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
@@ -373,7 +373,9 @@ export const journalEntries = pgTable('journal_entries', {
   sourceDocNumber: varchar('source_doc_number', { length: 100 }),
   entryType:       varchar('entry_type',         { length: 20 }).notNull().default('manual'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
-});
+}, (t) => [
+  uniqueIndex('journal_entries_org_entry_number_uidx').on(t.orgId, t.entryNumber),
+]);
 
 // ─── Journal Entry Lines ──────────────────────────────────────────────────────
 export const journalEntryLines = pgTable('journal_entry_lines', {

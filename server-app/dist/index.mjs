@@ -32,10 +32,14 @@ var init_env = __esm({
 // src/schema.ts
 var schema_exports = {};
 __export(schema_exports, {
+  appSettings: () => appSettings,
   branches: () => branches,
   chartOfAccounts: () => chartOfAccounts,
+  costCenters: () => costCenters,
+  currencies: () => currencies,
   customers: () => customers,
   documentJournals: () => documentJournals,
+  documentSendLogs: () => documentSendLogs,
   documentTemplates: () => documentTemplates,
   documentTypes: () => documentTypes,
   freeProducts: () => freeProducts,
@@ -57,9 +61,11 @@ __export(schema_exports, {
   products: () => products,
   purchaseInvoiceItems: () => purchaseInvoiceItems,
   purchaseInvoices: () => purchaseInvoices,
+  qrSettings: () => qrSettings,
   receiptVouchers: () => receiptVouchers,
   salesInvoiceItems: () => salesInvoiceItems,
   salesInvoices: () => salesInvoices,
+  sendSettings: () => sendSettings,
   stockVoucherItems: () => stockVoucherItems,
   stockVoucherTypeEnum: () => stockVoucherTypeEnum,
   stockVouchers: () => stockVouchers,
@@ -72,11 +78,12 @@ __export(schema_exports, {
   users: () => users,
   voucherTypeEnum: () => voucherTypeEnum,
   vouchers: () => vouchers,
+  wabaMessageTemplates: () => wabaMessageTemplates,
   warehouseAccountLinks: () => warehouseAccountLinks,
   warehouses: () => warehouses
 });
 import { pgTable, serial, varchar, text, integer, boolean, decimal, timestamp, pgEnum } from "drizzle-orm/pg-core";
-var userRoleEnum, orgStatusEnum, invoiceTypeEnum, invoiceStatusEnum, paymentMethodEnum, voucherTypeEnum, journalStatusEnum, organizations, users, userGroups, userCategories, userGroupMembers, branches, warehouses, warehouseAccountLinks, units, productGroups, products, customers, suppliers, chartOfAccounts, salesInvoices, salesInvoiceItems, purchaseInvoices, purchaseInvoiceItems, journalEntries, journalEntryLines, vouchers, receiptVouchers, paymentVouchers, inventory, stockVoucherTypeEnum, stockVouchers, stockVoucherItems, inventoryCountStatusEnum, inventoryCounts, inventoryCountItems, freeProducts, messages, documentJournals, documentTypes, documentTemplates;
+var userRoleEnum, orgStatusEnum, invoiceTypeEnum, invoiceStatusEnum, paymentMethodEnum, voucherTypeEnum, journalStatusEnum, organizations, users, userGroups, userCategories, userGroupMembers, branches, warehouses, warehouseAccountLinks, units, productGroups, products, customers, suppliers, chartOfAccounts, salesInvoices, salesInvoiceItems, purchaseInvoices, purchaseInvoiceItems, journalEntries, journalEntryLines, vouchers, receiptVouchers, paymentVouchers, inventory, stockVoucherTypeEnum, stockVouchers, stockVoucherItems, inventoryCountStatusEnum, inventoryCounts, inventoryCountItems, freeProducts, messages, documentJournals, documentTypes, documentTemplates, costCenters, qrSettings, documentSendLogs, wabaMessageTemplates, sendSettings, appSettings, currencies;
 var init_schema = __esm({
   "src/schema.ts"() {
     userRoleEnum = pgEnum("user_role", ["superadmin", "admin", "cashier", "accountant", "warehouse_manager", "viewer"]);
@@ -106,7 +113,7 @@ var init_schema = __esm({
     });
     users = pgTable("users", {
       id: serial("id").primaryKey(),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
       code: varchar("code", { length: 50 }),
       username: varchar("username", { length: 100 }).notNull(),
       passwordHash: varchar("password_hash", { length: 255 }).notNull(),
@@ -122,7 +129,7 @@ var init_schema = __esm({
     });
     userGroups = pgTable("user_groups", {
       id: serial("id").primaryKey(),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
       code: varchar("code", { length: 50 }),
       name: varchar("name", { length: 255 }).notNull(),
       description: text("description"),
@@ -153,7 +160,7 @@ var init_schema = __esm({
     });
     branches = pgTable("branches", {
       id: serial("id").primaryKey(),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
       name: varchar("name", { length: 255 }).notNull(),
       address: text("address"),
       phone: varchar("phone", { length: 50 }),
@@ -162,8 +169,8 @@ var init_schema = __esm({
     });
     warehouses = pgTable("warehouses", {
       id: serial("id").primaryKey(),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
-      branchId: integer("branch_id").references(() => branches.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+      branchId: integer("branch_id").references(() => branches.id, { onDelete: "set null" }),
       code: varchar("code", { length: 50 }),
       name: varchar("name", { length: 255 }).notNull(),
       name2: varchar("name2", { length: 255 }),
@@ -171,13 +178,13 @@ var init_schema = __esm({
       fullName2: varchar("full_name2", { length: 255 }),
       address: text("address"),
       isActive: boolean("is_active").notNull().default(true),
-      invAccountId: integer("inv_account_id").references(() => chartOfAccounts.id),
-      cogsAccount1Id: integer("cogs_account1_id").references(() => chartOfAccounts.id),
-      cogsAccount2Id: integer("cogs_account2_id").references(() => chartOfAccounts.id),
-      cashAccountId: integer("cash_account_id").references(() => chartOfAccounts.id),
-      bankAccountId: integer("bank_account_id").references(() => chartOfAccounts.id),
-      salesAccount1Id: integer("sales_account1_id").references(() => chartOfAccounts.id),
-      allowedUserId: integer("allowed_user_id").references(() => users.id),
+      invAccountId: integer("inv_account_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
+      cogsAccount1Id: integer("cogs_account1_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
+      cogsAccount2Id: integer("cogs_account2_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
+      cashAccountId: integer("cash_account_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
+      bankAccountId: integer("bank_account_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
+      salesAccount1Id: integer("sales_account1_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
+      allowedUserId: integer("allowed_user_id").references(() => users.id, { onDelete: "set null" }),
       allowedUserGroup: varchar("allowed_user_group", { length: 255 }),
       copyFromWarehouseId: integer("copy_from_warehouse_id"),
       createdAt: timestamp("created_at").notNull().defaultNow()
@@ -186,18 +193,18 @@ var init_schema = __esm({
       id: serial("id").primaryKey(),
       warehouseId: integer("warehouse_id").notNull().references(() => warehouses.id, { onDelete: "cascade" }),
       label: varchar("label", { length: 255 }).notNull(),
-      accountId: integer("account_id").references(() => chartOfAccounts.id),
+      accountId: integer("account_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
       sortOrder: integer("sort_order").notNull().default(0)
     });
     units = pgTable("units", {
       id: serial("id").primaryKey(),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
       name: varchar("name", { length: 100 }).notNull(),
       symbol: varchar("symbol", { length: 20 })
     });
     productGroups = pgTable("product_groups", {
       id: serial("id").primaryKey(),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
       groupCode: varchar("group_code", { length: 50 }),
       name: varchar("name", { length: 255 }).notNull(),
       name2: varchar("name2", { length: 255 }),
@@ -215,13 +222,13 @@ var init_schema = __esm({
     });
     products = pgTable("products", {
       id: serial("id").primaryKey(),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
       code: varchar("code", { length: 100 }),
       barcode: varchar("barcode", { length: 100 }),
       name: varchar("name", { length: 500 }).notNull(),
       nameEn: varchar("name_en", { length: 500 }),
-      groupId: integer("group_id").references(() => productGroups.id),
-      unitId: integer("unit_id").references(() => units.id),
+      groupId: integer("group_id").references(() => productGroups.id, { onDelete: "set null" }),
+      unitId: integer("unit_id").references(() => units.id, { onDelete: "set null" }),
       unit: varchar("unit", { length: 100 }),
       salePrice: decimal("sale_price", { precision: 18, scale: 4 }).default("0"),
       purchasePrice: decimal("purchase_price", { precision: 18, scale: 4 }).default("0"),
@@ -233,21 +240,32 @@ var init_schema = __esm({
     });
     customers = pgTable("customers", {
       id: serial("id").primaryKey(),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
       code: varchar("code", { length: 50 }),
       name: varchar("name", { length: 500 }).notNull(),
       phone: varchar("phone", { length: 50 }),
       email: varchar("email", { length: 255 }),
       address: text("address"),
       taxNumber: varchar("tax_number", { length: 50 }),
+      customerType: varchar("customer_type", { length: 20 }).notNull().default("individual"),
+      registrationNumber: varchar("registration_number", { length: 100 }),
+      shortAddress: varchar("short_address", { length: 200 }),
+      buildingNumber: varchar("building_number", { length: 20 }),
+      additionalNumber: varchar("additional_number", { length: 20 }),
+      postalCode: varchar("postal_code", { length: 20 }),
+      city: varchar("city", { length: 100 }),
       creditLimit: decimal("credit_limit", { precision: 18, scale: 4 }).default("0"),
       balance: decimal("balance", { precision: 18, scale: 4 }).default("0"),
       isActive: boolean("is_active").notNull().default(true),
-      createdAt: timestamp("created_at").notNull().defaultNow()
+      createdAt: timestamp("created_at").notNull().defaultNow(),
+      // ─── قنوات الإرسال الإلكتروني ──────────────────────────────────────────────
+      whatsappPhone: varchar("whatsapp_phone", { length: 50 }),
+      telegramId: varchar("telegram_id", { length: 100 }),
+      defaultSendMethod: varchar("default_send_method", { length: 20 })
     });
     suppliers = pgTable("suppliers", {
       id: serial("id").primaryKey(),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
       code: varchar("code", { length: 50 }),
       name: varchar("name", { length: 500 }).notNull(),
       phone: varchar("phone", { length: 50 }),
@@ -260,7 +278,7 @@ var init_schema = __esm({
     });
     chartOfAccounts = pgTable("chart_of_accounts", {
       id: serial("id").primaryKey(),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
       code: varchar("code", { length: 50 }).notNull(),
       name: varchar("name", { length: 500 }).notNull(),
       nameEn: varchar("name_en", { length: 500 }),
@@ -280,16 +298,18 @@ var init_schema = __esm({
     });
     salesInvoices = pgTable("sales_invoices", {
       id: serial("id").primaryKey(),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
       invoiceNumber: varchar("invoice_number", { length: 50 }).notNull(),
       invoiceType: invoiceTypeEnum("invoice_type").notNull().default("sale"),
       invoiceDate: timestamp("invoice_date").notNull().defaultNow(),
       dueDate: timestamp("due_date"),
-      customerId: integer("customer_id").references(() => customers.id),
+      customerId: integer("customer_id").references(() => customers.id, { onDelete: "set null" }),
       customerName: varchar("customer_name", { length: 500 }),
+      customerType: varchar("customer_type", { length: 20 }).default("individual"),
+      customerTaxNumber: varchar("customer_tax_number", { length: 100 }),
       warehouseId: integer("warehouse_id").references(() => warehouses.id, { onDelete: "set null" }),
-      branchId: integer("branch_id").references(() => branches.id),
-      userId: integer("user_id").references(() => users.id),
+      branchId: integer("branch_id").references(() => branches.id, { onDelete: "set null" }),
+      userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
       currency: varchar("currency", { length: 10 }).default("SAR"),
       exchangeRate: decimal("exchange_rate", { precision: 10, scale: 4 }).default("1"),
       subtotal: decimal("subtotal", { precision: 18, scale: 4 }).default("0"),
@@ -304,17 +324,20 @@ var init_schema = __esm({
       notes: text("notes"),
       refInvoiceId: integer("ref_invoice_id"),
       journalId: integer("journal_id"),
+      docTypeId: integer("doc_type_id"),
       isPosted: boolean("is_posted").notNull().default(false),
       postedAt: timestamp("posted_at"),
       postedJournalEntryId: integer("posted_journal_entry_id"),
+      costPosted: boolean("cost_posted").notNull().default(false),
+      costPostedJournalEntryId: integer("cost_posted_journal_entry_id"),
       createdAt: timestamp("created_at").notNull().defaultNow(),
       updatedAt: timestamp("updated_at").notNull().defaultNow()
     });
     salesInvoiceItems = pgTable("sales_invoice_items", {
       id: serial("id").primaryKey(),
       invoiceId: integer("invoice_id").notNull().references(() => salesInvoices.id, { onDelete: "cascade" }),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
-      productId: integer("product_id").references(() => products.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+      productId: integer("product_id").references(() => products.id, { onDelete: "set null" }),
       productCode: varchar("product_code", { length: 100 }),
       productName: varchar("product_name", { length: 500 }).notNull(),
       unit: varchar("unit", { length: 100 }),
@@ -331,13 +354,13 @@ var init_schema = __esm({
     });
     purchaseInvoices = pgTable("purchase_invoices", {
       id: serial("id").primaryKey(),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
       invoiceNumber: varchar("invoice_number", { length: 50 }).notNull(),
       invoiceType: varchar("invoice_type", { length: 20 }).notNull().default("invoice"),
       supplierInvoiceNumber: varchar("supplier_invoice_number", { length: 100 }),
       invoiceDate: timestamp("invoice_date").notNull().defaultNow(),
       dueDate: timestamp("due_date"),
-      supplierId: integer("supplier_id").references(() => suppliers.id),
+      supplierId: integer("supplier_id").references(() => suppliers.id, { onDelete: "set null" }),
       supplierName: varchar("supplier_name", { length: 500 }),
       warehouseId: integer("warehouse_id").references(() => warehouses.id, { onDelete: "set null" }),
       journalId: integer("journal_id"),
@@ -353,18 +376,21 @@ var init_schema = __esm({
       paymentMethod: varchar("payment_method", { length: 20 }).default("cash"),
       status: invoiceStatusEnum("status").notNull().default("draft"),
       notes: text("notes"),
-      userId: integer("user_id").references(() => users.id),
+      userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
+      docTypeId: integer("doc_type_id"),
       isPosted: boolean("is_posted").notNull().default(false),
       postedAt: timestamp("posted_at"),
       postedJournalEntryId: integer("posted_journal_entry_id"),
+      inventoryPosted: boolean("inventory_posted").notNull().default(false),
+      costPostedJournalEntryId: integer("cost_posted_journal_entry_id"),
       createdAt: timestamp("created_at").notNull().defaultNow(),
       updatedAt: timestamp("updated_at").notNull().defaultNow()
     });
     purchaseInvoiceItems = pgTable("purchase_invoice_items", {
       id: serial("id").primaryKey(),
       invoiceId: integer("invoice_id").notNull().references(() => purchaseInvoices.id, { onDelete: "cascade" }),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
-      productId: integer("product_id").references(() => products.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+      productId: integer("product_id").references(() => products.id, { onDelete: "set null" }),
       productCode: varchar("product_code", { length: 100 }),
       productName: varchar("product_name", { length: 500 }).notNull(),
       unit: varchar("unit", { length: 100 }),
@@ -379,7 +405,7 @@ var init_schema = __esm({
     });
     journalEntries = pgTable("journal_entries", {
       id: serial("id").primaryKey(),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
       entryNumber: varchar("entry_number", { length: 50 }).notNull(),
       entryDate: timestamp("entry_date").notNull().defaultNow(),
       description: text("description"),
@@ -387,7 +413,7 @@ var init_schema = __esm({
       totalDebit: decimal("total_debit", { precision: 18, scale: 4 }).default("0"),
       totalCredit: decimal("total_credit", { precision: 18, scale: 4 }).default("0"),
       status: journalStatusEnum("status").notNull().default("draft"),
-      userId: integer("user_id").references(() => users.id),
+      userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
       sourceDocType: varchar("source_doc_type", { length: 50 }),
       sourceDocId: integer("source_doc_id"),
       sourceDocNumber: varchar("source_doc_number", { length: 100 }),
@@ -397,8 +423,8 @@ var init_schema = __esm({
     journalEntryLines = pgTable("journal_entry_lines", {
       id: serial("id").primaryKey(),
       entryId: integer("entry_id").notNull().references(() => journalEntries.id, { onDelete: "cascade" }),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
-      accountId: integer("account_id").references(() => chartOfAccounts.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+      accountId: integer("account_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
       accountCode: varchar("account_code", { length: 50 }),
       accountName: varchar("account_name", { length: 500 }),
       description: text("description"),
@@ -409,13 +435,13 @@ var init_schema = __esm({
     });
     vouchers = pgTable("vouchers", {
       id: serial("id").primaryKey(),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
       voucherNumber: varchar("voucher_number", { length: 50 }).notNull(),
       voucherType: voucherTypeEnum("voucher_type").notNull(),
       voucherDate: timestamp("voucher_date").notNull().defaultNow(),
       amount: decimal("amount", { precision: 18, scale: 4 }).notNull(),
       paymentMethod: paymentMethodEnum("payment_method").default("cash"),
-      accountId: integer("account_id").references(() => chartOfAccounts.id),
+      accountId: integer("account_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
       accountCode: varchar("account_code", { length: 50 }),
       accountName: varchar("account_name", { length: 500 }),
       partyType: varchar("party_type", { length: 20 }),
@@ -424,12 +450,12 @@ var init_schema = __esm({
       description: text("description"),
       reference: varchar("reference", { length: 100 }),
       status: journalStatusEnum("status").notNull().default("draft"),
-      userId: integer("user_id").references(() => users.id),
+      userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
       createdAt: timestamp("created_at").notNull().defaultNow()
     });
     receiptVouchers = pgTable("receipt_vouchers", {
       id: serial("id").primaryKey(),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
       voucherNumber: varchar("voucher_number", { length: 50 }).notNull(),
       voucherDate: timestamp("voucher_date").notNull().defaultNow(),
       receivedFrom: varchar("received_from", { length: 500 }),
@@ -438,18 +464,18 @@ var init_schema = __esm({
       bankAccount: varchar("bank_account", { length: 100 }),
       checkNumber: varchar("check_number", { length: 100 }),
       description: text("description"),
-      accountId: integer("account_id").references(() => chartOfAccounts.id),
-      contraAccountId: integer("contra_account_id").references(() => chartOfAccounts.id),
+      accountId: integer("account_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
+      contraAccountId: integer("contra_account_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
       costCenterId: integer("cost_center_id"),
       notes: text("notes"),
       journalEntryId: integer("journal_entry_id"),
       status: varchar("status", { length: 20 }).notNull().default("posted"),
-      userId: integer("user_id").references(() => users.id),
+      userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
       createdAt: timestamp("created_at").notNull().defaultNow()
     });
     paymentVouchers = pgTable("payment_vouchers", {
       id: serial("id").primaryKey(),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
       voucherNumber: varchar("voucher_number", { length: 50 }).notNull(),
       voucherDate: timestamp("voucher_date").notNull().defaultNow(),
       paidTo: varchar("paid_to", { length: 500 }),
@@ -458,18 +484,18 @@ var init_schema = __esm({
       bankAccount: varchar("bank_account", { length: 100 }),
       checkNumber: varchar("check_number", { length: 100 }),
       description: text("description"),
-      accountId: integer("account_id").references(() => chartOfAccounts.id),
-      contraAccountId: integer("contra_account_id").references(() => chartOfAccounts.id),
+      accountId: integer("account_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
+      contraAccountId: integer("contra_account_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
       notes: text("notes"),
       journalEntryId: integer("journal_entry_id"),
       status: varchar("status", { length: 20 }).notNull().default("posted"),
-      userId: integer("user_id").references(() => users.id),
+      userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
       createdAt: timestamp("created_at").notNull().defaultNow()
     });
     inventory = pgTable("inventory", {
       id: serial("id").primaryKey(),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
-      productId: integer("product_id").notNull().references(() => products.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+      productId: integer("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
       warehouseId: integer("warehouse_id").references(() => warehouses.id, { onDelete: "set null" }),
       quantity: decimal("quantity", { precision: 18, scale: 4 }).notNull().default("0"),
       avgCost: decimal("avg_cost", { precision: 18, scale: 4 }).default("0"),
@@ -478,25 +504,25 @@ var init_schema = __esm({
     stockVoucherTypeEnum = pgEnum("stock_voucher_type", ["receipt", "issue", "transfer"]);
     stockVouchers = pgTable("stock_vouchers", {
       id: serial("id").primaryKey(),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
       voucherNumber: varchar("voucher_number", { length: 50 }).notNull(),
       type: stockVoucherTypeEnum("type").notNull(),
       voucherDate: timestamp("voucher_date").notNull().defaultNow(),
       warehouseId: integer("warehouse_id").references(() => warehouses.id, { onDelete: "set null" }),
-      branchId: integer("branch_id").references(() => branches.id),
-      supplierId: integer("supplier_id").references(() => suppliers.id),
+      branchId: integer("branch_id").references(() => branches.id, { onDelete: "set null" }),
+      supplierId: integer("supplier_id").references(() => suppliers.id, { onDelete: "set null" }),
       reason: varchar("reason", { length: 500 }),
       notes: text("notes"),
       totalCost: decimal("total_cost", { precision: 18, scale: 4 }).default("0"),
       status: varchar("status", { length: 20 }).notNull().default("confirmed"),
-      userId: integer("user_id").references(() => users.id),
+      userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
       createdAt: timestamp("created_at").notNull().defaultNow()
     });
     stockVoucherItems = pgTable("stock_voucher_items", {
       id: serial("id").primaryKey(),
       voucherId: integer("voucher_id").notNull().references(() => stockVouchers.id, { onDelete: "cascade" }),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
-      productId: integer("product_id").references(() => products.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+      productId: integer("product_id").references(() => products.id, { onDelete: "set null" }),
       productName: varchar("product_name", { length: 500 }).notNull(),
       quantity: decimal("quantity", { precision: 18, scale: 4 }).notNull(),
       unitCost: decimal("unit_cost", { precision: 18, scale: 4 }).default("0"),
@@ -506,21 +532,21 @@ var init_schema = __esm({
     inventoryCountStatusEnum = pgEnum("inventory_count_status", ["draft", "confirmed", "cancelled"]);
     inventoryCounts = pgTable("inventory_counts", {
       id: serial("id").primaryKey(),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
       countNumber: varchar("count_number", { length: 50 }).notNull(),
       warehouseId: integer("warehouse_id").references(() => warehouses.id, { onDelete: "set null" }),
-      branchId: integer("branch_id").references(() => branches.id),
+      branchId: integer("branch_id").references(() => branches.id, { onDelete: "set null" }),
       status: inventoryCountStatusEnum("status").notNull().default("draft"),
       notes: text("notes"),
-      userId: integer("user_id").references(() => users.id),
+      userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
       createdAt: timestamp("created_at").notNull().defaultNow(),
       confirmedAt: timestamp("confirmed_at")
     });
     inventoryCountItems = pgTable("inventory_count_items", {
       id: serial("id").primaryKey(),
       countId: integer("count_id").notNull().references(() => inventoryCounts.id, { onDelete: "cascade" }),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
-      productId: integer("product_id").references(() => products.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+      productId: integer("product_id").references(() => products.id, { onDelete: "set null" }),
       productName: varchar("product_name", { length: 500 }).notNull(),
       systemQuantity: decimal("system_quantity", { precision: 18, scale: 4 }).default("0"),
       actualQuantity: decimal("actual_quantity", { precision: 18, scale: 4 }).default("0"),
@@ -529,8 +555,8 @@ var init_schema = __esm({
     });
     freeProducts = pgTable("free_products", {
       id: serial("id").primaryKey(),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
-      productId: integer("product_id").references(() => products.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+      productId: integer("product_id").references(() => products.id, { onDelete: "set null" }),
       productCode: varchar("product_code", { length: 100 }),
       productName: varchar("product_name", { length: 500 }).notNull(),
       unit: varchar("unit", { length: 100 }),
@@ -544,16 +570,16 @@ var init_schema = __esm({
     });
     messages = pgTable("messages", {
       id: serial("id").primaryKey(),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
-      senderId: integer("sender_id").notNull().references(() => users.id),
-      receiverId: integer("receiver_id").notNull().references(() => users.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+      senderId: integer("sender_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+      receiverId: integer("receiver_id").notNull().references(() => users.id, { onDelete: "cascade" }),
       content: text("content").notNull(),
       isRead: boolean("is_read").notNull().default(false),
       createdAt: timestamp("created_at").notNull().defaultNow()
     });
     documentJournals = pgTable("document_journals", {
       id: serial("id").primaryKey(),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
       // نوع المستند المرتبط
       docType: varchar("doc_type", { length: 30 }).notNull(),
       // مثال: 'sales_invoice' | 'purchase_invoice' | 'receipt_voucher' | 'payment_voucher'
@@ -576,23 +602,31 @@ var init_schema = __esm({
       // آخر رقم مستخدم
       // ── الربط بالكيانات ───────────────────────────────────────────────────────
       warehouseId: integer("warehouse_id").references(() => warehouses.id, { onDelete: "set null" }),
-      branchId: integer("branch_id").references(() => branches.id),
+      branchId: integer("branch_id").references(() => branches.id, { onDelete: "set null" }),
       // ── الحسابات الافتراضية ───────────────────────────────────────────────────
-      salesAccountId: integer("sales_account_id").references(() => chartOfAccounts.id),
-      cashAccountId: integer("cash_account_id").references(() => chartOfAccounts.id),
-      creditAccountId: integer("credit_account_id").references(() => chartOfAccounts.id),
-      taxAccountId: integer("tax_account_id").references(() => chartOfAccounts.id),
-      discountAccountId: integer("discount_account_id").references(() => chartOfAccounts.id),
+      salesAccountId: integer("sales_account_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
+      cashAccountId: integer("cash_account_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
+      creditAccountId: integer("credit_account_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
+      taxAccountId: integer("tax_account_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
+      discountAccountId: integer("discount_account_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
+      // حسابات المشتريات
+      purchaseAccountId: integer("purchase_account_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
+      supplierAccountId: integer("supplier_account_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
+      // حسابات المخزون والتكلفة (المرحلة الثانية)
+      inventoryAccountId: integer("inventory_account_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
+      cogsAccountId: integer("cogs_account_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
       // ── الإعدادات ─────────────────────────────────────────────────────────────
       defaultCurrency: varchar("default_currency", { length: 10 }).default("SAR"),
       defaultPayMethod: varchar("default_pay_method", { length: 20 }).default("cash"),
       allowedUserGroup: varchar("allowed_user_group", { length: 255 }),
-      allowedUserId: integer("allowed_user_id").references(() => users.id),
+      allowedUserId: integer("allowed_user_id").references(() => users.id, { onDelete: "set null" }),
       printTemplate: varchar("print_template", { length: 100 }),
       printTemplate2: varchar("print_template_2", { length: 100 }),
       resetFrequency: varchar("reset_frequency", { length: 20 }).default("none"),
       autoSerial: boolean("auto_serial").notNull().default(false),
       printOnSave: boolean("print_on_save").notNull().default(false),
+      customersJournal: varchar("customers_journal", { length: 50 }),
+      suppliersJournal: varchar("suppliers_journal", { length: 50 }),
       postingMode: varchar("posting_mode", { length: 20 }).default("manual"),
       allowUnpost: boolean("allow_unpost").notNull().default(true),
       allowEditAfterPost: boolean("allow_edit_after_post").notNull().default(false),
@@ -604,7 +638,7 @@ var init_schema = __esm({
     });
     documentTypes = pgTable("document_types", {
       id: serial("id").primaryKey(),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
       typeId: varchar("type_id", { length: 30 }).notNull(),
       nameAr: varchar("name_ar", { length: 255 }).notNull(),
       nameEn: varchar("name_en", { length: 255 }),
@@ -615,6 +649,8 @@ var init_schema = __esm({
       user_: varchar("user_", { length: 50 }),
       warehouse: varchar("warehouse", { length: 50 }),
       journal: varchar("journal", { length: 50 }),
+      customersJournal: varchar("customers_journal", { length: 50 }),
+      suppliersJournal: varchar("suppliers_journal", { length: 50 }),
       systemOnly: boolean("system_only").notNull().default(false),
       entryType: varchar("entry_type", { length: 30 }),
       entryJournal: varchar("entry_journal", { length: 50 }),
@@ -637,6 +673,15 @@ var init_schema = __esm({
       acctDiscount: varchar("acct_discount", { length: 50 }),
       acctCash: varchar("acct_cash", { length: 50 }),
       acctTax: varchar("acct_tax", { length: 50 }),
+      acctInventory: varchar("acct_inventory", { length: 50 }),
+      acctCogs: varchar("acct_cogs", { length: 50 }),
+      salesAccountId: integer("sales_account_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
+      cashAccountId: integer("cash_account_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
+      creditAccountId: integer("credit_account_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
+      taxAccountId: integer("tax_account_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
+      discountAccountId: integer("discount_account_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
+      purchaseAccountId: integer("purchase_account_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
+      supplierAccountId: integer("supplier_account_id").references(() => chartOfAccounts.id, { onDelete: "set null" }),
       sortOrder: integer("sort_order").notNull().default(0),
       isActive: boolean("is_active").notNull().default(true),
       createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -644,7 +689,7 @@ var init_schema = __esm({
     });
     documentTemplates = pgTable("document_templates", {
       id: serial("id").primaryKey(),
-      orgId: integer("org_id").notNull().references(() => organizations.id),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
       code: varchar("code", { length: 30 }).notNull(),
       // رقم النموذج مثال: T001
       nameAr: varchar("name_ar", { length: 255 }).notNull(),
@@ -660,6 +705,118 @@ var init_schema = __esm({
       notes: text("notes"),
       isActive: boolean("is_active").notNull().default(true),
       sortOrder: integer("sort_order").notNull().default(0),
+      createdAt: timestamp("created_at").notNull().defaultNow(),
+      updatedAt: timestamp("updated_at").notNull().defaultNow()
+    });
+    costCenters = pgTable("cost_centers", {
+      id: serial("id").primaryKey(),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+      code: varchar("code", { length: 30 }).notNull(),
+      name: varchar("name", { length: 255 }).notNull(),
+      name2: varchar("name2", { length: 255 }),
+      centerType: varchar("center_type", { length: 20 }).notNull().default("branch"),
+      // root | general | branch
+      parentId: integer("parent_id"),
+      level: integer("level").notNull().default(1),
+      notes: text("notes"),
+      isActive: boolean("is_active").notNull().default(true),
+      createdAt: timestamp("created_at").notNull().defaultNow()
+    });
+    qrSettings = pgTable("qr_settings", {
+      id: serial("id").primaryKey(),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+      isEnabled: boolean("is_enabled").notNull().default(true),
+      countrySystem: varchar("country_system", { length: 20 }).notNull().default("zatca"),
+      customFormat: text("custom_format"),
+      sellerName: varchar("seller_name", { length: 255 }),
+      taxNumber: varchar("tax_number", { length: 50 }),
+      showOnSalesInvoice: boolean("show_on_sales_invoice").notNull().default(true),
+      showOnPurchaseInvoice: boolean("show_on_purchase_invoice").notNull().default(false),
+      showOnReceiptVoucher: boolean("show_on_receipt_voucher").notNull().default(false),
+      qrSize: integer("qr_size").notNull().default(100),
+      qrPosition: varchar("qr_position", { length: 30 }).notNull().default("top-right"),
+      notes: text("notes"),
+      createdAt: timestamp("created_at").notNull().defaultNow(),
+      updatedAt: timestamp("updated_at").notNull().defaultNow()
+    });
+    documentSendLogs = pgTable("document_send_logs", {
+      id: serial("id").primaryKey(),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+      docType: varchar("doc_type", { length: 50 }).notNull(),
+      docId: integer("doc_id"),
+      docNumber: varchar("doc_number", { length: 100 }),
+      method: varchar("method", { length: 20 }).notNull(),
+      status: varchar("status", { length: 20 }).notNull().default("pending"),
+      recipientName: varchar("recipient_name", { length: 255 }),
+      recipientContact: varchar("recipient_contact", { length: 500 }),
+      messageSent: text("message_sent"),
+      errorMessage: text("error_message"),
+      metaMessageId: varchar("meta_message_id", { length: 100 }),
+      sentByUserId: integer("sent_by_user_id").references(() => users.id, { onDelete: "set null" }),
+      sentAt: timestamp("sent_at").notNull().defaultNow()
+    });
+    wabaMessageTemplates = pgTable("waba_message_templates", {
+      id: serial("id").primaryKey(),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+      key: varchar("key", { length: 100 }).notNull(),
+      label: varchar("label", { length: 255 }).notNull(),
+      docType: varchar("doc_type", { length: 50 }),
+      channel: varchar("channel", { length: 20 }).notNull().default("whatsapp"),
+      content: text("content").notNull(),
+      isActive: boolean("is_active").notNull().default(true),
+      createdAt: timestamp("created_at").notNull().defaultNow(),
+      updatedAt: timestamp("updated_at").notNull().defaultNow()
+    });
+    sendSettings = pgTable("send_settings", {
+      id: serial("id").primaryKey(),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+      whatsappEnabled: boolean("whatsapp_enabled").notNull().default(true),
+      telegramEnabled: boolean("telegram_enabled").notNull().default(false),
+      emailEnabled: boolean("email_enabled").notNull().default(false),
+      telegramBotToken: text("telegram_bot_token"),
+      emailProvider: varchar("email_provider", { length: 20 }).default("resend"),
+      emailApiKey: text("email_api_key"),
+      emailFromName: varchar("email_from_name", { length: 255 }),
+      emailFromEmail: varchar("email_from_email", { length: 255 }),
+      whatsappMessageTemplate: text("whatsapp_message_template"),
+      telegramMessageTemplate: text("telegram_message_template"),
+      emailSubjectTemplate: varchar("email_subject_template", { length: 500 }),
+      emailBodyTemplate: text("email_body_template"),
+      // WhatsApp Business API (WABA)
+      wabaEnabled: boolean("waba_enabled").notNull().default(false),
+      wabaApiUrl: text("waba_api_url"),
+      wabaAccessToken: text("waba_access_token"),
+      wabaPhoneNumberId: varchar("waba_phone_number_id", { length: 100 }),
+      wabaSenderName: varchar("waba_sender_name", { length: 255 }),
+      wabaBusinessAccountId: varchar("waba_business_account_id", { length: 100 }),
+      wabaVerifyToken: varchar("waba_verify_token", { length: 255 }),
+      wabaWebhookUrl: varchar("waba_webhook_url", { length: 500 }),
+      createdAt: timestamp("created_at").notNull().defaultNow(),
+      updatedAt: timestamp("updated_at").notNull().defaultNow()
+    });
+    appSettings = pgTable("app_settings", {
+      id: serial("id").primaryKey(),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+      key: varchar("key", { length: 100 }).notNull(),
+      value: text("value"),
+      updatedAt: timestamp("updated_at").notNull().defaultNow()
+    });
+    currencies = pgTable("currencies", {
+      id: serial("id").primaryKey(),
+      orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+      code: varchar("code", { length: 10 }).notNull(),
+      nameAr: varchar("name_ar", { length: 100 }).notNull(),
+      nameEn: varchar("name_en", { length: 100 }).notNull(),
+      symbol: varchar("symbol", { length: 10 }).notNull(),
+      symbolIntl: varchar("symbol_intl", { length: 10 }),
+      exchangeRate: decimal("exchange_rate", { precision: 18, scale: 6 }).notNull().default("1"),
+      decimalPlaces: integer("decimal_places").notNull().default(2),
+      isBase: boolean("is_base").notNull().default(false),
+      mainUnitAr: varchar("main_unit_ar", { length: 50 }),
+      subUnitAr: varchar("sub_unit_ar", { length: 50 }),
+      mainUnitEn: varchar("main_unit_en", { length: 50 }),
+      subUnitEn: varchar("sub_unit_en", { length: 50 }),
+      isActive: boolean("is_active").notNull().default(true),
       createdAt: timestamp("created_at").notNull().defaultNow(),
       updatedAt: timestamp("updated_at").notNull().defaultNow()
     });
@@ -853,8 +1010,8 @@ var adminProcedure = t.procedure.use(requireAdmin);
 var superAdminProcedure = t.procedure.use(requireSuperAdmin);
 
 // src/routers/index.ts
-import { z as z10 } from "zod";
-import { TRPCError as TRPCError3 } from "@trpc/server";
+import { z as z13 } from "zod";
+import { TRPCError as TRPCError4 } from "@trpc/server";
 
 // src/routers/orgs.ts
 import { z } from "zod";
@@ -1124,9 +1281,79 @@ init_schema();
 
 // src/routers/posting.ts
 import { z as z3 } from "zod";
-import { eq as eq4, and as and4, desc } from "drizzle-orm";
+import { eq as eq4, and as and4, desc, inArray, gte, lte } from "drizzle-orm";
 init_db();
 init_schema();
+async function resolveDocTypeAccountsByJournal(journalId, orgId) {
+  const docType = await db.query.documentTypes.findFirst({
+    where: and4(eq4(documentTypes.journal, String(journalId)), eq4(documentTypes.orgId, orgId))
+  });
+  if (!docType) return null;
+  return resolveDocTypeAccounts(docType.id, orgId);
+}
+async function resolveDocTypeAccounts(docTypeId, orgId) {
+  const docType = await db.query.documentTypes.findFirst({
+    where: and4(eq4(documentTypes.id, docTypeId), eq4(documentTypes.orgId, orgId))
+  });
+  if (!docType) return null;
+  const rawIds = [
+    docType.acctCash,
+    docType.acctDebit,
+    docType.acctCredit,
+    docType.acctTax,
+    docType.acctDiscount,
+    docType.acctInventory,
+    docType.acctCogs
+  ];
+  const linkIds = rawIds.map((v) => v ? parseInt(v) : NaN).filter((v) => !isNaN(v));
+  const walById = /* @__PURE__ */ new Map();
+  if (linkIds.length > 0) {
+    const walRows = await db.query.warehouseAccountLinks.findMany({
+      where: inArray(warehouseAccountLinks.id, linkIds)
+    });
+    walRows.forEach((w) => walById.set(w.id, w));
+  }
+  const getAccId = (code) => {
+    if (!code) return null;
+    const id = parseInt(code);
+    return isNaN(id) ? null : walById.get(id)?.accountId ?? null;
+  };
+  return {
+    docType,
+    cashAccountId: docType.cashAccountId ?? getAccId(docType.acctCash) ?? null,
+    creditAccountId: docType.creditAccountId ?? getAccId(docType.acctDebit) ?? null,
+    salesAccountId: docType.salesAccountId ?? getAccId(docType.acctCredit) ?? null,
+    taxAccountId: docType.taxAccountId ?? getAccId(docType.acctTax) ?? null,
+    discountAccountId: docType.discountAccountId ?? getAccId(docType.acctDiscount) ?? null,
+    purchaseAccountId: docType.purchaseAccountId ?? getAccId(docType.acctDebit) ?? null,
+    supplierAccountId: docType.supplierAccountId ?? getAccId(docType.acctCredit) ?? null,
+    inventoryAccountId: getAccId(docType.acctInventory),
+    cogsAccountId: getAccId(docType.acctCogs)
+  };
+}
+async function validateAccounts(accountIds) {
+  const ids = accountIds.filter((id) => id !== null);
+  if (!ids.length) return;
+  const accs = await db.query.chartOfAccounts.findMany({
+    where: inArray(chartOfAccounts.id, ids)
+  });
+  for (const acc of accs) {
+    if (!acc.isActive)
+      throw new Error(`\u0627\u0644\u062D\u0633\u0627\u0628 "${acc.code} - ${acc.name}" \u0645\u0648\u0642\u0648\u0641 \u0648\u0644\u0627 \u064A\u0645\u0643\u0646 \u0627\u0644\u062A\u0631\u062D\u064A\u0644 \u0639\u0644\u064A\u0647`);
+    if (acc.isParent)
+      throw new Error(`\u0627\u0644\u062D\u0633\u0627\u0628 "${acc.code} - ${acc.name}" \u062A\u062C\u0645\u064A\u0639\u064A \u0648\u0644\u0627 \u064A\u0645\u0643\u0646 \u0627\u0644\u062A\u0631\u062D\u064A\u0644 \u0639\u0644\u064A\u0647 \u2014 \u064A\u062C\u0628 \u0627\u062E\u062A\u064A\u0627\u0631 \u062D\u0633\u0627\u0628 \u0641\u0631\u0639\u064A`);
+    if (acc.allowPosting === false)
+      throw new Error(`\u0627\u0644\u062D\u0633\u0627\u0628 "${acc.code} - ${acc.name}" \u0644\u0627 \u064A\u0633\u0645\u062D \u0628\u0627\u0644\u062A\u0631\u062D\u064A\u0644`);
+  }
+}
+async function nextEntryNumber(orgId) {
+  const last = await db.query.journalEntries.findFirst({
+    where: eq4(journalEntries.orgId, orgId),
+    orderBy: [desc(journalEntries.id)]
+  });
+  const n = last ? parseInt(last.entryNumber.replace(/\D/g, "") || "0") + 1 : 1;
+  return `JE-${String(n).padStart(4, "0")}`;
+}
 async function buildSalesInvoiceLines(invoice, journal, orgId) {
   const accIds = [
     journal?.cashAccountId,
@@ -1136,23 +1363,24 @@ async function buildSalesInvoiceLines(invoice, journal, orgId) {
     journal?.discountAccountId
   ].filter(Boolean);
   const accs = accIds.length ? await db.query.chartOfAccounts.findMany({
-    where: (a, { inArray }) => inArray(a.id, accIds)
+    where: (a, { inArray: inArray3 }) => inArray3(a.id, accIds)
   }) : [];
   const accMap = new Map(accs.map((a) => [a.id, a]));
   const total = Number(invoice.total ?? 0);
   const subtotal = Number(invoice.subtotal ?? 0);
   const taxAmount = Number(invoice.taxAmount ?? 0);
   const discountAmount = Number(invoice.discountAmount ?? 0);
-  const isCash = invoice.paymentMethod === "cash";
+  const isCredit = invoice.paymentMethod === "credit";
   const lines = [];
   const warnings = [];
-  const debitAccId = isCash ? journal?.cashAccountId : journal?.creditAccountId;
+  const debitAccId = isCredit ? journal?.creditAccountId : journal?.cashAccountId;
   const debitAcc = debitAccId ? accMap.get(debitAccId) : null;
-  if (!debitAccId) warnings.push(isCash ? "\u062D\u0633\u0627\u0628 \u0627\u0644\u0635\u0646\u062F\u0648\u0642 \u063A\u064A\u0631 \u0645\u062D\u062F\u062F \u0641\u064A \u0627\u0644\u062F\u0641\u062A\u0631" : "\u062D\u0633\u0627\u0628 \u0630\u0645\u0645 \u0627\u0644\u0639\u0645\u0644\u0627\u0621 \u063A\u064A\u0631 \u0645\u062D\u062F\u062F \u0641\u064A \u0627\u0644\u062F\u0641\u062A\u0631");
+  const defaultDebitName = isCredit ? "\u0630\u0645\u0645 \u0627\u0644\u0639\u0645\u0644\u0627\u0621" : "\u0627\u0644\u0635\u0646\u062F\u0648\u0642 / \u0627\u0644\u0646\u0642\u062F";
+  if (!debitAccId) warnings.push(isCredit ? "\u062D\u0633\u0627\u0628 \u0630\u0645\u0645 \u0627\u0644\u0639\u0645\u0644\u0627\u0621 \u063A\u064A\u0631 \u0645\u062D\u062F\u062F \u0641\u064A \u0627\u0644\u062F\u0641\u062A\u0631" : "\u062D\u0633\u0627\u0628 \u0627\u0644\u0635\u0646\u062F\u0648\u0642 \u063A\u064A\u0631 \u0645\u062D\u062F\u062F \u0641\u064A \u0627\u0644\u062F\u0641\u062A\u0631");
   lines.push({
     accountId: debitAccId ?? null,
     accountCode: debitAcc?.code ?? "---",
-    accountName: debitAcc?.name ?? (isCash ? "\u0627\u0644\u0635\u0646\u062F\u0648\u0642 / \u0627\u0644\u0646\u0642\u062F" : "\u0630\u0645\u0645 \u0627\u0644\u0639\u0645\u0644\u0627\u0621"),
+    accountName: debitAcc?.name ?? defaultDebitName,
     debit: total.toFixed(4),
     credit: "0.0000",
     description: `\u0641\u0627\u062A\u0648\u0631\u0629 \u0645\u0628\u064A\u0639\u0627\u062A ${invoice.invoiceNumber}`
@@ -1199,8 +1427,208 @@ async function buildSalesInvoiceLines(invoice, journal, orgId) {
   const isBalanced = Math.abs(totalDebit - totalCredit) < 1e-3;
   return { lines, warnings, totalDebit: totalDebit.toFixed(4), totalCredit: totalCredit.toFixed(4), isBalanced };
 }
+async function buildPurchaseInvoiceLines(invoice, journal, orgId) {
+  const accIds = [
+    journal?.purchaseAccountId,
+    journal?.supplierAccountId,
+    journal?.cashAccountId,
+    journal?.taxAccountId,
+    journal?.discountAccountId
+  ].filter(Boolean);
+  const accs = accIds.length ? await db.query.chartOfAccounts.findMany({
+    where: (a, { inArray: inArray3 }) => inArray3(a.id, accIds)
+  }) : [];
+  const accMap = new Map(accs.map((a) => [a.id, a]));
+  const total = Number(invoice.total ?? 0);
+  const subtotal = Number(invoice.subtotal ?? 0);
+  const taxAmount = Number(invoice.taxAmount ?? 0);
+  const discountAmount = Number(invoice.discountAmount ?? 0);
+  const isCredit = invoice.paymentMethod === "credit";
+  const lines = [];
+  const warnings = [];
+  const purchaseAccId = journal?.purchaseAccountId ?? null;
+  const purchaseAcc = purchaseAccId ? accMap.get(purchaseAccId) : null;
+  if (!purchaseAccId) warnings.push("\u062D\u0633\u0627\u0628 \u0627\u0644\u0645\u0634\u062A\u0631\u064A\u0627\u062A \u063A\u064A\u0631 \u0645\u062D\u062F\u062F \u0641\u064A \u0627\u0644\u062F\u0641\u062A\u0631");
+  lines.push({
+    accountId: purchaseAccId,
+    accountCode: purchaseAcc?.code ?? "---",
+    accountName: purchaseAcc?.name ?? "\u0627\u0644\u0645\u0634\u062A\u0631\u064A\u0627\u062A",
+    debit: subtotal.toFixed(4),
+    credit: "0.0000",
+    description: `\u0641\u0627\u062A\u0648\u0631\u0629 \u0645\u0634\u062A\u0631\u064A\u0627\u062A ${invoice.invoiceNumber}`
+  });
+  if (taxAmount > 0) {
+    const taxAccId = journal?.taxAccountId ?? null;
+    const taxAcc = taxAccId ? accMap.get(taxAccId) : null;
+    if (!taxAccId) warnings.push("\u062D\u0633\u0627\u0628 \u0636\u0631\u064A\u0628\u0629 \u0627\u0644\u0645\u0634\u062A\u0631\u064A\u0627\u062A \u063A\u064A\u0631 \u0645\u062D\u062F\u062F \u0641\u064A \u0627\u0644\u062F\u0641\u062A\u0631");
+    lines.push({
+      accountId: taxAccId,
+      accountCode: taxAcc?.code ?? "---",
+      accountName: taxAcc?.name ?? "\u0636\u0631\u064A\u0628\u0629 \u0627\u0644\u0642\u064A\u0645\u0629 \u0627\u0644\u0645\u0636\u0627\u0641\u0629",
+      debit: taxAmount.toFixed(4),
+      credit: "0.0000",
+      description: `\u0636\u0631\u064A\u0628\u0629 \u0645\u0634\u062A\u0631\u064A\u0627\u062A - ${invoice.invoiceNumber}`
+    });
+  }
+  if (discountAmount > 0) {
+    const discAccId = journal?.discountAccountId ?? null;
+    const discAcc = discAccId ? accMap.get(discAccId) : null;
+    if (!discAccId) warnings.push("\u062D\u0633\u0627\u0628 \u062E\u0635\u0645 \u0627\u0644\u0645\u0634\u062A\u0631\u064A\u0627\u062A \u063A\u064A\u0631 \u0645\u062D\u062F\u062F \u0641\u064A \u0627\u0644\u062F\u0641\u062A\u0631");
+    lines.push({
+      accountId: discAccId,
+      accountCode: discAcc?.code ?? "---",
+      accountName: discAcc?.name ?? "\u062E\u0635\u0648\u0645\u0627\u062A \u0627\u0644\u0645\u0634\u062A\u0631\u064A\u0627\u062A",
+      debit: "0.0000",
+      credit: discountAmount.toFixed(4),
+      description: `\u062E\u0635\u0645 \u0645\u0634\u062A\u0631\u064A\u0627\u062A - ${invoice.invoiceNumber}`
+    });
+  }
+  const creditAccId = isCredit ? journal?.supplierAccountId ?? null : journal?.cashAccountId ?? null;
+  const creditAcc = creditAccId ? accMap.get(creditAccId) : null;
+  const defaultCreditName = isCredit ? "\u0630\u0645\u0645 \u0627\u0644\u0645\u0648\u0631\u062F\u064A\u0646" : "\u0627\u0644\u0635\u0646\u062F\u0648\u0642 / \u0627\u0644\u0646\u0642\u062F";
+  if (!creditAccId) warnings.push(isCredit ? "\u062D\u0633\u0627\u0628 \u0630\u0645\u0645 \u0627\u0644\u0645\u0648\u0631\u062F\u064A\u0646 \u063A\u064A\u0631 \u0645\u062D\u062F\u062F \u0641\u064A \u0627\u0644\u062F\u0641\u062A\u0631" : "\u062D\u0633\u0627\u0628 \u0627\u0644\u0635\u0646\u062F\u0648\u0642 \u063A\u064A\u0631 \u0645\u062D\u062F\u062F \u0641\u064A \u0627\u0644\u062F\u0641\u062A\u0631");
+  lines.push({
+    accountId: creditAccId,
+    accountCode: creditAcc?.code ?? "---",
+    accountName: creditAcc?.name ?? defaultCreditName,
+    debit: "0.0000",
+    credit: total.toFixed(4),
+    description: isCredit ? `\u0645\u0648\u0631\u062F - ${invoice.supplierName ?? ""}` : `\u0633\u062F\u0627\u062F \u0646\u0642\u062F\u064A - ${invoice.invoiceNumber}`
+  });
+  const totalDebit = lines.reduce((s, l) => s + Number(l.debit), 0);
+  const totalCredit = lines.reduce((s, l) => s + Number(l.credit), 0);
+  const isBalanced = Math.abs(totalDebit - totalCredit) < 1e-3;
+  return { lines, warnings, totalDebit: totalDebit.toFixed(4), totalCredit: totalCredit.toFixed(4), isBalanced };
+}
+async function autoPostSalesInvoice(invoiceId, orgId, userId) {
+  const invoice = await db.query.salesInvoices.findFirst({
+    where: and4(eq4(salesInvoices.id, invoiceId), eq4(salesInvoices.orgId, orgId))
+  });
+  if (!invoice || invoice.isPosted) return null;
+  if (invoice.invoiceType !== "sale" && invoice.invoiceType !== "return") return null;
+  if (!invoice.journalId && !invoice.docTypeId) return null;
+  const journal = invoice.journalId ? await db.query.documentJournals.findFirst({
+    where: and4(eq4(documentJournals.id, invoice.journalId), eq4(documentJournals.orgId, orgId))
+  }) : null;
+  if (journal?.postingMode === "disabled") return null;
+  const docTypeAccs = invoice.docTypeId ? await resolveDocTypeAccounts(invoice.docTypeId, orgId) : invoice.journalId ? await resolveDocTypeAccountsByJournal(invoice.journalId, orgId) : null;
+  const effectiveJournal = {
+    ...journal ?? {},
+    cashAccountId: docTypeAccs?.cashAccountId ?? journal?.cashAccountId ?? null,
+    salesAccountId: docTypeAccs?.salesAccountId ?? journal?.salesAccountId ?? null,
+    creditAccountId: docTypeAccs?.creditAccountId ?? journal?.creditAccountId ?? null,
+    taxAccountId: docTypeAccs?.taxAccountId ?? journal?.taxAccountId ?? null,
+    discountAccountId: docTypeAccs?.discountAccountId ?? journal?.discountAccountId ?? null,
+    postingMode: journal?.postingMode ?? "auto"
+  };
+  const isCredit = invoice.paymentMethod === "credit";
+  const hasDebitAcc = isCredit ? !!effectiveJournal.creditAccountId : !!effectiveJournal.cashAccountId;
+  if (!effectiveJournal.salesAccountId || !hasDebitAcc) return null;
+  const { lines: rawLines, isBalanced } = await buildSalesInvoiceLines(invoice, effectiveJournal, orgId);
+  if (!isBalanced || rawLines.length === 0) return null;
+  const isReturn = invoice.invoiceType === "return";
+  const reversedLines = isReturn ? rawLines.map((l) => ({ ...l, debit: l.credit, credit: l.debit })) : rawLines;
+  const docLabel = isReturn ? "\u0645\u0631\u062F\u0648\u062F \u0645\u0628\u064A\u0639\u0627\u062A" : "\u0641\u0627\u062A\u0648\u0631\u0629 \u0645\u0628\u064A\u0639\u0627\u062A";
+  const docTypeName = docTypeAccs?.docType?.nameAr ?? docLabel;
+  const lineDesc = `${docTypeName} - ${invoice.invoiceNumber}`;
+  const lines = reversedLines.map((l) => ({ ...l, description: lineDesc }));
+  const entry = await insertJournalEntry({
+    orgId,
+    userId,
+    date: invoice.invoiceDate,
+    description: docTypeName,
+    reference: invoice.invoiceNumber,
+    sourceDocType: isReturn ? "sales_return" : "sales_invoice",
+    sourceDocId: invoice.id,
+    sourceDocNumber: invoice.invoiceNumber,
+    lines
+  });
+  await db.update(salesInvoices).set({ isPosted: true, postedAt: /* @__PURE__ */ new Date(), postedJournalEntryId: entry.id, updatedAt: /* @__PURE__ */ new Date() }).where(and4(eq4(salesInvoices.id, invoiceId), eq4(salesInvoices.orgId, orgId)));
+  return { entryNumber: entry.entryNumber };
+}
+async function autoPostPurchaseInvoice(invoiceId, orgId, userId) {
+  const invoice = await db.query.purchaseInvoices.findFirst({
+    where: and4(eq4(purchaseInvoices.id, invoiceId), eq4(purchaseInvoices.orgId, orgId))
+  });
+  if (!invoice || invoice.isPosted) return null;
+  if (!invoice.journalId && !invoice.docTypeId) return null;
+  const journal = invoice.journalId ? await db.query.documentJournals.findFirst({
+    where: and4(eq4(documentJournals.id, invoice.journalId), eq4(documentJournals.orgId, orgId))
+  }) : null;
+  if (journal?.postingMode === "disabled") return null;
+  const docTypeAccs = invoice.docTypeId ? await resolveDocTypeAccounts(invoice.docTypeId, orgId) : invoice.journalId ? await resolveDocTypeAccountsByJournal(invoice.journalId, orgId) : null;
+  const effectiveJournal = {
+    purchaseAccountId: docTypeAccs?.purchaseAccountId ?? journal?.purchaseAccountId ?? null,
+    supplierAccountId: docTypeAccs?.supplierAccountId ?? journal?.supplierAccountId ?? null,
+    cashAccountId: docTypeAccs?.cashAccountId ?? journal?.cashAccountId ?? null,
+    taxAccountId: docTypeAccs?.taxAccountId ?? journal?.taxAccountId ?? null,
+    discountAccountId: docTypeAccs?.discountAccountId ?? journal?.discountAccountId ?? null
+  };
+  const isCredit = invoice.paymentMethod === "credit";
+  const hasCounterAcc = isCredit ? !!effectiveJournal.supplierAccountId : !!effectiveJournal.cashAccountId;
+  if (!effectiveJournal.purchaseAccountId || !hasCounterAcc) return null;
+  const { lines: rawLines, isBalanced } = await buildPurchaseInvoiceLines(invoice, effectiveJournal, orgId);
+  if (!isBalanced || rawLines.length === 0) return null;
+  const isReturn = invoice.invoiceType === "return";
+  const reversedLines = isReturn ? rawLines.map((l) => ({ ...l, debit: l.credit, credit: l.debit })) : rawLines;
+  const docLabel = isReturn ? "\u0645\u0631\u062F\u0648\u062F \u0645\u0634\u062A\u0631\u064A\u0627\u062A" : "\u0641\u0627\u062A\u0648\u0631\u0629 \u0645\u0634\u062A\u0631\u064A\u0627\u062A";
+  const docTypeName = docTypeAccs?.docType?.nameAr ?? docLabel;
+  const lineDesc = `${docTypeName} - ${invoice.invoiceNumber}`;
+  const lines = reversedLines.map((l) => ({ ...l, description: lineDesc }));
+  const entry = await insertJournalEntry({
+    orgId,
+    userId,
+    date: invoice.invoiceDate,
+    description: docTypeName,
+    reference: invoice.invoiceNumber,
+    sourceDocType: isReturn ? "purchase_return" : "purchase_invoice",
+    sourceDocId: invoice.id,
+    sourceDocNumber: invoice.invoiceNumber,
+    lines
+  });
+  await db.update(purchaseInvoices).set({ isPosted: true, postedAt: /* @__PURE__ */ new Date(), postedJournalEntryId: entry.id, updatedAt: /* @__PURE__ */ new Date() }).where(and4(eq4(purchaseInvoices.id, invoiceId), eq4(purchaseInvoices.orgId, orgId)));
+  return { entryNumber: entry.entryNumber };
+}
+async function insertJournalEntry(opts) {
+  const entryNumber = await nextEntryNumber(opts.orgId);
+  const totalDebit = opts.lines.reduce((s, l) => s + Number(l.debit), 0);
+  const totalCredit = opts.lines.reduce((s, l) => s + Number(l.credit), 0);
+  const [entry] = await db.insert(journalEntries).values({
+    orgId: opts.orgId,
+    entryNumber,
+    entryDate: opts.date,
+    description: opts.description,
+    reference: opts.reference,
+    totalDebit: totalDebit.toFixed(4),
+    totalCredit: totalCredit.toFixed(4),
+    status: "posted",
+    userId: opts.userId,
+    sourceDocType: opts.sourceDocType,
+    sourceDocId: opts.sourceDocId,
+    sourceDocNumber: opts.sourceDocNumber,
+    entryType: "auto"
+  }).returning();
+  if (opts.lines.length > 0) {
+    await db.insert(journalEntryLines).values(
+      opts.lines.map((l, i) => ({
+        entryId: entry.id,
+        orgId: opts.orgId,
+        accountId: l.accountId ?? void 0,
+        accountCode: l.accountCode,
+        accountName: l.accountName,
+        description: l.description,
+        debit: l.debit,
+        credit: l.credit,
+        sortOrder: i
+      }))
+    );
+  }
+  return entry;
+}
 var postingRouter = router({
-  // ── معاينة القيد قبل الترحيل ─────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // فاتورة المبيعات — معاينة + ترحيل + فك الترحيل
+  // ══════════════════════════════════════════════════════════════════════════
   previewSalesInvoice: protectedProcedure.input(z3.object({ invoiceId: z3.number() })).query(async ({ ctx, input }) => {
     const orgId = ctx.user.orgId;
     const invoice = await db.query.salesInvoices.findFirst({
@@ -1210,14 +1638,24 @@ var postingRouter = router({
     const journal = invoice.journalId ? await db.query.documentJournals.findFirst({
       where: and4(eq4(documentJournals.id, invoice.journalId), eq4(documentJournals.orgId, orgId))
     }) : null;
-    const { lines, warnings, totalDebit, totalCredit, isBalanced } = await buildSalesInvoiceLines(invoice, journal ?? null, orgId);
+    const docTypeAccs = invoice.docTypeId ? await resolveDocTypeAccounts(invoice.docTypeId, orgId) : invoice.journalId ? await resolveDocTypeAccountsByJournal(invoice.journalId, orgId) : null;
+    const effectiveJournal = {
+      ...journal ?? {},
+      cashAccountId: docTypeAccs?.cashAccountId ?? journal?.cashAccountId ?? null,
+      salesAccountId: docTypeAccs?.salesAccountId ?? journal?.salesAccountId ?? null,
+      creditAccountId: docTypeAccs?.creditAccountId ?? journal?.creditAccountId ?? null,
+      taxAccountId: docTypeAccs?.taxAccountId ?? journal?.taxAccountId ?? null,
+      discountAccountId: docTypeAccs?.discountAccountId ?? journal?.discountAccountId ?? null,
+      postingMode: journal?.postingMode ?? "manual"
+    };
+    const { lines, warnings, totalDebit, totalCredit, isBalanced } = await buildSalesInvoiceLines(invoice, effectiveJournal, orgId);
     return {
       invoiceNumber: invoice.invoiceNumber,
       invoiceDate: invoice.invoiceDate,
       customerName: invoice.customerName,
       total: invoice.total,
       paymentMethod: invoice.paymentMethod,
-      journalName: journal?.name ?? null,
+      journalName: journal?.name ?? docTypeAccs?.docType?.nameAr ?? null,
       lines,
       warnings,
       totalDebit,
@@ -1227,7 +1665,6 @@ var postingRouter = router({
       isPosted: invoice.isPosted
     };
   }),
-  // ── ترحيل فاتورة مبيعات ─────────────────────────────────────────────────
   postSalesInvoice: protectedProcedure.input(z3.object({ invoiceId: z3.number() })).mutation(async ({ ctx, input }) => {
     const orgId = ctx.user.orgId;
     const invoice = await db.query.salesInvoices.findFirst({
@@ -1238,57 +1675,45 @@ var postingRouter = router({
     const journal = invoice.journalId ? await db.query.documentJournals.findFirst({
       where: and4(eq4(documentJournals.id, invoice.journalId), eq4(documentJournals.orgId, orgId))
     }) : null;
-    if (journal?.postingMode === "disabled") {
+    if (journal?.postingMode === "disabled")
       throw new Error("\u0627\u0644\u062A\u0631\u062D\u064A\u0644 \u0645\u0639\u0637\u064E\u0651\u0644 \u0644\u0647\u0630\u0627 \u0627\u0644\u062F\u0641\u062A\u0631");
-    }
-    const { lines, isBalanced } = await buildSalesInvoiceLines(invoice, journal ?? null, orgId);
-    const lastEntry = await db.query.journalEntries.findFirst({
-      where: eq4(journalEntries.orgId, orgId),
-      orderBy: [desc(journalEntries.id)]
-    });
-    const nextNum = lastEntry ? parseInt(lastEntry.entryNumber.replace(/\D/g, "") || "0") + 1 : 1;
-    const entryNumber = `JE-${String(nextNum).padStart(4, "0")}`;
-    const totalDebit = lines.reduce((s, l) => s + Number(l.debit), 0);
-    const totalCredit = lines.reduce((s, l) => s + Number(l.credit), 0);
-    const [entry] = await db.insert(journalEntries).values({
+    const docTypeAccs = invoice.docTypeId ? await resolveDocTypeAccounts(invoice.docTypeId, orgId) : invoice.journalId ? await resolveDocTypeAccountsByJournal(invoice.journalId, orgId) : null;
+    const effectiveJournal = {
+      ...journal ?? {},
+      cashAccountId: docTypeAccs?.cashAccountId ?? journal?.cashAccountId ?? null,
+      salesAccountId: docTypeAccs?.salesAccountId ?? journal?.salesAccountId ?? null,
+      creditAccountId: docTypeAccs?.creditAccountId ?? journal?.creditAccountId ?? null,
+      taxAccountId: docTypeAccs?.taxAccountId ?? journal?.taxAccountId ?? null,
+      discountAccountId: docTypeAccs?.discountAccountId ?? journal?.discountAccountId ?? null,
+      postingMode: journal?.postingMode ?? "manual"
+    };
+    const isCredit = invoice.paymentMethod === "credit";
+    const missingAccounts = [];
+    if (!effectiveJournal.salesAccountId) missingAccounts.push("\u062D\u0633\u0627\u0628 \u0627\u0644\u0645\u0628\u064A\u0639\u0627\u062A/\u0627\u0644\u0625\u064A\u0631\u0627\u062F\u0627\u062A");
+    if (isCredit && !effectiveJournal.creditAccountId) missingAccounts.push("\u062D\u0633\u0627\u0628 \u0630\u0645\u0645 \u0627\u0644\u0639\u0645\u0644\u0627\u0621 (\u0622\u062C\u0644)");
+    if (!isCredit && !effectiveJournal.cashAccountId) missingAccounts.push("\u062D\u0633\u0627\u0628 \u0627\u0644\u0635\u0646\u062F\u0648\u0642/\u0627\u0644\u0646\u0642\u062F");
+    if (missingAccounts.length > 0)
+      throw new Error(
+        `\u0644\u0627 \u064A\u0645\u0643\u0646 \u062A\u0631\u062D\u064A\u0644 \u0627\u0644\u0645\u0633\u062A\u0646\u062F \u0644\u0639\u062F\u0645 \u0627\u0643\u062A\u0645\u0627\u0644 \u0627\u0644\u0631\u0648\u0627\u0628\u0637 \u0627\u0644\u0645\u062D\u0627\u0633\u0628\u064A\u0629
+\u0627\u0644\u062D\u0633\u0627\u0628\u0627\u062A \u0627\u0644\u0646\u0627\u0642\u0635\u0629: ${missingAccounts.join("\u060C ")}`
+      );
+    const { lines, isBalanced } = await buildSalesInvoiceLines(invoice, effectiveJournal, orgId);
+    if (!isBalanced) throw new Error("\u0644\u0627 \u064A\u0645\u0643\u0646 \u062A\u0631\u062D\u064A\u0644 \u0627\u0644\u0645\u0633\u062A\u0646\u062F: \u0627\u0644\u0645\u062F\u064A\u0646 \u0644\u0627 \u064A\u0633\u0627\u0648\u064A \u0627\u0644\u062F\u0627\u0626\u0646 \u0641\u064A \u0627\u0644\u0642\u064A\u062F \u0627\u0644\u0645\u062D\u0627\u0633\u0628\u064A");
+    await validateAccounts(lines.map((l) => l.accountId));
+    const entry = await insertJournalEntry({
       orgId,
-      entryNumber,
-      entryDate: invoice.invoiceDate,
+      userId: ctx.user.id,
+      date: invoice.invoiceDate,
       description: `\u062A\u0631\u062D\u064A\u0644 \u0641\u0627\u062A\u0648\u0631\u0629 \u0645\u0628\u064A\u0639\u0627\u062A ${invoice.invoiceNumber}`,
       reference: invoice.invoiceNumber,
-      totalDebit: totalDebit.toFixed(4),
-      totalCredit: totalCredit.toFixed(4),
-      status: "posted",
-      userId: ctx.user.id,
       sourceDocType: "sales_invoice",
       sourceDocId: invoice.id,
       sourceDocNumber: invoice.invoiceNumber,
-      entryType: "auto"
-    }).returning();
-    if (lines.length > 0) {
-      await db.insert(journalEntryLines).values(
-        lines.map((l, i) => ({
-          entryId: entry.id,
-          orgId,
-          accountId: l.accountId ?? void 0,
-          accountCode: l.accountCode,
-          accountName: l.accountName,
-          description: l.description,
-          debit: l.debit,
-          credit: l.credit,
-          sortOrder: i
-        }))
-      );
-    }
-    await db.update(salesInvoices).set({
-      isPosted: true,
-      postedAt: /* @__PURE__ */ new Date(),
-      postedJournalEntryId: entry.id,
-      updatedAt: /* @__PURE__ */ new Date()
-    }).where(and4(eq4(salesInvoices.id, input.invoiceId), eq4(salesInvoices.orgId, orgId)));
-    return { success: true, journalEntryId: entry.id, entryNumber };
+      lines
+    });
+    await db.update(salesInvoices).set({ isPosted: true, postedAt: /* @__PURE__ */ new Date(), postedJournalEntryId: entry.id, updatedAt: /* @__PURE__ */ new Date() }).where(and4(eq4(salesInvoices.id, input.invoiceId), eq4(salesInvoices.orgId, orgId)));
+    return { success: true, journalEntryId: entry.id, entryNumber: entry.entryNumber };
   }),
-  // ── إلغاء ترحيل فاتورة مبيعات ────────────────────────────────────────────
   unpostSalesInvoice: protectedProcedure.input(z3.object({ invoiceId: z3.number() })).mutation(async ({ ctx, input }) => {
     const orgId = ctx.user.orgId;
     const invoice = await db.query.salesInvoices.findFirst({
@@ -1299,20 +1724,305 @@ var postingRouter = router({
     const journal = invoice.journalId ? await db.query.documentJournals.findFirst({
       where: and4(eq4(documentJournals.id, invoice.journalId), eq4(documentJournals.orgId, orgId))
     }) : null;
-    if (journal && !journal.allowUnpost) {
+    if (journal && !journal.allowUnpost)
       throw new Error("\u0625\u0644\u063A\u0627\u0621 \u0627\u0644\u062A\u0631\u062D\u064A\u0644 \u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D \u0628\u0647 \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u062F\u0641\u062A\u0631");
-    }
     if (invoice.postedJournalEntryId) {
       await db.delete(journalEntryLines).where(eq4(journalEntryLines.entryId, invoice.postedJournalEntryId));
-      await db.delete(journalEntries).where(and4(
-        eq4(journalEntries.id, invoice.postedJournalEntryId),
-        eq4(journalEntries.orgId, orgId)
-      ));
+      await db.delete(journalEntries).where(and4(eq4(journalEntries.id, invoice.postedJournalEntryId), eq4(journalEntries.orgId, orgId)));
     }
     await db.update(salesInvoices).set({ isPosted: false, postedAt: null, postedJournalEntryId: null, updatedAt: /* @__PURE__ */ new Date() }).where(and4(eq4(salesInvoices.id, input.invoiceId), eq4(salesInvoices.orgId, orgId)));
     return { success: true };
   }),
-  // ── جلب إعدادات الترحيل لجميع الدفاتر ──────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // فاتورة المشتريات — معاينة + ترحيل + فك الترحيل
+  // ══════════════════════════════════════════════════════════════════════════
+  previewPurchaseInvoice: protectedProcedure.input(z3.object({ invoiceId: z3.number() })).query(async ({ ctx, input }) => {
+    const orgId = ctx.user.orgId;
+    const invoice = await db.query.purchaseInvoices.findFirst({
+      where: and4(eq4(purchaseInvoices.id, input.invoiceId), eq4(purchaseInvoices.orgId, orgId))
+    });
+    if (!invoice) throw new Error("\u0627\u0644\u0641\u0627\u062A\u0648\u0631\u0629 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629");
+    const journal = invoice.journalId ? await db.query.documentJournals.findFirst({
+      where: and4(eq4(documentJournals.id, invoice.journalId), eq4(documentJournals.orgId, orgId))
+    }) : null;
+    const docTypeAccs = invoice.docTypeId ? await resolveDocTypeAccounts(invoice.docTypeId, orgId) : invoice.journalId ? await resolveDocTypeAccountsByJournal(invoice.journalId, orgId) : null;
+    const effectiveJournal = {
+      purchaseAccountId: docTypeAccs?.purchaseAccountId ?? journal?.purchaseAccountId ?? null,
+      supplierAccountId: docTypeAccs?.supplierAccountId ?? journal?.supplierAccountId ?? null,
+      cashAccountId: docTypeAccs?.cashAccountId ?? journal?.cashAccountId ?? null,
+      taxAccountId: docTypeAccs?.taxAccountId ?? journal?.taxAccountId ?? null,
+      discountAccountId: docTypeAccs?.discountAccountId ?? journal?.discountAccountId ?? null
+    };
+    const { lines, warnings, totalDebit, totalCredit, isBalanced } = await buildPurchaseInvoiceLines(invoice, effectiveJournal, orgId);
+    return {
+      invoiceNumber: invoice.invoiceNumber,
+      invoiceDate: invoice.invoiceDate,
+      supplierName: invoice.supplierName,
+      total: invoice.total,
+      paymentMethod: invoice.paymentMethod,
+      journalName: journal?.name ?? docTypeAccs?.docType?.nameAr ?? null,
+      lines,
+      warnings,
+      totalDebit,
+      totalCredit,
+      isBalanced,
+      canPost: !invoice.isPosted,
+      isPosted: invoice.isPosted
+    };
+  }),
+  postPurchaseInvoice: protectedProcedure.input(z3.object({ invoiceId: z3.number() })).mutation(async ({ ctx, input }) => {
+    const orgId = ctx.user.orgId;
+    const invoice = await db.query.purchaseInvoices.findFirst({
+      where: and4(eq4(purchaseInvoices.id, input.invoiceId), eq4(purchaseInvoices.orgId, orgId))
+    });
+    if (!invoice) throw new Error("\u0627\u0644\u0641\u0627\u062A\u0648\u0631\u0629 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629");
+    if (invoice.isPosted) throw new Error("\u0627\u0644\u0641\u0627\u062A\u0648\u0631\u0629 \u0645\u0631\u062D\u064E\u0651\u0644\u0629 \u0645\u0633\u0628\u0642\u0627\u064B");
+    const journal = invoice.journalId ? await db.query.documentJournals.findFirst({
+      where: and4(eq4(documentJournals.id, invoice.journalId), eq4(documentJournals.orgId, orgId))
+    }) : null;
+    if (journal?.postingMode === "disabled")
+      throw new Error("\u0627\u0644\u062A\u0631\u062D\u064A\u0644 \u0645\u0639\u0637\u064E\u0651\u0644 \u0644\u0647\u0630\u0627 \u0627\u0644\u062F\u0641\u062A\u0631");
+    const docTypeAccs = invoice.docTypeId ? await resolveDocTypeAccounts(invoice.docTypeId, orgId) : invoice.journalId ? await resolveDocTypeAccountsByJournal(invoice.journalId, orgId) : null;
+    const effectiveJournal = {
+      purchaseAccountId: docTypeAccs?.purchaseAccountId ?? journal?.purchaseAccountId ?? null,
+      supplierAccountId: docTypeAccs?.supplierAccountId ?? journal?.supplierAccountId ?? null,
+      cashAccountId: docTypeAccs?.cashAccountId ?? journal?.cashAccountId ?? null,
+      taxAccountId: docTypeAccs?.taxAccountId ?? journal?.taxAccountId ?? null,
+      discountAccountId: docTypeAccs?.discountAccountId ?? journal?.discountAccountId ?? null
+    };
+    const isCredit = invoice.paymentMethod === "credit";
+    const missingAccounts = [];
+    if (!effectiveJournal.purchaseAccountId) missingAccounts.push("\u062D\u0633\u0627\u0628 \u0627\u0644\u0645\u0634\u062A\u0631\u064A\u0627\u062A");
+    if (isCredit && !effectiveJournal.supplierAccountId) missingAccounts.push("\u062D\u0633\u0627\u0628 \u0630\u0645\u0645 \u0627\u0644\u0645\u0648\u0631\u062F\u064A\u0646 (\u0622\u062C\u0644)");
+    if (!isCredit && !effectiveJournal.cashAccountId) missingAccounts.push("\u062D\u0633\u0627\u0628 \u0627\u0644\u0635\u0646\u062F\u0648\u0642/\u0627\u0644\u0646\u0642\u062F");
+    if (missingAccounts.length > 0)
+      throw new Error(
+        `\u0644\u0627 \u064A\u0645\u0643\u0646 \u062A\u0631\u062D\u064A\u0644 \u0627\u0644\u0645\u0633\u062A\u0646\u062F \u0644\u0639\u062F\u0645 \u0627\u0643\u062A\u0645\u0627\u0644 \u0627\u0644\u0631\u0648\u0627\u0628\u0637 \u0627\u0644\u0645\u062D\u0627\u0633\u0628\u064A\u0629
+\u0627\u0644\u062D\u0633\u0627\u0628\u0627\u062A \u0627\u0644\u0646\u0627\u0642\u0635\u0629: ${missingAccounts.join("\u060C ")}`
+      );
+    const { lines, isBalanced } = await buildPurchaseInvoiceLines(invoice, effectiveJournal, orgId);
+    if (!isBalanced) throw new Error("\u0644\u0627 \u064A\u0645\u0643\u0646 \u062A\u0631\u062D\u064A\u0644 \u0627\u0644\u0645\u0633\u062A\u0646\u062F: \u0627\u0644\u0645\u062F\u064A\u0646 \u0644\u0627 \u064A\u0633\u0627\u0648\u064A \u0627\u0644\u062F\u0627\u0626\u0646 \u0641\u064A \u0627\u0644\u0642\u064A\u062F \u0627\u0644\u0645\u062D\u0627\u0633\u0628\u064A");
+    await validateAccounts(lines.map((l) => l.accountId));
+    const entry = await insertJournalEntry({
+      orgId,
+      userId: ctx.user.id,
+      date: invoice.invoiceDate,
+      description: `\u062A\u0631\u062D\u064A\u0644 \u0641\u0627\u062A\u0648\u0631\u0629 \u0645\u0634\u062A\u0631\u064A\u0627\u062A ${invoice.invoiceNumber}`,
+      reference: invoice.invoiceNumber,
+      sourceDocType: "purchase_invoice",
+      sourceDocId: invoice.id,
+      sourceDocNumber: invoice.invoiceNumber,
+      lines
+    });
+    await db.update(purchaseInvoices).set({ isPosted: true, postedAt: /* @__PURE__ */ new Date(), postedJournalEntryId: entry.id, updatedAt: /* @__PURE__ */ new Date() }).where(and4(eq4(purchaseInvoices.id, input.invoiceId), eq4(purchaseInvoices.orgId, orgId)));
+    return { success: true, journalEntryId: entry.id, entryNumber: entry.entryNumber };
+  }),
+  unpostPurchaseInvoice: protectedProcedure.input(z3.object({ invoiceId: z3.number() })).mutation(async ({ ctx, input }) => {
+    const orgId = ctx.user.orgId;
+    const invoice = await db.query.purchaseInvoices.findFirst({
+      where: and4(eq4(purchaseInvoices.id, input.invoiceId), eq4(purchaseInvoices.orgId, orgId))
+    });
+    if (!invoice) throw new Error("\u0627\u0644\u0641\u0627\u062A\u0648\u0631\u0629 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629");
+    if (!invoice.isPosted) throw new Error("\u0627\u0644\u0641\u0627\u062A\u0648\u0631\u0629 \u0644\u064A\u0633\u062A \u0645\u0631\u062D\u064E\u0651\u0644\u0629");
+    const journal = invoice.journalId ? await db.query.documentJournals.findFirst({
+      where: and4(eq4(documentJournals.id, invoice.journalId), eq4(documentJournals.orgId, orgId))
+    }) : null;
+    if (journal && !journal.allowUnpost)
+      throw new Error("\u0625\u0644\u063A\u0627\u0621 \u0627\u0644\u062A\u0631\u062D\u064A\u0644 \u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D \u0628\u0647 \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u062F\u0641\u062A\u0631");
+    if (invoice.postedJournalEntryId) {
+      await db.delete(journalEntryLines).where(eq4(journalEntryLines.entryId, invoice.postedJournalEntryId));
+      await db.delete(journalEntries).where(and4(eq4(journalEntries.id, invoice.postedJournalEntryId), eq4(journalEntries.orgId, orgId)));
+    }
+    await db.update(purchaseInvoices).set({ isPosted: false, postedAt: null, postedJournalEntryId: null, updatedAt: /* @__PURE__ */ new Date() }).where(and4(eq4(purchaseInvoices.id, input.invoiceId), eq4(purchaseInvoices.orgId, orgId)));
+    return { success: true };
+  }),
+  // ══════════════════════════════════════════════════════════════════════════
+  // المرحلة الثانية: ترحيل المشتريات للمخزون
+  // القيد: مدين المخزون / دائن حساب المشتريات
+  // ══════════════════════════════════════════════════════════════════════════
+  previewPostPurchasesToInventory: protectedProcedure.input(z3.object({
+    fromDate: z3.string().optional(),
+    toDate: z3.string().optional(),
+    warehouseId: z3.number().optional(),
+    journalId: z3.number().optional()
+  })).query(async ({ ctx, input }) => {
+    const orgId = ctx.user.orgId;
+    const conds = [
+      eq4(purchaseInvoices.orgId, orgId),
+      eq4(purchaseInvoices.isPosted, true),
+      eq4(purchaseInvoices.inventoryPosted, false)
+    ];
+    if (input.fromDate) conds.push(gte(purchaseInvoices.invoiceDate, new Date(input.fromDate)));
+    if (input.toDate) conds.push(lte(purchaseInvoices.invoiceDate, new Date(input.toDate)));
+    if (input.warehouseId) conds.push(eq4(purchaseInvoices.warehouseId, input.warehouseId));
+    if (input.journalId) conds.push(eq4(purchaseInvoices.journalId, input.journalId));
+    const invoices = await db.query.purchaseInvoices.findMany({ where: and4(...conds) });
+    const totalAmount = invoices.reduce((s, inv) => s + Number(inv.subtotal ?? 0), 0);
+    return {
+      count: invoices.length,
+      totalAmount: totalAmount.toFixed(4),
+      invoices: invoices.map((inv) => ({
+        id: inv.id,
+        invoiceNumber: inv.invoiceNumber,
+        supplierName: inv.supplierName,
+        invoiceDate: inv.invoiceDate,
+        subtotal: inv.subtotal
+      }))
+    };
+  }),
+  postPurchasesToInventory: protectedProcedure.input(z3.object({
+    fromDate: z3.string().optional(),
+    toDate: z3.string().optional(),
+    warehouseId: z3.number().optional(),
+    journalId: z3.number().optional(),
+    inventoryAccountId: z3.number(),
+    purchasesAccountId: z3.number()
+  })).mutation(async ({ ctx, input }) => {
+    const orgId = ctx.user.orgId;
+    const conds = [
+      eq4(purchaseInvoices.orgId, orgId),
+      eq4(purchaseInvoices.isPosted, true),
+      eq4(purchaseInvoices.inventoryPosted, false)
+    ];
+    if (input.fromDate) conds.push(gte(purchaseInvoices.invoiceDate, new Date(input.fromDate)));
+    if (input.toDate) conds.push(lte(purchaseInvoices.invoiceDate, new Date(input.toDate)));
+    if (input.warehouseId) conds.push(eq4(purchaseInvoices.warehouseId, input.warehouseId));
+    if (input.journalId) conds.push(eq4(purchaseInvoices.journalId, input.journalId));
+    const invoices = await db.query.purchaseInvoices.findMany({ where: and4(...conds) });
+    if (!invoices.length) throw new Error("\u0644\u0627 \u062A\u0648\u062C\u062F \u0641\u0648\u0627\u062A\u064A\u0631 \u0645\u0634\u062A\u0631\u064A\u0627\u062A \u0645\u0631\u062D\u064E\u0651\u0644\u0629 \u0648\u063A\u064A\u0631 \u0645\u062D\u0648\u064E\u0651\u0644\u0629 \u0644\u0644\u0645\u062E\u0632\u0648\u0646 \u0641\u064A \u0627\u0644\u0646\u0637\u0627\u0642 \u0627\u0644\u0645\u062D\u062F\u062F");
+    await validateAccounts([input.inventoryAccountId, input.purchasesAccountId]);
+    const [invAcc, purAcc] = await Promise.all([
+      db.query.chartOfAccounts.findFirst({ where: eq4(chartOfAccounts.id, input.inventoryAccountId) }),
+      db.query.chartOfAccounts.findFirst({ where: eq4(chartOfAccounts.id, input.purchasesAccountId) })
+    ]);
+    const totalAmount = invoices.reduce((s, inv) => s + Number(inv.subtotal ?? 0), 0);
+    const lines = [
+      {
+        accountId: input.inventoryAccountId,
+        accountCode: invAcc?.code ?? "---",
+        accountName: invAcc?.name ?? "\u0627\u0644\u0645\u062E\u0632\u0648\u0646",
+        debit: totalAmount.toFixed(4),
+        credit: "0.0000",
+        description: `\u062A\u0631\u062D\u064A\u0644 \u0627\u0644\u0645\u0634\u062A\u0631\u064A\u0627\u062A \u0644\u0644\u0645\u062E\u0632\u0648\u0646 \u2014 ${invoices.length} \u0641\u0627\u062A\u0648\u0631\u0629`
+      },
+      {
+        accountId: input.purchasesAccountId,
+        accountCode: purAcc?.code ?? "---",
+        accountName: purAcc?.name ?? "\u0627\u0644\u0645\u0634\u062A\u0631\u064A\u0627\u062A",
+        debit: "0.0000",
+        credit: totalAmount.toFixed(4),
+        description: `\u062A\u0635\u0641\u064A\u0631 \u062D\u0633\u0627\u0628 \u0627\u0644\u0645\u0634\u062A\u0631\u064A\u0627\u062A \u2014 ${invoices.length} \u0641\u0627\u062A\u0648\u0631\u0629`
+      }
+    ];
+    const entry = await insertJournalEntry({
+      orgId,
+      userId: ctx.user.id,
+      date: /* @__PURE__ */ new Date(),
+      description: `\u062A\u0631\u062D\u064A\u0644 \u0627\u0644\u0645\u0634\u062A\u0631\u064A\u0627\u062A \u0644\u0644\u0645\u062E\u0632\u0648\u0646 \u2014 ${invoices.length} \u0641\u0627\u062A\u0648\u0631\u0629 \u2014 \u0625\u062C\u0645\u0627\u0644\u064A ${totalAmount.toFixed(2)}`,
+      reference: `INV-XFER-${Date.now()}`,
+      sourceDocType: "purchase_to_inventory",
+      sourceDocId: 0,
+      sourceDocNumber: `PURCH-INV-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}`,
+      lines
+    });
+    const invoiceIds = invoices.map((inv) => inv.id);
+    await db.update(purchaseInvoices).set({ inventoryPosted: true, costPostedJournalEntryId: entry.id, updatedAt: /* @__PURE__ */ new Date() }).where(and4(eq4(purchaseInvoices.orgId, orgId), inArray(purchaseInvoices.id, invoiceIds)));
+    return { success: true, count: invoices.length, totalAmount: totalAmount.toFixed(4), entryNumber: entry.entryNumber };
+  }),
+  // ══════════════════════════════════════════════════════════════════════════
+  // المرحلة الثانية: ترحيل تكلفة المبيعات (COGS)
+  // القيد: مدين تكلفة المبيعات / دائن المخزون
+  // ══════════════════════════════════════════════════════════════════════════
+  previewPostSalesCOGS: protectedProcedure.input(z3.object({
+    fromDate: z3.string().optional(),
+    toDate: z3.string().optional(),
+    warehouseId: z3.number().optional(),
+    journalId: z3.number().optional()
+  })).query(async ({ ctx, input }) => {
+    const orgId = ctx.user.orgId;
+    const conds = [
+      eq4(salesInvoices.orgId, orgId),
+      eq4(salesInvoices.isPosted, true),
+      eq4(salesInvoices.costPosted, false)
+    ];
+    if (input.fromDate) conds.push(gte(salesInvoices.invoiceDate, new Date(input.fromDate)));
+    if (input.toDate) conds.push(lte(salesInvoices.invoiceDate, new Date(input.toDate)));
+    if (input.journalId) conds.push(eq4(salesInvoices.journalId, input.journalId));
+    const invoices = await db.query.salesInvoices.findMany({ where: and4(...conds) });
+    const totalCost = invoices.reduce((s, inv) => s + Number(inv.subtotal ?? 0), 0);
+    return {
+      count: invoices.length,
+      totalCost: totalCost.toFixed(4),
+      invoices: invoices.map((inv) => ({
+        id: inv.id,
+        invoiceNumber: inv.invoiceNumber,
+        customerName: inv.customerName,
+        invoiceDate: inv.invoiceDate,
+        subtotal: inv.subtotal
+      }))
+    };
+  }),
+  postSalesCOGS: protectedProcedure.input(z3.object({
+    fromDate: z3.string().optional(),
+    toDate: z3.string().optional(),
+    warehouseId: z3.number().optional(),
+    journalId: z3.number().optional(),
+    cogsAccountId: z3.number(),
+    inventoryAccountId: z3.number()
+  })).mutation(async ({ ctx, input }) => {
+    const orgId = ctx.user.orgId;
+    const conds = [
+      eq4(salesInvoices.orgId, orgId),
+      eq4(salesInvoices.isPosted, true),
+      eq4(salesInvoices.costPosted, false)
+    ];
+    if (input.fromDate) conds.push(gte(salesInvoices.invoiceDate, new Date(input.fromDate)));
+    if (input.toDate) conds.push(lte(salesInvoices.invoiceDate, new Date(input.toDate)));
+    if (input.journalId) conds.push(eq4(salesInvoices.journalId, input.journalId));
+    const invoices = await db.query.salesInvoices.findMany({ where: and4(...conds) });
+    if (!invoices.length) throw new Error("\u0644\u0627 \u062A\u0648\u062C\u062F \u0641\u0648\u0627\u062A\u064A\u0631 \u0645\u0628\u064A\u0639\u0627\u062A \u0645\u0631\u062D\u064E\u0651\u0644\u0629 \u0648\u063A\u064A\u0631 \u0645\u062D\u0648\u064E\u0651\u0644 \u062A\u0643\u0644\u0641\u062A\u0647\u0627 \u0641\u064A \u0627\u0644\u0646\u0637\u0627\u0642 \u0627\u0644\u0645\u062D\u062F\u062F");
+    await validateAccounts([input.cogsAccountId, input.inventoryAccountId]);
+    const [cogsAcc, invAcc] = await Promise.all([
+      db.query.chartOfAccounts.findFirst({ where: eq4(chartOfAccounts.id, input.cogsAccountId) }),
+      db.query.chartOfAccounts.findFirst({ where: eq4(chartOfAccounts.id, input.inventoryAccountId) })
+    ]);
+    const totalCost = invoices.reduce((s, inv) => s + Number(inv.subtotal ?? 0), 0);
+    const lines = [
+      {
+        accountId: input.cogsAccountId,
+        accountCode: cogsAcc?.code ?? "---",
+        accountName: cogsAcc?.name ?? "\u062A\u0643\u0644\u0641\u0629 \u0627\u0644\u0645\u0628\u064A\u0639\u0627\u062A",
+        debit: totalCost.toFixed(4),
+        credit: "0.0000",
+        description: `\u062A\u0643\u0644\u0641\u0629 \u0627\u0644\u0645\u0628\u064A\u0639\u0627\u062A \u2014 ${invoices.length} \u0641\u0627\u062A\u0648\u0631\u0629`
+      },
+      {
+        accountId: input.inventoryAccountId,
+        accountCode: invAcc?.code ?? "---",
+        accountName: invAcc?.name ?? "\u0627\u0644\u0645\u062E\u0632\u0648\u0646",
+        debit: "0.0000",
+        credit: totalCost.toFixed(4),
+        description: `\u062A\u062E\u0641\u064A\u0636 \u0627\u0644\u0645\u062E\u0632\u0648\u0646 \u2014 \u0628\u062A\u0643\u0644\u0641\u0629 \u0627\u0644\u0645\u0628\u064A\u0639\u0627\u062A \u2014 ${invoices.length} \u0641\u0627\u062A\u0648\u0631\u0629`
+      }
+    ];
+    const entry = await insertJournalEntry({
+      orgId,
+      userId: ctx.user.id,
+      date: /* @__PURE__ */ new Date(),
+      description: `\u062A\u0631\u062D\u064A\u0644 \u062A\u0643\u0644\u0641\u0629 \u0627\u0644\u0645\u0628\u064A\u0639\u0627\u062A \u2014 ${invoices.length} \u0641\u0627\u062A\u0648\u0631\u0629 \u2014 \u0625\u062C\u0645\u0627\u0644\u064A ${totalCost.toFixed(2)}`,
+      reference: `COGS-${Date.now()}`,
+      sourceDocType: "sales_cogs",
+      sourceDocId: 0,
+      sourceDocNumber: `COGS-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}`,
+      lines
+    });
+    const invoiceIds = invoices.map((inv) => inv.id);
+    await db.update(salesInvoices).set({ costPosted: true, costPostedJournalEntryId: entry.id, updatedAt: /* @__PURE__ */ new Date() }).where(and4(eq4(salesInvoices.orgId, orgId), inArray(salesInvoices.id, invoiceIds)));
+    return { success: true, count: invoices.length, totalCost: totalCost.toFixed(4), entryNumber: entry.entryNumber };
+  }),
+  // ══════════════════════════════════════════════════════════════════════════
+  // إعدادات الترحيل
+  // ══════════════════════════════════════════════════════════════════════════
   listJournalSettings: protectedProcedure.query(async ({ ctx }) => {
     const journals = await db.query.documentJournals.findMany({
       where: eq4(documentJournals.orgId, ctx.user.orgId),
@@ -1328,7 +2038,6 @@ var postingRouter = router({
       allowEditAfterPost: j.allowEditAfterPost ?? false
     }));
   }),
-  // ── تحديث إعدادات الترحيل لدفتر ─────────────────────────────────────────
   updateJournalSettings: protectedProcedure.input(z3.object({
     journalId: z3.number(),
     postingMode: z3.enum(["auto", "manual", "disabled"]),
@@ -1340,13 +2049,9 @@ var postingRouter = router({
       allowUnpost: input.allowUnpost,
       allowEditAfterPost: input.allowEditAfterPost,
       updatedAt: /* @__PURE__ */ new Date()
-    }).where(and4(
-      eq4(documentJournals.id, input.journalId),
-      eq4(documentJournals.orgId, ctx.user.orgId)
-    ));
+    }).where(and4(eq4(documentJournals.id, input.journalId), eq4(documentJournals.orgId, ctx.user.orgId)));
     return { success: true };
   }),
-  // ── جلب فاتورة بالـ ID (للقراءة بعد الحفظ) ──────────────────────────────
   getSalesInvoice: protectedProcedure.input(z3.object({ invoiceId: z3.number() })).query(async ({ ctx, input }) => {
     return db.query.salesInvoices.findFirst({
       where: and4(eq4(salesInvoices.id, input.invoiceId), eq4(salesInvoices.orgId, ctx.user.orgId))
@@ -1461,6 +2166,8 @@ var salesRouter = router({
     dueDate: z4.string().optional(),
     customerId: z4.number().optional(),
     customerName: z4.string().optional(),
+    customerType: z4.string().optional(),
+    customerTaxNumber: z4.string().optional(),
     warehouseId: z4.number().optional(),
     journalId: z4.number().optional(),
     currency: z4.string().default("SAR"),
@@ -1475,6 +2182,7 @@ var salesRouter = router({
     paymentMethod: z4.enum(["cash", "bank", "credit", "check", "other"]).default("cash"),
     status: z4.enum(["draft", "confirmed", "cancelled", "paid"]).default("confirmed"),
     notes: z4.string().optional(),
+    docTypeId: z4.number().optional(),
     items: z4.array(z4.object({
       productId: z4.number().optional(),
       productCode: z4.string().optional(),
@@ -1509,53 +2217,13 @@ var salesRouter = router({
         }))
       );
     }
-    if (input.paymentMethod === "cash" && input.journalId && invoice.invoiceType === "sale") {
-      const journal = await db.query.documentJournals.findFirst({
-        where: and5(eq5(documentJournals.id, input.journalId), eq5(documentJournals.orgId, orgId))
-      });
-      if (journal && journal.postingMode !== "disabled") {
-        const { lines } = await buildSalesInvoiceLines(invoice, journal, orgId);
-        if (lines.length > 0 && lines.some((l) => l.accountId !== null)) {
-          const lastEntry = await db.query.journalEntries.findFirst({
-            where: eq5(journalEntries.orgId, orgId),
-            orderBy: [desc2(journalEntries.id)]
-          });
-          const nextNum = lastEntry ? parseInt(lastEntry.entryNumber.replace(/\D/g, "") || "0") + 1 : 1;
-          const entryNumber = `JE-${String(nextNum).padStart(4, "0")}`;
-          const totalDebit = lines.reduce((s, l) => s + Number(l.debit), 0);
-          const totalCredit = lines.reduce((s, l) => s + Number(l.credit), 0);
-          const [entry] = await db.insert(journalEntries).values({
-            orgId,
-            entryNumber,
-            entryDate: invoice.invoiceDate,
-            description: `\u062A\u0631\u062D\u064A\u0644 \u062A\u0644\u0642\u0627\u0626\u064A - \u0641\u0627\u062A\u0648\u0631\u0629 \u0645\u0628\u064A\u0639\u0627\u062A ${invoice.invoiceNumber}`,
-            reference: invoice.invoiceNumber,
-            totalDebit: totalDebit.toFixed(4),
-            totalCredit: totalCredit.toFixed(4),
-            status: "posted",
-            userId: ctx.user.id,
-            sourceDocType: "sales_invoice",
-            sourceDocId: invoice.id,
-            sourceDocNumber: invoice.invoiceNumber,
-            entryType: "auto"
-          }).returning();
-          await db.insert(journalEntryLines).values(
-            lines.map((l, i) => ({
-              entryId: entry.id,
-              orgId,
-              accountId: l.accountId ?? void 0,
-              accountCode: l.accountCode,
-              accountName: l.accountName,
-              description: l.description,
-              debit: l.debit,
-              credit: l.credit,
-              sortOrder: i
-            }))
-          );
-          const [updated] = await db.update(salesInvoices).set({ isPosted: true, postedAt: /* @__PURE__ */ new Date(), postedJournalEntryId: entry.id, updatedAt: /* @__PURE__ */ new Date() }).where(and5(eq5(salesInvoices.id, invoice.id), eq5(salesInvoices.orgId, orgId))).returning();
-          return { ...updated, autoPostedEntryNumber: entryNumber };
-        }
+    try {
+      const posted = await autoPostSalesInvoice(invoice.id, orgId, ctx.user.id);
+      if (posted) {
+        return { ...invoice, isPosted: true, autoPostedEntryNumber: posted.entryNumber };
       }
+    } catch (e) {
+      console.error("[sales.create] autoPostSalesInvoice error:", e);
     }
     return invoice;
   }),
@@ -1565,6 +2233,8 @@ var salesRouter = router({
     invoiceDate: z4.string().optional(),
     customerId: z4.number().optional(),
     customerName: z4.string().optional(),
+    customerType: z4.string().optional(),
+    customerTaxNumber: z4.string().optional(),
     subtotal: z4.string().optional(),
     discountAmount: z4.string().optional(),
     taxAmount: z4.string().optional(),
@@ -1589,6 +2259,11 @@ var salesRouter = router({
     })).optional()
   })).mutation(async ({ ctx, input }) => {
     const { id, items, invoiceDate, ...rest } = input;
+    const existing = await db.query.salesInvoices.findFirst({
+      where: and5(eq5(salesInvoices.id, id), eq5(salesInvoices.orgId, ctx.user.orgId))
+    });
+    if (existing?.isPosted)
+      throw new Error("\u0644\u0627 \u064A\u0645\u0643\u0646 \u062A\u0639\u062F\u064A\u0644 \u0645\u0633\u062A\u0646\u062F \u0645\u0631\u062D\u0651\u0644 \u2014 \u064A\u062C\u0628 \u0641\u0643 \u0627\u0644\u062A\u0631\u062D\u064A\u0644 \u0623\u0648\u0644\u0627\u064B");
     await db.update(salesInvoices).set({
       ...rest,
       ...invoiceDate ? { invoiceDate: new Date(invoiceDate) } : {},
@@ -1650,10 +2325,12 @@ var salesRouter = router({
         }))
       };
     }
+    const typeFilter = input.type === "order" ? "order" : input.type === "quote" ? "quote" : "sale";
     const invoice = await db.query.salesInvoices.findFirst({
       where: and5(
         eq5(salesInvoices.orgId, ctx.user.orgId),
-        eq5(salesInvoices.invoiceNumber, input.number)
+        eq5(salesInvoices.invoiceNumber, input.number),
+        eq5(salesInvoices.invoiceType, typeFilter)
       )
     });
     if (!invoice) return null;
@@ -1686,6 +2363,11 @@ var salesRouter = router({
   }),
   // حذف مستند
   delete: protectedProcedure.input(z4.object({ id: z4.number() })).mutation(async ({ ctx, input }) => {
+    const existing = await db.query.salesInvoices.findFirst({
+      where: and5(eq5(salesInvoices.id, input.id), eq5(salesInvoices.orgId, ctx.user.orgId))
+    });
+    if (existing?.isPosted)
+      throw new Error("\u0644\u0627 \u064A\u0645\u0643\u0646 \u062D\u0630\u0641 \u0645\u0633\u062A\u0646\u062F \u0645\u0631\u062D\u0651\u0644 \u2014 \u064A\u062C\u0628 \u0641\u0643 \u0627\u0644\u062A\u0631\u062D\u064A\u0644 \u0623\u0648\u0644\u0627\u064B");
     await db.delete(salesInvoiceItems).where(eq5(salesInvoiceItems.invoiceId, input.id));
     await db.delete(salesInvoices).where(
       and5(eq5(salesInvoices.id, input.id), eq5(salesInvoices.orgId, ctx.user.orgId))
@@ -1857,6 +2539,11 @@ var purchasesRouter = router({
         }))
       );
     }
+    try {
+      await autoPostPurchaseInvoice(invoice.id, orgId, ctx.user.id);
+    } catch (e) {
+      console.warn("[autoPostPurchaseInvoice] skipped:", e);
+    }
     return invoice;
   }),
   // تعديل مستند
@@ -1873,6 +2560,7 @@ var purchasesRouter = router({
     remainingAmount: z5.string().optional(),
     status: z5.enum(["draft", "confirmed", "cancelled", "paid"]).optional(),
     notes: z5.string().optional(),
+    docTypeId: z5.number().optional(),
     items: z5.array(z5.object({
       productId: z5.number().optional(),
       productCode: z5.string().optional(),
@@ -1889,6 +2577,11 @@ var purchasesRouter = router({
     })).optional()
   })).mutation(async ({ ctx, input }) => {
     const { id, items, invoiceDate, ...rest } = input;
+    const existing = await db.query.purchaseInvoices.findFirst({
+      where: and6(eq6(purchaseInvoices.id, id), eq6(purchaseInvoices.orgId, ctx.user.orgId))
+    });
+    if (existing?.isPosted)
+      throw new Error("\u0644\u0627 \u064A\u0645\u0643\u0646 \u062A\u0639\u062F\u064A\u0644 \u0645\u0633\u062A\u0646\u062F \u0645\u0631\u062D\u064E\u0651\u0644 \u2014 \u064A\u062C\u0628 \u0641\u0643 \u0627\u0644\u062A\u0631\u062D\u064A\u0644 \u0623\u0648\u0644\u0627\u064B");
     await db.update(purchaseInvoices).set({
       ...rest,
       ...invoiceDate ? { invoiceDate: new Date(invoiceDate) } : {},
@@ -1911,6 +2604,11 @@ var purchasesRouter = router({
   }),
   // حذف مستند
   delete: protectedProcedure.input(z5.object({ id: z5.number() })).mutation(async ({ ctx, input }) => {
+    const existing = await db.query.purchaseInvoices.findFirst({
+      where: and6(eq6(purchaseInvoices.id, input.id), eq6(purchaseInvoices.orgId, ctx.user.orgId))
+    });
+    if (existing?.isPosted)
+      throw new Error("\u0644\u0627 \u064A\u0645\u0643\u0646 \u062D\u0630\u0641 \u0645\u0633\u062A\u0646\u062F \u0645\u0631\u062D\u064E\u0651\u0644 \u2014 \u064A\u062C\u0628 \u0641\u0643 \u0627\u0644\u062A\u0631\u062D\u064A\u0644 \u0623\u0648\u0644\u0627\u064B");
     await db.delete(purchaseInvoices).where(
       and6(eq6(purchaseInvoices.id, input.id), eq6(purchaseInvoices.orgId, ctx.user.orgId))
     );
@@ -2033,6 +2731,8 @@ var journalInputShape = {
   resetFrequency: z7.string().default("none"),
   autoSerial: z7.boolean().default(false),
   printOnSave: z7.boolean().default(false),
+  customersJournal: z7.string().nullable().optional(),
+  suppliersJournal: z7.string().nullable().optional(),
   notes: z7.string().optional(),
   sortOrder: z7.number().default(0)
 };
@@ -2121,6 +2821,79 @@ import { z as z8 } from "zod";
 import { eq as eq9, and as and9, asc as asc2 } from "drizzle-orm";
 init_db();
 init_schema();
+var POS01_CONFIG = JSON.stringify({
+  type: "pos_config_v1",
+  paperWidth: "80mm",
+  primaryColor: "#406B93",
+  taxPct: 15,
+  taxInclusive: true,
+  show: {
+    logo: false,
+    taxNumber: true,
+    commercialReg: true,
+    address: true,
+    phone: true,
+    customerName: false,
+    cashierName: true,
+    itemCode: false,
+    discount: true,
+    prices: true,
+    branchName: true,
+    qr: true,
+    amountInWords: false,
+    thankYou: true,
+    paymentMethod: true,
+    changeAmount: true
+  },
+  printMode: "detailed",
+  thankYouMsg: "\u0634\u0643\u0631\u0627\u064B \u0644\u062A\u0633\u0648\u0642\u0643\u0645 \u0645\u0639\u0646\u0627",
+  copies: 1
+});
+var INV01_CONFIG = JSON.stringify({
+  version: 1,
+  type: "config_v1",
+  paperSize: "A4",
+  orientation: "portrait",
+  language: "bilingual",
+  primaryColor: "#406B93",
+  columns: {
+    num: true,
+    code: true,
+    name: true,
+    unit: false,
+    qty: true,
+    price: true,
+    discount: true,
+    taxable: true,
+    taxRate: true,
+    taxAmt: true,
+    total: true
+  },
+  minRows: 5,
+  sections: {
+    sellerInfo: true,
+    customerInfo: true,
+    amountInWords: true,
+    pageNumber: true,
+    signatures: false
+  },
+  elements: [
+    { id: "e_qr", type: "qr", x: 5, y: 5, w: 26, h: 26, border: false },
+    { id: "e_title", type: "text", x: 72, y: 7, w: 62, h: 16, content: "\u0641\u0627\u062A\u0648\u0631\u0629 \u0636\u0631\u064A\u0628\u064A\u0629\nTAX INVOICE", fontSize: 13, fontWeight: "bold", textAlign: "center", color: "#222222" },
+    { id: "e_co", type: "company_info", x: 112, y: 5, w: 93, h: 28, fontSize: 9 },
+    { id: "e_d1", type: "line", x: 5, y: 36, w: 200, h: 1, color: "#406B93" },
+    { id: "e_inv", type: "invoice_info", x: 5, y: 39, w: 200, h: 13, fontSize: 9 },
+    { id: "e_d2", type: "line", x: 5, y: 54, w: 200, h: 1, color: "#cccccc" },
+    { id: "e_cust", type: "customer_info", x: 5, y: 57, w: 95, h: 32, fontSize: 9, border: true },
+    { id: "e_d3", type: "line", x: 5, y: 92, w: 200, h: 1, color: "#cccccc" },
+    { id: "e_items", type: "items_table", x: 5, y: 95, w: 200, h: 82, fontSize: 9 },
+    { id: "e_total", type: "totals", x: 115, y: 181, w: 90, h: 44, fontSize: 10, border: true },
+    { id: "e_words", type: "notes", x: 5, y: 181, w: 106, h: 12, content: "\u0627\u0644\u0645\u0628\u0644\u063A \u0643\u062A\u0627\u0628\u0629\u064B: {{AmountInWords}}", fontSize: 9 },
+    { id: "e_notes", type: "notes", x: 5, y: 196, w: 106, h: 12, content: "\u0645\u0644\u0627\u062D\u0638\u0627\u062A: {{Notes}}", fontSize: 9 },
+    { id: "e_d4", type: "line", x: 5, y: 229, w: 200, h: 1, color: "#cccccc" },
+    { id: "e_foot", type: "text", x: 5, y: 232, w: 200, h: 8, content: "OneSoft ERP  \xB7  \u0635\u0641\u062D\u0629 1 \u0645\u0646 1 / Page 1 of 1", fontSize: 8, textAlign: "center", color: "#888888" }
+  ]
+});
 var documentTemplatesRouter = router({
   list: protectedProcedure.input(z8.object({ docType: z8.string().optional() }).optional()).query(async ({ ctx, input }) => {
     const where = input?.docType ? and9(eq9(documentTemplates.orgId, ctx.user.orgId), eq9(documentTemplates.docType, input.docType), eq9(documentTemplates.isActive, true)) : and9(eq9(documentTemplates.orgId, ctx.user.orgId), eq9(documentTemplates.isActive, true));
@@ -2128,6 +2901,69 @@ var documentTemplatesRouter = router({
       where,
       orderBy: [asc2(documentTemplates.sortOrder), asc2(documentTemplates.id)]
     });
+  }),
+  getDefault: protectedProcedure.input(z8.object({ docType: z8.string() })).query(async ({ ctx, input }) => {
+    const tpl = await db.query.documentTemplates.findFirst({
+      where: and9(
+        eq9(documentTemplates.orgId, ctx.user.orgId),
+        eq9(documentTemplates.docType, input.docType),
+        eq9(documentTemplates.isDefault, true),
+        eq9(documentTemplates.isActive, true)
+      )
+    });
+    return tpl ?? null;
+  }),
+  seedDefaults: protectedProcedure.mutation(async ({ ctx }) => {
+    const defaults = [
+      {
+        code: "INV01",
+        nameAr: "\u0646\u0645\u0648\u0630\u062C \u0627\u0644\u0645\u0628\u064A\u0639\u0627\u062A \u0627\u0644\u0623\u0633\u0627\u0633\u064A",
+        nameEn: "Standard Sales Invoice",
+        docType: "sales_invoice",
+        paperSize: "A4",
+        layoutJson: INV01_CONFIG,
+        notes: "\u0627\u0644\u0646\u0645\u0648\u0630\u062C \u0627\u0644\u0627\u0641\u062A\u0631\u0627\u0636\u064A \u2014 \u0641\u0627\u062A\u0648\u0631\u0629 \u0636\u0631\u064A\u0628\u064A\u0629 \u062B\u0646\u0627\u0626\u064A\u0629 \u0627\u0644\u0644\u063A\u0629"
+      },
+      {
+        code: "POS01",
+        nameAr: "\u0646\u0645\u0648\u0630\u062C \u0646\u0642\u0627\u0637 \u0627\u0644\u0628\u064A\u0639 \u0627\u0644\u062D\u0631\u0627\u0631\u064A",
+        nameEn: "POS Thermal Receipt",
+        docType: "pos_receipt",
+        paperSize: "80mm",
+        layoutJson: POS01_CONFIG,
+        notes: "\u0625\u064A\u0635\u0627\u0644 \u062D\u0631\u0627\u0631\u064A \u0644\u0646\u0642\u0627\u0637 \u0627\u0644\u0628\u064A\u0639 \u2014 ZATCA/ETA QR"
+      }
+    ];
+    let seededCount = 0;
+    for (const def of defaults) {
+      const existing = await db.query.documentTemplates.findFirst({
+        where: and9(
+          eq9(documentTemplates.orgId, ctx.user.orgId),
+          eq9(documentTemplates.code, def.code)
+        )
+      });
+      if (!existing) {
+        await db.insert(documentTemplates).values({
+          orgId: ctx.user.orgId,
+          code: def.code,
+          nameAr: def.nameAr,
+          nameEn: def.nameEn,
+          docType: def.docType,
+          paperSize: def.paperSize,
+          orientation: "portrait",
+          isDefault: true,
+          isActive: true,
+          sortOrder: 1,
+          layoutJson: def.layoutJson,
+          notes: def.notes
+        });
+        seededCount++;
+      } else if (!existing.layoutJson) {
+        await db.update(documentTemplates).set({ layoutJson: def.layoutJson, isDefault: true, updatedAt: /* @__PURE__ */ new Date() }).where(and9(eq9(documentTemplates.id, existing.id), eq9(documentTemplates.orgId, ctx.user.orgId)));
+        seededCount++;
+      }
+    }
+    return { seeded: seededCount > 0, count: seededCount };
   }),
   create: protectedProcedure.input(z8.object({
     code: z8.string().min(1),
@@ -2175,6 +3011,27 @@ var documentTemplatesRouter = router({
   delete: protectedProcedure.input(z8.object({ id: z8.number() })).mutation(async ({ ctx, input }) => {
     await db.update(documentTemplates).set({ isActive: false, updatedAt: /* @__PURE__ */ new Date() }).where(and9(eq9(documentTemplates.id, input.id), eq9(documentTemplates.orgId, ctx.user.orgId)));
     return { success: true };
+  }),
+  clone: protectedProcedure.input(z8.object({ id: z8.number(), newCode: z8.string(), newNameAr: z8.string() })).mutation(async ({ ctx, input }) => {
+    const src = await db.query.documentTemplates.findFirst({
+      where: and9(eq9(documentTemplates.id, input.id), eq9(documentTemplates.orgId, ctx.user.orgId))
+    });
+    if (!src) throw new Error("\u0627\u0644\u0646\u0645\u0648\u0630\u062C \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F");
+    const [row] = await db.insert(documentTemplates).values({
+      orgId: ctx.user.orgId,
+      code: input.newCode,
+      nameAr: input.newNameAr,
+      nameEn: src.nameEn ? `Copy of ${src.nameEn}` : void 0,
+      docType: src.docType,
+      paperSize: src.paperSize ?? "A4",
+      orientation: src.orientation ?? "portrait",
+      isDefault: false,
+      isActive: true,
+      layoutJson: src.layoutJson,
+      notes: src.notes,
+      sortOrder: (src.sortOrder ?? 0) + 1
+    }).returning();
+    return row;
   })
 });
 
@@ -2194,6 +3051,8 @@ var inputShape = {
   user_: z9.string().optional(),
   warehouse: z9.string().optional(),
   journal: z9.string().optional(),
+  customersJournal: z9.string().optional(),
+  suppliersJournal: z9.string().optional(),
   systemOnly: z9.boolean().default(false),
   entryType: z9.string().optional(),
   entryJournal: z9.string().optional(),
@@ -2216,6 +3075,13 @@ var inputShape = {
   acctDiscount: z9.string().optional(),
   acctCash: z9.string().optional(),
   acctTax: z9.string().optional(),
+  salesAccountId: z9.number().nullable().optional(),
+  cashAccountId: z9.number().nullable().optional(),
+  creditAccountId: z9.number().nullable().optional(),
+  taxAccountId: z9.number().nullable().optional(),
+  discountAccountId: z9.number().nullable().optional(),
+  purchaseAccountId: z9.number().nullable().optional(),
+  supplierAccountId: z9.number().nullable().optional(),
   sortOrder: z9.number().default(0)
 };
 var documentTypesRouter = router({
@@ -2245,10 +3111,572 @@ var documentTypesRouter = router({
   })
 });
 
+// src/routers/documentSend.ts
+import { z as z10 } from "zod";
+init_db();
+init_schema();
+import { eq as eq11, and as and11, desc as desc5 } from "drizzle-orm";
+var TPL_WA = `\u0639\u0632\u064A\u0632\u064A {{customerName}}\u060C
+\u0645\u0631\u0641\u0642 \u0644\u0643\u0645 {{docTypeName}} \u0631\u0642\u0645 {{docNumber}}
+\u0628\u0645\u0628\u0644\u063A {{amount}} {{currency}}.
+
+\u0634\u0643\u0631\u0627\u064B \u0644\u062A\u0639\u0627\u0645\u0644\u0643\u0645 \u0645\u0639\u0646\u0627.`;
+var TPL_TG = `\u0639\u0632\u064A\u0632\u064A {{customerName}}\u060C
+\u0645\u0631\u0641\u0642 \u0644\u0643\u0645 {{docTypeName}} \u0631\u0642\u0645 {{docNumber}}
+\u0628\u0645\u0628\u0644\u063A {{amount}} {{currency}}.
+
+\u0634\u0643\u0631\u0627\u064B \u0644\u062A\u0639\u0627\u0645\u0644\u0643\u0645 \u0645\u0639\u0646\u0627.`;
+var TPL_EMAIL_SUBJECT = `{{docTypeName}} \u0631\u0642\u0645 {{docNumber}} \u2014 {{sellerName}}`;
+var TPL_EMAIL_BODY = `<div dir="rtl" style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
+  <h2 style="color:#406B93">{{sellerName}}</h2>
+  <p>\u0639\u0632\u064A\u0632\u064A {{customerName}}\u060C</p>
+  <p>\u0646\u0631\u0641\u0642 \u0644\u0643\u0645 <strong>{{docTypeName}}</strong> \u0631\u0642\u0645 <strong>{{docNumber}}</strong>
+     \u0628\u0645\u0628\u0644\u063A <strong>{{amount}} {{currency}}</strong>.</p>
+  <p style="color:#555">\u0634\u0643\u0631\u0627\u064B \u0644\u062A\u0639\u0627\u0645\u0644\u0643\u0645 \u0645\u0639\u0646\u0627.</p>
+</div>`;
+var DEFAULT_WA_TEMPLATES = [
+  { key: "invoice_sales", label: "\u0641\u0627\u062A\u0648\u0631\u0629 \u0645\u0628\u064A\u0639\u0627\u062A", docType: "sales_invoice", channel: "whatsapp", content: "\u0639\u0632\u064A\u0632\u064A {{customerName}}\u060C\n\u0645\u0631\u0641\u0642 \u0641\u0627\u062A\u0648\u0631\u0629 \u0627\u0644\u0645\u0628\u064A\u0639\u0627\u062A \u0631\u0642\u0645 {{docNumber}} \u0628\u0645\u0628\u0644\u063A {{amount}} {{currency}}.\n\n\u0634\u0643\u0631\u0627\u064B \u0644\u062A\u0639\u0627\u0645\u0644\u0643\u0645 \u0645\u0639\u0646\u0627 \u{1F64F}" },
+  { key: "quotation", label: "\u0639\u0631\u0636 \u0633\u0639\u0631", docType: "quotation", channel: "whatsapp", content: "\u0639\u0632\u064A\u0632\u064A {{customerName}}\u060C\n\u064A\u0633\u0639\u062F\u0646\u0627 \u062A\u0642\u062F\u064A\u0645 \u0639\u0631\u0636 \u0627\u0644\u0633\u0639\u0631 \u0631\u0642\u0645 {{docNumber}}.\n\n\u0646\u0623\u0645\u0644 \u0623\u0646 \u064A\u0644\u0642\u0649 \u0642\u0628\u0648\u0644\u0643\u0645." },
+  { key: "statement", label: "\u0643\u0634\u0641 \u062D\u0633\u0627\u0628", docType: "statement", channel: "whatsapp", content: "\u0639\u0632\u064A\u0632\u064A {{customerName}}\u060C\n\u0645\u0631\u0641\u0642 \u0643\u0634\u0641 \u062D\u0633\u0627\u0628\u0643\u0645 \u0628\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u064A\u0648\u0645.\n\n\u0627\u0644\u0631\u0635\u064A\u062F \u0627\u0644\u0645\u0633\u062A\u062D\u0642: {{amount}} {{currency}}." },
+  { key: "credit_note", label: "\u0625\u0634\u0639\u0627\u0631 \u062F\u0627\u0626\u0646", docType: "credit_note", channel: "whatsapp", content: "\u0639\u0632\u064A\u0632\u064A {{customerName}}\u060C\n\u062A\u0645 \u0625\u0635\u062F\u0627\u0631 \u0625\u0634\u0639\u0627\u0631 \u062F\u0627\u0626\u0646 \u0631\u0642\u0645 {{docNumber}} \u0628\u0645\u0628\u0644\u063A {{amount}} {{currency}}." },
+  { key: "debit_note", label: "\u0625\u0634\u0639\u0627\u0631 \u0645\u062F\u064A\u0646", docType: "debit_note", channel: "whatsapp", content: "\u0639\u0632\u064A\u0632\u064A {{customerName}}\u060C\n\u062A\u0645 \u0625\u0635\u062F\u0627\u0631 \u0625\u0634\u0639\u0627\u0631 \u0645\u062F\u064A\u0646 \u0631\u0642\u0645 {{docNumber}} \u0628\u0645\u0628\u0644\u063A {{amount}} {{currency}}." },
+  { key: "purchase_invoice", label: "\u0641\u0627\u062A\u0648\u0631\u0629 \u0645\u0634\u062A\u0631\u064A\u0627\u062A", docType: "purchase_invoice", channel: "whatsapp", content: "\u0639\u0632\u064A\u0632\u064A \u0627\u0644\u0645\u0648\u0631\u062F {{customerName}}\u060C\n\u0645\u0631\u0641\u0642 \u0623\u0645\u0631 \u0627\u0644\u0634\u0631\u0627\u0621 \u0631\u0642\u0645 {{docNumber}} \u0628\u0645\u0628\u0644\u063A {{amount}} {{currency}}." }
+];
+function interpolate(tpl, vars) {
+  return tpl.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? "");
+}
+var docInfoSchema = z10.object({
+  docType: z10.string(),
+  docId: z10.number().optional(),
+  docNumber: z10.string(),
+  docTypeName: z10.string(),
+  amount: z10.string(),
+  currency: z10.string().default("SAR"),
+  customerName: z10.string(),
+  customMessage: z10.string().optional()
+});
+var documentSendRouter = router({
+  /* ── إعدادات الإرسال ──────────────────────────────────────────── */
+  getSettings: protectedProcedure.query(async ({ ctx }) => {
+    const row = await db.query.sendSettings.findFirst({
+      where: eq11(sendSettings.orgId, ctx.user.orgId)
+    });
+    return row ?? {
+      id: 0,
+      orgId: ctx.user.orgId,
+      whatsappEnabled: true,
+      telegramEnabled: false,
+      emailEnabled: false,
+      wabaEnabled: false,
+      wabaApiUrl: null,
+      wabaAccessToken: null,
+      wabaPhoneNumberId: null,
+      wabaSenderName: null,
+      wabaBusinessAccountId: null,
+      wabaVerifyToken: null,
+      wabaWebhookUrl: null,
+      telegramBotToken: null,
+      emailProvider: "resend",
+      emailApiKey: null,
+      emailFromName: null,
+      emailFromEmail: null,
+      whatsappMessageTemplate: TPL_WA,
+      telegramMessageTemplate: TPL_TG,
+      emailSubjectTemplate: TPL_EMAIL_SUBJECT,
+      emailBodyTemplate: TPL_EMAIL_BODY,
+      createdAt: /* @__PURE__ */ new Date(),
+      updatedAt: /* @__PURE__ */ new Date()
+    };
+  }),
+  updateSettings: protectedProcedure.input(z10.object({
+    whatsappEnabled: z10.boolean().optional(),
+    telegramEnabled: z10.boolean().optional(),
+    emailEnabled: z10.boolean().optional(),
+    wabaEnabled: z10.boolean().optional(),
+    wabaApiUrl: z10.string().nullable().optional(),
+    wabaAccessToken: z10.string().nullable().optional(),
+    wabaPhoneNumberId: z10.string().nullable().optional(),
+    wabaSenderName: z10.string().nullable().optional(),
+    wabaBusinessAccountId: z10.string().nullable().optional(),
+    wabaVerifyToken: z10.string().nullable().optional(),
+    wabaWebhookUrl: z10.string().nullable().optional(),
+    telegramBotToken: z10.string().nullable().optional(),
+    emailProvider: z10.enum(["resend", "smtp"]).optional(),
+    emailApiKey: z10.string().nullable().optional(),
+    emailFromName: z10.string().nullable().optional(),
+    emailFromEmail: z10.string().nullable().optional(),
+    whatsappMessageTemplate: z10.string().nullable().optional(),
+    telegramMessageTemplate: z10.string().nullable().optional(),
+    emailSubjectTemplate: z10.string().nullable().optional(),
+    emailBodyTemplate: z10.string().nullable().optional()
+  })).mutation(async ({ ctx, input }) => {
+    const existing = await db.query.sendSettings.findFirst({
+      where: eq11(sendSettings.orgId, ctx.user.orgId)
+    });
+    if (existing) {
+      await db.update(sendSettings).set({ ...input, updatedAt: /* @__PURE__ */ new Date() }).where(eq11(sendSettings.orgId, ctx.user.orgId));
+    } else {
+      await db.insert(sendSettings).values({ orgId: ctx.user.orgId, ...input });
+    }
+    return { ok: true };
+  }),
+  /* ── اختبار اتصال WhatsApp Business API ──────────────────────── */
+  testWabaConnection: protectedProcedure.mutation(async ({ ctx }) => {
+    const cfg = await db.query.sendSettings.findFirst({
+      where: eq11(sendSettings.orgId, ctx.user.orgId)
+    });
+    if (!cfg?.wabaApiUrl || !cfg?.wabaAccessToken || !cfg?.wabaPhoneNumberId) {
+      return {
+        ok: false,
+        message: "\u064A\u0631\u062C\u0649 \u0625\u062F\u062E\u0627\u0644: API URL\u060C Access Token\u060C Phone Number ID",
+        phoneInfo: null
+      };
+    }
+    try {
+      const baseUrl = cfg.wabaApiUrl.replace(/\/$/, "");
+      const url = `${baseUrl}/${cfg.wabaPhoneNumberId}?fields=display_phone_number,verified_name,quality_rating,platform_type,throughput,last_onboarded_time,status`;
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${cfg.wabaAccessToken}` }
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        const code = json.error?.code;
+        let message = json.error?.message || `HTTP ${res.status}`;
+        if (code === 190) message = "\u062E\u0637\u0623 \u0628\u0627\u0644\u0645\u0635\u0627\u062F\u0642\u0629 \u2014 Access Token \u0645\u0646\u062A\u0647\u064A \u0627\u0644\u0635\u0644\u0627\u062D\u064A\u0629 \u0623\u0648 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D";
+        else if (code === 100) message = "\u062E\u0637\u0623 \u0628\u0627\u0644\u0631\u0642\u0645 \u2014 Phone Number ID \u063A\u064A\u0631 \u0635\u062D\u064A\u062D";
+        return { ok: false, message, phoneInfo: null };
+      }
+      return {
+        ok: true,
+        message: `\u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0646\u0627\u062C\u062D`,
+        phoneInfo: {
+          displayNumber: json.display_phone_number ?? cfg.wabaPhoneNumberId,
+          verifiedName: json.verified_name ?? cfg.wabaSenderName ?? "\u2014",
+          quality: json.quality_rating ?? "\u2014",
+          status: json.status ?? "CONNECTED"
+        }
+      };
+    } catch (e) {
+      return { ok: false, message: e.message || "\u062E\u0637\u0623 \u0641\u064A \u0627\u0644\u0634\u0628\u0643\u0629", phoneInfo: null };
+    }
+  }),
+  /* ── معلومات حساب WABA ─────────────────────────────────────────── */
+  getWabaInfo: protectedProcedure.query(async ({ ctx }) => {
+    const cfg = await db.query.sendSettings.findFirst({
+      where: eq11(sendSettings.orgId, ctx.user.orgId)
+    });
+    if (!cfg?.wabaEnabled || !cfg?.wabaApiUrl || !cfg?.wabaAccessToken || !cfg?.wabaPhoneNumberId) {
+      return null;
+    }
+    try {
+      const url = `${cfg.wabaApiUrl.replace(/\/$/, "")}/${cfg.wabaPhoneNumberId}?fields=display_phone_number,verified_name,quality_rating,status`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${cfg.wabaAccessToken}` } });
+      if (!res.ok) return null;
+      const json = await res.json();
+      return {
+        displayNumber: json.display_phone_number ?? cfg.wabaPhoneNumberId,
+        verifiedName: json.verified_name ?? cfg.wabaSenderName ?? "\u2014",
+        quality: json.quality_rating ?? "\u2014",
+        status: json.status ?? "CONNECTED"
+      };
+    } catch {
+      return null;
+    }
+  }),
+  /* ── اختبار اتصال Telegram Bot ───────────────────────────────── */
+  testTelegramConnection: protectedProcedure.mutation(async ({ ctx }) => {
+    const cfg = await db.query.sendSettings.findFirst({
+      where: eq11(sendSettings.orgId, ctx.user.orgId)
+    });
+    if (!cfg?.telegramBotToken) {
+      return { ok: false, message: "\u0644\u0645 \u064A\u062A\u0645 \u0625\u062F\u062E\u0627\u0644 Bot Token" };
+    }
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${cfg.telegramBotToken}/getMe`);
+      const json = await res.json();
+      if (json.ok && json.result) {
+        return { ok: true, message: `\u0627\u062A\u0635\u0627\u0644 \u0646\u0627\u062C\u062D \u2014 \u0627\u0644\u0628\u0648\u062A: @${json.result.username ?? json.result.first_name}` };
+      }
+      return { ok: false, message: json.description || "\u0641\u0634\u0644 \u0627\u0644\u062A\u062D\u0642\u0642 \u0645\u0646 \u0627\u0644\u0628\u0648\u062A" };
+    } catch (e) {
+      return { ok: false, message: e.message };
+    }
+  }),
+  /* ── قوالب رسائل WABA ─────────────────────────────────────────── */
+  getWabaTemplates: protectedProcedure.query(async ({ ctx }) => {
+    const rows = await db.select().from(wabaMessageTemplates).where(eq11(wabaMessageTemplates.orgId, ctx.user.orgId)).orderBy(wabaMessageTemplates.id);
+    if (rows.length === 0) {
+      return DEFAULT_WA_TEMPLATES.map((t2) => ({
+        id: 0,
+        orgId: ctx.user.orgId,
+        ...t2,
+        isActive: true,
+        createdAt: /* @__PURE__ */ new Date(),
+        updatedAt: /* @__PURE__ */ new Date()
+      }));
+    }
+    return rows;
+  }),
+  saveWabaTemplates: protectedProcedure.input(z10.array(z10.object({
+    id: z10.number(),
+    key: z10.string(),
+    label: z10.string(),
+    docType: z10.string().nullable().optional(),
+    channel: z10.string().default("whatsapp"),
+    content: z10.string(),
+    isActive: z10.boolean().default(true)
+  }))).mutation(async ({ ctx, input }) => {
+    for (const tpl of input) {
+      if (tpl.id > 0) {
+        await db.update(wabaMessageTemplates).set({ label: tpl.label, content: tpl.content, isActive: tpl.isActive, docType: tpl.docType, updatedAt: /* @__PURE__ */ new Date() }).where(and11(eq11(wabaMessageTemplates.id, tpl.id), eq11(wabaMessageTemplates.orgId, ctx.user.orgId)));
+      } else {
+        await db.insert(wabaMessageTemplates).values({
+          orgId: ctx.user.orgId,
+          key: tpl.key,
+          label: tpl.label,
+          docType: tpl.docType,
+          channel: tpl.channel,
+          content: tpl.content,
+          isActive: tpl.isActive
+        });
+      }
+    }
+    return { ok: true, count: input.length };
+  }),
+  /* ── إرسال واتساب ─────────────────────────────────────────────── */
+  sendWhatsApp: protectedProcedure.input(docInfoSchema.extend({
+    customerPhone: z10.string()
+  })).mutation(async ({ ctx, input }) => {
+    const [cfg, org] = await Promise.all([
+      db.query.sendSettings.findFirst({ where: eq11(sendSettings.orgId, ctx.user.orgId) }),
+      db.query.organizations.findFirst({ where: eq11(organizations.id, ctx.user.orgId) })
+    ]);
+    const tpl = input.customMessage || cfg?.whatsappMessageTemplate || TPL_WA;
+    const message = interpolate(tpl, {
+      customerName: input.customerName,
+      docTypeName: input.docTypeName,
+      docNumber: input.docNumber,
+      amount: input.amount,
+      currency: input.currency,
+      sellerName: org?.name ?? ""
+    });
+    let phone = input.customerPhone.replace(/[\s\-\(\)]/g, "");
+    if (phone.startsWith("0")) phone = "966" + phone.slice(1);
+    phone = phone.replace(/^\+/, "");
+    const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    let status = "sent";
+    let errorMessage;
+    let metaMessageId;
+    if (cfg?.wabaEnabled && cfg?.wabaApiUrl && cfg?.wabaAccessToken && cfg?.wabaPhoneNumberId) {
+      try {
+        const url = `${cfg.wabaApiUrl.replace(/\/$/, "")}/${cfg.wabaPhoneNumberId}/messages`;
+        const res = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${cfg.wabaAccessToken}`
+          },
+          body: JSON.stringify({
+            messaging_product: "whatsapp",
+            to: phone,
+            type: "text",
+            text: { body: message }
+          })
+        });
+        const json = await res.json();
+        status = res.ok ? "sent" : "failed";
+        metaMessageId = json.messages?.[0]?.id;
+        errorMessage = res.ok ? void 0 : json.error?.message || `HTTP ${res.status}`;
+      } catch (e) {
+        status = "failed";
+        errorMessage = e.message;
+      }
+    }
+    await db.insert(documentSendLogs).values({
+      orgId: ctx.user.orgId,
+      docType: input.docType,
+      docId: input.docId,
+      docNumber: input.docNumber,
+      method: "whatsapp",
+      status,
+      recipientName: input.customerName,
+      recipientContact: input.customerPhone,
+      messageSent: message,
+      errorMessage,
+      metaMessageId,
+      sentByUserId: ctx.user.id
+    });
+    return { waUrl, message, status, metaMessageId };
+  }),
+  /* ── إرسال تيليجرام ───────────────────────────────────────────── */
+  sendTelegram: protectedProcedure.input(docInfoSchema.extend({
+    telegramId: z10.string()
+  })).mutation(async ({ ctx, input }) => {
+    const [cfg, org] = await Promise.all([
+      db.query.sendSettings.findFirst({ where: eq11(sendSettings.orgId, ctx.user.orgId) }),
+      db.query.organizations.findFirst({ where: eq11(organizations.id, ctx.user.orgId) })
+    ]);
+    const tpl = input.customMessage || cfg?.telegramMessageTemplate || TPL_TG;
+    const message = interpolate(tpl, {
+      customerName: input.customerName,
+      docTypeName: input.docTypeName,
+      docNumber: input.docNumber,
+      amount: input.amount,
+      currency: input.currency,
+      sellerName: org?.name ?? ""
+    });
+    const botToken = cfg?.telegramBotToken;
+    let status = "pending";
+    let errorMessage;
+    let tgUrl;
+    if (botToken) {
+      try {
+        const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: input.telegramId, text: message })
+        });
+        const json = await res.json();
+        status = json.ok ? "sent" : "failed";
+        errorMessage = json.ok ? void 0 : json.description;
+      } catch (e) {
+        status = "failed";
+        errorMessage = e.message;
+      }
+    } else {
+      const tid = input.telegramId.trim();
+      tgUrl = tid.startsWith("@") ? `https://t.me/${tid.slice(1)}` : `https://t.me/${tid}`;
+      status = "pending";
+    }
+    await db.insert(documentSendLogs).values({
+      orgId: ctx.user.orgId,
+      docType: input.docType,
+      docId: input.docId,
+      docNumber: input.docNumber,
+      method: "telegram",
+      status,
+      recipientName: input.customerName,
+      recipientContact: input.telegramId,
+      messageSent: message,
+      errorMessage,
+      sentByUserId: ctx.user.id
+    });
+    return { status, message, tgUrl, hasBotToken: !!botToken };
+  }),
+  /* ── إرسال بريد إلكتروني ──────────────────────────────────────── */
+  sendEmail: protectedProcedure.input(docInfoSchema.extend({
+    customerEmail: z10.string().email(),
+    customSubject: z10.string().optional()
+  })).mutation(async ({ ctx, input }) => {
+    const [cfg, org] = await Promise.all([
+      db.query.sendSettings.findFirst({ where: eq11(sendSettings.orgId, ctx.user.orgId) }),
+      db.query.organizations.findFirst({ where: eq11(organizations.id, ctx.user.orgId) })
+    ]);
+    const vars = {
+      customerName: input.customerName,
+      docTypeName: input.docTypeName,
+      docNumber: input.docNumber,
+      amount: input.amount,
+      currency: input.currency,
+      sellerName: org?.name ?? ""
+    };
+    const subject = input.customSubject || interpolate(cfg?.emailSubjectTemplate || TPL_EMAIL_SUBJECT, vars);
+    const bodyHtml = input.customMessage || interpolate(cfg?.emailBodyTemplate || TPL_EMAIL_BODY, vars);
+    const apiKey = cfg?.emailApiKey;
+    const fromEmail = cfg?.emailFromEmail || "noreply@onesoft.sa";
+    const fromName = cfg?.emailFromName || org?.name || "OneSoft ERP";
+    let status = "pending";
+    let errorMessage;
+    if (apiKey && cfg?.emailEnabled) {
+      try {
+        const res = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            from: `${fromName} <${fromEmail}>`,
+            to: input.customerEmail,
+            subject,
+            html: bodyHtml
+          })
+        });
+        const json = await res.json();
+        status = res.ok ? "sent" : "failed";
+        errorMessage = res.ok ? void 0 : json.message || `HTTP ${res.status}`;
+      } catch (e) {
+        status = "failed";
+        errorMessage = e.message;
+      }
+    } else {
+      status = "pending";
+      errorMessage = "\u0644\u0645 \u064A\u062A\u0645 \u062A\u0647\u064A\u0626\u0629 \u062E\u062F\u0645\u0629 \u0627\u0644\u0628\u0631\u064A\u062F \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A";
+    }
+    await db.insert(documentSendLogs).values({
+      orgId: ctx.user.orgId,
+      docType: input.docType,
+      docId: input.docId,
+      docNumber: input.docNumber,
+      method: "email",
+      status,
+      recipientName: input.customerName,
+      recipientContact: input.customerEmail,
+      messageSent: `${subject}
+
+${bodyHtml}`,
+      errorMessage,
+      sentByUserId: ctx.user.id
+    });
+    return { status, subject, emailEnabled: !!apiKey };
+  }),
+  /* ── سجل الإرسال (للمستند المحدد) ────────────────────────────── */
+  getLogs: protectedProcedure.input(z10.object({
+    docType: z10.string().optional(),
+    docId: z10.number().optional(),
+    limit: z10.number().default(20)
+  })).query(async ({ ctx, input }) => {
+    const where = [eq11(documentSendLogs.orgId, ctx.user.orgId)];
+    if (input.docType) where.push(eq11(documentSendLogs.docType, input.docType));
+    if (input.docId !== void 0) where.push(eq11(documentSendLogs.docId, input.docId));
+    return db.select().from(documentSendLogs).where(and11(...where)).orderBy(desc5(documentSendLogs.sentAt)).limit(input.limit);
+  }),
+  /* ── سجل الإرسال الكامل مع بيانات المستخدم ──────────────────── */
+  getAllLogs: protectedProcedure.input(z10.object({
+    limit: z10.number().default(100),
+    method: z10.string().optional(),
+    status: z10.string().optional()
+  })).query(async ({ ctx, input }) => {
+    const where = [eq11(documentSendLogs.orgId, ctx.user.orgId)];
+    if (input.method) where.push(eq11(documentSendLogs.method, input.method));
+    if (input.status) where.push(eq11(documentSendLogs.status, input.status));
+    const logs = await db.select({
+      id: documentSendLogs.id,
+      docType: documentSendLogs.docType,
+      docNumber: documentSendLogs.docNumber,
+      method: documentSendLogs.method,
+      status: documentSendLogs.status,
+      recipientName: documentSendLogs.recipientName,
+      recipientContact: documentSendLogs.recipientContact,
+      metaMessageId: documentSendLogs.metaMessageId,
+      errorMessage: documentSendLogs.errorMessage,
+      sentAt: documentSendLogs.sentAt,
+      sentByUserId: documentSendLogs.sentByUserId,
+      userName: users.username
+    }).from(documentSendLogs).leftJoin(users, eq11(documentSendLogs.sentByUserId, users.id)).where(and11(...where)).orderBy(desc5(documentSendLogs.sentAt)).limit(input.limit);
+    return logs;
+  })
+});
+
+// src/routers/currencies.ts
+import { z as z11 } from "zod";
+import { TRPCError as TRPCError3 } from "@trpc/server";
+init_db();
+init_schema();
+import { eq as eq12, and as and12 } from "drizzle-orm";
+var currencyInput = z11.object({
+  code: z11.string().min(1).max(10).toUpperCase(),
+  nameAr: z11.string().min(1).max(100),
+  nameEn: z11.string().min(1).max(100),
+  symbol: z11.string().min(1).max(10),
+  symbolIntl: z11.string().max(10).optional().nullable(),
+  exchangeRate: z11.string().default("1"),
+  decimalPlaces: z11.number().int().min(0).max(8).default(2),
+  isBase: z11.boolean().default(false),
+  mainUnitAr: z11.string().max(50).optional().nullable(),
+  subUnitAr: z11.string().max(50).optional().nullable(),
+  mainUnitEn: z11.string().max(50).optional().nullable(),
+  subUnitEn: z11.string().max(50).optional().nullable(),
+  isActive: z11.boolean().default(true)
+});
+var currenciesRouter = router({
+  list: protectedProcedure.query(async ({ ctx }) => {
+    return db.select().from(currencies).where(eq12(currencies.orgId, ctx.user.orgId)).orderBy(currencies.code);
+  }),
+  create: protectedProcedure.input(currencyInput).mutation(async ({ input, ctx }) => {
+    const orgId = ctx.user.orgId;
+    const dup = await db.select({ id: currencies.id }).from(currencies).where(and12(eq12(currencies.orgId, orgId), eq12(currencies.code, input.code))).limit(1);
+    if (dup.length) throw new TRPCError3({ code: "BAD_REQUEST", message: `\u0643\u0648\u062F \u0627\u0644\u0639\u0645\u0644\u0629 "${input.code}" \u0645\u0648\u062C\u0648\u062F \u0645\u0633\u0628\u0642\u0627\u064B` });
+    if (input.isBase) {
+      await db.update(currencies).set({ isBase: false }).where(and12(eq12(currencies.orgId, orgId), eq12(currencies.isBase, true)));
+    }
+    const [row] = await db.insert(currencies).values({ orgId, ...input }).returning();
+    return row;
+  }),
+  update: protectedProcedure.input(z11.object({ id: z11.number() }).merge(currencyInput.partial())).mutation(async ({ input, ctx }) => {
+    const { id, ...rest } = input;
+    const orgId = ctx.user.orgId;
+    if (rest.code) {
+      const dup = await db.select({ id: currencies.id }).from(currencies).where(and12(eq12(currencies.orgId, orgId), eq12(currencies.code, rest.code))).limit(1);
+      if (dup.length && dup[0].id !== id)
+        throw new TRPCError3({ code: "BAD_REQUEST", message: `\u0643\u0648\u062F \u0627\u0644\u0639\u0645\u0644\u0629 "${rest.code}" \u0645\u0648\u062C\u0648\u062F \u0645\u0633\u0628\u0642\u0627\u064B` });
+    }
+    if (rest.isBase) {
+      await db.update(currencies).set({ isBase: false }).where(and12(eq12(currencies.orgId, orgId), eq12(currencies.isBase, true)));
+    }
+    const [row] = await db.update(currencies).set({ ...rest, updatedAt: /* @__PURE__ */ new Date() }).where(and12(eq12(currencies.id, id), eq12(currencies.orgId, orgId))).returning();
+    return row;
+  }),
+  delete: protectedProcedure.input(z11.object({ id: z11.number() })).mutation(async ({ input, ctx }) => {
+    const orgId = ctx.user.orgId;
+    const existing = await db.select({ isBase: currencies.isBase }).from(currencies).where(and12(eq12(currencies.id, input.id), eq12(currencies.orgId, orgId))).limit(1);
+    if (!existing.length) throw new TRPCError3({ code: "NOT_FOUND", message: "\u0627\u0644\u0639\u0645\u0644\u0629 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629" });
+    if (existing[0].isBase) throw new TRPCError3({ code: "BAD_REQUEST", message: "\u0644\u0627 \u064A\u0645\u0643\u0646 \u062D\u0630\u0641 \u0627\u0644\u0639\u0645\u0644\u0629 \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629" });
+    await db.update(currencies).set({ isActive: false, updatedAt: /* @__PURE__ */ new Date() }).where(and12(eq12(currencies.id, input.id), eq12(currencies.orgId, orgId)));
+    return { success: true };
+  }),
+  seedDefaults: protectedProcedure.mutation(async ({ ctx }) => {
+    const orgId = ctx.user.orgId;
+    const existing = await db.select({ id: currencies.id }).from(currencies).where(eq12(currencies.orgId, orgId)).limit(1);
+    if (existing.length) return { seeded: false };
+    const defaults = [
+      { code: "SAR", nameAr: "\u0631\u064A\u0627\u0644 \u0633\u0639\u0648\u062F\u064A", nameEn: "Saudi Riyal", symbol: "\u0631.\u0633", symbolIntl: "SAR", exchangeRate: "1", decimalPlaces: 2, isBase: true, mainUnitAr: "\u0631\u064A\u0627\u0644", subUnitAr: "\u0647\u0644\u0644\u0629", mainUnitEn: "Riyal", subUnitEn: "Halala", isActive: true },
+      { code: "USD", nameAr: "\u062F\u0648\u0644\u0627\u0631 \u0623\u0645\u0631\u064A\u0643\u064A", nameEn: "US Dollar", symbol: "$", symbolIntl: "USD", exchangeRate: "3.75", decimalPlaces: 2, isBase: false, mainUnitAr: "\u062F\u0648\u0644\u0627\u0631", subUnitAr: "\u0633\u0646\u062A", mainUnitEn: "Dollar", subUnitEn: "Cent", isActive: true },
+      { code: "EUR", nameAr: "\u064A\u0648\u0631\u0648", nameEn: "Euro", symbol: "\u20AC", symbolIntl: "EUR", exchangeRate: "4.10", decimalPlaces: 2, isBase: false, mainUnitAr: "\u064A\u0648\u0631\u0648", subUnitAr: "\u0633\u0646\u062A", mainUnitEn: "Euro", subUnitEn: "Cent", isActive: true },
+      { code: "AED", nameAr: "\u062F\u0631\u0647\u0645 \u0625\u0645\u0627\u0631\u0627\u062A\u064A", nameEn: "UAE Dirham", symbol: "\u062F.\u0625", symbolIntl: "AED", exchangeRate: "1.02", decimalPlaces: 2, isBase: false, mainUnitAr: "\u062F\u0631\u0647\u0645", subUnitAr: "\u0641\u0644\u0633", mainUnitEn: "Dirham", subUnitEn: "Fils", isActive: true },
+      { code: "GBP", nameAr: "\u062C\u0646\u064A\u0647 \u0625\u0633\u062A\u0631\u0644\u064A\u0646\u064A", nameEn: "British Pound", symbol: "\xA3", symbolIntl: "GBP", exchangeRate: "4.75", decimalPlaces: 2, isBase: false, mainUnitAr: "\u062C\u0646\u064A\u0647", subUnitAr: "\u0628\u0646\u0633", mainUnitEn: "Pound", subUnitEn: "Penny", isActive: true }
+    ];
+    await db.insert(currencies).values(defaults.map((d) => ({ orgId, ...d })));
+    return { seeded: true };
+  }),
+  getBase: protectedProcedure.query(async ({ ctx }) => {
+    const rows = await db.select().from(currencies).where(and12(eq12(currencies.orgId, ctx.user.orgId), eq12(currencies.isBase, true))).limit(1);
+    return rows[0] ?? null;
+  })
+});
+
+// src/routers/appSettings.ts
+import { z as z12 } from "zod";
+init_db();
+init_schema();
+import { eq as eq13, and as and13 } from "drizzle-orm";
+var appSettingsRouter = router({
+  get: protectedProcedure.input(z12.object({ key: z12.string() })).query(async ({ input, ctx }) => {
+    const rows = await db.select().from(appSettings).where(and13(eq13(appSettings.orgId, ctx.user.orgId), eq13(appSettings.key, input.key))).limit(1);
+    if (!rows.length) return null;
+    try {
+      return JSON.parse(rows[0].value ?? "null");
+    } catch {
+      return null;
+    }
+  }),
+  set: protectedProcedure.input(z12.object({ key: z12.string(), value: z12.any() })).mutation(async ({ input, ctx }) => {
+    const orgId = ctx.user.orgId;
+    const serialized = JSON.stringify(input.value);
+    const existing = await db.select({ id: appSettings.id }).from(appSettings).where(and13(eq13(appSettings.orgId, orgId), eq13(appSettings.key, input.key))).limit(1);
+    if (existing.length) {
+      await db.update(appSettings).set({ value: serialized, updatedAt: /* @__PURE__ */ new Date() }).where(and13(eq13(appSettings.orgId, orgId), eq13(appSettings.key, input.key)));
+    } else {
+      await db.insert(appSettings).values({ orgId, key: input.key, value: serialized });
+    }
+    return { success: true };
+  })
+});
+
 // src/routers/index.ts
 init_db();
 init_schema();
-import { eq as eq11, and as and11, desc as desc5, like as like2, or as or3, sql as sql3, isNotNull, isNull, asc as asc4, gte, lte } from "drizzle-orm";
+import { eq as eq14, and as and14, desc as desc6, like as like2, or as or3, sql as sql3, isNotNull, isNull as isNull2, asc as asc4, gte as gte2, lte as lte2, inArray as inArray2 } from "drizzle-orm";
 var appRouter = router({
   // ─── Auth ────────────────────────────────────────────────────────────────────
   auth: router({
@@ -2269,9 +3697,9 @@ var appRouter = router({
   // ─── User Groups ─────────────────────────────────────────────────────────────
   userGroups: router({
     list: protectedProcedure.query(async ({ ctx }) => {
-      return db.select().from(userGroups).where(and11(eq11(userGroups.orgId, ctx.user.orgId), eq11(userGroups.isActive, true))).orderBy(userGroups.name);
+      return db.select().from(userGroups).where(and14(eq14(userGroups.orgId, ctx.user.orgId), eq14(userGroups.isActive, true))).orderBy(userGroups.name);
     }),
-    create: protectedProcedure.input(z10.object({ code: z10.string().optional(), name: z10.string().min(1), description: z10.string().optional() })).mutation(async ({ input, ctx }) => {
+    create: protectedProcedure.input(z13.object({ code: z13.string().optional(), name: z13.string().min(1), description: z13.string().optional() })).mutation(async ({ input, ctx }) => {
       const [g] = await db.insert(userGroups).values({
         orgId: ctx.user.orgId,
         code: input.code,
@@ -2280,33 +3708,33 @@ var appRouter = router({
       }).returning();
       return g;
     }),
-    update: protectedProcedure.input(z10.object({ id: z10.number(), code: z10.string().optional(), name: z10.string().optional(), description: z10.string().optional() })).mutation(async ({ input, ctx }) => {
+    update: protectedProcedure.input(z13.object({ id: z13.number(), code: z13.string().optional(), name: z13.string().optional(), description: z13.string().optional() })).mutation(async ({ input, ctx }) => {
       const { id, ...rest } = input;
-      await db.update(userGroups).set(rest).where(and11(eq11(userGroups.id, id), eq11(userGroups.orgId, ctx.user.orgId)));
+      await db.update(userGroups).set(rest).where(and14(eq14(userGroups.id, id), eq14(userGroups.orgId, ctx.user.orgId)));
       return { success: true };
     }),
-    delete: protectedProcedure.input(z10.object({ id: z10.number() })).mutation(async ({ input, ctx }) => {
-      await db.update(userGroups).set({ isActive: false }).where(and11(eq11(userGroups.id, input.id), eq11(userGroups.orgId, ctx.user.orgId)));
+    delete: protectedProcedure.input(z13.object({ id: z13.number() })).mutation(async ({ input, ctx }) => {
+      await db.update(userGroups).set({ isActive: false }).where(and14(eq14(userGroups.id, input.id), eq14(userGroups.orgId, ctx.user.orgId)));
       return { success: true };
     })
   }),
   // ─── User Categories ─────────────────────────────────────────────────────────
   userCategories: router({
     list: protectedProcedure.query(async ({ ctx }) => {
-      return db.select().from(userCategories).where(and11(eq11(userCategories.orgId, ctx.user.orgId), eq11(userCategories.isActive, true))).orderBy(userCategories.name);
+      return db.select().from(userCategories).where(and14(eq14(userCategories.orgId, ctx.user.orgId), eq14(userCategories.isActive, true))).orderBy(userCategories.name);
     }),
-    create: protectedProcedure.input(z10.object({
-      code: z10.string().optional(),
-      name: z10.string().min(1),
-      autoNumbering: z10.boolean().optional(),
-      firstNumber: z10.number().optional(),
-      lastNumber: z10.number().optional(),
-      increment: z10.number().optional(),
-      codeDigits: z10.number().optional()
+    create: protectedProcedure.input(z13.object({
+      code: z13.string().optional(),
+      name: z13.string().min(1),
+      autoNumbering: z13.boolean().optional(),
+      firstNumber: z13.number().optional(),
+      lastNumber: z13.number().optional(),
+      increment: z13.number().optional(),
+      codeDigits: z13.number().optional()
     })).mutation(async ({ input, ctx }) => {
       if (input.code) {
-        const dup = await db.select({ id: userCategories.id }).from(userCategories).where(and11(eq11(userCategories.orgId, ctx.user.orgId), eq11(userCategories.code, input.code), eq11(userCategories.isActive, true))).limit(1);
-        if (dup.length) throw new TRPCError3({ code: "BAD_REQUEST", message: "\u0627\u0644\u0643\u0648\u062F \u0645\u0643\u0631\u0631 \u2014 \u064A\u0648\u062C\u062F \u0641\u0626\u0629 \u0628\u0646\u0641\u0633 \u0627\u0644\u0643\u0648\u062F" });
+        const dup = await db.select({ id: userCategories.id }).from(userCategories).where(and14(eq14(userCategories.orgId, ctx.user.orgId), eq14(userCategories.code, input.code), eq14(userCategories.isActive, true))).limit(1);
+        if (dup.length) throw new TRPCError4({ code: "BAD_REQUEST", message: "\u0627\u0644\u0643\u0648\u062F \u0645\u0643\u0631\u0631 \u2014 \u064A\u0648\u062C\u062F \u0641\u0626\u0629 \u0628\u0646\u0641\u0633 \u0627\u0644\u0643\u0648\u062F" });
       }
       const [c] = await db.insert(userCategories).values({
         orgId: ctx.user.orgId,
@@ -2320,35 +3748,35 @@ var appRouter = router({
       }).returning();
       return c;
     }),
-    update: protectedProcedure.input(z10.object({
-      id: z10.number(),
-      code: z10.string().optional(),
-      name: z10.string().optional(),
-      autoNumbering: z10.boolean().optional(),
-      firstNumber: z10.number().optional(),
-      lastNumber: z10.number().optional(),
-      increment: z10.number().optional(),
-      codeDigits: z10.number().optional()
+    update: protectedProcedure.input(z13.object({
+      id: z13.number(),
+      code: z13.string().optional(),
+      name: z13.string().optional(),
+      autoNumbering: z13.boolean().optional(),
+      firstNumber: z13.number().optional(),
+      lastNumber: z13.number().optional(),
+      increment: z13.number().optional(),
+      codeDigits: z13.number().optional()
     })).mutation(async ({ input, ctx }) => {
       const { id, ...rest } = input;
       if (rest.code) {
-        const dup = await db.select({ id: userCategories.id }).from(userCategories).where(and11(eq11(userCategories.orgId, ctx.user.orgId), eq11(userCategories.code, rest.code), eq11(userCategories.isActive, true))).limit(1);
-        if (dup.length && dup[0].id !== id) throw new TRPCError3({ code: "BAD_REQUEST", message: "\u0627\u0644\u0643\u0648\u062F \u0645\u0643\u0631\u0631 \u2014 \u064A\u0648\u062C\u062F \u0641\u0626\u0629 \u0628\u0646\u0641\u0633 \u0627\u0644\u0643\u0648\u062F" });
+        const dup = await db.select({ id: userCategories.id }).from(userCategories).where(and14(eq14(userCategories.orgId, ctx.user.orgId), eq14(userCategories.code, rest.code), eq14(userCategories.isActive, true))).limit(1);
+        if (dup.length && dup[0].id !== id) throw new TRPCError4({ code: "BAD_REQUEST", message: "\u0627\u0644\u0643\u0648\u062F \u0645\u0643\u0631\u0631 \u2014 \u064A\u0648\u062C\u062F \u0641\u0626\u0629 \u0628\u0646\u0641\u0633 \u0627\u0644\u0643\u0648\u062F" });
       }
-      await db.update(userCategories).set(rest).where(and11(eq11(userCategories.id, id), eq11(userCategories.orgId, ctx.user.orgId)));
+      await db.update(userCategories).set(rest).where(and14(eq14(userCategories.id, id), eq14(userCategories.orgId, ctx.user.orgId)));
       return { success: true };
     }),
-    delete: protectedProcedure.input(z10.object({ id: z10.number() })).mutation(async ({ input, ctx }) => {
-      await db.update(userCategories).set({ isActive: false }).where(and11(eq11(userCategories.id, input.id), eq11(userCategories.orgId, ctx.user.orgId)));
+    delete: protectedProcedure.input(z13.object({ id: z13.number() })).mutation(async ({ input, ctx }) => {
+      await db.update(userCategories).set({ isActive: false }).where(and14(eq14(userCategories.id, input.id), eq14(userCategories.orgId, ctx.user.orgId)));
       return { success: true };
     }),
-    nextCode: protectedProcedure.input(z10.object({ categoryId: z10.number() })).query(async ({ input, ctx }) => {
-      const cat = await db.select().from(userCategories).where(and11(eq11(userCategories.id, input.categoryId), eq11(userCategories.orgId, ctx.user.orgId))).limit(1);
+    nextCode: protectedProcedure.input(z13.object({ categoryId: z13.number() })).query(async ({ input, ctx }) => {
+      const cat = await db.select().from(userCategories).where(and14(eq14(userCategories.id, input.categoryId), eq14(userCategories.orgId, ctx.user.orgId))).limit(1);
       if (!cat.length || !cat[0].autoNumbering) return null;
       const c = cat[0];
       const prefix = c.code ?? "";
       const numDigits = Math.max(c.codeDigits - prefix.length, 1);
-      const catUsers = await db.select({ code: users.code }).from(users).where(and11(eq11(users.orgId, ctx.user.orgId), eq11(users.categoryId, input.categoryId), eq11(users.isActive, true)));
+      const catUsers = await db.select({ code: users.code }).from(users).where(and14(eq14(users.orgId, ctx.user.orgId), eq14(users.categoryId, input.categoryId), eq14(users.isActive, true)));
       let maxNum = c.firstNumber - c.increment;
       for (const u of catUsers) {
         if (!u.code) continue;
@@ -2364,32 +3792,32 @@ var appRouter = router({
   }),
   // ─── User Group Members ───────────────────────────────────────────────────────
   groupMembers: router({
-    list: protectedProcedure.input(z10.object({ groupId: z10.number() })).query(async ({ input, ctx }) => {
-      return db.select().from(userGroupMembers).where(and11(eq11(userGroupMembers.groupId, input.groupId), eq11(userGroupMembers.orgId, ctx.user.orgId))).orderBy(userGroupMembers.createdAt);
+    list: protectedProcedure.input(z13.object({ groupId: z13.number() })).query(async ({ input, ctx }) => {
+      return db.select().from(userGroupMembers).where(and14(eq14(userGroupMembers.groupId, input.groupId), eq14(userGroupMembers.orgId, ctx.user.orgId))).orderBy(userGroupMembers.createdAt);
     }),
-    add: protectedProcedure.input(z10.object({
-      groupId: z10.number(),
-      memberType: z10.enum(["user", "group"]),
-      memberCode: z10.string().min(1),
-      memberName: z10.string().optional()
+    add: protectedProcedure.input(z13.object({
+      groupId: z13.number(),
+      memberType: z13.enum(["user", "group"]),
+      memberCode: z13.string().min(1),
+      memberName: z13.string().optional()
     })).mutation(async ({ input, ctx }) => {
       let resolvedName = input.memberName;
       if (input.memberType === "user") {
-        const found = await db.select({ id: users.id, name: users.name }).from(users).where(and11(eq11(users.orgId, ctx.user.orgId), eq11(users.code, input.memberCode))).limit(1);
-        if (!found.length) throw new TRPCError3({ code: "BAD_REQUEST", message: `\u0643\u0648\u062F \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 "${input.memberCode}" \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0641\u064A \u0627\u0644\u0646\u0638\u0627\u0645` });
+        const found = await db.select({ id: users.id, name: users.name }).from(users).where(and14(eq14(users.orgId, ctx.user.orgId), eq14(users.code, input.memberCode))).limit(1);
+        if (!found.length) throw new TRPCError4({ code: "BAD_REQUEST", message: `\u0643\u0648\u062F \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 "${input.memberCode}" \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0641\u064A \u0627\u0644\u0646\u0638\u0627\u0645` });
         resolvedName = found[0].name;
       } else {
-        const found = await db.select({ id: userGroups.id, name: userGroups.name }).from(userGroups).where(and11(eq11(userGroups.orgId, ctx.user.orgId), eq11(userGroups.code, input.memberCode), eq11(userGroups.isActive, true))).limit(1);
-        if (!found.length) throw new TRPCError3({ code: "BAD_REQUEST", message: `\u0643\u0648\u062F \u0627\u0644\u0645\u062C\u0645\u0648\u0639\u0629 "${input.memberCode}" \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0641\u064A \u0627\u0644\u0646\u0638\u0627\u0645` });
+        const found = await db.select({ id: userGroups.id, name: userGroups.name }).from(userGroups).where(and14(eq14(userGroups.orgId, ctx.user.orgId), eq14(userGroups.code, input.memberCode), eq14(userGroups.isActive, true))).limit(1);
+        if (!found.length) throw new TRPCError4({ code: "BAD_REQUEST", message: `\u0643\u0648\u062F \u0627\u0644\u0645\u062C\u0645\u0648\u0639\u0629 "${input.memberCode}" \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0641\u064A \u0627\u0644\u0646\u0638\u0627\u0645` });
         resolvedName = found[0].name;
       }
-      const existing = await db.select({ id: userGroupMembers.id }).from(userGroupMembers).where(and11(
-        eq11(userGroupMembers.groupId, input.groupId),
-        eq11(userGroupMembers.orgId, ctx.user.orgId),
-        eq11(userGroupMembers.memberType, input.memberType),
-        eq11(userGroupMembers.memberCode, input.memberCode)
+      const existing = await db.select({ id: userGroupMembers.id }).from(userGroupMembers).where(and14(
+        eq14(userGroupMembers.groupId, input.groupId),
+        eq14(userGroupMembers.orgId, ctx.user.orgId),
+        eq14(userGroupMembers.memberType, input.memberType),
+        eq14(userGroupMembers.memberCode, input.memberCode)
       )).limit(1);
-      if (existing.length) throw new TRPCError3({ code: "BAD_REQUEST", message: `\u0627\u0644\u0639\u0636\u0648 \u062A\u0645 \u062A\u0643\u0631\u0627\u0631 \u0628\u0627\u0644\u062C\u062F\u0648\u0644` });
+      if (existing.length) throw new TRPCError4({ code: "BAD_REQUEST", message: `\u0627\u0644\u0639\u0636\u0648 \u062A\u0645 \u062A\u0643\u0631\u0627\u0631 \u0628\u0627\u0644\u062C\u062F\u0648\u0644` });
       const [m] = await db.insert(userGroupMembers).values({
         groupId: input.groupId,
         orgId: ctx.user.orgId,
@@ -2399,16 +3827,16 @@ var appRouter = router({
       }).returning();
       return m;
     }),
-    remove: protectedProcedure.input(z10.object({ id: z10.number() })).mutation(async ({ input, ctx }) => {
-      await db.delete(userGroupMembers).where(and11(eq11(userGroupMembers.id, input.id), eq11(userGroupMembers.orgId, ctx.user.orgId)));
+    remove: protectedProcedure.input(z13.object({ id: z13.number() })).mutation(async ({ input, ctx }) => {
+      await db.delete(userGroupMembers).where(and14(eq14(userGroupMembers.id, input.id), eq14(userGroupMembers.orgId, ctx.user.orgId)));
       return { success: true };
     }),
-    addBulk: protectedProcedure.input(z10.object({
-      groupId: z10.number(),
-      members: z10.array(z10.object({
-        memberType: z10.enum(["user", "group"]),
-        memberCode: z10.string().min(1),
-        memberName: z10.string().optional()
+    addBulk: protectedProcedure.input(z13.object({
+      groupId: z13.number(),
+      members: z13.array(z13.object({
+        memberType: z13.enum(["user", "group"]),
+        memberCode: z13.string().min(1),
+        memberName: z13.string().optional()
       }))
     })).mutation(async ({ input, ctx }) => {
       if (!input.members.length) return { count: 0 };
@@ -2419,19 +3847,19 @@ var appRouter = router({
         seen.add(key);
         return true;
       });
-      const existingMembers = await db.select({ memberType: userGroupMembers.memberType, memberCode: userGroupMembers.memberCode }).from(userGroupMembers).where(and11(eq11(userGroupMembers.groupId, input.groupId), eq11(userGroupMembers.orgId, ctx.user.orgId)));
+      const existingMembers = await db.select({ memberType: userGroupMembers.memberType, memberCode: userGroupMembers.memberCode }).from(userGroupMembers).where(and14(eq14(userGroupMembers.groupId, input.groupId), eq14(userGroupMembers.orgId, ctx.user.orgId)));
       const existingSet = new Set(existingMembers.map((m) => `${m.memberType}:${m.memberCode}`));
       const toInsert = unique.filter((m) => !existingSet.has(`${m.memberType}:${m.memberCode}`));
       if (!toInsert.length) return { count: 0 };
       const resolved = await Promise.all(toInsert.map(async (m) => {
         let name = m.memberName;
         if (m.memberType === "user") {
-          const found = await db.select({ name: users.name }).from(users).where(and11(eq11(users.orgId, ctx.user.orgId), eq11(users.code, m.memberCode))).limit(1);
-          if (!found.length) throw new TRPCError3({ code: "BAD_REQUEST", message: `\u0643\u0648\u062F \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 "${m.memberCode}" \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0641\u064A \u0627\u0644\u0646\u0638\u0627\u0645` });
+          const found = await db.select({ name: users.name }).from(users).where(and14(eq14(users.orgId, ctx.user.orgId), eq14(users.code, m.memberCode))).limit(1);
+          if (!found.length) throw new TRPCError4({ code: "BAD_REQUEST", message: `\u0643\u0648\u062F \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 "${m.memberCode}" \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0641\u064A \u0627\u0644\u0646\u0638\u0627\u0645` });
           name = found[0].name;
         } else {
-          const found = await db.select({ name: userGroups.name }).from(userGroups).where(and11(eq11(userGroups.orgId, ctx.user.orgId), eq11(userGroups.code, m.memberCode), eq11(userGroups.isActive, true))).limit(1);
-          if (!found.length) throw new TRPCError3({ code: "BAD_REQUEST", message: `\u0643\u0648\u062F \u0627\u0644\u0645\u062C\u0645\u0648\u0639\u0629 "${m.memberCode}" \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0641\u064A \u0627\u0644\u0646\u0638\u0627\u0645` });
+          const found = await db.select({ name: userGroups.name }).from(userGroups).where(and14(eq14(userGroups.orgId, ctx.user.orgId), eq14(userGroups.code, m.memberCode), eq14(userGroups.isActive, true))).limit(1);
+          if (!found.length) throw new TRPCError4({ code: "BAD_REQUEST", message: `\u0643\u0648\u062F \u0627\u0644\u0645\u062C\u0645\u0648\u0639\u0629 "${m.memberCode}" \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0641\u064A \u0627\u0644\u0646\u0638\u0627\u0645` });
           name = found[0].name;
         }
         return { groupId: input.groupId, orgId: ctx.user.orgId, memberType: m.memberType, memberCode: m.memberCode, memberName: name };
@@ -2449,7 +3877,39 @@ var appRouter = router({
   documentJournals: documentJournalsRouter,
   documentTemplates: documentTemplatesRouter,
   documentTypes: documentTypesRouter,
+  documentSend: documentSendRouter,
   posting: postingRouter,
+  currencies: currenciesRouter,
+  appSettings: appSettingsRouter,
+  // ─── QR Settings ─────────────────────────────────────────────────────────────
+  qrSettings: router({
+    get: protectedProcedure.query(async ({ ctx }) => {
+      const rows = await db.select().from(qrSettings).where(eq14(qrSettings.orgId, ctx.user.orgId)).limit(1);
+      return rows[0] ?? null;
+    }),
+    upsert: protectedProcedure.input(z13.object({
+      isEnabled: z13.boolean().optional(),
+      countrySystem: z13.enum(["zatca", "eta", "custom"]).optional(),
+      customFormat: z13.string().optional().nullable(),
+      sellerName: z13.string().optional().nullable(),
+      taxNumber: z13.string().optional().nullable(),
+      showOnSalesInvoice: z13.boolean().optional(),
+      showOnPurchaseInvoice: z13.boolean().optional(),
+      showOnReceiptVoucher: z13.boolean().optional(),
+      qrSize: z13.number().min(50).max(300).optional(),
+      qrPosition: z13.string().optional(),
+      notes: z13.string().optional().nullable()
+    })).mutation(async ({ input, ctx }) => {
+      const existing = await db.select({ id: qrSettings.id }).from(qrSettings).where(eq14(qrSettings.orgId, ctx.user.orgId)).limit(1);
+      if (existing.length) {
+        const [updated] = await db.update(qrSettings).set({ ...input, updatedAt: /* @__PURE__ */ new Date() }).where(eq14(qrSettings.orgId, ctx.user.orgId)).returning();
+        return updated;
+      } else {
+        const [inserted] = await db.insert(qrSettings).values({ orgId: ctx.user.orgId, ...input }).returning();
+        return inserted;
+      }
+    })
+  }),
   // ─── Dashboard ───────────────────────────────────────────────────────────────
   dashboard: router({
     stats: protectedProcedure.query(async ({ ctx }) => {
@@ -2462,8 +3922,8 @@ var appRouter = router({
           total: sql3`coalesce(sum(${salesInvoices.total}), 0)`,
           count: sql3`count(*)`
         }).from(salesInvoices).where(
-          and11(
-            eq11(salesInvoices.orgId, orgId),
+          and14(
+            eq14(salesInvoices.orgId, orgId),
             sql3`${salesInvoices.invoiceDate} >= ${todayStart}`,
             sql3`${salesInvoices.invoiceType} = 'sale'`,
             sql3`${salesInvoices.status} != 'cancelled'`
@@ -2473,18 +3933,18 @@ var appRouter = router({
           total: sql3`coalesce(sum(${salesInvoices.total}), 0)`,
           count: sql3`count(*)`
         }).from(salesInvoices).where(
-          and11(
-            eq11(salesInvoices.orgId, orgId),
+          and14(
+            eq14(salesInvoices.orgId, orgId),
             sql3`${salesInvoices.invoiceDate} >= ${monthStart}`,
             sql3`${salesInvoices.invoiceType} = 'sale'`,
             sql3`${salesInvoices.status} != 'cancelled'`
           )
         ),
         db.select({ count: sql3`count(*)` }).from(products).where(
-          and11(eq11(products.orgId, orgId), eq11(products.isActive, true))
+          and14(eq14(products.orgId, orgId), eq14(products.isActive, true))
         ),
         db.select({ count: sql3`count(*)` }).from(stockVouchers).where(
-          and11(eq11(stockVouchers.orgId, orgId), sql3`${stockVouchers.type}::text = 'transfer'`, eq11(stockVouchers.status, "draft"))
+          and14(eq14(stockVouchers.orgId, orgId), sql3`${stockVouchers.type}::text = 'transfer'`, eq14(stockVouchers.status, "draft"))
         )
       ]);
       return {
@@ -2496,7 +3956,7 @@ var appRouter = router({
         pendingTransfers: Number(pendingTransferRow[0]?.count ?? 0)
       };
     }),
-    salesChart: protectedProcedure.input(z10.object({ days: z10.number().default(7) })).query(async ({ ctx, input }) => {
+    salesChart: protectedProcedure.input(z13.object({ days: z13.number().default(7) })).query(async ({ ctx, input }) => {
       const orgId = ctx.user.orgId;
       const since = /* @__PURE__ */ new Date();
       since.setDate(since.getDate() - input.days);
@@ -2505,8 +3965,8 @@ var appRouter = router({
         total: sql3`coalesce(sum(${salesInvoices.total}), 0)`,
         count: sql3`count(*)`
       }).from(salesInvoices).where(
-        and11(
-          eq11(salesInvoices.orgId, orgId),
+        and14(
+          eq14(salesInvoices.orgId, orgId),
           sql3`${salesInvoices.invoiceDate} >= ${since}`,
           sql3`${salesInvoices.invoiceType} = 'sale'`,
           sql3`${salesInvoices.status} != 'cancelled'`
@@ -2514,7 +3974,7 @@ var appRouter = router({
       ).groupBy(sql3`date_trunc('day', ${salesInvoices.invoiceDate})::date`).orderBy(sql3`date_trunc('day', ${salesInvoices.invoiceDate})::date`);
       return rows.map((r) => ({ date: r.date, total: Number(r.total), count: Number(r.count) }));
     }),
-    topProducts: protectedProcedure.input(z10.object({ limit: z10.number().default(5) })).query(async ({ ctx, input }) => {
+    topProducts: protectedProcedure.input(z13.object({ limit: z13.number().default(5) })).query(async ({ ctx, input }) => {
       const orgId = ctx.user.orgId;
       const monthStart = /* @__PURE__ */ new Date();
       monthStart.setDate(1);
@@ -2524,14 +3984,14 @@ var appRouter = router({
         productName: salesInvoiceItems.productName,
         totalQty: sql3`sum(${salesInvoiceItems.quantity})`,
         totalRevenue: sql3`sum(${salesInvoiceItems.total})`
-      }).from(salesInvoiceItems).innerJoin(salesInvoices, eq11(salesInvoiceItems.invoiceId, salesInvoices.id)).where(
-        and11(
-          eq11(salesInvoices.orgId, orgId),
+      }).from(salesInvoiceItems).innerJoin(salesInvoices, eq14(salesInvoiceItems.invoiceId, salesInvoices.id)).where(
+        and14(
+          eq14(salesInvoices.orgId, orgId),
           sql3`${salesInvoices.invoiceDate} >= ${monthStart}`,
           sql3`${salesInvoices.invoiceType} = 'sale'`,
           sql3`${salesInvoices.status} != 'cancelled'`
         )
-      ).groupBy(salesInvoiceItems.productId, salesInvoiceItems.productName).orderBy(desc5(sql3`sum(${salesInvoiceItems.total})`)).limit(input.limit);
+      ).groupBy(salesInvoiceItems.productId, salesInvoiceItems.productName).orderBy(desc6(sql3`sum(${salesInvoiceItems.total})`)).limit(input.limit);
       return rows.map((r) => ({
         productId: r.productId,
         productName: r.productName,
@@ -2542,11 +4002,11 @@ var appRouter = router({
   }),
   // ─── Products ────────────────────────────────────────────────────────────────
   products: router({
-    list: protectedProcedure.input(z10.object({
-      search: z10.string().optional(),
-      categoryId: z10.number().optional()
+    list: protectedProcedure.input(z13.object({
+      search: z13.string().optional(),
+      categoryId: z13.number().optional()
     }).optional()).query(async ({ ctx, input }) => {
-      const conditions = [eq11(products.orgId, ctx.user.orgId), eq11(products.isActive, true)];
+      const conditions = [eq14(products.orgId, ctx.user.orgId), eq14(products.isActive, true)];
       if (input?.search) {
         conditions.push(or3(
           like2(products.name, `%${input.search}%`),
@@ -2555,58 +4015,58 @@ var appRouter = router({
         ));
       }
       if (input?.categoryId) {
-        conditions.push(eq11(products.groupId, input.categoryId));
+        conditions.push(eq14(products.groupId, input.categoryId));
       }
       return db.query.products.findMany({
-        where: and11(...conditions),
+        where: and14(...conditions),
         orderBy: (p, { asc: asc5 }) => [asc5(p.name)]
       });
     }),
-    search: protectedProcedure.input(z10.object({ q: z10.string() })).query(async ({ ctx, input }) => {
+    search: protectedProcedure.input(z13.object({ q: z13.string() })).query(async ({ ctx, input }) => {
       return db.query.products.findMany({
-        where: and11(
-          eq11(products.orgId, ctx.user.orgId),
-          eq11(products.isActive, true),
+        where: and14(
+          eq14(products.orgId, ctx.user.orgId),
+          eq14(products.isActive, true),
           or3(like2(products.name, `%${input.q}%`), like2(products.code, `%${input.q}%`))
         ),
         limit: 20
       });
     }),
-    create: protectedProcedure.input(z10.object({
-      name: z10.string().min(1, "\u0627\u0633\u0645 \u0627\u0644\u0635\u0646\u0641 \u0645\u0637\u0644\u0648\u0628"),
-      name2: z10.string().optional(),
-      nameEn: z10.string().optional(),
-      sku: z10.string().optional(),
-      barcode: z10.string().optional(),
-      barcode2: z10.string().optional(),
-      barcode3: z10.string().optional(),
-      groupId: z10.number().int().positive().optional(),
-      categoryId: z10.number().int().positive().optional(),
-      unit: z10.string().optional(),
-      unit2: z10.string().optional(),
-      unit3: z10.string().optional(),
-      unitsJson: z10.string().optional(),
-      catsJson: z10.string().optional(),
-      salePrice: z10.string().optional(),
-      salePrice2: z10.string().optional(),
-      salePrice3: z10.string().optional(),
-      salePrice4: z10.string().optional(),
-      salePrice5: z10.string().optional(),
-      wholesalePrice: z10.string().optional(),
-      purchasePrice: z10.string().optional(),
-      costPrice: z10.string().optional(),
-      vatRate: z10.string().optional(),
-      taxRate: z10.string().optional(),
-      taxable: z10.boolean().optional(),
-      taxType: z10.string().optional(),
-      minStock: z10.number().optional(),
-      maxStock: z10.number().optional(),
-      reorderPoint: z10.number().optional(),
-      itemType: z10.string().optional(),
-      brand: z10.string().optional(),
-      model: z10.string().optional(),
-      description: z10.string().optional(),
-      notes: z10.string().optional()
+    create: protectedProcedure.input(z13.object({
+      name: z13.string().min(1, "\u0627\u0633\u0645 \u0627\u0644\u0635\u0646\u0641 \u0645\u0637\u0644\u0648\u0628"),
+      name2: z13.string().optional(),
+      nameEn: z13.string().optional(),
+      sku: z13.string().optional(),
+      barcode: z13.string().optional(),
+      barcode2: z13.string().optional(),
+      barcode3: z13.string().optional(),
+      groupId: z13.number().int().positive().optional(),
+      categoryId: z13.number().int().positive().optional(),
+      unit: z13.string().optional(),
+      unit2: z13.string().optional(),
+      unit3: z13.string().optional(),
+      unitsJson: z13.string().optional(),
+      catsJson: z13.string().optional(),
+      salePrice: z13.string().optional(),
+      salePrice2: z13.string().optional(),
+      salePrice3: z13.string().optional(),
+      salePrice4: z13.string().optional(),
+      salePrice5: z13.string().optional(),
+      wholesalePrice: z13.string().optional(),
+      purchasePrice: z13.string().optional(),
+      costPrice: z13.string().optional(),
+      vatRate: z13.string().optional(),
+      taxRate: z13.string().optional(),
+      taxable: z13.boolean().optional(),
+      taxType: z13.string().optional(),
+      minStock: z13.number().optional(),
+      maxStock: z13.number().optional(),
+      reorderPoint: z13.number().optional(),
+      itemType: z13.string().optional(),
+      brand: z13.string().optional(),
+      model: z13.string().optional(),
+      description: z13.string().optional(),
+      notes: z13.string().optional()
     })).mutation(async ({ ctx, input }) => {
       const {
         name,
@@ -2700,18 +4160,18 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
         throw new Error("\u0641\u0634\u0644 \u062D\u0641\u0638 \u0627\u0644\u0635\u0646\u0641 \u2014 \u062A\u062D\u0642\u0642 \u0645\u0646 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u062F\u062E\u0644\u0629");
       }
     }),
-    bulkImport: protectedProcedure.input(z10.object({
-      rows: z10.array(z10.object({
-        name: z10.string().min(1),
-        nameEn: z10.string().optional(),
-        sku: z10.string().optional(),
-        barcode: z10.string().optional(),
-        unit: z10.string().optional(),
-        salePrice: z10.string().optional(),
-        purchasePrice: z10.string().optional(),
-        taxRate: z10.string().optional(),
-        minStock: z10.string().optional(),
-        notes: z10.string().optional()
+    bulkImport: protectedProcedure.input(z13.object({
+      rows: z13.array(z13.object({
+        name: z13.string().min(1),
+        nameEn: z13.string().optional(),
+        sku: z13.string().optional(),
+        barcode: z13.string().optional(),
+        unit: z13.string().optional(),
+        salePrice: z13.string().optional(),
+        purchasePrice: z13.string().optional(),
+        taxRate: z13.string().optional(),
+        minStock: z13.string().optional(),
+        notes: z13.string().optional()
       })).min(1).max(2e3)
     })).mutation(async ({ ctx, input }) => {
       const values = input.rows.map((r) => ({
@@ -2731,43 +4191,43 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
       const inserted = await db.insert(products).values(values).returning({ id: products.id });
       return { count: inserted.length };
     }),
-    update: protectedProcedure.input(z10.object({
-      id: z10.number(),
-      name: z10.string().min(1).optional(),
-      name2: z10.string().optional(),
-      nameEn: z10.string().optional(),
-      sku: z10.string().optional(),
-      barcode: z10.string().optional(),
-      barcode2: z10.string().optional(),
-      barcode3: z10.string().optional(),
-      groupId: z10.number().optional(),
-      categoryId: z10.number().optional(),
-      unit: z10.string().optional(),
-      unit2: z10.string().optional(),
-      unit3: z10.string().optional(),
-      unitsJson: z10.string().optional(),
-      catsJson: z10.string().optional(),
-      salePrice: z10.string().optional(),
-      salePrice2: z10.string().optional(),
-      salePrice3: z10.string().optional(),
-      salePrice4: z10.string().optional(),
-      salePrice5: z10.string().optional(),
-      wholesalePrice: z10.string().optional(),
-      purchasePrice: z10.string().optional(),
-      costPrice: z10.string().optional(),
-      vatRate: z10.string().optional(),
-      taxRate: z10.string().optional(),
-      taxable: z10.boolean().optional(),
-      taxType: z10.string().optional(),
-      minStock: z10.number().optional(),
-      maxStock: z10.number().optional(),
-      reorderPoint: z10.number().optional(),
-      itemType: z10.string().optional(),
-      brand: z10.string().optional(),
-      model: z10.string().optional(),
-      description: z10.string().optional(),
-      isActive: z10.boolean().optional(),
-      notes: z10.string().optional()
+    update: protectedProcedure.input(z13.object({
+      id: z13.number(),
+      name: z13.string().min(1).optional(),
+      name2: z13.string().optional(),
+      nameEn: z13.string().optional(),
+      sku: z13.string().optional(),
+      barcode: z13.string().optional(),
+      barcode2: z13.string().optional(),
+      barcode3: z13.string().optional(),
+      groupId: z13.number().optional(),
+      categoryId: z13.number().optional(),
+      unit: z13.string().optional(),
+      unit2: z13.string().optional(),
+      unit3: z13.string().optional(),
+      unitsJson: z13.string().optional(),
+      catsJson: z13.string().optional(),
+      salePrice: z13.string().optional(),
+      salePrice2: z13.string().optional(),
+      salePrice3: z13.string().optional(),
+      salePrice4: z13.string().optional(),
+      salePrice5: z13.string().optional(),
+      wholesalePrice: z13.string().optional(),
+      purchasePrice: z13.string().optional(),
+      costPrice: z13.string().optional(),
+      vatRate: z13.string().optional(),
+      taxRate: z13.string().optional(),
+      taxable: z13.boolean().optional(),
+      taxType: z13.string().optional(),
+      minStock: z13.number().optional(),
+      maxStock: z13.number().optional(),
+      reorderPoint: z13.number().optional(),
+      itemType: z13.string().optional(),
+      brand: z13.string().optional(),
+      model: z13.string().optional(),
+      description: z13.string().optional(),
+      isActive: z13.boolean().optional(),
+      notes: z13.string().optional()
     }).passthrough()).mutation(async ({ ctx, input }) => {
       const {
         id,
@@ -2834,11 +4294,11 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
       if (rest.minStock !== void 0) updateData.minStock = String(rest.minStock);
       if (rest.isActive !== void 0) updateData.isActive = rest.isActive;
       if (notesStr !== void 0) updateData.notes = notesStr;
-      await db.update(products).set(updateData).where(and11(eq11(products.id, id), eq11(products.orgId, ctx.user.orgId)));
+      await db.update(products).set(updateData).where(and14(eq14(products.id, id), eq14(products.orgId, ctx.user.orgId)));
       return { success: true };
     }),
-    delete: protectedProcedure.input(z10.object({ id: z10.number() })).mutation(async ({ ctx, input }) => {
-      await db.update(products).set({ isActive: false }).where(and11(eq11(products.id, input.id), eq11(products.orgId, ctx.user.orgId)));
+    delete: protectedProcedure.input(z13.object({ id: z13.number() })).mutation(async ({ ctx, input }) => {
+      await db.update(products).set({ isActive: false }).where(and14(eq14(products.id, input.id), eq14(products.orgId, ctx.user.orgId)));
       return { success: true };
     })
   }),
@@ -2846,23 +4306,23 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
   categories: router({
     list: protectedProcedure.query(async ({ ctx }) => {
       const rows = await db.query.productGroups.findMany({
-        where: eq11(productGroups.orgId, ctx.user.orgId),
+        where: eq14(productGroups.orgId, ctx.user.orgId),
         orderBy: (g, { asc: asc5 }) => [asc5(g.name)]
       });
       return rows.map((r) => ({ ...r, uuid: String(r.id), isActive: r.isActive ?? true }));
     }),
     tree: protectedProcedure.query(async ({ ctx }) => {
       const rows = await db.query.productGroups.findMany({
-        where: eq11(productGroups.orgId, ctx.user.orgId),
+        where: eq14(productGroups.orgId, ctx.user.orgId),
         orderBy: (g, { asc: asc5 }) => [asc5(g.name)]
       });
       return rows.map((r) => ({ ...r, uuid: String(r.id), isActive: r.isActive ?? true }));
     }),
-    create: protectedProcedure.input(z10.object({
-      name: z10.string().min(1),
-      parentId: z10.number().optional(),
-      description: z10.string().optional(),
-      color: z10.string().optional()
+    create: protectedProcedure.input(z13.object({
+      name: z13.string().min(1),
+      parentId: z13.number().optional(),
+      description: z13.string().optional(),
+      color: z13.string().optional()
     })).mutation(async ({ ctx, input }) => {
       const [g] = await db.insert(productGroups).values({
         orgId: ctx.user.orgId,
@@ -2873,19 +4333,19 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
       }).returning();
       return { ...g, uuid: String(g.id), isActive: g.isActive ?? true };
     }),
-    update: protectedProcedure.input(z10.object({
-      id: z10.number(),
-      name: z10.string().min(1).optional(),
-      description: z10.string().optional(),
-      color: z10.string().optional(),
-      isActive: z10.boolean().optional()
+    update: protectedProcedure.input(z13.object({
+      id: z13.number(),
+      name: z13.string().min(1).optional(),
+      description: z13.string().optional(),
+      color: z13.string().optional(),
+      isActive: z13.boolean().optional()
     })).mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
-      await db.update(productGroups).set(data).where(and11(eq11(productGroups.id, id), eq11(productGroups.orgId, ctx.user.orgId)));
+      await db.update(productGroups).set(data).where(and14(eq14(productGroups.id, id), eq14(productGroups.orgId, ctx.user.orgId)));
       return { success: true };
     }),
-    delete: protectedProcedure.input(z10.object({ id: z10.number() })).mutation(async ({ ctx, input }) => {
-      await db.delete(productGroups).where(and11(eq11(productGroups.id, input.id), eq11(productGroups.orgId, ctx.user.orgId)));
+    delete: protectedProcedure.input(z13.object({ id: z13.number() })).mutation(async ({ ctx, input }) => {
+      await db.delete(productGroups).where(and14(eq14(productGroups.id, input.id), eq14(productGroups.orgId, ctx.user.orgId)));
       return { success: true };
     })
   }),
@@ -2893,53 +4353,53 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
   productGroups: router({
     list: protectedProcedure.query(async ({ ctx }) => {
       return db.query.productGroups.findMany({
-        where: eq11(productGroups.orgId, ctx.user.orgId),
+        where: eq14(productGroups.orgId, ctx.user.orgId),
         orderBy: (g, { asc: asc5 }) => [asc5(g.groupCode), asc5(g.name)]
       });
     }),
-    create: protectedProcedure.input(z10.object({
-      name: z10.string().min(1),
-      name2: z10.string().optional(),
-      groupCode: z10.string().optional(),
-      description: z10.string().optional(),
-      parentId: z10.number().optional(),
-      groupType: z10.string().optional(),
-      level: z10.number().optional(),
-      autoNumbering: z10.boolean().optional(),
-      firstNumber: z10.number().optional(),
-      lastNumber: z10.number().optional(),
-      increment: z10.number().optional(),
-      codeDigits: z10.number().optional()
+    create: protectedProcedure.input(z13.object({
+      name: z13.string().min(1),
+      name2: z13.string().optional(),
+      groupCode: z13.string().optional(),
+      description: z13.string().optional(),
+      parentId: z13.number().optional(),
+      groupType: z13.string().optional(),
+      level: z13.number().optional(),
+      autoNumbering: z13.boolean().optional(),
+      firstNumber: z13.number().optional(),
+      lastNumber: z13.number().optional(),
+      increment: z13.number().optional(),
+      codeDigits: z13.number().optional()
     })).mutation(async ({ ctx, input }) => {
       const [g] = await db.insert(productGroups).values({ ...input, orgId: ctx.user.orgId }).returning();
       return g;
     }),
-    update: protectedProcedure.input(z10.object({
-      id: z10.number(),
-      name: z10.string().min(1).optional(),
-      name2: z10.string().optional(),
-      groupCode: z10.string().optional(),
-      description: z10.string().optional(),
-      parentId: z10.number().optional(),
-      groupType: z10.string().optional(),
-      level: z10.number().optional(),
-      autoNumbering: z10.boolean().optional(),
-      firstNumber: z10.number().optional(),
-      lastNumber: z10.number().optional(),
-      increment: z10.number().optional(),
-      codeDigits: z10.number().optional()
+    update: protectedProcedure.input(z13.object({
+      id: z13.number(),
+      name: z13.string().min(1).optional(),
+      name2: z13.string().optional(),
+      groupCode: z13.string().optional(),
+      description: z13.string().optional(),
+      parentId: z13.number().optional(),
+      groupType: z13.string().optional(),
+      level: z13.number().optional(),
+      autoNumbering: z13.boolean().optional(),
+      firstNumber: z13.number().optional(),
+      lastNumber: z13.number().optional(),
+      increment: z13.number().optional(),
+      codeDigits: z13.number().optional()
     })).mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
-      await db.update(productGroups).set(data).where(and11(eq11(productGroups.id, id), eq11(productGroups.orgId, ctx.user.orgId)));
+      await db.update(productGroups).set(data).where(and14(eq14(productGroups.id, id), eq14(productGroups.orgId, ctx.user.orgId)));
       return { success: true };
     }),
-    delete: protectedProcedure.input(z10.object({ id: z10.number() })).mutation(async ({ ctx, input }) => {
-      await db.delete(productGroups).where(and11(eq11(productGroups.id, input.id), eq11(productGroups.orgId, ctx.user.orgId)));
+    delete: protectedProcedure.input(z13.object({ id: z13.number() })).mutation(async ({ ctx, input }) => {
+      await db.delete(productGroups).where(and14(eq14(productGroups.id, input.id), eq14(productGroups.orgId, ctx.user.orgId)));
       return { success: true };
     }),
-    nextCode: protectedProcedure.input(z10.object({ groupId: z10.number() })).query(async ({ ctx, input }) => {
+    nextCode: protectedProcedure.input(z13.object({ groupId: z13.number() })).query(async ({ ctx, input }) => {
       const group = await db.query.productGroups.findFirst({
-        where: and11(eq11(productGroups.id, input.groupId), eq11(productGroups.orgId, ctx.user.orgId))
+        where: and14(eq14(productGroups.id, input.groupId), eq14(productGroups.orgId, ctx.user.orgId))
       });
       if (!group) return null;
       const prefix = group.groupCode ?? "";
@@ -2949,11 +4409,11 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
       const incr = group.increment ?? 1;
       const lastNum = group.lastNumber ?? 99999;
       const existing = await db.select({ code: products.code }).from(products).where(
-        and11(
-          eq11(products.orgId, ctx.user.orgId),
+        and14(
+          eq14(products.orgId, ctx.user.orgId),
           prefix ? like2(products.code, prefix + "%") : isNotNull(products.code)
         )
-      ).orderBy(desc5(products.code));
+      ).orderBy(desc6(products.code));
       let nextNum = firstNum;
       if (existing.length > 0) {
         const nums = existing.map((p) => {
@@ -2974,30 +4434,64 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
   customers: router({
     list: protectedProcedure.query(async ({ ctx }) => {
       return db.query.customers.findMany({
-        where: and11(eq11(customers.orgId, ctx.user.orgId), eq11(customers.isActive, true)),
+        where: and14(eq14(customers.orgId, ctx.user.orgId), eq14(customers.isActive, true)),
         orderBy: (c, { asc: asc5 }) => [asc5(c.name)]
       });
     }),
-    create: protectedProcedure.input(z10.object({
-      code: z10.string().optional(),
-      name: z10.string().min(1),
-      phone: z10.string().optional(),
-      email: z10.string().optional(),
-      address: z10.string().optional()
+    create: protectedProcedure.input(z13.object({
+      code: z13.string().optional(),
+      name: z13.string().min(1),
+      phone: z13.string().optional(),
+      email: z13.string().optional(),
+      address: z13.string().optional(),
+      taxNumber: z13.string().optional(),
+      customerType: z13.enum(["individual", "organization"]).optional(),
+      registrationNumber: z13.string().optional(),
+      shortAddress: z13.string().optional(),
+      buildingNumber: z13.string().optional(),
+      additionalNumber: z13.string().optional(),
+      postalCode: z13.string().optional(),
+      city: z13.string().optional(),
+      whatsappPhone: z13.string().optional(),
+      telegramId: z13.string().optional(),
+      defaultSendMethod: z13.enum(["whatsapp", "telegram", "email"]).optional()
     })).mutation(async ({ ctx, input }) => {
       const [c] = await db.insert(customers).values({
         ...input,
+        customerType: input.customerType ?? "individual",
         orgId: ctx.user.orgId,
         isActive: true
       }).returning();
       return c;
+    }),
+    update: protectedProcedure.input(z13.object({
+      id: z13.number(),
+      name: z13.string().min(1).optional(),
+      phone: z13.string().optional(),
+      email: z13.string().optional(),
+      address: z13.string().optional(),
+      taxNumber: z13.string().optional(),
+      customerType: z13.enum(["individual", "organization"]).optional(),
+      registrationNumber: z13.string().optional(),
+      shortAddress: z13.string().optional(),
+      buildingNumber: z13.string().optional(),
+      additionalNumber: z13.string().optional(),
+      postalCode: z13.string().optional(),
+      city: z13.string().optional(),
+      whatsappPhone: z13.string().optional(),
+      telegramId: z13.string().optional(),
+      defaultSendMethod: z13.enum(["whatsapp", "telegram", "email"]).optional().nullable()
+    })).mutation(async ({ ctx, input }) => {
+      const { id, ...rest } = input;
+      await db.update(customers).set(rest).where(and14(eq14(customers.id, id), eq14(customers.orgId, ctx.user.orgId)));
+      return { success: true };
     })
   }),
   // ─── Suppliers ───────────────────────────────────────────────────────────────
   suppliers: router({
     list: protectedProcedure.query(async ({ ctx }) => {
       return db.query.suppliers.findMany({
-        where: and11(eq11(suppliers.orgId, ctx.user.orgId), eq11(suppliers.isActive, true)),
+        where: and14(eq14(suppliers.orgId, ctx.user.orgId), eq14(suppliers.isActive, true)),
         orderBy: (s, { asc: asc5 }) => [asc5(s.name)]
       });
     })
@@ -3006,12 +4500,12 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
   accounts: router({
     list: protectedProcedure.query(async ({ ctx }) => {
       return db.query.chartOfAccounts.findMany({
-        where: and11(eq11(chartOfAccounts.orgId, ctx.user.orgId), eq11(chartOfAccounts.isActive, true)),
+        where: and14(eq14(chartOfAccounts.orgId, ctx.user.orgId), eq14(chartOfAccounts.isActive, true)),
         orderBy: (a, { asc: asc5 }) => [asc5(a.code)]
       });
     }),
-    children: protectedProcedure.input(z10.object({ parentId: z10.number().int().nullable() })).query(async ({ ctx, input }) => {
-      const parentCond = input.parentId === null ? isNull(chartOfAccounts.parentId) : eq11(chartOfAccounts.parentId, input.parentId);
+    children: protectedProcedure.input(z13.object({ parentId: z13.number().int().nullable() })).query(async ({ ctx, input }) => {
+      const parentCond = input.parentId === null ? isNull2(chartOfAccounts.parentId) : eq14(chartOfAccounts.parentId, input.parentId);
       return db.select({
         id: chartOfAccounts.id,
         code: chartOfAccounts.code,
@@ -3022,32 +4516,32 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
         isParent: chartOfAccounts.isParent,
         allowPosting: chartOfAccounts.allowPosting,
         parentId: chartOfAccounts.parentId
-      }).from(chartOfAccounts).where(and11(
-        eq11(chartOfAccounts.orgId, ctx.user.orgId),
-        eq11(chartOfAccounts.isActive, true),
+      }).from(chartOfAccounts).where(and14(
+        eq14(chartOfAccounts.orgId, ctx.user.orgId),
+        eq14(chartOfAccounts.isActive, true),
         parentCond
       )).orderBy(asc4(chartOfAccounts.code));
     }),
-    create: protectedProcedure.input(z10.object({
-      code: z10.string().min(1),
-      name: z10.string().min(1),
-      nameEn: z10.string().optional(),
-      accountType: z10.string().default("assets"),
-      nature: z10.string().default("debit"),
-      level: z10.number().int().min(1).max(10).default(1),
-      parentId: z10.number().int().optional(),
-      isParent: z10.boolean().default(false),
-      allowPosting: z10.boolean().default(true),
-      costCenterType: z10.enum(["not_allowed", "optional", "mandatory"]).default("not_allowed"),
-      isActive: z10.boolean().default(true),
-      notes: z10.string().optional()
+    create: protectedProcedure.input(z13.object({
+      code: z13.string().min(1),
+      name: z13.string().min(1),
+      nameEn: z13.string().optional(),
+      accountType: z13.string().default("assets"),
+      nature: z13.string().default("debit"),
+      level: z13.number().int().min(1).max(10).default(1),
+      parentId: z13.number().int().optional(),
+      isParent: z13.boolean().default(false),
+      allowPosting: z13.boolean().default(true),
+      costCenterType: z13.enum(["not_allowed", "optional", "mandatory"]).default("not_allowed"),
+      isActive: z13.boolean().default(true),
+      notes: z13.string().optional()
     })).mutation(async ({ ctx, input }) => {
-      const exists = await db.select({ id: chartOfAccounts.id }).from(chartOfAccounts).where(and11(eq11(chartOfAccounts.orgId, ctx.user.orgId), eq11(chartOfAccounts.code, input.code), eq11(chartOfAccounts.isActive, true))).limit(1);
-      if (exists.length > 0) throw new TRPCError3({ code: "BAD_REQUEST", message: `\u0643\u0648\u062F \u0627\u0644\u062D\u0633\u0627\u0628 "${input.code}" \u0645\u0648\u062C\u0648\u062F \u0628\u0627\u0644\u0641\u0639\u0644` });
+      const exists = await db.select({ id: chartOfAccounts.id }).from(chartOfAccounts).where(and14(eq14(chartOfAccounts.orgId, ctx.user.orgId), eq14(chartOfAccounts.code, input.code), eq14(chartOfAccounts.isActive, true))).limit(1);
+      if (exists.length > 0) throw new TRPCError4({ code: "BAD_REQUEST", message: `\u0643\u0648\u062F \u0627\u0644\u062D\u0633\u0627\u0628 "${input.code}" \u0645\u0648\u062C\u0648\u062F \u0628\u0627\u0644\u0641\u0639\u0644` });
       if (input.parentId) {
-        const parent = await db.select({ id: chartOfAccounts.id, isParent: chartOfAccounts.isParent }).from(chartOfAccounts).where(and11(eq11(chartOfAccounts.id, input.parentId), eq11(chartOfAccounts.orgId, ctx.user.orgId))).limit(1);
-        if (!parent.length) throw new TRPCError3({ code: "BAD_REQUEST", message: "\u0627\u0644\u062D\u0633\u0627\u0628 \u0627\u0644\u0623\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
-        if (!parent[0].isParent) throw new TRPCError3({ code: "BAD_REQUEST", message: "\u0644\u0627 \u064A\u0645\u0643\u0646 \u0625\u0636\u0627\u0641\u0629 \u062D\u0633\u0627\u0628 \u062A\u062D\u062A \u062D\u0633\u0627\u0628 \u0641\u0631\u0639\u064A \u2014 \u0627\u0644\u062D\u0633\u0627\u0628 \u0627\u0644\u0641\u0631\u0639\u064A \u0644\u0627 \u064A\u0642\u0628\u0644 \u062D\u0633\u0627\u0628\u0627\u062A \u062A\u062D\u062A\u0647" });
+        const parent = await db.select({ id: chartOfAccounts.id, isParent: chartOfAccounts.isParent }).from(chartOfAccounts).where(and14(eq14(chartOfAccounts.id, input.parentId), eq14(chartOfAccounts.orgId, ctx.user.orgId))).limit(1);
+        if (!parent.length) throw new TRPCError4({ code: "BAD_REQUEST", message: "\u0627\u0644\u062D\u0633\u0627\u0628 \u0627\u0644\u0623\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
+        if (!parent[0].isParent) throw new TRPCError4({ code: "BAD_REQUEST", message: "\u0644\u0627 \u064A\u0645\u0643\u0646 \u0625\u0636\u0627\u0641\u0629 \u062D\u0633\u0627\u0628 \u062A\u062D\u062A \u062D\u0633\u0627\u0628 \u0641\u0631\u0639\u064A \u2014 \u0627\u0644\u062D\u0633\u0627\u0628 \u0627\u0644\u0641\u0631\u0639\u064A \u0644\u0627 \u064A\u0642\u0628\u0644 \u062D\u0633\u0627\u0628\u0627\u062A \u062A\u062D\u062A\u0647" });
       }
       const insertData = {
         orgId: ctx.user.orgId,
@@ -3066,41 +4560,41 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
       if (input.notes) insertData.notes = input.notes;
       const [account] = await db.insert(chartOfAccounts).values(insertData).returning();
       if (input.parentId) {
-        await db.update(chartOfAccounts).set({ isParent: true }).where(and11(eq11(chartOfAccounts.id, input.parentId), eq11(chartOfAccounts.orgId, ctx.user.orgId)));
+        await db.update(chartOfAccounts).set({ isParent: true }).where(and14(eq14(chartOfAccounts.id, input.parentId), eq14(chartOfAccounts.orgId, ctx.user.orgId)));
       }
       return account;
     }),
-    delete: protectedProcedure.input(z10.object({ id: z10.number() })).mutation(async ({ ctx, input }) => {
-      const children = await db.select({ id: chartOfAccounts.id, code: chartOfAccounts.code, name: chartOfAccounts.name }).from(chartOfAccounts).where(and11(
-        eq11(chartOfAccounts.parentId, input.id),
-        eq11(chartOfAccounts.orgId, ctx.user.orgId),
-        eq11(chartOfAccounts.isActive, true)
+    delete: protectedProcedure.input(z13.object({ id: z13.number() })).mutation(async ({ ctx, input }) => {
+      const children = await db.select({ id: chartOfAccounts.id, code: chartOfAccounts.code, name: chartOfAccounts.name }).from(chartOfAccounts).where(and14(
+        eq14(chartOfAccounts.parentId, input.id),
+        eq14(chartOfAccounts.orgId, ctx.user.orgId),
+        eq14(chartOfAccounts.isActive, true)
       )).limit(1);
       if (children.length > 0) {
-        throw new TRPCError3({
+        throw new TRPCError4({
           code: "BAD_REQUEST",
           message: `\u0644\u0627 \u064A\u0645\u0643\u0646 \u062D\u0630\u0641 \u0647\u0630\u0627 \u0627\u0644\u062D\u0633\u0627\u0628 \u0644\u0623\u0646\u0647 \u064A\u062D\u062A\u0648\u064A \u0639\u0644\u0649 \u062D\u0633\u0627\u0628\u0627\u062A \u0641\u0631\u0639\u064A\u0629 \u2014 \u064A\u062C\u0628 \u062D\u0630\u0641 \u0627\u0644\u062D\u0633\u0627\u0628\u0627\u062A \u0627\u0644\u0641\u0631\u0639\u064A\u0629 \u0623\u0648\u0644\u0627\u064B`
         });
       }
-      await db.update(chartOfAccounts).set({ isActive: false }).where(and11(eq11(chartOfAccounts.id, input.id), eq11(chartOfAccounts.orgId, ctx.user.orgId)));
+      await db.update(chartOfAccounts).set({ isActive: false }).where(and14(eq14(chartOfAccounts.id, input.id), eq14(chartOfAccounts.orgId, ctx.user.orgId)));
       return { success: true };
     }),
-    import: protectedProcedure.input(z10.object({
-      accounts: z10.array(z10.object({
-        code: z10.string().min(1),
-        name: z10.string().min(1),
-        nameEn: z10.string().optional(),
-        accountType: z10.string().default("assets"),
-        nature: z10.string().default("debit"),
-        level: z10.number().int().min(1).max(10).default(1),
-        isParent: z10.boolean().default(false),
-        allowPosting: z10.boolean().default(true),
-        openingBalance: z10.string().optional(),
-        openingBalanceType: z10.string().default("debit")
+    import: protectedProcedure.input(z13.object({
+      accounts: z13.array(z13.object({
+        code: z13.string().min(1),
+        name: z13.string().min(1),
+        nameEn: z13.string().optional(),
+        accountType: z13.string().default("assets"),
+        nature: z13.string().default("debit"),
+        level: z13.number().int().min(1).max(10).default(1),
+        isParent: z13.boolean().default(false),
+        allowPosting: z13.boolean().default(true),
+        openingBalance: z13.string().optional(),
+        openingBalanceType: z13.string().default("debit")
       })),
-      skipDuplicates: z10.boolean().default(true)
+      skipDuplicates: z13.boolean().default(true)
     })).mutation(async ({ ctx, input }) => {
-      const existing = await db.select({ code: chartOfAccounts.code }).from(chartOfAccounts).where(and11(eq11(chartOfAccounts.orgId, ctx.user.orgId), eq11(chartOfAccounts.isActive, true)));
+      const existing = await db.select({ code: chartOfAccounts.code }).from(chartOfAccounts).where(and14(eq14(chartOfAccounts.orgId, ctx.user.orgId), eq14(chartOfAccounts.isActive, true)));
       const existingCodes = new Set(existing.map((r) => r.code));
       const toInsert = input.accounts.filter((a) => !existingCodes.has(a.code) || !input.skipDuplicates);
       if (toInsert.length === 0) return { inserted: 0, skipped: input.accounts.length };
@@ -3112,54 +4606,85 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
   journal: router({
     list: protectedProcedure.query(async ({ ctx }) => {
       return db.query.journalEntries.findMany({
-        where: eq11(journalEntries.orgId, ctx.user.orgId),
-        orderBy: [desc5(journalEntries.createdAt)],
+        where: eq14(journalEntries.orgId, ctx.user.orgId),
+        orderBy: [desc6(journalEntries.createdAt)],
         limit: 100
       });
     }),
-    get: protectedProcedure.input(z10.object({ id: z10.number() })).query(async ({ ctx, input }) => {
+    get: protectedProcedure.input(z13.object({ id: z13.number() })).query(async ({ ctx, input }) => {
       const entry = await db.query.journalEntries.findFirst({
-        where: and11(eq11(journalEntries.id, input.id), eq11(journalEntries.orgId, ctx.user.orgId))
+        where: and14(eq14(journalEntries.id, input.id), eq14(journalEntries.orgId, ctx.user.orgId))
       });
       if (!entry) throw new Error("\u0627\u0644\u0642\u064A\u062F \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F");
       const lines = await db.query.journalEntryLines.findMany({
-        where: eq11(journalEntryLines.entryId, input.id),
+        where: eq14(journalEntryLines.entryId, input.id),
         orderBy: (l, { asc: asc5 }) => [asc5(l.sortOrder)]
       });
       return { ...entry, lines };
     }),
     nextNumber: protectedProcedure.query(async ({ ctx }) => {
       const last = await db.query.journalEntries.findFirst({
-        where: eq11(journalEntries.orgId, ctx.user.orgId),
-        orderBy: [desc5(journalEntries.id)]
+        where: eq14(journalEntries.orgId, ctx.user.orgId),
+        orderBy: [desc6(journalEntries.id)]
       });
-      const num = last ? parseInt(last.entryNumber.replace(/\D/g, "") || "0") + 1 : 1;
+      const raw = last ? parseInt(last.entryNumber.replace(/\D/g, "") || "0") : 0;
+      const num = raw > 9e6 ? 1 : raw + 1;
       return `JE-${String(num).padStart(4, "0")}`;
     }),
-    create: protectedProcedure.input(z10.object({
-      entryNumber: z10.string(),
-      entryDate: z10.string(),
-      description: z10.string().optional(),
-      reference: z10.string().optional(),
-      totalDebit: z10.string(),
-      totalCredit: z10.string(),
-      sourceDocType: z10.string().optional(),
-      sourceDocId: z10.number().optional(),
-      sourceDocNumber: z10.string().optional(),
-      entryType: z10.enum(["manual", "auto"]).optional(),
-      lines: z10.array(z10.object({
-        accountId: z10.number().optional(),
-        accountCode: z10.string().optional(),
-        accountName: z10.string().optional(),
-        description: z10.string().optional(),
-        debit: z10.string().default("0"),
-        credit: z10.string().default("0"),
-        sortOrder: z10.number().optional()
+    create: protectedProcedure.input(z13.object({
+      entryDate: z13.string(),
+      description: z13.string().optional(),
+      reference: z13.string().optional(),
+      totalDebit: z13.string(),
+      totalCredit: z13.string(),
+      sourceDocType: z13.string().optional(),
+      sourceDocId: z13.number().optional(),
+      sourceDocNumber: z13.string().optional(),
+      entryType: z13.enum(["manual", "auto"]).optional(),
+      lines: z13.array(z13.object({
+        accountId: z13.number().optional(),
+        accountCode: z13.string().optional(),
+        accountName: z13.string().optional(),
+        description: z13.string().optional(),
+        debit: z13.string().default("0"),
+        credit: z13.string().default("0"),
+        sortOrder: z13.number().optional()
       }))
     })).mutation(async ({ ctx, input }) => {
       const { lines, entryDate, ...rest } = input;
+      const totalD = lines.reduce((s, l) => s + parseFloat(l.debit ?? "0"), 0);
+      const totalC = lines.reduce((s, l) => s + parseFloat(l.credit ?? "0"), 0);
+      if (Math.abs(totalD - totalC) > 1e-3)
+        throw new TRPCError4({ code: "BAD_REQUEST", message: "\u0644\u0627 \u064A\u0645\u0643\u0646 \u062D\u0641\u0638 \u0627\u0644\u0642\u064A\u062F: \u0627\u0644\u0645\u062F\u064A\u0646 \u0644\u0627 \u064A\u0633\u0627\u0648\u064A \u0627\u0644\u062F\u0627\u0626\u0646" });
+      const accountIds = lines.map((l) => l.accountId).filter((id) => !!id);
+      if (accountIds.length > 0) {
+        const accs = await db.query.chartOfAccounts.findMany({
+          where: inArray2(chartOfAccounts.id, accountIds)
+        });
+        const accMap = new Map(accs.map((a) => [a.id, a]));
+        for (const l of lines) {
+          if (!l.accountId) continue;
+          const acc = accMap.get(l.accountId);
+          if (!acc)
+            throw new TRPCError4({ code: "BAD_REQUEST", message: `\u0627\u0644\u062D\u0633\u0627\u0628 \u0628\u0627\u0644\u0643\u0648\u062F ${l.accountCode ?? l.accountId} \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F` });
+          if (!acc.isActive)
+            throw new TRPCError4({ code: "BAD_REQUEST", message: `\u0627\u0644\u062D\u0633\u0627\u0628 "${acc.code} - ${acc.name}" \u0645\u0648\u0642\u0648\u0641 \u0648\u0644\u0627 \u064A\u0645\u0643\u0646 \u0627\u0644\u062A\u0631\u062D\u064A\u0644 \u0639\u0644\u064A\u0647` });
+          if (acc.isParent)
+            throw new TRPCError4({ code: "BAD_REQUEST", message: `\u0627\u0644\u062D\u0633\u0627\u0628 "${acc.code} - ${acc.name}" \u062A\u062C\u0645\u064A\u0639\u064A \u2014 \u064A\u062C\u0628 \u0627\u062E\u062A\u064A\u0627\u0631 \u062D\u0633\u0627\u0628 \u0641\u0631\u0639\u064A` });
+          if (acc.allowPosting === false)
+            throw new TRPCError4({ code: "BAD_REQUEST", message: `\u0627\u0644\u062D\u0633\u0627\u0628 "${acc.code} - ${acc.name}" \u0644\u0627 \u064A\u0633\u0645\u062D \u0628\u0627\u0644\u062A\u0631\u062D\u064A\u0644` });
+        }
+      }
+      const lastEntry = await db.query.journalEntries.findFirst({
+        where: eq14(journalEntries.orgId, ctx.user.orgId),
+        orderBy: [desc6(journalEntries.id)]
+      });
+      const lastNum = lastEntry ? parseInt(lastEntry.entryNumber.replace(/\D/g, "") || "0") : 0;
+      const safeLastNum = lastNum > 9e6 ? 0 : lastNum;
+      const entryNumber = `JE-${String(safeLastNum + 1).padStart(4, "0")}`;
       const [entry] = await db.insert(journalEntries).values({
         ...rest,
+        entryNumber,
         entryType: rest.entryType ?? "manual",
         orgId: ctx.user.orgId,
         userId: ctx.user.id,
@@ -3173,17 +4698,17 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
       }
       return entry;
     }),
-    delete: protectedProcedure.input(z10.object({ id: z10.number() })).mutation(async ({ ctx, input }) => {
-      await db.update(journalEntries).set({ status: "cancelled" }).where(and11(eq11(journalEntries.id, input.id), eq11(journalEntries.orgId, ctx.user.orgId)));
+    delete: protectedProcedure.input(z13.object({ id: z13.number() })).mutation(async ({ ctx, input }) => {
+      await db.update(journalEntries).set({ status: "cancelled" }).where(and14(eq14(journalEntries.id, input.id), eq14(journalEntries.orgId, ctx.user.orgId)));
       return { success: true };
     }),
-    getByNumber: protectedProcedure.input(z10.object({ entryNumber: z10.string() })).query(async ({ ctx, input }) => {
+    getByNumber: protectedProcedure.input(z13.object({ entryNumber: z13.string() })).query(async ({ ctx, input }) => {
       const entry = await db.query.journalEntries.findFirst({
-        where: and11(eq11(journalEntries.entryNumber, input.entryNumber), eq11(journalEntries.orgId, ctx.user.orgId))
+        where: and14(eq14(journalEntries.entryNumber, input.entryNumber), eq14(journalEntries.orgId, ctx.user.orgId))
       });
       if (!entry) return null;
       const lines = await db.query.journalEntryLines.findMany({
-        where: eq11(journalEntryLines.entryId, entry.id),
+        where: eq14(journalEntryLines.entryId, entry.id),
         orderBy: (l, { asc: asc5 }) => [asc5(l.sortOrder)]
       });
       return { ...entry, lines };
@@ -3193,32 +4718,32 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
   vouchers: router({
     list: protectedProcedure.query(async ({ ctx }) => {
       return db.query.vouchers.findMany({
-        where: eq11(vouchers.orgId, ctx.user.orgId),
-        orderBy: [desc5(vouchers.createdAt)],
+        where: eq14(vouchers.orgId, ctx.user.orgId),
+        orderBy: [desc6(vouchers.createdAt)],
         limit: 100
       });
     }),
-    nextNumber: protectedProcedure.input(z10.object({ type: z10.enum(["receipt", "payment"]) })).query(async ({ ctx, input }) => {
+    nextNumber: protectedProcedure.input(z13.object({ type: z13.enum(["receipt", "payment"]) })).query(async ({ ctx, input }) => {
       const last = await db.query.vouchers.findFirst({
-        where: and11(eq11(vouchers.orgId, ctx.user.orgId), eq11(vouchers.voucherType, input.type)),
-        orderBy: [desc5(vouchers.id)]
+        where: and14(eq14(vouchers.orgId, ctx.user.orgId), eq14(vouchers.voucherType, input.type)),
+        orderBy: [desc6(vouchers.id)]
       });
       const prefix = input.type === "receipt" ? "RV" : "PV";
       const num = last ? parseInt(last.voucherNumber.replace(/\D/g, "") || "0") + 1 : 1;
       return `${prefix}-${String(num).padStart(4, "0")}`;
     }),
-    create: protectedProcedure.input(z10.object({
-      voucherNumber: z10.string(),
-      voucherType: z10.enum(["receipt", "payment"]),
-      voucherDate: z10.string(),
-      amount: z10.string(),
-      paymentMethod: z10.enum(["cash", "bank", "credit", "check", "other"]).default("cash"),
-      accountCode: z10.string().optional(),
-      accountName: z10.string().optional(),
-      partyType: z10.string().optional(),
-      partyName: z10.string().optional(),
-      description: z10.string().optional(),
-      reference: z10.string().optional()
+    create: protectedProcedure.input(z13.object({
+      voucherNumber: z13.string(),
+      voucherType: z13.enum(["receipt", "payment"]),
+      voucherDate: z13.string(),
+      amount: z13.string(),
+      paymentMethod: z13.enum(["cash", "bank", "credit", "check", "other"]).default("cash"),
+      accountCode: z13.string().optional(),
+      accountName: z13.string().optional(),
+      partyType: z13.string().optional(),
+      partyName: z13.string().optional(),
+      description: z13.string().optional(),
+      reference: z13.string().optional()
     })).mutation(async ({ ctx, input }) => {
       const [v] = await db.insert(vouchers).values({
         ...input,
@@ -3233,33 +4758,33 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
   // ─── Receipt Vouchers ────────────────────────────────────────────────────────
   receiptVouchers: router({
     list: protectedProcedure.query(async ({ ctx }) => {
-      return db.select().from(receiptVouchers).where(eq11(receiptVouchers.orgId, ctx.user.orgId)).orderBy(desc5(receiptVouchers.createdAt)).limit(200);
+      return db.select().from(receiptVouchers).where(eq14(receiptVouchers.orgId, ctx.user.orgId)).orderBy(desc6(receiptVouchers.createdAt)).limit(200);
     }),
-    create: protectedProcedure.input(z10.object({
-      voucherNumber: z10.string(),
-      voucherDate: z10.date(),
-      receivedFrom: z10.string().optional(),
-      amount: z10.string(),
-      paymentMethod: z10.enum(["cash", "bank", "credit", "check", "other"]).default("cash"),
-      bankAccount: z10.string().optional(),
-      checkNumber: z10.string().optional(),
-      description: z10.string().optional(),
-      accountId: z10.number().optional(),
-      contraAccountId: z10.number().optional(),
-      costCenterId: z10.number().optional(),
-      notes: z10.string().optional()
+    create: protectedProcedure.input(z13.object({
+      voucherNumber: z13.string(),
+      voucherDate: z13.date(),
+      receivedFrom: z13.string().optional(),
+      amount: z13.string(),
+      paymentMethod: z13.enum(["cash", "bank", "credit", "check", "other"]).default("cash"),
+      bankAccount: z13.string().optional(),
+      checkNumber: z13.string().optional(),
+      description: z13.string().optional(),
+      accountId: z13.number().optional(),
+      contraAccountId: z13.number().optional(),
+      costCenterId: z13.number().optional(),
+      notes: z13.string().optional()
     })).mutation(async ({ ctx, input }) => {
       let journalEntryId;
       let journalEntryNumber;
       if (input.accountId && input.contraAccountId) {
         const last = await db.query.journalEntries.findFirst({
-          where: eq11(journalEntries.orgId, ctx.user.orgId),
-          orderBy: [desc5(journalEntries.id)]
+          where: eq14(journalEntries.orgId, ctx.user.orgId),
+          orderBy: [desc6(journalEntries.id)]
         });
         const num = last ? parseInt(last.entryNumber.replace(/\D/g, "") || "0") + 1 : 1;
         journalEntryNumber = `JE-${String(num).padStart(4, "0")}`;
-        const accDebitName = await db.query.chartOfAccounts.findFirst({ where: eq11(chartOfAccounts.id, input.accountId) });
-        const accCreditName = await db.query.chartOfAccounts.findFirst({ where: eq11(chartOfAccounts.id, input.contraAccountId) });
+        const accDebitName = await db.query.chartOfAccounts.findFirst({ where: eq14(chartOfAccounts.id, input.accountId) });
+        const accCreditName = await db.query.chartOfAccounts.findFirst({ where: eq14(chartOfAccounts.id, input.contraAccountId) });
         const [je] = await db.insert(journalEntries).values({
           orgId: ctx.user.orgId,
           userId: ctx.user.id,
@@ -3304,32 +4829,32 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
   // ─── Payment Vouchers ────────────────────────────────────────────────────────
   paymentVouchers: router({
     list: protectedProcedure.query(async ({ ctx }) => {
-      return db.select().from(paymentVouchers).where(eq11(paymentVouchers.orgId, ctx.user.orgId)).orderBy(desc5(paymentVouchers.createdAt)).limit(200);
+      return db.select().from(paymentVouchers).where(eq14(paymentVouchers.orgId, ctx.user.orgId)).orderBy(desc6(paymentVouchers.createdAt)).limit(200);
     }),
-    create: protectedProcedure.input(z10.object({
-      voucherNumber: z10.string(),
-      voucherDate: z10.date(),
-      paidTo: z10.string().optional(),
-      amount: z10.string(),
-      paymentMethod: z10.enum(["cash", "bank", "credit", "check", "other"]).default("cash"),
-      bankAccount: z10.string().optional(),
-      checkNumber: z10.string().optional(),
-      description: z10.string().optional(),
-      accountId: z10.number().optional(),
-      contraAccountId: z10.number().optional(),
-      notes: z10.string().optional()
+    create: protectedProcedure.input(z13.object({
+      voucherNumber: z13.string(),
+      voucherDate: z13.date(),
+      paidTo: z13.string().optional(),
+      amount: z13.string(),
+      paymentMethod: z13.enum(["cash", "bank", "credit", "check", "other"]).default("cash"),
+      bankAccount: z13.string().optional(),
+      checkNumber: z13.string().optional(),
+      description: z13.string().optional(),
+      accountId: z13.number().optional(),
+      contraAccountId: z13.number().optional(),
+      notes: z13.string().optional()
     })).mutation(async ({ ctx, input }) => {
       let journalEntryId;
       let journalEntryNumber;
       if (input.accountId && input.contraAccountId) {
         const last = await db.query.journalEntries.findFirst({
-          where: eq11(journalEntries.orgId, ctx.user.orgId),
-          orderBy: [desc5(journalEntries.id)]
+          where: eq14(journalEntries.orgId, ctx.user.orgId),
+          orderBy: [desc6(journalEntries.id)]
         });
         const num = last ? parseInt(last.entryNumber.replace(/\D/g, "") || "0") + 1 : 1;
         journalEntryNumber = `JE-${String(num).padStart(4, "0")}`;
-        const accDebitName = await db.query.chartOfAccounts.findFirst({ where: eq11(chartOfAccounts.id, input.contraAccountId) });
-        const accCreditName = await db.query.chartOfAccounts.findFirst({ where: eq11(chartOfAccounts.id, input.accountId) });
+        const accDebitName = await db.query.chartOfAccounts.findFirst({ where: eq14(chartOfAccounts.id, input.contraAccountId) });
+        const accCreditName = await db.query.chartOfAccounts.findFirst({ where: eq14(chartOfAccounts.id, input.accountId) });
         const [je] = await db.insert(journalEntries).values({
           orgId: ctx.user.orgId,
           userId: ctx.user.id,
@@ -3374,33 +4899,58 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
   branches: router({
     list: protectedProcedure.query(async ({ ctx }) => {
       return db.query.branches.findMany({
-        where: and11(eq11(branches.orgId, ctx.user.orgId), eq11(branches.isActive, true)),
+        where: and14(eq14(branches.orgId, ctx.user.orgId), eq14(branches.isActive, true)),
         orderBy: (b, { asc: asc5 }) => [asc5(b.name)]
       });
     }),
-    create: protectedProcedure.input(z10.object({ name: z10.string().min(1), address: z10.string().optional(), phone: z10.string().optional() })).mutation(async ({ ctx, input }) => {
+    create: protectedProcedure.input(z13.object({ name: z13.string().min(1), address: z13.string().optional(), phone: z13.string().optional() })).mutation(async ({ ctx, input }) => {
       const [b] = await db.insert(branches).values({ ...input, orgId: ctx.user.orgId, isActive: true }).returning();
       return b;
     }),
-    update: protectedProcedure.input(z10.object({ id: z10.number(), name: z10.string().min(1).optional(), address: z10.string().optional(), phone: z10.string().optional() })).mutation(async ({ ctx, input }) => {
+    update: protectedProcedure.input(z13.object({ id: z13.number(), name: z13.string().min(1).optional(), address: z13.string().optional(), phone: z13.string().optional() })).mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
-      await db.update(branches).set(data).where(and11(eq11(branches.id, id), eq11(branches.orgId, ctx.user.orgId)));
+      await db.update(branches).set(data).where(and14(eq14(branches.id, id), eq14(branches.orgId, ctx.user.orgId)));
       return { success: true };
     }),
-    delete: protectedProcedure.input(z10.object({ id: z10.number() })).mutation(async ({ ctx, input }) => {
-      const hasWarehouses = await db.select({ id: warehouses.id }).from(warehouses).where(and11(eq11(warehouses.branchId, input.id), eq11(warehouses.orgId, ctx.user.orgId), eq11(warehouses.isActive, true))).limit(1);
+    delete: protectedProcedure.input(z13.object({ id: z13.number() })).mutation(async ({ ctx, input }) => {
+      const hasWarehouses = await db.select({ id: warehouses.id }).from(warehouses).where(and14(eq14(warehouses.branchId, input.id), eq14(warehouses.orgId, ctx.user.orgId), eq14(warehouses.isActive, true))).limit(1);
       if (hasWarehouses.length > 0) {
-        throw new TRPCError3({ code: "BAD_REQUEST", message: "\u0644\u0627 \u064A\u0645\u0643\u0646 \u062D\u0630\u0641 \u0627\u0644\u0641\u0631\u0639 \u0644\u0623\u0646\u0647 \u0645\u0631\u062A\u0628\u0637 \u0628\u0645\u062E\u0627\u0632\u0646" });
+        throw new TRPCError4({ code: "BAD_REQUEST", message: "\u0644\u0627 \u064A\u0645\u0643\u0646 \u062D\u0630\u0641 \u0627\u0644\u0641\u0631\u0639 \u0644\u0623\u0646\u0647 \u0645\u0631\u062A\u0628\u0637 \u0628\u0645\u062E\u0627\u0632\u0646" });
       }
-      const hasInvoices = await db.select({ id: salesInvoices.id }).from(salesInvoices).where(and11(eq11(salesInvoices.branchId, input.id), eq11(salesInvoices.orgId, ctx.user.orgId))).limit(1);
+      const hasInvoices = await db.select({ id: salesInvoices.id }).from(salesInvoices).where(and14(eq14(salesInvoices.branchId, input.id), eq14(salesInvoices.orgId, ctx.user.orgId))).limit(1);
       if (hasInvoices.length > 0) {
-        throw new TRPCError3({ code: "BAD_REQUEST", message: "\u0644\u0627 \u064A\u0645\u0643\u0646 \u062D\u0630\u0641 \u0627\u0644\u0641\u0631\u0639 \u0644\u0623\u0646\u0647 \u0645\u0631\u062A\u0628\u0637 \u0628\u0641\u0648\u0627\u062A\u064A\u0631 \u0645\u0628\u064A\u0639\u0627\u062A" });
+        throw new TRPCError4({ code: "BAD_REQUEST", message: "\u0644\u0627 \u064A\u0645\u0643\u0646 \u062D\u0630\u0641 \u0627\u0644\u0641\u0631\u0639 \u0644\u0623\u0646\u0647 \u0645\u0631\u062A\u0628\u0637 \u0628\u0641\u0648\u0627\u062A\u064A\u0631 \u0645\u0628\u064A\u0639\u0627\u062A" });
       }
-      const hasInventoryCounts = await db.select({ id: inventoryCounts.id }).from(inventoryCounts).where(and11(eq11(inventoryCounts.branchId, input.id), eq11(inventoryCounts.orgId, ctx.user.orgId))).limit(1);
+      const hasInventoryCounts = await db.select({ id: inventoryCounts.id }).from(inventoryCounts).where(and14(eq14(inventoryCounts.branchId, input.id), eq14(inventoryCounts.orgId, ctx.user.orgId))).limit(1);
       if (hasInventoryCounts.length > 0) {
-        throw new TRPCError3({ code: "BAD_REQUEST", message: "\u0644\u0627 \u064A\u0645\u0643\u0646 \u062D\u0630\u0641 \u0627\u0644\u0641\u0631\u0639 \u0644\u0623\u0646\u0647 \u0645\u0631\u062A\u0628\u0637 \u0628\u0639\u0645\u0644\u064A\u0627\u062A \u062C\u0631\u062F \u0645\u062E\u0632\u0646\u064A" });
+        throw new TRPCError4({ code: "BAD_REQUEST", message: "\u0644\u0627 \u064A\u0645\u0643\u0646 \u062D\u0630\u0641 \u0627\u0644\u0641\u0631\u0639 \u0644\u0623\u0646\u0647 \u0645\u0631\u062A\u0628\u0637 \u0628\u0639\u0645\u0644\u064A\u0627\u062A \u062C\u0631\u062F \u0645\u062E\u0632\u0646\u064A" });
       }
-      await db.update(branches).set({ isActive: false }).where(and11(eq11(branches.id, input.id), eq11(branches.orgId, ctx.user.orgId)));
+      await db.update(branches).set({ isActive: false }).where(and14(eq14(branches.id, input.id), eq14(branches.orgId, ctx.user.orgId)));
+      return { success: true };
+    })
+  }),
+  // ─── Cost Centers (مراكز التكلفة) ────────────────────────────────────────────
+  costCenters: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return db.select().from(costCenters).where(and14(eq14(costCenters.orgId, ctx.user.orgId), eq14(costCenters.isActive, true))).orderBy(asc4(costCenters.code));
+    }),
+    create: protectedProcedure.input(z13.object({
+      code: z13.string().min(1),
+      name: z13.string().min(1),
+      name2: z13.string().optional(),
+      centerType: z13.enum(["root", "general", "branch"]).default("branch"),
+      parentId: z13.number().optional(),
+      level: z13.number().default(1),
+      notes: z13.string().optional()
+    })).mutation(async ({ ctx, input }) => {
+      const [c] = await db.insert(costCenters).values({
+        ...input,
+        orgId: ctx.user.orgId
+      }).returning();
+      return c;
+    }),
+    delete: protectedProcedure.input(z13.object({ id: z13.number() })).mutation(async ({ ctx, input }) => {
+      await db.update(costCenters).set({ isActive: false }).where(and14(eq14(costCenters.id, input.id), eq14(costCenters.orgId, ctx.user.orgId)));
       return { success: true };
     })
   }),
@@ -3408,78 +4958,78 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
   warehouses: router({
     list: protectedProcedure.query(async ({ ctx }) => {
       return db.query.warehouses.findMany({
-        where: and11(eq11(warehouses.orgId, ctx.user.orgId), eq11(warehouses.isActive, true)),
+        where: and14(eq14(warehouses.orgId, ctx.user.orgId), eq14(warehouses.isActive, true)),
         orderBy: (w, { asc: asc5 }) => [asc5(w.name)]
       });
     }),
-    create: protectedProcedure.input(z10.object({
-      name: z10.string().min(1),
-      code: z10.string().optional(),
-      branchId: z10.number().optional(),
-      name2: z10.string().optional(),
-      fullName1: z10.string().optional(),
-      fullName2: z10.string().optional(),
-      description: z10.string().optional(),
-      invAccountId: z10.number().optional(),
-      cogsAccount1Id: z10.number().optional(),
-      cogsAccount2Id: z10.number().optional(),
-      cashAccountId: z10.number().optional(),
-      bankAccountId: z10.number().optional(),
-      salesAccount1Id: z10.number().optional(),
-      allowedUserId: z10.number().optional(),
-      allowedUserGroup: z10.string().optional(),
-      copyFromWarehouseId: z10.number().optional()
+    create: protectedProcedure.input(z13.object({
+      name: z13.string().min(1),
+      code: z13.string().optional(),
+      branchId: z13.number().optional(),
+      name2: z13.string().optional(),
+      fullName1: z13.string().optional(),
+      fullName2: z13.string().optional(),
+      description: z13.string().optional(),
+      invAccountId: z13.number().optional(),
+      cogsAccount1Id: z13.number().optional(),
+      cogsAccount2Id: z13.number().optional(),
+      cashAccountId: z13.number().optional(),
+      bankAccountId: z13.number().optional(),
+      salesAccount1Id: z13.number().optional(),
+      allowedUserId: z13.number().optional(),
+      allowedUserGroup: z13.string().optional(),
+      copyFromWarehouseId: z13.number().optional()
     })).mutation(async ({ ctx, input }) => {
       const { description, ...rest } = input;
       const [w] = await db.insert(warehouses).values({ ...rest, address: description, orgId: ctx.user.orgId, isActive: true }).returning();
       return w;
     }),
-    update: protectedProcedure.input(z10.object({
-      id: z10.number(),
-      name: z10.string().optional(),
-      code: z10.string().optional(),
-      branchId: z10.number().optional(),
-      name2: z10.string().optional(),
-      fullName1: z10.string().optional(),
-      fullName2: z10.string().optional(),
-      description: z10.string().optional(),
-      invAccountId: z10.number().optional(),
-      cogsAccount1Id: z10.number().optional(),
-      cogsAccount2Id: z10.number().optional(),
-      cashAccountId: z10.number().optional(),
-      bankAccountId: z10.number().optional(),
-      salesAccount1Id: z10.number().optional(),
-      allowedUserId: z10.number().optional(),
-      allowedUserGroup: z10.string().optional(),
-      copyFromWarehouseId: z10.number().optional()
+    update: protectedProcedure.input(z13.object({
+      id: z13.number(),
+      name: z13.string().optional(),
+      code: z13.string().optional(),
+      branchId: z13.number().optional(),
+      name2: z13.string().optional(),
+      fullName1: z13.string().optional(),
+      fullName2: z13.string().optional(),
+      description: z13.string().optional(),
+      invAccountId: z13.number().optional(),
+      cogsAccount1Id: z13.number().optional(),
+      cogsAccount2Id: z13.number().optional(),
+      cashAccountId: z13.number().optional(),
+      bankAccountId: z13.number().optional(),
+      salesAccount1Id: z13.number().optional(),
+      allowedUserId: z13.number().optional(),
+      allowedUserGroup: z13.string().optional(),
+      copyFromWarehouseId: z13.number().optional()
     })).mutation(async ({ ctx, input }) => {
       const { id, description, ...rest } = input;
-      await db.update(warehouses).set({ ...rest, address: description }).where(and11(eq11(warehouses.id, id), eq11(warehouses.orgId, ctx.user.orgId)));
+      await db.update(warehouses).set({ ...rest, address: description }).where(and14(eq14(warehouses.id, id), eq14(warehouses.orgId, ctx.user.orgId)));
       return { success: true };
     }),
-    delete: protectedProcedure.input(z10.object({ id: z10.number() })).mutation(async ({ ctx, input }) => {
-      const hasInventory = await db.select({ id: inventory.id }).from(inventory).where(and11(eq11(inventory.warehouseId, input.id), eq11(inventory.orgId, ctx.user.orgId))).limit(1);
+    delete: protectedProcedure.input(z13.object({ id: z13.number() })).mutation(async ({ ctx, input }) => {
+      const hasInventory = await db.select({ id: inventory.id }).from(inventory).where(and14(eq14(inventory.warehouseId, input.id), eq14(inventory.orgId, ctx.user.orgId))).limit(1);
       if (hasInventory.length > 0) {
-        throw new TRPCError3({ code: "BAD_REQUEST", message: "\u0644\u0627 \u064A\u0645\u0643\u0646 \u062D\u0630\u0641 \u0627\u0644\u0645\u062E\u0632\u0646 \u0644\u0623\u0646\u0647 \u0645\u0631\u062A\u0628\u0637 \u0628\u0645\u0646\u062A\u062C\u0627\u062A \u0641\u064A \u0627\u0644\u0645\u062E\u0632\u0648\u0646" });
+        throw new TRPCError4({ code: "BAD_REQUEST", message: "\u0644\u0627 \u064A\u0645\u0643\u0646 \u062D\u0630\u0641 \u0627\u0644\u0645\u062E\u0632\u0646 \u0644\u0623\u0646\u0647 \u0645\u0631\u062A\u0628\u0637 \u0628\u0645\u0646\u062A\u062C\u0627\u062A \u0641\u064A \u0627\u0644\u0645\u062E\u0632\u0648\u0646" });
       }
-      const hasVouchers = await db.select({ id: stockVouchers.id }).from(stockVouchers).where(and11(eq11(stockVouchers.warehouseId, input.id), eq11(stockVouchers.orgId, ctx.user.orgId))).limit(1);
+      const hasVouchers = await db.select({ id: stockVouchers.id }).from(stockVouchers).where(and14(eq14(stockVouchers.warehouseId, input.id), eq14(stockVouchers.orgId, ctx.user.orgId))).limit(1);
       if (hasVouchers.length > 0) {
-        throw new TRPCError3({ code: "BAD_REQUEST", message: "\u0644\u0627 \u064A\u0645\u0643\u0646 \u062D\u0630\u0641 \u0627\u0644\u0645\u062E\u0632\u0646 \u0644\u0623\u0646\u0647 \u0645\u0631\u062A\u0628\u0637 \u0628\u062D\u0631\u0643\u0627\u062A \u0645\u062E\u0632\u0646\u064A\u0629" });
+        throw new TRPCError4({ code: "BAD_REQUEST", message: "\u0644\u0627 \u064A\u0645\u0643\u0646 \u062D\u0630\u0641 \u0627\u0644\u0645\u062E\u0632\u0646 \u0644\u0623\u0646\u0647 \u0645\u0631\u062A\u0628\u0637 \u0628\u062D\u0631\u0643\u0627\u062A \u0645\u062E\u0632\u0646\u064A\u0629" });
       }
-      const hasInventoryCounts = await db.select({ id: inventoryCounts.id }).from(inventoryCounts).where(and11(eq11(inventoryCounts.warehouseId, input.id), eq11(inventoryCounts.orgId, ctx.user.orgId))).limit(1);
+      const hasInventoryCounts = await db.select({ id: inventoryCounts.id }).from(inventoryCounts).where(and14(eq14(inventoryCounts.warehouseId, input.id), eq14(inventoryCounts.orgId, ctx.user.orgId))).limit(1);
       if (hasInventoryCounts.length > 0) {
-        throw new TRPCError3({ code: "BAD_REQUEST", message: "\u0644\u0627 \u064A\u0645\u0643\u0646 \u062D\u0630\u0641 \u0627\u0644\u0645\u062E\u0632\u0646 \u0644\u0623\u0646\u0647 \u0645\u0631\u062A\u0628\u0637 \u0628\u0639\u0645\u0644\u064A\u0627\u062A \u062C\u0631\u062F \u0645\u062E\u0632\u0646\u064A" });
+        throw new TRPCError4({ code: "BAD_REQUEST", message: "\u0644\u0627 \u064A\u0645\u0643\u0646 \u062D\u0630\u0641 \u0627\u0644\u0645\u062E\u0632\u0646 \u0644\u0623\u0646\u0647 \u0645\u0631\u062A\u0628\u0637 \u0628\u0639\u0645\u0644\u064A\u0627\u062A \u062C\u0631\u062F \u0645\u062E\u0632\u0646\u064A" });
       }
-      const hasSalesInvoices = await db.select({ id: salesInvoices.id }).from(salesInvoices).where(and11(eq11(salesInvoices.warehouseId, input.id), eq11(salesInvoices.orgId, ctx.user.orgId))).limit(1);
+      const hasSalesInvoices = await db.select({ id: salesInvoices.id }).from(salesInvoices).where(and14(eq14(salesInvoices.warehouseId, input.id), eq14(salesInvoices.orgId, ctx.user.orgId))).limit(1);
       if (hasSalesInvoices.length > 0) {
-        throw new TRPCError3({ code: "BAD_REQUEST", message: "\u0644\u0627 \u064A\u0645\u0643\u0646 \u062D\u0630\u0641 \u0627\u0644\u0645\u062E\u0632\u0646 \u0644\u0623\u0646\u0647 \u0645\u0631\u062A\u0628\u0637 \u0628\u0641\u0648\u0627\u062A\u064A\u0631 \u0645\u0628\u064A\u0639\u0627\u062A" });
+        throw new TRPCError4({ code: "BAD_REQUEST", message: "\u0644\u0627 \u064A\u0645\u0643\u0646 \u062D\u0630\u0641 \u0627\u0644\u0645\u062E\u0632\u0646 \u0644\u0623\u0646\u0647 \u0645\u0631\u062A\u0628\u0637 \u0628\u0641\u0648\u0627\u062A\u064A\u0631 \u0645\u0628\u064A\u0639\u0627\u062A" });
       }
-      await db.update(warehouses).set({ isActive: false }).where(and11(eq11(warehouses.id, input.id), eq11(warehouses.orgId, ctx.user.orgId)));
+      await db.update(warehouses).set({ isActive: false }).where(and14(eq14(warehouses.id, input.id), eq14(warehouses.orgId, ctx.user.orgId)));
       return { success: true };
     }),
     accountLinks: router({
-      list: protectedProcedure.input(z10.object({ warehouseId: z10.number() })).query(async ({ input }) => {
-        return db.select().from(warehouseAccountLinks).where(eq11(warehouseAccountLinks.warehouseId, input.warehouseId)).orderBy(warehouseAccountLinks.sortOrder);
+      list: protectedProcedure.input(z13.object({ warehouseId: z13.number() })).query(async ({ input }) => {
+        return db.select().from(warehouseAccountLinks).where(eq14(warehouseAccountLinks.warehouseId, input.warehouseId)).orderBy(warehouseAccountLinks.sortOrder);
       }),
       listAll: protectedProcedure.query(async ({ ctx }) => {
         const rows = await db.select({
@@ -3491,22 +5041,22 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
           accountCode: chartOfAccounts.code,
           accountName: chartOfAccounts.name,
           warehouseName: warehouses.name
-        }).from(warehouseAccountLinks).innerJoin(warehouses, and11(
-          eq11(warehouses.id, warehouseAccountLinks.warehouseId),
-          eq11(warehouses.orgId, ctx.user.orgId)
-        )).leftJoin(chartOfAccounts, eq11(chartOfAccounts.id, warehouseAccountLinks.accountId)).orderBy(warehouses.name, warehouseAccountLinks.sortOrder);
+        }).from(warehouseAccountLinks).innerJoin(warehouses, and14(
+          eq14(warehouses.id, warehouseAccountLinks.warehouseId),
+          eq14(warehouses.orgId, ctx.user.orgId)
+        )).leftJoin(chartOfAccounts, eq14(chartOfAccounts.id, warehouseAccountLinks.accountId)).orderBy(warehouses.name, warehouseAccountLinks.sortOrder);
         return rows;
       }),
-      save: protectedProcedure.input(z10.object({
-        warehouseId: z10.number(),
-        links: z10.array(z10.object({
-          id: z10.number().optional(),
-          label: z10.string().min(1),
-          accountId: z10.number().nullable().optional(),
-          sortOrder: z10.number().default(0)
+      save: protectedProcedure.input(z13.object({
+        warehouseId: z13.number(),
+        links: z13.array(z13.object({
+          id: z13.number().optional(),
+          label: z13.string().min(1),
+          accountId: z13.number().nullable().optional(),
+          sortOrder: z13.number().default(0)
         }))
       })).mutation(async ({ input }) => {
-        await db.delete(warehouseAccountLinks).where(eq11(warehouseAccountLinks.warehouseId, input.warehouseId));
+        await db.delete(warehouseAccountLinks).where(eq14(warehouseAccountLinks.warehouseId, input.warehouseId));
         if (input.links.length > 0) {
           await db.insert(warehouseAccountLinks).values(
             input.links.map((l, i) => ({
@@ -3524,61 +5074,61 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
   // ─── Units ───────────────────────────────────────────────────────────────────
   units: router({
     list: protectedProcedure.query(async ({ ctx }) => {
-      return db.query.units.findMany({ where: eq11(units.orgId, ctx.user.orgId), orderBy: (u, { asc: asc5 }) => [asc5(u.name)] });
+      return db.query.units.findMany({ where: eq14(units.orgId, ctx.user.orgId), orderBy: (u, { asc: asc5 }) => [asc5(u.name)] });
     }),
-    create: protectedProcedure.input(z10.object({ name: z10.string().min(1), symbol: z10.string().optional() })).mutation(async ({ ctx, input }) => {
+    create: protectedProcedure.input(z13.object({ name: z13.string().min(1), symbol: z13.string().optional() })).mutation(async ({ ctx, input }) => {
       const [u] = await db.insert(units).values({ ...input, orgId: ctx.user.orgId }).returning();
       return u;
     }),
-    update: protectedProcedure.input(z10.object({ id: z10.number(), name: z10.string().min(1).optional(), symbol: z10.string().optional() })).mutation(async ({ ctx, input }) => {
+    update: protectedProcedure.input(z13.object({ id: z13.number(), name: z13.string().min(1).optional(), symbol: z13.string().optional() })).mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
-      await db.update(units).set(data).where(and11(eq11(units.id, id), eq11(units.orgId, ctx.user.orgId)));
+      await db.update(units).set(data).where(and14(eq14(units.id, id), eq14(units.orgId, ctx.user.orgId)));
       return { success: true };
     }),
-    delete: protectedProcedure.input(z10.object({ id: z10.number() })).mutation(async ({ ctx, input }) => {
-      await db.delete(units).where(and11(eq11(units.id, input.id), eq11(units.orgId, ctx.user.orgId)));
+    delete: protectedProcedure.input(z13.object({ id: z13.number() })).mutation(async ({ ctx, input }) => {
+      await db.delete(units).where(and14(eq14(units.id, input.id), eq14(units.orgId, ctx.user.orgId)));
       return { success: true };
     })
   }),
   // ─── Stock Vouchers (سندات المخزن) ───────────────────────────────────────────
   stockVouchers: router({
-    list: protectedProcedure.input(z10.object({ type: z10.enum(["receipt", "issue", "transfer"]).optional() }).optional()).query(async ({ ctx, input }) => {
-      const conds = [eq11(stockVouchers.orgId, ctx.user.orgId)];
-      if (input?.type) conds.push(eq11(stockVouchers.type, input.type));
+    list: protectedProcedure.input(z13.object({ type: z13.enum(["receipt", "issue", "transfer"]).optional() }).optional()).query(async ({ ctx, input }) => {
+      const conds = [eq14(stockVouchers.orgId, ctx.user.orgId)];
+      if (input?.type) conds.push(eq14(stockVouchers.type, input.type));
       return db.query.stockVouchers.findMany({
-        where: and11(...conds),
-        orderBy: [desc5(stockVouchers.createdAt)],
+        where: and14(...conds),
+        orderBy: [desc6(stockVouchers.createdAt)],
         limit: 200
       });
     }),
-    get: protectedProcedure.input(z10.object({ id: z10.number() })).query(async ({ ctx, input }) => {
+    get: protectedProcedure.input(z13.object({ id: z13.number() })).query(async ({ ctx, input }) => {
       const v = await db.query.stockVouchers.findFirst({
-        where: and11(eq11(stockVouchers.id, input.id), eq11(stockVouchers.orgId, ctx.user.orgId))
+        where: and14(eq14(stockVouchers.id, input.id), eq14(stockVouchers.orgId, ctx.user.orgId))
       });
       if (!v) throw new Error("\u0627\u0644\u0633\u0646\u062F \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F");
-      const items = await db.query.stockVoucherItems.findMany({ where: eq11(stockVoucherItems.voucherId, input.id) });
+      const items = await db.query.stockVoucherItems.findMany({ where: eq14(stockVoucherItems.voucherId, input.id) });
       return { ...v, items };
     }),
-    create: protectedProcedure.input(z10.object({
-      type: z10.enum(["receipt", "issue", "transfer"]),
-      warehouseId: z10.number(),
-      branchId: z10.number(),
-      supplierId: z10.number().optional(),
-      reason: z10.string().optional(),
-      notes: z10.string().optional(),
-      items: z10.array(z10.object({
-        productId: z10.number(),
-        productName: z10.string(),
-        quantity: z10.string(),
-        unitCost: z10.string(),
-        totalCost: z10.string()
+    create: protectedProcedure.input(z13.object({
+      type: z13.enum(["receipt", "issue", "transfer"]),
+      warehouseId: z13.number(),
+      branchId: z13.number(),
+      supplierId: z13.number().optional(),
+      reason: z13.string().optional(),
+      notes: z13.string().optional(),
+      items: z13.array(z13.object({
+        productId: z13.number(),
+        productName: z13.string(),
+        quantity: z13.string(),
+        unitCost: z13.string(),
+        totalCost: z13.string()
       }))
     })).mutation(async ({ ctx, input }) => {
       const { items, ...rest } = input;
       const totalCost = items.reduce((s, i) => s + Number(i.totalCost), 0).toFixed(4);
       const last = await db.query.stockVouchers.findFirst({
-        where: eq11(stockVouchers.orgId, ctx.user.orgId),
-        orderBy: [desc5(stockVouchers.id)]
+        where: eq14(stockVouchers.orgId, ctx.user.orgId),
+        orderBy: [desc6(stockVouchers.id)]
       });
       const num = last ? parseInt(last.voucherNumber.replace(/\D/g, "") || "0") + 1 : 1;
       const prefix = rest.type === "receipt" ? "SV-IN" : rest.type === "issue" ? "SV-OUT" : "SV-TR";
@@ -3598,12 +5148,12 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
       }
       for (const item of items) {
         const existing = await db.query.inventory.findFirst({
-          where: and11(eq11(inventory.orgId, ctx.user.orgId), eq11(inventory.productId, item.productId), eq11(inventory.warehouseId, rest.warehouseId))
+          where: and14(eq14(inventory.orgId, ctx.user.orgId), eq14(inventory.productId, item.productId), eq14(inventory.warehouseId, rest.warehouseId))
         });
         const qty = Number(item.quantity);
         const diff = rest.type === "receipt" ? qty : -qty;
         if (existing) {
-          await db.update(inventory).set({ quantity: String(Number(existing.quantity) + diff), updatedAt: /* @__PURE__ */ new Date() }).where(eq11(inventory.id, existing.id));
+          await db.update(inventory).set({ quantity: String(Number(existing.quantity) + diff), updatedAt: /* @__PURE__ */ new Date() }).where(eq14(inventory.id, existing.id));
         } else {
           await db.insert(inventory).values({ orgId: ctx.user.orgId, productId: item.productId, warehouseId: rest.warehouseId, quantity: String(Math.max(0, diff)), avgCost: item.unitCost });
         }
@@ -3615,26 +5165,26 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
   inventoryCount: router({
     list: protectedProcedure.query(async ({ ctx }) => {
       return db.query.inventoryCounts.findMany({
-        where: eq11(inventoryCounts.orgId, ctx.user.orgId),
-        orderBy: [desc5(inventoryCounts.createdAt)],
+        where: eq14(inventoryCounts.orgId, ctx.user.orgId),
+        orderBy: [desc6(inventoryCounts.createdAt)],
         limit: 100
       });
     }),
-    get: protectedProcedure.input(z10.object({ id: z10.number() })).query(async ({ ctx, input }) => {
+    get: protectedProcedure.input(z13.object({ id: z13.number() })).query(async ({ ctx, input }) => {
       const count = await db.query.inventoryCounts.findFirst({
-        where: and11(eq11(inventoryCounts.id, input.id), eq11(inventoryCounts.orgId, ctx.user.orgId))
+        where: and14(eq14(inventoryCounts.id, input.id), eq14(inventoryCounts.orgId, ctx.user.orgId))
       });
       if (!count) throw new Error("\u062C\u0644\u0633\u0629 \u0627\u0644\u062C\u0631\u062F \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629");
       const items = await db.query.inventoryCountItems.findMany({
-        where: eq11(inventoryCountItems.countId, input.id),
+        where: eq14(inventoryCountItems.countId, input.id),
         orderBy: (i, { asc: asc5 }) => [asc5(i.sortOrder)]
       });
       return { ...count, items };
     }),
-    create: protectedProcedure.input(z10.object({ warehouseId: z10.number(), branchId: z10.number().optional(), notes: z10.string().optional() })).mutation(async ({ ctx, input }) => {
+    create: protectedProcedure.input(z13.object({ warehouseId: z13.number(), branchId: z13.number().optional(), notes: z13.string().optional() })).mutation(async ({ ctx, input }) => {
       const last = await db.query.inventoryCounts.findFirst({
-        where: eq11(inventoryCounts.orgId, ctx.user.orgId),
-        orderBy: [desc5(inventoryCounts.id)]
+        where: eq14(inventoryCounts.orgId, ctx.user.orgId),
+        orderBy: [desc6(inventoryCounts.id)]
       });
       const num = last ? parseInt(last.countNumber.replace(/\D/g, "") || "0") + 1 : 1;
       const countNumber = `CNT-${String(num).padStart(4, "0")}`;
@@ -3646,12 +5196,12 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
         status: "draft"
       }).returning();
       const invItems = await db.query.inventory.findMany({
-        where: and11(eq11(inventory.orgId, ctx.user.orgId), eq11(inventory.warehouseId, input.warehouseId))
+        where: and14(eq14(inventory.orgId, ctx.user.orgId), eq14(inventory.warehouseId, input.warehouseId))
       });
       if (invItems.length > 0) {
         const productIds = invItems.map((i) => i.productId);
         const prods = await db.query.products.findMany({
-          where: and11(eq11(products.orgId, ctx.user.orgId))
+          where: and14(eq14(products.orgId, ctx.user.orgId))
         });
         const prodMap = new Map(prods.map((p) => [p.id, p]));
         await db.insert(inventoryCountItems).values(
@@ -3669,43 +5219,43 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
       }
       return count.id;
     }),
-    updateItem: protectedProcedure.input(z10.object({ id: z10.number(), actualQuantity: z10.string() })).mutation(async ({ ctx, input }) => {
-      const item = await db.query.inventoryCountItems.findFirst({ where: eq11(inventoryCountItems.id, input.id) });
+    updateItem: protectedProcedure.input(z13.object({ id: z13.number(), actualQuantity: z13.string() })).mutation(async ({ ctx, input }) => {
+      const item = await db.query.inventoryCountItems.findFirst({ where: eq14(inventoryCountItems.id, input.id) });
       if (!item) throw new Error("\u0627\u0644\u0639\u0646\u0635\u0631 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F");
       const diff = (Number(input.actualQuantity) - Number(item.systemQuantity)).toFixed(4);
-      await db.update(inventoryCountItems).set({ actualQuantity: input.actualQuantity, difference: diff }).where(eq11(inventoryCountItems.id, input.id));
+      await db.update(inventoryCountItems).set({ actualQuantity: input.actualQuantity, difference: diff }).where(eq14(inventoryCountItems.id, input.id));
       return { success: true };
     }),
-    confirm: protectedProcedure.input(z10.object({ id: z10.number() })).mutation(async ({ ctx, input }) => {
+    confirm: protectedProcedure.input(z13.object({ id: z13.number() })).mutation(async ({ ctx, input }) => {
       const count = await db.query.inventoryCounts.findFirst({
-        where: and11(eq11(inventoryCounts.id, input.id), eq11(inventoryCounts.orgId, ctx.user.orgId))
+        where: and14(eq14(inventoryCounts.id, input.id), eq14(inventoryCounts.orgId, ctx.user.orgId))
       });
       if (!count) throw new Error("\u062C\u0644\u0633\u0629 \u0627\u0644\u062C\u0631\u062F \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629");
       if (count.status !== "draft") throw new Error("\u062A\u0645 \u062A\u0623\u0643\u064A\u062F \u0627\u0644\u062C\u0631\u062F \u0645\u0633\u0628\u0642\u0627\u064B");
-      const items = await db.query.inventoryCountItems.findMany({ where: eq11(inventoryCountItems.countId, input.id) });
+      const items = await db.query.inventoryCountItems.findMany({ where: eq14(inventoryCountItems.countId, input.id) });
       for (const item of items) {
         if (!item.productId || !count.warehouseId) continue;
         const existing = await db.query.inventory.findFirst({
-          where: and11(eq11(inventory.orgId, ctx.user.orgId), eq11(inventory.productId, item.productId), eq11(inventory.warehouseId, count.warehouseId))
+          where: and14(eq14(inventory.orgId, ctx.user.orgId), eq14(inventory.productId, item.productId), eq14(inventory.warehouseId, count.warehouseId))
         });
         if (existing) {
-          await db.update(inventory).set({ quantity: item.actualQuantity, updatedAt: /* @__PURE__ */ new Date() }).where(eq11(inventory.id, existing.id));
+          await db.update(inventory).set({ quantity: item.actualQuantity, updatedAt: /* @__PURE__ */ new Date() }).where(eq14(inventory.id, existing.id));
         } else {
           await db.insert(inventory).values({ orgId: ctx.user.orgId, productId: item.productId, warehouseId: count.warehouseId, quantity: item.actualQuantity });
         }
       }
-      await db.update(inventoryCounts).set({ status: "confirmed", confirmedAt: /* @__PURE__ */ new Date() }).where(eq11(inventoryCounts.id, input.id));
+      await db.update(inventoryCounts).set({ status: "confirmed", confirmedAt: /* @__PURE__ */ new Date() }).where(eq14(inventoryCounts.id, input.id));
       return { success: true };
     })
   }),
   // ─── Reports ──────────────────────────────────────────────────────────────────
   reports: router({
-    stockByWarehouse: protectedProcedure.input(z10.object({ warehouseId: z10.number().optional() }).optional()).query(async ({ ctx, input }) => {
-      const conds = [eq11(inventory.orgId, ctx.user.orgId)];
-      if (input?.warehouseId) conds.push(eq11(inventory.warehouseId, input.warehouseId));
-      const invRows = await db.query.inventory.findMany({ where: and11(...conds) });
-      const prods = await db.query.products.findMany({ where: eq11(products.orgId, ctx.user.orgId) });
-      const warehouseList = await db.query.warehouses.findMany({ where: eq11(warehouses.orgId, ctx.user.orgId) });
+    stockByWarehouse: protectedProcedure.input(z13.object({ warehouseId: z13.number().optional() }).optional()).query(async ({ ctx, input }) => {
+      const conds = [eq14(inventory.orgId, ctx.user.orgId)];
+      if (input?.warehouseId) conds.push(eq14(inventory.warehouseId, input.warehouseId));
+      const invRows = await db.query.inventory.findMany({ where: and14(...conds) });
+      const prods = await db.query.products.findMany({ where: eq14(products.orgId, ctx.user.orgId) });
+      const warehouseList = await db.query.warehouses.findMany({ where: eq14(warehouses.orgId, ctx.user.orgId) });
       const prodMap = new Map(prods.map((p) => [p.id, p]));
       const whMap = new Map(warehouseList.map((w) => [w.id, w]));
       return invRows.map((r) => {
@@ -3727,7 +5277,7 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
     }),
     voucherSummary: protectedProcedure.query(async ({ ctx }) => {
       const all = await db.query.stockVouchers.findMany({
-        where: eq11(stockVouchers.orgId, ctx.user.orgId)
+        where: eq14(stockVouchers.orgId, ctx.user.orgId)
       });
       const grouped = {};
       for (const v of all) {
@@ -3738,9 +5288,9 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
       return Object.values(grouped).map((g) => ({ ...g, totalCost: g.totalCost.toFixed(4) }));
     }),
     lowStockAlert: protectedProcedure.query(async ({ ctx }) => {
-      const invRows = await db.query.inventory.findMany({ where: eq11(inventory.orgId, ctx.user.orgId) });
-      const prods = await db.query.products.findMany({ where: and11(eq11(products.orgId, ctx.user.orgId), eq11(products.isActive, true)) });
-      const warehouseList = await db.query.warehouses.findMany({ where: eq11(warehouses.orgId, ctx.user.orgId) });
+      const invRows = await db.query.inventory.findMany({ where: eq14(inventory.orgId, ctx.user.orgId) });
+      const prods = await db.query.products.findMany({ where: and14(eq14(products.orgId, ctx.user.orgId), eq14(products.isActive, true)) });
+      const warehouseList = await db.query.warehouses.findMany({ where: eq14(warehouses.orgId, ctx.user.orgId) });
       const prodMap = new Map(prods.map((p) => [p.id, p]));
       const whMap = new Map(warehouseList.map((w) => [w.id, w]));
       return invRows.filter((r) => {
@@ -3762,20 +5312,20 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
   freeProducts: router({
     list: protectedProcedure.query(async ({ ctx }) => {
       return db.query.freeProducts.findMany({
-        where: and11(eq11(freeProducts.orgId, ctx.user.orgId), eq11(freeProducts.isActive, true)),
-        orderBy: [desc5(freeProducts.createdAt)]
+        where: and14(eq14(freeProducts.orgId, ctx.user.orgId), eq14(freeProducts.isActive, true)),
+        orderBy: [desc6(freeProducts.createdAt)]
       });
     }),
-    create: protectedProcedure.input(z10.object({
-      productId: z10.number().optional(),
-      productCode: z10.string().optional(),
-      productName: z10.string().min(1),
-      unit: z10.string().optional(),
-      baseQty: z10.string().default("1"),
-      freeQty: z10.string().default("1"),
-      offerStart: z10.string().optional(),
-      offerEnd: z10.string().optional(),
-      notes: z10.string().optional()
+    create: protectedProcedure.input(z13.object({
+      productId: z13.number().optional(),
+      productCode: z13.string().optional(),
+      productName: z13.string().min(1),
+      unit: z13.string().optional(),
+      baseQty: z13.string().default("1"),
+      freeQty: z13.string().default("1"),
+      offerStart: z13.string().optional(),
+      offerEnd: z13.string().optional(),
+      notes: z13.string().optional()
     })).mutation(async ({ ctx, input }) => {
       const [row] = await db.insert(freeProducts).values({
         orgId: ctx.user.orgId,
@@ -3791,37 +5341,37 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
       }).returning();
       return row;
     }),
-    update: protectedProcedure.input(z10.object({
-      id: z10.number(),
-      productCode: z10.string().optional(),
-      productName: z10.string().optional(),
-      unit: z10.string().optional(),
-      baseQty: z10.string().optional(),
-      freeQty: z10.string().optional(),
-      offerStart: z10.string().optional(),
-      offerEnd: z10.string().optional(),
-      notes: z10.string().optional(),
-      isActive: z10.boolean().optional()
+    update: protectedProcedure.input(z13.object({
+      id: z13.number(),
+      productCode: z13.string().optional(),
+      productName: z13.string().optional(),
+      unit: z13.string().optional(),
+      baseQty: z13.string().optional(),
+      freeQty: z13.string().optional(),
+      offerStart: z13.string().optional(),
+      offerEnd: z13.string().optional(),
+      notes: z13.string().optional(),
+      isActive: z13.boolean().optional()
     })).mutation(async ({ ctx, input }) => {
       const { id, offerStart, offerEnd, ...rest } = input;
       await db.update(freeProducts).set({
         ...rest,
         offerStart: offerStart ? new Date(offerStart) : void 0,
         offerEnd: offerEnd ? new Date(offerEnd) : void 0
-      }).where(and11(eq11(freeProducts.id, id), eq11(freeProducts.orgId, ctx.user.orgId)));
+      }).where(and14(eq14(freeProducts.id, id), eq14(freeProducts.orgId, ctx.user.orgId)));
       return { success: true };
     }),
-    delete: protectedProcedure.input(z10.object({ id: z10.number() })).mutation(async ({ ctx, input }) => {
-      await db.update(freeProducts).set({ isActive: false }).where(and11(eq11(freeProducts.id, input.id), eq11(freeProducts.orgId, ctx.user.orgId)));
+    delete: protectedProcedure.input(z13.object({ id: z13.number() })).mutation(async ({ ctx, input }) => {
+      await db.update(freeProducts).set({ isActive: false }).where(and14(eq14(freeProducts.id, input.id), eq14(freeProducts.orgId, ctx.user.orgId)));
       return { success: true };
     })
   }),
   // ─── Accounting Reports ───────────────────────────────────────────────────
   accounting: router({
-    trialBalance: protectedProcedure.input(z10.object({
-      fromDate: z10.date().optional(),
-      toDate: z10.date().optional(),
-      costCenterId: z10.number().optional()
+    trialBalance: protectedProcedure.input(z13.object({
+      fromDate: z13.date().optional(),
+      toDate: z13.date().optional(),
+      costCenterId: z13.number().optional()
     })).query(async ({ ctx, input }) => {
       const { fromDate, toDate } = input;
       const accounts = await db.select({
@@ -3831,19 +5381,21 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
         nature: chartOfAccounts.nature,
         isParent: chartOfAccounts.isParent,
         level: chartOfAccounts.level,
+        parentId: chartOfAccounts.parentId,
+        accountType: chartOfAccounts.accountType,
         openingBalance: chartOfAccounts.openingBalance,
         openingBalanceType: chartOfAccounts.openingBalanceType
-      }).from(chartOfAccounts).where(and11(eq11(chartOfAccounts.orgId, ctx.user.orgId), eq11(chartOfAccounts.isActive, true))).orderBy(asc4(chartOfAccounts.code));
+      }).from(chartOfAccounts).where(and14(eq14(chartOfAccounts.orgId, ctx.user.orgId), eq14(chartOfAccounts.isActive, true))).orderBy(asc4(chartOfAccounts.code));
       const allLines = await db.select({
         accountId: journalEntryLines.accountId,
         debit: journalEntryLines.debit,
         credit: journalEntryLines.credit,
         entryDate: journalEntries.entryDate
-      }).from(journalEntryLines).innerJoin(journalEntries, and11(
-        eq11(journalEntries.id, journalEntryLines.entryId),
-        eq11(journalEntries.status, "posted"),
-        eq11(journalEntries.orgId, ctx.user.orgId)
-      )).where(eq11(journalEntryLines.orgId, ctx.user.orgId));
+      }).from(journalEntryLines).innerJoin(journalEntries, and14(
+        eq14(journalEntries.id, journalEntryLines.entryId),
+        eq14(journalEntries.status, "posted"),
+        eq14(journalEntries.orgId, ctx.user.orgId)
+      )).where(eq14(journalEntryLines.orgId, ctx.user.orgId));
       const agg = /* @__PURE__ */ new Map();
       const endOfDay = (d) => new Date(d.getTime() + 86399999);
       for (const ln of allLines) {
@@ -3877,13 +5429,15 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
         const moveC = a?.moveC ?? 0;
         const netOpen = openD - openC;
         const netClose = netOpen + moveD - moveC;
-        if (netOpen === 0 && moveD === 0 && moveC === 0) continue;
         rows.push({
           accountId: acc.id,
           code: acc.code,
           name: acc.name,
           nature: acc.nature ?? "debit",
           isParent: acc.isParent ?? false,
+          level: acc.level,
+          parentId: acc.parentId ?? null,
+          accountType: acc.accountType,
           openingBalance: Math.abs(netOpen),
           openingBalanceType: netOpen >= 0 ? "debit" : "credit",
           movementDebit: moveD,
@@ -3894,38 +5448,58 @@ ${JSON.stringify(extraData)}` : description : Object.keys(extraData).length ? JS
       }
       return rows;
     }),
-    accountStatement: protectedProcedure.input(z10.object({
-      accountId: z10.number(),
-      fromDate: z10.date().optional(),
-      toDate: z10.date().optional()
+    accountStatement: protectedProcedure.input(z13.object({
+      accountId: z13.number(),
+      fromDate: z13.date().optional(),
+      toDate: z13.date().optional()
     })).query(async ({ ctx, input }) => {
       const { accountId, fromDate, toDate } = input;
       const endOfDay = (d) => new Date(d.getTime() + 86399999);
       const conds = [
-        eq11(journalEntryLines.accountId, accountId),
-        eq11(journalEntryLines.orgId, ctx.user.orgId),
-        eq11(journalEntries.status, "posted")
+        eq14(journalEntryLines.accountId, accountId),
+        eq14(journalEntryLines.orgId, ctx.user.orgId),
+        eq14(journalEntries.status, "posted")
       ];
-      if (fromDate) conds.push(gte(journalEntries.entryDate, fromDate));
-      if (toDate) conds.push(lte(journalEntries.entryDate, endOfDay(toDate)));
+      if (fromDate) conds.push(gte2(journalEntries.entryDate, fromDate));
+      if (toDate) conds.push(lte2(journalEntries.entryDate, endOfDay(toDate)));
       const lines = await db.select({
         entryId: journalEntryLines.entryId,
         entryDate: journalEntries.entryDate,
         entryNumber: journalEntries.entryNumber,
+        reference: journalEntries.reference,
+        sourceDocType: journalEntries.sourceDocType,
         description: journalEntries.description,
         lineDesc: journalEntryLines.description,
-        voucherType: sql3`'قيد'`,
         debit: journalEntryLines.debit,
         credit: journalEntryLines.credit
-      }).from(journalEntryLines).innerJoin(journalEntries, and11(
-        eq11(journalEntries.id, journalEntryLines.entryId),
-        eq11(journalEntries.orgId, ctx.user.orgId)
-      )).where(and11(...conds)).orderBy(asc4(journalEntries.entryDate), asc4(journalEntries.id));
+      }).from(journalEntryLines).innerJoin(journalEntries, and14(
+        eq14(journalEntries.id, journalEntryLines.entryId),
+        eq14(journalEntries.orgId, ctx.user.orgId)
+      )).where(and14(...conds)).orderBy(asc4(journalEntries.entryDate), asc4(journalEntries.id));
+      const docTypeLabel = (src) => {
+        switch (src) {
+          case "sales_invoice":
+            return "\u0641\u0627\u062A\u0648\u0631\u0629 \u0645\u0628\u064A\u0639\u0627\u062A";
+          case "sales_return":
+            return "\u0645\u0631\u062F\u0648\u062F \u0645\u0628\u064A\u0639\u0627\u062A";
+          case "purchase_invoice":
+            return "\u0641\u0627\u062A\u0648\u0631\u0629 \u0645\u0634\u062A\u0631\u064A\u0627\u062A";
+          case "purchase_return":
+            return "\u0645\u0631\u062F\u0648\u062F \u0645\u0634\u062A\u0631\u064A\u0627\u062A";
+          case "receipt_voucher":
+            return "\u0633\u0646\u062F \u0642\u0628\u0636";
+          case "payment_voucher":
+            return "\u0633\u0646\u062F \u0635\u0631\u0641";
+          default:
+            return "\u0642\u064A\u062F";
+        }
+      };
       return lines.map((l) => ({
         entryId: l.entryId,
         entryDate: l.entryDate,
         entryNumber: l.entryNumber,
-        voucherType: l.voucherType,
+        reference: l.reference,
+        voucherType: docTypeLabel(l.sourceDocType),
         description: l.lineDesc ?? l.description,
         debit: l.debit,
         credit: l.credit
