@@ -590,6 +590,7 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
       setEntryStatus("posted");
       localStorage.removeItem(DRAFT_KEY);
       journalListQuery.refetch();
+      nextNumberQuery.refetch();
       setDirty(false);
       saveResolveRef.current?.(true);
       saveResolveRef.current = null;
@@ -752,9 +753,8 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
     });
     if (badLines.length > 0)
       return toast.error(`يوجد ${badLines.length > 1 ? badLines.length + " بنود" : "بند"} بحساب غير محدد — اختر من الدليل أو احذف البند`);
-    const entryNumber = nextNumberQuery.data ?? `JE-${Date.now()}`;
     createMutation.mutate({
-      entryNumber, entryDate, description,
+      entryDate, description,
       reference: basedOn || undefined,
       totalDebit: totalDebit.toFixed(3),
       totalCredit: totalCredit.toFixed(3),
@@ -770,7 +770,7 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
           credit: l.credit || "0",
         })),
     });
-  }, [balanced, nextNumberQuery.data, entryDate, description, basedOn, totalDebit, totalCredit, lines, createMutation]);
+  }, [balanced, entryDate, description, basedOn, totalDebit, totalCredit, lines, createMutation]);
 
   const handleDuplicate = useCallback(() => {
     setSavedEntryId(null); setSavedEntryNumber(""); setEntryStatus("new");

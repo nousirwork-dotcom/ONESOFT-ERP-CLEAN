@@ -1105,12 +1105,12 @@ export const appRouter = router({
         where: eq(journalEntries.orgId, ctx.user.orgId),
         orderBy: [desc(journalEntries.id)],
       });
-      const num = last ? parseInt(last.entryNumber.replace(/\D/g, '') || '0') + 1 : 1;
+      const raw = last ? parseInt(last.entryNumber.replace(/\D/g, '') || '0') : 0;
+      const num = raw > 9_000_000 ? 1 : raw + 1;
       return `JE-${String(num).padStart(4, '0')}`;
     }),
     create: protectedProcedure
       .input(z.object({
-        entryNumber: z.string(),
         entryDate: z.string(),
         description: z.string().optional(),
         reference: z.string().optional(),
@@ -1163,8 +1163,18 @@ export const appRouter = router({
           }
         }
 
+        // 3) توليد الرقم التسلسلي على الخادم (ذري — لا يعتمد على الواجهة)
+        const lastEntry = await db.query.journalEntries.findFirst({
+          where: eq(journalEntries.orgId, ctx.user.orgId),
+          orderBy: [desc(journalEntries.id)],
+        });
+        const lastNum = lastEntry ? parseInt(lastEntry.entryNumber.replace(/\D/g, '') || '0') : 0;
+        const safeLastNum = lastNum > 9_000_000 ? 0 : lastNum;
+        const entryNumber = `JE-${String(safeLastNum + 1).padStart(4, '0')}`;
+
         const [entry] = await db.insert(journalEntries).values({
           ...rest,
+          entryNumber,
           entryType: rest.entryType ?? 'manual',
           orgId: ctx.user.orgId,
           userId: ctx.user.id,
