@@ -25,30 +25,35 @@ type MenuId = string;
 // ─── Menu Structure ────────────────────────────────────────────────────────────
 const menuSections = [
   {
-    id: "suppliers-group",
-    label: "الموردون",
-    icon: Users,
+    id: "transactions-group",
+    label: "المعاملات",
+    icon: FileText,
     children: [
-      { id: "suppliers-list", label: "دليل الموردين", icon: Users, path: "/purchases/suppliers" },
+      { id: "purchase-invoices", label: "فاتورة مشتريات",  icon: FileText,       path: "/purchases/invoices" },
+      { id: "purchase-returns",  label: "مردود المشتريات", icon: RotateCcw,      path: "/purchases/returns" },
+      { id: "debit-note",        label: "إشعار مدين",      icon: DollarSign,     path: "/purchases/debit-note" },
+      { id: "purchase-orders",   label: "امر شراء",        icon: ClipboardList,  path: "/purchases/orders" },
     ],
   },
   {
-    id: "purchase-docs",
-    label: "مستندات المشتريات",
-    icon: ShoppingCart,
+    id: "suppliers-group",
+    label: "الموردين",
+    icon: Users,
     children: [
-      { id: "purchase-orders",   label: "أوامر الشراء",     icon: ClipboardList, path: "/purchases/orders" },
-      { id: "purchase-invoices", label: "فواتير المشتريات", icon: FileText,       path: "/purchases/invoices" },
-      { id: "purchase-returns",  label: "مردود المشتريات",  icon: RotateCcw,      path: "/purchases/returns" },
+      { id: "suppliers-list",      label: "إضافة مورد",           icon: Plus,        path: "/purchases/suppliers" },
+      { id: "supplier-groups",     label: "مجموعات الموردين",     icon: Users,       path: "/purchases/supplier-groups" },
+      { id: "supplier-balances",   label: "أرصدة الموردين",       icon: DollarSign,  path: "/purchases/supplier-balances" },
+      { id: "supplier-statement",  label: "كشف حساب المورد",      icon: FileText,    path: "/purchases/supplier-statement" },
     ],
   },
   {
     id: "purchase-reports",
-    label: "تقارير المشتريات",
+    label: "التقارير",
     icon: TrendingDown,
     children: [
-      { id: "rpt-by-supplier", label: "مشتريات حسب المورد", icon: TrendingDown, path: "/purchases/rpt-supplier" },
-      { id: "rpt-by-item",     label: "مشتريات حسب الصنف",  icon: Package,      path: "/purchases/rpt-item" },
+      { id: "rpt-by-supplier",    label: "تقارير الموردين",              icon: TrendingDown, path: "/purchases/rpt-supplier" },
+      { id: "rpt-totals",         label: "تقارير إجماليات المشتريات",    icon: ShoppingCart, path: "/purchases/rpt-totals" },
+      { id: "rpt-by-item",        label: "تقارير أصناف المشتريات",       icon: Package,      path: "/purchases/rpt-item" },
     ],
   },
 ];
@@ -57,7 +62,7 @@ const menuSections = [
 function PurchasesMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
   const { openTab } = useTabManager();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
-    "suppliers-group": true, "purchase-docs": true, "purchase-reports": false,
+    "transactions-group": true, "suppliers-group": true, "purchase-reports": false,
   });
   const toggle = (id: string) => setExpanded(p => ({ ...p, [id]: !p[id] }));
 
@@ -872,16 +877,31 @@ function ReportBySupplier() {
 }
 
 // ─── Content Router ────────────────────────────────────────────────────────────
+function ComingSoon({ label }: { label: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-48 text-center gap-2">
+      <FileText className="w-10 h-10 text-muted-foreground/30" />
+      <p className="text-sm font-semibold text-muted-foreground">{label}</p>
+      <p className="text-xs text-muted-foreground/60">قريباً</p>
+    </div>
+  );
+}
+
 function PurchasesContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
   switch (activeId) {
-    case "overview":          return <PurchasesOverview onSelect={onSelect} />;
-    case "suppliers-list":    return <SuppliersListPage />;
-    case "purchase-orders":   return <PurchaseOrderPage />;
-    case "purchase-invoices": return <PurchaseInvoicePage />;
-    case "purchase-returns":  return <PurchaseReturnPage />;
-    case "rpt-by-supplier":   return <ReportBySupplier />;
-    case "rpt-by-item":       return <div className="text-xs text-muted-foreground p-4">تقرير المشتريات حسب الصنف - قريباً</div>;
-    default:                  return <PurchasesOverview onSelect={onSelect} />;
+    case "overview":           return <PurchasesOverview onSelect={onSelect} />;
+    case "purchase-invoices":  return <PurchaseInvoicePage />;
+    case "purchase-returns":   return <PurchaseReturnPage />;
+    case "debit-note":         return <ComingSoon label="إشعار مدين" />;
+    case "purchase-orders":    return <PurchaseOrderPage />;
+    case "suppliers-list":     return <SuppliersListPage />;
+    case "supplier-groups":    return <ComingSoon label="مجموعات الموردين" />;
+    case "supplier-balances":  return <ComingSoon label="أرصدة الموردين" />;
+    case "supplier-statement": return <ComingSoon label="كشف حساب المورد" />;
+    case "rpt-by-supplier":    return <ReportBySupplier />;
+    case "rpt-totals":         return <ComingSoon label="تقارير إجماليات المشتريات" />;
+    case "rpt-by-item":        return <ComingSoon label="تقارير أصناف المشتريات" />;
+    default:                   return <PurchasesOverview onSelect={onSelect} />;
   }
 }
 
