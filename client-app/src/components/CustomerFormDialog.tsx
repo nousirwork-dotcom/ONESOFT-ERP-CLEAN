@@ -24,6 +24,11 @@ interface CustomerData {
   postalCode?: string;
   creditLimit?: string;
   balance?: string;
+  // التسعير والضوابط
+  priceLevel?: number;
+  maxDiscountPct?: string;
+  canSellOnCredit?: boolean;
+  // قنوات الإرسال
   whatsappPhone?: string;
   telegramId?: string;
   defaultSendMethod?: string;
@@ -58,8 +63,18 @@ const EMPTY: CustomerData = {
   phone: "", email: "", taxNumber: "", registrationNumber: "",
   city: "", address: "", shortAddress: "", buildingNumber: "",
   additionalNumber: "", postalCode: "", creditLimit: "",
+  priceLevel: 1, maxDiscountPct: "0", canSellOnCredit: true,
   whatsappPhone: "", telegramId: "", defaultSendMethod: "",
 };
+
+/* مستويات الأسعار المتاحة — مرتبطة بحقل salePrice في كارت الصنف */
+const PRICE_LEVELS = [
+  { value: 1, label: "سعر البيع الأساسي", hint: "السعر الافتراضي للصنف",     color: "#406B93" },
+  { value: 2, label: "سعر بيع 2",         hint: "سعر الجملة / العملاء الدائمين", color: "#0D9488" },
+  { value: 3, label: "سعر بيع 3",         hint: "سعر خاص / صفقات كبرى",        color: "#7C3AED" },
+  { value: 4, label: "سعر بيع 4",         hint: "سعر المعرض / التجزئة",         color: "#D97706" },
+  { value: 5, label: "سعر بيع 5",         hint: "سعر مخصص يدوي",               color: "#DC2626" },
+];
 
 /* ═══════════════════════════ Main Component ═══════════════════════════ */
 export default function CustomerFormDialog({ open, editData, onClose, onSaved }: Props) {
@@ -98,6 +113,9 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
         additionalNumber:   editData.additionalNumber   ?? "",
         postalCode:         editData.postalCode         ?? "",
         creditLimit:        editData.creditLimit        ?? "",
+        priceLevel:         editData.priceLevel         ?? 1,
+        maxDiscountPct:     editData.maxDiscountPct     ?? "0",
+        canSellOnCredit:    editData.canSellOnCredit    ?? true,
         whatsappPhone:      editData.whatsappPhone      ?? "",
         telegramId:         editData.telegramId         ?? "",
         defaultSendMethod:  editData.defaultSendMethod  ?? "",
@@ -133,6 +151,9 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
       additionalNumber:   form.additionalNumber?.trim()   || undefined,
       postalCode:         form.postalCode?.trim()         || undefined,
       creditLimit:        form.creditLimit?.trim()        || undefined,
+      priceLevel:         form.priceLevel ?? 1,
+      maxDiscountPct:     form.maxDiscountPct?.trim()     || "0",
+      canSellOnCredit:    form.canSellOnCredit ?? true,
       whatsappPhone:      form.whatsappPhone?.trim()      || undefined,
       telegramId:         form.telegramId?.trim()         || undefined,
       defaultSendMethod:  (form.defaultSendMethod as any) || undefined,
@@ -296,16 +317,198 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
           {/* ══ التسعير والضوابط ══ */}
           {tab === "pricing" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <ESection title="حدود الائتمان">
-                <div style={{ maxWidth: 280 }}>
-                  <EField label="حد الائتمان الأقصى" hint="صفر = بدون حد">
-                    <EInput value={form.creditLimit} onChange={v => set("creditLimit", v)} placeholder="0.00" ltr mono />
-                  </EField>
+
+              {/* ── سعر البيع للعميل ── */}
+              <ESection title="سعر البيع المطبّق على العميل"
+                headerColor="#406B93"
+                note="يُحدد السعر المسحوب تلقائياً من كارت الصنف عند فتح فاتورة لهذا العميل">
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {PRICE_LEVELS.map(pl => {
+                    const active = (form.priceLevel ?? 1) === pl.value;
+                    return (
+                      <button key={pl.value} type="button"
+                        onClick={() => setForm(f => ({ ...f, priceLevel: pl.value }))}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 10,
+                          padding: "7px 12px", borderRadius: 4, cursor: "pointer",
+                          border: `2px solid ${active ? pl.color : "#D0D0D0"}`,
+                          background: active ? `${pl.color}12` : "white",
+                          textAlign: "right", width: "100%",
+                          transition: "all 0.12s",
+                        }}>
+                        {/* Bullet indicator */}
+                        <div style={{
+                          width: 14, height: 14, borderRadius: "50%", flexShrink: 0,
+                          background: active ? pl.color : "#D0D0D0",
+                          border: `2px solid ${active ? pl.color : "#C0C0C0"}`,
+                          boxShadow: active ? `0 0 0 3px ${pl.color}30` : "none",
+                        }} />
+                        {/* Level number badge */}
+                        <span style={{
+                          width: 22, height: 22, borderRadius: 4, display: "flex",
+                          alignItems: "center", justifyContent: "center", flexShrink: 0,
+                          background: active ? pl.color : "#E8E8E8",
+                          color: active ? "white" : "#666",
+                          fontSize: 11, fontWeight: 700,
+                        }}>{pl.value}</span>
+                        {/* Text */}
+                        <div style={{ flex: 1, textAlign: "right" }}>
+                          <div style={{ fontSize: 13, fontWeight: active ? 700 : 500, color: active ? pl.color : "#333" }}>
+                            {pl.label}
+                          </div>
+                          <div style={{ fontSize: 10, color: "#888", marginTop: 1 }}>{pl.hint}</div>
+                        </div>
+                        {/* Active checkmark */}
+                        {active && (
+                          <span style={{ color: pl.color, fontSize: 14, fontWeight: 700, marginLeft: 4 }}>✓</span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </ESection>
-              <ESection title="التسعير والخصومات">
-                <PlaceholderNote text="سيتم ربط مستويات الأسعار وإعدادات الخصم في إصدار قادم" />
+
+              {/* ── حدود الخصم ── */}
+              <ESection title="حدود الخصم في الفاتورة" headerColor="#D97706">
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <EField label="الحد الأقصى للخصم المسموح به" hint="نسبة مئوية — صفر = بدون قيود">
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <EInput
+                            value={form.maxDiscountPct}
+                            onChange={v => {
+                              const n = parseFloat(v);
+                              if (v === "" || (!isNaN(n) && n >= 0 && n <= 100))
+                                setForm(f => ({ ...f, maxDiscountPct: v }));
+                            }}
+                            placeholder="0.00" ltr mono
+                            style={{ maxWidth: 120 }}
+                          />
+                          <span style={{ fontSize: 16, color: "#888" }}>%</span>
+                          {/* Visual bar */}
+                          <div style={{ flex: 1, height: 6, background: "#E8E8E8", borderRadius: 3, overflow: "hidden" }}>
+                            <div style={{
+                              height: "100%", borderRadius: 3,
+                              width: `${Math.min(parseFloat(form.maxDiscountPct || "0"), 100)}%`,
+                              background: parseFloat(form.maxDiscountPct || "0") === 0
+                                ? "#C0C0C0"
+                                : parseFloat(form.maxDiscountPct || "0") <= 10
+                                ? "#22C55E"
+                                : parseFloat(form.maxDiscountPct || "0") <= 25
+                                ? "#F59E0B"
+                                : "#EF4444",
+                              transition: "width 0.3s",
+                            }} />
+                          </div>
+                        </div>
+                      </EField>
+                    </div>
+                  </div>
+                  {/* Preset buttons */}
+                  <div>
+                    <div style={{ fontSize: 10, color: "#888", marginBottom: 5 }}>اختيار سريع:</div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {[
+                        { v: "0",  label: "بدون حد", desc: "غير محدود" },
+                        { v: "5",  label: "5%",       desc: "خصم خفيف" },
+                        { v: "10", label: "10%",      desc: "خصم متوسط" },
+                        { v: "15", label: "15%",      desc: "خصم جيد" },
+                        { v: "20", label: "20%",      desc: "خصم كبير" },
+                        { v: "25", label: "25%",      desc: "عميل مميز" },
+                      ].map(opt => {
+                        const active = form.maxDiscountPct === opt.v;
+                        return (
+                          <button key={opt.v} type="button"
+                            onClick={() => setForm(f => ({ ...f, maxDiscountPct: opt.v }))}
+                            title={opt.desc}
+                            style={{
+                              padding: "3px 10px", fontSize: 11, borderRadius: 4, cursor: "pointer",
+                              fontWeight: active ? 700 : 500,
+                              background: active ? "#D97706" : "#F3F4F6",
+                              color:      active ? "white"   : "#555",
+                              border:     `1px solid ${active ? "#B45309" : "#D1D5DB"}`,
+                            }}>{opt.label}</button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
               </ESection>
+
+              {/* ── البيع بالدين ── */}
+              <ESection title="صلاحيات البيع الآجل (الدين)"
+                headerColor={form.canSellOnCredit ? "#0D9488" : "#DC2626"}>
+                <div style={{ display: "flex", gap: 10 }}>
+                  {/* ON button */}
+                  <button type="button"
+                    onClick={() => setForm(f => ({ ...f, canSellOnCredit: true }))}
+                    style={{
+                      flex: 1, padding: "10px 14px", borderRadius: 5, cursor: "pointer",
+                      border: `2px solid ${form.canSellOnCredit ? "#0D9488" : "#D0D0D0"}`,
+                      background: form.canSellOnCredit ? "#F0FDFA" : "white",
+                      textAlign: "center",
+                    }}>
+                    <div style={{ fontSize: 20, marginBottom: 3 }}>✅</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: form.canSellOnCredit ? "#0D9488" : "#888" }}>
+                      يُسمح بالبيع الآجل
+                    </div>
+                    <div style={{ fontSize: 10, color: "#888", marginTop: 2 }}>
+                      يمكن للعميل الشراء بالدين ضمن حد الائتمان
+                    </div>
+                    {form.canSellOnCredit && (
+                      <div style={{
+                        marginTop: 6, padding: "2px 8px", borderRadius: 10, display: "inline-block",
+                        background: "#0D9488", color: "white", fontSize: 10, fontWeight: 700,
+                      }}>مُفعَّل</div>
+                    )}
+                  </button>
+
+                  {/* OFF button */}
+                  <button type="button"
+                    onClick={() => setForm(f => ({ ...f, canSellOnCredit: false }))}
+                    style={{
+                      flex: 1, padding: "10px 14px", borderRadius: 5, cursor: "pointer",
+                      border: `2px solid ${!form.canSellOnCredit ? "#DC2626" : "#D0D0D0"}`,
+                      background: !form.canSellOnCredit ? "#FFF5F5" : "white",
+                      textAlign: "center",
+                    }}>
+                    <div style={{ fontSize: 20, marginBottom: 3 }}>🚫</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: !form.canSellOnCredit ? "#DC2626" : "#888" }}>
+                      نقدي فقط
+                    </div>
+                    <div style={{ fontSize: 10, color: "#888", marginTop: 2 }}>
+                      لا يُسمح بالبيع الآجل — النقد عند التسليم
+                    </div>
+                    {!form.canSellOnCredit && (
+                      <div style={{
+                        marginTop: 6, padding: "2px 8px", borderRadius: 10, display: "inline-block",
+                        background: "#DC2626", color: "white", fontSize: 10, fontWeight: 700,
+                      }}>مُفعَّل</div>
+                    )}
+                  </button>
+                </div>
+
+                {/* حد الائتمان مع البيع الآجل */}
+                {form.canSellOnCredit && (
+                  <div style={{
+                    marginTop: 10, padding: "8px 12px", borderRadius: 4,
+                    background: "#F0FDFA", border: "1px solid #99F6E4",
+                    display: "flex", alignItems: "center", gap: 10,
+                  }}>
+                    <span style={{ fontSize: 12, color: "#0D9488", fontWeight: 700 }}>🏦 حد الائتمان:</span>
+                    <EInput
+                      value={form.creditLimit}
+                      onChange={v => set("creditLimit", v)}
+                      placeholder="0.00 (صفر = بدون حد)"
+                      ltr mono
+                      style={{ maxWidth: 200, height: 24, fontSize: 12 }}
+                    />
+                    <span style={{ fontSize: 11, color: "#666" }}>ر.س</span>
+                  </div>
+                )}
+              </ESection>
+
             </div>
           )}
 

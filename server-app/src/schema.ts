@@ -196,12 +196,16 @@ export const customers = pgTable('customers', {
   city: varchar('city', { length: 100 }),
   creditLimit: decimal('credit_limit', { precision: 18, scale: 4 }).default('0'),
   balance: decimal('balance', { precision: 18, scale: 4 }).default('0'),
-  isActive: boolean('is_active').notNull().default(true),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
+  // ─── التسعير والضوابط ─────────────────────────────────────────────────────
+  priceLevel:       integer('price_level').notNull().default(1),
+  maxDiscountPct:   decimal('max_discount_pct', { precision: 5, scale: 2 }).notNull().default('0'),
+  canSellOnCredit:  boolean('can_sell_on_credit').notNull().default(true),
   // ─── قنوات الإرسال الإلكتروني ──────────────────────────────────────────────
   whatsappPhone: varchar('whatsapp_phone', { length: 50 }),
   telegramId: varchar('telegram_id', { length: 100 }),
   defaultSendMethod: varchar('default_send_method', { length: 20 }),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
 // ─── Suppliers ────────────────────────────────────────────────────────────────
