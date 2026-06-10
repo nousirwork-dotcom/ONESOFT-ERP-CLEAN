@@ -876,6 +876,94 @@ function ReportBySupplier() {
   );
 }
 
+// ─── Supplier Groups (مجموعات الموردين = دفاتر الموردين) ──────────────────────
+function SupplierGroupsPage() {
+  const listQuery = trpc.documentJournals.list.useQuery({ docType: "suppliers_journal" });
+  const [search, setSearch] = useState("");
+
+  const rows = (listQuery.data ?? []).filter(r =>
+    !search ||
+    r.name?.includes(search) ||
+    r.code?.includes(search) ||
+    (r.name2 ?? "").toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="font-bold text-sm flex items-center gap-2">
+          <Users className="w-4 h-4 text-primary" /> مجموعات الموردين
+        </h3>
+        <div className="relative">
+          <Search className="absolute right-2 top-1.5 w-3 h-3 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="h-7 text-xs pr-7 w-52"
+            placeholder="بحث..."
+          />
+        </div>
+      </div>
+
+      <Card className="border-border/60">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/30">
+              <TableHead className="text-xs">كود الدفتر</TableHead>
+              <TableHead className="text-xs">اسم المجموعة</TableHead>
+              <TableHead className="text-xs">الاسم الإنجليزي</TableHead>
+              <TableHead className="text-xs text-center">بادئة الترقيم</TableHead>
+              <TableHead className="text-xs text-center">الرقم الحالي</TableHead>
+              <TableHead className="text-xs text-center">الحالة</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {listQuery.isLoading && (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center text-xs text-muted-foreground py-8">
+                  جاري التحميل...
+                </TableCell>
+              </TableRow>
+            )}
+            {!listQuery.isLoading && rows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center text-xs text-muted-foreground py-8">
+                  لا توجد مجموعات موردين — أضف دفتراً جديداً من الإعدادات ← دفاتر المستندات
+                </TableCell>
+              </TableRow>
+            )}
+            {rows.map(r => (
+              <TableRow key={r.id} className="hover:bg-muted/10">
+                <TableCell className="text-xs font-mono font-semibold text-primary">{r.code}</TableCell>
+                <TableCell className="text-xs font-semibold">{r.name}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{r.name2 ?? "—"}</TableCell>
+                <TableCell className="text-center text-xs font-mono">{r.numberPrefix ?? "—"}</TableCell>
+                <TableCell className="text-center text-xs">
+                  {r.currentSeq > 0 ? r.currentSeq : "—"}
+                </TableCell>
+                <TableCell className="text-center">
+                  <Badge
+                    variant={r.isActive ? "default" : "secondary"}
+                    className="text-[10px] h-4 px-1.5"
+                  >
+                    {r.isActive ? "نشط" : "موقف"}
+                  </Badge>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
+
+      {rows.length > 0 && (
+        <p className="text-[10px] text-muted-foreground text-left">
+          لتعديل الدفاتر أو إضافة جديد: الإعدادات ← دفاتر المستندات ← دفتر الموردين
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ─── Content Router ────────────────────────────────────────────────────────────
 function ComingSoon({ label }: { label: string }) {
   return (
@@ -895,7 +983,7 @@ function PurchasesContent({ activeId, onSelect }: { activeId: MenuId; onSelect: 
     case "debit-note":         return <ComingSoon label="إشعار مدين" />;
     case "purchase-orders":    return <PurchaseOrderPage />;
     case "suppliers-list":     return <SuppliersListPage />;
-    case "supplier-groups":    return <ComingSoon label="مجموعات الموردين" />;
+    case "supplier-groups":    return <SupplierGroupsPage />;
     case "supplier-balances":  return <ComingSoon label="أرصدة الموردين" />;
     case "supplier-statement": return <ComingSoon label="كشف حساب المورد" />;
     case "rpt-by-supplier":    return <ReportBySupplier />;
