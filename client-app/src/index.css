@@ -128,6 +128,9 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    /* ── إزالة تمييز اللمس الافتراضي في المتصفح ── */
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none; /* تعطيل قائمة الضغط المطوّل على iOS */
   }
 
   html {
@@ -135,6 +138,9 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    /* منع التمرير غير المقصود على المستوى الجذري */
+    overscroll-behavior: none;
+    touch-action: pan-x pan-y;
   }
 
   body {
@@ -145,6 +151,7 @@
     line-height: 1.6;
     color: #2B2B2B;
     direction: rtl;
+    overscroll-behavior: none;
   }
 
   /* ── تدرج Typography الاحترافي ── */
@@ -186,6 +193,48 @@
   input[type="checkbox"]:not(:disabled),
   input[type="radio"]:not(:disabled) {
     @apply cursor-pointer;
+  }
+
+  /* ══════════════════════════════════════════════
+     دعم اللمس (Touch Support)
+     ══════════════════════════════════════════════ */
+
+  /* إزالة تأخير 300ms على العناصر التفاعلية */
+  button,
+  a,
+  select,
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="submit"],
+  input[type="button"],
+  input[type="reset"],
+  [role="button"],
+  [tabindex] {
+    touch-action: manipulation;
+  }
+
+  /* تأثير اللمس المرئي على الأزرار (بديل hover) */
+  button:active:not(:disabled),
+  [role="button"]:active,
+  a:active {
+    opacity: 0.82;
+  }
+
+  /* المناطق القابلة للتمرير — تمرير سلس على iOS */
+  [style*="overflow: auto"],
+  [style*="overflow:auto"],
+  [style*="overflow-y: auto"],
+  [style*="overflow-x: auto"],
+  [style*="overflow-y:auto"],
+  [style*="overflow-x:auto"] {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  /* منع تحديد النص عند اللمس على عناصر الواجهة */
+  button, [role="button"], .erp-table th {
+    user-select: none;
+    -webkit-user-select: none;
   }
 }
 

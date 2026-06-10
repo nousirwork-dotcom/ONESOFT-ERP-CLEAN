@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import { Minus, Square, X } from "lucide-react";
 import { useTabManager, AppTab } from "@/contexts/TabManagerContext";
 import { useWorkspaceEl } from "@/contexts/WorkspaceContext";
@@ -66,14 +66,25 @@ export default function AppWindow({ tab, children }: AppWindowProps) {
     };
   }
 
-  /* ─── Double-click title bar = maximize/restore ─── */
+  /* ─── Double-click / double-tap title bar = maximize/restore ─── */
   const onTitleDblClick = () => toggleMaximize(tab.id);
+
+  const lastTapRef = useRef<number>(0);
+  const onTitleTouchEnd = useCallback((e: React.TouchEvent) => {
+    const now = Date.now();
+    if (now - lastTapRef.current < 300) {
+      e.preventDefault();
+      toggleMaximize(tab.id);
+    }
+    lastTapRef.current = now;
+  }, [tab.id, toggleMaximize]);
 
   /* ─── Render ─── */
   return (
     <div
       style={style}
       onMouseDown={() => bringToFront(tab.id)}
+      onTouchStart={() => bringToFront(tab.id)}
     >
       {/* Window frame */}
       <div style={{
@@ -95,6 +106,7 @@ export default function AppWindow({ tab, children }: AppWindowProps) {
         {/* ── Title bar ── */}
         <div
           onDoubleClick={onTitleDblClick}
+          onTouchEnd={onTitleTouchEnd}
           style={{
             height: 36,
             display: "flex",
@@ -178,6 +190,7 @@ function WinBtn({
   return (
     <button
       onMouseDown={e => e.stopPropagation()}
+      onTouchStart={e => e.stopPropagation()}
       onClick={onClick}
       title={title}
       style={{
@@ -192,6 +205,7 @@ function WinBtn({
         cursor: "pointer",
         transition: "background 0.1s",
         flexShrink: 0,
+        touchAction: "manipulation",
       }}
       onMouseEnter={e => (e.currentTarget.style.background = hoverBg)}
       onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
