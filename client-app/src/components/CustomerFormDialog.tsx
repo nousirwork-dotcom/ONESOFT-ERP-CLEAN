@@ -111,6 +111,8 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
   /* فلاتر تبويب المشتريات (مردودات المبيعات) */
   const [prYear,  setPrYear]  = useState<number | null>(CURRENT_YEAR);
   const [prMonth, setPrMonth] = useState<number | null>(null);
+  /* فلتر تبويب الأرصدة */
+  const [balYear, setBalYear] = useState<number>(CURRENT_YEAR);
 
   const create = trpc.customers.create.useMutation({
     onSuccess: () => { utils.customers.list.invalidate(); toast.success("تم إضافة العميل بنجاح"); onSaved(); },
@@ -133,6 +135,12 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
   const returnsHistoryQuery = trpc.salesInvoices.list.useQuery(
     { customerId: editData?.id, invoiceType: "return", dateFrom: prRange.from, dateTo: prRange.to, limit: 500 },
     { enabled: open && tab === "purchases" && !!editData?.id }
+  );
+
+  /* ── أرصدة العميل (كل الفواتير للسنة المختارة) ── */
+  const balancesQuery = trpc.salesInvoices.list.useQuery(
+    { customerId: editData?.id, dateFrom: `${balYear}-01-01`, dateTo: `${balYear}-12-31`, limit: 1000 },
+    { enabled: open && tab === "balances" && !!editData?.id }
   );
 
   useEffect(() => {
@@ -602,10 +610,21 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
           )}
 
           {/* ══ Placeholder tabs ══ */}
-          {(tab === "accounts" || (tab === "balances" && !editData?.id)) && (
+          {tab === "accounts" && (
             <ESection title={TABS.find(t => t.id === tab)?.label ?? ""}>
               <PlaceholderNote text="سيتم تفعيل هذا القسم في إصدار قادم" />
             </ESection>
+          )}
+
+          {/* ══ الأرصدة ══ */}
+          {tab === "balances" && (
+            <CustomerBalancesTab
+              customerId={editData?.id ?? null}
+              year={balYear}
+              onYearChange={setBalYear}
+              data={balancesQuery.data ?? []}
+              isLoading={balancesQuery.isLoading}
+            />
           )}
 
           {/* ══ المبيعات ══ */}
@@ -982,6 +1001,249 @@ function SummaryBadge({ label, value, color, unit }: { label: string; value: str
       <span style={{ fontSize: 14, fontWeight: 700, color, fontFamily: "monospace" }}>
         {value} <span style={{ fontSize: 10, fontWeight: 400, color: "#888" }}>{unit}</span>
       </span>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════
+   CustomerBalancesTab
+   جدول أرصدة شهري مطابق لصورة النظام المرجعية:
+   الفترة | الحركة (مدين / دائن) | الرصيد (مدين / دائن)
+   ════════════════════════════════════════════════════ */
+interface BalInvoiceRow {
+  id: number;
+  invoiceDate: Date | string;
+  invoiceType?: string | null;
+  total?: string | null;
+  paidAmount?: string | null;
+  remainingAmount?: string | null;
+}
+
+interface MonthRow {
+  monthNum: number;   /* 1-12 */
+  label: string;      /* يناير ... */
+  debitMove: number;  /* حركة مدين (فواتير مبيعات) */
+  creditMove: number; /* حركة دائن (مردودات + مدفوع) */
+  balDebit: number;   /* رصيد مدين (تراكمي) */
+  balCredit: number;  /* رصيد دائن (تراكمي) */
+}
+
+function buildMonthlyRows(data: BalInvoiceRow[]): MonthRow[] {
+  /* تجميع حسب الشهر */
+  const byMonth: Record<number, { debit: number; credit: number }> = {};
+  for (let m = 1; m <= 12; m++) byMonth[m] = { debit: 0, credit: 0 };
+
+  for (const row of data) {
+    const d = new Date(row.invoiceDate);
+    const m = d.getMonth() + 1;
+    const total  = parseFloat(row.total ?? "0");
+    const paid   = parseFloat(row.paidAmount ?? "0");
+
+    if (row.invoiceType === "return") {
+      byMonth[m].credit += total;
+    } else {
+      /* sale / quote */
+      byMonth[m].debit  += total;
+      /* الجزء المدفوع يُسجَّل دائناً */
+      if (paid > 0) byMonth[m].credit += paid;
+    }
+  }
+
+  /* بناء الصفوف مع الرصيد التراكمي */
+  let running = 0;
+  return MONTHS_AR.map((label, idx) => {
+    const m = idx + 1;
+    const dm = byMonth[m].debit;
+    const cm = byMonth[m].credit;
+    running += dm - cm;
+    const bd = running > 0 ? running : 0;
+    const bc = running < 0 ? Math.abs(running) : 0;
+    return { monthNum: m, label, debitMove: dm, creditMove: cm, balDebit: bd, balCredit: bc };
+  });
+}
+
+function CustomerBalancesTab({
+  customerId, year, onYearChange, data, isLoading,
+}: {
+  customerId: number | null;
+  year: number; onYearChange: (y: number) => void;
+  data: BalInvoiceRow[];
+  isLoading: boolean;
+}) {
+  const ACCENT = "#406B93";
+  const fmtN = (n: number) =>
+    n === 0 ? "" : n.toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  if (!customerId) {
+    return (
+      <ESection title="أرصدة" headerColor={ACCENT}>
+        <PlaceholderNote text="احفظ العميل أولاً لعرض الأرصدة" />
+      </ESection>
+    );
+  }
+
+  const rows   = buildMonthlyRows(data);
+  /* الصف الإجمالي */
+  const totDM  = rows.reduce((s, r) => s + r.debitMove,  0);
+  const totCM  = rows.reduce((s, r) => s + r.creditMove, 0);
+  const netBal = totDM - totCM;
+  const totBD  = netBal > 0 ? netBal : 0;
+  const totBC  = netBal < 0 ? Math.abs(netBal) : 0;
+
+  /* ─── ألوان ─── */
+  const COL_HEADER = ACCENT;
+  const COL_TOTAL_BG = "#EBF1F7";
+  const COL_DEBIT  = "#B91C1C";
+  const COL_CREDIT = "#15803D";
+  const COL_BAL_D  = "#1D4ED8";
+  const COL_BAL_C  = "#15803D";
+
+  /* ─── نمط خلية ─── */
+  const cell = (
+    txt: string,
+    color = "#333",
+    bg = "transparent",
+    bold = false,
+    align: "right"|"center" = "center"
+  ): React.CSSProperties => ({
+    padding: "4px 8px", color, background: bg,
+    fontWeight: bold ? 700 : 400,
+    textAlign: align,
+    fontFamily: txt && /[\d,.]/.test(txt) ? "monospace" : "inherit",
+    borderLeft: "1px solid #D8D8D8",
+    fontSize: 11,
+  });
+
+  const COL_GRID = "110px 1fr 1fr 1fr 1fr";
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+
+      {/* ── شريط أدوات ── */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+        padding: "7px 12px", background: "#EBF1F7",
+        border: "1px solid #B8CCDF", borderRadius: 4,
+      }}>
+        {/* عنوان */}
+        <span style={{ fontSize: 12, fontWeight: 700, color: ACCENT }}>📊 كشف الحساب السنوي</span>
+        <div style={{ flex: 1 }} />
+
+        {/* فلتر السنة */}
+        <span style={{ fontSize: 11, color: "#555" }}>السنة:</span>
+        <select
+          value={year}
+          onChange={e => onYearChange(Number(e.target.value))}
+          style={{
+            height: 26, fontSize: 12, padding: "0 8px", borderRadius: 3,
+            border: "1px solid #B8CCDF", background: "white", cursor: "pointer",
+            fontWeight: 700, color: ACCENT,
+          }}>
+          {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+        </select>
+
+        {/* رمز العملة */}
+        <span style={{
+          fontSize: 11, fontWeight: 700, color: "white",
+          background: ACCENT, borderRadius: 3, padding: "2px 8px",
+        }}>ر.س</span>
+      </div>
+
+      {/* ── الجدول ── */}
+      <div style={{ border: "1px solid #C4C4C4", borderRadius: 3, overflow: "hidden" }}>
+
+        {/* ─ رأس المجموعات (مزدوج) ─ */}
+        <div style={{
+          display: "grid", gridTemplateColumns: COL_GRID,
+          background: COL_HEADER, color: "white",
+          fontSize: 10, fontWeight: 700, textAlign: "center",
+        }}>
+          <div style={{ padding: "4px 8px", textAlign: "right",  borderLeft: "1px solid rgba(255,255,255,0.25)", gridRow: "1 / 3" }}>الفترة</div>
+          <div style={{ padding: "3px 0", gridColumn: "2 / 4", borderLeft: "1px solid rgba(255,255,255,0.25)", borderBottom: "1px solid rgba(255,255,255,0.35)" }}>الحركة</div>
+          <div style={{ padding: "3px 0", gridColumn: "4 / 6", borderLeft: "1px solid rgba(255,255,255,0.25)", borderBottom: "1px solid rgba(255,255,255,0.35)" }}>الرصيد</div>
+        </div>
+        <div style={{
+          display: "grid", gridTemplateColumns: COL_GRID,
+          background: "#2E5278", color: "white",
+          fontSize: 10, fontWeight: 700, textAlign: "center",
+        }}>
+          <div style={{ padding: "3px 8px", borderLeft: "1px solid rgba(255,255,255,0.25)" }}>مدين</div>
+          <div style={{ padding: "3px 8px", borderLeft: "1px solid rgba(255,255,255,0.25)" }}>دائن</div>
+          <div style={{ padding: "3px 8px", borderLeft: "1px solid rgba(255,255,255,0.25)" }}>مدين</div>
+          <div style={{ padding: "3px 8px", borderLeft: "1px solid rgba(255,255,255,0.25)" }}>دائن</div>
+        </div>
+
+        {/* ─ صف الإجمالي ─ */}
+        <div style={{
+          display: "grid", gridTemplateColumns: COL_GRID,
+          background: COL_TOTAL_BG,
+          borderBottom: "2px solid #B0BFCC",
+        }}>
+          <div style={{ ...cell("إجمالي", ACCENT, COL_TOTAL_BG, true, "right"), borderLeft: "none" }}>إجمالي</div>
+          <div style={cell(fmtN(totDM),  COL_DEBIT,  COL_TOTAL_BG, true)}>{fmtN(totDM)}</div>
+          <div style={cell(fmtN(totCM),  COL_CREDIT, COL_TOTAL_BG, true)}>{fmtN(totCM)}</div>
+          <div style={cell(fmtN(totBD),  COL_BAL_D,  COL_TOTAL_BG, true)}>{fmtN(totBD)}</div>
+          <div style={cell(fmtN(totBC),  COL_BAL_C,  COL_TOTAL_BG, true)}>{fmtN(totBC)}</div>
+        </div>
+
+        {/* ─ صفوف الشهور ─ */}
+        <div style={{ maxHeight: 260, overflowY: "auto" }}>
+          {isLoading ? (
+            <div style={{ padding: 20, textAlign: "center", color: "#888", fontSize: 12 }}>⏳ جاري تحميل البيانات...</div>
+          ) : (
+            rows.map((row, idx) => {
+              const active = row.debitMove > 0 || row.creditMove > 0;
+              const bg = active
+                ? (idx % 2 === 0 ? "white" : "#F8FAFB")
+                : (idx % 2 === 0 ? "#FAFAFA" : "#F4F4F4");
+              return (
+                <div key={row.monthNum} style={{
+                  display: "grid", gridTemplateColumns: COL_GRID,
+                  borderTop: "1px solid #E4E4E4",
+                  background: bg,
+                  opacity: active ? 1 : 0.55,
+                }}>
+                  {/* اسم الشهر + رقمه */}
+                  <div style={{
+                    padding: "4px 10px", fontSize: 11, fontWeight: active ? 700 : 400,
+                    color: active ? ACCENT : "#999",
+                    display: "flex", alignItems: "center", gap: 6,
+                    borderLeft: "none",
+                  }}>
+                    <span style={{
+                      display: "inline-block", width: 16, textAlign: "center",
+                      fontSize: 9, color: "white", background: active ? ACCENT : "#BBBBC0",
+                      borderRadius: 2, padding: "0 2px", flexShrink: 0,
+                    }}>{row.monthNum}</span>
+                    {row.label}
+                  </div>
+                  <div style={cell(fmtN(row.debitMove),  active ? COL_DEBIT  : "#CCC", bg)}>{fmtN(row.debitMove)}</div>
+                  <div style={cell(fmtN(row.creditMove), active ? COL_CREDIT : "#CCC", bg)}>{fmtN(row.creditMove)}</div>
+                  <div style={cell(fmtN(row.balDebit),   active ? COL_BAL_D  : "#CCC", bg)}>{fmtN(row.balDebit)}</div>
+                  <div style={cell(fmtN(row.balCredit),  active ? COL_BAL_C  : "#CCC", bg)}>{fmtN(row.balCredit)}</div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* ── مربعات الملخص ── */}
+      {!isLoading && (
+        <div style={{
+          display: "flex", gap: 10, flexWrap: "wrap",
+          padding: "8px 12px", borderRadius: 4,
+          background: "#EBF1F7", border: "1px solid #B8CCDF",
+        }}>
+          <SummaryBadge label="إجمالي المديونية" value={fmtN(totDM) || "0.00"} color={COL_DEBIT}  unit="ر.س" />
+          <SummaryBadge label="إجمالي الدائنية"  value={fmtN(totCM) || "0.00"} color={COL_CREDIT} unit="ر.س" />
+          <SummaryBadge label="صافي الرصيد"
+            value={(netBal !== 0 ? fmtN(Math.abs(netBal)) : "0.00")}
+            color={netBal >= 0 ? COL_BAL_D : COL_BAL_C}
+            unit={netBal >= 0 ? "ر.س مدين" : "ر.س دائن"} />
+        </div>
+      )}
+
     </div>
   );
 }
