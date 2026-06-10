@@ -379,56 +379,46 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
               <ESection title="سعر البيع المطبّق على العميل"
                 headerColor="#406B93"
                 note="يُحدد السعر المسحوب تلقائياً من كارت الصنف عند فتح فاتورة لهذا العميل">
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {PRICE_LEVELS.map(pl => {
-                    const active = (form.priceLevel ?? 1) === pl.value;
-                    return (
-                      <button key={pl.value} type="button"
-                        onClick={() => setForm(f => ({ ...f, priceLevel: pl.value }))}
+                {(() => {
+                  const selected = PRICE_LEVELS.find(pl => pl.value === (form.priceLevel ?? 1)) ?? PRICE_LEVELS[0];
+                  return (
+                    <div style={{ position: "relative", width: "100%" }}>
+                      <select
+                        value={form.priceLevel ?? 1}
+                        onChange={e => setForm(f => ({ ...f, priceLevel: Number(e.target.value) }))}
                         style={{
-                          display: "flex", alignItems: "center", gap: 10,
-                          padding: "7px 12px", borderRadius: 4, cursor: "pointer",
-                          border: `2px solid ${active ? pl.color : "#D0D0D0"}`,
-                          background: active ? `${pl.color}12` : "white",
-                          textAlign: "right", width: "100%",
-                          transition: "all 0.12s",
-                          position: "relative",
+                          width: "100%", appearance: "none", WebkitAppearance: "none",
+                          padding: "8px 36px 8px 36px",
+                          borderRadius: 5, cursor: "pointer",
+                          border: `2px solid ${selected.color}`,
+                          background: `${selected.color}0f`,
+                          color: selected.color,
+                          fontSize: 13, fontWeight: 700,
+                          outline: "none", direction: "rtl",
                         }}>
-                        {/* Arrow indicator — RTL leading side (right) */}
-                        <span style={{
-                          fontSize: 15, flexShrink: 0, lineHeight: 1,
-                          color: active ? pl.color : "#D0D0D0",
-                          fontWeight: 700,
-                          transition: "color 0.12s, transform 0.12s",
-                          transform: active ? "translateX(-2px)" : "none",
-                          display: "inline-block",
-                        }}>◄</span>
-                        {/* Level number badge */}
-                        <span style={{
-                          width: 22, height: 22, borderRadius: 4, display: "flex",
-                          alignItems: "center", justifyContent: "center", flexShrink: 0,
-                          background: active ? pl.color : "#E8E8E8",
-                          color: active ? "white" : "#666",
-                          fontSize: 11, fontWeight: 700,
-                        }}>{pl.value}</span>
-                        {/* Text */}
-                        <div style={{ flex: 1, textAlign: "right" }}>
-                          <div style={{ fontSize: 13, fontWeight: active ? 700 : 500, color: active ? pl.color : "#333" }}>
-                            {pl.label}
-                          </div>
-                          <div style={{ fontSize: 10, color: "#888", marginTop: 1 }}>{pl.hint}</div>
-                        </div>
-                        {/* Checkmark on selected */}
-                        <span style={{
-                          fontSize: 13, flexShrink: 0,
-                          color: active ? pl.color : "#E0E0E0",
-                          fontWeight: 700,
-                          transition: "color 0.12s",
-                        }}>✓</span>
-                      </button>
-                    );
-                  })}
-                </div>
+                        {PRICE_LEVELS.map(pl => (
+                          <option key={pl.value} value={pl.value}>
+                            {pl.value}. {pl.label} — {pl.hint}
+                          </option>
+                        ))}
+                      </select>
+                      {/* badge رقم المستوى */}
+                      <span style={{
+                        position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+                        width: 22, height: 22, borderRadius: 4,
+                        background: selected.color, color: "#fff",
+                        fontSize: 11, fontWeight: 700,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        pointerEvents: "none",
+                      }}>{selected.value}</span>
+                      {/* سهم القائمة */}
+                      <span style={{
+                        position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)",
+                        color: selected.color, fontSize: 12, pointerEvents: "none", fontWeight: 700,
+                      }}>▼</span>
+                    </div>
+                  );
+                })()}
               </ESection>
 
               {/* ── حدود الخصم ── */}
