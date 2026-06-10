@@ -18,6 +18,7 @@ export const salesRouter = router({
       dateTo: z.string().optional(),        // YYYY-MM-DD
       warehouseId: z.number().optional(),    // فلتر المخزن
       customerSearch: z.string().optional(), // بحث باسم/كود العميل
+      customerId: z.number().optional(),     // فلتر بـ ID العميل
       excludeReturns: z.boolean().optional(),// استثناء المردودات
       numberPrefix: z.string().optional(),   // فلتر دفتر المستند (بادئة الرقم)
     }).optional())
@@ -46,6 +47,9 @@ export const salesRouter = router({
           r.invoiceNumber?.toLowerCase().includes(q) ||
           r.customerName?.toLowerCase().includes(q)
         );
+      }
+      if (input?.customerId) {
+        filtered = filtered.filter(r => r.customerId === input.customerId);
       }
       if (input?.customerSearch) {
         const q = input.customerSearch.toLowerCase();

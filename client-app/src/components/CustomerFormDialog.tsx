@@ -77,11 +77,40 @@ const PRICE_LEVELS = [
 ];
 
 /* ═══════════════════════════ Main Component ═══════════════════════════ */
+/* ─── ثوابت التقويم ─── */
+const CURRENT_YEAR = new Date().getFullYear();
+const YEARS = Array.from({ length: 7 }, (_, i) => CURRENT_YEAR - i);
+const MONTHS_AR = [
+  "يناير","فبراير","مارس","أبريل","مايو","يونيو",
+  "يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر",
+];
+
+function lastDayOfMonth(year: number, month: number): string {
+  return new Date(year, month, 0).toISOString().split("T")[0];
+}
+
+function dateRange(year: number | null, month: number | null): { from?: string; to?: string } {
+  if (!year) return {};
+  if (month) return {
+    from: `${year}-${String(month).padStart(2, "0")}-01`,
+    to:   lastDayOfMonth(year, month),
+  };
+  return { from: `${year}-01-01`, to: `${year}-12-31` };
+}
+
+/* ═══════════════════════════ Main Component ═══════════════════════════ */
 export default function CustomerFormDialog({ open, editData, onClose, onSaved }: Props) {
   const [tab, setTab]   = useState<TabId>("main");
   const [form, setForm] = useState<CustomerData>(EMPTY);
   const nameRef         = useRef<HTMLInputElement>(null);
   const utils           = trpc.useUtils();
+
+  /* فلاتر تبويب المبيعات */
+  const [slYear,  setSlYear]  = useState<number | null>(CURRENT_YEAR);
+  const [slMonth, setSlMonth] = useState<number | null>(null);
+  /* فلاتر تبويب المشتريات (مردودات المبيعات) */
+  const [prYear,  setPrYear]  = useState<number | null>(CURRENT_YEAR);
+  const [prMonth, setPrMonth] = useState<number | null>(null);
 
   const create = trpc.customers.create.useMutation({
     onSuccess: () => { utils.customers.list.invalidate(); toast.success("تم إضافة العميل بنجاح"); onSaved(); },
@@ -91,6 +120,20 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
     onSuccess: () => { utils.customers.list.invalidate(); toast.success("تم حفظ التعديلات"); onSaved(); },
     onError:   (e) => toast.error(e.message),
   });
+
+  /* ── سجل المبيعات للعميل ── */
+  const slRange = dateRange(slYear, slMonth);
+  const salesHistoryQuery = trpc.salesInvoices.list.useQuery(
+    { customerId: editData?.id, invoiceType: "sale", dateFrom: slRange.from, dateTo: slRange.to, limit: 500 },
+    { enabled: open && tab === "sales" && !!editData?.id }
+  );
+
+  /* ── سجل المردودات للعميل ── */
+  const prRange = dateRange(prYear, prMonth);
+  const returnsHistoryQuery = trpc.salesInvoices.list.useQuery(
+    { customerId: editData?.id, invoiceType: "return", dateFrom: prRange.from, dateTo: prRange.to, limit: 500 },
+    { enabled: open && tab === "purchases" && !!editData?.id }
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -559,10 +602,38 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
           )}
 
           {/* ══ Placeholder tabs ══ */}
-          {(tab === "accounts" || (tab === "balances" && !editData?.id) || tab === "sales" || tab === "purchases") && (
+          {(tab === "accounts" || (tab === "balances" && !editData?.id)) && (
             <ESection title={TABS.find(t => t.id === tab)?.label ?? ""}>
               <PlaceholderNote text="سيتم تفعيل هذا القسم في إصدار قادم" />
             </ESection>
+          )}
+
+          {/* ══ المبيعات ══ */}
+          {tab === "sales" && (
+            <CustomerInvoicesTab
+              customerId={editData?.id ?? null}
+              year={slYear} onYearChange={setSlYear}
+              month={slMonth} onMonthChange={setSlMonth}
+              data={salesHistoryQuery.data ?? []}
+              isLoading={salesHistoryQuery.isLoading}
+              accentColor="#406B93"
+              title="سجل فواتير المبيعات"
+              emptyText="لا توجد فواتير مبيعات في هذه الفترة"
+            />
+          )}
+
+          {/* ══ المشتريات (مردودات المبيعات) ══ */}
+          {tab === "purchases" && (
+            <CustomerInvoicesTab
+              customerId={editData?.id ?? null}
+              year={prYear} onYearChange={setPrYear}
+              month={prMonth} onMonthChange={setPrMonth}
+              data={returnsHistoryQuery.data ?? []}
+              isLoading={returnsHistoryQuery.isLoading}
+              accentColor="#DC2626"
+              title="سجل مردودات المبيعات"
+              emptyText="لا توجد مردودات في هذه الفترة"
+            />
           )}
 
         </div>
@@ -694,6 +765,223 @@ function PlaceholderNote({ text }: { text: string }) {
   return (
     <div style={{ padding: "20px", textAlign: "center", color: "#999", fontSize: 12, fontStyle: "italic" }}>
       ⏳ {text}
+    </div>
+  );
+}
+
+/* ════════════════ CustomerInvoicesTab ════════════════
+   تبويب موحّد للمبيعات والمردودات — يُمرَّر له البيانات جاهزة
+   ════════════════════════════════════════════════════ */
+interface InvoiceRow {
+  id: number;
+  invoiceNumber: string;
+  invoiceDate: Date | string;
+  paymentMethod?: string | null;
+  total?: string | null;
+  taxAmount?: string | null;
+  status?: string | null;
+  isPosted?: boolean | null;
+}
+
+function CustomerInvoicesTab({
+  customerId, year, onYearChange, month, onMonthChange,
+  data, isLoading, accentColor, title, emptyText,
+}: {
+  customerId: number | null;
+  year: number | null; onYearChange: (y: number | null) => void;
+  month: number | null; onMonthChange: (m: number | null) => void;
+  data: InvoiceRow[];
+  isLoading: boolean;
+  accentColor: string;
+  title: string;
+  emptyText: string;
+}) {
+  /* ملخص المجاميع */
+  const totalAmt  = data.reduce((s, r) => s + parseFloat(r.total ?? "0"), 0);
+  const totalTax  = data.reduce((s, r) => s + parseFloat(r.taxAmount ?? "0"), 0);
+  const fmtNum = (n: number) => n.toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  /* تحويل التاريخ */
+  const fmtDate = (d: Date | string) => {
+    try { return new Date(d).toLocaleDateString("ar-SA", { year: "numeric", month: "2-digit", day: "2-digit" }); }
+    catch { return String(d).slice(0, 10); }
+  };
+
+  /* الحالة بالعربية */
+  const statusAr = (row: InvoiceRow) => {
+    if (row.isPosted) return { label: "مرحَّل", color: "#15803D", bg: "#DCFCE7" };
+    const s = row.status ?? "";
+    if (s === "cancelled") return { label: "ملغي",   color: "#DC2626", bg: "#FEE2E2" };
+    if (s === "paid")      return { label: "مدفوع",  color: "#0D9488", bg: "#F0FDFA" };
+    return                        { label: "مسودة",  color: "#92400E", bg: "#FEF9C3" };
+  };
+
+  /* نوع الدفع */
+  const payAr = (m?: string | null) => m === "credit" ? "آجل" : "نقدي";
+
+  if (!customerId) {
+    return (
+      <ESection title={title} headerColor={accentColor}>
+        <PlaceholderNote text="احفظ العميل أولاً لعرض سجل المعاملات" />
+      </ESection>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+
+      {/* ── شريط الفلاتر ── */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+        padding: "7px 10px", background: `${accentColor}0C`,
+        border: `1px solid ${accentColor}30`, borderRadius: 4,
+      }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: accentColor }}>📅 الفترة:</span>
+
+        {/* السنة */}
+        <select
+          value={year ?? ""}
+          onChange={e => onYearChange(e.target.value ? Number(e.target.value) : null)}
+          style={{
+            height: 26, fontSize: 12, padding: "0 6px", borderRadius: 3,
+            border: `1px solid ${accentColor}60`, background: "white", cursor: "pointer",
+            color: "#333", fontWeight: year ? 700 : 400,
+          }}>
+          <option value="">كل السنوات</option>
+          {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+        </select>
+
+        {/* الشهر */}
+        <select
+          value={month ?? ""}
+          onChange={e => onMonthChange(e.target.value ? Number(e.target.value) : null)}
+          style={{
+            height: 26, fontSize: 12, padding: "0 6px", borderRadius: 3,
+            border: `1px solid ${accentColor}60`, background: "white", cursor: "pointer",
+            color: "#333",
+          }}>
+          <option value="">كل الشهور</option>
+          {MONTHS_AR.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
+        </select>
+
+        {/* زر إعادة الضبط */}
+        {(year !== CURRENT_YEAR || month !== null) && (
+          <button type="button"
+            onClick={() => { onYearChange(CURRENT_YEAR); onMonthChange(null); }}
+            style={{
+              height: 24, padding: "0 8px", fontSize: 11, borderRadius: 3,
+              border: `1px solid #C0C0C0`, background: "#F3F4F6", cursor: "pointer", color: "#555",
+            }}>↺ السنة الحالية</button>
+        )}
+
+        <div style={{ flex: 1 }} />
+
+        {/* عداد النتائج */}
+        <span style={{
+          fontSize: 11, fontWeight: 700, color: "white",
+          background: accentColor, borderRadius: 10, padding: "2px 10px",
+        }}>{data.length} فاتورة</span>
+      </div>
+
+      {/* ── الجدول ── */}
+      <div style={{ border: "1px solid #C8C8C8", borderRadius: 3, overflow: "hidden" }}>
+        {/* رأس الجدول */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 80px 55px 90px 72px 62px",
+          background: accentColor, color: "white",
+          fontSize: 10, fontWeight: 700,
+        }}>
+          {["رقم الفاتورة","التاريخ","الدفع","الإجمالي","الضريبة","الحالة"].map((h, i) => (
+            <div key={i} style={{ padding: "5px 8px", textAlign: i === 0 ? "right" : "center",
+              borderLeft: i > 0 ? "1px solid rgba(255,255,255,0.2)" : "none" }}>{h}</div>
+          ))}
+        </div>
+
+        {/* صفوف البيانات */}
+        <div style={{ maxHeight: 240, overflowY: "auto" }}>
+          {isLoading ? (
+            <div style={{ padding: 20, textAlign: "center", color: "#888", fontSize: 12 }}>
+              ⏳ جاري التحميل...
+            </div>
+          ) : data.length === 0 ? (
+            <div style={{ padding: 20, textAlign: "center", color: "#999", fontSize: 12, fontStyle: "italic" }}>
+              📭 {emptyText}
+            </div>
+          ) : (
+            data.map((row, idx) => {
+              const st = statusAr(row);
+              return (
+                <div key={row.id} style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 80px 55px 90px 72px 62px",
+                  borderTop: "1px solid #E8E8E8",
+                  background: idx % 2 === 0 ? "white" : "#F9FAFB",
+                  fontSize: 11,
+                }}>
+                  {/* رقم الفاتورة */}
+                  <div style={{ padding: "5px 8px", fontWeight: 700, color: accentColor, fontFamily: "monospace" }}>
+                    {row.invoiceNumber}
+                  </div>
+                  {/* التاريخ */}
+                  <div style={{ padding: "5px 8px", textAlign: "center", color: "#555" }}>
+                    {fmtDate(row.invoiceDate)}
+                  </div>
+                  {/* نوع الدفع */}
+                  <div style={{ padding: "5px 8px", textAlign: "center", color: "#555" }}>
+                    {payAr(row.paymentMethod)}
+                  </div>
+                  {/* الإجمالي */}
+                  <div style={{ padding: "5px 8px", textAlign: "center", fontFamily: "monospace", fontWeight: 600 }}>
+                    {fmtNum(parseFloat(row.total ?? "0"))}
+                  </div>
+                  {/* الضريبة */}
+                  <div style={{ padding: "5px 8px", textAlign: "center", fontFamily: "monospace", color: "#666" }}>
+                    {fmtNum(parseFloat(row.taxAmount ?? "0"))}
+                  </div>
+                  {/* الحالة */}
+                  <div style={{ padding: "4px 6px", textAlign: "center" }}>
+                    <span style={{
+                      fontSize: 9, fontWeight: 700, padding: "2px 5px", borderRadius: 8,
+                      background: st.bg, color: st.color,
+                    }}>{st.label}</span>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* ── مجموع الفترة ── */}
+      {data.length > 0 && (
+        <div style={{
+          display: "flex", gap: 10, flexWrap: "wrap",
+          padding: "8px 12px", borderRadius: 4,
+          background: `${accentColor}0A`, border: `1px solid ${accentColor}25`,
+        }}>
+          <SummaryBadge label="عدد الفواتير"    value={String(data.length)}    color={accentColor} unit="فاتورة" />
+          <SummaryBadge label="إجمالي المبيعات" value={fmtNum(totalAmt)}       color="#15803D"     unit="ر.س"   />
+          <SummaryBadge label="إجمالي الضريبة"  value={fmtNum(totalTax)}       color="#D97706"     unit="ر.س"   />
+          <SummaryBadge label="صافي (بدون ضريبة)" value={fmtNum(totalAmt - totalTax)} color="#6B7280" unit="ر.س" />
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+function SummaryBadge({ label, value, color, unit }: { label: string; value: string; color: string; unit: string }) {
+  return (
+    <div style={{
+      display: "flex", flexDirection: "column", alignItems: "center",
+      padding: "4px 14px", borderRadius: 4, background: "white",
+      border: `1px solid ${color}30`, minWidth: 110,
+    }}>
+      <span style={{ fontSize: 9, color: "#888", marginBottom: 1 }}>{label}</span>
+      <span style={{ fontSize: 14, fontWeight: 700, color, fontFamily: "monospace" }}>
+        {value} <span style={{ fontSize: 10, fontWeight: 400, color: "#888" }}>{unit}</span>
+      </span>
     </div>
   );
 }
