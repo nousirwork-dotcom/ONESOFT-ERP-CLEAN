@@ -1,192 +1,206 @@
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { trpc } from "@/lib/trpc";
-import { Edit, Plus, Search, Users } from "lucide-react";
+/**
+ * Customers.tsx — صفحة إدارة العملاء مع نافذة الإضافة/التعديل الشاملة
+ */
 import { useState } from "react";
+import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { Search, Users } from "lucide-react";
 import ERPToolbar from "@/components/ERPToolbar";
-
-const emptyForm = { code: "", name: "", phone: "", email: "", address: "", whatsappPhone: "", telegramId: "", defaultSendMethod: "" };
+import CustomerFormDialog from "@/components/CustomerFormDialog";
 
 export default function Customers() {
-  const [search, setSearch] = useState("");
-  const [isOpen, setIsOpen] = useState(false);
-  const [editId, setEditId] = useState<number | null>(null);
-  const [form, setForm] = useState(emptyForm);
-  const utils = trpc.useUtils();
+  const [search,    setSearch]    = useState("");
+  const [dialogOpen, setDialog]   = useState(false);
+  const [editData,   setEditData] = useState<any>(null);
 
-  const { data: customers, isLoading } = trpc.customers.list.useQuery({});
-  const create = trpc.customers.create.useMutation({
-    onSuccess: () => { utils.customers.list.invalidate(); toast.success("تم إضافة العميل"); setIsOpen(false); },
-    onError: (e) => toast.error(e.message),
-  });
-  const update = trpc.customers.update.useMutation({
-    onSuccess: () => { utils.customers.list.invalidate(); toast.success("تم تحديث العميل"); setIsOpen(false); },
-    onError: (e) => toast.error(e.message),
-  });
+  const { data: customers, isLoading, refetch } = trpc.customers.list.useQuery({});
 
-  const openCreate = () => { setEditId(null); setForm(emptyForm); setIsOpen(true); };
-  const openEdit = (c: any) => {
-    setEditId(c.id);
-    setForm({
-      code: c.code ?? "", name: c.name, phone: c.phone ?? "",
-      email: c.email ?? "", address: c.address ?? "",
-      whatsappPhone: c.whatsappPhone ?? "", telegramId: c.telegramId ?? "",
-      defaultSendMethod: c.defaultSendMethod ?? "",
-    });
-    setIsOpen(true);
-  };
-  const handleSubmit = () => {
-    if (!form.name.trim()) { toast.error("اسم العميل مطلوب"); return; }
-    const data = {
-      code: form.code.trim() || undefined,
-      name: form.name.trim(),
-      phone: form.phone || undefined,
-      email: form.email || undefined,
-      address: form.address || undefined,
-      whatsappPhone: form.whatsappPhone || undefined,
-      telegramId: form.telegramId || undefined,
-      defaultSendMethod: (form.defaultSendMethod as any) || undefined,
-    };
-    if (editId) update.mutate({ id: editId, ...data });
-    else create.mutate(data);
-  };
+  const openCreate = () => { setEditData(null); setDialog(true); };
+  const openEdit   = (c: any) => { setEditData(c); setDialog(true); };
+  const handleSaved = () => { setDialog(false); refetch(); };
 
-  const q = search.trim().toLowerCase();
+  const q        = search.trim().toLowerCase();
   const filtered = q
-    ? (customers ?? []).filter((c: any) => c.name.toLowerCase().includes(q) || (c.code ?? "").toLowerCase().includes(q) || (c.phone ?? "").includes(q))
+    ? (customers ?? []).filter((c: any) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.code ?? "").toLowerCase().includes(q) ||
+        (c.phone ?? "").includes(q) ||
+        (c.taxNumber ?? "").includes(q)
+      )
     : (customers ?? []);
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">العملاء</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">إدارة قاعدة بيانات العملاء</p>
-        </div>
-      </div>
+    <div className="space-y-4" dir="rtl">
 
+      {/* ── Toolbar ── */}
       <ERPToolbar
         pageTitle="العملاء"
         hideStatusBar
         onNew={openCreate}
-        onEdit={() => toast.info("اختر عميلاً للتعديل")}
-        onDelete={() => toast.info("اختر عميلاً للحذف")}
-        onSearch={() => toast.info("بحث...")}
-        onRefresh={() => window.location.reload()}
+        onEdit={() => toast.info("اختر عميلاً من القائمة للتعديل")}
+        onDelete={() => toast.info("اختر عميلاً من القائمة للحذف")}
+        onSearch={() => {}}
+        onRefresh={() => refetch()}
         onPrint={() => toast.info("جاري الطباعة...")}
       />
 
-      <div className="relative max-w-sm">
-        <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث بالاسم أو الكود أو الهاتف..." className="pr-9" />
+      {/* ── Search ── */}
+      <div style={{ position: "relative", maxWidth: 340 }}>
+        <Search style={{
+          position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+          width: 15, height: 15, color: "#888",
+        }} />
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="بحث بالاسم أو الكود أو الهاتف..."
+          style={{
+            width: "100%", height: 30, paddingRight: 32, paddingLeft: 8,
+            fontSize: 13, border: "1px solid #C0C0C0", borderRadius: 3,
+            background: "white", outline: "none", fontFamily: "inherit",
+          }}
+        />
       </div>
 
-      <Card className="border-0 shadow-sm">
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="text-right w-28">الكود</TableHead>
-                <TableHead className="text-right">الاسم</TableHead>
-                <TableHead className="text-right">الهاتف</TableHead>
-                <TableHead className="text-right">البريد</TableHead>
-                <TableHead className="text-right">العنوان</TableHead>
-                <TableHead className="text-right w-16">تعديل</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                Array.from({ length: 4 }).map((_, i) => (
-                  <TableRow key={i}>{Array.from({ length: 6 }).map((_, j) => (<TableCell key={j}><div className="h-4 bg-muted rounded animate-pulse" /></TableCell>))}</TableRow>
-                ))
-              ) : filtered.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                    <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                    <p>لا يوجد عملاء</p>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filtered.map((c: any) => (
-                  <TableRow key={c.id} className="hover:bg-muted/30">
-                    <TableCell>
-                      {c.code
-                        ? <span className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded" style={{ background: "#e0eaf4", color: "#406B93" }}>{c.code}</span>
-                        : <span className="text-muted-foreground">—</span>
-                      }
-                    </TableCell>
-                    <TableCell className="font-medium">{c.name}</TableCell>
-                    <TableCell className="text-muted-foreground">{c.phone ?? "—"}</TableCell>
-                    <TableCell className="text-muted-foreground">{c.email ?? "—"}</TableCell>
-                    <TableCell className="text-muted-foreground">{c.address ?? "—"}</TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(c)}>
-                        <Edit className="w-3.5 h-3.5" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      {/* ── Table ── */}
+      <div style={{ border: "1px solid #D0D0D0", borderRadius: 4, overflow: "hidden" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead>
+            <tr style={{ background: "#E8EEF4", borderBottom: "2px solid #C0C0C0" }}>
+              {["الكود", "النوع", "الاسم", "الهاتف", "المدينة", "الرقم الضريبي", "الرصيد", ""].map((h, i) => (
+                <th key={i} style={{
+                  textAlign: "right", padding: "6px 10px",
+                  fontWeight: 700, color: "#2B4A6A", fontSize: 12,
+                  whiteSpace: "nowrap",
+                }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i} style={{ borderBottom: "1px solid #F0F0F0" }}>
+                  {Array.from({ length: 8 }).map((_, j) => (
+                    <td key={j} style={{ padding: "8px 10px" }}>
+                      <div style={{ height: 12, background: "#E8E8E8", borderRadius: 4, animation: "pulse 1.5s infinite" }} />
+                    </td>
+                  ))}
+                </tr>
+              ))
+            ) : filtered.length === 0 ? (
+              <tr>
+                <td colSpan={8} style={{ textAlign: "center", padding: "40px 0", color: "#999" }}>
+                  <Users style={{ width: 32, height: 32, margin: "0 auto 8px", opacity: 0.3 }} />
+                  <div style={{ fontSize: 13 }}>
+                    {search ? "لا توجد نتائج مطابقة للبحث" : "لا يوجد عملاء — اضغط «جديد» لإضافة أول عميل"}
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              filtered.map((c: any, idx: number) => (
+                <tr
+                  key={c.id}
+                  style={{
+                    borderBottom: "1px solid #F0F0F0",
+                    background: idx % 2 === 0 ? "white" : "#FAFAFA",
+                    cursor: "pointer",
+                  }}
+                  onDoubleClick={() => openEdit(c)}
+                  onMouseEnter={e => (e.currentTarget.style.background = "#EEF4FB")}
+                  onMouseLeave={e => (e.currentTarget.style.background = idx % 2 === 0 ? "white" : "#FAFAFA")}
+                >
+                  {/* الكود */}
+                  <td style={{ padding: "6px 10px" }}>
+                    {c.code
+                      ? <span style={{
+                          fontFamily: "monospace", fontSize: 11, fontWeight: 700,
+                          padding: "2px 6px", borderRadius: 4,
+                          background: "#E0EAF4", color: "#406B93",
+                        }}>{c.code}</span>
+                      : <span style={{ color: "#CCC" }}>—</span>
+                    }
+                  </td>
+                  {/* النوع */}
+                  <td style={{ padding: "6px 10px" }}>
+                    {c.customerType === "organization"
+                      ? <span style={{
+                          fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 10,
+                          background: "#DBEAFE", color: "#1D4ED8", border: "1px solid #93C5FD",
+                        }}>📋 مؤسسة</span>
+                      : <span style={{
+                          fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 10,
+                          background: "#DCFCE7", color: "#15803D", border: "1px solid #86EFAC",
+                        }}>🧾 فرد</span>
+                    }
+                  </td>
+                  {/* الاسم */}
+                  <td style={{ padding: "6px 10px", fontWeight: 600, maxWidth: 200 }}>
+                    <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {c.name}
+                    </div>
+                  </td>
+                  {/* الهاتف */}
+                  <td style={{ padding: "6px 10px", color: "#555", fontFamily: "monospace", fontSize: 12 }}>
+                    {c.phone ?? "—"}
+                  </td>
+                  {/* المدينة */}
+                  <td style={{ padding: "6px 10px", color: "#555" }}>{c.city ?? "—"}</td>
+                  {/* الرقم الضريبي */}
+                  <td style={{ padding: "6px 10px", color: "#555", fontFamily: "monospace", fontSize: 11 }}>
+                    {c.taxNumber
+                      ? <span style={{ background: "#FEF3C7", color: "#92400E", padding: "1px 5px", borderRadius: 3 }}>{c.taxNumber}</span>
+                      : "—"
+                    }
+                  </td>
+                  {/* الرصيد */}
+                  <td style={{ padding: "6px 10px", textAlign: "left", fontFamily: "monospace", fontSize: 12 }}>
+                    {parseFloat(c.balance ?? "0") !== 0
+                      ? <span style={{ color: parseFloat(c.balance) > 0 ? "#DC2626" : "#15803D", fontWeight: 700 }}>
+                          {parseFloat(c.balance).toLocaleString("ar-SA", { minimumFractionDigits: 2 })}
+                        </span>
+                      : <span style={{ color: "#CCC" }}>0.00</span>
+                    }
+                  </td>
+                  {/* زر التعديل */}
+                  <td style={{ padding: "4px 8px" }}>
+                    <button
+                      onClick={e => { e.stopPropagation(); openEdit(c); }}
+                      style={{
+                        fontSize: 10, padding: "2px 8px", borderRadius: 3,
+                        background: "#E8EEF4", color: "#406B93",
+                        border: "1px solid #B8CFE0", cursor: "pointer",
+                        fontFamily: "inherit", fontWeight: 600,
+                      }}
+                    >تعديل</button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
 
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>{editId ? "تعديل العميل" : "إضافة عميل جديد"}</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
-            <div>
-              <Label>الكود</Label>
-              <Input
-                value={form.code}
-                onChange={(e) => setForm({ ...form, code: e.target.value })}
-                className="mt-1 font-mono"
-                placeholder="مثال: CU-001"
-              />
-            </div>
-            <div><Label>الاسم <span className="text-red-500">*</span></Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-1" /></div>
-            <div><Label>الهاتف</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="mt-1" /></div>
-            <div><Label>البريد الإلكتروني</Label><Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="mt-1" /></div>
-            <div><Label>العنوان</Label><Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="mt-1" /></div>
+      {/* ── Summary bar ── */}
+      {!isLoading && (customers ?? []).length > 0 && (
+        <div style={{ fontSize: 11, color: "#888", display: "flex", gap: 16 }}>
+          <span>إجمالي العملاء: <strong>{(customers ?? []).length}</strong></span>
+          <span>مؤسسات: <strong style={{ color: "#1D4ED8" }}>
+            {(customers ?? []).filter((c: any) => c.customerType === "organization").length}
+          </strong></span>
+          <span>أفراد: <strong style={{ color: "#15803D" }}>
+            {(customers ?? []).filter((c: any) => c.customerType !== "organization").length}
+          </strong></span>
+          {search && <span>نتائج البحث: <strong>{filtered.length}</strong></span>}
+        </div>
+      )}
 
-            <Separator />
-            <p className="text-xs font-semibold text-muted-foreground">قنوات الإرسال الإلكتروني</p>
-            <div>
-              <Label className="text-xs">رقم واتساب</Label>
-              <Input value={form.whatsappPhone} onChange={(e) => setForm({ ...form, whatsappPhone: e.target.value })} className="mt-1 font-mono text-sm" placeholder="05xxxxxxxx" dir="ltr" />
-              <p className="text-[10px] text-muted-foreground mt-0.5">إن اختلف عن رقم الهاتف</p>
-            </div>
-            <div>
-              <Label className="text-xs">معرّف تيليجرام</Label>
-              <Input value={form.telegramId} onChange={(e) => setForm({ ...form, telegramId: e.target.value })} className="mt-1 font-mono text-sm" placeholder="@username أو Chat ID" dir="ltr" />
-            </div>
-            <div>
-              <Label className="text-xs">طريقة الإرسال الافتراضية</Label>
-              <Select value={form.defaultSendMethod || "none"} onValueChange={(v) => setForm({ ...form, defaultSendMethod: v === "none" ? "" : v })}>
-                <SelectTrigger className="mt-1 text-sm h-9"><SelectValue placeholder="اختر..." /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">— بدون تفضيل —</SelectItem>
-                  <SelectItem value="whatsapp">واتساب</SelectItem>
-                  <SelectItem value="telegram">تيليجرام</SelectItem>
-                  <SelectItem value="email">بريد إلكتروني</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsOpen(false)}>إلغاء</Button>
-            <Button onClick={handleSubmit} disabled={create.isPending || update.isPending}>{editId ? "حفظ" : "إضافة"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* ── Dialog ── */}
+      <CustomerFormDialog
+        open={dialogOpen}
+        editData={editData}
+        onClose={() => setDialog(false)}
+        onSaved={handleSaved}
+      />
     </div>
   );
 }
