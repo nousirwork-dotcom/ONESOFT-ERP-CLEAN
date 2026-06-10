@@ -6,10 +6,10 @@ const AR = {
 
   // ─── Nav items ────────────────────────────────
   dashboard: "لوحة التحكم",
-  salesMgmt: "إدارة المبيعات",
-  purchasesMgmt: "إدارة المشتريات",
-  inventoryMgmt: "إدارة المخزون",
-  manufacturingMgmt: "إدارة التصنيع",
+  salesMgmt: "المبيعات",
+  purchasesMgmt: "المشتريات",
+  inventoryMgmt: "المخزون",
+  manufacturingMgmt: "التصنيع",
   accounting: "الحسابات العامة",
   hr: "الموارد البشرية",
   fixedAssets: "الأصول الثابتة",
