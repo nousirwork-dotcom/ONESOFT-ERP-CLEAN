@@ -102,7 +102,7 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
         id, path, label, Icon, pinned,
         pos, size,
         prevPos: pos, prevSize: size,
-        windowState: "normal",
+        windowState: "maximized",
         zIndex: zCounter,
       };
       setActiveTabId(id);
