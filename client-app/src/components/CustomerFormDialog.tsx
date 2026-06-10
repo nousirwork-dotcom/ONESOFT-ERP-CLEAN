@@ -45,14 +45,13 @@ interface Props {
 }
 
 /* ═══════════════════════════ Constants ═══════════════════════════ */
-type TabId = "main" | "address" | "pricing" | "channels" | "accounts" | "balances" | "sales" | "purchases";
+type TabId = "main" | "address" | "pricing" | "channels" | "balances" | "sales" | "purchases";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "main",      label: "نافذة رئيسية" },
   { id: "address",   label: "عنوان" },
   { id: "pricing",   label: "التسعير والضوابط" },
   { id: "channels",  label: "قنوات الإرسال" },
-  { id: "accounts",  label: "حسابات" },
   { id: "balances",  label: "أرصدة" },
   { id: "sales",     label: "مبيعات" },
   { id: "purchases", label: "مشتريات" },
@@ -728,13 +727,6 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
                 </div>
               </ESection>
             </div>
-          )}
-
-          {/* ══ Placeholder tabs ══ */}
-          {tab === "accounts" && (
-            <ESection title={TABS.find(t => t.id === tab)?.label ?? ""}>
-              <PlaceholderNote text="سيتم تفعيل هذا القسم في إصدار قادم" />
-            </ESection>
           )}
 
           {/* ══ الأرصدة ══ */}
