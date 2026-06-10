@@ -73,7 +73,7 @@ const ALL_BUTTONS: BtnDef[] = [
   { id: "delete",          label: "حذف",             icon: Trash2,        shortcut: "Del", variant: "danger", dividerAfter: true },
   { id: "search",          label: "بحث",             icon: Search,        shortcut: "F3" },
   { id: "refresh",         label: "تحديث",           icon: RefreshCw },
-  { id: "copy",            label: "نسخ",             icon: Copy,          dividerAfter: true },
+  { id: "copy",            label: "نسخة مماثلة",     icon: Copy,          dividerAfter: true },
   { id: "post",            label: "ترحيل",           icon: SendHorizonal, variant: "gold" },
   { id: "unpost",          label: "إلغاء الترحيل",  icon: Undo2,         variant: "danger" },
   { id: "preview-journal", label: "معاينة القيد",    icon: Eye },

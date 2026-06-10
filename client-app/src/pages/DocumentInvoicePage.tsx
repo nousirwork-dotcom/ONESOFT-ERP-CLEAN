@@ -546,6 +546,21 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     docTypeId, docTypesQuery.data, salesperson, stockQuery.data, config,
   ]);
 
+  /* ── نسخة مماثلة ── */
+  const handleDuplicate = useCallback(() => {
+    if (!savedInvoiceId) { toast.warning("لا يوجد مستند محفوظ للنسخ — احفظ أولاً"); return; }
+    setSavedInvoiceId(null); setIsPosted(false); setShowPostingPreview(false);
+    setErpMode("new");
+    setBasedOnType(""); setBasedOnNum(""); setBasedOnTrigger("");
+    setPaidAmountOverride("");
+    if (journalId) {
+      utils.documentJournals.previewNextNumber.fetch({ journalId })
+        .then(p => { if (p) setInvoiceNumber(p); })
+        .catch(() => setInvoiceNumber(""));
+    } else setInvoiceNumber("");
+    toast.success("تم إنشاء نسخة مماثلة — راجع البيانات ثم احفظ");
+  }, [savedInvoiceId, journalId, utils]);
+
   const handleNew = useCallback(() => {
     setLines([EMPTY_LINE()]); setSelectedLineIdx(0);
     setPartyId(null); setPartyName(""); setSupplierInvoiceNumber("");
@@ -585,7 +600,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
           if (config.docCategory === "sales") salesNextNumberQuery.refetch();
           else purchaseNextNumberQuery.refetch();
         }}
-        onCopy={() => copiedLine && toast.info("تم النسخ")}
+        onCopy={handleDuplicate}
         onPost={config.canPost !== false && config.docCategory === "sales" ? () => {
           if (!savedInvoiceId) { toast.warning("يجب حفظ المستند أولاً"); return; }
           setShowPostingPreview(true);

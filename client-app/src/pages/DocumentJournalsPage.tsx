@@ -8,7 +8,7 @@ import {
   BookOpen, BookMarked, RotateCcw, ClipboardList, ArrowLeftRight, Tag,
   Plus, Save, Trash2, ChevronFirst, ChevronLast, RefreshCw,
   ChevronLeft as CLeft, ChevronRight as CRight, ArrowLeft, FileText, Eye,
-  BookText, PackageMinus, PackagePlus, Users, Truck,
+  BookText, PackageMinus, PackagePlus, Users, Truck, Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -260,11 +260,26 @@ export default function DocumentJournalsPage() {
   const handleDelete = () => deleteMut.mutate({ id: editId! });
   const handleResetNumbering = () => { if (editId != null) resetMut.mutate({ journalId: editId }); };
 
+  const handleDuplicate = useCallback(() => {
+    if (!editId) { toast.warning("اختر دفتراً أولاً ثم اضغط نسخة مماثلة"); return; }
+    setForm(prev => ({
+      ...prev,
+      nameAr:    `نسخة من: ${prev.nameAr}`,
+      nameEn:    prev.nameEn ? `Copy of ${prev.nameEn}` : "",
+      fixedPart: prev.fixedPart ? `${prev.fixedPart}2` : "",
+    }));
+    setEditId(null);
+    setIsDirty(true);
+    setView("form");
+    toast.success("تم نسخ الدفتر — راجع البيانات ثم احفظ");
+  }, [editId]);
+
   /* ── Toolbar ── */
   const isBusy = createMut.isPending || updateMut.isPending || deleteMut.isPending;
   const toolbar = [
-    { label: "حفظ",    icon: <Save className="w-3.5 h-3.5" />,         action: handleSave,  primary: true,  disabled: isBusy },
-    { label: "جديد",   icon: <Plus className="w-3.5 h-3.5" />,         action: () => safeNavigate(openCreate) },
+    { label: "حفظ",           icon: <Save className="w-3.5 h-3.5" />,  action: handleSave,       primary: true,  disabled: isBusy },
+    { label: "جديد",          icon: <Plus className="w-3.5 h-3.5" />,  action: () => safeNavigate(openCreate) },
+    { label: "نسخة مماثلة",   icon: <Copy className="w-3.5 h-3.5" />,  action: handleDuplicate,  disabled: !editId },
     { label: "الأخير", icon: <ChevronLast className="w-3.5 h-3.5" />,  action: () => typeJournals.at(-1) && safeNavigate(() => openEdit(typeJournals.at(-1)!)) },
     { label: "التالي", icon: <CLeft className="w-3.5 h-3.5" />,        action: () => currentIndex < typeJournals.length - 1 && safeNavigate(() => openEdit(typeJournals[currentIndex + 1])) },
     { label: "السابق", icon: <CRight className="w-3.5 h-3.5" />,       action: () => currentIndex > 0 && safeNavigate(() => openEdit(typeJournals[currentIndex - 1])) },

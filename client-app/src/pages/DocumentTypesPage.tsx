@@ -8,7 +8,7 @@ import {
   BookOpen, BookMarked, RotateCcw, ClipboardList, ArrowLeftRight, Tag,
   Plus, Save, Trash2, ChevronFirst, ChevronLast,
   ChevronLeft as CLeft, ChevronRight as CRight, ArrowLeft, FileText, Search, X, Link2,
-  BookText, PackageMinus, PackagePlus,
+  BookText, PackageMinus, PackagePlus, Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -397,9 +397,25 @@ export default function DocumentTypesPage() {
   };
 
   /* ── Toolbar ── */
+  const handleDuplicate = useCallback(() => {
+    if (!editId) { toast.warning("اختر نوعاً أولاً ثم اضغط نسخة مماثلة"); return; }
+    setForm(prev => ({
+      ...prev,
+      nameAr: `نسخة من: ${prev.nameAr}`,
+      nameEn: prev.nameEn ? `Copy of ${prev.nameEn}` : "",
+      codeEn: prev.codeEn ? `${prev.codeEn}2` : "",
+      codeAr: prev.codeAr ? `${prev.codeAr}2` : "",
+    }));
+    setEditId(null);
+    setIsDirty(true);
+    setView("form");
+    toast.success("تم نسخ النوع — راجع البيانات ثم احفظ");
+  }, [editId]);
+
   const toolbar = [
-    { label: "حفظ",    icon: <Save className="w-3.5 h-3.5" />,         action: handleSave, primary: true },
-    { label: "جديد",   icon: <Plus className="w-3.5 h-3.5" />,         action: () => safeNavigate(openCreate) },
+    { label: "حفظ",           icon: <Save className="w-3.5 h-3.5" />, action: handleSave,      primary: true },
+    { label: "جديد",          icon: <Plus className="w-3.5 h-3.5" />, action: () => safeNavigate(openCreate) },
+    { label: "نسخة مماثلة",   icon: <Copy className="w-3.5 h-3.5" />, action: handleDuplicate, disabled: !editId },
     { label: "الأخير", icon: <ChevronLast className="w-3.5 h-3.5" />,  action: () => typeDoctypes.at(-1) && safeNavigate(() => openEdit(typeDoctypes.at(-1)!)) },
     { label: "التالي", icon: <CLeft className="w-3.5 h-3.5" />,        action: () => currentIndex < typeDoctypes.length - 1 && safeNavigate(() => openEdit(typeDoctypes[currentIndex + 1])) },
     { label: "السابق", icon: <CRight className="w-3.5 h-3.5" />,       action: () => currentIndex > 0 && safeNavigate(() => openEdit(typeDoctypes[currentIndex - 1])) },

@@ -663,6 +663,27 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
   ]);
 
   // ── New Invoice ───────────────────────────────────────────────────────────
+  /* ── نسخة مماثلة — تحتفظ بكل بيانات الفاتورة وتفتح مستنداً جديداً ── */
+  const handleDuplicate = useCallback(() => {
+    const hasDoc = !!(savedInvoiceId ?? navInvoiceId);
+    if (!hasDoc) { toast.warning("لا يوجد مستند محفوظ للنسخ — احفظ الفاتورة أولاً"); return; }
+    setSavedInvoiceId(null);
+    setNavInvoiceId(null);
+    setIsPosted(false);
+    setShowPostingPreview(false);
+    setErpMode("new");
+    setInvoiceDate(new Date().toISOString().split("T")[0]);
+    setDueDate(new Date().toISOString().split("T")[0]);
+    setBasedOnType(''); setBasedOnNum(''); setBasedOnTrigger('');
+    setPaidAmountOverride("");
+    if (journalId) {
+      utils.documentJournals.previewNextNumber.fetch({ journalId })
+        .then(p => { if (p) setInvoiceNumber(p); })
+        .catch(() => setInvoiceNumber(""));
+    } else setInvoiceNumber("");
+    toast.success("تم إنشاء نسخة مماثلة — راجع البيانات ثم احفظ");
+  }, [savedInvoiceId, navInvoiceId, journalId, utils]);
+
   const handleNew = useCallback(() => {
     setLines([EMPTY_LINE()]);
     setSelectedLineIdx(0);
@@ -801,7 +822,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         onDelete={handleDelete}
         onSearch={() => { setErpMode("search"); toast.info("بحث..."); }}
         onRefresh={() => nextNumberQuery.refetch()}
-        onCopy={() => copiedLine && toast.info("تم النسخ")}
+        onCopy={handleDuplicate}
         onPost={() => {
           if (!savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً"); return; }
           setShowPostingPreview(true);
