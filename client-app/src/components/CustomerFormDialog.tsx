@@ -28,6 +28,8 @@ interface CustomerData {
   priceLevel?: number;
   maxDiscountPct?: string;
   canSellOnCredit?: boolean;
+  dealStartDate?: string | null;
+  dealEndDate?:   string | null;
   // قنوات الإرسال
   whatsappPhone?: string;
   telegramId?: string;
@@ -64,6 +66,7 @@ const EMPTY: CustomerData = {
   city: "", address: "", shortAddress: "", buildingNumber: "",
   additionalNumber: "", postalCode: "", creditLimit: "",
   priceLevel: 1, maxDiscountPct: "0", canSellOnCredit: true,
+  dealStartDate: null, dealEndDate: null,
   whatsappPhone: "", telegramId: "", defaultSendMethod: "",
 };
 
@@ -167,6 +170,8 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
         priceLevel:         editData.priceLevel         ?? 1,
         maxDiscountPct:     editData.maxDiscountPct     ?? "0",
         canSellOnCredit:    editData.canSellOnCredit    ?? true,
+        dealStartDate:      editData.dealStartDate ? String(editData.dealStartDate).slice(0,10) : null,
+        dealEndDate:        editData.dealEndDate   ? String(editData.dealEndDate).slice(0,10)   : null,
         whatsappPhone:      editData.whatsappPhone      ?? "",
         telegramId:         editData.telegramId         ?? "",
         defaultSendMethod:  editData.defaultSendMethod  ?? "",
@@ -205,6 +210,8 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
       priceLevel:         form.priceLevel ?? 1,
       maxDiscountPct:     form.maxDiscountPct?.trim()     || "0",
       canSellOnCredit:    form.canSellOnCredit ?? true,
+      dealStartDate:      form.dealStartDate || null,
+      dealEndDate:        form.dealEndDate   || null,
       whatsappPhone:      form.whatsappPhone?.trim()      || undefined,
       telegramId:         form.telegramId?.trim()         || undefined,
       defaultSendMethod:  (form.defaultSendMethod as any) || undefined,
@@ -386,14 +393,17 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
                           background: active ? `${pl.color}12` : "white",
                           textAlign: "right", width: "100%",
                           transition: "all 0.12s",
+                          position: "relative",
                         }}>
-                        {/* Bullet indicator */}
-                        <div style={{
-                          width: 14, height: 14, borderRadius: "50%", flexShrink: 0,
-                          background: active ? pl.color : "#D0D0D0",
-                          border: `2px solid ${active ? pl.color : "#C0C0C0"}`,
-                          boxShadow: active ? `0 0 0 3px ${pl.color}30` : "none",
-                        }} />
+                        {/* Arrow indicator — RTL leading side (right) */}
+                        <span style={{
+                          fontSize: 15, flexShrink: 0, lineHeight: 1,
+                          color: active ? pl.color : "#D0D0D0",
+                          fontWeight: 700,
+                          transition: "color 0.12s, transform 0.12s",
+                          transform: active ? "translateX(-2px)" : "none",
+                          display: "inline-block",
+                        }}>◄</span>
                         {/* Level number badge */}
                         <span style={{
                           width: 22, height: 22, borderRadius: 4, display: "flex",
@@ -409,10 +419,13 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
                           </div>
                           <div style={{ fontSize: 10, color: "#888", marginTop: 1 }}>{pl.hint}</div>
                         </div>
-                        {/* Active checkmark */}
-                        {active && (
-                          <span style={{ color: pl.color, fontSize: 14, fontWeight: 700, marginLeft: 4 }}>✓</span>
-                        )}
+                        {/* Checkmark on selected */}
+                        <span style={{
+                          fontSize: 13, flexShrink: 0,
+                          color: active ? pl.color : "#E0E0E0",
+                          fontWeight: 700,
+                          transition: "color 0.12s",
+                        }}>✓</span>
                       </button>
                     );
                   })}
@@ -559,6 +572,114 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
                   </div>
                 )}
               </ESection>
+
+              {/* ── حدود فترة التعامل ── */}
+              {(() => {
+                const isLimited = !!(form.dealStartDate || form.dealEndDate);
+                const DEAL_COLOR = "#7C3AED";
+                return (
+                  <ESection title="حدود فترة التعامل" headerColor={DEAL_COLOR}
+                    note="تحديد إن كان التعامل مع العميل مفتوحاً أو محدوداً بتواريخ بداية ونهاية">
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+
+                      {/* Toggle: مفتوحة / محددة */}
+                      <div style={{ display: "flex", gap: 6 }}>
+                        {[
+                          { key: false, icon: "♾️", label: "مفتوحة",         hint: "بدون تاريخ انتهاء" },
+                          { key: true,  icon: "📅", label: "محددة بتاريخ",   hint: "تحديد من — إلى" },
+                        ].map(opt => {
+                          const sel = isLimited === opt.key;
+                          return (
+                            <button key={String(opt.key)} type="button"
+                              onClick={() => {
+                                if (!opt.key) setForm(f => ({ ...f, dealStartDate: null, dealEndDate: null }));
+                                else          setForm(f => ({ ...f, dealStartDate: f.dealStartDate || new Date().toISOString().slice(0,10) }));
+                              }}
+                              style={{
+                                flex: 1, padding: "8px 10px", borderRadius: 4, cursor: "pointer",
+                                border: `2px solid ${sel ? DEAL_COLOR : "#D0D0D0"}`,
+                                background: sel ? `${DEAL_COLOR}10` : "white",
+                                textAlign: "center",
+                              }}>
+                              <div style={{ fontSize: 18, marginBottom: 2 }}>{opt.icon}</div>
+                              <div style={{ fontSize: 12, fontWeight: sel ? 700 : 500, color: sel ? DEAL_COLOR : "#555" }}>{opt.label}</div>
+                              <div style={{ fontSize: 9, color: "#999", marginTop: 1 }}>{opt.hint}</div>
+                              {sel && (
+                                <div style={{
+                                  marginTop: 4, fontSize: 9, fontWeight: 700,
+                                  color: "white", background: DEAL_COLOR,
+                                  borderRadius: 8, padding: "1px 7px", display: "inline-block",
+                                }}>مُفعَّل</div>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* حقول التاريخ — تظهر فقط عند "محددة" */}
+                      {isLimited && (
+                        <div style={{
+                          display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10,
+                          padding: "10px 12px", borderRadius: 4,
+                          background: `${DEAL_COLOR}08`, border: `1px solid ${DEAL_COLOR}30`,
+                        }}>
+                          {/* من تاريخ */}
+                          <div>
+                            <div style={{ fontSize: 10, color: DEAL_COLOR, fontWeight: 700, marginBottom: 4 }}>
+                              📅 من تاريخ
+                            </div>
+                            <input type="date"
+                              value={form.dealStartDate ?? ""}
+                              onChange={e => setForm(f => ({ ...f, dealStartDate: e.target.value || null }))}
+                              style={{
+                                width: "100%", height: 30, padding: "0 8px", fontSize: 12,
+                                border: `1px solid ${DEAL_COLOR}50`, borderRadius: 3,
+                                background: "white", color: "#333", outline: "none",
+                                direction: "ltr",
+                              }} />
+                          </div>
+                          {/* إلى تاريخ */}
+                          <div>
+                            <div style={{ fontSize: 10, color: "#DC2626", fontWeight: 700, marginBottom: 4 }}>
+                              🏁 إلى تاريخ
+                              <span style={{ fontSize: 9, color: "#999", fontWeight: 400, marginRight: 4 }}>
+                                (اتركه فارغاً = مفتوح النهاية)
+                              </span>
+                            </div>
+                            <input type="date"
+                              value={form.dealEndDate ?? ""}
+                              onChange={e => setForm(f => ({ ...f, dealEndDate: e.target.value || null }))}
+                              min={form.dealStartDate ?? undefined}
+                              style={{
+                                width: "100%", height: 30, padding: "0 8px", fontSize: 12,
+                                border: `1px solid #DC262650`, borderRadius: 3,
+                                background: "white", color: "#333", outline: "none",
+                                direction: "ltr",
+                              }} />
+                          </div>
+
+                          {/* ملخص الفترة */}
+                          {(form.dealStartDate || form.dealEndDate) && (
+                            <div style={{
+                              gridColumn: "1 / -1", marginTop: 2, padding: "5px 10px",
+                              borderRadius: 4, background: `${DEAL_COLOR}15`,
+                              fontSize: 11, color: DEAL_COLOR, fontWeight: 600,
+                              textAlign: "center",
+                            }}>
+                              {form.dealStartDate && !form.dealEndDate
+                                ? `تبدأ من ${form.dealStartDate} — مفتوحة النهاية`
+                                : !form.dealStartDate && form.dealEndDate
+                                ? `تنتهي في ${form.dealEndDate}`
+                                : `من ${form.dealStartDate} إلى ${form.dealEndDate}`}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                    </div>
+                  </ESection>
+                );
+              })()}
 
             </div>
           )}

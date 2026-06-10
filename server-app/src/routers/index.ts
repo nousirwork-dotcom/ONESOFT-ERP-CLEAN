@@ -898,14 +898,19 @@ export const appRouter = router({
         whatsappPhone: z.string().optional(),
         telegramId: z.string().optional(),
         defaultSendMethod: z.enum(['whatsapp', 'telegram', 'email']).optional(),
+        dealStartDate: z.string().optional().nullable(),
+        dealEndDate:   z.string().optional().nullable(),
       }))
       .mutation(async ({ ctx, input }) => {
+        const { dealStartDate, dealEndDate, ...rest } = input;
         const [c] = await db.insert(customers).values({
-          ...input,
-          customerType: input.customerType ?? 'individual',
-          priceLevel: input.priceLevel ?? 1,
-          maxDiscountPct: input.maxDiscountPct ?? '0',
-          canSellOnCredit: input.canSellOnCredit ?? true,
+          ...rest,
+          customerType: rest.customerType ?? 'individual',
+          priceLevel: rest.priceLevel ?? 1,
+          maxDiscountPct: rest.maxDiscountPct ?? '0',
+          canSellOnCredit: rest.canSellOnCredit ?? true,
+          dealStartDate: dealStartDate ? new Date(dealStartDate) : null,
+          dealEndDate:   dealEndDate   ? new Date(dealEndDate)   : null,
           orgId: ctx.user.orgId,
           isActive: true,
         }).returning();
@@ -933,11 +938,16 @@ export const appRouter = router({
         whatsappPhone: z.string().optional(),
         telegramId: z.string().optional(),
         defaultSendMethod: z.enum(['whatsapp', 'telegram', 'email']).optional().nullable(),
+        dealStartDate: z.string().optional().nullable(),
+        dealEndDate:   z.string().optional().nullable(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const { id, ...rest } = input;
-        await db.update(customers).set(rest)
-          .where(and(eq(customers.id, id), eq(customers.orgId, ctx.user.orgId)));
+        const { id, dealStartDate, dealEndDate, ...rest } = input;
+        await db.update(customers).set({
+          ...rest,
+          dealStartDate: dealStartDate !== undefined ? (dealStartDate ? new Date(dealStartDate) : null) : undefined,
+          dealEndDate:   dealEndDate   !== undefined ? (dealEndDate   ? new Date(dealEndDate)   : null) : undefined,
+        }).where(and(eq(customers.id, id), eq(customers.orgId, ctx.user.orgId)));
         return { success: true };
       }),
   }),

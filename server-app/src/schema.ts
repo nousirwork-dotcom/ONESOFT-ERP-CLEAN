@@ -200,6 +200,8 @@ export const customers = pgTable('customers', {
   priceLevel:       integer('price_level').notNull().default(1),
   maxDiscountPct:   decimal('max_discount_pct', { precision: 5, scale: 2 }).notNull().default('0'),
   canSellOnCredit:  boolean('can_sell_on_credit').notNull().default(true),
+  dealStartDate:    timestamp('deal_start_date'),
+  dealEndDate:      timestamp('deal_end_date'),
   // ─── قنوات الإرسال الإلكتروني ──────────────────────────────────────────────
   whatsappPhone: varchar('whatsapp_phone', { length: 50 }),
   telegramId: varchar('telegram_id', { length: 100 }),
