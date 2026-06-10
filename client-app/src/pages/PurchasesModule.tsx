@@ -997,6 +997,9 @@ function PurchasesContent({ activeId, onSelect }: { activeId: MenuId; onSelect: 
 export function PurchaseSuppliersPage() {
   return <div className="h-full overflow-auto p-5" dir="rtl"><SuppliersListPage /></div>;
 }
+export function PurchaseSupplierGroupsPage() {
+  return <div className="h-full overflow-auto p-5" dir="rtl"><SupplierGroupsPage /></div>;
+}
 export function PurchaseOrdersPage() {
   return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><PurchaseOrderPage /></div>;
 }

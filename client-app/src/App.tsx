@@ -11,8 +11,8 @@ import Dashboard from "./pages/Dashboard";
 import POS from "./pages/POS";
 import Invoices from "./pages/Invoices";
 import PurchasesModule, {
-  PurchaseSuppliersPage, PurchaseOrdersPage, PurchaseInvoicesPage,
-  PurchaseReturnsPage, PurchaseRptSupplierPage, PurchaseRptItemPage,
+  PurchaseSuppliersPage, PurchaseSupplierGroupsPage, PurchaseOrdersPage,
+  PurchaseInvoicesPage, PurchaseReturnsPage, PurchaseRptSupplierPage, PurchaseRptItemPage,
 } from "./pages/PurchasesModule";
 import SalesModule, {
   SalesTransactionsTab,
@@ -90,8 +90,9 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/accounting-module":    AccountingModule,
   "/hr-module":            HRModule,
   "/assets-module":        AssetsModule,
-  "/purchases/suppliers":    PurchaseSuppliersPage,
-  "/purchases/orders":       PurchaseOrdersPage,
+  "/purchases/suppliers":         PurchaseSuppliersPage,
+  "/purchases/supplier-groups":  PurchaseSupplierGroupsPage,
+  "/purchases/orders":           PurchaseOrdersPage,
   "/purchases/invoices":     PurchaseInvoicesPage,
   "/purchases/returns":      PurchaseReturnsPage,
   "/purchases/rpt-supplier": PurchaseRptSupplierPage,
