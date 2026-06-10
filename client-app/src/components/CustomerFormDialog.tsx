@@ -37,8 +37,9 @@ interface Props {
   onSaved: () => void;
 }
 
-/* ═══════════════════════════ Tab list ═══════════════════════════ */
+/* ═══════════════════════════ Constants ═══════════════════════════ */
 type TabId = "main" | "address" | "pricing" | "channels" | "accounts" | "balances" | "sales" | "purchases";
+
 const TABS: { id: TabId; label: string }[] = [
   { id: "main",      label: "نافذة رئيسية" },
   { id: "address",   label: "عنوان" },
@@ -50,8 +51,8 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "purchases", label: "مشتريات" },
 ];
 
-/* ═══════════════════════════ Helpers ═══════════════════════════ */
 const PRIMARY = "#406B93";
+
 const EMPTY: CustomerData = {
   code: "", name: "", customerType: "individual",
   phone: "", email: "", taxNumber: "", registrationNumber: "",
@@ -60,12 +61,12 @@ const EMPTY: CustomerData = {
   whatsappPhone: "", telegramId: "", defaultSendMethod: "",
 };
 
-/* ═══════════════════════════ Component ═══════════════════════════ */
+/* ═══════════════════════════ Main Component ═══════════════════════════ */
 export default function CustomerFormDialog({ open, editData, onClose, onSaved }: Props) {
-  const [tab, setTab]       = useState<TabId>("main");
-  const [form, setForm]     = useState<CustomerData>(EMPTY);
-  const nameRef             = useRef<HTMLInputElement>(null);
-  const utils               = trpc.useUtils();
+  const [tab, setTab]   = useState<TabId>("main");
+  const [form, setForm] = useState<CustomerData>(EMPTY);
+  const nameRef         = useRef<HTMLInputElement>(null);
+  const utils           = trpc.useUtils();
 
   const create = trpc.customers.create.useMutation({
     onSuccess: () => { utils.customers.list.invalidate(); toast.success("تم إضافة العميل بنجاح"); onSaved(); },
@@ -76,7 +77,6 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
     onError:   (e) => toast.error(e.message),
   });
 
-  /* ─── Sync form with editData ─── */
   useEffect(() => {
     if (!open) return;
     setTab("main");
@@ -84,60 +84,58 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
       setForm({
         ...EMPTY,
         ...editData,
-        code:           editData.code           ?? "",
-        name:           editData.name           ?? "",
-        customerType:   (editData.customerType as any) ?? "individual",
-        phone:          editData.phone          ?? "",
-        email:          editData.email          ?? "",
-        taxNumber:      editData.taxNumber      ?? "",
+        code:               editData.code               ?? "",
+        name:               editData.name               ?? "",
+        customerType:       (editData.customerType as any) ?? "individual",
+        phone:              editData.phone              ?? "",
+        email:              editData.email              ?? "",
+        taxNumber:          editData.taxNumber          ?? "",
         registrationNumber: editData.registrationNumber ?? "",
-        city:           editData.city           ?? "",
-        address:        editData.address        ?? "",
-        shortAddress:   editData.shortAddress   ?? "",
-        buildingNumber: editData.buildingNumber ?? "",
-        additionalNumber: editData.additionalNumber ?? "",
-        postalCode:     editData.postalCode     ?? "",
-        creditLimit:    editData.creditLimit    ?? "",
-        whatsappPhone:  editData.whatsappPhone  ?? "",
-        telegramId:     editData.telegramId     ?? "",
-        defaultSendMethod: editData.defaultSendMethod ?? "",
+        city:               editData.city               ?? "",
+        address:            editData.address            ?? "",
+        shortAddress:       editData.shortAddress       ?? "",
+        buildingNumber:     editData.buildingNumber     ?? "",
+        additionalNumber:   editData.additionalNumber   ?? "",
+        postalCode:         editData.postalCode         ?? "",
+        creditLimit:        editData.creditLimit        ?? "",
+        whatsappPhone:      editData.whatsappPhone      ?? "",
+        telegramId:         editData.telegramId         ?? "",
+        defaultSendMethod:  editData.defaultSendMethod  ?? "",
       });
     } else {
       setForm(EMPTY);
     }
   }, [open, editData]);
 
-  /* ─── Auto-focus name field ─── */
   useEffect(() => {
     if (open) setTimeout(() => nameRef.current?.focus(), 80);
   }, [open]);
 
   const set = (k: keyof CustomerData, v: string) => setForm(f => ({ ...f, [k]: v }));
 
-  /* ─── Validate & Submit ─── */
   const handleSave = () => {
     if (!form.name?.trim()) { toast.error("اسم العميل مطلوب"); setTab("main"); return; }
     if (form.customerType === "organization" && !form.taxNumber?.trim()) {
       toast.error("الرقم الضريبي مطلوب للمؤسسات"); setTab("main"); return;
     }
     const payload = {
-      code:               form.code?.trim()             || undefined,
+      code:               form.code?.trim()              || undefined,
       name:               form.name.trim(),
       customerType:       form.customerType,
-      phone:              form.phone?.trim()             || undefined,
-      email:              form.email?.trim()             || undefined,
-      taxNumber:          form.taxNumber?.trim()         || undefined,
-      registrationNumber: form.registrationNumber?.trim()|| undefined,
-      city:               form.city?.trim()              || undefined,
-      address:            form.address?.trim()           || undefined,
-      shortAddress:       form.shortAddress?.trim()      || undefined,
-      buildingNumber:     form.buildingNumber?.trim()    || undefined,
-      additionalNumber:   form.additionalNumber?.trim()  || undefined,
-      postalCode:         form.postalCode?.trim()        || undefined,
-      creditLimit:        form.creditLimit?.trim()       || undefined,
-      whatsappPhone:      form.whatsappPhone?.trim()     || undefined,
-      telegramId:         form.telegramId?.trim()        || undefined,
-      defaultSendMethod:  (form.defaultSendMethod as any)|| undefined,
+      phone:              form.phone?.trim()              || undefined,
+      email:              form.email?.trim()              || undefined,
+      taxNumber:          form.taxNumber?.trim()          || undefined,
+      registrationNumber: form.registrationNumber?.trim() || undefined,
+      city:               form.city?.trim()               || undefined,
+      address:            form.address?.trim()            || undefined,
+      shortAddress:       form.shortAddress?.trim()       || undefined,
+      buildingNumber:     form.buildingNumber?.trim()     || undefined,
+      additionalNumber:   form.additionalNumber?.trim()   || undefined,
+      postalCode:         form.postalCode?.trim()         || undefined,
+      creditLimit:        form.creditLimit?.trim()        || undefined,
+      whatsappPhone:      form.whatsappPhone?.trim()      || undefined,
+      telegramId:         form.telegramId?.trim()         || undefined,
+      defaultSendMethod:  (form.defaultSendMethod as any) || undefined,
     };
     if (editData?.id) update.mutate({ id: editData.id, ...payload });
     else              create.mutate(payload);
@@ -145,32 +143,27 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
 
   if (!open) return null;
 
-  const isOrg    = form.customerType === "organization";
+  const isOrg     = form.customerType === "organization";
   const isPending = create.isPending || update.isPending;
   const title     = editData?.id ? `تعديل العميل — ${editData.name ?? ""}` : "إضافة عميل جديد";
 
-  /* ═══════════════════════════ Render ═══════════════════════════ */
   return (
-    /* Backdrop */
     <div
       style={{ position: "fixed", inset: 0, zIndex: 1200,
                background: "rgba(0,0,0,0.45)", display: "flex",
                alignItems: "center", justifyContent: "center" }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      {/* Window */}
-      <div
-        dir="rtl"
-        style={{
-          width: 760, maxWidth: "98vw",
-          background: "#F0F0F0",
-          border: "2px solid #A0A0A0",
-          boxShadow: "4px 4px 16px rgba(0,0,0,0.5)",
-          display: "flex", flexDirection: "column",
-          maxHeight: "92vh", overflow: "hidden",
-          borderRadius: 2,
-        }}
-      >
+      <div dir="rtl" style={{
+        width: 760, maxWidth: "98vw",
+        background: "#F0F0F0",
+        border: "2px solid #A0A0A0",
+        boxShadow: "4px 4px 16px rgba(0,0,0,0.5)",
+        display: "flex", flexDirection: "column",
+        maxHeight: "92vh", overflow: "hidden",
+        borderRadius: 2,
+      }}>
+
         {/* ── Title Bar ── */}
         <div style={{
           background: `linear-gradient(90deg, ${PRIMARY} 0%, #2e5070 100%)`,
@@ -179,17 +172,13 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ fontSize: 16 }}>👤</span>
-            <span style={{ color: "white", fontWeight: 700, fontSize: 13, fontFamily: "inherit" }}>
-              {title}
-            </span>
+            <span style={{ color: "white", fontWeight: 700, fontSize: 13 }}>{title}</span>
           </div>
-          <div style={{ display: "flex", gap: 3 }}>
-            <button onClick={onClose} style={{
-              width: 18, height: 18, background: "#C75050", border: "1px solid #9a3030",
-              color: "white", fontSize: 11, fontWeight: 700, cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 2,
-            }}>✕</button>
-          </div>
+          <button onClick={onClose} style={{
+            width: 18, height: 18, background: "#C75050", border: "1px solid #9a3030",
+            color: "white", fontSize: 10, fontWeight: 700, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 2,
+          }}>✕</button>
         </div>
 
         {/* ── Tab Bar ── */}
@@ -199,171 +188,141 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
         }}>
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)} style={{
-              padding: "5px 12px", fontSize: 12, fontWeight: tab === t.id ? 700 : 500,
+              padding: "5px 12px", fontSize: 12,
+              fontWeight: tab === t.id ? 700 : 500,
               background: tab === t.id ? "#F0F0F0" : "transparent",
               color: tab === t.id ? PRIMARY : "#444",
               border: "none", borderLeft: "1px solid #C0C0C0",
               borderBottom: tab === t.id ? "2px solid #F0F0F0" : "none",
               marginBottom: tab === t.id ? -2 : 0,
-              cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit",
+              cursor: "pointer", whiteSpace: "nowrap",
             }}>
               {t.label}
             </button>
           ))}
         </div>
 
-        {/* ── Body (scrollable) ── */}
+        {/* ── Body ── */}
         <div style={{ overflowY: "auto", flexGrow: 1, padding: "12px 14px" }}>
 
-          {/* ══════════ TAB: نافذة رئيسية ══════════ */}
+          {/* ══ نافذة رئيسية ══ */}
           {tab === "main" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
-              {/* نوع العميل */}
-              <Section title="نوع العميل">
+              <ESection title="نوع العميل">
                 <div style={{ display: "flex", gap: 8 }}>
-                  <TypeBtn
-                    active={!isOrg}
-                    label="🧾 فرد (فاتورة مبسطة)"
-                    color="#15803D"
-                    onClick={() => { set("customerType", "individual"); set("taxNumber", ""); }}
-                  />
-                  <TypeBtn
-                    active={isOrg}
-                    label="📋 مؤسسة (فاتورة ضريبية)"
-                    color="#1D4ED8"
-                    onClick={() => set("customerType", "organization")}
-                  />
+                  <TypeBtn active={!isOrg} label="🧾 فرد (فاتورة مبسطة)" color="#15803D"
+                    onClick={() => { set("customerType", "individual"); set("taxNumber", ""); }} />
+                  <TypeBtn active={isOrg}  label="📋 مؤسسة (فاتورة ضريبية)" color="#1D4ED8"
+                    onClick={() => set("customerType", "organization")} />
                 </div>
-              </Section>
+              </ESection>
 
-              {/* معلومات أساسية */}
-              <Section title="المعلومات الأساسية">
+              <ESection title="المعلومات الأساسية">
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 14px" }}>
-                  <Field label="كود العميل" hint="يُعبأ تلقائياً إن تُرك فارغاً">
-                    <ClassicInput value={form.code} onChange={v => set("code", v)}
-                      placeholder="مثال: CU-001" mono />
-                  </Field>
-                  <Field label={isOrg ? "اسم المؤسسة *" : "اسم العميل *"}>
-                    <ClassicInput ref={nameRef} value={form.name} onChange={v => set("name", v)}
-                      placeholder={isOrg ? "اسم الشركة أو المؤسسة..." : "أدخل اسم العميل..."}
-                      required />
-                  </Field>
-                  <Field label="رقم الجوال">
-                    <ClassicInput value={form.phone} onChange={v => set("phone", v)}
-                      placeholder="05xxxxxxxx" ltr />
-                  </Field>
-                  <Field label="البريد الإلكتروني">
-                    <ClassicInput value={form.email} onChange={v => set("email", v)}
-                      placeholder="example@domain.com" ltr />
-                  </Field>
+                  <EField label="كود العميل" hint="يُعبأ تلقائياً إن تُرك فارغاً">
+                    <EInput value={form.code} onChange={v => set("code", v)} placeholder="مثال: CU-001" mono />
+                  </EField>
+                  <EField label={isOrg ? "اسم المؤسسة *" : "اسم العميل *"}>
+                    <EInput inputRef={nameRef} value={form.name} onChange={v => set("name", v)}
+                      placeholder={isOrg ? "اسم الشركة أو المؤسسة..." : "أدخل اسم العميل..."} />
+                  </EField>
+                  <EField label="رقم الجوال">
+                    <EInput value={form.phone} onChange={v => set("phone", v)} placeholder="05xxxxxxxx" ltr />
+                  </EField>
+                  <EField label="البريد الإلكتروني">
+                    <EInput value={form.email} onChange={v => set("email", v)} placeholder="example@domain.com" ltr />
+                  </EField>
                 </div>
-              </Section>
+              </ESection>
 
-              {/* بيانات الضريبة — للمؤسسات */}
-              <Section title="البيانات الضريبية والتجارية"
+              <ESection title="البيانات الضريبية والتجارية"
                 headerColor={isOrg ? "#1D4ED8" : undefined}
-                note={!isOrg ? "تنطبق على العملاء من نوع مؤسسة فقط" : undefined}>
+                note={!isOrg ? "تنطبق على المؤسسات فقط" : undefined}>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 14px",
-                              opacity: isOrg ? 1 : 0.45, pointerEvents: isOrg ? "auto" : "none" }}>
-                  <Field label="الرقم الضريبي *" hint={isOrg ? "مطلوب للمؤسسات" : ""}>
-                    <ClassicInput value={form.taxNumber} onChange={v => set("taxNumber", v)}
+                              opacity: isOrg ? 1 : 0.4, pointerEvents: isOrg ? "auto" : "none" }}>
+                  <EField label="الرقم الضريبي *">
+                    <EInput value={form.taxNumber} onChange={v => set("taxNumber", v)}
                       placeholder="3xxxxxxxxxxxxxxxxx" ltr
-                      style={isOrg && !form.taxNumber?.trim()
-                        ? { borderColor: "#FCA5A5", background: "#FFF5F5" }
-                        : isOrg ? { borderColor: "#86EFAC", background: "#F0FDF4" } : undefined}
+                      style={isOrg
+                        ? (form.taxNumber?.trim()
+                            ? { borderColor: "#86EFAC", background: "#F0FDF4" }
+                            : { borderColor: "#FCA5A5", background: "#FFF5F5" })
+                        : undefined}
                     />
-                  </Field>
-                  <Field label="رقم السجل التجاري">
-                    <ClassicInput value={form.registrationNumber} onChange={v => set("registrationNumber", v)}
+                  </EField>
+                  <EField label="رقم السجل التجاري">
+                    <EInput value={form.registrationNumber} onChange={v => set("registrationNumber", v)}
                       placeholder="1010xxxxxx" ltr />
-                  </Field>
+                  </EField>
                 </div>
-              </Section>
+              </ESection>
 
             </div>
           )}
 
-          {/* ══════════ TAB: عنوان ══════════ */}
+          {/* ══ عنوان ══ */}
           {tab === "address" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <Section title="العنوان التفصيلي">
+              <ESection title="العنوان التفصيلي">
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 14px" }}>
-                  <Field label="المدينة">
-                    <ClassicInput value={form.city} onChange={v => set("city", v)} placeholder="مثال: الرياض" />
-                  </Field>
-                  <Field label="العنوان المختصر (ABRV)">
-                    <ClassicInput value={form.shortAddress} onChange={v => set("shortAddress", v)}
-                      placeholder="الرمز المختصر للعنوان" ltr />
-                  </Field>
-                  <Field label="رقم المبنى">
-                    <ClassicInput value={form.buildingNumber} onChange={v => set("buildingNumber", v)}
-                      placeholder="رقم المبنى" ltr />
-                  </Field>
-                  <Field label="الرقم الإضافي">
-                    <ClassicInput value={form.additionalNumber} onChange={v => set("additionalNumber", v)}
-                      placeholder="الرقم الإضافي" ltr />
-                  </Field>
-                  <Field label="الرمز البريدي">
-                    <ClassicInput value={form.postalCode} onChange={v => set("postalCode", v)}
-                      placeholder="12345" ltr />
-                  </Field>
+                  <EField label="المدينة">
+                    <EInput value={form.city} onChange={v => set("city", v)} placeholder="مثال: الرياض" />
+                  </EField>
+                  <EField label="العنوان المختصر">
+                    <EInput value={form.shortAddress} onChange={v => set("shortAddress", v)} placeholder="ABRV" ltr />
+                  </EField>
+                  <EField label="رقم المبنى">
+                    <EInput value={form.buildingNumber} onChange={v => set("buildingNumber", v)} ltr />
+                  </EField>
+                  <EField label="الرقم الإضافي">
+                    <EInput value={form.additionalNumber} onChange={v => set("additionalNumber", v)} ltr />
+                  </EField>
+                  <EField label="الرمز البريدي">
+                    <EInput value={form.postalCode} onChange={v => set("postalCode", v)} placeholder="12345" ltr />
+                  </EField>
                 </div>
-              </Section>
-              <Section title="العنوان الكامل">
-                <textarea
-                  value={form.address}
-                  onChange={e => set("address", e.target.value)}
-                  rows={3}
-                  placeholder="العنوان التفصيلي الكامل..."
-                  style={{
-                    width: "100%", fontSize: 13, padding: "5px 8px",
-                    border: "1px solid #A0A0A0", background: "white",
-                    resize: "vertical", fontFamily: "inherit",
-                    borderRadius: 2, outline: "none",
-                  }}
-                />
-              </Section>
+              </ESection>
+              <ESection title="العنوان الكامل">
+                <textarea value={form.address} onChange={e => set("address", e.target.value)}
+                  rows={3} placeholder="العنوان التفصيلي الكامل..."
+                  style={{ width: "100%", fontSize: 13, padding: "5px 8px", border: "1px solid #A0A0A0",
+                           background: "white", resize: "vertical", fontFamily: "inherit",
+                           borderRadius: 2, outline: "none", boxSizing: "border-box" }} />
+              </ESection>
             </div>
           )}
 
-          {/* ══════════ TAB: التسعير والضوابط ══════════ */}
+          {/* ══ التسعير والضوابط ══ */}
           {tab === "pricing" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <Section title="حدود الائتمان">
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 14px" }}>
-                  <Field label="حد الائتمان (الحد الأقصى للمديونية)"
-                    hint="صفر يعني لا يوجد حد">
-                    <ClassicInput value={form.creditLimit} onChange={v => set("creditLimit", v)}
-                      placeholder="0.00" ltr mono />
-                  </Field>
+              <ESection title="حدود الائتمان">
+                <div style={{ maxWidth: 280 }}>
+                  <EField label="حد الائتمان الأقصى" hint="صفر = بدون حد">
+                    <EInput value={form.creditLimit} onChange={v => set("creditLimit", v)} placeholder="0.00" ltr mono />
+                  </EField>
                 </div>
-              </Section>
-              <Section title="التسعير">
-                <PlaceholderNote text="سيتم ربط مستويات الأسعار في إصدار قادم" />
-              </Section>
-              <Section title="الخصومات">
-                <PlaceholderNote text="سيتم ربط إعدادات الخصم في إصدار قادم" />
-              </Section>
+              </ESection>
+              <ESection title="التسعير والخصومات">
+                <PlaceholderNote text="سيتم ربط مستويات الأسعار وإعدادات الخصم في إصدار قادم" />
+              </ESection>
             </div>
           )}
 
-          {/* ══════════ TAB: قنوات الإرسال ══════════ */}
+          {/* ══ قنوات الإرسال ══ */}
           {tab === "channels" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <Section title="بيانات الاتصال الإلكتروني">
+              <ESection title="بيانات التواصل الإلكتروني">
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 14px" }}>
-                  <Field label="رقم الواتساب" hint="إن اختلف عن رقم الجوال">
-                    <ClassicInput value={form.whatsappPhone} onChange={v => set("whatsappPhone", v)}
-                      placeholder="05xxxxxxxx" ltr />
-                  </Field>
-                  <Field label="معرّف تيليجرام">
-                    <ClassicInput value={form.telegramId} onChange={v => set("telegramId", v)}
-                      placeholder="@username أو Chat ID" ltr />
-                  </Field>
+                  <EField label="رقم الواتساب" hint="إن اختلف عن رقم الجوال">
+                    <EInput value={form.whatsappPhone} onChange={v => set("whatsappPhone", v)} placeholder="05xxxxxxxx" ltr />
+                  </EField>
+                  <EField label="معرّف تيليجرام">
+                    <EInput value={form.telegramId} onChange={v => set("telegramId", v)} placeholder="@username" ltr />
+                  </EField>
                 </div>
-              </Section>
-              <Section title="طريقة الإرسال الافتراضية">
+              </ESection>
+              <ESection title="طريقة الإرسال الافتراضية">
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   {[
                     { v: "",         label: "— بدون تفضيل —" },
@@ -373,67 +332,70 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
                   ].map(opt => (
                     <button key={opt.v} onClick={() => set("defaultSendMethod", opt.v)} style={{
                       padding: "5px 14px", fontSize: 12, borderRadius: 3, cursor: "pointer",
-                      fontFamily: "inherit", fontWeight: 600,
+                      fontWeight: 600,
                       background: form.defaultSendMethod === opt.v ? PRIMARY : "#E8E8E8",
                       color:      form.defaultSendMethod === opt.v ? "white"  : "#333",
                       border:     `1px solid ${form.defaultSendMethod === opt.v ? PRIMARY : "#C0C0C0"}`,
                     }}>{opt.label}</button>
                   ))}
                 </div>
-              </Section>
+              </ESection>
             </div>
           )}
 
-          {/* ══════════ Placeholder Tabs ══════════ */}
-          {(tab === "accounts" || tab === "balances" || tab === "sales" || tab === "purchases") && (
+          {/* ══ الأرصدة ══ */}
+          {tab === "balances" && editData?.id && (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {tab === "balances" && editData?.id && (
-                <Section title="الرصيد الحالي">
-                  <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-                    <BalanceBadge label="الرصيد" value={editData.balance ?? "0"} color={PRIMARY} />
-                    <BalanceBadge label="حد الائتمان" value={form.creditLimit || "0"} color="#15803D" />
-                  </div>
-                </Section>
-              )}
-              <Section title={TABS.find(t => t.id === tab)?.label ?? ""}>
-                <PlaceholderNote text="سيتم تفعيل هذا القسم في إصدار قادم" />
-              </Section>
+              <ESection title="الرصيد الحالي">
+                <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                  <BalanceBadge label="رصيد العميل" value={editData.balance ?? "0"} color={PRIMARY} />
+                  <BalanceBadge label="حد الائتمان"  value={form.creditLimit || "0"} color="#15803D" />
+                </div>
+              </ESection>
             </div>
+          )}
+
+          {/* ══ Placeholder tabs ══ */}
+          {(tab === "accounts" || (tab === "balances" && !editData?.id) || tab === "sales" || tab === "purchases") && (
+            <ESection title={TABS.find(t => t.id === tab)?.label ?? ""}>
+              <PlaceholderNote text="سيتم تفعيل هذا القسم في إصدار قادم" />
+            </ESection>
           )}
 
         </div>
 
-        {/* ── Footer / Action Bar ── */}
+        {/* ── Footer ── */}
         <div style={{
           background: "#E0E0E0", borderTop: "1px solid #A0A0A0",
           padding: "8px 14px", display: "flex", alignItems: "center",
-          justifyContent: "space-between", flexShrink: 0, gap: 8,
+          justifyContent: "space-between", flexShrink: 0,
         }}>
-          {/* Status badge */}
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{
-              padding: "2px 10px", borderRadius: 10, fontSize: 11, fontWeight: 700,
-              background: isOrg ? "#DBEAFE" : "#DCFCE7",
-              color:      isOrg ? "#1D4ED8" : "#15803D",
-              border:     `1px solid ${isOrg ? "#93C5FD" : "#86EFAC"}`,
-            }}>
-              {isOrg ? "📋 مؤسسة" : "🧾 فرد"}
-            </span>
-            {editData?.id && (
-              <span style={{ fontSize: 11, color: "#666" }}>
-                كود: <span style={{ fontFamily: "monospace", fontWeight: 700 }}>{editData.code || "—"}</span>
-              </span>
-            )}
-          </div>
+          <span style={{
+            padding: "2px 10px", borderRadius: 10, fontSize: 11, fontWeight: 700,
+            background: isOrg ? "#DBEAFE" : "#DCFCE7",
+            color:      isOrg ? "#1D4ED8" : "#15803D",
+            border:     `1px solid ${isOrg ? "#93C5FD" : "#86EFAC"}`,
+          }}>
+            {isOrg ? "📋 مؤسسة" : "🧾 فرد"}
+          </span>
 
-          {/* Action buttons */}
           <div style={{ display: "flex", gap: 6 }}>
-            <button onClick={onClose} disabled={isPending} style={btnStyle("outline")}>إلغاء</button>
-            <button onClick={handleSave} disabled={isPending} style={btnStyle("primary", isPending)}>
+            <button onClick={onClose} disabled={isPending} style={{
+              padding: "5px 14px", fontSize: 12, fontWeight: 600, borderRadius: 3,
+              background: "#E0E0E0", color: "#333", border: "1px solid #A0A0A0",
+              cursor: "pointer",
+            }}>إلغاء</button>
+            <button onClick={handleSave} disabled={isPending} style={{
+              padding: "5px 18px", fontSize: 12, fontWeight: 700, borderRadius: 3,
+              background: isPending ? "#A0A0A0" : PRIMARY, color: "white",
+              border: `1px solid ${isPending ? "#888" : "#2e5070"}`,
+              cursor: isPending ? "not-allowed" : "pointer",
+            }}>
               {isPending ? "جاري الحفظ..." : editData?.id ? "💾 حفظ التعديلات" : "➕ إضافة العميل"}
             </button>
           </div>
         </div>
+
       </div>
     </div>
   );
@@ -441,7 +403,7 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
 
 /* ═══════════════════════════ Sub-components ═══════════════════════════ */
 
-function Section({ title, children, headerColor, note }: {
+function ESection({ title, children, headerColor, note }: {
   title: string; children: React.ReactNode;
   headerColor?: string; note?: string;
 }) {
@@ -452,17 +414,15 @@ function Section({ title, children, headerColor, note }: {
         borderBottom: "1px solid #C0C0C0", padding: "4px 10px",
         display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: headerColor ?? "#2B4A6A" }}>
-          {title}
-        </span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: headerColor ?? "#2B4A6A" }}>{title}</span>
         {note && <span style={{ fontSize: 10, color: "#888" }}>{note}</span>}
       </div>
-      <div style={{ padding: "10px 10px" }}>{children}</div>
+      <div style={{ padding: "10px" }}>{children}</div>
     </div>
   );
 }
 
-function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
+function EField({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
       <label style={{ fontSize: 11, fontWeight: 700, color: "#333" }}>
@@ -474,53 +434,50 @@ function Field({ label, children, hint }: { label: string; children: React.React
   );
 }
 
-const ClassicInput = React.forwardRef<HTMLInputElement, {
+function EInput({ value, onChange, placeholder, ltr, mono, inputRef, style }: {
   value?: string; onChange: (v: string) => void;
   placeholder?: string; ltr?: boolean; mono?: boolean;
-  required?: boolean; style?: React.CSSProperties;
-}>(({ value, onChange, placeholder, ltr, mono, required, style }, ref) => (
-  <input
-    ref={ref}
-    value={value ?? ""}
-    onChange={e => onChange(e.target.value)}
-    placeholder={placeholder}
-    dir={ltr ? "ltr" : "rtl"}
-    style={{
-      height: 26, fontSize: 13, padding: "0 7px",
-      border: "1px solid #A0A0A0", background: "white",
-      fontFamily: mono ? "monospace" : "inherit",
-      outline: "none", width: "100%", borderRadius: 2,
-      ...(required ? { borderColor: "#86EFAC" } : {}),
-      ...style,
-    }}
-  />
-));
+  inputRef?: React.RefObject<HTMLInputElement | null>;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <input
+      ref={inputRef}
+      value={value ?? ""}
+      onChange={e => onChange(e.target.value)}
+      placeholder={placeholder}
+      dir={ltr ? "ltr" : "rtl"}
+      style={{
+        height: 26, fontSize: 13, padding: "0 7px",
+        border: "1px solid #A0A0A0", background: "white",
+        fontFamily: mono ? "monospace" : "inherit",
+        outline: "none", width: "100%", borderRadius: 2,
+        boxSizing: "border-box",
+        ...style,
+      }}
+    />
+  );
+}
 
 function TypeBtn({ active, label, color, onClick }: {
   active: boolean; label: string; color: string; onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        flex: 1, padding: "7px 10px", fontSize: 12, fontWeight: 700,
-        borderRadius: 3, cursor: "pointer", fontFamily: "inherit",
-        background: active ? color : "#E8E8E8",
-        color:      active ? "white" : "#555",
-        border:     `2px solid ${active ? color : "#C0C0C0"}`,
-        transition: "all 0.15s",
-      }}
-    >{label}</button>
+    <button type="button" onClick={onClick} style={{
+      flex: 1, padding: "7px 10px", fontSize: 12, fontWeight: 700,
+      borderRadius: 3, cursor: "pointer",
+      background: active ? color : "#E8E8E8",
+      color:      active ? "white" : "#555",
+      border:     `2px solid ${active ? color : "#C0C0C0"}`,
+    }}>{label}</button>
   );
 }
 
 function BalanceBadge({ label, value, color }: { label: string; value: string; color: string }) {
   return (
     <div style={{
-      padding: "8px 16px", borderRadius: 4,
+      padding: "8px 16px", borderRadius: 4, textAlign: "center", minWidth: 130,
       background: `${color}14`, border: `1px solid ${color}44`,
-      textAlign: "center", minWidth: 130,
     }}>
       <div style={{ fontSize: 10, color: "#666", marginBottom: 2 }}>{label}</div>
       <div style={{ fontSize: 18, fontWeight: 700, color, fontFamily: "monospace" }}>
@@ -532,25 +489,9 @@ function BalanceBadge({ label, value, color }: { label: string; value: string; c
 
 function PlaceholderNote({ text }: { text: string }) {
   return (
-    <div style={{
-      padding: "20px", textAlign: "center", color: "#999",
-      fontSize: 12, fontStyle: "italic",
-    }}>
+    <div style={{ padding: "20px", textAlign: "center", color: "#999", fontSize: 12, fontStyle: "italic" }}>
       ⏳ {text}
     </div>
   );
 }
 
-function btnStyle(variant: "primary" | "outline", disabled?: boolean): React.CSSProperties {
-  if (variant === "primary") return {
-    padding: "5px 18px", fontSize: 12, fontWeight: 700, borderRadius: 3,
-    background: disabled ? "#A0A0A0" : PRIMARY, color: "white",
-    border: `1px solid ${disabled ? "#888" : "#2e5070"}`,
-    cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit",
-  };
-  return {
-    padding: "5px 14px", fontSize: 12, fontWeight: 600, borderRadius: 3,
-    background: "#E0E0E0", color: "#333",
-    border: "1px solid #A0A0A0", cursor: "pointer", fontFamily: "inherit",
-  };
-}

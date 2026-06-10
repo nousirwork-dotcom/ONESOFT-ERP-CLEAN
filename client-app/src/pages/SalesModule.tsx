@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import CustomerFormDialog from "@/components/CustomerFormDialog";
 import SalesInvoicePageNew from "./SalesInvoicePage";
 import SalesQuotation from "./sales/SalesQuotation";
 import SalesReturnPage from "./SalesReturnPage";
@@ -715,75 +716,134 @@ function SalesInvoicePage() {
 // ─── Customers Page ────────────────────────────────────────────────────────────
 
 function CustomersPage() {
-  const [search, setSearch] = useState("");
-  const [open, setOpen] = useState(false);
-  const { data: customers, refetch } = trpc.customers.list.useQuery({ search });
-  const createMutation = trpc.customers.create.useMutation({
-    onSuccess: () => { toast.success("تم إضافة العميل"); setOpen(false); refetch(); }
-  });
-  const [form, setForm] = useState({ name: "", phone: "", email: "", address: "" });
+  const [search,     setSearch]    = useState("");
+  const [dialogOpen, setDialog]    = useState(false);
+  const [editData,   setEditData]  = useState<any>(null);
+  const { data: customers, isLoading, refetch } = trpc.customers.list.useQuery({});
+
+  const openCreate = () => { setEditData(null); setDialog(true); };
+  const openEdit   = (c: any) => { setEditData(c); setDialog(true); };
+  const handleSaved = () => { setDialog(false); refetch(); };
+
+  const q        = search.trim().toLowerCase();
+  const filtered = q
+    ? (customers ?? []).filter((c: any) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.code ?? "").toLowerCase().includes(q) ||
+        (c.phone ?? "").includes(q) ||
+        (c.taxNumber ?? "").includes(q)
+      )
+    : (customers ?? []);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute right-3 top-2.5 w-4 h-4 text-muted-foreground" />
-          <Input placeholder="بحث عن عميل..." value={search} onChange={e => setSearch(e.target.value)} className="pr-9 h-9" />
+    <div dir="rtl" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+
+      {/* Toolbar row */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ position: "relative", flex: "0 0 280px" }}>
+          <Search style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", width: 14, height: 14, color: "#888" }} />
+          <input
+            value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="بحث بالاسم أو الكود أو الهاتف..."
+            style={{ width: "100%", height: 28, paddingRight: 28, paddingLeft: 6, fontSize: 12,
+                     border: "1px solid #C0C0C0", borderRadius: 3, fontFamily: "inherit", outline: "none" }}
+          />
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="h-9 text-sm"><Plus className="w-4 h-4 ml-1" /> إضافة عميل</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>إضافة عميل جديد</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              {[["name","الاسم"],["phone","الهاتف"],["email","البريد الإلكتروني"],["address","العنوان"]].map(([k,l]) => (
-                <div key={k}>
-                  <Label className="text-xs text-muted-foreground">{l}</Label>
-                  <Input value={(form as any)[k]} onChange={e => setForm(p => ({...p,[k]:e.target.value}))} className="h-8 text-sm" />
-                </div>
-              ))}
-              <Button className="w-full" onClick={() => createMutation.mutate(form)} disabled={createMutation.isPending}>حفظ</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <button onClick={openCreate} style={{
+          height: 28, padding: "0 14px", fontSize: 12, fontWeight: 700, borderRadius: 3, cursor: "pointer",
+          background: "#406B93", color: "white", border: "1px solid #2e5070", fontFamily: "inherit",
+          display: "flex", alignItems: "center", gap: 5,
+        }}>
+          <span style={{ fontSize: 14, lineHeight: 1 }}>+</span> إضافة عميل
+        </button>
+        <button onClick={() => refetch()} style={{
+          height: 28, padding: "0 10px", fontSize: 12, borderRadius: 3, cursor: "pointer",
+          background: "#E8E8E8", color: "#444", border: "1px solid #C0C0C0", fontFamily: "inherit",
+        }}>🔄 تحديث</button>
       </div>
-      <Card className="border-border/50">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="text-xs">الاسم</TableHead>
-              <TableHead className="text-xs">الهاتف</TableHead>
-              <TableHead className="text-xs">البريد</TableHead>
-              <TableHead className="text-xs text-center">الرصيد</TableHead>
-              <TableHead className="text-xs">الإجراءات</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {customers?.map((c: any) => (
-              <TableRow key={c.id}>
-                <TableCell className="text-sm font-medium">{c.name}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">{c.phone || "-"}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">{c.email || "-"}</TableCell>
-                <TableCell className="text-center">
-                  <span className={`text-sm font-semibold ${Number(c.balance) >= 0 ? "text-emerald-500" : "text-destructive"}`}>
-                    {Number(c.balance || 0).toFixed(2)}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  <div className="flex gap-2">
-                    <button className="text-primary hover:text-primary/70 text-xs">تعديل</button>
-                    <button className="text-muted-foreground hover:text-foreground text-xs">كشف حساب</button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-            {!customers?.length && (
-              <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">لا يوجد عملاء</TableCell></TableRow>
+
+      {/* Table */}
+      <div style={{ border: "1px solid #D0D0D0", borderRadius: 4, overflow: "hidden" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <thead>
+            <tr style={{ background: "#E8EEF4", borderBottom: "2px solid #C0C0C0" }}>
+              {["الكود","النوع","الاسم","الهاتف","المدينة","الرقم الضريبي","الرصيد",""].map((h, i) => (
+                <th key={i} style={{ textAlign: "right", padding: "5px 9px", fontWeight: 700, color: "#2B4A6A", whiteSpace: "nowrap" }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <tr key={i} style={{ borderBottom: "1px solid #F0F0F0" }}>
+                  {Array.from({ length: 8 }).map((_, j) => (
+                    <td key={j} style={{ padding: "7px 9px" }}>
+                      <div style={{ height: 11, background: "#E8E8E8", borderRadius: 3 }} />
+                    </td>
+                  ))}
+                </tr>
+              ))
+            ) : filtered.length === 0 ? (
+              <tr>
+                <td colSpan={8} style={{ textAlign: "center", padding: "36px 0", color: "#999", fontSize: 13 }}>
+                  {search ? "لا توجد نتائج مطابقة" : "لا يوجد عملاء — اضغط «إضافة عميل» للبدء"}
+                </td>
+              </tr>
+            ) : (
+              filtered.map((c: any, idx: number) => (
+                <tr key={c.id}
+                  style={{ borderBottom: "1px solid #F0F0F0", background: idx % 2 === 0 ? "white" : "#FAFAFA", cursor: "pointer" }}
+                  onDoubleClick={() => openEdit(c)}
+                  onMouseEnter={e => (e.currentTarget.style.background = "#EEF4FB")}
+                  onMouseLeave={e => (e.currentTarget.style.background = idx % 2 === 0 ? "white" : "#FAFAFA")}
+                >
+                  <td style={{ padding: "5px 9px" }}>
+                    {c.code
+                      ? <span style={{ fontFamily: "monospace", fontSize: 11, fontWeight: 700, padding: "1px 5px", borderRadius: 3, background: "#E0EAF4", color: "#406B93" }}>{c.code}</span>
+                      : <span style={{ color: "#CCC" }}>—</span>}
+                  </td>
+                  <td style={{ padding: "5px 9px" }}>
+                    {c.customerType === "organization"
+                      ? <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 10, background: "#DBEAFE", color: "#1D4ED8", border: "1px solid #93C5FD" }}>📋 مؤسسة</span>
+                      : <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 10, background: "#DCFCE7", color: "#15803D", border: "1px solid #86EFAC" }}>🧾 فرد</span>}
+                  </td>
+                  <td style={{ padding: "5px 9px", fontWeight: 600 }}>{c.name}</td>
+                  <td style={{ padding: "5px 9px", color: "#555", fontFamily: "monospace" }}>{c.phone ?? "—"}</td>
+                  <td style={{ padding: "5px 9px", color: "#555" }}>{c.city ?? "—"}</td>
+                  <td style={{ padding: "5px 9px", color: "#555", fontFamily: "monospace", fontSize: 11 }}>
+                    {c.taxNumber
+                      ? <span style={{ background: "#FEF3C7", color: "#92400E", padding: "1px 4px", borderRadius: 3 }}>{c.taxNumber}</span>
+                      : "—"}
+                  </td>
+                  <td style={{ padding: "5px 9px", fontFamily: "monospace", textAlign: "left" }}>
+                    <span style={{ color: parseFloat(c.balance ?? "0") > 0 ? "#DC2626" : parseFloat(c.balance ?? "0") < 0 ? "#15803D" : "#CCC", fontWeight: 700 }}>
+                      {parseFloat(c.balance ?? "0").toFixed(2)}
+                    </span>
+                  </td>
+                  <td style={{ padding: "4px 6px" }}>
+                    <button onClick={e => { e.stopPropagation(); openEdit(c); }} style={{
+                      fontSize: 10, padding: "2px 7px", borderRadius: 3, cursor: "pointer",
+                      background: "#E8EEF4", color: "#406B93", border: "1px solid #B8CFE0", fontFamily: "inherit", fontWeight: 600,
+                    }}>تعديل</button>
+                  </td>
+                </tr>
+              ))
             )}
-          </TableBody>
-        </Table>
-      </Card>
+          </tbody>
+        </table>
+      </div>
+
+      {/* Summary */}
+      {!isLoading && (customers ?? []).length > 0 && (
+        <div style={{ fontSize: 11, color: "#888", display: "flex", gap: 14 }}>
+          <span>الإجمالي: <strong>{(customers ?? []).length}</strong></span>
+          <span>مؤسسات: <strong style={{ color: "#1D4ED8" }}>{(customers ?? []).filter((c: any) => c.customerType === "organization").length}</strong></span>
+          <span>أفراد: <strong style={{ color: "#15803D" }}>{(customers ?? []).filter((c: any) => c.customerType !== "organization").length}</strong></span>
+          {search && <span>نتائج البحث: <strong>{filtered.length}</strong></span>}
+        </div>
+      )}
+
+      <CustomerFormDialog open={dialogOpen} editData={editData} onClose={() => setDialog(false)} onSaved={handleSaved} />
     </div>
   );
 }
