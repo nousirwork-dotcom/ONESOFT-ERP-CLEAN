@@ -2204,7 +2204,7 @@ export default function Products() {
         <>
           {/* طبقة الخلفية — داخل منطقة العمل فقط */}
           <div
-            style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.38)", zIndex: 50 }}
+            style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.38)", zIndex: 9998 }}
             onClick={() => setIsOpen(false)}
           />
 
@@ -2235,7 +2235,7 @@ export default function Products() {
               top: true, bottom: true, left: true, right: true,
               topLeft: true, topRight: true, bottomLeft: true, bottomRight: true,
             }}
-            style={{ zIndex: 51 }}
+            style={{ zIndex: 9999 }}
           >
             {/* الحاوية الداخلية */}
             <div
