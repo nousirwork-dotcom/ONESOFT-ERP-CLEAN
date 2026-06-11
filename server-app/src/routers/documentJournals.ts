@@ -54,6 +54,7 @@ const journalInputShape = {
   suppliersJournal: z.string().nullable().optional(),
   paymentTypesConfig: z.record(z.string(), z.any()).nullable().optional(),
   issuanceConfig:   z.record(z.string(), z.any()).nullable().optional(),
+  optionsConfig:    z.record(z.string(), z.any()).nullable().optional(),
   allowUnpost:      z.boolean().optional(),
   allowEditAfterPost: z.boolean().optional(),
   notes:            z.string().optional(),

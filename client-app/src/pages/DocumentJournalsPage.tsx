@@ -26,6 +26,11 @@ type JournalForm = {
   issuanceJournalType: string; issuanceJournalBookId: string;
   issuanceInventoryDocType: string; issuanceInventoryDocBookId: string;
   allowUnpost: boolean; allowEditAfterPost: boolean;
+  printPageSize: string; thermalPrint: boolean; thermalWidth: string;
+  trackQuantity: boolean; noTax: boolean; salesmanStats: boolean;
+  itemStats: boolean; customerSupplierStats: boolean;
+  preventNegativeInventory: boolean; requireNote: boolean;
+  preventEditIfLinked: boolean; requireCustomerCode: boolean; requireEmployeeCode: boolean;
 };
 
 type DBJournal = {
@@ -53,6 +58,11 @@ const EMPTY: JournalForm = {
   issuanceJournalType: "", issuanceJournalBookId: "",
   issuanceInventoryDocType: "", issuanceInventoryDocBookId: "",
   allowUnpost: true, allowEditAfterPost: false,
+  printPageSize: "A4", thermalPrint: false, thermalWidth: "80mm",
+  trackQuantity: false, noTax: false, salesmanStats: false,
+  itemStats: false, customerSupplierStats: false,
+  preventNegativeInventory: false, requireNote: false,
+  preventEditIfLinked: false, requireCustomerCode: false, requireEmployeeCode: false,
 };
 
 /* ── أنواع السندات (sales journal only) ── */
@@ -129,6 +139,7 @@ const CB = ({ label, checked, onChange }: { label: string; checked: boolean; onC
 /* ──────────────── helpers ──────────────── */
 function dbToForm(j: DBJournal): JournalForm {
   const ic = (j as any).issuanceConfig ?? {};
+  const oc = (j as any).optionsConfig  ?? {};
   return {
     nameAr:            j.name ?? "",
     nameEn:            j.name2 ?? "",
@@ -162,6 +173,19 @@ function dbToForm(j: DBJournal): JournalForm {
     issuanceInventoryDocBookId:ic.inventoryDocBookId     ?? "",
     allowUnpost:         (j as any).allowUnpost         ?? true,
     allowEditAfterPost:  (j as any).allowEditAfterPost  ?? false,
+    printPageSize:       oc.printPageSize       ?? "A4",
+    thermalPrint:        oc.thermalPrint        ?? false,
+    thermalWidth:        oc.thermalWidth        ?? "80mm",
+    trackQuantity:       oc.trackQuantity       ?? false,
+    noTax:               oc.noTax               ?? false,
+    salesmanStats:       oc.salesmanStats       ?? false,
+    itemStats:           oc.itemStats           ?? false,
+    customerSupplierStats: oc.customerSupplierStats ?? false,
+    preventNegativeInventory: oc.preventNegativeInventory ?? false,
+    requireNote:         oc.requireNote         ?? false,
+    preventEditIfLinked: oc.preventEditIfLinked ?? false,
+    requireCustomerCode: oc.requireCustomerCode ?? false,
+    requireEmployeeCode: oc.requireEmployeeCode ?? false,
   };
 }
 
@@ -183,7 +207,7 @@ export default function DocumentJournalsPage() {
   const [showDelete, setShowDelete]     = useState(false);
   const [showReset, setShowReset]       = useState(false);
   const [ptConfig, setPtConfig]         = useState<PTC>(DEFAULT_PTC);
-  const [activeTab, setActiveTab]       = useState<"basic" | "payment-types" | "issuance">("basic");
+  const [activeTab, setActiveTab]       = useState<"basic" | "payment-types" | "issuance" | "options">("basic");
 
   /* ── queries ── */
   const listQuery = trpc.documentJournals.list.useQuery();
@@ -305,6 +329,21 @@ export default function DocumentJournalsPage() {
         inventoryDocType: form.issuanceInventoryDocType || null,
         inventoryDocBookId: form.issuanceInventoryDocBookId || null,
       } : null,
+      optionsConfig: {
+        printPageSize:            form.printPageSize,
+        thermalPrint:             form.thermalPrint,
+        thermalWidth:             form.thermalWidth,
+        trackQuantity:            form.trackQuantity,
+        noTax:                    form.noTax,
+        salesmanStats:            form.salesmanStats,
+        itemStats:                form.itemStats,
+        customerSupplierStats:    form.customerSupplierStats,
+        preventNegativeInventory: form.preventNegativeInventory,
+        requireNote:              form.requireNote,
+        preventEditIfLinked:      form.preventEditIfLinked,
+        requireCustomerCode:      form.requireCustomerCode,
+        requireEmployeeCode:      form.requireEmployeeCode,
+      },
       sortOrder:        0,
     };
     if (editId != null) {
@@ -477,6 +516,7 @@ export default function DocumentJournalsPage() {
                 { id: "basic", label: "البيانات الأساسية" },
                 ...(selectedType === "sales" ? [{ id: "payment-types", label: "أنواع السندات" }] : []),
                 { id: "issuance", label: "خصائص السندات المصدرة" },
+                { id: "options",  label: "خيارات" },
               ].map(tab => (
                 <button
                   key={tab.id}
@@ -843,6 +883,48 @@ export default function DocumentJournalsPage() {
                 </div>
               </P>
 
+            </div>
+            )}
+
+            {/* ── TAB: خيارات ── */}
+            {activeTab === "options" && (
+            <div className="h-full overflow-y-auto p-4 space-y-3" dir="rtl">
+              <P title="خيارات المستند">
+
+                {/* سطر الطباعة */}
+                <div className="flex items-center gap-4 mb-3">
+                  <span className="text-[11px] text-slate-500 font-medium shrink-0" style={{ width: 100 }}>نموذج الطباعة</span>
+                  <FS value={form.printPageSize} onValueChange={v => set("printPageSize", v)} placeholder="نموذج الطباعة">
+                    <SelectItem value="A4">A4</SelectItem>
+                    <SelectItem value="A5">A5</SelectItem>
+                    <SelectItem value="letter">Letter</SelectItem>
+                  </FS>
+                  <CB label="طباعة حرارية" checked={form.thermalPrint} onChange={v => set("thermalPrint", v)} />
+                  <div className="flex items-center gap-1.5">
+                    <FI value={form.thermalWidth} onChange={v => set("thermalWidth", v)} placeholder="80mm" mono />
+                  </div>
+                </div>
+
+                <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 10, marginBottom: 4 }}>
+                  {/* صف الخيارات الأول */}
+                  <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-2.5">
+                    <CB label="متابعة الكميات بالفواتير"  checked={form.trackQuantity}           onChange={v => set("trackQuantity", v)} />
+                    <CB label="بدون ضريبة"                checked={form.noTax}                   onChange={v => set("noTax", v)} />
+                    <CB label="إحصاءات للبائع"            checked={form.salesmanStats}           onChange={v => set("salesmanStats", v)} />
+                    <CB label="إحصاءات للصنف"             checked={form.itemStats}               onChange={v => set("itemStats", v)} />
+                    <CB label="إحصاءات عميل/مورد"         checked={form.customerSupplierStats}   onChange={v => set("customerSupplierStats", v)} />
+                  </div>
+                  {/* صف الخيارات الثاني */}
+                  <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                    <CB label="إمنع الصرف بدون رصيد مخزني" checked={form.preventNegativeInventory} onChange={v => set("preventNegativeInventory", v)} />
+                    <CB label="يجب إدخال الملاحظة"           checked={form.requireNote}             onChange={v => set("requireNote", v)} />
+                    <CB label="منع التعديل إذا كانت مرتبطة"  checked={form.preventEditIfLinked}     onChange={v => set("preventEditIfLinked", v)} />
+                    <CB label="يجب إدخال كود العميل أو المورد" checked={form.requireCustomerCode}   onChange={v => set("requireCustomerCode", v)} />
+                    <CB label="يجب إدخال كود الموظف"          checked={form.requireEmployeeCode}    onChange={v => set("requireEmployeeCode", v)} />
+                  </div>
+                </div>
+
+              </P>
             </div>
             )}
 

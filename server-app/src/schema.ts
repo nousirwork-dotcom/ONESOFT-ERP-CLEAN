@@ -615,6 +615,7 @@ export const documentJournals = pgTable('document_journals', {
   allowEditAfterPost: boolean('allow_edit_after_post').notNull().default(false),
   paymentTypesConfig: jsonb('payment_types_config'),
   issuanceConfig:   jsonb('issuance_config'),
+  optionsConfig:    jsonb('options_config'),
   notes:            text('notes'),
   isActive:         boolean('is_active').notNull().default(true),
   sortOrder:        integer('sort_order').notNull().default(0),
