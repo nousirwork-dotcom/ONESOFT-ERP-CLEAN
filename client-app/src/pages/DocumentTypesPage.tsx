@@ -64,6 +64,7 @@ const DOC_TYPES = [
   { id: "journal-entry",        label: "سند قيد",            icon: <BookText className="w-3.5 h-3.5" /> },
   { id: "stock-issue-items",    label: "سند صرف أصناف",      icon: <PackageMinus className="w-3.5 h-3.5" /> },
   { id: "stock-receipt-items",  label: "سند توريد أصناف",    icon: <PackagePlus className="w-3.5 h-3.5" /> },
+  { id: "sales",                label: "sales",               icon: <BookOpen className="w-3.5 h-3.5" /> },
 ];
 
 /* ──────────────── small atoms ──────────────── */

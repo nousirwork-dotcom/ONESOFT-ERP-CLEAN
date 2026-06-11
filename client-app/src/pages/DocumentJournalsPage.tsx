@@ -61,6 +61,7 @@ const DOC_TYPES = [
   { id: "stock_receipt_items", label: "سند توريد أصناف",    icon: <PackagePlus className="w-3.5 h-3.5" /> },
   { id: "customers_journal",   label: "دفتر العملاء",        icon: <Users className="w-3.5 h-3.5" /> },
   { id: "suppliers_journal",   label: "دفتر الموردين",       icon: <Truck className="w-3.5 h-3.5" /> },
+  { id: "sales",               label: "sales",               icon: <BookOpen className="w-3.5 h-3.5" /> },
 ];
 
 /* ──────────────── small atoms ──────────────── */
