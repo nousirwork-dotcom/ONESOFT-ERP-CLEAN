@@ -21,6 +21,11 @@ type JournalForm = {
   printOnSave: boolean; status: string; postingMethod: string;
   resetFrequency: string;
   customersJournal: string; suppliersJournal: string;
+  salesAccountId: string; cashAccountId: string; creditAccountId: string;
+  taxAccountId: string; discountAccountId: string;
+  issuanceJournalType: string; issuanceJournalBookId: string;
+  issuanceInventoryDocType: string; issuanceInventoryDocBookId: string;
+  allowUnpost: boolean; allowEditAfterPost: boolean;
 };
 
 type DBJournal = {
@@ -43,6 +48,11 @@ const EMPTY: JournalForm = {
   printOnSave: false, status: "ready", postingMethod: "normal",
   resetFrequency: "none",
   customersJournal: "", suppliersJournal: "",
+  salesAccountId: "", cashAccountId: "", creditAccountId: "",
+  taxAccountId: "", discountAccountId: "",
+  issuanceJournalType: "", issuanceJournalBookId: "",
+  issuanceInventoryDocType: "", issuanceInventoryDocBookId: "",
+  allowUnpost: true, allowEditAfterPost: false,
 };
 
 /* ── أنواع السندات (sales journal only) ── */
@@ -118,6 +128,7 @@ const CB = ({ label, checked, onChange }: { label: string; checked: boolean; onC
 
 /* ──────────────── helpers ──────────────── */
 function dbToForm(j: DBJournal): JournalForm {
+  const ic = (j as any).issuanceConfig ?? {};
   return {
     nameAr:            j.name ?? "",
     nameEn:            j.name2 ?? "",
@@ -140,6 +151,17 @@ function dbToForm(j: DBJournal): JournalForm {
     resetFrequency:    j.resetFrequency ?? "none",
     customersJournal:  (j as any).customersJournal ?? "",
     suppliersJournal:  (j as any).suppliersJournal ?? "",
+    salesAccountId:    (j as any).salesAccountId != null ? String((j as any).salesAccountId) : "",
+    cashAccountId:     (j as any).cashAccountId  != null ? String((j as any).cashAccountId)  : "",
+    creditAccountId:   (j as any).creditAccountId != null ? String((j as any).creditAccountId) : "",
+    taxAccountId:      (j as any).taxAccountId   != null ? String((j as any).taxAccountId)   : "",
+    discountAccountId: (j as any).discountAccountId != null ? String((j as any).discountAccountId) : "",
+    issuanceJournalType:       ic.journalEntryType      ?? "",
+    issuanceJournalBookId:     ic.journalBookId          ?? "",
+    issuanceInventoryDocType:  ic.inventoryDocType       ?? "",
+    issuanceInventoryDocBookId:ic.inventoryDocBookId     ?? "",
+    allowUnpost:         (j as any).allowUnpost         ?? true,
+    allowEditAfterPost:  (j as any).allowEditAfterPost  ?? false,
   };
 }
 
@@ -161,7 +183,7 @@ export default function DocumentJournalsPage() {
   const [showDelete, setShowDelete]     = useState(false);
   const [showReset, setShowReset]       = useState(false);
   const [ptConfig, setPtConfig]         = useState<PTC>(DEFAULT_PTC);
-  const [activeTab, setActiveTab]       = useState<"basic" | "payment-types">("basic");
+  const [activeTab, setActiveTab]       = useState<"basic" | "payment-types" | "issuance">("basic");
 
   /* ── queries ── */
   const listQuery = trpc.documentJournals.list.useQuery();
@@ -270,6 +292,19 @@ export default function DocumentJournalsPage() {
       customersJournal: (form.customersJournal && form.customersJournal !== "none") ? form.customersJournal : null,
       suppliersJournal: (form.suppliersJournal && form.suppliersJournal !== "none") ? form.suppliersJournal : null,
       paymentTypesConfig: selectedType === "sales" ? ptConfig : null,
+      salesAccountId:    form.salesAccountId    ? parseInt(form.salesAccountId)    : null,
+      cashAccountId:     form.cashAccountId     ? parseInt(form.cashAccountId)     : null,
+      creditAccountId:   form.creditAccountId   ? parseInt(form.creditAccountId)   : null,
+      taxAccountId:      form.taxAccountId      ? parseInt(form.taxAccountId)      : null,
+      discountAccountId: form.discountAccountId ? parseInt(form.discountAccountId) : null,
+      allowUnpost:       form.allowUnpost,
+      allowEditAfterPost:form.allowEditAfterPost,
+      issuanceConfig:    (form.issuanceJournalType || form.issuanceJournalBookId || form.issuanceInventoryDocType || form.issuanceInventoryDocBookId) ? {
+        journalEntryType: form.issuanceJournalType      || null,
+        journalBookId:    form.issuanceJournalBookId    || null,
+        inventoryDocType: form.issuanceInventoryDocType || null,
+        inventoryDocBookId: form.issuanceInventoryDocBookId || null,
+      } : null,
       sortOrder:        0,
     };
     if (editId != null) {
@@ -441,6 +476,7 @@ export default function DocumentJournalsPage() {
               {[
                 { id: "basic", label: "البيانات الأساسية" },
                 ...(selectedType === "sales" ? [{ id: "payment-types", label: "أنواع السندات" }] : []),
+                { id: "issuance", label: "خصائص السندات المصدرة" },
               ].map(tab => (
                 <button
                   key={tab.id}
@@ -717,6 +753,97 @@ export default function DocumentJournalsPage() {
                   })}
                 </div>
               </div>
+            )}
+
+            {/* ── TAB: خصائص السندات المصدرة ── */}
+            {activeTab === "issuance" && (
+            <div className="h-full overflow-y-auto p-4 space-y-3" dir="rtl">
+
+              {/* قسم 1: الروابط المحاسبية */}
+              <P title="الروابط المحاسبية لنوع السند">
+                <div className="grid grid-cols-2 gap-x-5 gap-y-2.5">
+                  {([
+                    ["إيرادات المبيعات",        "salesAccountId"],
+                    ["ذمم العملاء (آجل)",       "creditAccountId"],
+                    ["الصندوق / النقد",          "cashAccountId"],
+                    ["ضريبة القيمة المضافة",     "taxAccountId"],
+                    ["الخصم المنوح",             "discountAccountId"],
+                  ] as [string, keyof JournalForm][]).map(([label, field]) => (
+                    <R key={field} label={label} lw={145}>
+                      <Select
+                        value={String(form[field]) || "__none__"}
+                        onValueChange={v => set(field, v === "__none__" ? "" : v)}
+                      >
+                        <SelectTrigger className="h-7 text-[11px] px-2 border-slate-200 focus:ring-0 focus:ring-offset-0 bg-white rounded">
+                          <SelectValue placeholder="— بدون —" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">— بدون —</SelectItem>
+                          {chartAccounts.map((a: any) => (
+                            <SelectItem key={a.id} value={String(a.id)}>
+                              {a.code} — {a.nameAr}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </R>
+                  ))}
+                </div>
+              </P>
+
+              {/* قسم 2: خصائص السندات المصدرة */}
+              <P title="خصائص السندات المصدرة">
+                <div className="grid grid-cols-2 gap-x-5 gap-y-2.5">
+                  <R label="نوع القيد" lw={145}>
+                    <FS value={form.issuanceJournalType} onValueChange={v => set("issuanceJournalType", v)}>
+                      <SelectItem value="__none__">— اختر —</SelectItem>
+                      {DOC_TYPES.filter(dt => ["journal_entry","sales_invoice","purchase_invoice","receipt_voucher","payment_voucher"].includes(dt.id))
+                        .map(dt => <SelectItem key={dt.id} value={dt.id}>{dt.label}</SelectItem>)}
+                    </FS>
+                  </R>
+                  <R label="دفتر القيد" lw={145}>
+                    <FS value={form.issuanceJournalBookId} onValueChange={v => set("issuanceJournalBookId", v)}>
+                      <SelectItem value="__none__">— اختر —</SelectItem>
+                      {allJournals
+                        .filter(j => !form.issuanceJournalType || j.docType === form.issuanceJournalType)
+                        .map(j => (
+                          <SelectItem key={j.id} value={String(j.id)}>
+                            {j.numberPrefix ? `${j.numberPrefix} — ${j.name}` : j.name}
+                          </SelectItem>
+                        ))}
+                    </FS>
+                  </R>
+                  <R label="نوع مستند المخزون" lw={145}>
+                    <FS value={form.issuanceInventoryDocType} onValueChange={v => { set("issuanceInventoryDocType", v); set("issuanceInventoryDocBookId", ""); }}>
+                      <SelectItem value="__none__">— اختر —</SelectItem>
+                      {DOC_TYPES.filter(dt => ["stock_issue_items","stock_receipt_items","stock_transfer","stock_receipt","stock_issue"].includes(dt.id))
+                        .map(dt => <SelectItem key={dt.id} value={dt.id}>{dt.label}</SelectItem>)}
+                    </FS>
+                  </R>
+                  <R label="دفتر مستند المخزون" lw={145}>
+                    <FS value={form.issuanceInventoryDocBookId} onValueChange={v => set("issuanceInventoryDocBookId", v)}>
+                      <SelectItem value="__none__">— اختر —</SelectItem>
+                      {allJournals
+                        .filter(j => !form.issuanceInventoryDocType || j.docType === form.issuanceInventoryDocType)
+                        .map(j => (
+                          <SelectItem key={j.id} value={String(j.id)}>
+                            {j.numberPrefix ? `${j.numberPrefix} — ${j.name}` : j.name}
+                          </SelectItem>
+                        ))}
+                    </FS>
+                  </R>
+                </div>
+              </P>
+
+              {/* قسم 3: خيارات المستند */}
+              <P title="خيارات المستند">
+                <div className="space-y-2">
+                  <CB label="السماح بفك الترحيل"              checked={form.allowUnpost}        onChange={v => set("allowUnpost", v)} />
+                  <CB label="السماح بالتعديل بعد الترحيل"     checked={form.allowEditAfterPost}  onChange={v => set("allowEditAfterPost", v)} />
+                </div>
+              </P>
+
+            </div>
             )}
 
             </div>
