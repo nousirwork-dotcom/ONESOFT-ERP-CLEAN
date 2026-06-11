@@ -161,6 +161,7 @@ export default function DocumentJournalsPage() {
   const [showDelete, setShowDelete]     = useState(false);
   const [showReset, setShowReset]       = useState(false);
   const [ptConfig, setPtConfig]         = useState<PTC>(DEFAULT_PTC);
+  const [activeTab, setActiveTab]       = useState<"basic" | "payment-types">("basic");
 
   /* ── queries ── */
   const listQuery = trpc.documentJournals.list.useQuery();
@@ -232,6 +233,7 @@ export default function DocumentJournalsPage() {
     setForm({ ...EMPTY, docType: selectedType });
     setIsDirty(false);
     setPtConfig(DEFAULT_PTC);
+    setActiveTab("basic");
     setView("form");
   }, [selectedType]);
 
@@ -240,6 +242,7 @@ export default function DocumentJournalsPage() {
     setForm(dbToForm(j));
     setPtConfig((j as any).paymentTypesConfig ?? DEFAULT_PTC);
     setIsDirty(false);
+    setActiveTab("basic");
     setView("form");
   }, []);
 
@@ -433,12 +436,37 @@ export default function DocumentJournalsPage() {
               {isDirty && <span className="text-[10px] text-amber-600 mr-auto">● تعديلات غير محفوظة</span>}
             </div>
 
-            {/* Form content */}
-            <div className="flex-1 flex overflow-hidden">
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {/* ── Tabs Bar ── */}
+            <div className="shrink-0 flex items-center gap-0 border-b border-slate-200 bg-white px-3" dir="rtl">
+              {[
+                { id: "basic", label: "البيانات الأساسية" },
+                ...(selectedType === "sales" ? [{ id: "payment-types", label: "أنواع السندات" }] : []),
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className="relative px-4 py-2.5 text-[11px] font-semibold transition-colors whitespace-nowrap"
+                  style={{
+                    color: activeTab === tab.id ? "#406B93" : "#64748b",
+                    borderBottom: activeTab === tab.id ? "2px solid #406B93" : "2px solid transparent",
+                    background: "transparent",
+                    marginBottom: -1,
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* ── Tab Content ── */}
+            <div className="flex-1 overflow-hidden">
+
+            {/* ── TAB: البيانات الأساسية ── */}
+            {activeTab === "basic" && (
+            <div className="h-full overflow-y-auto p-4 space-y-3">
 
               {/* ── بيانات الدفتر ── */}
-              <P title="بيانات الدفتر">
+              <P title="البيانات الأساسية">
                 <div className="grid grid-cols-2 gap-x-5 gap-y-2">
                   <R label="نوع المستند">
                     <FS value={form.docType} onValueChange={v => set("docType", v)}>
@@ -621,14 +649,12 @@ export default function DocumentJournalsPage() {
               </div>
 
             </div>
+            )}
 
-            {/* ── لوحة أنواع السندات (sales فقط) ── */}
-            {selectedType === "sales" && (
-              <div className="w-80 shrink-0 overflow-y-auto border-r border-slate-200 bg-slate-50" dir="rtl">
-                <div className="px-3 py-2 border-b border-slate-200" style={{ background: "linear-gradient(to left,#f0f4ff,#e8f0fb)" }}>
-                  <span className="text-[12px] font-bold text-indigo-800">أنواع السندات</span>
-                </div>
-                <div className="p-3 space-y-3">
+            {/* ── TAB: أنواع السندات ── */}
+            {activeTab === "payment-types" && selectedType === "sales" && (
+              <div className="h-full overflow-y-auto p-4" dir="rtl">
+                <div className="grid grid-cols-2 gap-4">
                   {(["cash","credit"] as const).map(kind => {
                     const isCash = kind === "cash";
                     const row = ptConfig[kind];
@@ -638,13 +664,13 @@ export default function DocumentJournalsPage() {
                     };
                     const acctPick = (label: string, val: number | null, key: keyof PTRow) => (
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-[10px] text-slate-500 shrink-0" style={{ width: 110 }}>{label}</span>
+                        <span className="text-[11px] text-slate-500 shrink-0" style={{ width: 130 }}>{label}</span>
                         <div className="flex-1 min-w-0">
                           <Select
                             value={val ? String(val) : "__none__"}
                             onValueChange={v => { setRow({ [key]: v === "__none__" ? null : parseInt(v) } as any); }}
                           >
-                            <SelectTrigger className="h-6 text-[10px] px-2 border-slate-200 focus:ring-0 focus:ring-offset-0 bg-white rounded">
+                            <SelectTrigger className="h-7 text-[11px] px-2 border-slate-200 focus:ring-0 focus:ring-offset-0 bg-white rounded">
                               <SelectValue placeholder="— حساب —" />
                             </SelectTrigger>
                             <SelectContent>
@@ -660,31 +686,41 @@ export default function DocumentJournalsPage() {
                       </div>
                     );
                     return (
-                      <div key={kind} className="rounded-lg border border-slate-200 bg-white overflow-hidden">
-                        <div className={`flex items-center gap-2 px-3 py-2 border-b ${isCash ? "bg-emerald-50 border-emerald-100" : "bg-blue-50 border-blue-100"}`}>
-                          <input type="checkbox" className="w-3.5 h-3.5 accent-indigo-600"
+                      <div key={kind} className="rounded-xl overflow-hidden"
+                        style={{ border: `1px solid ${isCash ? "#a7f3d0" : "#bfdbfe"}`, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+                        {/* Card header */}
+                        <div className={`flex items-center gap-2.5 px-4 py-3 border-b ${isCash ? "bg-emerald-50 border-emerald-100" : "bg-blue-50 border-blue-100"}`}>
+                          <input type="checkbox" className="w-4 h-4 accent-indigo-600 cursor-pointer"
                             checked={row.enabled} onChange={e => setRow({ enabled: e.target.checked })} />
-                          <span className={`text-[12px] font-semibold ${isCash ? "text-emerald-800" : "text-blue-800"}`}>
+                          <span className={`text-[13px] font-bold ${isCash ? "text-emerald-800" : "text-blue-800"}`}>
                             {isCash ? "نقداً" : "آجل (ائتمان)"}
                           </span>
+                          {!row.enabled && (
+                            <span className="mr-auto text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-400">معطّل</span>
+                          )}
                         </div>
-                        {row.enabled && (
-                          <div className="p-2.5 space-y-1.5">
+                        {/* Card body */}
+                        <div className="bg-white p-4 space-y-2.5">
+                          {row.enabled ? (<>
                             {acctPick("إيرادات المبيعات", row.salesAccountId, "salesAccountId")}
                             {isCash
                               ? acctPick("الصندوق / النقد", row.cashAccountId, "cashAccountId")
                               : acctPick("ذمم العملاء", row.customerAccountId, "customerAccountId")}
                             {acctPick("الخصم المنوح", row.discountAccountId, "discountAccountId")}
                             {acctPick("ضريبة القيمة المضافة", row.taxAccountId, "taxAccountId")}
-                          </div>
-                        )}
+                          </>) : (
+                            <p className="text-[11px] text-slate-400 text-center py-3">فعّل هذا النوع لتحديد الحسابات</p>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
                 </div>
               </div>
             )}
+
             </div>
+            {/* end Tab Content */}
 
             {/* ══ Sticky Toolbar ══ */}
             <div className="shrink-0 flex items-center gap-1 px-3"
