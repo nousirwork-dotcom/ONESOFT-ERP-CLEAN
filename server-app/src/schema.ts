@@ -1,4 +1,4 @@
-import { pgTable, serial, varchar, text, integer, boolean, decimal, timestamp, pgEnum, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, serial, varchar, text, integer, boolean, decimal, timestamp, pgEnum, uniqueIndex, jsonb } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
@@ -613,6 +613,7 @@ export const documentJournals = pgTable('document_journals', {
   postingMode:      varchar('posting_mode', { length: 20 }).default('manual'),
   allowUnpost:      boolean('allow_unpost').notNull().default(true),
   allowEditAfterPost: boolean('allow_edit_after_post').notNull().default(false),
+  paymentTypesConfig: jsonb('payment_types_config'),
   notes:            text('notes'),
   isActive:         boolean('is_active').notNull().default(true),
   sortOrder:        integer('sort_order').notNull().default(0),

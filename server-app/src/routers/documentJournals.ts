@@ -52,6 +52,7 @@ const journalInputShape = {
   printOnSave:      z.boolean().default(false),
   customersJournal: z.string().nullable().optional(),
   suppliersJournal: z.string().nullable().optional(),
+  paymentTypesConfig: z.record(z.string(), z.any()).nullable().optional(),
   notes:            z.string().optional(),
   sortOrder:        z.number().default(0),
 };

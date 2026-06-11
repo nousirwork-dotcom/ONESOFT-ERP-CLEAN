@@ -45,6 +45,19 @@ const EMPTY: JournalForm = {
   customersJournal: "", suppliersJournal: "",
 };
 
+/* ── أنواع السندات (sales journal only) ── */
+type PTRow = {
+  enabled: boolean;
+  salesAccountId: number | null;
+  cashAccountId: number | null;
+  customerAccountId: number | null;
+  taxAccountId: number | null;
+  discountAccountId: number | null;
+};
+type PTC = { cash: PTRow; credit: PTRow };
+const EMPTY_PT_ROW: PTRow = { enabled: false, salesAccountId: null, cashAccountId: null, customerAccountId: null, taxAccountId: null, discountAccountId: null };
+const DEFAULT_PTC: PTC = { cash: { ...EMPTY_PT_ROW }, credit: { ...EMPTY_PT_ROW } };
+
 /* ──────────────── document types ──────────────── */
 const DOC_TYPES = [
   { id: "sales_invoice",    label: "فاتورة مبيعات",    icon: <BookOpen className="w-3.5 h-3.5" /> },
@@ -147,6 +160,7 @@ export default function DocumentJournalsPage() {
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [showDelete, setShowDelete]     = useState(false);
   const [showReset, setShowReset]       = useState(false);
+  const [ptConfig, setPtConfig]         = useState<PTC>(DEFAULT_PTC);
 
   /* ── queries ── */
   const listQuery = trpc.documentJournals.list.useQuery();
@@ -162,6 +176,7 @@ export default function DocumentJournalsPage() {
   const { data: templates }       = trpc.documentTemplates.list.useQuery({ docType: selectedType });
   const { data: custJournalsList }  = trpc.documentJournals.list.useQuery({ docType: "customers_journal" });
   const { data: suppJournalsList }  = trpc.documentJournals.list.useQuery({ docType: "suppliers_journal" });
+  const { data: chartAccounts = [] } = trpc.accounts.list.useQuery();
 
   /* ── mutations ── */
   const createMut = trpc.documentJournals.create.useMutation({
@@ -216,12 +231,14 @@ export default function DocumentJournalsPage() {
     setEditId(null);
     setForm({ ...EMPTY, docType: selectedType });
     setIsDirty(false);
+    setPtConfig(DEFAULT_PTC);
     setView("form");
   }, [selectedType]);
 
   const openEdit = useCallback((j: DBJournal) => {
     setEditId(j.id);
     setForm(dbToForm(j));
+    setPtConfig((j as any).paymentTypesConfig ?? DEFAULT_PTC);
     setIsDirty(false);
     setView("form");
   }, []);
@@ -249,6 +266,7 @@ export default function DocumentJournalsPage() {
       printOnSave:      form.printOnSave,
       customersJournal: (form.customersJournal && form.customersJournal !== "none") ? form.customersJournal : null,
       suppliersJournal: (form.suppliersJournal && form.suppliersJournal !== "none") ? form.suppliersJournal : null,
+      paymentTypesConfig: selectedType === "sales" ? ptConfig : null,
       sortOrder:        0,
     };
     if (editId != null) {
@@ -416,6 +434,7 @@ export default function DocumentJournalsPage() {
             </div>
 
             {/* Form content */}
+            <div className="flex-1 flex overflow-hidden">
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
 
               {/* ── بيانات الدفتر ── */}
@@ -601,6 +620,70 @@ export default function DocumentJournalsPage() {
                 </P>
               </div>
 
+            </div>
+
+            {/* ── لوحة أنواع السندات (sales فقط) ── */}
+            {selectedType === "sales" && (
+              <div className="w-80 shrink-0 overflow-y-auto border-r border-slate-200 bg-slate-50" dir="rtl">
+                <div className="px-3 py-2 border-b border-slate-200" style={{ background: "linear-gradient(to left,#f0f4ff,#e8f0fb)" }}>
+                  <span className="text-[12px] font-bold text-indigo-800">أنواع السندات</span>
+                </div>
+                <div className="p-3 space-y-3">
+                  {(["cash","credit"] as const).map(kind => {
+                    const isCash = kind === "cash";
+                    const row = ptConfig[kind];
+                    const setRow = (patch: Partial<PTRow>) => {
+                      setPtConfig(p => ({ ...p, [kind]: { ...p[kind], ...patch } }));
+                      setIsDirty(true);
+                    };
+                    const acctPick = (label: string, val: number | null, key: keyof PTRow) => (
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[10px] text-slate-500 shrink-0" style={{ width: 110 }}>{label}</span>
+                        <div className="flex-1 min-w-0">
+                          <Select
+                            value={val ? String(val) : "__none__"}
+                            onValueChange={v => { setRow({ [key]: v === "__none__" ? null : parseInt(v) } as any); }}
+                          >
+                            <SelectTrigger className="h-6 text-[10px] px-2 border-slate-200 focus:ring-0 focus:ring-offset-0 bg-white rounded">
+                              <SelectValue placeholder="— حساب —" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">— بدون —</SelectItem>
+                              {chartAccounts.map((a: any) => (
+                                <SelectItem key={a.id} value={String(a.id)}>
+                                  {a.code} — {a.nameAr}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    );
+                    return (
+                      <div key={kind} className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+                        <div className={`flex items-center gap-2 px-3 py-2 border-b ${isCash ? "bg-emerald-50 border-emerald-100" : "bg-blue-50 border-blue-100"}`}>
+                          <input type="checkbox" className="w-3.5 h-3.5 accent-indigo-600"
+                            checked={row.enabled} onChange={e => setRow({ enabled: e.target.checked })} />
+                          <span className={`text-[12px] font-semibold ${isCash ? "text-emerald-800" : "text-blue-800"}`}>
+                            {isCash ? "نقداً" : "آجل (ائتمان)"}
+                          </span>
+                        </div>
+                        {row.enabled && (
+                          <div className="p-2.5 space-y-1.5">
+                            {acctPick("إيرادات المبيعات", row.salesAccountId, "salesAccountId")}
+                            {isCash
+                              ? acctPick("الصندوق / النقد", row.cashAccountId, "cashAccountId")
+                              : acctPick("ذمم العملاء", row.customerAccountId, "customerAccountId")}
+                            {acctPick("الخصم المنوح", row.discountAccountId, "discountAccountId")}
+                            {acctPick("ضريبة القيمة المضافة", row.taxAccountId, "taxAccountId")}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             </div>
 
             {/* ══ Sticky Toolbar ══ */}
