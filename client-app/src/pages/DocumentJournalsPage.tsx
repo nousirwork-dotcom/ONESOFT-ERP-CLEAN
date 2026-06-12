@@ -66,17 +66,21 @@ const EMPTY: JournalForm = {
 };
 
 /* ── أنواع السندات (sales journal only) ── */
-type PTRow = {
-  enabled: boolean;
-  salesAccountId: number | null;
-  cashAccountId: number | null;
-  customerAccountId: number | null;
-  taxAccountId: number | null;
-  discountAccountId: number | null;
+type PaymentTypeRow = { id: string; nameAr: string; nameEn: string; codeAr: string; codeEn: string; };
+type AccountLinkRow = { id: string; description: string; postingName: string; accountId: number | null; };
+type PTC = { types: PaymentTypeRow[]; accountLinks: AccountLinkRow[]; };
+const DEFAULT_PTC: PTC = {
+  types: [
+    { id: "1", nameAr: "نقدا",  nameEn: "نقدا",  codeAr: "نقدا",  codeEn: "cash"  },
+    { id: "2", nameAr: "آجل",   nameEn: "آجل",   codeAr: "آجل",   codeEn: "cridt" },
+  ],
+  accountLinks: [],
 };
-type PTC = { cash: PTRow; credit: PTRow };
-const EMPTY_PT_ROW: PTRow = { enabled: false, salesAccountId: null, cashAccountId: null, customerAccountId: null, taxAccountId: null, discountAccountId: null };
-const DEFAULT_PTC: PTC = { cash: { ...EMPTY_PT_ROW }, credit: { ...EMPTY_PT_ROW } };
+function normalizePtConfig(raw: any): PTC {
+  if (!raw) return DEFAULT_PTC;
+  if (Array.isArray(raw.types)) return raw as PTC;
+  return DEFAULT_PTC;
+}
 
 /* ──────────────── document types ──────────────── */
 const DOC_TYPES = [
@@ -286,7 +290,7 @@ export default function DocumentJournalsPage() {
   const openEdit = useCallback((j: DBJournal) => {
     setEditId(j.id);
     setForm(dbToForm(j));
-    setPtConfig((j as any).paymentTypesConfig ?? DEFAULT_PTC);
+    setPtConfig(normalizePtConfig((j as any).paymentTypesConfig));
     setIsDirty(false);
     setActiveTab("basic");
     setView("form");
@@ -728,72 +732,139 @@ export default function DocumentJournalsPage() {
             )}
 
             {/* ── TAB: أنواع السندات ── */}
-            {activeTab === "payment-types" && selectedType === "sales" && (
-              <div className="h-full overflow-y-auto p-4" dir="rtl">
-                <div className="grid grid-cols-2 gap-4">
-                  {(["cash","credit"] as const).map(kind => {
-                    const isCash = kind === "cash";
-                    const row = ptConfig[kind];
-                    const setRow = (patch: Partial<PTRow>) => {
-                      setPtConfig(p => ({ ...p, [kind]: { ...p[kind], ...patch } }));
-                      setIsDirty(true);
-                    };
-                    const acctPick = (label: string, val: number | null, key: keyof PTRow) => (
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-[11px] text-slate-500 shrink-0" style={{ width: 130 }}>{label}</span>
-                        <div className="flex-1 min-w-0">
-                          <Select
-                            value={val ? String(val) : "__none__"}
-                            onValueChange={v => { setRow({ [key]: v === "__none__" ? null : parseInt(v) } as any); }}
-                          >
-                            <SelectTrigger className="h-7 text-[11px] px-2 border-slate-200 focus:ring-0 focus:ring-offset-0 bg-white rounded">
-                              <SelectValue placeholder="— حساب —" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="__none__">— بدون —</SelectItem>
-                              {chartAccounts.map((a: any) => (
-                                <SelectItem key={a.id} value={String(a.id)}>
-                                  {a.code} — {a.nameAr}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    );
-                    return (
-                      <div key={kind} className="rounded-xl overflow-hidden"
-                        style={{ border: `1px solid ${isCash ? "#a7f3d0" : "#bfdbfe"}`, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-                        {/* Card header */}
-                        <div className={`flex items-center gap-2.5 px-4 py-3 border-b ${isCash ? "bg-emerald-50 border-emerald-100" : "bg-blue-50 border-blue-100"}`}>
-                          <input type="checkbox" className="w-4 h-4 accent-indigo-600 cursor-pointer"
-                            checked={row.enabled} onChange={e => setRow({ enabled: e.target.checked })} />
-                          <span className={`text-[13px] font-bold ${isCash ? "text-emerald-800" : "text-blue-800"}`}>
-                            {isCash ? "نقداً" : "آجل (ائتمان)"}
-                          </span>
-                          {!row.enabled && (
-                            <span className="mr-auto text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-400">معطّل</span>
-                          )}
-                        </div>
-                        {/* Card body */}
-                        <div className="bg-white p-4 space-y-2.5">
-                          {row.enabled ? (<>
-                            {acctPick("إيرادات المبيعات", row.salesAccountId, "salesAccountId")}
-                            {isCash
-                              ? acctPick("الصندوق / النقد", row.cashAccountId, "cashAccountId")
-                              : acctPick("ذمم العملاء", row.customerAccountId, "customerAccountId")}
-                            {acctPick("الخصم المنوح", row.discountAccountId, "discountAccountId")}
-                            {acctPick("ضريبة القيمة المضافة", row.taxAccountId, "taxAccountId")}
-                          </>) : (
-                            <p className="text-[11px] text-slate-400 text-center py-3">فعّل هذا النوع لتحديد الحسابات</p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+            {activeTab === "payment-types" && selectedType === "sales" && (() => {
+              const thCls = "text-[10px] font-semibold text-slate-500 px-2 py-1.5 text-right bg-slate-50 border-b border-slate-200";
+              const tdCls = "px-1.5 py-1 border-b border-slate-100";
+              const cellInput = (val: string, onChange: (v: string) => void) => (
+                <input value={val} onChange={e => onChange(e.target.value)}
+                  className="w-full h-6 text-[11px] px-1.5 border border-slate-200 rounded bg-white focus:outline-none focus:border-indigo-400" />
+              );
+              const addType = () => {
+                const newId = String(Date.now());
+                setPtConfig(p => ({ ...p, types: [...p.types, { id: newId, nameAr: "", nameEn: "", codeAr: "", codeEn: "" }] }));
+                setIsDirty(true);
+              };
+              const removeType = (idx: number) => {
+                setPtConfig(p => ({ ...p, types: p.types.filter((_, i) => i !== idx) }));
+                setIsDirty(true);
+              };
+              const patchType = (idx: number, patch: Partial<PaymentTypeRow>) => {
+                setPtConfig(p => { const t = [...p.types]; t[idx] = { ...t[idx], ...patch }; return { ...p, types: t }; });
+                setIsDirty(true);
+              };
+              const addLink = () => {
+                const newId = String(Date.now());
+                setPtConfig(p => ({ ...p, accountLinks: [...p.accountLinks, { id: newId, description: "", postingName: "", accountId: null }] }));
+                setIsDirty(true);
+              };
+              const removeLink = (idx: number) => {
+                setPtConfig(p => ({ ...p, accountLinks: p.accountLinks.filter((_, i) => i !== idx) }));
+                setIsDirty(true);
+              };
+              const patchLink = (idx: number, patch: Partial<AccountLinkRow>) => {
+                setPtConfig(p => { const a = [...p.accountLinks]; a[idx] = { ...a[idx], ...patch }; return { ...p, accountLinks: a }; });
+                setIsDirty(true);
+              };
+              return (
+                <div className="h-full overflow-y-auto p-4 space-y-4" dir="rtl">
+
+                  {/* ─── جدول 1: النوع ─── */}
+                  <P title="النوع">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr>
+                          <th className={thCls}>الاسم العربي</th>
+                          <th className={thCls}>الاسم الإنجليزي</th>
+                          <th className={thCls}>كود عربي</th>
+                          <th className={thCls}>كود إنجليزي</th>
+                          <th className="w-6 bg-slate-50 border-b border-slate-200"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ptConfig.types.map((row, i) => (
+                          <tr key={row.id} className="hover:bg-slate-50/50">
+                            <td className={tdCls}>{cellInput(row.nameAr, v => patchType(i, { nameAr: v }))}</td>
+                            <td className={tdCls}>{cellInput(row.nameEn, v => patchType(i, { nameEn: v }))}</td>
+                            <td className={tdCls}>{cellInput(row.codeAr, v => patchType(i, { codeAr: v }))}</td>
+                            <td className={tdCls}>{cellInput(row.codeEn, v => patchType(i, { codeEn: v }))}</td>
+                            <td className={`${tdCls} text-center`}>
+                              <button onClick={() => removeType(i)}
+                                className="w-5 h-5 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 text-[13px] leading-none flex items-center justify-center">×</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr>
+                          <td colSpan={5} className="px-2 py-1.5">
+                            <button onClick={addType}
+                              className="text-[11px] text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
+                              <span className="text-[14px] leading-none">+</span> إضافة نوع آخر
+                            </button>
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </P>
+
+                  {/* ─── جدول 2: الروابط المحاسبية ─── */}
+                  <P title="الروابط المحاسبية">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr>
+                          <th className={thCls} style={{ width: "22%" }}>بيان</th>
+                          <th className={thCls} style={{ width: "22%" }}>اسم الترحيل</th>
+                          <th className={thCls} style={{ width: "22%" }}>كود الحساب</th>
+                          <th className={thCls}>اسم الحساب</th>
+                          <th className="w-6 bg-slate-50 border-b border-slate-200"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ptConfig.accountLinks.map((row, i) => {
+                          const acct = (chartAccounts as any[]).find(a => a.id === row.accountId);
+                          return (
+                            <tr key={row.id} className="hover:bg-slate-50/50">
+                              <td className={tdCls}>{cellInput(row.description, v => patchLink(i, { description: v }))}</td>
+                              <td className={tdCls}>{cellInput(row.postingName, v => patchLink(i, { postingName: v }))}</td>
+                              <td className={tdCls}>
+                                <Select value={row.accountId ? String(row.accountId) : "__none__"}
+                                  onValueChange={v => patchLink(i, { accountId: v === "__none__" ? null : parseInt(v) })}>
+                                  <SelectTrigger className="h-6 text-[11px] px-1.5 border-slate-200 focus:ring-0 focus:ring-offset-0 bg-white rounded">
+                                    <SelectValue placeholder="— اختر —" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="__none__">— بدون —</SelectItem>
+                                    {(chartAccounts as any[]).map(a => (
+                                      <SelectItem key={a.id} value={String(a.id)}>{a.code} — {a.nameAr}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </td>
+                              <td className={`${tdCls} text-[11px] text-slate-600`}>{acct?.nameAr ?? ""}</td>
+                              <td className={`${tdCls} text-center`}>
+                                <button onClick={() => removeLink(i)}
+                                  className="w-5 h-5 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 text-[13px] leading-none flex items-center justify-center">×</button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr>
+                          <td colSpan={5} className="px-2 py-1.5">
+                            <button onClick={addLink}
+                              className="text-[11px] text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
+                              <span className="text-[14px] leading-none">+</span> إضافة حساب
+                            </button>
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </P>
+
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* ── TAB: خصائص السندات المصدرة ── */}
             {activeTab === "issuance" && (
