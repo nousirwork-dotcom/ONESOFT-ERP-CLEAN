@@ -8,6 +8,7 @@ import { purchasesRouter } from './purchases.js';
 import { chatRouter } from './chat.js';
 import { documentJournalsRouter } from './documentJournals.js';
 import { documentTemplatesRouter } from './documentTemplates.js';
+import { postingDefinitionsRouter } from './postingDefinitions.js';
 import { documentTypesRouter } from './documentTypes.js';
 import { documentSendRouter } from './documentSend.js';
 import { postingRouter } from './posting.js';
@@ -277,6 +278,7 @@ export const appRouter = router({
   documentJournals: documentJournalsRouter,
   documentTemplates: documentTemplatesRouter,
   documentTypes: documentTypesRouter,
+  postingDefinitions: postingDefinitionsRouter,
   documentSend: documentSendRouter,
   posting: postingRouter,
   currencies: currenciesRouter,

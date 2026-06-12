@@ -827,6 +827,30 @@ export const currencies = pgTable('currencies', {
   updatedAt:      timestamp('updated_at').notNull().defaultNow(),
 });
 
+// ─── Posting Definitions ─────────────────────────────────────────────────────
+export const postingDefinitions = pgTable('posting_definitions', {
+  id:        serial('id').primaryKey(),
+  orgId:     integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  docType:   varchar('doc_type', { length: 30 }).notNull(),
+  variant:   varchar('variant', { length: 20 }).notNull().default(''),
+  name:      varchar('name', { length: 200 }).notNull(),
+  isActive:  boolean('is_active').notNull().default(true),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const postingDefinitionLines = pgTable('posting_definition_lines', {
+  id:           serial('id').primaryKey(),
+  orgId:        integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  definitionId: integer('definition_id').notNull().references(() => postingDefinitions.id, { onDelete: 'cascade' }),
+  description:  varchar('description', { length: 200 }),
+  accountId:    integer('account_id').references(() => chartOfAccounts.id, { onDelete: 'set null' }),
+  direction:    varchar('direction', { length: 10 }).notNull().default('debit'),
+  amountSource: varchar('amount_source', { length: 50 }).notNull().default('total'),
+  sortOrder:    integer('sort_order').notNull().default(0),
+});
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type Organization = typeof organizations.$inferSelect;
 export type User = typeof users.$inferSelect;
