@@ -225,21 +225,35 @@ function FieldCodeSearch({
 
   return (
     <div ref={wrapRef} className="relative w-full">
-      <div className="px-1.5 py-0.5">
-        <input
-          value={q}
-          dir="ltr"
-          onChange={e => { setQ(e.target.value); setOpen(true); setHi(0); }}
-          onFocus={() => { setOpen(true); setQ(""); }}
-          onBlur={() => setTimeout(() => { if (!wrapRef.current?.contains(document.activeElement)) { setOpen(false); setQ(selectedCode); } }, 120)}
-          onKeyDown={onKey}
-          placeholder="كود الحقل..."
-          className="h-5 w-full text-[10px] px-1 border-0 bg-transparent outline-none focus:bg-indigo-50 font-mono text-slate-700 placeholder:text-slate-300 rounded"
-        />
-        {selected && (
-          <div className="text-[9px] text-indigo-600 truncate px-1 leading-tight">{selected.nameAr}</div>
-        )}
-      </div>
+      {!open ? (
+        <button
+          type="button"
+          onClick={() => { setOpen(true); setQ(""); setTimeout(() => (wrapRef.current?.querySelector("input") as HTMLInputElement)?.focus(), 10); }}
+          className="w-full text-right px-2 py-1 hover:bg-indigo-50/60 transition-colors min-h-[32px] flex flex-col justify-center"
+        >
+          {selected ? (
+            <>
+              <span className="font-mono text-[10px] text-slate-700 leading-tight">{selected.code}</span>
+              <span className="text-[9px] text-indigo-600 leading-tight truncate">{selected.nameAr}</span>
+            </>
+          ) : (
+            <span className="text-[10px] text-slate-300 italic">— اختر حقلاً —</span>
+          )}
+        </button>
+      ) : (
+        <div className="px-1.5 py-0.5">
+          <input
+            autoFocus
+            value={q}
+            dir="ltr"
+            onChange={e => { setQ(e.target.value); setHi(0); }}
+            onBlur={() => setTimeout(() => { if (!wrapRef.current?.contains(document.activeElement)) { setOpen(false); setQ(selectedCode); } }, 120)}
+            onKeyDown={onKey}
+            placeholder="بحث بالكود أو الاسم..."
+            className="h-5 w-full text-[10px] px-1 border border-indigo-300 bg-indigo-50 outline-none font-mono text-slate-700 placeholder:text-slate-300 rounded"
+          />
+        </div>
+      )}
       {open && (
         <div className="absolute top-full right-0 z-[9990] mt-0.5 w-80 bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden" dir="rtl">
           <div className="overflow-y-auto max-h-52">
