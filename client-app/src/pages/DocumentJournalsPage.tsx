@@ -31,6 +31,13 @@ type JournalForm = {
   itemStats: boolean; customerSupplierStats: boolean;
   preventNegativeInventory: boolean; requireNote: boolean;
   preventEditIfLinked: boolean; requireCustomerCode: boolean; requireEmployeeCode: boolean;
+  showWarehouseCol: boolean; showUnitCol: boolean; autoCalcPrices: boolean;
+  editItemNames: boolean; editServiceNames: boolean;
+  suggestLastBuyPrice: boolean; suggestLastPurchaseOrder: boolean;
+  allowForeignCurrency: boolean; usePriceUnitsOnly: boolean; allowOverdraft: boolean;
+  maxUnitsCount: string; suggestedSalesUnit: string; returnPeriodDays: string;
+  availableQtyDisplay: string; currentQtyDisplay: string;
+  colWidthItemCode: string; colWidthItemName: string; colWidthUnit: string; colWidthAccount: string;
 };
 
 type DBJournal = {
@@ -63,6 +70,13 @@ const EMPTY: JournalForm = {
   itemStats: false, customerSupplierStats: false,
   preventNegativeInventory: false, requireNote: false,
   preventEditIfLinked: false, requireCustomerCode: false, requireEmployeeCode: false,
+  showWarehouseCol: true, showUnitCol: true, autoCalcPrices: false,
+  editItemNames: false, editServiceNames: false,
+  suggestLastBuyPrice: false, suggestLastPurchaseOrder: false,
+  allowForeignCurrency: false, usePriceUnitsOnly: false, allowOverdraft: false,
+  maxUnitsCount: "3", suggestedSalesUnit: "", returnPeriodDays: "0",
+  availableQtyDisplay: "show", currentQtyDisplay: "show",
+  colWidthItemCode: "0", colWidthItemName: "32", colWidthUnit: "12", colWidthAccount: "25",
 };
 
 /* ── أنواع السندات (sales journal only) ── */
@@ -389,6 +403,25 @@ function dbToForm(j: DBJournal): JournalForm {
     preventEditIfLinked: oc.preventEditIfLinked ?? false,
     requireCustomerCode: oc.requireCustomerCode ?? false,
     requireEmployeeCode: oc.requireEmployeeCode ?? false,
+    showWarehouseCol:         oc.showWarehouseCol         ?? true,
+    showUnitCol:              oc.showUnitCol              ?? true,
+    autoCalcPrices:           oc.autoCalcPrices           ?? false,
+    editItemNames:            oc.editItemNames            ?? false,
+    editServiceNames:         oc.editServiceNames         ?? false,
+    suggestLastBuyPrice:      oc.suggestLastBuyPrice      ?? false,
+    suggestLastPurchaseOrder: oc.suggestLastPurchaseOrder ?? false,
+    allowForeignCurrency:     oc.allowForeignCurrency     ?? false,
+    usePriceUnitsOnly:        oc.usePriceUnitsOnly        ?? false,
+    allowOverdraft:           oc.allowOverdraft           ?? false,
+    maxUnitsCount:            oc.maxUnitsCount            ?? "3",
+    suggestedSalesUnit:       oc.suggestedSalesUnit       ?? "",
+    returnPeriodDays:         oc.returnPeriodDays         ?? "0",
+    availableQtyDisplay:      oc.availableQtyDisplay      ?? "show",
+    currentQtyDisplay:        oc.currentQtyDisplay        ?? "show",
+    colWidthItemCode:         oc.colWidthItemCode         ?? "0",
+    colWidthItemName:         oc.colWidthItemName         ?? "32",
+    colWidthUnit:             oc.colWidthUnit             ?? "12",
+    colWidthAccount:          oc.colWidthAccount          ?? "25",
   };
 }
 
@@ -547,6 +580,25 @@ export default function DocumentJournalsPage() {
         preventEditIfLinked:      form.preventEditIfLinked,
         requireCustomerCode:      form.requireCustomerCode,
         requireEmployeeCode:      form.requireEmployeeCode,
+        showWarehouseCol:         form.showWarehouseCol,
+        showUnitCol:              form.showUnitCol,
+        autoCalcPrices:           form.autoCalcPrices,
+        editItemNames:            form.editItemNames,
+        editServiceNames:         form.editServiceNames,
+        suggestLastBuyPrice:      form.suggestLastBuyPrice,
+        suggestLastPurchaseOrder: form.suggestLastPurchaseOrder,
+        allowForeignCurrency:     form.allowForeignCurrency,
+        usePriceUnitsOnly:        form.usePriceUnitsOnly,
+        allowOverdraft:           form.allowOverdraft,
+        maxUnitsCount:            form.maxUnitsCount,
+        suggestedSalesUnit:       form.suggestedSalesUnit,
+        returnPeriodDays:         form.returnPeriodDays,
+        availableQtyDisplay:      form.availableQtyDisplay,
+        currentQtyDisplay:        form.currentQtyDisplay,
+        colWidthItemCode:         form.colWidthItemCode,
+        colWidthItemName:         form.colWidthItemName,
+        colWidthUnit:             form.colWidthUnit,
+        colWidthAccount:          form.colWidthAccount,
       },
       sortOrder:        0,
     };
@@ -1184,6 +1236,82 @@ export default function DocumentJournalsPage() {
                 </div>
 
               </P>
+
+              {/* ── خيارات الأصناف ── */}
+              <P title="خيارات الأصناف">
+                <div className="grid grid-cols-2 gap-x-8 gap-y-2.5">
+                  <R label="أقصى عدد الوحدات" lw={160}>
+                    <FS value={form.maxUnitsCount} onValueChange={v => set("maxUnitsCount", v)}>
+                      <SelectItem value="1">وحدة واحدة</SelectItem>
+                      <SelectItem value="2">وحدتان</SelectItem>
+                      <SelectItem value="3">ثلاث وحدات</SelectItem>
+                    </FS>
+                  </R>
+                  <R label="وحدة البيع المقترحة" lw={160}>
+                    <FI value={form.suggestedSalesUnit} onChange={v => set("suggestedSalesUnit", v)} placeholder="مثال: قطعة" />
+                  </R>
+                  <R label="فترة الارتجاع (يوم)" lw={160}>
+                    <FI value={form.returnPeriodDays} onChange={v => set("returnPeriodDays", v)} placeholder="0" mono />
+                  </R>
+                  <div className="flex items-center pt-1">
+                    <CB label="استخدام وحدات السعر فقط" checked={form.usePriceUnitsOnly} onChange={v => set("usePriceUnitsOnly", v)} />
+                  </div>
+                </div>
+              </P>
+
+              {/* ── خيارات سندات المبيعات ── */}
+              <P title="خيارات سندات المبيعات والمشتريات">
+                <div className="flex flex-wrap gap-x-5 gap-y-2">
+                  <CB label="عرض عمود المخزن"         checked={form.showWarehouseCol}         onChange={v => set("showWarehouseCol", v)} />
+                  <CB label="عرض عمود الوحدات"        checked={form.showUnitCol}              onChange={v => set("showUnitCol", v)} />
+                  <CB label="حساب أسعار البيع آلياً"   checked={form.autoCalcPrices}           onChange={v => set("autoCalcPrices", v)} />
+                  <CB label="تعديل أسماء الأصناف"      checked={form.editItemNames}            onChange={v => set("editItemNames", v)} />
+                  <CB label="تعديل أسماء الخدمات"      checked={form.editServiceNames}         onChange={v => set("editServiceNames", v)} />
+                  <CB label="اقتراح آخر سعر شراء"      checked={form.suggestLastBuyPrice}      onChange={v => set("suggestLastBuyPrice", v)} />
+                  <CB label="اقتراح آخر أمر شراء"      checked={form.suggestLastPurchaseOrder} onChange={v => set("suggestLastPurchaseOrder", v)} />
+                  <CB label="البيع بعملات أجنبية"       checked={form.allowForeignCurrency}     onChange={v => set("allowForeignCurrency", v)} />
+                </div>
+              </P>
+
+              {/* ── خيارات الكميات ── */}
+              <P title="خيارات الكميات">
+                <div className="grid grid-cols-2 gap-x-8 gap-y-2.5">
+                  <R label="الكمية المتاحة" lw={140}>
+                    <FS value={form.availableQtyDisplay} onValueChange={v => set("availableQtyDisplay", v)}>
+                      <SelectItem value="show">إظهار</SelectItem>
+                      <SelectItem value="hide">إخفاء</SelectItem>
+                    </FS>
+                  </R>
+                  <R label="الكمية الموجودة" lw={140}>
+                    <FS value={form.currentQtyDisplay} onValueChange={v => set("currentQtyDisplay", v)}>
+                      <SelectItem value="show">إظهار</SelectItem>
+                      <SelectItem value="hide">إخفاء</SelectItem>
+                    </FS>
+                  </R>
+                  <div className="flex items-center col-span-2 pt-1">
+                    <CB label="السماح بالسحب على المكشوف (بدون رصيد)" checked={form.allowOverdraft} onChange={v => set("allowOverdraft", v)} />
+                  </div>
+                </div>
+              </P>
+
+              {/* ── اتساع الأعمدة ── */}
+              <P title="اتساع أعمدة الأصناف">
+                <div className="grid grid-cols-4 gap-x-4 gap-y-2.5">
+                  <R label="كود الصنف" lw={80}>
+                    <FI value={form.colWidthItemCode} onChange={v => set("colWidthItemCode", v)} placeholder="0" mono />
+                  </R>
+                  <R label="اسم الصنف" lw={80}>
+                    <FI value={form.colWidthItemName} onChange={v => set("colWidthItemName", v)} placeholder="32" mono />
+                  </R>
+                  <R label="الوحدة" lw={60}>
+                    <FI value={form.colWidthUnit} onChange={v => set("colWidthUnit", v)} placeholder="12" mono />
+                  </R>
+                  <R label="الحساب" lw={60}>
+                    <FI value={form.colWidthAccount} onChange={v => set("colWidthAccount", v)} placeholder="25" mono />
+                  </R>
+                </div>
+              </P>
+
             </div>
             )}
 
