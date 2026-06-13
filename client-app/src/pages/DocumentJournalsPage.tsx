@@ -172,6 +172,99 @@ function AccCodeSearch({
   );
 }
 
+/* ──────────────── FieldCodeSearch ──────────────── */
+function FieldCodeSearch({
+  allFields,
+  selectedCode,
+  onChange,
+}: {
+  allFields: any[];
+  selectedCode: string;
+  onChange: (code: string) => void;
+}) {
+  const selected = useMemo(() => allFields.find((f: any) => f.code === selectedCode) ?? null, [allFields, selectedCode]);
+  const [q, setQ]     = useState(selectedCode);
+  const [open, setOpen] = useState(false);
+  const [hi, setHi]   = useState(0);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { if (!open) setQ(selectedCode); }, [selectedCode, open]);
+
+  const filtered = useMemo(() => {
+    const sq = normalizeArDJ(q.trim());
+    if (!sq) return allFields.slice(0, 40);
+    const codeFirst = allFields.filter((f: any) => normalizeArDJ(f.code ?? "").startsWith(sq));
+    const rest      = allFields.filter((f: any) =>
+      !normalizeArDJ(f.code ?? "").startsWith(sq) &&
+      (normalizeArDJ(f.code ?? "").includes(sq) ||
+       normalizeArDJ(f.nameAr ?? "").includes(sq) ||
+       normalizeArDJ(f.nameEn ?? "").includes(sq))
+    );
+    return [...codeFirst, ...rest].slice(0, 40);
+  }, [q, allFields]);
+
+  useEffect(() => { setHi(0); }, [filtered]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const pick = (f: any) => { onChange(f.code); setQ(f.code); setOpen(false); };
+  const clear = () => { onChange(""); setQ(""); setOpen(false); };
+
+  const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); setHi(h => Math.min(h + 1, filtered.length - 1)); setOpen(true); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setHi(h => Math.max(h - 1, 0)); }
+    else if (e.key === "Escape") { setOpen(false); setQ(selectedCode); }
+    else if ((e.key === "Enter" || e.key === "Tab") && open && filtered[hi]) { e.preventDefault(); pick(filtered[hi]); }
+  };
+
+  return (
+    <div ref={wrapRef} className="relative w-full">
+      <div className="px-1.5 py-0.5">
+        <input
+          value={q}
+          dir="ltr"
+          onChange={e => { setQ(e.target.value); setOpen(true); setHi(0); }}
+          onFocus={() => { setOpen(true); setQ(""); }}
+          onBlur={() => setTimeout(() => { if (!wrapRef.current?.contains(document.activeElement)) { setOpen(false); setQ(selectedCode); } }, 120)}
+          onKeyDown={onKey}
+          placeholder="كود الحقل..."
+          className="h-5 w-full text-[10px] px-1 border-0 bg-transparent outline-none focus:bg-indigo-50 font-mono text-slate-700 placeholder:text-slate-300 rounded"
+        />
+        {selected && (
+          <div className="text-[9px] text-indigo-600 truncate px-1 leading-tight">{selected.nameAr}</div>
+        )}
+      </div>
+      {open && (
+        <div className="absolute top-full right-0 z-[9990] mt-0.5 w-80 bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden" dir="rtl">
+          <div className="overflow-y-auto max-h-52">
+            <button onMouseDown={clear}
+              className="w-full flex items-center gap-2 px-2 py-1.5 text-[11px] text-slate-400 hover:bg-slate-50 border-b border-slate-100">
+              — بدون حقل —
+            </button>
+            {filtered.length === 0 && <div className="text-[11px] text-center text-slate-400 py-3">لا نتائج</div>}
+            {filtered.map((f: any, idx: number) => (
+              <button key={f.id} onMouseDown={() => pick(f)}
+                className={`w-full flex items-center gap-2 px-2 py-1.5 text-[11px] transition-colors ${idx === hi ? "bg-indigo-50" : "hover:bg-slate-50"}`}
+              >
+                <span className="font-mono text-[10px] text-slate-500 w-24 text-left shrink-0">{f.code}</span>
+                <span className="flex-1 text-right truncate text-slate-700">{f.nameAr}</span>
+                <span className="text-[9px] text-slate-400 shrink-0">{f.fieldType}</span>
+              </button>
+            ))}
+          </div>
+          <div className="px-2 py-1 border-t border-slate-100 bg-slate-50 text-[9px] text-slate-400">↑↓ تنقل · Enter اختيار · بحث بالكود أو الاسم</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ──────────────── document types ──────────────── */
 const DOC_TYPES = [
   { id: "sales_invoice",    label: "فاتورة مبيعات",    icon: <BookOpen className="w-3.5 h-3.5" /> },
@@ -317,7 +410,8 @@ export default function DocumentJournalsPage() {
   const { data: templates }       = trpc.documentTemplates.list.useQuery({ docType: selectedType });
   const { data: custJournalsList }  = trpc.documentJournals.list.useQuery({ docType: "customers_journal" });
   const { data: suppJournalsList }  = trpc.documentJournals.list.useQuery({ docType: "suppliers_journal" });
-  const { data: chartAccounts = [] } = trpc.accounts.list.useQuery();
+  const { data: chartAccounts = [] }   = trpc.accounts.list.useQuery();
+  const { data: fieldDictList = [] }   = trpc.fieldDictionary.list.useQuery();
 
   /* ── mutations ── */
   const createMut = trpc.documentJournals.create.useMutation({
@@ -922,7 +1016,13 @@ export default function DocumentJournalsPage() {
                             >
                               <td className="px-2 py-1 text-[11px] text-slate-400 text-center">{i + 1}</td>
                               <td className={tdCls}>{cellInput(row.description, v => patchLink(i, { description: v }))}</td>
-                              <td className={tdCls}>{cellInput(row.postingName, v => patchLink(i, { postingName: v }))}</td>
+                              <td className="py-0" style={{ borderRight: "1px solid #eef2f7", borderLeft: "1px solid #eef2f7" }}>
+                                <FieldCodeSearch
+                                  allFields={fieldDictList as any[]}
+                                  selectedCode={row.postingName}
+                                  onChange={v => patchLink(i, { postingName: v })}
+                                />
+                              </td>
                               <td className="py-0" style={{ borderRight: "1px solid #eef2f7", borderLeft: "1px solid #eef2f7" }}>
                                 <AccCodeSearch
                                   allAccounts={chartAccounts as any[]}
