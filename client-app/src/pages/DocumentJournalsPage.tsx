@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -80,6 +80,96 @@ function normalizePtConfig(raw: any): PTC {
   if (!raw) return DEFAULT_PTC;
   if (Array.isArray(raw.types)) return raw as PTC;
   return DEFAULT_PTC;
+}
+
+/* ── مكوّن بحث الحساب (مثل المخازن) ── */
+const normalizeArDJ = (s: string) =>
+  (s ?? "").toLowerCase().replace(/[أإآ]/g, "ا").replace(/ة/g, "ه").replace(/ى/g, "ي");
+
+function AccCodeSearch({
+  allAccounts,
+  selectedId,
+  onChange,
+}: {
+  allAccounts: any[];
+  selectedId: number | null;
+  onChange: (id: number | null) => void;
+}) {
+  const selected = useMemo(() => allAccounts.find((a: any) => a.id === selectedId) ?? null, [allAccounts, selectedId]);
+  const [q, setQ]     = useState(selected?.code ?? "");
+  const [open, setOpen] = useState(false);
+  const [hi, setHi]   = useState(0);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { setQ(selected?.code ?? ""); }, [selected?.code]);
+
+  const filtered = useMemo(() => {
+    const sq = normalizeArDJ(q.trim());
+    if (!sq) return allAccounts.slice(0, 30);
+    const codeFirst = allAccounts.filter((a: any) => normalizeArDJ(a.code ?? "").startsWith(sq));
+    const rest      = allAccounts.filter((a: any) =>
+      !normalizeArDJ(a.code ?? "").startsWith(sq) &&
+      (normalizeArDJ(a.code ?? "").includes(sq) || normalizeArDJ(a.nameAr ?? "").includes(sq))
+    );
+    return [...codeFirst, ...rest].slice(0, 30);
+  }, [q, allAccounts]);
+
+  useEffect(() => { setHi(0); }, [filtered]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const pick = (a: any) => { onChange(a.id); setQ(a.code ?? ""); setOpen(false); };
+  const clear = () => { onChange(null); setQ(""); setOpen(false); };
+
+  const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); setHi(h => Math.min(h + 1, filtered.length - 1)); setOpen(true); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setHi(h => Math.max(h - 1, 0)); }
+    else if (e.key === "Escape") { setOpen(false); setQ(selected?.code ?? ""); }
+    else if ((e.key === "Enter" || e.key === "Tab") && open && filtered[hi]) { e.preventDefault(); pick(filtered[hi]); }
+  };
+
+  return (
+    <div ref={wrapRef} className="relative w-full">
+      <input
+        value={open || !selected ? q : (selected?.code ?? "")}
+        dir="ltr"
+        onChange={e => { setQ(e.target.value); setOpen(true); setHi(0); }}
+        onFocus={() => { setOpen(true); if (selected) setQ(""); }}
+        onBlur={() => setTimeout(() => { if (!wrapRef.current?.contains(document.activeElement)) { setOpen(false); setQ(selected?.code ?? ""); } }, 120)}
+        onKeyDown={onKey}
+        placeholder="كود..."
+        className="h-5 w-full text-[10px] px-1.5 border-0 bg-transparent outline-none focus:bg-indigo-50 font-mono text-slate-700 placeholder:text-slate-300"
+      />
+      {open && (
+        <div className="absolute top-full right-0 z-[9990] mt-0.5 w-72 bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden" dir="rtl">
+          <div className="overflow-y-auto max-h-48">
+            <button
+              onMouseDown={clear}
+              className="w-full flex items-center gap-2 px-2 py-1 text-[11px] text-slate-400 hover:bg-slate-50 transition-colors"
+            >
+              — بدون حساب —
+            </button>
+            {filtered.length === 0 && <div className="text-[11px] text-center text-slate-400 py-3">لا نتائج</div>}
+            {filtered.map((a: any, idx: number) => (
+              <button key={a.id} onMouseDown={() => pick(a)}
+                className={`w-full flex items-center gap-2 px-2 py-1 text-[11px] transition-colors ${idx === hi ? "bg-indigo-50" : "hover:bg-slate-50"}`}
+              >
+                <span className="font-mono text-[10px] text-slate-400 w-16 text-left shrink-0">{a.code}</span>
+                <span className="flex-1 text-right truncate text-slate-700">{a.nameAr}</span>
+              </button>
+            ))}
+          </div>
+          <div className="px-2 py-1 border-t border-slate-100 bg-slate-50 text-[9px] text-slate-400">↑↓ تنقل · Enter اختيار</div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ──────────────── document types ──────────────── */
@@ -809,38 +899,37 @@ export default function DocumentJournalsPage() {
 
                   {/* ─── جدول 2: الروابط المحاسبية ─── */}
                   <P title="الروابط المحاسبية">
-                    <table className="w-full border-collapse">
+                    <table className="w-full" style={{ borderCollapse: "separate", borderSpacing: 0 }}>
                       <thead>
-                        <tr>
-                          <th className={thCls} style={{ width: "22%" }}>بيان</th>
-                          <th className={thCls} style={{ width: "22%" }}>اسم الترحيل</th>
-                          <th className={thCls} style={{ width: "22%" }}>كود الحساب</th>
+                        <tr style={{ background: "linear-gradient(to left, #f1f5f9, #eef2f7)" }}>
+                          <th className={thCls} style={{ width: "26%" }}>بيان</th>
+                          <th className={thCls} style={{ width: "22%" }}>المصدر</th>
+                          <th className={thCls} style={{ width: 110, borderRight: "1px solid #e8edf3" }}>كود الحساب</th>
                           <th className={thCls}>اسم الحساب</th>
                           <th className="w-6 bg-slate-50 border-b border-slate-200"></th>
                         </tr>
                       </thead>
                       <tbody>
                         {ptConfig.accountLinks.map((row, i) => {
-                          const acct = (chartAccounts as any[]).find(a => a.id === row.accountId);
+                          const acct = (chartAccounts as any[]).find((a: any) => a.id === row.accountId);
+                          const even = i % 2 === 0;
                           return (
-                            <tr key={row.id} className="hover:bg-slate-50/50">
+                            <tr key={row.id}
+                              style={{ background: even ? "#ffffff" : "#f8fafc", borderBottom: "1px solid #f0f4f8" }}
+                              className="hover:bg-indigo-50/20"
+                            >
                               <td className={tdCls}>{cellInput(row.description, v => patchLink(i, { description: v }))}</td>
                               <td className={tdCls}>{cellInput(row.postingName, v => patchLink(i, { postingName: v }))}</td>
-                              <td className={tdCls}>
-                                <Select value={row.accountId ? String(row.accountId) : "__none__"}
-                                  onValueChange={v => patchLink(i, { accountId: v === "__none__" ? null : parseInt(v) })}>
-                                  <SelectTrigger className="h-6 text-[11px] px-1.5 border-slate-200 focus:ring-0 focus:ring-offset-0 bg-white rounded">
-                                    <SelectValue placeholder="— اختر —" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="__none__">— بدون —</SelectItem>
-                                    {(chartAccounts as any[]).map(a => (
-                                      <SelectItem key={a.id} value={String(a.id)}>{a.code} — {a.nameAr}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+                              <td className="py-0" style={{ borderRight: "1px solid #eef2f7", borderLeft: "1px solid #eef2f7" }}>
+                                <AccCodeSearch
+                                  allAccounts={chartAccounts as any[]}
+                                  selectedId={row.accountId}
+                                  onChange={v => patchLink(i, { accountId: v })}
+                                />
                               </td>
-                              <td className={`${tdCls} text-[11px] text-slate-600`}>{acct?.nameAr ?? ""}</td>
+                              <td className="px-2 py-1 text-[11px] text-slate-600 truncate" style={{ maxWidth: 180 }}>
+                                {acct?.nameAr ?? <span className="text-slate-300">—</span>}
+                              </td>
                               <td className={`${tdCls} text-center`}>
                                 <button onClick={() => removeLink(i)}
                                   className="w-5 h-5 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 text-[13px] leading-none flex items-center justify-center">×</button>
