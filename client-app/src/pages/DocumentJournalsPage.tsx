@@ -67,7 +67,7 @@ const EMPTY: JournalForm = {
 
 /* ── أنواع السندات (sales journal only) ── */
 type PaymentTypeRow = { id: string; nameAr: string; nameEn: string; codeAr: string; codeEn: string; };
-type AccountLinkRow = { id: string; description: string; postingName: string; accountId: number | null; };
+type AccountLinkRow = { id: string; description: string; postingName: string; accountId: number | null; postingSide: string; };
 type PTC = { types: PaymentTypeRow[]; accountLinks: AccountLinkRow[]; };
 const DEFAULT_PTC: PTC = {
   types: [
@@ -844,7 +844,7 @@ export default function DocumentJournalsPage() {
               };
               const addLink = () => {
                 const newId = String(Date.now());
-                setPtConfig(p => ({ ...p, accountLinks: [...p.accountLinks, { id: newId, description: "", postingName: "", accountId: null }] }));
+                setPtConfig(p => ({ ...p, accountLinks: [...p.accountLinks, { id: newId, description: "", postingName: "", accountId: null, postingSide: "" }] }));
                 setIsDirty(true);
               };
               const removeLink = (idx: number) => {
@@ -902,10 +902,12 @@ export default function DocumentJournalsPage() {
                     <table className="w-full" style={{ borderCollapse: "separate", borderSpacing: 0 }}>
                       <thead>
                         <tr style={{ background: "linear-gradient(to left, #f1f5f9, #eef2f7)" }}>
-                          <th className={thCls} style={{ width: "26%" }}>بيان<br/><span className="font-normal text-[9px] text-slate-400">Description</span></th>
-                          <th className={thCls} style={{ width: "22%" }}>حقل المصدر<br/><span className="font-normal text-[9px] text-slate-400">Source Field</span></th>
+                          <th className={thCls} style={{ width: 28 }}>#</th>
+                          <th className={thCls} style={{ width: "23%" }}>بيان<br/><span className="font-normal text-[9px] text-slate-400">Description</span></th>
+                          <th className={thCls} style={{ width: "18%" }}>حقل المصدر<br/><span className="font-normal text-[9px] text-slate-400">Source Field</span></th>
                           <th className={thCls} style={{ width: 110, borderRight: "1px solid #e8edf3" }}>كود الحساب<br/><span className="font-normal text-[9px] text-slate-400">Account Code</span></th>
                           <th className={thCls}>اسم الحساب<br/><span className="font-normal text-[9px] text-slate-400">Account Name</span></th>
+                          <th className={thCls} style={{ width: 100 }}>اتجاه القيد<br/><span className="font-normal text-[9px] text-slate-400">Posting Side</span></th>
                           <th className="w-6 bg-slate-50 border-b border-slate-200"></th>
                         </tr>
                       </thead>
@@ -918,6 +920,7 @@ export default function DocumentJournalsPage() {
                               style={{ background: even ? "#ffffff" : "#f8fafc", borderBottom: "1px solid #f0f4f8" }}
                               className="hover:bg-indigo-50/20"
                             >
+                              <td className="px-2 py-1 text-[11px] text-slate-400 text-center">{i + 1}</td>
                               <td className={tdCls}>{cellInput(row.description, v => patchLink(i, { description: v }))}</td>
                               <td className={tdCls}>{cellInput(row.postingName, v => patchLink(i, { postingName: v }))}</td>
                               <td className="py-0" style={{ borderRight: "1px solid #eef2f7", borderLeft: "1px solid #eef2f7" }}>
@@ -927,8 +930,20 @@ export default function DocumentJournalsPage() {
                                   onChange={v => patchLink(i, { accountId: v })}
                                 />
                               </td>
-                              <td className="px-2 py-1 text-[11px] text-slate-600 truncate" style={{ maxWidth: 180 }}>
+                              <td className="px-2 py-1 text-[11px] text-slate-600 truncate" style={{ maxWidth: 160 }}>
                                 {acct?.name ?? <span className="text-slate-300">—</span>}
+                              </td>
+                              <td className="py-0 px-1">
+                                <select
+                                  value={row.postingSide}
+                                  onChange={e => patchLink(i, { postingSide: e.target.value })}
+                                  className="w-full h-7 text-[11px] bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-indigo-300 rounded px-1 cursor-pointer"
+                                  style={{ direction: "rtl" }}
+                                >
+                                  <option value="">— اختر —</option>
+                                  <option value="debit">مدين (Debit)</option>
+                                  <option value="credit">دائن (Credit)</option>
+                                </select>
                               </td>
                               <td className={`${tdCls} text-center`}>
                                 <button onClick={() => removeLink(i)}
@@ -940,7 +955,7 @@ export default function DocumentJournalsPage() {
                       </tbody>
                       <tfoot>
                         <tr>
-                          <td colSpan={5} className="px-2 py-1.5">
+                          <td colSpan={7} className="px-2 py-1.5">
                             <button onClick={addLink}
                               className="text-[11px] text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
                               <span className="text-[14px] leading-none">+</span> إضافة حساب
