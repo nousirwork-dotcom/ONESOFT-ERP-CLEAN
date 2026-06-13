@@ -109,7 +109,7 @@ function AccCodeSearch({
     const codeFirst = allAccounts.filter((a: any) => normalizeArDJ(a.code ?? "").startsWith(sq));
     const rest      = allAccounts.filter((a: any) =>
       !normalizeArDJ(a.code ?? "").startsWith(sq) &&
-      (normalizeArDJ(a.code ?? "").includes(sq) || normalizeArDJ(a.nameAr ?? "").includes(sq))
+      (normalizeArDJ(a.code ?? "").includes(sq) || normalizeArDJ(a.name ?? "").includes(sq))
     );
     return [...codeFirst, ...rest].slice(0, 30);
   }, [q, allAccounts]);
@@ -161,7 +161,7 @@ function AccCodeSearch({
                 className={`w-full flex items-center gap-2 px-2 py-1 text-[11px] transition-colors ${idx === hi ? "bg-indigo-50" : "hover:bg-slate-50"}`}
               >
                 <span className="font-mono text-[10px] text-slate-400 w-16 text-left shrink-0">{a.code}</span>
-                <span className="flex-1 text-right truncate text-slate-700">{a.nameAr}</span>
+                <span className="flex-1 text-right truncate text-slate-700">{a.name}</span>
               </button>
             ))}
           </div>
@@ -928,7 +928,7 @@ export default function DocumentJournalsPage() {
                                 />
                               </td>
                               <td className="px-2 py-1 text-[11px] text-slate-600 truncate" style={{ maxWidth: 180 }}>
-                                {acct?.nameAr ?? <span className="text-slate-300">—</span>}
+                                {acct?.name ?? <span className="text-slate-300">—</span>}
                               </td>
                               <td className={`${tdCls} text-center`}>
                                 <button onClick={() => removeLink(i)}
@@ -981,7 +981,7 @@ export default function DocumentJournalsPage() {
                           <SelectItem value="__none__">— بدون —</SelectItem>
                           {chartAccounts.map((a: any) => (
                             <SelectItem key={a.id} value={String(a.id)}>
-                              {a.code} — {a.nameAr}
+                              {a.code} — {a.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
