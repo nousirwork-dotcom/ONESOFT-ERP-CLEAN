@@ -1090,38 +1090,6 @@ export default function DocumentJournalsPage() {
             {activeTab === "issuance" && (
             <div className="h-full overflow-y-auto p-4 space-y-3" dir="rtl">
 
-              {/* قسم 1: الروابط المحاسبية */}
-              <P title="الروابط المحاسبية لنوع السند">
-                <div className="grid grid-cols-2 gap-x-5 gap-y-2.5">
-                  {([
-                    ["إيرادات المبيعات",        "salesAccountId"],
-                    ["ذمم العملاء (آجل)",       "creditAccountId"],
-                    ["الصندوق / النقد",          "cashAccountId"],
-                    ["ضريبة القيمة المضافة",     "taxAccountId"],
-                    ["الخصم المنوح",             "discountAccountId"],
-                  ] as [string, keyof JournalForm][]).map(([label, field]) => (
-                    <R key={field} label={label} lw={145}>
-                      <Select
-                        value={String(form[field]) || "__none__"}
-                        onValueChange={v => set(field, v === "__none__" ? "" : v)}
-                      >
-                        <SelectTrigger className="h-7 text-[11px] px-2 border-slate-200 focus:ring-0 focus:ring-offset-0 bg-white rounded">
-                          <SelectValue placeholder="— بدون —" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none__">— بدون —</SelectItem>
-                          {chartAccounts.map((a: any) => (
-                            <SelectItem key={a.id} value={String(a.id)}>
-                              {a.code} — {a.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </R>
-                  ))}
-                </div>
-              </P>
-
               {/* قسم 2: خصائص السندات المصدرة */}
               <P title="خصائص السندات المصدرة">
                 <div className="grid grid-cols-2 gap-x-5 gap-y-2.5">
