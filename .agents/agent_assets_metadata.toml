@@ -66,3 +66,9 @@ id = "x3dJBJtNIyndged1w6dT_"
 uri = "file://OneSoft-ERP-source.zip"
 type = "unspecified"
 title = "OneSoft ERP — ملفات البرنامج الكاملة"
+
+[[outputs]]
+id = "0bVK6LxrmrnW9mOpKj4Jq"
+uri = "file://onesoft_erp_backup_20260613_2325.zip"
+type = "unspecified"
+title = "OneSoft ERP — نسخة احتياطية 13/06/2026"
