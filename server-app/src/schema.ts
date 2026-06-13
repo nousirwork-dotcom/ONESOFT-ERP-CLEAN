@@ -851,6 +851,22 @@ export const postingDefinitionLines = pgTable('posting_definition_lines', {
   sortOrder:    integer('sort_order').notNull().default(0),
 });
 
+// ─── Field Dictionary ────────────────────────────────────────────────────────
+export const fieldDictionary = pgTable('field_dictionary', {
+  id:          serial('id').primaryKey(),
+  orgId:       integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  code:        varchar('code', { length: 50 }).notNull(),
+  nameAr:      varchar('name_ar', { length: 150 }).notNull(),
+  nameEn:      varchar('name_en', { length: 150 }).notNull(),
+  fieldType:   varchar('field_type', { length: 50 }).notNull().default('Text'),
+  category:    varchar('category', { length: 80 }).notNull().default('Custom Fields'),
+  description: text('description'),
+  isSystem:    boolean('is_system').notNull().default(false),
+  isActive:    boolean('is_active').notNull().default(true),
+  sortOrder:   integer('sort_order').notNull().default(0),
+  createdAt:   timestamp('created_at').notNull().defaultNow(),
+});
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type Organization = typeof organizations.$inferSelect;
 export type User = typeof users.$inferSelect;

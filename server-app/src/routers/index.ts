@@ -13,6 +13,7 @@ import { documentTypesRouter } from './documentTypes.js';
 import { documentSendRouter } from './documentSend.js';
 import { postingRouter } from './posting.js';
 import { currenciesRouter } from './currencies.js';
+import { fieldDictionaryRouter } from './fieldDictionary.js';
 import { appSettingsRouter } from './appSettings.js';
 import { db } from '../db.js';
 import { products, customers, suppliers, chartOfAccounts, warehouses, branches, units, productGroups, journalEntries, journalEntryLines, vouchers, receiptVouchers, paymentVouchers, inventory, stockVouchers, stockVoucherItems, inventoryCounts, inventoryCountItems, freeProducts, salesInvoices, salesInvoiceItems, warehouseAccountLinks, userGroups, userGroupMembers, userCategories, users, documentJournals, documentTypes, costCenters, qrSettings, documentSendLogs, sendSettings } from '../schema.js';
@@ -282,6 +283,7 @@ export const appRouter = router({
   documentSend: documentSendRouter,
   posting: postingRouter,
   currencies: currenciesRouter,
+  fieldDictionary: fieldDictionaryRouter,
   appSettings: appSettingsRouter,
 
   // ─── QR Settings ─────────────────────────────────────────────────────────────

@@ -66,6 +66,7 @@ import SettingsModule, {
   CfgMessagingWhatsAppTab, CfgMessagingTelegramTab, CfgMessagingEmailTab,
   CfgMessagingTemplatesTab, CfgMessagingLogTab,
   CfgPrintSettingsTab, CfgLogoStampTab, CfgSignaturesTab, CfgEmailPdfTab,
+  CfgFieldDictionaryTab,
 } from "./pages/SettingsModule";
 import PostingSettingsPage from "./pages/PostingSettingsPage";
 import PostingOperationsPage from "./pages/PostingOperationsPage";
@@ -194,6 +195,7 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/cfg/currencies":        CfgCurrenciesTab,
   "/cfg/taxes":             CfgTaxesTab,
   "/cfg/fiscal":            CfgFiscalTab,
+  "/cfg/field-dictionary":  CfgFieldDictionaryTab,
   "/cfg/user-categories":   CfgUserCategoriesTab,
   "/cfg/users":             CfgUsersTab,
   "/cfg/user-groups":       CfgUserGroupsTab,

@@ -38,11 +38,12 @@ const menuSections = [
     color: "#a855f7",
     emoji: "📁",
     children: [
-      { id: "company-info",   label: "معلومات الشركة",      status: "done",    path: "/cfg/company" },
-      { id: "currencies",     label: "العملات",              status: "done",    path: "/cfg/currencies" },
-      { id: "taxes",          label: "الضرائب",              status: "done",    path: "/cfg/taxes" },
-      { id: "qr-settings",    label: "إعدادات QR Code",      status: "done",    path: "/cfg/qr-settings" },
-      { id: "fiscal-periods",   label: "الفترات المحاسبية",    status: "done",    path: "/cfg/fiscal" },
+      { id: "company-info",    label: "معلومات الشركة",         status: "done",    path: "/cfg/company" },
+      { id: "currencies",      label: "العملات",               status: "done",    path: "/cfg/currencies" },
+      { id: "taxes",           label: "الضرائب",               status: "done",    path: "/cfg/taxes" },
+      { id: "qr-settings",     label: "إعدادات QR Code",       status: "done",    path: "/cfg/qr-settings" },
+      { id: "fiscal-periods",  label: "الفترات المحاسبية",     status: "done",    path: "/cfg/fiscal" },
+      { id: "field-dictionary",label: "تعريف الحقول (Field Dictionary)", status: "done", path: "/cfg/field-dictionary" },
     ],
   },
   {
@@ -4168,6 +4169,308 @@ function EmailPdfSettingsPage() {
   );
 }
 
+// ─── Field Dictionary ──────────────────────────────────────────────────────────
+
+const FIELD_TYPES = [
+  { value: "Text",      labelAr: "نص",              labelEn: "Text" },
+  { value: "LongText",  labelAr: "نص طويل",          labelEn: "Long Text" },
+  { value: "Number",    labelAr: "رقم",              labelEn: "Number" },
+  { value: "Amount",    labelAr: "مبلغ",             labelEn: "Amount" },
+  { value: "Percentage",labelAr: "نسبة",             labelEn: "Percentage" },
+  { value: "Date",      labelAr: "تاريخ",            labelEn: "Date" },
+  { value: "Time",      labelAr: "وقت",              labelEn: "Time" },
+  { value: "DateTime",  labelAr: "تاريخ ووقت",       labelEn: "DateTime" },
+  { value: "Boolean",   labelAr: "نعم / لا",         labelEn: "Boolean" },
+  { value: "Customer",  labelAr: "عميل",             labelEn: "Customer" },
+  { value: "Vendor",    labelAr: "مورد",             labelEn: "Vendor" },
+  { value: "Employee",  labelAr: "موظف",             labelEn: "Employee" },
+  { value: "User",      labelAr: "مستخدم",           labelEn: "User" },
+  { value: "Item",      labelAr: "صنف",              labelEn: "Item" },
+  { value: "Warehouse", labelAr: "مستودع",           labelEn: "Warehouse" },
+  { value: "Branch",    labelAr: "فرع",              labelEn: "Branch" },
+  { value: "Account",   labelAr: "حساب محاسبي",      labelEn: "Account" },
+  { value: "Currency",  labelAr: "عملة",             labelEn: "Currency" },
+  { value: "Unit",      labelAr: "وحدة قياس",        labelEn: "Unit" },
+  { value: "Image",     labelAr: "صورة",             labelEn: "Image" },
+  { value: "File",      labelAr: "ملف",              labelEn: "File" },
+  { value: "URL",       labelAr: "رابط",             labelEn: "URL" },
+  { value: "Email",     labelAr: "بريد إلكتروني",    labelEn: "Email" },
+  { value: "Phone",     labelAr: "رقم هاتف",         labelEn: "Phone" },
+];
+
+const FIELD_CATEGORIES = [
+  "Document Fields", "Customer Fields", "Vendor Fields", "Item Fields",
+  "Inventory Fields", "Accounting Fields", "Sales Fields", "Purchase Fields",
+  "Financial Fields", "Employee Fields", "Branch Fields", "Company Fields",
+  "System Fields", "Custom Fields",
+];
+
+const CATEGORY_AR: Record<string, string> = {
+  "Document Fields":  "بيانات المستند",
+  "Customer Fields":  "بيانات العميل",
+  "Vendor Fields":    "بيانات المورد",
+  "Item Fields":      "بيانات الأصناف",
+  "Inventory Fields": "بيانات المخزون",
+  "Accounting Fields":"بيانات محاسبية",
+  "Sales Fields":     "بيانات المبيعات",
+  "Purchase Fields":  "بيانات المشتريات",
+  "Financial Fields": "بيانات مالية",
+  "Employee Fields":  "بيانات الموظفين",
+  "Branch Fields":    "بيانات الفروع",
+  "Company Fields":   "بيانات الشركة",
+  "System Fields":    "بيانات النظام",
+  "Custom Fields":    "حقول مخصصة",
+};
+
+type FDRow = { id: number; orgId: number; code: string; nameAr: string; nameEn: string; fieldType: string; category: string; description?: string | null; isSystem: boolean; isActive: boolean; sortOrder: number; createdAt: string; };
+const EMPTY_FD = { code: "", nameAr: "", nameEn: "", fieldType: "Text", category: "Custom Fields", description: "", isActive: true, sortOrder: 0 };
+
+function FieldDictionaryDialog({
+  open, onClose, initial, isEdit,
+}: { open: boolean; onClose: () => void; initial: Partial<FDRow> & typeof EMPTY_FD; isEdit: boolean; }) {
+  const utils = trpc.useUtils();
+  const [form, setForm] = useState({ ...initial });
+  useEffect(() => { setForm({ ...initial }); }, [open]);
+  const f = (k: keyof typeof EMPTY_FD, v: any) => setForm(p => ({ ...p, [k]: v }));
+
+  const createMut = trpc.fieldDictionary.create.useMutation({
+    onSuccess: () => { toast.success("تم إضافة الحقل"); utils.fieldDictionary.list.invalidate(); onClose(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const updateMut = trpc.fieldDictionary.update.useMutation({
+    onSuccess: () => { toast.success("تم تحديث الحقل"); utils.fieldDictionary.list.invalidate(); onClose(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  function save() {
+    if (!form.code.trim()) return toast.error("كود الحقل مطلوب");
+    if (!form.nameAr.trim()) return toast.error("الاسم العربي مطلوب");
+    if (!form.nameEn.trim()) return toast.error("الاسم الإنجليزي مطلوب");
+    const payload = { code: form.code.trim().toUpperCase(), nameAr: form.nameAr.trim(), nameEn: form.nameEn.trim(), fieldType: form.fieldType, category: form.category, description: form.description || null, isActive: form.isActive, sortOrder: Number(form.sortOrder) || 0 };
+    if (isEdit && (initial as any).id) updateMut.mutate({ id: (initial as any).id, ...payload });
+    else createMut.mutate(payload);
+  }
+
+  const isPending = createMut.isPending || updateMut.isPending;
+  return (
+    <Dialog open={open} onOpenChange={v => !v && onClose()}>
+      <DialogContent className="max-w-lg" dir="rtl">
+        <DialogHeader>
+          <DialogTitle className="text-sm">{isEdit ? "تعديل حقل" : "إضافة حقل جديد"}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">كود الحقل <span className="text-destructive">*</span></Label>
+              <Input value={form.code} onChange={e => f("code", e.target.value.toUpperCase())} className="h-8 text-xs font-mono" placeholder="مثال: NETSALES" disabled={isEdit && !!(initial as any).isSystem} />
+              <p className="text-[10px] text-muted-foreground">أحرف إنجليزية كبيرة وأرقام وشرطة سفلية</p>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">نوع الحقل <span className="text-destructive">*</span></Label>
+              <Select value={form.fieldType} onValueChange={v => f("fieldType", v)}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {FIELD_TYPES.map(t => (
+                    <SelectItem key={t.value} value={t.value} className="text-xs">
+                      {t.labelAr} — {t.labelEn}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">الاسم العربي <span className="text-destructive">*</span></Label>
+              <Input value={form.nameAr} onChange={e => f("nameAr", e.target.value)} className="h-8 text-xs" placeholder="مثال: صافي المبيعات" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">English Name <span className="text-destructive">*</span></Label>
+              <Input value={form.nameEn} onChange={e => f("nameEn", e.target.value)} className="h-8 text-xs" placeholder="e.g. Net Sales" dir="ltr" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">فئة الحقل / Category</Label>
+            <Select value={form.category} onValueChange={v => f("category", v)}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {FIELD_CATEGORIES.map(c => (
+                  <SelectItem key={c} value={c} className="text-xs">
+                    {CATEGORY_AR[c] ?? c} — {c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">وصف الحقل (اختياري)</Label>
+            <Textarea value={form.description ?? ""} onChange={e => f("description", e.target.value)} className="text-xs resize-none h-16" placeholder="وصف مختصر لاستخدام الحقل..." />
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch checked={form.isActive} onCheckedChange={v => f("isActive", v)} id="fd-active" />
+            <Label htmlFor="fd-active" className="text-xs">نشط</Label>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={onClose}>إلغاء</Button>
+          <Button size="sm" onClick={save} disabled={isPending}>
+            {isPending ? "جاري الحفظ..." : isEdit ? "حفظ التعديلات" : "إضافة الحقل"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function FieldDictionaryPage() {
+  const utils = trpc.useUtils();
+  const listQ = trpc.fieldDictionary.list.useQuery();
+  const seedMut = trpc.fieldDictionary.seedDefaults.useMutation({
+    onSuccess: (r) => { if (r.seeded) utils.fieldDictionary.list.invalidate(); },
+  });
+  const deleteMut = trpc.fieldDictionary.delete.useMutation({
+    onSuccess: () => { toast.success("تم حذف الحقل"); utils.fieldDictionary.list.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (!seededRef.current && listQ.data && listQ.data.length === 0) {
+      seededRef.current = true;
+      seedMut.mutate();
+    }
+  }, [listQ.data]);
+
+  const [dlgOpen, setDlgOpen] = useState(false);
+  const [editing, setEditing] = useState<(typeof EMPTY_FD & { id?: number; isSystem?: boolean }) | null>(null);
+  const [search, setSearch] = useState("");
+  const [catFilter, setCatFilter] = useState("__all__");
+  const [typeFilter, setTypeFilter] = useState("__all__");
+
+  function openAdd() { setEditing({ ...EMPTY_FD }); setDlgOpen(true); }
+  function openEdit(r: FDRow) {
+    setEditing({ id: r.id, isSystem: r.isSystem, code: r.code, nameAr: r.nameAr, nameEn: r.nameEn, fieldType: r.fieldType, category: r.category, description: r.description ?? "", isActive: r.isActive, sortOrder: r.sortOrder });
+    setDlgOpen(true);
+  }
+
+  const rows = (listQ.data ?? []) as FDRow[];
+  const sq = search.toLowerCase();
+  const filtered = rows.filter(r =>
+    (!sq || r.code.toLowerCase().includes(sq) || r.nameAr.includes(sq) || r.nameEn.toLowerCase().includes(sq)) &&
+    (catFilter === "__all__" || r.category === catFilter) &&
+    (typeFilter === "__all__" || r.fieldType === typeFilter)
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <div>
+          <h3 className="font-semibold text-sm">قاموس الحقول / Field Dictionary</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">تعريف مركزي للحقول يُستخدم في الروابط المحاسبية، القوالب، التقارير، والرسائل</p>
+        </div>
+        <Button className="h-8 text-xs gap-1.5" onClick={openAdd}>
+          <Plus className="w-3.5 h-3.5" />إضافة حقل
+        </Button>
+      </div>
+
+      <div className="flex gap-2 flex-wrap">
+        <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="بحث بالكود أو الاسم..." className="h-8 text-xs w-56" />
+        <Select value={catFilter} onValueChange={setCatFilter}>
+          <SelectTrigger className="h-8 text-xs w-48"><SelectValue placeholder="كل الفئات" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__" className="text-xs">كل الفئات</SelectItem>
+            {FIELD_CATEGORIES.map(c => <SelectItem key={c} value={c} className="text-xs">{CATEGORY_AR[c] ?? c}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <SelectTrigger className="h-8 text-xs w-40"><SelectValue placeholder="كل الأنواع" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__" className="text-xs">كل الأنواع</SelectItem>
+            {FIELD_TYPES.map(t => <SelectItem key={t.value} value={t.value} className="text-xs">{t.labelAr}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <span className="text-xs text-muted-foreground self-center">{filtered.length} حقل</span>
+      </div>
+
+      <Card className="border-border/50">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-xs w-10 text-center">#</TableHead>
+              <TableHead className="text-xs font-mono">كود الحقل<br/><span className="font-normal text-[10px] text-muted-foreground">Field Code</span></TableHead>
+              <TableHead className="text-xs">الاسم العربي</TableHead>
+              <TableHead className="text-xs" dir="ltr">English Name</TableHead>
+              <TableHead className="text-xs">نوع الحقل<br/><span className="font-normal text-[10px] text-muted-foreground">Type</span></TableHead>
+              <TableHead className="text-xs">الفئة<br/><span className="font-normal text-[10px] text-muted-foreground">Category</span></TableHead>
+              <TableHead className="text-xs text-center w-16">نظامي</TableHead>
+              <TableHead className="text-xs text-center w-16">الحالة</TableHead>
+              <TableHead className="text-xs w-20">إجراءات</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {listQ.isLoading && (
+              <TableRow><TableCell colSpan={9} className="text-center text-xs text-muted-foreground py-8">جاري التحميل...</TableCell></TableRow>
+            )}
+            {!listQ.isLoading && filtered.length === 0 && (
+              <TableRow><TableCell colSpan={9} className="text-center text-xs text-muted-foreground py-8">لا توجد حقول مطابقة</TableCell></TableRow>
+            )}
+            {filtered.map((r, i) => {
+              const typeInfo = FIELD_TYPES.find(t => t.value === r.fieldType);
+              return (
+                <TableRow key={r.id} className={!r.isActive ? "opacity-50" : undefined}>
+                  <TableCell className="text-xs text-center text-muted-foreground">{i + 1}</TableCell>
+                  <TableCell className="text-xs font-mono font-bold text-primary">{r.code}</TableCell>
+                  <TableCell className="text-xs">{r.nameAr}</TableCell>
+                  <TableCell className="text-xs" dir="ltr">{r.nameEn}</TableCell>
+                  <TableCell className="text-xs">
+                    <span className="inline-flex items-center gap-1">
+                      {typeInfo?.labelAr ?? r.fieldType}
+                      <span className="text-[10px] text-muted-foreground">({typeInfo?.labelEn ?? r.fieldType})</span>
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    <span>{CATEGORY_AR[r.category] ?? r.category}</span>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {r.isSystem
+                      ? <Badge className="text-[10px] bg-blue-50 text-blue-700 border-blue-200">نظامي</Badge>
+                      : <span className="text-xs text-muted-foreground">—</span>}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {r.isActive
+                      ? <Badge variant="secondary" className="text-[10px] bg-green-50 text-green-700 border-green-200">نشط</Badge>
+                      : <Badge variant="secondary" className="text-[10px] bg-red-50 text-red-700 border-red-200">موقوف</Badge>}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-2">
+                      <button className="text-primary text-xs hover:underline" onClick={() => openEdit(r)}>تعديل</button>
+                      {!r.isSystem && (
+                        <button className="text-destructive text-xs hover:underline"
+                          onClick={() => { if (confirm(`حذف الحقل "${r.code}"؟`)) deleteMut.mutate({ id: r.id }); }}>
+                          حذف
+                        </button>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </Card>
+
+      {editing && (
+        <FieldDictionaryDialog
+          open={dlgOpen}
+          onClose={() => setDlgOpen(false)}
+          initial={editing as any}
+          isEdit={!!( editing as any).id}
+        />
+      )}
+    </div>
+  );
+}
+
 // ─── Content Router ────────────────────────────────────────────────────────────
 
 function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
@@ -4178,6 +4481,7 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
     case "currencies":           return <CurrenciesPage />;
     case "taxes":                return <TaxesPage />;
     case "fiscal-periods":       return <FiscalPeriodsPage />;
+    case "field-dictionary":     return <FieldDictionaryPage />;
     case "user-categories":      return <UserCategoriesPage />;
     // المستخدمون والصلاحيات
     case "users-list":           return <UsersListPage />;
@@ -4310,3 +4614,4 @@ export function CfgPrintSettingsTab()      { return <CfgSubPage activeId="print-
 export function CfgLogoStampTab()          { return <CfgSubPage activeId="logo-stamp" />; }
 export function CfgSignaturesTab()         { return <CfgSubPage activeId="signatures" />; }
 export function CfgEmailPdfTab()           { return <CfgSubPage activeId="email-pdf" />; }
+export function CfgFieldDictionaryTab()   { return <CfgSubPage activeId="field-dictionary" />; }

@@ -1,0 +1,189 @@
+الموضوع: إنشاء شاشة تعريف الحقول (Field Dictionary)
+
+الهدف:
+إنشاء شاشة مركزية لتعريف الحقول المستخدمة داخل النظام بحيث يتم تعريف الحقل مرة واحدة فقط وإعادة استخدامه في جميع أجزاء النظام، مثل الروابط المحاسبية، التقارير، القوالب، الطباعة، رسائل البريد الإلكتروني، رسائل الواتساب، والتكاملات المستقبلية.
+
+الحقول المطلوبة داخل شاشة تعريف الحقول:
+
+1- كود الحقل (Field Code)
+
+* يكون فريداً ولا يتكرر.
+* مثال:
+
+  * NETSALES
+  * TAX
+  * TOTAL
+  * CUSTOMER_NAME
+
+2- الاسم العربي (Arabic Name)
+
+* مثال:
+
+  * صافي المبيعات
+  * الضريبة
+  * إجمالي الفاتورة
+
+3- الاسم الإنجليزي (English Name)
+
+* مثال:
+
+  * Net Sales
+  * Tax Amount
+  * Invoice Total
+
+4- نوع الحقل (Field Type)
+
+أنواع الحقول المطلوبة:
+
+* Text (نص)
+* Long Text (نص طويل)
+* Number (رقم)
+* Amount (مبلغ)
+* Percentage (نسبة)
+* Date (تاريخ)
+* Time (وقت)
+* DateTime (تاريخ ووقت)
+* Boolean (نعم / لا)
+* Customer (عميل)
+* Vendor (مورد)
+* Employee (موظف)
+* User (مستخدم)
+* Item (صنف)
+* Warehouse (مستودع)
+* Branch (فرع)
+* Account (حساب محاسبي)
+* Currency (عملة)
+* Unit (وحدة قياس)
+* Image (صورة)
+* File (ملف)
+* URL (رابط)
+* Email (بريد إلكتروني)
+* Phone (رقم هاتف)
+
+5- فئة الحقل (Category)
+
+الفئات المقترحة:
+
+* Document Fields
+* Customer Fields
+* Vendor Fields
+* Item Fields
+* Inventory Fields
+* Accounting Fields
+* Sales Fields
+* Purchase Fields
+* Financial Fields
+* Employee Fields
+* Branch Fields
+* Company Fields
+* System Fields
+* Custom Fields
+
+أمثلة على الحقول الأساسية المطلوب تعريفها:
+
+بيانات المستند:
+
+* INVOICE_NO
+* DOCUMENT_NO
+* INVOICE_DATE
+* DOCUMENT_DATE
+* NOTES
+
+بيانات العميل:
+
+* CUSTOMER_CODE
+* CUSTOMER_NAME
+* CUSTOMER_MOBILE
+* CUSTOMER_PHONE
+* CUSTOMER_EMAIL
+* CUSTOMER_VAT
+* CUSTOMER_ADDRESS
+
+بيانات المورد:
+
+* VENDOR_CODE
+* VENDOR_NAME
+* VENDOR_MOBILE
+* VENDOR_VAT
+
+بيانات المبيعات:
+
+* NETSALES
+* DISCOUNT
+* TAX
+* TOTAL
+* PROFIT
+* COST
+
+بيانات الأصناف:
+
+* ITEM_CODE
+* ITEM_NAME
+* ITEM_BARCODE
+* QTY
+* PRICE
+* UNIT
+* LINE_TOTAL
+
+بيانات المخزون:
+
+* STOCK_QTY
+* AVAILABLE_QTY
+* COST
+
+بيانات النظام:
+
+* USER_NAME
+* BRANCH_NAME
+* COMPANY_NAME
+* PRINT_DATE
+* PRINT_TIME
+
+استخدامات الحقول:
+
+1- الروابط المحاسبية
+إضافة عمود جديد باسم:
+Source Field
+
+مثال:
+
+* 110101 الصندوق ← TOTAL
+* 410101 المبيعات ← NETSALES
+* 210101 ضريبة المخرجات ← TAX
+
+بحيث يقوم النظام بجلب قيمة الحقل تلقائياً أثناء الترحيل.
+
+2- مصمم القوالب والطباعة
+يتم عرض جميع الحقول المعرفة داخل قائمة "إدراج حقل" لاستخدامها داخل الفواتير والمستندات.
+
+مثال:
+{{INVOICE_NO}}
+{{CUSTOMER_NAME}}
+{{NETSALES}}
+{{TAX}}
+{{TOTAL}}
+
+3- مصمم التقارير
+تستخدم الحقول مباشرة داخل التقارير مع دعم العمليات التالية:
+
+* SUM()
+* AVG()
+* COUNT()
+* MIN()
+* MAX()
+
+4- رسائل البريد الإلكتروني والواتساب
+إمكانية استخدام الحقول داخل الرسائل مستقبلاً.
+
+مثال:
+{{CUSTOMER_NAME}}
+{{INVOICE_NO}}
+{{TOTAL}}
+
+ملاحظات مهمة:
+
+* يتم تعريف الحقل مرة واحدة فقط داخل النظام.
+* يمنع تكرار كود الحقل.
+* جميع أجزاء النظام تعتمد على نفس تعريف الحقل.
+* أي حقل جديد يظهر تلقائياً في القوالب والتقارير والروابط المحاسبية.
+* يفضل تحميل الحقول في الذاكرة (Cache) لتحسين الأداء وعدم التأثير على سرعة النظام.
