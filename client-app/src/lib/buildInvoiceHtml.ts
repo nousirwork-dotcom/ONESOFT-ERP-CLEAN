@@ -28,6 +28,13 @@ export interface InvPrintData {
   customerName: string;
   customerCode?: string;
   customerTaxNumber?: string;
+  customerBuildingNo?: string;
+  customerStreet?: string;
+  customerDistrict?: string;
+  customerCity?: string;
+  customerCountry?: string;
+  customerPostalCode?: string;
+  customerAdditionalNo?: string;
   salesperson?: string;
   paymentType: "cash" | "credit";
   currency: string;
@@ -50,7 +57,16 @@ export interface InvPrintData {
   paidAmount: number;
   remainingAmount: number;
   sellerName: string;
+  sellerNameEn?: string;
   sellerTaxNumber: string;
+  sellerCommercialReg?: string;
+  sellerCity?: string;
+  sellerCountry?: string;
+  sellerBuildingNo?: string;
+  sellerStreet?: string;
+  sellerDistrict?: string;
+  sellerPostalCode?: string;
+  sellerAdditionalNo?: string;
   sellerAddress?: string;
   sellerPhone?: string;
 }
@@ -217,17 +233,27 @@ export function buildInvoiceHtml(
 
   const customerRows: [string, string, string][] = [
     ["الإسم", "Name", data.customerName],
-    ["المدينة", "City", ""],
-    ["البلد", "Country", ""],
-    ["رقم ضريبة القيمة المضافة", "VAT Number", data.customerTaxNumber || ""],
-    ["معرف آخر", "Other ID", data.customerCode || ""],
+    ["رقم المبنى", "Building No", data.customerBuildingNo || ""],
+    ["إسم الشارع", "Street Name", data.customerStreet || ""],
+    ["الحي", "District", data.customerDistrict || ""],
+    ["المدينة", "City", data.customerCity || ""],
+    ["البلد", "Country", data.customerCountry || ""],
+    ["رقم البريد", "Postal Code", data.customerPostalCode || ""],
+    ["رقم العنوان الإضافي", "Additional No", data.customerAdditionalNo || ""],
+    ["رقم تسجيل ضريبة القيمة المضافة", "VAT Number", data.customerTaxNumber || ""],
+    ["المعرف أخرى", "Other ID", data.customerCode || ""],
   ];
   const sellerRows: [string, string, string][] = [
     ["الإسم", "Name", data.sellerName],
-    ["المدينة", "City", data.sellerAddress || ""],
-    ["البلد", "Country", "المملكة العربية السعودية"],
-    ["رقم ضريبة القيمة المضافة", "VAT Number", data.sellerTaxNumber || ""],
-    ["الهاتف", "Phone", data.sellerPhone || ""],
+    ["رقم المبنى", "Building No", data.sellerBuildingNo || ""],
+    ["إسم الشارع", "Street Name", data.sellerStreet || ""],
+    ["سجل تجاري", "Commercial Reg", data.sellerCommercialReg || ""],
+    ["المدينة", "City", data.sellerCity || ""],
+    ["البلد", "Country", data.sellerCountry || "المملكة العربية السعودية"],
+    ["رقم البريد", "Postal Code", data.sellerPostalCode || ""],
+    ["رقم العنوان الإضافي", "Additional No", data.sellerAdditionalNo || ""],
+    ["رقم تسجيل ضريبة القيمة المضافة", "VAT Number", data.sellerTaxNumber || ""],
+    ["المعرف أخرى", "Other ID", ""],
   ];
 
   const summaryHtml = [
@@ -258,19 +284,20 @@ export function buildInvoiceHtml(
 </head>
 <body><div class="page">
 
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;border:2px solid ${color};padding:10px 12px;margin-bottom:6px">
-    <div>
-      <div style="font-size:16px;font-weight:bold;color:${color}">${data.sellerName}</div>
-      ${data.sellerAddress ? `<div style="font-size:9px;color:#555">${data.sellerAddress}</div>` : ""}
-      ${data.sellerPhone   ? `<div style="font-size:9px;color:#555">Tel: ${data.sellerPhone}</div>` : ""}
-      ${data.sellerTaxNumber ? `<div style="font-size:9px;color:#555">VAT: ${data.sellerTaxNumber}</div>` : ""}
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    ${isBilingual ? `<div style="text-align:left;flex:1">
+      <div style="font-size:13px;font-weight:bold;color:${color}">${data.sellerNameEn || data.sellerName}</div>
+      ${data.sellerAddress ? `<div style="font-size:8px;color:#555">${data.sellerAddress}</div>` : ""}
+    </div>` : `<div></div>`}
+    <div style="text-align:center;flex:1">
+      <div style="font-size:18px;font-weight:bold;border:2px solid ${color};padding:6px 18px;display:inline-block;line-height:1.4">
+        فاتورة ضريبية${isBilingual ? `<br><span style="font-size:13px">TAX INVOICE</span>` : ""}
+      </div>
     </div>
-    <div style="text-align:center">
-      <div style="font-size:20px;font-weight:bold;color:#222">فاتورة ضريبية</div>
-      ${isBilingual ? `<div style="font-size:13px;color:#555;font-weight:bold">TAX INVOICE</div>` : ""}
-      <div style="font-size:12px;font-weight:bold;color:${color};margin-top:4px"># ${data.invoiceNumber}</div>
+    <div style="text-align:right;flex:1">
+      <div style="font-size:14px;font-weight:bold;color:${color}">${data.sellerName}</div>
+      ${data.sellerPhone ? `<div style="font-size:8px;color:#555">Tel: ${data.sellerPhone}</div>` : ""}
     </div>
-    <div>${qrImgHtml}</div>
   </div>
 
   <table style="width:100%;border-collapse:collapse;margin-bottom:6px;font-size:9px;border:1px solid #ccc">

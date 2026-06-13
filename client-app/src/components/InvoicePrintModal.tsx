@@ -42,6 +42,13 @@ export interface PrintInvoiceData {
   customerName: string;
   customerCode?: string;
   customerTaxNumber?: string;
+  customerBuildingNo?: string;
+  customerStreet?: string;
+  customerDistrict?: string;
+  customerCity?: string;
+  customerCountry?: string;
+  customerPostalCode?: string;
+  customerAdditionalNo?: string;
   salesperson?: string;
   paymentType: "cash" | "credit";
   currency: string;
@@ -64,7 +71,16 @@ export interface PrintInvoiceData {
   paidAmount: number;
   remainingAmount: number;
   sellerName: string;
+  sellerNameEn?: string;
   sellerTaxNumber: string;
+  sellerCommercialReg?: string;
+  sellerCity?: string;
+  sellerCountry?: string;
+  sellerBuildingNo?: string;
+  sellerStreet?: string;
+  sellerDistrict?: string;
+  sellerPostalCode?: string;
+  sellerAdditionalNo?: string;
   sellerAddress?: string;
   sellerPhone?: string;
 }
@@ -83,17 +99,17 @@ type ColKey = keyof DocTemplateConfig["columns"];
 type LineCalc = { discountAmt: number; beforeTax: number; taxAmt: number; lineTotal: number };
 
 const COL_DEFS: { key: ColKey; arH: string; enH: string; w?: number; alignRight?: boolean }[] = [
-  { key: "num",      arH: "م",                       enH: "No.",            w: 28  },
-  { key: "code",     arH: "رمز الصنف",               enH: "Item Code",      w: 60  },
-  { key: "name",     arH: "اسم الصنف",               enH: "Item Name",      alignRight: true },
-  { key: "unit",     arH: "وحدة",                    enH: "Unit",           w: 40  },
-  { key: "qty",      arH: "الكمية",                  enH: "Qty",            w: 45  },
-  { key: "price",    arH: "السعر",                   enH: "Unit Price",     w: 65  },
-  { key: "discount", arH: "الخصم%",                  enH: "Disc%",          w: 45  },
-  { key: "taxable",  arH: "المبلغ الخاضع",           enH: "Taxable Amt",    w: 65  },
-  { key: "taxRate",  arH: "الضريبة%",                enH: "Tax%",           w: 40  },
-  { key: "taxAmt",   arH: "مبلغ الضريبة",            enH: "VAT Amt",        w: 65  },
-  { key: "total",    arH: "الإجمالي شامل الضريبة",   enH: "Total Incl VAT", w: 75  },
+  { key: "num",      arH: "م",                              enH: "No.",                  w: 28  },
+  { key: "code",     arH: "رقم الصنف",                     enH: "Item Code",            w: 65  },
+  { key: "name",     arH: "تفاصيل السلع/خدمات",            enH: "Item Name",            alignRight: true },
+  { key: "unit",     arH: "وحدة",                          enH: "Unit",                 w: 40  },
+  { key: "qty",      arH: "كمية",                          enH: "Quantity",             w: 45  },
+  { key: "price",    arH: "سعر الوحدة",                    enH: "Unit Price",           w: 65  },
+  { key: "discount", arH: "خصومات",                        enH: "Discount",             w: 55  },
+  { key: "taxable",  arH: "المبلغ الخاضع للضريبة",        enH: "Taxable Amount",       w: 70  },
+  { key: "taxRate",  arH: "نسبة الضريبة",                  enH: "Tax Rate",             w: 42  },
+  { key: "taxAmt",   arH: "مبلغ الضريبة",                  enH: "Tax Amount",           w: 65  },
+  { key: "total",    arH: "المجموع (شامل ضريبة)",          enH: "SubTotal Incl. VAT",   w: 80  },
 ];
 
 function computeLines(data: PrintInvoiceData): LineCalc[] {
@@ -124,7 +140,7 @@ function getColVal(
     case "unit":     return ln.unit;
     case "qty":      return (parseFloat(ln.quantity) || 0).toFixed(2);
     case "price":    return (parseFloat(ln.unitPrice) || 0).toFixed(2);
-    case "discount": return `${ln.discountPct}%`;
+    case "discount": return calc.discountAmt.toFixed(2);
     case "taxable":  return calc.beforeTax.toFixed(2);
     case "taxRate":  return `${ln.taxPct}%`;
     case "taxAmt":   return calc.taxAmt.toFixed(2);
@@ -258,17 +274,27 @@ export default function InvoicePrintModal({ open, onClose, data, qrSettings, tem
 
     const customerRows: [string, string, string][] = [
       ["الإسم", "Name", data.customerName],
-      ["المدينة", "City", ""],
-      ["البلد", "Country", ""],
-      ["رقم ضريبة القيمة المضافة", "VAT Number", data.customerTaxNumber || ""],
-      ["معرف آخر", "Other ID", data.customerCode || ""],
+      ["رقم المبنى", "Building No", data.customerBuildingNo || ""],
+      ["إسم الشارع", "Street Name", data.customerStreet || ""],
+      ["الحي", "District", data.customerDistrict || ""],
+      ["المدينة", "City", data.customerCity || ""],
+      ["البلد", "Country", data.customerCountry || ""],
+      ["رقم البريد", "Postal Code", data.customerPostalCode || ""],
+      ["رقم العنوان الإضافي", "Additional No", data.customerAdditionalNo || ""],
+      ["رقم تسجيل ضريبة القيمة المضافة", "VAT Number", data.customerTaxNumber || ""],
+      ["المعرف أخرى", "Other ID", data.customerCode || ""],
     ];
     const sellerRows: [string, string, string][] = [
       ["الإسم", "Name", data.sellerName],
-      ["المدينة", "City", data.sellerAddress || ""],
-      ["البلد", "Country", "المملكة العربية السعودية"],
-      ["رقم ضريبة القيمة المضافة", "VAT Number", data.sellerTaxNumber || ""],
-      ["الهاتف", "Phone", data.sellerPhone || ""],
+      ["رقم المبنى", "Building No", data.sellerBuildingNo || ""],
+      ["إسم الشارع", "Street Name", data.sellerStreet || ""],
+      ["سجل تجاري", "Commercial Reg", data.sellerCommercialReg || ""],
+      ["المدينة", "City", data.sellerCity || ""],
+      ["البلد", "Country", data.sellerCountry || "المملكة العربية السعودية"],
+      ["رقم البريد", "Postal Code", data.sellerPostalCode || ""],
+      ["رقم العنوان الإضافي", "Additional No", data.sellerAdditionalNo || ""],
+      ["رقم تسجيل ضريبة القيمة المضافة", "VAT Number", data.sellerTaxNumber || ""],
+      ["المعرف أخرى", "Other ID", ""],
     ];
 
     const summaryRows = [
@@ -301,19 +327,20 @@ export default function InvoicePrintModal({ open, onClose, data, qrSettings, tem
 <body><div class="page">
 
   <!-- رأس الفاتورة -->
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;border:2px solid ${color};padding:10px 12px;margin-bottom:6px">
-    <div>
-      <div style="font-size:16px;font-weight:bold;color:${color}">${data.sellerName}</div>
-      ${data.sellerAddress ? `<div style="font-size:9px;color:#555">${data.sellerAddress}</div>` : ""}
-      ${data.sellerPhone   ? `<div style="font-size:9px;color:#555">Tel: ${data.sellerPhone}</div>` : ""}
-      ${data.sellerTaxNumber ? `<div style="font-size:9px;color:#555">VAT: ${data.sellerTaxNumber}</div>` : ""}
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    ${isBilingual ? `<div style="text-align:left;flex:1">
+      <div style="font-size:13px;font-weight:bold;color:${color}">${data.sellerNameEn || data.sellerName}</div>
+      ${data.sellerAddress ? `<div style="font-size:8px;color:#555">${data.sellerAddress}</div>` : ""}
+    </div>` : `<div></div>`}
+    <div style="text-align:center;flex:1">
+      <div style="font-size:18px;font-weight:bold;color:#111;border:2px solid ${color};padding:6px 18px;display:inline-block">
+        فاتورة ضريبية${isBilingual ? `<br><span style="font-size:13px">TAX INVOICE</span>` : ""}
+      </div>
     </div>
-    <div style="text-align:center">
-      <div style="font-size:20px;font-weight:bold;color:#222">فاتورة ضريبية</div>
-      ${isBilingual ? `<div style="font-size:13px;color:#555;font-weight:bold">TAX INVOICE</div>` : ""}
-      <div style="font-size:12px;font-weight:bold;color:${color};margin-top:4px"># ${data.invoiceNumber}</div>
+    <div style="text-align:right;flex:1">
+      <div style="font-size:14px;font-weight:bold;color:${color}">${data.sellerName}</div>
+      ${data.sellerPhone ? `<div style="font-size:8px;color:#555">Tel: ${data.sellerPhone}</div>` : ""}
     </div>
-    <div>${qrImgHtml}</div>
   </div>
 
   <!-- بيانات الفاتورة -->
@@ -415,17 +442,27 @@ export default function InvoicePrintModal({ open, onClose, data, qrSettings, tem
 
   const customerRows: [string, string, string][] = [
     ["الإسم", "Name", data.customerName],
-    ["المدينة", "City", ""],
-    ["البلد", "Country", ""],
-    ["رقم ضريبة القيمة المضافة", "VAT Number", data.customerTaxNumber || ""],
-    ["معرف آخر", "Other ID", data.customerCode || ""],
+    ["رقم المبنى", "Building No", data.customerBuildingNo || ""],
+    ["إسم الشارع", "Street Name", data.customerStreet || ""],
+    ["الحي", "District", data.customerDistrict || ""],
+    ["المدينة", "City", data.customerCity || ""],
+    ["البلد", "Country", data.customerCountry || ""],
+    ["رقم البريد", "Postal Code", data.customerPostalCode || ""],
+    ["رقم العنوان الإضافي", "Additional No", data.customerAdditionalNo || ""],
+    ["رقم تسجيل ضريبة القيمة المضافة", "VAT Number", data.customerTaxNumber || ""],
+    ["المعرف أخرى", "Other ID", data.customerCode || ""],
   ];
   const sellerRows: [string, string, string][] = [
     ["الإسم", "Name", data.sellerName],
-    ["المدينة", "City", data.sellerAddress || ""],
-    ["البلد", "Country", "المملكة العربية السعودية"],
-    ["رقم ضريبة القيمة المضافة", "VAT Number", data.sellerTaxNumber || ""],
-    ["الهاتف", "Phone", data.sellerPhone || ""],
+    ["رقم المبنى", "Building No", data.sellerBuildingNo || ""],
+    ["إسم الشارع", "Street Name", data.sellerStreet || ""],
+    ["سجل تجاري", "Commercial Reg", data.sellerCommercialReg || ""],
+    ["المدينة", "City", data.sellerCity || ""],
+    ["البلد", "Country", data.sellerCountry || "المملكة العربية السعودية"],
+    ["رقم البريد", "Postal Code", data.sellerPostalCode || ""],
+    ["رقم العنوان الإضافي", "Additional No", data.sellerAdditionalNo || ""],
+    ["رقم تسجيل ضريبة القيمة المضافة", "VAT Number", data.sellerTaxNumber || ""],
+    ["المعرف أخرى", "Other ID", ""],
   ];
 
   const summaryRows = [
@@ -461,25 +498,22 @@ export default function InvoicePrintModal({ open, onClose, data, qrSettings, tem
           style={{ fontFamily: "Tahoma, Arial, sans-serif", direction: "rtl", fontSize: 10 }}>
 
           {/* Header */}
-          <div className="flex justify-between items-start mb-3 p-3 rounded" style={{ border: `2px solid ${color}` }}>
-            <div>
-              <div className="font-bold text-base" style={{ color }}>{data.sellerName}</div>
-              {data.sellerAddress && <div className="text-[9px] text-gray-500">{data.sellerAddress}</div>}
-              {data.sellerPhone   && <div className="text-[9px] text-gray-500">Tel: {data.sellerPhone}</div>}
-              {data.sellerTaxNumber && <div className="text-[9px] text-gray-500">VAT: {data.sellerTaxNumber}</div>}
+          <div className="flex justify-between items-center mb-4">
+            {isBilingual && (
+              <div className="text-left flex-1">
+                <div className="font-bold text-[13px]" style={{ color }}>{data.sellerNameEn || data.sellerName}</div>
+                {data.sellerAddress && <div className="text-[8px] text-gray-500">{data.sellerAddress}</div>}
+              </div>
+            )}
+            <div className="flex-1 flex flex-col items-center">
+              <div className="font-bold text-[18px] text-center border-2 px-5 py-1.5 leading-tight" style={{ borderColor: color }}>
+                <div>فاتورة ضريبية</div>
+                {isBilingual && <div className="text-[13px]">TAX INVOICE</div>}
+              </div>
             </div>
-            <div className="text-center">
-              <div className="text-xl font-bold">فاتورة ضريبية</div>
-              {isBilingual && <div className="text-sm text-gray-500 font-bold">TAX INVOICE</div>}
-              <div className="text-sm font-bold mt-1" style={{ color }}># {data.invoiceNumber}</div>
-            </div>
-            <div className="flex flex-col items-center gap-1">
-              {showQR && qrDataUrl && (
-                <>
-                  <img src={qrDataUrl} width={qrSize} height={qrSize} alt="QR" />
-                  <span className="text-[7px] text-gray-400">{qrLabel}</span>
-                </>
-              )}
+            <div className="text-right flex-1">
+              <div className="font-bold text-[14px]" style={{ color }}>{data.sellerName}</div>
+              {data.sellerPhone && <div className="text-[8px] text-gray-500">Tel: {data.sellerPhone}</div>}
             </div>
           </div>
 
