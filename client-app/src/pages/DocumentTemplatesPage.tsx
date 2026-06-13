@@ -8,10 +8,44 @@ import {
   BookOpen, BookMarked, RotateCcw, ClipboardList, ArrowLeftRight, Tag,
   Plus, Save, Trash2, ChevronFirst, ChevronLast,
   ChevronLeft as CLeft, ChevronRight as CRight, FileText, Star,
-  Paintbrush, CheckCircle2, Circle, LayoutTemplate,
+  Paintbrush, CheckCircle2, Circle, LayoutTemplate, Globe2, Palette, Table2,
 } from "lucide-react";
 import { toast } from "sonner";
 import PrintTemplateDesigner, { type TemplateLayout } from "@/components/PrintTemplateDesigner";
+
+/* ──────────────── config_v1 constants ──────────────── */
+const DEFAULT_COLS: TemplateLayout["columns"] = {
+  num: true, code: true, name: true, unit: false,
+  qty: true, price: true, discount: true,
+  taxable: true, taxRate: true, taxAmt: true, total: true,
+};
+const DEFAULT_SECS: TemplateLayout["sections"] = {
+  sellerInfo: true, customerInfo: true,
+  amountInWords: true, pageNumber: true, signatures: false,
+};
+const COL_LIST: { key: keyof TemplateLayout["columns"]; ar: string }[] = [
+  { key: "num",      ar: "م"                        },
+  { key: "code",     ar: "رقم الصنف"                },
+  { key: "name",     ar: "اسم الصنف / الخدمة"       },
+  { key: "unit",     ar: "وحدة"                     },
+  { key: "qty",      ar: "الكمية"                    },
+  { key: "price",    ar: "سعر الوحدة"               },
+  { key: "discount", ar: "الخصومات"                 },
+  { key: "taxable",  ar: "المبلغ الخاضع للضريبة"    },
+  { key: "taxRate",  ar: "نسبة الضريبة"             },
+  { key: "taxAmt",   ar: "مبلغ الضريبة"             },
+  { key: "total",    ar: "المجموع (شامل ضريبة)"     },
+];
+const SEC_LIST: { key: keyof TemplateLayout["sections"]; ar: string }[] = [
+  { key: "sellerInfo",    ar: "بيانات البائع / المورد" },
+  { key: "customerInfo",  ar: "بيانات العميل"          },
+  { key: "amountInWords", ar: "المبلغ كتابةً"          },
+  { key: "pageNumber",    ar: "رقم الصفحة"             },
+  { key: "signatures",    ar: "خانات التوقيع"          },
+];
+const PRESET_COLORS = [
+  "#406B93","#1D4ED8","#7C3AED","#059669","#DC2626","#D97706","#0891B2","#374151",
+];
 
 /* ──────────────── types ──────────────── */
 type TplForm = {
@@ -227,6 +261,40 @@ export default function DocumentTemplatesPage() {
     try { return form.layoutJson ? JSON.parse(form.layoutJson) as TemplateLayout : null; }
     catch { return null; }
   })();
+
+  /* ── helpers to update config_v1 fields inline ── */
+  const getBaseCfg = (): TemplateLayout => parsedLayout ?? {
+    version: 1, type: "config_v1",
+    paperSize: form.paperSize, orientation: form.orientation as any,
+    elements: [], language: "bilingual", primaryColor: "#406B93",
+    columns: { ...DEFAULT_COLS }, sections: { ...DEFAULT_SECS }, minRows: 5,
+  };
+  const setLayoutCfg = <K extends keyof TemplateLayout>(k: K, v: TemplateLayout[K]) => {
+    const updated = { ...getBaseCfg(), [k]: v };
+    setForm(p => ({ ...p, layoutJson: JSON.stringify(updated) }));
+    setIsDirty(true);
+  };
+  const patchCol = (k: keyof TemplateLayout["columns"], v: boolean) => {
+    const base = getBaseCfg();
+    const updated = { ...base, columns: { ...base.columns, [k]: v } };
+    setForm(p => ({ ...p, layoutJson: JSON.stringify(updated) }));
+    setIsDirty(true);
+  };
+  const patchSec = (k: keyof TemplateLayout["sections"], v: boolean) => {
+    const base = getBaseCfg();
+    const updated = { ...base, sections: { ...base.sections, [k]: v } };
+    setForm(p => ({ ...p, layoutJson: JSON.stringify(updated) }));
+    setIsDirty(true);
+  };
+
+  const cfgLang    = parsedLayout?.language     ?? "bilingual";
+  const cfgColor   = parsedLayout?.primaryColor ?? "#406B93";
+  const cfgCols    = { ...DEFAULT_COLS, ...parsedLayout?.columns };
+  const cfgSecs    = { ...DEFAULT_SECS, ...parsedLayout?.sections };
+  const cfgMinRows = parsedLayout?.minRows ?? 5;
+
+  /* show config panel for invoice-style doc types */
+  const showCfgPanel = ["sales_invoice","sales_return","purchase_invoice","purchase_return","receipt_voucher","payment_voucher"].includes(selectedType);
 
   /* ══════════════════ designer full-screen mode ══════════════════ */
   if (view === "designer") {
@@ -477,6 +545,108 @@ export default function DocumentTemplatesPage() {
                 </div>
               )}
             </P>
+
+            {/* ── إعدادات الفاتورة (config_v1) ── */}
+            {showCfgPanel && (
+              <P title="إعدادات طباعة الفاتورة">
+                <div className="space-y-4">
+
+                  {/* اللغة */}
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Globe2 className="w-3.5 h-3.5 text-indigo-500" />
+                      <span className="text-[11px] font-semibold text-slate-600">لغة الطباعة</span>
+                    </div>
+                    <div className="flex gap-2">
+                      {[
+                        { v: "bilingual", label: "ثنائي اللغة (عربي + إنجليزي)" },
+                        { v: "ar",        label: "عربي فقط" },
+                      ].map(o => (
+                        <button key={o.v}
+                          onClick={() => setLayoutCfg("language", o.v as any)}
+                          className={`flex-1 py-1.5 rounded border text-[11px] transition-colors font-medium ${cfgLang === o.v ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-500 hover:border-slate-300"}`}>
+                          {o.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* اللون الرئيسي */}
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Palette className="w-3.5 h-3.5 text-indigo-500" />
+                      <span className="text-[11px] font-semibold text-slate-600">اللون الرئيسي</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex gap-1.5 flex-wrap">
+                        {PRESET_COLORS.map(c => (
+                          <button key={c}
+                            onClick={() => setLayoutCfg("primaryColor", c)}
+                            className="w-6 h-6 rounded-full border-2 hover:scale-110 transition-transform"
+                            style={{ background: c, borderColor: cfgColor === c ? "#fff" : "transparent", outline: cfgColor === c ? `2.5px solid ${c}` : "none", outlineOffset: 2 }} />
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <input type="color" value={cfgColor}
+                          onChange={e => setLayoutCfg("primaryColor", e.target.value)}
+                          className="w-8 h-7 rounded cursor-pointer border border-slate-200 p-0.5" />
+                        <span className="text-[10px] font-mono text-slate-400">{cfgColor}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* أعمدة الجدول */}
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Table2 className="w-3.5 h-3.5 text-indigo-500" />
+                      <span className="text-[11px] font-semibold text-slate-600">أعمدة جدول الأصناف</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                      {COL_LIST.map(c => (
+                        <label key={c.key} className="flex items-center gap-1.5 cursor-pointer select-none">
+                          <input type="checkbox" className="w-3.5 h-3.5 accent-indigo-600"
+                            checked={cfgCols[c.key]}
+                            onChange={e => patchCol(c.key, e.target.checked)} />
+                          <span className={`text-[11px] ${cfgCols[c.key] ? "text-slate-700" : "text-slate-300"}`}>{c.ar}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* الأقسام + صفوف فارغة */}
+                  <div className="grid grid-cols-2 gap-6">
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <FileText className="w-3.5 h-3.5 text-indigo-500" />
+                        <span className="text-[11px] font-semibold text-slate-600">الأقسام</span>
+                      </div>
+                      <div className="space-y-1">
+                        {SEC_LIST.map(s => (
+                          <label key={s.key} className="flex items-center gap-1.5 cursor-pointer select-none">
+                            <input type="checkbox" className="w-3.5 h-3.5 accent-indigo-600"
+                              checked={cfgSecs[s.key]}
+                              onChange={e => patchSec(s.key, e.target.checked)} />
+                            <span className={`text-[11px] ${cfgSecs[s.key] ? "text-slate-700" : "text-slate-300"}`}>{s.ar}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-semibold text-slate-600 mb-2">
+                        الصفوف الفارغة الأدنى: <span className="text-indigo-600 font-bold">{cfgMinRows}</span>
+                      </div>
+                      <input type="range" min={0} max={15} step={1} value={cfgMinRows}
+                        onChange={e => setLayoutCfg("minRows", Number(e.target.value))}
+                        className="w-full accent-indigo-600" />
+                      <div className="flex justify-between text-[9px] text-slate-300 mt-0.5">
+                        <span>0</span><span>15</span>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              </P>
+            )}
 
             {/* ملاحظات */}
             <P title="وصف وملاحظات">
