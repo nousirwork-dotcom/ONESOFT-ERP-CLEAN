@@ -903,7 +903,7 @@ export default function DocumentJournalsPage() {
                       <thead>
                         <tr style={{ background: "linear-gradient(to left, #f1f5f9, #eef2f7)" }}>
                           <th className={thCls} style={{ width: "26%" }}>بيان</th>
-                          <th className={thCls} style={{ width: "22%" }}>مصدر البيانات</th>
+                          <th className={thCls} style={{ width: "22%" }}>حقل المصدر</th>
                           <th className={thCls} style={{ width: 110, borderRight: "1px solid #e8edf3" }}>كود الحساب</th>
                           <th className={thCls}>اسم الحساب</th>
                           <th className="w-6 bg-slate-50 border-b border-slate-200"></th>
