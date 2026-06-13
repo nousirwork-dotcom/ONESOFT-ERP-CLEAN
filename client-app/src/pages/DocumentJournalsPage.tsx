@@ -902,10 +902,10 @@ export default function DocumentJournalsPage() {
                     <table className="w-full" style={{ borderCollapse: "separate", borderSpacing: 0 }}>
                       <thead>
                         <tr style={{ background: "linear-gradient(to left, #f1f5f9, #eef2f7)" }}>
-                          <th className={thCls} style={{ width: "26%" }}>بيان</th>
-                          <th className={thCls} style={{ width: "22%" }}>حقل المصدر</th>
-                          <th className={thCls} style={{ width: 110, borderRight: "1px solid #e8edf3" }}>كود الحساب</th>
-                          <th className={thCls}>اسم الحساب</th>
+                          <th className={thCls} style={{ width: "26%" }}>بيان<br/><span className="font-normal text-[9px] text-slate-400">Description</span></th>
+                          <th className={thCls} style={{ width: "22%" }}>مصدر البيانات<br/><span className="font-normal text-[9px] text-slate-400">Data Source</span></th>
+                          <th className={thCls} style={{ width: 110, borderRight: "1px solid #e8edf3" }}>كود الحساب<br/><span className="font-normal text-[9px] text-slate-400">Account Code</span></th>
+                          <th className={thCls}>اسم الحساب<br/><span className="font-normal text-[9px] text-slate-400">Account Name</span></th>
                           <th className="w-6 bg-slate-50 border-b border-slate-200"></th>
                         </tr>
                       </thead>
