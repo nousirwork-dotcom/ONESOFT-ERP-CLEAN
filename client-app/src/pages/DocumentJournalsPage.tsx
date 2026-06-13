@@ -101,18 +101,20 @@ function AccCodeSearch({
   const [hi, setHi]   = useState(0);
   const wrapRef = useRef<HTMLDivElement>(null);
 
+  const postableAccounts = useMemo(() => allAccounts.filter((a: any) => a.allowPosting === true), [allAccounts]);
+
   useEffect(() => { setQ(selected?.code ?? ""); }, [selected?.code]);
 
   const filtered = useMemo(() => {
     const sq = normalizeArDJ(q.trim());
-    if (!sq) return allAccounts.slice(0, 30);
-    const codeFirst = allAccounts.filter((a: any) => normalizeArDJ(a.code ?? "").startsWith(sq));
-    const rest      = allAccounts.filter((a: any) =>
+    if (!sq) return postableAccounts.slice(0, 30);
+    const codeFirst = postableAccounts.filter((a: any) => normalizeArDJ(a.code ?? "").startsWith(sq));
+    const rest      = postableAccounts.filter((a: any) =>
       !normalizeArDJ(a.code ?? "").startsWith(sq) &&
       (normalizeArDJ(a.code ?? "").includes(sq) || normalizeArDJ(a.name ?? "").includes(sq))
     );
     return [...codeFirst, ...rest].slice(0, 30);
-  }, [q, allAccounts]);
+  }, [q, postableAccounts]);
 
   useEffect(() => { setHi(0); }, [filtered]);
 
