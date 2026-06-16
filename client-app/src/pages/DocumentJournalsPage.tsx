@@ -443,7 +443,7 @@ export default function DocumentJournalsPage() {
   const [showDelete, setShowDelete]     = useState(false);
   const [showReset, setShowReset]       = useState(false);
   const [ptConfig, setPtConfig]         = useState<PTC>(DEFAULT_PTC);
-  const [activeTab, setActiveTab]       = useState<"basic" | "payment-types" | "issuance" | "options">("basic");
+  const [activeTab, setActiveTab]       = useState<"basic" | "payment-types" | "accounting-links" | "issuance" | "options">("basic");
 
   /* ── queries ── */
   const listQuery = trpc.documentJournals.list.useQuery();
@@ -771,6 +771,7 @@ export default function DocumentJournalsPage() {
               {[
                 { id: "basic", label: "البيانات الأساسية" },
                 ...(selectedType === "sales" ? [{ id: "payment-types", label: "أنواع السندات" }] : []),
+                ...(selectedType === "sales" ? [{ id: "accounting-links", label: "الروابط المحاسبية" }] : []),
                 { id: "issuance", label: "خصائص السندات المصدرة" },
                 { id: "options",  label: "خيارات" },
               ].map(tab => (
@@ -1059,7 +1060,33 @@ export default function DocumentJournalsPage() {
                     </table>
                   </P>
 
-                  {/* ─── جدول 2: الروابط المحاسبية ─── */}
+                </div>
+              );
+            })()}
+
+            {/* ── TAB: الروابط المحاسبية ── */}
+            {activeTab === "accounting-links" && selectedType === "sales" && (() => {
+              const thCls = "text-[10px] font-semibold text-slate-500 px-2 py-1.5 text-right bg-slate-50 border-b border-slate-200";
+              const tdCls = "px-1.5 py-1 border-b border-slate-100";
+              const cellInput = (val: string, onChange: (v: string) => void) => (
+                <input value={val} onChange={e => onChange(e.target.value)}
+                  className="w-full h-6 text-[11px] px-1.5 border border-slate-200 rounded bg-white focus:outline-none focus:border-indigo-400" />
+              );
+              const addLink = () => {
+                const newId = String(Date.now());
+                setPtConfig(p => ({ ...p, accountLinks: [...p.accountLinks, { id: newId, description: "", postingName: "", accountId: null, postingSide: "" }] }));
+                setIsDirty(true);
+              };
+              const removeLink = (idx: number) => {
+                setPtConfig(p => ({ ...p, accountLinks: p.accountLinks.filter((_, i) => i !== idx) }));
+                setIsDirty(true);
+              };
+              const patchLink = (idx: number, patch: Partial<AccountLinkRow>) => {
+                setPtConfig(p => { const a = [...p.accountLinks]; a[idx] = { ...a[idx], ...patch }; return { ...p, accountLinks: a }; });
+                setIsDirty(true);
+              };
+              return (
+                <div className="h-full overflow-y-auto p-4 space-y-4" dir="rtl">
                   <P title="الروابط المحاسبية">
                     <table className="w-full" style={{ borderCollapse: "separate", borderSpacing: 0 }}>
                       <thead>
@@ -1133,7 +1160,6 @@ export default function DocumentJournalsPage() {
                       </tfoot>
                     </table>
                   </P>
-
                 </div>
               );
             })()}
