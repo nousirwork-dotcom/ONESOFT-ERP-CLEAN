@@ -4266,16 +4266,16 @@ function FieldDictionaryDialog({
             </div>
             <div className="space-y-1">
               <Label className="text-xs">نوع الحقل <span className="text-destructive">*</span></Label>
-              <Select value={form.fieldType} onValueChange={v => f("fieldType", v)}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent style={{ zIndex: 9999 }}>
-                  {FIELD_TYPES.map(t => (
-                    <SelectItem key={t.value} value={t.value} className="text-xs">
-                      {t.labelAr} — {t.labelEn}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <select
+                value={form.fieldType}
+                onChange={e => f("fieldType", e.target.value)}
+                className="w-full h-8 text-xs px-2 border border-input rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                dir="rtl"
+              >
+                {FIELD_TYPES.map(t => (
+                  <option key={t.value} value={t.value}>{t.labelAr} — {t.labelEn}</option>
+                ))}
+              </select>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -4290,16 +4290,16 @@ function FieldDictionaryDialog({
           </div>
           <div className="space-y-1">
             <Label className="text-xs">فئة الحقل / Category</Label>
-            <Select value={form.category} onValueChange={v => f("category", v)}>
-              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent style={{ zIndex: 9999 }}>
-                {FIELD_CATEGORIES.map(c => (
-                  <SelectItem key={c} value={c} className="text-xs">
-                    {CATEGORY_AR[c] ?? c} — {c}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <select
+              value={form.category}
+              onChange={e => f("category", e.target.value)}
+              className="w-full h-8 text-xs px-2 border border-input rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+              dir="rtl"
+            >
+              {FIELD_CATEGORIES.map(c => (
+                <option key={c} value={c}>{CATEGORY_AR[c] ?? c} — {c}</option>
+              ))}
+            </select>
           </div>
           <div className="space-y-1">
             <Label className="text-xs">وصف الحقل (اختياري)</Label>
