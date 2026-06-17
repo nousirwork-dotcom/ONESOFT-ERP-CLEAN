@@ -4268,7 +4268,7 @@ function FieldDictionaryDialog({
               <Label className="text-xs">نوع الحقل <span className="text-destructive">*</span></Label>
               <Select value={form.fieldType} onValueChange={v => f("fieldType", v)}>
                 <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
+                <SelectContent style={{ zIndex: 9999 }}>
                   {FIELD_TYPES.map(t => (
                     <SelectItem key={t.value} value={t.value} className="text-xs">
                       {t.labelAr} — {t.labelEn}
@@ -4292,7 +4292,7 @@ function FieldDictionaryDialog({
             <Label className="text-xs">فئة الحقل / Category</Label>
             <Select value={form.category} onValueChange={v => f("category", v)}>
               <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
+              <SelectContent style={{ zIndex: 9999 }}>
                 {FIELD_CATEGORIES.map(c => (
                   <SelectItem key={c} value={c} className="text-xs">
                     {CATEGORY_AR[c] ?? c} — {c}
