@@ -83,17 +83,42 @@ const EMPTY: JournalForm = {
 type PaymentTypeRow = { id: string; nameAr: string; nameEn: string; codeAr: string; codeEn: string; };
 type AccountLinkRow = { id: string; description: string; postingName: string; accountId: number | null; postingSide: string; };
 type PTC = { types: PaymentTypeRow[]; accountLinks: AccountLinkRow[]; };
+const DEFAULT_LINK_DESCRIPTIONS = [
+  "الصندوق / النقد",
+  "صافي المبيعات",
+  "الضريبة (VAT)",
+  "السلعة / التكلفة",
+  "ذمم العملاء (آجل)",
+  "الخصم الممنوح",
+  "مردود المبيعات",
+  "مصاريف أخرى",
+  "بند إضافي (1)",
+  "بند إضافي (2)",
+];
+const DEFAULT_ACCOUNT_LINKS: AccountLinkRow[] = DEFAULT_LINK_DESCRIPTIONS.map((desc, i) => ({
+  id: `default-${i + 1}`,
+  description: desc,
+  postingName: "",
+  accountId: null,
+  postingSide: "",
+}));
 const DEFAULT_PTC: PTC = {
   types: [
     { id: "1", nameAr: "نقدا",  nameEn: "نقدا",  codeAr: "نقدا",  codeEn: "cash"  },
     { id: "2", nameAr: "آجل",   nameEn: "آجل",   codeAr: "آجل",   codeEn: "cridt" },
   ],
-  accountLinks: [],
+  accountLinks: DEFAULT_ACCOUNT_LINKS,
 };
 function normalizePtConfig(raw: any): PTC {
   if (!raw) return DEFAULT_PTC;
-  if (Array.isArray(raw.types)) return raw as PTC;
-  return DEFAULT_PTC;
+  if (!Array.isArray(raw.types)) return DEFAULT_PTC;
+  const savedLinks: AccountLinkRow[] = Array.isArray(raw.accountLinks) ? raw.accountLinks : [];
+  const merged: AccountLinkRow[] = DEFAULT_ACCOUNT_LINKS.map((def, i) => {
+    const saved = savedLinks[i];
+    return saved ?? { ...def, id: `default-${i + 1}` };
+  });
+  const extras = savedLinks.slice(DEFAULT_ACCOUNT_LINKS.length);
+  return { types: raw.types, accountLinks: [...merged, ...extras] };
 }
 
 /* ── مكوّن بحث الحساب (مثل المخازن) ── */
