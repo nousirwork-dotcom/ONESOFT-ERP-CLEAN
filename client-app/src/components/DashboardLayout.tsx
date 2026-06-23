@@ -107,7 +107,7 @@ function getNavGroups(lang: "ar" | "en"): NavGroup[] {
         { icon: Calculator,      label: t(lang, "accounting"),       path: "/accounting-module" },
         { icon: UserCheck,       label: t(lang, "hr"),               path: "/hr-module" },
         { icon: Wrench,          label: t(lang, "fixedAssets"),      path: "/assets-module" },
-        { icon: Settings,        label: t(lang, "settings"),         path: "/settings", roles: ["admin"] },
+        { icon: Settings,        label: t(lang, "settings"),         path: "/settings" },
       ],
     },
   ];
