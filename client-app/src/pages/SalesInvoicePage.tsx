@@ -1428,8 +1428,11 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         </div>
       </div>
 
-      {/* ── Lines Table ─────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-auto bg-white border-b border-[#b0a89a]">
+      {/* ── Lines Table + Totals Panel ──────────────────────────────────── */}
+      <div className="flex-1 flex overflow-hidden border-b border-[#b0a89a]" dir="rtl">
+
+      {/* جدول السطور (يمين) */}
+      <div className="flex-1 overflow-auto bg-white">
         <table className="w-full border-collapse" style={{ fontSize: "12px" }}>
           <thead className="sticky top-0 z-10">
             <tr style={{ background: "linear-gradient(to bottom, #406B93, #365E80)", color: "#fff" }}>
@@ -1598,59 +1601,98 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         </div>
       </div>
 
-      {/* ── Totals Bar ──────────────────────────────────────────────────── */}
-      <div style={{ background: "#E8E4DC", borderTop: "1px solid #b0a89a" }}>
-        <div className="flex items-center gap-0 px-3 py-1.5">
-          {/* Left: totals summary */}
-          <div className="flex items-center gap-3 flex-1">
-            <TF label="إجمالي" value={fmt(subtotal)} />
-            <span className="text-[#aaa]">−</span>
-            <TF label="الخصم" value={fmt(totalDiscount)} color="#C0392B" />
-            <span className="text-[#aaa]">+</span>
-            <TF label="الضريبة" value={fmt(totalTax)} />
+      {/* ── لوحة الإجماليات (يسار) ──────────────────────────────────────── */}
+      <div
+        className="flex flex-col border-r border-[#b0a89a]"
+        style={{ width: 210, minWidth: 210, background: "#F4F1EC" }}
+      >
+        {/* عنوان اللوحة */}
+        <div
+          className="px-3 py-2 text-[11px] font-bold text-white text-center"
+          style={{ background: "linear-gradient(to bottom, #406B93, #365E80)" }}
+        >
+          ملخص الفاتورة
+        </div>
+
+        {/* صفوف الإجماليات */}
+        <div className="flex-1 flex flex-col justify-center px-3 py-3 gap-0">
+
+          {/* المبلغ الإجمالي */}
+          <div className="flex items-center justify-between py-2 border-b border-[#d4cfc7]">
+            <span className="text-[11px] text-[#555]">المبلغ الإجمالي</span>
+            <span className="text-[12px] font-semibold text-[#333] font-mono">{fmt(subtotal)}</span>
           </div>
 
-          {/* Divider */}
-          <div style={{ width: 1, height: 28, background: "#b0a89a", margin: "0 12px" }} />
+          {/* قيمة الخصم */}
+          <div className="flex items-center justify-between py-2 border-b border-[#d4cfc7]">
+            <span className="text-[11px] text-[#555]">قيمة الخصم</span>
+            <span className="text-[12px] font-semibold font-mono" style={{ color: totalDiscount > 0 ? "#C0392B" : "#aaa" }}>
+              {totalDiscount > 0 ? `− ${fmt(totalDiscount)}` : fmt(0)}
+            </span>
+          </div>
 
-          {/* Right: payment info */}
-          <div className="flex items-center gap-3">
-            <TF label="الصافي" value={fmt(netTotal)} highlight />
+          {/* الإجمالي غير شامل الضريبة */}
+          <div className="flex items-center justify-between py-2 border-b border-[#d4cfc7]">
+            <span className="text-[11px] text-[#555]">غير شامل الضريبة</span>
+            <span className="text-[12px] font-semibold text-[#333] font-mono">{fmt(subtotal - totalDiscount)}</span>
+          </div>
 
-            {paymentType === "cash" ? (
-              <>
-                <TF label="مدفوع نقداً" value={fmt(netTotal)} color="#16A34A" />
-                <TF label="المتبقي" value="0.000" />
-              </>
-            ) : (
-              <>
-                <div className="flex items-center gap-1">
-                  <span className="text-[11px] text-[#444] whitespace-nowrap">مدفوع:</span>
-                  <input
-                    type="number"
-                    value={paidAmountOverride}
-                    onChange={e => setPaidAmountOverride(e.target.value)}
-                    placeholder="0.000"
-                    className="classic-input text-center w-24"
-                    style={{ background: "#FFF7ED", borderColor: "#D97706" }}
-                    min="0"
-                  />
-                </div>
-                <TF
-                  label="المتبقي"
-                  value={fmt(remainingAmount)}
-                  color={remainingAmount > 0 ? "#C0392B" : "#16A34A"}
-                />
-              </>
-            )}
+          {/* إجمالي الضريبة */}
+          <div className="flex items-center justify-between py-2 border-b border-[#d4cfc7]">
+            <span className="text-[11px] text-[#555]">إجمالي الضريبة</span>
+            <span className="text-[12px] font-semibold font-mono" style={{ color: totalTax > 0 ? "#B45309" : "#aaa" }}>
+              {fmt(totalTax)}
+            </span>
+          </div>
 
-            <div style={{ width: 1, height: 28, background: "#b0a89a", margin: "0 4px" }} />
-            <TF label="الإجمالي الكلي" value={fmt(netTotal)} highlight big />
+          {/* الإجمالي شامل الضريبة */}
+          <div
+            className="flex items-center justify-between py-2.5 px-2 rounded-md mt-1"
+            style={{ background: "#406B93", color: "#fff" }}
+          >
+            <span className="text-[11px] font-bold">شامل الضريبة</span>
+            <span className="text-[13px] font-bold font-mono">{fmt(netTotal)}</span>
           </div>
         </div>
 
+        {/* زر الدفع */}
+        <div className="px-3 pb-3">
+          <button
+            onClick={() => {
+              if (!savedInvoiceId) {
+                toast.warning("احفظ الفاتورة أولاً لتتمكن من تسجيل الدفع");
+                return;
+              }
+              setPendingPayInvoiceId(savedInvoiceId);
+              setPendingPayInvoiceNumber(invoiceNumber);
+              setPendingPayTotal(netTotal);
+              setShowPaymentModal(true);
+            }}
+            className="w-full py-2.5 rounded-md text-[13px] font-bold text-white transition-all"
+            style={{
+              background: savedInvoiceId
+                ? "linear-gradient(135deg, #16A34A, #15803D)"
+                : "linear-gradient(135deg, #94A3B8, #64748B)",
+              boxShadow: savedInvoiceId ? "0 2px 6px rgba(21,128,61,0.35)" : "none",
+              cursor: savedInvoiceId ? "pointer" : "default",
+            }}
+          >
+            💳 الدفع
+          </button>
+          {paymentType !== "cash" && remainingAmount > 0 && (
+            <div className="text-center mt-1.5 text-[10px]" style={{ color: "#C0392B" }}>
+              متبقي: <span className="font-bold font-mono">{fmt(remainingAmount)}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      </div>{/* end flex wrapper */}
+
+      {/* ── Totals Bar (مبسّط) ──────────────────────────────────────────── */}
+      <div style={{ background: "#E8E4DC", borderTop: "1px solid #b0a89a" }}>
         {/* Status + Shortcuts row */}
-        <div className="flex items-center justify-between px-3 py-0.5 border-t border-[#c8c0b4]" style={{ background: "#DDD9D0", fontSize: "10px", color: "#666" }}>
+        <div className="flex items-center justify-between px-3 py-1" style={{ fontSize: "10px", color: "#666" }}>
           <div className="flex gap-4">
             <span>
               نوع السند:&nbsp;
