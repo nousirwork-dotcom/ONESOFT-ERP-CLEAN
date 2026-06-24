@@ -1118,7 +1118,7 @@ export default function DocumentJournalsPage() {
                         <tr style={{ background: "linear-gradient(to left, #f1f5f9, #eef2f7)" }}>
                           <th className={thCls} style={{ width: 28 }}>#</th>
                           <th className={thCls} style={{ width: "23%" }}>بيان<br/><span className="font-normal text-[9px] text-slate-400">Description</span></th>
-                          <th className={thCls} style={{ width: "18%" }}>حقل المصدر<br/><span className="font-normal text-[9px] text-slate-400">Source Field</span></th>
+                          <th className={thCls} style={{ width: "18%" }}>مصدر البيانات<br/><span className="font-normal text-[9px] text-slate-400">Source Field</span></th>
                           <th className={thCls} style={{ width: 110, borderRight: "1px solid #e8edf3" }}>كود الحساب<br/><span className="font-normal text-[9px] text-slate-400">Account Code</span></th>
                           <th className={thCls}>اسم الحساب<br/><span className="font-normal text-[9px] text-slate-400">Account Name</span></th>
                           <th className={thCls} style={{ width: 100 }}>اتجاه القيد<br/><span className="font-normal text-[9px] text-slate-400">Posting Side</span></th>
