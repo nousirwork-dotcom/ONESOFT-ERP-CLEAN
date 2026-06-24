@@ -2754,14 +2754,12 @@ function ChartOfAccountsPage() {
                   {/* نوع الحساب */}
                   <div className="space-y-1">
                     <Label className="text-[11px] font-bold text-slate-700">نوع الحساب <span className="text-red-500">*</span></Label>
-                    <Select value={form.accountLevelType} onValueChange={v => setF("accountLevelType", v)}>
-                      <SelectTrigger className="h-9 text-xs border-2 border-slate-200 bg-white"><SelectValue /></SelectTrigger>
-                      <SelectContent dir="rtl">
-                        <SelectItem value="root">🔷 جذري — حساب رئيسي بلا أب</SelectItem>
-                        <SelectItem value="general">🔶 عام — حساب تجميعي</SelectItem>
-                        <SelectItem value="sub">🟢 فرعي — يقبل الحركات</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <select value={form.accountLevelType} onChange={e => setF("accountLevelType", e.target.value)}
+                      style={{ height: 36, width: "100%", border: "2px solid #cbd5e1", borderRadius: 8, padding: "0 8px", fontSize: 12, background: "#fff", fontFamily: "'Cairo',Tahoma,sans-serif", color: "#1e293b" }}>
+                      <option value="root">🔷 جذري — حساب رئيسي بلا أب</option>
+                      <option value="general">🔶 عام — حساب تجميعي</option>
+                      <option value="sub">🟢 فرعي — يقبل الحركات</option>
+                    </select>
                   </div>
                   {/* اسم الحساب العربي — عرض كامل */}
                   <div className="col-span-2 space-y-1">
@@ -2785,22 +2783,16 @@ function ChartOfAccountsPage() {
                     <Label className="text-[11px] font-bold text-slate-700">
                       يصبّ في (الحساب الأب) {form.accountLevelType !== "root" && <span className="text-red-500">*</span>}
                     </Label>
-                    <Select
+                    <select
                       value={form.parentId || "none"}
-                      onValueChange={v => setF("parentId", v === "none" ? "" : v)}
-                      disabled={form.accountLevelType === "root"}>
-                      <SelectTrigger className={`h-9 text-xs border-2 ${form.accountLevelType === "root" ? "opacity-40 bg-slate-50 border-slate-100" : formErrors.parentId ? "border-red-400 bg-red-50" : "border-slate-200 bg-white"}`}>
-                        <SelectValue placeholder="اختر الحساب الأب..." />
-                      </SelectTrigger>
-                      <SelectContent dir="rtl">
-                        <SelectItem value="none">— بدون حساب أب —</SelectItem>
-                        {listQuery.data?.filter(a => a.isParent === true).map(a => (
-                          <SelectItem key={a.id} value={String(a.id)}>
-                            <span className="font-mono text-[10px] text-blue-600 ml-1">{a.code}</span> {a.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      onChange={e => setF("parentId", e.target.value === "none" ? "" : e.target.value)}
+                      disabled={form.accountLevelType === "root"}
+                      style={{ height: 36, width: "100%", border: `2px solid ${formErrors.parentId ? "#f87171" : "#cbd5e1"}`, borderRadius: 8, padding: "0 8px", fontSize: 12, background: form.accountLevelType === "root" ? "#f8fafc" : formErrors.parentId ? "#fef2f2" : "#fff", fontFamily: "'Cairo',Tahoma,sans-serif", color: "#1e293b", opacity: form.accountLevelType === "root" ? 0.4 : 1 }}>
+                      <option value="none">— بدون حساب أب —</option>
+                      {listQuery.data?.filter(a => a.isParent === true).map(a => (
+                        <option key={a.id} value={String(a.id)}>{a.code} — {a.name}</option>
+                      ))}
+                    </select>
                     {form.accountLevelType === "root" && <p className="text-[10px] text-blue-500">الجذري لا يحتاج حساباً أباً</p>}
                     {formErrors.parentId && <p className="text-[10px] text-red-500 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{formErrors.parentId}</p>}
                   </div>
@@ -2827,39 +2819,33 @@ function ChartOfAccountsPage() {
                   {/* طبيعة الحساب */}
                   <div className="space-y-1">
                     <Label className="text-[11px] font-bold text-slate-700">طبيعة الحساب</Label>
-                    <Select value={form.nature} onValueChange={v => setF("nature", v)}>
-                      <SelectTrigger className="h-9 text-xs border-2 border-slate-200 bg-white"><SelectValue /></SelectTrigger>
-                      <SelectContent dir="rtl">
-                        <SelectItem value="debit">🔵 مدين</SelectItem>
-                        <SelectItem value="credit">🔴 دائن</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <select value={form.nature} onChange={e => setF("nature", e.target.value)}
+                      style={{ height: 36, width: "100%", border: "2px solid #cbd5e1", borderRadius: 8, padding: "0 8px", fontSize: 12, background: "#fff", fontFamily: "'Cairo',Tahoma,sans-serif", color: "#1e293b" }}>
+                      <option value="debit">🔵 مدين</option>
+                      <option value="credit">🔴 دائن</option>
+                    </select>
                   </div>
                   {/* التصنيف المالي */}
                   <div className="space-y-1">
                     <Label className="text-[11px] font-bold text-slate-700">التصنيف المالي</Label>
-                    <Select value={form.accountType} onValueChange={v => setF("accountType", v)}>
-                      <SelectTrigger className="h-9 text-xs border-2 border-slate-200 bg-white"><SelectValue /></SelectTrigger>
-                      <SelectContent dir="rtl">
-                        <SelectItem value="assets">أصول</SelectItem>
-                        <SelectItem value="liabilities">خصوم</SelectItem>
-                        <SelectItem value="equity">حقوق ملكية</SelectItem>
-                        <SelectItem value="revenue">إيرادات</SelectItem>
-                        <SelectItem value="expenses">مصروفات</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <select value={form.accountType} onChange={e => setF("accountType", e.target.value)}
+                      style={{ height: 36, width: "100%", border: "2px solid #cbd5e1", borderRadius: 8, padding: "0 8px", fontSize: 12, background: "#fff", fontFamily: "'Cairo',Tahoma,sans-serif", color: "#1e293b" }}>
+                      <option value="assets">أصول</option>
+                      <option value="liabilities">خصوم</option>
+                      <option value="equity">حقوق ملكية</option>
+                      <option value="revenue">إيرادات</option>
+                      <option value="expenses">مصروفات</option>
+                    </select>
                   </div>
                   {/* مركز التكلفة */}
                   <div className="space-y-1">
                     <Label className="text-[11px] font-bold text-slate-700">مركز التكلفة</Label>
-                    <Select value={form.costCenterType} onValueChange={v => setF("costCenterType", v)}>
-                      <SelectTrigger className="h-9 text-xs border-2 border-slate-200 bg-white"><SelectValue /></SelectTrigger>
-                      <SelectContent dir="rtl">
-                        <SelectItem value="not_allowed">غير مسموح</SelectItem>
-                        <SelectItem value="optional">اختياري</SelectItem>
-                        <SelectItem value="mandatory">إجباري ⚠️</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <select value={form.costCenterType} onChange={e => setF("costCenterType", e.target.value)}
+                      style={{ height: 36, width: "100%", border: "2px solid #cbd5e1", borderRadius: 8, padding: "0 8px", fontSize: 12, background: "#fff", fontFamily: "'Cairo',Tahoma,sans-serif", color: "#1e293b" }}>
+                      <option value="not_allowed">غير مسموح</option>
+                      <option value="optional">اختياري</option>
+                      <option value="mandatory">إجباري ⚠️</option>
+                    </select>
                     {form.costCenterType === "mandatory" && (
                       <p className="text-[10px] text-amber-600 flex items-center gap-1"><AlertCircle className="w-3 h-3" />يجب تحديد مركز تكلفة عند الترحيل</p>
                     )}
@@ -2867,13 +2853,11 @@ function ChartOfAccountsPage() {
                   {/* حالة الحساب */}
                   <div className="space-y-1">
                     <Label className="text-[11px] font-bold text-slate-700">حالة الحساب</Label>
-                    <Select value={form.status} onValueChange={v => setF("status", v)}>
-                      <SelectTrigger className={`h-9 text-xs border-2 bg-white ${form.status === "active" ? "border-emerald-300 text-emerald-700" : "border-red-200 text-red-600"}`}><SelectValue /></SelectTrigger>
-                      <SelectContent dir="rtl">
-                        <SelectItem value="active">✅ نشط</SelectItem>
-                        <SelectItem value="suspended">🔴 موقوف</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <select value={form.status} onChange={e => setF("status", e.target.value)}
+                      style={{ height: 36, width: "100%", border: `2px solid ${form.status === "active" ? "#6ee7b7" : "#fca5a5"}`, borderRadius: 8, padding: "0 8px", fontSize: 12, background: "#fff", fontFamily: "'Cairo',Tahoma,sans-serif", color: form.status === "active" ? "#059669" : "#dc2626" }}>
+                      <option value="active">✅ نشط</option>
+                      <option value="suspended">🔴 موقوف</option>
+                    </select>
                   </div>
                 </div>
 
