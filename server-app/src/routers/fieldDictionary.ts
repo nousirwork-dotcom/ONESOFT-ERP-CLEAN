@@ -60,6 +60,16 @@ const SEED_FIELDS = [
   { code: 'COMPANY_NAME',    nameAr: 'اسم الشركة',             nameEn: 'Company Name',      fieldType: 'Text',     category: 'System Fields',    isSystem: true },
   { code: 'PRINT_DATE',      nameAr: 'تاريخ الطباعة',          nameEn: 'Print Date',        fieldType: 'Date',     category: 'System Fields',    isSystem: true },
   { code: 'PRINT_TIME',      nameAr: 'وقت الطباعة',            nameEn: 'Print Time',        fieldType: 'Time',     category: 'System Fields',    isSystem: true },
+  // Payment Fields
+  { code: 'CASH_AMOUNT',     nameAr: 'المبلغ النقدي',          nameEn: 'Cash Amount',       fieldType: 'Amount',   category: 'Payment Fields',   isSystem: true },
+  { code: 'CARD_AMOUNT',     nameAr: 'مبلغ البطاقة',           nameEn: 'Card Amount',       fieldType: 'Amount',   category: 'Payment Fields',   isSystem: true },
+  { code: 'BANK_AMOUNT',     nameAr: 'تحويل بنكي',             nameEn: 'Bank Transfer',     fieldType: 'Amount',   category: 'Payment Fields',   isSystem: true },
+  { code: 'TAMARA_AMOUNT',   nameAr: 'مبلغ تمارا',             nameEn: 'Tamara Amount',     fieldType: 'Amount',   category: 'Payment Fields',   isSystem: true },
+  { code: 'TABBY_AMOUNT',    nameAr: 'مبلغ تابي',              nameEn: 'Tabby Amount',      fieldType: 'Amount',   category: 'Payment Fields',   isSystem: true },
+  { code: 'OTHER_AMOUNT',    nameAr: 'مبالغ أخرى',             nameEn: 'Other Amount',      fieldType: 'Amount',   category: 'Payment Fields',   isSystem: true },
+  { code: 'PAYMENT_TOTAL',   nameAr: 'إجمالي المدفوع',         nameEn: 'Total Paid',        fieldType: 'Amount',   category: 'Payment Fields',   isSystem: true },
+  { code: 'PAID',            nameAr: 'المدفوع',                nameEn: 'Paid Amount',       fieldType: 'Amount',   category: 'Payment Fields',   isSystem: true },
+  { code: 'REMAINING',       nameAr: 'المتبقي',                nameEn: 'Remaining',         fieldType: 'Amount',   category: 'Payment Fields',   isSystem: true },
 ];
 
 export const fieldDictionaryRouter = router({

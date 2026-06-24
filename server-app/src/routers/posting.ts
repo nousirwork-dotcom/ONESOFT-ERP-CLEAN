@@ -97,6 +97,8 @@ function resolveInvoiceFieldValue(
   const paidAmount = Number(invoice.paidAmount     ?? 0);
   const isCredit   = invoice.paymentMethod === 'credit';
 
+  const breakdown = invoice.paymentBreakdown as Record<string, number> | null | undefined;
+
   switch (fieldCode.toUpperCase()) {
     case 'TOTAL':         return total;
     case 'NETSALES':      return subtotal;
@@ -104,8 +106,16 @@ function resolveInvoiceFieldValue(
     case 'DISCOUNT':      return discAmt;
     case 'CASH':          return isCredit ? 0 : total;
     case 'CUSTOMER_CODE': return isCredit ? total : 0;   // ذمم العملاء (آجل)
-    case 'PAID':          return paidAmount;
+    case 'PAID':
+    case 'PAYMENT_TOTAL': return paidAmount;
     case 'REMAINING':     return Math.max(0, total - paidAmount);
+    // وسائل الدفع من تفصيل السداد
+    case 'CASH_AMOUNT':   return Number(breakdown?.CASH_AMOUNT   ?? 0);
+    case 'CARD_AMOUNT':   return Number(breakdown?.CARD_AMOUNT   ?? 0);
+    case 'BANK_AMOUNT':   return Number(breakdown?.BANK_AMOUNT   ?? 0);
+    case 'TAMARA_AMOUNT': return Number(breakdown?.TAMARA_AMOUNT ?? 0);
+    case 'TABBY_AMOUNT':  return Number(breakdown?.TABBY_AMOUNT  ?? 0);
+    case 'OTHER_AMOUNT':  return Number(breakdown?.OTHER_AMOUNT  ?? 0);
     default:              return 0;
   }
 }

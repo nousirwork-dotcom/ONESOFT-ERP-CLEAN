@@ -135,6 +135,7 @@ export const salesRouter = router({
       total: z.string().default('0'),
       paidAmount: z.string().default('0'),
       remainingAmount: z.string().default('0'),
+      paymentBreakdown: z.record(z.string(), z.number()).optional().nullable(),
       paymentMethod: z.enum(['cash', 'bank', 'credit', 'check', 'other']).default('cash'),
       status: z.enum(['draft', 'confirmed', 'cancelled', 'paid']).default('confirmed'),
       notes: z.string().optional(),
@@ -203,6 +204,7 @@ export const salesRouter = router({
       total: z.string().optional(),
       paidAmount: z.string().optional(),
       remainingAmount: z.string().optional(),
+      paymentBreakdown: z.record(z.string(), z.number()).optional().nullable(),
       status: z.enum(['draft', 'confirmed', 'cancelled', 'paid']).optional(),
       notes: z.string().optional(),
       items: z.array(z.object({
@@ -246,6 +248,28 @@ export const salesRouter = router({
           );
         }
       }
+      return { success: true };
+    }),
+
+  // تحديث بيانات السداد فقط (من شاشة الدفع)
+  updatePayment: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      paymentBreakdown: z.record(z.string(), z.number()),
+      paidAmount: z.string(),
+      remainingAmount: z.string(),
+      status: z.enum(['draft', 'confirmed', 'paid']).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const orgId = ctx.user.orgId;
+      const { id, paymentBreakdown, paidAmount, remainingAmount, status } = input;
+      const existing = await db.query.salesInvoices.findFirst({
+        where: and(eq(salesInvoices.id, id), eq(salesInvoices.orgId, orgId)),
+      });
+      if (!existing) throw new Error('الفاتورة غير موجودة');
+      await db.update(salesInvoices)
+        .set({ paymentBreakdown, paidAmount, remainingAmount, ...(status ? { status } : {}), updatedAt: new Date() })
+        .where(and(eq(salesInvoices.id, id), eq(salesInvoices.orgId, orgId)));
       return { success: true };
     }),
 

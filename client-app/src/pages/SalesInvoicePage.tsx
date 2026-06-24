@@ -15,6 +15,7 @@ import ERPToolbar, { ERPMode } from "@/components/ERPToolbar";
 import PostingPreviewModal from "@/components/PostingPreviewModal";
 import InvoicePrintModal, { type DocTemplateConfig } from "@/components/InvoicePrintModal";
 import SendDocumentPanel from "@/components/SendDocumentPanel";
+import PaymentModal from "@/components/PaymentModal";
 import { buildInvoiceHtml } from "@/lib/buildInvoiceHtml";
 import QRCode from "qrcode";
 
@@ -34,7 +35,7 @@ interface InvoiceLine {
   productId?: number;
 }
 
-type PaymentType = "cash" | "credit";
+type PaymentType = "cash" | "credit" | "partial";
 
 const EMPTY_LINE = (): InvoiceLine => ({
   id: crypto.randomUUID(),
@@ -84,6 +85,10 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
   const [journalWarehouseId, setJournalWarehouseId] = useState<number | null>(null); // مخزن مقيَّد من الدفتر
   const [docTypeWarehouseId, setDocTypeWarehouseId] = useState<number | null>(null); // مخزن مقيَّد من نوع السند
   const [paymentType, setPaymentType] = useState<PaymentType>("cash");
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [pendingPayInvoiceId, setPendingPayInvoiceId] = useState<number | null>(null);
+  const [pendingPayInvoiceNumber, setPendingPayInvoiceNumber] = useState("");
+  const [pendingPayTotal, setPendingPayTotal] = useState(0);
   const [docTypeId, setDocTypeId] = useState<string>("");
   const [currency, setCurrency] = useState("SAR");
   const [exchangeRate, setExchangeRate] = useState("1.000");
@@ -282,6 +287,13 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       setNavInvoiceId(data.id);
       setIsPosted(data.isPosted ?? false);
       setErpMode("view");
+      // فتح شاشة الدفع تلقائياً للفواتير النقدية والجزئية
+      if (paymentType !== "credit") {
+        setPendingPayInvoiceId(data.id);
+        setPendingPayInvoiceNumber(data.invoiceNumber);
+        setPendingPayTotal(netTotal);
+        setShowPaymentModal(true);
+      }
     },
     onError: (e) => toast.error(`خطأ في الحفظ: ${e.message}`),
   });
@@ -610,7 +622,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       }
     }
 
-    const paid = paymentType === "cash" ? fmt(netTotal) : fmt(paidAmount);
+    const paid = paymentType === "cash" ? fmt(netTotal) : paymentType === "partial" ? fmt(paidAmount) : fmt(paidAmount);
     const remaining = paymentType === "cash" ? "0.000" : fmt(remainingAmount);
     const payMethod = paymentType === "cash" ? "cash" : "credit";
     const status = paymentType === "cash" ? "paid" : (remainingAmount <= 0 ? "paid" : "confirmed");
@@ -1326,13 +1338,14 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                   }}
                   className="classic-input w-full"
                   style={{
-                    background: paymentType === "cash" ? "#F0FDF4" : "#FFF7ED",
-                    borderColor: paymentType === "cash" ? "#16A34A" : "#D97706",
+                    background: paymentType === "cash" ? "#F0FDF4" : paymentType === "partial" ? "#EFF6FF" : "#FFF7ED",
+                    borderColor: paymentType === "cash" ? "#16A34A" : paymentType === "partial" ? "#2563EB" : "#D97706",
                     fontWeight: 700,
-                    color: paymentType === "cash" ? "#15803D" : "#B45309",
+                    color: paymentType === "cash" ? "#15803D" : paymentType === "partial" ? "#1D4ED8" : "#B45309",
                   }}
                 >
                   <option value="cash">نقدًا</option>
+                  <option value="partial">جزئي (دفعة + رصيد)</option>
                   <option value="credit">آجل</option>
                 </select>
               );
@@ -1717,6 +1730,27 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
           onClose={() => setShowPostingPreview(false)}
           onConfirmPost={() => postMutation.mutate({ invoiceId: savedInvoiceId! })}
           isPosting={postMutation.isPending}
+        />
+      )}
+
+      {/* ── شاشة الدفع ──────────────────────────────────────────────────── */}
+      {showPaymentModal && pendingPayInvoiceId && (
+        <PaymentModal
+          open={showPaymentModal}
+          onClose={() => setShowPaymentModal(false)}
+          invoiceId={pendingPayInvoiceId}
+          invoiceNumber={pendingPayInvoiceNumber}
+          invoiceTotal={pendingPayTotal}
+          currency={currency}
+          onConfirmed={(paidAmt, breakdown) => {
+            setShowPaymentModal(false);
+            const keys = Object.keys(breakdown);
+            const methods = keys.map(k => k.replace("_AMOUNT","")).join(" + ");
+            toast.success(`✓ تم تسجيل الدفع: ${paidAmt.toFixed(2)} ${currency}`, {
+              description: keys.length > 0 ? `وسائل الدفع: ${methods}` : undefined,
+              duration: 5000,
+            });
+          }}
         />
       )}
 

@@ -271,6 +271,7 @@ export const salesInvoices = pgTable('sales_invoices', {
   total: decimal('total', { precision: 18, scale: 4 }).default('0'),
   paidAmount: decimal('paid_amount', { precision: 18, scale: 4 }).default('0'),
   remainingAmount: decimal('remaining_amount', { precision: 18, scale: 4 }).default('0'),
+  paymentBreakdown: jsonb('payment_breakdown'),
   paymentMethod: paymentMethodEnum('payment_method').default('cash'),
   status: invoiceStatusEnum('status').notNull().default('draft'),
   notes: text('notes'),

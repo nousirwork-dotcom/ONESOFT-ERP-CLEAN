@@ -36,7 +36,7 @@ export interface InvPrintData {
   customerPostalCode?: string;
   customerAdditionalNo?: string;
   salesperson?: string;
-  paymentType: "cash" | "credit";
+  paymentType: "cash" | "credit" | "partial";
   currency: string;
   notes?: string;
   lines: {
@@ -178,6 +178,8 @@ export function buildInvoiceHtml(
   const amountInWords = C.sections.amountInWords ? toArabicWords(data.grandTotal, data.currency) : "";
   const paymentText = data.paymentType === "cash"
     ? (isBilingual ? "نقداً / Cash" : "نقداً")
+    : data.paymentType === "partial"
+    ? (isBilingual ? "جزئي / Partial" : "جزئي")
     : (isBilingual ? "آجل / Credit" : "آجل");
 
   const qrImgHtml = qrDataUrl
