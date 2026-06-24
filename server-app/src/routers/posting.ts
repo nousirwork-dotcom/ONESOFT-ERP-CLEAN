@@ -85,12 +85,114 @@ async function nextEntryNumber(orgId: number): Promise<string> {
   return `JE-${String(n).padStart(4, '0')}`;
 }
 
+// ─── مساعد: تحليل قيمة حقل موحّد من فاتورة مبيعات ─────────────────────────
+function resolveInvoiceFieldValue(
+  fieldCode: string,
+  invoice: typeof salesInvoices.$inferSelect,
+): number {
+  const total      = Number(invoice.total          ?? 0);
+  const subtotal   = Number(invoice.subtotal       ?? 0);
+  const taxAmount  = Number(invoice.taxAmount      ?? 0);
+  const discAmt    = Number(invoice.discountAmount ?? 0);
+  const paidAmount = Number(invoice.paidAmount     ?? 0);
+  const isCredit   = invoice.paymentMethod === 'credit';
+
+  switch (fieldCode.toUpperCase()) {
+    case 'TOTAL':         return total;
+    case 'NETSALES':      return subtotal;
+    case 'TAX':           return taxAmount;
+    case 'DISCOUNT':      return discAmt;
+    case 'CASH':          return isCredit ? 0 : total;
+    case 'CUSTOMER_CODE': return isCredit ? total : 0;   // ذمم العملاء (آجل)
+    case 'PAID':          return paidAmount;
+    case 'REMAINING':     return Math.max(0, total - paidAmount);
+    default:              return 0;
+  }
+}
+
+// ─── مساعد: بناء أسطر القيد من الروابط المحاسبية المُضبَّطة في الدفتر ──────
+type AccountLinkCfg = {
+  accountId: number | null;
+  postingName: string;
+  postingSide: string;
+  description: string;
+};
+
+async function buildLinesFromAccountLinks(
+  accountLinks: AccountLinkCfg[],
+  invoice: typeof salesInvoices.$inferSelect,
+  orgId: number,
+): Promise<{
+  lines: { accountId: number | null; accountCode: string; accountName: string; debit: string; credit: string; description: string }[];
+  warnings: string[];
+  totalDebit: string;
+  totalCredit: string;
+  isBalanced: boolean;
+}> {
+  const accIds = accountLinks
+    .map(l => l.accountId)
+    .filter((id): id is number => typeof id === 'number' && id > 0);
+
+  const accs = accIds.length
+    ? await db.query.chartOfAccounts.findMany({
+        where: (a, { inArray }) => inArray(a.id, accIds),
+      })
+    : [];
+  const accMap = new Map(accs.map(a => [a.id, a]));
+
+  const lines: { accountId: number | null; accountCode: string; accountName: string; debit: string; credit: string; description: string }[] = [];
+  const warnings: string[] = [];
+
+  for (const link of accountLinks) {
+    if (!link.accountId || !link.postingName || !link.postingSide) continue;
+    const value = resolveInvoiceFieldValue(link.postingName, invoice);
+    if (value === 0) continue;
+
+    const acc    = accMap.get(link.accountId);
+    const isDebit = link.postingSide === 'debit';
+    const lineDesc = link.description
+      ? `${link.description} - ${invoice.invoiceNumber}`
+      : invoice.invoiceNumber;
+
+    lines.push({
+      accountId:   link.accountId,
+      accountCode: acc?.code ?? '---',
+      accountName: acc?.name ?? link.description ?? '',
+      debit:  isDebit ? value.toFixed(4) : '0.0000',
+      credit: isDebit ? '0.0000' : value.toFixed(4),
+      description: lineDesc,
+    });
+  }
+
+  const totalDebit  = lines.reduce((s, l) => s + Number(l.debit),  0);
+  const totalCredit = lines.reduce((s, l) => s + Number(l.credit), 0);
+  const isBalanced  = Math.abs(totalDebit - totalCredit) < 0.01;
+
+  return {
+    lines,
+    warnings,
+    totalDebit:  totalDebit.toFixed(4),
+    totalCredit: totalCredit.toFixed(4),
+    isBalanced,
+  };
+}
+
 // ─── مساعد: بناء أسطر قيد فاتورة المبيعات ──────────────────────────────────
 export async function buildSalesInvoiceLines(
   invoice: typeof salesInvoices.$inferSelect,
   journal: typeof documentJournals.$inferSelect | null,
   orgId: number,
 ) {
+  // ── استخدام الروابط المحاسبية المُضبَّطة في الدفتر إن وُجدت ──────────────
+  const ptCfg = journal?.paymentTypesConfig as { accountLinks?: AccountLinkCfg[] } | null | undefined;
+  const configLinks: AccountLinkCfg[] = Array.isArray(ptCfg?.accountLinks) ? (ptCfg!.accountLinks as AccountLinkCfg[]) : [];
+  const hasConfiguredLinks = configLinks.some(l => l.accountId && l.postingName && l.postingSide);
+
+  if (hasConfiguredLinks) {
+    return buildLinesFromAccountLinks(configLinks, invoice, orgId);
+  }
+
+  // ── الاحتياط: المنطق الثابت (Legacy) ────────────────────────────────────
   const accIds = [
     journal?.cashAccountId,
     journal?.creditAccountId,
