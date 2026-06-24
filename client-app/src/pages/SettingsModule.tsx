@@ -44,6 +44,7 @@ const menuSections = [
       { id: "qr-settings",     label: "إعدادات QR Code",       status: "done",    path: "/cfg/qr-settings" },
       { id: "fiscal-periods",  label: "الفترات المحاسبية",     status: "done",    path: "/cfg/fiscal" },
       { id: "field-dictionary",label: "تعريف الحقول (Field Dictionary)", status: "done", path: "/cfg/field-dictionary" },
+      { id: "payment-methods", label: "وسائل الدفع",                     status: "done", path: "/cfg/payment-methods" },
     ],
   },
   {
@@ -4470,6 +4471,350 @@ function FieldDictionaryPage() {
   );
 }
 
+// ─── Payment Methods ───────────────────────────────────────────────────────────
+
+const ICON_OPTIONS = [
+  { value: "cash",   labelAr: "نقدي (Cash)" },
+  { value: "card",   labelAr: "بطاقة (Card)" },
+  { value: "bank",   labelAr: "تحويل بنكي (Bank)" },
+  { value: "tamara", labelAr: "تمارا (Tamara)" },
+  { value: "tabby",  labelAr: "تابي (Tabby)" },
+  { value: "wallet", labelAr: "محفظة (Wallet)" },
+  { value: "qr",     labelAr: "كيو آر (QR)" },
+  { value: "other",  labelAr: "أخرى (Other)" },
+];
+
+function PaymentMethodIcon({ icon, color }: { icon?: string | null; color?: string | null }) {
+  const c = color ?? "#64748B";
+  if (icon === "cash") return (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5">
+      <rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/>
+      <path d="M6 12h.01M18 12h.01"/>
+    </svg>
+  );
+  if (icon === "card") return (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5">
+      <rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/>
+    </svg>
+  );
+  if (icon === "bank") return (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5">
+      <path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11M8 10v11M12 10v11M16 10v11"/>
+    </svg>
+  );
+  if (icon === "wallet") return (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5">
+      <path d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5"/>
+      <circle cx="16" cy="12" r="1.5"/>
+    </svg>
+  );
+  if (icon === "qr") return (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5">
+      <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+      <rect x="3" y="14" width="7" height="7"/><path d="M14 14h1v1h-1zM16 14h1v1h-1zM18 14h1v1h-1zM14 16h1v1h-1zM16 16h1v1h-1zM18 16h1v1h-1zM14 18h1v1h-1zM16 18h1v1h-1zM18 18h1v1h-1z"/>
+    </svg>
+  );
+  return (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5">
+      <circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>
+    </svg>
+  );
+}
+
+type PMRow = {
+  id: number; code: string; nameAr: string; nameEn?: string | null;
+  icon?: string | null; color?: string | null; bgColor?: string | null;
+  accountId?: number | null; isActive: boolean; isVisible: boolean;
+  isBuiltIn: boolean; sortOrder: number;
+};
+
+const EMPTY_PM: Omit<PMRow, "id" | "isBuiltIn"> = {
+  code: "", nameAr: "", nameEn: "", icon: "other", color: "#406B93", bgColor: "#EFF6FF",
+  accountId: null, isActive: true, isVisible: true, sortOrder: 0,
+};
+
+function PaymentMethodDialog({
+  open, onClose, initial, isEdit,
+}: {
+  open: boolean; onClose: () => void;
+  initial: Partial<PMRow> & { id?: number };
+  isEdit: boolean;
+}) {
+  const [form, setForm] = useState<typeof EMPTY_PM & { id?: number }>({ ...EMPTY_PM, ...initial });
+  const utils = trpc.useUtils();
+
+  useEffect(() => { setForm({ ...EMPTY_PM, ...initial }); }, [open]);
+
+  const upd = (k: keyof typeof form, v: unknown) => setForm(f => ({ ...f, [k]: v }));
+
+  const createMut = trpc.paymentMethods.create.useMutation({
+    onSuccess: () => { toast.success("تمت الإضافة"); utils.paymentMethods.list.invalidate(); utils.paymentMethods.listActive.invalidate(); onClose(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const updateMut = trpc.paymentMethods.update.useMutation({
+    onSuccess: () => { toast.success("تم التحديث"); utils.paymentMethods.list.invalidate(); utils.paymentMethods.listActive.invalidate(); onClose(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  function handleSave() {
+    if (!form.nameAr.trim()) return toast.error("الاسم العربي مطلوب");
+    if (!isEdit && !form.code.trim()) return toast.error("الكود مطلوب");
+    if (isEdit && form.id) {
+      updateMut.mutate({ id: form.id, nameAr: form.nameAr, nameEn: form.nameEn ?? undefined,
+        icon: form.icon ?? undefined, color: form.color ?? undefined, bgColor: form.bgColor ?? undefined,
+        accountId: form.accountId ?? undefined, isActive: form.isActive, isVisible: form.isVisible, sortOrder: form.sortOrder });
+    } else {
+      createMut.mutate({ code: form.code, nameAr: form.nameAr, nameEn: form.nameEn ?? undefined,
+        icon: form.icon ?? undefined, color: form.color ?? undefined, bgColor: form.bgColor ?? undefined,
+        accountId: form.accountId ?? undefined, isActive: form.isActive, isVisible: form.isVisible, sortOrder: form.sortOrder });
+    }
+  }
+
+  if (!open) return null;
+  const busy = createMut.isPending || updateMut.isPending;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" dir="rtl">
+      <div className="bg-background border rounded-xl shadow-xl w-[500px] max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-5 py-4 border-b">
+          <h3 className="text-sm font-semibold">{isEdit ? "تعديل وسيلة دفع" : "إضافة وسيلة دفع جديدة"}</h3>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-lg leading-none">✕</button>
+        </div>
+        <div className="p-5 space-y-4">
+          {!isEdit && (
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">كود الوسيلة (Code) *</label>
+              <Input value={form.code} onChange={e => upd("code", e.target.value.toUpperCase())}
+                placeholder="مثال: TRANSFER" className="h-8 text-xs font-mono mt-1" />
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">الاسم العربي *</label>
+              <Input value={form.nameAr} onChange={e => upd("nameAr", e.target.value)} className="h-8 text-xs mt-1" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">الاسم الإنجليزي</label>
+              <Input value={form.nameEn ?? ""} onChange={e => upd("nameEn", e.target.value)} className="h-8 text-xs mt-1" dir="ltr" />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">الأيقونة</label>
+            <select value={form.icon ?? "other"} onChange={e => upd("icon", e.target.value)}
+              className="mt-1 w-full h-8 text-xs border rounded-md px-2 bg-background">
+              {ICON_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.labelAr}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">لون الأيقونة / الحدود</label>
+              <div className="flex items-center gap-2 mt-1">
+                <input type="color" value={form.color ?? "#406B93"} onChange={e => upd("color", e.target.value)}
+                  className="h-8 w-10 rounded border cursor-pointer" />
+                <Input value={form.color ?? "#406B93"} onChange={e => upd("color", e.target.value)}
+                  className="h-8 text-xs font-mono flex-1" dir="ltr" />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">لون الخلفية (BgColor)</label>
+              <div className="flex items-center gap-2 mt-1">
+                <input type="color" value={form.bgColor ?? "#EFF6FF"} onChange={e => upd("bgColor", e.target.value)}
+                  className="h-8 w-10 rounded border cursor-pointer" />
+                <Input value={form.bgColor ?? "#EFF6FF"} onChange={e => upd("bgColor", e.target.value)}
+                  className="h-8 text-xs font-mono flex-1" dir="ltr" />
+              </div>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">معاينة</label>
+            <div className="mt-1 flex items-center gap-2 p-3 rounded-lg border"
+              style={{ backgroundColor: form.bgColor ?? "#EFF6FF", borderColor: form.color ?? "#406B93" }}>
+              <PaymentMethodIcon icon={form.icon} color={form.color} />
+              <span className="text-sm font-medium" style={{ color: form.color ?? "#406B93" }}>{form.nameAr || "اسم الوسيلة"}</span>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">الترتيب</label>
+            <Input type="number" value={form.sortOrder} onChange={e => upd("sortOrder", Number(e.target.value))}
+              className="h-8 text-xs mt-1 w-24" dir="ltr" />
+          </div>
+          <div className="flex items-center gap-6">
+            <label className="flex items-center gap-2 cursor-pointer text-xs">
+              <input type="checkbox" checked={form.isActive} onChange={e => upd("isActive", e.target.checked)} className="rounded" />
+              نشطة (Active)
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer text-xs">
+              <input type="checkbox" checked={form.isVisible} onChange={e => upd("isVisible", e.target.checked)} className="rounded" />
+              مرئية في نافذة الدفع
+            </label>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 px-5 pb-4">
+          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={onClose} disabled={busy}>إلغاء</Button>
+          <Button size="sm" className="h-8 text-xs" onClick={handleSave} disabled={busy}>
+            {busy ? "جاري الحفظ..." : isEdit ? "تحديث" : "إضافة"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PaymentMethodsPage() {
+  const utils = trpc.useUtils();
+  const listQ = trpc.paymentMethods.list.useQuery();
+  const seedMut = trpc.paymentMethods.seedDefaults.useMutation({
+    onSuccess: (r) => { if (r.seeded) utils.paymentMethods.list.invalidate(); },
+  });
+  const updateMut = trpc.paymentMethods.update.useMutation({
+    onSuccess: () => { utils.paymentMethods.list.invalidate(); utils.paymentMethods.listActive.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const deleteMut = trpc.paymentMethods.delete.useMutation({
+    onSuccess: () => { toast.success("تم الحذف"); utils.paymentMethods.list.invalidate(); utils.paymentMethods.listActive.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const reorderMut = trpc.paymentMethods.reorder.useMutation({
+    onSuccess: () => utils.paymentMethods.list.invalidate(),
+  });
+
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (!seededRef.current && listQ.data && listQ.data.length === 0) {
+      seededRef.current = true;
+      seedMut.mutate();
+    }
+  }, [listQ.data]);
+
+  const [dlgOpen, setDlgOpen] = useState(false);
+  const [editing, setEditing] = useState<Partial<PMRow> & { id?: number }>({});
+
+  const rows = (listQ.data ?? []) as PMRow[];
+  const sorted = [...rows].sort((a, b) => a.sortOrder - b.sortOrder);
+
+  function openAdd() { setEditing({ ...EMPTY_PM }); setDlgOpen(true); }
+  function openEdit(r: PMRow) { setEditing(r); setDlgOpen(true); }
+
+  function moveRow(id: number, dir: -1 | 1) {
+    const idx = sorted.findIndex(r => r.id === id);
+    const swapIdx = idx + dir;
+    if (swapIdx < 0 || swapIdx >= sorted.length) return;
+    const newOrder = sorted.map(r => r.id);
+    [newOrder[idx], newOrder[swapIdx]] = [newOrder[swapIdx], newOrder[idx]];
+    reorderMut.mutate({ ids: newOrder });
+  }
+
+  function toggleField(r: PMRow, field: "isActive" | "isVisible") {
+    updateMut.mutate({ id: r.id, [field]: !r[field] });
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <div>
+          <h3 className="font-semibold text-sm">وسائل الدفع / Payment Methods</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">إدارة وسائل الدفع المتاحة في نافذة استلام المبالغ</p>
+        </div>
+        <div className="flex gap-2">
+          {rows.length === 0 && (
+            <Button variant="outline" className="h-8 text-xs gap-1.5" onClick={() => seedMut.mutate()}>
+              <RefreshCw className="w-3.5 h-3.5" />استعادة الافتراضيات
+            </Button>
+          )}
+          <Button className="h-8 text-xs gap-1.5" onClick={openAdd}>
+            <Plus className="w-3.5 h-3.5" />إضافة وسيلة
+          </Button>
+        </div>
+      </div>
+
+      <Card className="border-border/50">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-xs w-16 text-center">ترتيب</TableHead>
+              <TableHead className="text-xs w-16 text-center">معاينة</TableHead>
+              <TableHead className="text-xs font-mono">الكود</TableHead>
+              <TableHead className="text-xs">الاسم العربي</TableHead>
+              <TableHead className="text-xs" dir="ltr">English Name</TableHead>
+              <TableHead className="text-xs text-center w-20">مرئية</TableHead>
+              <TableHead className="text-xs text-center w-20">نشطة</TableHead>
+              <TableHead className="text-xs text-center w-20">نظامية</TableHead>
+              <TableHead className="text-xs w-24">إجراءات</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {listQ.isLoading && (
+              <TableRow><TableCell colSpan={9} className="text-center text-xs text-muted-foreground py-8">جاري التحميل...</TableCell></TableRow>
+            )}
+            {!listQ.isLoading && sorted.length === 0 && (
+              <TableRow><TableCell colSpan={9} className="text-center text-xs text-muted-foreground py-8">لا توجد وسائل دفع — اضغط "استعادة الافتراضيات"</TableCell></TableRow>
+            )}
+            {sorted.map((r, i) => (
+              <TableRow key={r.id} className={!r.isActive ? "opacity-50" : undefined}>
+                <TableCell className="text-center">
+                  <div className="flex flex-col items-center gap-0.5">
+                    <button className="text-muted-foreground hover:text-foreground disabled:opacity-30"
+                      disabled={i === 0} onClick={() => moveRow(r.id, -1)}>▲</button>
+                    <span className="text-xs text-muted-foreground">{r.sortOrder}</span>
+                    <button className="text-muted-foreground hover:text-foreground disabled:opacity-30"
+                      disabled={i === sorted.length - 1} onClick={() => moveRow(r.id, 1)}>▼</button>
+                  </div>
+                </TableCell>
+                <TableCell className="text-center">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center mx-auto"
+                    style={{ backgroundColor: r.bgColor ?? "#F8FAFC", border: `1px solid ${r.color ?? "#E2E8F0"}` }}>
+                    <PaymentMethodIcon icon={r.icon} color={r.color} />
+                  </div>
+                </TableCell>
+                <TableCell className="text-xs font-mono font-bold text-primary">{r.code}</TableCell>
+                <TableCell className="text-xs">{r.nameAr}</TableCell>
+                <TableCell className="text-xs" dir="ltr">{r.nameEn ?? "—"}</TableCell>
+                <TableCell className="text-center">
+                  <button onClick={() => toggleField(r, "isVisible")} title="تبديل الظهور">
+                    {r.isVisible
+                      ? <Badge variant="secondary" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 cursor-pointer">مرئية</Badge>
+                      : <Badge variant="secondary" className="text-[10px] bg-gray-50 text-gray-500 border-gray-200 cursor-pointer">مخفية</Badge>}
+                  </button>
+                </TableCell>
+                <TableCell className="text-center">
+                  <button onClick={() => toggleField(r, "isActive")} title="تبديل الحالة">
+                    {r.isActive
+                      ? <Badge variant="secondary" className="text-[10px] bg-green-50 text-green-700 border-green-200 cursor-pointer">نشطة</Badge>
+                      : <Badge variant="secondary" className="text-[10px] bg-red-50 text-red-700 border-red-200 cursor-pointer">موقوفة</Badge>}
+                  </button>
+                </TableCell>
+                <TableCell className="text-center">
+                  {r.isBuiltIn
+                    ? <Badge className="text-[10px] bg-blue-50 text-blue-700 border-blue-200">نظامية</Badge>
+                    : <span className="text-xs text-muted-foreground">—</span>}
+                </TableCell>
+                <TableCell>
+                  <div className="flex gap-2">
+                    <button className="text-primary text-xs hover:underline" onClick={() => openEdit(r)}>تعديل</button>
+                    {!r.isBuiltIn && (
+                      <button className="text-destructive text-xs hover:underline"
+                        onClick={() => { if (confirm(`حذف "${r.nameAr}"؟`)) deleteMut.mutate({ id: r.id }); }}>
+                        حذف
+                      </button>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
+
+      <PaymentMethodDialog
+        open={dlgOpen}
+        onClose={() => setDlgOpen(false)}
+        initial={editing}
+        isEdit={!!editing.id}
+      />
+    </div>
+  );
+}
+
 // ─── Content Router ────────────────────────────────────────────────────────────
 
 function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
@@ -4481,6 +4826,7 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
     case "taxes":                return <TaxesPage />;
     case "fiscal-periods":       return <FiscalPeriodsPage />;
     case "field-dictionary":     return <FieldDictionaryPage />;
+    case "payment-methods":      return <PaymentMethodsPage />;
     case "user-categories":      return <UserCategoriesPage />;
     // المستخدمون والصلاحيات
     case "users-list":           return <UsersListPage />;
@@ -4614,3 +4960,4 @@ export function CfgLogoStampTab()          { return <CfgSubPage activeId="logo-s
 export function CfgSignaturesTab()         { return <CfgSubPage activeId="signatures" />; }
 export function CfgEmailPdfTab()           { return <CfgSubPage activeId="email-pdf" />; }
 export function CfgFieldDictionaryTab()   { return <CfgSubPage activeId="field-dictionary" />; }
+export function CfgPaymentMethodsTab()    { return <CfgSubPage activeId="payment-methods" />; }

@@ -868,6 +868,25 @@ export const fieldDictionary = pgTable('field_dictionary', {
   createdAt:   timestamp('created_at').notNull().defaultNow(),
 });
 
+// ─── Payment Methods ──────────────────────────────────────────────────────────
+export const paymentMethods = pgTable('payment_methods', {
+  id:          serial('id').primaryKey(),
+  orgId:       integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  code:        varchar('code', { length: 50 }).notNull(),
+  nameAr:      varchar('name_ar', { length: 150 }).notNull(),
+  nameEn:      varchar('name_en', { length: 150 }),
+  icon:        varchar('icon', { length: 50 }),
+  color:       varchar('color', { length: 20 }).default('#406B93'),
+  bgColor:     varchar('bg_color', { length: 20 }).default('#EFF6FF'),
+  accountId:   integer('account_id').references(() => chartOfAccounts.id, { onDelete: 'set null' }),
+  isActive:    boolean('is_active').notNull().default(true),
+  isVisible:   boolean('is_visible').notNull().default(true),
+  isBuiltIn:   boolean('is_built_in').notNull().default(false),
+  sortOrder:   integer('sort_order').notNull().default(0),
+  createdAt:   timestamp('created_at').notNull().defaultNow(),
+  updatedAt:   timestamp('updated_at').notNull().defaultNow(),
+});
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type Organization = typeof organizations.$inferSelect;
 export type User = typeof users.$inferSelect;
