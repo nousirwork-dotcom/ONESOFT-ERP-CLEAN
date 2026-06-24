@@ -7,9 +7,10 @@ import {
   Bold, Plus, Eye, EyeOff, Layers, CornerDownLeft,
   Settings2, Palette, Globe2, Table2, Monitor,
   Undo2, Redo2, Copy, Clipboard, Download, Upload,
-  BookOpen, Square, GripVertical, Magnet, X, Check,
+  BookOpen, Square, GripVertical, Magnet, X, Check, Hash, List,
 } from "lucide-react";
 import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
 import { buildInvoiceHtml } from "@/lib/buildInvoiceHtml";
 import type { InvPrintData } from "@/lib/buildInvoiceHtml";
 
@@ -454,9 +455,13 @@ export default function PrintTemplateDesigner({
   const [snapEnabled, setSnapEnabled] = useState(true);
   const [isDirty,     setIsDirty]    = useState(false);
   const [rightTab,    setRightTab]   = useState<"element" | "settings">("element");
+  const [leftTab,     setLeftTab]    = useState<"elements" | "fields">("elements");
   const [showPreview, setShowPreview] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
   const [clipboard,   setClipboard]  = useState<LayoutElement | null>(null);
+
+  /* ── قاموس الحقول ── */
+  const { data: fieldDictList = [] } = trpc.fieldDictionary.list.useQuery();
 
   /* ── config_v1 state ── */
   const [cfgLanguage,  setCfgLanguage]  = useState<"ar"|"bilingual">(initialLayout?.language ?? "bilingual");
@@ -585,6 +590,27 @@ export default function PrintTemplateDesigner({
       w: Math.min(def.w, pW - 10),
       h: def.h,
       content:    type === "text" ? "{{InvoiceNo}}" : undefined,
+      fontSize:   10,
+      fontWeight: "normal",
+      textAlign:  "right",
+      color:      "#1a1a1a",
+      border:     false,
+    };
+    setElements(prev => { const next = [...prev, newEl]; pushHistory(next); return next; });
+    setSelectedId(newEl.id);
+    setIsDirty(true);
+  }, [pW, pH, pushHistory]);
+
+  /* ── إدراج حقل من قاموس الحقول كعنصر نص ── */
+  const addFieldElement = useCallback((fieldCode: string) => {
+    const def = DEFAULTS["text" as ElementType];
+    const newEl: LayoutElement = {
+      id: uid(), type: "text",
+      x: Math.max(0, (pW - def.w) / 2),
+      y: Math.max(0, pH * 0.1),
+      w: Math.min(def.w, pW - 10),
+      h: def.h,
+      content:    `{{${fieldCode}}}`,
       fontSize:   10,
       fontWeight: "normal",
       textAlign:  "right",
@@ -788,24 +814,101 @@ export default function PrintTemplateDesigner({
       {/* ── Body ── */}
       <div className="flex flex-1 overflow-hidden">
 
-        {/* ── Left: palette ── */}
-        <div className="w-36 shrink-0 flex flex-col bg-white border-l border-slate-200 overflow-y-auto">
-          <div className="px-2.5 py-2 border-b border-slate-100 bg-slate-50 sticky top-0 z-10">
-            <div className="flex items-center gap-1">
-              <Layers className="w-3 h-3 text-slate-400" />
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">العناصر</span>
+        {/* ── Left: palette + available fields ── */}
+        <div className="w-40 shrink-0 flex flex-col bg-white border-l border-slate-200 overflow-hidden">
+
+          {/* تبويبان */}
+          <div className="shrink-0 flex border-b border-slate-200 bg-slate-50">
+            <button
+              onClick={() => setLeftTab("elements")}
+              className={`flex-1 flex items-center justify-center gap-1 py-2 text-[10px] font-semibold transition-colors border-b-2 ${
+                leftTab === "elements"
+                  ? "border-indigo-500 text-indigo-700 bg-white"
+                  : "border-transparent text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              <Layers className="w-3 h-3" /> العناصر
+            </button>
+            <button
+              onClick={() => setLeftTab("fields")}
+              className={`flex-1 flex items-center justify-center gap-1 py-2 text-[10px] font-semibold transition-colors border-b-2 ${
+                leftTab === "fields"
+                  ? "border-emerald-500 text-emerald-700 bg-white"
+                  : "border-transparent text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              <Hash className="w-3 h-3" /> الحقول
+            </button>
+          </div>
+
+          {/* ── تبويب العناصر ── */}
+          {leftTab === "elements" && (
+            <div className="flex-1 overflow-y-auto py-1">
+              {PALETTE.map(({ type, label, icon }) => (
+                <button key={type} onClick={() => addElement(type)}
+                  className="group w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 border-b border-slate-50 text-right transition-colors">
+                  <span className="text-slate-400 group-hover:text-indigo-500 shrink-0 transition-colors">{icon}</span>
+                  <span className="flex-1">{label}</span>
+                  <Plus className="w-3 h-3 opacity-0 group-hover:opacity-100 text-indigo-400 transition-opacity shrink-0" />
+                </button>
+              ))}
             </div>
-          </div>
-          <div className="py-1">
-            {PALETTE.map(({ type, label, icon }) => (
-              <button key={type} onClick={() => addElement(type)}
-                className="group w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 border-b border-slate-50 text-right transition-colors">
-                <span className="text-slate-400 group-hover:text-indigo-500 shrink-0 transition-colors">{icon}</span>
-                <span className="flex-1">{label}</span>
-                <Plus className="w-3 h-3 opacity-0 group-hover:opacity-100 text-indigo-400 transition-opacity shrink-0" />
-              </button>
-            ))}
-          </div>
+          )}
+
+          {/* ── تبويب الحقول المتاحة ── */}
+          {leftTab === "fields" && (
+            <div className="flex-1 overflow-y-auto">
+              {fieldDictList.length === 0 && (
+                <div className="px-3 py-6 text-center text-[10px] text-slate-400 leading-relaxed">
+                  لا توجد حقول<br />في قاموس الحقول
+                </div>
+              )}
+              {(() => {
+                const CAT_AR: Record<string, string> = {
+                  "Document Fields":   "المستند",
+                  "Customer Fields":   "العميل",
+                  "Vendor Fields":     "المورد",
+                  "Sales Fields":      "المبيعات",
+                  "Item Fields":       "الأصناف",
+                  "Inventory Fields":  "المخزون",
+                  "System Fields":     "النظام",
+                  "Accounting Fields": "المحاسبة",
+                  "Payment Fields":    "المدفوعات",
+                };
+                const grouped: Record<string, typeof fieldDictList> = {};
+                for (const f of fieldDictList) {
+                  const cat = f.category ?? "أخرى";
+                  if (!grouped[cat]) grouped[cat] = [];
+                  grouped[cat].push(f);
+                }
+                return Object.entries(grouped).map(([cat, fields]) => (
+                  <div key={cat}>
+                    <div className="px-2.5 py-1 text-[9px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50 border-b border-slate-100 sticky top-0">
+                      {CAT_AR[cat] ?? cat}
+                    </div>
+                    {fields.map((f) => (
+                      <button
+                        key={f.code}
+                        onClick={() => addFieldElement(f.code)}
+                        className="group w-full flex items-start gap-1.5 px-2.5 py-1.5 border-b border-slate-50 hover:bg-emerald-50 hover:text-emerald-700 transition-colors text-right"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[9px] font-mono font-semibold text-slate-600 group-hover:text-emerald-700 truncate">
+                            {f.code}
+                          </div>
+                          <div className="text-[9px] text-slate-400 truncate leading-tight">
+                            {f.nameAr}
+                          </div>
+                        </div>
+                        <Plus className="w-3 h-3 opacity-0 group-hover:opacity-100 text-emerald-400 shrink-0 mt-0.5 transition-opacity" />
+                      </button>
+                    ))}
+                  </div>
+                ));
+              })()}
+            </div>
+          )}
+
         </div>
 
         {/* ── Center: canvas OR live preview ── */}
