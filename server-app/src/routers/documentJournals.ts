@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { eq, and, asc } from 'drizzle-orm';
+import { eq, and, asc, inArray } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import { documentJournals } from '../schema.js';
@@ -64,11 +64,15 @@ const journalInputShape = {
 export const documentJournalsRouter = router({
 
   list: protectedProcedure
-    .input(z.object({ docType: z.string().optional() }).optional())
+    .input(z.object({
+      docType:  z.string().optional(),
+      docTypes: z.array(z.string()).optional(),
+    }).optional())
     .query(async ({ ctx, input }) => {
+      const types = input?.docTypes ?? (input?.docType ? [input.docType] : null);
       const rows = await db.query.documentJournals.findMany({
-        where: input?.docType
-          ? and(eq(documentJournals.orgId, ctx.user.orgId), eq(documentJournals.docType, input.docType), eq(documentJournals.isActive, true))
+        where: types && types.length > 0
+          ? and(eq(documentJournals.orgId, ctx.user.orgId), inArray(documentJournals.docType, types), eq(documentJournals.isActive, true))
           : and(eq(documentJournals.orgId, ctx.user.orgId), eq(documentJournals.isActive, true)),
         orderBy: [asc(documentJournals.sortOrder), asc(documentJournals.id)],
       });

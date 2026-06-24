@@ -429,10 +429,17 @@ export async function autoPostSalesInvoice(
     postingMode:       journal?.postingMode ?? 'auto',
   } as typeof documentJournals.$inferSelect;
 
-  // لا ترحيل إذا كانت الحسابات الأساسية ناقصة
-  const isCredit = invoice.paymentMethod === 'credit';
-  const hasDebitAcc = isCredit ? !!effectiveJournal.creditAccountId : !!effectiveJournal.cashAccountId;
-  if (!effectiveJournal.salesAccountId || !hasDebitAcc) return null;
+  // التحقق: هل يوجد accountLinks مضبوطة (نهج حقول الكود) ؟
+  const _ptCfgAuto = journal?.paymentTypesConfig as { accountLinks?: AccountLinkCfg[] } | null | undefined;
+  const _hasFieldLinks = Array.isArray(_ptCfgAuto?.accountLinks) &&
+    _ptCfgAuto!.accountLinks.some(l => l.accountId && l.postingName && l.postingSide);
+
+  if (!_hasFieldLinks) {
+    // لا ترحيل تلقائي إذا كانت الحسابات المباشرة ناقصة ولا يوجد accountLinks
+    const isCredit = invoice.paymentMethod === 'credit';
+    const hasDebitAcc = isCredit ? !!effectiveJournal.creditAccountId : !!effectiveJournal.cashAccountId;
+    if (!effectiveJournal.salesAccountId || !hasDebitAcc) return null;
+  }
 
   const { lines: rawLines, isBalanced } = await buildSalesInvoiceLines(invoice, effectiveJournal, orgId);
   if (!isBalanced || rawLines.length === 0) return null;
@@ -681,15 +688,23 @@ export const postingRouter = router({
         postingMode:      journal?.postingMode ?? 'manual',
       } as typeof documentJournals.$inferSelect;
 
-      const isCredit = invoice.paymentMethod === 'credit';
-      const missingAccounts: string[] = [];
-      if (!effectiveJournal.salesAccountId) missingAccounts.push('حساب المبيعات/الإيرادات');
-      if (isCredit && !effectiveJournal.creditAccountId) missingAccounts.push('حساب ذمم العملاء (آجل)');
-      if (!isCredit && !effectiveJournal.cashAccountId) missingAccounts.push('حساب الصندوق/النقد');
-      if (missingAccounts.length > 0)
-        throw new Error(
-          `لا يمكن ترحيل المستند لعدم اكتمال الروابط المحاسبية\nالحسابات الناقصة: ${missingAccounts.join('، ')}`
-        );
+      // التحقق: هل يوجد accountLinks مضبوطة (نهج حقول الكود) ؟
+      const _ptCfgMan = journal?.paymentTypesConfig as { accountLinks?: AccountLinkCfg[] } | null | undefined;
+      const _hasFieldLinksMan = Array.isArray(_ptCfgMan?.accountLinks) &&
+        _ptCfgMan!.accountLinks.some(l => l.accountId && l.postingName && l.postingSide);
+
+      if (!_hasFieldLinksMan) {
+        // التحقق التقليدي: الحسابات المباشرة
+        const isCredit = invoice.paymentMethod === 'credit';
+        const missingAccounts: string[] = [];
+        if (!effectiveJournal.salesAccountId) missingAccounts.push('حساب المبيعات/الإيرادات');
+        if (isCredit && !effectiveJournal.creditAccountId) missingAccounts.push('حساب ذمم العملاء (آجل)');
+        if (!isCredit && !effectiveJournal.cashAccountId) missingAccounts.push('حساب الصندوق/النقد');
+        if (missingAccounts.length > 0)
+          throw new Error(
+            `لا يمكن ترحيل المستند لعدم اكتمال الروابط المحاسبية\nالحسابات الناقصة: ${missingAccounts.join('، ')}`
+          );
+      }
 
       const { lines, isBalanced } = await buildSalesInvoiceLines(invoice, effectiveJournal, orgId);
       if (!isBalanced) throw new Error('لا يمكن ترحيل المستند: المدين لا يساوي الدائن في القيد المحاسبي');

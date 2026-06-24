@@ -577,7 +577,7 @@ export default function DocumentJournalsPage() {
       printOnSave:      form.printOnSave,
       customersJournal: (form.customersJournal && form.customersJournal !== "none") ? form.customersJournal : null,
       suppliersJournal: (form.suppliersJournal && form.suppliersJournal !== "none") ? form.suppliersJournal : null,
-      paymentTypesConfig: selectedType === "sales" ? ptConfig : null,
+      paymentTypesConfig: ["sales", "sales_invoice", "sales_return", "purchase_invoice", "purchase_return", "receipt_voucher", "payment_voucher"].includes(selectedType) ? ptConfig : null,
       salesAccountId:    form.salesAccountId    ? parseInt(form.salesAccountId)    : null,
       cashAccountId:     form.cashAccountId     ? parseInt(form.cashAccountId)     : null,
       creditAccountId:   form.creditAccountId   ? parseInt(form.creditAccountId)   : null,

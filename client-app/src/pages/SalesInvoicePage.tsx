@@ -141,7 +141,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
   const customersQuery   = trpc.customers.list.useQuery({});
   const warehousesQuery  = trpc.warehouses.list.useQuery();
   const productsQuery    = trpc.products.list.useQuery({});
-  const journalsQuery    = trpc.documentJournals.list.useQuery({ docType: "sales_invoice" });
+  const journalsQuery    = trpc.documentJournals.list.useQuery({ docTypes: ["sales_invoice", "sales"] });
   const nextNumberQuery  = trpc.salesInvoices.nextNumber.useQuery({ prefix: "INV" });
   const docTypesQuery    = trpc.documentTypes.list.useQuery({ typeId: "sales" });
   const allInvoicesQuery = trpc.salesInvoices.list.useQuery({});
