@@ -67,10 +67,12 @@ function CardBadge() {
 interface PaymentModalProps {
   open: boolean;
   onClose: () => void;
-  invoiceId: number;
+  invoiceId: number | null;
   invoiceNumber: string;
   invoiceTotal: number;
   currency?: string;
+  /** إذا لم تكن الفاتورة محفوظة، يُستدعى هذا لحفظها وإرجاع الـ ID */
+  onSaveFirst?: () => Promise<number | null>;
   onConfirmed: (paidAmount: number, breakdown: Record<string, number>) => void;
 }
 
@@ -82,9 +84,11 @@ export default function PaymentModal({
   invoiceNumber,
   invoiceTotal,
   currency = "SAR",
+  onSaveFirst,
   onConfirmed,
 }: PaymentModalProps) {
   const [amounts, setAmounts] = useState<Record<string, string>>({});
+  const [isSavingFirst, setIsSavingFirst] = useState(false);
 
   // ─── جلب وسائل الدفع من قاعدة البيانات ──────────────────────────────────
   const methodsQ = trpc.paymentMethods.listActive.useQuery(undefined, { enabled: open });
@@ -125,22 +129,41 @@ export default function PaymentModal({
     onError: (e) => toast.error(e.message),
   });
 
-  const handleConfirm = useCallback(() => {
+  const handleConfirm = useCallback(async () => {
     if (!hasAnyPayment) { toast.warning("أدخل مبلغاً واحداً على الأقل"); return; }
     if (isOverPaid) { toast.error("المبلغ المدفوع يتجاوز إجمالي الفاتورة"); return; }
+
+    let finalInvoiceId = invoiceId;
+
+    // إذا لم تكن الفاتورة محفوظة، احفظها أولاً
+    if (!finalInvoiceId && onSaveFirst) {
+      setIsSavingFirst(true);
+      try {
+        finalInvoiceId = await onSaveFirst();
+      } finally {
+        setIsSavingFirst(false);
+      }
+      if (!finalInvoiceId) return;
+    }
+
+    if (!finalInvoiceId) {
+      toast.error("لا يمكن تسجيل الدفع — يجب حفظ الفاتورة أولاً");
+      return;
+    }
+
     const breakdown: Record<string, number> = {};
     Object.entries(amounts).forEach(([k, v]) => {
       const n = parseFloat(v) || 0;
       if (n > 0) breakdown[k] = n;
     });
     updatePaymentMut.mutate({
-      id: invoiceId,
+      id: finalInvoiceId,
       paymentBreakdown: breakdown,
       paidAmount: totalPaid.toFixed(4),
       remainingAmount: Math.max(0, invoiceTotal - totalPaid).toFixed(4),
       status: isFullyPaid ? "paid" : "confirmed",
     });
-  }, [hasAnyPayment, isOverPaid, isFullyPaid, amounts, totalPaid, invoiceTotal, invoiceId, updatePaymentMut]);
+  }, [hasAnyPayment, isOverPaid, isFullyPaid, amounts, totalPaid, invoiceTotal, invoiceId, updatePaymentMut, onSaveFirst]);
 
   const setAmount = useCallback((code: string, value: string) => {
     setAmounts((prev) => ({ ...prev, [code]: value }));
@@ -169,6 +192,19 @@ export default function PaymentModal({
   const methods = methodsQ.data ?? [];
   const isLoading = methodsQ.isLoading || (methods.length === 0 && seedMut.isPending);
 
+  const isBusy = isSavingFirst || updatePaymentMut.isPending;
+  const needsSave = !invoiceId && !!onSaveFirst;
+
+  // نص زر التأكيد
+  const confirmLabel = (() => {
+    if (isSavingFirst) return "جاري حفظ الفاتورة...";
+    if (updatePaymentMut.isPending) return "جاري تسجيل الدفع...";
+    if (needsSave && isFullyPaid) return "💾 حفظ وتأكيد الدفع الكامل";
+    if (needsSave) return "💾 حفظ وتأكيد الدفع";
+    if (isFullyPaid) return "✓ تأكيد الدفع الكامل";
+    return "تأكيد دفع جزئي";
+  })();
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
       <DialogContent
@@ -180,11 +216,20 @@ export default function PaymentModal({
         <DialogHeader className="px-5 pt-4 pb-3 border-b border-slate-100" style={{ background: "#406B93" }}>
           <DialogTitle className="text-white text-[15px] font-bold text-right flex items-center gap-2">
             <svg className="w-5 h-5 opacity-80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 2v20M2 12h20M7 7l10 10M17 7L7 17" strokeLinecap="round"/>
+              <rect x="2" y="5" width="20" height="14" rx="2"/>
+              <path d="M2 10h20M6 15h4"/>
             </svg>
             شاشة الدفع
           </DialogTitle>
-          <p className="text-white/70 text-[11px] text-right">فاتورة رقم: {invoiceNumber}</p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <p className="text-white/70 text-[11px]">فاتورة رقم: {invoiceNumber || "—"}</p>
+            {needsSave && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold"
+                style={{ background: "rgba(255,193,7,0.25)", color: "#FFC107" }}>
+                ● لم تُحفظ بعد
+              </span>
+            )}
+          </div>
         </DialogHeader>
 
         {/* ── Summary ── */}
@@ -249,7 +294,7 @@ export default function PaymentModal({
               >
                 {/* Icon */}
                 <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                  className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
                   style={{ background: hasVal ? borderColor + "20" : "#F1F5F9" }}
                 >
                   <MethodIcon icon={method.icon} color={method.color} />
@@ -273,6 +318,7 @@ export default function PaymentModal({
                   onChange={(e) => setAmount(method.code, e.target.value)}
                   className="w-28 h-8 text-left text-[12px] font-mono border-slate-200 focus:border-[#406B93]"
                   dir="ltr"
+                  disabled={isBusy}
                 />
 
                 {/* كامل button */}
@@ -282,6 +328,7 @@ export default function PaymentModal({
                   className="h-8 px-2 text-[11px] text-slate-500 hover:text-[#406B93] flex-shrink-0"
                   onClick={() => fillFull(method.code)}
                   title="ملء المتبقي"
+                  disabled={isBusy}
                 >
                   كامل
                 </Button>
@@ -296,21 +343,19 @@ export default function PaymentModal({
             variant="outline"
             className="flex-1 h-9 text-[12px]"
             onClick={handleClose}
-            disabled={updatePaymentMut.isPending}
+            disabled={isBusy}
           >
-            تخطي
+            إلغاء
           </Button>
           <Button
             className="flex-1 h-9 text-[12px] font-bold"
-            style={{ background: isOverPaid ? "#EF4444" : "#406B93" }}
-            disabled={!hasAnyPayment || updatePaymentMut.isPending || isOverPaid}
+            style={{
+              background: isOverPaid ? "#EF4444" : isFullyPaid ? "#16A34A" : "#406B93",
+            }}
+            disabled={!hasAnyPayment || isBusy || isOverPaid}
             onClick={handleConfirm}
           >
-            {updatePaymentMut.isPending
-              ? "جاري الحفظ..."
-              : isFullyPaid
-              ? "✓ تأكيد الدفع الكامل"
-              : "تأكيد دفع جزئي"}
+            {confirmLabel}
           </Button>
         </div>
       </DialogContent>

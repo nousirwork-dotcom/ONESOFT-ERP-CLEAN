@@ -141,6 +141,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
   const [newCustCity, setNewCustCity]         = useState("");
 
   const cellRefs = useRef<Map<string, HTMLInputElement>>(new Map());
+  const skipAutoPayModal = useRef(false);
 
   // ── Queries ───────────────────────────────────────────────────────────────
   const customersQuery   = trpc.customers.list.useQuery({});
@@ -287,13 +288,14 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       setNavInvoiceId(data.id);
       setIsPosted(data.isPosted ?? false);
       setErpMode("view");
-      // فتح شاشة الدفع تلقائياً للفواتير النقدية والجزئية
-      if (paymentType !== "credit") {
+      // فتح شاشة الدفع تلقائياً للفواتير النقدية (إلا إذا كانت تُستدعى من saveForPayment)
+      if (paymentType !== "credit" && !skipAutoPayModal.current) {
         setPendingPayInvoiceId(data.id);
         setPendingPayInvoiceNumber(data.invoiceNumber);
         setPendingPayTotal(netTotal);
         setShowPaymentModal(true);
       }
+      skipAutoPayModal.current = false;
     },
     onError: (e) => toast.error(`خطأ في الحفظ: ${e.message}`),
   });
@@ -665,6 +667,111 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         sortOrder: idx,
       })),
     });
+  }, [
+    invoiceNumber, invoiceDate, dueDate, customerId, customerName,
+    customerType, customerTaxNumber,
+    warehouseId, currency, exchangeRate, paymentType, paidAmount,
+    remainingAmount, notes, lines, subtotal, totalDiscount, totalTax,
+    netTotal, createMutation, journalId, nextJournalNumberMutation,
+    docTypeId, docTypesQuery.data, salesperson, stockQuery.data,
+  ]);
+
+  // ── Save For Payment (حفظ الفاتورة من شاشة الدفع) ────────────────────────
+  const saveForPayment = useCallback(async (): Promise<number | null> => {
+    if (!journalId) { toast.error("يجب اختيار نوع السند قبل الحفظ"); return null; }
+    if (!invoiceNumber.trim()) { toast.error("رقم الفاتورة مطلوب"); return null; }
+    const validLines = lines.filter(l => l.productName.trim() !== "");
+    if (validLines.length === 0) { toast.error("يجب إضافة صنف واحد على الأقل في الفاتورة"); return null; }
+    if (customerType === 'organization' && !customerTaxNumber.trim()) {
+      toast.error("الرقم الضريبي مطلوب للعملاء من نوع مؤسسة"); return null;
+    }
+    for (const l of validLines) {
+      if (!l.unitPrice || parseFloat(l.unitPrice) === 0) {
+        toast.error(`سعر الصنف "${l.productName}" يجب أن يكون أكبر من صفر`); return null;
+      }
+      if (!l.quantity || parseFloat(l.quantity) === 0) {
+        toast.error(`كمية الصنف "${l.productName}" يجب أن تكون أكبر من صفر`); return null;
+      }
+    }
+    const selectedDocType = docTypeId
+      ? (docTypesQuery.data ?? []).find((dt: any) => String(dt.id) === docTypeId)
+      : null;
+    if (selectedDocType) {
+      if (selectedDocType.requireNote && !notes.trim()) { toast.error("يجب إدخال ملاحظة للمستند"); return null; }
+      if (selectedDocType.requireCustomerCode && !customerId) { toast.error("يجب اختيار العميل"); return null; }
+      if (selectedDocType.requireEmployeeCode && !salesperson.trim()) { toast.error("يجب إدخال كود الموظف"); return null; }
+      if (selectedDocType.noStockDispatch && warehouseId) {
+        const stockData = stockQuery.data ?? [];
+        for (const line of validLines) {
+          if (!line.productId) continue;
+          const inv = stockData.find((s: any) => s.productId === line.productId);
+          const available = Number(inv?.totalQuantity ?? 0);
+          const requested = parseFloat(line.quantity) || 0;
+          if (requested > available) {
+            toast.error(`⛔ لا يوجد رصيد كافٍ للصنف "${line.productName}"\nالمتاح: ${available.toFixed(3)} — المطلوب: ${requested.toFixed(3)}`);
+            return null;
+          }
+        }
+      }
+    }
+    let finalInvoiceNumber = invoiceNumber;
+    if (journalId) {
+      try {
+        finalInvoiceNumber = await nextJournalNumberMutation.mutateAsync({ journalId });
+        setInvoiceNumber(finalInvoiceNumber);
+      } catch {
+        toast.error("تعذّر حجز رقم الفاتورة من الدفتر"); return null;
+      }
+    }
+    const paid = paymentType === "cash" ? fmt(netTotal) : fmt(paidAmount);
+    const remaining2 = paymentType === "cash" ? "0.000" : fmt(remainingAmount);
+    const payMethod = paymentType === "cash" ? "cash" : "credit";
+    const status = paymentType === "cash" ? "paid" : (remainingAmount <= 0 ? "paid" : "confirmed");
+    try {
+      skipAutoPayModal.current = true;
+      const data = await createMutation.mutateAsync({
+        invoiceNumber: finalInvoiceNumber,
+        invoiceType: "sale",
+        invoiceDate,
+        dueDate: dueDate || undefined,
+        customerId: customerId ?? undefined,
+        customerName: customerName || undefined,
+        customerType,
+        customerTaxNumber: customerTaxNumber || undefined,
+        warehouseId: warehouseId ?? undefined,
+        journalId: journalId ?? undefined,
+        currency,
+        exchangeRate,
+        subtotal: fmt(subtotal),
+        discountAmount: fmt(totalDiscount),
+        taxAmount: fmt(totalTax),
+        total: fmt(netTotal),
+        paidAmount: paid,
+        remainingAmount: remaining2,
+        paymentMethod: payMethod as any,
+        status: status as any,
+        notes: notes || undefined,
+        docTypeId: docTypeId ? parseInt(docTypeId) : undefined,
+        items: validLines.map((l, idx) => ({
+          productId: l.productId,
+          productCode: l.productCode || undefined,
+          productName: l.productName,
+          unit: l.unit || undefined,
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+          discountPercent: l.discountPct,
+          discountAmount: l.discountAmt,
+          taxPercent: l.taxPct,
+          taxAmount: l.taxAmt,
+          total: l.total,
+          sortOrder: idx,
+        })),
+      });
+      return data.id;
+    } catch {
+      skipAutoPayModal.current = false;
+      return null;
+    }
   }, [
     invoiceNumber, invoiceDate, dueDate, customerId, customerName,
     customerType, customerTaxNumber,
@@ -1659,10 +1766,6 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         <div className="px-3 pb-3">
           <button
             onClick={() => {
-              if (!savedInvoiceId) {
-                toast.warning("احفظ الفاتورة أولاً لتتمكن من تسجيل الدفع");
-                return;
-              }
               setPendingPayInvoiceId(savedInvoiceId);
               setPendingPayInvoiceNumber(invoiceNumber);
               setPendingPayTotal(netTotal);
@@ -1670,11 +1773,8 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
             }}
             className="w-full py-2.5 rounded-md text-[13px] font-bold text-white transition-all"
             style={{
-              background: savedInvoiceId
-                ? "linear-gradient(135deg, #16A34A, #15803D)"
-                : "linear-gradient(135deg, #94A3B8, #64748B)",
-              boxShadow: savedInvoiceId ? "0 2px 6px rgba(21,128,61,0.35)" : "none",
-              cursor: savedInvoiceId ? "pointer" : "default",
+              background: "linear-gradient(135deg, #406B93, #2d4f6e)",
+              boxShadow: "0 2px 6px rgba(64,107,147,0.4)",
             }}
           >
             💳 الدفع
@@ -1776,7 +1876,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       )}
 
       {/* ── شاشة الدفع ──────────────────────────────────────────────────── */}
-      {showPaymentModal && pendingPayInvoiceId && (
+      {showPaymentModal && (
         <PaymentModal
           open={showPaymentModal}
           onClose={() => setShowPaymentModal(false)}
@@ -1784,11 +1884,12 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
           invoiceNumber={pendingPayInvoiceNumber}
           invoiceTotal={pendingPayTotal}
           currency={currency}
+          onSaveFirst={!pendingPayInvoiceId ? saveForPayment : undefined}
           onConfirmed={(paidAmt, breakdown) => {
             setShowPaymentModal(false);
             const keys = Object.keys(breakdown);
-            const methods = keys.map(k => k.replace("_AMOUNT","")).join(" + ");
-            toast.success(`✓ تم تسجيل الدفع: ${paidAmt.toFixed(2)} ${currency}`, {
+            const methods = keys.join(" + ");
+            toast.success(`✓ تم حفظ الفاتورة وتسجيل الدفع: ${paidAmt.toFixed(2)} ${currency}`, {
               description: keys.length > 0 ? `وسائل الدفع: ${methods}` : undefined,
               duration: 5000,
             });
