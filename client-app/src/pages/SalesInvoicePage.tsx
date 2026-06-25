@@ -71,6 +71,9 @@ function calcLineTotal(line: InvoiceLine): string {
 function fmt(n: number) {
   return n.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 }
+function fmtDb(n: number) {
+  return n.toFixed(4);
+}
 function toDisplayDate(iso: string) {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');
@@ -668,8 +671,8 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       }
     }
 
-    const paid = paymentType === "cash" ? fmt(netTotal) : paymentType === "partial" ? fmt(paidAmount) : fmt(paidAmount);
-    const remaining = paymentType === "cash" ? "0.000" : fmt(remainingAmount);
+    const paid = paymentType === "cash" ? fmtDb(netTotal) : paymentType === "partial" ? fmtDb(paidAmount) : fmtDb(paidAmount);
+    const remaining = paymentType === "cash" ? "0.0000" : fmtDb(remainingAmount);
     const payMethod = paymentType === "cash" ? "cash" : "credit";
     const status = paymentType === "cash" ? "paid" : (remainingAmount <= 0 ? "paid" : "confirmed");
 
@@ -686,10 +689,10 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       journalId: journalId ?? undefined,
       currency,
       exchangeRate,
-      subtotal: fmt(subtotal),
-      discountAmount: fmt(totalDiscount),
-      taxAmount: fmt(totalTax),
-      total: fmt(netTotal),
+      subtotal: fmtDb(subtotal),
+      discountAmount: fmtDb(totalDiscount),
+      taxAmount: fmtDb(totalTax),
+      total: fmtDb(netTotal),
       paidAmount: paid,
       remainingAmount: remaining,
       paymentMethod: payMethod as any,
@@ -767,8 +770,8 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         toast.error("تعذّر حجز رقم الفاتورة من الدفتر"); return null;
       }
     }
-    const paid = paymentType === "cash" ? fmt(netTotal) : fmt(paidAmount);
-    const remaining2 = paymentType === "cash" ? "0.000" : fmt(remainingAmount);
+    const paid = paymentType === "cash" ? fmtDb(netTotal) : fmtDb(paidAmount);
+    const remaining2 = paymentType === "cash" ? "0.0000" : fmtDb(remainingAmount);
     const payMethod = paymentType === "cash" ? "cash" : "credit";
     const status = paymentType === "cash" ? "paid" : (remainingAmount <= 0 ? "paid" : "confirmed");
     try {
@@ -786,10 +789,10 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         journalId: journalId ?? undefined,
         currency,
         exchangeRate,
-        subtotal: fmt(subtotal),
-        discountAmount: fmt(totalDiscount),
-        taxAmount: fmt(totalTax),
-        total: fmt(netTotal),
+        subtotal: fmtDb(subtotal),
+        discountAmount: fmtDb(totalDiscount),
+        taxAmount: fmtDb(totalTax),
+        total: fmtDb(netTotal),
         paidAmount: paid,
         remainingAmount: remaining2,
         paymentMethod: payMethod as any,
