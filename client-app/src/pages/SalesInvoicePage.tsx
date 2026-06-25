@@ -1370,7 +1370,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       <div className="flex-1 overflow-auto bg-white">
         <table className="w-full border-collapse" style={{ fontSize: "12px" }}>
           <thead className="sticky top-0 z-10">
-            <tr style={{ background: "linear-gradient(to bottom, #D19C05, #B88904)", color: "#fff" }}>
+            <tr style={{ background: "#DAD271", color: "#4A3800" }}>
               <th className="inv-th w-8 text-center">#</th>
               <th className="inv-th w-24">رقم الصنف</th>
               <th className="inv-th">اسم الصنف</th>
