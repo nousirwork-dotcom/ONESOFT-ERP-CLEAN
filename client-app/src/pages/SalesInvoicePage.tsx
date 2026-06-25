@@ -846,6 +846,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
     setDueDate(new Date().toISOString().split("T")[0]);
     setSalesperson("");
     setPaidAmountOverride("");
+    setExchangeRate("1.000");
     setErpMode("new");
     setJournalWarehouseId(null);
     setSavedInvoiceId(null);
