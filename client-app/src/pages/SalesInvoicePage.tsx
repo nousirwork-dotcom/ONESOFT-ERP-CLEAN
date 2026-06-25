@@ -97,6 +97,8 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
   const [custSearch, setCustSearch]     = useState("");
   const [showCustDrop, setShowCustDrop] = useState(false);
   const custDropRef = useRef<HTMLDivElement>(null);
+  const invoiceDatePickerRef = useRef<HTMLInputElement>(null);
+  const dueDatePickerRef = useRef<HTMLInputElement>(null);
   const [warehouseId, setWarehouseId] = useState<number | null>(null);
   const [journalWarehouseId, setJournalWarehouseId] = useState<number | null>(null); // مخزن مقيَّد من الدفتر
   const [docTypeWarehouseId, setDocTypeWarehouseId] = useState<number | null>(null); // مخزن مقيَّد من نوع السند
@@ -1326,28 +1328,40 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
             })()}
           </HF>
           <HF label="تاريخ التحرير">
-            <input
-              type="text"
-              dir="ltr"
-              value={toDisplayDate(invoiceDate)}
-              onChange={e => setInvoiceDate(toIsoDate(e.target.value))}
-              placeholder="DD-MM-YYYY"
-              maxLength={10}
-              className="classic-input"
-              style={{ width: 108, textAlign: "center" }}
-            />
+            <div className="flex items-stretch" style={{ width: 130 }}>
+              <input
+                type="text"
+                dir="ltr"
+                value={toDisplayDate(invoiceDate)}
+                onChange={e => setInvoiceDate(toIsoDate(e.target.value))}
+                placeholder="DD-MM-YYYY"
+                maxLength={10}
+                className="classic-input flex-1 min-w-0"
+                style={{ textAlign: "center", borderRadius: "4px 0 0 4px", borderRight: "none" }}
+              />
+              <button type="button" onClick={() => invoiceDatePickerRef.current?.showPicker()} className="flex items-center justify-center" style={{ background: "#f3f4f6", border: "1px solid #d1d5db", borderLeft: "none", borderRadius: "0 4px 4px 0", padding: "0 5px", color: "#555", cursor: "pointer" }}>
+                📅
+              </button>
+              <input ref={invoiceDatePickerRef} type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} />
+            </div>
           </HF>
           <HF label="تاريخ الدفع">
-            <input
-              type="text"
-              dir="ltr"
-              value={toDisplayDate(dueDate)}
-              onChange={e => setDueDate(toIsoDate(e.target.value))}
-              placeholder="DD-MM-YYYY"
-              maxLength={10}
-              className="classic-input"
-              style={{ width: 108, textAlign: "center" }}
-            />
+            <div className="flex items-stretch" style={{ width: 130 }}>
+              <input
+                type="text"
+                dir="ltr"
+                value={toDisplayDate(dueDate)}
+                onChange={e => setDueDate(toIsoDate(e.target.value))}
+                placeholder="DD-MM-YYYY"
+                maxLength={10}
+                className="classic-input flex-1 min-w-0"
+                style={{ textAlign: "center", borderRadius: "4px 0 0 4px", borderRight: "none" }}
+              />
+              <button type="button" onClick={() => dueDatePickerRef.current?.showPicker()} className="flex items-center justify-center" style={{ background: "#f3f4f6", border: "1px solid #d1d5db", borderLeft: "none", borderRadius: "0 4px 4px 0", padding: "0 5px", color: "#555", cursor: "pointer" }}>
+                📅
+              </button>
+              <input ref={dueDatePickerRef} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} />
+            </div>
           </HF>
           <HF label="البائع" labelW={52}>
             <input value={salesperson} onChange={e => setSalesperson(e.target.value)} className="classic-input w-full" />
