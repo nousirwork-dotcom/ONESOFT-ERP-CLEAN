@@ -1306,7 +1306,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         </div>
 
         {/* ── صف 3: المخزن + تاريخ التحرير + تاريخ الدفع + البائع ── */}
-        <div className="grid gap-x-2 gap-y-0.5 mb-1" style={{ gridTemplateColumns: "1fr 1.5fr 1.5fr 210px" }}>
+        <div className="grid gap-x-2 gap-y-0.5 mb-1" style={{ gridTemplateColumns: "1fr 1fr 1fr 210px" }}>
           <HF label="المخزن" labelW={70}>
             {(() => {
               const lockedWh = journalWarehouseId ?? docTypeWarehouseId;
