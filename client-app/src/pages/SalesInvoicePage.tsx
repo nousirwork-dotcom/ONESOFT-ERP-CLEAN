@@ -1149,7 +1149,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                 </div>
               </div>
             </HF>
-            <HF label="نوع السند">
+            <HF label="نوع السند" labelW={52}>
               {(() => {
                 const allDocTypes = docTypesQuery.data ?? [];
                 const filteredDocTypes = journalId ? allDocTypes.filter((dt: any) => dt.journal === String(journalId)) : allDocTypes;
@@ -1251,7 +1251,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
               })()}
             </div>
           </HF>
-          <HF label="العملة">
+          <HF label="العملة" labelW={52}>
             <select value={currency} onChange={e => setCurrency(e.target.value)} className="classic-input w-full">
               <option value="SAR">ريال سعودي (SAR)</option>
               <option value="USD">دولار (USD)</option>
@@ -1350,7 +1350,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
           <HF label="تاريخ الدفع">
             <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="classic-input w-full" />
           </HF>
-          <HF label="البائع">
+          <HF label="البائع" labelW={52}>
             <input value={salesperson} onChange={e => setSalesperson(e.target.value)} className="classic-input w-full" />
           </HF>
         </div>
@@ -2165,10 +2165,10 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
 }
 
 // ─── HF: Header Field ─────────────────────────────────────────────────────────
-function HF({ label, children }: { label: string; children: React.ReactNode }) {
+function HF({ label, children, labelW }: { label: string; children: React.ReactNode; labelW?: number }) {
   return (
     <div className="flex flex-row items-center gap-1.5">
-      <label style={{ fontSize: "10px", fontWeight: 700, color: "#666", fontFamily: "'Cairo', Tahoma", whiteSpace: "nowrap", flexShrink: 0 }}>
+      <label style={{ fontSize: "10px", fontWeight: 700, color: "#666", fontFamily: "'Cairo', Tahoma", whiteSpace: "nowrap", flexShrink: 0, ...(labelW ? { minWidth: labelW, display: "inline-block" } : {}) }}>
         {label}
       </label>
       <div className="flex-1 min-w-0">{children}</div>
