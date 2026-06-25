@@ -1676,7 +1676,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       {/* ── لوحة الإجماليات (يسار) ──────────────────────────────────────── */}
       <div
         className="flex flex-col border-r border-[#b0a89a]"
-        style={{ width: 290, minWidth: 290, background: "#F4F1EC" }}
+        style={{ width: 320, minWidth: 320, background: "#F4F1EC" }}
       >
         {/* عنوان اللوحة */}
         <div
@@ -1912,13 +1912,13 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       <style>{`
         .classic-input {
           border: 1px solid #a0a0a0;
-          padding: 1px 5px;
-          height: 22px;
+          padding: 2px 5px;
+          height: 24px;
           font-size: 12px;
           font-family: 'Cairo', Tahoma, Arial, sans-serif;
           background: #fff;
           outline: none;
-          border-radius: 1px;
+          border-radius: 2px;
         }
         .classic-input:focus {
           border-color: #D19C05;
@@ -1938,14 +1938,14 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         .inv-td {
           border: 1px solid #e8e4dc;
           padding: 1px 3px;
-          height: 24px;
+          height: 27px;
           vertical-align: middle;
         }
         .inv-cell {
           border: none;
           outline: none;
-          padding: 1px 4px;
-          height: 22px;
+          padding: 2px 4px;
+          height: 25px;
           font-size: 12px;
           font-family: 'Cairo', Tahoma, Arial, sans-serif;
           background: transparent;
@@ -1958,6 +1958,14 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         }
         input[type=number]::-webkit-inner-spin-button,
         input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        select.classic-input {
+          padding: 1px 4px;
+          height: 24px;
+          cursor: pointer;
+        }
+        .inv-th {
+          padding: 5px 6px;
+        }
       `}</style>
 
       {/* ── نافذة معاينة القيد المحاسبي ─────────────────────────────────── */}
