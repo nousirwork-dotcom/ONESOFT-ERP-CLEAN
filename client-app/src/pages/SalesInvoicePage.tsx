@@ -1333,7 +1333,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
               placeholder="DD-MM-YYYY"
               maxLength={10}
               className="classic-input"
-              style={{ width: 92 }}
+              style={{ width: 108 }}
             />
           </HF>
           <HF label="تاريخ الدفع">
@@ -1344,7 +1344,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
               placeholder="DD-MM-YYYY"
               maxLength={10}
               className="classic-input"
-              style={{ width: 92 }}
+              style={{ width: 108 }}
             />
           </HF>
           <HF label="البائع" labelW={52}>
