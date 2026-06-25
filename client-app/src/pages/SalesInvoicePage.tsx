@@ -995,39 +995,6 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
             </div>
           )}
 
-          {/* الرقم الضريبي (يظهر فقط عند مؤسسة) */}
-          {customerType === 'organization' && (
-            <div className="flex items-center gap-1.5">
-              <label className="text-[10px] font-bold whitespace-nowrap" style={{ color: customerTaxNumber.trim() ? '#15803D' : '#DC2626' }}>
-                الرقم الضريبي <span className="text-red-500">*</span>
-              </label>
-              <input
-                value={customerTaxNumber}
-                onChange={e => !customerId && setCustomerTaxNumber(e.target.value)}
-                readOnly={!!customerId}
-                className="classic-input"
-                placeholder="3xxxxxxxxxxxxxxxxx"
-                title={customerId ? "الرقم الضريبي محدد من كارت العميل — يُعدَّل من هناك" : ""}
-                style={{
-                  width: 200,
-                  borderColor: customerTaxNumber.trim() ? '#86EFAC' : '#FCA5A5',
-                  background: customerId ? '#F1F5F9' : (customerTaxNumber.trim() ? '#F0FDF4' : '#FFF5F5'),
-                  cursor: customerId ? 'not-allowed' : 'text',
-                  color: customerId ? '#475569' : undefined,
-                }}
-              />
-            </div>
-          )}
-
-          {/* اسم العميل المحدد (للعرض السريع) */}
-          {customerName && (
-            <span className="text-[11px] font-medium text-gray-600 truncate flex-1 min-w-0">
-              👤 {customerName}
-              {customerType === 'organization' && customerTaxNumber && (
-                <span className="text-[10px] text-blue-600 mr-2">| ض: {customerTaxNumber}</span>
-              )}
-            </span>
-          )}
         </div>
 
         {/* ── رقم الفاتورة (بارز أعلى يمين) + حقول الصف الأول ── */}
