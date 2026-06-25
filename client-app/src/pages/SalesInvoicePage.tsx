@@ -1253,19 +1253,19 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
             </div>
           </HF>
           </div>
-          {/* ── بادجات نوع الفاتورة والعميل ── */}
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <div
-              className="flex items-center gap-1 px-2 py-0.5 rounded font-bold text-[11px]"
-              style={{
-                background: customerType === 'organization' ? '#EFF6FF' : '#F0FDF4',
-                border: `1px solid ${customerType === 'organization' ? '#93C5FD' : '#86EFAC'}`,
-                color: customerType === 'organization' ? '#1D4ED8' : '#15803D',
-              }}
-            >
-              {customerType === 'organization' ? '📋 فاتورة ضريبية' : '🧾 فاتورة ضريبية مبسطة'}
-            </div>
-            {customerId && (
+          {/* ── بادجات نوع الفاتورة والعميل — تظهر فقط عند اختيار عميل ── */}
+          {customerId && (
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <div
+                className="flex items-center gap-1 px-2 py-0.5 rounded font-bold text-[11px]"
+                style={{
+                  background: customerType === 'organization' ? '#EFF6FF' : '#F0FDF4',
+                  border: `1px solid ${customerType === 'organization' ? '#93C5FD' : '#86EFAC'}`,
+                  color: customerType === 'organization' ? '#1D4ED8' : '#15803D',
+                }}
+              >
+                {customerType === 'organization' ? '📋 فاتورة ضريبية' : '🧾 فاتورة ضريبية مبسطة'}
+              </div>
               <div
                 className="flex items-center gap-1 px-2 py-0.5 rounded font-bold text-[11px]"
                 style={{
@@ -1276,8 +1276,8 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
               >
                 {customerType === 'organization' ? '🏢 مؤسسة' : '👤 فرد'}
               </div>
-            )}
-          </div>
+            </div>
+          )}
           <div className="flex-shrink-0" style={{ width: 210 }}>
           <HF label="العملة" labelW={52}>
             <select value={currency} onChange={e => setCurrency(e.target.value)} className="classic-input w-full">
