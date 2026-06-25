@@ -67,7 +67,23 @@ function calcLineTotal(line: InvoiceLine): string {
   return (afterDisc + afterDisc * (taxPct / 100)).toFixed(3);
 }
 
-function fmt(n: number) { return n.toFixed(3); }
+function fmt(n: number) {
+  return n.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+}
+function toDisplayDate(iso: string) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  if (!y || !m || !d) return iso;
+  return `${d}-${m}-${y}`;
+}
+function toIsoDate(display: string) {
+  if (!display) return '';
+  const parts = display.split('-');
+  if (parts.length !== 3) return display;
+  const [d, m, y] = parts;
+  if (y.length === 4) return `${y}-${m}-${d}`;
+  return display;
+}
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceId?: number } = {}) {
@@ -1310,10 +1326,24 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
             })()}
           </HF>
           <HF label="تاريخ التحرير" labelW={70}>
-            <input type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className="classic-input w-full" />
+            <input
+              type="text"
+              value={toDisplayDate(invoiceDate)}
+              onChange={e => setInvoiceDate(toIsoDate(e.target.value))}
+              placeholder="DD-MM-YYYY"
+              maxLength={10}
+              className="classic-input w-full"
+            />
           </HF>
           <HF label="تاريخ الدفع" labelW={70}>
-            <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="classic-input w-full" />
+            <input
+              type="text"
+              value={toDisplayDate(dueDate)}
+              onChange={e => setDueDate(toIsoDate(e.target.value))}
+              placeholder="DD-MM-YYYY"
+              maxLength={10}
+              className="classic-input w-full"
+            />
           </HF>
           <HF label="البائع" labelW={52}>
             <input value={salesperson} onChange={e => setSalesperson(e.target.value)} className="classic-input w-full" />
@@ -1472,7 +1502,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                 </td>
 
                 <td className="inv-td text-center font-bold" style={{ color: "#003399", fontSize: "12px" }}>
-                  {parseFloat(line.total).toFixed(3)}
+                  {fmt(parseFloat(line.total) || 0)}
                 </td>
 
                 <td className="inv-td text-center">
