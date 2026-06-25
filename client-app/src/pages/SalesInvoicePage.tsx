@@ -967,6 +967,69 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       {/* ── Header Form ─────────────────────────────────────────────────── */}
       <div className="border-b border-[#b0a89a] px-3 pt-2 pb-1.5" style={{ background: "#F7F5EE", boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }}>
 
+        {/* ── شريط نوع العميل والرقم الضريبي (أعلى الهيدر) ── */}
+        <div className="flex items-center gap-3 mb-1.5">
+          {/* نوع الفاتورة (مؤشر) */}
+          <div
+            className="flex items-center gap-1 px-2 py-0.5 rounded font-bold text-[11px] flex-shrink-0"
+            style={{
+              background: customerType === 'organization' ? '#EFF6FF' : '#F0FDF4',
+              border: `1px solid ${customerType === 'organization' ? '#93C5FD' : '#86EFAC'}`,
+              color: customerType === 'organization' ? '#1D4ED8' : '#15803D',
+            }}
+          >
+            {customerType === 'organization' ? '📋 فاتورة ضريبية' : '🧾 فاتورة ضريبية مبسطة'}
+          </div>
+
+          {/* نوع العميل (يظهر عند اختيار عميل) */}
+          {customerId && (
+            <div
+              className="flex items-center gap-1 px-2 py-0.5 rounded font-bold text-[11px] flex-shrink-0"
+              style={{
+                background: customerType === 'organization' ? '#1D4ED8' : '#15803D',
+                color: 'white',
+                border: `1px solid ${customerType === 'organization' ? '#1e40af' : '#166534'}`,
+              }}
+            >
+              {customerType === 'organization' ? '🏢 مؤسسة' : '👤 فرد'}
+            </div>
+          )}
+
+          {/* الرقم الضريبي (يظهر فقط عند مؤسسة) */}
+          {customerType === 'organization' && (
+            <div className="flex items-center gap-1.5">
+              <label className="text-[10px] font-bold whitespace-nowrap" style={{ color: customerTaxNumber.trim() ? '#15803D' : '#DC2626' }}>
+                الرقم الضريبي <span className="text-red-500">*</span>
+              </label>
+              <input
+                value={customerTaxNumber}
+                onChange={e => !customerId && setCustomerTaxNumber(e.target.value)}
+                readOnly={!!customerId}
+                className="classic-input"
+                placeholder="3xxxxxxxxxxxxxxxxx"
+                title={customerId ? "الرقم الضريبي محدد من كارت العميل — يُعدَّل من هناك" : ""}
+                style={{
+                  width: 200,
+                  borderColor: customerTaxNumber.trim() ? '#86EFAC' : '#FCA5A5',
+                  background: customerId ? '#F1F5F9' : (customerTaxNumber.trim() ? '#F0FDF4' : '#FFF5F5'),
+                  cursor: customerId ? 'not-allowed' : 'text',
+                  color: customerId ? '#475569' : undefined,
+                }}
+              />
+            </div>
+          )}
+
+          {/* اسم العميل المحدد (للعرض السريع) */}
+          {customerName && (
+            <span className="text-[11px] font-medium text-gray-600 truncate flex-1 min-w-0">
+              👤 {customerName}
+              {customerType === 'organization' && customerTaxNumber && (
+                <span className="text-[10px] text-blue-600 mr-2">| ض: {customerTaxNumber}</span>
+              )}
+            </span>
+          )}
+        </div>
+
         {/* ── رقم الفاتورة (بارز أعلى يمين) + حقول الصف الأول ── */}
         <div className="flex items-start gap-2 mb-1.5">
           {/* رقم الفاتورة — مدمج مع منتقي الدفتر */}
@@ -1259,69 +1322,6 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
               <option value="AED">درهم (AED)</option>
             </select>
           </HF>
-        </div>
-
-        {/* ── صف نوع العميل والرقم الضريبي ── */}
-        <div className="flex items-center gap-3 mb-1.5 mt-1">
-          {/* نوع الفاتورة (مؤشر) */}
-          <div
-            className="flex items-center gap-1 px-2 py-0.5 rounded font-bold text-[11px] flex-shrink-0"
-            style={{
-              background: customerType === 'organization' ? '#EFF6FF' : '#F0FDF4',
-              border: `1px solid ${customerType === 'organization' ? '#93C5FD' : '#86EFAC'}`,
-              color: customerType === 'organization' ? '#1D4ED8' : '#15803D',
-            }}
-          >
-            {customerType === 'organization' ? '📋 فاتورة ضريبية' : '🧾 فاتورة ضريبية مبسطة'}
-          </div>
-
-          {/* نوع العميل (يظهر عند اختيار عميل) */}
-          {customerId && (
-            <div
-              className="flex items-center gap-1 px-2 py-0.5 rounded font-bold text-[11px] flex-shrink-0"
-              style={{
-                background: customerType === 'organization' ? '#1D4ED8' : '#15803D',
-                color: 'white',
-                border: `1px solid ${customerType === 'organization' ? '#1e40af' : '#166534'}`,
-              }}
-            >
-              {customerType === 'organization' ? '🏢 مؤسسة' : '👤 فرد'}
-            </div>
-          )}
-
-          {/* الرقم الضريبي (يظهر فقط عند مؤسسة) */}
-          {customerType === 'organization' && (
-            <div className="flex items-center gap-1.5">
-              <label className="text-[10px] font-bold whitespace-nowrap" style={{ color: customerTaxNumber.trim() ? '#15803D' : '#DC2626' }}>
-                الرقم الضريبي <span className="text-red-500">*</span>
-              </label>
-              <input
-                value={customerTaxNumber}
-                onChange={e => !customerId && setCustomerTaxNumber(e.target.value)}
-                readOnly={!!customerId}
-                className="classic-input"
-                placeholder="3xxxxxxxxxxxxxxxxx"
-                title={customerId ? "الرقم الضريبي محدد من كارت العميل — يُعدَّل من هناك" : ""}
-                style={{
-                  width: 200,
-                  borderColor: customerTaxNumber.trim() ? '#86EFAC' : '#FCA5A5',
-                  background: customerId ? '#F1F5F9' : (customerTaxNumber.trim() ? '#F0FDF4' : '#FFF5F5'),
-                  cursor: customerId ? 'not-allowed' : 'text',
-                  color: customerId ? '#475569' : undefined,
-                }}
-              />
-            </div>
-          )}
-
-          {/* اسم العميل المحدد (للعرض السريع) */}
-          {customerName && (
-            <span className="text-[11px] font-medium text-gray-600 truncate flex-1 min-w-0">
-              👤 {customerName}
-              {customerType === 'organization' && customerTaxNumber && (
-                <span className="text-[10px] text-blue-600 mr-2">| ض: {customerTaxNumber}</span>
-              )}
-            </span>
-          )}
         </div>
 
         {/* ── صف 3: المخزن + تاريخ التحرير + تاريخ الدفع + البائع ── */}
