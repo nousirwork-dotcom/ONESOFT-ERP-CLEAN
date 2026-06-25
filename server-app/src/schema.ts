@@ -887,6 +887,19 @@ export const paymentMethods = pgTable('payment_methods', {
   updatedAt:   timestamp('updated_at').notNull().defaultNow(),
 });
 
+// ─── Sales Invoice Payments (حركات السداد المستقلة) ──────────────────────────
+export const salesInvoicePayments = pgTable('sales_invoice_payments', {
+  id:                  serial('id').primaryKey(),
+  orgId:               integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  invoiceId:           integer('invoice_id').notNull().references(() => salesInvoices.id, { onDelete: 'cascade' }),
+  paymentMethodCode:   varchar('payment_method_code', { length: 50 }).notNull(),
+  paymentMethodName:   varchar('payment_method_name', { length: 150 }),
+  amount:              decimal('amount', { precision: 18, scale: 4 }).notNull().default('0'),
+  referenceNo:         varchar('reference_no', { length: 100 }),
+  notes:               text('notes'),
+  createdAt:           timestamp('created_at').notNull().defaultNow(),
+});
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type Organization = typeof organizations.$inferSelect;
 export type User = typeof users.$inferSelect;

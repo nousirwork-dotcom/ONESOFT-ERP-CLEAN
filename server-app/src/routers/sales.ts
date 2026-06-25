@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { eq, and, desc, like, or } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { salesInvoices, salesInvoiceItems, products, customers, stockVouchers, stockVoucherItems } from '../schema.js';
+import { salesInvoices, salesInvoiceItems, salesInvoicePayments, paymentMethods, products, customers, stockVouchers, stockVoucherItems } from '../schema.js';
 import { autoPostSalesInvoice } from './posting.js';
 
 export const salesRouter = router({
@@ -251,6 +251,25 @@ export const salesRouter = router({
       return { success: true };
     }),
 
+  // جلب بيانات السداد المحفوظة لفاتورة معينة
+  getPaymentBreakdown: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const orgId = ctx.user.orgId;
+      const payments = await db.query.salesInvoicePayments.findMany({
+        where: and(
+          eq(salesInvoicePayments.invoiceId, input.id),
+          eq(salesInvoicePayments.orgId, orgId),
+        ),
+        orderBy: (t, { asc }) => [asc(t.id)],
+      });
+      const breakdown: Record<string, number> = {};
+      for (const p of payments) {
+        breakdown[p.paymentMethodCode] = parseFloat(p.amount as string);
+      }
+      return { payments, breakdown };
+    }),
+
   // تحديث بيانات السداد فقط (من شاشة الدفع)
   updatePayment: protectedProcedure
     .input(z.object({
@@ -262,15 +281,53 @@ export const salesRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const orgId = ctx.user.orgId;
-      const { id, paymentBreakdown, paidAmount, remainingAmount, status } = input;
+      const { id, paymentBreakdown, paidAmount, remainingAmount } = input;
       const existing = await db.query.salesInvoices.findFirst({
         where: and(eq(salesInvoices.id, id), eq(salesInvoices.orgId, orgId)),
       });
       if (!existing) throw new Error('الفاتورة غير موجودة');
+
+      // حساب حالة السداد تلقائياً
+      const invoiceTotal = parseFloat(existing.total as string);
+      const paid = parseFloat(paidAmount);
+      const autoStatus = paid <= 0 ? 'confirmed'
+        : paid >= invoiceTotal - 0.005 ? 'paid'
+        : 'confirmed';
+
+      // تحديث بيانات الفاتورة
       await db.update(salesInvoices)
-        .set({ paymentBreakdown, paidAmount, remainingAmount, ...(status ? { status } : {}), updatedAt: new Date() })
+        .set({
+          paymentBreakdown,
+          paidAmount,
+          remainingAmount,
+          status: autoStatus,
+          updatedAt: new Date(),
+        })
         .where(and(eq(salesInvoices.id, id), eq(salesInvoices.orgId, orgId)));
-      return { success: true };
+
+      // حذف حركات السداد القديمة وإعادة إدخالها
+      await db.delete(salesInvoicePayments)
+        .where(and(
+          eq(salesInvoicePayments.invoiceId, id),
+          eq(salesInvoicePayments.orgId, orgId),
+        ));
+
+      for (const [code, amount] of Object.entries(paymentBreakdown)) {
+        if (amount > 0.001) {
+          const method = await db.query.paymentMethods.findFirst({
+            where: and(eq(paymentMethods.orgId, orgId), eq(paymentMethods.code, code)),
+          });
+          await db.insert(salesInvoicePayments).values({
+            orgId,
+            invoiceId: id,
+            paymentMethodCode: code,
+            paymentMethodName: method?.nameAr ?? code,
+            amount: amount.toFixed(4),
+          });
+        }
+      }
+
+      return { success: true, status: autoStatus };
     }),
 
   // بحث عن مستند مصدر (بناءً على)

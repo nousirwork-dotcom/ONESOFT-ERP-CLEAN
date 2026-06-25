@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
-// ─── Icon renderer for DB-driven methods ─────────────────────────────────────
+// ─── Icon renderer ────────────────────────────────────────────────────────────
 function MethodIcon({ icon, color }: { icon?: string | null; color?: string | null }) {
   const c = color ?? "#64748B";
   if (icon === "cash") return (
@@ -52,7 +52,6 @@ function MethodIcon({ icon, color }: { icon?: string | null; color?: string | nu
   );
 }
 
-// Badge for card method
 function CardBadge() {
   return (
     <div className="flex gap-1 items-center mt-0.5">
@@ -63,7 +62,7 @@ function CardBadge() {
   );
 }
 
-// ─── الواجهة ──────────────────────────────────────────────────────────────────
+// ─── Interface ────────────────────────────────────────────────────────────────
 interface PaymentModalProps {
   open: boolean;
   onClose: () => void;
@@ -71,12 +70,11 @@ interface PaymentModalProps {
   invoiceNumber: string;
   invoiceTotal: number;
   currency?: string;
-  /** إذا لم تكن الفاتورة محفوظة، يُستدعى هذا لحفظها وإرجاع الـ ID */
   onSaveFirst?: () => Promise<number | null>;
   onConfirmed: (paidAmount: number, breakdown: Record<string, number>) => void;
 }
 
-// ─── المكوّن الرئيسي ──────────────────────────────────────────────────────────
+// ─── Component ────────────────────────────────────────────────────────────────
 export default function PaymentModal({
   open,
   onClose,
@@ -89,13 +87,14 @@ export default function PaymentModal({
 }: PaymentModalProps) {
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [isSavingFirst, setIsSavingFirst] = useState(false);
+  const [shake, setShake] = useState(false);
+  const loadedRef = useRef<number | null>(null);
 
-  // ─── جلب وسائل الدفع من قاعدة البيانات ──────────────────────────────────
+  // ─── payment methods ───────────────────────────────────────────────────────
   const methodsQ = trpc.paymentMethods.listActive.useQuery(undefined, { enabled: open });
   const seedMut = trpc.paymentMethods.seedDefaults.useMutation({
     onSuccess: () => methodsQ.refetch(),
   });
-
   const seededRef = useRef(false);
   useEffect(() => {
     if (!open) { seededRef.current = false; return; }
@@ -105,17 +104,45 @@ export default function PaymentModal({
     }
   }, [open, methodsQ.data]);
 
-  // ─── حسابات الإجمالي ──────────────────────────────────────────────────────
+  // ─── load saved breakdown when invoice already exists ─────────────────────
+  const breakdownQ = trpc.salesInvoices.getPaymentBreakdown.useQuery(
+    { id: invoiceId! },
+    { enabled: open && !!invoiceId }
+  );
+  useEffect(() => {
+    if (!open) { loadedRef.current = null; return; }
+    if (!invoiceId || !breakdownQ.data) return;
+    if (loadedRef.current === invoiceId) return; // already loaded for this invoice
+    const bd = breakdownQ.data.breakdown;
+    if (Object.keys(bd).length > 0) {
+      const newAmounts: Record<string, string> = {};
+      for (const [k, v] of Object.entries(bd)) {
+        newAmounts[k] = v.toFixed(2);
+      }
+      setAmounts(newAmounts);
+      loadedRef.current = invoiceId;
+    }
+  }, [open, invoiceId, breakdownQ.data]);
+
+  // reset amounts when opening a fresh (unsaved) invoice
+  useEffect(() => {
+    if (open && !invoiceId) {
+      setAmounts({});
+      loadedRef.current = null;
+    }
+  }, [open, invoiceId]);
+
+  // ─── totals ───────────────────────────────────────────────────────────────
   const totalPaid = useMemo(
     () => Object.values(amounts).reduce((s, v) => s + (parseFloat(v) || 0), 0),
     [amounts]
   );
-
-  const remaining = Math.max(0, invoiceTotal - totalPaid);
+  const remaining  = Math.max(0, invoiceTotal - totalPaid);
   const isFullyPaid = Math.abs(totalPaid - invoiceTotal) < 0.005;
-  const isOverPaid = totalPaid > invoiceTotal + 0.005;
+  const isOverPaid  = totalPaid > invoiceTotal + 0.005;
   const hasAnyPayment = totalPaid > 0.004;
 
+  // ─── update mutation ──────────────────────────────────────────────────────
   const updatePaymentMut = trpc.salesInvoices.updatePayment.useMutation({
     onSuccess: () => {
       const breakdown: Record<string, number> = {};
@@ -129,27 +156,19 @@ export default function PaymentModal({
     onError: (e) => toast.error(e.message),
   });
 
+  // ─── confirm ──────────────────────────────────────────────────────────────
   const handleConfirm = useCallback(async () => {
     if (!hasAnyPayment) { toast.warning("أدخل مبلغاً واحداً على الأقل"); return; }
     if (isOverPaid) { toast.error("المبلغ المدفوع يتجاوز إجمالي الفاتورة"); return; }
 
-    let finalInvoiceId = invoiceId;
-
-    // إذا لم تكن الفاتورة محفوظة، احفظها أولاً
-    if (!finalInvoiceId && onSaveFirst) {
+    let finalId = invoiceId;
+    if (!finalId && onSaveFirst) {
       setIsSavingFirst(true);
-      try {
-        finalInvoiceId = await onSaveFirst();
-      } finally {
-        setIsSavingFirst(false);
-      }
-      if (!finalInvoiceId) return;
+      try { finalId = await onSaveFirst(); }
+      finally { setIsSavingFirst(false); }
+      if (!finalId) return;
     }
-
-    if (!finalInvoiceId) {
-      toast.error("لا يمكن تسجيل الدفع — يجب حفظ الفاتورة أولاً");
-      return;
-    }
+    if (!finalId) { toast.error("لا يمكن تسجيل الدفع — يجب حفظ الفاتورة أولاً"); return; }
 
     const breakdown: Record<string, number> = {};
     Object.entries(amounts).forEach(([k, v]) => {
@@ -157,7 +176,7 @@ export default function PaymentModal({
       if (n > 0) breakdown[k] = n;
     });
     updatePaymentMut.mutate({
-      id: finalInvoiceId,
+      id: finalId,
       paymentBreakdown: breakdown,
       paidAmount: totalPaid.toFixed(4),
       remainingAmount: Math.max(0, invoiceTotal - totalPaid).toFixed(4),
@@ -169,49 +188,79 @@ export default function PaymentModal({
     setAmounts((prev) => ({ ...prev, [code]: value }));
   }, []);
 
-  const fillFull = useCallback(
-    (code: string) => {
-      const otherTotal = Object.entries(amounts)
-        .filter(([k]) => k !== code)
-        .reduce((s, [, v]) => s + (parseFloat(v) || 0), 0);
-      setAmounts((prev) => ({ ...prev, [code]: Math.max(0, invoiceTotal - otherTotal).toFixed(2) }));
-    },
-    [amounts, invoiceTotal]
-  );
+  const fillFull = useCallback((code: string) => {
+    const otherTotal = Object.entries(amounts)
+      .filter(([k]) => k !== code)
+      .reduce((s, [, v]) => s + (parseFloat(v) || 0), 0);
+    setAmounts((prev) => ({ ...prev, [code]: Math.max(0, invoiceTotal - otherTotal).toFixed(2) }));
+  }, [amounts, invoiceTotal]);
+
+  // ─── prevent outside-click close: show shake instead ─────────────────────
+  const handleAttemptClose = useCallback(() => {
+    if (isBusy) return;
+    setShake(true);
+    setTimeout(() => setShake(false), 600);
+  }, []);
 
   const handleClose = useCallback(() => {
+    if (isBusy) return;
     setAmounts({});
+    loadedRef.current = null;
     onClose();
   }, [onClose]);
 
   const fmt = (n: number) =>
     n.toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  const paidPct = Math.min(100, (totalPaid / invoiceTotal) * 100);
-
-  const methods = methodsQ.data ?? [];
+  const paidPct = Math.min(100, (totalPaid / Math.max(invoiceTotal, 0.001)) * 100);
+  const methods  = methodsQ.data ?? [];
   const isLoading = methodsQ.isLoading || (methods.length === 0 && seedMut.isPending);
-
   const isBusy = isSavingFirst || updatePaymentMut.isPending;
   const needsSave = !invoiceId && !!onSaveFirst;
 
-  // نص زر التأكيد
   const confirmLabel = (() => {
-    if (isSavingFirst) return "جاري حفظ الفاتورة...";
+    if (isSavingFirst)             return "جاري حفظ الفاتورة...";
     if (updatePaymentMut.isPending) return "جاري تسجيل الدفع...";
-    if (needsSave && isFullyPaid) return "💾 حفظ وتأكيد الدفع الكامل";
-    if (needsSave) return "💾 حفظ وتأكيد الدفع";
-    if (isFullyPaid) return "✓ تأكيد الدفع الكامل";
+    if (needsSave && isFullyPaid)  return "💾 حفظ وتأكيد الدفع الكامل";
+    if (needsSave)                 return "💾 حفظ وتأكيد الدفع";
+    if (isFullyPaid)               return "✓ تأكيد الدفع الكامل";
     return "تأكيد دفع جزئي";
   })();
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) handleAttemptClose(); // intercept outside-click
+      }}
+      modal={true}
+    >
       <DialogContent
-        className="p-0 gap-0 overflow-hidden"
+        className={`p-0 gap-0 overflow-hidden transition-transform ${shake ? "animate-shake" : ""}`}
         style={{ maxWidth: 480, borderRadius: 12 }}
         dir="rtl"
+        onPointerDownOutside={(e) => {
+          e.preventDefault(); // BLOCK outside-click close
+          handleAttemptClose();
+        }}
+        onInteractOutside={(e) => {
+          e.preventDefault(); // BLOCK escape + outside interactions
+        }}
       >
+        {/* shake keyframes */}
+        <style>{`
+          @keyframes shake {
+            0%,100%{transform:translateX(0)}
+            15%{transform:translateX(-8px)}
+            30%{transform:translateX(7px)}
+            45%{transform:translateX(-6px)}
+            60%{transform:translateX(5px)}
+            75%{transform:translateX(-3px)}
+            90%{transform:translateX(2px)}
+          }
+          .animate-shake{animation:shake 0.55s ease-in-out;}
+        `}</style>
+
         {/* ── Header ── */}
         <DialogHeader className="px-5 pt-4 pb-3 border-b border-slate-100" style={{ background: "#406B93" }}>
           <DialogTitle className="text-white text-[15px] font-bold text-right flex items-center gap-2">
@@ -255,14 +304,10 @@ export default function PaymentModal({
               <div className="text-[9px] text-slate-400">{currency}</div>
             </div>
           </div>
-          {/* Progress bar */}
           <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden">
             <div
               className="h-full rounded-full transition-all duration-300"
-              style={{
-                width: `${paidPct}%`,
-                background: isOverPaid ? "#EF4444" : isFullyPaid ? "#16A34A" : "#406B93",
-              }}
+              style={{ width: `${paidPct}%`, background: isOverPaid ? "#EF4444" : isFullyPaid ? "#16A34A" : "#406B93" }}
             />
           </div>
         </div>
@@ -280,51 +325,37 @@ export default function PaymentModal({
           {methods.map((method) => {
             const val = amounts[method.code] ?? "";
             const hasVal = parseFloat(val) > 0;
-            const textColor = method.color ?? "#64748B";
-            const bgColor = method.bgColor ?? "#F8FAFC";
-            const borderColor = method.color ?? "#94A3B8";
+            const textColor   = method.color   ?? "#64748B";
+            const bgColor     = method.bgColor  ?? "#F8FAFC";
+            const borderColor = method.color    ?? "#94A3B8";
             return (
               <div
                 key={method.code}
                 className="flex items-center gap-3 p-2.5 rounded-lg border transition-all"
-                style={{
-                  background: hasVal ? bgColor : "#FAFAFA",
-                  borderColor: hasVal ? borderColor : "#E2E8F0",
-                }}
+                style={{ background: hasVal ? bgColor : "#FAFAFA", borderColor: hasVal ? borderColor : "#E2E8F0" }}
               >
-                {/* Icon */}
                 <div
                   className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
                   style={{ background: hasVal ? borderColor + "20" : "#F1F5F9" }}
                 >
                   <MethodIcon icon={method.icon} color={method.color} />
                 </div>
-
-                {/* Label */}
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-[12px]" style={{ color: hasVal ? textColor : "#374151" }}>
                     {method.nameAr}
                   </div>
                   {method.icon === "card" && <CardBadge />}
                 </div>
-
-                {/* Amount input */}
                 <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
+                  type="number" min="0" step="0.01" placeholder="0.00"
                   value={val}
                   onChange={(e) => setAmount(method.code, e.target.value)}
                   className="w-28 h-8 text-left text-[12px] font-mono border-slate-200 focus:border-[#406B93]"
                   dir="ltr"
                   disabled={isBusy}
                 />
-
-                {/* كامل button */}
                 <Button
-                  size="sm"
-                  variant="ghost"
+                  size="sm" variant="ghost"
                   className="h-8 px-2 text-[11px] text-slate-500 hover:text-[#406B93] flex-shrink-0"
                   onClick={() => fillFull(method.code)}
                   title="ملء المتبقي"
@@ -349,9 +380,7 @@ export default function PaymentModal({
           </Button>
           <Button
             className="flex-1 h-9 text-[12px] font-bold"
-            style={{
-              background: isOverPaid ? "#EF4444" : isFullyPaid ? "#16A34A" : "#406B93",
-            }}
+            style={{ background: isOverPaid ? "#EF4444" : isFullyPaid ? "#16A34A" : "#406B93" }}
             disabled={!hasAnyPayment || isBusy || isOverPaid}
             onClick={handleConfirm}
           >
