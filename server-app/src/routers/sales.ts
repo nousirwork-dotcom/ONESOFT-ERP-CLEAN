@@ -158,13 +158,27 @@ export const salesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { items, dueDate, ...invoiceData } = input;
       const orgId = ctx.user.orgId;
-      const [invoice] = await db.insert(salesInvoices).values({
-        ...invoiceData,
-        orgId,
-        userId: ctx.user.id,
-        invoiceDate: new Date(invoiceData.invoiceDate),
-        ...(dueDate ? { dueDate: new Date(dueDate) } : {}),
-      }).returning();
+      let invoice: typeof salesInvoices.$inferSelect;
+      try {
+        const [row] = await db.insert(salesInvoices).values({
+          ...invoiceData,
+          orgId,
+          userId: ctx.user.id,
+          invoiceDate: new Date(invoiceData.invoiceDate),
+          ...(dueDate ? { dueDate: new Date(dueDate) } : {}),
+        }).returning();
+        invoice = row;
+      } catch (e: any) {
+        console.error('[sales.create] INSERT ERROR:', {
+          message: e?.message,
+          code: e?.code,
+          detail: e?.detail,
+          constraint: e?.constraint,
+          table: e?.table,
+          data: { invoiceNumber: invoiceData.invoiceNumber, orgId, paymentMethod: invoiceData.paymentMethod },
+        });
+        throw e;
+      }
       if (items.length > 0) {
         await db.insert(salesInvoiceItems).values(
           items.map((item, idx) => ({
