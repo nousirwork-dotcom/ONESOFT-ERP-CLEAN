@@ -219,7 +219,85 @@ export async function buildSalesInvoiceLines(
   const hasConfiguredLinks = configLinks.some(l => l.accountId && l.postingName && l.postingSide);
 
   if (hasConfiguredLinks) {
-    return buildLinesFromAccountLinks(configLinks, invoice, orgId);
+    const result = await buildLinesFromAccountLinks(configLinks, invoice, orgId);
+
+    // ── توازن تلقائي: إذا كانت جهة الدائن > المدين، يعني هناك مدفوعات بلا حساب مُضبَّط ──
+    if (!result.isBalanced) {
+      const debit  = Number(result.totalDebit);
+      const credit = Number(result.totalCredit);
+      const shortfall = credit - debit;
+
+      if (shortfall > 0.001) {
+        // نحسب مجموع كل وسائل الدفع من تفصيل السداد
+        const breakdown = invoice.paymentBreakdown as Record<string, number> | null | undefined;
+        const paymentFieldCodes: Record<string, string[]> = {
+          CASH:    ['CASH',    'CASH_AMOUNT'],
+          CARD:    ['CARD',    'CARD_AMOUNT', 'VISA'],
+          BANK:    ['BANK',    'BANK_AMOUNT'],
+          ACCOUNT: ['ACCOUNT', 'ACCOUNT_AMOUNT', 'CUSTOMER_RECEIVABLE'],
+          TAMARA:  ['TAMARA',  'TAMARA_AMOUNT'],
+          TABBY:   ['TABBY',   'TABBY_AMOUNT'],
+          OTHER:   ['OTHER',   'OTHER_AMOUNT'],
+        };
+
+        // نكتشف وسائل الدفع التي لها مبلغ في التفصيل لكن لا يوجد رابط محاسبي لها
+        const uncoveredMethods: string[] = [];
+        if (breakdown) {
+          for (const [method, aliases] of Object.entries(paymentFieldCodes)) {
+            const amt = Number(breakdown[method] ?? breakdown[method + '_AMOUNT'] ?? 0);
+            if (amt > 0.001) {
+              const isCovered = configLinks.some(l =>
+                l.accountId && l.postingName &&
+                aliases.some(a => a === l.postingName.toUpperCase())
+              );
+              if (!isCovered) uncoveredMethods.push(method);
+            }
+          }
+        }
+
+        // تحذير مفصّل يوضح وسائل الدفع غير المُربوطة
+        const methodLabels: Record<string, string> = {
+          CASH:    'نقدي',
+          CARD:    'بطاقة',
+          BANK:    'تحويل بنكي',
+          ACCOUNT: 'آجل (حساب عميل)',
+          TAMARA:  'تمارة',
+          TABBY:   'تابي',
+          OTHER:   'أخرى',
+        };
+        if (uncoveredMethods.length > 0) {
+          const labels = uncoveredMethods.map(m => methodLabels[m] ?? m).join('، ');
+          result.warnings.push(
+            `وسائل الدفع التالية ليس لها حساب مُضبَّط في الدفتر: ${labels} — تمت إضافة القيد إلى حساب الصندوق الافتراضي (${shortfall.toFixed(3)})`
+          );
+        }
+
+        // نضيف قيد موازن إلى حساب الصندوق الافتراضي
+        const cashAccId = journal?.cashAccountId ?? null;
+        if (cashAccId) {
+          const cashAccs = await db.query.chartOfAccounts.findMany({
+            where: (a, { eq }) => eq(a.id, cashAccId),
+          });
+          const cashAcc = cashAccs[0];
+          result.lines.push({
+            accountId:   cashAccId,
+            accountCode: cashAcc?.code ?? '---',
+            accountName: cashAcc?.name ?? 'الصندوق / النقد',
+            debit:  shortfall.toFixed(4),
+            credit: '0.0000',
+            description: `مدفوعات إضافية - ${invoice.invoiceNumber}`,
+          });
+        } else {
+          result.warnings.push('حساب الصندوق غير محدد في الدفتر — لا يمكن إضافة قيد التوازن التلقائي');
+        }
+
+        const newTotal = (debit + shortfall).toFixed(4);
+        result.totalDebit  = cashAccId ? newTotal : result.totalDebit;
+        result.isBalanced  = cashAccId ? true : false;
+      }
+    }
+
+    return result;
   }
 
   // ── الاحتياط: المنطق الثابت (Legacy) ────────────────────────────────────
