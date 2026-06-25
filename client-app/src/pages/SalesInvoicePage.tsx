@@ -1020,6 +1020,10 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         enableShortcuts
       />
 
+      {/* ── Main Content: outer flex row (left-col + summary) ──────────── */}
+      <div className="flex-1 flex overflow-hidden" dir="rtl">
+      <div className="flex-1 flex flex-col overflow-hidden">
+
       {/* ── Header Form ─────────────────────────────────────────────────── */}
       <div className="bg-white border-b border-[#b0a89a] px-3 pt-2 pb-1.5" style={{ boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }}>
 
@@ -1522,12 +1526,46 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
               className="classic-input w-full"
             />
           </HF>
+          <HF label="المخزن">
+            {(() => {
+              const lockedWh = journalWarehouseId ?? docTypeWarehouseId;
+              const whTitle = journalWarehouseId
+                ? "المخزن محدد من الدفتر ولا يمكن تغييره"
+                : docTypeWarehouseId
+                ? "المخزن محدد من نوع السند ولا يمكن تغييره"
+                : undefined;
+              return (
+                <select
+                  value={warehouseId ?? ""}
+                  onChange={e => !lockedWh && setWarehouseId(parseInt(e.target.value) || null)}
+                  className="classic-input w-full"
+                  disabled={!!lockedWh}
+                  title={whTitle}
+                >
+                  <option value="">-- اختر مخزن --</option>
+                  {(lockedWh
+                    ? warehousesQuery.data?.filter(w => w.id === lockedWh)
+                    : warehousesQuery.data
+                  )?.map(w => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
+                  ))}
+                </select>
+              );
+            })()}
+          </HF>
+          <HF label="البائع">
+            <input
+              value={salesperson}
+              onChange={e => setSalesperson(e.target.value)}
+              className="classic-input w-full"
+            />
+          </HF>
           <div />
         </div>
       </div>
 
-      {/* ── Lines Table + Totals Panel ──────────────────────────────────── */}
-      <div className="flex-1 flex overflow-hidden border-b border-[#b0a89a]" dir="rtl">
+      {/* ── Lines Table ─────────────────────────────────────────────────── */}
+      <div className="flex-1 overflow-hidden border-b border-[#b0a89a]">
 
       {/* جدول السطور (يمين) */}
       <div className="flex-1 overflow-auto bg-white">
@@ -1698,6 +1736,8 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
           </button>
         </div>
       </div>
+      </div>{/* end lines wrapper */}
+      </div>{/* end left flex-col wrapper */}
 
       {/* ── لوحة الإجماليات (يسار) ──────────────────────────────────────── */}
       <div
@@ -1710,43 +1750,6 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
           style={{ background: "linear-gradient(to bottom, #D19C05, #B88904)" }}
         >
           ملخص الفاتورة
-        </div>
-
-        {/* ── المخزن والبائع ── */}
-        <div className="px-3 pt-3 pb-1 flex flex-col gap-1.5 border-b border-[#d4cfc7]" dir="rtl">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-[#666] w-14 shrink-0 text-right">المخزن</span>
-            {(() => {
-              const lockedWh = journalWarehouseId ?? docTypeWarehouseId;
-              return (
-                <select
-                  value={warehouseId ?? ""}
-                  onChange={e => !lockedWh && setWarehouseId(parseInt(e.target.value) || null)}
-                  disabled={!!lockedWh}
-                  title={lockedWh ? "المخزن محدد ولا يمكن تغييره" : undefined}
-                  className="flex-1 text-[10px] px-1.5 py-0.5 border border-[#c0bbb4] rounded bg-white focus:outline-none focus:border-[#D19C05]"
-                  style={{ color: lockedWh ? "#888" : "#333" }}
-                >
-                  <option value="">-- اختر مخزن --</option>
-                  {(lockedWh
-                    ? warehousesQuery.data?.filter(w => w.id === lockedWh)
-                    : warehousesQuery.data
-                  )?.map(w => (
-                    <option key={w.id} value={w.id}>{w.name}</option>
-                  ))}
-                </select>
-              );
-            })()}
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-[#666] w-14 shrink-0 text-right">البائع</span>
-            <input
-              value={salesperson}
-              onChange={e => setSalesperson(e.target.value)}
-              placeholder="كود الموظف"
-              className="flex-1 text-[10px] px-1.5 py-0.5 border border-[#c0bbb4] rounded bg-white focus:outline-none focus:border-[#D19C05]"
-            />
-          </div>
         </div>
 
         {/* صفوف الإجماليات */}
