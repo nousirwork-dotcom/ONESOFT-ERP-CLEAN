@@ -1307,25 +1307,25 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
           </div>
         </div>
 
-        {/* ── صف 3: تاريخ الدفع + تاريخ التحرير + المخزن + البائع ── */}
+        {/* ── صف 3: المخزن + تاريخ التحرير + تاريخ الدفع + البائع ── */}
         <div className="grid gap-x-2 gap-y-0.5 mb-1" style={{ gridTemplateColumns: "auto auto auto 210px" }}>
-          <HF label="تاريخ الدفع" labelW={70}>
-            <div className="flex items-stretch" style={{ width: 130 }}>
-              <input
-                type="text"
-                dir="ltr"
-                value={dueDate}
-                onChange={e => setDueDate(e.target.value)}
-                placeholder="YYYY-MM-DD"
-                maxLength={10}
-                className="classic-input flex-1 min-w-0"
-                style={{ textAlign: "center", borderRadius: "4px 0 0 4px", borderRight: "none" }}
-              />
-              <button type="button" onClick={() => dueDatePickerRef.current?.showPicker()} className="flex items-center justify-center" style={{ background: "#f3f4f6", border: "1px solid #d1d5db", borderLeft: "none", borderRadius: "0 4px 4px 0", padding: "0 5px", color: "#555", cursor: "pointer" }}>
-                📅
-              </button>
-              <input ref={dueDatePickerRef} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} />
-            </div>
+          <HF label="المخزن" labelW={70}>
+            {(() => {
+              const lockedWh = journalWarehouseId ?? docTypeWarehouseId;
+              const whTitle = journalWarehouseId
+                ? "المخزن محدد من الدفتر ولا يمكن تغييره"
+                : docTypeWarehouseId
+                ? "المخزن محدد من نوع السند ولا يمكن تغييره"
+                : undefined;
+              return (
+                <select value={warehouseId ?? ""} onChange={e => !lockedWh && setWarehouseId(parseInt(e.target.value) || null)} className="classic-input" style={{ width: 130 }} disabled={!!lockedWh} title={whTitle}>
+                  <option value="">-- اختر مخزن --</option>
+                  {(lockedWh ? warehousesQuery.data?.filter(w => w.id === lockedWh) : warehousesQuery.data)?.map(w => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
+                  ))}
+                </select>
+              );
+            })()}
           </HF>
           <HF label="تاريخ التحرير">
             <div className="flex items-stretch" style={{ width: 130 }}>
@@ -1345,23 +1345,23 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
               <input ref={invoiceDatePickerRef} type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} />
             </div>
           </HF>
-          <HF label="المخزن">
-            {(() => {
-              const lockedWh = journalWarehouseId ?? docTypeWarehouseId;
-              const whTitle = journalWarehouseId
-                ? "المخزن محدد من الدفتر ولا يمكن تغييره"
-                : docTypeWarehouseId
-                ? "المخزن محدد من نوع السند ولا يمكن تغييره"
-                : undefined;
-              return (
-                <select value={warehouseId ?? ""} onChange={e => !lockedWh && setWarehouseId(parseInt(e.target.value) || null)} className="classic-input" style={{ width: 130 }} disabled={!!lockedWh} title={whTitle}>
-                  <option value="">-- اختر مخزن --</option>
-                  {(lockedWh ? warehousesQuery.data?.filter(w => w.id === lockedWh) : warehousesQuery.data)?.map(w => (
-                    <option key={w.id} value={w.id}>{w.name}</option>
-                  ))}
-                </select>
-              );
-            })()}
+          <HF label="تاريخ الدفع">
+            <div className="flex items-stretch" style={{ width: 130 }}>
+              <input
+                type="text"
+                dir="ltr"
+                value={dueDate}
+                onChange={e => setDueDate(e.target.value)}
+                placeholder="YYYY-MM-DD"
+                maxLength={10}
+                className="classic-input flex-1 min-w-0"
+                style={{ textAlign: "center", borderRadius: "4px 0 0 4px", borderRight: "none" }}
+              />
+              <button type="button" onClick={() => dueDatePickerRef.current?.showPicker()} className="flex items-center justify-center" style={{ background: "#f3f4f6", border: "1px solid #d1d5db", borderLeft: "none", borderRadius: "0 4px 4px 0", padding: "0 5px", color: "#555", cursor: "pointer" }}>
+                📅
+              </button>
+              <input ref={dueDatePickerRef} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} />
+            </div>
           </HF>
           <HF label="البائع" labelW={46}>
             <input value={salesperson} onChange={e => setSalesperson(e.target.value)} className="classic-input w-full" />
