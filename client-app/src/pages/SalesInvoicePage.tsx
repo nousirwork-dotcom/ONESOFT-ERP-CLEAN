@@ -321,6 +321,25 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
     onError: (e) => toast.error(`خطأ في إلغاء الترحيل: ${e.message}`),
   });
 
+  const handleRepost = useCallback(() => {
+    if (!savedInvoiceId) return;
+    if (!window.confirm("سيتم حذف القيد الحالي وإنشاء قيد جديد بالأرقام الصحيحة. هل تريد المتابعة؟")) return;
+    unpostMutation.mutate({ invoiceId: savedInvoiceId }, {
+      onSuccess: () => {
+        setIsPosted(false);
+        postMutation.mutate({ invoiceId: savedInvoiceId }, {
+          onSuccess: () => {
+            toast.success("تمت إعادة الترحيل بنجاح");
+            setIsPosted(true);
+            setShowPostingPreview(false);
+          },
+          onError: (e) => toast.error(`خطأ في إعادة الترحيل: ${e.message}`),
+        });
+      },
+      onError: (e) => toast.error(`خطأ في إلغاء الترحيل القديم: ${e.message}`),
+    });
+  }, [savedInvoiceId, unpostMutation, postMutation]);
+
   const deleteMutation = trpc.salesInvoices.delete.useMutation({
     onSuccess: () => {
       toast.success("تم حذف الفاتورة بنجاح");
@@ -960,6 +979,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
             unpostMutation.mutate({ invoiceId: savedInvoiceId });
           }
         }}
+        onRepost={handleRepost}
         onPreviewJournal={() => {
           if (!savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً"); return; }
           setShowPostingPreview(true);

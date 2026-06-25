@@ -2,7 +2,7 @@ import {
   FilePlus, Save, Pencil, Trash2, Search, Printer,
   RefreshCw, Copy, SendHorizonal, CheckCircle2, XCircle,
   ChevronRight, ChevronLeft, ChevronsRight, ChevronsLeft,
-  X, LucideIcon, Undo2, Eye, Share2,
+  X, LucideIcon, Undo2, Eye, Share2, RefreshCcw,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 
@@ -10,7 +10,7 @@ import { useState, useEffect, useCallback } from "react";
 export type ERPAction =
   | "new" | "save" | "edit" | "delete"
   | "search" | "refresh" | "copy"
-  | "post" | "unpost" | "preview-journal" | "approve" | "cancel"
+  | "post" | "unpost" | "repost" | "preview-journal" | "approve" | "cancel"
   | "print" | "send"
   | "first" | "prev" | "next" | "last"
   | "close";
@@ -34,6 +34,7 @@ export interface ERPToolbarProps {
   onCopy?: () => void;
   onPost?: () => void;
   onUnpost?: () => void;
+  onRepost?: () => void;
   onPreviewJournal?: () => void;
   onApprove?: () => void;
   onCancel?: () => void;
@@ -76,6 +77,7 @@ const ALL_BUTTONS: BtnDef[] = [
   { id: "copy",            label: "نسخة مماثلة",     icon: Copy,          dividerAfter: true },
   { id: "post",            label: "ترحيل",           icon: SendHorizonal, variant: "gold" },
   { id: "unpost",          label: "إلغاء الترحيل",  icon: Undo2,         variant: "danger" },
+  { id: "repost",          label: "إعادة الترحيل",  icon: RefreshCcw,    variant: "gold" },
   { id: "preview-journal", label: "معاينة القيد",    icon: Eye },
   { id: "approve",         label: "اعتماد",          icon: CheckCircle2,  variant: "gold" },
   { id: "cancel",          label: "إلغاء",           icon: XCircle,       variant: "danger", dividerAfter: true },
@@ -202,7 +204,7 @@ export default function ERPToolbar({
   pageTitle,
   onNew, onSave, onEdit, onDelete,
   onSearch, onRefresh, onCopy,
-  onPost, onUnpost, onPreviewJournal, onApprove, onCancel,
+  onPost, onUnpost, onRepost, onPreviewJournal, onApprove, onCancel,
   onPrint, onSend,
   onFirst, onPrev, onNext, onLast,
   onClose,
@@ -219,7 +221,7 @@ export default function ERPToolbar({
   const callbacks: Partial<Record<ERPAction, (() => void) | undefined>> = {
     new: onNew, save: onSave, edit: onEdit, delete: onDelete,
     search: onSearch, refresh: onRefresh, copy: onCopy,
-    post: onPost, unpost: onUnpost, "preview-journal": onPreviewJournal,
+    post: onPost, unpost: onUnpost, repost: onRepost, "preview-journal": onPreviewJournal,
     approve: onApprove, cancel: onCancel,
     print: onPrint,
     send:  onSend,
@@ -263,6 +265,7 @@ export default function ERPToolbar({
     if (id === "save")   return saveDisabled;
     if (id === "post")   return !isSaved || isPosted;
     if (id === "unpost") return !isPosted;
+    if (id === "repost") return !isSaved || !isPosted;
     if (id === "preview-journal") return !isSaved;
     return false;
   };
