@@ -17,6 +17,7 @@ import InvoicePrintModal, { type DocTemplateConfig } from "@/components/InvoiceP
 import SendDocumentPanel from "@/components/SendDocumentPanel";
 import PaymentModal from "@/components/PaymentModal";
 import { buildInvoiceHtml } from "@/lib/buildInvoiceHtml";
+import { DateSegmentInput } from "@/components/DateSegmentInput";
 import QRCode from "qrcode";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -1329,36 +1330,26 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
             })()}
           </HF>
           <HF label="تاريخ التحرير">
-            <div className="flex items-stretch" style={{ width: 130 }}>
-              <input
-                type="text"
-                dir="ltr"
+            <div className="flex items-stretch" style={{ width: 135 }}>
+              <DateSegmentInput
                 value={invoiceDate}
-                onChange={e => setInvoiceDate(e.target.value)}
-                placeholder="YYYY-MM-DD"
-                maxLength={10}
-                className="classic-input flex-1 min-w-0"
-                style={{ textAlign: "center", borderRadius: "4px 0 0 4px", borderRight: "none" }}
+                onChange={setInvoiceDate}
+                style={{ flex: 1, minWidth: 0 }}
               />
-              <button type="button" onClick={() => invoiceDatePickerRef.current?.showPicker()} className="flex items-center justify-center" style={{ background: "#f3f4f6", border: "1px solid #d1d5db", borderLeft: "none", borderRadius: "0 4px 4px 0", padding: "0 5px", color: "#555", cursor: "pointer" }}>
+              <button type="button" onClick={() => invoiceDatePickerRef.current?.showPicker()} className="flex items-center justify-center" style={{ background: "#f3f4f6", border: "1px solid #d1d5db", borderLeft: "none", borderRadius: "0 4px 4px 0", padding: "0 6px", color: "#555", cursor: "pointer", fontSize: 13 }}>
                 📅
               </button>
               <input ref={invoiceDatePickerRef} type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} />
             </div>
           </HF>
           <HF label="تاريخ الدفع">
-            <div className="flex items-stretch" style={{ width: 130 }}>
-              <input
-                type="text"
-                dir="ltr"
+            <div className="flex items-stretch" style={{ width: 135 }}>
+              <DateSegmentInput
                 value={dueDate}
-                onChange={e => setDueDate(e.target.value)}
-                placeholder="YYYY-MM-DD"
-                maxLength={10}
-                className="classic-input flex-1 min-w-0"
-                style={{ textAlign: "center", borderRadius: "4px 0 0 4px", borderRight: "none" }}
+                onChange={setDueDate}
+                style={{ flex: 1, minWidth: 0 }}
               />
-              <button type="button" onClick={() => dueDatePickerRef.current?.showPicker()} className="flex items-center justify-center" style={{ background: "#f3f4f6", border: "1px solid #d1d5db", borderLeft: "none", borderRadius: "0 4px 4px 0", padding: "0 5px", color: "#555", cursor: "pointer" }}>
+              <button type="button" onClick={() => dueDatePickerRef.current?.showPicker()} className="flex items-center justify-center" style={{ background: "#f3f4f6", border: "1px solid #d1d5db", borderLeft: "none", borderRadius: "0 4px 4px 0", padding: "0 6px", color: "#555", cursor: "pointer", fontSize: 13 }}>
                 📅
               </button>
               <input ref={dueDatePickerRef} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} />
