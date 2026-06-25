@@ -118,7 +118,16 @@ function resolveInvoiceFieldValue(
     case 'TAMARA_AMOUNT':  return Number(breakdown?.TAMARA  ?? breakdown?.TAMARA_AMOUNT  ?? 0);
     case 'TABBY_AMOUNT':   return Number(breakdown?.TABBY   ?? breakdown?.TABBY_AMOUNT   ?? 0);
     case 'OTHER_AMOUNT':   return Number(breakdown?.OTHER   ?? breakdown?.OTHER_AMOUNT   ?? 0);
-    default:               return 0;
+    default: {
+      // ── بحث ديناميكي في تفصيل السداد لأي كود وسيلة دفع مخصصة ─────────
+      if (breakdown) {
+        const code = fieldCode.toUpperCase();
+        // محاولة مطابقة مباشرة (CUSTOM_AMOUNT أو CUSTOM)
+        const direct = breakdown[code] ?? breakdown[code.replace(/_AMOUNT$/, '')] ?? null;
+        if (direct !== null) return Number(direct);
+      }
+      return 0;
+    }
   }
 }
 

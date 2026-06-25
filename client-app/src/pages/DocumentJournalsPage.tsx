@@ -218,11 +218,16 @@ function FieldCodeSearch({
   allFields,
   selectedCode,
   onChange,
+  filterType,
 }: {
   allFields: any[];
   selectedCode: string;
   onChange: (code: string) => void;
+  filterType?: string;
 }) {
+  allFields = filterType
+    ? allFields.filter((f: any) => f.fieldType === filterType)
+    : allFields;
   const selected = useMemo(() => allFields.find((f: any) => f.code === selectedCode) ?? null, [allFields, selectedCode]);
   const [q, setQ]     = useState(selectedCode);
   const [open, setOpen] = useState(false);
@@ -486,6 +491,18 @@ export default function DocumentJournalsPage() {
   const { data: suppJournalsList }  = trpc.documentJournals.list.useQuery({ docType: "suppliers_journal" });
   const { data: chartAccounts = [] }   = trpc.accounts.list.useQuery();
   const { data: fieldDictList = [] }   = trpc.fieldDictionary.list.useQuery();
+  const syncFieldsMut = trpc.fieldDictionary.syncSystemFields.useMutation();
+
+  // ── مزامنة الحقول النظامية عند تحميل الصفحة ───────────────────────────
+  const syncedRef = useRef(false);
+  useEffect(() => {
+    if (fieldDictList.length > 0 && !syncedRef.current) {
+      syncedRef.current = true;
+      syncFieldsMut.mutate(undefined, {
+        onSuccess: (r) => { if (r.added > 0) toast.info(`تمت إضافة ${r.added} حقل نظامي جديد للقاموس`); },
+      });
+    }
+  }, [fieldDictList.length]);
 
   /* ── mutations ── */
   const createMut = trpc.documentJournals.create.useMutation({
@@ -1141,6 +1158,7 @@ export default function DocumentJournalsPage() {
                                   allFields={fieldDictList as any[]}
                                   selectedCode={row.postingName}
                                   onChange={v => patchLink(i, { postingName: v })}
+                                  filterType="Amount"
                                 />
                               </td>
                               <td className="py-0" style={{ borderRight: "1px solid #eef2f7", borderLeft: "1px solid #eef2f7" }}>
