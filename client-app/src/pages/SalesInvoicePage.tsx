@@ -1742,7 +1742,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
 
           {/* الإجمالي غير شامل الضريبة */}
           <div className="flex items-center justify-between py-2 border-b border-[#d4cfc7]">
-            <span className="text-[11px] text-[#555]">غير شامل الضريبة</span>
+            <span className="text-[11px] text-[#555]">الإجمالي غير شامل الضريبة</span>
             <span className="text-[12px] font-semibold text-[#333] font-mono">{fmt(subtotal - totalDiscount)}</span>
           </div>
 
@@ -1759,7 +1759,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
             className="flex items-center justify-between py-2.5 px-2 rounded-md mt-1"
             style={{ background: "#406B93", color: "#fff" }}
           >
-            <span className="text-[11px] font-bold">شامل الضريبة</span>
+            <span className="text-[11px] font-bold">الإجمالي شامل الضريبة</span>
             <span className="text-[13px] font-bold font-mono">{fmt(netTotal)}</span>
           </div>
         </div>
