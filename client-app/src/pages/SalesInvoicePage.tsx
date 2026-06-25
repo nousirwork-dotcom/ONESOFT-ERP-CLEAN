@@ -1314,9 +1314,9 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
               <input
                 type="text"
                 dir="ltr"
-                value={toDisplayDate(dueDate)}
-                onChange={e => setDueDate(toIsoDate(e.target.value))}
-                placeholder="DD-MM-YYYY"
+                value={dueDate}
+                onChange={e => setDueDate(e.target.value)}
+                placeholder="YYYY-MM-DD"
                 maxLength={10}
                 className="classic-input flex-1 min-w-0"
                 style={{ textAlign: "center", borderRadius: "4px 0 0 4px", borderRight: "none" }}
@@ -1332,9 +1332,9 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
               <input
                 type="text"
                 dir="ltr"
-                value={toDisplayDate(invoiceDate)}
-                onChange={e => setInvoiceDate(toIsoDate(e.target.value))}
-                placeholder="DD-MM-YYYY"
+                value={invoiceDate}
+                onChange={e => setInvoiceDate(e.target.value)}
+                placeholder="YYYY-MM-DD"
                 maxLength={10}
                 className="classic-input flex-1 min-w-0"
                 style={{ textAlign: "center", borderRadius: "4px 0 0 4px", borderRight: "none" }}
