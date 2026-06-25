@@ -58,7 +58,7 @@ import SettingsModule, {
   CfgApproveInventoryTab, CfgApproveJournalTab, CfgApprovalsLogTab, CfgApprovalPathsTab,
   CfgNotifStockTab, CfgNotifCreditTab, CfgNotifOverdueTab, CfgNotifExpiryTab,
   CfgNotifMaintenanceTab, CfgNotifPendingTab, CfgWarehousesTab,
-  CfgDocTypesTab, CfgDocBooksTab, CfgDocumentJournalsTab, CfgDocumentTypesTab, CfgDocumentTemplatesTab,
+  CfgDocTypesTab, CfgDocBooksTab, CfgDocumentJournalsTab, CfgDocumentTemplatesTab,
   CfgFieldDesignTab, CfgBackupTab, CfgAuditLogTab, CfgQrSettingsTab,
   CfgMissingDocsTab, CfgPayrollPeriodsTab, CfgOrgChartTab, CfgWageCalendarTab,
   CfgShiftsTab, CfgReportDesignerTab, CfgTestSetupTab, CfgTestEditTab, CfgFieldSpecsTab,
@@ -220,7 +220,7 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/cfg/document-journals":   CfgDocumentJournalsTab,
   "/cfg/posting-settings":    PostingSettingsPage,
   "/accounting/posting-ops":  PostingOperationsPage,
-  "/cfg/document-types":      CfgDocumentTypesTab,
+
   "/cfg/document-templates":  CfgDocumentTemplatesTab,
   "/cfg/qr-settings":       CfgQrSettingsTab,
   "/cfg/field-design":      CfgFieldDesignTab,
