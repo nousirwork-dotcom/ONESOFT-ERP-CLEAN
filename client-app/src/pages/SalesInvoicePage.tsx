@@ -960,67 +960,6 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       style={{ fontFamily: "'Cairo', Tahoma, Arial, sans-serif", fontSize: "12px", background: "#ECE7DD" }}
       dir="rtl"
     >
-      {/* ── ERP Toolbar ─────────────────────────────────────────────────── */}
-      <ERPToolbar
-        pageTitle="فواتير المبيعات"
-        mode={erpMode}
-        isSaved={savedInvoiceId !== null}
-        isPosted={isPosted}
-        postingStatus={savedInvoiceId !== null ? (isPosted ? "posted" : "unposted") : null}
-        onNew={() => { handleNew(); setErpMode("new"); }}
-        onEdit={() => { setErpMode("edit"); toast.info("وضع التعديل"); }}
-        onDelete={handleDelete}
-        onSearch={() => { setErpMode("search"); toast.info("بحث..."); }}
-        onRefresh={() => nextNumberQuery.refetch()}
-        onCopy={handleDuplicate}
-        onPost={() => {
-          if (!savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً"); return; }
-          setShowPostingPreview(true);
-        }}
-        onUnpost={() => {
-          if (!savedInvoiceId) return;
-          if (window.confirm("هل أنت متأكد من إلغاء ترحيل هذه الفاتورة؟")) {
-            unpostMutation.mutate({ invoiceId: savedInvoiceId });
-          }
-        }}
-        onRepost={handleRepost}
-        onPreviewJournal={() => {
-          if (!savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً"); return; }
-          setShowPostingPreview(true);
-        }}
-        onApprove={() => toast.success("تم الاعتماد")}
-        onCancel={() => { setErpMode("view"); toast.info("تم الإلغاء"); }}
-        onPrint={() => setShowPrintModal(true)}
-        onSend={() => {
-          if (!savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً قبل الإرسال"); return; }
-          setShowSendPanel(true);
-        }}
-        onFirst={() => {
-          const ids = [...(allInvoicesQuery.data ?? [])].sort((a, b) => a.id - b.id).map(i => i.id);
-          if (ids.length) { setNavInvoiceId(ids[0]); setErpMode("view"); }
-        }}
-        onPrev={() => {
-          const ids = [...(allInvoicesQuery.data ?? [])].sort((a, b) => a.id - b.id).map(i => i.id);
-          const cur = navInvoiceId ?? savedInvoiceId;
-          const idx = cur ? ids.indexOf(cur) : -1;
-          if (idx > 0) { setNavInvoiceId(ids[idx - 1]); setErpMode("view"); }
-          else if (idx === -1 && ids.length) { setNavInvoiceId(ids[ids.length - 1]); setErpMode("view"); }
-        }}
-        onNext={() => {
-          const ids = [...(allInvoicesQuery.data ?? [])].sort((a, b) => a.id - b.id).map(i => i.id);
-          const cur = navInvoiceId ?? savedInvoiceId;
-          const idx = cur ? ids.indexOf(cur) : -1;
-          if (idx >= 0 && idx < ids.length - 1) { setNavInvoiceId(ids[idx + 1]); setErpMode("view"); }
-          else if (idx === -1 && ids.length) { setNavInvoiceId(ids[0]); setErpMode("view"); }
-        }}
-        onLast={() => {
-          const ids = [...(allInvoicesQuery.data ?? [])].sort((a, b) => a.id - b.id).map(i => i.id);
-          if (ids.length) { setNavInvoiceId(ids[ids.length - 1]); setErpMode("view"); }
-        }}
-        onClose={() => toast.info("إغلاق")}
-        enableShortcuts
-      />
-
       {/* ── Main Content: outer flex row (left-col + summary) ──────────── */}
       <div className="flex-1 flex overflow-hidden" dir="rtl">
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -1907,6 +1846,67 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
           </div>
         </div>
       </div>
+
+      {/* ── ERP Toolbar (أسفل الشاشة) ────────────────────────────────── */}
+      <ERPToolbar
+        pageTitle="فواتير المبيعات"
+        mode={erpMode}
+        isSaved={savedInvoiceId !== null}
+        isPosted={isPosted}
+        postingStatus={savedInvoiceId !== null ? (isPosted ? "posted" : "unposted") : null}
+        onNew={() => { handleNew(); setErpMode("new"); }}
+        onEdit={() => { setErpMode("edit"); toast.info("وضع التعديل"); }}
+        onDelete={handleDelete}
+        onSearch={() => { setErpMode("search"); toast.info("بحث..."); }}
+        onRefresh={() => nextNumberQuery.refetch()}
+        onCopy={handleDuplicate}
+        onPost={() => {
+          if (!savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً"); return; }
+          setShowPostingPreview(true);
+        }}
+        onUnpost={() => {
+          if (!savedInvoiceId) return;
+          if (window.confirm("هل أنت متأكد من إلغاء ترحيل هذه الفاتورة؟")) {
+            unpostMutation.mutate({ invoiceId: savedInvoiceId });
+          }
+        }}
+        onRepost={handleRepost}
+        onPreviewJournal={() => {
+          if (!savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً"); return; }
+          setShowPostingPreview(true);
+        }}
+        onApprove={() => toast.success("تم الاعتماد")}
+        onCancel={() => { setErpMode("view"); toast.info("تم الإلغاء"); }}
+        onPrint={() => setShowPrintModal(true)}
+        onSend={() => {
+          if (!savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً قبل الإرسال"); return; }
+          setShowSendPanel(true);
+        }}
+        onFirst={() => {
+          const ids = [...(allInvoicesQuery.data ?? [])].sort((a, b) => a.id - b.id).map(i => i.id);
+          if (ids.length) { setNavInvoiceId(ids[0]); setErpMode("view"); }
+        }}
+        onPrev={() => {
+          const ids = [...(allInvoicesQuery.data ?? [])].sort((a, b) => a.id - b.id).map(i => i.id);
+          const cur = navInvoiceId ?? savedInvoiceId;
+          const idx = cur ? ids.indexOf(cur) : -1;
+          if (idx > 0) { setNavInvoiceId(ids[idx - 1]); setErpMode("view"); }
+          else if (idx === -1 && ids.length) { setNavInvoiceId(ids[ids.length - 1]); setErpMode("view"); }
+        }}
+        onNext={() => {
+          const ids = [...(allInvoicesQuery.data ?? [])].sort((a, b) => a.id - b.id).map(i => i.id);
+          const cur = navInvoiceId ?? savedInvoiceId;
+          const idx = cur ? ids.indexOf(cur) : -1;
+          if (idx >= 0 && idx < ids.length - 1) { setNavInvoiceId(ids[idx + 1]); setErpMode("view"); }
+          else if (idx === -1 && ids.length) { setNavInvoiceId(ids[0]); setErpMode("view"); }
+        }}
+        onLast={() => {
+          const ids = [...(allInvoicesQuery.data ?? [])].sort((a, b) => a.id - b.id).map(i => i.id);
+          if (ids.length) { setNavInvoiceId(ids[ids.length - 1]); setErpMode("view"); }
+        }}
+        onClose={() => toast.info("إغلاق")}
+        enableShortcuts
+      />
 
       {/* ── Styles ──────────────────────────────────────────────────────── */}
       <style>{`
