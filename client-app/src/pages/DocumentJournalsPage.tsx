@@ -594,7 +594,7 @@ export default function DocumentJournalsPage() {
       printOnSave:      form.printOnSave,
       customersJournal: (form.customersJournal && form.customersJournal !== "none") ? form.customersJournal : null,
       suppliersJournal: (form.suppliersJournal && form.suppliersJournal !== "none") ? form.suppliersJournal : null,
-      paymentTypesConfig: ["sales", "sales_invoice", "sales_return", "purchase_invoice", "purchase_return", "receipt_voucher", "payment_voucher"].includes(selectedType) ? ptConfig : null,
+      paymentTypesConfig: ptConfig,
       salesAccountId:    form.salesAccountId    ? parseInt(form.salesAccountId)    : null,
       cashAccountId:     form.cashAccountId     ? parseInt(form.cashAccountId)     : null,
       creditAccountId:   form.creditAccountId   ? parseInt(form.creditAccountId)   : null,
@@ -811,11 +811,11 @@ export default function DocumentJournalsPage() {
             {/* ── Tabs Bar ── */}
             <div className="shrink-0 flex items-center gap-0 border-b border-slate-200 bg-white px-3" dir="rtl">
               {[
-                { id: "basic", label: "البيانات الأساسية" },
-                ...(selectedType === "sales" ? [{ id: "payment-types", label: "أنواع السندات" }] : []),
-                ...(selectedType === "sales" ? [{ id: "accounting-links", label: "الروابط المحاسبية" }] : []),
-                { id: "issuance", label: "خصائص السندات المصدرة" },
-                { id: "options",  label: "خيارات" },
+                { id: "basic",             label: "البيانات الأساسية" },
+                { id: "payment-types",     label: "أنواع السندات" },
+                { id: "accounting-links",  label: "الروابط المحاسبية" },
+                { id: "issuance",          label: "خصائص السندات المصدرة" },
+                { id: "options",           label: "خيارات" },
               ].map(tab => (
                 <button
                   key={tab.id}
@@ -1027,7 +1027,7 @@ export default function DocumentJournalsPage() {
             )}
 
             {/* ── TAB: أنواع السندات ── */}
-            {activeTab === "payment-types" && selectedType === "sales" && (() => {
+            {activeTab === "payment-types" && (() => {
               const thCls = "text-[10px] font-semibold text-slate-500 px-2 py-1.5 text-right bg-slate-50 border-b border-slate-200";
               const tdCls = "px-1.5 py-1 border-b border-slate-100";
               const cellInput = (val: string, onChange: (v: string) => void) => (
@@ -1107,7 +1107,7 @@ export default function DocumentJournalsPage() {
             })()}
 
             {/* ── TAB: الروابط المحاسبية ── */}
-            {activeTab === "accounting-links" && selectedType === "sales" && (() => {
+            {activeTab === "accounting-links" && (() => {
               const thCls = "text-[10px] font-semibold text-slate-500 px-2 py-1.5 text-right bg-slate-50 border-b border-slate-200";
               const tdCls = "px-1.5 py-1 border-b border-slate-100";
               const cellInput = (val: string, onChange: (v: string) => void) => (
