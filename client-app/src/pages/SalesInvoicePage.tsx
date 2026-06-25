@@ -984,10 +984,10 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
               return `${j.numberPrefix}${year}-${padded}`;
             };
             return (
-              <div className="flex flex-col gap-0.5 flex-shrink-0 relative" style={{ minWidth: 176 }}>
+              <div className="flex flex-row items-center gap-1.5 flex-shrink-0 relative">
                 {/* Label مع اسم الدفتر المختار */}
-                <div className="flex items-center gap-1">
-                  <label className="text-[10px] font-bold text-[#D19C05] uppercase tracking-wide">رقم الفاتورة</label>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <label className="text-[10px] font-bold text-[#D19C05] uppercase tracking-wide whitespace-nowrap">رقم الفاتورة</label>
                   {selected && (
                     <span
                       className="text-[9px] px-1 py-0 rounded font-medium cursor-pointer"
@@ -2167,11 +2167,11 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
 // ─── HF: Header Field ─────────────────────────────────────────────────────────
 function HF({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-0.5">
-      <label style={{ fontSize: "10px", fontWeight: 700, color: "#666", fontFamily: "'Cairo', Tahoma" }}>
+    <div className="flex flex-row items-center gap-1.5">
+      <label style={{ fontSize: "10px", fontWeight: 700, color: "#666", fontFamily: "'Cairo', Tahoma", whiteSpace: "nowrap", flexShrink: 0 }}>
         {label}
       </label>
-      {children}
+      <div className="flex-1 min-w-0">{children}</div>
     </div>
   );
 }
