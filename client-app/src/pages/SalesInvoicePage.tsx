@@ -1290,7 +1290,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         </div>
 
         {/* ── صف 3: المخزن + تاريخ التحرير + تاريخ الدفع + البائع ── */}
-        <div className="grid gap-x-2 gap-y-0.5 mb-1" style={{ gridTemplateColumns: "1fr 1fr 1fr 210px" }}>
+        <div className="grid gap-x-2 gap-y-0.5 mb-1" style={{ gridTemplateColumns: "1fr 1.5fr 1.5fr 210px" }}>
           <HF label="المخزن" labelW={70}>
             {(() => {
               const lockedWh = journalWarehouseId ?? docTypeWarehouseId;
@@ -1309,10 +1309,10 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
               );
             })()}
           </HF>
-          <HF label="تاريخ التحرير">
+          <HF label="تاريخ التحرير" labelW={70}>
             <input type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className="classic-input w-full" />
           </HF>
-          <HF label="تاريخ الدفع">
+          <HF label="تاريخ الدفع" labelW={70}>
             <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="classic-input w-full" />
           </HF>
           <HF label="البائع" labelW={52}>
