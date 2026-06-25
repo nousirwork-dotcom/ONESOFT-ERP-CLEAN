@@ -1115,7 +1115,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
           {/* ── بناءً على + نوع السند (صف 1 مع رقم الفاتورة) ── */}
           <div className="flex-1 grid gap-x-2" style={{ gridTemplateColumns: "1fr 210px" }}>
             <HF label="بناءً على">
-              <div className="flex w-full" style={{ borderRadius: 4, overflow: "hidden", border: "1px solid #d1d5db", background: "white" }}>
+              <div className="flex gap-1 w-full">
                 <select
                   value={basedOnType}
                   onChange={e => {
@@ -1123,12 +1123,8 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                     setBasedOnNum('');
                     setBasedOnTrigger('');
                   }}
-                  style={{
-                    flex: "0 0 auto", minWidth: 110, border: "none", outline: "none",
-                    background: "transparent", fontSize: 12, padding: "2px 6px",
-                    fontFamily: "'Cairo', Tahoma", cursor: "pointer",
-                    borderLeft: basedOnType ? "1px solid #e5e7eb" : "none",
-                  }}
+                  className="classic-input flex-shrink-0"
+                  style={{ minWidth: 110 }}
                 >
                   <option value="">-- النوع --</option>
                   <option value="order">أمر بيع</option>
@@ -1144,8 +1140,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                       onBlur={() => { if (basedOnNum.trim()) setBasedOnTrigger(basedOnNum.trim()); }}
                       onKeyDown={e => { if (e.key === 'Enter' && basedOnNum.trim()) setBasedOnTrigger(basedOnNum.trim()); }}
                       placeholder="رقم المستند ثم Enter ↵"
-                      className="w-full h-full"
-                      style={{ border: "none", outline: "none", background: "transparent", fontSize: 12, padding: "2px 6px", fontFamily: "'Cairo', Tahoma" }}
+                      className="classic-input w-full"
                     />
                     {basedOnQuery.isFetching && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-blue-500">⏳</span>}
                     {basedOnTrigger && !basedOnQuery.isFetching && basedOnQuery.data === null && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-red-500 font-bold" title="لم يُوجد المستند">✗</span>}
