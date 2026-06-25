@@ -937,12 +937,10 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       <ERPToolbar
         pageTitle="فواتير المبيعات"
         mode={erpMode}
-        saveDisabled={createMutation.isPending || erpMode === "view"}
         isSaved={savedInvoiceId !== null}
         isPosted={isPosted}
         postingStatus={savedInvoiceId !== null ? (isPosted ? "posted" : "unposted") : null}
         onNew={() => { handleNew(); setErpMode("new"); }}
-        onSave={() => handleSave()}
         onEdit={() => { setErpMode("edit"); toast.info("وضع التعديل"); }}
         onDelete={handleDelete}
         onSearch={() => { setErpMode("search"); toast.info("بحث..."); }}
