@@ -101,28 +101,37 @@ function resolveInvoiceFieldValue(
 
   switch (fieldCode.toUpperCase()) {
     case 'TOTAL':         return total;
-    case 'NETSALES':      return subtotal;
-    case 'TAX':           return taxAmount;
-    case 'DISCOUNT':      return discAmt;
-    case 'CASH':          return isCredit ? 0 : total;
-    case 'CUSTOMER_CODE': return isCredit ? total : 0;   // ذمم العملاء (آجل)
+    case 'NETSALES':
+    case 'TOTAL_EXCLUSIVE_VAT': return subtotal;
+    case 'TAX':
+    case 'TOTAL_VAT':     return taxAmount;
+    case 'DISCOUNT':
+    case 'DISCOUNT_AMOUNT': return discAmt;
+    // نقدي: إذا وُجد تفصيل سداد يُعاد مبلغ الكاش فقط، وإلا الإجمالي
+    case 'CASH':          return breakdown
+                            ? Number(breakdown.CASH ?? breakdown.CASH_AMOUNT ?? 0)
+                            : (isCredit ? 0 : total);
+    case 'CUSTOMER_CODE':
+    case 'CUSTOMER_RECEIVABLE': return Number(breakdown?.ACCOUNT ?? breakdown?.ACCOUNT_AMOUNT ?? (isCredit ? total : 0));
     case 'PAID':
     case 'PAYMENT_TOTAL': return paidAmount;
     case 'REMAINING':     return Math.max(0, total - paidAmount);
     // وسائل الدفع من تفصيل السداد
     case 'CASH_AMOUNT':    return Number(breakdown?.CASH    ?? breakdown?.CASH_AMOUNT    ?? 0);
-    case 'CARD_AMOUNT':    return Number(breakdown?.CARD    ?? breakdown?.CARD_AMOUNT    ?? 0);
+    case 'CARD_AMOUNT':
+    case 'VISA':           return Number(breakdown?.CARD    ?? breakdown?.VISA    ?? breakdown?.CARD_AMOUNT ?? 0);
     case 'BANK_AMOUNT':    return Number(breakdown?.BANK    ?? breakdown?.BANK_AMOUNT    ?? 0);
     case 'ACCOUNT_AMOUNT':
     case 'ACCOUNT':        return Number(breakdown?.ACCOUNT ?? breakdown?.ACCOUNT_AMOUNT ?? 0);
+    case 'TAMARA':
     case 'TAMARA_AMOUNT':  return Number(breakdown?.TAMARA  ?? breakdown?.TAMARA_AMOUNT  ?? 0);
+    case 'TABBY':
     case 'TABBY_AMOUNT':   return Number(breakdown?.TABBY   ?? breakdown?.TABBY_AMOUNT   ?? 0);
     case 'OTHER_AMOUNT':   return Number(breakdown?.OTHER   ?? breakdown?.OTHER_AMOUNT   ?? 0);
     default: {
       // ── بحث ديناميكي في تفصيل السداد لأي كود وسيلة دفع مخصصة ─────────
       if (breakdown) {
         const code = fieldCode.toUpperCase();
-        // محاولة مطابقة مباشرة (CUSTOM_AMOUNT أو CUSTOM)
         const direct = breakdown[code] ?? breakdown[code.replace(/_AMOUNT$/, '')] ?? null;
         if (direct !== null) return Number(direct);
       }
