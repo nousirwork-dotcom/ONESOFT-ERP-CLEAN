@@ -1166,7 +1166,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                 </div>
               </div>
             </HF>
-            <HF label="نوع السند">
+            <HF label="نوع السند" labelW={46}>
               {(() => {
                 const allDocTypes = docTypesQuery.data ?? [];
                 const filteredDocTypes = journalId ? allDocTypes.filter((dt: any) => dt.journal === String(journalId)) : allDocTypes;
@@ -1296,7 +1296,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
             </div>
           )}
           <div className="flex-shrink-0" style={{ width: 210 }}>
-          <HF label="العملة">
+          <HF label="العملة" labelW={46}>
             <select value={currency} onChange={e => setCurrency(e.target.value)} className="classic-input w-full">
               <option value="SAR">ريال سعودي (SAR)</option>
               <option value="USD">دولار (USD)</option>
@@ -1363,7 +1363,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
               <input ref={dueDatePickerRef} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} />
             </div>
           </HF>
-          <HF label="البائع">
+          <HF label="البائع" labelW={46}>
             <input value={salesperson} onChange={e => setSalesperson(e.target.value)} className="classic-input w-full" />
           </HF>
         </div>
