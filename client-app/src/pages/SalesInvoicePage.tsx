@@ -1465,13 +1465,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
               <option value="AED">درهم (AED)</option>
             </select>
           </HF>
-          <HF label="سعر الصرف">
-            <input
-              value={exchangeRate}
-              onChange={e => setExchangeRate(e.target.value)}
-              className="classic-input w-full text-center"
-            />
-          </HF>
+
           <HF label="بناءً على">
             <div className="flex gap-1 w-full">
               <select
