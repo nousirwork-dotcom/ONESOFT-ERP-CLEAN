@@ -965,7 +965,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       <div className="flex-1 flex flex-col overflow-hidden">
 
       {/* ── Header Form ─────────────────────────────────────────────────── */}
-      <div className="bg-white border-b border-[#b0a89a] px-3 pt-2 pb-1.5" style={{ boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }}>
+      <div className="border-b border-[#b0a89a] px-3 pt-2 pb-1.5" style={{ background: "#F7F5EE", boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }}>
 
         {/* ── رقم الفاتورة (بارز أعلى يمين) + حقول الصف الأول ── */}
         <div className="flex items-start gap-2 mb-1.5">
