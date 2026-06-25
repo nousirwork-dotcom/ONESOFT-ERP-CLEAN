@@ -1390,7 +1390,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                 key={line.id}
                 className={`border-b border-[#e8e4dc] ${
                   selectedLineIdx === rowIdx
-                    ? "bg-[#DAD271]"
+                    ? "bg-[#EEF4FA]"
                     : rowIdx % 2 === 0 ? "bg-white" : "bg-[#FAFAF8]"
                 }`}
                 onClick={() => setSelectedLineIdx(rowIdx)}
