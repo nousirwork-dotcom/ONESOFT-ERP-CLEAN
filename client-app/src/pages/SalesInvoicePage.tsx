@@ -990,9 +990,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         <div style={{ display: "grid", gridTemplateColumns: "auto auto 1fr 210px", columnGap: 8, rowGap: 4, alignItems: "center" }}>
 
           {/* ── صف 1 ── */}
-          <div /><div />
-          <div className="flex items-start gap-2">
-          {/* رقم الفاتورة — مدمج مع منتقي الدفتر */}
+          {/* رقم الفاتورة — col 1 (أقصى اليمين) */}
           {(() => {
             const journals = journalsQuery.data ?? [];
             const selected = journals.find((j: any) => j.id === journalId);
@@ -1135,8 +1133,9 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
             );
           })()}
 
-            <div className="flex-1 min-w-0">
-            <HF label="بناءً على">
+          {/* بناءً على — col 2 */}
+          <div>
+          <HF label="بناءً على">
               <div className="flex gap-1 w-full">
                 <select
                   value={basedOnType}
@@ -1170,8 +1169,9 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                 </div>
               </div>
             </HF>
-            </div>
           </div>
+          {/* فراغ — col 3 */}
+          <div />
           <HF label="نوع السند" labelW={46}>
               {(() => {
                 const allDocTypes = docTypesQuery.data ?? [];
@@ -1205,9 +1205,8 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
           </HF>
 
           {/* ── صف 2 ── */}
-          <div /><div />
-          <div className="flex items-center gap-2">
-          <div className="flex-1 min-w-0">
+          {/* العميل — col 1 (أقصى اليمين) */}
+          <div style={{ minWidth: 260 }}>
           <HF label="العميل" labelW={70}>
             <div className="flex gap-1 w-full" ref={custDropRef} style={{ position: "relative" }}>
               <input
@@ -1275,9 +1274,9 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
             </div>
           </HF>
           </div>
-          {/* ── بادجات نوع الفاتورة والعميل — تظهر فقط عند اختيار عميل ── */}
-          {customerId && (
-            <div className="flex items-center gap-1 flex-shrink-0">
+          {/* badges — col 2 */}
+          <div className="flex items-center gap-1">
+          {customerId && (<>
               <div
                 className="flex items-center gap-1 px-2 py-0.5 rounded font-bold text-[11px]"
                 style={{
@@ -1298,9 +1297,10 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
               >
                 {customerType === 'organization' ? '🏢 مؤسسة' : '👤 فرد'}
               </div>
-            </div>
-          )}
+          </>)}
           </div>
+          {/* فراغ — col 3 */}
+          <div />
           <HF label="العملة" labelW={46}>
             <select value={currency} onChange={e => setCurrency(e.target.value)} className="classic-input w-full">
               <option value="SAR">ريال سعودي (SAR)</option>
