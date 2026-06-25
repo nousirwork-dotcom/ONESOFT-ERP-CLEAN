@@ -1364,7 +1364,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       </div>
 
       {/* ── Lines Table ─────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-hidden border-b border-[#b0a89a]">
+      <div className="flex-1 overflow-hidden border-b border-[#b0a89a] flex flex-col">
 
       {/* جدول السطور (يمين) */}
       <div className="flex-1 overflow-auto bg-white">
@@ -1524,16 +1524,17 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
           </tbody>
         </table>
 
-        <div className="px-2 py-1.5 border-t border-[#e8e4dc]">
-          <button
-            onClick={addLine}
-            className="flex items-center gap-1 text-[11px] text-[#D19C05] hover:text-[#9A7203] hover:underline transition-colors"
-          >
-            <Plus className="w-3 h-3" />
-            إضافة سطر جديد
-            <span className="text-[#aaa] mr-1">(Enter في آخر سطر)</span>
-          </button>
-        </div>
+      </div>
+      {/* زر إضافة سطر — خارج منطقة التمرير ليبقى ثابتاً */}
+      <div className="px-2 py-1.5 border-t border-[#e8e4dc] bg-white flex-shrink-0">
+        <button
+          onClick={addLine}
+          className="flex items-center gap-1 text-[11px] text-[#D19C05] hover:text-[#9A7203] hover:underline transition-colors"
+        >
+          <Plus className="w-3 h-3" />
+          إضافة سطر جديد
+          <span className="text-[#aaa] mr-1">(Enter في آخر سطر)</span>
+        </button>
       </div>
       </div>{/* end lines wrapper */}
       </div>{/* end left flex-col wrapper */}
