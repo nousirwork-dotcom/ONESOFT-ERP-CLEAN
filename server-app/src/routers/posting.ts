@@ -120,7 +120,8 @@ function resolveInvoiceFieldValue(
     case 'CASH_AMOUNT':    return Number(breakdown?.CASH    ?? breakdown?.CASH_AMOUNT    ?? 0);
     case 'CARD_AMOUNT':
     case 'VISA':           return Number(breakdown?.CARD    ?? breakdown?.VISA    ?? breakdown?.CARD_AMOUNT ?? 0);
-    case 'BANK_AMOUNT':    return Number(breakdown?.BANK    ?? breakdown?.BANK_AMOUNT    ?? 0);
+    case 'BANK_AMOUNT':
+    case 'BANK_TRANSFER':  return Number(breakdown?.BANK    ?? breakdown?.BANK_AMOUNT    ?? 0);
     case 'ACCOUNT_AMOUNT':
     case 'ACCOUNT':        return Number(breakdown?.ACCOUNT ?? breakdown?.ACCOUNT_AMOUNT ?? 0);
     case 'TAMARA':
@@ -233,7 +234,7 @@ export async function buildSalesInvoiceLines(
         const paymentFieldCodes: Record<string, string[]> = {
           CASH:    ['CASH',    'CASH_AMOUNT'],
           CARD:    ['CARD',    'CARD_AMOUNT', 'VISA'],
-          BANK:    ['BANK',    'BANK_AMOUNT'],
+          BANK:    ['BANK',    'BANK_AMOUNT', 'BANK_TRANSFER'],
           ACCOUNT: ['ACCOUNT', 'ACCOUNT_AMOUNT', 'CUSTOMER_RECEIVABLE'],
           TAMARA:  ['TAMARA',  'TAMARA_AMOUNT'],
           TABBY:   ['TABBY',   'TABBY_AMOUNT'],
