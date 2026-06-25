@@ -98,6 +98,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
   const [basedOnTrigger, setBasedOnTrigger] = useState(""); // يُحرِّك جلب البيانات
   const [notes, setNotes] = useState("");
   const [paidAmountOverride, setPaidAmountOverride] = useState<string>("");
+  const [paymentBreakdown, setPaymentBreakdown]     = useState<Record<string, number>>({});
 
   // ── Lines state ───────────────────────────────────────────────────────────
   const [lines, setLines] = useState<InvoiceLine[]>([EMPTY_LINE()]);
@@ -251,6 +252,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
     setPaidAmountOverride(inv.paidAmount ?? "");
     setSavedInvoiceId(inv.id);
     setIsPosted(inv.isPosted ?? false);
+    setPaymentBreakdown((inv.paymentBreakdown as Record<string, number>) ?? {});
     setErpMode("view");
     if (inv.items && inv.items.length > 0) {
       setLines(inv.items.map(item => ({
@@ -849,6 +851,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
     setSavedInvoiceId(null);
     setNavInvoiceId(null);
     setIsPosted(false);
+    setPaymentBreakdown({});
     setShowPostingPreview(false);
     // إذا كان هناك دفتر محدد، اعرض الرقم المتوقع — وإلا يبقى الحقل فارغاً
     if (journalId) {
@@ -1733,7 +1736,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       {/* ── لوحة الإجماليات (يسار) ──────────────────────────────────────── */}
       <div
         className="flex flex-col border-r border-[#b0a89a]"
-        style={{ width: 260, minWidth: 260, background: "#F4F1EC" }}
+        style={{ width: 290, minWidth: 290, background: "#F4F1EC" }}
       >
         {/* عنوان اللوحة */}
         <div
@@ -1785,7 +1788,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         </div>
 
         {/* زر الدفع */}
-        <div className="px-3 pb-3">
+        <div className="px-3 pt-1 pb-2">
           <button
             onClick={() => {
               if (netTotal <= 0) {
@@ -1803,17 +1806,79 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
               background: netTotal <= 0
                 ? "#94a3b8"
                 : "linear-gradient(135deg, #D19C05, #9A7203)",
-              boxShadow: netTotal > 0 ? "0 2px 6px rgba(64,107,147,0.4)" : "none",
+              boxShadow: netTotal > 0 ? "0 2px 6px rgba(209,156,5,0.4)" : "none",
             }}
           >
             💳 الدفع
           </button>
           {paymentType !== "cash" && remainingAmount > 0 && (
-            <div className="text-center mt-1.5 text-[10px]" style={{ color: "#C0392B" }}>
+            <div className="text-center mt-1 text-[10px]" style={{ color: "#C0392B" }}>
               متبقي: <span className="font-bold font-mono">{fmt(remainingAmount)}</span>
             </div>
           )}
         </div>
+
+        {/* ── بيانات الدفع ── */}
+        {(() => {
+          const METHOD_LABELS: Record<string, { label: string; icon: string }> = {
+            CASH:    { label: "نقدي",          icon: "💵" },
+            CARD:    { label: "بطاقة بنكية",   icon: "💳" },
+            BANK:    { label: "تحويل بنكي",    icon: "🏦" },
+            ACCOUNT: { label: "آجل",            icon: "👤" },
+            TAMARA:  { label: "تمارة",          icon: "🌙" },
+            TABBY:   { label: "تابي",           icon: "⭐" },
+            OTHER:   { label: "أخرى",           icon: "📋" },
+          };
+          const entries = Object.entries(paymentBreakdown).filter(([, v]) => v > 0);
+          if (entries.length === 0) return null;
+          const total = entries.reduce((s, [, v]) => s + v, 0);
+          const openPayModal = () => {
+            setPendingPayInvoiceId(savedInvoiceId);
+            setPendingPayInvoiceNumber(invoiceNumber);
+            setPendingPayTotal(netTotal);
+            setShowPaymentModal(true);
+          };
+          return (
+            <div className="mx-3 mb-3 rounded-md overflow-hidden border border-[#d4cfc7]" dir="rtl">
+              {/* رأس القسم */}
+              <button
+                onClick={openPayModal}
+                className="w-full flex items-center justify-between px-2.5 py-1.5 text-[10px] font-bold text-white"
+                style={{ background: "linear-gradient(to left, #7C5A02, #9A7203)" }}
+              >
+                <span>بيانات الدفع</span>
+                <span className="opacity-70 text-[9px]">✏️ تعديل</span>
+              </button>
+              {/* صفوف الوسائل */}
+              <div className="bg-white divide-y divide-[#f0ede8]">
+                {entries.map(([code, amount]) => {
+                  const m = METHOD_LABELS[code] ?? { label: code, icon: "💰" };
+                  return (
+                    <div key={code} className="flex items-center justify-between px-2.5 py-1">
+                      <span className="text-[10px] text-[#555] flex items-center gap-1">
+                        <span>{m.icon}</span>
+                        <span>{m.label}</span>
+                      </span>
+                      <span className="text-[11px] font-semibold font-mono text-[#333]">
+                        {fmt(amount)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              {/* إجمالي */}
+              <div
+                className="flex items-center justify-between px-2.5 py-1.5"
+                style={{ background: "#F4F1EC", borderTop: "1px solid #d4cfc7" }}
+              >
+                <span className="text-[10px] font-bold text-[#555]">الإجمالي</span>
+                <span className="text-[11px] font-bold font-mono" style={{ color: "#9A7203" }}>
+                  {fmt(total)}
+                </span>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       </div>{/* end flex wrapper */}
@@ -1917,6 +1982,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
           onSaveFirst={!pendingPayInvoiceId ? saveForPayment : undefined}
           onConfirmed={(paidAmt, breakdown) => {
             setShowPaymentModal(false);
+            setPaymentBreakdown(breakdown);
             const keys = Object.keys(breakdown);
             const methods = keys.join(" + ");
             toast.success(`✓ تم حفظ الفاتورة وتسجيل الدفع: ${paidAmt.toFixed(2)} ${currency}`, {
