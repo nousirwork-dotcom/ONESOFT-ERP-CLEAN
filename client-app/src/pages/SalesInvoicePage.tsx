@@ -1132,21 +1132,20 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                   <option value="transfer">تحويل داخلي</option>
                   <option value="sale">فاتورة مبيعات</option>
                 </select>
-                {basedOnType && (
-                  <div className="relative flex-1">
-                    <input
-                      value={basedOnNum}
-                      onChange={e => { setBasedOnNum(e.target.value); setBasedOnTrigger(""); }}
-                      onBlur={() => { if (basedOnNum.trim()) setBasedOnTrigger(basedOnNum.trim()); }}
-                      onKeyDown={e => { if (e.key === 'Enter' && basedOnNum.trim()) setBasedOnTrigger(basedOnNum.trim()); }}
-                      placeholder="رقم المستند ثم Enter ↵"
-                      className="classic-input w-full"
-                    />
-                    {basedOnQuery.isFetching && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-blue-500">⏳</span>}
-                    {basedOnTrigger && !basedOnQuery.isFetching && basedOnQuery.data === null && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-red-500 font-bold" title="لم يُوجد المستند">✗</span>}
-                    {basedOnTrigger && !basedOnQuery.isFetching && basedOnQuery.data && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-green-600 font-bold" title="تم استيراد البيانات">✓</span>}
-                  </div>
-                )}
+                <div className="relative flex-1">
+                  <input
+                    value={basedOnNum}
+                    onChange={e => { setBasedOnNum(e.target.value); setBasedOnTrigger(""); }}
+                    onBlur={() => { if (basedOnType && basedOnNum.trim()) setBasedOnTrigger(basedOnNum.trim()); }}
+                    onKeyDown={e => { if (e.key === 'Enter' && basedOnType && basedOnNum.trim()) setBasedOnTrigger(basedOnNum.trim()); }}
+                    placeholder={basedOnType ? "رقم المستند ثم Enter ↵" : ""}
+                    disabled={!basedOnType}
+                    className="classic-input w-full"
+                  />
+                  {basedOnQuery.isFetching && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-blue-500">⏳</span>}
+                  {basedOnTrigger && !basedOnQuery.isFetching && basedOnQuery.data === null && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-red-500 font-bold" title="لم يُوجد المستند">✗</span>}
+                  {basedOnTrigger && !basedOnQuery.isFetching && basedOnQuery.data && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-green-600 font-bold" title="تم استيراد البيانات">✓</span>}
+                </div>
               </div>
             </HF>
             <HF label="نوع السند" labelW={52}>
