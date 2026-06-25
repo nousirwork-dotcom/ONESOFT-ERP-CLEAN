@@ -290,10 +290,14 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       setErpMode("view");
       // فتح شاشة الدفع تلقائياً للفواتير النقدية (إلا إذا كانت تُستدعى من saveForPayment)
       if (paymentType !== "credit" && !skipAutoPayModal.current) {
-        setPendingPayInvoiceId(data.id);
-        setPendingPayInvoiceNumber(data.invoiceNumber);
-        setPendingPayTotal(netTotal);
-        setShowPaymentModal(true);
+        if (netTotal <= 0) {
+          toast.warning("إجمالي الفاتورة يساوي صفر — لا يمكن تسجيل دفعة");
+        } else {
+          setPendingPayInvoiceId(data.id);
+          setPendingPayInvoiceNumber(data.invoiceNumber);
+          setPendingPayTotal(netTotal);
+          setShowPaymentModal(true);
+        }
       }
       skipAutoPayModal.current = false;
     },
@@ -1764,15 +1768,22 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         <div className="px-3 pb-3">
           <button
             onClick={() => {
+              if (netTotal <= 0) {
+                toast.warning("يجب إضافة أصناف أو مبالغ إلى الفاتورة قبل تسجيل الدفع");
+                return;
+              }
               setPendingPayInvoiceId(savedInvoiceId);
               setPendingPayInvoiceNumber(invoiceNumber);
               setPendingPayTotal(netTotal);
               setShowPaymentModal(true);
             }}
-            className="w-full py-2.5 rounded-md text-[13px] font-bold text-white transition-all"
+            disabled={netTotal <= 0}
+            className="w-full py-2.5 rounded-md text-[13px] font-bold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             style={{
-              background: "linear-gradient(135deg, #406B93, #2d4f6e)",
-              boxShadow: "0 2px 6px rgba(64,107,147,0.4)",
+              background: netTotal <= 0
+                ? "#94a3b8"
+                : "linear-gradient(135deg, #406B93, #2d4f6e)",
+              boxShadow: netTotal > 0 ? "0 2px 6px rgba(64,107,147,0.4)" : "none",
             }}
           >
             💳 الدفع

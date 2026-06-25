@@ -216,6 +216,7 @@ export default function PaymentModal({
   const methods  = methodsQ.data ?? [];
   const isLoading = methodsQ.isLoading || (methods.length === 0 && seedMut.isPending);
   const isBusy = isSavingFirst || updatePaymentMut.isPending;
+  const isZeroTotal = invoiceTotal <= 0;
   const needsSave = !invoiceId && !!onSaveFirst;
 
   const confirmLabel = (() => {
@@ -280,6 +281,20 @@ export default function PaymentModal({
             )}
           </div>
         </DialogHeader>
+
+        {/* ── Zero-total warning ── */}
+        {invoiceTotal <= 0 && (
+          <div className="mx-4 mt-3 mb-1 flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+            <svg className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <div>
+              <p className="text-[12px] font-bold text-amber-700">لا يمكن تسجيل دفعة</p>
+              <p className="text-[11px] text-amber-600 mt-0.5">يجب إضافة أصناف أو مبالغ إلى الفاتورة قبل تسجيل الدفع.</p>
+            </div>
+          </div>
+        )}
 
         {/* ── Summary ── */}
         <div className="px-5 py-3 bg-slate-50 border-b border-slate-100">
@@ -352,14 +367,14 @@ export default function PaymentModal({
                   onChange={(e) => setAmount(method.code, e.target.value)}
                   className="w-28 h-8 text-left text-[12px] font-mono border-slate-200 focus:border-[#406B93]"
                   dir="ltr"
-                  disabled={isBusy}
+                  disabled={isBusy || isZeroTotal}
                 />
                 <Button
                   size="sm" variant="ghost"
                   className="h-8 px-2 text-[11px] text-slate-500 hover:text-[#406B93] flex-shrink-0"
                   onClick={() => fillFull(method.code)}
                   title="ملء المتبقي"
-                  disabled={isBusy}
+                  disabled={isBusy || isZeroTotal}
                 >
                   كامل
                 </Button>
@@ -381,7 +396,7 @@ export default function PaymentModal({
           <Button
             className="flex-1 h-9 text-[12px] font-bold"
             style={{ background: isOverPaid ? "#EF4444" : isFullyPaid ? "#16A34A" : "#406B93" }}
-            disabled={!hasAnyPayment || isBusy || isOverPaid}
+            disabled={!hasAnyPayment || isBusy || isOverPaid || isZeroTotal}
             onClick={handleConfirm}
           >
             {confirmLabel}
