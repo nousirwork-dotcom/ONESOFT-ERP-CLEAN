@@ -1113,7 +1113,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
           })()}
 
           {/* ── بناءً على + نوع السند (صف 1 مع رقم الفاتورة) ── */}
-          <div className="flex-1 grid gap-x-2" style={{ gridTemplateColumns: "1fr 150px" }}>
+          <div className="flex-1 grid gap-x-2" style={{ gridTemplateColumns: "1fr 210px" }}>
             <HF label="بناءً على">
               <div className="flex gap-1 w-full">
                 <select
@@ -1184,7 +1184,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         </div>
 
         {/* ── صف 2: العميل + العملة ── */}
-        <div className="grid gap-x-2 gap-y-0.5 mb-1.5" style={{ gridTemplateColumns: "1fr 130px" }}>
+        <div className="grid gap-x-2 gap-y-0.5 mb-1.5" style={{ gridTemplateColumns: "1fr 210px" }}>
           <HF label="العميل">
             <div className="flex gap-1 w-full" ref={custDropRef} style={{ position: "relative" }}>
               <input
@@ -1325,7 +1325,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         </div>
 
         {/* ── صف 3: المخزن + تاريخ التحرير + تاريخ الدفع + البائع ── */}
-        <div className="grid gap-x-2 gap-y-0.5 mb-1" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+        <div className="grid gap-x-2 gap-y-0.5 mb-1" style={{ gridTemplateColumns: "1fr 1fr 1fr 210px" }}>
           <HF label="المخزن">
             {(() => {
               const lockedWh = journalWarehouseId ?? docTypeWarehouseId;
