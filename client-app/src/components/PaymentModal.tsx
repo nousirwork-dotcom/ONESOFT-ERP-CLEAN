@@ -77,6 +77,7 @@ interface PaymentModalProps {
   invoiceNumber: string;
   invoiceTotal: number;
   currency?: string;
+  customerId?: number | null;
   onSaveFirst?: () => Promise<number | null>;
   onConfirmed: (paidAmount: number, breakdown: Record<string, number>) => void;
 }
@@ -89,12 +90,14 @@ export default function PaymentModal({
   invoiceNumber,
   invoiceTotal,
   currency = "SAR",
+  customerId,
   onSaveFirst,
   onConfirmed,
 }: PaymentModalProps) {
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [isSavingFirst, setIsSavingFirst] = useState(false);
   const [shake, setShake] = useState(false);
+  const [showRemainingPanel, setShowRemainingPanel] = useState(false);
   const loadedRef = useRef<number | null>(null);
 
   // ─── payment methods ───────────────────────────────────────────────────────
@@ -163,11 +166,8 @@ export default function PaymentModal({
     onError: (e) => toast.error(e.message),
   });
 
-  // ─── confirm ──────────────────────────────────────────────────────────────
-  const handleConfirm = useCallback(async () => {
-    if (!hasAnyPayment) { toast.warning("أدخل مبلغاً واحداً على الأقل"); return; }
-    if (isOverPaid) { toast.error("المبلغ المدفوع يتجاوز إجمالي الفاتورة"); return; }
-
+  // ─── core save (after validation) ────────────────────────────────────────
+  const doSave = useCallback(async (finalAmounts: Record<string, string>) => {
     let finalId = invoiceId;
     if (!finalId && onSaveFirst) {
       setIsSavingFirst(true);
@@ -178,18 +178,48 @@ export default function PaymentModal({
     if (!finalId) { toast.error("لا يمكن تسجيل الدفع — يجب حفظ الفاتورة أولاً"); return; }
 
     const breakdown: Record<string, number> = {};
-    Object.entries(amounts).forEach(([k, v]) => {
+    Object.entries(finalAmounts).forEach(([k, v]) => {
       const n = parseFloat(v) || 0;
       if (n > 0) breakdown[k] = n;
     });
+    const paid = Object.values(breakdown).reduce((s, v) => s + v, 0);
+    const isFullPaid = Math.abs(paid - invoiceTotal) < 0.005;
     updatePaymentMut.mutate({
       id: finalId,
       paymentBreakdown: breakdown,
-      paidAmount: totalPaid.toFixed(4),
-      remainingAmount: Math.max(0, invoiceTotal - totalPaid).toFixed(4),
-      status: isFullyPaid ? "paid" : "confirmed",
+      paidAmount: paid.toFixed(4),
+      remainingAmount: Math.max(0, invoiceTotal - paid).toFixed(4),
+      status: isFullPaid ? "paid" : "confirmed",
     });
-  }, [hasAnyPayment, isOverPaid, isFullyPaid, amounts, totalPaid, invoiceTotal, invoiceId, updatePaymentMut, onSaveFirst]);
+  }, [invoiceId, invoiceTotal, onSaveFirst, updatePaymentMut]);
+
+  // ─── confirm ──────────────────────────────────────────────────────────────
+  const handleConfirm = useCallback(async () => {
+    if (!hasAnyPayment) { toast.warning("أدخل مبلغاً واحداً على الأقل"); return; }
+    if (isOverPaid)     { toast.error("المبلغ المدفوع يتجاوز إجمالي الفاتورة"); return; }
+
+    // ── مبلغ متبقٍ → إجبار المستخدم على تحديد مصيره ─────────────────────
+    if (!isFullyPaid && remaining > 0.005) {
+      setShowRemainingPanel(true);
+      return;
+    }
+    await doSave(amounts);
+  }, [hasAnyPayment, isOverPaid, isFullyPaid, remaining, amounts, doSave]);
+
+  // ─── ترحيل المتبقي على حساب العميل ───────────────────────────────────────
+  const handleMoveToAccount = useCallback(async () => {
+    const acctMethod = (methodsQ.data ?? []).find(m => m.code === "ACCOUNT");
+    if (!acctMethod) {
+      toast.error("وسيلة الدفع 'حساب العميل' غير مفعّلة في الإعدادات");
+      return;
+    }
+    const currentAccount = parseFloat(amounts["ACCOUNT"] ?? "0") || 0;
+    const newAccount     = currentAccount + remaining;
+    const finalAmounts   = { ...amounts, ACCOUNT: newAccount.toFixed(2) };
+    setAmounts(finalAmounts);
+    setShowRemainingPanel(false);
+    await doSave(finalAmounts);
+  }, [amounts, remaining, methodsQ.data, doSave]);
 
   const setAmount = useCallback((code: string, value: string) => {
     setAmounts((prev) => ({ ...prev, [code]: value }));
@@ -212,9 +242,10 @@ export default function PaymentModal({
   const handleClose = useCallback(() => {
     if (isBusy) return;
     setAmounts({});
+    setShowRemainingPanel(false);
     loadedRef.current = null;
     onClose();
-  }, [onClose]);
+  }, [onClose, isBusy]);
 
   const fmt = (n: number) =>
     n.toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -230,10 +261,13 @@ export default function PaymentModal({
     if (isSavingFirst)             return "جاري حفظ الفاتورة...";
     if (updatePaymentMut.isPending) return "جاري تسجيل الدفع...";
     if (needsSave && isFullyPaid)  return "💾 حفظ وتأكيد الدفع الكامل";
-    if (needsSave)                 return "💾 حفظ وتأكيد الدفع";
+    if (needsSave)                 return "💾 التحقق من التوزيع";
     if (isFullyPaid)               return "✓ تأكيد الدفع الكامل";
-    return "تأكيد دفع جزئي";
+    return "متابعة ←";
   })();
+
+  const hasAccountMethod = (methodsQ.data ?? []).some(m => m.code === "ACCOUNT");
+  const canMoveToAccount = !!customerId && hasAccountMethod;
 
   return (
     <Dialog
@@ -390,6 +424,85 @@ export default function PaymentModal({
           })}
         </div>
 
+        {/* ── لوحة معالجة الرصيد المتبقي ── */}
+        {showRemainingPanel && (
+          <div className="mx-4 mb-0 rounded-xl border-2 border-orange-300 bg-orange-50 overflow-hidden">
+            {/* رأس اللوحة */}
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-orange-100 border-b border-orange-200">
+              <svg className="w-4 h-4 text-orange-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              <span className="text-[12px] font-bold text-orange-700">
+                يوجد مبلغ متبقٍ قدره {fmt(remaining)} {currency} — يرجى تحديد طريقة المعالجة
+              </span>
+            </div>
+            {/* خيارات المعالجة */}
+            <div className="px-4 py-3 space-y-2">
+              {/* خيار 1: ترحيل على حساب العميل */}
+              <button
+                onClick={handleMoveToAccount}
+                disabled={!canMoveToAccount || isBusy}
+                className="w-full flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-all text-right"
+                style={{
+                  background: canMoveToAccount ? "#FFF7ED" : "#F8FAFC",
+                  borderColor: canMoveToAccount ? "#F97316" : "#E2E8F0",
+                  opacity: canMoveToAccount ? 1 : 0.55,
+                  cursor: canMoveToAccount ? "pointer" : "not-allowed",
+                }}
+              >
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                  style={{ background: canMoveToAccount ? "#FED7AA" : "#F1F5F9" }}>
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke={canMoveToAccount ? "#C2410C" : "#94A3B8"} strokeWidth="1.5">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <div className="text-[12px] font-bold" style={{ color: canMoveToAccount ? "#C2410C" : "#94A3B8" }}>
+                    ترحيل {fmt(remaining)} {currency} على حساب العميل (آجل)
+                  </div>
+                  {!customerId && (
+                    <div className="text-[10px] text-orange-500 mt-0.5">
+                      يجب اختيار عميل أولاً لتسجيل رصيد آجل
+                    </div>
+                  )}
+                  {customerId && !hasAccountMethod && (
+                    <div className="text-[10px] text-orange-500 mt-0.5">
+                      وسيلة "حساب العميل" غير مفعّلة في الإعدادات
+                    </div>
+                  )}
+                  {canMoveToAccount && (
+                    <div className="text-[10px] text-orange-600 mt-0.5">
+                      يُسجَّل كذمة مدينة على العميل
+                    </div>
+                  )}
+                </div>
+                <svg className="w-4 h-4 shrink-0 opacity-60" viewBox="0 0 24 24" fill="none" stroke={canMoveToAccount ? "#C2410C" : "#94A3B8"} strokeWidth="2">
+                  <path d="M9 18l-6-6 6-6M15 6l6 6-6 6"/>
+                </svg>
+              </button>
+
+              {/* خيار 2: العودة لإكمال التوزيع */}
+              <button
+                onClick={() => setShowRemainingPanel(false)}
+                disabled={isBusy}
+                className="w-full flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 hover:bg-slate-50 transition-all text-right"
+              >
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-slate-100">
+                  <svg className="w-4 h-4 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M19 12H5M12 19l-7-7 7-7"/>
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <div className="text-[12px] font-bold text-slate-700">العودة لإكمال التوزيع</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">أكمل توزيع {fmt(remaining)} {currency} على وسائل الدفع</div>
+                </div>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ── Actions ── */}
         <div className="px-5 py-3 border-t border-slate-100 flex gap-2 bg-white">
           <Button
@@ -400,14 +513,16 @@ export default function PaymentModal({
           >
             إلغاء
           </Button>
-          <Button
-            className="flex-1 h-9 text-[12px] font-bold"
-            style={{ background: isOverPaid ? "#EF4444" : isFullyPaid ? "#16A34A" : "#406B93" }}
-            disabled={!hasAnyPayment || isBusy || isOverPaid || isZeroTotal}
-            onClick={handleConfirm}
-          >
-            {confirmLabel}
-          </Button>
+          {!showRemainingPanel && (
+            <Button
+              className="flex-1 h-9 text-[12px] font-bold"
+              style={{ background: isOverPaid ? "#EF4444" : isFullyPaid ? "#16A34A" : "#406B93" }}
+              disabled={!hasAnyPayment || isBusy || isOverPaid || isZeroTotal}
+              onClick={handleConfirm}
+            >
+              {confirmLabel}
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>

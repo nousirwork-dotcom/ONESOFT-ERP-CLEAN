@@ -1893,6 +1893,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
           invoiceNumber={pendingPayInvoiceNumber}
           invoiceTotal={pendingPayTotal}
           currency={currency}
+          customerId={customerId}
           onSaveFirst={!pendingPayInvoiceId ? saveForPayment : undefined}
           onConfirmed={(paidAmt, breakdown) => {
             setShowPaymentModal(false);
