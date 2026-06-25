@@ -1306,7 +1306,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         </div>
 
         {/* ── صف 3: المخزن + تاريخ التحرير + تاريخ الدفع + البائع ── */}
-        <div className="grid gap-x-2 gap-y-0.5 mb-1" style={{ gridTemplateColumns: "1fr auto auto 210px" }}>
+        <div className="grid gap-x-2 gap-y-0.5 mb-1" style={{ gridTemplateColumns: "auto auto auto 210px" }}>
           <HF label="المخزن" labelW={70}>
             {(() => {
               const lockedWh = journalWarehouseId ?? docTypeWarehouseId;
@@ -1316,7 +1316,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                 ? "المخزن محدد من نوع السند ولا يمكن تغييره"
                 : undefined;
               return (
-                <select value={warehouseId ?? ""} onChange={e => !lockedWh && setWarehouseId(parseInt(e.target.value) || null)} className="classic-input w-full" disabled={!!lockedWh} title={whTitle}>
+                <select value={warehouseId ?? ""} onChange={e => !lockedWh && setWarehouseId(parseInt(e.target.value) || null)} className="classic-input" style={{ width: 130 }} disabled={!!lockedWh} title={whTitle}>
                   <option value="">-- اختر مخزن --</option>
                   {(lockedWh ? warehousesQuery.data?.filter(w => w.id === lockedWh) : warehousesQuery.data)?.map(w => (
                     <option key={w.id} value={w.id}>{w.name}</option>
