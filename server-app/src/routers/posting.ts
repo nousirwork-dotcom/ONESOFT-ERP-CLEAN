@@ -267,9 +267,16 @@ export async function buildSalesInvoiceLines(
         };
         if (uncoveredMethods.length > 0) {
           const labels = uncoveredMethods.map(m => methodLabels[m] ?? m).join('، ');
-          result.warnings.push(
-            `وسائل الدفع التالية ليس لها حساب مُضبَّط في الدفتر: ${labels} — تمت إضافة القيد إلى حساب الصندوق الافتراضي (${shortfall.toFixed(3)})`
-          );
+          const cashAccId = journal?.cashAccountId ?? null;
+          if (cashAccId) {
+            result.warnings.push(
+              `وسائل الدفع التالية ليس لها حساب مُضبَّط في الدفتر: ${labels} — تمت إضافة الفرق (${shortfall.toFixed(3)}) إلى حساب الصندوق الافتراضي`
+            );
+          } else {
+            result.warnings.push(
+              `وسائل الدفع التالية ليس لها حساب مُضبَّط في الدفتر: ${labels} (${shortfall.toFixed(3)}) — يُرجى إضافة رابط محاسبي لكل وسيلة في إعدادات الدفتر`
+            );
+          }
         }
 
         // نضيف قيد موازن إلى حساب الصندوق الافتراضي
@@ -287,8 +294,6 @@ export async function buildSalesInvoiceLines(
             credit: '0.0000',
             description: `مدفوعات إضافية - ${invoice.invoiceNumber}`,
           });
-        } else {
-          result.warnings.push('حساب الصندوق غير محدد في الدفتر — لا يمكن إضافة قيد التوازن التلقائي');
         }
 
         const newTotal = (debit + shortfall).toFixed(4);
