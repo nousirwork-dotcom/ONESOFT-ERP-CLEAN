@@ -1318,40 +1318,6 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                 className="classic-input w-full"
               />
             </HF>
-            <HF label="المخزن">
-              {(() => {
-                const lockedWh = journalWarehouseId ?? docTypeWarehouseId;
-                const whTitle = journalWarehouseId
-                  ? "المخزن محدد من الدفتر ولا يمكن تغييره"
-                  : docTypeWarehouseId
-                  ? "المخزن محدد من نوع السند ولا يمكن تغييره"
-                  : undefined;
-                return (
-                  <select
-                    value={warehouseId ?? ""}
-                    onChange={e => !lockedWh && setWarehouseId(parseInt(e.target.value) || null)}
-                    className="classic-input w-full"
-                    disabled={!!lockedWh}
-                    title={whTitle}
-                  >
-                    <option value="">-- اختر مخزن --</option>
-                    {(lockedWh
-                      ? warehousesQuery.data?.filter(w => w.id === lockedWh)
-                      : warehousesQuery.data
-                    )?.map(w => (
-                      <option key={w.id} value={w.id}>{w.name}</option>
-                    ))}
-                  </select>
-                );
-              })()}
-            </HF>
-            <HF label="البائع">
-              <input
-                value={salesperson}
-                onChange={e => setSalesperson(e.target.value)}
-                className="classic-input w-full"
-              />
-            </HF>
           </div>
         </div>
 
@@ -1746,8 +1712,45 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
           ملخص الفاتورة
         </div>
 
+        {/* ── المخزن والبائع ── */}
+        <div className="px-3 pt-3 pb-1 flex flex-col gap-1.5 border-b border-[#d4cfc7]" dir="rtl">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-[#666] w-14 shrink-0 text-right">المخزن</span>
+            {(() => {
+              const lockedWh = journalWarehouseId ?? docTypeWarehouseId;
+              return (
+                <select
+                  value={warehouseId ?? ""}
+                  onChange={e => !lockedWh && setWarehouseId(parseInt(e.target.value) || null)}
+                  disabled={!!lockedWh}
+                  title={lockedWh ? "المخزن محدد ولا يمكن تغييره" : undefined}
+                  className="flex-1 text-[10px] px-1.5 py-0.5 border border-[#c0bbb4] rounded bg-white focus:outline-none focus:border-[#D19C05]"
+                  style={{ color: lockedWh ? "#888" : "#333" }}
+                >
+                  <option value="">-- اختر مخزن --</option>
+                  {(lockedWh
+                    ? warehousesQuery.data?.filter(w => w.id === lockedWh)
+                    : warehousesQuery.data
+                  )?.map(w => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
+                  ))}
+                </select>
+              );
+            })()}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-[#666] w-14 shrink-0 text-right">البائع</span>
+            <input
+              value={salesperson}
+              onChange={e => setSalesperson(e.target.value)}
+              placeholder="كود الموظف"
+              className="flex-1 text-[10px] px-1.5 py-0.5 border border-[#c0bbb4] rounded bg-white focus:outline-none focus:border-[#D19C05]"
+            />
+          </div>
+        </div>
+
         {/* صفوف الإجماليات */}
-        <div className="flex-1 flex flex-col justify-center px-3 py-3 gap-0">
+        <div className="flex-1 flex flex-col justify-start px-3 py-3 gap-0">
 
           {/* المبلغ الإجمالي */}
           <div className="flex items-center justify-between py-2 border-b border-[#d4cfc7]">
