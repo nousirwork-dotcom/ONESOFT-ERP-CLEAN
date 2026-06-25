@@ -1008,7 +1008,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                     onKeyDown={e => { if (e.key === "F4" || (e.key === "ArrowDown" && e.altKey)) { e.preventDefault(); setJournalOpen(o => !o); } }}
                     className="classic-input text-center font-bold"
                     style={{
-                      width: 148, background: selected ? "#eff6ff" : "#FFFDE7",
+                      width: 100, background: selected ? "#eff6ff" : "#FFFDE7",
                       borderColor: selected ? "#3b82f6" : "#F59E0B",
                       borderRadius: "4px 0 0 4px", borderLeft: "none",
                       color: "#1a1a1a", fontSize: "13px", fontWeight: 700,
