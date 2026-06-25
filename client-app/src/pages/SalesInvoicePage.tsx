@@ -1020,7 +1020,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
               <div className="flex flex-col gap-0.5 flex-shrink-0 relative" style={{ minWidth: 176 }}>
                 {/* Label مع اسم الدفتر المختار */}
                 <div className="flex items-center gap-1">
-                  <label className="text-[10px] font-bold text-[#406B93] uppercase tracking-wide">رقم الفاتورة</label>
+                  <label className="text-[10px] font-bold text-[#D19C05] uppercase tracking-wide">رقم الفاتورة</label>
                   {selected && (
                     <span
                       className="text-[9px] px-1 py-0 rounded font-medium cursor-pointer"
@@ -1201,7 +1201,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                     setShowAddCustomer(true); setShowCustDrop(false);
                   }}
                   className="flex-shrink-0 flex items-center justify-center transition-colors hover:opacity-80"
-                  style={{ width: 22, height: 22, borderRadius: 3, background: "#406B93", color: "white", fontSize: 16, fontWeight: 700, border: "1px solid #2f5475", lineHeight: 1 }}
+                  style={{ width: 22, height: 22, borderRadius: 3, background: "#D19C05", color: "white", fontSize: 16, fontWeight: 700, border: "1px solid #9A7203", lineHeight: 1 }}
                   title="إضافة عميل جديد"
                 >+</button>
 
@@ -1243,7 +1243,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                         >
                           <span style={{ fontSize: 13 }}>{(c as any).customerType === 'organization' ? '🏢' : '👤'}</span>
                           {(c as any).code && (
-                            <span className="font-mono text-[11px] font-bold px-1 rounded" style={{ background: "#e0eaf4", color: "#406B93", letterSpacing: "0.04em" }}>{(c as any).code}</span>
+                            <span className="font-mono text-[11px] font-bold px-1 rounded" style={{ background: "#FEF3C7", color: "#D19C05", letterSpacing: "0.04em" }}>{(c as any).code}</span>
                           )}
                           <span className="font-medium text-gray-800">{c.name}</span>
                           {(c as any).customerType === 'organization' && (
@@ -1544,7 +1544,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       <div className="flex-1 overflow-auto bg-white">
         <table className="w-full border-collapse" style={{ fontSize: "12px" }}>
           <thead className="sticky top-0 z-10">
-            <tr style={{ background: "linear-gradient(to bottom, #406B93, #365E80)", color: "#fff" }}>
+            <tr style={{ background: "linear-gradient(to bottom, #D19C05, #B88904)", color: "#fff" }}>
               <th className="inv-th w-8 text-center">#</th>
               <th className="inv-th w-24">رقم الصنف</th>
               <th className="inv-th">اسم الصنف</th>
@@ -1701,7 +1701,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         <div className="px-2 py-1.5 border-t border-[#e8e4dc]">
           <button
             onClick={addLine}
-            className="flex items-center gap-1 text-[11px] text-[#406B93] hover:text-[#2d4f6e] hover:underline transition-colors"
+            className="flex items-center gap-1 text-[11px] text-[#D19C05] hover:text-[#9A7203] hover:underline transition-colors"
           >
             <Plus className="w-3 h-3" />
             إضافة سطر جديد
@@ -1718,7 +1718,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         {/* عنوان اللوحة */}
         <div
           className="px-3 py-2 text-[11px] font-bold text-white text-center"
-          style={{ background: "linear-gradient(to bottom, #406B93, #365E80)" }}
+          style={{ background: "linear-gradient(to bottom, #D19C05, #B88904)" }}
         >
           ملخص الفاتورة
         </div>
@@ -1757,7 +1757,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
           {/* الإجمالي شامل الضريبة */}
           <div
             className="flex items-center justify-between py-2.5 px-2 rounded-md mt-1"
-            style={{ background: "#406B93", color: "#fff" }}
+            style={{ background: "#D19C05", color: "#fff" }}
           >
             <span className="text-[11px] font-bold">الإجمالي شامل الضريبة</span>
             <span className="text-[13px] font-bold font-mono">{fmt(netTotal)}</span>
@@ -1782,7 +1782,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
             style={{
               background: netTotal <= 0
                 ? "#94a3b8"
-                : "linear-gradient(135deg, #406B93, #2d4f6e)",
+                : "linear-gradient(135deg, #D19C05, #9A7203)",
               boxShadow: netTotal > 0 ? "0 2px 6px rgba(64,107,147,0.4)" : "none",
             }}
           >
@@ -1809,7 +1809,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                 {paymentType === "cash" ? "نقدًا — سيُحفظ بحالة مدفوع" : "آجل — يمكن المدفوع الجزئي"}
               </strong>
             </span>
-            <span>الأصناف: <strong style={{ color: "#406B93" }}>{lines.filter(l => l.productName).length}</strong></span>
+            <span>الأصناف: <strong style={{ color: "#D19C05" }}>{lines.filter(l => l.productName).length}</strong></span>
           </div>
           <div className="flex gap-3">
             <span>Tab/Enter: انتقال</span>
@@ -1835,7 +1835,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
           border-radius: 1px;
         }
         .classic-input:focus {
-          border-color: #406B93;
+          border-color: #D19C05;
           background: #F0F6FF;
           box-shadow: 0 0 0 1px rgba(64,107,147,0.2);
         }
@@ -1867,7 +1867,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         }
         .inv-cell:focus {
           background: #FFFFF0;
-          border: 1px solid #406B93;
+          border: 1px solid #D19C05;
           box-shadow: inset 0 0 0 1px rgba(64,107,147,0.15);
         }
         input[type=number]::-webkit-inner-spin-button,
@@ -2016,7 +2016,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
             dir="rtl"
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-2.5" style={{ background: "#406B93" }}>
+            <div className="flex items-center justify-between px-4 py-2.5" style={{ background: "#D19C05" }}>
               <span className="text-white font-bold text-[13px]">إضافة عميل جديد</span>
               <button onClick={() => setShowAddCustomer(false)} style={{ color: "rgba(255,255,255,0.8)", fontSize: 16, lineHeight: 1 }}>✕</button>
             </div>
@@ -2025,9 +2025,9 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
             <div className="px-4 py-4 flex flex-col gap-3">
               {/* الكود التلقائي */}
               {newCustCode && (
-                <div className="flex items-center gap-2 px-3 py-2 rounded" style={{ background: "#e0eaf4", border: "1px solid #b8cfe0" }}>
-                  <span className="text-[11px] font-bold text-[#406B93]">كود العميل:</span>
-                  <span className="font-mono font-bold text-[13px] text-[#406B93] tracking-wider">{newCustCode}</span>
+                <div className="flex items-center gap-2 px-3 py-2 rounded" style={{ background: "#FEF3C7", border: "1px solid #b8cfe0" }}>
+                  <span className="text-[11px] font-bold text-[#D19C05]">كود العميل:</span>
+                  <span className="font-mono font-bold text-[13px] text-[#D19C05] tracking-wider">{newCustCode}</span>
                   <span className="text-[10px] text-slate-400 mr-auto">(يُحدَّد تلقائياً من دفتر التكويد)</span>
                 </div>
               )}
@@ -2188,7 +2188,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                 disabled={!newCustName.trim() || createCustomerMutation.isPending || nextJournalNumberMutation.isPending}
                 className="px-4 py-1.5 rounded text-[12px] font-bold transition-colors"
                 style={{
-                  background: newCustName.trim() ? "#406B93" : "#9ca3af",
+                  background: newCustName.trim() ? "#D19C05" : "#9ca3af",
                   color: "white",
                   opacity: createCustomerMutation.isPending ? 0.7 : 1,
                 }}
@@ -2340,7 +2340,7 @@ function ProductNameCell({
               onMouseDown={() => handleSelect(p)}
               onMouseEnter={() => setHighlighted(i)}
             >
-              <span style={{ color: "#406B93", fontWeight: 600, minWidth: 60 }}>{p.sku ?? p.code ?? ""}</span>
+              <span style={{ color: "#D19C05", fontWeight: 600, minWidth: 60 }}>{p.sku ?? p.code ?? ""}</span>
               <span style={{ flex: 1 }}>{p.name}</span>
               <span style={{ color: "#16A34A", fontWeight: 600 }}>{p.salePrice}</span>
             </div>
