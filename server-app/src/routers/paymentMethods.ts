@@ -5,12 +5,13 @@ import { db } from '../db.js';
 import { paymentMethods } from '../schema.js';
 
 const DEFAULT_METHODS = [
-  { code: 'CASH',   nameAr: 'نقدي',          nameEn: 'Cash',          icon: 'cash',   color: '#15803D', bgColor: '#F0FDF4', sortOrder: 1, isBuiltIn: true },
-  { code: 'CARD',   nameAr: 'بطاقة بنكية',    nameEn: 'Card',          icon: 'card',   color: '#1D4ED8', bgColor: '#EFF6FF', sortOrder: 2, isBuiltIn: true },
-  { code: 'BANK',   nameAr: 'تحويل بنكي',     nameEn: 'Bank Transfer', icon: 'bank',   color: '#6D28D9', bgColor: '#FAF5FF', sortOrder: 3, isBuiltIn: true },
-  { code: 'TAMARA', nameAr: 'تمارا',           nameEn: 'Tamara',        icon: 'tamara', color: '#B45309', bgColor: '#FFFBEB', sortOrder: 4, isBuiltIn: false },
-  { code: 'TABBY',  nameAr: 'تابي',            nameEn: 'Tabby',         icon: 'tabby',  color: '#047857', bgColor: '#F0FDF4', sortOrder: 5, isBuiltIn: false },
-  { code: 'OTHER',  nameAr: 'أخرى',            nameEn: 'Other',         icon: 'other',  color: '#64748B', bgColor: '#F8FAFC', sortOrder: 6, isBuiltIn: false },
+  { code: 'CASH',    nameAr: 'نقدي',                  nameEn: 'Cash',            icon: 'cash',    color: '#15803D', bgColor: '#F0FDF4', sortOrder: 1, isBuiltIn: true  },
+  { code: 'CARD',    nameAr: 'بطاقة بنكية',            nameEn: 'Card',            icon: 'card',    color: '#1D4ED8', bgColor: '#EFF6FF', sortOrder: 2, isBuiltIn: true  },
+  { code: 'BANK',    nameAr: 'تحويل بنكي',             nameEn: 'Bank Transfer',   icon: 'bank',    color: '#6D28D9', bgColor: '#FAF5FF', sortOrder: 3, isBuiltIn: true  },
+  { code: 'ACCOUNT', nameAr: 'حساب العميل (آجل)',      nameEn: 'Customer Account', icon: 'account', color: '#B45309', bgColor: '#FFF7ED', sortOrder: 4, isBuiltIn: true  },
+  { code: 'TAMARA',  nameAr: 'تمارا',                  nameEn: 'Tamara',          icon: 'tamara',  color: '#92400E', bgColor: '#FFFBEB', sortOrder: 5, isBuiltIn: false },
+  { code: 'TABBY',   nameAr: 'تابي',                   nameEn: 'Tabby',           icon: 'tabby',   color: '#047857', bgColor: '#F0FDF4', sortOrder: 6, isBuiltIn: false },
+  { code: 'OTHER',   nameAr: 'أخرى',                   nameEn: 'Other',           icon: 'other',   color: '#64748B', bgColor: '#F8FAFC', sortOrder: 7, isBuiltIn: false },
 ];
 
 export const paymentMethodsRouter = router({

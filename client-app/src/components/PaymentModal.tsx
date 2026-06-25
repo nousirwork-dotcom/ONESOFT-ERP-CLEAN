@@ -39,6 +39,13 @@ function MethodIcon({ icon, color }: { icon?: string | null; color?: string | nu
       <path d="M14 14h.01M17 14h.01M20 14h.01M14 17h.01M17 17h.01M20 17h.01M14 20h.01M17 20h.01M20 20h.01"/>
     </svg>
   );
+  if (icon === "account") return (
+    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+      <circle cx="12" cy="7" r="4"/>
+      <path d="M16 3.5c1.5.5 2.5 2 2.5 3.5" strokeDasharray="2 1.5"/>
+    </svg>
+  );
   if (icon === "tamara") return (
     <span style={{ fontWeight: 700, fontSize: 13, color: "#000", letterSpacing: -0.5 }}>tamara</span>
   );

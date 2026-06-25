@@ -110,13 +110,15 @@ function resolveInvoiceFieldValue(
     case 'PAYMENT_TOTAL': return paidAmount;
     case 'REMAINING':     return Math.max(0, total - paidAmount);
     // وسائل الدفع من تفصيل السداد
-    case 'CASH_AMOUNT':   return Number(breakdown?.CASH_AMOUNT   ?? 0);
-    case 'CARD_AMOUNT':   return Number(breakdown?.CARD_AMOUNT   ?? 0);
-    case 'BANK_AMOUNT':   return Number(breakdown?.BANK_AMOUNT   ?? 0);
-    case 'TAMARA_AMOUNT': return Number(breakdown?.TAMARA_AMOUNT ?? 0);
-    case 'TABBY_AMOUNT':  return Number(breakdown?.TABBY_AMOUNT  ?? 0);
-    case 'OTHER_AMOUNT':  return Number(breakdown?.OTHER_AMOUNT  ?? 0);
-    default:              return 0;
+    case 'CASH_AMOUNT':    return Number(breakdown?.CASH    ?? breakdown?.CASH_AMOUNT    ?? 0);
+    case 'CARD_AMOUNT':    return Number(breakdown?.CARD    ?? breakdown?.CARD_AMOUNT    ?? 0);
+    case 'BANK_AMOUNT':    return Number(breakdown?.BANK    ?? breakdown?.BANK_AMOUNT    ?? 0);
+    case 'ACCOUNT_AMOUNT':
+    case 'ACCOUNT':        return Number(breakdown?.ACCOUNT ?? breakdown?.ACCOUNT_AMOUNT ?? 0);
+    case 'TAMARA_AMOUNT':  return Number(breakdown?.TAMARA  ?? breakdown?.TAMARA_AMOUNT  ?? 0);
+    case 'TABBY_AMOUNT':   return Number(breakdown?.TABBY   ?? breakdown?.TABBY_AMOUNT   ?? 0);
+    case 'OTHER_AMOUNT':   return Number(breakdown?.OTHER   ?? breakdown?.OTHER_AMOUNT   ?? 0);
+    default:               return 0;
   }
 }
 
@@ -224,6 +226,7 @@ export async function buildSalesInvoiceLines(
   const discountAmount = Number(invoice.discountAmount ?? 0);
 
   const isCredit = invoice.paymentMethod === 'credit';
+  const breakdown = invoice.paymentBreakdown as Record<string, number> | null | undefined;
 
   const lines: {
     accountId: number | null;
@@ -236,18 +239,54 @@ export async function buildSalesInvoiceLines(
 
   const warnings: string[] = [];
 
-  const debitAccId = isCredit ? journal?.creditAccountId : journal?.cashAccountId;
-  const debitAcc = debitAccId ? accMap.get(debitAccId) : null;
-  const defaultDebitName = isCredit ? 'ذمم العملاء' : 'الصندوق / النقد';
-  if (!debitAccId) warnings.push(isCredit ? 'حساب ذمم العملاء غير محدد في الدفتر' : 'حساب الصندوق غير محدد في الدفتر');
-  lines.push({
-    accountId: debitAccId ?? null,
-    accountCode: debitAcc?.code ?? '---',
-    accountName: debitAcc?.name ?? defaultDebitName,
-    debit: total.toFixed(4),
-    credit: '0.0000',
-    description: `فاتورة مبيعات ${invoice.invoiceNumber}`,
-  });
+  // ── جانب المدين: نقدي + حساب العميل (دعم الدفع المختلط) ─────────────────
+  const AR_CODE = 'ACCOUNT'; // كود وسيلة "حساب العميل (آجل)"
+  const arAmount   = Number(breakdown?.[AR_CODE] ?? 0);
+  const cashAmount = total - arAmount; // ما تبقى من إجمالي = نقدي/بطاقة/بنك
+
+  if (breakdown && Object.keys(breakdown).length > 0) {
+    // ── وضع تفصيل السداد: سطر لكل شق ────────────────────────────────────
+    if (cashAmount > 0.001) {
+      const cashAccId = journal?.cashAccountId ?? null;
+      const cashAcc   = cashAccId ? accMap.get(cashAccId) : null;
+      if (!cashAccId) warnings.push('حساب الصندوق غير محدد في الدفتر');
+      lines.push({
+        accountId:   cashAccId,
+        accountCode: cashAcc?.code ?? '---',
+        accountName: cashAcc?.name ?? 'الصندوق / النقد',
+        debit:  cashAmount.toFixed(4),
+        credit: '0.0000',
+        description: `مدفوع نقداً - ${invoice.invoiceNumber}`,
+      });
+    }
+    if (arAmount > 0.001) {
+      const arAccId = journal?.creditAccountId ?? null;
+      const arAcc   = arAccId ? accMap.get(arAccId) : null;
+      if (!arAccId) warnings.push('حساب ذمم العملاء غير محدد في الدفتر');
+      lines.push({
+        accountId:   arAccId,
+        accountCode: arAcc?.code ?? '---',
+        accountName: arAcc?.name ?? 'ذمم العملاء',
+        debit:  arAmount.toFixed(4),
+        credit: '0.0000',
+        description: `ذمة عميل (آجل) - ${invoice.invoiceNumber}`,
+      });
+    }
+  } else {
+    // ── وضع بسيط (لا تفصيل) ─────────────────────────────────────────────
+    const debitAccId = isCredit ? journal?.creditAccountId : journal?.cashAccountId;
+    const debitAcc   = debitAccId ? accMap.get(debitAccId) : null;
+    const defaultDebitName = isCredit ? 'ذمم العملاء' : 'الصندوق / النقد';
+    if (!debitAccId) warnings.push(isCredit ? 'حساب ذمم العملاء غير محدد في الدفتر' : 'حساب الصندوق غير محدد في الدفتر');
+    lines.push({
+      accountId:   debitAccId ?? null,
+      accountCode: debitAcc?.code ?? '---',
+      accountName: debitAcc?.name ?? defaultDebitName,
+      debit:  total.toFixed(4),
+      credit: '0.0000',
+      description: `فاتورة مبيعات ${invoice.invoiceNumber}`,
+    });
+  }
 
   const salesAccId = journal?.salesAccountId;
   const salesAcc = salesAccId ? accMap.get(salesAccId) : null;
