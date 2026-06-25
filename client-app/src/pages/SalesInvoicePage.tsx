@@ -1713,7 +1713,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       {/* ── لوحة الإجماليات (يسار) ──────────────────────────────────────── */}
       <div
         className="flex flex-col border-r border-[#b0a89a]"
-        style={{ width: 210, minWidth: 210, background: "#F4F1EC" }}
+        style={{ width: 260, minWidth: 260, background: "#F4F1EC" }}
       >
         {/* عنوان اللوحة */}
         <div
