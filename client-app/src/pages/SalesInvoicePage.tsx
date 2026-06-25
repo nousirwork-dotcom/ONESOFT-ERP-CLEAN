@@ -1328,23 +1328,25 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
           <HF label="تاريخ التحرير">
             <input
               type="text"
+              dir="ltr"
               value={toDisplayDate(invoiceDate)}
               onChange={e => setInvoiceDate(toIsoDate(e.target.value))}
               placeholder="DD-MM-YYYY"
               maxLength={10}
               className="classic-input"
-              style={{ width: 108 }}
+              style={{ width: 108, textAlign: "center" }}
             />
           </HF>
           <HF label="تاريخ الدفع">
             <input
               type="text"
+              dir="ltr"
               value={toDisplayDate(dueDate)}
               onChange={e => setDueDate(toIsoDate(e.target.value))}
               placeholder="DD-MM-YYYY"
               maxLength={10}
               className="classic-input"
-              style={{ width: 108 }}
+              style={{ width: 108, textAlign: "center" }}
             />
           </HF>
           <HF label="البائع" labelW={52}>
