@@ -967,36 +967,6 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       {/* ── Header Form ─────────────────────────────────────────────────── */}
       <div className="border-b border-[#b0a89a] px-3 pt-2 pb-1.5" style={{ background: "#F7F5EE", boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }}>
 
-        {/* ── شريط نوع العميل والرقم الضريبي (أعلى الهيدر) ── */}
-        <div className="flex items-center gap-3 mb-1.5">
-          {/* نوع الفاتورة (مؤشر) */}
-          <div
-            className="flex items-center gap-1 px-2 py-0.5 rounded font-bold text-[11px] flex-shrink-0"
-            style={{
-              background: customerType === 'organization' ? '#EFF6FF' : '#F0FDF4',
-              border: `1px solid ${customerType === 'organization' ? '#93C5FD' : '#86EFAC'}`,
-              color: customerType === 'organization' ? '#1D4ED8' : '#15803D',
-            }}
-          >
-            {customerType === 'organization' ? '📋 فاتورة ضريبية' : '🧾 فاتورة ضريبية مبسطة'}
-          </div>
-
-          {/* نوع العميل (يظهر عند اختيار عميل) */}
-          {customerId && (
-            <div
-              className="flex items-center gap-1 px-2 py-0.5 rounded font-bold text-[11px] flex-shrink-0"
-              style={{
-                background: customerType === 'organization' ? '#1D4ED8' : '#15803D',
-                color: 'white',
-                border: `1px solid ${customerType === 'organization' ? '#1e40af' : '#166534'}`,
-              }}
-            >
-              {customerType === 'organization' ? '🏢 مؤسسة' : '👤 فرد'}
-            </div>
-          )}
-
-        </div>
-
         {/* ── رقم الفاتورة (بارز أعلى يمين) + حقول الصف الأول ── */}
         <div className="flex items-start gap-2 mb-1.5">
           {/* رقم الفاتورة — مدمج مع منتقي الدفتر */}
@@ -1213,8 +1183,9 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
           </div>
         </div>
 
-        {/* ── صف 2: العميل + العملة ── */}
-        <div className="grid gap-x-2 gap-y-0.5 mb-1.5" style={{ gridTemplateColumns: "1fr 210px" }}>
+        {/* ── صف 2: العميل + بادجات + العملة ── */}
+        <div className="flex items-center gap-2 mb-1.5">
+          <div className="flex-1 min-w-0">
           <HF label="العميل">
             <div className="flex gap-1 w-full" ref={custDropRef} style={{ position: "relative" }}>
               <input
@@ -1281,6 +1252,33 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
               })()}
             </div>
           </HF>
+          </div>
+          {/* ── بادجات نوع الفاتورة والعميل ── */}
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <div
+              className="flex items-center gap-1 px-2 py-0.5 rounded font-bold text-[11px]"
+              style={{
+                background: customerType === 'organization' ? '#EFF6FF' : '#F0FDF4',
+                border: `1px solid ${customerType === 'organization' ? '#93C5FD' : '#86EFAC'}`,
+                color: customerType === 'organization' ? '#1D4ED8' : '#15803D',
+              }}
+            >
+              {customerType === 'organization' ? '📋 فاتورة ضريبية' : '🧾 فاتورة ضريبية مبسطة'}
+            </div>
+            {customerId && (
+              <div
+                className="flex items-center gap-1 px-2 py-0.5 rounded font-bold text-[11px]"
+                style={{
+                  background: customerType === 'organization' ? '#1D4ED8' : '#15803D',
+                  color: 'white',
+                  border: `1px solid ${customerType === 'organization' ? '#1e40af' : '#166534'}`,
+                }}
+              >
+                {customerType === 'organization' ? '🏢 مؤسسة' : '👤 فرد'}
+              </div>
+            )}
+          </div>
+          <div className="flex-shrink-0" style={{ width: 210 }}>
           <HF label="العملة" labelW={52}>
             <select value={currency} onChange={e => setCurrency(e.target.value)} className="classic-input w-full">
               <option value="SAR">ريال سعودي (SAR)</option>
@@ -1289,6 +1287,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
               <option value="AED">درهم (AED)</option>
             </select>
           </HF>
+          </div>
         </div>
 
         {/* ── صف 3: المخزن + تاريخ التحرير + تاريخ الدفع + البائع ── */}
