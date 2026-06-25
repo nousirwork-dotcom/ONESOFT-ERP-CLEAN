@@ -232,12 +232,14 @@ export default function PaymentModal({
     setAmounts((prev) => ({ ...prev, [code]: Math.max(0, invoiceTotal - otherTotal).toFixed(2) }));
   }, [amounts, invoiceTotal]);
 
+  const isBusy = isSavingFirst || updatePaymentMut.isPending;
+
   // ─── prevent outside-click close: show shake instead ─────────────────────
   const handleAttemptClose = useCallback(() => {
     if (isBusy) return;
     setShake(true);
     setTimeout(() => setShake(false), 600);
-  }, []);
+  }, [isBusy]);
 
   const handleClose = useCallback(() => {
     if (isBusy) return;
@@ -253,7 +255,6 @@ export default function PaymentModal({
   const paidPct = Math.min(100, (totalPaid / Math.max(invoiceTotal, 0.001)) * 100);
   const methods  = methodsQ.data ?? [];
   const isLoading = methodsQ.isLoading || (methods.length === 0 && seedMut.isPending);
-  const isBusy = isSavingFirst || updatePaymentMut.isPending;
   const isZeroTotal = invoiceTotal <= 0;
   const needsSave = !invoiceId && !!onSaveFirst;
 
