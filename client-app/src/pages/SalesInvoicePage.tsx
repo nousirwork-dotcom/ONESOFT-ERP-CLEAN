@@ -987,7 +987,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
               <div className="flex flex-row items-center gap-1.5 flex-shrink-0 relative">
                 {/* Label مع اسم الدفتر المختار */}
                 <div className="flex items-center gap-1 flex-shrink-0">
-                  <label className="text-[10px] font-bold text-[#D19C05] uppercase tracking-wide whitespace-nowrap">رقم الفاتورة</label>
+                  <label className="text-[10px] font-bold text-[#D19C05] uppercase tracking-wide whitespace-nowrap" style={{ minWidth: 70, display: "inline-block" }}>رقم الفاتورة</label>
                   {selected && (
                     <span
                       className="text-[9px] px-1 py-0 rounded font-medium cursor-pointer"
@@ -1191,7 +1191,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         {/* ── صف 2: العميل + بادجات + العملة ── */}
         <div className="flex items-center gap-2 mb-1.5">
           <div className="flex-1 min-w-0">
-          <HF label="العميل">
+          <HF label="العميل" labelW={70}>
             <div className="flex gap-1 w-full" ref={custDropRef} style={{ position: "relative" }}>
               <input
                 value={customerId ? (customerCode ? `${customerCode} - ${customerName}` : customerName) : custSearch}
@@ -1297,7 +1297,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
 
         {/* ── صف 3: المخزن + تاريخ التحرير + تاريخ الدفع + البائع ── */}
         <div className="grid gap-x-2 gap-y-0.5 mb-1" style={{ gridTemplateColumns: "1fr 1fr 1fr 210px" }}>
-          <HF label="المخزن">
+          <HF label="المخزن" labelW={70}>
             {(() => {
               const lockedWh = journalWarehouseId ?? docTypeWarehouseId;
               const whTitle = journalWarehouseId
@@ -1328,7 +1328,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
 
         {/* ── صف 4: ملحوظة ── */}
         <div className="mb-0.5">
-          <HF label="ملحوظة">
+          <HF label="ملحوظة" labelW={70}>
             <input value={notes} onChange={e => setNotes(e.target.value)} className="classic-input w-full" />
           </HF>
         </div>
