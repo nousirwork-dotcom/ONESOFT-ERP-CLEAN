@@ -7,6 +7,8 @@ import { ENV } from './env.js';
 import { createContext } from './trpc.js';
 import { appRouter } from './routers/index.js';
 import { loginHandler, logoutHandler, meHandler } from './auth.js';
+import { pool } from './db.js';
+import { checkSchema } from './check-schema.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -49,6 +51,12 @@ if (existsSync(path.join(clientBuildPath, 'index.html'))) {
 }
 
 // ─── Start ────────────────────────────────────────────────────────────────────
+const schemaOk = await checkSchema(pool);
+if (!schemaOk) {
+  console.error('[startup] Aborting: database schema is out of date or unreachable.');
+  process.exit(1);
+}
+
 app.listen(ENV.port, () => {
   console.log(`Server running on http://localhost:${ENV.port}`);
 });

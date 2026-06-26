@@ -7,7 +7,8 @@
     "start": "node dist/index.mjs",
     "build": "esbuild src/index.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/index.mjs",
     "setup-db": "tsx scripts/setup-db.ts",
-    "migrate": "pnpm check-fk:static && drizzle-kit push && pnpm check-fk:db",
+    "migrate": "pnpm check-fk:static && drizzle-kit push && pnpm check-fk:db && pnpm stamp-migration",
+    "stamp-migration": "tsx scripts/stamp-migration.ts",
     "check-fk": "tsx ../scripts/check-fk-delete-rules.ts",
     "check-fk:static": "tsx ../scripts/check-fk-delete-rules.ts --static",
     "check-fk:db": "tsx ../scripts/check-fk-delete-rules.ts --db"
