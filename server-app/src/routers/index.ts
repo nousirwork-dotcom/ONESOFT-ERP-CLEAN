@@ -12,6 +12,7 @@ import { postingDefinitionsRouter } from './postingDefinitions.js';
 import { documentTypesRouter } from './documentTypes.js';
 import { documentSendRouter } from './documentSend.js';
 import { postingRouter } from './posting.js';
+import { insertJournalEntry } from '../services/PostingEngine.js';
 import { currenciesRouter } from './currencies.js';
 import { fieldDictionaryRouter } from './fieldDictionary.js';
 import { appSettingsRouter } from './appSettings.js';
@@ -1320,36 +1321,26 @@ export const appRouter = router({
         let journalEntryNumber: string | undefined;
 
         if (input.accountId && input.contraAccountId) {
-          const last = await db.query.journalEntries.findFirst({
-            where: eq(journalEntries.orgId, ctx.user.orgId),
-            orderBy: [desc(journalEntries.id)],
-          });
-          const num = last ? parseInt(last.entryNumber.replace(/\D/g, '') || '0') + 1 : 1;
-          journalEntryNumber = `JE-${String(num).padStart(4, '0')}`;
-
-          const accDebitName = await db.query.chartOfAccounts.findFirst({ where: eq(chartOfAccounts.id, input.accountId) });
-          const accCreditName = await db.query.chartOfAccounts.findFirst({ where: eq(chartOfAccounts.id, input.contraAccountId) });
-
-          const [je] = await db.insert(journalEntries).values({
-            orgId: ctx.user.orgId,
-            userId: ctx.user.id,
-            entryNumber: journalEntryNumber,
-            entryDate: input.voucherDate,
-            description: `سند قبض رقم ${input.voucherNumber}${input.receivedFrom ? ` - ${input.receivedFrom}` : ""}`,
-            reference: input.voucherNumber,
-            totalDebit: input.amount,
-            totalCredit: input.amount,
-            sourceDocType: 'receipt_voucher',
-            sourceDocNumber: input.voucherNumber,
-            entryType: 'auto',
-            status: 'posted',
-          }).returning();
-          journalEntryId = je.id;
-
-          await db.insert(journalEntryLines).values([
-            { entryId: je.id, orgId: ctx.user.orgId, accountId: input.accountId,        accountName: accDebitName?.name  ?? '', debit:  input.amount, credit: '0',           sortOrder: 1, description: input.description },
-            { entryId: je.id, orgId: ctx.user.orgId, accountId: input.contraAccountId,  accountName: accCreditName?.name ?? '', debit: '0',           credit: input.amount,  sortOrder: 2, description: input.description },
+          const [accDebit, accCredit] = await Promise.all([
+            db.query.chartOfAccounts.findFirst({ where: eq(chartOfAccounts.id, input.accountId) }),
+            db.query.chartOfAccounts.findFirst({ where: eq(chartOfAccounts.id, input.contraAccountId) }),
           ]);
+          const entry = await insertJournalEntry({
+            orgId:           ctx.user.orgId,
+            userId:          ctx.user.id,
+            date:            input.voucherDate,
+            description:     `سند قبض رقم ${input.voucherNumber}${input.receivedFrom ? ` - ${input.receivedFrom}` : ""}`,
+            reference:       input.voucherNumber,
+            sourceDocType:   'receipt_voucher',
+            sourceDocId:     0,
+            sourceDocNumber: input.voucherNumber,
+            lines: [
+              { accountId: input.accountId,       accountCode: accDebit?.code  ?? '---', accountName: accDebit?.name  ?? '', debit: input.amount, credit: '0',          description: input.description ?? '' },
+              { accountId: input.contraAccountId, accountCode: accCredit?.code ?? '---', accountName: accCredit?.name ?? '', debit: '0',          credit: input.amount, description: input.description ?? '' },
+            ],
+          });
+          journalEntryId = entry.id;
+          journalEntryNumber = entry.entryNumber;
         }
 
         const [v] = await db.insert(receiptVouchers).values({
@@ -1401,36 +1392,26 @@ export const appRouter = router({
         let journalEntryNumber: string | undefined;
 
         if (input.accountId && input.contraAccountId) {
-          const last = await db.query.journalEntries.findFirst({
-            where: eq(journalEntries.orgId, ctx.user.orgId),
-            orderBy: [desc(journalEntries.id)],
-          });
-          const num = last ? parseInt(last.entryNumber.replace(/\D/g, '') || '0') + 1 : 1;
-          journalEntryNumber = `JE-${String(num).padStart(4, '0')}`;
-
-          const accDebitName  = await db.query.chartOfAccounts.findFirst({ where: eq(chartOfAccounts.id, input.contraAccountId) });
-          const accCreditName = await db.query.chartOfAccounts.findFirst({ where: eq(chartOfAccounts.id, input.accountId) });
-
-          const [je] = await db.insert(journalEntries).values({
-            orgId: ctx.user.orgId,
-            userId: ctx.user.id,
-            entryNumber: journalEntryNumber,
-            entryDate: input.voucherDate,
-            description: `سند صرف رقم ${input.voucherNumber}${input.paidTo ? ` - ${input.paidTo}` : ""}`,
-            reference: input.voucherNumber,
-            totalDebit: input.amount,
-            totalCredit: input.amount,
-            sourceDocType: 'payment_voucher',
-            sourceDocNumber: input.voucherNumber,
-            entryType: 'auto',
-            status: 'posted',
-          }).returning();
-          journalEntryId = je.id;
-
-          await db.insert(journalEntryLines).values([
-            { entryId: je.id, orgId: ctx.user.orgId, accountId: input.contraAccountId, accountName: accDebitName?.name  ?? '', debit:  input.amount, credit: '0',          sortOrder: 1, description: input.description },
-            { entryId: je.id, orgId: ctx.user.orgId, accountId: input.accountId,       accountName: accCreditName?.name ?? '', debit: '0',           credit: input.amount, sortOrder: 2, description: input.description },
+          const [accDebit, accCredit] = await Promise.all([
+            db.query.chartOfAccounts.findFirst({ where: eq(chartOfAccounts.id, input.contraAccountId) }),
+            db.query.chartOfAccounts.findFirst({ where: eq(chartOfAccounts.id, input.accountId) }),
           ]);
+          const entry = await insertJournalEntry({
+            orgId:           ctx.user.orgId,
+            userId:          ctx.user.id,
+            date:            input.voucherDate,
+            description:     `سند صرف رقم ${input.voucherNumber}${input.paidTo ? ` - ${input.paidTo}` : ""}`,
+            reference:       input.voucherNumber,
+            sourceDocType:   'payment_voucher',
+            sourceDocId:     0,
+            sourceDocNumber: input.voucherNumber,
+            lines: [
+              { accountId: input.contraAccountId, accountCode: accDebit?.code  ?? '---', accountName: accDebit?.name  ?? '', debit: input.amount, credit: '0',          description: input.description ?? '' },
+              { accountId: input.accountId,       accountCode: accCredit?.code ?? '---', accountName: accCredit?.name ?? '', debit: '0',          credit: input.amount, description: input.description ?? '' },
+            ],
+          });
+          journalEntryId = entry.id;
+          journalEntryNumber = entry.entryNumber;
         }
 
         const [v] = await db.insert(paymentVouchers).values({
