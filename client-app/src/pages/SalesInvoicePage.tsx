@@ -1102,10 +1102,10 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
             })()}
           </div>
 
-          {/* ══ صف 2: العميل (col 1-2) │ المخزن (col 3-4) ══ */}
+          {/* ══ صف 2: العميل (col 1-3) │ العملة (col 4) ══ */}
 
-          {/* col 1-2: العميل */}
-          <div className="flex items-center" ref={custDropRef} style={{ gap: 6, gridColumn: "1/3", position: "relative" }}>
+          {/* col 1-3: العميل */}
+          <div className="flex items-center" ref={custDropRef} style={{ gap: 6, gridColumn: "1/4", position: "relative" }}>
             <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>العميل</label>
             <div className="flex flex-1 min-w-0" style={{ gap: 4, position: "relative" }}>
               <input
@@ -1174,8 +1174,21 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
             </div>
           </div>
 
-          {/* col 3-4: المخزن */}
-          <div className="flex items-center" style={{ gap: 6, gridColumn: "3/5" }}>
+          {/* col 4: العملة — تحت نوع السند */}
+          <div className="flex items-center" style={{ gap: 6 }}>
+            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>العملة</label>
+            <select value={currency} onChange={e => setCurrency(e.target.value)} className="classic-input flex-1" style={{ height: 26 }}>
+              <option value="SAR">ريال سعودي (SAR)</option>
+              <option value="USD">دولار (USD)</option>
+              <option value="EUR">يورو (EUR)</option>
+              <option value="AED">درهم (AED)</option>
+            </select>
+          </div>
+
+          {/* ══ صف 3: المخزن │ تاريخ التحرير │ تاريخ الدفع │ البائع ══ */}
+
+          {/* col 1: المخزن */}
+          <div className="flex items-center" style={{ gap: 6 }}>
             <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>المخزن</label>
             {(() => {
               const lockedWh = journalWarehouseId ?? docTypeWarehouseId;
@@ -1191,26 +1204,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
             })()}
           </div>
 
-          {/* ══ صف 3: العملة │ البائع │ تاريخ التحرير │ تاريخ الدفع ══ */}
-
-          {/* col 1: العملة */}
-          <div className="flex items-center" style={{ gap: 6 }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>العملة</label>
-            <select value={currency} onChange={e => setCurrency(e.target.value)} className="classic-input flex-1" style={{ height: 26 }}>
-              <option value="SAR">ريال سعودي (SAR)</option>
-              <option value="USD">دولار (USD)</option>
-              <option value="EUR">يورو (EUR)</option>
-              <option value="AED">درهم (AED)</option>
-            </select>
-          </div>
-
-          {/* col 2: البائع */}
-          <div className="flex items-center" style={{ gap: 6 }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>البائع</label>
-            <input value={salesperson} onChange={e => setSalesperson(e.target.value)} className="classic-input flex-1" style={{ height: 26 }} />
-          </div>
-
-          {/* col 3: تاريخ التحرير */}
+          {/* col 2: تاريخ التحرير */}
           <div className="flex items-center" style={{ gap: 6 }}>
             <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>تاريخ التحرير</label>
             <div className="flex flex-1" style={{ height: 26 }}>
@@ -1220,7 +1214,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
             </div>
           </div>
 
-          {/* col 4: تاريخ الدفع */}
+          {/* col 3: تاريخ الدفع */}
           <div className="flex items-center" style={{ gap: 6 }}>
             <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>تاريخ الدفع</label>
             <div className="flex flex-1" style={{ height: 26 }}>
@@ -1228,6 +1222,12 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
               <button type="button" onClick={() => dueDatePickerRef.current?.showPicker()} className="flex items-center justify-center flex-shrink-0" style={{ height: 26, width: 26, background: "#f3f4f6", border: "1px solid #d1d5db", borderLeft: "none", borderRadius: "0 4px 4px 0", color: "#555", cursor: "pointer", fontSize: 12 }}>📅</button>
               <input ref={dueDatePickerRef} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} />
             </div>
+          </div>
+
+          {/* col 4: البائع — تحت العملة */}
+          <div className="flex items-center" style={{ gap: 6 }}>
+            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>البائع</label>
+            <input value={salesperson} onChange={e => setSalesperson(e.target.value)} className="classic-input flex-1" style={{ height: 26 }} />
           </div>
 
           {/* ══ صف 4: ملحوظة ══ */}
