@@ -9,7 +9,17 @@ export const orgsRouter = router({
   // بيانات المؤسسة الحالية للمستخدم
   currentOrg: protectedProcedure.query(async ({ ctx }) => {
     const [org] = await db
-      .select({ id: organizations.id, name: organizations.name, code: organizations.code })
+      .select({
+        id:            organizations.id,
+        name:          organizations.name,
+        nameEn:        organizations.nameEn,
+        code:          organizations.code,
+        phone:         organizations.phone,
+        address:       organizations.address,
+        taxNumber:     organizations.taxNumber,
+        commercialReg: organizations.commercialReg,
+        currency:      organizations.currency,
+      })
       .from(organizations)
       .where(eq(organizations.id, ctx.user.orgId));
     return org ?? null;

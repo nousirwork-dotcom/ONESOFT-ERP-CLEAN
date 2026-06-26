@@ -121,6 +121,44 @@ export const documentTemplatesRouter = router({
       return tpl ?? null;
     }),
 
+  seedDefault: protectedProcedure
+    .input(z.object({ docType: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const orgId = ctx.user.orgId;
+      const defMap: Record<string, { code: string; nameAr: string; nameEn: string; paperSize: string; layoutJson: string; notes: string }> = {
+        sales_invoice: {
+          code: 'INV01', nameAr: 'نموذج المبيعات الأساسي', nameEn: 'Standard Sales Invoice',
+          paperSize: 'A4', layoutJson: INV01_CONFIG,
+          notes: 'النموذج الافتراضي — فاتورة ضريبية ثنائية اللغة',
+        },
+        pos_receipt: {
+          code: 'POS01', nameAr: 'نموذج نقاط البيع الحراري', nameEn: 'POS Thermal Receipt',
+          paperSize: '80mm', layoutJson: POS01_CONFIG,
+          notes: 'إيصال حراري لنقاط البيع — ZATCA/ETA QR',
+        },
+      };
+      const def = defMap[input.docType];
+      if (!def) return { seeded: false };
+      const existing = await db.query.documentTemplates.findFirst({
+        where: and(eq(documentTemplates.orgId, orgId), eq(documentTemplates.code, def.code)),
+      });
+      if (!existing) {
+        await db.insert(documentTemplates).values({
+          orgId, code: def.code, nameAr: def.nameAr, nameEn: def.nameEn,
+          docType: input.docType, paperSize: def.paperSize, orientation: 'portrait',
+          isDefault: true, isActive: true, sortOrder: 1,
+          layoutJson: def.layoutJson, notes: def.notes,
+        });
+        return { seeded: true };
+      } else if (!existing.layoutJson) {
+        await db.update(documentTemplates)
+          .set({ layoutJson: def.layoutJson, isDefault: true, updatedAt: new Date() })
+          .where(and(eq(documentTemplates.id, existing.id), eq(documentTemplates.orgId, orgId)));
+        return { seeded: true };
+      }
+      return { seeded: false };
+    }),
+
   seedDefaults: protectedProcedure
     .mutation(async ({ ctx }) => {
       const defaults = [

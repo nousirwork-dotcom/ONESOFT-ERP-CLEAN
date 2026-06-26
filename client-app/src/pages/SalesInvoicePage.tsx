@@ -1956,6 +1956,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
             paidAmount,
             remainingAmount,
             sellerName: orgQuery.data?.name ?? qrSettingsQuery.data?.sellerName ?? "OneSoft ERP",
+            sellerNameEn: orgQuery.data?.nameEn ?? undefined,
             sellerTaxNumber: orgQuery.data?.taxNumber ?? qrSettingsQuery.data?.taxNumber ?? "",
             sellerCommercialReg: orgQuery.data?.commercialReg || undefined,
             sellerAddress: orgQuery.data?.address ?? undefined,

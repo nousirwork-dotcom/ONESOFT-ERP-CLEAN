@@ -1,20 +1,28 @@
 /**
  * PostingEngine — محرك الترحيل المحاسبي
  *
- * مسؤول عن:
- * - بناء أسطر القيد من الروابط المحاسبية (account links)
- * - حساب قيم الحقول بناءً على Field Code
- * - ترحيل المستندات وإلغاء الترحيل
- * - التوازن التلقائي للقيود
+ * يحتوي على كامل Business Logic للترحيل:
+ * - تحليل حسابات نوع المستند
+ * - بناء أسطر القيد (مبيعات + مشتريات)
+ * - الترحيل التلقائي
+ * - التحقق من صحة الحسابات
+ * - إدراج القيد في قاعدة البيانات
  *
- * القاعدة: أي منطق محاسبي جديد يُضاف هنا، ثم يُستدعى من posting.ts
+ * القاعدة: Router يستدعي هذا الملف فقط — لا يحتوي على منطق.
  */
 
 import { db } from '../db.js';
-import { salesInvoices, documentJournals, journalEntries, journalEntryLines, chartOfAccounts } from '../schema.js';
-import { eq, and } from 'drizzle-orm';
+import {
+  salesInvoices, purchaseInvoices, purchaseInvoiceItems,
+  journalEntries, journalEntryLines,
+  documentJournals, chartOfAccounts, documentTypes,
+  warehouseAccountLinks, paymentMethods,
+} from '../schema.js';
+import { eq, and, desc, inArray } from 'drizzle-orm';
 
-// ─── أنواع مشتركة ──────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// Types
+// ══════════════════════════════════════════════════════════════════════════════
 
 export type PostingLine = {
   accountId:   number | null;
@@ -40,60 +48,156 @@ export type AccountLinkConfig = {
   description:  string;
 };
 
-// ─── resolveFieldValue ─────────────────────────────────────────────────────────
-/**
- * يُحسب قيمة حقل محدد بـ Field Code من بيانات الفاتورة.
- * أي Field Code جديد يُضاف هنا.
- *
- * @param fieldCode  كود الحقل من قاموس الحقول (مثال: CASH, TOTAL, BANK_TRANSFER)
- * @param invoice    بيانات الفاتورة كاملة
- */
-export function resolveFieldValue(
+// ══════════════════════════════════════════════════════════════════════════════
+// resolveDocTypeAccounts — تحليل حسابات نوع المستند
+// ══════════════════════════════════════════════════════════════════════════════
+
+export async function resolveDocTypeAccountsByJournal(journalId: number, orgId: number) {
+  const docType = await db.query.documentTypes.findFirst({
+    where: and(eq(documentTypes.journal, String(journalId)), eq(documentTypes.orgId, orgId)),
+  });
+  if (!docType) return null;
+  return resolveDocTypeAccounts(docType.id, orgId);
+}
+
+export async function resolveDocTypeAccounts(docTypeId: number, orgId: number) {
+  const docType = await db.query.documentTypes.findFirst({
+    where: and(eq(documentTypes.id, docTypeId), eq(documentTypes.orgId, orgId)),
+  });
+  if (!docType) return null;
+
+  const rawIds = [
+    docType.acctCash, docType.acctDebit, docType.acctCredit,
+    docType.acctTax, docType.acctDiscount,
+    docType.acctInventory, docType.acctCogs,
+  ];
+  const linkIds = rawIds.map(v => (v ? parseInt(v) : NaN)).filter(v => !isNaN(v));
+
+  const walById = new Map<number, { accountId: number | null }>();
+  if (linkIds.length > 0) {
+    const walRows = await db.query.warehouseAccountLinks.findMany({
+      where: inArray(warehouseAccountLinks.id, linkIds),
+    });
+    walRows.forEach(w => walById.set(w.id, w));
+  }
+
+  const getAccId = (code: string | null | undefined): number | null => {
+    if (!code) return null;
+    const id = parseInt(code);
+    return isNaN(id) ? null : (walById.get(id)?.accountId ?? null);
+  };
+
+  return {
+    docType,
+    cashAccountId:      docType.cashAccountId     ?? getAccId(docType.acctCash)     ?? null,
+    creditAccountId:    docType.creditAccountId   ?? getAccId(docType.acctDebit)    ?? null,
+    salesAccountId:     docType.salesAccountId    ?? getAccId(docType.acctCredit)   ?? null,
+    taxAccountId:       docType.taxAccountId      ?? getAccId(docType.acctTax)      ?? null,
+    discountAccountId:  docType.discountAccountId ?? getAccId(docType.acctDiscount) ?? null,
+    purchaseAccountId:  docType.purchaseAccountId ?? getAccId(docType.acctDebit)    ?? null,
+    supplierAccountId:  docType.supplierAccountId ?? getAccId(docType.acctCredit)   ?? null,
+    inventoryAccountId: getAccId(docType.acctInventory),
+    cogsAccountId:      getAccId(docType.acctCogs),
+  };
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// validateAccounts — التحقق من صحة الحسابات
+// ══════════════════════════════════════════════════════════════════════════════
+
+export async function validateAccounts(accountIds: (number | null)[]): Promise<void> {
+  const ids = accountIds.filter((id): id is number => id !== null);
+  if (!ids.length) return;
+  const accs = await db.query.chartOfAccounts.findMany({
+    where: inArray(chartOfAccounts.id, ids),
+  });
+  for (const acc of accs) {
+    if (!acc.isActive)
+      throw new Error(`الحساب "${acc.code} - ${acc.name}" موقوف ولا يمكن الترحيل عليه`);
+    if (acc.isParent)
+      throw new Error(`الحساب "${acc.code} - ${acc.name}" تجميعي ولا يمكن الترحيل عليه — يجب اختيار حساب فرعي`);
+    if (acc.allowPosting === false)
+      throw new Error(`الحساب "${acc.code} - ${acc.name}" لا يسمح بالترحيل`);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// nextEntryNumber — رقم قيد تسلسلي
+// ══════════════════════════════════════════════════════════════════════════════
+
+export async function nextEntryNumber(orgId: number): Promise<string> {
+  const last = await db.query.journalEntries.findFirst({
+    where: eq(journalEntries.orgId, orgId),
+    orderBy: [desc(journalEntries.id)],
+  });
+  const n = last ? parseInt(last.entryNumber.replace(/\D/g, '') || '0') + 1 : 1;
+  return `JE-${String(n).padStart(4, '0')}`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// resolveInvoiceFieldValue — تحليل قيمة حقل من فاتورة مبيعات
+// ══════════════════════════════════════════════════════════════════════════════
+
+export function resolveInvoiceFieldValue(
   fieldCode: string,
   invoice: typeof salesInvoices.$inferSelect,
 ): number {
-  const total      = Number(invoice.totalAmount  ?? 0);
-  const subtotal   = Number(invoice.subtotal     ?? 0);
-  const taxAmount  = Number(invoice.taxAmount    ?? 0);
+  const total      = Number(invoice.total          ?? 0);
+  const subtotal   = Number(invoice.subtotal       ?? 0);
+  const taxAmount  = Number(invoice.taxAmount      ?? 0);
   const discAmt    = Number(invoice.discountAmount ?? 0);
-  const paidAmount = Number(invoice.paidAmount   ?? 0);
-  const isCredit   = invoice.paymentStatus === 'credit';
-  const breakdown  = invoice.paymentBreakdown as Record<string, number> | null | undefined;
+  const paidAmount = Number(invoice.paidAmount     ?? 0);
+  const isCredit   = invoice.paymentMethod === 'credit';
 
-  const fc = fieldCode.toUpperCase();
+  const breakdown = invoice.paymentBreakdown as Record<string, number> | null | undefined;
 
-  // ── حقول الإجماليات ──────────────────────────────────────────────────────
-  if (fc === 'TOTAL' || fc === 'INVOICE_TOTAL')         return total;
-  if (fc === 'NETSALES' || fc === 'TOTAL_EXCLUSIVE_VAT') return subtotal;
-  if (fc === 'TAX' || fc === 'TOTAL_VAT')               return taxAmount;
-  if (fc === 'DISCOUNT' || fc === 'DISCOUNT_AMOUNT')    return discAmt;
-  if (fc === 'PAID' || fc === 'PAYMENT_TOTAL')          return paidAmount;
-  if (fc === 'REMAINING') return Math.max(0, total - paidAmount);
-
-  // ── حقول الدفع (تقرأ من paymentBreakdown مباشرةً بـ fieldCode) ───────────
-  if (breakdown) {
-    const direct = breakdown[fc] ?? breakdown[fc.replace(/_AMOUNT$/, '')] ?? null;
-    if (direct !== null) return Number(direct);
+  switch (fieldCode.toUpperCase()) {
+    case 'TOTAL':         return total;
+    case 'NETSALES':
+    case 'TOTAL_EXCLUSIVE_VAT': return subtotal;
+    case 'TAX':
+    case 'TOTAL_VAT':     return taxAmount;
+    case 'DISCOUNT':
+    case 'DISCOUNT_AMOUNT': return discAmt;
+    case 'CASH':          return breakdown
+                            ? Number(breakdown.CASH ?? breakdown.CASH_AMOUNT ?? 0)
+                            : (isCredit ? 0 : total);
+    case 'CUSTOMER_CODE':
+    case 'CUSTOMER_RECEIVABLE': return Number(breakdown?.ACCOUNT ?? breakdown?.ACCOUNT_AMOUNT ?? (isCredit ? total : 0));
+    case 'PAID':
+    case 'PAYMENT_TOTAL': return paidAmount;
+    case 'REMAINING':     return Math.max(0, total - paidAmount);
+    case 'CASH_AMOUNT':    return Number(breakdown?.CASH    ?? breakdown?.CASH_AMOUNT    ?? 0);
+    case 'CARD_AMOUNT':
+    case 'VISA':           return Number(breakdown?.CARD    ?? breakdown?.VISA    ?? breakdown?.CARD_AMOUNT ?? 0);
+    case 'BANK_AMOUNT':
+    case 'BANK_TRANSFER':  return Number(breakdown?.BANK    ?? breakdown?.BANK_AMOUNT    ?? 0);
+    case 'ACCOUNT_AMOUNT':
+    case 'ACCOUNT':        return Number(breakdown?.ACCOUNT ?? breakdown?.ACCOUNT_AMOUNT ?? 0);
+    case 'TAMARA':
+    case 'TAMARA_AMOUNT':  return Number(breakdown?.TAMARA  ?? breakdown?.TAMARA_AMOUNT  ?? 0);
+    case 'TABBY':
+    case 'TABBY_AMOUNT':   return Number(breakdown?.TABBY   ?? breakdown?.TABBY_AMOUNT   ?? 0);
+    case 'OTHER_AMOUNT':   return Number(breakdown?.OTHER   ?? breakdown?.OTHER_AMOUNT   ?? 0);
+    default: {
+      if (breakdown) {
+        const code = fieldCode.toUpperCase();
+        const direct = breakdown[code] ?? breakdown[code.replace(/_AMOUNT$/, '')] ?? null;
+        if (direct !== null) return Number(direct);
+      }
+      return 0;
+    }
   }
-
-  // ── CASH بدون breakdown = إجمالي الفاتورة (نقدي بالكامل) ─────────────────
-  if (fc === 'CASH' && !breakdown) return isCredit ? 0 : total;
-
-  // ── CUSTOMER_RECEIVABLE بدون breakdown = مبيعات آجلة ──────────────────────
-  if ((fc === 'CUSTOMER_RECEIVABLE' || fc === 'CUSTOMER_CODE') && !breakdown)
-    return isCredit ? total : 0;
-
-  return 0;
 }
 
-// ─── buildLinesFromAccountLinks ────────────────────────────────────────────────
-/**
- * يبني أسطر القيد المحاسبي من قائمة الروابط المحاسبية وبيانات الفاتورة.
- * تعتمد بالكامل على resolveFieldValue — لا hardcoded names.
- */
+// ══════════════════════════════════════════════════════════════════════════════
+// buildLinesFromAccountLinks — بناء أسطر القيد من الروابط المحاسبية
+// ══════════════════════════════════════════════════════════════════════════════
+
 export async function buildLinesFromAccountLinks(
   accountLinks: AccountLinkConfig[],
   invoice: typeof salesInvoices.$inferSelect,
+  orgId: number,
 ): Promise<PostingResult> {
   const accIds = accountLinks
     .map(l => l.accountId)
@@ -107,16 +211,16 @@ export async function buildLinesFromAccountLinks(
   const accMap = new Map(accs.map(a => [a.id, a]));
 
   const lines: PostingLine[] = [];
-  const warnings: string[]   = [];
+  const warnings: string[] = [];
 
   for (const link of accountLinks) {
     if (!link.accountId || !link.postingName || !link.postingSide) continue;
-    const value = resolveFieldValue(link.postingName, invoice);
+    const value = resolveInvoiceFieldValue(link.postingName, invoice);
     if (value === 0) continue;
 
-    const acc     = accMap.get(link.accountId);
+    const acc    = accMap.get(link.accountId);
     const isDebit = link.postingSide === 'debit';
-    const desc    = link.description
+    const lineDesc = link.description
       ? `${link.description} - ${invoice.invoiceNumber}`
       : invoice.invoiceNumber;
 
@@ -126,26 +230,547 @@ export async function buildLinesFromAccountLinks(
       accountName: acc?.name ?? link.description ?? '',
       debit:  isDebit ? value.toFixed(4) : '0.0000',
       credit: isDebit ? '0.0000' : value.toFixed(4),
-      description: desc,
+      description: lineDesc,
     });
   }
 
   const totalDebit  = lines.reduce((s, l) => s + Number(l.debit),  0);
   const totalCredit = lines.reduce((s, l) => s + Number(l.credit), 0);
+  const isBalanced  = Math.abs(totalDebit - totalCredit) < 0.01;
 
   return {
     lines,
     warnings,
     totalDebit:  totalDebit.toFixed(4),
     totalCredit: totalCredit.toFixed(4),
-    isBalanced:  Math.abs(totalDebit - totalCredit) < 0.01,
+    isBalanced,
   };
 }
 
-// ─── getJournalForDoc ──────────────────────────────────────────────────────────
-/**
- * يجلب دفتر المستند المرتبط بالفاتورة.
- */
+// ══════════════════════════════════════════════════════════════════════════════
+// buildSalesInvoiceLines — بناء أسطر قيد فاتورة المبيعات
+// ══════════════════════════════════════════════════════════════════════════════
+
+export async function buildSalesInvoiceLines(
+  invoice: typeof salesInvoices.$inferSelect,
+  journal: typeof documentJournals.$inferSelect | null,
+  orgId: number,
+) {
+  const ptCfg = journal?.paymentTypesConfig as { accountLinks?: AccountLinkConfig[] } | null | undefined;
+  const configLinks: AccountLinkConfig[] = Array.isArray(ptCfg?.accountLinks) ? (ptCfg!.accountLinks as AccountLinkConfig[]) : [];
+  const hasConfiguredLinks = configLinks.some(l => l.accountId && l.postingName && l.postingSide);
+
+  if (hasConfiguredLinks) {
+    const result = await buildLinesFromAccountLinks(configLinks, invoice, orgId);
+
+    if (!result.isBalanced) {
+      const debit  = Number(result.totalDebit);
+      const credit = Number(result.totalCredit);
+      const shortfall = credit - debit;
+
+      if (shortfall > 0.001) {
+        const breakdown = invoice.paymentBreakdown as Record<string, number> | null | undefined;
+
+        const orgPayMethods = await db.select({ code: paymentMethods.code, nameAr: paymentMethods.nameAr })
+          .from(paymentMethods)
+          .where(eq(paymentMethods.orgId, orgId));
+
+        const uncoveredMethods: string[] = [];
+        if (breakdown) {
+          for (const pm of orgPayMethods) {
+            const amt = Number(breakdown[pm.code] ?? 0);
+            if (amt > 0.001) {
+              const knownAliases: Record<string, string[]> = {
+                CASH:    ['CASH', 'CASH_AMOUNT'],
+                CARD:    ['CARD', 'CARD_AMOUNT', 'VISA'],
+                BANK:    ['BANK', 'BANK_AMOUNT', 'BANK_TRANSFER'],
+                ACCOUNT: ['ACCOUNT', 'ACCOUNT_AMOUNT', 'CUSTOMER_RECEIVABLE', 'CUSTOMER_CODE'],
+                TAMARA:  ['TAMARA', 'TAMARA_AMOUNT'],
+                TABBY:   ['TABBY', 'TABBY_AMOUNT'],
+                OTHER:   ['OTHER', 'OTHER_AMOUNT'],
+              };
+              const aliases = knownAliases[pm.code] ?? [pm.code];
+              const isCovered = configLinks.some(l =>
+                l.accountId && l.postingName &&
+                aliases.some(a => a === l.postingName.toUpperCase())
+              );
+              if (!isCovered) uncoveredMethods.push(pm.nameAr ?? pm.code);
+            }
+          }
+        }
+
+        if (uncoveredMethods.length > 0) {
+          const labels = uncoveredMethods.join('، ');
+          const cashAccId = journal?.cashAccountId ?? null;
+          if (cashAccId) {
+            result.warnings.push(
+              `وسائل الدفع التالية ليس لها حساب مُضبَّط في الدفتر: ${labels} — تمت إضافة الفرق (${shortfall.toFixed(3)}) إلى حساب الصندوق الافتراضي`
+            );
+          } else {
+            result.warnings.push(
+              `وسائل الدفع التالية ليس لها حساب مُضبَّط في الدفتر: ${labels} (${shortfall.toFixed(3)}) — يُرجى إضافة رابط محاسبي لكل وسيلة في إعدادات الدفتر`
+            );
+          }
+        }
+
+        const cashAccId = journal?.cashAccountId ?? null;
+        if (cashAccId) {
+          const cashAccs = await db.query.chartOfAccounts.findMany({
+            where: (a, { eq }) => eq(a.id, cashAccId),
+          });
+          const cashAcc = cashAccs[0];
+          result.lines.push({
+            accountId:   cashAccId,
+            accountCode: cashAcc?.code ?? '---',
+            accountName: cashAcc?.name ?? 'الصندوق / النقد',
+            debit:  shortfall.toFixed(4),
+            credit: '0.0000',
+            description: `مدفوعات إضافية - ${invoice.invoiceNumber}`,
+          });
+        }
+
+        const newTotal = (debit + shortfall).toFixed(4);
+        result.totalDebit  = cashAccId ? newTotal : result.totalDebit;
+        result.isBalanced  = cashAccId ? true : false;
+      }
+    }
+
+    return result;
+  }
+
+  // ── Legacy: المنطق الثابت ──────────────────────────────────────────────────
+  const accIds = [
+    journal?.cashAccountId,
+    journal?.creditAccountId,
+    journal?.salesAccountId,
+    journal?.taxAccountId,
+    journal?.discountAccountId,
+  ].filter(Boolean) as number[];
+
+  const accs = accIds.length
+    ? await db.query.chartOfAccounts.findMany({
+        where: (a, { inArray }) => inArray(a.id, accIds),
+      })
+    : [];
+  const accMap = new Map(accs.map(a => [a.id, a]));
+
+  const total = Number(invoice.total ?? 0);
+  const subtotal = Number(invoice.subtotal ?? 0);
+  const taxAmount = Number(invoice.taxAmount ?? 0);
+  const discountAmount = Number(invoice.discountAmount ?? 0);
+
+  const isCredit = invoice.paymentMethod === 'credit';
+  const breakdown = invoice.paymentBreakdown as Record<string, number> | null | undefined;
+
+  const lines: PostingLine[] = [];
+  const warnings: string[] = [];
+
+  const AR_CODE = 'ACCOUNT';
+  const arAmount   = Number(breakdown?.[AR_CODE] ?? 0);
+  const cashAmount = total - arAmount;
+
+  if (breakdown && Object.keys(breakdown).length > 0) {
+    if (cashAmount > 0.001) {
+      const cashAccId = journal?.cashAccountId ?? null;
+      const cashAcc   = cashAccId ? accMap.get(cashAccId) : null;
+      if (!cashAccId) warnings.push('حساب الصندوق غير محدد في الدفتر');
+      lines.push({
+        accountId:   cashAccId,
+        accountCode: cashAcc?.code ?? '---',
+        accountName: cashAcc?.name ?? 'الصندوق / النقد',
+        debit:  cashAmount.toFixed(4),
+        credit: '0.0000',
+        description: `مدفوع نقداً - ${invoice.invoiceNumber}`,
+      });
+    }
+    if (arAmount > 0.001) {
+      const arAccId = journal?.creditAccountId ?? null;
+      const arAcc   = arAccId ? accMap.get(arAccId) : null;
+      if (!arAccId) warnings.push('حساب ذمم العملاء غير محدد في الدفتر');
+      lines.push({
+        accountId:   arAccId,
+        accountCode: arAcc?.code ?? '---',
+        accountName: arAcc?.name ?? 'ذمم العملاء',
+        debit:  arAmount.toFixed(4),
+        credit: '0.0000',
+        description: `ذمة عميل (آجل) - ${invoice.invoiceNumber}`,
+      });
+    }
+  } else {
+    const debitAccId = isCredit ? journal?.creditAccountId : journal?.cashAccountId;
+    const debitAcc   = debitAccId ? accMap.get(debitAccId) : null;
+    const defaultDebitName = isCredit ? 'ذمم العملاء' : 'الصندوق / النقد';
+    if (!debitAccId) warnings.push(isCredit ? 'حساب ذمم العملاء غير محدد في الدفتر' : 'حساب الصندوق غير محدد في الدفتر');
+    lines.push({
+      accountId:   debitAccId ?? null,
+      accountCode: debitAcc?.code ?? '---',
+      accountName: debitAcc?.name ?? defaultDebitName,
+      debit:  total.toFixed(4),
+      credit: '0.0000',
+      description: `فاتورة مبيعات ${invoice.invoiceNumber}`,
+    });
+  }
+
+  const salesAccId = journal?.salesAccountId;
+  const salesAcc = salesAccId ? accMap.get(salesAccId) : null;
+  if (!salesAccId) warnings.push('حساب إيرادات المبيعات غير محدد في الدفتر');
+  lines.push({
+    accountId: salesAccId ?? null,
+    accountCode: salesAcc?.code ?? '---',
+    accountName: salesAcc?.name ?? 'إيرادات المبيعات',
+    debit: '0.0000',
+    credit: subtotal.toFixed(4),
+    description: `مبيعات - ${invoice.invoiceNumber}`,
+  });
+
+  if (discountAmount > 0) {
+    const discAccId = journal?.discountAccountId;
+    const discAcc = discAccId ? accMap.get(discAccId) : null;
+    if (!discAccId) warnings.push('حساب الخصم غير محدد في الدفتر');
+    lines.push({
+      accountId: discAccId ?? null,
+      accountCode: discAcc?.code ?? '---',
+      accountName: discAcc?.name ?? 'خصومات المبيعات',
+      debit: discountAmount.toFixed(4),
+      credit: '0.0000',
+      description: `خصم - ${invoice.invoiceNumber}`,
+    });
+  }
+
+  if (taxAmount > 0) {
+    const taxAccId = journal?.taxAccountId;
+    const taxAcc = taxAccId ? accMap.get(taxAccId) : null;
+    if (!taxAccId) warnings.push('حساب الضريبة غير محدد في الدفتر');
+    lines.push({
+      accountId: taxAccId ?? null,
+      accountCode: taxAcc?.code ?? '---',
+      accountName: taxAcc?.name ?? 'ضريبة القيمة المضافة',
+      debit: '0.0000',
+      credit: taxAmount.toFixed(4),
+      description: `ضريبة - ${invoice.invoiceNumber}`,
+    });
+  }
+
+  const totalDebit = lines.reduce((s, l) => s + Number(l.debit), 0);
+  const totalCredit = lines.reduce((s, l) => s + Number(l.credit), 0);
+  const isBalanced = Math.abs(totalDebit - totalCredit) < 0.001;
+
+  return { lines, warnings, totalDebit: totalDebit.toFixed(4), totalCredit: totalCredit.toFixed(4), isBalanced };
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// buildPurchaseInvoiceLines — بناء أسطر قيد فاتورة المشتريات
+// ══════════════════════════════════════════════════════════════════════════════
+
+export async function buildPurchaseInvoiceLines(
+  invoice: typeof purchaseInvoices.$inferSelect,
+  journal: {
+    purchaseAccountId?: number | null;
+    supplierAccountId?: number | null;
+    cashAccountId?: number | null;
+    taxAccountId?: number | null;
+    discountAccountId?: number | null;
+  } | null,
+  orgId: number,
+) {
+  const accIds = [
+    journal?.purchaseAccountId,
+    journal?.supplierAccountId,
+    journal?.cashAccountId,
+    journal?.taxAccountId,
+    journal?.discountAccountId,
+  ].filter(Boolean) as number[];
+
+  const accs = accIds.length
+    ? await db.query.chartOfAccounts.findMany({
+        where: (a, { inArray }) => inArray(a.id, accIds),
+      })
+    : [];
+  const accMap = new Map(accs.map(a => [a.id, a]));
+
+  const total = Number(invoice.total ?? 0);
+  const subtotal = Number(invoice.subtotal ?? 0);
+  const taxAmount = Number(invoice.taxAmount ?? 0);
+  const discountAmount = Number(invoice.discountAmount ?? 0);
+  const isCredit = invoice.paymentMethod === 'credit';
+
+  const lines: PostingLine[] = [];
+  const warnings: string[] = [];
+
+  const purchaseAccId = journal?.purchaseAccountId ?? null;
+  const purchaseAcc = purchaseAccId ? accMap.get(purchaseAccId) : null;
+  if (!purchaseAccId) warnings.push('حساب المشتريات غير محدد في الدفتر');
+  lines.push({
+    accountId: purchaseAccId,
+    accountCode: purchaseAcc?.code ?? '---',
+    accountName: purchaseAcc?.name ?? 'المشتريات',
+    debit: subtotal.toFixed(4),
+    credit: '0.0000',
+    description: `فاتورة مشتريات ${invoice.invoiceNumber}`,
+  });
+
+  if (taxAmount > 0) {
+    const taxAccId = journal?.taxAccountId ?? null;
+    const taxAcc = taxAccId ? accMap.get(taxAccId) : null;
+    if (!taxAccId) warnings.push('حساب ضريبة المشتريات غير محدد في الدفتر');
+    lines.push({
+      accountId: taxAccId,
+      accountCode: taxAcc?.code ?? '---',
+      accountName: taxAcc?.name ?? 'ضريبة القيمة المضافة',
+      debit: taxAmount.toFixed(4),
+      credit: '0.0000',
+      description: `ضريبة مشتريات - ${invoice.invoiceNumber}`,
+    });
+  }
+
+  if (discountAmount > 0) {
+    const discAccId = journal?.discountAccountId ?? null;
+    const discAcc = discAccId ? accMap.get(discAccId) : null;
+    if (!discAccId) warnings.push('حساب خصم المشتريات غير محدد في الدفتر');
+    lines.push({
+      accountId: discAccId,
+      accountCode: discAcc?.code ?? '---',
+      accountName: discAcc?.name ?? 'خصومات المشتريات',
+      debit: '0.0000',
+      credit: discountAmount.toFixed(4),
+      description: `خصم مشتريات - ${invoice.invoiceNumber}`,
+    });
+  }
+
+  const creditAccId = isCredit
+    ? (journal?.supplierAccountId ?? null)
+    : (journal?.cashAccountId ?? null);
+  const creditAcc = creditAccId ? accMap.get(creditAccId) : null;
+  const defaultCreditName = isCredit ? 'ذمم الموردين' : 'الصندوق / النقد';
+  if (!creditAccId) warnings.push(isCredit ? 'حساب ذمم الموردين غير محدد في الدفتر' : 'حساب الصندوق غير محدد في الدفتر');
+  lines.push({
+    accountId: creditAccId,
+    accountCode: creditAcc?.code ?? '---',
+    accountName: creditAcc?.name ?? defaultCreditName,
+    debit: '0.0000',
+    credit: total.toFixed(4),
+    description: isCredit ? `مورد - ${invoice.supplierName ?? ''}` : `سداد نقدي - ${invoice.invoiceNumber}`,
+  });
+
+  const totalDebit = lines.reduce((s, l) => s + Number(l.debit), 0);
+  const totalCredit = lines.reduce((s, l) => s + Number(l.credit), 0);
+  const isBalanced = Math.abs(totalDebit - totalCredit) < 0.001;
+
+  return { lines, warnings, totalDebit: totalDebit.toFixed(4), totalCredit: totalCredit.toFixed(4), isBalanced };
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// insertJournalEntry — إدراج قيد محاسبي في قاعدة البيانات
+// ══════════════════════════════════════════════════════════════════════════════
+
+export async function insertJournalEntry(opts: {
+  orgId: number;
+  userId: number;
+  date: Date;
+  description: string;
+  reference: string;
+  sourceDocType: string;
+  sourceDocId: number;
+  sourceDocNumber: string;
+  lines: PostingLine[];
+}) {
+  const entryNumber = await nextEntryNumber(opts.orgId);
+  const totalDebit  = opts.lines.reduce((s, l) => s + Number(l.debit),  0);
+  const totalCredit = opts.lines.reduce((s, l) => s + Number(l.credit), 0);
+
+  const [entry] = await db.insert(journalEntries).values({
+    orgId:           opts.orgId,
+    entryNumber,
+    entryDate:       opts.date,
+    description:     opts.description,
+    reference:       opts.reference,
+    totalDebit:      totalDebit.toFixed(4),
+    totalCredit:     totalCredit.toFixed(4),
+    status:          'posted',
+    userId:          opts.userId,
+    sourceDocType:   opts.sourceDocType,
+    sourceDocId:     opts.sourceDocId,
+    sourceDocNumber: opts.sourceDocNumber,
+    entryType:       'auto',
+  }).returning();
+
+  if (opts.lines.length > 0) {
+    await db.insert(journalEntryLines).values(
+      opts.lines.map((l, i) => ({
+        entryId:     entry.id,
+        orgId:       opts.orgId,
+        accountId:   l.accountId ?? undefined,
+        accountCode: l.accountCode,
+        accountName: l.accountName,
+        description: l.description,
+        debit:       l.debit,
+        credit:      l.credit,
+        sortOrder:   i,
+      }))
+    );
+  }
+  return entry;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// autoPostSalesInvoice — ترحيل تلقائي فاتورة مبيعات / مردود
+// ══════════════════════════════════════════════════════════════════════════════
+
+export async function autoPostSalesInvoice(
+  invoiceId: number,
+  orgId: number,
+  userId: number,
+): Promise<{ entryNumber: string } | null> {
+  const invoice = await db.query.salesInvoices.findFirst({
+    where: and(eq(salesInvoices.id, invoiceId), eq(salesInvoices.orgId, orgId)),
+  });
+  if (!invoice || invoice.isPosted) return null;
+  if (invoice.invoiceType !== 'sale' && invoice.invoiceType !== 'return') return null;
+  if (!invoice.journalId && !invoice.docTypeId) return null;
+
+  const journal = invoice.journalId
+    ? await db.query.documentJournals.findFirst({
+        where: and(eq(documentJournals.id, invoice.journalId), eq(documentJournals.orgId, orgId)),
+      })
+    : null;
+
+  if (journal?.postingMode === 'disabled') return null;
+
+  const docTypeAccs = invoice.docTypeId
+    ? await resolveDocTypeAccounts(invoice.docTypeId, orgId)
+    : invoice.journalId
+      ? await resolveDocTypeAccountsByJournal(invoice.journalId, orgId)
+      : null;
+
+  const effectiveJournal = {
+    ...(journal ?? {}),
+    cashAccountId:     docTypeAccs?.cashAccountId     ?? journal?.cashAccountId     ?? null,
+    salesAccountId:    docTypeAccs?.salesAccountId    ?? journal?.salesAccountId    ?? null,
+    creditAccountId:   docTypeAccs?.creditAccountId   ?? journal?.creditAccountId   ?? null,
+    taxAccountId:      docTypeAccs?.taxAccountId      ?? journal?.taxAccountId      ?? null,
+    discountAccountId: docTypeAccs?.discountAccountId ?? journal?.discountAccountId ?? null,
+    postingMode:       journal?.postingMode ?? 'auto',
+  } as typeof documentJournals.$inferSelect;
+
+  const _ptCfgAuto = journal?.paymentTypesConfig as { accountLinks?: AccountLinkConfig[] } | null | undefined;
+  const _hasFieldLinks = Array.isArray(_ptCfgAuto?.accountLinks) &&
+    _ptCfgAuto!.accountLinks.some(l => l.accountId && l.postingName && l.postingSide);
+
+  if (!_hasFieldLinks) {
+    const isCredit = invoice.paymentMethod === 'credit';
+    const hasDebitAcc = isCredit ? !!effectiveJournal.creditAccountId : !!effectiveJournal.cashAccountId;
+    if (!effectiveJournal.salesAccountId || !hasDebitAcc) return null;
+  }
+
+  const { lines: rawLines, isBalanced } = await buildSalesInvoiceLines(invoice, effectiveJournal, orgId);
+  if (!isBalanced || rawLines.length === 0) return null;
+
+  const isReturn = invoice.invoiceType === 'return';
+  const reversedLines = isReturn
+    ? rawLines.map(l => ({ ...l, debit: l.credit, credit: l.debit }))
+    : rawLines;
+
+  const docLabel    = isReturn ? 'مردود مبيعات' : 'فاتورة مبيعات';
+  const docTypeName = docTypeAccs?.docType?.nameAr ?? docLabel;
+  const lineDesc    = `${docTypeName} - ${invoice.invoiceNumber}`;
+  const lines       = reversedLines.map(l => ({ ...l, description: lineDesc }));
+
+  const entry = await insertJournalEntry({
+    orgId,
+    userId,
+    date:            invoice.invoiceDate,
+    description:     docTypeName,
+    reference:       invoice.invoiceNumber,
+    sourceDocType:   isReturn ? 'sales_return' : 'sales_invoice',
+    sourceDocId:     invoice.id,
+    sourceDocNumber: invoice.invoiceNumber,
+    lines,
+  });
+
+  await db.update(salesInvoices)
+    .set({ isPosted: true, postedAt: new Date(), postedJournalEntryId: entry.id, updatedAt: new Date() })
+    .where(and(eq(salesInvoices.id, invoiceId), eq(salesInvoices.orgId, orgId)));
+
+  return { entryNumber: entry.entryNumber };
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// autoPostPurchaseInvoice — ترحيل تلقائي فاتورة مشتريات / مردود
+// ══════════════════════════════════════════════════════════════════════════════
+
+export async function autoPostPurchaseInvoice(
+  invoiceId: number,
+  orgId: number,
+  userId: number,
+): Promise<{ entryNumber: string } | null> {
+  const invoice = await db.query.purchaseInvoices.findFirst({
+    where: and(eq(purchaseInvoices.id, invoiceId), eq(purchaseInvoices.orgId, orgId)),
+  });
+  if (!invoice || invoice.isPosted) return null;
+  if (!invoice.journalId && !invoice.docTypeId) return null;
+
+  const journal = invoice.journalId
+    ? await db.query.documentJournals.findFirst({
+        where: and(eq(documentJournals.id, invoice.journalId), eq(documentJournals.orgId, orgId)),
+      })
+    : null;
+
+  if (journal?.postingMode === 'disabled') return null;
+
+  const docTypeAccs = invoice.docTypeId
+    ? await resolveDocTypeAccounts(invoice.docTypeId, orgId)
+    : invoice.journalId
+      ? await resolveDocTypeAccountsByJournal(invoice.journalId, orgId)
+      : null;
+
+  const effectiveJournal = {
+    purchaseAccountId: docTypeAccs?.purchaseAccountId ?? journal?.purchaseAccountId ?? null,
+    supplierAccountId: docTypeAccs?.supplierAccountId ?? journal?.supplierAccountId ?? null,
+    cashAccountId:     docTypeAccs?.cashAccountId     ?? journal?.cashAccountId     ?? null,
+    taxAccountId:      docTypeAccs?.taxAccountId      ?? journal?.taxAccountId      ?? null,
+    discountAccountId: docTypeAccs?.discountAccountId ?? journal?.discountAccountId ?? null,
+  };
+
+  const isCredit = invoice.paymentMethod === 'credit';
+  const hasCounterAcc = isCredit ? !!effectiveJournal.supplierAccountId : !!effectiveJournal.cashAccountId;
+  if (!effectiveJournal.purchaseAccountId || !hasCounterAcc) return null;
+
+  const { lines: rawLines, isBalanced } = await buildPurchaseInvoiceLines(invoice, effectiveJournal, orgId);
+  if (!isBalanced || rawLines.length === 0) return null;
+
+  const isReturn    = invoice.invoiceType === 'return';
+  const reversedLines = isReturn
+    ? rawLines.map(l => ({ ...l, debit: l.credit, credit: l.debit }))
+    : rawLines;
+
+  const docLabel    = isReturn ? 'مردود مشتريات' : 'فاتورة مشتريات';
+  const docTypeName = docTypeAccs?.docType?.nameAr ?? docLabel;
+  const lineDesc    = `${docTypeName} - ${invoice.invoiceNumber}`;
+  const lines       = reversedLines.map(l => ({ ...l, description: lineDesc }));
+
+  const entry = await insertJournalEntry({
+    orgId,
+    userId,
+    date:            invoice.invoiceDate,
+    description:     docTypeName,
+    reference:       invoice.invoiceNumber,
+    sourceDocType:   isReturn ? 'purchase_return' : 'purchase_invoice',
+    sourceDocId:     invoice.id,
+    sourceDocNumber: invoice.invoiceNumber,
+    lines,
+  });
+
+  await db.update(purchaseInvoices)
+    .set({ isPosted: true, postedAt: new Date(), postedJournalEntryId: entry.id, updatedAt: new Date() })
+    .where(and(eq(purchaseInvoices.id, invoiceId), eq(purchaseInvoices.orgId, orgId)));
+
+  return { entryNumber: entry.entryNumber };
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// getJournalForDoc — جلب دفتر المستند
+// ══════════════════════════════════════════════════════════════════════════════
+
 export async function getJournalForDoc(
   journalId: number | null | undefined,
   orgId: number,
