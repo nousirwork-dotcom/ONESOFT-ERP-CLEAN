@@ -1149,6 +1149,17 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                 className="flex-shrink-0 flex items-center justify-center"
                 style={{ width: 26, height: 26, borderRadius: 3, background: "#D19C05", color: "white", fontSize: 15, fontWeight: 700, border: "1px solid #9A7203" }}
                 title="إضافة عميل جديد">+</button>
+              {customerId && (
+                <div className="flex items-center flex-shrink-0 px-2 rounded text-[10px] font-bold whitespace-nowrap"
+                  style={{
+                    height: 26,
+                    background: customerTaxNumber ? "#EFF6FF" : "#F0FDF4",
+                    border: `1px solid ${customerTaxNumber ? "#93C5FD" : "#86EFAC"}`,
+                    color: customerTaxNumber ? "#1D4ED8" : "#15803D",
+                  }}>
+                  {customerTaxNumber ? "فاتورة ضريبية" : "فاتورة ضريبة مبسطة"}
+                </div>
+              )}
               {showCustDrop && !customerId && (() => {
                 const all = customersQuery.data ?? [];
                 const q = custSearch.trim().toLowerCase();
