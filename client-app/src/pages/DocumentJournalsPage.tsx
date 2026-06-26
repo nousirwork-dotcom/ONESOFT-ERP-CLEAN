@@ -338,20 +338,20 @@ function FieldCodeSearch({
 
 /* ──────────────── document types ──────────────── */
 const DOC_TYPES = [
-  { id: "sales_return",     label: "مردود مبيعات",     icon: <RotateCcw className="w-3.5 h-3.5" /> },
-  { id: "purchase_invoice", label: "فاتورة مشتريات",   icon: <BookMarked className="w-3.5 h-3.5" /> },
-  { id: "purchase_return",  label: "مردود مشتريات",    icon: <RotateCcw className="w-3.5 h-3.5" /> },
-  { id: "sales_order",      label: "أمر بيع",          icon: <ClipboardList className="w-3.5 h-3.5" /> },
-  { id: "sales_quote",      label: "عرض سعر مبيعات",  icon: <Tag className="w-3.5 h-3.5" /> },
-  { id: "purchase_order",   label: "أمر شراء",         icon: <ClipboardList className="w-3.5 h-3.5" /> },
-  { id: "purchase_quote",   label: "عرض سعر مشتريات", icon: <Tag className="w-3.5 h-3.5" /> },
-  { id: "stock_transfer",      label: "سند تحويل مخزني",   icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
-  { id: "journal_entry",       label: "سند قيد",            icon: <BookText className="w-3.5 h-3.5" /> },
-  { id: "stock_issue_items",   label: "سند صرف أصناف",      icon: <PackageMinus className="w-3.5 h-3.5" /> },
-  { id: "stock_receipt_items", label: "سند توريد أصناف",    icon: <PackagePlus className="w-3.5 h-3.5" /> },
-  { id: "customers_journal",   label: "دفتر العملاء",        icon: <Users className="w-3.5 h-3.5" /> },
-  { id: "suppliers_journal",   label: "دفتر الموردين",       icon: <Truck className="w-3.5 h-3.5" /> },
-  { id: "sales",               label: "sales",               icon: <BookOpen className="w-3.5 h-3.5" /> },
+  { id: "sales",               label: "فاتورة المبيعات",     icon: <BookOpen className="w-3.5 h-3.5" /> },
+  { id: "sales_return",        label: "مردود مبيعات",        icon: <RotateCcw className="w-3.5 h-3.5" /> },
+  { id: "purchase_invoice",    label: "فاتورة مشتريات",      icon: <BookMarked className="w-3.5 h-3.5" /> },
+  { id: "purchase_return",     label: "مردود مشتريات",       icon: <RotateCcw className="w-3.5 h-3.5" /> },
+  { id: "sales_order",         label: "أمر بيع",             icon: <ClipboardList className="w-3.5 h-3.5" /> },
+  { id: "sales_quote",         label: "عرض سعر مبيعات",     icon: <Tag className="w-3.5 h-3.5" /> },
+  { id: "purchase_order",      label: "أمر شراء",            icon: <ClipboardList className="w-3.5 h-3.5" /> },
+  { id: "purchase_quote",      label: "عرض سعر مشتريات",    icon: <Tag className="w-3.5 h-3.5" /> },
+  { id: "stock_transfer",      label: "سند تحويل مخزني",    icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
+  { id: "journal_entry",       label: "سند قيد",             icon: <BookText className="w-3.5 h-3.5" /> },
+  { id: "stock_issue_items",   label: "سند صرف أصناف",       icon: <PackageMinus className="w-3.5 h-3.5" /> },
+  { id: "stock_receipt_items", label: "سند توريد أصناف",     icon: <PackagePlus className="w-3.5 h-3.5" /> },
+  { id: "customers_journal",   label: "دفتر العملاء",         icon: <Users className="w-3.5 h-3.5" /> },
+  { id: "suppliers_journal",   label: "دفتر الموردين",        icon: <Truck className="w-3.5 h-3.5" /> },
 ];
 
 /* ──────────────── small atoms ──────────────── */
@@ -473,7 +473,7 @@ function buildPreview(fixedPart: string, firstNum: string, digits: string): stri
 
 /* ──────────────── main component ──────────────── */
 export default function DocumentJournalsPage() {
-  const [selectedType, setSelectedType] = useState("sales_return");
+  const [selectedType, setSelectedType] = useState("sales");
   const [view, setView]       = useState<"list" | "form">("list");
   const [editId, setEditId]   = useState<number | null>(null);
   const [form, setForm]       = useState<JournalForm>({ ...EMPTY });
