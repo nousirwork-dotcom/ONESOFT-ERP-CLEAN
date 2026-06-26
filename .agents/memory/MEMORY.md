@@ -1,4 +1,5 @@
 - [JSX Fragment in conditional rendering](jsx-fragment-conditional.md) — use `{cond && (<>...</>)}` not `{cond && (\n{inner...})` — bare newline breaks JSX parser
 - [PrintTemplateDesigner config_v1](print-template-designer.md) — TemplateLayout must include type:"config_v1" + all config fields for InvoicePrintModal compatibility
 - [Field-code journal posting pattern](field-code-journal-posting.md) — three places must all allow accountLinks-based posting: list endpoint, page save condition, posting validation
+- [Payment method ↔ field dictionary sync](payment-method-field-code-sync.md) — PM code must exactly match postingName in account links; auto-sync on create; auto-balance fetches PMs from DB dynamically
 - [toLocaleString comma bug in DB writes](tolocalestring-db-bug.md) — never use toLocaleString for values sent to PostgreSQL decimal columns; use toFixed(4) instead

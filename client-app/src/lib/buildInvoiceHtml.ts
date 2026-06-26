@@ -102,17 +102,17 @@ function toArabicWords(n: number, currency = "ريال"): string {
 /* ══════════════ Column Definitions ══════════════ */
 type ColKey = keyof InvDocTemplateConfig["columns"];
 const COL_DEFS: { key: ColKey; arH: string; enH: string; w?: number; alignRight?: boolean }[] = [
-  { key: "num",      arH: "م",                         enH: "No",                w: 28 },
-  { key: "code",     arH: "رقم الصنف",                 enH: "Item Code",         w: 70 },
-  { key: "name",     arH: "تفاصيل السلع/خدمات",        enH: "Item Name",         alignRight: true },
-  { key: "unit",     arH: "وحدة",                      enH: "Unit",              w: 42 },
-  { key: "qty",      arH: "كمية",                      enH: "Quantity",          w: 52 },
-  { key: "price",    arH: "سعر الوحدة",                enH: "Unit Price",        w: 62 },
-  { key: "discount", arH: "خصومات",                    enH: "Discount",          w: 58 },
-  { key: "taxable",  arH: "المبلغ الخاضع للضريبة",     enH: "Taxable Amount",    w: 80 },
-  { key: "taxRate",  arH: "نسبة الضريبة",              enH: "Tax Rate",          w: 52 },
-  { key: "taxAmt",   arH: "مبلغ الضريبة",              enH: "Tax Amount",        w: 68 },
-  { key: "total",    arH: "المجموع (شامل ضريبة)",      enH: "SubTotal Incl VAT", w: 80 },
+  { key: "num",      arH: "م",                         enH: "No",                w: 26 },
+  { key: "code",     arH: "رمز الصنف",                 enH: "Item Code",         w: 66 },
+  { key: "name",     arH: "تفاصيل السلع / الخدمات",    enH: "Description",       alignRight: true },
+  { key: "unit",     arH: "وحدة",                      enH: "Unit",              w: 40 },
+  { key: "qty",      arH: "الكمية",                    enH: "Qty",               w: 48 },
+  { key: "price",    arH: "سعر الوحدة",                enH: "Unit Price",        w: 60 },
+  { key: "discount", arH: "الخصم",                     enH: "Discount",          w: 54 },
+  { key: "taxable",  arH: "المبلغ الخاضع",             enH: "Taxable",           w: 66 },
+  { key: "taxRate",  arH: "نسبة الضريبة",              enH: "Tax %",             w: 48 },
+  { key: "taxAmt",   arH: "مبلغ الضريبة",              enH: "VAT Amount",        w: 62 },
+  { key: "total",    arH: "الإجمالي (شامل ضريبة)",     enH: "Total Incl. VAT",   w: 76 },
 ];
 
 /* ══════════════ Compute line values ══════════════ */
@@ -156,6 +156,15 @@ const DEFAULT_CFG: InvDocTemplateConfig = {
   sections: { sellerInfo: true, customerInfo: true, amountInWords: true, pageNumber: true, signatures: false },
 };
 
+/* ══════════════ Helpers ══════════════ */
+function hex2rgb(hex: string): string {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `${r},${g},${b}`;
+}
+
 /* ══════════════ Main Export ══════════════ */
 export function buildInvoiceHtml(
   data: InvPrintData,
@@ -164,114 +173,137 @@ export function buildInvoiceHtml(
   qrLabel = "QR Code",
   qrSize = 100,
 ): string {
-  const C = cfg ?? DEFAULT_CFG;
-  const color = C.primaryColor;
-  const isBilingual = C.language === "bilingual";
-  const visibleCols = COL_DEFS.filter(c => C.columns[c.key]);
+  const C        = cfg ?? DEFAULT_CFG;
+  const color    = C.primaryColor;
+  const colorRgb = hex2rgb(color);
+  const isBi     = C.language === "bilingual";
+  const visibleCols  = COL_DEFS.filter(c => C.columns[c.key]);
   const METRIC_KEYS: ColKey[] = ["qty", "discount", "taxable", "taxRate", "taxAmt", "total"];
   const metricsCount = METRIC_KEYS.filter(k => visibleCols.some(c => c.key === k)).length;
   const labelColSpan = Math.max(1, visibleCols.length - metricsCount);
-  const lineCalcs = computeLines(data);
-  const minRows = C.minRows ?? 5;
-  const emptyRows = Math.max(0, minRows - data.lines.length);
-  const netExclVAT = data.subtotal - data.discountTotal;
-  const amountInWords = C.sections.amountInWords ? toArabicWords(data.grandTotal, data.currency) : "";
-  const paymentText = data.paymentType === "cash"
-    ? (isBilingual ? "نقداً / Cash" : "نقداً")
-    : data.paymentType === "partial"
-    ? (isBilingual ? "جزئي / Partial" : "جزئي")
-    : (isBilingual ? "آجل / Credit" : "آجل");
+  const lineCalcs    = computeLines(data);
+  const minRows      = C.minRows ?? 5;
+  const emptyRows    = Math.max(0, minRows - data.lines.length);
+  const netExclVAT   = data.subtotal - data.discountTotal;
+  const amountWords  = C.sections.amountInWords ? toArabicWords(data.grandTotal, data.currency || "ريال") : "";
 
-  const qrImgHtml = qrDataUrl
-    ? `<div style="display:flex;flex-direction:column;align-items:center;gap:3px">
-         <img src="${qrDataUrl}" width="${qrSize}" height="${qrSize}" style="display:block"/>
-         <span style="font-size:7px;color:#888">${qrLabel}</span>
-       </div>` : "";
+  const paymentText =
+    data.paymentType === "cash"    ? (isBi ? "نقداً / Cash"       : "نقداً") :
+    data.paymentType === "partial" ? (isBi ? "جزئي / Partial"     : "جزئي") :
+                                     (isBi ? "آجل / Credit"       : "آجل");
 
-  const thS = `border:1px solid #000;padding:4px 3px;text-align:center;background:${color};color:#fff;font-size:9px`;
-  const tdS = `border:1px solid #000;padding:3px 4px;text-align:center;font-size:9px;height:20px`;
+  /* ─── Items table HTML ─── */
+  const thS  = `border:1px solid rgba(${colorRgb},0.8);padding:4px 3px;text-align:center;background:${color};color:#fff;font-size:8.5px;vertical-align:middle`;
+  const tdS  = `border:1px solid #d0d5dd;padding:2.5px 3px;text-align:center;font-size:8.5px;height:19px;vertical-align:middle`;
+  const tdSR = `${tdS};text-align:right;padding-right:5px`;
 
   const headersHtml = visibleCols.map(c =>
     `<th style="${thS}${c.w ? `;width:${c.w}px` : ""}">
-      <div>${c.arH}</div>${isBilingual ? `<div style="font-size:7px;opacity:0.85">${c.enH}</div>` : ""}
-    </th>`).join("");
+      <div style="font-weight:bold">${c.arH}</div>
+      ${isBi ? `<div style="font-size:7px;opacity:0.82;font-weight:normal">${c.enH}</div>` : ""}
+    </th>`
+  ).join("");
 
   const linesHtml = data.lines.map((ln, i) => {
     const calc = lineCalcs[i];
-    return `<tr>${visibleCols.map(c => {
-      const v = getColVal(c.key, ln, calc, i);
-      const align = c.alignRight ? "right;padding-right:5px" : "center";
-      return `<td style="${tdS};text-align:${align}">${v}</td>`;
+    const bg   = i % 2 === 1 ? "background:#f7f9fc" : "";
+    return `<tr style="${bg}">${visibleCols.map(c => {
+      const v   = getColVal(c.key, ln, calc, i);
+      const sty = c.alignRight ? tdSR : tdS;
+      return `<td style="${sty}">${v}</td>`;
     }).join("")}</tr>`;
   }).join("");
 
-  const emptyHtml = Array(emptyRows).fill(
-    `<tr>${visibleCols.map(() => `<td style="${tdS}">&nbsp;</td>`).join("")}</tr>`
-  ).join("");
+  const emptyHtml = Array(emptyRows).fill(null).map((_, i) => {
+    const bg = (data.lines.length + i) % 2 === 1 ? "background:#f7f9fc" : "";
+    return `<tr style="${bg}">${visibleCols.map(() => `<td style="${tdS}">&nbsp;</td>`).join("")}</tr>`;
+  }).join("");
 
-  const sumRow = `<tr style="background:#f5f5f5;font-weight:bold">
-    <td style="${tdS}" colspan="${labelColSpan}">${isBilingual ? "المجموع / Total" : "المجموع"}</td>
+  const sumRowStyle = `background:#eef2f8;font-weight:bold;font-size:8.5px`;
+  const sumRow = `<tr style="${sumRowStyle}">
+    <td style="${tdSR};border:1px solid #d0d5dd" colspan="${labelColSpan}">${isBi ? "المجموع / Total" : "المجموع"}</td>
     ${C.columns.qty      ? `<td style="${tdS}">${data.lines.reduce((s,l)=>s+(parseFloat(l.quantity)||0),0).toFixed(2)}</td>` : ""}
     ${C.columns.discount ? `<td style="${tdS}">${data.discountTotal.toFixed(2)}</td>` : ""}
     ${C.columns.taxable  ? `<td style="${tdS}">${netExclVAT.toFixed(2)}</td>` : ""}
-    ${C.columns.taxRate  ? `<td style="${tdS}">-</td>` : ""}
+    ${C.columns.taxRate  ? `<td style="${tdS}">—</td>` : ""}
     ${C.columns.taxAmt   ? `<td style="${tdS}">${data.taxTotal.toFixed(2)}</td>` : ""}
     ${C.columns.total    ? `<td style="${tdS}">${data.grandTotal.toFixed(2)}</td>` : ""}
   </tr>`;
 
-  const partyBox = (titleAr: string, titleEn: string, rows: [string, string, string][]) =>
-    `<div style="border:1px solid #ccc;padding:6px;flex:1">
-      <div style="font-weight:bold;font-size:10px;color:${color};margin-bottom:4px">
-        ${titleAr}${isBilingual ? ` <span style="font-size:8px;color:#888">/ ${titleEn}</span>` : ""}
+  /* ─── Party box builder ─── */
+  type Row3 = [string, string, string];
+  const partyBox = (titleAr: string, titleEn: string, rows: Row3[]) => {
+    const filtered = rows.filter(r => r[2]);
+    return `<div style="flex:1;border:1px solid #ccc;overflow:hidden;border-radius:3px">
+      <div style="background:${color};color:#fff;padding:3px 8px;font-size:9.5px;font-weight:bold">
+        ${titleAr}${isBi ? ` <span style="font-size:8px;font-weight:normal;opacity:0.85">/ ${titleEn}</span>` : ""}
       </div>
-      <table style="width:100%;border-collapse:collapse;font-size:8px">
-        ${rows.map(([ar, en, val]) => `<tr>
-          ${isBilingual ? `<td style="color:#888;width:80px;padding:1px 2px" dir="ltr">${en}</td>` : ""}
-          <td style="color:#555;width:100px;padding:1px 2px">${ar}</td>
-          <td style="font-weight:500;padding:1px 4px">${val}</td>
-        </tr>`).join("")}
-      </table>
+      <div style="padding:5px 8px">
+        <table style="width:100%;border-collapse:collapse;font-size:8px">
+          ${filtered.map(([ar, en, val]) => `<tr>
+            ${isBi ? `<td style="color:#888;width:82px;padding:1.5px 2px;vertical-align:top" dir="ltr">${en}:</td>` : ""}
+            <td style="color:#555;width:${isBi ? 85 : 100}px;padding:1.5px 2px;vertical-align:top">${ar}:</td>
+            <td style="font-weight:500;padding:1.5px 4px;vertical-align:top">${val}</td>
+          </tr>`).join("")}
+        </table>
+      </div>
     </div>`;
+  };
 
-  const customerRows: [string, string, string][] = [
-    ["الإسم", "Name", data.customerName],
-    ["رقم المبنى", "Building No", data.customerBuildingNo || ""],
-    ["إسم الشارع", "Street Name", data.customerStreet || ""],
-    ["الحي", "District", data.customerDistrict || ""],
-    ["المدينة", "City", data.customerCity || ""],
-    ["البلد", "Country", data.customerCountry || ""],
-    ["رقم البريد", "Postal Code", data.customerPostalCode || ""],
-    ["رقم العنوان الإضافي", "Additional No", data.customerAdditionalNo || ""],
+  const customerRows: Row3[] = [
+    ["الإسم",                    "Name",           data.customerName],
     ["رقم تسجيل ضريبة القيمة المضافة", "VAT Number", data.customerTaxNumber || ""],
-    ["المعرف أخرى", "Other ID", data.customerCode || ""],
+    ["رقم المبنى",               "Building No",    data.customerBuildingNo || ""],
+    ["إسم الشارع",               "Street",         data.customerStreet || ""],
+    ["الحي",                     "District",       data.customerDistrict || ""],
+    ["المدينة",                  "City",           data.customerCity || ""],
+    ["الدولة",                   "Country",        data.customerCountry || ""],
+    ["الرمز البريدي",            "Postal Code",    data.customerPostalCode || ""],
+    ["الرقم الإضافي",            "Additional No",  data.customerAdditionalNo || ""],
+    ["رقم / كود العميل",         "Customer ID",    data.customerCode || ""],
   ];
-  const sellerRows: [string, string, string][] = [
-    ["الإسم", "Name", data.sellerName],
-    ["رقم المبنى", "Building No", data.sellerBuildingNo || ""],
-    ["إسم الشارع", "Street Name", data.sellerStreet || ""],
-    ["سجل تجاري", "Commercial Reg", data.sellerCommercialReg || ""],
-    ["المدينة", "City", data.sellerCity || ""],
-    ["البلد", "Country", data.sellerCountry || "المملكة العربية السعودية"],
-    ["رقم البريد", "Postal Code", data.sellerPostalCode || ""],
-    ["رقم العنوان الإضافي", "Additional No", data.sellerAdditionalNo || ""],
+
+  const sellerRows: Row3[] = [
+    ["الإسم",                    "Name",           data.sellerName],
     ["رقم تسجيل ضريبة القيمة المضافة", "VAT Number", data.sellerTaxNumber || ""],
-    ["المعرف أخرى", "Other ID", ""],
+    ["السجل التجاري",             "Comm. Reg",      data.sellerCommercialReg || ""],
+    ["رقم المبنى",               "Building No",    data.sellerBuildingNo || ""],
+    ["إسم الشارع",               "Street",         data.sellerStreet || ""],
+    ["الحي",                     "District",       data.sellerDistrict || ""],
+    ["المدينة",                  "City",           data.sellerCity || ""],
+    ["الدولة",                   "Country",        data.sellerCountry || "المملكة العربية السعودية"],
+    ["الرمز البريدي",            "Postal Code",    data.sellerPostalCode || ""],
+    ["هاتف",                     "Phone",          data.sellerPhone || ""],
   ];
 
-  const summaryHtml = [
-    { ar: "الإجمالي غير شامل ضريبة المضافة", en: "Total (Excluding VAT)", val: data.subtotal.toFixed(2) },
-    { ar: "تخفيض", en: "Discount", val: data.discountTotal.toFixed(2) },
-    { ar: "الصافي غير شامل ضريبة المضافة", en: "Net (Excluding VAT)", val: netExclVAT.toFixed(2) },
-    { ar: "مجموعة ضريبة القيمة المضافة", en: "Total VAT", val: data.taxTotal.toFixed(2) },
-    { ar: "إجمالي المبلغ المستحق", en: "Total Amount due", val: data.grandTotal.toFixed(2), grand: true },
-  ].map(r =>
-    `<tr style="${r.grand ? "background:#e8f5e8;font-weight:bold" : ""}">
-      <td style="border:1px solid #000;padding:5px 8px;font-weight:bold;width:120px;text-align:center">${r.val}</td>
-      <td style="border:1px solid #000;padding:5px 8px;text-align:right">
-        ${r.ar}${isBilingual ? ` <span style="font-size:8px;color:#777;float:left">${r.en}</span>` : ""}
+  /* ─── Summary rows ─── */
+  const summaryRows = [
+    { ar: "الإجمالي (غير شامل ضريبة القيمة المضافة)", en: "Total (Excl. VAT)",  val: data.subtotal.toFixed(2),      grand: false },
+    { ar: "الخصم",                                    en: "Discount",           val: `(${data.discountTotal.toFixed(2)})`, grand: false },
+    { ar: "الصافي (غير شامل ضريبة القيمة المضافة)",  en: "Net Amount (Excl.)", val: netExclVAT.toFixed(2),         grand: false },
+    { ar: "ضريبة القيمة المضافة (15%)",              en: "VAT Amount (15%)",   val: data.taxTotal.toFixed(2),      grand: false },
+    { ar: "إجمالي المبلغ المستحق",                   en: "Total Amount Due",   val: data.grandTotal.toFixed(2),    grand: true  },
+  ];
+  const sumTdLbl = `border:1px solid #ccc;padding:4px 8px;font-size:9px`;
+  const sumTdVal = `border:1px solid #ccc;padding:4px 8px;font-size:9px;font-weight:bold;text-align:center;white-space:nowrap`;
+  const summaryHtml = summaryRows.map(r =>
+    `<tr style="${r.grand ? `background:${color};color:#fff` : ""}">
+      <td style="${sumTdVal}${r.grand ? ";color:#fff" : ""}">${r.val}</td>
+      <td style="${sumTdLbl}${r.grand ? ";color:#fff;font-weight:bold" : ""}">
+        ${r.ar}${isBi ? `<span style="font-size:7.5px;opacity:0.75;margin-right:6px"> ${r.en}</span>` : ""}
       </td>
-    </tr>`).join("");
+    </tr>`
+  ).join("");
 
+  /* ─── QR section ─── */
+  const qrHtml = qrDataUrl
+    ? `<div style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px;border:1px solid #ddd;border-radius:3px;margin-left:8px">
+         <img src="${qrDataUrl}" width="${qrSize}" height="${qrSize}" style="display:block"/>
+         <span style="font-size:7px;color:#888">${qrLabel}</span>
+       </div>`
+    : "";
+
+  /* ─── Full HTML ─── */
   return `<!DOCTYPE html>
 <html dir="rtl">
 <head>
@@ -279,70 +311,135 @@ export function buildInvoiceHtml(
 <title>فاتورة ${data.invoiceNumber}</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
-  body{font-family:'Tahoma','Arial',sans-serif;font-size:10px;color:#000;background:#fff;direction:rtl}
-  .page{padding:14px 18px;max-width:980px;margin:auto}
-  @media print{body{margin:0}.page{padding:10px}}
+  body{font-family:'Tahoma','Arial',sans-serif;font-size:10px;color:#111;background:#fff;direction:rtl}
+  .page{max-width:980px;margin:auto}
+  @media print{body{margin:0}.page{padding:0}}
 </style>
 </head>
 <body><div class="page">
 
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-    ${isBilingual ? `<div style="text-align:left;flex:1">
-      <div style="font-size:13px;font-weight:bold;color:${color}">${data.sellerNameEn || data.sellerName}</div>
-      ${data.sellerAddress ? `<div style="font-size:8px;color:#555">${data.sellerAddress}</div>` : ""}
-    </div>` : `<div></div>`}
-    <div style="text-align:center;flex:1">
-      <div style="font-size:18px;font-weight:bold;border:2px solid ${color};padding:6px 18px;display:inline-block;line-height:1.4">
-        فاتورة ضريبية${isBilingual ? `<br><span style="font-size:13px">TAX INVOICE</span>` : ""}
+  <!-- ══ شريط لوني علوي ══ -->
+  <div style="height:6px;background:${color}"></div>
+
+  <!-- ══ رأس الفاتورة ══ -->
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 18px 8px;border-bottom:2px solid ${color};gap:8px">
+
+    <!-- يسار: اسم الشركة بالإنجليزية -->
+    ${isBi ? `<div style="flex:1;text-align:left;direction:ltr">
+      <div style="font-size:14px;font-weight:bold;color:${color};line-height:1.3">${data.sellerNameEn || data.sellerName}</div>
+      ${data.sellerPhone ? `<div style="font-size:8px;color:#666;margin-top:2px">Tel: ${data.sellerPhone}</div>` : ""}
+      ${data.sellerTaxNumber ? `<div style="font-size:8px;color:#666">VAT No: ${data.sellerTaxNumber}</div>` : ""}
+    </div>` : `<div style="flex:1"></div>`}
+
+    <!-- وسط: عنوان الفاتورة -->
+    <div style="flex:1;text-align:center">
+      <div style="display:inline-block;border:2.5px solid ${color};padding:5px 22px;border-radius:2px;line-height:1.5">
+        <div style="font-size:16px;font-weight:bold;color:${color}">فاتورة ضريبية</div>
+        ${isBi ? `<div style="font-size:11px;font-weight:bold;color:${color};opacity:0.85;letter-spacing:0.5px">TAX INVOICE</div>` : ""}
       </div>
     </div>
-    <div style="text-align:right;flex:1">
-      <div style="font-size:14px;font-weight:bold;color:${color}">${data.sellerName}</div>
-      ${data.sellerPhone ? `<div style="font-size:8px;color:#555">Tel: ${data.sellerPhone}</div>` : ""}
+
+    <!-- يمين: اسم الشركة بالعربية -->
+    <div style="flex:1;text-align:right">
+      <div style="font-size:15px;font-weight:bold;color:${color};line-height:1.3">${data.sellerName}</div>
+      ${data.sellerCommercialReg ? `<div style="font-size:8px;color:#666;margin-top:2px">س.ت: ${data.sellerCommercialReg}</div>` : ""}
+      ${data.sellerCity ? `<div style="font-size:8px;color:#666">${data.sellerCity}${data.sellerCountry ? "، " + data.sellerCountry : ""}</div>` : ""}
     </div>
   </div>
 
-  <table style="width:100%;border-collapse:collapse;margin-bottom:6px;font-size:9px;border:1px solid #ccc">
-    <tr>
-      <td style="padding:3px 6px;border:1px solid #ccc;color:#888">${isBilingual ? "رقم الفاتورة / Invoice No" : "رقم الفاتورة"}</td>
-      <td style="padding:3px 6px;border:1px solid #ccc;font-weight:bold">${data.invoiceNumber}</td>
-      <td style="padding:3px 6px;border:1px solid #ccc;color:#888">${isBilingual ? "تاريخ التحرير / Issue Date" : "التاريخ"}</td>
-      <td style="padding:3px 6px;border:1px solid #ccc;font-weight:bold">${data.invoiceDate}</td>
-    </tr>
-    <tr>
-      <td style="padding:3px 6px;border:1px solid #ccc;color:#888">${isBilingual ? "نوع السند / Type" : "نوع الدفع"}</td>
-      <td style="padding:3px 6px;border:1px solid #ccc;font-weight:bold">${paymentText}</td>
-      <td style="padding:3px 6px;border:1px solid #ccc;color:#888">${isBilingual ? "بائع / Sales man" : "مندوب البيع"}</td>
-      <td style="padding:3px 6px;border:1px solid #ccc;font-weight:bold">${data.salesperson || ""}</td>
-    </tr>
-  </table>
+  <!-- ══ بيانات الفاتورة ══ -->
+  <div style="padding:6px 18px">
+    <table style="width:100%;border-collapse:collapse;font-size:9px">
+      <tr style="background:#f5f7fb">
+        <td style="border:1px solid #ddd;padding:3.5px 7px;color:#666;width:90px">
+          رقم الفاتورة${isBi ? `<br><span style="font-size:7.5px;color:#aaa">Invoice No</span>` : ""}
+        </td>
+        <td style="border:1px solid #ddd;padding:3.5px 7px;font-weight:bold;width:130px">${data.invoiceNumber}</td>
+        <td style="border:1px solid #ddd;padding:3.5px 7px;color:#666;width:90px">
+          تاريخ التحرير${isBi ? `<br><span style="font-size:7.5px;color:#aaa">Issue Date</span>` : ""}
+        </td>
+        <td style="border:1px solid #ddd;padding:3.5px 7px;font-weight:bold;width:110px">${data.invoiceDate}${data.invoiceTime ? " " + data.invoiceTime.slice(0,5) : ""}</td>
+        <td style="border:1px solid #ddd;padding:3.5px 7px;color:#666;width:80px">
+          نوع السند${isBi ? `<br><span style="font-size:7.5px;color:#aaa">Type</span>` : ""}
+        </td>
+        <td style="border:1px solid #ddd;padding:3.5px 7px;font-weight:bold">${paymentText}</td>
+      </tr>
+      <tr>
+        <td style="border:1px solid #ddd;padding:3.5px 7px;color:#666">
+          مندوب المبيعات${isBi ? `<br><span style="font-size:7.5px;color:#aaa">Salesperson</span>` : ""}
+        </td>
+        <td style="border:1px solid #ddd;padding:3.5px 7px;font-weight:bold">${data.salesperson || "—"}</td>
+        <td style="border:1px solid #ddd;padding:3.5px 7px;color:#666">
+          العملة${isBi ? `<br><span style="font-size:7.5px;color:#aaa">Currency</span>` : ""}
+        </td>
+        <td style="border:1px solid #ddd;padding:3.5px 7px;font-weight:bold">${data.currency || "SAR"}</td>
+        <td style="border:1px solid #ddd;padding:3.5px 7px;color:#666" colspan="2"></td>
+      </tr>
+    </table>
+  </div>
 
-  <div style="display:flex;gap:6px;margin-bottom:6px">
+  <!-- ══ بيانات الأطراف ══ -->
+  ${(C.sections.customerInfo || C.sections.sellerInfo) ? `
+  <div style="display:flex;gap:8px;padding:0 18px 8px">
     ${C.sections.customerInfo ? partyBox("العميل", "Customer", customerRows) : ""}
-    ${C.sections.sellerInfo   ? partyBox("البائع / المورد", "Seller", sellerRows) : ""}
-  </div>
-
-  ${data.notes ? `<div style="border:1px solid #ccc;padding:4px 8px;margin-bottom:6px;font-size:9px"><strong>ملحوظة / Remark:</strong> ${data.notes}</div>` : ""}
-
-  <table style="width:100%;border-collapse:collapse;margin-bottom:6px">
-    <thead><tr>${headersHtml}</tr></thead>
-    <tbody>${linesHtml}${emptyHtml}${sumRow}</tbody>
-  </table>
-
-  <div style="display:flex;gap:0;margin-bottom:6px;border:1px solid #000">
-    ${qrDataUrl ? `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px;border-left:1px solid #000;min-width:${qrSize+20}px">${qrImgHtml}</div>` : ""}
-    <div style="flex:1"><table style="width:100%;border-collapse:collapse">${summaryHtml}</table></div>
-  </div>
-
-  ${C.sections.amountInWords ? `<div style="border:1px solid #000;padding:5px 8px;margin-bottom:4px;font-size:10px;font-weight:bold"><u>${amountInWords}</u></div>` : ""}
-
-  ${C.sections.signatures ? `<div style="display:flex;justify-content:space-around;margin-top:24px;padding-top:8px">
-    ${["المدير","المحاسب","المستلم"].map(s=>`<div style="text-align:center;width:180px"><div style="border-top:1px solid #999;padding-top:4px;font-size:9px;color:#555">${s}</div></div>`).join("")}
+    ${C.sections.sellerInfo   ? partyBox("البائع", "Seller",   sellerRows)   : ""}
   </div>` : ""}
 
-  ${C.sections.pageNumber ? `<div style="display:flex;justify-content:space-between;font-size:9px;color:#888;margin-top:6px;border-top:1px solid #eee;padding-top:4px">
-    <span>OneSoft ERP</span><span>صفحة 1 من 1 / Page 1 of 1</span>
+  <!-- ══ ملاحظة ══ -->
+  ${data.notes ? `<div style="border-right:3px solid ${color};background:#fffbe8;padding:4px 10px;margin:0 18px 6px;font-size:9px">
+    <strong>${isBi ? "ملحوظة / Note:" : "ملحوظة:"}</strong> ${data.notes}
   </div>` : ""}
+
+  <!-- ══ جدول الأصناف ══ -->
+  <div style="padding:0 18px;margin-bottom:8px">
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr>${headersHtml}</tr></thead>
+      <tbody>${linesHtml}${emptyHtml}${sumRow}</tbody>
+    </table>
+  </div>
+
+  <!-- ══ ملخص + QR ══ -->
+  <div style="padding:0 18px;margin-bottom:6px">
+    <div style="display:flex;align-items:flex-start;gap:10px">
+      <!-- QR (إذا وجد) -->
+      ${qrHtml}
+      <!-- الإجماليات -->
+      <div style="margin-right:auto;min-width:310px">
+        <table style="width:100%;border-collapse:collapse">
+          ${summaryHtml}
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ المبلغ كتابةً ══ -->
+  ${C.sections.amountInWords && amountWords ? `
+  <div style="border:1px solid #ccc;padding:5px 12px;margin:0 18px 5px;border-radius:2px;font-size:9.5px">
+    <strong style="color:${color}">${isBi ? "المبلغ كتابةً / Amount in Words:" : "المبلغ كتابةً:"}</strong>
+    <span style="font-weight:bold"> ${amountWords}</span>
+  </div>` : ""}
+
+  <!-- ══ توقيعات ══ -->
+  ${C.sections.signatures ? `
+  <div style="display:flex;justify-content:space-around;padding:0 18px;margin-top:22px;margin-bottom:6px">
+    ${[
+      isBi ? "المدير / Manager"    : "المدير",
+      isBi ? "المحاسب / Accountant": "المحاسب",
+      isBi ? "المستلم / Receiver"  : "المستلم",
+    ].map(s => `<div style="text-align:center;width:170px">
+      <div style="border-top:1px solid #999;padding-top:4px;font-size:8px;color:#666;margin-top:28px">${s}</div>
+    </div>`).join("")}
+  </div>` : ""}
+
+  <!-- ══ تذييل ══ -->
+  ${C.sections.pageNumber ? `
+  <div style="display:flex;justify-content:space-between;font-size:8px;color:#888;margin:4px 18px 0;border-top:1px solid #e0e0e0;padding-top:3px">
+    <span>OneSoft ERP</span>
+    <span>${isBi ? "صفحة 1 من 1 / Page 1 of 1" : "صفحة 1 من 1"}</span>
+  </div>` : ""}
+
+  <!-- ══ شريط لوني سفلي ══ -->
+  <div style="height:4px;background:${color};margin-top:5px"></div>
 
 </div></body></html>`;
 }

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { eq, and, asc } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { paymentMethods } from '../schema.js';
+import { paymentMethods, fieldDictionary } from '../schema.js';
 
 const DEFAULT_METHODS = [
   { code: 'CASH',    nameAr: 'نقدي',                  nameEn: 'Cash',            icon: 'cash',    color: '#15803D', bgColor: '#F0FDF4', sortOrder: 1, isBuiltIn: true  },
@@ -70,11 +70,29 @@ export const paymentMethodsRouter = router({
       sortOrder: z.number().int().default(0),
     }))
     .mutation(async ({ ctx, input }) => {
+      const orgId = ctx.user.orgId;
       const [row] = await db.insert(paymentMethods).values({
-        orgId: ctx.user.orgId,
+        orgId,
         ...input,
         isBuiltIn: false,
       }).returning();
+      // مزامنة تلقائية مع قاموس الحقول حتى يظهر الكود في الروابط المحاسبية
+      const existing = await db.select({ id: fieldDictionary.id })
+        .from(fieldDictionary)
+        .where(and(eq(fieldDictionary.orgId, orgId), eq(fieldDictionary.code, input.code)))
+        .limit(1);
+      if (!existing.length) {
+        await db.insert(fieldDictionary).values({
+          orgId,
+          code: input.code,
+          nameAr: input.nameAr,
+          nameEn: input.nameEn ?? input.nameAr,
+          category: 'Payment Fields',
+          fieldType: 'Amount',
+          sortOrder: (input.sortOrder ?? 99) + 100,
+          isSystem: false,
+        });
+      }
       return row;
     }),
 

@@ -75,14 +75,49 @@ export const documentTemplatesRouter = router({
   getDefault: protectedProcedure
     .input(z.object({ docType: z.string() }))
     .query(async ({ ctx, input }) => {
-      const tpl = await db.query.documentTemplates.findFirst({
+      const orgId = ctx.user.orgId;
+      let tpl = await db.query.documentTemplates.findFirst({
         where: and(
-          eq(documentTemplates.orgId, ctx.user.orgId),
+          eq(documentTemplates.orgId, orgId),
           eq(documentTemplates.docType, input.docType),
           eq(documentTemplates.isDefault, true),
           eq(documentTemplates.isActive, true),
         ),
       });
+      // إذا لم يوجد نموذج افتراضي، أنشئه تلقائياً (seed)
+      if (!tpl) {
+        const defMap: Record<string, { code: string; nameAr: string; nameEn: string; paperSize: string; layoutJson: string }> = {
+          sales_invoice: {
+            code: 'INV01', nameAr: 'نموذج المبيعات الأساسي', nameEn: 'Standard Sales Invoice',
+            paperSize: 'A4', layoutJson: INV01_CONFIG,
+          },
+          pos_receipt: {
+            code: 'POS01', nameAr: 'نموذج نقاط البيع الحراري', nameEn: 'POS Thermal Receipt',
+            paperSize: '80mm', layoutJson: POS01_CONFIG,
+          },
+        };
+        const def = defMap[input.docType];
+        if (def) {
+          const existing = await db.query.documentTemplates.findFirst({
+            where: and(eq(documentTemplates.orgId, orgId), eq(documentTemplates.code, def.code)),
+          });
+          if (existing) {
+            // وجد لكن ليس افتراضياً — اجعله افتراضياً
+            await db.update(documentTemplates)
+              .set({ isDefault: true, updatedAt: new Date() })
+              .where(and(eq(documentTemplates.id, existing.id), eq(documentTemplates.orgId, orgId)));
+            tpl = { ...existing, isDefault: true };
+          } else {
+            const [row] = await db.insert(documentTemplates).values({
+              orgId, code: def.code, nameAr: def.nameAr, nameEn: def.nameEn,
+              docType: input.docType, paperSize: def.paperSize, orientation: 'portrait',
+              isDefault: true, isActive: true, sortOrder: 1,
+              layoutJson: def.layoutJson,
+            }).returning();
+            tpl = row;
+          }
+        }
+      }
       return tpl ?? null;
     }),
 

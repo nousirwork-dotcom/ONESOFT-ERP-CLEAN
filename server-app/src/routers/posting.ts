@@ -6,6 +6,7 @@ import {
   salesInvoices, purchaseInvoices, purchaseInvoiceItems,
   journalEntries, journalEntryLines,
   documentJournals, chartOfAccounts, documentTypes, warehouseAccountLinks,
+  paymentMethods,
 } from '../schema.js';
 
 // ─── مساعد: تحليل حسابات نوع المستند عبر warehouseAccountLinks ─────────────
@@ -229,45 +230,41 @@ export async function buildSalesInvoiceLines(
       const shortfall = credit - debit;
 
       if (shortfall > 0.001) {
-        // نحسب مجموع كل وسائل الدفع من تفصيل السداد
         const breakdown = invoice.paymentBreakdown as Record<string, number> | null | undefined;
-        const paymentFieldCodes: Record<string, string[]> = {
-          CASH:    ['CASH',    'CASH_AMOUNT'],
-          CARD:    ['CARD',    'CARD_AMOUNT', 'VISA'],
-          BANK:    ['BANK',    'BANK_AMOUNT', 'BANK_TRANSFER'],
-          ACCOUNT: ['ACCOUNT', 'ACCOUNT_AMOUNT', 'CUSTOMER_RECEIVABLE'],
-          TAMARA:  ['TAMARA',  'TAMARA_AMOUNT'],
-          TABBY:   ['TABBY',   'TABBY_AMOUNT'],
-          OTHER:   ['OTHER',   'OTHER_AMOUNT'],
-        };
+
+        // جلب وسائل الدفع الفعلية للمنشأة (تشمل المخصصة كالولاء وغيرها)
+        const orgPayMethods = await db.select({ code: paymentMethods.code, nameAr: paymentMethods.nameAr })
+          .from(paymentMethods)
+          .where(eq(paymentMethods.orgId, orgId));
 
         // نكتشف وسائل الدفع التي لها مبلغ في التفصيل لكن لا يوجد رابط محاسبي لها
         const uncoveredMethods: string[] = [];
         if (breakdown) {
-          for (const [method, aliases] of Object.entries(paymentFieldCodes)) {
-            const amt = Number(breakdown[method] ?? breakdown[method + '_AMOUNT'] ?? 0);
+          for (const pm of orgPayMethods) {
+            const amt = Number(breakdown[pm.code] ?? 0);
             if (amt > 0.001) {
+              // رابط محاسبي يغطي هذه الوسيلة: يجب أن يطابق كودها تماماً أو أحد الأسماء البديلة المعروفة
+              const knownAliases: Record<string, string[]> = {
+                CASH:    ['CASH', 'CASH_AMOUNT'],
+                CARD:    ['CARD', 'CARD_AMOUNT', 'VISA'],
+                BANK:    ['BANK', 'BANK_AMOUNT', 'BANK_TRANSFER'],
+                ACCOUNT: ['ACCOUNT', 'ACCOUNT_AMOUNT', 'CUSTOMER_RECEIVABLE', 'CUSTOMER_CODE'],
+                TAMARA:  ['TAMARA', 'TAMARA_AMOUNT'],
+                TABBY:   ['TABBY', 'TABBY_AMOUNT'],
+                OTHER:   ['OTHER', 'OTHER_AMOUNT'],
+              };
+              const aliases = knownAliases[pm.code] ?? [pm.code];
               const isCovered = configLinks.some(l =>
                 l.accountId && l.postingName &&
                 aliases.some(a => a === l.postingName.toUpperCase())
               );
-              if (!isCovered) uncoveredMethods.push(method);
+              if (!isCovered) uncoveredMethods.push(pm.nameAr ?? pm.code);
             }
           }
         }
 
-        // تحذير مفصّل يوضح وسائل الدفع غير المُربوطة
-        const methodLabels: Record<string, string> = {
-          CASH:    'نقدي',
-          CARD:    'بطاقة',
-          BANK:    'تحويل بنكي',
-          ACCOUNT: 'آجل (حساب عميل)',
-          TAMARA:  'تمارة',
-          TABBY:   'تابي',
-          OTHER:   'أخرى',
-        };
         if (uncoveredMethods.length > 0) {
-          const labels = uncoveredMethods.map(m => methodLabels[m] ?? m).join('، ');
+          const labels = uncoveredMethods.join('، ');
           const cashAccId = journal?.cashAccountId ?? null;
           if (cashAccId) {
             result.warnings.push(
