@@ -1,37 +1,49 @@
 /**
  * PrintEngine.ts — المنسق المركزي لعمليات الطباعة
  *
- * الاستخدام الآن:
- *   PrintEngine.buildAndPrint({ documentType: "sales_invoice", data, templateConfig, ... })
+ * مبدأ التصميم: Open/Closed
+ *   - PrintEngine مغلق للتعديل — لا يحتوي على أي if أو switch خاص بنوع المستند.
+ *   - مفتوح للتوسعة — يكفي تسجيل Builder جديد عبر registerBuilder().
  *
- * الاستخدام المستقبلي:
- *   PrintEngine.buildAndPrint({ documentType: "purchase_invoice", ... })
- *   PrintEngine.buildAndPrint({ documentType: "receipt_voucher",  ... })
+ * الاستخدام:
+ *   PrintEngine.buildAndPrint({ documentType: "sales_invoice",    data, templateConfig })
+ *   PrintEngine.buildAndPrint({ documentType: "purchase_invoice", data, templateConfig })
+ *   PrintEngine.buildAndPrint({ documentType: "receipt_voucher",  data, templateConfig })
+ *
+ * إضافة مستند جديد:
+ *   1. أنشئ builders/ReceiptBuilder.ts وسجّل registerBuilder("receipt_voucher", ...)
+ *   2. أضف import في index.ts
+ *   — PrintEngine نفسه لا يُعدَّل أبداً.
  */
-import { buildInvoiceHtml } from "@/lib/buildInvoiceHtml";
-import { DEFAULT_TEMPLATE_CONFIG } from "./TemplateEngine";
-import type { PrintJob, PrintDocumentType } from "./types";
+import type { PrintJob, PrintDocumentType, DocumentBuilder } from "./types";
 
-const INVOICE_BUILDER_TYPES: PrintDocumentType[] = [
-  "sales_invoice",
-  "purchase_invoice",
-  "sales_return",
-  "purchase_return",
-];
+/* ── Registry ──────────────────────────────────────────────────────────────── */
+const _registry = new Map<PrintDocumentType, DocumentBuilder>();
 
+/**
+ * يُسجّل Builder لنوع مستند محدد.
+ * يُستدعى مرة واحدة عند تحميل ملف الـ Builder (side-effect import).
+ */
+export function registerBuilder(
+  docType: PrintDocumentType,
+  builder: DocumentBuilder,
+): void {
+  _registry.set(docType, builder);
+}
+
+/* ── Engine ────────────────────────────────────────────────────────────────── */
 export const PrintEngine = {
   /**
-   * يبني HTML المستند بناءً على نوعه ويوجّه إلى الـ builder المناسب.
+   * يبحث في الـ Registry عن الـ Builder المناسب ويستدعي buildHtml.
+   * لا يوجد أي منطق خاص بنوع المستند هنا.
    */
   buildHtml(job: PrintJob): string {
-    const { documentType, data, templateConfig, qrDataUrl, qrLabel, qrSize } = job;
-    const cfg = templateConfig ?? DEFAULT_TEMPLATE_CONFIG;
-
-    if (INVOICE_BUILDER_TYPES.includes(documentType)) {
-      return buildInvoiceHtml(data, cfg, qrDataUrl, qrLabel, qrSize);
-    }
-
-    return buildInvoiceHtml(data, cfg, qrDataUrl, qrLabel, qrSize);
+    const builder = _registry.get(job.documentType);
+    if (!builder) throw new Error(
+      `[PrintEngine] No builder registered for "${job.documentType}". ` +
+      `Import from "@/lib/print" to ensure all builders are loaded.`,
+    );
+    return builder.buildHtml(job);
   },
 
   /**

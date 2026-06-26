@@ -16,7 +16,7 @@ import PostingPreviewModal from "@/components/PostingPreviewModal";
 import InvoicePrintModal from "@/components/InvoicePrintModal";
 import SendDocumentPanel from "@/components/SendDocumentPanel";
 import PaymentModal from "@/components/PaymentModal";
-import { PrintEngine } from "@/lib/print/PrintEngine";
+import { PrintEngine } from "@/lib/print";
 import { usePrintTemplate } from "@/hooks/usePrintTemplate";
 import { DateSegmentInput } from "@/components/DateSegmentInput";
 import QRCode from "qrcode";

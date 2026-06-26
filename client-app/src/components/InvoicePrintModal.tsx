@@ -9,8 +9,7 @@ import { Printer, X, FileText } from "lucide-react";
 import { generateQrContent, type QrSettings, type QrInvoiceData } from "@/lib/qrUtils";
 import { buildInvoiceHtml } from "@/lib/buildInvoiceHtml";
 import type { InvDocTemplateConfig, InvPrintData } from "@/lib/buildInvoiceHtml";
-import { PrintEngine } from "@/lib/print/PrintEngine";
-import { DEFAULT_TEMPLATE_CONFIG } from "@/lib/print/TemplateEngine";
+import { PrintEngine, DEFAULT_TEMPLATE_CONFIG } from "@/lib/print";
 
 /* ═══════════════════ Re-exported Types (backward compat) ═══════════════════ */
 export type DocTemplateConfig = InvDocTemplateConfig;

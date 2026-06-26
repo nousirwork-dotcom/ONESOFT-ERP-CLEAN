@@ -21,3 +21,11 @@ export interface PrintJob {
   qrLabel?:        string;
   qrSize?:         number;
 }
+
+/**
+ * واجهة يجب على كل Builder تنفيذها.
+ * يُسجَّل كل Builder عبر registerBuilder() ويُستدعى تلقائياً من PrintEngine.
+ */
+export interface DocumentBuilder {
+  buildHtml(job: PrintJob): string;
+}
