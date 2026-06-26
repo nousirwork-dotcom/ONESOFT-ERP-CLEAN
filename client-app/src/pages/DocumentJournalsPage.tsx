@@ -706,7 +706,7 @@ export default function DocumentJournalsPage() {
         style={{ width: 180, background: "#EBE7DE", borderLeft: "1px solid #ddd8ce" }}>
         <div className="px-3 py-2 shrink-0"
           style={{ borderBottom: "1px solid #d8d3c8", background: "#E4E0D6" }}>
-          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">نوع المستند</span>
+          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">نوع الدفتر</span>
         </div>
         <div className="flex-1 overflow-y-auto">
           {DOC_TYPES.map(dt => {
