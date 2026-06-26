@@ -1205,13 +1205,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
             })()}
           </div>
 
-          {/* col 2: البائع */}
-          <div className="flex items-center gap-1">
-            <label className="text-[10px] font-bold whitespace-nowrap flex-shrink-0" style={{ color: "#666" }}>البائع</label>
-            <input value={salesperson} onChange={e => setSalesperson(e.target.value)} className="classic-input w-full" />
-          </div>
-
-          {/* col 3: تاريخ التحرير */}
+          {/* col 2: تاريخ التحرير */}
           <div className="flex items-center gap-1">
             <label className="text-[10px] font-bold whitespace-nowrap flex-shrink-0" style={{ color: "#666" }}>تاريخ التحرير</label>
             <div className="flex items-stretch" style={{ width: 128 }}>
@@ -1221,7 +1215,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
             </div>
           </div>
 
-          {/* col 4: تاريخ الدفع */}
+          {/* col 3: تاريخ الدفع */}
           <div className="flex items-center gap-1">
             <label className="text-[10px] font-bold whitespace-nowrap flex-shrink-0" style={{ color: "#666" }}>تاريخ الدفع</label>
             <div className="flex items-stretch" style={{ width: 128 }}>
@@ -1229,6 +1223,12 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
               <button type="button" onClick={() => dueDatePickerRef.current?.showPicker()} className="flex items-center justify-center" style={{ background: "#f3f4f6", border: "1px solid #d1d5db", borderLeft: "none", borderRadius: "0 4px 4px 0", padding: "0 5px", color: "#555", cursor: "pointer", fontSize: 12 }}>📅</button>
               <input ref={dueDatePickerRef} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} />
             </div>
+          </div>
+
+          {/* col 4: البائع (تحت العملة) */}
+          <div className="flex items-center gap-1">
+            <label className="text-[10px] font-bold whitespace-nowrap flex-shrink-0" style={{ color: "#666" }}>البائع</label>
+            <input value={salesperson} onChange={e => setSalesperson(e.target.value)} className="classic-input w-full" />
           </div>
 
           {/* ══ صف 4: ملحوظة ══ */}
