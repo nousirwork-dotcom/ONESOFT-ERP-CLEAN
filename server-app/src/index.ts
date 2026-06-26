@@ -26,8 +26,10 @@ app.get('/api/health', (_req, res) => res.json({ status: 'ok', version: '1.0.0' 
 
 // ─── Backup Download ───────────────────────────────────────────────────────────
 app.get('/download/backup', (_req, res) => {
-  const file = path.join(__dirname, '..', '..', '..', 'OneSoft-ERP-src-20260626.zip');
-  res.download(file, 'OneSoft-ERP-src-20260626.zip');
+  const file = path.join(__dirname, '..', '..', 'OneSoft-ERP-src-20260626.zip');
+  res.download(file, 'OneSoft-ERP-src-20260626.zip', (err) => {
+    if (err) res.status(404).json({ error: 'File not found', path: file });
+  });
 });
 
 // ─── tRPC ─────────────────────────────────────────────────────────────────────
