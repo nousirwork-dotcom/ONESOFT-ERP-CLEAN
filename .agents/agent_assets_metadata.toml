@@ -72,3 +72,9 @@ id = "0bVK6LxrmrnW9mOpKj4Jq"
 uri = "file://onesoft_erp_backup_20260613_2325.zip"
 type = "unspecified"
 title = "OneSoft ERP — نسخة احتياطية 13/06/2026"
+
+[[outputs]]
+id = "eTWYJfbKow8CFMI07vuVW"
+uri = "file://OneSoft-ERP-backup-20260626.zip"
+type = "unspecified"
+title = "OneSoft ERP — نسخة احتياطية 26/06/2026"
