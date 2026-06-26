@@ -978,24 +978,23 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
 
       {/* ── Header Form ─────────────────────────────────────────────────── */}
       <div className="border-b border-[#b0a89a] px-3 pt-2 pb-1.5" style={{ background: "#F7F5EE", boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "auto 1fr auto 190px", columnGap: 8, rowGap: 3, alignItems: "center" }}>
 
-        {/* ── صف 1: رقم الفاتورة | بناءً على | تاريخ التحرير | تاريخ الدفع ── */}
-        <div className="flex items-center gap-3 flex-wrap mb-1.5">
+          {/* ══ صف 1: رقم الفاتورة │ بناءً على │ نوع السند ══ */}
 
-          {/* رقم الفاتورة + الدفتر */}
+          {/* col 1 (يمين): رقم الفاتورة */}
           {(() => {
             const journals = journalsQuery.data ?? [];
             const selected = journals.find((j: any) => j.id === journalId);
             const previewNum = (j: any): string => {
               const seq = (j.currentSeq ?? 0) === 0 ? (j.firstNumber ?? 1) : (j.currentSeq ?? 0) + (j.increment ?? 1);
-              const digits = j.numDigits ?? 6;
-              const padded = String(seq).padStart(digits, "0");
+              const padded = String(seq).padStart(j.numDigits ?? 6, "0");
               const year = j.includeYear ? `-${new Date().getFullYear()}` : "";
               return `${j.numberPrefix}${year}-${padded}`;
             };
             return (
-              <div className="flex items-center gap-1.5 flex-shrink-0 relative">
-                <label className="text-[10px] font-bold whitespace-nowrap" style={{ color: "#D19C05", minWidth: 70 }}>رقم الفاتورة</label>
+              <div className="flex items-center gap-1 flex-shrink-0 relative">
+                <label className="text-[10px] font-bold whitespace-nowrap" style={{ color: "#D19C05" }}>رقم الفاتورة</label>
                 {selected && (
                   <span className="text-[9px] px-1 rounded cursor-pointer" style={{ background: "#dbeafe", color: "#1d4ed8", lineHeight: "16px" }} onClick={() => setJournalId(null)} title="إلغاء الدفتر">
                     {selected.name} ✕
@@ -1003,65 +1002,56 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                 )}
                 <div className="flex items-stretch">
                   <input
-                    value={invoiceNumber}
-                    onChange={e => setInvoiceNumber(e.target.value)}
+                    value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)}
                     onContextMenu={e => { e.preventDefault(); setJournalOpen(o => !o); }}
                     onKeyDown={e => { if (e.key === "F4" || (e.key === "ArrowDown" && e.altKey)) { e.preventDefault(); setJournalOpen(o => !o); } }}
                     className="classic-input text-center font-bold"
-                    style={{ width: 110, background: selected ? "#eff6ff" : "#FFFDE7", borderColor: selected ? "#3b82f6" : "#F59E0B", borderRadius: "4px 0 0 4px", borderLeft: "none", color: "#1a1a1a", fontSize: "13px", fontWeight: 700, letterSpacing: "0.03em" }}
+                    style={{ width: 110, background: selected ? "#eff6ff" : "#FFFDE7", borderColor: selected ? "#3b82f6" : "#F59E0B", borderRadius: "4px 0 0 4px", borderLeft: "none", color: "#1a1a1a", fontSize: "13px", fontWeight: 700 }}
                     title="كليك يمين أو F4 لاختيار الدفتر"
                   />
-                  <button onClick={() => setJournalOpen(o => !o)} className="flex items-center justify-center" style={{ width: 20, borderRadius: "0 4px 4px 0", background: selected ? "#3b82f6" : "#F59E0B", border: `1px solid ${selected ? "#2563eb" : "#d97706"}`, color: "white", fontSize: "9px" }} title="اختيار الدفتر">▼</button>
+                  <button onClick={() => setJournalOpen(o => !o)} className="flex items-center justify-center" style={{ width: 20, borderRadius: "0 4px 4px 0", background: selected ? "#3b82f6" : "#F59E0B", border: `1px solid ${selected ? "#2563eb" : "#d97706"}`, color: "white", fontSize: "9px" }}>▼</button>
                 </div>
-                {journalOpen && (
-                  <>
-                    <div className="fixed inset-0 z-[9998]" onClick={() => setJournalOpen(false)} />
-                    <div className="absolute top-full right-0 z-[9999] mt-1 bg-white rounded-lg overflow-hidden" style={{ minWidth: 320, boxShadow: "0 8px 32px rgba(0,0,0,0.18)", border: "1px solid #e2e8f0" }} dir="rtl">
-                      <div className="flex items-center justify-between px-3 py-2" style={{ background: "#1e40af" }}>
-                        <span className="text-white text-[11px] font-bold">دفاتر فاتورة المبيعات</span>
-                        <button onClick={() => setJournalOpen(false)} style={{ color: "rgba(255,255,255,0.7)", fontSize: "11px" }}>✕</button>
-                      </div>
-                      {journals.length === 0 ? (
-                        <div className="px-4 py-5 text-center">
-                          <div className="text-[20px] mb-1">📒</div>
-                          <div className="text-[11px] text-slate-500 font-medium">لا توجد دفاتر مُعرَّفة</div>
-                        </div>
-                      ) : (
-                        <div className="overflow-y-auto" style={{ maxHeight: 240 }}>
-                          {journals.map((j: any, idx: number) => {
-                            const isSelected = j.id === journalId;
-                            const preview = previewNum(j);
-                            return (
-                              <button key={j.id} onClick={() => handleJournalSelect(j.id)} className="w-full flex items-center gap-0 text-right transition-colors" style={{ background: isSelected ? "#eff6ff" : idx % 2 === 0 ? "#fafafa" : "white", borderBottom: "1px solid #f1f5f9", padding: "6px 12px" }}>
-                                <span style={{ width: 16, color: isSelected ? "#3b82f6" : "transparent", fontSize: "11px", flexShrink: 0 }}>✓</span>
-                                <div className="flex-1 min-w-0 mx-2">
-                                  <div className="text-[12px] font-semibold truncate" style={{ color: isSelected ? "#1d4ed8" : "#1e293b" }}>فاتورة مبيعات – {j.name}</div>
-                                  {j.description && <div className="text-[10px] text-slate-400 truncate">{j.description}</div>}
-                                </div>
-                                <div className="shrink-0 text-left">
-                                  <div className="font-mono text-[11px] font-bold px-2 py-0.5 rounded" style={{ background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0" }}>{preview}</div>
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-                      <div className="px-3 py-1.5 flex items-center justify-between" style={{ background: "#f8fafc", borderTop: "1px solid #e2e8f0" }}>
-                        <span className="text-[9px] text-slate-400">كليك يمين أو F4 لفتح القائمة</span>
-                        {journalId && <button onClick={() => { setJournalId(null); setJournalOpen(false); }} className="text-[9px] text-red-400 hover:text-red-600">إلغاء اختيار الدفتر</button>}
-                      </div>
+                {journalOpen && (<>
+                  <div className="fixed inset-0 z-[9998]" onClick={() => setJournalOpen(false)} />
+                  <div className="absolute top-full right-0 z-[9999] mt-1 bg-white rounded-lg overflow-hidden" style={{ minWidth: 320, boxShadow: "0 8px 32px rgba(0,0,0,0.18)", border: "1px solid #e2e8f0" }} dir="rtl">
+                    <div className="flex items-center justify-between px-3 py-2" style={{ background: "#1e40af" }}>
+                      <span className="text-white text-[11px] font-bold">دفاتر فاتورة المبيعات</span>
+                      <button onClick={() => setJournalOpen(false)} style={{ color: "rgba(255,255,255,0.7)", fontSize: "11px" }}>✕</button>
                     </div>
-                  </>
-                )}
+                    {journals.length === 0 ? (
+                      <div className="px-4 py-5 text-center"><div className="text-[20px] mb-1">📒</div><div className="text-[11px] text-slate-500">لا توجد دفاتر مُعرَّفة</div></div>
+                    ) : (
+                      <div className="overflow-y-auto" style={{ maxHeight: 240 }}>
+                        {journals.map((j: any, idx: number) => {
+                          const isSelected = j.id === journalId;
+                          return (
+                            <button key={j.id} onClick={() => handleJournalSelect(j.id)} className="w-full flex items-center gap-0 text-right transition-colors" style={{ background: isSelected ? "#eff6ff" : idx % 2 === 0 ? "#fafafa" : "white", borderBottom: "1px solid #f1f5f9", padding: "6px 12px" }}>
+                              <span style={{ width: 16, color: isSelected ? "#3b82f6" : "transparent", fontSize: "11px", flexShrink: 0 }}>✓</span>
+                              <div className="flex-1 min-w-0 mx-2">
+                                <div className="text-[12px] font-semibold truncate" style={{ color: isSelected ? "#1d4ed8" : "#1e293b" }}>فاتورة مبيعات – {j.name}</div>
+                                {j.description && <div className="text-[10px] text-slate-400 truncate">{j.description}</div>}
+                              </div>
+                              <div className="font-mono text-[11px] font-bold px-2 py-0.5 rounded shrink-0" style={{ background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0" }}>{previewNum(j)}</div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <div className="px-3 py-1.5 flex items-center justify-between" style={{ background: "#f8fafc", borderTop: "1px solid #e2e8f0" }}>
+                      <span className="text-[9px] text-slate-400">كليك يمين أو F4 لفتح القائمة</span>
+                      {journalId && <button onClick={() => { setJournalId(null); setJournalOpen(false); }} className="text-[9px] text-red-400 hover:text-red-600">إلغاء اختيار الدفتر</button>}
+                    </div>
+                  </div>
+                </>)}
               </div>
             );
           })()}
 
-          {/* بناءً على */}
-          <div className="flex items-center gap-1.5 flex-1 min-w-0" style={{ maxWidth: 380 }}>
-            <label className="text-[10px] font-bold whitespace-nowrap" style={{ color: "#666" }}>بناءً على</label>
+          {/* col 2-3: بناءً على */}
+          <div className="flex items-center gap-1.5" style={{ gridColumn: "2/4" }}>
+            <label className="text-[10px] font-bold whitespace-nowrap flex-shrink-0" style={{ color: "#666" }}>بناءً على</label>
             <div className="flex gap-1 flex-1 min-w-0">
-              <select value={basedOnType} onChange={e => { setBasedOnType(e.target.value as any); setBasedOnNum(''); setBasedOnTrigger(''); }} className="classic-input flex-shrink-0" style={{ minWidth: 100 }}>
+              <select value={basedOnType} onChange={e => { setBasedOnType(e.target.value as any); setBasedOnNum(''); setBasedOnTrigger(''); }} className="classic-input flex-shrink-0" style={{ minWidth: 105 }}>
                 <option value="">-- النوع --</option>
                 <option value="order">أمر بيع</option>
                 <option value="quote">عرض أسعار</option>
@@ -1070,130 +1060,142 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
               </select>
               <div className="relative flex-1 min-w-0">
                 <input
-                  value={basedOnNum}
-                  onChange={e => { setBasedOnNum(e.target.value); setBasedOnTrigger(""); }}
+                  value={basedOnNum} onChange={e => { setBasedOnNum(e.target.value); setBasedOnTrigger(""); }}
                   onBlur={() => { if (basedOnType && basedOnNum.trim()) setBasedOnTrigger(basedOnNum.trim()); }}
                   onKeyDown={e => { if (e.key === 'Enter' && basedOnType && basedOnNum.trim()) setBasedOnTrigger(basedOnNum.trim()); }}
                   placeholder={basedOnType ? "رقم المستند ثم Enter ↵" : ""}
-                  disabled={!basedOnType}
-                  className="classic-input w-full"
+                  disabled={!basedOnType} className="classic-input w-full"
                 />
                 {basedOnQuery.isFetching && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-blue-500">⏳</span>}
-                {basedOnTrigger && !basedOnQuery.isFetching && basedOnQuery.data === null && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-red-500 font-bold" title="لم يُوجد المستند">✗</span>}
-                {basedOnTrigger && !basedOnQuery.isFetching && basedOnQuery.data && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-green-600 font-bold" title="تم استيراد البيانات">✓</span>}
+                {basedOnTrigger && !basedOnQuery.isFetching && basedOnQuery.data === null && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-red-500 font-bold">✗</span>}
+                {basedOnTrigger && !basedOnQuery.isFetching && basedOnQuery.data && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-green-600 font-bold">✓</span>}
               </div>
             </div>
           </div>
 
-          {/* تاريخ التحرير */}
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            <label className="text-[10px] font-bold whitespace-nowrap" style={{ color: "#666" }}>تاريخ التحرير</label>
-            <div className="flex items-stretch" style={{ width: 130 }}>
-              <DateSegmentInput value={invoiceDate} onChange={setInvoiceDate} style={{ flex: 1, minWidth: 0 }} />
-              <button type="button" onClick={() => invoiceDatePickerRef.current?.showPicker()} className="flex items-center justify-center" style={{ background: "#f3f4f6", border: "1px solid #d1d5db", borderLeft: "none", borderRadius: "0 4px 4px 0", padding: "0 5px", color: "#555", cursor: "pointer", fontSize: 12 }}>📅</button>
-              <input ref={invoiceDatePickerRef} type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} />
-            </div>
-          </div>
-
-          {/* تاريخ الدفع */}
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            <label className="text-[10px] font-bold whitespace-nowrap" style={{ color: "#666" }}>تاريخ الدفع</label>
-            <div className="flex items-stretch" style={{ width: 130 }}>
-              <DateSegmentInput value={dueDate} onChange={setDueDate} style={{ flex: 1, minWidth: 0 }} />
-              <button type="button" onClick={() => dueDatePickerRef.current?.showPicker()} className="flex items-center justify-center" style={{ background: "#f3f4f6", border: "1px solid #d1d5db", borderLeft: "none", borderRadius: "0 4px 4px 0", padding: "0 5px", color: "#555", cursor: "pointer", fontSize: 12 }}>📅</button>
-              <input ref={dueDatePickerRef} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} />
-            </div>
-          </div>
-
-        </div>
-
-        {/* ── صف 2: العميل | المخزن ── */}
-        <div className="flex items-center gap-3 flex-wrap mb-1.5">
-
-          {/* العميل */}
-          <div className="flex items-center gap-1.5 flex-1 min-w-0" ref={custDropRef} style={{ position: "relative", maxWidth: 560 }}>
-            <label className="text-[10px] font-bold whitespace-nowrap flex-shrink-0" style={{ color: "#666", minWidth: 40 }}>العميل</label>
-            <div className="flex gap-1 flex-1 min-w-0" style={{ position: "relative" }}>
-              <input
-                value={customerId ? (customerCode ? `${customerCode} - ${customerName}` : customerName) : custSearch}
-                onChange={e => { if (customerId) return; setCustSearch(e.target.value); setShowCustDrop(true); }}
-                onFocus={() => { if (!customerId) setShowCustDrop(true); }}
-                readOnly={!!customerId}
-                placeholder="ابحث عن عميل..."
-                className="classic-input flex-1 min-w-0"
-                style={{ cursor: customerId ? "default" : "text", paddingLeft: customerId ? 22 : undefined }}
-              />
-              {customerId && (
-                <button type="button" onClick={() => { setCustomerId(null); setCustomerName(""); setCustomerCode(""); setCustSearch(""); setCustomerType('individual'); setCustomerTaxNumber(""); setShowCustDrop(false); }}
-                  style={{ position: "absolute", left: 48, top: "50%", transform: "translateY(-50%)", color: "#9ca3af", fontSize: 13, lineHeight: 1, background: "none", border: "none", cursor: "pointer", padding: "0 2px" }}
-                  title="إلغاء اختيار العميل">✕</button>
-              )}
-              <button type="button" onClick={() => { if (!customerId) { setCustSearch(""); setShowCustDrop(v => !v); } }}
-                className="flex-shrink-0 flex items-center justify-center"
-                style={{ width: 22, height: 22, borderRadius: 3, background: "#6B7280", color: "white", fontSize: 11, border: "1px solid #4B5563" }}
-                title="عرض قائمة العملاء">▾</button>
-              <button type="button"
-                onClick={async () => {
-                  setNewCustName(custSearch.trim()); setNewCustCode(""); setNewCustPhone(""); setNewCustEmail(""); setNewCustAddr("");
-                  setNewCustType('individual'); setNewCustTaxNum(""); setNewCustRegNum("");
-                  setNewCustShortAddr(""); setNewCustBuilding(""); setNewCustAdditional("");
-                  setNewCustPostal(""); setNewCustCity("");
-                  if (journalCustomersJournalId) { try { const preview = await utils.documentJournals.previewNextNumber.fetch({ journalId: journalCustomersJournalId }); if (preview) setNewCustCode(preview); } catch {} }
-                  setShowAddCustomer(true); setShowCustDrop(false);
-                }}
-                className="flex-shrink-0 flex items-center justify-center"
-                style={{ width: 22, height: 22, borderRadius: 3, background: "#D19C05", color: "white", fontSize: 16, fontWeight: 700, border: "1px solid #9A7203" }}
-                title="إضافة عميل جديد">+</button>
-              {showCustDrop && !customerId && (() => {
-                const all = customersQuery.data ?? [];
-                const q = custSearch.trim().toLowerCase();
-                const filtered = q ? all.filter(c => c.name.toLowerCase().includes(q) || (c.code ?? "").toLowerCase().includes(q)) : all;
-                const exactMatch = all.some(c => c.name.toLowerCase() === q || (c.code ?? "").toLowerCase() === q);
+          {/* col 4 (يسار): نوع السند */}
+          <div className="flex items-center gap-1">
+            <label className="text-[10px] font-bold whitespace-nowrap flex-shrink-0" style={{ color: "#666" }}>نوع السند</label>
+            {(() => {
+              const allDocTypes = docTypesQuery.data ?? [];
+              const filteredDocTypes = journalId ? allDocTypes.filter((dt: any) => dt.journal === String(journalId)) : allDocTypes;
+              const selectedDT = docTypeId ? allDocTypes.find((dt: any) => String(dt.id) === docTypeId) : null;
+              if (allDocTypes.length > 0) {
                 return (
-                  <div style={{ position: "absolute", top: "100%", right: 0, left: 0, zIndex: 9999, background: "white", border: "1px solid #d1d5db", borderRadius: 4, boxShadow: "0 4px 16px rgba(0,0,0,0.15)", maxHeight: 220, overflowY: "auto", marginTop: 2 }} dir="rtl">
-                    {filtered.length === 0 && !custSearch.trim() && <div className="px-3 py-2 text-[11px] text-gray-400 text-center">لا يوجد عملاء مضافون</div>}
-                    {filtered.map(c => (
-                      <div key={c.id} onMouseDown={() => { setCustomerId(c.id); setCustomerName(c.name); setCustomerCode((c as any).code ?? ""); setCustomerType((c as any).customerType ?? 'individual'); setCustomerTaxNumber((c as any).taxNumber ?? ""); setCustSearch(""); setShowCustDrop(false); }}
-                        className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-blue-50 text-[12px]" style={{ borderBottom: "1px solid #f3f4f6" }}>
-                        <span style={{ fontSize: 13 }}>{(c as any).customerType === 'organization' ? '🏢' : '👤'}</span>
-                        {(c as any).code && <span className="font-mono text-[11px] font-bold px-1 rounded" style={{ background: "#FEF3C7", color: "#D19C05" }}>{(c as any).code}</span>}
-                        <span className="font-medium text-gray-800">{c.name}</span>
-                        {(c as any).customerType === 'organization' && <span className="text-[10px] text-blue-500 mr-auto">مؤسسة</span>}
-                      </div>
-                    ))}
-                    {custSearch.trim() && !exactMatch && (
-                      <div onMouseDown={async () => {
-                        setNewCustName(custSearch.trim()); setNewCustCode(""); setNewCustPhone(""); setNewCustEmail(""); setNewCustAddr("");
-                        setNewCustType('individual'); setNewCustTaxNum(""); setNewCustRegNum("");
-                        setNewCustShortAddr(""); setNewCustBuilding(""); setNewCustAdditional("");
-                        setNewCustPostal(""); setNewCustCity("");
-                        if (journalCustomersJournalId) { try { const preview = await utils.documentJournals.previewNextNumber.fetch({ journalId: journalCustomersJournalId }); if (preview) setNewCustCode(preview); } catch {} }
-                        setShowAddCustomer(true); setShowCustDrop(false);
-                      }} className="flex items-center gap-2 px-3 py-2 cursor-pointer text-[12px] font-bold" style={{ background: "#EFF6FF", borderTop: "1px solid #BFDBFE", color: "#1D4ED8" }}>
-                        <span>➕</span><span>إضافة "{custSearch.trim()}" كعميل جديد</span>
-                      </div>
-                    )}
+                  <div className="relative flex-1 min-w-0">
+                    {selectedDT && <div className="absolute inset-0 flex items-center px-2 pointer-events-none z-10"><span className="font-bold text-blue-800 text-[12px] truncate">{selectedDT.codeAr || selectedDT.nameAr}</span></div>}
+                    <select value={docTypeId} onChange={e => handleDocTypeSelect(e.target.value)} className="classic-input w-full" style={{ fontWeight: 600, color: selectedDT ? "transparent" : undefined }}>
+                      {filteredDocTypes.map((dt: any) => (<option key={dt.id} value={String(dt.id)}>{dt.codeAr ? `${dt.codeAr} — ${dt.nameAr}` : dt.nameAr}</option>))}
+                    </select>
                   </div>
                 );
-              })()}
-            </div>
-            {customerId && (
-              <div className="flex items-center gap-1 flex-shrink-0">
-                <div className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold" style={{ background: customerType === 'organization' ? '#EFF6FF' : '#F0FDF4', border: `1px solid ${customerType === 'organization' ? '#93C5FD' : '#86EFAC'}`, color: customerType === 'organization' ? '#1D4ED8' : '#15803D' }}>
-                  {customerType === 'organization' ? '🏢 مؤسسة' : '👤 فرد'}
-                </div>
-              </div>
-            )}
+              }
+              return (
+                <select value={paymentType} onChange={e => { setPaymentType(e.target.value as PaymentType); setPaidAmountOverride(""); }} className="classic-input w-full"
+                  style={{ background: paymentType === "cash" ? "#F0FDF4" : paymentType === "partial" ? "#EFF6FF" : "#FFF7ED", borderColor: paymentType === "cash" ? "#16A34A" : paymentType === "partial" ? "#2563EB" : "#D97706", fontWeight: 700, color: paymentType === "cash" ? "#15803D" : paymentType === "partial" ? "#1D4ED8" : "#B45309" }}>
+                  <option value="cash">نقدًا</option>
+                  <option value="partial">جزئي</option>
+                  <option value="credit">آجل</option>
+                </select>
+              );
+            })()}
           </div>
 
-          {/* المخزن */}
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            <label className="text-[10px] font-bold whitespace-nowrap" style={{ color: "#666" }}>المخزن</label>
+          {/* ══ صف 2: العميل │ العملة ══ */}
+
+          {/* col 1-3: العميل */}
+          <div style={{ gridColumn: "1/4" }} ref={custDropRef}>
+            <div className="flex items-center gap-1.5">
+              <label className="text-[10px] font-bold whitespace-nowrap flex-shrink-0" style={{ color: "#666", minWidth: 40 }}>العميل</label>
+              <div className="flex gap-1 flex-1 min-w-0" style={{ position: "relative" }}>
+                <input
+                  value={customerId ? (customerCode ? `${customerCode} - ${customerName}` : customerName) : custSearch}
+                  onChange={e => { if (customerId) return; setCustSearch(e.target.value); setShowCustDrop(true); }}
+                  onFocus={() => { if (!customerId) setShowCustDrop(true); }}
+                  readOnly={!!customerId} placeholder="ابحث عن عميل..."
+                  className="classic-input flex-1 min-w-0"
+                  style={{ cursor: customerId ? "default" : "text", paddingLeft: customerId ? 22 : undefined }}
+                />
+                {customerId && (
+                  <button type="button" onClick={() => { setCustomerId(null); setCustomerName(""); setCustomerCode(""); setCustSearch(""); setCustomerType('individual'); setCustomerTaxNumber(""); setShowCustDrop(false); }}
+                    style={{ position: "absolute", left: 48, top: "50%", transform: "translateY(-50%)", color: "#9ca3af", fontSize: 13, lineHeight: 1, background: "none", border: "none", cursor: "pointer", padding: "0 2px" }}
+                    title="إلغاء اختيار العميل">✕</button>
+                )}
+                <button type="button" onClick={() => { if (!customerId) { setCustSearch(""); setShowCustDrop(v => !v); } }}
+                  className="flex-shrink-0 flex items-center justify-center"
+                  style={{ width: 22, height: 22, borderRadius: 3, background: "#6B7280", color: "white", fontSize: 11, border: "1px solid #4B5563" }}>▾</button>
+                <button type="button"
+                  onClick={async () => {
+                    setNewCustName(custSearch.trim()); setNewCustCode(""); setNewCustPhone(""); setNewCustEmail(""); setNewCustAddr("");
+                    setNewCustType('individual'); setNewCustTaxNum(""); setNewCustRegNum("");
+                    setNewCustShortAddr(""); setNewCustBuilding(""); setNewCustAdditional(""); setNewCustPostal(""); setNewCustCity("");
+                    if (journalCustomersJournalId) { try { const preview = await utils.documentJournals.previewNextNumber.fetch({ journalId: journalCustomersJournalId }); if (preview) setNewCustCode(preview); } catch {} }
+                    setShowAddCustomer(true); setShowCustDrop(false);
+                  }}
+                  className="flex-shrink-0 flex items-center justify-center"
+                  style={{ width: 22, height: 22, borderRadius: 3, background: "#D19C05", color: "white", fontSize: 16, fontWeight: 700, border: "1px solid #9A7203" }}
+                  title="إضافة عميل جديد">+</button>
+                {showCustDrop && !customerId && (() => {
+                  const all = customersQuery.data ?? [];
+                  const q = custSearch.trim().toLowerCase();
+                  const filtered = q ? all.filter(c => c.name.toLowerCase().includes(q) || (c.code ?? "").toLowerCase().includes(q)) : all;
+                  const exactMatch = all.some(c => c.name.toLowerCase() === q || (c.code ?? "").toLowerCase() === q);
+                  return (
+                    <div style={{ position: "absolute", top: "100%", right: 0, left: 0, zIndex: 9999, background: "white", border: "1px solid #d1d5db", borderRadius: 4, boxShadow: "0 4px 16px rgba(0,0,0,0.15)", maxHeight: 220, overflowY: "auto", marginTop: 2 }} dir="rtl">
+                      {filtered.length === 0 && !custSearch.trim() && <div className="px-3 py-2 text-[11px] text-gray-400 text-center">لا يوجد عملاء مضافون</div>}
+                      {filtered.map(c => (
+                        <div key={c.id} onMouseDown={() => { setCustomerId(c.id); setCustomerName(c.name); setCustomerCode((c as any).code ?? ""); setCustomerType((c as any).customerType ?? 'individual'); setCustomerTaxNumber((c as any).taxNumber ?? ""); setCustSearch(""); setShowCustDrop(false); }}
+                          className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-blue-50 text-[12px]" style={{ borderBottom: "1px solid #f3f4f6" }}>
+                          <span style={{ fontSize: 13 }}>{(c as any).customerType === 'organization' ? '🏢' : '👤'}</span>
+                          {(c as any).code && <span className="font-mono text-[11px] font-bold px-1 rounded" style={{ background: "#FEF3C7", color: "#D19C05" }}>{(c as any).code}</span>}
+                          <span className="font-medium text-gray-800">{c.name}</span>
+                          {(c as any).customerType === 'organization' && <span className="text-[10px] text-blue-500 mr-auto">مؤسسة</span>}
+                        </div>
+                      ))}
+                      {custSearch.trim() && !exactMatch && (
+                        <div onMouseDown={async () => {
+                          setNewCustName(custSearch.trim()); setNewCustCode(""); setNewCustPhone(""); setNewCustEmail(""); setNewCustAddr("");
+                          setNewCustType('individual'); setNewCustTaxNum(""); setNewCustRegNum("");
+                          setNewCustShortAddr(""); setNewCustBuilding(""); setNewCustAdditional(""); setNewCustPostal(""); setNewCustCity("");
+                          if (journalCustomersJournalId) { try { const preview = await utils.documentJournals.previewNextNumber.fetch({ journalId: journalCustomersJournalId }); if (preview) setNewCustCode(preview); } catch {} }
+                          setShowAddCustomer(true); setShowCustDrop(false);
+                        }} className="flex items-center gap-2 px-3 py-2 cursor-pointer text-[12px] font-bold" style={{ background: "#EFF6FF", borderTop: "1px solid #BFDBFE", color: "#1D4ED8" }}>
+                          <span>➕</span><span>إضافة "{custSearch.trim()}" كعميل جديد</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+              {customerId && (
+                <div className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold flex-shrink-0" style={{ background: customerType === 'organization' ? '#EFF6FF' : '#F0FDF4', border: `1px solid ${customerType === 'organization' ? '#93C5FD' : '#86EFAC'}`, color: customerType === 'organization' ? '#1D4ED8' : '#15803D' }}>
+                  {customerType === 'organization' ? '🏢 مؤسسة' : '👤 فرد'}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* col 4: العملة */}
+          <div className="flex items-center gap-1">
+            <label className="text-[10px] font-bold whitespace-nowrap flex-shrink-0" style={{ color: "#666" }}>العملة</label>
+            <select value={currency} onChange={e => setCurrency(e.target.value)} className="classic-input flex-1">
+              <option value="SAR">ريال سعودي (SAR)</option>
+              <option value="USD">دولار (USD)</option>
+              <option value="EUR">يورو (EUR)</option>
+              <option value="AED">درهم (AED)</option>
+            </select>
+          </div>
+
+          {/* ══ صف 3: المخزن │ البائع │ تاريخ التحرير │ تاريخ الدفع ══ */}
+
+          {/* col 1: المخزن */}
+          <div className="flex items-center gap-1">
+            <label className="text-[10px] font-bold whitespace-nowrap flex-shrink-0" style={{ color: "#666" }}>المخزن</label>
             {(() => {
               const lockedWh = journalWarehouseId ?? docTypeWarehouseId;
               const whTitle = journalWarehouseId ? "المخزن محدد من الدفتر" : docTypeWarehouseId ? "المخزن محدد من نوع السند" : undefined;
               return (
-                <select value={warehouseId ?? ""} onChange={e => !lockedWh && setWarehouseId(parseInt(e.target.value) || null)} className="classic-input" style={{ width: 140 }} disabled={!!lockedWh} title={whTitle}>
+                <select value={warehouseId ?? ""} onChange={e => !lockedWh && setWarehouseId(parseInt(e.target.value) || null)} className="classic-input" style={{ width: 130 }} disabled={!!lockedWh} title={whTitle}>
                   <option value="">-- اختر مخزن --</option>
                   {(lockedWh ? warehousesQuery.data?.filter(w => w.id === lockedWh) : warehousesQuery.data)?.map(w => (
                     <option key={w.id} value={w.id}>{w.name}</option>
@@ -1203,14 +1205,39 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
             })()}
           </div>
 
-        </div>
+          {/* col 2: البائع */}
+          <div className="flex items-center gap-1">
+            <label className="text-[10px] font-bold whitespace-nowrap flex-shrink-0" style={{ color: "#666" }}>البائع</label>
+            <input value={salesperson} onChange={e => setSalesperson(e.target.value)} className="classic-input w-full" />
+          </div>
 
-        {/* ── صف 3: ملحوظة ── */}
-        <div className="flex items-center gap-1.5">
-          <label className="text-[10px] font-bold whitespace-nowrap flex-shrink-0" style={{ color: "#666", minWidth: 40 }}>ملحوظة</label>
-          <input value={notes} onChange={e => setNotes(e.target.value)} className="classic-input flex-1" />
-        </div>
+          {/* col 3: تاريخ التحرير */}
+          <div className="flex items-center gap-1">
+            <label className="text-[10px] font-bold whitespace-nowrap flex-shrink-0" style={{ color: "#666" }}>تاريخ التحرير</label>
+            <div className="flex items-stretch" style={{ width: 128 }}>
+              <DateSegmentInput value={invoiceDate} onChange={setInvoiceDate} style={{ flex: 1, minWidth: 0 }} />
+              <button type="button" onClick={() => invoiceDatePickerRef.current?.showPicker()} className="flex items-center justify-center" style={{ background: "#f3f4f6", border: "1px solid #d1d5db", borderLeft: "none", borderRadius: "0 4px 4px 0", padding: "0 5px", color: "#555", cursor: "pointer", fontSize: 12 }}>📅</button>
+              <input ref={invoiceDatePickerRef} type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} />
+            </div>
+          </div>
 
+          {/* col 4: تاريخ الدفع */}
+          <div className="flex items-center gap-1">
+            <label className="text-[10px] font-bold whitespace-nowrap flex-shrink-0" style={{ color: "#666" }}>تاريخ الدفع</label>
+            <div className="flex items-stretch" style={{ width: 128 }}>
+              <DateSegmentInput value={dueDate} onChange={setDueDate} style={{ flex: 1, minWidth: 0 }} />
+              <button type="button" onClick={() => dueDatePickerRef.current?.showPicker()} className="flex items-center justify-center" style={{ background: "#f3f4f6", border: "1px solid #d1d5db", borderLeft: "none", borderRadius: "0 4px 4px 0", padding: "0 5px", color: "#555", cursor: "pointer", fontSize: 12 }}>📅</button>
+              <input ref={dueDatePickerRef} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} />
+            </div>
+          </div>
+
+          {/* ══ صف 4: ملحوظة ══ */}
+          <div style={{ gridColumn: "1/-1" }} className="flex items-center gap-1.5">
+            <label className="text-[10px] font-bold whitespace-nowrap flex-shrink-0" style={{ color: "#666", minWidth: 40 }}>ملحوظة</label>
+            <input value={notes} onChange={e => setNotes(e.target.value)} className="classic-input flex-1" />
+          </div>
+
+        </div>
       </div>
 
       {/* ── Lines Table ─────────────────────────────────────────────────── */}
