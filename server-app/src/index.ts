@@ -29,7 +29,6 @@ app.get('/download/backup', async (req, res) => {
   const { getUserFromRequest } = await import('./auth.js');
   const user = await getUserFromRequest(req);
   if (!user) return res.status(401).json({ error: 'يجب تسجيل الدخول أولاً' });
-  if (!['superadmin', 'admin'].includes(user.role)) return res.status(403).json({ error: 'ليس لديك صلاحية التحميل' });
   const file = path.join(__dirname, '..', '..', 'OneSoft-ERP-backup-20260626.zip');
   res.download(file, 'OneSoft-ERP-backup-20260626.zip', (err) => {
     if (err && !res.headersSent) res.status(404).json({ error: 'الملف غير موجود' });
