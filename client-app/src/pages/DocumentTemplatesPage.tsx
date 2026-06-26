@@ -95,11 +95,11 @@ const FS = ({ value, onValueChange, children }: { value: string; onValueChange: 
 );
 const P = ({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) => (
   <div className="overflow-hidden" style={{ border: "1px solid #e8edf3", borderRadius: 6, boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
-    <div className="px-3 py-1.5 flex items-center justify-between" style={{ background: "linear-gradient(to left, #f8faff, #f3f6fb)", borderBottom: "1px solid #edf2f7" }}>
+    <div className="px-3 py-1.5 flex items-center justify-between" style={{ background: "linear-gradient(to left, #f0ece3, #e8e3d8)", borderBottom: "1px solid #d8d3c8" }}>
       <span className="font-semibold text-indigo-800 text-[12px]">{title}</span>
       {action}
     </div>
-    <div className="px-3 py-2.5" style={{ background: "#fff" }}>{children}</div>
+    <div className="px-3 py-2.5" style={{ background: "#FDFAF5" }}>{children}</div>
   </div>
 );
 const R = ({ label, lw = 110, children }: { label: string; lw?: number; children: React.ReactNode }) => (

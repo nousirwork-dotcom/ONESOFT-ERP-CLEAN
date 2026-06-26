@@ -96,9 +96,10 @@ const Section = ({
   const c = useContext(Density) === "compact";
   return (
     <div
-      className="bg-white overflow-hidden"
+      className="overflow-hidden"
       style={{
-        border: "1px solid #e8edf3",
+        background: "#FDFAF5",
+        border: "1px solid #d8d3c8",
         borderRadius: c ? 5 : 8,
         boxShadow: "0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03)",
       }}
@@ -106,8 +107,8 @@ const Section = ({
       <div
         className={`flex items-center justify-between ${c ? "px-2.5 py-0.5" : "px-5 py-3"}`}
         style={{
-          borderBottom: `1px solid ${c ? "#f1f5f9" : "#edf2f7"}`,
-          background: c ? "#f8fafc" : "linear-gradient(to left, #f8faff, #f3f6fb)",
+          borderBottom: `1px solid #d8d3c8`,
+          background: c ? "#e8e3d8" : "linear-gradient(to left, #f0ece3, #e8e3d8)",
         }}
       >
         <span
