@@ -13,10 +13,11 @@ import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import ERPToolbar, { ERPMode } from "@/components/ERPToolbar";
 import PostingPreviewModal from "@/components/PostingPreviewModal";
-import InvoicePrintModal, { type DocTemplateConfig } from "@/components/InvoicePrintModal";
+import InvoicePrintModal from "@/components/InvoicePrintModal";
 import SendDocumentPanel from "@/components/SendDocumentPanel";
 import PaymentModal from "@/components/PaymentModal";
-import { buildInvoiceHtml } from "@/lib/buildInvoiceHtml";
+import { PrintEngine } from "@/lib/print/PrintEngine";
+import { usePrintTemplate } from "@/hooks/usePrintTemplate";
 import { DateSegmentInput } from "@/components/DateSegmentInput";
 import QRCode from "qrcode";
 
@@ -176,7 +177,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
   const allInvoicesQuery = trpc.salesInvoices.list.useQuery({});
   const qrSettingsQuery       = trpc.qrSettings.get.useQuery();
   const orgQuery              = trpc.orgs.currentOrg.useQuery();
-  const defaultTemplateQuery  = trpc.documentTemplates.getDefault.useQuery({ docType: "sales_invoice" });
+  const { templateConfig }    = usePrintTemplate("sales_invoice");
   const stockQuery       = trpc.reports.stockByWarehouse.useQuery(
     { warehouseId: warehouseId! },
     { enabled: !!warehouseId }
@@ -909,8 +910,9 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
           qrDataUrl = await QRCode.toDataURL(content, { width: 200, margin: 1 }).catch(() => "");
         }
       }
-      const html = buildInvoiceHtml(
-        {
+      const ok = PrintEngine.buildAndPrint({
+        documentType: "sales_invoice",
+        data: {
           invoiceNumber: invoiceNumber || "—",
           invoiceDate,
           invoiceTime: new Date().toTimeString().slice(0, 8),
@@ -949,31 +951,19 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
           sellerAddress: orgQuery.data?.address ?? undefined,
           sellerPhone: orgQuery.data?.phone ?? undefined,
         },
-        (() => {
-          try {
-            const raw = defaultTemplateQuery.data?.layoutJson;
-            if (!raw) return null;
-            const parsed = JSON.parse(raw);
-            return parsed.type === "config_v1" ? parsed : null;
-          } catch { return null; }
-        })(),
-        qrDataUrl || undefined,
-        qrSettingsQuery.data?.countrySystem === "zatca" ? "ZATCA QR"
+        templateConfig,
+        qrDataUrl: qrDataUrl || undefined,
+        qrLabel: qrSettingsQuery.data?.countrySystem === "zatca" ? "ZATCA QR"
           : qrSettingsQuery.data?.countrySystem === "eta" ? "ETA QR" : "QR Code",
-        qrSettingsQuery.data?.qrSize ?? 100,
-      );
-      const win = window.open("", "_blank", "width=980,height=1100");
-      if (!win) { toast.error("تعذّر فتح نافذة PDF — تحقق من إعدادات المتصفح (السماح بالنوافذ المنبثقة)"); return; }
-      win.document.write(html);
-      win.document.close();
-      win.focus();
-      setTimeout(() => { win.print(); }, 600);
+        qrSize: qrSettingsQuery.data?.qrSize ?? 100,
+      });
+      if (!ok) toast.error("تعذّر فتح نافذة PDF — تحقق من إعدادات المتصفح (السماح بالنوافذ المنبثقة)");
     } catch (e: any) {
       toast.error("تعذّر توليد PDF");
     }
   }, [invoiceNumber, invoiceDate, customerName, customerCode, customerTaxNumber, salesperson,
       paymentType, currency, notes, lines, subtotal, totalDiscount, totalTax, netTotal,
-      paidAmount, remainingAmount, orgQuery.data, qrSettingsQuery.data, defaultTemplateQuery.data]);
+      paidAmount, remainingAmount, orgQuery.data, qrSettingsQuery.data, templateConfig]);
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
@@ -1900,14 +1890,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
         <InvoicePrintModal
           open={showPrintModal}
           onClose={() => setShowPrintModal(false)}
-          templateConfig={(() => {
-            try {
-              const raw = defaultTemplateQuery.data?.layoutJson;
-              if (!raw) return null;
-              const parsed = JSON.parse(raw);
-              return parsed.type === "config_v1" ? (parsed as DocTemplateConfig) : null;
-            } catch { return null; }
-          })()}
+          templateConfig={templateConfig}
           qrSettings={qrSettingsQuery.data ? {
             isEnabled: qrSettingsQuery.data.isEnabled,
             countrySystem: qrSettingsQuery.data.countrySystem as any,

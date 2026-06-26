@@ -9,6 +9,8 @@ import { Printer, X, FileText } from "lucide-react";
 import { generateQrContent, type QrSettings, type QrInvoiceData } from "@/lib/qrUtils";
 import { buildInvoiceHtml } from "@/lib/buildInvoiceHtml";
 import type { InvDocTemplateConfig, InvPrintData } from "@/lib/buildInvoiceHtml";
+import { PrintEngine } from "@/lib/print/PrintEngine";
+import { DEFAULT_TEMPLATE_CONFIG } from "@/lib/print/TemplateEngine";
 
 /* ═══════════════════ Re-exported Types (backward compat) ═══════════════════ */
 export type DocTemplateConfig = InvDocTemplateConfig;
@@ -23,30 +25,13 @@ interface InvoicePrintModalProps {
   templateConfig?: DocTemplateConfig | null;
 }
 
-/* ═══════════════════ Default Config ═══════════════════ */
-const DEFAULT_CFG: DocTemplateConfig = {
-  type:         "config_v1",
-  language:     "bilingual",
-  primaryColor: "#406B93",
-  columns: {
-    num: true, code: true, name: true, unit: false,
-    qty: true, price: true, discount: true,
-    taxable: true, taxRate: true, taxAmt: true, total: true,
-  },
-  minRows:  5,
-  sections: {
-    sellerInfo: true, customerInfo: true,
-    amountInWords: true, pageNumber: true, signatures: false,
-  },
-};
-
 /* ═══════════════════ Component ═══════════════════ */
 export default function InvoicePrintModal({
   open, onClose, data, qrSettings, templateConfig,
 }: InvoicePrintModalProps) {
   const [qrDataUrl, setQrDataUrl] = useState("");
 
-  const cfg   = templateConfig ?? DEFAULT_CFG;
+  const cfg   = templateConfig ?? DEFAULT_TEMPLATE_CONFIG;
   const color = cfg.primaryColor;
 
   const showQR  = !!(qrSettings?.isEnabled && qrSettings?.showOnSalesInvoice);
@@ -88,14 +73,7 @@ export default function InvoicePrintModal({
   );
 
   /* ── طباعة / تصدير PDF ── */
-  const handlePrint = () => {
-    const win = window.open("", "_blank", "width=1040,height=1150");
-    if (!win) return;
-    win.document.write(invoiceHtml);
-    win.document.close();
-    win.focus();
-    setTimeout(() => { win.print(); win.close(); }, 500);
-  };
+  const handlePrint = () => { PrintEngine.print(invoiceHtml); };
 
   if (!open) return null;
 
