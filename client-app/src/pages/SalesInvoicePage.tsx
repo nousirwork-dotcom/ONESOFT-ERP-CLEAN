@@ -91,7 +91,7 @@ function toIsoDate(display: string) {
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceId?: number } = {}) {
+export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: { initialInvoiceId?: number; onDocTypeChange?: (name: string) => void } = {}) {
   // ── Header state ─────────────────────────────────────────────────────────
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().split("T")[0]);
@@ -268,6 +268,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
     setCustomerTaxNumber(inv.customerTaxNumber ?? "");
     setWarehouseId(inv.warehouseId ?? null);
     setJournalId(inv.journalId ?? null);
+    if (inv.docTypeId) setDocTypeId(String(inv.docTypeId));
     setCurrency(inv.currency ?? "SAR");
     setExchangeRate(inv.exchangeRate ?? "1.000");
     setPaymentType((inv.paymentMethod ?? "cash") as PaymentType);
@@ -850,6 +851,14 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
     } else setInvoiceNumber("");
     toast.success("تم إنشاء نسخة مماثلة — راجع البيانات ثم احفظ");
   }, [savedInvoiceId, navInvoiceId, journalId, utils]);
+
+  // إبلاغ الأب بتغيير نوع السند
+  useEffect(() => {
+    if (!onDocTypeChange) return;
+    if (!docTypeId) { onDocTypeChange(""); return; }
+    const dt = (docTypesQuery.data ?? []).find((d: any) => String(d.id) === docTypeId);
+    onDocTypeChange(dt?.nameAr ?? "");
+  }, [docTypeId, docTypesQuery.data]);
 
   const handleNew = useCallback(() => {
     setLines([EMPTY_LINE()]);

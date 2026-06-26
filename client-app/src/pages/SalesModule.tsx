@@ -2346,6 +2346,7 @@ function SalesInvoiceListView() {
   const [search, setSearch]         = useState("");
   const [mode, setMode]             = useState<"list" | "form" | "view">("list");
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
+  const [invoiceTypeName, setInvoiceTypeName]     = useState<string>("");
 
   const applyPeriod = (p: string) => {
     setDatePeriod(p);
@@ -2386,7 +2387,7 @@ function SalesInvoiceListView() {
           background: "#F9FAFB",
         }}>
           <button
-            onClick={() => { setMode("list"); setSelectedInvoiceId(null); refetch(); }}
+            onClick={() => { setMode("list"); setSelectedInvoiceId(null); setInvoiceTypeName(""); refetch(); }}
             style={{
               display: "flex", alignItems: "center", gap: 5, padding: "4px 10px",
               border: "1px solid #D1D5DB", borderRadius: 6,
@@ -2400,11 +2401,11 @@ function SalesInvoiceListView() {
             العودة إلى القائمة
           </button>
           <span style={{ fontSize: 12, color: "#9CA3AF", fontFamily: "'Cairo', Tahoma, sans-serif" }}>
-            {isView ? "عرض / تعديل فاتورة مبيعات" : "إنشاء فاتورة مبيعات جديدة"}
+            {invoiceTypeName ? `إنشاء ${invoiceTypeName}` : isView ? "عرض / تعديل فاتورة مبيعات" : "إنشاء فاتورة مبيعات جديدة"}
           </span>
         </div>
         <div className="flex-1 overflow-auto">
-          <SalesInvoicePageNew initialInvoiceId={isView ? selectedInvoiceId! : undefined} />
+          <SalesInvoicePageNew initialInvoiceId={isView ? selectedInvoiceId! : undefined} onDocTypeChange={setInvoiceTypeName} />
         </div>
       </div>
     );
