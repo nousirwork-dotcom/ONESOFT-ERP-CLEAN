@@ -24,6 +24,12 @@ app.post('/api/auth/logout', logoutHandler);
 app.get('/api/auth/me', meHandler);
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', version: '1.0.0' }));
 
+// ─── Backup Download ───────────────────────────────────────────────────────────
+app.get('/download/backup', (_req, res) => {
+  const file = path.join(__dirname, '..', '..', '..', 'OneSoft-ERP-src-20260626.zip');
+  res.download(file, 'OneSoft-ERP-src-20260626.zip');
+});
+
 // ─── tRPC ─────────────────────────────────────────────────────────────────────
 app.use('/api/trpc', createExpressMiddleware({
   router: appRouter,
