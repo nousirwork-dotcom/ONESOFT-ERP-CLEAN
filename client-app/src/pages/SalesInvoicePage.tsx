@@ -979,42 +979,28 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
       {/* ── Header Form ─────────────────────────────────────────────────── */}
       <div className="border-b border-[#b0a89a] px-3 pt-2 pb-1.5" style={{ background: "#F7F5EE", boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }}>
 
-        {/* ── Master Header Grid ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "auto auto 1fr 210px", columnGap: 8, rowGap: 4, alignItems: "center" }}>
+        {/* ── صف 1: رقم الفاتورة | بناءً على | تاريخ التحرير | تاريخ الدفع ── */}
+        <div className="flex items-center gap-3 flex-wrap mb-1.5">
 
-          {/* ── صف 1 ── */}
-          <div /><div />
-          <div className="flex items-start gap-2">
+          {/* رقم الفاتورة + الدفتر */}
           {(() => {
             const journals = journalsQuery.data ?? [];
             const selected = journals.find((j: any) => j.id === journalId);
-            // حساب الرقم التالي للعرض في القائمة (بدون استدعاء API)
             const previewNum = (j: any): string => {
-              const seq = (j.currentSeq ?? 0) === 0
-                ? (j.firstNumber ?? 1)
-                : (j.currentSeq ?? 0) + (j.increment ?? 1);
+              const seq = (j.currentSeq ?? 0) === 0 ? (j.firstNumber ?? 1) : (j.currentSeq ?? 0) + (j.increment ?? 1);
               const digits = j.numDigits ?? 6;
               const padded = String(seq).padStart(digits, "0");
               const year = j.includeYear ? `-${new Date().getFullYear()}` : "";
               return `${j.numberPrefix}${year}-${padded}`;
             };
             return (
-              <div className="flex flex-row items-center gap-1.5 flex-shrink-0 relative">
-                {/* Label مع اسم الدفتر المختار */}
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  <label className="text-[10px] font-bold text-[#D19C05] uppercase tracking-wide whitespace-nowrap" style={{ minWidth: 70, display: "inline-block" }}>رقم الفاتورة</label>
-                  {selected && (
-                    <span
-                      className="text-[9px] px-1 py-0 rounded font-medium cursor-pointer"
-                      style={{ background: "#dbeafe", color: "#1d4ed8", lineHeight: "14px" }}
-                      onClick={() => { setJournalId(null); }}
-                      title="إلغاء الدفتر"
-                    >
-                      {selected.name} ✕
-                    </span>
-                  )}
-                </div>
-                {/* حقل الرقم + زر السهم */}
+              <div className="flex items-center gap-1.5 flex-shrink-0 relative">
+                <label className="text-[10px] font-bold whitespace-nowrap" style={{ color: "#D19C05", minWidth: 70 }}>رقم الفاتورة</label>
+                {selected && (
+                  <span className="text-[9px] px-1 rounded cursor-pointer" style={{ background: "#dbeafe", color: "#1d4ed8", lineHeight: "16px" }} onClick={() => setJournalId(null)} title="إلغاء الدفتر">
+                    {selected.name} ✕
+                  </span>
+                )}
                 <div className="flex items-stretch">
                   <input
                     value={invoiceNumber}
@@ -1022,55 +1008,23 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                     onContextMenu={e => { e.preventDefault(); setJournalOpen(o => !o); }}
                     onKeyDown={e => { if (e.key === "F4" || (e.key === "ArrowDown" && e.altKey)) { e.preventDefault(); setJournalOpen(o => !o); } }}
                     className="classic-input text-center font-bold"
-                    style={{
-                      width: 100, background: selected ? "#eff6ff" : "#FFFDE7",
-                      borderColor: selected ? "#3b82f6" : "#F59E0B",
-                      borderRadius: "4px 0 0 4px", borderLeft: "none",
-                      color: "#1a1a1a", fontSize: "13px", fontWeight: 700,
-                      letterSpacing: "0.03em",
-                    }}
+                    style={{ width: 110, background: selected ? "#eff6ff" : "#FFFDE7", borderColor: selected ? "#3b82f6" : "#F59E0B", borderRadius: "4px 0 0 4px", borderLeft: "none", color: "#1a1a1a", fontSize: "13px", fontWeight: 700, letterSpacing: "0.03em" }}
                     title="كليك يمين أو F4 لاختيار الدفتر"
                   />
-                  <button
-                    onClick={() => setJournalOpen(o => !o)}
-                    className="flex items-center justify-center transition-colors"
-                    style={{
-                      width: 22, borderRadius: "0 4px 4px 0",
-                      background: selected ? "#3b82f6" : "#F59E0B",
-                      border: `1px solid ${selected ? "#2563eb" : "#d97706"}`,
-                      color: "white", fontSize: "9px",
-                    }}
-                    title="اختيار الدفتر"
-                  >▼</button>
+                  <button onClick={() => setJournalOpen(o => !o)} className="flex items-center justify-center" style={{ width: 20, borderRadius: "0 4px 4px 0", background: selected ? "#3b82f6" : "#F59E0B", border: `1px solid ${selected ? "#2563eb" : "#d97706"}`, color: "white", fontSize: "9px" }} title="اختيار الدفتر">▼</button>
                 </div>
-                {/* Dropdown قائمة الدفاتر */}
                 {journalOpen && (
                   <>
-                    {/* Overlay لإغلاق عند الضغط خارجاً */}
                     <div className="fixed inset-0 z-[9998]" onClick={() => setJournalOpen(false)} />
-                    <div
-                      className="absolute top-full right-0 z-[9999] mt-1 bg-white rounded-lg overflow-hidden"
-                      style={{ minWidth: 320, boxShadow: "0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.10)", border: "1px solid #e2e8f0" }}
-                      dir="rtl"
-                    >
-                      {/* Header */}
+                    <div className="absolute top-full right-0 z-[9999] mt-1 bg-white rounded-lg overflow-hidden" style={{ minWidth: 320, boxShadow: "0 8px 32px rgba(0,0,0,0.18)", border: "1px solid #e2e8f0" }} dir="rtl">
                       <div className="flex items-center justify-between px-3 py-2" style={{ background: "#1e40af" }}>
-                        <div className="flex items-center gap-2">
-                          <span className="text-white text-[11px] font-bold">دفاتر فاتورة المبيعات</span>
-                          {journals.length > 0 && (
-                            <span className="text-[9px] px-1.5 py-0 rounded-full font-medium" style={{ background: "rgba(255,255,255,0.2)", color: "white" }}>
-                              {journals.length}
-                            </span>
-                          )}
-                        </div>
+                        <span className="text-white text-[11px] font-bold">دفاتر فاتورة المبيعات</span>
                         <button onClick={() => setJournalOpen(false)} style={{ color: "rgba(255,255,255,0.7)", fontSize: "11px" }}>✕</button>
                       </div>
-                      {/* الدفاتر */}
                       {journals.length === 0 ? (
                         <div className="px-4 py-5 text-center">
                           <div className="text-[20px] mb-1">📒</div>
                           <div className="text-[11px] text-slate-500 font-medium">لا توجد دفاتر مُعرَّفة</div>
-                          <div className="text-[10px] text-slate-400 mt-0.5">أضف دفاتر من إعدادات المستندات</div>
                         </div>
                       ) : (
                         <div className="overflow-y-auto" style={{ maxHeight: 240 }}>
@@ -1078,47 +1032,23 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                             const isSelected = j.id === journalId;
                             const preview = previewNum(j);
                             return (
-                              <button
-                                key={j.id}
-                                onClick={() => handleJournalSelect(j.id)}
-                                className="w-full flex items-center gap-0 text-right transition-colors"
-                                style={{
-                                  background: isSelected ? "#eff6ff" : idx % 2 === 0 ? "#fafafa" : "white",
-                                  borderBottom: "1px solid #f1f5f9",
-                                  padding: "6px 12px",
-                                }}
-                              >
-                                {/* أيقونة التحديد */}
+                              <button key={j.id} onClick={() => handleJournalSelect(j.id)} className="w-full flex items-center gap-0 text-right transition-colors" style={{ background: isSelected ? "#eff6ff" : idx % 2 === 0 ? "#fafafa" : "white", borderBottom: "1px solid #f1f5f9", padding: "6px 12px" }}>
                                 <span style={{ width: 16, color: isSelected ? "#3b82f6" : "transparent", fontSize: "11px", flexShrink: 0 }}>✓</span>
-                                {/* اسم الدفتر الكامل */}
                                 <div className="flex-1 min-w-0 mx-2">
-                                  <div className="text-[12px] font-semibold truncate" style={{ color: isSelected ? "#1d4ed8" : "#1e293b" }}>
-                                    فاتورة مبيعات – {j.name}
-                                  </div>
-                                  {j.description && (
-                                    <div className="text-[10px] text-slate-400 truncate">{j.description}</div>
-                                  )}
+                                  <div className="text-[12px] font-semibold truncate" style={{ color: isSelected ? "#1d4ed8" : "#1e293b" }}>فاتورة مبيعات – {j.name}</div>
+                                  {j.description && <div className="text-[10px] text-slate-400 truncate">{j.description}</div>}
                                 </div>
-                                {/* معاينة الرقم التالي */}
                                 <div className="shrink-0 text-left">
-                                  <div className="font-mono text-[11px] font-bold px-2 py-0.5 rounded" style={{ background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0" }}>
-                                    {preview}
-                                  </div>
+                                  <div className="font-mono text-[11px] font-bold px-2 py-0.5 rounded" style={{ background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0" }}>{preview}</div>
                                 </div>
                               </button>
                             );
                           })}
                         </div>
                       )}
-                      {/* Footer */}
                       <div className="px-3 py-1.5 flex items-center justify-between" style={{ background: "#f8fafc", borderTop: "1px solid #e2e8f0" }}>
                         <span className="text-[9px] text-slate-400">كليك يمين أو F4 لفتح القائمة</span>
-                        {journalId && (
-                          <button
-                            onClick={() => { setJournalId(null); setJournalOpen(false); }}
-                            className="text-[9px] text-red-400 hover:text-red-600"
-                          >إلغاء اختيار الدفتر</button>
-                        )}
+                        {journalId && <button onClick={() => { setJournalId(null); setJournalOpen(false); }} className="text-[9px] text-red-400 hover:text-red-600">إلغاء اختيار الدفتر</button>}
                       </div>
                     </div>
                   </>
@@ -1127,81 +1057,63 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
             );
           })()}
 
-          <div className="flex-1 min-w-0">
-          <HF label="بناءً على">
-              <div className="flex gap-1 w-full">
-                <select
-                  value={basedOnType}
-                  onChange={e => {
-                    setBasedOnType(e.target.value as any);
-                    setBasedOnNum('');
-                    setBasedOnTrigger('');
-                  }}
-                  className="classic-input flex-shrink-0"
-                  style={{ minWidth: 110 }}
-                >
-                  <option value="">-- النوع --</option>
-                  <option value="order">أمر بيع</option>
-                  <option value="quote">عرض أسعار</option>
-                  <option value="transfer">تحويل داخلي</option>
-                  <option value="sale">فاتورة مبيعات</option>
-                </select>
-                <div className="relative flex-1">
-                  <input
-                    value={basedOnNum}
-                    onChange={e => { setBasedOnNum(e.target.value); setBasedOnTrigger(""); }}
-                    onBlur={() => { if (basedOnType && basedOnNum.trim()) setBasedOnTrigger(basedOnNum.trim()); }}
-                    onKeyDown={e => { if (e.key === 'Enter' && basedOnType && basedOnNum.trim()) setBasedOnTrigger(basedOnNum.trim()); }}
-                    placeholder={basedOnType ? "رقم المستند ثم Enter ↵" : ""}
-                    disabled={!basedOnType}
-                    className="classic-input w-full"
-                  />
-                  {basedOnQuery.isFetching && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-blue-500">⏳</span>}
-                  {basedOnTrigger && !basedOnQuery.isFetching && basedOnQuery.data === null && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-red-500 font-bold" title="لم يُوجد المستند">✗</span>}
-                  {basedOnTrigger && !basedOnQuery.isFetching && basedOnQuery.data && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-green-600 font-bold" title="تم استيراد البيانات">✓</span>}
-                </div>
+          {/* بناءً على */}
+          <div className="flex items-center gap-1.5 flex-1 min-w-0" style={{ maxWidth: 380 }}>
+            <label className="text-[10px] font-bold whitespace-nowrap" style={{ color: "#666" }}>بناءً على</label>
+            <div className="flex gap-1 flex-1 min-w-0">
+              <select value={basedOnType} onChange={e => { setBasedOnType(e.target.value as any); setBasedOnNum(''); setBasedOnTrigger(''); }} className="classic-input flex-shrink-0" style={{ minWidth: 100 }}>
+                <option value="">-- النوع --</option>
+                <option value="order">أمر بيع</option>
+                <option value="quote">عرض أسعار</option>
+                <option value="transfer">تحويل داخلي</option>
+                <option value="sale">فاتورة مبيعات</option>
+              </select>
+              <div className="relative flex-1 min-w-0">
+                <input
+                  value={basedOnNum}
+                  onChange={e => { setBasedOnNum(e.target.value); setBasedOnTrigger(""); }}
+                  onBlur={() => { if (basedOnType && basedOnNum.trim()) setBasedOnTrigger(basedOnNum.trim()); }}
+                  onKeyDown={e => { if (e.key === 'Enter' && basedOnType && basedOnNum.trim()) setBasedOnTrigger(basedOnNum.trim()); }}
+                  placeholder={basedOnType ? "رقم المستند ثم Enter ↵" : ""}
+                  disabled={!basedOnType}
+                  className="classic-input w-full"
+                />
+                {basedOnQuery.isFetching && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-blue-500">⏳</span>}
+                {basedOnTrigger && !basedOnQuery.isFetching && basedOnQuery.data === null && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-red-500 font-bold" title="لم يُوجد المستند">✗</span>}
+                {basedOnTrigger && !basedOnQuery.isFetching && basedOnQuery.data && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-green-600 font-bold" title="تم استيراد البيانات">✓</span>}
               </div>
-            </HF>
+            </div>
           </div>
-          </div>
-          <HF label="نوع السند" labelW={46}>
-              {(() => {
-                const allDocTypes = docTypesQuery.data ?? [];
-                const filteredDocTypes = journalId ? allDocTypes.filter((dt: any) => dt.journal === String(journalId)) : allDocTypes;
-                const selectedDT = docTypeId ? allDocTypes.find((dt: any) => String(dt.id) === docTypeId) : null;
-                if (allDocTypes.length > 0) {
-                  return (
-                    <div className="relative w-full">
-                      {selectedDT && (
-                        <div className="absolute inset-0 flex items-center px-2 pointer-events-none z-10" style={{ background: "transparent" }}>
-                          <span className="font-bold text-blue-800 text-[12px] truncate">{selectedDT.codeAr || selectedDT.nameAr}</span>
-                        </div>
-                      )}
-                      <select value={docTypeId} onChange={e => handleDocTypeSelect(e.target.value)} className="classic-input w-full" style={{ fontWeight: 600, color: selectedDT ? "transparent" : undefined }}>
-                        {filteredDocTypes.map((dt: any) => (
-                          <option key={dt.id} value={String(dt.id)}>{dt.codeAr ? `${dt.codeAr} — ${dt.nameAr}` : dt.nameAr}</option>
-                        ))}
-                      </select>
-                    </div>
-                  );
-                }
-                return (
-                  <select value={paymentType} onChange={e => { setPaymentType(e.target.value as PaymentType); setPaidAmountOverride(""); }} className="classic-input w-full"
-                    style={{ background: paymentType === "cash" ? "#F0FDF4" : paymentType === "partial" ? "#EFF6FF" : "#FFF7ED", borderColor: paymentType === "cash" ? "#16A34A" : paymentType === "partial" ? "#2563EB" : "#D97706", fontWeight: 700, color: paymentType === "cash" ? "#15803D" : paymentType === "partial" ? "#1D4ED8" : "#B45309" }}>
-                    <option value="cash">نقدًا</option>
-                    <option value="partial">جزئي (دفعة + رصيد)</option>
-                    <option value="credit">آجل</option>
-                  </select>
-                );
-              })()}
-          </HF>
 
-          {/* ── صف 2 ── */}
-          <div /><div />
-          <div className="flex items-center gap-2">
-          <div className="flex-1 min-w-0">
-          <HF label="العميل" labelW={70}>
-            <div className="flex gap-1 w-full" ref={custDropRef} style={{ position: "relative" }}>
+          {/* تاريخ التحرير */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <label className="text-[10px] font-bold whitespace-nowrap" style={{ color: "#666" }}>تاريخ التحرير</label>
+            <div className="flex items-stretch" style={{ width: 130 }}>
+              <DateSegmentInput value={invoiceDate} onChange={setInvoiceDate} style={{ flex: 1, minWidth: 0 }} />
+              <button type="button" onClick={() => invoiceDatePickerRef.current?.showPicker()} className="flex items-center justify-center" style={{ background: "#f3f4f6", border: "1px solid #d1d5db", borderLeft: "none", borderRadius: "0 4px 4px 0", padding: "0 5px", color: "#555", cursor: "pointer", fontSize: 12 }}>📅</button>
+              <input ref={invoiceDatePickerRef} type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} />
+            </div>
+          </div>
+
+          {/* تاريخ الدفع */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <label className="text-[10px] font-bold whitespace-nowrap" style={{ color: "#666" }}>تاريخ الدفع</label>
+            <div className="flex items-stretch" style={{ width: 130 }}>
+              <DateSegmentInput value={dueDate} onChange={setDueDate} style={{ flex: 1, minWidth: 0 }} />
+              <button type="button" onClick={() => dueDatePickerRef.current?.showPicker()} className="flex items-center justify-center" style={{ background: "#f3f4f6", border: "1px solid #d1d5db", borderLeft: "none", borderRadius: "0 4px 4px 0", padding: "0 5px", color: "#555", cursor: "pointer", fontSize: 12 }}>📅</button>
+              <input ref={dueDatePickerRef} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} />
+            </div>
+          </div>
+
+        </div>
+
+        {/* ── صف 2: العميل | المخزن ── */}
+        <div className="flex items-center gap-3 flex-wrap mb-1.5">
+
+          {/* العميل */}
+          <div className="flex items-center gap-1.5 flex-1 min-w-0" ref={custDropRef} style={{ position: "relative", maxWidth: 560 }}>
+            <label className="text-[10px] font-bold whitespace-nowrap flex-shrink-0" style={{ color: "#666", minWidth: 40 }}>العميل</label>
+            <div className="flex gap-1 flex-1 min-w-0" style={{ position: "relative" }}>
               <input
                 value={customerId ? (customerCode ? `${customerCode} - ${customerName}` : customerName) : custSearch}
                 onChange={e => { if (customerId) return; setCustSearch(e.target.value); setShowCustDrop(true); }}
@@ -1213,12 +1125,12 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
               />
               {customerId && (
                 <button type="button" onClick={() => { setCustomerId(null); setCustomerName(""); setCustomerCode(""); setCustSearch(""); setCustomerType('individual'); setCustomerTaxNumber(""); setShowCustDrop(false); }}
-                  style={{ position: "absolute", left: 66, top: "50%", transform: "translateY(-50%)", color: "#9ca3af", fontSize: 13, lineHeight: 1, background: "none", border: "none", cursor: "pointer", padding: "0 2px" }}
+                  style={{ position: "absolute", left: 48, top: "50%", transform: "translateY(-50%)", color: "#9ca3af", fontSize: 13, lineHeight: 1, background: "none", border: "none", cursor: "pointer", padding: "0 2px" }}
                   title="إلغاء اختيار العميل">✕</button>
               )}
               <button type="button" onClick={() => { if (!customerId) { setCustSearch(""); setShowCustDrop(v => !v); } }}
-                className="flex-shrink-0 flex items-center justify-center transition-colors hover:opacity-80"
-                style={{ width: 22, height: 22, borderRadius: 3, background: "#6B7280", color: "white", fontSize: 11, border: "1px solid #4B5563", lineHeight: 1 }}
+                className="flex-shrink-0 flex items-center justify-center"
+                style={{ width: 22, height: 22, borderRadius: 3, background: "#6B7280", color: "white", fontSize: 11, border: "1px solid #4B5563" }}
                 title="عرض قائمة العملاء">▾</button>
               <button type="button"
                 onClick={async () => {
@@ -1229,8 +1141,8 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                   if (journalCustomersJournalId) { try { const preview = await utils.documentJournals.previewNextNumber.fetch({ journalId: journalCustomersJournalId }); if (preview) setNewCustCode(preview); } catch {} }
                   setShowAddCustomer(true); setShowCustDrop(false);
                 }}
-                className="flex-shrink-0 flex items-center justify-center transition-colors hover:opacity-80"
-                style={{ width: 22, height: 22, borderRadius: 3, background: "#D19C05", color: "white", fontSize: 16, fontWeight: 700, border: "1px solid #9A7203", lineHeight: 1 }}
+                className="flex-shrink-0 flex items-center justify-center"
+                style={{ width: 22, height: 22, borderRadius: 3, background: "#D19C05", color: "white", fontSize: 16, fontWeight: 700, border: "1px solid #9A7203" }}
                 title="إضافة عميل جديد">+</button>
               {showCustDrop && !customerId && (() => {
                 const all = customersQuery.data ?? [];
@@ -1244,7 +1156,7 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                       <div key={c.id} onMouseDown={() => { setCustomerId(c.id); setCustomerName(c.name); setCustomerCode((c as any).code ?? ""); setCustomerType((c as any).customerType ?? 'individual'); setCustomerTaxNumber((c as any).taxNumber ?? ""); setCustSearch(""); setShowCustDrop(false); }}
                         className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-blue-50 text-[12px]" style={{ borderBottom: "1px solid #f3f4f6" }}>
                         <span style={{ fontSize: 13 }}>{(c as any).customerType === 'organization' ? '🏢' : '👤'}</span>
-                        {(c as any).code && <span className="font-mono text-[11px] font-bold px-1 rounded" style={{ background: "#FEF3C7", color: "#D19C05", letterSpacing: "0.04em" }}>{(c as any).code}</span>}
+                        {(c as any).code && <span className="font-mono text-[11px] font-bold px-1 rounded" style={{ background: "#FEF3C7", color: "#D19C05" }}>{(c as any).code}</span>}
                         <span className="font-medium text-gray-800">{c.name}</span>
                         {(c as any).customerType === 'organization' && <span className="text-[10px] text-blue-500 mr-auto">مؤسسة</span>}
                       </div>
@@ -1265,53 +1177,23 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                 );
               })()}
             </div>
-          </HF>
-          </div>
-          {customerId && (
-          <div className="flex items-center gap-1">
-              <div
-                className="flex items-center gap-1 px-2 py-0.5 rounded font-bold text-[11px]"
-                style={{
-                  background: customerType === 'organization' ? '#EFF6FF' : '#F0FDF4',
-                  border: `1px solid ${customerType === 'organization' ? '#93C5FD' : '#86EFAC'}`,
-                  color: customerType === 'organization' ? '#1D4ED8' : '#15803D',
-                }}
-              >
-                {customerType === 'organization' ? '📋 فاتورة ضريبية' : '🧾 فاتورة ضريبية مبسطة'}
+            {customerId && (
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <div className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold" style={{ background: customerType === 'organization' ? '#EFF6FF' : '#F0FDF4', border: `1px solid ${customerType === 'organization' ? '#93C5FD' : '#86EFAC'}`, color: customerType === 'organization' ? '#1D4ED8' : '#15803D' }}>
+                  {customerType === 'organization' ? '🏢 مؤسسة' : '👤 فرد'}
+                </div>
               </div>
-              <div
-                className="flex items-center gap-1 px-2 py-0.5 rounded font-bold text-[11px]"
-                style={{
-                  background: customerType === 'organization' ? '#1D4ED8' : '#15803D',
-                  color: 'white',
-                  border: `1px solid ${customerType === 'organization' ? '#1e40af' : '#166534'}`,
-                }}
-              >
-                {customerType === 'organization' ? '🏢 مؤسسة' : '👤 فرد'}
-              </div>
+            )}
           </div>
-          )}
-          </div>
-          <HF label="العملة" labelW={46}>
-            <select value={currency} onChange={e => setCurrency(e.target.value)} className="classic-input w-full">
-              <option value="SAR">ريال سعودي (SAR)</option>
-              <option value="USD">دولار (USD)</option>
-              <option value="EUR">يورو (EUR)</option>
-              <option value="AED">درهم (AED)</option>
-            </select>
-          </HF>
 
-          {/* ── صف 3 ── */}
-          <HF label="المخزن" labelW={70}>
+          {/* المخزن */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <label className="text-[10px] font-bold whitespace-nowrap" style={{ color: "#666" }}>المخزن</label>
             {(() => {
               const lockedWh = journalWarehouseId ?? docTypeWarehouseId;
-              const whTitle = journalWarehouseId
-                ? "المخزن محدد من الدفتر ولا يمكن تغييره"
-                : docTypeWarehouseId
-                ? "المخزن محدد من نوع السند ولا يمكن تغييره"
-                : undefined;
+              const whTitle = journalWarehouseId ? "المخزن محدد من الدفتر" : docTypeWarehouseId ? "المخزن محدد من نوع السند" : undefined;
               return (
-                <select value={warehouseId ?? ""} onChange={e => !lockedWh && setWarehouseId(parseInt(e.target.value) || null)} className="classic-input" style={{ width: 130 }} disabled={!!lockedWh} title={whTitle}>
+                <select value={warehouseId ?? ""} onChange={e => !lockedWh && setWarehouseId(parseInt(e.target.value) || null)} className="classic-input" style={{ width: 140 }} disabled={!!lockedWh} title={whTitle}>
                   <option value="">-- اختر مخزن --</option>
                   {(lockedWh ? warehousesQuery.data?.filter(w => w.id === lockedWh) : warehousesQuery.data)?.map(w => (
                     <option key={w.id} value={w.id}>{w.name}</option>
@@ -1319,43 +1201,16 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
                 </select>
               );
             })()}
-          </HF>
-          <HF label="تاريخ التحرير">
-            <div className="flex items-stretch" style={{ width: 135 }}>
-              <DateSegmentInput
-                value={invoiceDate}
-                onChange={setInvoiceDate}
-                style={{ flex: 1, minWidth: 0 }}
-              />
-              <button type="button" onClick={() => invoiceDatePickerRef.current?.showPicker()} className="flex items-center justify-center" style={{ background: "#f3f4f6", border: "1px solid #d1d5db", borderLeft: "none", borderRadius: "0 4px 4px 0", padding: "0 6px", color: "#555", cursor: "pointer", fontSize: 13 }}>
-                📅
-              </button>
-              <input ref={invoiceDatePickerRef} type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} />
-            </div>
-          </HF>
-          <HF label="تاريخ الدفع">
-            <div className="flex items-stretch" style={{ width: 135 }}>
-              <DateSegmentInput
-                value={dueDate}
-                onChange={setDueDate}
-                style={{ flex: 1, minWidth: 0 }}
-              />
-              <button type="button" onClick={() => dueDatePickerRef.current?.showPicker()} className="flex items-center justify-center" style={{ background: "#f3f4f6", border: "1px solid #d1d5db", borderLeft: "none", borderRadius: "0 4px 4px 0", padding: "0 6px", color: "#555", cursor: "pointer", fontSize: 13 }}>
-                📅
-              </button>
-              <input ref={dueDatePickerRef} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} />
-            </div>
-          </HF>
-          <HF label="البائع" labelW={46}>
-            <input value={salesperson} onChange={e => setSalesperson(e.target.value)} className="classic-input w-full" />
-          </HF>
-          {/* ── صف 4 ── */}
-          <div style={{ gridColumn: "1/-1" }}>
-          <HF label="ملحوظة" labelW={70}>
-            <input value={notes} onChange={e => setNotes(e.target.value)} className="classic-input w-full" />
-          </HF>
           </div>
+
         </div>
+
+        {/* ── صف 3: ملحوظة ── */}
+        <div className="flex items-center gap-1.5">
+          <label className="text-[10px] font-bold whitespace-nowrap flex-shrink-0" style={{ color: "#666", minWidth: 40 }}>ملحوظة</label>
+          <input value={notes} onChange={e => setNotes(e.target.value)} className="classic-input flex-1" />
+        </div>
+
       </div>
 
       {/* ── Lines Table ─────────────────────────────────────────────────── */}
