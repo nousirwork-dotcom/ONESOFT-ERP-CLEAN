@@ -4896,7 +4896,7 @@ export default function SettingsModule() {
   return (
     <div className="flex h-full" dir="rtl">
       <SettingsMenu activeId={activeId} onSelect={setActiveId} />
-      <div className="flex-1 overflow-auto p-5">
+      <div className="flex-1 overflow-auto p-5" style={{ background: "#ECE7DD" }}>
         <SettingsContent activeId={activeId} onSelect={setActiveId} />
       </div>
     </div>
@@ -4905,7 +4905,7 @@ export default function SettingsModule() {
 
 // ─── Tab Sub-Pages ─────────────────────────────────────────────────────────────
 function CfgSubPage({ activeId }: { activeId: string }) {
-  return <div className="h-full overflow-auto p-5" dir="rtl"><SettingsContent activeId={activeId} onSelect={() => {}} /></div>;
+  return <div className="h-full overflow-auto p-5" dir="rtl" style={{ background: "#ECE7DD" }}><SettingsContent activeId={activeId} onSelect={() => {}} /></div>;
 }
 export function CfgCompanyTab()          { return <CfgSubPage activeId="company-info" />; }
 export function CfgCurrenciesTab()       { return <CfgSubPage activeId="currencies" />; }
