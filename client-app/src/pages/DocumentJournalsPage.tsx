@@ -338,7 +338,6 @@ function FieldCodeSearch({
 
 /* ──────────────── document types ──────────────── */
 const DOC_TYPES = [
-  { id: "sales_invoice",    label: "فاتورة مبيعات",    icon: <BookOpen className="w-3.5 h-3.5" /> },
   { id: "sales_return",     label: "مردود مبيعات",     icon: <RotateCcw className="w-3.5 h-3.5" /> },
   { id: "purchase_invoice", label: "فاتورة مشتريات",   icon: <BookMarked className="w-3.5 h-3.5" /> },
   { id: "purchase_return",  label: "مردود مشتريات",    icon: <RotateCcw className="w-3.5 h-3.5" /> },
@@ -474,7 +473,7 @@ function buildPreview(fixedPart: string, firstNum: string, digits: string): stri
 
 /* ──────────────── main component ──────────────── */
 export default function DocumentJournalsPage() {
-  const [selectedType, setSelectedType] = useState("sales_invoice");
+  const [selectedType, setSelectedType] = useState("sales_return");
   const [view, setView]       = useState<"list" | "form">("list");
   const [editId, setEditId]   = useState<number | null>(null);
   const [form, setForm]       = useState<JournalForm>({ ...EMPTY });
@@ -1234,7 +1233,7 @@ export default function DocumentJournalsPage() {
                   <R label="نوع القيد" lw={145}>
                     <FS value={form.issuanceJournalType} onValueChange={v => set("issuanceJournalType", v)}>
                       <SelectItem value="__none__">— اختر —</SelectItem>
-                      {DOC_TYPES.filter(dt => ["journal_entry","sales_invoice","purchase_invoice","receipt_voucher","payment_voucher"].includes(dt.id))
+                      {DOC_TYPES.filter(dt => ["journal_entry","purchase_invoice","receipt_voucher","payment_voucher"].includes(dt.id))
                         .map(dt => <SelectItem key={dt.id} value={dt.id}>{dt.label}</SelectItem>)}
                     </FS>
                   </R>
