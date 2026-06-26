@@ -172,6 +172,7 @@ export function buildInvoiceHtml(
   qrDataUrl?: string,
   qrLabel = "QR Code",
   qrSize = 100,
+  docType = "sales_invoice",
 ): string {
   const C        = cfg ?? DEFAULT_CFG;
   const color    = C.primaryColor;
@@ -334,8 +335,8 @@ export function buildInvoiceHtml(
     <!-- وسط: عنوان الفاتورة -->
     <div style="flex:1;text-align:center">
       <div style="display:inline-block;border:2.5px solid ${color};padding:5px 22px;border-radius:2px;line-height:1.5">
-        <div style="font-size:16px;font-weight:bold;color:${color}">فاتورة ضريبية</div>
-        ${isBi ? `<div style="font-size:11px;font-weight:bold;color:${color};opacity:0.85;letter-spacing:0.5px">TAX INVOICE</div>` : ""}
+        <div style="font-size:16px;font-weight:bold;color:${color}">${docType === "purchase_invoice" ? "فاتورة مشتريات" : "فاتورة ضريبية"}</div>
+        ${isBi ? `<div style="font-size:11px;font-weight:bold;color:${color};opacity:0.85;letter-spacing:0.5px">${docType === "purchase_invoice" ? "PURCHASE INVOICE" : "TAX INVOICE"}</div>` : ""}
       </div>
     </div>
 
@@ -381,7 +382,7 @@ export function buildInvoiceHtml(
   <!-- ══ بيانات الأطراف ══ -->
   ${(C.sections.customerInfo || C.sections.sellerInfo) ? `
   <div style="display:flex;gap:8px;padding:0 18px 8px">
-    ${C.sections.customerInfo ? partyBox("العميل", "Customer", customerRows) : ""}
+    ${C.sections.customerInfo ? partyBox(docType === "purchase_invoice" ? "المورد" : "العميل", docType === "purchase_invoice" ? "Supplier" : "Customer", customerRows) : ""}
     ${C.sections.sellerInfo   ? partyBox("البائع", "Seller",   sellerRows)   : ""}
   </div>` : ""}
 

@@ -58,6 +58,41 @@ const INV01_CONFIG = JSON.stringify({
   ],
 });
 
+const PINV01_CONFIG = JSON.stringify({
+  version: 1,
+  type: "config_v1",
+  paperSize: "A4",
+  orientation: "portrait",
+  language: "bilingual",
+  primaryColor: "#4A5568",
+  columns: {
+    num: true, code: true, name: true, unit: false,
+    qty: true, price: true, discount: true,
+    taxable: true, taxRate: true, taxAmt: true, total: true,
+  },
+  minRows: 5,
+  sections: {
+    sellerInfo: true, customerInfo: true,
+    amountInWords: true, pageNumber: true, signatures: false,
+  },
+  elements: [
+    { id: "e_qr",    type: "qr",           x: 5,   y: 5,   w: 26,  h: 26,  border: false },
+    { id: "e_title", type: "text",          x: 72,  y: 7,   w: 62,  h: 16,  content: "فاتورة مشتريات\nPURCHASE INVOICE", fontSize: 13, fontWeight: "bold", textAlign: "center", color: "#222222" },
+    { id: "e_co",    type: "company_info",  x: 112, y: 5,   w: 93,  h: 28,  fontSize: 9 },
+    { id: "e_d1",    type: "line",          x: 5,   y: 36,  w: 200, h: 1,   color: "#4A5568" },
+    { id: "e_inv",   type: "invoice_info",  x: 5,   y: 39,  w: 200, h: 13,  fontSize: 9 },
+    { id: "e_d2",    type: "line",          x: 5,   y: 54,  w: 200, h: 1,   color: "#cccccc" },
+    { id: "e_cust",  type: "customer_info", x: 5,   y: 57,  w: 95,  h: 32,  fontSize: 9, border: true },
+    { id: "e_d3",    type: "line",          x: 5,   y: 92,  w: 200, h: 1,   color: "#cccccc" },
+    { id: "e_items", type: "items_table",   x: 5,   y: 95,  w: 200, h: 82,  fontSize: 9 },
+    { id: "e_total", type: "totals",        x: 115, y: 181, w: 90,  h: 44,  fontSize: 10, border: true },
+    { id: "e_words", type: "notes",         x: 5,   y: 181, w: 106, h: 12,  content: "المبلغ كتابةً: {{AmountInWords}}", fontSize: 9 },
+    { id: "e_notes", type: "notes",         x: 5,   y: 196, w: 106, h: 12,  content: "ملاحظات: {{Notes}}", fontSize: 9 },
+    { id: "e_d4",    type: "line",          x: 5,   y: 229, w: 200, h: 1,   color: "#cccccc" },
+    { id: "e_foot",  type: "text",          x: 5,   y: 232, w: 200, h: 8,   content: "OneSoft ERP  ·  صفحة 1 من 1 / Page 1 of 1", fontSize: 8, textAlign: "center", color: "#888888" },
+  ],
+});
+
 export const documentTemplatesRouter = router({
 
   list: protectedProcedure
@@ -90,6 +125,10 @@ export const documentTemplatesRouter = router({
           sales_invoice: {
             code: 'INV01', nameAr: 'نموذج المبيعات الأساسي', nameEn: 'Standard Sales Invoice',
             paperSize: 'A4', layoutJson: INV01_CONFIG,
+          },
+          purchase_invoice: {
+            code: 'PINV01', nameAr: 'نموذج المشتريات الأساسي', nameEn: 'Standard Purchase Invoice',
+            paperSize: 'A4', layoutJson: PINV01_CONFIG,
           },
           pos_receipt: {
             code: 'POS01', nameAr: 'نموذج نقاط البيع الحراري', nameEn: 'POS Thermal Receipt',
@@ -131,6 +170,11 @@ export const documentTemplatesRouter = router({
           paperSize: 'A4', layoutJson: INV01_CONFIG,
           notes: 'النموذج الافتراضي — فاتورة ضريبية ثنائية اللغة',
         },
+        purchase_invoice: {
+          code: 'PINV01', nameAr: 'نموذج المشتريات الأساسي', nameEn: 'Standard Purchase Invoice',
+          paperSize: 'A4', layoutJson: PINV01_CONFIG,
+          notes: 'النموذج الافتراضي — فاتورة مشتريات ثنائية اللغة',
+        },
         pos_receipt: {
           code: 'POS01', nameAr: 'نموذج نقاط البيع الحراري', nameEn: 'POS Thermal Receipt',
           paperSize: '80mm', layoutJson: POS01_CONFIG,
@@ -166,6 +210,11 @@ export const documentTemplatesRouter = router({
           code: 'INV01', nameAr: 'نموذج المبيعات الأساسي', nameEn: 'Standard Sales Invoice',
           docType: 'sales_invoice', paperSize: 'A4', layoutJson: INV01_CONFIG,
           notes: 'النموذج الافتراضي — فاتورة ضريبية ثنائية اللغة',
+        },
+        {
+          code: 'PINV01', nameAr: 'نموذج المشتريات الأساسي', nameEn: 'Standard Purchase Invoice',
+          docType: 'purchase_invoice', paperSize: 'A4', layoutJson: PINV01_CONFIG,
+          notes: 'النموذج الافتراضي — فاتورة مشتريات ثنائية اللغة',
         },
         {
           code: 'POS01', nameAr: 'نموذج نقاط البيع الحراري', nameEn: 'POS Thermal Receipt',

@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import ERPToolbar, { ERPMode } from "@/components/ERPToolbar";
 import PostingPreviewModal from "@/components/PostingPreviewModal";
+import InvoicePrintModal, { type DocTemplateConfig } from "@/components/InvoicePrintModal";
 
 // ─── Config ────────────────────────────────────────────────────────────────────
 export interface DocPageConfig {
@@ -217,6 +218,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   const [showPostingPreview, setShowPostingPreview] = useState(false);
 
   const [erpMode, setErpMode] = useState<ERPMode>("new");
+  const [showPrintModal, setShowPrintModal] = useState(false);
 
   const cellRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
@@ -244,6 +246,19 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   const stockQuery = trpc.reports.stockByWarehouse.useQuery(
     { warehouseId: warehouseId! },
     { enabled: !!warehouseId }
+  );
+
+  // نوع الفاتورة للطباعة: فاتورة مشتريات أو مردود مبيعات
+  const isPrintEnabled =
+    (config.docCategory === "purchase" && config.invoiceType === "invoice") ||
+    (config.docCategory === "sales"    && config.invoiceType === "return");
+  const printDocType = config.docCategory === "purchase" ? "purchase_invoice" : "sales_invoice";
+
+  const orgQuery             = trpc.orgs.currentOrg.useQuery();
+  const qrSettingsQuery      = trpc.qrSettings.get.useQuery();
+  const defaultTemplateQuery = trpc.documentTemplates.getDefault.useQuery(
+    { docType: printDocType },
+    { enabled: isPrintEnabled },
   );
 
   const nextJournalNumberMutation = trpc.documentJournals.nextNumber.useMutation();
@@ -616,7 +631,13 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
         } : undefined}
         onApprove={() => toast.success("تم الاعتماد")}
         onCancel={() => { setErpMode("view"); toast.info("تم الإلغاء"); }}
-        onPrint={() => toast.info("جاري الطباعة...")}
+        onPrint={() => {
+          if (isPrintEnabled) {
+            setShowPrintModal(true);
+          } else {
+            toast.info("جاري الطباعة...");
+          }
+        }}
         onFirst={() => {}} onPrev={() => {}} onNext={() => {}} onLast={() => {}}
         onClose={() => toast.info("إغلاق")}
         enableShortcuts
@@ -1042,6 +1063,69 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
           onClose={() => setShowPostingPreview(false)}
           onConfirmPost={() => postMutation.mutate({ invoiceId: savedInvoiceId! })}
           isPosting={postMutation.isPending}
+        />
+      )}
+
+      {/* ── Print Modal (Purchase Invoice / Sales Return) ──────────────────── */}
+      {showPrintModal && isPrintEnabled && (
+        <InvoicePrintModal
+          open={showPrintModal}
+          onClose={() => setShowPrintModal(false)}
+          docType={printDocType as "sales_invoice" | "purchase_invoice"}
+          templateConfig={(() => {
+            try {
+              const raw = defaultTemplateQuery.data?.layoutJson;
+              if (!raw) return null;
+              const parsed = JSON.parse(raw);
+              return parsed.type === "config_v1" ? (parsed as DocTemplateConfig) : null;
+            } catch { return null; }
+          })()}
+          qrSettings={qrSettingsQuery.data ? {
+            isEnabled: qrSettingsQuery.data.isEnabled,
+            countrySystem: qrSettingsQuery.data.countrySystem as any,
+            sellerName: qrSettingsQuery.data.sellerName ?? undefined,
+            taxNumber: qrSettingsQuery.data.taxNumber ?? undefined,
+            customFormat: qrSettingsQuery.data.customFormat ?? undefined,
+            showOnSalesInvoice: qrSettingsQuery.data.showOnSalesInvoice,
+            showOnPurchaseInvoice: qrSettingsQuery.data.showOnPurchaseInvoice,
+            showOnReceiptVoucher: qrSettingsQuery.data.showOnReceiptVoucher,
+            qrSize: qrSettingsQuery.data.qrSize,
+            qrPosition: qrSettingsQuery.data.qrPosition,
+          } : null}
+          data={{
+            invoiceNumber: invoiceNumber || "—",
+            invoiceDate,
+            invoiceTime: new Date().toTimeString().slice(0, 8),
+            customerName: partyName || (config.docCategory === "purchase" ? "المورد" : "العميل"),
+            paymentType,
+            currency,
+            notes: notes || undefined,
+            lines: lines
+              .filter(l => l.productName.trim())
+              .map(l => ({
+                productCode: l.productCode,
+                productName: l.productName,
+                quantity: l.quantity,
+                unit: l.unit,
+                unitPrice: l.unitPrice,
+                discountPct: l.discountPct,
+                taxPct: l.taxPct,
+                taxAmt: l.taxAmt,
+                total: l.total,
+              })),
+            subtotal,
+            discountTotal: totalDiscount,
+            taxTotal: totalTax,
+            grandTotal: netTotal,
+            paidAmount,
+            remainingAmount,
+            sellerName: orgQuery.data?.name ?? qrSettingsQuery.data?.sellerName ?? "OneSoft ERP",
+            sellerNameEn: orgQuery.data?.nameEn ?? undefined,
+            sellerTaxNumber: orgQuery.data?.taxNumber ?? qrSettingsQuery.data?.taxNumber ?? "",
+            sellerCommercialReg: orgQuery.data?.commercialReg || undefined,
+            sellerAddress: orgQuery.data?.address ?? undefined,
+            sellerPhone: orgQuery.data?.phone ?? undefined,
+          }}
         />
       )}
     </div>

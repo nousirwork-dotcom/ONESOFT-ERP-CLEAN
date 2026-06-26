@@ -22,18 +22,23 @@ interface InvoicePrintModalProps {
   data:            PrintInvoiceData;
   qrSettings?:     QrSettings | null;
   templateConfig?: DocTemplateConfig | null;
+  docType?:        "sales_invoice" | "purchase_invoice";
 }
 
 /* ═══════════════════ Component ═══════════════════ */
 export default function InvoicePrintModal({
-  open, onClose, data, qrSettings, templateConfig,
+  open, onClose, data, qrSettings, templateConfig, docType = "sales_invoice",
 }: InvoicePrintModalProps) {
   const [qrDataUrl, setQrDataUrl] = useState("");
 
   const cfg   = templateConfig ?? DEFAULT_TEMPLATE_CONFIG;
   const color = cfg.primaryColor;
 
-  const showQR  = !!(qrSettings?.isEnabled && qrSettings?.showOnSalesInvoice);
+  const showQR  = !!(qrSettings?.isEnabled && (
+    docType === "purchase_invoice"
+      ? qrSettings?.showOnPurchaseInvoice
+      : qrSettings?.showOnSalesInvoice
+  ));
   const qrLabel = qrSettings?.countrySystem === "zatca" ? "ZATCA QR"
                 : qrSettings?.countrySystem === "eta"   ? "ETA QR"
                 : "QR Code";
@@ -66,9 +71,9 @@ export default function InvoicePrintModal({
 
   /* ── HTML الفاتورة — نفس المخرج للمعاينة والطباعة ── */
   const invoiceHtml = useMemo(
-    () => buildInvoiceHtml(data, cfg, showQR ? qrDataUrl : undefined, qrLabel, qrSize),
+    () => buildInvoiceHtml(data, cfg, showQR ? qrDataUrl : undefined, qrLabel, qrSize, docType),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [data, cfg, qrDataUrl, showQR, qrLabel, qrSize],
+    [data, cfg, qrDataUrl, showQR, qrLabel, qrSize, docType],
   );
 
   /* ── طباعة / تصدير PDF ── */
@@ -86,9 +91,11 @@ export default function InvoicePrintModal({
       >
         <FileText className="w-5 h-5 text-white/80" />
         <span className="text-white font-bold text-base flex-1">
-          معاينة الطباعة — فاتورة {data.invoiceNumber}
+          معاينة الطباعة — {docType === "purchase_invoice" ? "فاتورة مشتريات" : "فاتورة"} {data.invoiceNumber}
           {cfg.language === "bilingual" && (
-            <span className="text-white/60 font-normal text-sm mr-2">| INV01 ثنائي اللغة</span>
+            <span className="text-white/60 font-normal text-sm mr-2">
+              | {docType === "purchase_invoice" ? "PINV01 ثنائي اللغة" : "INV01 ثنائي اللغة"}
+            </span>
           )}
         </span>
         <Button
