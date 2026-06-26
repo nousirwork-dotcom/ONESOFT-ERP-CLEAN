@@ -316,7 +316,7 @@ export default function DocumentTemplatesPage() {
     <div className="flex h-full overflow-hidden" dir="rtl">
 
       {/* ── Sidebar ── */}
-      <div className="w-44 shrink-0 border-l border-slate-200 bg-gradient-to-b from-slate-50 to-white overflow-y-auto">
+      <div className="w-44 shrink-0 overflow-y-auto" style={{ background: "#E4E0D6", borderLeft: "1px solid #d8d3c8" }}>
         <div className="px-3 py-2 border-b border-slate-200">
           <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wide">نماذج المستندات</span>
         </div>
@@ -339,7 +339,7 @@ export default function DocumentTemplatesPage() {
       <div className="flex-1 flex flex-col overflow-hidden">
 
         {/* Toolbar */}
-        <div className="flex items-center gap-1 px-3 py-1.5 border-b border-slate-200 bg-white shrink-0">
+        <div className="flex items-center gap-1 px-3 py-1.5 border-b shrink-0" style={{ background: "#EBE7DE", borderBottomColor: "#d8d3c8" }}>
           <span className="text-[11px] font-semibold text-slate-700 ml-2">{currentTypeMeta?.label}</span>
           <div className="flex-1" />
 

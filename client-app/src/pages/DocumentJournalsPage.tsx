@@ -704,9 +704,9 @@ export default function DocumentJournalsPage() {
 
       {/* ══ Type Sidebar ══ */}
       <div className="shrink-0 flex flex-col overflow-hidden"
-        style={{ width: 180, background: "#fff", borderLeft: "1px solid #e8edf3" }}>
+        style={{ width: 180, background: "#EBE7DE", borderLeft: "1px solid #ddd8ce" }}>
         <div className="px-3 py-2 shrink-0"
-          style={{ borderBottom: "1px solid #f1f5f9", background: "#f8fafc" }}>
+          style={{ borderBottom: "1px solid #d8d3c8", background: "#E4E0D6" }}>
           <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">نوع المستند</span>
         </div>
         <div className="flex-1 overflow-y-auto">
