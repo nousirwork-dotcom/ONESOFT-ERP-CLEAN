@@ -1,5 +1,8 @@
 import * as XLSX from "xlsx";
 
+const fmtDate = (d: Date): string =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 export interface AccountForExport {
   id: number;
@@ -96,9 +99,7 @@ export function buildTreeFlat(accounts: AccountForExport[], opts: ExportOptions)
 
 // ── Excel Export ──────────────────────────────────────────────────────────────
 export function exportToExcel(rows: FlatRow[], companyName: string, userName: string) {
-  const dateStr = new Date().toLocaleDateString("ar-EG", {
-    year: "numeric", month: "long", day: "numeric",
-  });
+  const dateStr = fmtDate(new Date());
 
   const headerRows: (string | number | null)[][] = [
     [companyName, "", "", "", "", "", ""],
@@ -152,9 +153,7 @@ export function exportToExcel(rows: FlatRow[], companyName: string, userName: st
 
 // ── Word Export (HTML-based .doc) ─────────────────────────────────────────────
 export function exportToWord(rows: FlatRow[], companyName: string, userName: string) {
-  const dateStr = new Date().toLocaleDateString("ar-EG", {
-    year: "numeric", month: "long", day: "numeric",
-  });
+  const dateStr = fmtDate(new Date());
 
   const levelBg: Record<number, string> = {
     1: "#dbeafe", 2: "#eff6ff", 3: "#f1f5f9", 4: "#ffffff", 5: "#ffffff",
@@ -231,9 +230,7 @@ export function openPrintPreview(
   userName: string,
   autoPrint = false,
 ) {
-  const dateStr = new Date().toLocaleDateString("ar-EG", {
-    year: "numeric", month: "long", day: "numeric",
-  });
+  const dateStr = fmtDate(new Date());
 
   const levelBg: Record<number, string> = {
     1: "#dbeafe", 2: "#eff6ff", 3: "#f1f5f9", 4: "#ffffff", 5: "#ffffff",
@@ -360,7 +357,7 @@ export function exportTBToExcel(
   fromDate: string,
   toDate: string,
 ) {
-  const dateStr = new Date().toLocaleDateString("ar-EG", { year: "numeric", month: "long", day: "numeric" });
+  const dateStr = fmtDate(new Date());
   const period = `${fromDate || "—"} / ${toDate || "—"}`;
 
   if (tbMode === "full") {
@@ -430,7 +427,7 @@ export function exportTBToWord(
   fromDate: string,
   toDate: string,
 ) {
-  const dateStr = new Date().toLocaleDateString("ar-EG", { year: "numeric", month: "long", day: "numeric" });
+  const dateStr = fmtDate(new Date());
   const period = `${fromDate || "—"} — ${toDate || "—"}`;
   const D = "#C0392B"; const C2 = "#1A7A4A";
   const numCell = (v: number, color: string) =>
@@ -491,7 +488,7 @@ export function openTBPrintPreview(
   toDate: string,
   autoPrint = false,
 ) {
-  const dateStr = new Date().toLocaleDateString("ar-EG", { year: "numeric", month: "long", day: "numeric" });
+  const dateStr = fmtDate(new Date());
   const period = `${fromDate || "—"} — ${toDate || "—"}`;
   const D = "#C0392B"; const C2 = "#1A7A4A";
   const numTd = (v: number, col: string) =>

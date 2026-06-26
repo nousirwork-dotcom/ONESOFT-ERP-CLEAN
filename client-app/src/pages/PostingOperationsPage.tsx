@@ -1,4 +1,5 @@
 import { useState, CSSProperties } from "react";
+import { fmtDate } from "../utils/dateUtils";
 import { trpc } from "../lib/trpc";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -286,7 +287,7 @@ export default function PostingOperationsPage() {
                             {op === "post_purchases_inventory" ? inv.supplierName : inv.customerName}
                           </td>
                           <td className="px-3 py-1.5 text-slate-500">
-                            {new Date(inv.invoiceDate).toLocaleDateString("ar-SA")}
+                            {fmtDate(inv.invoiceDate)}
                           </td>
                           <td className="px-3 py-1.5 text-left font-mono text-slate-700">
                             {Number(inv.subtotal).toLocaleString("ar-SA", { minimumFractionDigits: 2 })}

@@ -1,3 +1,4 @@
+import { fmtDate } from "@/utils/dateUtils";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { MessageCircle, X, Send, ChevronLeft, Search } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -21,7 +22,7 @@ function timeAgo(date: string | Date) {
   if (diff < 60) return "الآن";
   if (diff < 3600) return `${Math.floor(diff / 60)} د`;
   if (diff < 86400) return `${Math.floor(diff / 3600)} س`;
-  return d.toLocaleDateString("ar-EG", { day: "numeric", month: "short" });
+  return fmtDate(d);
 }
 
 export default function ChatWidget() {

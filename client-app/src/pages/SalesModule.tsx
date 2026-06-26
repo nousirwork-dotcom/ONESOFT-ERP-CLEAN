@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { fmtDate } from "@/utils/dateUtils";
 import CustomerFormDialog from "@/components/CustomerFormDialog";
 import SalesInvoicePageNew from "./SalesInvoicePage";
 import SalesQuotation from "./sales/SalesQuotation";
@@ -2252,9 +2253,7 @@ function SalesTransactionsView() {
                 const dt = DOC_TYPE_CONFIG[inv.invoiceType] ?? { label: inv.invoiceType, color: "#6B7280", bg: "#F3F4F6" };
                 const st = statusLabel[inv.status] ?? { label: inv.status, color: "#6B7280" };
                 const payLabel = inv.paymentMethod === "cash" ? "نقداً" : "آجل";
-                const invDate = new Date(inv.invoiceDate).toLocaleDateString("ar-EG", {
-                  year: "numeric", month: "2-digit", day: "2-digit",
-                });
+                const invDate = fmtDate(inv.invoiceDate);
                 return (
                   <tr key={inv.id}
                     style={{ borderBottom: "1px solid #F3F4F6", background: i % 2 === 0 ? "#fff" : "#FAFAFA" }}
@@ -2584,9 +2583,7 @@ function SalesInvoiceListView() {
               invoices.map((inv, i) => {
                 const st = statusLabel[inv.status] ?? { label: inv.status, color: "#6B7280" };
                 const payLabel = inv.paymentMethod === "cash" ? "نقداً" : "آجل";
-                const invDate = new Date(inv.invoiceDate).toLocaleDateString("ar-EG", {
-                  year: "numeric", month: "2-digit", day: "2-digit",
-                });
+                const invDate = fmtDate(inv.invoiceDate);
                 return (
                   <tr
                     key={inv.id}

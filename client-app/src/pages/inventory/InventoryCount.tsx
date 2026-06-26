@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { fmtDate } from "@/utils/dateUtils";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -123,7 +124,7 @@ export default function InventoryCount() {
                     </TableCell>
                     <TableCell>{statusBadge(c.status)}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">
-                      {new Date(c.createdAt).toLocaleDateString("ar-EG")}
+                      {fmtDate(c.createdAt)}
                     </TableCell>
                     <TableCell>
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openCount(c.id)}>

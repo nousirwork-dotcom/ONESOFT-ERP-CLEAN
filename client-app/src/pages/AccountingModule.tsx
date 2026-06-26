@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useCallback, useEffect, createContext, useContext } from "react";
+import { fmtDate } from "@/utils/dateUtils";
 import type { CSSProperties } from "react";
 import { useTabManager } from "@/contexts/TabManagerContext";
 import type { KeyboardEvent } from "react";
@@ -1382,7 +1383,7 @@ function ReceiptVoucherPage() {
             {listQuery.data?.map(v => (
               <TableRow key={v.id} className="hover:bg-muted/10">
                 <TableCell className="text-xs font-mono">{v.voucherNumber}</TableCell>
-                <TableCell className="text-xs">{new Date(v.voucherDate).toLocaleDateString("ar-SA")}</TableCell>
+                <TableCell className="text-xs">{fmtDate(v.voucherDate)}</TableCell>
                 <TableCell className="text-xs">{v.receivedFrom ?? "-"}</TableCell>
                 <TableCell className="text-xs">
                   <Badge variant="outline" className="text-xs">{(v.paymentMethod as string) === "cash" ? "نقدي" : (v.paymentMethod as string) === "check" ? "شيك" : (v.paymentMethod as string) === "transfer" ? "تحويل" : "بطاقة"}</Badge>
@@ -1593,7 +1594,7 @@ function PaymentVoucherPage() {
             {listQuery.data?.map(v => (
               <TableRow key={v.id} className="hover:bg-muted/10">
                 <TableCell className="text-xs font-mono">{v.voucherNumber}</TableCell>
-                <TableCell className="text-xs">{new Date(v.voucherDate).toLocaleDateString("ar-SA")}</TableCell>
+                <TableCell className="text-xs">{fmtDate(v.voucherDate)}</TableCell>
                 <TableCell className="text-xs">{v.paidTo ?? "-"}</TableCell>
                 <TableCell className="text-xs">
                   <Badge variant="outline" className="text-xs">{v.paymentMethod === "cash" ? "نقدي" : v.paymentMethod === "check" ? "شيك" : "تحويل"}</Badge>
@@ -1728,7 +1729,7 @@ function JournalListPage({ onOpenEntry }: { onOpenEntry?: (id: number) => void }
             {filtered.map(e => (
               <TableRow key={e.id} className="hover:bg-muted/10 cursor-pointer" onClick={() => onOpenEntry?.(e.id)}>
                 <TableCell className="text-xs font-mono text-primary">{e.entryNumber}</TableCell>
-                <TableCell className="text-xs">{new Date(e.entryDate).toLocaleDateString("ar-SA")}</TableCell>
+                <TableCell className="text-xs">{fmtDate(e.entryDate)}</TableCell>
                 <TableCell className="text-xs">
                   <Badge variant="outline" className="text-xs">
                     {e.voucherType === "journal" ? "قيد يومي" : e.voucherType === "receipt" ? "سند قبض" : e.voucherType === "payment" ? "سند صرف" : e.voucherType === "opening" ? "قيد افتتاحي" : e.voucherType}
@@ -3194,7 +3195,7 @@ function AccountLedgerPage({
                     const fmt = (n: number) => n > 0 ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
                     return (
                       <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#F3F8FE", borderBottom: "1px solid #F3F4F6" }}>
-                        <td style={{ padding: "5px 10px", whiteSpace: "nowrap" }}>{new Date(r.entryDate).toLocaleDateString("ar-EG")}</td>
+                        <td style={{ padding: "5px 10px", whiteSpace: "nowrap" }}>{fmtDate(r.entryDate)}</td>
                         <td style={{ padding: "5px 10px", fontFamily: "monospace", color: "#2563EB", whiteSpace: "nowrap" }}>{(r as any).reference ?? r.entryNumber}</td>
                         <td style={{ padding: "5px 10px" }}>{r.voucherType}</td>
                         <td style={{ padding: "5px 10px", color: "#374151", maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.description ?? "—"}</td>
@@ -3678,7 +3679,7 @@ function LedgerDialogBody({
               )}
               {rows.map((r, i) => (
                 <TableRow key={i} className="hover:bg-muted/10">
-                  <TableCell className="text-xs">{new Date(r.entryDate).toLocaleDateString("ar-SA")}</TableCell>
+                  <TableCell className="text-xs">{fmtDate(r.entryDate)}</TableCell>
                   <TableCell className="text-xs font-mono text-primary">{(r as any).reference ?? r.entryNumber}</TableCell>
                   <TableCell className="text-xs">{r.voucherType}</TableCell>
                   <TableCell className="text-xs">{r.description ?? "-"}</TableCell>

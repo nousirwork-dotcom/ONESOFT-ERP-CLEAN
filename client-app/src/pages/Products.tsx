@@ -1,3 +1,4 @@
+import { fmtDate } from "@/utils/dateUtils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1022,7 +1023,7 @@ function ProductCard({
               <div className="bg-[#EBE7DF] dark:bg-slate-800 px-3 py-1.5 border-b border-[#CFCFCF] dark:border-slate-700 flex items-center justify-between">
                 <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">بيانات الموردين</span>
                 {isEdit && costsData?.lastVoucherDate && (
-                  <span className="text-xs text-slate-500">آخر مشتروات: {new Date(costsData.lastVoucherDate).toLocaleDateString("ar-SA")}</span>
+                  <span className="text-xs text-slate-500">آخر مشتروات: {fmtDate(costsData.lastVoucherDate)}</span>
                 )}
               </div>
               <div className="p-3 grid grid-cols-4 gap-2">

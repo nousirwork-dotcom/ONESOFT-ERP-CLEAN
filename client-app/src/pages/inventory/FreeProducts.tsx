@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { fmtDate } from "@/utils/dateUtils";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -198,8 +199,8 @@ export default function FreeProducts() {
                     <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400">{row.unit || "—"}</td>
                     <td className="px-3 py-1.5 font-mono text-center text-slate-700 dark:text-slate-200">{Number(row.baseQty).toFixed(0)}</td>
                     <td className="px-3 py-1.5 font-mono text-center text-emerald-700 dark:text-emerald-400 font-semibold">{Number(row.freeQty).toFixed(0)}</td>
-                    <td className="px-3 py-1.5 text-xs text-slate-500">{row.offerStart ? new Date(row.offerStart).toLocaleDateString("ar-SA") : "—"}</td>
-                    <td className="px-3 py-1.5 text-xs text-slate-500">{row.offerEnd ? new Date(row.offerEnd).toLocaleDateString("ar-SA") : "—"}</td>
+                    <td className="px-3 py-1.5 text-xs text-slate-500">{row.offerStart ? fmtDate(row.offerStart) : "—"}</td>
+                    <td className="px-3 py-1.5 text-xs text-slate-500">{row.offerEnd ? fmtDate(row.offerEnd) : "—"}</td>
                     <td className="px-3 py-1.5">
                       <div className="flex items-center gap-1">
                         <button onClick={() => openEdit(row)} className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 hover:text-blue-600 transition-colors" title="تعديل">

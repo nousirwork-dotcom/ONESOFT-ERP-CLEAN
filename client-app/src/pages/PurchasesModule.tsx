@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { fmtDate } from "@/utils/dateUtils";
 import PurchaseInvoicePage from "./PurchaseInvoicePage";
 import PurchaseReturnPage from "./PurchaseReturnPage";
 import PurchaseOrderPage from "./PurchaseOrderPage";
@@ -595,7 +596,7 @@ function PurchaseDocPage({ invoiceType }: { invoiceType: InvoiceType }) {
             {listQuery.data?.map(inv => (
               <TableRow key={inv.id} className="hover:bg-muted/10">
                 <TableCell className="text-xs font-mono text-primary">{inv.invoiceNumber}</TableCell>
-                <TableCell className="text-xs">{new Date(inv.invoiceDate).toLocaleDateString("ar-SA")}</TableCell>
+                <TableCell className="text-xs">{fmtDate(inv.invoiceDate)}</TableCell>
                 <TableCell className="text-xs">{(inv as any).supplierName ?? "-"}</TableCell>
                 <TableCell className="text-center text-xs font-semibold">{parseFloat(inv.subtotal ?? "0").toLocaleString()}</TableCell>
                 <TableCell className="text-center text-xs text-amber-600">{parseFloat(inv.discountAmount ?? "0").toLocaleString()}</TableCell>

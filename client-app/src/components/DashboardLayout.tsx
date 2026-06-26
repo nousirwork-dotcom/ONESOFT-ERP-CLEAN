@@ -1,3 +1,4 @@
+import { fmtDate } from "@/utils/dateUtils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -485,12 +486,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="flex-1" />
             <OnlineIndicator />
             <span className="text-xs text-muted-foreground hidden md:block">
-              {new Date().toLocaleDateString(t(lang, "dateLocale"), {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
+              {fmtDate(new Date())}
             </span>
             <LangToggleBtn />
             <LayoutToggleBtn />
@@ -612,12 +608,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="flex-1" />
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground hidden sm:block">
-              {new Date().toLocaleDateString(t(lang, "dateLocale"), {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
+              {fmtDate(new Date())}
             </span>
             <LangToggleBtn />
             <LayoutToggleBtn />

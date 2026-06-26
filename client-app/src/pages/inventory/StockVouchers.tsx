@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { fmtDate } from "@/utils/dateUtils";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -165,7 +166,7 @@ export default function StockVouchers({ initialTab = "receipt" }: { initialTab?:
                         </TableCell>
                         <TableCell className="font-mono font-bold">{Number(v.totalCost).toFixed(3)}</TableCell>
                         <TableCell className="text-muted-foreground text-sm">
-                          {new Date(v.createdAt).toLocaleDateString("ar-EG")}
+                          {fmtDate(v.createdAt)}
                         </TableCell>
                         <TableCell>
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowDetails(v)}>

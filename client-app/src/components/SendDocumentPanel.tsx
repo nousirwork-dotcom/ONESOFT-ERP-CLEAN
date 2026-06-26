@@ -3,6 +3,7 @@
  * يدعم: WhatsApp | Telegram | البريد الإلكتروني
  */
 import { useState, useEffect } from "react";
+import { fmtDate } from "@/utils/dateUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -369,7 +370,7 @@ export default function SendDocumentPanel({
                             <span className="text-muted-foreground">{log.recipientContact}</span>
                           </div>
                           <p className="text-muted-foreground mt-1">
-                            {new Date(log.sentAt).toLocaleDateString("ar-SA")}
+                            {fmtDate(log.sentAt)}
                             {" — "}
                             {new Date(log.sentAt).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}
                           </p>

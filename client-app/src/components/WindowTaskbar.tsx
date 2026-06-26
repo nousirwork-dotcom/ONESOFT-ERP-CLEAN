@@ -1,3 +1,4 @@
+import { fmtDate } from "@/utils/dateUtils";
 import { useTabManager } from "@/contexts/TabManagerContext";
 import { LayoutDashboard, Store } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -145,7 +146,7 @@ export default function WindowTaskbar() {
       }}>
         <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.3, letterSpacing: "0.02em" }}>{clock}</div>
         <div style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", lineHeight: 1.2 }}>
-          {new Date().toLocaleDateString("ar-SA", { day: "2-digit", month: "2-digit", year: "numeric" })}
+          {fmtDate(new Date())}
         </div>
       </div>
     </div>

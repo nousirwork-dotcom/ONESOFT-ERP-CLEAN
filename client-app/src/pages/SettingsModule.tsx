@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { fmtDate, fmtDateTime } from "@/utils/dateUtils";
 import { useTabManager } from "@/contexts/TabManagerContext";
 import { trpc } from "@/lib/trpc";
 import Warehouses from "./Warehouses";
@@ -3289,7 +3290,7 @@ function MessagingWhatsAppPage() {
                   {[
                     { label: "إجمالي الرسائل المرسلة", value: (logsQ.data?.filter(l => l.status === "sent").length ?? 0).toLocaleString("ar-SA"), icon: Send, color: "text-green-600" },
                     { label: "رسائل فاشلة", value: (logsQ.data?.filter(l => l.status === "failed").length ?? 0).toLocaleString("ar-SA"), icon: XCircle, color: "text-red-600" },
-                    { label: "آخر إرسال", value: logsQ.data?.[0]?.sentAt ? new Date(logsQ.data[0].sentAt).toLocaleDateString("ar-SA") : "—", icon: Clock, color: "text-[#406B93]" },
+                    { label: "آخر إرسال", value: logsQ.data?.[0]?.sentAt ? fmtDate(logsQ.data[0].sentAt) : "—", icon: Clock, color: "text-[#406B93]" },
                   ].map(stat => (
                     <Card key={stat.label} className="border-border/50">
                       <CardContent className="p-4 text-center">
@@ -3387,7 +3388,7 @@ function MessagingWhatsAppPage() {
                   {logsQ.data.map((log: any) => (
                     <TableRow key={log.id}>
                       <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                        {log.sentAt ? new Date(log.sentAt).toLocaleString("ar-SA", { dateStyle: "short", timeStyle: "short" }) : "—"}
+                        {log.sentAt ? fmtDateTime(log.sentAt) : "—"}
                       </TableCell>
                       <TableCell className="text-xs font-mono">{log.docNumber ?? "—"}</TableCell>
                       <TableCell className="text-xs">{log.recipientName ?? "—"}</TableCell>
@@ -3639,7 +3640,7 @@ function MessagingLogPage() {
               {logs.map((log: any) => (
                 <TableRow key={log.id}>
                   <TableCell className="text-xs text-muted-foreground">
-                    {log.sentAt ? new Date(log.sentAt).toLocaleString("ar-SA") : "—"}
+                    {log.sentAt ? fmtDateTime(log.sentAt) : "—"}
                   </TableCell>
                   <TableCell className="text-xs">
                     {CHANNEL_ICONS[log.channel] ?? "📨"} {log.channel}

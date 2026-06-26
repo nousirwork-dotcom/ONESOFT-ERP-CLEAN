@@ -1,3 +1,4 @@
+import { fmtDate } from "@/utils/dateUtils";
 import { useState } from 'react';
 import { trpc } from '../lib/trpc';
 import { toast } from 'sonner';
@@ -118,7 +119,7 @@ export default function SuperAdminPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-slate-400">
-                        {org.subscriptionExpiry ? new Date(org.subscriptionExpiry).toLocaleDateString('ar-SA') : 'غير محدد'}
+                        {org.subscriptionExpiry ? fmtDate(org.subscriptionExpiry) : 'غير محدد'}
                       </td>
                       <td className="px-4 py-3 text-slate-400">{org.maxUsers}</td>
                       <td className="px-4 py-3">

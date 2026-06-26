@@ -1,3 +1,4 @@
+import { fmtDate } from "@/utils/dateUtils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -105,7 +106,7 @@ export default function Users() {
                       {branches?.find((b) => b.id === (u as any).branchId)?.name ?? "—"}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-xs">
-                      {new Date(u.lastSignedIn).toLocaleDateString("ar-SA")}
+                      {fmtDate(u.lastSignedIn)}
                     </TableCell>
                     <TableCell>
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(u)}>

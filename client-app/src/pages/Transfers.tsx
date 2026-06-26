@@ -1,3 +1,4 @@
+import { fmtDate } from "@/utils/dateUtils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -128,7 +129,7 @@ export default function Transfers() {
                           <TableCell>{getWarehouseName(t.fromWarehouseId)}</TableCell>
                           <TableCell>{getWarehouseName(t.toWarehouseId)}</TableCell>
                           <TableCell><span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${sc?.className}`}>{sc?.label}</span></TableCell>
-                          <TableCell className="text-muted-foreground text-xs">{new Date(t.requestedAt ?? t.createdAt).toLocaleDateString("ar-SA")}</TableCell>
+                          <TableCell className="text-muted-foreground text-xs">{fmtDate(t.requestedAt ?? t.createdAt)}</TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">
                               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setSelectedId(t.id); setIsDetailOpen(true); }}>

@@ -1,3 +1,4 @@
+import { fmtDate } from "@/utils/dateUtils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -82,7 +83,7 @@ export default function Invoices() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-xs">
-                      {new Date(inv.createdAt).toLocaleString("ar-SA")}
+                      {fmtDate(inv.createdAt)}
                     </TableCell>
                   </TableRow>
                 ))

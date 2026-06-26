@@ -3,6 +3,7 @@
  * نافذة إضافة / تعديل العميل — متعددة التبويبات بأسلوب ERP الكلاسيكي
  */
 import React, { useState, useEffect, useRef } from "react";
+import { fmtDate } from "@/utils/dateUtils";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
@@ -922,12 +923,6 @@ function CustomerInvoicesTab({
   const totalAmt  = data.reduce((s, r) => s + parseFloat(r.total ?? "0"), 0);
   const totalTax  = data.reduce((s, r) => s + parseFloat(r.taxAmount ?? "0"), 0);
   const fmtNum = (n: number) => n.toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-  /* تحويل التاريخ */
-  const fmtDate = (d: Date | string) => {
-    try { return new Date(d).toLocaleDateString("ar-SA", { year: "numeric", month: "2-digit", day: "2-digit" }); }
-    catch { return String(d).slice(0, 10); }
-  };
 
   /* الحالة بالعربية */
   const statusAr = (row: InvoiceRow) => {

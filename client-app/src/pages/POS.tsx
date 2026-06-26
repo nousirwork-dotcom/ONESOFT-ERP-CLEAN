@@ -1,3 +1,4 @@
+import { fmtDate } from "@/utils/dateUtils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -172,7 +173,7 @@ export default function POS() {
         : undefined;
       const rData: POSReceiptData = {
         invoiceNumber: id,
-        invoiceDate: now.toLocaleDateString("ar-SA"),
+        invoiceDate: fmtDate(now),
         invoiceTime: now.toTimeString().slice(0, 8),
         cashierName: user?.name ?? (user as any)?.username ?? undefined,
         branchName: "الفرع الرئيسي",

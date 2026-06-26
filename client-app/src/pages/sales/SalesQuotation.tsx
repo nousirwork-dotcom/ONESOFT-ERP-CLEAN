@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef, KeyboardEvent } from "react";
+import { fmtDate } from "@/utils/dateUtils";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -176,7 +177,7 @@ function QuotationList({
                   <TableRow key={q.id} className="hover:bg-muted/20 cursor-pointer" onClick={() => onView(q.id)}>
                     <TableCell className="font-mono text-sm font-semibold text-primary">{q.invoiceNumber}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {new Date(q.invoiceDate).toLocaleDateString("ar-SA")}
+                      {fmtDate(q.invoiceDate)}
                     </TableCell>
                     <TableCell className="text-sm">{q.customerName || "—"}</TableCell>
                     <TableCell className="text-sm font-semibold">{fmt(q.total)} {q.currency}</TableCell>
@@ -770,7 +771,7 @@ function QuotationDetail({ id, onBack, onEdit }: { id: number; onBack: () => voi
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div>
             <p className="text-xs text-muted-foreground">التاريخ</p>
-            <p className="font-medium">{new Date(q.invoiceDate).toLocaleDateString("ar-SA")}</p>
+            <p className="font-medium">{fmtDate(q.invoiceDate)}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">العميل</p>
