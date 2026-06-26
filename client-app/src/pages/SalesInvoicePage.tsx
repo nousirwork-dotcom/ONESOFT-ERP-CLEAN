@@ -1418,19 +1418,19 @@ export default function SalesInvoicePage({ initialInvoiceId }: { initialInvoiceI
 
       {/* ── لوحة الإجماليات (يسار) ──────────────────────────────────────── */}
       <div
-        className="flex flex-col border-r border-[#b0a89a]"
+        className="border-r border-[#b0a89a] overflow-y-auto flex-shrink-0"
         style={{ width: 320, minWidth: 320, background: "#F4F1EC" }}
       >
-        {/* عنوان اللوحة */}
+        {/* عنوان اللوحة — ثابت دائماً في الأعلى */}
         <div
-          className="px-3 py-2 text-[11px] font-bold text-white text-center"
+          className="px-3 py-2 text-[11px] font-bold text-white text-center sticky top-0 z-10"
           style={{ background: "linear-gradient(to bottom, #D19C05, #B88904)" }}
         >
           ملخص الفاتورة
         </div>
 
         {/* صفوف الإجماليات */}
-        <div className="flex-1 flex flex-col justify-start px-3 py-3 gap-0">
+        <div className="px-3 py-3 gap-0 flex flex-col">
 
           {/* المبلغ الإجمالي */}
           <div className="flex items-center justify-between py-2 border-b border-[#d4cfc7]">
