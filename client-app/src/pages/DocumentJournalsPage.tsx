@@ -776,8 +776,8 @@ export default function DocumentJournalsPage() {
               <div className="grid grid-cols-2 gap-2">
                 {typeJournals.map((j, idx) => (
                   <button key={j.id} onClick={() => openEdit(j)}
-                    className="group flex flex-col items-start gap-1 p-3 rounded-lg bg-white text-right transition-all hover:shadow-md hover:border-indigo-200"
-                    style={{ border: "1px solid #e8edf3", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+                    className="group flex flex-col items-start gap-1 p-3 rounded-lg text-right transition-all hover:shadow-md hover:border-indigo-200"
+                    style={{ background: "#FDFAF5", border: "1px solid #d8d3c8", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
                     <div className="flex items-center gap-2 w-full">
                       <span className="text-[9px] font-bold text-slate-300">#{String(idx + 1).padStart(2, "0")}</span>
                       <span className="flex-1 text-[12px] font-semibold text-slate-700 truncate group-hover:text-indigo-700">
@@ -1149,14 +1149,14 @@ export default function DocumentJournalsPage() {
                   <P title="الروابط المحاسبية">
                     <table className="w-full" style={{ borderCollapse: "separate", borderSpacing: 0 }}>
                       <thead>
-                        <tr style={{ background: "linear-gradient(to left, #f1f5f9, #eef2f7)" }}>
+                        <tr style={{ background: "linear-gradient(to left, #e8e3d8, #e2ddd3)" }}>
                           <th className={thCls} style={{ width: 28 }}>#</th>
                           <th className={thCls} style={{ width: "23%" }}>بيان<br/><span className="font-normal text-[9px] text-slate-400">Description</span></th>
                           <th className={thCls} style={{ width: "18%" }}>مصدر البيانات<br/><span className="font-normal text-[9px] text-slate-400">Source Field</span></th>
-                          <th className={thCls} style={{ width: 110, borderRight: "1px solid #e8edf3" }}>كود الحساب<br/><span className="font-normal text-[9px] text-slate-400">Account Code</span></th>
+                          <th className={thCls} style={{ width: 110, borderRight: "1px solid #d8d3c8" }}>كود الحساب<br/><span className="font-normal text-[9px] text-slate-400">Account Code</span></th>
                           <th className={thCls}>اسم الحساب<br/><span className="font-normal text-[9px] text-slate-400">Account Name</span></th>
                           <th className={thCls} style={{ width: 100 }}>اتجاه القيد<br/><span className="font-normal text-[9px] text-slate-400">Posting Side</span></th>
-                          <th className="w-6 bg-slate-50 border-b border-slate-200"></th>
+                          <th className="w-6 border-b" style={{ background: "#e2ddd3", borderColor: "#d8d3c8" }}></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1165,8 +1165,8 @@ export default function DocumentJournalsPage() {
                           const even = i % 2 === 0;
                           return (
                             <tr key={row.id}
-                              style={{ background: even ? "#ffffff" : "#f8fafc", borderBottom: "1px solid #f0f4f8" }}
-                              className="hover:bg-indigo-50/20"
+                              style={{ background: even ? "#FDFAF5" : "#F5F0E8", borderBottom: "1px solid #e8e3d8" }}
+                              className="hover:bg-amber-50/40"
                             >
                               <td className="px-2 py-1 text-[11px] text-slate-400 text-center">{i + 1}</td>
                               <td className={tdCls}>{cellInput(row.description, v => patchLink(i, { description: v }))}</td>

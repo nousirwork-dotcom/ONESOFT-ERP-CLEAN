@@ -192,10 +192,10 @@ const P = ({ title, children }: { title: string; children: React.ReactNode }) =>
   const c = useContext(Density) === "compact";
   return (
     <div className="overflow-hidden" style={{ border: "1px solid #d1d5db", borderRadius: 4 }}>
-      <div className={`${c ? "px-1.5 py-px" : "px-2.5 py-1"}`} style={{ background: "#e8edf5", borderBottom: "1px solid #d1d5db" }}>
+      <div className={`${c ? "px-1.5 py-px" : "px-2.5 py-1"}`} style={{ background: "#e8e3d8", borderBottom: "1px solid #d8d3c8" }}>
         <span className={`font-bold text-slate-700 ${c ? "text-[10px]" : "text-[11px]"}`}>{title}</span>
       </div>
-      <div className={`${c ? "px-1.5 py-1" : "px-3 py-2"}`} style={{ background: "#fff" }}>{children}</div>
+      <div className={`${c ? "px-1.5 py-1" : "px-3 py-2"}`} style={{ background: "#FDFAF5" }}>{children}</div>
     </div>
   );
 };
@@ -629,22 +629,22 @@ export default function Warehouses() {
                   style={{ borderCollapse: "separate", borderSpacing: 0, maxWidth: c ? 420 : 580 }}
                 >
                   <thead>
-                    <tr style={{ background: "linear-gradient(to left, #f1f5f9, #eef2f7)" }}>
+                    <tr style={{ background: "linear-gradient(to left, #e8e3d8, #e2ddd3)" }}>
                       <th
                         className={`font-semibold text-slate-400 text-right ${c ? "px-1 py-0.5 text-[9px]" : "px-3 py-2 text-[11px]"}`}
-                        style={{ width: c ? 20 : 28, borderBottom: "2px solid #e2e8f0" }}
+                        style={{ width: c ? 20 : 28, borderBottom: "2px solid #d8d3c8" }}
                       >#</th>
                       <th
                         className={`font-semibold text-slate-500 text-right ${c ? "px-1 py-0.5 text-[9px]" : "px-3 py-2 text-[11px]"}`}
-                        style={{ borderBottom: "2px solid #e2e8f0" }}
+                        style={{ borderBottom: "2px solid #d8d3c8" }}
                       >بيان</th>
                       <th
                         className={`font-semibold text-slate-500 text-right ${c ? "px-1 py-0.5 text-[9px]" : "px-3 py-2 text-[11px]"}`}
-                        style={{ width: c ? 90 : 110, borderBottom: "2px solid #e2e8f0", borderRight: "1px solid #e8edf3" }}
+                        style={{ width: c ? 90 : 110, borderBottom: "2px solid #d8d3c8", borderRight: "1px solid #d8d3c8" }}
                       >كود الحساب</th>
                       <th
                         className={`font-semibold text-slate-500 text-right ${c ? "px-1 py-0.5 text-[9px]" : "px-3 py-2 text-[11px]"}`}
-                        style={{ borderBottom: "2px solid #e2e8f0" }}
+                        style={{ borderBottom: "2px solid #d8d3c8" }}
                       >إسم الحساب</th>
                     </tr>
                   </thead>
@@ -659,8 +659,8 @@ export default function Warehouses() {
                         <tr
                           key={idx}
                           style={{
-                            background: isMissing ? "#fff9f0" : even ? "#ffffff" : "#f8fafc",
-                            borderBottom: isMissing ? "1px solid #fed7aa" : "1px solid #f0f4f8",
+                            background: isMissing ? "#fff3e0" : even ? "#FDFAF5" : "#F5F0E8",
+                            borderBottom: isMissing ? "1px solid #fed7aa" : "1px solid #e8e3d8",
                             transition: "background 0.1s",
                           }}
                           className="hover:bg-indigo-50/30"
@@ -1064,8 +1064,8 @@ export default function Warehouses() {
         <div
           className="sticky bottom-0 z-30 flex items-center gap-1 px-3 shrink-0"
           style={{
-            borderTop: "1px solid #e2e8f0",
-            background: "#ffffff",
+            borderTop: "1px solid #d8d3c8",
+            background: "#EBE7DE",
             boxShadow: "0 -2px 10px rgba(0,0,0,0.07)",
             height: c ? 36 : 44,
           }}
@@ -1206,14 +1206,14 @@ export default function Warehouses() {
 
       {/* Table card */}
       <div
-        className="bg-white overflow-hidden"
-        style={{ border: "1px solid #e5e7eb", borderRadius: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}
+        className="overflow-hidden"
+        style={{ background: "#FDFAF5", border: "1px solid #d8d3c8", borderRadius: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}
       >
         <Table>
           <TableHeader>
             <TableRow
               className="hover:bg-transparent"
-              style={{ background: "#f8fafc", borderBottom: "1px solid #e5e7eb" }}
+              style={{ background: "linear-gradient(to left, #e8e3d8, #e2ddd3)", borderBottom: "1px solid #d8d3c8" }}
             >
               {["رقم", "إسم المخزن", "إسم 2", "الموقع", "ملحوظة", "الحالة", ""].map((h, i) => (
                 <TableHead
@@ -1254,8 +1254,8 @@ export default function Warehouses() {
                 key={w.id}
                 className="cursor-pointer transition-colors hover:bg-indigo-50/30"
                 style={{
-                  borderBottom: "1px solid #f1f5f9",
-                  background: idx % 2 === 0 ? "#ffffff" : "#fafafa",
+                  borderBottom: "1px solid #e8e3d8",
+                  background: idx % 2 === 0 ? "#FDFAF5" : "#F5F0E8",
                 }}
                 onClick={() => openEdit(w)}
               >
