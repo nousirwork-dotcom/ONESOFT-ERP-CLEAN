@@ -1,4 +1,5 @@
 import { Toaster } from "@/components/ui/sonner";
+import { useSmartCopy } from "@/hooks/useSmartCopy";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch, useLocation } from "wouter";
@@ -334,6 +335,7 @@ function AppRoutes() {
 
 // ─── App Root ─────────────────────────────────────────────────────────────
 function App() {
+  useSmartCopy();
   return (
     <ErrorBoundary>
       <LanguageProvider>
