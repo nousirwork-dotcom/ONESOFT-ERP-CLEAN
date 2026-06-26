@@ -1,8 +1,15 @@
 /**
- * DateSegmentInput — إدخال التاريخ بالشرائح YYYY / MM / DD
- * - انتقال تلقائي بين الشرائح عند اكتمال كل جزء
- * - يخزّن ويقرأ بصيغة ISO: YYYY-MM-DD
- * - يدعم الأسهم، Tab، Backspace، والتقويم المنبثق
+ * DateSegmentInput — إدخال التاريخ بالشرائح YYYY-MM-DD
+ *
+ * ترتيب الإدخال:  DD → MM → YYYY
+ * ترتيب العرض:   YYYY - MM - DD  (CSS order على flex)
+ *
+ * Tab / Shift+Tab : ينتقل DD↔MM↔YYYY ثم يخرج طبيعياً عبر ترتيب DOM
+ * Enter           : يخرج مباشرة إلى الحقل التالي من أي موضع
+ * ← →             : ينتقل بصرياً بين الأجزاء
+ * Backspace فارغ  : يرجع للجزء السابق في ترتيب الإدخال
+ * Auto-advance    : بعد 2 رقم في DD→MM وبعد اكتمال YYYY
+ * onFocus         : يحدد المحتوى تلقائياً
  */
 import { useRef, useState, useEffect } from "react";
 import type { KeyboardEvent, CSSProperties } from "react";
@@ -28,14 +35,30 @@ function build(dd: string, mm: string, yyyy: string): string {
   return "";
 }
 
+function focusNext(from: HTMLElement | null) {
+  if (!from) return;
+  const doc = from.ownerDocument ?? document;
+  const all = Array.from(
+    doc.querySelectorAll<HTMLElement>(
+      'input:not([disabled]):not([type="hidden"]):not([tabindex="-1"]),' +
+      'select:not([disabled]):not([tabindex="-1"]),' +
+      'textarea:not([disabled]):not([tabindex="-1"]),' +
+      'button:not([disabled]):not([tabindex="-1"])'
+    )
+  ).filter(el => el.offsetParent !== null);
+  const i = all.indexOf(from);
+  if (i >= 0 && i + 1 < all.length) all[i + 1].focus();
+}
+
 export function DateSegmentInput({ value, onChange, style, className }: DateSegmentInputProps) {
   const [dd,   setDd]   = useState("");
   const [mm,   setMm]   = useState("");
   const [yyyy, setYyyy] = useState("");
 
-  const yyyyRef = useRef<HTMLInputElement>(null);
-  const mmRef   = useRef<HTMLInputElement>(null);
+  // DOM order: ddRef → mmRef → yyyyRef  (ترتيب Tab الطبيعي)
   const ddRef   = useRef<HTMLInputElement>(null);
+  const mmRef   = useRef<HTMLInputElement>(null);
+  const yyyyRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const [d, m, y] = parse(value);
@@ -48,61 +71,67 @@ export function DateSegmentInput({ value, onChange, style, className }: DateSegm
     if (iso) onChange(iso);
   };
 
-  /* ── YYYY (first segment) ── */
-  const onYyyyChange = (raw: string) => {
-    const v = raw.replace(/\D/g, "").slice(0, 4);
-    setYyyy(v);
-    if (v.length === 4 && +v >= 1000) {
-      mmRef.current?.focus();
-      mmRef.current?.select();
-    }
-    emit(dd, mm, v);
+  // ── DD ──────────────────────────────────────────────────────────────────────
+  const onDdChange = (raw: string) => {
+    const v = raw.replace(/\D/g, "").slice(0, 2);
+    setDd(v);
+    if (v.length === 2) { mmRef.current?.focus(); mmRef.current?.select(); }
+    emit(v, mm, yyyy);
   };
 
-  const onYyyyKey = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "ArrowRight") {
-      e.preventDefault(); mmRef.current?.focus(); mmRef.current?.select();
-    } else if (e.key === "Tab" && !e.shiftKey) {
+  const onDdKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      // انتقل للشهر أولاً إن لم يكتمل DD، وإلا انتقل للشهر أيضاً
+      mmRef.current?.focus(); mmRef.current?.select();
+    } else if (e.key === "ArrowRight") {
+      // بصرياً DD هو الأقصى يمينًا — لا انتقال
+    } else if (e.key === "ArrowLeft") {
       e.preventDefault(); mmRef.current?.focus(); mmRef.current?.select();
     }
+    // Tab / Shift+Tab: ينتقل طبيعياً عبر ترتيب DOM
   };
 
-  /* ── MM (second segment) ── */
+  // ── MM ──────────────────────────────────────────────────────────────────────
   const onMmChange = (raw: string) => {
     const v = raw.replace(/\D/g, "").slice(0, 2);
     setMm(v);
     if (v.length === 2 && +v >= 1 && +v <= 12) {
-      ddRef.current?.focus();
-      ddRef.current?.select();
+      yyyyRef.current?.focus(); yyyyRef.current?.select();
     }
     emit(dd, v, yyyy);
   };
 
   const onMmKey = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "ArrowLeft" || (e.key === "Backspace" && mm === "")) {
+    if (e.key === "Enter") {
       e.preventDefault(); yyyyRef.current?.focus(); yyyyRef.current?.select();
     } else if (e.key === "ArrowRight") {
       e.preventDefault(); ddRef.current?.focus(); ddRef.current?.select();
-    } else if (e.key === "Tab" && !e.shiftKey) {
-      e.preventDefault(); ddRef.current?.focus(); ddRef.current?.select();
-    } else if (e.key === "Tab" && e.shiftKey) {
+    } else if (e.key === "ArrowLeft") {
       e.preventDefault(); yyyyRef.current?.focus(); yyyyRef.current?.select();
+    } else if (e.key === "Backspace" && mm === "") {
+      e.preventDefault(); ddRef.current?.focus(); ddRef.current?.select();
     }
   };
 
-  /* ── DD (third segment) ── */
-  const onDdChange = (raw: string) => {
-    const v = raw.replace(/\D/g, "").slice(0, 2);
-    setDd(v);
-    emit(v, mm, yyyy);
+  // ── YYYY ─────────────────────────────────────────────────────────────────────
+  const onYyyyChange = (raw: string) => {
+    const v = raw.replace(/\D/g, "").slice(0, 4);
+    setYyyy(v);
+    emit(dd, mm, v);
   };
 
-  const onDdKey = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "ArrowLeft" || (e.key === "Backspace" && dd === "")) {
+  const onYyyyKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault(); focusNext(yyyyRef.current);
+    } else if (e.key === "ArrowRight") {
       e.preventDefault(); mmRef.current?.focus(); mmRef.current?.select();
-    } else if (e.key === "Tab" && e.shiftKey) {
+    } else if (e.key === "ArrowLeft") {
+      // YYYY هو الأقصى يسارًا — لا انتقال
+    } else if (e.key === "Backspace" && yyyy === "") {
       e.preventDefault(); mmRef.current?.focus(); mmRef.current?.select();
     }
+    // Tab: يخرج طبيعياً (YYYY آخر في DOM) | Shift+Tab: يذهب لـ MM طبيعياً
   };
 
   const seg: CSSProperties = {
@@ -125,30 +154,10 @@ export function DateSegmentInput({ value, onChange, style, className }: DateSegm
         ...style,
       }}
     >
-      <input
-        ref={yyyyRef}
-        value={yyyy}
-        onChange={e => onYyyyChange(e.target.value)}
-        onKeyDown={onYyyyKey}
-        onFocus={e => e.target.select()}
-        placeholder="YYYY"
-        maxLength={4}
-        inputMode="numeric"
-        style={{ ...seg, width: 34 }}
-      />
-      <span style={{ color: "#bbb", userSelect: "none", fontSize: 11, margin: "0 1px" }}>-</span>
-      <input
-        ref={mmRef}
-        value={mm}
-        onChange={e => onMmChange(e.target.value)}
-        onKeyDown={onMmKey}
-        onFocus={e => e.target.select()}
-        placeholder="MM"
-        maxLength={2}
-        inputMode="numeric"
-        style={{ ...seg, width: 20 }}
-      />
-      <span style={{ color: "#bbb", userSelect: "none", fontSize: 11, margin: "0 1px" }}>-</span>
+      {/*
+        DOM order  : DD(1st) → MM(2nd) → YYYY(3rd)   ← ترتيب Tab الطبيعي
+        CSS order  : YYYY(1) - sep(2) - MM(3) - sep(4) - DD(5)  ← العرض البصري
+      */}
       <input
         ref={ddRef}
         value={dd}
@@ -158,8 +167,32 @@ export function DateSegmentInput({ value, onChange, style, className }: DateSegm
         placeholder="DD"
         maxLength={2}
         inputMode="numeric"
-        style={{ ...seg, width: 20 }}
+        style={{ ...seg, width: 20, order: 5 }}
       />
+      <input
+        ref={mmRef}
+        value={mm}
+        onChange={e => onMmChange(e.target.value)}
+        onKeyDown={onMmKey}
+        onFocus={e => e.target.select()}
+        placeholder="MM"
+        maxLength={2}
+        inputMode="numeric"
+        style={{ ...seg, width: 20, order: 3 }}
+      />
+      <input
+        ref={yyyyRef}
+        value={yyyy}
+        onChange={e => onYyyyChange(e.target.value)}
+        onKeyDown={onYyyyKey}
+        onFocus={e => e.target.select()}
+        placeholder="YYYY"
+        maxLength={4}
+        inputMode="numeric"
+        style={{ ...seg, width: 34, order: 1 }}
+      />
+      <span style={{ color: "#bbb", userSelect: "none", fontSize: 11, margin: "0 1px", order: 2 }}>-</span>
+      <span style={{ color: "#bbb", userSelect: "none", fontSize: 11, margin: "0 1px", order: 4 }}>-</span>
     </div>
   );
 }
