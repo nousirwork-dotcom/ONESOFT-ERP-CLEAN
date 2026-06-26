@@ -172,6 +172,7 @@ export const products = pgTable('products', {
   purchasePrice: decimal('purchase_price', { precision: 18, scale: 4 }).default('0'),
   taxRate: decimal('tax_rate', { precision: 5, scale: 2 }).default('0'),
   minStock: decimal('min_stock', { precision: 18, scale: 4 }).default('0'),
+  itemType: varchar('item_type', { length: 20 }).notNull().default('stock'),
   isActive: boolean('is_active').notNull().default(true),
   notes: text('notes'),
   createdAt: timestamp('created_at').notNull().defaultNow(),

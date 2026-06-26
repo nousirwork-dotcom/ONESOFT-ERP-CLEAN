@@ -35,6 +35,7 @@ interface InvoiceLine {
   taxAmt: string;
   total: string;
   productId?: number;
+  isStockItem?: boolean;
 }
 
 type PaymentType = "cash" | "credit" | "partial";
@@ -521,20 +522,29 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     updateLine(idx, "productCode", code);
     if (!code) return;
     const found = (productsQuery.data ?? []).find(
-      p => p.sku === code || p.barcode === code || String(p.id) === code
+      (p: any) => p.sku === code || p.barcode === code || String(p.id) === code
     );
     if (found) {
+      const isStock = (found as any).itemType !== "service";
       setLines(prev => {
         const updated = [...prev];
         const l = { ...updated[idx] };
         l.productCode = found.sku ?? found.barcode ?? code;
         l.productName = found.name;
         l.productId = found.id;
+        l.isStockItem = isStock;
         l.unit = found.unit ?? "";
         l.unitPrice = found.salePrice ? String(found.salePrice) : "";
         l.taxPct = found.taxRate ? String(found.taxRate) : "0";
         l.total = calcLineTotal(l);
         updated[idx] = l;
+        return updated;
+      });
+    } else {
+      // كود غير موجود في قاعدة البيانات
+      setLines(prev => {
+        const updated = [...prev];
+        updated[idx] = { ...updated[idx], productId: undefined, isStockItem: undefined };
         return updated;
       });
     }
@@ -610,6 +620,14 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     if (validLines.length === 0) {
       toast.error("يجب إضافة صنف واحد على الأقل في الفاتورة");
       return;
+    }
+    // تحقق من أن جميع الأصناف مسجلة في النظام
+    for (const l of validLines) {
+      if (!l.productId) {
+        const nameOrCode = l.productCode || l.productName;
+        toast.error(`الصنف "${nameOrCode}" غير موجود — يرجى اختيار صنف مسجل أو إنشاء صنف جديد`);
+        return;
+      }
     }
     // تحقق من الرقم الضريبي للمؤسسات
     if (customerType === 'organization' && !customerTaxNumber.trim()) {
@@ -731,6 +749,13 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     if (!invoiceNumber.trim()) { toast.error("رقم الفاتورة مطلوب"); return null; }
     const validLines = lines.filter(l => l.productName.trim() !== "");
     if (validLines.length === 0) { toast.error("يجب إضافة صنف واحد على الأقل في الفاتورة"); return null; }
+    for (const l of validLines) {
+      if (!l.productId) {
+        const nameOrCode = l.productCode || l.productName;
+        toast.error(`الصنف "${nameOrCode}" غير موجود — يرجى اختيار صنف مسجل أو إنشاء صنف جديد`);
+        return null;
+      }
+    }
     if (customerType === 'organization' && !customerTaxNumber.trim()) {
       toast.error("الرقم الضريبي مطلوب للعملاء من نوع مؤسسة"); return null;
     }
@@ -1311,10 +1336,11 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                     value={line.productName}
                     products={productsQuery.data ?? []}
                     cellRefs={cellRefs}
-                    onSelect={(name, code, id, unit, price, tax) => {
+                    isStockItem={line.isStockItem}
+                    onSelect={(name, code, id, unit, price, tax, itemType) => {
                       setLines(prev => {
                         const updated = [...prev];
-                        const l = { ...updated[rowIdx], productName: name, productCode: code, productId: id, unit, unitPrice: price, taxPct: tax };
+                        const l = { ...updated[rowIdx], productName: name, productCode: code, productId: id, unit, unitPrice: price, taxPct: tax, isStockItem: itemType !== "service" };
                         l.total = calcLineTotal(l);
                         updated[rowIdx] = l;
                         return updated;
@@ -2096,15 +2122,16 @@ function TF({ label, value, highlight, big, color }: {
 
 // ─── Product Name Cell with autocomplete ─────────────────────────────────────
 function ProductNameCell({
-  rowIdx, value, products, cellRefs, onSelect, onKeyDown, onFocus,
+  rowIdx, value, products, cellRefs, onSelect, onKeyDown, onFocus, isStockItem,
 }: {
   rowIdx: number;
   value: string;
   products: any[];
   cellRefs: React.MutableRefObject<Map<string, HTMLInputElement>>;
-  onSelect: (name: string, code: string, id: number, unit: string, price: string, tax: string) => void;
+  onSelect: (name: string, code: string, id: number, unit: string, price: string, tax: string, itemType: string) => void;
   onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
   onFocus: () => void;
+  isStockItem?: boolean;
 }) {
   const [search, setSearch] = useState(value);
   const [open, setOpen] = useState(false);
@@ -2133,7 +2160,7 @@ function ProductNameCell({
   const handleSelect = (p: any) => {
     setSearch(p.name);
     setOpen(false);
-    onSelect(p.name, p.sku ?? p.barcode ?? p.code ?? "", p.id, p.unit ?? "", p.salePrice ? String(p.salePrice) : "", p.taxRate ? String(p.taxRate) : "0");
+    onSelect(p.name, p.sku ?? p.barcode ?? p.code ?? "", p.id, p.unit ?? "", p.salePrice ? String(p.salePrice) : "", p.taxRate ? String(p.taxRate) : "0", p.itemType ?? "stock");
   };
 
   useEffect(() => {
@@ -2151,7 +2178,7 @@ function ProductNameCell({
       <input
         ref={el => { (inputRef as any).current = el; if (el) cellRefs.current.set(`${rowIdx}-1`, el); }}
         value={search}
-        onChange={e => handleChange(e.target.value)}
+        onChange={e => { if (!isStockItem) handleChange(e.target.value); }}
         onFocus={onFocus}
         onKeyDown={e => {
           if (open) {
@@ -2163,8 +2190,11 @@ function ProductNameCell({
           onKeyDown(e);
         }}
         className="inv-cell w-full"
-        placeholder="اسم الصنف..."
+        placeholder={isStockItem ? "" : "اسم الصنف..."}
         autoComplete="off"
+        readOnly={isStockItem}
+        title={isStockItem ? "اسم الصنف المخزني لا يمكن تعديله" : undefined}
+        style={isStockItem ? { background: "#f5f5f3", color: "#555", cursor: "default" } : undefined}
       />
       {open && (
         <div
