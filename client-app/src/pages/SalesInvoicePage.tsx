@@ -1142,27 +1142,50 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           <div className="flex items-center" ref={custDropRef} style={{ gap: 6, gridColumn: "1/4", position: "relative" }}>
             <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>العميل</label>
             <div className="flex flex-1 min-w-0" style={{ gap: 4, position: "relative" }}>
-              <input
-                value={customerId ? (customerCode ? `${customerCode} - ${customerName}` : customerName) : custSearch}
-                onChange={e => { if (customerId) return; setCustSearch(e.target.value); setShowCustDrop(true); }}
-                onFocus={() => { if (!customerId) setShowCustDrop(true); }}
-                readOnly={!!customerId} placeholder="ابحث عن عميل..."
-                className="classic-input flex-1 min-w-0"
-                style={{ height: 26, cursor: customerId ? "default" : "text", paddingLeft: customerId ? 22 : undefined }}
-              />
-              {customerId && (
-                <button type="button" onClick={() => { setCustomerId(null); setCustomerName(""); setCustomerCode(""); setCustSearch(""); setCustomerType('individual'); setCustomerTaxNumber(""); setShowCustDrop(false); }}
-                  style={{ position: "absolute", left: 56, top: "50%", transform: "translateY(-50%)", color: "#9ca3af", fontSize: 13, lineHeight: 1, background: "none", border: "none", cursor: "pointer", padding: "0 2px" }}
-                  title="إلغاء اختيار العميل">✕</button>
-              )}
-              {customerId && (
-                <div className="flex items-center flex-shrink-0 px-1.5 rounded text-[10px] font-bold" style={{ height: 26, background: customerType === 'organization' ? '#EFF6FF' : '#F0FDF4', border: `1px solid ${customerType === 'organization' ? '#93C5FD' : '#86EFAC'}`, color: customerType === 'organization' ? '#1D4ED8' : '#15803D' }}>
-                  {customerType === 'organization' ? '🏢' : '👤'}
-                </div>
-              )}
-              <button type="button" onClick={() => { if (!customerId) { setCustSearch(""); setShowCustDrop(v => !v); } }}
+              {/* حقل البحث / اسم العميل */}
+              {(() => {
+                const customerLocked = !!(savedInvoiceId || isPosted);
+                const clearCustomer = () => {
+                  setCustomerId(null); setCustomerName(""); setCustomerCode("");
+                  setCustSearch(""); setCustomerType('individual');
+                  setCustomerTaxNumber(""); setShowCustDrop(true);
+                };
+                return (
+                  <>
+                    <input
+                      value={customerId ? (customerCode ? `${customerCode} - ${customerName}` : customerName) : custSearch}
+                      onChange={e => { if (customerId || customerLocked) return; setCustSearch(e.target.value); setShowCustDrop(true); }}
+                      onFocus={() => { if (!customerLocked && !customerId) setShowCustDrop(true); }}
+                      onClick={() => { if (!customerLocked && customerId) clearCustomer(); }}
+                      readOnly={!!(customerId || customerLocked)}
+                      placeholder="ابحث عن عميل..."
+                      className="classic-input flex-1 min-w-0"
+                      style={{
+                        height: 26,
+                        cursor: customerLocked ? "not-allowed" : customerId ? "pointer" : "text",
+                        background: customerLocked ? "#f3f4f6" : undefined,
+                        paddingLeft: customerId && !customerLocked ? 20 : undefined,
+                      }}
+                      title={customerId && !customerLocked ? "انقر لتغيير العميل" : undefined}
+                    />
+                    {/* زر مسح العميل — يظهر فقط قبل الحفظ */}
+                    {customerId && !customerLocked && (
+                      <button type="button" onClick={clearCustomer}
+                        style={{ position: "absolute", left: 4, top: "50%", transform: "translateY(-50%)", color: "#ef4444", fontSize: 12, lineHeight: 1, background: "none", border: "none", cursor: "pointer", padding: "0 2px", zIndex: 2 }}
+                        title="تغيير العميل">✕</button>
+                    )}
+                    {customerId && (
+                      <div className="flex items-center flex-shrink-0 px-1.5 rounded text-[10px] font-bold" style={{ height: 26, background: customerType === 'organization' ? '#EFF6FF' : '#F0FDF4', border: `1px solid ${customerType === 'organization' ? '#93C5FD' : '#86EFAC'}`, color: customerType === 'organization' ? '#1D4ED8' : '#15803D' }}>
+                        {customerType === 'organization' ? '🏢' : '👤'}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+              <button type="button"
+                onClick={() => { if (!(savedInvoiceId || isPosted) && !customerId) { setCustSearch(""); setShowCustDrop(v => !v); } }}
                 className="flex-shrink-0 flex items-center justify-center"
-                style={{ width: 26, height: 26, borderRadius: 3, background: "#6B7280", color: "white", fontSize: 11, border: "1px solid #4B5563" }}>▾</button>
+                style={{ width: 26, height: 26, borderRadius: 3, background: (savedInvoiceId || isPosted) ? "#9ca3af" : "#6B7280", color: "white", fontSize: 11, border: "1px solid #4B5563", cursor: (savedInvoiceId || isPosted) ? "not-allowed" : "pointer" }}>▾</button>
               <button type="button"
                 onClick={async () => {
                   setNewCustName(custSearch.trim()); setNewCustCode(""); setNewCustPhone(""); setNewCustEmail(""); setNewCustAddr("");
