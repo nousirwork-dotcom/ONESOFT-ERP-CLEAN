@@ -52,6 +52,17 @@ type DBJournal = {
   isActive: boolean; sortOrder: number;
 };
 
+type DocComponent = {
+  sortOrder: number;
+  fieldCode: string;
+  nameAr: string;
+  nameEn: string;
+  showInDocument: boolean;
+  showInPrint: boolean;
+  showInTemplates: boolean;
+  showInReports: boolean;
+};
+
 const EMPTY: JournalForm = {
   nameAr: "", nameEn: "", fixedPart: "", docType: "",
   transferOwnership: false, userGroup: "", user: "", warehouse: "",
@@ -473,7 +484,8 @@ export default function DocumentJournalsPage() {
   const [showDelete, setShowDelete]     = useState(false);
   const [showReset, setShowReset]       = useState(false);
   const [ptConfig, setPtConfig]         = useState<PTC>(DEFAULT_PTC);
-  const [activeTab, setActiveTab]       = useState<"basic" | "payment-types" | "accounting-links" | "issuance" | "options">("basic");
+  const [activeTab, setActiveTab]       = useState<"basic" | "payment-types" | "accounting-links" | "issuance" | "options" | "doc-components">("basic");
+  const [docComponents, setDocComponents] = useState<DocComponent[]>([]);
 
   /* ── queries ── */
   const listQuery = trpc.documentJournals.list.useQuery();
@@ -558,6 +570,7 @@ export default function DocumentJournalsPage() {
     setForm({ ...EMPTY, docType: selectedType });
     setIsDirty(false);
     setPtConfig(DEFAULT_PTC);
+    setDocComponents([]);
     setActiveTab("basic");
     setView("form");
   }, [selectedType]);
@@ -566,6 +579,8 @@ export default function DocumentJournalsPage() {
     setEditId(j.id);
     setForm(dbToForm(j));
     setPtConfig(normalizePtConfig((j as any).paymentTypesConfig));
+    const oc2 = (j as any).optionsConfig ?? {};
+    setDocComponents((oc2.documentComponents as DocComponent[]) ?? []);
     setIsDirty(false);
     setActiveTab("basic");
     setView("form");
@@ -641,6 +656,7 @@ export default function DocumentJournalsPage() {
         colWidthItemName:         form.colWidthItemName,
         colWidthUnit:             form.colWidthUnit,
         colWidthAccount:          form.colWidthAccount,
+        documentComponents:       docComponents,
       },
       sortOrder:        0,
     };
@@ -816,6 +832,7 @@ export default function DocumentJournalsPage() {
                 { id: "accounting-links",  label: "الروابط المحاسبية" },
                 { id: "issuance",          label: "خصائص السندات المصدرة" },
                 { id: "options",           label: "خيارات" },
+                { id: "doc-components",    label: "مكونات المستند" },
               ].map(tab => (
                 <button
                   key={tab.id}
@@ -1381,6 +1398,214 @@ export default function DocumentJournalsPage() {
                 </div>
               </P>
 
+            </div>
+            )}
+
+            {/* ── TAB: مكونات المستند ── */}
+            {activeTab === "doc-components" && (
+            <div className="h-full overflow-y-auto p-4" dir="rtl">
+
+              {/* ── شرح ── */}
+              <div className="mb-3 flex items-start gap-2 rounded-lg border border-blue-100 bg-blue-50 px-4 py-2.5">
+                <svg className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>
+                </svg>
+                <p className="text-[11px] text-blue-700 leading-relaxed">
+                  حدد المكونات التي تظهر في هذا الدفتر (الإجماليات، طرق الدفع، …).
+                  يُختار كل مكوّن من <strong>قاموس الحقول</strong>، ويمكن التحكم في ظهوره داخل المستند والطباعة والقوالب والتقارير.
+                </p>
+              </div>
+
+              {/* ── شريط الإضافة ── */}
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-[12px] font-bold text-slate-700">
+                  المكونات ({docComponents.length})
+                </span>
+                <button
+                  onClick={() => {
+                    const next = docComponents.length > 0
+                      ? Math.max(...docComponents.map(c => c.sortOrder)) + 10
+                      : 10;
+                    setDocComponents(prev => [...prev, {
+                      sortOrder: next,
+                      fieldCode: "",
+                      nameAr: "",
+                      nameEn: "",
+                      showInDocument: true,
+                      showInPrint: true,
+                      showInTemplates: false,
+                      showInReports: false,
+                    }]);
+                    setIsDirty(true);
+                  }}
+                  className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-bold text-white transition-colors"
+                  style={{ background: "#406B93" }}
+                >
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M12 5v14M5 12h14"/>
+                  </svg>
+                  إضافة مكوّن
+                </button>
+              </div>
+
+              {/* ── الجدول ── */}
+              {docComponents.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center text-slate-400">
+                  <svg className="w-10 h-10 mb-2 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
+                  </svg>
+                  <p className="text-[12px]">لا توجد مكونات بعد</p>
+                  <p className="text-[11px] mt-1">اضغط "إضافة مكوّن" لإضافة حقل من قاموس الحقول</p>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-slate-200 overflow-hidden">
+                  <table className="w-full" style={{ borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ background: "#F1F5F9" }}>
+                        <th className="text-right px-2 py-2 text-[10px] font-bold text-slate-600 border-b border-slate-200 w-14">ترتيب</th>
+                        <th className="text-right px-2 py-2 text-[10px] font-bold text-slate-600 border-b border-slate-200 w-44">كود الحقل</th>
+                        <th className="text-right px-2 py-2 text-[10px] font-bold text-slate-600 border-b border-slate-200">الاسم</th>
+                        <th className="text-center px-1 py-2 text-[10px] font-bold text-slate-600 border-b border-slate-200 w-14">مستند</th>
+                        <th className="text-center px-1 py-2 text-[10px] font-bold text-slate-600 border-b border-slate-200 w-14">طباعة</th>
+                        <th className="text-center px-1 py-2 text-[10px] font-bold text-slate-600 border-b border-slate-200 w-14">قوالب</th>
+                        <th className="text-center px-1 py-2 text-[10px] font-bold text-slate-600 border-b border-slate-200 w-14">تقارير</th>
+                        <th className="w-8 border-b border-slate-200"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...docComponents]
+                        .sort((a, b) => a.sortOrder - b.sortOrder)
+                        .map((comp, idx) => {
+                          const origIdx = docComponents.indexOf(comp);
+                          const updateComp = (patch: Partial<DocComponent>) => {
+                            setDocComponents(prev => {
+                              const copy = [...prev];
+                              copy[origIdx] = { ...copy[origIdx], ...patch };
+                              return copy;
+                            });
+                            setIsDirty(true);
+                          };
+                          return (
+                            <tr
+                              key={idx}
+                              style={{ background: idx % 2 === 0 ? "#FFFFFF" : "#F8FAFC" }}
+                              className="hover:bg-blue-50/40 transition-colors"
+                            >
+                              {/* الترتيب */}
+                              <td className="px-2 py-1.5 border-b border-slate-100">
+                                <input
+                                  type="number" min="1" step="1"
+                                  value={comp.sortOrder}
+                                  onChange={e => updateComp({ sortOrder: parseInt(e.target.value) || 0 })}
+                                  className="w-12 h-7 text-center text-[11px] font-mono border border-slate-200 rounded px-1 focus:outline-none focus:border-[#406B93]"
+                                />
+                              </td>
+                              {/* كود الحقل */}
+                              <td className="px-2 py-1.5 border-b border-slate-100">
+                                <select
+                                  value={comp.fieldCode}
+                                  onChange={e => {
+                                    const fc = e.target.value;
+                                    const fd = fieldDictList.find((f: any) => f.code === fc);
+                                    updateComp({
+                                      fieldCode: fc,
+                                      nameAr: fd?.nameAr ?? comp.nameAr,
+                                      nameEn: fd?.nameEn ?? comp.nameEn,
+                                    });
+                                  }}
+                                  className="w-full h-7 text-[11px] font-mono border border-slate-200 rounded px-1 focus:outline-none focus:border-[#406B93] bg-white"
+                                >
+                                  <option value="">— اختر حقلاً —</option>
+                                  {(() => {
+                                    const grouped: Record<string, typeof fieldDictList> = {};
+                                    (fieldDictList as any[]).forEach((f: any) => {
+                                      if (!grouped[f.category]) grouped[f.category] = [];
+                                      grouped[f.category].push(f);
+                                    });
+                                    return Object.entries(grouped).map(([cat, fields]) => (
+                                      <optgroup key={cat} label={cat}>
+                                        {(fields as any[]).map((f: any) => (
+                                          <option key={f.code} value={f.code}>
+                                            {f.code} — {f.nameAr}
+                                          </option>
+                                        ))}
+                                      </optgroup>
+                                    ));
+                                  })()}
+                                </select>
+                              </td>
+                              {/* الاسم */}
+                              <td className="px-2 py-1.5 border-b border-slate-100">
+                                <input
+                                  type="text"
+                                  value={comp.nameAr}
+                                  onChange={e => updateComp({ nameAr: e.target.value })}
+                                  placeholder="اسم المكوّن"
+                                  className="w-full h-7 text-[11px] border border-slate-200 rounded px-2 focus:outline-none focus:border-[#406B93]"
+                                />
+                              </td>
+                              {/* مستند */}
+                              <td className="px-1 py-1.5 border-b border-slate-100 text-center">
+                                <input
+                                  type="checkbox" className="w-3.5 h-3.5 accent-[#406B93] cursor-pointer"
+                                  checked={comp.showInDocument}
+                                  onChange={e => updateComp({ showInDocument: e.target.checked })}
+                                />
+                              </td>
+                              {/* طباعة */}
+                              <td className="px-1 py-1.5 border-b border-slate-100 text-center">
+                                <input
+                                  type="checkbox" className="w-3.5 h-3.5 accent-[#406B93] cursor-pointer"
+                                  checked={comp.showInPrint}
+                                  onChange={e => updateComp({ showInPrint: e.target.checked })}
+                                />
+                              </td>
+                              {/* قوالب */}
+                              <td className="px-1 py-1.5 border-b border-slate-100 text-center">
+                                <input
+                                  type="checkbox" className="w-3.5 h-3.5 accent-[#406B93] cursor-pointer"
+                                  checked={comp.showInTemplates}
+                                  onChange={e => updateComp({ showInTemplates: e.target.checked })}
+                                />
+                              </td>
+                              {/* تقارير */}
+                              <td className="px-1 py-1.5 border-b border-slate-100 text-center">
+                                <input
+                                  type="checkbox" className="w-3.5 h-3.5 accent-[#406B93] cursor-pointer"
+                                  checked={comp.showInReports}
+                                  onChange={e => updateComp({ showInReports: e.target.checked })}
+                                />
+                              </td>
+                              {/* حذف */}
+                              <td className="px-1 py-1.5 border-b border-slate-100 text-center">
+                                <button
+                                  onClick={() => {
+                                    setDocComponents(prev => prev.filter((_, i) => i !== origIdx));
+                                    setIsDirty(true);
+                                  }}
+                                  className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                                  title="حذف"
+                                >
+                                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M3 6h18M19 6l-1 14H6L5 6M10 11v6M14 11v6"/>
+                                    <path d="M9 6V4h6v2"/>
+                                  </svg>
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* ── ملاحظة الحفظ ── */}
+              {docComponents.length > 0 && (
+                <p className="mt-3 text-[10px] text-slate-400 text-center">
+                  يتم حفظ المكونات مع بيانات الدفتر عند الضغط على زر "حفظ"
+                </p>
+              )}
             </div>
             )}
 
