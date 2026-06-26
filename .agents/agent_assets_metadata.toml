@@ -78,3 +78,9 @@ id = "eTWYJfbKow8CFMI07vuVW"
 uri = "file://OneSoft-ERP-backup-20260626.zip"
 type = "unspecified"
 title = "OneSoft ERP — نسخة احتياطية 26/06/2026"
+
+[[outputs]]
+id = "GTyG9v3cPoj5Fo7wo8yxd"
+uri = "file://OneSoft-ERP-src-20260626.zip"
+type = "unspecified"
+title = "OneSoft ERP — كود المصدر 26/06/2026 (0.89 MB)"
