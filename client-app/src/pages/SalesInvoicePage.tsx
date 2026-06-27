@@ -20,6 +20,7 @@ import { PrintEngine } from "@/lib/print";
 import { usePrintTemplate } from "@/hooks/usePrintTemplate";
 import { DateSegmentInput } from "@/components/DateSegmentInput";
 import BasedOnDocInput from "@/components/BasedOnDocInput";
+import ContextSelectInput from "@/components/ContextSelectInput";
 import QRCode from "qrcode";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -1087,13 +1088,21 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           <div className="flex items-center" style={{ gap: 6, gridColumn: "2/4" }}>
             <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>بناءً على</label>
             <div className="flex flex-1 min-w-0" style={{ gap: 4 }}>
-              <select value={basedOnType} onChange={e => { setBasedOnType(e.target.value as any); setBasedOnNum(''); setBasedOnTrigger(''); }} className="classic-input flex-shrink-0" style={{ height: 26, minWidth: 100 }}>
-                <option value="">-- النوع --</option>
-                <option value="order">أمر بيع</option>
-                <option value="quote">عرض أسعار</option>
-                <option value="transfer">تحويل داخلي</option>
-                <option value="sale">فاتورة مبيعات</option>
-              </select>
+              <div style={{ flexShrink: 0, width: 110, display: "flex" }}>
+                <ContextSelectInput
+                  value={basedOnType}
+                  onChange={v => { setBasedOnType(v as any); setBasedOnNum(''); setBasedOnTrigger(''); }}
+                  options={[
+                    { value: "order",    label: "أمر بيع" },
+                    { value: "quote",    label: "عرض أسعار" },
+                    { value: "transfer", label: "تحويل داخلي" },
+                    { value: "sale",     label: "فاتورة مبيعات" },
+                  ]}
+                  menuTitle="نوع المستند المصدر"
+                  placeholder="النوع ⊞"
+                  style={{ height: 26 }}
+                />
+              </div>
               <BasedOnDocInput
                 docType={basedOnType}
                 value={basedOnNum}
@@ -1262,12 +1271,19 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           {/* col 4: العملة — تحت نوع السند */}
           <div className="flex items-center" style={{ gap: 6 }}>
             <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>العملة</label>
-            <select value={currency} onChange={e => setCurrency(e.target.value)} className="classic-input flex-1" style={{ height: 26 }}>
-              <option value="SAR">ريال سعودي (SAR)</option>
-              <option value="USD">دولار (USD)</option>
-              <option value="EUR">يورو (EUR)</option>
-              <option value="AED">درهم (AED)</option>
-            </select>
+            <ContextSelectInput
+              value={currency}
+              onChange={v => setCurrency(v || "SAR")}
+              options={[
+                { value: "SAR", label: "ريال سعودي", sublabel: "SAR" },
+                { value: "USD", label: "دولار أمريكي", sublabel: "USD" },
+                { value: "EUR", label: "يورو", sublabel: "EUR" },
+                { value: "AED", label: "درهم إماراتي", sublabel: "AED" },
+              ]}
+              menuTitle="اختر العملة"
+              placeholder="العملة ⊞"
+              style={{ height: 26 }}
+            />
           </div>
 
           {/* ══ صف 3: المخزن │ تاريخ التحرير │ تاريخ الدفع │ البائع ══ */}
@@ -1278,13 +1294,21 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             {(() => {
               const lockedWh = journalWarehouseId ?? docTypeWarehouseId;
               const whTitle = journalWarehouseId ? "المخزن محدد من الدفتر" : docTypeWarehouseId ? "المخزن محدد من نوع السند" : undefined;
+              const whOptions = (lockedWh
+                ? warehousesQuery.data?.filter(w => w.id === lockedWh)
+                : warehousesQuery.data
+              )?.map(w => ({ value: String(w.id), label: w.name })) ?? [];
               return (
-                <select value={warehouseId ?? ""} onChange={e => !lockedWh && setWarehouseId(parseInt(e.target.value) || null)} className="classic-input flex-1" style={{ height: 26 }} disabled={!!lockedWh} title={whTitle}>
-                  <option value="">-- اختر مخزن --</option>
-                  {(lockedWh ? warehousesQuery.data?.filter(w => w.id === lockedWh) : warehousesQuery.data)?.map(w => (
-                    <option key={w.id} value={w.id}>{w.name}</option>
-                  ))}
-                </select>
+                <ContextSelectInput
+                  value={warehouseId ? String(warehouseId) : ""}
+                  onChange={v => !lockedWh && setWarehouseId(parseInt(v) || null)}
+                  options={whOptions}
+                  menuTitle="اختر المخزن"
+                  placeholder="المخزن ⊞"
+                  disabled={!!lockedWh}
+                  title={whTitle}
+                  style={{ height: 26 }}
+                />
               );
             })()}
           </div>
