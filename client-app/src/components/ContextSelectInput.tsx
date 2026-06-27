@@ -26,7 +26,8 @@ interface Props {
   style?:       React.CSSProperties;
 }
 
-/* ── لون تمييز Windows 10 ── */
+/* ── ألوان القائمة ── */
+const MENU_BG    = "#f0f0f0";   /* لون خلفية موحّد — رمادي فاتح */
 const WIN_HOVER  = "#CCE8FF";
 const WIN_BORDER = "1px solid #adadad";
 const WIN_SHADOW = "2px 2px 8px rgba(0,0,0,0.22), 0 0 0 0.5px rgba(0,0,0,0.08)";
@@ -161,7 +162,7 @@ export default function ContextSelectInput({
             top:        menuPos.y,
             left:       menuPos.x,
             zIndex:     99999,
-            background: "#ffffff",
+            background: MENU_BG,
             border:     WIN_BORDER,
             boxShadow:  WIN_SHADOW,
             minWidth:   200,
@@ -184,7 +185,7 @@ export default function ContextSelectInput({
               fontWeight:  700,
               color:       "#666",
               borderBottom: "1px solid #e0e0e0",
-              background:  "#f5f5f5",
+              background:  MENU_BG,
               letterSpacing: 0,
             }}>
               {menuTitle}
