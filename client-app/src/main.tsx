@@ -6,6 +6,9 @@ import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
 import "./index.css";
+import { initArabicKeyboardShortcuts } from "@/lib/arabicKeyboardShortcuts";
+
+initArabicKeyboardShortcuts();
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30000 } },
