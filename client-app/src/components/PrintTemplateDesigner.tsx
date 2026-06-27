@@ -251,12 +251,18 @@ const VARS = [
 
 /* ─── Sample invoice data for live preview ─── */
 const SAMPLE_DATA: InvPrintData = {
-  invoiceNumber: "INV-2024-00123",
-  invoiceDate: "2024-06-04",
+  invoiceNumber: "INV-2026-000123",
+  invoiceDate: "2026-06-27",
   invoiceTime: "10:30:00",
   customerName: "شركة الأفق للتجارة",
   customerCode: "C0042",
   customerTaxNumber: "310012345600003",
+  customerBuildingNo:  "3247",
+  customerStreet:      "طريق الملك فهد",
+  customerDistrict:    "العليا",
+  customerCity:        "الرياض",
+  customerCountry:     "المملكة العربية السعودية",
+  customerPostalCode:  "12211",
   salesperson: "أحمد السالم",
   paymentType: "credit",
   currency: "SAR",
@@ -270,10 +276,17 @@ const SAMPLE_DATA: InvPrintData = {
   ],
   subtotal: 14750.00, discountTotal: 477.50, taxTotal: 2212.25, grandTotal: 16484.75,
   paidAmount: 0, remainingAmount: 16484.75,
-  sellerName: "شركة ون سوفت لتقنية المعلومات",
-  sellerTaxNumber: "300123456700003",
-  sellerAddress: "الرياض، حي العليا، شارع العروبة",
-  sellerPhone: "+966 11 123 4567",
+  sellerName:          "شركة ون سوفت لتقنية المعلومات",
+  sellerNameEn:        "OneSoft Information Technology Co.",
+  sellerTaxNumber:     "300123456700003",
+  sellerCommercialReg: "1010123456",
+  sellerBuildingNo:    "1234",
+  sellerStreet:        "شارع العروبة",
+  sellerDistrict:      "العليا",
+  sellerCity:          "الرياض",
+  sellerCountry:       "المملكة العربية السعودية",
+  sellerPostalCode:    "12244",
+  sellerPhone:         "+966 11 123 4567",
 };
 
 /* ─── ID generator ─── */

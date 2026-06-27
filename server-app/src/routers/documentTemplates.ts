@@ -29,7 +29,7 @@ const INV01_CONFIG = JSON.stringify({
   paperSize: "A4",
   orientation: "portrait",
   language: "bilingual",
-  primaryColor: "#406B93",
+  primaryColor: "#1B4F8E",
   columns: {
     num: true, code: true, name: true, unit: false,
     qty: true, price: true, discount: true,
@@ -41,20 +41,20 @@ const INV01_CONFIG = JSON.stringify({
     amountInWords: true, pageNumber: true, signatures: false,
   },
   elements: [
-    { id: "e_qr",    type: "qr",           x: 5,   y: 5,   w: 26,  h: 26,  border: false },
-    { id: "e_title", type: "text",          x: 72,  y: 7,   w: 62,  h: 16,  content: "فاتورة ضريبية\nTAX INVOICE", fontSize: 13, fontWeight: "bold", textAlign: "center", color: "#222222" },
-    { id: "e_co",    type: "company_info",  x: 112, y: 5,   w: 93,  h: 28,  fontSize: 9 },
-    { id: "e_d1",    type: "line",          x: 5,   y: 36,  w: 200, h: 1,   color: "#406B93" },
-    { id: "e_inv",   type: "invoice_info",  x: 5,   y: 39,  w: 200, h: 13,  fontSize: 9 },
-    { id: "e_d2",    type: "line",          x: 5,   y: 54,  w: 200, h: 1,   color: "#cccccc" },
-    { id: "e_cust",  type: "customer_info", x: 5,   y: 57,  w: 95,  h: 32,  fontSize: 9, border: true },
-    { id: "e_d3",    type: "line",          x: 5,   y: 92,  w: 200, h: 1,   color: "#cccccc" },
-    { id: "e_items", type: "items_table",   x: 5,   y: 95,  w: 200, h: 82,  fontSize: 9 },
-    { id: "e_total", type: "totals",        x: 115, y: 181, w: 90,  h: 44,  fontSize: 10, border: true },
-    { id: "e_words", type: "notes",         x: 5,   y: 181, w: 106, h: 12,  content: "المبلغ كتابةً: {{AmountInWords}}", fontSize: 9 },
-    { id: "e_notes", type: "notes",         x: 5,   y: 196, w: 106, h: 12,  content: "ملاحظات: {{Notes}}", fontSize: 9 },
-    { id: "e_d4",    type: "line",          x: 5,   y: 229, w: 200, h: 1,   color: "#cccccc" },
-    { id: "e_foot",  type: "text",          x: 5,   y: 232, w: 200, h: 8,   content: "OneSoft ERP  ·  صفحة 1 من 1 / Page 1 of 1", fontSize: 8, textAlign: "center", color: "#888888" },
+    { id: "e_qr",    type: "qr",           x: 5,   y: 5,   w: 28,  h: 28,  border: false },
+    { id: "e_title", type: "text",          x: 71,  y: 6,   w: 68,  h: 20,  content: "فاتورة ضريبية\nTAX INVOICE", fontSize: 14, fontWeight: "bold", textAlign: "center", color: "#1B4F8E" },
+    { id: "e_co",    type: "company_info",  x: 112, y: 4,   w: 93,  h: 30,  fontSize: 9 },
+    { id: "e_d1",    type: "line",          x: 5,   y: 37,  w: 200, h: 1,   color: "#1B4F8E" },
+    { id: "e_inv",   type: "invoice_info",  x: 5,   y: 40,  w: 200, h: 14,  fontSize: 9 },
+    { id: "e_d2",    type: "line",          x: 5,   y: 56,  w: 200, h: 1,   color: "#dddddd" },
+    { id: "e_cust",  type: "customer_info", x: 5,   y: 59,  w: 98,  h: 34,  fontSize: 9, border: true },
+    { id: "e_d3",    type: "line",          x: 5,   y: 95,  w: 200, h: 1,   color: "#dddddd" },
+    { id: "e_items", type: "items_table",   x: 5,   y: 98,  w: 200, h: 120, fontSize: 9 },
+    { id: "e_total", type: "totals",        x: 118, y: 222, w: 87,  h: 50,  fontSize: 10, border: true },
+    { id: "e_words", type: "notes",         x: 5,   y: 222, w: 109, h: 15,  content: "المبلغ كتابةً: {{AmountInWords}}", fontSize: 9 },
+    { id: "e_notes", type: "notes",         x: 5,   y: 239, w: 109, h: 12,  content: "ملاحظات: {{Notes}}", fontSize: 9 },
+    { id: "e_d4",    type: "line",          x: 5,   y: 275, w: 200, h: 1,   color: "#dddddd" },
+    { id: "e_foot",  type: "text",          x: 5,   y: 278, w: 200, h: 8,   content: "OneSoft ERP  ·  صفحة 1 من 1 / Page 1 of 1", fontSize: 7.5, textAlign: "center", color: "#999999" },
   ],
 });
 
@@ -76,20 +76,20 @@ const PINV01_CONFIG = JSON.stringify({
     amountInWords: true, pageNumber: true, signatures: false,
   },
   elements: [
-    { id: "e_qr",    type: "qr",           x: 5,   y: 5,   w: 26,  h: 26,  border: false },
-    { id: "e_title", type: "text",          x: 72,  y: 7,   w: 62,  h: 16,  content: "فاتورة مشتريات\nPURCHASE INVOICE", fontSize: 13, fontWeight: "bold", textAlign: "center", color: "#222222" },
-    { id: "e_co",    type: "company_info",  x: 112, y: 5,   w: 93,  h: 28,  fontSize: 9 },
-    { id: "e_d1",    type: "line",          x: 5,   y: 36,  w: 200, h: 1,   color: "#4A5568" },
-    { id: "e_inv",   type: "invoice_info",  x: 5,   y: 39,  w: 200, h: 13,  fontSize: 9 },
-    { id: "e_d2",    type: "line",          x: 5,   y: 54,  w: 200, h: 1,   color: "#cccccc" },
-    { id: "e_cust",  type: "customer_info", x: 5,   y: 57,  w: 95,  h: 32,  fontSize: 9, border: true },
-    { id: "e_d3",    type: "line",          x: 5,   y: 92,  w: 200, h: 1,   color: "#cccccc" },
-    { id: "e_items", type: "items_table",   x: 5,   y: 95,  w: 200, h: 82,  fontSize: 9 },
-    { id: "e_total", type: "totals",        x: 115, y: 181, w: 90,  h: 44,  fontSize: 10, border: true },
-    { id: "e_words", type: "notes",         x: 5,   y: 181, w: 106, h: 12,  content: "المبلغ كتابةً: {{AmountInWords}}", fontSize: 9 },
-    { id: "e_notes", type: "notes",         x: 5,   y: 196, w: 106, h: 12,  content: "ملاحظات: {{Notes}}", fontSize: 9 },
-    { id: "e_d4",    type: "line",          x: 5,   y: 229, w: 200, h: 1,   color: "#cccccc" },
-    { id: "e_foot",  type: "text",          x: 5,   y: 232, w: 200, h: 8,   content: "OneSoft ERP  ·  صفحة 1 من 1 / Page 1 of 1", fontSize: 8, textAlign: "center", color: "#888888" },
+    { id: "e_qr",    type: "qr",           x: 5,   y: 5,   w: 28,  h: 28,  border: false },
+    { id: "e_title", type: "text",          x: 71,  y: 6,   w: 68,  h: 20,  content: "فاتورة مشتريات\nPURCHASE INVOICE", fontSize: 14, fontWeight: "bold", textAlign: "center", color: "#4A5568" },
+    { id: "e_co",    type: "company_info",  x: 112, y: 4,   w: 93,  h: 30,  fontSize: 9 },
+    { id: "e_d1",    type: "line",          x: 5,   y: 37,  w: 200, h: 1,   color: "#4A5568" },
+    { id: "e_inv",   type: "invoice_info",  x: 5,   y: 40,  w: 200, h: 14,  fontSize: 9 },
+    { id: "e_d2",    type: "line",          x: 5,   y: 56,  w: 200, h: 1,   color: "#dddddd" },
+    { id: "e_cust",  type: "customer_info", x: 5,   y: 59,  w: 98,  h: 34,  fontSize: 9, border: true },
+    { id: "e_d3",    type: "line",          x: 5,   y: 95,  w: 200, h: 1,   color: "#dddddd" },
+    { id: "e_items", type: "items_table",   x: 5,   y: 98,  w: 200, h: 120, fontSize: 9 },
+    { id: "e_total", type: "totals",        x: 118, y: 222, w: 87,  h: 50,  fontSize: 10, border: true },
+    { id: "e_words", type: "notes",         x: 5,   y: 222, w: 109, h: 15,  content: "المبلغ كتابةً: {{AmountInWords}}", fontSize: 9 },
+    { id: "e_notes", type: "notes",         x: 5,   y: 239, w: 109, h: 12,  content: "ملاحظات: {{Notes}}", fontSize: 9 },
+    { id: "e_d4",    type: "line",          x: 5,   y: 275, w: 200, h: 1,   color: "#dddddd" },
+    { id: "e_foot",  type: "text",          x: 5,   y: 278, w: 200, h: 8,   content: "OneSoft ERP  ·  صفحة 1 من 1 / Page 1 of 1", fontSize: 7.5, textAlign: "center", color: "#999999" },
   ],
 });
 
@@ -161,7 +161,7 @@ export const documentTemplatesRouter = router({
     }),
 
   seedDefault: protectedProcedure
-    .input(z.object({ docType: z.string() }))
+    .input(z.object({ docType: z.string(), forceReset: z.boolean().optional() }))
     .mutation(async ({ ctx, input }) => {
       const orgId = ctx.user.orgId;
       const defMap: Record<string, { code: string; nameAr: string; nameEn: string; paperSize: string; layoutJson: string; notes: string }> = {
@@ -194,7 +194,7 @@ export const documentTemplatesRouter = router({
           layoutJson: def.layoutJson, notes: def.notes,
         });
         return { seeded: true };
-      } else if (!existing.layoutJson) {
+      } else if (!existing.layoutJson || input.forceReset) {
         await db.update(documentTemplates)
           .set({ layoutJson: def.layoutJson, isDefault: true, updatedAt: new Date() })
           .where(and(eq(documentTemplates.id, existing.id), eq(documentTemplates.orgId, orgId)));

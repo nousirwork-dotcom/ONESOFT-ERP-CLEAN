@@ -211,16 +211,40 @@ function elStyle(el: InvLayoutElement, extra = ""): string {
 
 function renderPosCompanyInfo(el: InvLayoutElement, data: InvPrintData, isBi: boolean, color: string): string {
   const fs = el.fontSize ?? 9;
-  const rows = [
-    data.sellerTaxNumber    ? `<tr><td style="color:#777;font-size:${fs-1}pt;padding:0.3mm 0.5mm">${isBi?"الرقم الضريبي / VAT No":"الرقم الضريبي"}:</td><td style="font-size:${fs}pt;padding:0.3mm 0.5mm">${data.sellerTaxNumber}</td></tr>` : "",
-    data.sellerCommercialReg? `<tr><td style="color:#777;font-size:${fs-1}pt;padding:0.3mm 0.5mm">${isBi?"السجل التجاري / CR":"السجل التجاري"}:</td><td style="font-size:${fs}pt;padding:0.3mm 0.5mm">${data.sellerCommercialReg}</td></tr>` : "",
-    data.sellerCity         ? `<tr><td style="color:#777;font-size:${fs-1}pt;padding:0.3mm 0.5mm">${isBi?"المدينة / City":"المدينة"}:</td><td style="font-size:${fs}pt;padding:0.3mm 0.5mm">${data.sellerCity}${data.sellerCountry?", "+data.sellerCountry:""}</td></tr>` : "",
-    data.sellerPhone        ? `<tr><td style="color:#777;font-size:${fs-1}pt;padding:0.3mm 0.5mm">${isBi?"هاتف / Tel":"هاتف"}:</td><td style="font-size:${fs}pt;padding:0.3mm 0.5mm">${data.sellerPhone}</td></tr>` : "",
+
+  /* Build address line: buildingNo + street + district + city + postalCode */
+  const addrParts: string[] = [];
+  if (data.sellerBuildingNo && data.sellerStreet) addrParts.push(`${data.sellerBuildingNo} ${data.sellerStreet}`);
+  else if (data.sellerStreet) addrParts.push(data.sellerStreet);
+  if (data.sellerDistrict) addrParts.push(data.sellerDistrict);
+  if (data.sellerCity)     addrParts.push(data.sellerCity);
+  if (data.sellerPostalCode) addrParts.push(data.sellerPostalCode);
+  const addrAr = addrParts.join("، ") || data.sellerAddress || "";
+  const addrEn = [
+    data.sellerBuildingNo && data.sellerStreet ? `${data.sellerBuildingNo} ${data.sellerStreet}` : data.sellerStreet,
+    data.sellerDistrict, data.sellerCity, data.sellerPostalCode,
+  ].filter(Boolean).join(", ");
+
+  const row = (labelAr: string, labelEn: string, val: string | undefined) => {
+    if (!val) return "";
+    const lbl = isBi ? `${labelAr} / ${labelEn}` : labelAr;
+    return `<tr>
+      <td style="color:#777;font-size:${fs - 1}pt;padding:0.25mm 0.5mm;white-space:nowrap">${lbl}:</td>
+      <td style="font-size:${fs}pt;padding:0.25mm 0.5mm;font-weight:500">${val}</td>
+    </tr>`;
+  };
+
+  const tableRows = [
+    row("الرقم الضريبي", "VAT No",  data.sellerTaxNumber),
+    row("السجل التجاري", "CR",      data.sellerCommercialReg),
+    addrAr ? `<tr><td style="color:#777;font-size:${fs-1}pt;padding:0.25mm 0.5mm;white-space:nowrap">${isBi?"العنوان / Address":"العنوان"}:</td><td style="font-size:${fs}pt;padding:0.25mm 0.5mm;font-weight:500">${isBi ? addrEn : addrAr}</td></tr>` : "",
+    row("هاتف", "Tel", data.sellerPhone),
   ].filter(Boolean).join("");
+
   return `<div style="${elStyle(el)};direction:rtl">
-    <div style="font-size:${fs+1}pt;font-weight:bold;color:${color};padding:0.5mm 1mm;line-height:1.3">${data.sellerName}</div>
-    ${isBi && data.sellerNameEn ? `<div style="font-size:${fs}pt;color:${color};opacity:0.75;direction:ltr;text-align:left;padding:0 1mm;line-height:1.2">${data.sellerNameEn}</div>` : ""}
-    <table style="border-collapse:collapse;width:100%">${rows}</table>
+    <div style="font-size:${fs + 1}pt;font-weight:bold;color:${color};padding:0.5mm 1mm;line-height:1.3">${data.sellerName}</div>
+    ${isBi && data.sellerNameEn ? `<div style="font-size:${fs - 0.5}pt;color:${color};opacity:0.7;direction:ltr;text-align:left;padding:0 1mm;line-height:1.2">${data.sellerNameEn}</div>` : ""}
+    <table style="border-collapse:collapse;width:100%">${tableRows}</table>
   </div>`;
 }
 

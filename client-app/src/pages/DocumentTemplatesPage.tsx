@@ -133,7 +133,11 @@ export default function DocumentTemplatesPage() {
     onSuccess: r => { if (r.seeded) listQuery.refetch(); },
   });
 
-  // تأكد دائماً من وجود نماذج افتراضية (INV01، POS01) عند تحميل الصفحة
+  const seedDefaultMut = trpc.documentTemplates.seedDefault.useMutation({
+    onSuccess: r => { if (r.seeded) listQuery.refetch(); },
+  });
+
+  // عند التحميل: seed الكل مرة واحدة
   const seedCalledRef = useRef(false);
   useEffect(() => {
     if (!seedCalledRef.current) {
@@ -141,6 +145,13 @@ export default function DocumentTemplatesPage() {
       seedMut.mutate();
     }
   }, []);
+
+  // عند خلو القائمة لنوع معين: حاول seed الافتراضي لهذا النوع تحديداً
+  useEffect(() => {
+    if (!listQuery.isLoading && listQuery.data?.length === 0 && !seedDefaultMut.isPending) {
+      seedDefaultMut.mutate({ docType: selectedType });
+    }
+  }, [selectedType, listQuery.data, listQuery.isLoading]);
 
   const createMut = trpc.documentTemplates.create.useMutation({
     onSuccess: row => {
@@ -524,11 +535,26 @@ export default function DocumentTemplatesPage() {
                     افتح مصمم القوالب لتحديد أماكن العناصر على الورقة (رأس الصفحة، بيانات العميل، جدول الأصناف، الإجماليات…)
                   </p>
                 </div>
-                <button onClick={openDesigner}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-600 text-white text-[12px] font-medium hover:bg-purple-700 shadow-sm transition-colors shrink-0">
-                  <Paintbrush className="w-4 h-4" />
-                  {parsedLayout && parsedLayout.elements.length > 0 ? "تعديل التصميم" : "تصميم النموذج"}
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  {parsedLayout && parsedLayout.elements.length > 0 && (
+                    <button
+                      title="إعادة ضبط التصميم للنموذج الافتراضي المدمج"
+                      onClick={() => {
+                        if (!confirm("سيتم استبدال التصميم الحالي بالتصميم الافتراضي. هل أنت متأكد؟")) return;
+                        seedDefaultMut.mutate({ docType: selectedType, forceReset: true });
+                      }}
+                      disabled={seedDefaultMut.isPending}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-medium hover:bg-slate-200 border border-slate-200 transition-colors">
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      استعادة الافتراضي
+                    </button>
+                  )}
+                  <button onClick={openDesigner}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-600 text-white text-[12px] font-medium hover:bg-purple-700 shadow-sm transition-colors">
+                    <Paintbrush className="w-4 h-4" />
+                    {parsedLayout && parsedLayout.elements.length > 0 ? "تعديل التصميم" : "تصميم النموذج"}
+                  </button>
+                </div>
               </div>
               {parsedLayout && parsedLayout.elements.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
