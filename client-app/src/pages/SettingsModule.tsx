@@ -4990,3 +4990,5 @@ export function CfgZatcaTab()            { return <CfgSubPage activeId="zatca-co
 export function CfgZatcaMonitorTab()     { return <CfgSubPage activeId="zatca-monitor" />; }
 export function CfgZatcaInvoicesTab()    { return <CfgSubPage activeId="zatca-invoices" />; }
 export function CfgZatcaLogsTab()        { return <CfgSubPage activeId="zatca-logs" />; }
+export function CfgGosiTab()             { return <CfgSubPage activeId="gosi-config" />; }
+export function CfgGaztTab()             { return <CfgSubPage activeId="gazt-config" />; }
