@@ -68,6 +68,7 @@ import SettingsModule, {
   CfgMessagingTemplatesTab, CfgMessagingLogTab,
   CfgPrintSettingsTab, CfgLogoStampTab, CfgSignaturesTab, CfgEmailPdfTab,
   CfgFieldDictionaryTab, CfgPaymentMethodsTab,
+  CfgZatcaTab, CfgZatcaMonitorTab, CfgZatcaInvoicesTab, CfgZatcaLogsTab,
 } from "./pages/SettingsModule";
 import PostingSettingsPage from "./pages/PostingSettingsPage";
 import PostingOperationsPage from "./pages/PostingOperationsPage";
@@ -249,6 +250,11 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/cfg/logo-stamp":             CfgLogoStampTab,
   "/cfg/signatures":             CfgSignaturesTab,
   "/cfg/email-pdf":              CfgEmailPdfTab,
+  // ZATCA Government Integration
+  "/cfg/zatca":                  CfgZatcaTab,
+  "/cfg/zatca-mon":              CfgZatcaMonitorTab,
+  "/cfg/zatca-inv":              CfgZatcaInvoicesTab,
+  "/cfg/zatca-log":              CfgZatcaLogsTab,
 };
 
 // ─── Auth Guard ───────────────────────────────────────────────────────────
