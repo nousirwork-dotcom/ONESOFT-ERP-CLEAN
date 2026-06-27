@@ -1,17 +1,17 @@
 /**
- * ContextSelectInput — حقل اختيار يعمل بكليك يمين
+ * ContextSelectInput — قائمة اختيار بأسلوب Windows 10 Context Menu
  *
- * يظهر فارغاً بشكل افتراضي.
- * كليك يمين → قائمة سياق بالخيارات المتاحة.
- * يُستخدم للمخزن، العملة، نوع "بناءً على".
+ * تفتح بالنقر العادي أو كليك يمين.
+ * تصميم: خلفية بيضاء، بدون تدوير، تظليل أزرق Windows عند التحويم.
  */
 import React, { useState, useRef, useEffect, type MouseEvent } from "react";
 
 export interface ContextSelectOption {
-  value: string;
-  label: string;
-  sublabel?: string;
-  color?: string;
+  value:      string;
+  label:      string;
+  sublabel?:  string;
+  color?:     string;
+  separator?: boolean; /* خط فاصل قبل هذا العنصر */
 }
 
 interface Props {
@@ -26,9 +26,14 @@ interface Props {
   style?:       React.CSSProperties;
 }
 
+/* ── لون تمييز Windows 10 ── */
+const WIN_HOVER  = "#CCE8FF";
+const WIN_BORDER = "1px solid #adadad";
+const WIN_SHADOW = "2px 2px 8px rgba(0,0,0,0.22), 0 0 0 0.5px rgba(0,0,0,0.08)";
+
 export default function ContextSelectInput({
   value, onChange, options,
-  placeholder = "كليك ⊞ للاختيار",
+  placeholder = "اضغط للاختيار",
   disabled, title, menuTitle,
   className = "classic-input",
   style,
@@ -36,8 +41,10 @@ export default function ContextSelectInput({
 
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuPos,     setMenuPos]     = useState({ x: 0, y: 0 });
+  const [hovered,     setHovered]     = useState<string | null>(null);
+
   const menuRef  = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const wrapRef  = useRef<HTMLDivElement>(null);
 
   const selectedLabel = options.find(o => o.value === value)?.label ?? "";
 
@@ -45,9 +52,13 @@ export default function ContextSelectInput({
   useEffect(() => {
     if (!menuVisible) return;
     const onMouse = (e: globalThis.MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuVisible(false);
+      if (menuRef.current  && !menuRef.current.contains(e.target as Node) &&
+          wrapRef.current  && !wrapRef.current.contains(e.target as Node))
+        setMenuVisible(false);
     };
-    const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === "Escape") setMenuVisible(false); };
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape") setMenuVisible(false);
+    };
     document.addEventListener("mousedown", onMouse);
     document.addEventListener("keydown",   onKey);
     return () => {
@@ -56,160 +67,195 @@ export default function ContextSelectInput({
     };
   }, [menuVisible]);
 
-  /* ── Right-click ── */
-  function handleContextMenu(e: MouseEvent<HTMLInputElement>) {
+  /* ── Open menu at cursor / below input ── */
+  function openMenu(clientX: number, clientY: number) {
     if (disabled) return;
-    e.preventDefault();
     const vw = window.innerWidth, vh = window.innerHeight;
-    const menuW = 220, menuH = Math.min(options.length * 36 + 60, 340);
-    const x = e.clientX + menuW > vw ? e.clientX - menuW : e.clientX;
-    const y = e.clientY + menuH > vh ? e.clientY - menuH : e.clientY;
+    const menuW = 230;
+    const menuH = Math.min(options.length * 30 + 32, 380);
+    const x = clientX + menuW > vw ? clientX - menuW : clientX;
+    const y = clientY + menuH > vh ? clientY - menuH : clientY;
     setMenuPos({ x, y });
     setMenuVisible(true);
   }
 
-  /* ── Select option ── */
+  function handleClick(e: MouseEvent<HTMLDivElement>) {
+    if (disabled) return;
+    if (menuVisible) { setMenuVisible(false); return; }
+    /* فتح تحت الحقل مباشرة */
+    const rect = wrapRef.current?.getBoundingClientRect();
+    if (rect) openMenu(rect.right, rect.bottom + 1);
+    else       openMenu(e.clientX, e.clientY);
+  }
+
+  function handleContextMenu(e: MouseEvent<HTMLDivElement>) {
+    e.preventDefault();
+    if (disabled) return;
+    openMenu(e.clientX, e.clientY);
+  }
+
   function pick(opt: ContextSelectOption) {
     onChange(opt.value);
     setMenuVisible(false);
-    inputRef.current?.focus();
+  }
+
+  /* ── تظليل العنصر المحدد ── */
+  function itemBg(optValue: string) {
+    if (hovered === optValue) return WIN_HOVER;
+    if (optValue === value && hovered === null) return "#E8F4FF";
+    return "";
   }
 
   return (
     <>
-      <div className="relative flex-1 min-w-0" style={{ minWidth: 0 }}>
+      {/* ── Input wrapper ── */}
+      <div
+        ref={wrapRef}
+        className="relative flex-1 min-w-0"
+        style={{ cursor: disabled ? "not-allowed" : "default" }}
+        onClick={handleClick}
+        onContextMenu={handleContextMenu}
+      >
         <input
-          ref={inputRef}
           type="text"
           readOnly
           value={selectedLabel}
           disabled={disabled}
-          onContextMenu={handleContextMenu}
           placeholder={disabled ? "" : placeholder}
-          title={title ?? (disabled ? "" : "كليك يمين لاختيار")}
+          title={title ?? (disabled ? "" : "اضغط للاختيار")}
           className={className}
           style={{
-            cursor: disabled ? "not-allowed" : "default",
+            cursor:     disabled ? "not-allowed" : "default",
             userSelect: "none",
+            pointerEvents: "none",   /* الضغط يصل للـ wrapper */
             ...style,
           }}
-          onFocus={e => e.currentTarget.blur()}
+          tabIndex={-1}
         />
-        {/* chevron indicator */}
+        {/* chevron */}
         {!disabled && (
           <div
             className="absolute inset-y-0 left-1.5 flex items-center pointer-events-none"
             style={{ zIndex: 1 }}
           >
-            <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
-              <path d="M2 3.5L5 6.5L8 3.5" stroke={selectedLabel ? "#4B5563" : "#9CA3AF"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            <svg
+              width="9" height="9" viewBox="0 0 10 10" fill="none"
+              style={{ transform: menuVisible ? "rotate(180deg)" : "", transition: "transform 0.15s" }}
+            >
+              <path
+                d="M2 3.5L5 6.5L8 3.5"
+                stroke={selectedLabel ? "#444" : "#9CA3AF"}
+                strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"
+              />
             </svg>
           </div>
         )}
-        {/* series indicator ⊞ */}
-        {!disabled && !selectedLabel && (
-          <span style={{
-            position: "absolute", top: "50%", transform: "translateY(-50%)",
-            right: 5, fontSize: 7, color: "#1a7fd4", opacity: 0.55,
-            pointerEvents: "none", userSelect: "none",
-          }}>⊞</span>
-        )}
       </div>
 
-      {/* ── Context Menu ── */}
+      {/* ── Windows-style Context Menu ── */}
       {menuVisible && (
         <div
           ref={menuRef}
           style={{
-            position: "fixed",
-            top:  menuPos.y,
-            left: menuPos.x,
-            zIndex: 99999,
-            background: "#fff",
-            border: "1px solid #d1d5db",
-            borderRadius: 6,
-            boxShadow: "0 4px 28px rgba(0,0,0,0.18)",
-            minWidth: 200,
-            maxHeight: 340,
-            overflowY: "auto",
-            direction: "rtl",
+            position:   "fixed",
+            top:        menuPos.y,
+            left:       menuPos.x,
+            zIndex:     99999,
+            background: "#ffffff",
+            border:     WIN_BORDER,
+            boxShadow:  WIN_SHADOW,
+            minWidth:   200,
+            maxHeight:  380,
+            overflowY:  "auto",
+            direction:  "rtl",
+            padding:    "2px 0",
+            userSelect: "none",
+            /* Windows: بدون تدوير */
+            borderRadius: 0,
+            fontFamily: '"Tahoma","Segoe UI",Arial,sans-serif',
           }}
+          onMouseLeave={() => setHovered(null)}
         >
-          {/* Header */}
+          {/* عنوان اختياري — بأسلوب Windows section header */}
           {menuTitle && (
             <div style={{
-              padding: "7px 12px",
-              background: "linear-gradient(135deg,#1a7fd4,#2563ab)",
-              color: "#fff", fontSize: 11, fontWeight: 700,
-              position: "sticky", top: 0,
+              padding:     "5px 12px 4px",
+              fontSize:    11,
+              fontWeight:  700,
+              color:       "#666",
+              borderBottom: "1px solid #e0e0e0",
+              background:  "#f5f5f5",
+              letterSpacing: 0,
             }}>
               {menuTitle}
             </div>
           )}
 
-          {/* Empty state */}
+          {/* لا خيارات */}
           {options.length === 0 && (
-            <div style={{ padding: 14, textAlign: "center", fontSize: 12, color: "#888" }}>
+            <div style={{ padding: "8px 14px", fontSize: 12, color: "#999" }}>
               لا توجد خيارات
             </div>
           )}
 
-          {/* Clear option if value selected */}
+          {/* خيار "مسح" عند وجود قيمة */}
           {value && (
-            <div
-              onClick={() => pick({ value: "", label: "" })}
-              style={{
-                padding: "7px 14px", cursor: "pointer",
-                fontSize: 11, color: "#ef4444",
-                borderBottom: "1px solid #f3f4f6",
-                display: "flex", alignItems: "center", gap: 6,
-              }}
-              onMouseEnter={e => (e.currentTarget.style.background = "#fff1f2")}
-              onMouseLeave={e => (e.currentTarget.style.background = "")}
-            >
-              ✕ مسح الاختيار
-            </div>
+            <>
+              <div
+                onMouseEnter={() => setHovered("__clear__")}
+                onClick={() => pick({ value: "", label: "" })}
+                style={{
+                  padding:    "5px 14px",
+                  fontSize:   12,
+                  color:      hovered === "__clear__" ? "#000" : "#c0392b",
+                  cursor:     "default",
+                  background: itemBg("__clear__"),
+                  display:    "flex", alignItems: "center", gap: 7,
+                  minHeight:  28,
+                }}
+              >
+                <span style={{ fontSize: 10 }}>✕</span> مسح الاختيار
+              </div>
+              <div style={{ height: 1, background: "#e0e0e0", margin: "1px 0" }} />
+            </>
           )}
 
-          {/* Options */}
-          {options.map(opt => (
-            <div
-              key={opt.value}
-              onClick={() => pick(opt)}
-              style={{
-                padding: "8px 14px",
-                cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                fontSize: 12,
-                borderBottom: "1px solid #f3f4f6",
-                gap: 8,
-                background: opt.value === value ? "#eff6ff" : "",
-              }}
-              onMouseEnter={e => (e.currentTarget.style.background = opt.value === value ? "#dbeafe" : "#f5f9ff")}
-              onMouseLeave={e => (e.currentTarget.style.background = opt.value === value ? "#eff6ff" : "")}
-            >
-              <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                <span style={{ fontWeight: opt.value === value ? 700 : 500, color: opt.color ?? "#1a3f6f" }}>
-                  {opt.label}
-                </span>
-                {opt.sublabel && (
-                  <span style={{ fontSize: 10, color: "#94a3b8" }}>{opt.sublabel}</span>
+          {/* الخيارات */}
+          {options.map((opt, i) => (
+            <React.Fragment key={opt.value}>
+              {/* فاصل اختياري */}
+              {opt.separator && i > 0 && (
+                <div style={{ height: 1, background: "#e0e0e0", margin: "1px 0" }} />
+              )}
+              <div
+                onMouseEnter={() => setHovered(opt.value)}
+                onClick={() => pick(opt)}
+                style={{
+                  padding:    "0 14px",
+                  fontSize:   12,
+                  color:      hovered === opt.value ? "#000" : (opt.color ?? "#1a1a1a"),
+                  cursor:     "default",
+                  background: itemBg(opt.value),
+                  display:    "flex", alignItems: "center", justifyContent: "space-between",
+                  minHeight:  28,
+                  gap:        8,
+                }}
+              >
+                <div style={{ display: "flex", flexDirection: "column", gap: 1, flex: 1 }}>
+                  <span style={{ fontWeight: opt.value === value ? 700 : 400 }}>
+                    {opt.label}
+                  </span>
+                  {opt.sublabel && (
+                    <span style={{ fontSize: 10, color: "#888" }}>{opt.sublabel}</span>
+                  )}
+                </div>
+                {/* checkmark للعنصر المحدد */}
+                {opt.value === value && (
+                  <span style={{ fontSize: 11, color: "#0078D7", flexShrink: 0 }}>✔</span>
                 )}
               </div>
-              {opt.value === value && (
-                <span style={{ fontSize: 11, color: "#3b82f6", flexShrink: 0 }}>✓</span>
-              )}
-            </div>
+            </React.Fragment>
           ))}
-
-          {/* Footer */}
-          <div style={{
-            padding: "4px 12px", fontSize: 10, color: "#aaa",
-            background: "#f9fafb", borderTop: "1px solid #eee",
-            position: "sticky", bottom: 0,
-          }}>
-            اختر بالنقر · Esc للإغلاق
-          </div>
         </div>
       )}
     </>
