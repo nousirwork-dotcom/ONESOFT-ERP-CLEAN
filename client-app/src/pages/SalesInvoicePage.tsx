@@ -1239,25 +1239,34 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                 const filtered = q ? all.filter(c => c.name.toLowerCase().includes(q) || (c.code ?? "").toLowerCase().includes(q)) : all;
                 const exactMatch = all.some(c => c.name.toLowerCase() === q || (c.code ?? "").toLowerCase() === q);
                 return (
-                  <div style={{ position: "absolute", top: "100%", right: 0, left: 0, zIndex: 9999, background: "white", border: "1px solid #d1d5db", borderRadius: 4, boxShadow: "0 4px 16px rgba(0,0,0,0.15)", maxHeight: 220, overflowY: "auto", marginTop: 2 }} dir="rtl">
-                    {filtered.length === 0 && !custSearch.trim() && <div className="px-3 py-2 text-[11px] text-gray-400 text-center">لا يوجد عملاء مضافون</div>}
+                  <div style={{ position: "absolute", top: "100%", right: 0, left: 0, zIndex: 9999, background: "#f0f0f0", border: "1px solid #adadad", borderRadius: 0, boxShadow: "2px 2px 8px rgba(0,0,0,0.22), 0 0 0 0.5px rgba(0,0,0,0.08)", maxHeight: 220, overflowY: "auto", marginTop: 2, fontFamily: '"Tahoma","Segoe UI",Arial,sans-serif' }} dir="rtl">
+                    {filtered.length === 0 && !custSearch.trim() && <div className="px-3 py-2 text-[11px] text-center" style={{ color: "#999" }}>لا يوجد عملاء مضافون</div>}
                     {filtered.map(c => (
-                      <div key={c.id} onMouseDown={() => { setCustomerId(c.id); setCustomerName(c.name); setCustomerCode((c as any).code ?? ""); setCustomerType((c as any).customerType ?? 'individual'); setCustomerTaxNumber((c as any).taxNumber ?? ""); setCustSearch(""); setShowCustDrop(false); }}
-                        className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-blue-50 text-[12px]" style={{ borderBottom: "1px solid #f3f4f6" }}>
+                      <div key={c.id}
+                        onMouseDown={() => { setCustomerId(c.id); setCustomerName(c.name); setCustomerCode((c as any).code ?? ""); setCustomerType((c as any).customerType ?? 'individual'); setCustomerTaxNumber((c as any).taxNumber ?? ""); setCustSearch(""); setShowCustDrop(false); }}
+                        onMouseEnter={e => (e.currentTarget.style.background = "#CCE8FF")}
+                        onMouseLeave={e => (e.currentTarget.style.background = "")}
+                        className="flex items-center gap-2 px-3 cursor-default text-[12px]"
+                        style={{ borderBottom: "1px solid #e0e0e0", minHeight: 28, cursor: "default" }}>
                         <span style={{ fontSize: 13 }}>{(c as any).customerType === 'organization' ? '🏢' : '👤'}</span>
-                        {(c as any).code && <span className="font-mono text-[11px] font-bold px-1 rounded" style={{ background: "#FEF3C7", color: "#D19C05" }}>{(c as any).code}</span>}
-                        <span className="font-medium text-gray-800">{c.name}</span>
-                        {(c as any).customerType === 'organization' && <span className="text-[10px] text-blue-500 mr-auto">مؤسسة</span>}
+                        {(c as any).code && <span className="font-mono text-[11px] font-bold px-1" style={{ background: "#FEF3C7", color: "#D19C05" }}>{(c as any).code}</span>}
+                        <span style={{ fontWeight: 500, color: "#1a1a1a" }}>{c.name}</span>
+                        {(c as any).customerType === 'organization' && <span className="text-[10px] mr-auto" style={{ color: "#0078D7" }}>مؤسسة</span>}
                       </div>
                     ))}
                     {custSearch.trim() && !exactMatch && (
-                      <div onMouseDown={async () => {
-                        setNewCustName(custSearch.trim()); setNewCustCode(""); setNewCustPhone(""); setNewCustEmail(""); setNewCustAddr("");
-                        setNewCustType('individual'); setNewCustTaxNum(""); setNewCustRegNum("");
-                        setNewCustShortAddr(""); setNewCustBuilding(""); setNewCustAdditional(""); setNewCustPostal(""); setNewCustCity("");
-                        if (journalCustomersJournalId) { try { const preview = await utils.documentJournals.previewNextNumber.fetch({ journalId: journalCustomersJournalId }); if (preview) setNewCustCode(preview); } catch {} }
-                        setShowAddCustomer(true); setShowCustDrop(false);
-                      }} className="flex items-center gap-2 px-3 py-2 cursor-pointer text-[12px] font-bold" style={{ background: "#EFF6FF", borderTop: "1px solid #BFDBFE", color: "#1D4ED8" }}>
+                      <div
+                        onMouseDown={async () => {
+                          setNewCustName(custSearch.trim()); setNewCustCode(""); setNewCustPhone(""); setNewCustEmail(""); setNewCustAddr("");
+                          setNewCustType('individual'); setNewCustTaxNum(""); setNewCustRegNum("");
+                          setNewCustShortAddr(""); setNewCustBuilding(""); setNewCustAdditional(""); setNewCustPostal(""); setNewCustCity("");
+                          if (journalCustomersJournalId) { try { const preview = await utils.documentJournals.previewNextNumber.fetch({ journalId: journalCustomersJournalId }); if (preview) setNewCustCode(preview); } catch {} }
+                          setShowAddCustomer(true); setShowCustDrop(false);
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.background = "#CCE8FF")}
+                        onMouseLeave={e => (e.currentTarget.style.background = "")}
+                        className="flex items-center gap-2 px-3 cursor-default text-[12px] font-bold"
+                        style={{ borderTop: "1px solid #e0e0e0", minHeight: 28, color: "#0078D7", cursor: "default" }}>
                         <span>➕</span><span>إضافة "{custSearch.trim()}" كعميل جديد</span>
                       </div>
                     )}
