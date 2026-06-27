@@ -6,7 +6,7 @@ import { trpc } from "@/lib/trpc";
 import Warehouses from "./Warehouses";
 import DocumentJournalsPage from "./DocumentJournalsPage";
 
-import DocumentTemplatesPage from "./DocumentTemplatesPage";
+import TemplatesManagerPage from "./TemplatesManagerPage";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   ChevronDown, ChevronRight, Settings, Building2, DollarSign,
@@ -4853,7 +4853,7 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
     case "warehouses-config":    return <Warehouses />;
     case "document-journals":    return <DocumentJournalsPage />;
 
-    case "document-templates":   return <DocumentTemplatesPage />;
+    case "document-templates":   return <TemplatesManagerPage />;
     case "qr-settings":          return <QRSettingsPage />;
     case "field-design":         return <FieldDesignPage />;
     case "backup":               return <BackupPage />;
