@@ -1127,37 +1127,36 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
               const selectedDT = docTypeId ? allDocTypes.find((dt: any) => String(dt.id) === docTypeId) : null;
               if (allDocTypes.length > 0) {
                 return (
-                  <div className="relative flex-1 min-w-0">
-                    {/* نص العرض المخصص */}
-                    {selectedDT && (
-                      <div className="absolute inset-0 flex items-center pointer-events-none z-10" style={{ paddingRight: 6, paddingLeft: 22 }}>
-                        <span className="font-bold text-blue-800 text-[12px] truncate">{selectedDT.codeAr || selectedDT.nameAr}</span>
-                      </div>
-                    )}
-                    {/* سهم القائمة المنسدلة المخصص */}
-                    <div className="absolute inset-y-0 left-1.5 flex items-center pointer-events-none z-10">
-                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                        <path d="M2 3.5L5 6.5L8 3.5" stroke="#4B5563" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </div>
-                    <select
-                      value={docTypeId}
-                      onChange={e => handleDocTypeSelect(e.target.value)}
-                      className="classic-input w-full"
-                      style={{ height: 26, fontWeight: 600, color: selectedDT ? "transparent" : undefined, appearance: "none", WebkitAppearance: "none", paddingLeft: 20 }}
-                    >
-                      {filteredDocTypes.map((dt: any) => (<option key={dt.id} value={String(dt.id)}>{dt.codeAr ? `${dt.codeAr} — ${dt.nameAr}` : dt.nameAr}</option>))}
-                    </select>
-                  </div>
+                  <ContextSelectInput
+                    value={docTypeId}
+                    onChange={v => handleDocTypeSelect(v)}
+                    options={filteredDocTypes.map((dt: any) => ({
+                      value: String(dt.id),
+                      label: dt.codeAr ? `${dt.codeAr} — ${dt.nameAr}` : dt.nameAr,
+                    }))}
+                    menuTitle="نوع السند"
+                    placeholder="نوع السند ⊞"
+                    style={{ height: 26, fontWeight: 600, color: "#1e40af" }}
+                  />
                 );
               }
               return (
-                <select value={paymentType} onChange={e => { setPaymentType(e.target.value as PaymentType); setPaidAmountOverride(""); }} className="classic-input w-full"
-                  style={{ height: 26, background: paymentType === "cash" ? "#F0FDF4" : paymentType === "partial" ? "#EFF6FF" : "#FFF7ED", borderColor: paymentType === "cash" ? "#16A34A" : paymentType === "partial" ? "#2563EB" : "#D97706", fontWeight: 700, color: paymentType === "cash" ? "#15803D" : paymentType === "partial" ? "#1D4ED8" : "#B45309" }}>
-                  <option value="cash">نقدًا</option>
-                  <option value="partial">جزئي</option>
-                  <option value="credit">آجل</option>
-                </select>
+                <ContextSelectInput
+                  value={paymentType}
+                  onChange={v => { setPaymentType((v || "cash") as PaymentType); setPaidAmountOverride(""); }}
+                  options={[
+                    { value: "cash",    label: "نقدًا", color: "#15803D" },
+                    { value: "partial", label: "جزئي",  color: "#1D4ED8" },
+                    { value: "credit",  label: "آجل",   color: "#B45309" },
+                  ]}
+                  menuTitle="نوع الدفع"
+                  style={{
+                    height: 26, fontWeight: 700,
+                    background:   paymentType === "cash" ? "#F0FDF4" : paymentType === "partial" ? "#EFF6FF" : "#FFF7ED",
+                    borderColor:  paymentType === "cash" ? "#16A34A" : paymentType === "partial" ? "#2563EB" : "#D97706",
+                    color:        paymentType === "cash" ? "#15803D" : paymentType === "partial" ? "#1D4ED8" : "#B45309",
+                  }}
+                />
               );
             })()}
           </div>
