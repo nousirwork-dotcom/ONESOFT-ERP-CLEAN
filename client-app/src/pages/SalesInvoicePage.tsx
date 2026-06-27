@@ -1119,8 +1119,24 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
               if (allDocTypes.length > 0) {
                 return (
                   <div className="relative flex-1 min-w-0">
-                    {selectedDT && <div className="absolute inset-0 flex items-center px-2 pointer-events-none z-10"><span className="font-bold text-blue-800 text-[12px] truncate">{selectedDT.codeAr || selectedDT.nameAr}</span></div>}
-                    <select value={docTypeId} onChange={e => handleDocTypeSelect(e.target.value)} className="classic-input w-full" style={{ height: 26, fontWeight: 600, color: selectedDT ? "transparent" : undefined }}>
+                    {/* نص العرض المخصص */}
+                    {selectedDT && (
+                      <div className="absolute inset-0 flex items-center pointer-events-none z-10" style={{ paddingRight: 6, paddingLeft: 22 }}>
+                        <span className="font-bold text-blue-800 text-[12px] truncate">{selectedDT.codeAr || selectedDT.nameAr}</span>
+                      </div>
+                    )}
+                    {/* سهم القائمة المنسدلة المخصص */}
+                    <div className="absolute inset-y-0 left-1.5 flex items-center pointer-events-none z-10">
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                        <path d="M2 3.5L5 6.5L8 3.5" stroke="#4B5563" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </div>
+                    <select
+                      value={docTypeId}
+                      onChange={e => handleDocTypeSelect(e.target.value)}
+                      className="classic-input w-full"
+                      style={{ height: 26, fontWeight: 600, color: selectedDT ? "transparent" : undefined, appearance: "none", WebkitAppearance: "none", paddingLeft: 20 }}
+                    >
                       {filteredDocTypes.map((dt: any) => (<option key={dt.id} value={String(dt.id)}>{dt.codeAr ? `${dt.codeAr} — ${dt.nameAr}` : dt.nameAr}</option>))}
                     </select>
                   </div>
