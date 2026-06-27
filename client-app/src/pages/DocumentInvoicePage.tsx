@@ -6,6 +6,7 @@ import React, { useState, useRef, useCallback, useEffect, KeyboardEvent } from "
 import { Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { DateSegmentInput } from "@/components/DateSegmentInput";
 import ERPToolbar, { ERPMode } from "@/components/ERPToolbar";
 import PostingPreviewModal from "@/components/PostingPreviewModal";
 import InvoicePrintModal, { type DocTemplateConfig } from "@/components/InvoicePrintModal";

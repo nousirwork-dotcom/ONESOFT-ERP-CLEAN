@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useCallback, useEffect, createContext, useContext } from "react";
+import { DateSegmentInput } from "@/components/DateSegmentInput";
 import { fmtDate } from "@/utils/dateUtils";
 import type { CSSProperties } from "react";
 import { useTabManager } from "@/contexts/TabManagerContext";

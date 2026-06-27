@@ -10,6 +10,10 @@
  * Backspace فارغ  : يرجع للجزء السابق في ترتيب الإدخال
  * Auto-advance    : بعد 2 رقم في DD→MM وبعد اكتمال YYYY
  * onFocus         : يحدد المحتوى تلقائياً
+ *
+ * Props:
+ *   standalone   — true: حدود كاملة (بدون زر تقويم)
+ *                  false (افتراضي): بدون حد يمين (للاقتران بزر التقويم)
  */
 import { useRef, useState, useEffect } from "react";
 import type { KeyboardEvent, CSSProperties } from "react";
@@ -19,6 +23,9 @@ export interface DateSegmentInputProps {
   onChange: (v: string) => void;
   style?: CSSProperties;
   className?: string;
+  standalone?: boolean;    // true = حدود كاملة بدون زر تقويم جانبي
+  tabIndex?: number;
+  disabled?: boolean;
 }
 
 function parse(iso: string): [string, string, string] {
@@ -50,7 +57,9 @@ function focusNext(from: HTMLElement | null) {
   if (i >= 0 && i + 1 < all.length) all[i + 1].focus();
 }
 
-export function DateSegmentInput({ value, onChange, style, className }: DateSegmentInputProps) {
+export function DateSegmentInput({
+  value, onChange, style, className, standalone = false, tabIndex, disabled,
+}: DateSegmentInputProps) {
   const [dd,   setDd]   = useState("");
   const [mm,   setMm]   = useState("");
   const [yyyy, setYyyy] = useState("");
@@ -82,14 +91,10 @@ export function DateSegmentInput({ value, onChange, style, className }: DateSegm
   const onDdKey = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      // انتقل للشهر أولاً إن لم يكتمل DD، وإلا انتقل للشهر أيضاً
       mmRef.current?.focus(); mmRef.current?.select();
-    } else if (e.key === "ArrowRight") {
-      // بصرياً DD هو الأقصى يمينًا — لا انتقال
     } else if (e.key === "ArrowLeft") {
       e.preventDefault(); mmRef.current?.focus(); mmRef.current?.select();
     }
-    // Tab / Shift+Tab: ينتقل طبيعياً عبر ترتيب DOM
   };
 
   // ── MM ──────────────────────────────────────────────────────────────────────
@@ -118,6 +123,7 @@ export function DateSegmentInput({ value, onChange, style, className }: DateSegm
   const onYyyyChange = (raw: string) => {
     const v = raw.replace(/\D/g, "").slice(0, 4);
     setYyyy(v);
+    if (v.length === 4) focusNext(yyyyRef.current);
     emit(dd, mm, v);
   };
 
@@ -126,18 +132,16 @@ export function DateSegmentInput({ value, onChange, style, className }: DateSegm
       e.preventDefault(); focusNext(yyyyRef.current);
     } else if (e.key === "ArrowRight") {
       e.preventDefault(); mmRef.current?.focus(); mmRef.current?.select();
-    } else if (e.key === "ArrowLeft") {
-      // YYYY هو الأقصى يسارًا — لا انتقال
     } else if (e.key === "Backspace" && yyyy === "") {
       e.preventDefault(); mmRef.current?.focus(); mmRef.current?.select();
     }
-    // Tab: يخرج طبيعياً (YYYY آخر في DOM) | Shift+Tab: يذهب لـ MM طبيعياً
   };
 
   const seg: CSSProperties = {
     border: "none", outline: "none", background: "transparent",
     textAlign: "center", fontFamily: "inherit", fontSize: "inherit",
-    color: "inherit", padding: "0 1px", lineHeight: 1,
+    color: disabled ? "#9ca3af" : "inherit",
+    padding: "0 1px", lineHeight: 1,
   };
 
   return (
@@ -147,10 +151,11 @@ export function DateSegmentInput({ value, onChange, style, className }: DateSegm
       style={{
         display: "flex", alignItems: "center",
         border: "1px solid #d1d5db",
-        borderRadius: "4px 0 0 4px",
-        borderRight: "none",
-        background: "white",
+        borderRadius: standalone ? 4 : "4px 0 0 4px",
+        borderRight: standalone ? "1px solid #d1d5db" : "none",
+        background: disabled ? "#f9fafb" : "white",
         paddingInline: 5,
+        cursor: disabled ? "not-allowed" : undefined,
         ...style,
       }}
     >
@@ -167,6 +172,8 @@ export function DateSegmentInput({ value, onChange, style, className }: DateSegm
         placeholder="DD"
         maxLength={2}
         inputMode="numeric"
+        disabled={disabled}
+        tabIndex={tabIndex}
         style={{ ...seg, width: 20, order: 5 }}
       />
       <input
@@ -178,6 +185,8 @@ export function DateSegmentInput({ value, onChange, style, className }: DateSegm
         placeholder="MM"
         maxLength={2}
         inputMode="numeric"
+        disabled={disabled}
+        tabIndex={tabIndex !== undefined ? -1 : undefined}
         style={{ ...seg, width: 20, order: 3 }}
       />
       <input
@@ -189,6 +198,8 @@ export function DateSegmentInput({ value, onChange, style, className }: DateSegm
         placeholder="YYYY"
         maxLength={4}
         inputMode="numeric"
+        disabled={disabled}
+        tabIndex={tabIndex !== undefined ? -1 : undefined}
         style={{ ...seg, width: 34, order: 1 }}
       />
       <span style={{ color: "#bbb", userSelect: "none", fontSize: 11, margin: "0 1px", order: 2 }}>-</span>
