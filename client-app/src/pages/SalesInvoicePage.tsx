@@ -147,6 +147,9 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
   // ── ERP mode ──────────────────────────────────────────────────────────────
   const [erpMode, setErpMode] = useState<ERPMode>("new");
 
+  // ── ZATCA tab ──────────────────────────────────────────────────────────────
+  const [activeMainTab, setActiveMainTab] = useState<"invoice" | "zatca">("invoice");
+
   // ── Customer type & tax ───────────────────────────────────────────────────
   const [customerType, setCustomerType]         = useState<'individual' | 'organization'>('individual');
   const [customerTaxNumber, setCustomerTaxNumber] = useState("");
@@ -181,6 +184,16 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
   const qrSettingsQuery       = trpc.qrSettings.get.useQuery();
   const orgQuery              = trpc.orgs.currentOrg.useQuery();
   const { templateConfig }    = usePrintTemplate("sales_invoice");
+
+  const currentInvId          = navInvoiceId ?? savedInvoiceId;
+  const zatcaQuery            = trpc.zatca.getInvoiceZatca.useQuery(
+    { invoiceId: currentInvId! },
+    { enabled: !!currentInvId && activeMainTab === "zatca" }
+  );
+  const zatcaSubmitMut        = trpc.zatca.submitInvoice.useMutation({
+    onSuccess: (r) => { toast.success(r.message ?? "تم"); zatcaQuery.refetch(); },
+    onError:   (e) => toast.error(e.message),
+  });
   const stockQuery       = trpc.reports.stockByWarehouse.useQuery(
     { warehouseId: warehouseId! },
     { enabled: !!warehouseId }
@@ -1356,8 +1369,120 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
         </div>
       </div>
 
+      {/* ── Main Tab Bar ─────────────────────────────────────────────────── */}
+      <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #b0a89a", background: "#F0EDE4", padding: "0 10px" }}>
+        {[
+          { id: "invoice", label: "📋 بيانات الفاتورة" },
+          { id: "zatca",   label: "🏛️ الهيئة (ZATCA)", disabled: !currentInvId },
+        ].map(t => (
+          <button key={t.id} onClick={() => !t.disabled && setActiveMainTab(t.id as "invoice" | "zatca")}
+            style={{ height: 30, padding: "0 14px", border: "none", borderBottom: activeMainTab === t.id ? "2px solid #D19C05" : "2px solid transparent", background: "transparent", color: activeMainTab === t.id ? "#D19C05" : t.disabled ? "#bbb" : "#4a4a4a", fontWeight: activeMainTab === t.id ? 800 : 600, fontSize: 11, cursor: t.disabled ? "not-allowed" : "pointer", fontFamily: "'Cairo', Tahoma, Arial, sans-serif", marginBottom: -1 }}>
+            {t.label}
+            {t.id === "zatca" && currentInvId && zatcaQuery.data?.zatcaStatus === "cleared" && (
+              <span style={{ marginRight: 4, fontSize: 9, color: "#16a34a" }}>✓</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* ── ZATCA Panel ──────────────────────────────────────────────────── */}
+      {activeMainTab === "zatca" && currentInvId && (
+        <div className="flex-1 overflow-auto p-4" style={{ background: "#F7F5EE" }} dir="rtl">
+          {zatcaQuery.isLoading ? (
+            <div style={{ textAlign: "center", padding: 40, color: "#9ca3af" }}>جارٍ التحميل...</div>
+          ) : zatcaQuery.data && (
+            <div style={{ maxWidth: 640 }}>
+              {/* حالة الإرسال */}
+              {(() => {
+                const statusMap: Record<string, { label: string; color: string; bg: string; icon: string }> = {
+                  not_submitted: { label: "لم تُرسَل للهيئة بعد",   color: "#6b7280", bg: "#f3f4f6", icon: "📭" },
+                  pending:       { label: "في انتظار معالجة الهيئة", color: "#d97706", bg: "#fef3c7", icon: "⏳" },
+                  cleared:       { label: "مُخلَّصة من الهيئة ✓",   color: "#16a34a", bg: "#dcfce7", icon: "✅" },
+                  reported:      { label: "مُبلَّغة للهيئة",         color: "#0ea5e9", bg: "#e0f2fe", icon: "📤" },
+                  rejected:      { label: "مرفوضة من الهيئة",        color: "#dc2626", bg: "#fee2e2", icon: "❌" },
+                  error:         { label: "خطأ في الإرسال",           color: "#dc2626", bg: "#fee2e2", icon: "⚠️" },
+                };
+                const st = statusMap[zatcaQuery.data.zatcaStatus ?? "not_submitted"] ?? statusMap.not_submitted;
+                return (
+                  <div style={{ padding: "14px 18px", borderRadius: 10, background: st.bg, border: `1px solid ${st.color}44`, marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
+                    <span style={{ fontSize: 24 }}>{st.icon}</span>
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: 14, color: st.color }}>{st.label}</div>
+                      {zatcaQuery.data.zatcaClearedAt && (
+                        <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>
+                          تاريخ التخليص: {new Date(zatcaQuery.data.zatcaClearedAt).toLocaleString('ar-SA')}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ marginRight: "auto", display: "flex", gap: 8 }}>
+                      {zatcaQuery.data.zatcaStatus !== "cleared" && (
+                        <button onClick={() => zatcaSubmitMut.mutate({ invoiceId: currentInvId })} disabled={zatcaSubmitMut.isPending} style={{ height: 30, padding: "0 16px", background: "#D19C05", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: "pointer", opacity: zatcaSubmitMut.isPending ? 0.6 : 1 }}>
+                          {zatcaSubmitMut.isPending ? "جارٍ الإرسال..." : "🏛️ إرسال للهيئة"}
+                        </button>
+                      )}
+                      {zatcaQuery.data.zatcaStatus === "rejected" && (
+                        <button onClick={() => zatcaSubmitMut.mutate({ invoiceId: currentInvId, forceResend: true })} disabled={zatcaSubmitMut.isPending} style={{ height: 30, padding: "0 16px", background: "#dc2626", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                          إعادة الإرسال
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* التفاصيل التقنية */}
+              <div style={{ background: "#fff", borderRadius: 10, border: "1px solid #e2e8f0", overflow: "hidden" }}>
+                <div style={{ background: "#f8fafc", padding: "10px 16px", fontWeight: 800, fontSize: 12, color: "#374151", borderBottom: "1px solid #e2e8f0" }}>
+                  🔑 البيانات التقنية
+                </div>
+                <div style={{ padding: "14px 16px", display: "grid", gridTemplateColumns: "140px 1fr", rowGap: 10, alignItems: "start", fontSize: 12 }}>
+                  {[
+                    { label: "UUID الفاتورة",      value: zatcaQuery.data.zatcaUuid },
+                    { label: "Hash التشفيري",       value: zatcaQuery.data.zatcaHash },
+                    { label: "PIH (الفاتورة السابقة)", value: zatcaQuery.data.zatcaPih },
+                    { label: "رقم تسلسلي (Counter)", value: zatcaQuery.data.zatcaInvoiceCounter?.toString() },
+                  ].map(row => row.value ? (
+                    <React.Fragment key={row.label}>
+                      <div style={{ fontWeight: 700, color: "#6b7280", paddingLeft: 8 }}>{row.label}</div>
+                      <div style={{ fontFamily: "monospace", fontSize: 10, color: "#1e293b", background: "#f8fafc", padding: "3px 8px", borderRadius: 4, wordBreak: "break-all" }}>{row.value}</div>
+                    </React.Fragment>
+                  ) : null)}
+                  {!zatcaQuery.data.zatcaUuid && (
+                    <div style={{ gridColumn: "1/-1", textAlign: "center", color: "#9ca3af", padding: 20 }}>
+                      لم تُرسَل الفاتورة بعد — اضغط "إرسال للهيئة" لبدء عملية التخليص
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* QR Code */}
+              {zatcaQuery.data.zatcaQrCode && (
+                <div style={{ marginTop: 16, background: "#fff", borderRadius: 10, border: "1px solid #e2e8f0", padding: "14px 16px" }}>
+                  <div style={{ fontWeight: 700, fontSize: 12, color: "#374151", marginBottom: 10 }}>📱 QR Code الهيئة</div>
+                  <img src={`data:image/png;base64,${zatcaQuery.data.zatcaQrCode}`} alt="ZATCA QR" style={{ width: 140, height: 140 }} />
+                </div>
+              )}
+
+              {/* استجابة الهيئة */}
+              {zatcaQuery.data.zatcaResponse && (
+                <div style={{ marginTop: 16, background: "#fff", borderRadius: 10, border: "1px solid #e2e8f0", overflow: "hidden" }}>
+                  <div style={{ background: "#f8fafc", padding: "10px 16px", fontWeight: 700, fontSize: 12, color: "#374151", borderBottom: "1px solid #e2e8f0" }}>
+                    📋 استجابة الهيئة
+                  </div>
+                  <div style={{ padding: 14 }}>
+                    <pre style={{ fontFamily: "monospace", fontSize: 10, background: "#1e293b", color: "#e2e8f0", borderRadius: 6, padding: "10px 14px", overflow: "auto", maxHeight: 200, margin: 0 }}>
+                      {JSON.stringify(zatcaQuery.data.zatcaResponse, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Lines Table ─────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-hidden border-b border-[#b0a89a] flex flex-col">
+      {activeMainTab === "invoice" && <div className="flex-1 overflow-hidden border-b border-[#b0a89a] flex flex-col">
 
       {/* جدول السطور (يمين) */}
       <div className="flex-1 overflow-auto bg-white">
@@ -1530,7 +1655,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           <span className="text-[#aaa] mr-1">(Enter في آخر سطر)</span>
         </button>
       </div>
-      </div>{/* end lines wrapper */}
+      </div>}{/* end lines wrapper */}
       </div>{/* end left flex-col wrapper */}
 
       {/* ── لوحة الإجماليات (يسار) ──────────────────────────────────────── */}

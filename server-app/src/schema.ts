@@ -26,6 +26,7 @@ export const organizations = pgTable('organizations', {
   status: orgStatusEnum('status').notNull().default('trial'),
   subscriptionExpiry: timestamp('subscription_expiry'),
   maxUsers: integer('max_users').notNull().default(5),
+  zatcaConfig: jsonb('zatca_config'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -284,6 +285,15 @@ export const salesInvoices = pgTable('sales_invoices', {
   postedJournalEntryId: integer('posted_journal_entry_id'),
   costPosted: boolean('cost_posted').notNull().default(false),
   costPostedJournalEntryId: integer('cost_posted_journal_entry_id'),
+  zatcaUuid: varchar('zatca_uuid', { length: 100 }),
+  zatcaHash: varchar('zatca_hash', { length: 256 }),
+  zatcaQrCode: text('zatca_qr_code'),
+  zatcaXml: text('zatca_xml'),
+  zatcaStatus: varchar('zatca_status', { length: 30 }).default('not_submitted'),
+  zatcaClearedAt: timestamp('zatca_cleared_at'),
+  zatcaResponse: jsonb('zatca_response'),
+  zatcaInvoiceCounter: integer('zatca_invoice_counter'),
+  zatcaPih: varchar('zatca_pih', { length: 256 }),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -899,6 +909,21 @@ export const salesInvoicePayments = pgTable('sales_invoice_payments', {
   referenceNo:         varchar('reference_no', { length: 100 }),
   notes:               text('notes'),
   createdAt:           timestamp('created_at').notNull().defaultNow(),
+});
+
+// ─── ZATCA Logs ───────────────────────────────────────────────────────────────
+export const zatcaLogs = pgTable('zatca_logs', {
+  id:              serial('id').primaryKey(),
+  orgId:           integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  invoiceId:       integer('invoice_id').references(() => salesInvoices.id, { onDelete: 'set null' }),
+  invoiceNumber:   varchar('invoice_number', { length: 100 }),
+  eventType:       varchar('event_type', { length: 50 }).notNull(),
+  status:          varchar('status', { length: 30 }).notNull(),
+  environment:     varchar('environment', { length: 20 }).default('sandbox'),
+  requestBody:     text('request_body'),
+  responseBody:    text('response_body'),
+  errorMessage:    text('error_message'),
+  createdAt:       timestamp('created_at').notNull().defaultNow(),
 });
 
 // ─── Types ────────────────────────────────────────────────────────────────────

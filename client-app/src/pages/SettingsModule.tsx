@@ -7,6 +7,7 @@ import Warehouses from "./Warehouses";
 import DocumentJournalsPage from "./DocumentJournalsPage";
 
 import TemplatesManagerPage from "./TemplatesManagerPage";
+import ZatcaIntegrationPage from "./ZatcaIntegrationPage";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   ChevronDown, ChevronRight, Settings, Building2, DollarSign,
@@ -143,6 +144,20 @@ const menuSections = [
     ],
   },
   {
+    id: "gov-integrations",
+    label: "التكاملات الحكومية",
+    color: "#16a34a",
+    emoji: "🏛️",
+    children: [
+      { id: "zatca-config",   label: "هيئة الزكاة والضريبة (ZATCA)", status: "partial", path: "/cfg/zatca"      },
+      { id: "zatca-monitor",  label: "لوحة متابعة ZATCA",             status: "partial", path: "/cfg/zatca-mon"  },
+      { id: "zatca-invoices", label: "فواتير الهيئة",                  status: "partial", path: "/cfg/zatca-inv"  },
+      { id: "zatca-logs",     label: "سجل عمليات ZATCA",              status: "partial", path: "/cfg/zatca-log"  },
+      { id: "gosi-config",    label: "التأمينات الاجتماعية (GOSI)",    status: "missing", path: "/cfg/gosi"       },
+      { id: "gazt-config",    label: "الزكاة والدخل (GAZT)",           status: "missing", path: "/cfg/gazt"       },
+    ],
+  },
+  {
     id: "hr-settings",
     label: "إعدادات أخرى",
     color: "#a855f7",
@@ -177,6 +192,7 @@ function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id:
     notifications: false,
     system: false,
     messaging: false,
+    "gov-integrations": false,
     "hr-settings": false,
   });
   const toggle = (id: string) => setExpanded(p => ({ ...p, [id]: !p[id] }));
@@ -4875,6 +4891,13 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
     case "loyalty-tiers":        return <LoyaltyTiersPage />;
     case "loyalty-promos":       return <LoyaltyPromosPage />;
     case "loyalty-messages":     return <LoyaltyMessagesPage />;
+    // التكاملات الحكومية
+    case "zatca-config":         return <ZatcaIntegrationPage initialTab="settings" />;
+    case "zatca-monitor":        return <ZatcaIntegrationPage initialTab="monitor" />;
+    case "zatca-invoices":       return <ZatcaIntegrationPage initialTab="invoices" />;
+    case "zatca-logs":           return <ZatcaIntegrationPage initialTab="logs" />;
+    case "gosi-config":          return <ComingSoon title="التأمينات الاجتماعية (GOSI)" />;
+    case "gazt-config":          return <ComingSoon title="الزكاة والدخل (GAZT)" />;
     // مركز الرسائل والتكاملات
     case "messaging-whatsapp":   return <MessagingWhatsAppPage />;
     case "messaging-telegram":   return <MessagingTelegramPage />;
@@ -4963,3 +4986,7 @@ export function CfgSignaturesTab()         { return <CfgSubPage activeId="signat
 export function CfgEmailPdfTab()           { return <CfgSubPage activeId="email-pdf" />; }
 export function CfgFieldDictionaryTab()   { return <CfgSubPage activeId="field-dictionary" />; }
 export function CfgPaymentMethodsTab()    { return <CfgSubPage activeId="payment-methods" />; }
+export function CfgZatcaTab()            { return <CfgSubPage activeId="zatca-config" />; }
+export function CfgZatcaMonitorTab()     { return <CfgSubPage activeId="zatca-monitor" />; }
+export function CfgZatcaInvoicesTab()    { return <CfgSubPage activeId="zatca-invoices" />; }
+export function CfgZatcaLogsTab()        { return <CfgSubPage activeId="zatca-logs" />; }
