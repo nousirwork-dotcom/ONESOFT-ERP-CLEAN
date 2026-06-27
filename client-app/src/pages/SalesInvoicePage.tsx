@@ -19,7 +19,7 @@ import PaymentModal from "@/components/PaymentModal";
 import { PrintEngine } from "@/lib/print";
 import { usePrintTemplate } from "@/hooks/usePrintTemplate";
 import { DateSegmentInput } from "@/components/DateSegmentInput";
-import QuotePickerInput from "@/components/QuotePickerInput";
+import BasedOnDocInput from "@/components/BasedOnDocInput";
 import QRCode from "qrcode";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -1094,32 +1094,18 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                 <option value="transfer">تحويل داخلي</option>
                 <option value="sale">فاتورة مبيعات</option>
               </select>
-              {basedOnType === 'quote' ? (
-                <QuotePickerInput
-                  value={basedOnNum}
-                  onChange={v => { setBasedOnNum(v); setBasedOnTrigger(""); }}
-                  onPick={num => { setBasedOnNum(num); setBasedOnTrigger(num); }}
-                  warehouseId={warehouseId}
-                  isFetching={basedOnQuery.isFetching}
-                  trigger={basedOnTrigger}
-                  isFound={basedOnTrigger && !basedOnQuery.isFetching
-                    ? basedOnQuery.data != null
-                    : null}
-                />
-              ) : (
-                <div className="relative flex-1 min-w-0">
-                  <input
-                    value={basedOnNum} onChange={e => { setBasedOnNum(e.target.value); setBasedOnTrigger(""); }}
-                    onBlur={() => { if (basedOnType && basedOnNum.trim()) setBasedOnTrigger(basedOnNum.trim()); }}
-                    onKeyDown={e => { if (e.key === 'Enter' && basedOnType && basedOnNum.trim()) setBasedOnTrigger(basedOnNum.trim()); }}
-                    placeholder={basedOnType ? "رقم المستند ثم Enter ↵" : ""}
-                    disabled={!basedOnType} className="classic-input w-full" style={{ height: 26 }}
-                  />
-                  {basedOnQuery.isFetching && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-blue-500">⏳</span>}
-                  {basedOnTrigger && !basedOnQuery.isFetching && basedOnQuery.data === null && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-red-500 font-bold">✗</span>}
-                  {basedOnTrigger && !basedOnQuery.isFetching && basedOnQuery.data && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-green-600 font-bold">✓</span>}
-                </div>
-              )}
+              <BasedOnDocInput
+                docType={basedOnType}
+                value={basedOnNum}
+                onChange={v => { setBasedOnNum(v); setBasedOnTrigger(""); }}
+                onPick={num => { setBasedOnNum(num); setBasedOnTrigger(num); }}
+                warehouseId={warehouseId}
+                isFetching={basedOnQuery.isFetching}
+                trigger={basedOnTrigger}
+                isFound={basedOnTrigger && !basedOnQuery.isFetching
+                  ? basedOnQuery.data != null
+                  : null}
+              />
             </div>
           </div>
 
