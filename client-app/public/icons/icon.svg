@@ -1,0 +1,6 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'>
+  <rect width='512' height='512' rx='80' fill='#1a2332'/>
+  <rect x='40' y='40' width='432' height='432' rx='60' fill='#406B93'/>
+  <text x='256' y='310' font-family='Arial,sans-serif' font-size='240' font-weight='900' text-anchor='middle' fill='white'>O</text>
+  <text x='256' y='430' font-family='Arial,sans-serif' font-size='55' font-weight='700' text-anchor='middle' fill='rgba(255,255,255,0.85)'>OneSoft</text>
+</svg>
