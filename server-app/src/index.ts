@@ -22,6 +22,24 @@ app.use(express.urlencoded({ extended: true }));
 app.post('/api/auth/login', loginHandler);
 app.post('/api/auth/logout', logoutHandler);
 app.get('/api/auth/me', meHandler);
+
+// ─── Auto-Login (dev / single-user mode) ─────────────────────────────────────
+app.post('/api/auth/auto-login', async (_req, res) => {
+  try {
+    const { db } = await import('./db.js');
+    const { users } = await import('./schema.js');
+    const { eq } = await import('drizzle-orm');
+    const { createToken } = await import('./auth.js');
+    const user = await db.query.users.findFirst({ where: eq(users.id, 1) });
+    if (!user) return res.status(404).json({ error: 'لا يوجد مستخدم افتراضي' });
+    const token = await createToken({ userId: user.id, orgId: user.orgId, username: user.username, role: user.role });
+    res.cookie(ENV.cookieName, token, { httpOnly: true, secure: false, sameSite: 'lax', maxAge: ENV.sessionExpiry });
+    return res.json({ success: true, user: { id: user.id, name: user.name, username: user.username, role: user.role, orgId: user.orgId } });
+  } catch (err) {
+    console.error('[AutoLogin]', err);
+    return res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', version: '1.0.0' }));
 
 // ─── Backup Download (requires superadmin session) ────────────────────────────
