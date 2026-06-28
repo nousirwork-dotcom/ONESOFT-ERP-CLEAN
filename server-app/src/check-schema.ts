@@ -47,6 +47,21 @@ const EXPECTED_TABLES = [
   'field_dictionary',
   'payment_methods',
   'sales_invoice_payments',
+  // ZATCA Database Architecture (0012)
+  'zatca_environments',
+  'zatca_devices',
+  'zatca_certificates',
+  'zatca_csid',
+  'zatca_keys',
+  'zatca_csr_requests',
+  'zatca_invoice_transactions',
+  'zatca_request_log',
+  'zatca_response_log',
+  'zatca_error_log',
+  'zatca_xml_documents',
+  'zatca_qr_codes',
+  'zatca_settings',
+  'zatca_api_history',
 ];
 
 export async function checkSchema(pool: Pool): Promise<boolean> {

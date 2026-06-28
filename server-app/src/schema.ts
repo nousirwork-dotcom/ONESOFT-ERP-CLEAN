@@ -1,4 +1,4 @@
-import { pgTable, serial, varchar, text, integer, boolean, decimal, timestamp, pgEnum, uniqueIndex, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, serial, varchar, text, integer, boolean, decimal, timestamp, pgEnum, uniqueIndex, jsonb, uuid } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
@@ -931,6 +931,282 @@ export const zatcaLogs = pgTable('zatca_logs', {
   createdAt:       timestamp('created_at').notNull().defaultNow(),
 });
 
+// ══════════════════════════════════════════════════════════════════════════════
+// ZATCA Database Architecture (0012) — 14 جدولاً
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ─── 1. ZATCA Environments ────────────────────────────────────────────────────
+export const zatcaEnvironments = pgTable('zatca_environments', {
+  id:             serial('id').primaryKey(),
+  orgId:          integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  name:           varchar('name', { length: 50 }).notNull(),
+  baseApiUrl:     text('base_api_url').notNull(),
+  complianceUrl:  text('compliance_url'),
+  reportingUrl:   text('reporting_url'),
+  clearanceUrl:   text('clearance_url'),
+  oauthUrl:       text('oauth_url'),
+  portalUrl:      text('portal_url'),
+  isDefault:      boolean('is_default').notNull().default(false),
+  isActive:       boolean('is_active').notNull().default(true),
+  isDeleted:      boolean('is_deleted').notNull().default(false),
+  createdAt:      timestamp('created_at').notNull().defaultNow(),
+  updatedAt:      timestamp('updated_at').notNull().defaultNow(),
+  createdBy:      integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:      integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+});
+
+// ─── 2. ZATCA Devices ─────────────────────────────────────────────────────────
+export const zatcaDevices = pgTable('zatca_devices', {
+  id:                   serial('id').primaryKey(),
+  orgId:                integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  deviceName:           varchar('device_name', { length: 255 }).notNull(),
+  deviceUuid:           uuid('device_uuid').notNull().defaultRandom(),
+  serialNumber:         varchar('serial_number', { length: 100 }),
+  branchId:             integer('branch_id').references(() => branches.id, { onDelete: 'set null' }),
+  environmentId:        integer('environment_id').references(() => zatcaEnvironments.id, { onDelete: 'set null' }),
+  userId:               integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+  registrationStatus:   varchar('registration_status', { length: 30 }).notNull().default('pending'),
+  lastRegistrationDate: timestamp('last_registration_date'),
+  lastConnectionDate:   timestamp('last_connection_date'),
+  currentCsidId:        integer('current_csid_id'),           // FK دوري — مُعرَّف في SQL فقط
+  isActive:             boolean('is_active').notNull().default(true),
+  isDeleted:            boolean('is_deleted').notNull().default(false),
+  createdAt:            timestamp('created_at').notNull().defaultNow(),
+  updatedAt:            timestamp('updated_at').notNull().defaultNow(),
+  createdBy:            integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:            integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+});
+
+// ─── 3. ZATCA Certificates ────────────────────────────────────────────────────
+export const zatcaCertificates = pgTable('zatca_certificates', {
+  id:                   serial('id').primaryKey(),
+  orgId:                integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  deviceId:             integer('device_id').references(() => zatcaDevices.id, { onDelete: 'set null' }),
+  csr:                  text('csr'),
+  publicCertificate:    text('public_certificate'),
+  privateKeyEncrypted:  text('private_key_encrypted'),        // مشفَّر AES-256-GCM
+  secretKeyEncrypted:   text('secret_key_encrypted'),         // مشفَّر AES-256-GCM
+  certificateVersion:   varchar('certificate_version', { length: 20 }),
+  startDate:            timestamp('start_date'),
+  expiryDate:           timestamp('expiry_date'),
+  status:               varchar('status', { length: 30 }).notNull().default('pending'),
+  isActive:             boolean('is_active').notNull().default(true),
+  isDeleted:            boolean('is_deleted').notNull().default(false),
+  createdAt:            timestamp('created_at').notNull().defaultNow(),
+  updatedAt:            timestamp('updated_at').notNull().defaultNow(),
+  createdBy:            integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:            integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+});
+
+// ─── 4. ZATCA CSID ────────────────────────────────────────────────────────────
+export const zatcaCsid = pgTable('zatca_csid', {
+  id:               serial('id').primaryKey(),
+  orgId:            integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  deviceId:         integer('device_id').references(() => zatcaDevices.id, { onDelete: 'set null' }),
+  certificateId:    integer('certificate_id').references(() => zatcaCertificates.id, { onDelete: 'set null' }),
+  complianceCsid:   text('compliance_csid'),
+  productionCsid:   text('production_csid'),
+  issueDate:        timestamp('issue_date'),
+  expiryDate:       timestamp('expiry_date'),
+  status:           varchar('status', { length: 30 }).notNull().default('active'),
+  isActive:         boolean('is_active').notNull().default(true),
+  isDeleted:        boolean('is_deleted').notNull().default(false),
+  createdAt:        timestamp('created_at').notNull().defaultNow(),
+  updatedAt:        timestamp('updated_at').notNull().defaultNow(),
+  createdBy:        integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:        integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+});
+
+// ─── 5. ZATCA Keys ────────────────────────────────────────────────────────────
+export const zatcaKeys = pgTable('zatca_keys', {
+  id:                   serial('id').primaryKey(),
+  orgId:                integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  deviceId:             integer('device_id').references(() => zatcaDevices.id, { onDelete: 'set null' }),
+  algorithm:            varchar('algorithm', { length: 20 }).notNull().default('EC'),
+  curve:                varchar('curve', { length: 20 }).default('secp256k1'),
+  publicKey:            text('public_key'),
+  privateKeyEncrypted:  text('private_key_encrypted'),        // مشفَّر AES-256-GCM
+  fingerprint:          varchar('fingerprint', { length: 128 }),
+  status:               varchar('status', { length: 30 }).notNull().default('active'),
+  isActive:             boolean('is_active').notNull().default(true),
+  isDeleted:            boolean('is_deleted').notNull().default(false),
+  createdAt:            timestamp('created_at').notNull().defaultNow(),
+  updatedAt:            timestamp('updated_at').notNull().defaultNow(),
+  createdBy:            integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:            integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+});
+
+// ─── 6. ZATCA CSR Requests ────────────────────────────────────────────────────
+export const zatcaCsrRequests = pgTable('zatca_csr_requests', {
+  id:          serial('id').primaryKey(),
+  orgId:       integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  deviceId:    integer('device_id').references(() => zatcaDevices.id, { onDelete: 'set null' }),
+  csrText:     text('csr_text'),
+  pem:         text('pem'),
+  requestDate: timestamp('request_date').notNull().defaultNow(),
+  status:      varchar('status', { length: 30 }).notNull().default('pending'),
+  response:    text('response'),
+  isActive:    boolean('is_active').notNull().default(true),
+  isDeleted:   boolean('is_deleted').notNull().default(false),
+  createdAt:   timestamp('created_at').notNull().defaultNow(),
+  updatedAt:   timestamp('updated_at').notNull().defaultNow(),
+  createdBy:   integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:   integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+});
+
+// ─── 7. ZATCA Invoice Transactions ───────────────────────────────────────────
+export const zatcaInvoiceTransactions = pgTable('zatca_invoice_transactions', {
+  id:              serial('id').primaryKey(),
+  orgId:           integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  invoiceId:       integer('invoice_id').references(() => salesInvoices.id, { onDelete: 'set null' }),
+  invoiceNumber:   varchar('invoice_number', { length: 100 }),
+  invoiceUuid:     uuid('invoice_uuid'),
+  invoiceHash:     varchar('invoice_hash', { length: 256 }),
+  qrHash:          text('qr_hash'),
+  deviceId:        integer('device_id').references(() => zatcaDevices.id, { onDelete: 'set null' }),
+  environmentId:   integer('environment_id').references(() => zatcaEnvironments.id, { onDelete: 'set null' }),
+  submissionType:  varchar('submission_type', { length: 30 }).notNull().default('clearance'),
+  submissionDate:  timestamp('submission_date').notNull().defaultNow(),
+  invoiceStatus:   varchar('invoice_status', { length: 30 }).notNull().default('pending'),
+  httpStatus:      integer('http_status'),
+  responseCode:    varchar('response_code', { length: 50 }),
+  responseMessage: text('response_message'),
+  executionTimeMs: integer('execution_time_ms'),
+  isActive:        boolean('is_active').notNull().default(true),
+  isDeleted:       boolean('is_deleted').notNull().default(false),
+  createdAt:       timestamp('created_at').notNull().defaultNow(),
+  updatedAt:       timestamp('updated_at').notNull().defaultNow(),
+  createdBy:       integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:       integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+});
+
+// ─── 8. ZATCA Request Log ─────────────────────────────────────────────────────
+export const zatcaRequestLog = pgTable('zatca_request_log', {
+  id:            serial('id').primaryKey(),
+  orgId:         integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  transactionId: integer('transaction_id').references(() => zatcaInvoiceTransactions.id, { onDelete: 'set null' }),
+  url:           text('url'),
+  httpMethod:    varchar('http_method', { length: 10 }).notNull().default('POST'),
+  headers:       jsonb('headers'),
+  requestBody:   text('request_body'),
+  requestTime:   timestamp('request_time').notNull().defaultNow(),
+  isActive:      boolean('is_active').notNull().default(true),
+  isDeleted:     boolean('is_deleted').notNull().default(false),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+  updatedAt:     timestamp('updated_at').notNull().defaultNow(),
+  createdBy:     integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:     integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+});
+
+// ─── 9. ZATCA Response Log ────────────────────────────────────────────────────
+export const zatcaResponseLog = pgTable('zatca_response_log', {
+  id:            serial('id').primaryKey(),
+  orgId:         integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  transactionId: integer('transaction_id').references(() => zatcaInvoiceTransactions.id, { onDelete: 'set null' }),
+  httpStatus:    integer('http_status'),
+  headers:       jsonb('headers'),
+  responseBody:  text('response_body'),
+  responseTime:  timestamp('response_time').notNull().defaultNow(),
+  isActive:      boolean('is_active').notNull().default(true),
+  isDeleted:     boolean('is_deleted').notNull().default(false),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+  updatedAt:     timestamp('updated_at').notNull().defaultNow(),
+  createdBy:     integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:     integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+});
+
+// ─── 10. ZATCA Error Log ──────────────────────────────────────────────────────
+export const zatcaErrorLog = pgTable('zatca_error_log', {
+  id:            serial('id').primaryKey(),
+  orgId:         integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  transactionId: integer('transaction_id').references(() => zatcaInvoiceTransactions.id, { onDelete: 'set null' }),
+  errorCode:     varchar('error_code', { length: 100 }),
+  errorType:     varchar('error_type', { length: 100 }),
+  errorMessage:  text('error_message'),
+  stackTrace:    text('stack_trace'),
+  resolution:    text('resolution'),
+  retryCount:    integer('retry_count').notNull().default(0),
+  isActive:      boolean('is_active').notNull().default(true),
+  isDeleted:     boolean('is_deleted').notNull().default(false),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+  updatedAt:     timestamp('updated_at').notNull().defaultNow(),
+  createdBy:     integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:     integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+});
+
+// ─── 11. ZATCA XML Documents ──────────────────────────────────────────────────
+export const zatcaXmlDocuments = pgTable('zatca_xml_documents', {
+  id:                serial('id').primaryKey(),
+  orgId:             integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  invoiceId:         integer('invoice_id').references(() => salesInvoices.id, { onDelete: 'set null' }),
+  xmlBeforeSigning:  text('xml_before_signing'),
+  xmlAfterSigning:   text('xml_after_signing'),
+  xmlVersion:        varchar('xml_version', { length: 20 }).default('2.1'),
+  validationResult:  jsonb('validation_result'),
+  isActive:          boolean('is_active').notNull().default(true),
+  isDeleted:         boolean('is_deleted').notNull().default(false),
+  createdAt:         timestamp('created_at').notNull().defaultNow(),
+  updatedAt:         timestamp('updated_at').notNull().defaultNow(),
+  createdBy:         integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:         integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+});
+
+// ─── 12. ZATCA QR Codes ───────────────────────────────────────────────────────
+export const zatcaQrCodes = pgTable('zatca_qr_codes', {
+  id:             serial('id').primaryKey(),
+  orgId:          integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  invoiceId:      integer('invoice_id').references(() => salesInvoices.id, { onDelete: 'set null' }),
+  tlvData:        text('tlv_data'),
+  base64:         text('base64'),
+  generationDate: timestamp('generation_date').notNull().defaultNow(),
+  isActive:       boolean('is_active').notNull().default(true),
+  isDeleted:      boolean('is_deleted').notNull().default(false),
+  createdAt:      timestamp('created_at').notNull().defaultNow(),
+  updatedAt:      timestamp('updated_at').notNull().defaultNow(),
+  createdBy:      integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:      integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+});
+
+// ─── 13. ZATCA Settings ───────────────────────────────────────────────────────
+export const zatcaSettings = pgTable('zatca_settings', {
+  id:                   serial('id').primaryKey(),
+  orgId:                integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }).unique(),
+  defaultEnvironmentId: integer('default_environment_id').references(() => zatcaEnvironments.id, { onDelete: 'set null' }),
+  enableZatca:          boolean('enable_zatca').notNull().default(false),
+  autoRetry:            boolean('auto_retry').notNull().default(true),
+  retryCount:           integer('retry_count').notNull().default(3),
+  timeoutSeconds:       integer('timeout_seconds').notNull().default(30),
+  proxySettings:        jsonb('proxy_settings'),
+  logLevel:             varchar('log_level', { length: 20 }).notNull().default('info'),
+  isActive:             boolean('is_active').notNull().default(true),
+  isDeleted:            boolean('is_deleted').notNull().default(false),
+  createdAt:            timestamp('created_at').notNull().defaultNow(),
+  updatedAt:            timestamp('updated_at').notNull().defaultNow(),
+  createdBy:            integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:            integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+});
+
+// ─── 14. ZATCA API History ────────────────────────────────────────────────────
+export const zatcaApiHistory = pgTable('zatca_api_history', {
+  id:          serial('id').primaryKey(),
+  orgId:       integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  apiName:     varchar('api_name', { length: 100 }),
+  url:         text('url'),
+  method:      varchar('method', { length: 10 }).notNull().default('POST'),
+  startTime:   timestamp('start_time').notNull().defaultNow(),
+  endTime:     timestamp('end_time'),
+  durationMs:  integer('duration_ms'),
+  result:      varchar('result', { length: 30 }),
+  userId:      integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+  userName:    varchar('user_name', { length: 200 }),
+  isActive:    boolean('is_active').notNull().default(true),
+  isDeleted:   boolean('is_deleted').notNull().default(false),
+  createdAt:   timestamp('created_at').notNull().defaultNow(),
+  updatedAt:   timestamp('updated_at').notNull().defaultNow(),
+  createdBy:   integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:   integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+});
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type Organization = typeof organizations.$inferSelect;
 export type User = typeof users.$inferSelect;
@@ -944,3 +1220,19 @@ export type JournalEntryLine = typeof journalEntryLines.$inferSelect;
 export type Voucher = typeof vouchers.$inferSelect;
 export type ReceiptVoucher = typeof receiptVouchers.$inferSelect;
 export type PaymentVoucher = typeof paymentVouchers.$inferSelect;
+
+// ZATCA Architecture Types (0012)
+export type ZatcaEnvironment         = typeof zatcaEnvironments.$inferSelect;
+export type ZatcaDevice              = typeof zatcaDevices.$inferSelect;
+export type ZatcaCertificate         = typeof zatcaCertificates.$inferSelect;
+export type ZatcaCsid                = typeof zatcaCsid.$inferSelect;
+export type ZatcaKey                 = typeof zatcaKeys.$inferSelect;
+export type ZatcaCsrRequest          = typeof zatcaCsrRequests.$inferSelect;
+export type ZatcaInvoiceTransaction  = typeof zatcaInvoiceTransactions.$inferSelect;
+export type ZatcaRequestLog          = typeof zatcaRequestLog.$inferSelect;
+export type ZatcaResponseLog         = typeof zatcaResponseLog.$inferSelect;
+export type ZatcaErrorLog            = typeof zatcaErrorLog.$inferSelect;
+export type ZatcaXmlDocument         = typeof zatcaXmlDocuments.$inferSelect;
+export type ZatcaQrCode              = typeof zatcaQrCodes.$inferSelect;
+export type ZatcaSettings            = typeof zatcaSettings.$inferSelect;
+export type ZatcaApiHistory          = typeof zatcaApiHistory.$inferSelect;
