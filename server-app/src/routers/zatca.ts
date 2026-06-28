@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { router, protectedProcedure, adminProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { organizations, salesInvoices, zatcaLogs, users } from '../schema.js';
+import { organizations, salesInvoices, salesInvoiceItems, zatcaLogs } from '../schema.js';
 import { eq, and, desc, count, sql, gte, lte, like, or } from 'drizzle-orm';
 
 // ─── Zod Schemas ──────────────────────────────────────────────────────────────
@@ -380,6 +380,285 @@ export const zatcaRouter = router({
       environment:         cfg.environment ?? 'sandbox',
     };
   }),
+
+  // ── التحقق من صحة XML الفاتورة ───────────────────────────────────────────
+  validateXml: protectedProcedure
+    .input(z.object({ invoiceId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      // جلب الفاتورة والبنود والإعدادات معاً
+      const [inv, items, org] = await Promise.all([
+        db.query.salesInvoices.findFirst({
+          where: and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, ctx.orgId)),
+        }),
+        db.select().from(salesInvoiceItems)
+          .where(and(eq(salesInvoiceItems.invoiceId, input.invoiceId), eq(salesInvoiceItems.orgId, ctx.orgId)))
+          .orderBy(salesInvoiceItems.sortOrder),
+        db.query.organizations.findFirst({
+          where: eq(organizations.id, ctx.orgId),
+          columns: { zatcaConfig: true, name: true },
+        }),
+      ]);
+
+      if (!inv) throw new Error('Invoice not found');
+      const cfg = (org?.zatcaConfig ?? {}) as any;
+
+      // ── توليد XML ──────────────────────────────────────────────────────────
+      const issueDate = inv.invoiceDate ? new Date(inv.invoiceDate).toISOString().split('T')[0] : '';
+      const issueTime = inv.invoiceDate ? new Date(inv.invoiceDate).toISOString().split('T')[1]?.slice(0, 8) ?? '00:00:00' : '00:00:00';
+      const invTypeCode = inv.invoiceType === 'return' ? '381' : '388';
+      const currency   = inv.currency ?? 'SAR';
+      const uuid       = inv.zatcaUuid ?? '';
+      const pih        = inv.zatcaPih ?? 'NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjNmQ2OTZjOTljNWVlNzljMmYxZjUzMGE4NzBhM2UwNjMxNmViMmMy';
+
+      const itemsXml = items.map((it, idx) => {
+        const lineTotal  = parseFloat(it.total ?? '0');
+        const taxAmt     = parseFloat(it.taxAmount ?? '0');
+        const netAmt     = lineTotal - taxAmt;
+        const taxPct     = parseFloat(it.taxPercent ?? '15');
+        const unitPrice  = parseFloat(it.unitPrice ?? '0');
+        const qty        = parseFloat(it.quantity ?? '1');
+        const discAmt    = parseFloat(it.discountAmount ?? '0');
+        return `
+    <cac:InvoiceLine>
+      <cbc:ID>${idx + 1}</cbc:ID>
+      <cbc:InvoicedQuantity unitCode="PCE">${qty.toFixed(4)}</cbc:InvoicedQuantity>
+      <cbc:LineExtensionAmount currencyID="${currency}">${netAmt.toFixed(4)}</cbc:LineExtensionAmount>
+      <cac:TaxTotal>
+        <cbc:TaxAmount currencyID="${currency}">${taxAmt.toFixed(4)}</cbc:TaxAmount>
+        <cbc:RoundingAmount currencyID="${currency}">${lineTotal.toFixed(4)}</cbc:RoundingAmount>
+      </cac:TaxTotal>
+      <cac:Item>
+        <cbc:Name>${(it.productName ?? 'Item').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</cbc:Name>
+        <cac:ClassifiedTaxCategory>
+          <cbc:ID>S</cbc:ID>
+          <cbc:Percent>${taxPct.toFixed(2)}</cbc:Percent>
+          <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
+        </cac:ClassifiedTaxCategory>
+      </cac:Item>
+      <cac:Price>
+        <cbc:PriceAmount currencyID="${currency}">${unitPrice.toFixed(4)}</cbc:PriceAmount>
+        ${discAmt > 0 ? `<cac:AllowanceCharge>
+          <cbc:ChargeIndicator>false</cbc:ChargeIndicator>
+          <cbc:Amount currencyID="${currency}">${discAmt.toFixed(4)}</cbc:Amount>
+        </cac:AllowanceCharge>` : ''}
+      </cac:Price>
+    </cac:InvoiceLine>`;
+      }).join('');
+
+      const taxTotal    = parseFloat(inv.taxAmount ?? '0');
+      const subtotal    = parseFloat(inv.subtotal ?? '0');
+      const discTotal   = parseFloat(inv.discountAmount ?? '0');
+      const total       = parseFloat(inv.total ?? '0');
+      const netAmount   = total - taxTotal;
+
+      const generatedXml = `<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+         xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+         xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
+         xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2">
+  <ext:UBLExtensions>
+    <ext:UBLExtension>
+      <ext:ExtensionURI>urn:oasis:names:specification:ubl:dsig:ext:XMLDSIG</ext:ExtensionURI>
+      <ext:ExtensionContent/>
+    </ext:UBLExtension>
+  </ext:UBLExtensions>
+  <cbc:ProfileID>reporting:1.0</cbc:ProfileID>
+  <cbc:ID>${inv.invoiceNumber}</cbc:ID>
+  <cbc:UUID>${uuid}</cbc:UUID>
+  <cbc:IssueDate>${issueDate}</cbc:IssueDate>
+  <cbc:IssueTime>${issueTime}</cbc:IssueTime>
+  <cbc:InvoiceTypeCode name="${inv.invoiceType === 'return' ? '0200000' : '0100000'}">${invTypeCode}</cbc:InvoiceTypeCode>
+  <cbc:DocumentCurrencyCode>${currency}</cbc:DocumentCurrencyCode>
+  <cbc:TaxCurrencyCode>SAR</cbc:TaxCurrencyCode>
+  <cac:AdditionalDocumentReference>
+    <cbc:ID>ICV</cbc:ID>
+    <cbc:UUID>${inv.zatcaInvoiceCounter ?? 1}</cbc:UUID>
+  </cac:AdditionalDocumentReference>
+  <cac:AdditionalDocumentReference>
+    <cbc:ID>PIH</cbc:ID>
+    <cac:Attachment>
+      <cbc:EmbeddedDocumentBinaryObject mimeCode="text/plain">${pih}</cbc:EmbeddedDocumentBinaryObject>
+    </cac:Attachment>
+  </cac:AdditionalDocumentReference>
+  <cac:AccountingSupplierParty>
+    <cac:Party>
+      <cac:PartyIdentification><cbc:ID schemeID="CRN">${cfg.crNumber ?? ''}</cbc:ID></cac:PartyIdentification>
+      <cac:PostalAddress>
+        <cbc:StreetName>${cfg.streetName ?? ''}</cbc:StreetName>
+        <cbc:BuildingNumber>${cfg.buildingNumber ?? ''}</cbc:BuildingNumber>
+        <cbc:CityName>${cfg.city ?? ''}</cbc:CityName>
+        <cbc:PostalZone>${cfg.postalCode ?? ''}</cbc:PostalZone>
+        <cbc:CountrySubentity>${cfg.district ?? ''}</cbc:CountrySubentity>
+        <cac:Country><cbc:IdentificationCode>${cfg.countryCode ?? 'SA'}</cbc:IdentificationCode></cac:Country>
+      </cac:PostalAddress>
+      <cac:PartyTaxScheme>
+        <cbc:CompanyID>${cfg.vatNumber ?? ''}</cbc:CompanyID>
+        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
+      </cac:PartyTaxScheme>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>${cfg.businessName ?? (org?.name ?? '')}</cbc:RegistrationName>
+      </cac:PartyLegalEntity>
+    </cac:Party>
+  </cac:AccountingSupplierParty>
+  <cac:AccountingCustomerParty>
+    <cac:Party>
+      <cac:PostalAddress>
+        <cac:Country><cbc:IdentificationCode>SA</cbc:IdentificationCode></cac:Country>
+      </cac:PostalAddress>
+      ${inv.customerTaxNumber ? `<cac:PartyTaxScheme>
+        <cbc:CompanyID>${inv.customerTaxNumber}</cbc:CompanyID>
+        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
+      </cac:PartyTaxScheme>` : ''}
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>${(inv.customerName ?? 'مشتري').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</cbc:RegistrationName>
+      </cac:PartyLegalEntity>
+    </cac:Party>
+  </cac:AccountingCustomerParty>
+  <cac:TaxTotal>
+    <cbc:TaxAmount currencyID="${currency}">${taxTotal.toFixed(4)}</cbc:TaxAmount>
+    <cac:TaxSubtotal>
+      <cbc:TaxableAmount currencyID="${currency}">${netAmount.toFixed(4)}</cbc:TaxableAmount>
+      <cbc:TaxAmount currencyID="${currency}">${taxTotal.toFixed(4)}</cbc:TaxAmount>
+      <cac:TaxCategory>
+        <cbc:ID>S</cbc:ID>
+        <cbc:Percent>15.00</cbc:Percent>
+        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
+      </cac:TaxCategory>
+    </cac:TaxSubtotal>
+  </cac:TaxTotal>
+  <cac:LegalMonetaryTotal>
+    <cbc:LineExtensionAmount currencyID="${currency}">${subtotal.toFixed(4)}</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="${currency}">${netAmount.toFixed(4)}</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="${currency}">${total.toFixed(4)}</cbc:TaxInclusiveAmount>
+    <cbc:AllowanceTotalAmount currencyID="${currency}">${discTotal.toFixed(4)}</cbc:AllowanceTotalAmount>
+    <cbc:PayableAmount currencyID="${currency}">${total.toFixed(4)}</cbc:PayableAmount>
+  </cac:LegalMonetaryTotal>${itemsXml}
+</Invoice>`;
+
+      // ── قواعد التحقق ───────────────────────────────────────────────────────
+      type VResult = { id: number; type: 'error' | 'warning' | 'info'; element: string; description: string; currentValue: string; expectedValue: string; fix: string };
+      const results: VResult[] = [];
+      let ruleId = 1;
+
+      const err  = (el: string, desc: string, cur: string, exp: string, fix: string) =>
+        results.push({ id: ruleId++, type: 'error',   element: el, description: desc, currentValue: cur, expectedValue: exp, fix });
+      const warn = (el: string, desc: string, cur: string, exp: string, fix: string) =>
+        results.push({ id: ruleId++, type: 'warning', element: el, description: desc, currentValue: cur, expectedValue: exp, fix });
+      const info = (el: string, desc: string, cur: string, exp: string, fix: string) =>
+        results.push({ id: ruleId++, type: 'info',    element: el, description: desc, currentValue: cur, expectedValue: exp, fix });
+
+      // UUID
+      if (!inv.zatcaUuid) err('cbc:UUID', 'UUID الفاتورة غير موجود', '(فارغ)', 'UUID صالح بصيغة RFC 4122', 'أرسل الفاتورة أولاً لتوليد UUID تلقائياً');
+      else info('cbc:UUID', 'UUID موجود وصالح', inv.zatcaUuid.slice(0,16) + '…', 'UUID RFC 4122', '—');
+
+      // رقم الفاتورة
+      if (!inv.invoiceNumber) err('cbc:ID', 'رقم الفاتورة مفقود', '(فارغ)', 'رقم فاتورة فريد', 'أدخل رقم الفاتورة');
+      else info('cbc:ID', 'رقم الفاتورة موجود', inv.invoiceNumber, 'رقم فريد', '—');
+
+      // التاريخ
+      if (!issueDate) err('cbc:IssueDate', 'تاريخ الفاتورة مفقود', '(فارغ)', 'YYYY-MM-DD', 'حدد تاريخ الفاتورة');
+      else info('cbc:IssueDate', 'تاريخ الفاتورة صالح', issueDate, 'YYYY-MM-DD', '—');
+
+      // العملة
+      if (currency !== 'SAR') err('cbc:DocumentCurrencyCode', 'عملة الفاتورة يجب أن تكون SAR للمبيعات المحلية', currency, 'SAR', 'غيّر عملة الفاتورة إلى SAR');
+      else info('cbc:DocumentCurrencyCode', 'العملة صحيحة', currency, 'SAR', '—');
+
+      // الرقم الضريبي للبائع
+      const sellerVat = cfg.vatNumber ?? '';
+      if (!sellerVat) err('cac:AccountingSupplierParty / cbc:CompanyID', 'الرقم الضريبي للبائع غير محدد في إعدادات ZATCA', '(فارغ)', '15 رقماً يبدأ وينتهي بـ 3', 'أكمل إعدادات ZATCA بالرقم الضريبي');
+      else if (!/^3\d{13}3$/.test(sellerVat)) err('cac:AccountingSupplierParty / cbc:CompanyID', 'تنسيق الرقم الضريبي للبائع غير صحيح', sellerVat, '15 رقماً يبدأ وينتهي بـ 3 (مثال: 3XXXXXXXXXXX3)', 'صحّح الرقم الضريبي في إعدادات ZATCA');
+      else info('cac:AccountingSupplierParty / cbc:CompanyID', 'الرقم الضريبي للبائع صالح', sellerVat, '15 رقماً', '—');
+
+      // اسم البائع
+      const sellerName = cfg.businessName ?? (org?.name ?? '');
+      if (!sellerName) err('cac:AccountingSupplierParty / cbc:RegistrationName', 'اسم المنشأة (البائع) غير محدد', '(فارغ)', 'اسم المنشأة', 'أكمل اسم المنشأة في إعدادات ZATCA');
+      else info('cac:AccountingSupplierParty / cbc:RegistrationName', 'اسم البائع موجود', sellerName, 'اسم المنشأة', '—');
+
+      // السجل التجاري
+      if (!cfg.crNumber) warn('cac:PartyIdentification / cbc:ID (CRN)', 'السجل التجاري غير محدد في إعدادات ZATCA', '(فارغ)', 'رقم السجل التجاري', 'أضف رقم السجل التجاري في إعدادات ZATCA');
+      else info('cac:PartyIdentification / cbc:ID', 'السجل التجاري موجود', cfg.crNumber, 'رقم السجل التجاري', '—');
+
+      // العنوان
+      if (!cfg.streetName || !cfg.city || !cfg.buildingNumber) {
+        const missing = [!cfg.streetName && 'الشارع', !cfg.buildingNumber && 'رقم المبنى', !cfg.city && 'المدينة'].filter(Boolean).join('، ');
+        warn('cac:PostalAddress', `بيانات العنوان غير مكتملة — مفقود: ${missing}`, '(جزئي)', 'الشارع + رقم المبنى + المدينة + الرمز البريدي', 'أكمل بيانات العنوان في إعدادات ZATCA');
+      } else info('cac:PostalAddress', 'بيانات العنوان مكتملة', `${cfg.streetName}، ${cfg.city}`, 'عنوان كامل', '—');
+
+      // اسم العميل
+      if (!inv.customerName) warn('cac:AccountingCustomerParty / cbc:RegistrationName', 'اسم العميل غير محدد', '(فارغ)', 'اسم العميل', 'حدد اسم العميل في الفاتورة');
+      else info('cac:AccountingCustomerParty / cbc:RegistrationName', 'اسم العميل موجود', inv.customerName.slice(0, 30), 'اسم العميل', '—');
+
+      // الرقم الضريبي للعميل (B2B)
+      if (inv.customerType === 'company' || cfg.sellerType === 'B2B') {
+        if (!inv.customerTaxNumber) err('cac:AccountingCustomerParty / cbc:CompanyID', 'فاتورة B2B تتطلب رقم ضريبي للعميل', '(فارغ)', '15 رقماً يبدأ وينتهي بـ 3', 'أضف الرقم الضريبي للعميل في الفاتورة');
+        else if (!/^3\d{13}3$/.test(inv.customerTaxNumber)) err('cac:AccountingCustomerParty / cbc:CompanyID', 'تنسيق الرقم الضريبي للعميل غير صحيح', inv.customerTaxNumber, '15 رقماً يبدأ وينتهي بـ 3', 'صحّح الرقم الضريبي للعميل');
+        else info('cac:AccountingCustomerParty / cbc:CompanyID', 'الرقم الضريبي للعميل صالح', inv.customerTaxNumber, '15 رقماً', '—');
+      }
+
+      // نوع الفاتورة
+      if (!['388', '381', '383'].includes(invTypeCode)) err('cbc:InvoiceTypeCode', 'كود نوع الفاتورة غير صحيح', invTypeCode, '388 (أصلية) أو 381 (مرتجع) أو 383 (خصم)', 'حدد نوع الفاتورة الصحيح');
+      else info('cbc:InvoiceTypeCode', 'كود نوع الفاتورة صحيح', `${invTypeCode} (${invTypeCode === '388' ? 'فاتورة أصلية' : invTypeCode === '381' ? 'مرتجع' : 'إشعار خصم'})`, '388 أو 381 أو 383', '—');
+
+      // البنود
+      if (items.length === 0) err('cac:InvoiceLine', 'الفاتورة لا تحتوي على بنود', '0 بنود', 'بند واحد على الأقل', 'أضف منتجاً أو خدمة للفاتورة');
+      else info('cac:InvoiceLine', `الفاتورة تحتوي على ${items.length} بند/بنود`, `${items.length} بند`, '≥ 1', '—');
+
+      // الضريبة
+      const expectedTax = parseFloat((netAmount * 0.15).toFixed(4));
+      const actualTax   = parseFloat(taxTotal.toFixed(4));
+      const taxDiff     = Math.abs(expectedTax - actualTax);
+      if (taxDiff > 0.01 && taxTotal > 0) {
+        warn('cac:TaxTotal / cbc:TaxAmount', `مبلغ الضريبة قد لا يتطابق مع نسبة 15%`, `${actualTax.toFixed(2)} SAR`, `${expectedTax.toFixed(2)} SAR (≈15% من ${netAmount.toFixed(2)})`, 'راجع حسابات الضريبة في بنود الفاتورة');
+      } else {
+        info('cac:TaxTotal / cbc:TaxAmount', 'مبلغ الضريبة صحيح', `${taxTotal.toFixed(2)} SAR`, `${actualTax.toFixed(2)} SAR`, '—');
+      }
+
+      // إجمالي الفاتورة
+      if (total <= 0) err('cac:LegalMonetaryTotal / cbc:PayableAmount', 'إجمالي الفاتورة يجب أن يكون أكبر من صفر', total.toFixed(2), '> 0', 'تأكد من وجود بنود بأسعار صحيحة');
+      else info('cac:LegalMonetaryTotal / cbc:PayableAmount', 'إجمالي الفاتورة صحيح', `${total.toFixed(2)} SAR`, '> 0', '—');
+
+      // Hash
+      if (!inv.zatcaHash) warn('cbc:PreviousInvoiceHash', 'Hash الفاتورة غير موجود — سيتم توليده عند الإرسال', '(فارغ)', 'SHA-256 Hash', 'أرسل الفاتورة لتوليد Hash تلقائياً');
+      else info('cbc:PreviousInvoiceHash', 'Hash الفاتورة موجود', inv.zatcaHash.slice(0, 16) + '…', 'SHA-256', '—');
+
+      // QR
+      if (!inv.zatcaQrCode) warn('cbc:EmbeddedDocumentBinaryObject (QR)', 'رمز QR غير موجود — سيتم توليده عند الإرسال', '(فارغ)', 'Base64 TLV QR', 'أرسل الفاتورة لتوليد QR تلقائياً');
+      else info('cbc:EmbeddedDocumentBinaryObject (QR)', 'رمز QR موجود', '(مُشفَّر Base64)', 'Base64 TLV', '—');
+
+      // PIH
+      if (!inv.zatcaPih) warn('cac:AdditionalDocumentReference (PIH)', 'PIH غير موجود — سيُستخدم القيمة الافتراضية', '(افتراضي)', 'Hash الفاتورة السابقة', 'هذا طبيعي للفاتورة الأولى');
+      else info('cac:AdditionalDocumentReference (PIH)', 'PIH موجود', inv.zatcaPih.slice(0, 16) + '…', 'SHA-256 Hash', '—');
+
+      // ترقيم متسلسل
+      if (!inv.zatcaInvoiceCounter) warn('cac:AdditionalDocumentReference (ICV)', 'رقم ICV (العداد) غير محدد', '(فارغ)', 'رقم تسلسلي متصاعد', 'سيتم توليده عند الإرسال');
+      else info('cac:AdditionalDocumentReference (ICV)', 'رقم ICV موجود', `${inv.zatcaInvoiceCounter}`, 'رقم تسلسلي', '—');
+
+      // بيئة التشغيل
+      if (cfg.environment === 'production') info('env', 'البيئة: إنتاج', 'Production', 'Sandbox أو Production', '—');
+      else warn('env', 'البيئة: اختبار — تذكّر التحويل للإنتاج قبل النشر الفعلي', 'Sandbox', 'Production (في النشر الحقيقي)', 'غيّر البيئة إلى Production في إعدادات ZATCA عند الجاهزية');
+
+      const errorCount   = results.filter(r => r.type === 'error').length;
+      const warningCount = results.filter(r => r.type === 'warning').length;
+      const passed       = errorCount === 0;
+      const xmlToReturn  = inv.zatcaXml ?? generatedXml;
+
+      // تسجيل في السجل
+      const userName = (ctx.user as any).name ?? (ctx.user as any).username ?? 'مستخدم';
+      await db.insert(zatcaLogs).values({
+        orgId:         ctx.orgId,
+        invoiceId:     input.invoiceId,
+        invoiceNumber: inv.invoiceNumber,
+        eventType:     'xml_validation',
+        status:        passed ? 'success' : 'error',
+        userId:        ctx.user.id,
+        userName,
+        requestBody:   JSON.stringify({ invoiceId: input.invoiceId }),
+        responseBody:  JSON.stringify({ errorCount, warningCount, passed }),
+        errorMessage:  passed ? null : `${errorCount} خطأ، ${warningCount} تحذير`,
+      });
+
+      return { xml: xmlToReturn, results, errorCount, warningCount, passed, isGeneratedXml: !inv.zatcaXml };
+    }),
 
   // ── قائمة الفواتير مع حالة الهيئة ────────────────────────────────────────
   getInvoicesList: protectedProcedure

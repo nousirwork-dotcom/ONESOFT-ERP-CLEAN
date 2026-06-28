@@ -9,7 +9,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
 // ─── أنواع ────────────────────────────────────────────────────────────────────
-type ZatcaTab = "settings" | "monitor" | "invoices" | "logs" | "errors";
+type ZatcaTab = "settings" | "monitor" | "invoices" | "logs" | "errors" | "xmlcheck";
 
 // ─── مساعدات العرض ────────────────────────────────────────────────────────────
 const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
@@ -660,6 +660,225 @@ function ZatcaLogs({ errorsOnly = false }: { errorsOnly?: boolean }) {
   );
 }
 
+// ─── أداة التحقق من XML ───────────────────────────────────────────────────────
+function ZatcaXmlValidator() {
+  const [invoiceId, setInvoiceId] = useState<number | null>(null);
+  const [searchInv,  setSearchInv]  = useState("");
+  const [selectedRow, setSelectedRow] = useState<number | null>(null);
+  const [showXml, setShowXml] = useState(false);
+
+  // جلب قائمة الفواتير للاختيار منها
+  const invListQ = trpc.zatca.getInvoicesList.useQuery({ page: 1, limit: 50 });
+  const invoices = invListQ.data?.invoices ?? [];
+  const filtered = invoices.filter(i =>
+    !searchInv || i.invoiceNumber?.toLowerCase().includes(searchInv.toLowerCase()) || (i.customerName ?? "").includes(searchInv)
+  );
+
+  const validateM = trpc.zatca.validateXml.useMutation();
+  const result    = validateM.data;
+
+  const handleValidate = () => {
+    if (!invoiceId) return toast.error("اختر فاتورة أولاً");
+    validateM.mutate({ invoiceId });
+    setSelectedRow(null);
+    setShowXml(false);
+  };
+
+  const selectedRule = result?.results.find(r => r.id === selectedRow);
+
+  const exportCsv = () => {
+    if (!result) return;
+    const header = ["#", "النوع", "العنصر", "الوصف", "القيمة الحالية", "القيمة المتوقعة", "طريقة الحل"];
+    const lines  = result.results.map(r => [r.id, r.type, `"${r.element}"`, `"${r.description}"`, `"${r.currentValue}"`, `"${r.expectedValue}"`, `"${r.fix}"`].join(","));
+    const csv  = [header.join(","), ...lines].join("\n");
+    const link = document.createElement("a");
+    link.href  = `data:text/csv;charset=utf-8,%EF%BB%BF${encodeURIComponent(csv)}`;
+    link.download = `zatca-validation-${invoiceId}-${Date.now()}.csv`;
+    link.click();
+  };
+
+  const copyXml = () => {
+    if (result?.xml) { navigator.clipboard.writeText(result.xml); toast.success("تم نسخ XML"); }
+  };
+
+  const downloadXml = () => {
+    if (!result?.xml) return;
+    const link = document.createElement("a");
+    link.href  = `data:application/xml;charset=utf-8,${encodeURIComponent(result.xml)}`;
+    link.download = `invoice-${invoiceId}.xml`;
+    link.click();
+  };
+
+  const TYPE_STYLE: Record<string, { color: string; bg: string; icon: string }> = {
+    error:   { color: "#dc2626", bg: "#fee2e2", icon: "❌" },
+    warning: { color: "#d97706", bg: "#fef3c7", icon: "⚠️" },
+    info:    { color: "#16a34a", bg: "#dcfce7", icon: "✅" },
+  };
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 16, minHeight: 500 }}>
+      {/* العمود الأيسر — اختيار الفاتورة */}
+      <div>
+        <div style={{ background: "#fff", borderRadius: 10, border: "1px solid #e2e8f0", padding: 14, marginBottom: 12 }}>
+          <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 10, color: "#1e293b" }}>🔍 اختر فاتورة للتحقق</div>
+          <input
+            value={searchInv} onChange={e => setSearchInv(e.target.value)}
+            placeholder="بحث برقم الفاتورة أو العميل..."
+            style={{ ...fld, marginBottom: 8 }}
+          />
+          <div style={{ maxHeight: 280, overflowY: "auto", border: "1px solid #e2e8f0", borderRadius: 6 }}>
+            {filtered.length === 0
+              ? <div style={{ padding: "12px", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>لا توجد فواتير</div>
+              : filtered.map(inv => (
+                <div key={inv.id}
+                  onClick={() => setInvoiceId(inv.id)}
+                  style={{
+                    padding: "8px 10px", cursor: "pointer", borderBottom: "1px solid #f1f5f9",
+                    background: invoiceId === inv.id ? "#fef3c7" : "transparent",
+                    borderRight: invoiceId === inv.id ? "3px solid #D19C05" : "3px solid transparent",
+                  }}>
+                  <div style={{ fontWeight: 700, fontSize: 12, color: invoiceId === inv.id ? "#D19C05" : "#1e293b" }}>{inv.invoiceNumber}</div>
+                  <div style={{ fontSize: 10, color: "#6b7280" }}>{inv.customerName ?? "—"}</div>
+                  <div style={{ fontSize: 10, color: "#9ca3af" }}>{inv.invoiceDate ? new Date(inv.invoiceDate).toLocaleDateString("ar-SA") : ""}</div>
+                </div>
+              ))
+            }
+          </div>
+          <button
+            onClick={handleValidate}
+            disabled={!invoiceId || validateM.isPending}
+            style={{ width: "100%", height: 36, marginTop: 12, background: "#D19C05", color: "#fff", border: "none", borderRadius: 6, fontWeight: 800, fontSize: 13, cursor: invoiceId ? "pointer" : "not-allowed", opacity: (!invoiceId || validateM.isPending) ? 0.6 : 1 }}>
+            {validateM.isPending ? "⏳ جارٍ التحقق..." : "🔎 التحقق من الفاتورة"}
+          </button>
+        </div>
+
+        {/* ملخص النتيجة */}
+        {result && (
+          <div style={{ background: result.passed ? "#dcfce7" : "#fee2e2", borderRadius: 10, border: `1px solid ${result.passed ? "#16a34a" : "#dc2626"}`, padding: 14 }}>
+            <div style={{ fontSize: 22, textAlign: "center", marginBottom: 6 }}>{result.passed ? "✅" : "❌"}</div>
+            <div style={{ fontWeight: 800, fontSize: 13, textAlign: "center", color: result.passed ? "#16a34a" : "#dc2626", marginBottom: 8 }}>
+              {result.passed ? "الفاتورة مطابقة للمتطلبات" : "توجد أخطاء تحتاج تصحيح"}
+            </div>
+            {result.passed && <div style={{ fontSize: 11, color: "#15803d", textAlign: "center" }}>✓ الفاتورة جاهزة للإرسال إلى هيئة الزكاة</div>}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 10 }}>
+              <div style={{ textAlign: "center", background: "#fee2e2", borderRadius: 6, padding: "6px 4px" }}>
+                <div style={{ fontWeight: 800, fontSize: 18, color: "#dc2626" }}>{result.errorCount}</div>
+                <div style={{ fontSize: 10, color: "#dc2626" }}>أخطاء</div>
+              </div>
+              <div style={{ textAlign: "center", background: "#fef3c7", borderRadius: 6, padding: "6px 4px" }}>
+                <div style={{ fontWeight: 800, fontSize: 18, color: "#d97706" }}>{result.warningCount}</div>
+                <div style={{ fontSize: 10, color: "#d97706" }}>تحذيرات</div>
+              </div>
+            </div>
+            {result.isGeneratedXml && (
+              <div style={{ marginTop: 8, fontSize: 10, color: "#6b7280", textAlign: "center", background: "#f8fafc", borderRadius: 4, padding: "4px 6px" }}>
+                ⚠️ تم توليد XML من بيانات الفاتورة (لا يوجد XML مُرسَل)
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* العمود الأيمن — النتائج + XML */}
+      <div>
+        {!result && !validateM.isPending && (
+          <div style={{ background: "#fff", borderRadius: 10, border: "1px solid #e2e8f0", padding: "60px 40px", textAlign: "center", color: "#9ca3af" }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>🔎</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "#374151", marginBottom: 6 }}>أداة التحقق من XML</div>
+            <div style={{ fontSize: 12 }}>اختر فاتورة من القائمة ثم اضغط "التحقق من الفاتورة"</div>
+            <div style={{ fontSize: 11, marginTop: 8, color: "#cbd5e1" }}>يتم فحص الفاتورة وفق معايير ZATCA UBL 2.1</div>
+          </div>
+        )}
+
+        {result && (
+          <>
+            {/* شريط الأدوات */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+              <button onClick={() => setShowXml(!showXml)} style={{ height: 28, padding: "0 12px", background: "#1e293b", color: "#e2e8f0", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                {showXml ? "▲ إخفاء XML" : "▼ عرض XML"}
+              </button>
+              <button onClick={copyXml} style={{ height: 28, padding: "0 12px", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>📋 نسخ XML</button>
+              <button onClick={downloadXml} style={{ height: 28, padding: "0 12px", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>⬇️ تحميل XML</button>
+              <button onClick={exportCsv} style={{ height: 28, padding: "0 12px", background: "#16a34a", color: "#fff", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>📥 تصدير CSV</button>
+            </div>
+
+            {/* عرض XML */}
+            {showXml && (
+              <div style={{ background: "#1e293b", borderRadius: 8, padding: "12px 14px", marginBottom: 12, maxHeight: 280, overflow: "auto" }}>
+                <pre style={{ fontFamily: "monospace", fontSize: 10, color: "#e2e8f0", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                  {result.xml}
+                </pre>
+              </div>
+            )}
+
+            {/* جدول النتائج */}
+            <div style={{ background: "#fff", borderRadius: 10, border: "1px solid #e2e8f0", overflow: "hidden" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                    {["#", "النوع", "العنصر", "الوصف", "القيمة الحالية"].map(h => (
+                      <th key={h} style={{ padding: "7px 8px", textAlign: "right", fontWeight: 700, color: "#374151", fontSize: 10 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.results.map((r, i) => {
+                    const ts = TYPE_STYLE[r.type] ?? TYPE_STYLE.info;
+                    const isSelected = selectedRow === r.id;
+                    return (
+                      <React.Fragment key={r.id}>
+                        <tr
+                          onClick={() => setSelectedRow(isSelected ? null : r.id)}
+                          style={{ borderBottom: "1px solid #f1f5f9", background: isSelected ? `${ts.bg}` : i % 2 === 0 ? "#fff" : "#fafafa", cursor: "pointer" }}>
+                          <td style={{ padding: "5px 8px", fontWeight: 700, color: "#6b7280", width: 30 }}>{r.id}</td>
+                          <td style={{ padding: "5px 8px", width: 80 }}>
+                            <span style={{ display: "inline-flex", gap: 4, alignItems: "center", padding: "1px 7px", borderRadius: 10, fontSize: 10, fontWeight: 700, color: ts.color, background: ts.bg, border: `1px solid ${ts.color}33` }}>
+                              {ts.icon} {r.type === "error" ? "خطأ" : r.type === "warning" ? "تحذير" : "معلومة"}
+                            </span>
+                          </td>
+                          <td style={{ padding: "5px 8px", fontFamily: "monospace", fontSize: 9, color: "#6366f1", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.element}>{r.element}</td>
+                          <td style={{ padding: "5px 8px", color: r.type === "error" ? "#dc2626" : r.type === "warning" ? "#92400e" : "#374151" }}>{r.description}</td>
+                          <td style={{ padding: "5px 8px", fontFamily: "monospace", fontSize: 10, color: "#6b7280", maxWidth: 100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.currentValue}>{r.currentValue}</td>
+                        </tr>
+                        {isSelected && (
+                          <tr style={{ background: `${ts.bg}88` }}>
+                            <td colSpan={5} style={{ padding: "10px 14px" }}>
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                                <div>
+                                  <div style={{ fontSize: 10, fontWeight: 700, color: "#6b7280", marginBottom: 4 }}>القيمة الحالية</div>
+                                  <div style={{ fontFamily: "monospace", fontSize: 11, background: "#fff", padding: "6px 8px", borderRadius: 4, border: "1px solid #e2e8f0", wordBreak: "break-all" }}>{r.currentValue || "—"}</div>
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: 10, fontWeight: 700, color: "#6b7280", marginBottom: 4 }}>القيمة المتوقعة</div>
+                                  <div style={{ fontFamily: "monospace", fontSize: 11, background: "#fff", padding: "6px 8px", borderRadius: 4, border: `1px solid ${ts.color}44`, wordBreak: "break-all" }}>{r.expectedValue}</div>
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: 10, fontWeight: 700, color: "#6b7280", marginBottom: 4 }}>🔧 طريقة الحل</div>
+                                  <div style={{ fontSize: 11, background: "#fff", padding: "6px 8px", borderRadius: 4, border: "1px solid #e2e8f0" }}>{r.fix}</div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* تفاصيل التحقق */}
+            <div style={{ marginTop: 10, fontSize: 11, color: "#6b7280", textAlign: "center" }}>
+              انقر على أي صف لعرض تفاصيل المشكلة والحل
+              {result.isGeneratedXml && " · XML مُولَّد من بيانات الفاتورة"}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── المكوّن الرئيسي ──────────────────────────────────────────────────────────
 export default function ZatcaIntegrationPage({ initialTab }: { initialTab?: ZatcaTab } = {}) {
   const [tab, setTab] = useState<ZatcaTab>(initialTab ?? "settings");
@@ -670,6 +889,7 @@ export default function ZatcaIntegrationPage({ initialTab }: { initialTab?: Zatc
     { id: "invoices",  label: "الفواتير",         icon: "📄" },
     { id: "logs",      label: "سجل العمليات",    icon: "📋" },
     { id: "errors",    label: "سجل الأخطاء",     icon: "🚨" },
+    { id: "xmlcheck",  label: "التحقق من XML",    icon: "🔎" },
   ];
 
   return (
@@ -698,6 +918,7 @@ export default function ZatcaIntegrationPage({ initialTab }: { initialTab?: Zatc
       {tab === "invoices"  && <ZatcaInvoices />}
       {tab === "logs"      && <ZatcaLogs />}
       {tab === "errors"    && <ZatcaLogs errorsOnly />}
+      {tab === "xmlcheck"  && <ZatcaXmlValidator />}
     </div>
   );
 }
