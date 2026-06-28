@@ -8,6 +8,7 @@ import DocumentJournalsPage from "./DocumentJournalsPage";
 
 import TemplatesManagerPage from "./TemplatesManagerPage";
 import ZatcaIntegrationPage from "./ZatcaIntegrationPage";
+import ZatcaCenterPage from "./ZatcaCenterPage";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   ChevronDown, ChevronRight, Settings, Building2, DollarSign,
@@ -144,17 +145,37 @@ const menuSections = [
     ],
   },
   {
-    id: "gov-integrations",
-    label: "التكاملات الحكومية",
-    color: "#16a34a",
+    id: "zatca-integration-center",
+    label: "مركز التكامل مع هيئة الزكاة والضريبة والجمارك",
+    color: "#D19C05",
     emoji: "🏛️",
     children: [
-      { id: "zatca-config",   label: "هيئة الزكاة والضريبة (ZATCA)", status: "partial", path: "/cfg/zatca"      },
-      { id: "zatca-monitor",  label: "لوحة متابعة ZATCA",             status: "partial", path: "/cfg/zatca-mon"  },
-      { id: "zatca-invoices", label: "فواتير الهيئة",                  status: "partial", path: "/cfg/zatca-inv"  },
-      { id: "zatca-logs",     label: "سجل عمليات ZATCA",              status: "partial", path: "/cfg/zatca-log"  },
-      { id: "gosi-config",    label: "التأمينات الاجتماعية (GOSI)",    status: "missing", path: "/cfg/gosi"       },
-      { id: "gazt-config",    label: "الزكاة والدخل (GAZT)",           status: "missing", path: "/cfg/gazt"       },
+      { id: "zatca-center-dashboard", label: "لوحة التحكم",                  status: "done",    path: "/cfg/zatca-center" },
+      { id: "zatca-center-env",       label: "إعدادات البيئة",               status: "done",    path: "/cfg/zatca-center" },
+      { id: "zatca-center-devices",   label: "إدارة الأجهزة (EGS)",           status: "missing", path: "/cfg/zatca-center" },
+      { id: "zatca-center-certs",     label: "إدارة الشهادات",               status: "partial", path: "/cfg/zatca-center" },
+      { id: "zatca-center-keys",      label: "مفاتيح التشفير",               status: "missing", path: "/cfg/zatca-center" },
+      { id: "zatca-center-xml",       label: "التحقق من XML",                status: "done",    path: "/cfg/zatca-center" },
+      { id: "zatca-center-csr",       label: "إنشاء CSR",                   status: "missing", path: "/cfg/zatca-center" },
+      { id: "zatca-center-register",  label: "تسجيل الجهاز",                 status: "missing", path: "/cfg/zatca-center" },
+      { id: "zatca-center-csid",      label: "إدارة CSID",                  status: "partial", path: "/cfg/zatca-center" },
+      { id: "zatca-center-test",      label: "اختبار الاتصال",               status: "done",    path: "/cfg/zatca-center" },
+      { id: "zatca-center-send",      label: "إرسال الفواتير",               status: "done",    path: "/cfg/zatca-center" },
+      { id: "zatca-center-oplogs",    label: "سجل الإرسال والاستقبال",        status: "done",    path: "/cfg/zatca-center" },
+      { id: "zatca-center-errlogs",   label: "سجل الأخطاء",                 status: "done",    path: "/cfg/zatca-center" },
+      { id: "zatca-center-diag",      label: "أدوات التشخيص",               status: "done",    path: "/cfg/zatca-center" },
+      { id: "zatca-center-reports",   label: "التقارير والإحصائيات",          status: "done",    path: "/cfg/zatca-center" },
+    ],
+  },
+  {
+    id: "gov-integrations",
+    label: "تكاملات حكومية أخرى",
+    color: "#16a34a",
+    emoji: "🏢",
+    children: [
+      { id: "zatca-config",   label: "إعدادات ZATCA (كلاسيك)",              status: "partial", path: "/cfg/zatca"      },
+      { id: "gosi-config",    label: "التأمينات الاجتماعية (GOSI)",          status: "missing", path: "/cfg/gosi"       },
+      { id: "gazt-config",    label: "الزكاة والدخل (GAZT)",                 status: "missing", path: "/cfg/gazt"       },
     ],
   },
   {
@@ -4891,7 +4912,23 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
     case "loyalty-tiers":        return <LoyaltyTiersPage />;
     case "loyalty-promos":       return <LoyaltyPromosPage />;
     case "loyalty-messages":     return <LoyaltyMessagesPage />;
-    // التكاملات الحكومية
+    // مركز التكامل مع هيئة الزكاة (جميع الـ 15 قسماً → نفس الصفحة)
+    case "zatca-center-dashboard":
+    case "zatca-center-env":
+    case "zatca-center-devices":
+    case "zatca-center-certs":
+    case "zatca-center-keys":
+    case "zatca-center-xml":
+    case "zatca-center-csr":
+    case "zatca-center-register":
+    case "zatca-center-csid":
+    case "zatca-center-test":
+    case "zatca-center-send":
+    case "zatca-center-oplogs":
+    case "zatca-center-errlogs":
+    case "zatca-center-diag":
+    case "zatca-center-reports":   return <ZatcaCenterPage />;
+    // التكاملات الحكومية (كلاسيك)
     case "zatca-config":         return <ZatcaIntegrationPage initialTab="settings" />;
     case "zatca-monitor":        return <ZatcaIntegrationPage initialTab="monitor" />;
     case "zatca-invoices":       return <ZatcaIntegrationPage initialTab="invoices" />;
@@ -4980,6 +5017,7 @@ export function CfgMessagingTelegramTab()  { return <CfgSubPage activeId="messag
 export function CfgMessagingEmailTab()     { return <CfgSubPage activeId="messaging-email" />; }
 export function CfgMessagingTemplatesTab() { return <CfgSubPage activeId="messaging-templates" />; }
 export function CfgMessagingLogTab()       { return <CfgSubPage activeId="messaging-log" />; }
+export function CfgZatcaCenterTab()        { return <CfgSubPage activeId="zatca-center-dashboard" />; }
 export function CfgPrintSettingsTab()      { return <CfgSubPage activeId="print-settings" />; }
 export function CfgLogoStampTab()          { return <CfgSubPage activeId="logo-stamp" />; }
 export function CfgSignaturesTab()         { return <CfgSubPage activeId="signatures" />; }

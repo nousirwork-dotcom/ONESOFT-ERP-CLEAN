@@ -70,6 +70,7 @@ import SettingsModule, {
   CfgFieldDictionaryTab, CfgPaymentMethodsTab,
   CfgZatcaTab, CfgZatcaMonitorTab, CfgZatcaInvoicesTab, CfgZatcaLogsTab,
   CfgGosiTab, CfgGaztTab,
+  CfgZatcaCenterTab,
 } from "./pages/SettingsModule";
 import PostingSettingsPage from "./pages/PostingSettingsPage";
 import PostingOperationsPage from "./pages/PostingOperationsPage";
@@ -251,7 +252,9 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/cfg/logo-stamp":             CfgLogoStampTab,
   "/cfg/signatures":             CfgSignaturesTab,
   "/cfg/email-pdf":              CfgEmailPdfTab,
-  // ZATCA / GOSI / GAZT Government Integration
+  // مركز التكامل مع هيئة الزكاة والضريبة والجمارك
+  "/cfg/zatca-center":           CfgZatcaCenterTab,
+  // ZATCA / GOSI / GAZT Government Integration (كلاسيك)
   "/cfg/zatca":                  CfgZatcaTab,
   "/cfg/zatca-mon":              CfgZatcaMonitorTab,
   "/cfg/zatca-inv":              CfgZatcaInvoicesTab,
