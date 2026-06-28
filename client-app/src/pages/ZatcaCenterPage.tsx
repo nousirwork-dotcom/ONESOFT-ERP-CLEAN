@@ -348,12 +348,12 @@ function DashboardSection({ onStartSetup, onNavigate }: { onStartSetup: () => vo
       <div style={{ fontWeight: 700, fontSize: 12, color: "#374151", marginBottom: 10 }}>⚙️ حالة المكوّنات الأساسية</div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 20 }}>
         <StatusCard label="البيئة الحالية"       value={cfg?.environment === "production" ? "🟢 الإنتاج" : cfg?.environment === "sandbox" ? "🧪 الاختبار" : "غير محدد"} dot={envDot} sub={cfg?.environment ? "تم التهيئة" : "اضغط لإعداد البيئة"} />
-        <StatusCard label="حالة الاتصال"         value={(cfg as any)?.lastConnectionStatus === "success" ? "متصل ✓" : (cfg as any)?.lastConnectionStatus === "failed" ? "منقطع ✗" : "لم يُختبر"} dot={connDot} sub={cfg?.lastConnectionTest ? new Date(cfg.lastConnectionTest).toLocaleDateString("ar-SA") : "—"} />
+        <StatusCard label="حالة الاتصال"         value={(cfg as any)?.lastConnectionStatus === "success" ? "متصل ✓" : (cfg as any)?.lastConnectionStatus === "failed" ? "منقطع ✗" : "لم يُختبر"} dot={connDot} sub={cfg?.lastConnectionTest ? `آخر اختبار: ${new Date(cfg.lastConnectionTest).toLocaleDateString("ar-SA")}` : "لم يُجرَ اختبار بعد"} />
         <StatusCard label="شهادة CSID"           value={cfg?.csid ? "موجودة ✓" : "غير موجودة"} dot={csidDot} sub={certDays !== null ? (certDays > 0 ? `${certDays} يوم متبقٍ` : "منتهية!") : "—"} />
-        <StatusCard label="Secret Key"           value={cfg?.csid ? "موجود ✓" : "غير موجود"} dot={keyDot} sub="مشفّر في قاعدة البيانات" />
+        <StatusCard label="Secret Key"           value={cfg?.csid ? "موجود ✓" : "غير موجود"} dot={keyDot} sub="مشفّر AES-256-GCM في DB" />
         <StatusCard label="الجهاز (EGS)"         value="غير مسجّل" dot={devDot} sub="انقر لتسجيل الجهاز" />
-        <StatusCard label="تفعيل ZATCA"          value={cfg?.enabled ? "مُفعَّلة ✓" : "غير مُفعَّلة"} dot={enabledDot} sub={cfg?.vatNumber ?? "—"} />
-        <StatusCard label="آخر فاتورة مرسلة"    value={s?.totalInvoices ? `${s.cleared} مُخلَّصة` : "لا توجد فواتير"} dot={s?.cleared ? "ok" : "none"} sub="اليوم" />
+        <StatusCard label="تفعيل ZATCA"          value={cfg?.enabled ? "مُفعَّلة ✓" : "غير مُفعَّلة"} dot={enabledDot} sub={cfg?.vatNumber ?? "الرقم الضريبي غير محدد"} />
+        <StatusCard label="فواتير اليوم"          value={String(s?.todayCount ?? s?.cleared ?? 0)} dot={(s?.todayCount ?? 0) > 0 ? "ok" : "none"} sub={`إجمالي مُخلَّصة: ${s?.cleared ?? 0}`} />
         <StatusCard label="نسبة نجاح الإرسال"   value={s?.totalInvoices ? `${Math.round((s.cleared / s.totalInvoices) * 100)}%` : "—"} dot={s?.totalInvoices && s.cleared / s.totalInvoices > 0.8 ? "ok" : s?.totalInvoices ? "warn" : "none"} sub={`${s?.rejected ?? 0} مرفوضة`} />
       </div>
 
@@ -501,7 +501,7 @@ function DevicesSection() {
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
   const mockDevices = [
-    { id: 1, name: "جهاز الفوترة الرئيسي", uuid: "a3f2-...-e9c1", serial: "EGS-001-2024", csid: "لم يُعيَّن", status: "pending", lastConn: null, lastSend: null, branch: "الفرع الرئيسي", regDate: null },
+    { id: 1, name: "جهاز الفوترة الرئيسي", uuid: "a3f2-8e91-4b7c-e9c1", deviceId: "—", serial: "EGS-001-2024", csid: "لم يُعيَّن", status: "pending", lastConn: null, lastSend: null, lastResponse: "—", branch: "الفرع الرئيسي", regDate: null },
   ];
 
   const statusDot = (s: string): "ok"|"warn"|"error"|"none" =>
@@ -557,14 +557,14 @@ function DevicesSection() {
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 14 }}>
             {[
-              { label: "UUID",           value: dev.uuid,             mono: true },
-              { label: "الرقم التسلسلي", value: dev.serial,           mono: true },
-              { label: "CSID",           value: dev.csid,             mono: false },
-              { label: "تاريخ التسجيل",  value: dev.regDate ?? "—",  mono: false },
-              { label: "آخر اتصال",      value: dev.lastConn ?? "—", mono: false },
-              { label: "آخر إرسال",      value: dev.lastSend ?? "—", mono: false },
-              { label: "آخر استجابة",    value: "—",                  mono: false },
-              { label: "البيئة",         value: "Sandbox",            mono: false },
+              { label: "UUID",              value: dev.uuid,              mono: true },
+              { label: "الرقم التسلسلي",    value: dev.serial,            mono: true },
+              { label: "Device ID",         value: dev.deviceId,          mono: true },
+              { label: "CSID",              value: dev.csid,              mono: false },
+              { label: "تاريخ التسجيل",     value: dev.regDate ?? "—",   mono: false },
+              { label: "آخر اتصال",         value: dev.lastConn ?? "—",  mono: false },
+              { label: "آخر إرسال",         value: dev.lastSend ?? "—",  mono: false },
+              { label: "آخر استجابة ZATCA", value: dev.lastResponse,      mono: false },
             ].map(f => (
               <div key={f.label} style={{ background: "#f8fafc", borderRadius: 6, padding: "8px 10px", border: "1px solid #e2e8f0" }}>
                 <div style={{ fontSize: 10, color: "#6b7280", marginBottom: 2 }}>{f.label}</div>
@@ -623,11 +623,10 @@ function CertsSection() {
       <SecTitle icon="🛡️" title="إدارة الشهادات" />
 
       {/* حالة الشهادة */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 16 }}>
-        <StatusCard label="حالة الشهادة"        value={cfg?.csid ? "صالحة" : "غير موجودة"}  dot={csidDot => cfg?.csid ? "ok" : "none"} />
-        <StatusCard label="تاريخ الإنشاء"        value="—"                                   dot="none" />
-        <StatusCard label="تاريخ الانتهاء"       value={cfg?.certExpiryDate ? new Date(cfg.certExpiryDate).toLocaleDateString("ar-SA") : "—"} dot={certDot} sub={certDays !== null ? (certDays > 0 ? `${certDays} يوم متبقٍ` : "منتهية!") : undefined} />
-        <StatusCard label="الجهة المصدرة"        value="هيئة الزكاة والضريبة والجمارك"      dot={cfg?.csid ? "ok" : "none"} />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 16 }}>
+        <StatusCard label="حالة الشهادة"        value={cfg?.csid ? "صالحة ✓" : "غير موجودة"} dot={cfg?.csid ? "ok" : "none"} sub={cfg?.csid ? "شهادة X.509 من ZATCA" : "أنشئ CSR وسجّل الجهاز"} />
+        <StatusCard label="تاريخ الانتهاء"       value={cfg?.certExpiryDate ? new Date(cfg.certExpiryDate).toLocaleDateString("ar-SA") : "—"} dot={certDot} sub={certDays !== null ? (certDays > 0 ? `${certDays} يوم متبقٍ` : "منتهية — تجديد فوري!") : "لم تُحدَّد"} />
+        <StatusCard label="الجهة المصدرة / النوع" value={cfg?.csid ? "ZATCA CA" : "—"} dot={cfg?.csid ? "ok" : "none"} sub={cfg?.environment === "production" ? "شهادة إنتاج" : cfg?.environment === "sandbox" ? "شهادة اختبار" : "—"} />
       </div>
 
       {certDot === "warn" && (
