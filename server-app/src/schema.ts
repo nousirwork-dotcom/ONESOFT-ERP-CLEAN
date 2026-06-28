@@ -294,6 +294,9 @@ export const salesInvoices = pgTable('sales_invoices', {
   zatcaResponse: jsonb('zatca_response'),
   zatcaInvoiceCounter: integer('zatca_invoice_counter'),
   zatcaPih: varchar('zatca_pih', { length: 256 }),
+  zatcaSubmittedAt: timestamp('zatca_submitted_at'),
+  zatcaAttemptCount: integer('zatca_attempt_count').notNull().default(0),
+  zatcaRejectionReason: text('zatca_rejection_reason'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -923,6 +926,8 @@ export const zatcaLogs = pgTable('zatca_logs', {
   requestBody:     text('request_body'),
   responseBody:    text('response_body'),
   errorMessage:    text('error_message'),
+  userId:          integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+  userName:        varchar('user_name', { length: 200 }),
   createdAt:       timestamp('created_at').notNull().defaultNow(),
 });
 
