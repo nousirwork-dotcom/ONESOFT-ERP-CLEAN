@@ -39,7 +39,7 @@
 
 | البرنامج | الإصدار | رابط التحميل |
 |---------|---------|--------------|
-| **Node.js** | 18.x أو أحدث (LTS) | https://nodejs.org/en/download |
+| **Node.js** | 22.x LTS (الموصى به) | https://nodejs.org/en/download |
 | **PostgreSQL** | 14.x أو أحدث | https://www.postgresql.org/download/windows |
 | **pnpm** | 8.x أو أحدث | يُثبَّت تلقائياً عبر npm |
 
@@ -51,7 +51,9 @@
 
 1. افتح المتصفح واذهب إلى: **https://nodejs.org/en/download**
 
-2. اختر **"LTS"** (النسخة المستقرة) — اضغط على **"Windows Installer (.msi) 64-bit"**
+2. اختر **"LTS"** (النسخة المستقرة) — الإصدار الحالي **v22.x** — اضغط على **"Windows Installer (.msi) 64-bit"**
+
+   > ⚠️ تجنّب الإصدارات EOL (20, 19, 18, 17) — لا تزال تعمل لكن لا تتلقى تحديثات أمنية
 
 3. شغّل ملف `.msi` الذي تم تحميله
 
