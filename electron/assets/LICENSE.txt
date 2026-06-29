@@ -1,0 +1,16 @@
+OneSoft ERP — اتفاقية ترخيص المستخدم النهائي (EULA)
+Copyright (c) 2026 OneSoft. جميع الحقوق محفوظة.
+
+يُمنح المستخدم ترخيصاً محدوداً وغير حصري وغير قابل للتحويل لتثبيت
+واستخدام هذا البرنامج على جهاز واحد مرتبط بترخيص ساري المفعول.
+
+يُحظر: نسخ البرنامج أو توزيعه أو بيعه أو تأجيره أو الترخيص من الباطن
+دون إذن كتابي صريح من OneSoft.
+
+OneSoft ERP — End-User License Agreement (EULA)
+Copyright (c) 2026 OneSoft. All rights reserved.
+
+The user is granted a limited, non-exclusive, non-transferable license
+to install and use this software on a single device associated with a
+valid license. Copying, distributing, selling, renting, or sublicensing
+is prohibited without explicit written permission from OneSoft.

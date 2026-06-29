@@ -1,0 +1,31 @@
+{
+  "_comment": "ملف إعدادات OneSoft ERP — يمكن تعديله بأي محرر نصوص",
+
+  "port":    3000,
+
+  "dbType":  "postgresql",
+  "dbUrl":   "postgresql://postgres:PASSWORD@localhost:5432/onesoft_erp",
+
+  "jwtSecret": "",
+
+  "backupDir": "",
+
+  "logDir": "",
+
+  "nodeEnv": "production",
+
+  "openBrowserOnStart": true,
+
+  "language": "ar",
+
+  "zatca": {
+    "environment": "sandbox",
+    "apiBaseUrl":  "https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal"
+  },
+
+  "updates": {
+    "enabled":     false,
+    "serverUrl":   "",
+    "checkOnStart": true
+  }
+}

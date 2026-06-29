@@ -4,3 +4,10 @@
 *.zip
 *backup*
 *-source-*.tar.gz
+
+# Desktop deployment build output
+dist-installer/
+electron/node_modules/
+electron/dist/
+logs/
+backups/

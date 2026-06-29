@@ -18,6 +18,7 @@ import { appSettingsRouter }        from './appSettings.js';
 import { paymentMethodsRouter }     from './paymentMethods.js';
 import { zatcaRouter }              from './zatca.js';
 import { sourceCodeRouter }         from './sourceCode.js';
+import { backupRouter }             from './backup.js';
 
 // ─── Newly extracted routers ──────────────────────────────────────────────────
 import { authRouter }                                                           from './auth.js';
@@ -87,6 +88,7 @@ export const appRouter = router({
   paymentMethods:      paymentMethodsRouter,
   zatca:               zatcaRouter,
   sourceCode:          sourceCodeRouter,
+  backup:              backupRouter,
 });
 
 export type AppRouter = typeof appRouter;

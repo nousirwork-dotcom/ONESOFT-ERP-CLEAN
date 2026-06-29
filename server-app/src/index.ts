@@ -4,6 +4,7 @@ import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { ENV } from './env.js';
+import { logger } from './logger.js';
 import { createContext } from './trpc.js';
 import { appRouter } from './routers/index.js';
 import { loginHandler, logoutHandler, meHandler } from './auth.js';
@@ -40,7 +41,14 @@ app.post('/api/auth/auto-login', async (_req, res) => {
     return res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
-app.get('/api/health', (_req, res) => res.json({ status: 'ok', version: '1.0.0' }));
+app.get('/api/health', (_req, res) => res.json({
+  status:    'ok',
+  version:   '1.0.0',
+  env:       ENV.nodeEnv,
+  port:      ENV.port,
+  electron:  ENV.isElectron,
+  ts:        new Date().toISOString(),
+}));
 
 // ─── Backup Download (requires superadmin session) ────────────────────────────
 app.get('/download/backup', async (req, res) => {
@@ -87,7 +95,9 @@ if (!schemaOk) {
 }
 
 app.listen(ENV.port, () => {
-  console.log(`Server running on http://localhost:${ENV.port}`);
+  logger.info('server', `OneSoft ERP started on http://localhost:${ENV.port}`, {
+    env: ENV.nodeEnv, electron: ENV.isElectron,
+  });
 });
 
 export type { AppRouter } from './routers/index.js';

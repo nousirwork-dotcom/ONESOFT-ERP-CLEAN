@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8" />
+  <title>OneSoft ERP — جارٍ التشغيل</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', 'Arial', sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+      color: #e2e8f0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      user-select: none;
+      -webkit-app-region: drag;
+    }
+
+    .logo-ring {
+      width: 90px; height: 90px;
+      border-radius: 22px;
+      background: linear-gradient(135deg, #D19C05 0%, #F5B800 100%);
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 40px rgba(209,156,5,0.4), 0 8px 32px rgba(0,0,0,0.5);
+      margin-bottom: 24px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    .logo-ring svg { width: 54px; height: 54px; fill: #0f172a; }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 30px rgba(209,156,5,0.3), 0 8px 32px rgba(0,0,0,0.5); }
+      50%       { box-shadow: 0 0 60px rgba(209,156,5,0.6), 0 8px 32px rgba(0,0,0,0.5); }
+    }
+
+    h1 {
+      font-size: 28px; font-weight: 800;
+      color: #f8fafc;
+      letter-spacing: -0.5px;
+      margin-bottom: 4px;
+    }
+    .sub {
+      font-size: 13px; color: #64748b;
+      margin-bottom: 36px;
+    }
+
+    .progress-track {
+      width: 260px; height: 4px;
+      background: #1e3a5f;
+      border-radius: 99px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    .progress-bar {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, #D19C05, #F5B800);
+      border-radius: 99px;
+      transition: width 0.4s ease;
+    }
+
+    .status {
+      font-size: 12px; color: #64748b;
+      height: 18px;
+      transition: color 0.3s;
+    }
+    .status.ready { color: #22c55e; }
+    .status.error  { color: #ef4444; }
+
+    .dots {
+      display: inline-flex; gap: 4px; margin-top: 28px;
+    }
+    .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #334155;
+      animation: blink 1.4s ease-in-out infinite;
+    }
+    .dot:nth-child(2) { animation-delay: 0.2s; }
+    .dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes blink {
+      0%, 80%, 100% { background: #334155; }
+      40%            { background: #D19C05; }
+    }
+
+    .version {
+      position: fixed; bottom: 14px;
+      font-size: 10px; color: #334155;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="logo-ring">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+    </svg>
+  </div>
+
+  <h1>OneSoft ERP</h1>
+  <p class="sub">نظام إدارة موارد المؤسسات</p>
+
+  <div class="progress-track">
+    <div class="progress-bar" id="bar"></div>
+  </div>
+
+  <div class="status" id="status">جارٍ تهيئة الخادم...</div>
+
+  <div class="dots">
+    <div class="dot"></div>
+    <div class="dot"></div>
+    <div class="dot"></div>
+  </div>
+
+  <div class="version" id="ver">الإصدار 1.0.0</div>
+
+  <script>
+    const bar    = document.getElementById('bar');
+    const status = document.getElementById('status');
+    const ver    = document.getElementById('ver');
+
+    // استقبال رسائل من Main process
+    if (window.splashAPI) {
+      window.splashAPI.onProgress(({ pct, msg }) => {
+        bar.style.width = pct + '%';
+        status.textContent = msg;
+        if (pct >= 100) status.className = 'status ready';
+      });
+      window.splashAPI.onVersion(v => {
+        ver.textContent = 'الإصدار ' + v;
+      });
+    } else {
+      // Demo animation if no API
+      let p = 0;
+      const msgs = ['جارٍ تهيئة الخادم...','جارٍ الاتصال بقاعدة البيانات...','جارٍ تحميل الإعدادات...','البرنامج جاهز ✓'];
+      const t = setInterval(() => {
+        p += 25;
+        bar.style.width = p + '%';
+        status.textContent = msgs[Math.min(Math.floor(p/25)-1, msgs.length-1)];
+        if (p >= 100) { clearInterval(t); status.className = 'status ready'; }
+      }, 700);
+    }
+  </script>
+</body>
+</html>

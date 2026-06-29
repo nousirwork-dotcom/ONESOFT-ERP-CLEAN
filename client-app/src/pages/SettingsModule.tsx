@@ -2004,48 +2004,175 @@ function FieldDesignPage() {
 // ─── Backup ────────────────────────────────────────────────────────────────────
 
 function BackupPage() {
-  const backups = [
-    { id: 1, name: "نسخة_2026-05-07_10:00", size: "45 MB", date: "2026-05-07 10:00", type: "تلقائي" },
-    { id: 2, name: "نسخة_2026-05-06_10:00", size: "44 MB", date: "2026-05-06 10:00", type: "تلقائي" },
-    { id: 3, name: "نسخة_يدوية_2026-05-05", size: "43 MB", date: "2026-05-05 15:30", type: "يدوي" },
-  ];
+  const utils = trpc.useUtils();
+  const listQ     = trpc.backup.list.useQuery(undefined, { refetchInterval: 15_000 });
+  const dirQ      = trpc.backup.getDir.useQuery();
+  const logFilesQ = trpc.backup.getLogFiles.useQuery();
+  const logsQ     = trpc.backup.getLogs.useQuery({ lines: 300 });
+
+  const createM  = trpc.backup.create.useMutation({
+    onSuccess: (d) => { toast.success(`✅ تم إنشاء النسخة: ${d.name} (${d.sizeStr})`); utils.backup.list.invalidate(); },
+    onError:   (e) => toast.error(`❌ ${e.message}`),
+  });
+  const restoreM = trpc.backup.restore.useMutation({
+    onSuccess: () => { toast.success("✅ تمت الاستعادة بنجاح. أعد تحميل الصفحة."); utils.backup.list.invalidate(); },
+    onError:   (e) => toast.error(`❌ ${e.message}`),
+  });
+  const deleteM  = trpc.backup.delete.useMutation({
+    onSuccess: () => { toast.success("تم حذف النسخة"); utils.backup.list.invalidate(); },
+    onError:   (e) => toast.error(`❌ ${e.message}`),
+  });
+
+  const [confirmRestore, setConfirmRestore] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'backups'|'logs'>('backups');
+
+  const backups   = listQ.data ?? [];
+  const logFiles  = logFilesQ.data ?? [];
+  const logLines  = logsQ.data?.lines ?? [];
+
   return (
     <div className="space-y-4">
+      {/* Header */}
       <div className="flex justify-between items-center">
-        <h3 className="font-semibold text-sm">النسخ الاحتياطي</h3>
-        <Button className="h-8 text-sm" onClick={() => toast.success("جاري إنشاء نسخة احتياطية...")}><Download className="w-3.5 h-3.5 ml-1" />نسخ الآن</Button>
+        <h3 className="font-semibold text-sm">النسخ الاحتياطي والسجلات</h3>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" className="h-8 text-xs gap-1"
+            onClick={() => { listQ.refetch(); logFilesQ.refetch(); }}>
+            <RefreshCw className="w-3 h-3" /> تحديث
+          </Button>
+          <Button size="sm" className="h-8 text-xs gap-1"
+            disabled={createM.isPending}
+            onClick={() => createM.mutate({ label: 'backup' })}>
+            <Download className="w-3 h-3" />
+            {createM.isPending ? 'جارٍ النسخ...' : 'نسخ الآن'}
+          </Button>
+        </div>
       </div>
-      <Card className="border-border/50">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="text-xs">اسم النسخة</TableHead>
-              <TableHead className="text-xs">الحجم</TableHead>
-              <TableHead className="text-xs">التاريخ</TableHead>
-              <TableHead className="text-xs text-center">النوع</TableHead>
-              <TableHead className="text-xs">الإجراءات</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {backups.map(b => (
-              <TableRow key={b.id}>
-                <TableCell className="text-xs font-mono">{b.name}</TableCell>
-                <TableCell className="text-xs">{b.size}</TableCell>
-                <TableCell className="text-xs">{b.date}</TableCell>
-                <TableCell className="text-center">
-                  <Badge variant={b.type === "يدوي" ? "default" : "secondary"} className="text-xs">{b.type}</Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="flex gap-2">
-                    <button className="text-primary text-xs hover:underline" onClick={() => toast.info("جاري التنزيل...")}>تنزيل</button>
-                    <button className="text-amber-500 text-xs hover:underline" onClick={() => toast.info("جاري الاستعادة...")}>استعادة</button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Card>
+
+      {/* مجلد النسخ */}
+      {dirQ.data && (
+        <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2 font-mono flex items-center gap-2">
+          <Database className="w-3 h-3 shrink-0" />
+          مجلد النسخ: {dirQ.data.dir}
+        </div>
+      )}
+
+      {/* التبويبات */}
+      <div className="flex gap-1 border-b border-border/50">
+        {(['backups','logs'] as const).map(t => (
+          <button key={t}
+            className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors ${activeTab===t ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            onClick={() => setActiveTab(t)}>
+            {t==='backups' ? `📦 النسخ الاحتياطية (${backups.length})` : `📋 سجلات التشغيل`}
+          </button>
+        ))}
+      </div>
+
+      {/* === قسم النسخ === */}
+      {activeTab === 'backups' && (
+        <Card className="border-border/50">
+          {listQ.isLoading ? (
+            <div className="p-6 text-center text-xs text-muted-foreground">جارٍ التحميل...</div>
+          ) : backups.length === 0 ? (
+            <div className="p-6 text-center text-xs text-muted-foreground">
+              <Database className="w-8 h-8 mx-auto mb-2 opacity-30" />
+              لا توجد نسخ احتياطية بعد. اضغط "نسخ الآن" لإنشاء أول نسخة.
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">اسم الملف</TableHead>
+                  <TableHead className="text-xs">الحجم</TableHead>
+                  <TableHead className="text-xs">التاريخ</TableHead>
+                  <TableHead className="text-xs">الإجراءات</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {backups.map(b => (
+                  <TableRow key={b.name}>
+                    <TableCell className="text-xs font-mono">{b.name}</TableCell>
+                    <TableCell className="text-xs">{b.sizeStr}</TableCell>
+                    <TableCell className="text-xs">{new Date(b.mtime).toLocaleString('ar-SA')}</TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        <button
+                          className="text-amber-500 text-xs hover:underline disabled:opacity-40"
+                          disabled={restoreM.isPending}
+                          onClick={() => setConfirmRestore(b.name)}>
+                          استعادة
+                        </button>
+                        <button
+                          className="text-destructive text-xs hover:underline disabled:opacity-40"
+                          disabled={deleteM.isPending}
+                          onClick={() => {
+                            if (confirm(`حذف النسخة "${b.name}"؟`)) deleteM.mutate({ name: b.name });
+                          }}>
+                          حذف
+                        </button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </Card>
+      )}
+
+      {/* === قسم السجلات === */}
+      {activeTab === 'logs' && (
+        <div className="space-y-3">
+          {logFiles.length > 0 && (
+            <div className="flex gap-2 flex-wrap">
+              {logFiles.map(f => (
+                <Badge key={f.name} variant="outline" className="text-xs font-mono gap-1">
+                  {f.name} <span className="text-muted-foreground">({f.sizeStr})</span>
+                </Badge>
+              ))}
+            </div>
+          )}
+          <div className="bg-black/90 text-green-400 font-mono text-xs rounded p-3 h-64 overflow-y-auto">
+            {logLines.length === 0
+              ? <span className="text-muted-foreground">لا توجد سجلات اليوم</span>
+              : logLines.map((line, i) => (
+                <div key={i} className={`leading-5 ${line.includes('"ERROR"') ? 'text-red-400' : line.includes('"WARN"') ? 'text-yellow-400' : ''}`}>
+                  {line}
+                </div>
+              ))
+            }
+          </div>
+          <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => logsQ.refetch()}>
+            <RefreshCw className="w-3 h-3" /> تحديث السجلات
+          </Button>
+        </div>
+      )}
+
+      {/* مربع تأكيد الاستعادة */}
+      {confirmRestore && (
+        <Dialog open onOpenChange={() => setConfirmRestore(null)}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-amber-500">
+                <AlertTriangle className="w-4 h-4" /> تأكيد الاستعادة
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-sm">
+              سيتم استبدال بيانات قاعدة البيانات الحالية بالنسخة:<br/>
+              <span className="font-mono text-xs bg-muted px-1 rounded">{confirmRestore}</span>
+            </p>
+            <p className="text-xs text-destructive">⚠️ هذا الإجراء لا يمكن التراجع عنه</p>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" size="sm" onClick={() => setConfirmRestore(null)}>إلغاء</Button>
+              <Button variant="destructive" size="sm"
+                disabled={restoreM.isPending}
+                onClick={() => { restoreM.mutate({ name: confirmRestore! }); setConfirmRestore(null); }}>
+                {restoreM.isPending ? 'جارٍ الاستعادة...' : 'استعادة الآن'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

@@ -1,0 +1,87 @@
+{
+  "name": "onesoft-erp",
+  "version": "1.0.0",
+  "description": "OneSoft ERP — نظام إدارة موارد المؤسسات",
+  "main": "main.js",
+  "author": "OneSoft",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start":        "electron .",
+    "build:win":    "electron-builder --win",
+    "build:mac":    "electron-builder --mac",
+    "build:linux":  "electron-builder --linux",
+    "build:all":    "electron-builder --win --mac --linux"
+  },
+  "dependencies": {
+    "electron-updater": "^6.1.7"
+  },
+  "devDependencies": {
+    "electron":         "^30.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId":       "com.onesoft.erp",
+    "productName": "OneSoft ERP",
+    "copyright":   "Copyright © 2026 OneSoft",
+    "directories": {
+      "output": "../dist-installer",
+      "buildResources": "assets"
+    },
+    "files": [
+      "main.js",
+      "splash.html",
+      "preload.js",
+      "assets/**",
+      "!node_modules/.cache"
+    ],
+    "extraResources": [
+      {
+        "from": "../server-app/dist",
+        "to":   "server/dist",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../client-app/dist",
+        "to":   "client/dist",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../server-app/node_modules",
+        "to":   "server/node_modules",
+        "filter": ["**/*", "!**/.cache/**"]
+      }
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis",     "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "icon": "assets/icon.ico",
+      "publisherName": "OneSoft"
+    },
+    "nsis": {
+      "oneClick":               false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut":  true,
+      "createStartMenuShortcut": true,
+      "shortcutName":           "OneSoft ERP",
+      "installerIcon":          "assets/icon.ico",
+      "uninstallerIcon":        "assets/icon.ico",
+      "installerHeaderIcon":    "assets/icon.ico",
+      "license":                "assets/LICENSE.txt",
+      "language":               "1025",
+      "runAfterFinish":         true,
+      "deleteAppDataOnUninstall": false
+    },
+    "mac": {
+      "icon": "assets/icon.icns",
+      "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }]
+    },
+    "linux": {
+      "icon": "assets/icon.png",
+      "target": [{ "target": "AppImage", "arch": ["x64"] }]
+    },
+    "publish": null
+  }
+}
