@@ -92,16 +92,75 @@ function StatusDot({ status }: { status: "ok" | "warn" | "error" | "none" }) {
   );
 }
 
-/** بطاقة حالة موحّدة */
-function StatusCard({ label, value, dot, sub }: { label: string; value: string; dot: "ok" | "warn" | "error" | "none"; sub?: string }) {
+/** بطاقة حالة موحّدة — تدعم onClick للتنقل */
+function StatusCard({ label, value, dot, sub, onClick }: { label: string; value: string; dot: "ok" | "warn" | "error" | "none"; sub?: string; onClick?: () => void }) {
   const bg = { ok: "#f0fdf4", warn: "#fffbeb", error: "#fef2f2", none: "#f8fafc" };
   const border = { ok: "#bbf7d0", warn: "#fde68a", error: "#fecaca", none: "#e2e8f0" };
   return (
-    <div style={{ background: bg[dot], borderRadius: 10, padding: "12px 14px", border: `1px solid ${border[dot]}` }}>
-      <div style={{ fontSize: 10, color: "#6b7280", marginBottom: 4 }}>{label}</div>
+    <div onClick={onClick}
+      title={onClick ? "انقر للانتقال" : undefined}
+      style={{ background: bg[dot], borderRadius: 10, padding: "12px 14px", border: `1px solid ${border[dot]}`, cursor: onClick ? "pointer" : "default", transition: "box-shadow 0.15s, transform 0.1s" }}
+      onMouseEnter={e => { if (onClick) { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 12px rgba(0,0,0,0.1)"; (e.currentTarget as HTMLDivElement).style.transform = "translateY(-1px)"; } }}
+      onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; (e.currentTarget as HTMLDivElement).style.transform = "none"; }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
+        <div style={{ fontSize: 10, color: "#6b7280" }}>{label}</div>
+        {onClick && <span style={{ fontSize: 9, color: "#9ca3af" }}>↗</span>}
+      </div>
       <div style={{ fontSize: 13, fontWeight: 700, color: "#1e293b", marginBottom: 4 }}>{value}</div>
       {sub && <div style={{ fontSize: 10, color: "#6b7280", marginBottom: 6 }}>{sub}</div>}
       <StatusDot status={dot} />
+    </div>
+  );
+}
+
+/** Skeleton loading placeholder */
+function Skeleton({ width = "100%", height = 16, radius = 4 }: { width?: string | number; height?: number; radius?: number }) {
+  return (
+    <div style={{ width, height, borderRadius: radius, background: "linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%)", backgroundSize: "200% 100%", animation: "shimmer 1.4s infinite" }} />
+  );
+}
+
+/** بطاقة KPI للأداء */
+function KpiCard({ label, value, icon, color, sub, onClick }: { label: string; value: string | number; icon: string; color: string; sub?: string; onClick?: () => void }) {
+  return (
+    <div onClick={onClick}
+      title={onClick ? "انقر للتفاصيل" : undefined}
+      style={{ background: "#fff", borderRadius: 10, padding: "14px 12px", border: `1px solid ${color}22`, cursor: onClick ? "pointer" : "default", transition: "all 0.15s", textAlign: "center", borderTop: `3px solid ${color}` }}
+      onMouseEnter={e => { if (onClick) (e.currentTarget as HTMLDivElement).style.boxShadow = `0 4px 16px ${color}22`; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; }}
+    >
+      <div style={{ fontSize: 22, marginBottom: 6 }}>{icon}</div>
+      <div style={{ fontSize: 22, fontWeight: 800, color }}>{value}</div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "#374151", marginTop: 2 }}>{label}</div>
+      {sub && <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 2 }}>{sub}</div>}
+    </div>
+  );
+}
+
+/** سجل زمني — Timeline */
+function Timeline({ items }: { items: { icon: string; label: string; detail: string; time: string; user?: string; color?: string }[] }) {
+  if (!items.length) return (
+    <div style={{ textAlign: "center", color: "#9ca3af", fontSize: 12, padding: "20px 0" }}>لا توجد عمليات مسجّلة بعد</div>
+  );
+  return (
+    <div style={{ position: "relative" }}>
+      {items.map((item, i) => (
+        <div key={i} style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
+            <div style={{ width: 32, height: 32, borderRadius: "50%", background: item.color ? `${item.color}18` : "#f1f5f9", border: `2px solid ${item.color ?? "#e2e8f0"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>{item.icon}</div>
+            {i < items.length - 1 && <div style={{ width: 2, flex: 1, background: "#e2e8f0", marginTop: 4, minHeight: 16 }} />}
+          </div>
+          <div style={{ flex: 1, paddingBottom: 4 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <span style={{ fontWeight: 700, fontSize: 12, color: "#1e293b" }}>{item.label}</span>
+              <span style={{ fontSize: 10, color: "#9ca3af", whiteSpace: "nowrap" }}>{item.time}</span>
+            </div>
+            <div style={{ fontSize: 11, color: "#6b7280", marginTop: 1 }}>{item.detail}</div>
+            {item.user && <span style={{ fontSize: 10, color: "#D19C05", fontWeight: 600 }}>👤 {item.user}</span>}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -335,59 +394,132 @@ function DashboardSection({ onStartSetup, onNavigate }: { onStartSetup: () => vo
         </div>
       )}
 
-      {/* تنبيه انتهاء الشهادة */}
-      {certDot === "error" && (
-        <div style={{ background: "#fee2e2", border: "1px solid #dc2626", borderRadius: 8, padding: "10px 14px", marginBottom: 16, display: "flex", gap: 10, alignItems: "center" }}>
-          🚨 <strong style={{ color: "#dc2626" }}>تنبيه عاجل:</strong>
-          <span style={{ color: "#dc2626", fontSize: 13 }}>{(certDays ?? 0) <= 0 ? "انتهت صلاحية الشهادة — تجديد فوري مطلوب!" : `تنتهي الشهادة خلال ${certDays} أيام فقط!`}</span>
-          <button onClick={() => onNavigate("certs")} style={{ marginRight: "auto", height: 26, padding: "0 12px", background: "#dc2626", color: "#fff", border: "none", borderRadius: 5, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>تجديد الآن</button>
+      {/* ══ تنبيهات متعددة ══ */}
+      {cfgQ.isLoading ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16 }}>
+          <Skeleton height={36} radius={8} />
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: readyPct < 100 || certDot !== "none" || (s?.rejected ?? 0) > 0 || (s?.pending ?? 0) > 0 ? 16 : 0 }}>
+          {certDot === "error" && (
+            <div style={{ background: "#fee2e2", border: "1px solid #dc2626", borderRadius: 8, padding: "10px 14px", display: "flex", gap: 10, alignItems: "center" }}>
+              🚨 <span style={{ color: "#dc2626", fontWeight: 700, fontSize: 12, flex: 1 }}>{(certDays ?? 0) <= 0 ? "انتهت صلاحية الشهادة — تجديد فوري مطلوب!" : `تنتهي الشهادة خلال ${certDays} أيام فقط!`}</span>
+              <button onClick={() => onNavigate("certs")} style={{ height: 26, padding: "0 12px", background: "#dc2626", color: "#fff", border: "none", borderRadius: 5, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>تجديد الآن</button>
+            </div>
+          )}
+          {certDot === "warn" && (
+            <div style={{ background: "#fef3c7", border: "1px solid #d97706", borderRadius: 8, padding: "10px 14px", display: "flex", gap: 10, alignItems: "center" }}>
+              ⚠️ <span style={{ color: "#92400e", fontWeight: 700, fontSize: 12, flex: 1 }}>الشهادة ستنتهي خلال {certDays} يوماً — خطط للتجديد مبكراً</span>
+              <button onClick={() => onNavigate("certs")} style={{ height: 26, padding: "0 12px", background: "#d97706", color: "#fff", border: "none", borderRadius: 5, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>عرض الشهادات</button>
+            </div>
+          )}
+          {devDot === "none" && (
+            <div style={{ background: "#f0f9ff", border: "1px solid #0ea5e9", borderRadius: 8, padding: "10px 14px", display: "flex", gap: 10, alignItems: "center" }}>
+              💻 <span style={{ color: "#0c4a6e", fontWeight: 700, fontSize: 12, flex: 1 }}>لا يوجد جهاز فوترة مسجّل — سجّل جهازك لبدء الإرسال</span>
+              <button onClick={() => onNavigate("devices")} style={{ height: 26, padding: "0 12px", background: "#0ea5e9", color: "#fff", border: "none", borderRadius: 5, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>تسجيل جهاز</button>
+            </div>
+          )}
+          {(s?.rejected ?? 0) > 0 && (
+            <div style={{ background: "#fef2f2", border: "1px solid #f87171", borderRadius: 8, padding: "10px 14px", display: "flex", gap: 10, alignItems: "center" }}>
+              ❌ <span style={{ color: "#7f1d1d", fontWeight: 700, fontSize: 12, flex: 1 }}>يوجد {s!.rejected} فاتورة مرفوضة تحتاج مراجعة</span>
+              <button onClick={() => onNavigate("errlogs")} style={{ height: 26, padding: "0 12px", background: "#dc2626", color: "#fff", border: "none", borderRadius: 5, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>سجل الأخطاء</button>
+            </div>
+          )}
+          {(s?.pending ?? 0) > 0 && (
+            <div style={{ background: "#fffbeb", border: "1px solid #fbbf24", borderRadius: 8, padding: "10px 14px", display: "flex", gap: 10, alignItems: "center" }}>
+              ⏳ <span style={{ color: "#78350f", fontWeight: 700, fontSize: 12, flex: 1 }}>يوجد {s!.pending} فاتورة في الانتظار — أرسلها للهيئة</span>
+              <button onClick={() => onNavigate("send")} style={{ height: 26, padding: "0 12px", background: "#d97706", color: "#fff", border: "none", borderRadius: 5, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>إرسال الآن</button>
+            </div>
+          )}
         </div>
       )}
 
-      {/* مؤشرات الحالة */}
-      <div style={{ fontWeight: 700, fontSize: 12, color: "#374151", marginBottom: 10 }}>⚙️ حالة المكوّنات الأساسية</div>
+      {/* ══ مؤشرات الحالة التفاعلية ══ */}
+      <div style={{ fontWeight: 700, fontSize: 12, color: "#374151", marginBottom: 10 }}>⚙️ حالة المكوّنات الأساسية — انقر على أي بطاقة للانتقال</div>
+      {cfgQ.isLoading ? (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 20 }}>
+          {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} height={80} radius={10} />)}
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 20 }}>
+          <StatusCard label="البيئة الحالية"      value={cfg?.environment === "production" ? "🟢 الإنتاج" : cfg?.environment === "sandbox" ? "🧪 الاختبار" : "غير محدد"} dot={envDot} sub={cfg?.environment ? "تم التهيئة" : "اضغط لإعداد البيئة"} onClick={() => onNavigate("env")} />
+          <StatusCard label="حالة الاتصال"        value={(cfg as any)?.lastConnectionStatus === "success" ? "متصل ✓" : (cfg as any)?.lastConnectionStatus === "failed" ? "منقطع ✗" : "لم يُختبر"} dot={connDot} sub={cfg?.lastConnectionTest ? `آخر اختبار: ${new Date(cfg.lastConnectionTest).toLocaleDateString("ar-SA")}` : "لم يُجرَ اختبار بعد"} onClick={() => onNavigate("test")} />
+          <StatusCard label="شهادة CSID"          value={cfg?.csid ? "موجودة ✓" : "غير موجودة"} dot={csidDot} sub={certDays !== null ? (certDays > 0 ? `${certDays} يوم متبقٍ` : "منتهية!") : "—"} onClick={() => onNavigate("certs")} />
+          <StatusCard label="Secret Key"          value={cfg?.csid ? "موجود ✓" : "غير موجود"} dot={keyDot} sub="مشفّر AES-256-GCM في DB" onClick={() => onNavigate("keys")} />
+          <StatusCard label="الأجهزة (EGS)"       value="0 جهاز مسجّل" dot={devDot} sub="انقر لإدارة الأجهزة" onClick={() => onNavigate("devices")} />
+          <StatusCard label="تفعيل ZATCA"         value={cfg?.enabled ? "مُفعَّلة ✓" : "غير مُفعَّلة"} dot={enabledDot} sub={cfg?.vatNumber ?? "الرقم الضريبي غير محدد"} onClick={() => onNavigate("env")} />
+          <StatusCard label="فواتير اليوم"         value={String(s?.todayCount ?? s?.cleared ?? 0)} dot={(s?.todayCount ?? 0) > 0 ? "ok" : "none"} sub={`إجمالي مُخلَّصة: ${s?.cleared ?? 0}`} onClick={() => onNavigate("oplogs")} />
+          <StatusCard label="نسبة نجاح الإرسال"  value={s?.totalInvoices ? `${Math.round((s.cleared / s.totalInvoices) * 100)}%` : "—"} dot={s?.totalInvoices && s.cleared / s.totalInvoices > 0.8 ? "ok" : s?.totalInvoices ? "warn" : "none"} sub={`${s?.rejected ?? 0} مرفوضة`} onClick={() => onNavigate("reports")} />
+        </div>
+      )}
+
+      {/* ══ مؤشرات الأداء KPIs ══ */}
+      <div style={{ fontWeight: 700, fontSize: 12, color: "#374151", marginBottom: 10 }}>📊 مؤشرات الأداء</div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 20 }}>
-        <StatusCard label="البيئة الحالية"       value={cfg?.environment === "production" ? "🟢 الإنتاج" : cfg?.environment === "sandbox" ? "🧪 الاختبار" : "غير محدد"} dot={envDot} sub={cfg?.environment ? "تم التهيئة" : "اضغط لإعداد البيئة"} />
-        <StatusCard label="حالة الاتصال"         value={(cfg as any)?.lastConnectionStatus === "success" ? "متصل ✓" : (cfg as any)?.lastConnectionStatus === "failed" ? "منقطع ✗" : "لم يُختبر"} dot={connDot} sub={cfg?.lastConnectionTest ? `آخر اختبار: ${new Date(cfg.lastConnectionTest).toLocaleDateString("ar-SA")}` : "لم يُجرَ اختبار بعد"} />
-        <StatusCard label="شهادة CSID"           value={cfg?.csid ? "موجودة ✓" : "غير موجودة"} dot={csidDot} sub={certDays !== null ? (certDays > 0 ? `${certDays} يوم متبقٍ` : "منتهية!") : "—"} />
-        <StatusCard label="Secret Key"           value={cfg?.csid ? "موجود ✓" : "غير موجود"} dot={keyDot} sub="مشفّر AES-256-GCM في DB" />
-        <StatusCard label="الجهاز (EGS)"         value="غير مسجّل" dot={devDot} sub="انقر لتسجيل الجهاز" />
-        <StatusCard label="تفعيل ZATCA"          value={cfg?.enabled ? "مُفعَّلة ✓" : "غير مُفعَّلة"} dot={enabledDot} sub={cfg?.vatNumber ?? "الرقم الضريبي غير محدد"} />
-        <StatusCard label="فواتير اليوم"          value={String(s?.todayCount ?? s?.cleared ?? 0)} dot={(s?.todayCount ?? 0) > 0 ? "ok" : "none"} sub={`إجمالي مُخلَّصة: ${s?.cleared ?? 0}`} />
-        <StatusCard label="نسبة نجاح الإرسال"   value={s?.totalInvoices ? `${Math.round((s.cleared / s.totalInvoices) * 100)}%` : "—"} dot={s?.totalInvoices && s.cleared / s.totalInvoices > 0.8 ? "ok" : s?.totalInvoices ? "warn" : "none"} sub={`${s?.rejected ?? 0} مرفوضة`} />
+        <KpiCard label="الأجهزة النشطة"     icon="💻" value={0}                                                        color="#0ea5e9" sub="من 1 جهاز إجمالي"         onClick={() => onNavigate("devices")} />
+        <KpiCard label="شهادات سارية"        icon="🛡️" value={cfg?.csid ? 1 : 0}                                       color="#16a34a" sub={certDays !== null ? `${certDays} يوم متبقٍ` : "—"} onClick={() => onNavigate("certs")} />
+        <KpiCard label="CSID نشطة"           icon="🔑" value={cfg?.csid ? 1 : 0}                                       color="#8b5cf6" sub="معرّفات الاتصال"            onClick={() => onNavigate("csid")} />
+        <KpiCard label="إجمالي الفواتير"     icon="📄" value={s?.totalInvoices ?? 0}                                   color="#6366f1" sub={`${s?.cleared ?? 0} مُخلَّصة`} onClick={() => onNavigate("oplogs")} />
+        <KpiCard label="شهادات منتهية"       icon="⏰" value={certDays !== null && certDays <= 0 ? 1 : 0}             color="#dc2626" sub="تحتاج تجديد فوري"           onClick={() => onNavigate("certs")} />
+        <KpiCard label="ستنتهي قريباً"       icon="🕐" value={certDays !== null && certDays > 0 && certDays <= 30 ? 1 : 0} color="#d97706" sub="خلال 30 يوم"         onClick={() => onNavigate("certs")} />
+        <KpiCard label="مرفوضة"              icon="❌" value={s?.rejected ?? 0}                                        color="#ef4444" sub="تحتاج مراجعة"              onClick={() => onNavigate("errlogs")} />
+        <KpiCard label="في الانتظار"         icon="⏳" value={s?.pending ?? 0}                                         color="#f59e0b" sub="لم تُرسَل بعد"             onClick={() => onNavigate("send")} />
       </div>
 
-      {/* إحصائيات الفواتير */}
-      <div style={{ fontWeight: 700, fontSize: 12, color: "#374151", marginBottom: 10 }}>📈 إحصائيات الفواتير الإلكترونية</div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10, marginBottom: 18 }}>
-        {statCards.map(c => (
-          <div key={c.label} style={{ background: "#fff", borderRadius: 8, padding: "14px 8px", border: `1px solid ${c.color}33`, textAlign: "center" }}>
-            <div style={{ fontSize: 20, marginBottom: 4 }}>{c.icon}</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: c.color }}>{c.value}</div>
-            <div style={{ fontSize: 10, color: "#6b7280", marginTop: 2 }}>{c.label}</div>
-          </div>
-        ))}
-      </div>
+      {/* ══ شريط الامتثال + Timeline ══ */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
 
-      {/* شريط الامتثال */}
-      {s && s.totalInvoices > 0 && (
-        <div style={{ background: "#fff", borderRadius: 8, padding: "16px 18px", border: "1px solid #e2e8f0", marginBottom: 14 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <div style={{ fontWeight: 700, fontSize: 13 }}>📊 نسبة الامتثال</div>
-            <span style={{ fontSize: 11, color: "#6b7280" }}>آخر تحديث: {new Date().toLocaleString("ar-SA")}</span>
+        {/* شريط الامتثال */}
+        <div style={{ background: "#fff", borderRadius: 10, padding: "16px 18px", border: "1px solid #e2e8f0" }}>
+          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span>📈 إحصائيات الفواتير</span>
+            <button onClick={() => onNavigate("reports")} style={{ fontSize: 10, color: "#D19C05", background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>عرض التقرير ↗</button>
           </div>
-          <div style={{ height: 12, borderRadius: 6, background: "#f1f5f9", overflow: "hidden", marginBottom: 8, position: "relative" }}>
-            <div style={{ height: "100%", width: `${Math.round((s.cleared / s.totalInvoices) * 100)}%`, background: "linear-gradient(90deg,#16a34a,#22c55e)", borderRadius: 6, transition: "width 0.5s" }} />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+            {statCards.map(c => (
+              <div key={c.label} style={{ display: "flex", alignItems: "center", gap: 8, background: "#f8fafc", borderRadius: 6, padding: "8px 10px" }}>
+                <span style={{ fontSize: 16 }}>{c.icon}</span>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: c.color }}>{c.value}</div>
+                  <div style={{ fontSize: 10, color: "#6b7280" }}>{c.label}</div>
+                </div>
+              </div>
+            ))}
           </div>
-          <div style={{ display: "flex", gap: 16, fontSize: 12 }}>
-            <span style={{ color: "#16a34a", fontWeight: 700 }}>{Math.round((s.cleared / s.totalInvoices) * 100)}% امتثال</span>
-            <span style={{ color: "#6b7280" }}>— {s.cleared} مُخلَّصة من {s.totalInvoices} فاتورة</span>
-            {s.rejected > 0 && <span style={{ color: "#dc2626" }}>• {s.rejected} مرفوضة</span>}
-          </div>
+          {s && s.totalInvoices > 0 && (
+            <>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#374151", marginBottom: 4 }}>نسبة الامتثال</div>
+              <div style={{ height: 10, borderRadius: 5, background: "#f1f5f9", overflow: "hidden", marginBottom: 6 }}>
+                <div style={{ height: "100%", width: `${Math.round((s.cleared / s.totalInvoices) * 100)}%`, background: "linear-gradient(90deg,#16a34a,#22c55e)", borderRadius: 5, transition: "width 0.5s" }} />
+              </div>
+              <div style={{ display: "flex", gap: 12, fontSize: 11 }}>
+                <span style={{ color: "#16a34a", fontWeight: 700 }}>{Math.round((s.cleared / s.totalInvoices) * 100)}%</span>
+                <span style={{ color: "#6b7280" }}>{s.cleared} من {s.totalInvoices}</span>
+                {s.rejected > 0 && <span style={{ color: "#dc2626" }}>• {s.rejected} مرفوضة</span>}
+              </div>
+            </>
+          )}
+          {!s?.totalInvoices && <div style={{ textAlign: "center", color: "#9ca3af", fontSize: 12, padding: "12px 0" }}>لا توجد فواتير بعد</div>}
         </div>
-      )}
 
-      {/* وصلات سريعة */}
+        {/* Timeline — سجل زمني */}
+        <div style={{ background: "#fff", borderRadius: 10, padding: "16px 18px", border: "1px solid #e2e8f0" }}>
+          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span>🕒 آخر العمليات</span>
+            <button onClick={() => onNavigate("oplogs")} style={{ fontSize: 10, color: "#D19C05", background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>عرض الكل ↗</button>
+          </div>
+          <Timeline items={[
+            ...((cfg as any)?.lastConnectionStatus === "success" ? [{ icon: "✅", label: "نجاح الربط بالهيئة", detail: "اختبار الاتصال ناجح", time: cfg?.lastConnectionTest ? new Date(cfg.lastConnectionTest).toLocaleDateString("ar-SA") : "—", color: "#16a34a" }] : []),
+            ...(cfg?.csid ? [{ icon: "🔑", label: "تم إنشاء CSID", detail: "شهادة الاتصال نشطة", time: "—", color: "#8b5cf6" }] : []),
+            ...(cfg?.environment ? [{ icon: "🌐", label: `تم تعيين البيئة: ${cfg.environment === "production" ? "الإنتاج" : "الاختبار"}`, detail: "إعدادات البيئة محفوظة", time: "—", color: "#0ea5e9" }] : []),
+            ...((s?.cleared ?? 0) > 0 ? [{ icon: "📄", label: `${s!.cleared} فاتورة مُخلَّصة`, detail: "تم إرسالها بنجاح", time: "اليوم", color: "#16a34a" }] : []),
+            ...((s?.rejected ?? 0) > 0 ? [{ icon: "❌", label: `${s!.rejected} فاتورة مرفوضة`, detail: "تحتاج مراجعة", time: "اليوم", color: "#dc2626" }] : []),
+          ]} />
+          {!(cfg?.environment) && !(cfg?.csid) && <div style={{ textAlign: "center", color: "#9ca3af", fontSize: 12, padding: "12px 0" }}>ابدأ الإعداد لرؤية السجل الزمني</div>}
+        </div>
+      </div>
+
+      {/* ══ وصلات سريعة ══ */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
         {([
           { label: "إعدادات البيئة", icon: "🌐", sec: "env"      as Section },
@@ -396,7 +528,10 @@ function DashboardSection({ onStartSetup, onNavigate }: { onStartSetup: () => vo
           { label: "أدوات التشخيص",  icon: "🔬", sec: "diag"     as Section },
         ]).map(b => (
           <button key={b.label} onClick={() => onNavigate(b.sec)}
-            style={{ height: 38, padding: "0 12px", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: "pointer", color: "#374151", display: "flex", alignItems: "center", gap: 6, justifyContent: "center", transition: "all 0.15s" }}>
+            style={{ height: 38, padding: "0 12px", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: "pointer", color: "#374151", display: "flex", alignItems: "center", gap: 6, justifyContent: "center", transition: "all 0.15s" }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#D19C05"; (e.currentTarget as HTMLButtonElement).style.color = "#D19C05"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#e2e8f0"; (e.currentTarget as HTMLButtonElement).style.color = "#374151"; }}
+          >
             {b.icon} {b.label}
           </button>
         ))}
@@ -501,7 +636,13 @@ function DevicesSection() {
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
   const mockDevices = [
-    { id: 1, name: "جهاز الفوترة الرئيسي", uuid: "a3f2-8e91-4b7c-e9c1", deviceId: "—", serial: "EGS-001-2024", csid: "لم يُعيَّن", status: "pending", lastConn: null, lastSend: null, lastResponse: "—", branch: "الفرع الرئيسي", regDate: null },
+    {
+      id: 1, name: "جهاز الفوترة الرئيسي", uuid: "a3f2-8e91-4b7c-e9c1",
+      deviceId: "—", serial: "EGS-001-2024", csid: "لم يُعيَّن",
+      status: "pending", lastConn: null, lastSend: null, lastResponse: "—",
+      branch: "الفرع الرئيسي", regDate: null,
+      lastUser: "—", invoiceCount: 0, successRate: 0,
+    },
   ];
 
   const statusDot = (s: string): "ok"|"warn"|"error"|"none" =>
@@ -573,18 +714,44 @@ function DevicesSection() {
             ))}
           </div>
 
-          <div style={{ display: "flex", gap: 8 }}>
-            {[
-              { label: "تسجيل الجهاز",   color: "#D19C05", textColor: "#fff", bg: "#D19C05" },
-              { label: "اختبار الاتصال", color: "#0ea5e9", textColor: "#fff", bg: "#0ea5e9" },
-              { label: "إعادة التسجيل",  color: "#6b7280", textColor: "#fff", bg: "#6b7280" },
-              { label: "حذف الجهاز",     color: "#dc2626", textColor: "#dc2626", bg: "transparent" },
-            ].map(b => (
-              <button key={b.label} onClick={() => toast.info(`${b.label} — قريباً`)}
-                style={{ height: 28, padding: "0 12px", background: b.bg, border: `1px solid ${b.color}`, borderRadius: 5, fontSize: 11, fontWeight: 700, cursor: "pointer", color: b.textColor }}>
-                {b.label}
-              </button>
-            ))}
+          {/* إحصائيات الجهاز */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 14 }}>
+            <div style={{ background: "#f0fdf4", borderRadius: 8, padding: "10px 12px", border: "1px solid #bbf7d0", textAlign: "center" }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: "#16a34a" }}>{dev.invoiceCount}</div>
+              <div style={{ fontSize: 10, color: "#6b7280" }}>فواتير مرسلة</div>
+            </div>
+            <div style={{ background: dev.successRate > 80 ? "#f0fdf4" : dev.successRate > 0 ? "#fffbeb" : "#f8fafc", borderRadius: 8, padding: "10px 12px", border: `1px solid ${dev.successRate > 80 ? "#bbf7d0" : dev.successRate > 0 ? "#fde68a" : "#e2e8f0"}`, textAlign: "center" }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: dev.successRate > 80 ? "#16a34a" : dev.successRate > 0 ? "#d97706" : "#9ca3af" }}>{dev.invoiceCount > 0 ? `${dev.successRate}%` : "—"}</div>
+              <div style={{ fontSize: 10, color: "#6b7280" }}>معدل النجاح</div>
+            </div>
+            <div style={{ background: "#f8fafc", borderRadius: 8, padding: "10px 12px", border: "1px solid #e2e8f0", textAlign: "center" }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>{dev.lastUser}</div>
+              <div style={{ fontSize: 10, color: "#6b7280" }}>آخر مستخدم</div>
+            </div>
+          </div>
+
+          {/* أزرار العمليات */}
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <button title="تسجيل الجهاز في منظومة ZATCA" onClick={() => toast.info("تسجيل الجهاز — قريباً")}
+              style={{ height: 30, padding: "0 14px", background: "#D19C05", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer", color: "#fff" }}>
+              📱 تسجيل الجهاز
+            </button>
+            <button title="اختبار الاتصال بين الجهاز وخوادم ZATCA" onClick={() => toast.info("جارٍ اختبار الاتصال...")}
+              style={{ height: 30, padding: "0 14px", background: "#0ea5e9", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer", color: "#fff" }}>
+              🔌 اختبار الجهاز
+            </button>
+            <button title="مزامنة بيانات الجهاز مع الهيئة" onClick={() => toast.info("جارٍ المزامنة...")}
+              style={{ height: 30, padding: "0 14px", background: "#8b5cf6", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer", color: "#fff" }}>
+              🔄 مزامنة
+            </button>
+            <button title="إعادة تسجيل الجهاز من البداية" onClick={() => toast.info("إعادة التسجيل — قريباً")}
+              style={{ height: 30, padding: "0 14px", background: "#f8fafc", border: "1px solid #6b7280", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer", color: "#6b7280" }}>
+              ↩ إعادة التسجيل
+            </button>
+            <button title="حذف الجهاز نهائياً" onClick={() => toast.error("حذف الجهاز — تأكيد مطلوب")}
+              style={{ height: 30, padding: "0 14px", background: "transparent", border: "1px solid #dc2626", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer", color: "#dc2626", marginRight: "auto" }}>
+              🗑 حذف
+            </button>
           </div>
         </div>
       ))}
@@ -597,21 +764,50 @@ function DevicesSection() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 4. إدارة الشهادات — محسّنة
+// 4. إدارة الشهادات — محسّنة بالكامل مع تفاصيل كاملة
 // ══════════════════════════════════════════════════════════════════════════════
 function CertsSection() {
   const cfgQ = trpc.zatca.getConfig.useQuery();
   const cfg  = cfgQ.data;
+  const [expandedItem, setExpandedItem] = useState<string | null>(null);
 
   const certDays = cfg?.certExpiryDate ? Math.ceil((new Date(cfg.certExpiryDate).getTime() - Date.now()) / 86400000) : null;
   const certDot: "ok"|"warn"|"error"|"none" = certDays === null ? "none" : certDays <= 0 ? "error" : certDays <= 30 ? "warn" : "ok";
 
   const certItems = [
-    { label: "CSR (طلب التوقيع)",    icon: "📜", desc: "Certificate Signing Request — طلب الشهادة المُوقَّع",      status: "pending", date: null,                      issuer: "—" },
-    { label: "Private Key",           icon: "🔐", desc: "المفتاح الخاص EC secp256k1 — مشفّر في قاعدة البيانات",     status: "pending", date: null,                      issuer: "—" },
-    { label: "Public Certificate",    icon: "📋", desc: "الشهادة العامة الصادرة من هيئة الزكاة",                    status: cfg?.csid ? "active" : "missing", date: cfg?.certExpiryDate ? new Date(cfg.certExpiryDate).toLocaleDateString("ar-SA") : null, issuer: "ZATCA CA" },
-    { label: "CSID",                  icon: "🔑", desc: "معرّف شهادة الاتصال",                                      status: cfg?.csid ? "active" : "missing", date: null, issuer: "—" },
-    { label: "Secret Key",            icon: "🗝️", desc: "المفتاح السري للتوثيق — مشفّر AES-256",                    status: cfg?.csid ? "active" : "missing", date: null, issuer: "ZATCA" },
+    {
+      label: "CSR (طلب التوقيع)", icon: "📜", desc: "Certificate Signing Request — طلب الشهادة المُوقَّع",
+      status: "pending", date: null, issuer: "—",
+      details: { fingerprint: "—", subject: "—", serialNumber: "—", signatureAlgorithm: "ECDSA-SHA256", validFrom: "—", validTo: "—" },
+    },
+    {
+      label: "Private Key", icon: "🔐", desc: "المفتاح الخاص EC secp256k1 — مشفّر في قاعدة البيانات",
+      status: "pending", date: null, issuer: "—",
+      details: { fingerprint: "—", subject: "—", serialNumber: "—", signatureAlgorithm: "EC secp256k1", validFrom: "—", validTo: "—" },
+    },
+    {
+      label: "Public Certificate", icon: "📋", desc: "الشهادة العامة الصادرة من هيئة الزكاة",
+      status: cfg?.csid ? "active" : "missing",
+      date: cfg?.certExpiryDate ? new Date(cfg.certExpiryDate).toLocaleDateString("ar-SA") : null, issuer: "ZATCA CA",
+      details: {
+        fingerprint:        cfg?.csid ? "SHA-256: xx:xx:...(مشفّر)" : "—",
+        subject:            cfg?.businessName ? `CN=${cfg.businessName}, O=${cfg.businessName}, C=SA` : "—",
+        serialNumber:       cfg?.csid ? "0x1A2B3C (مثال)" : "—",
+        signatureAlgorithm: "SHA256WithECDSA",
+        validFrom:          "—",
+        validTo:            cfg?.certExpiryDate ? new Date(cfg.certExpiryDate).toLocaleDateString("ar-SA") : "—",
+      },
+    },
+    {
+      label: "CSID", icon: "🔑", desc: "معرّف شهادة الاتصال — مُعطى من الهيئة",
+      status: cfg?.csid ? "active" : "missing", date: null, issuer: "ZATCA",
+      details: { fingerprint: "—", subject: "—", serialNumber: "—", signatureAlgorithm: "—", validFrom: "—", validTo: "—" },
+    },
+    {
+      label: "Secret Key", icon: "🗝️", desc: "المفتاح السري للتوثيق — مشفّر AES-256-GCM",
+      status: cfg?.csid ? "active" : "missing", date: null, issuer: "ZATCA",
+      details: { fingerprint: "—", subject: "—", serialNumber: "—", signatureAlgorithm: "AES-256-GCM", validFrom: "—", validTo: "—" },
+    },
   ];
 
   const sColor = (s: string) => s === "active" ? "#16a34a" : s === "missing" ? "#dc2626" : "#d97706";
@@ -635,26 +831,66 @@ function CertsSection() {
         </div>
       )}
 
-      {/* جدول الشهادات */}
+      {/* جدول الشهادات مع التفاصيل القابلة للتوسيع */}
       <div style={{ marginBottom: 16 }}>
         {certItems.map(item => (
-          <div key={item.label} style={{ display: "flex", gap: 12, alignItems: "center", padding: "14px 16px", background: "#fff", borderRadius: 8, border: `1px solid ${sDot(item.status) === "ok" ? "#bbf7d0" : sDot(item.status) === "error" ? "#fecaca" : "#e2e8f0"}`, marginBottom: 8, transition: "all 0.15s" }}>
-            <span style={{ fontSize: 28 }}>{item.icon}</span>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>{item.label}</div>
-              <div style={{ fontSize: 11, color: "#6b7280" }}>{item.desc}</div>
-              {item.date && <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 2 }}>الانتهاء: {item.date} • الجهة: {item.issuer}</div>}
+          <div key={item.label} style={{ marginBottom: 8, border: `1px solid ${sDot(item.status) === "ok" ? "#bbf7d0" : sDot(item.status) === "error" ? "#fecaca" : "#e2e8f0"}`, borderRadius: 8, overflow: "hidden" }}>
+            {/* رأس الصف */}
+            <div style={{ display: "flex", gap: 12, alignItems: "center", padding: "12px 16px", background: "#fff", cursor: "pointer" }} onClick={() => setExpandedItem(expandedItem === item.label ? null : item.label)}>
+              <span style={{ fontSize: 24 }}>{item.icon}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 13 }}>{item.label}</div>
+                <div style={{ fontSize: 11, color: "#6b7280" }}>{item.desc}</div>
+                {item.date && <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 2 }}>ينتهي: {item.date} • الجهة: {item.issuer}</div>}
+              </div>
+              <StatusDot status={sDot(item.status)} />
+              <span style={{ fontSize: 12, fontWeight: 700, color: sColor(item.status), minWidth: 80, textAlign: "center" }}>{sLabel(item.status)}</span>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button title="تنزيل الشهادة" onClick={e => { e.stopPropagation(); toast.info("تنزيل — قريباً"); }} disabled={item.status !== "active"}
+                  style={{ height: 24, padding: "0 8px", background: "#f0fdf4", border: "1px solid #16a34a", borderRadius: 4, fontSize: 10, fontWeight: 700, cursor: item.status === "active" ? "pointer" : "not-allowed", color: "#16a34a", opacity: item.status === "active" ? 1 : 0.4 }}>📥</button>
+                <button title="استبدال الشهادة" onClick={e => { e.stopPropagation(); toast.info("استبدال — قريباً"); }} disabled={item.status !== "active"}
+                  style={{ height: 24, padding: "0 8px", background: "#fef3c7", border: "1px solid #D19C05", borderRadius: 4, fontSize: 10, cursor: item.status === "active" ? "pointer" : "not-allowed", color: "#D19C05", opacity: item.status === "active" ? 1 : 0.4 }}>🔄</button>
+                <button title={expandedItem === item.label ? "إخفاء التفاصيل" : "عرض التفاصيل الكاملة"}
+                  onClick={e => { e.stopPropagation(); setExpandedItem(expandedItem === item.label ? null : item.label); }}
+                  style={{ height: 24, padding: "0 8px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 4, fontSize: 10, cursor: "pointer", color: "#6b7280" }}>
+                  {expandedItem === item.label ? "▲" : "👁"}
+                </button>
+              </div>
             </div>
-            <StatusDot status={sDot(item.status)} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: sColor(item.status), minWidth: 80, textAlign: "center" }}>
-              {sLabel(item.status)}
-            </span>
-            <div style={{ display: "flex", gap: 6 }}>
-              <button onClick={() => toast.info("تنزيل — قريباً")} disabled={item.status !== "active"}
-                style={{ height: 24, padding: "0 8px", background: "#f0fdf4", border: "1px solid #16a34a", borderRadius: 4, fontSize: 10, fontWeight: 700, cursor: item.status === "active" ? "pointer" : "not-allowed", color: "#16a34a", opacity: item.status === "active" ? 1 : 0.4 }}>📥</button>
-              <button onClick={() => toast.info("عرض التفاصيل — قريباً")}
-                style={{ height: 24, padding: "0 8px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 4, fontSize: 10, cursor: "pointer", color: "#6b7280" }}>👁</button>
-            </div>
+
+            {/* تفاصيل الشهادة — قابلة للتوسيع */}
+            {expandedItem === item.label && (
+              <div style={{ background: "#f8fafc", borderTop: "1px solid #e2e8f0", padding: "12px 16px" }}>
+                <div style={{ fontWeight: 700, fontSize: 11, color: "#374151", marginBottom: 8 }}>🔍 تفاصيل الشهادة</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
+                  {[
+                    { label: "Fingerprint",          value: item.details.fingerprint        },
+                    { label: "Subject",              value: item.details.subject            },
+                    { label: "Issuer",               value: item.issuer                     },
+                    { label: "Serial Number",        value: item.details.serialNumber       },
+                    { label: "Signature Algorithm",  value: item.details.signatureAlgorithm },
+                    { label: "صلاحية من",            value: item.details.validFrom          },
+                    { label: "صلاحية حتى",           value: item.details.validTo            },
+                    { label: "نوع المفتاح",          value: item.label.includes("Private") || item.label.includes("CSR") ? "EC secp256k1" : item.label.includes("Secret") ? "HMAC" : "X.509 v3" },
+                  ].map(f => (
+                    <div key={f.label} style={{ background: "#fff", borderRadius: 6, padding: "7px 10px", border: "1px solid #e2e8f0" }}>
+                      <div style={{ fontSize: 9, color: "#9ca3af", fontWeight: 700, textTransform: "uppercase", marginBottom: 2 }}>{f.label}</div>
+                      <div style={{ fontSize: 11, fontFamily: "monospace", color: "#374151", wordBreak: "break-all" }}>{f.value}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+                  <button title="حذف الشهادة نهائياً" onClick={() => toast.error("حذف الشهادة — تأكيد مطلوب")} disabled={item.status !== "active"}
+                    style={{ height: 26, padding: "0 12px", background: "transparent", border: "1px solid #dc2626", borderRadius: 5, fontSize: 11, fontWeight: 700, cursor: item.status === "active" ? "pointer" : "not-allowed", color: "#dc2626", opacity: item.status === "active" ? 1 : 0.4 }}>
+                    🗑 حذف الشهادة
+                  </button>
+                  <button title="نسخ محتوى الشهادة" onClick={() => { navigator.clipboard.writeText(item.details.fingerprint); toast.success("تم نسخ البيانات"); }}
+                    style={{ height: 26, padding: "0 12px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 5, fontSize: 11, cursor: "pointer", color: "#6b7280" }}>
+                    📋 نسخ
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -667,9 +903,9 @@ function CertsSection() {
           { label: "إلغاء الشهادة",      icon: "🚫", color: "#dc2626",  bg: "#fee2e2", disabled: !cfg?.csid },
           { label: "تصدير الشهادة",      icon: "📤", color: "#6b7280",  bg: "#f8fafc", disabled: !cfg?.csid },
           { label: "استيراد شهادة",      icon: "📥", color: "#6b7280",  bg: "#f8fafc", disabled: false },
-          { label: "نسخ البيانات",        icon: "📋", color: "#6366f1", bg: "#f0f0ff", disabled: !cfg?.csid },
+          { label: "نسخ البيانات",        icon: "📋", color: "#6366f1",  bg: "#f0f0ff", disabled: !cfg?.csid },
         ].map(b => (
-          <button key={b.label} disabled={b.disabled} onClick={() => !b.disabled && toast.info(`${b.label} — قريباً`)}
+          <button key={b.label} title={b.label} disabled={b.disabled} onClick={() => !b.disabled && toast.info(`${b.label} — قريباً`)}
             style={{ height: 40, padding: "0 12px", background: b.disabled ? "#f8fafc" : b.bg, border: `1px solid ${b.disabled ? "#e2e8f0" : b.color}`, borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: b.disabled ? "not-allowed" : "pointer", color: b.disabled ? "#9ca3af" : b.color, display: "flex", alignItems: "center", gap: 6, justifyContent: "center" }}>
             {b.icon} {b.label}
           </button>
@@ -677,14 +913,11 @@ function CertsSection() {
       </div>
 
       <div style={{ background: "#f8fafc", borderRadius: 8, padding: "12px 14px", border: "1px solid #e2e8f0", fontSize: 11, color: "#6b7280" }}>
-        💡 لإنشاء الشهادة الكاملة وتسجيل الجهاز، استخدم قسم "تسجيل الجهاز" الذي يوفر معالجاً خطوة بخطوة.
+        💡 انقر على أي صف لرؤية تفاصيله الكاملة (Fingerprint, Subject, Issuer, Serial Number, Signature Algorithm).
       </div>
     </div>
   );
 }
-
-// ── مساعد لـ CertsSection ─────────────────────────────────────────────────────
-function csidDot(_: any): "ok"|"warn"|"error"|"none" { return "none"; }
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 5. مفاتيح التشفير — محسّنة
