@@ -71,13 +71,15 @@ import SettingsModule, {
   CfgZatcaTab, CfgZatcaMonitorTab, CfgZatcaInvoicesTab, CfgZatcaLogsTab,
   CfgGosiTab, CfgGaztTab,
   CfgZatcaCenterTab,
+  CfgSystemInfoTab,
 } from "./pages/SettingsModule";
 import PostingSettingsPage from "./pages/PostingSettingsPage";
 import PostingOperationsPage from "./pages/PostingOperationsPage";
 import LoginPage from "./pages/LoginPage";
 import SuperAdminPage from "./pages/SuperAdminPage";
 import SourceCodeViewerPage from "./pages/SourceCodeViewerPage";
-import { createElement, useEffect } from "react";
+import FirstRunWizard from "./pages/FirstRunWizard";
+import { createElement, useEffect, useState } from "react";
 import { trpc } from "./lib/trpc";
 import { Settings } from "lucide-react";
 import AppWindow from "./components/AppWindow";
@@ -262,6 +264,8 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/cfg/zatca-log":              CfgZatcaLogsTab,
   "/cfg/gosi":                   CfgGosiTab,
   "/cfg/gazt":                   CfgGaztTab,
+  // معلومات النظام
+  "/cfg/system-info":            CfgSystemInfoTab,
   // مستعرض الكود البرمجي
   "/dev/source-code":            SourceCodeViewerPage,
 };
@@ -270,6 +274,8 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const [location, navigate] = useLocation();
   const meQuery = trpc.auth.me.useQuery(undefined, { retry: false });
+  const firstRunQ = trpc.setup.isFirstRun.useQuery(undefined, { retry: false, enabled: !!meQuery.data });
+  const [wizardDone, setWizardDone] = useState(false);
 
   useEffect(() => {
     if (meQuery.isLoading) return;
@@ -293,7 +299,16 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  return <>{children}</>;
+  const showFirstRun = !!meQuery.data && firstRunQ.data?.firstRun === true && !wizardDone;
+
+  return (
+    <>
+      {showFirstRun && (
+        <FirstRunWizard onComplete={() => { setWizardDone(true); firstRunQ.refetch(); }} />
+      )}
+      {children}
+    </>
+  );
 }
 
 // ─── نوافذ عائمة Windows-style ───────────────────────────────────────────

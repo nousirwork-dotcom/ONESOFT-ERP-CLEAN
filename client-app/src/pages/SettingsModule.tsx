@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, lazy, Suspense } from "react";
 import { DateSegmentInput } from "@/components/DateSegmentInput";
 import { fmtDate, fmtDateTime } from "@/utils/dateUtils";
 import { useTabManager } from "@/contexts/TabManagerContext";
@@ -129,6 +129,7 @@ const menuSections = [
 
       { id: "backup",              label: "النسخ الاحتياطي",     status: "done",    path: "/cfg/backup" },
       { id: "audit-log",           label: "سجل العمليات",        status: "done",    path: "/cfg/audit-log" },
+      { id: "system-info",         label: "معلومات النظام",      status: "done",    path: "/cfg/system-info" },
     ],
   },
   {
@@ -1998,6 +1999,16 @@ function FieldDesignPage() {
         </Table>
       </Card>
     </div>
+  );
+}
+
+// ─── System Info (lazy) ────────────────────────────────────────────────────────
+const SystemInfoPageLazy = lazy(() => import("./SystemInfoPage"));
+function SystemInfoPageEmbed() {
+  return (
+    <Suspense fallback={<div className="p-4 text-sm text-muted-foreground">جارٍ التحميل...</div>}>
+      <SystemInfoPageLazy />
+    </Suspense>
   );
 }
 
@@ -5022,6 +5033,7 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
     case "field-design":         return <FieldDesignPage />;
     case "backup":               return <BackupPage />;
     case "audit-log":            return <AuditLogPage />;
+    case "system-info":          return <SystemInfoPageEmbed />;
     // إعدادات الموارد البشرية
     case "missing-doc-numbers":  return <MissingDocNumbersPage />;
     case "payroll-periods":      return <PayrollPeriodsPage />;
@@ -5157,3 +5169,4 @@ export function CfgZatcaInvoicesTab()    { return <CfgSubPage activeId="zatca-in
 export function CfgZatcaLogsTab()        { return <CfgSubPage activeId="zatca-logs" />; }
 export function CfgGosiTab()             { return <CfgSubPage activeId="gosi-config" />; }
 export function CfgGaztTab()             { return <CfgSubPage activeId="gazt-config" />; }
+export function CfgSystemInfoTab()       { return <CfgSubPage activeId="system-info" />; }
