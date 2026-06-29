@@ -50,12 +50,21 @@ export default function SuperAdminPage() {
             <p className="text-xs text-slate-400">لوحة تحكم المدير العام</p>
           </div>
         </div>
-        <button
-          onClick={async () => { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); window.location.href = '/login'; }}
-          className="text-sm text-slate-400 hover:text-white transition"
-        >
-          تسجيل الخروج
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => window.location.href = '/dev/source-code'}
+            title="مستعرض الكود البرمجي"
+            style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '6px 14px', color: '#94a3b8', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <span style={{ fontSize: 14 }}>🗂️</span> مستعرض الكود
+          </button>
+          <button
+            onClick={async () => { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); window.location.href = '/login'; }}
+            className="text-sm text-slate-400 hover:text-white transition"
+          >
+            تسجيل الخروج
+          </button>
+        </div>
       </div>
 
       <div className="p-6 max-w-6xl mx-auto">

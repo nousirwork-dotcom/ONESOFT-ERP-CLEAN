@@ -76,6 +76,7 @@ import PostingSettingsPage from "./pages/PostingSettingsPage";
 import PostingOperationsPage from "./pages/PostingOperationsPage";
 import LoginPage from "./pages/LoginPage";
 import SuperAdminPage from "./pages/SuperAdminPage";
+import SourceCodeViewerPage from "./pages/SourceCodeViewerPage";
 import { createElement, useEffect } from "react";
 import { trpc } from "./lib/trpc";
 import { Settings } from "lucide-react";
@@ -261,6 +262,8 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/cfg/zatca-log":              CfgZatcaLogsTab,
   "/cfg/gosi":                   CfgGosiTab,
   "/cfg/gazt":                   CfgGaztTab,
+  // مستعرض الكود البرمجي
+  "/dev/source-code":            SourceCodeViewerPage,
 };
 
 // ─── Auth Guard ───────────────────────────────────────────────────────────
@@ -330,6 +333,7 @@ function AppRoutes() {
   if (user?.role === "superadmin") {
     return (
       <Switch>
+        <Route path="/dev/source-code" component={SourceCodeViewerPage} />
         <Route path="/superadmin" component={SuperAdminPage} />
         <Route component={SuperAdminPage} />
       </Switch>

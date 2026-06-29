@@ -17,6 +17,7 @@ import { fieldDictionaryRouter }    from './fieldDictionary.js';
 import { appSettingsRouter }        from './appSettings.js';
 import { paymentMethodsRouter }     from './paymentMethods.js';
 import { zatcaRouter }              from './zatca.js';
+import { sourceCodeRouter }         from './sourceCode.js';
 
 // ─── Newly extracted routers ──────────────────────────────────────────────────
 import { authRouter }                                                           from './auth.js';
@@ -85,6 +86,7 @@ export const appRouter = router({
   appSettings:         appSettingsRouter,
   paymentMethods:      paymentMethodsRouter,
   zatca:               zatcaRouter,
+  sourceCode:          sourceCodeRouter,
 });
 
 export type AppRouter = typeof appRouter;

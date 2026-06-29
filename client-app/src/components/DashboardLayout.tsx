@@ -36,6 +36,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  Code2,
   Cog,
   Factory,
   FileText,
@@ -424,6 +425,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <Settings className="w-4 h-4 ml-2" />
           {t(lang, "settings")}
         </DropdownMenuItem>
+        {(user?.role === "superadmin" || user?.role === "admin") && (
+          <DropdownMenuItem onClick={() => openTab("/dev/source-code", "مستعرض الكود", Code2)}>
+            <Code2 className="w-4 h-4 ml-2" />
+            مستعرض الكود
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
           <LogOut className="w-4 h-4 ml-2" />
