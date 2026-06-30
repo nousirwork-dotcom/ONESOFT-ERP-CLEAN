@@ -5,6 +5,7 @@ import { useTabManager } from "@/core/contexts/TabManagerContext";
 import { trpc } from "@/shared/lib/trpc";
 import Warehouses from "./Warehouses";
 import DocumentJournalsPage from "./DocumentJournalsPage";
+import UpdatesPage from "./UpdatesPage";
 
 import TemplatesManagerPage from "./TemplatesManagerPage";
 import ZatcaIntegrationPage from "./ZatcaIntegrationPage";
@@ -130,6 +131,7 @@ const menuSections = [
       { id: "backup",              label: "النسخ الاحتياطي",     status: "done",    path: "/cfg/backup" },
       { id: "audit-log",           label: "سجل العمليات",        status: "done",    path: "/cfg/audit-log" },
       { id: "system-info",         label: "معلومات النظام",      status: "done",    path: "/cfg/system-info" },
+      { id: "updates",             label: "التحديثات",           status: "done",    path: "/cfg/updates" },
     ],
   },
   {
@@ -5034,6 +5036,7 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
     case "backup":               return <BackupPage />;
     case "audit-log":            return <AuditLogPage />;
     case "system-info":          return <SystemInfoPageEmbed />;
+    case "updates":              return <UpdatesPage />;
     // إعدادات الموارد البشرية
     case "missing-doc-numbers":  return <MissingDocNumbersPage />;
     case "payroll-periods":      return <PayrollPeriodsPage />;

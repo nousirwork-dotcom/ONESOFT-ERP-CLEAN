@@ -20,6 +20,7 @@ import { zatcaRouter }              from './zatca.js';
 import { sourceCodeRouter }         from './sourceCode.js';
 import { backupRouter }             from './backup.js';
 import { setupRouter }              from './setup.js';
+import { updatesRouter }            from './updates.js';
 
 // ─── Newly extracted routers ──────────────────────────────────────────────────
 import { authRouter }                                                           from './auth.js';
@@ -91,6 +92,7 @@ export const appRouter = router({
   sourceCode:          sourceCodeRouter,
   backup:              backupRouter,
   setup:               setupRouter,
+  updates:             updatesRouter,
 });
 
 export type AppRouter = typeof appRouter;
