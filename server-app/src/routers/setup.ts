@@ -159,23 +159,21 @@ export const setupRouter = router({
         phone:    input.company.phone ?? '',
         email:    input.company.email ?? '',
         address:  input.company.address ?? '',
-        country:  input.company.country,
         currency: input.company.currency,
         status:   'active',
-        plan:     'standard',
         maxUsers: 10,
       }).returning();
 
       // إنشاء مستخدم المدير
       const hashedPass = await hashPassword(input.admin.password);
       await db.insert(users).values({
-        orgId:    org.id,
-        username: input.admin.username,
-        password: hashedPass,
-        name:     input.admin.name,
-        email:    input.admin.email ?? '',
-        role:     'admin',
-        status:   'active',
+        orgId:        org.id,
+        username:     input.admin.username,
+        passwordHash: hashedPass,
+        name:         input.admin.name,
+        email:        input.admin.email ?? '',
+        role:         'admin',
+        status:       'active',
       });
 
       // حفظ إعدادات التطبيق
