@@ -11,3 +11,9 @@ electron/node_modules/
 electron/dist/
 logs/
 backups/
+
+# Development assets (screenshots, temp images - not needed for runtime)
+attached_assets/
+
+# Public ZIP downloads (generated on demand)
+client-app/public/onesoft-update.zip
