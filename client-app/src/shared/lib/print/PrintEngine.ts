@@ -5,17 +5,22 @@
  *   - PrintEngine مغلق للتعديل — لا يحتوي على أي if أو switch خاص بنوع المستند.
  *   - مفتوح للتوسعة — يكفي تسجيل Builder جديد عبر registerBuilder().
  *
- * الاستخدام:
+ * الاستخدام الموحد:
+ *   import { PrintEngine } from "@/shared/lib/print";
+ *
  *   PrintEngine.buildAndPrint({ documentType: "sales_invoice",    data, templateConfig })
  *   PrintEngine.buildAndPrint({ documentType: "purchase_invoice", data, templateConfig })
  *   PrintEngine.buildAndPrint({ documentType: "receipt_voucher",  data, templateConfig })
+ *   PrintEngine.buildAndPrint({ documentType: "product_label",    data })
+ *   PrintEngine.buildAndPrint({ documentType: "trial_balance",    data })
  *
  * إضافة مستند جديد:
- *   1. أنشئ builders/ReceiptBuilder.ts وسجّل registerBuilder("receipt_voucher", ...)
+ *   1. أنشئ builders/MyDocBuilder.ts وسجّل registerBuilder("my_doc", MyDocBuilder)
  *   2. أضف import في index.ts
  *   — PrintEngine نفسه لا يُعدَّل أبداً.
  */
 import type { PrintJob, PrintDocumentType, DocumentBuilder } from "./types";
+import { PdfExporter } from "./PdfExporter";
 
 /* ── Registry ──────────────────────────────────────────────────────────────── */
 const _registry = new Map<PrintDocumentType, DocumentBuilder>();
@@ -51,19 +56,44 @@ export const PrintEngine = {
    * يُعيد true في حالة النجاح، false إذا حجب المتصفح النافذة المنبثقة.
    */
   print(html: string): boolean {
-    const win = window.open("", "_blank", "width=1040,height=1150");
-    if (!win) return false;
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-    setTimeout(() => { win.print(); win.close(); }, 500);
-    return true;
+    return PdfExporter.print(html);
   },
 
   /**
    * يبني HTML ثم يطبعه مباشرةً — الطريقة الرئيسية لأي مستند.
    */
   buildAndPrint(job: PrintJob): boolean {
-    return this.print(this.buildHtml(job));
+    const html = this.buildHtml(job);
+    return this.print(html);
+  },
+
+  /**
+   * يفتح معاينة في تبويب جديد بدون طباعة تلقائية.
+   */
+  preview(job: PrintJob): boolean {
+    const html = this.buildHtml(job);
+    return PdfExporter.preview(html);
+  },
+
+  /**
+   * يُصدّر HTML كملف قابل للتحميل.
+   */
+  exportHtml(job: PrintJob, filename?: string): void {
+    const html = this.buildHtml(job);
+    PdfExporter.downloadHtml(html, filename ?? job.title ?? "document");
+  },
+
+  /**
+   * يُعيد true إذا كان نوع المستند مسجلاً.
+   */
+  hasBuilder(docType: PrintDocumentType): boolean {
+    return _registry.has(docType);
+  },
+
+  /**
+   * يُعيد قائمة بجميع أنواع المستندات المسجلة.
+   */
+  getRegisteredTypes(): PrintDocumentType[] {
+    return Array.from(_registry.keys());
   },
 };

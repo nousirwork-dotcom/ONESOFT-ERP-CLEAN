@@ -1,15 +1,20 @@
 /**
  * InvoicePrintModal.tsx — معاينة وطباعة الفاتورة الضريبية
- * يستخدم buildInvoiceHtml مباشرةً لضمان تطابق المعاينة مع الطباعة تماماً
+ *
+ * يستخدم PrintEngine + QRCodeService من "@/shared/lib/print"
+ * ليكون متوافقاً مع نظام الطباعة الموحد.
  */
 import { useEffect, useMemo, useState } from "react";
-import QRCode from "qrcode";
 import { Button } from "@/core/ui/button";
 import { Printer, X, FileText } from "lucide-react";
-import { generateQrContent, type QrSettings, type QrInvoiceData } from "@/shared/lib/qrUtils";
 import { buildInvoiceHtml } from "@/shared/lib/buildInvoiceHtml";
-import type { InvDocTemplateConfig, InvPrintData } from "@/shared/lib/buildInvoiceHtml";
-import { PrintEngine, DEFAULT_TEMPLATE_CONFIG } from "@/shared/lib/print";
+import {
+  PrintEngine,
+  QRCodeService,
+  DEFAULT_TEMPLATE_CONFIG,
+} from "@/shared/lib/print";
+import type { InvDocTemplateConfig, InvPrintData } from "@/shared/lib/print";
+import type { QrSettings, QrInvoiceData } from "@/shared/lib/qrUtils";
 
 /* ═══════════════════ Re-exported Types (backward compat) ═══════════════════ */
 export type DocTemplateConfig = InvDocTemplateConfig;
@@ -34,52 +39,46 @@ export default function InvoicePrintModal({
   const cfg   = templateConfig ?? DEFAULT_TEMPLATE_CONFIG;
   const color = cfg.primaryColor;
 
-  const showQR  = !!(qrSettings?.isEnabled && (
-    docType === "purchase_invoice"
-      ? qrSettings?.showOnPurchaseInvoice
-      : qrSettings?.showOnSalesInvoice
-  ));
-  const qrLabel = qrSettings?.countrySystem === "zatca" ? "ZATCA QR"
-                : qrSettings?.countrySystem === "eta"   ? "ETA QR"
-                : "QR Code";
-  const qrSize  = qrSettings?.qrSize ?? 100;
-
-  const qrContent = showQR
-    ? generateQrContent(
-        qrSettings!.countrySystem,
-        {
-          sellerName:      qrSettings?.sellerName || data.sellerName,
-          taxNumber:       qrSettings?.taxNumber  || data.sellerTaxNumber,
-          invoiceDateTime: `${data.invoiceDate}T${data.invoiceTime ?? "00:00:00"}`,
-          totalAmount:     data.grandTotal,
-          vatAmount:       data.taxTotal,
-          invoiceNumber:   data.invoiceNumber,
-          buyerName:       data.customerName,
-          buyerTaxNumber:  data.customerTaxNumber,
-        } as QrInvoiceData,
-        qrSettings?.customFormat,
-      )
-    : "";
-
-  /* ── توليد QR كصورة base64 ── */
+  /* ── حل QR عبر QRCodeService ── */
   useEffect(() => {
-    if (!showQR || !qrContent) { setQrDataUrl(""); return; }
-    QRCode.toDataURL(qrContent, { width: qrSize * 2, margin: 1, errorCorrectionLevel: "M" })
-      .then(url => setQrDataUrl(url))
+    if (!open) return;
+
+    const invoiceData: QrInvoiceData = {
+      sellerName:      qrSettings?.sellerName || data.sellerName,
+      taxNumber:       qrSettings?.taxNumber  || data.sellerTaxNumber || "",
+      invoiceDateTime: `${data.invoiceDate}T${data.invoiceTime ?? "00:00:00"}`,
+      totalAmount:     data.grandTotal,
+      vatAmount:       data.taxTotal,
+      invoiceNumber:   data.invoiceNumber,
+      buyerName:       data.customerName,
+      buyerTaxNumber:  data.customerTaxNumber,
+    };
+
+    QRCodeService.resolveForInvoice(qrSettings, invoiceData, docType)
+      .then(result => setQrDataUrl(result.dataUrl))
       .catch(() => setQrDataUrl(""));
-  }, [qrContent, qrSize, showQR]);
+  }, [open, data, qrSettings, docType]);
 
   /* ── HTML الفاتورة — نفس المخرج للمعاينة والطباعة ── */
-  const invoiceHtml = useMemo(
-    () => buildInvoiceHtml(data, cfg, showQR ? qrDataUrl : undefined, qrLabel, qrSize, docType),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [data, cfg, qrDataUrl, showQR, qrLabel, qrSize, docType],
-  );
+  const invoiceHtml = useMemo(() => {
+    const showQR = !!(qrSettings?.isEnabled && qrDataUrl && (
+      docType === "purchase_invoice"
+        ? qrSettings?.showOnPurchaseInvoice
+        : qrSettings?.showOnSalesInvoice
+    ));
+    const qrLabel = qrSettings?.countrySystem === "zatca" ? "ZATCA QR"
+                  : qrSettings?.countrySystem === "eta"   ? "ETA QR"  : "QR Code";
+    const qrSize  = qrSettings?.qrSize ?? 100;
 
-  /* ── طباعة / تصدير PDF ── */
+    return buildInvoiceHtml(data, cfg, showQR ? qrDataUrl : undefined, qrLabel, qrSize, docType);
+  }, [data, cfg, qrDataUrl, qrSettings, docType]);
+
+  /* ── طباعة / تصدير PDF عبر PrintEngine ── */
   const handlePrint = () => { PrintEngine.print(invoiceHtml); };
 
   if (!open) return null;
+
+  const docLabel = docType === "purchase_invoice" ? "فاتورة مشتريات" : "فاتورة";
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col" dir="rtl">
@@ -91,10 +90,10 @@ export default function InvoicePrintModal({
       >
         <FileText className="w-5 h-5 text-white/80" />
         <span className="text-white font-bold text-base flex-1">
-          معاينة الطباعة — {docType === "purchase_invoice" ? "فاتورة مشتريات" : "فاتورة"} {data.invoiceNumber}
+          معاينة الطباعة — {docLabel} {data.invoiceNumber}
           {cfg.language === "bilingual" && (
             <span className="text-white/60 font-normal text-sm mr-2">
-              | {docType === "purchase_invoice" ? "PINV01 ثنائي اللغة" : "INV01 ثنائي اللغة"}
+              | {docType === "purchase_invoice" ? "PINV01" : "INV01"} ثنائي اللغة
             </span>
           )}
         </span>
