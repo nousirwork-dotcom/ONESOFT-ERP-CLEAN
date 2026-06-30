@@ -1,35 +1,58 @@
 import { useEffect, useState } from 'react';
 import { trpc } from '@/shared/lib/trpc';
 import { useLocation } from 'wouter';
+import FirstRunWizard from '@/core/auth/FirstRunWizard';
 
 export default function LoginPage() {
   const [status, setStatus] = useState<'loading' | 'error'>('loading');
   const [error, setError] = useState('');
+  const [showWizard, setShowWizard] = useState(false);
   const utils = trpc.useUtils();
   const [, navigate] = useLocation();
 
+  const firstRunQ = trpc.setup.isFirstRun.useQuery(undefined, { retry: false });
+
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch('/api/auth/auto-login', {
-          method: 'POST',
-          credentials: 'include',
-        });
-        const data = await res.json();
-        if (res.ok) {
-          await utils.auth.me.invalidate();
-          const role = data.user?.role;
-          navigate(role === 'superadmin' ? '/superadmin' : '/');
-        } else {
-          setError(data.error || 'تعذّر الدخول التلقائي');
+    if (firstRunQ.data?.firstRun === true) {
+      setShowWizard(true);
+      setStatus('error');
+      return;
+    }
+    if (firstRunQ.data?.firstRun === false) {
+      (async () => {
+        try {
+          const res = await fetch('/api/auth/auto-login', {
+            method: 'POST',
+            credentials: 'include',
+          });
+          const data = await res.json();
+          if (res.ok) {
+            await utils.auth.me.invalidate();
+            const role = data.user?.role;
+            navigate(role === 'superadmin' ? '/superadmin' : '/');
+          } else {
+            setError(data.error || 'تعذّر الدخول التلقائي');
+            setStatus('error');
+          }
+        } catch {
+          setError('تعذّر الاتصال بالخادم');
           setStatus('error');
         }
-      } catch {
-        setError('تعذّر الاتصال بالخادم');
-        setStatus('error');
-      }
-    })();
-  }, []);
+      })();
+    }
+  }, [firstRunQ.data]);
+
+  if (showWizard) {
+    return (
+      <FirstRunWizard
+        onComplete={async () => {
+          setShowWizard(false);
+          await utils.auth.me.invalidate();
+          navigate('/');
+        }}
+      />
+    );
+  }
 
   return (
     <div
@@ -78,7 +101,7 @@ export default function LoginPage() {
             border: '1px solid #D4CDC1',
             boxShadow: '0 4px 20px rgba(30,52,79,0.1)',
           }}>
-            <div style={{ color: '#B91C1C', fontWeight: 600, marginBottom: 14 }}>⚠️ {error}</div>
+            {error && <div style={{ color: '#B91C1C', fontWeight: 600, marginBottom: 14 }}>⚠️ {error}</div>}
             <ManualLoginForm onSuccess={(role) => navigate(role === 'superadmin' ? '/superadmin' : '/')} utils={utils} />
           </div>
         )}
