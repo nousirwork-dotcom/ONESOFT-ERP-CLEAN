@@ -1,19 +1,95 @@
+# ══════════════════════════════════════════════════════════
+#  OneSoft ERP — .gitignore
+# ══════════════════════════════════════════════════════════
 
-# Backup archives
+# ── Node.js dependencies ──────────────────────────────────
+node_modules/
+client-app/node_modules/
+server-app/node_modules/
+electron/node_modules/
+artifacts/node_modules/
+
+# ── Build output (regeneratable) ─────────────────────────
+client-app/dist/
+server-app/dist/
+electron/dist/
+dist-installer/
+*.mjs.map
+
+# ── Runtime logs ─────────────────────────────────────────
+logs/
+*.log
+server-app/logs/
+client-app/logs/
+
+# ── Backup archives ───────────────────────────────────────
 *.tar.gz
 *.zip
+*.gz
 *backup*
-*-source-*.tar.gz
+*-backup-*
+*_backup_*
 
-# Desktop deployment build output
-dist-installer/
-electron/node_modules/
-electron/dist/
-logs/
-backups/
+# ── Database ──────────────────────────────────────────────
+*.sqlite
+*.sqlite3
+*.db
 
-# Development assets (screenshots, temp images - not needed for runtime)
+# ── Environment & secrets ────────────────────────────────
+.env
+.env.local
+.env.production
+.env.*.local
+server-app/src/.env
+server-app/.env
+config.json
+!deploy-windows/config.json.example
+
+# ── Replit internal (not needed for development) ─────────
+.local/
+.cache/
+.config/
+.upm/
+.replit.d/
+artifacts/
+.canvas/
+canvas/
+__pycache__/
+*.pyc
+*.pyo
+main.py
+pyproject.toml
+
+# ── Agent memory & workspace ─────────────────────────────
+.agents/
+
+# ── Development screenshots & temp images ────────────────
 attached_assets/
 
-# Public ZIP downloads (generated on demand)
+# ── Generated public files (created on demand) ───────────
 client-app/public/onesoft-update.zip
+client-app/public/onesoft-erp.zip
+client-app/public/*.zip
+
+# ── pnpm ─────────────────────────────────────────────────
+.pnpm-store/
+.pnpm-debug.log*
+
+# ── OS files ─────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*~
+
+# ── IDE ──────────────────────────────────────────────────
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# ── TypeScript ────────────────────────────────────────────
+*.tsbuildinfo
