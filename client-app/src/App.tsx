@@ -1,20 +1,20 @@
-import { Toaster } from "@/components/ui/sonner";
-import { useSmartCopy } from "@/hooks/useSmartCopy";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import NotFound from "@/pages/NotFound";
+import { Toaster } from "@/core/ui/sonner";
+import { useSmartCopy } from "@/shared/hooks/useSmartCopy";
+import { TooltipProvider } from "@/core/ui/tooltip";
+import NotFound from "@/shared/components/NotFound";
 import { Route, Switch, useLocation } from "wouter";
-import ErrorBoundary from "./components/ErrorBoundary";
-import DashboardLayout from "./components/DashboardLayout";
-import { ThemeProvider } from "./contexts/ThemeContext";
-import { TabManagerProvider, useTabManager } from "./contexts/TabManagerContext";
-import { LanguageProvider } from "./contexts/LanguageContext";
-import Dashboard from "./pages/Dashboard";
-import POS from "./pages/POS";
-import Invoices from "./pages/Invoices";
+import ErrorBoundary from "@/shared/components/ErrorBoundary";
+import DashboardLayout from "@/shared/components/DashboardLayout";
+import { ThemeProvider } from "@/core/contexts/ThemeContext";
+import { TabManagerProvider, useTabManager } from "@/core/contexts/TabManagerContext";
+import { LanguageProvider } from "@/core/contexts/LanguageContext";
+import Dashboard from "@/modules/dashboard/pages/Dashboard";
+import POS from "@/modules/sales/pages/POS";
+import Invoices from "@/modules/sales/pages/Invoices";
 import PurchasesModule, {
   PurchaseSuppliersPage, PurchaseSupplierGroupsPage, PurchaseOrdersPage,
   PurchaseInvoicesPage, PurchaseReturnsPage, PurchaseRptSupplierPage, PurchaseRptItemPage,
-} from "./pages/PurchasesModule";
+} from "@/modules/purchases/pages/PurchasesModule";
 import SalesModule, {
   SalesTransactionsTab,
   SalesInvoiceTab, SalesReturnTab, SalesCreditNoteTab, SalesQuotationTab,
@@ -23,35 +23,35 @@ import SalesModule, {
   SalesCustomersTab, SalesCustomerGroupsTab, SalesCustomerBalancesTab,
   SalesCustomerStatementTab, SalesCustomerReportsTab,
   SalesTotalsReportsTab, SalesInvoicesReportTab, SalesItemsReportsTab,
-} from "./pages/SalesModule";
-import Users from "./pages/Users";
+} from "@/modules/sales/pages/SalesModule";
+import Users from "@/modules/settings/pages/Users";
 import ManufacturingModule, {
   MfgNewOrderTab, MfgOrdersTab, MfgTrackingTab, MfgNewBomTab, MfgBomTab,
   MfgCostTab, MfgCostReportsTab, MfgStagesTab, MfgWorkcentersTab,
   MfgProductionReportTab, MfgEfficiencyTab, MfgWasteTab,
-} from "./pages/ManufacturingModule";
+} from "@/modules/manufacturing/pages/ManufacturingModule";
 import AccountingModule, {
   AccJournalTab, AccReceiptTab, AccPaymentTab, AccNewJournalTab, AccOpeningTab,
   AccAccountsTab, AccLedgerTab, AccCostCentersTab, AccCostAllocationTab,
   AccTrialBalanceTab, AccIncomeTab, AccBalanceSheetTab, AccCashFlowTab,
-} from "./pages/AccountingModule";
+} from "@/modules/accounting/pages/AccountingModule";
 import HRModule, {
   HREmployeesTab, HRAddEmployeeTab, HRDepartmentsTab, HRPositionsTab,
   HRPayrollTab, HRPayrollListTab, HRAdvancesTab, HRAttendanceTab,
   HRAttendanceReportTab, HRScheduleTab, HRLeaveRequestTab, HRLeavesTab,
   HRLeaveBalanceTab, HRHeadcountTab, HRPayrollReportTab, HRAttendanceSummaryTab,
-} from "./pages/HRModule";
+} from "@/modules/hr/pages/HRModule";
 import AssetsModule, {
   AssetsListTab, AssetsAddTab, AssetsCategoriesTab, AssetsDepreciationTab,
   AssetsDeprScheduleTab, AssetsTransferTab, AssetsTransferListTab,
   AssetsDisposalTab, AssetsDisposalListTab, AssetsSummaryTab,
   AssetsDeprReportTab, AssetsMovementTab,
-} from "./pages/AssetsModule";
+} from "@/modules/assets/pages/AssetsModule";
 import InventoryModule, {
   InvProductsTab, InvUnitsTab, InvGroupsTab, InvCategoriesTab,
   InvPricingTab, InvFreeProductsTab, InvTransferTab, InvReceiptTab, InvIssueTab,
   InvCountTab, InvStockReportsTab, InvVoucherReportsTab, InvReinstateTab, InvRegenerateTab,
-} from "./pages/InventoryModule";
+} from "@/modules/inventory/pages/InventoryModule";
 import SettingsModule, {
   CfgCompanyTab, CfgCurrenciesTab, CfgTaxesTab, CfgFiscalTab,
   CfgUserCategoriesTab, CfgUsersTab, CfgUserGroupsTab, CfgPermissionsTab,
@@ -72,17 +72,17 @@ import SettingsModule, {
   CfgGosiTab, CfgGaztTab,
   CfgZatcaCenterTab,
   CfgSystemInfoTab,
-} from "./pages/SettingsModule";
-import PostingSettingsPage from "./pages/PostingSettingsPage";
-import PostingOperationsPage from "./pages/PostingOperationsPage";
-import LoginPage from "./pages/LoginPage";
-import SuperAdminPage from "./pages/SuperAdminPage";
-import SourceCodeViewerPage from "./pages/SourceCodeViewerPage";
-import FirstRunWizard from "./pages/FirstRunWizard";
+} from "@/modules/settings/pages/SettingsModule";
+import PostingSettingsPage from "@/modules/accounting/pages/PostingSettingsPage";
+import PostingOperationsPage from "@/modules/accounting/pages/PostingOperationsPage";
+import LoginPage from "@/core/auth/LoginPage";
+import SuperAdminPage from "@/core/admin/SuperAdminPage";
+import SourceCodeViewerPage from "@/core/dev/SourceCodeViewerPage";
+import FirstRunWizard from "@/core/auth/FirstRunWizard";
 import { createElement, useEffect, useState } from "react";
-import { trpc } from "./lib/trpc";
+import { trpc } from "@/shared/lib/trpc";
 import { Settings } from "lucide-react";
-import AppWindow from "./components/AppWindow";
+import AppWindow from "@/shared/components/AppWindow";
 
 // ─── خريطة المسارات إلى المكونات ──────────────────────────────────────────
 export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
@@ -255,18 +255,14 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/cfg/logo-stamp":             CfgLogoStampTab,
   "/cfg/signatures":             CfgSignaturesTab,
   "/cfg/email-pdf":              CfgEmailPdfTab,
-  // مركز التكامل مع هيئة الزكاة والضريبة والجمارك
   "/cfg/zatca-center":           CfgZatcaCenterTab,
-  // ZATCA / GOSI / GAZT Government Integration (كلاسيك)
   "/cfg/zatca":                  CfgZatcaTab,
   "/cfg/zatca-mon":              CfgZatcaMonitorTab,
   "/cfg/zatca-inv":              CfgZatcaInvoicesTab,
   "/cfg/zatca-log":              CfgZatcaLogsTab,
   "/cfg/gosi":                   CfgGosiTab,
   "/cfg/gazt":                   CfgGaztTab,
-  // معلومات النظام
   "/cfg/system-info":            CfgSystemInfoTab,
-  // مستعرض الكود البرمجي
   "/dev/source-code":            SourceCodeViewerPage,
 };
 
@@ -318,14 +314,11 @@ function TabContent() {
 
   return (
     <>
-      {/* لوحة التحكم في الخلفية */}
       {showDashboard && (
         <div className="absolute inset-0 overflow-auto" dir="rtl">
           <Dashboard />
         </div>
       )}
-
-      {/* النوافذ العائمة */}
       {tabs.map(tab => {
         const Component = PAGE_MAP[tab.path];
         return (
