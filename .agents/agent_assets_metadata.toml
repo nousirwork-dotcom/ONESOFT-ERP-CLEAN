@@ -90,3 +90,9 @@ id = "vHn4oxukA3jvRXm75LiuJ"
 uri = "file://client-app/public/onesoft-erp-source.zip"
 type = "unspecified"
 title = "OneSoft ERP — ملفات المصدر الكاملة"
+
+[[outputs]]
+id = "24sppnmtq_J9RL7kEcKVZ"
+uri = "file://OneSoft-ERP-v1.0.zip"
+type = "unspecified"
+title = "OneSoft ERP v1.0 — كود المصدر الكامل"
