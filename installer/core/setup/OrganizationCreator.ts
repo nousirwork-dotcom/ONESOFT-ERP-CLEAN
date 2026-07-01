@@ -1,0 +1,45 @@
+import { Pool } from 'pg';
+import type { OrganizationSetup, ProgressEvent } from '../types.js';
+
+type Emit = (e: ProgressEvent) => void;
+
+export class OrganizationCreator {
+  async create(
+    databaseUrl: string,
+    org: OrganizationSetup,
+    emit: Emit,
+  ): Promise<{ id: number; code: string }> {
+    emit({ level: 'info', message: `جارٍ إنشاء المؤسسة "${org.name}"...`, timestamp: now() });
+
+    const pool = new Pool({ connectionString: databaseUrl });
+    const client = await pool.connect();
+
+    try {
+      // التحقق من عدم وجود المؤسسة مسبقاً
+      const exists = await client.query(
+        `SELECT id, code FROM organizations WHERE code = $1`, [org.code]
+      );
+      if ((exists.rowCount ?? 0) > 0) {
+        const row = exists.rows[0] as { id: number; code: string };
+        emit({ level: 'info', message: `المؤسسة "${org.code}" موجودة بالفعل`, timestamp: now() });
+        return row;
+      }
+
+      const result = await client.query<{ id: number; code: string }>(`
+        INSERT INTO organizations (code, name, "nameEn", currency, status, "maxUsers", "createdAt", "updatedAt")
+        VALUES ($1, $2, $3, $4, 'active', 10, NOW(), NOW())
+        RETURNING id, code
+      `, [org.code, org.name, org.nameEn, org.currency]);
+
+      const row = result.rows[0]!;
+      emit({ level: 'success', message: `تم إنشاء المؤسسة — كود: ${row.code}`, timestamp: now() });
+      return row;
+
+    } finally {
+      client.release();
+      await pool.end();
+    }
+  }
+}
+
+function now() { return new Date().toISOString(); }

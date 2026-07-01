@@ -1,0 +1,48 @@
+{
+  "name": "onesoft-installer",
+  "version": "1.0.0",
+  "description": "OneSoft ERP — Professional Installer",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "build": "tsc -p tsconfig.electron.json && vite build && electron-builder",
+    "build:core": "tsc -p tsconfig.core.json",
+    "test:core": "tsx core/index.ts",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "drizzle-orm": "^0.44.1",
+    "pg": "^8.11.5",
+    "bcryptjs": "^2.4.3",
+    "archiver": "^7.0.1",
+    "node-windows": "^1.0.0-beta.8",
+    "which": "^4.0.0",
+    "semver": "^7.6.2",
+    "execa": "^9.3.0",
+    "fs-extra": "^11.2.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/archiver": "^6.0.2",
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^20.14.2",
+    "@types/pg": "^8.11.6",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/semver": "^7.5.8",
+    "@types/which": "^3.0.3",
+    "@vitejs/plugin-react": "^4.3.1",
+    "concurrently": "^8.2.2",
+    "electron": "^31.0.2",
+    "electron-builder": "^24.13.3",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tsx": "^4.15.6",
+    "typescript": "^5.5.2",
+    "vite": "^5.3.1",
+    "wait-on": "^7.2.0",
+    "zustand": "^4.5.2"
+  }
+}

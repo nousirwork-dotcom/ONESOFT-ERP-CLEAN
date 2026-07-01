@@ -1,0 +1,3 @@
+# Place nssm.exe here before building the installer
+# Download from: https://nssm.cc/download
+# Required file: nssm.exe (win64 version)

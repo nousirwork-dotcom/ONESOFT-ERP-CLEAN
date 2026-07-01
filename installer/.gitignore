@@ -1,0 +1,9 @@
+node_modules/
+dist/
+dist-electron/
+dist-ui/
+dist-core/
+release/
+resources/bin/nssm.exe
+resources/icons/*.ico
+resources/icons/*.png
