@@ -10,10 +10,11 @@ const CONFIG_DIR = process.platform === 'win32'
 const CONFIG_FILE = path.join(CONFIG_DIR, 'onesoft.config.json');
 
 // ─── الإعدادات الافتراضية ─────────────────────────────────────────────────────
-export function buildDefaultConfig(partial?: {
+// ملاحظة: كلمة مرور قاعدة البيانات إلزامية — لا قيمة افتراضية لأسباب أمنية
+export function buildDefaultConfig(partial: {
   installMode?: InstallMode;
   runMode?: RunMode;
-  dbPassword?: string;
+  dbPassword: string;    // مطلوب دائماً — يُدخله المستخدم أثناء التثبيت
 }): OneSoftConfig {
   const programData = process.platform === 'win32'
     ? path.join(process.env['ProgramData'] || 'C:\\ProgramData', 'OneSoft')
@@ -21,15 +22,15 @@ export function buildDefaultConfig(partial?: {
 
   return {
     version: '1.0.0',
-    installMode: partial?.installMode ?? 'single-user',
-    runMode: partial?.runMode ?? 'desktop+web',
+    installMode: partial.installMode ?? 'single-user',
+    runMode: partial.runMode ?? 'desktop+web',
 
     database: {
       host: 'localhost',
       port: 5432,
       name: 'onesoft_erp',
       user: 'onesoft_app',
-      password: partial?.dbPassword ?? 'onesoft2026',
+      password: partial.dbPassword,   // ✅ لا قيمة افتراضية مرمّزة
       poolMin: 2,
       poolMax: 10,
     },
@@ -116,13 +117,16 @@ export class ConfigManager {
   }
 
   static patch(updates: Partial<OneSoftConfig>): OneSoftConfig {
-    const current = ConfigManager.exists() ? ConfigManager.load() : buildDefaultConfig();
+    if (!ConfigManager.exists()) {
+      throw new Error('Config file does not exist yet — call initDefault first');
+    }
+    const current = ConfigManager.load();
     const merged = deepMerge(current, updates) as OneSoftConfig;
     ConfigManager.save(merged);
     return merged;
   }
 
-  static initDefault(partial?: Parameters<typeof buildDefaultConfig>[0]): OneSoftConfig {
+  static initDefault(partial: Parameters<typeof buildDefaultConfig>[0]): OneSoftConfig {
     const config = buildDefaultConfig(partial);
     ConfigManager.save(config);
     return config;

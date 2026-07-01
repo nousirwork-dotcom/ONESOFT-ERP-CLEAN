@@ -1,5 +1,6 @@
 import type { IpcMain, BrowserWindow } from 'electron';
 import { ConnectionTester, DatabaseInstaller, MigrationRunner } from '../../core/index.js';
+import { PostgreSQLFixer } from '../../core/requirements/fixers/PostgreSQLFixer.js';
 import type { DatabaseConnectionOptions } from '../../core/types.js';
 import * as path from 'path';
 
@@ -10,6 +11,13 @@ export function registerDatabaseIpc(ipc: IpcMain, win: BrowserWindow | null) {
 
   ipc.handle('database:test-connection', async (_, opts: DatabaseConnectionOptions) => {
     return tester.test(opts);
+  });
+
+  // Handler مفقود سابقاً — تثبيت PostgreSQL تلقائياً
+  ipc.handle('database:install-postgres', async (_, pgPassword: string) => {
+    const fixer = new PostgreSQLFixer(pgPassword);
+    await fixer.fix(emit as any);
+    return { ok: true };
   });
 
   ipc.handle('database:create', async (_, opts: {
@@ -24,7 +32,6 @@ export function registerDatabaseIpc(ipc: IpcMain, win: BrowserWindow | null) {
   });
 
   ipc.handle('database:migrate', async (_, databaseUrl: string) => {
-    // البحث عن server-app بالنسبة لمجلد التثبيت
     const serverAppPath = path.join(process.resourcesPath ?? process.cwd(), '..', 'server-app');
     const runner = new MigrationRunner(serverAppPath);
     return runner.runMigrations(databaseUrl, emit as any);

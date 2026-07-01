@@ -3,13 +3,14 @@ import type { HealthCheckResult, DatabaseConnectionOptions } from '../../types.j
 
 export async function checkDatabaseConnection(opts: DatabaseConnectionOptions): Promise<HealthCheckResult> {
   const id = 'db-connection';
-  const label = `Database Connection (${opts.name})`;
+  // DatabaseConnectionOptions استخدام الحقل الصحيح: opts.database
+  const label = `Database Connection (${opts.database})`;
   const start = Date.now();
 
   const pool = new Pool({
     host: opts.host,
     port: opts.port,
-    database: opts.name,
+    database: opts.database,   // ✅ الحقل الصحيح من DatabaseConnectionOptions
     user: opts.user,
     password: opts.password,
     connectionTimeoutMillis: 5000,
@@ -21,9 +22,16 @@ export async function checkDatabaseConnection(opts: DatabaseConnectionOptions): 
     await client.query('SELECT 1');
     client.release();
     const ms = Date.now() - start;
-    return { id, label, status: 'healthy', detail: `${opts.name} @ ${opts.host}:${opts.port}`, responseMs: ms };
+    return {
+      id, label, status: 'healthy',
+      detail: `${opts.database} @ ${opts.host}:${opts.port}`,
+      responseMs: ms,
+    };
   } catch (e: unknown) {
-    return { id, label, status: 'unhealthy', detail: e instanceof Error ? e.message : String(e) };
+    return {
+      id, label, status: 'unhealthy',
+      detail: e instanceof Error ? e.message : String(e),
+    };
   } finally {
     await pool.end().catch(() => {});
   }

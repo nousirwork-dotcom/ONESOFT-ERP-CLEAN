@@ -18,7 +18,7 @@ export default function Step09HealthCheck() {
     setLoading(true);
     setResults([]);
     const report = await window.installer?.runHealthCheck?.({
-      dbOpts: { host: dbOpts.host, port: dbOpts.port, name: dbOpts.database, user: 'onesoft_app', password: dbOpts.password },
+      dbOpts: { host: dbOpts.host, port: dbOpts.port, database: dbOpts.database, user: 'onesoft_app', password: dbOpts.password },
       backendPort: 3000,
       frontendPort: 5000,
     });
