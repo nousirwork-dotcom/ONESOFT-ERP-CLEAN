@@ -3,7 +3,6 @@ import type {
   ChangeDeploymentResult,
   ProgressEvent,
   RemoteServerConfig,
-  DeploymentType,
   AccessMode,
 } from '../types.js';
 import { DeploymentOrchestrator } from '../deployment/DeploymentOrchestrator.js';
@@ -11,18 +10,6 @@ import { ConfigManager } from '../config/ConfigManager.js';
 
 type Emit = (e: ProgressEvent) => void;
 
-/**
- * تغيير نوع التثبيت (DeploymentType) أو طرق الاستخدام (AccessModes) أو عنوان السيرفر
- * بدون إعادة تثبيت كاملة
- *
- * السيناريوهات المدعومة:
- *   server+client → server         (إزالة Frontend المحلي)
- *   server+client → branch         (ربط بسيرفر رئيسي)
- *   client        → server+client  (إضافة DB + Backend محلي)
- *   أي نوع       → cloud          (التحويل الكامل للسحابة)
- *   [desktop]     → [desktop, web] (إضافة Web access بدون مسّ الخدمات)
- *   [desktop, web]→ [desktop]      (إيقاف Web access)
- */
 export class ChangeModeManager {
   private readonly orchestrator: DeploymentOrchestrator;
 
@@ -37,16 +24,15 @@ export class ChangeModeManager {
     try {
       emit({
         level: 'info',
-        message: `تغيير نوع التثبيت: ${req.currentDeploymentType} → ${req.targetDeploymentType}`,
+        message: `Changing deployment: ${req.currentDeploymentType} -> ${req.targetDeploymentType}`,
         timestamp: now(),
       });
       emit({
         level: 'info',
-        message: `طرق الاستخدام: [${req.currentAccessModes.join(', ')}] → [${req.targetAccessModes.join(', ')}]`,
+        message: `Access modes: [${req.currentAccessModes.join(', ')}] -> [${req.targetAccessModes.join(', ')}]`,
         timestamp: now(),
       });
 
-      // 1. التحقق من صحة الطلب
       const remoteUrl = req.remoteServer?.apiUrl;
       const validation = this.orchestrator.validate(
         req.targetDeploymentType,
@@ -63,31 +49,38 @@ export class ChangeModeManager {
         };
       }
 
-      // 2. حساب الفرق بين المكونات
       const diff = this.orchestrator.diff(
         req.currentDeploymentType, req.currentAccessModes,
         req.targetDeploymentType,  req.targetAccessModes,
         emit,
       );
 
-      // 3. تطبيق التغييرات (التنفيذ الفعلي سيُكتمل في v1.1)
-      for (const component of diff.toInstall) {
-        emit({ level: 'info', message: `تثبيت مكوّن: ${component}`, timestamp: now() });
-        await this._installComponent(component, emit);
-        stepsApplied.push(`install:${component}`);
-      }
-
-      for (const component of diff.toUninstall) {
-        emit({ level: 'warning', message: `إيقاف مكوّن: ${component}`, timestamp: now() });
-        await this._uninstallComponent(component, emit);
-        stepsApplied.push(`uninstall:${component}`);
+      // Component install/uninstall orchestration is not yet implemented.
+      // Block the operation rather than pretending it succeeded.
+      if (diff.toInstall.length > 0 || diff.toUninstall.length > 0) {
+        const pending = [
+          ...diff.toInstall.map(c => `install:${c}`),
+          ...diff.toUninstall.map(c => `uninstall:${c}`),
+        ];
+        emit({
+          level: 'error',
+          message: `Component orchestration not yet implemented for: ${pending.join(', ')}. This deployment change requires a full reinstall.`,
+          timestamp: now(),
+        });
+        return {
+          success: false,
+          stepsApplied,
+          stepsSkipped,
+          error: `Component changes require a full reinstall in this version: ${pending.join(', ')}`,
+          requiresRestart: false,
+        };
       }
 
       for (const component of diff.unchanged) {
         stepsSkipped.push(`unchanged:${component}`);
       }
 
-      // 4. تحديث onesoft.config.json
+      // Only update config when no component changes are needed
       const cfg = ConfigManager.load();
       cfg.deploymentType = req.targetDeploymentType;
       cfg.accessModes    = req.targetAccessModes;
@@ -103,7 +96,7 @@ export class ChangeModeManager {
 
       emit({
         level: 'success',
-        message: 'تم تحديث إعدادات النشر — يُرجى إعادة التشغيل',
+        message: 'Deployment settings updated - please restart',
         timestamp: now(),
       });
 
@@ -111,19 +104,16 @@ export class ChangeModeManager {
         success: true,
         stepsApplied,
         stepsSkipped,
-        requiresRestart: diff.toInstall.length > 0 || diff.toUninstall.length > 0,
+        requiresRestart: false,
       };
 
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      emit({ level: 'error', message: `فشل تغيير النشر: ${msg}`, timestamp: now() });
+      emit({ level: 'error', message: `Deployment change failed: ${msg}`, timestamp: now() });
       return { success: false, stepsApplied, stepsSkipped, error: msg, requiresRestart: false };
     }
   }
 
-  /**
-   * تغيير عنوان السيرفر أو الـ API بدون مسّ الخدمات
-   */
   async changeEndpoint(
     remoteServer: RemoteServerConfig,
     emit: Emit,
@@ -135,7 +125,7 @@ export class ChangeModeManager {
       ConfigManager.save(cfg);
       emit({
         level: 'success',
-        message: `تم تغيير عنوان السيرفر: ${old} → ${remoteServer.apiUrl}`,
+        message: `Server address changed: ${old} -> ${remoteServer.apiUrl}`,
         timestamp: now(),
       });
       return { success: true };
@@ -145,9 +135,6 @@ export class ChangeModeManager {
     }
   }
 
-  /**
-   * تغيير طرق الاستخدام فقط (بدون تغيير نوع التثبيت)
-   */
   async changeAccessModes(
     currentModes: AccessMode[],
     targetModes:  AccessMode[],
@@ -161,19 +148,6 @@ export class ChangeModeManager {
       targetAccessModes:     targetModes,
     }, emit);
   }
-
-  // ── Private helpers (v1.1: ربط فعلي بـ ServiceManager) ──────────────────
-
-  private async _installComponent(component: string, emit: Emit): Promise<void> {
-    emit({ level: 'info', message: `→ تثبيت ${component} (سيُطبَّق في v1.1)`, timestamp: now() });
-    await sleep(200);
-  }
-
-  private async _uninstallComponent(component: string, emit: Emit): Promise<void> {
-    emit({ level: 'info', message: `→ إيقاف ${component} (سيُطبَّق في v1.1)`, timestamp: now() });
-    await sleep(200);
-  }
 }
 
 function now() { return new Date().toISOString(); }
-function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
