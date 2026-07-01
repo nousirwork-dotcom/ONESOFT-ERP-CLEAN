@@ -1,10 +1,37 @@
 import { execSync } from 'child_process';
 import * as path from 'path';
+import * as fs from 'fs';
 import type { ProgressEvent } from '../types.js';
 
 type Emit = (e: ProgressEvent) => void;
 
 export class ShortcutCreator {
+  async createAll(
+    opts: { installDir: string; appExe: string; iconPath: string },
+    emit: Emit,
+  ): Promise<void> {
+    emit({ level: 'info', message: 'جارٍ إنشاء الاختصارات...', timestamp: now() });
+    if (process.platform !== 'win32') {
+      emit({ level: 'info', message: 'تخطي الاختصارات (غير Windows)', timestamp: now() });
+      return;
+    }
+    const { appExe, iconPath, installDir } = opts;
+    const lnks = [
+      `${process.env['USERPROFILE'] ?? 'C:\\Users\\Default'}\\Desktop\\OneSoft ERP.lnk`,
+      `${process.env['APPDATA'] ?? 'C:\\Users\\Default\\AppData\\Roaming'}\\Microsoft\\Windows\\Start Menu\\Programs\\OneSoft ERP.lnk`,
+    ];
+    for (const lnk of lnks) {
+      try {
+        fs.mkdirSync(path.dirname(lnk), { recursive: true });
+        this._ps(lnk, appExe, iconPath, installDir);
+        emit({ level: 'success', message: `✅ ${lnk}`, timestamp: now() });
+      } catch (e: unknown) {
+        emit({ level: 'warning', message: `⚠️ ${e instanceof Error ? e.message : String(e)}`, timestamp: now() });
+      }
+    }
+  }
+
+  // Legacy single-shortcut method kept for backward compat
   create(opts: {
     targetPath: string;
     iconPath: string;
@@ -14,7 +41,6 @@ export class ShortcutCreator {
       emit({ level: 'info', message: 'تخطي إنشاء الاختصارات (غير Windows)', timestamp: now() });
       return;
     }
-
     emit({ level: 'info', message: 'جارٍ إنشاء الاختصارات...', timestamp: now() });
 
     // سطح المكتب

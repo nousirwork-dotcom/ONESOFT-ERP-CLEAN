@@ -1,5 +1,5 @@
 import type { IpcMain, BrowserWindow } from 'electron';
-import { OrganizationCreator, UserCreator, AccountSeeder } from '../../core/index.js';
+import { OrganizationCreator, UserCreator, AccountSeeder, VersionDetector } from '../../core/index.js';
 import type { OrganizationSetup, FirstUserSetup } from '../../core/types.js';
 import * as path from 'path';
 
@@ -21,9 +21,16 @@ export function registerSetupIpc(ipc: IpcMain, win: BrowserWindow | null) {
   });
 
   ipc.handle('setup:seed-accounts', async (_, databaseUrl: string) => {
-    const serverAppPath = path.join(process.resourcesPath ?? process.cwd(), '..', 'server-app');
+    const serverAppPath = path.join(process.resourcesPath ?? process.cwd(), 'app', 'server-app');
     const seeder = new AccountSeeder(serverAppPath);
     await seeder.seed(databaseUrl, emit as any);
+    return { ok: true };
+  });
+
+  // يُكتب بعد انتهاء التثبيت — يُستخدم لاكتشاف النسخة لاحقاً
+  ipc.handle('setup:mark-installed', (_, opts: { version: string; installDir: string }) => {
+    const detector = new VersionDetector();
+    detector.markInstalled(opts.version, opts.installDir);
     return { ok: true };
   });
 }

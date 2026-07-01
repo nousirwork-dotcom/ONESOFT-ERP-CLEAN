@@ -78,12 +78,21 @@ export default function Step08Services() {
 
       // 8. إنشاء الاختصارات
       await window.installer?.createShortcuts?.({
-        targetPath: `${installDir}\\OneSoft ERP.exe`,
-        iconPath: `${installDir}\\resources\\icons\\onesoft.ico`,
         installDir,
+        appExe: `${installDir}\\OneSoft ERP.exe`,
+        iconPath: `${installDir}\\resources\\icons\\onesoft.ico`,
       });
 
-      // 9. حفظ الإعدادات
+      // 9. كتابة Registry — يظهر في إضافة/إزالة البرامج
+      await (window as any).installer?.writeRegistry?.({
+        installDir,
+        version: '1.0.0',
+        uninstallExe: `${installDir}\\OneSoft ERP Setup.exe`,
+        iconPath: `${installDir}\\resources\\icons\\onesoft.ico`,
+        sizeKB: 150000,
+      });
+
+      // 10. حفظ الإعدادات
       await window.installer?.saveConfig?.({
         version: '1.0.0',
         installMode: store.installMode,
@@ -91,6 +100,12 @@ export default function Step08Services() {
         database: { host: dbOpts.host, port: dbOpts.port, name: dbOpts.database, user: 'onesoft_app', password: dbOpts.password, poolMin: 2, poolMax: 10 },
         server: { backendPort: 3000, frontendPort: 5000, host: '0.0.0.0', allowedOrigins: ['localhost'] },
         paths,
+      });
+
+      // 11. تسجيل النسخة — لاكتشافها عند الترقية لاحقاً
+      await (window as any).installer?.markInstalled?.({
+        version: '1.0.0',
+        installDir,
       });
 
       setDone(true);

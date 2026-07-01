@@ -26,4 +26,17 @@ export class VersionDetector {
     const filePath = path.join(dataDir, 'version.json');
     fs.writeFileSync(filePath, JSON.stringify(info, null, 2), 'utf-8');
   }
+
+  markInstalled(version: string, installDir: string): void {
+    const versionFile = process.platform === 'win32'
+      ? path.join(process.env['ProgramData'] || 'C:\\ProgramData', 'OneSoft', 'version.json')
+      : path.join(process.env['HOME'] || '/tmp', '.onesoft', 'version.json');
+    const dir = path.dirname(versionFile);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(versionFile, JSON.stringify({
+      version,
+      installedAt: new Date().toISOString(),
+      installDir,
+    }, null, 2), 'utf-8');
+  }
 }

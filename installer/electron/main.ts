@@ -8,6 +8,7 @@ import { registerHealthIpc }       from './ipc/health.ipc.js';
 import { registerConfigIpc }       from './ipc/config.ipc.js';
 import { registerUpgradeIpc }      from './ipc/upgrade.ipc.js';
 import { registerFilesystemIpc }   from './ipc/filesystem.ipc.js';
+import { registerUninstallIpc }    from './ipc/uninstall.ipc.js';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -51,6 +52,7 @@ app.whenReady().then(() => {
   registerConfigIpc(ipcMain, mainWindow);
   registerUpgradeIpc(ipcMain, mainWindow);
   registerFilesystemIpc(ipcMain, mainWindow);
+  registerUninstallIpc(ipcMain, mainWindow);
 
   // Window controls
   ipcMain.handle('window:minimize', () => mainWindow?.minimize());

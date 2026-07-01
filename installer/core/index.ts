@@ -28,6 +28,7 @@ export { ServiceManager }       from './services/ServiceManager.js';
 // Filesystem
 export { DirectoryCreator }     from './filesystem/DirectoryCreator.js';
 export { ShortcutCreator }      from './filesystem/ShortcutCreator.js';
+export { RegistryWriter }       from './filesystem/RegistryWriter.js';
 
 // Health
 export { HealthChecker }        from './health/HealthChecker.js';
@@ -37,3 +38,7 @@ export { VersionDetector }      from './upgrade/VersionDetector.js';
 export { BackupBeforeUpgrade }  from './upgrade/BackupBeforeUpgrade.js';
 export { RollbackManager }      from './upgrade/RollbackManager.js';
 export { UpgradeManager }       from './upgrade/UpgradeManager.js';
+
+// Uninstall
+export { UninstallManager }     from './uninstall/UninstallManager.js';
+export type { UninstallOptions } from './uninstall/UninstallManager.js';

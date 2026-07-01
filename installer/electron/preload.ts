@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld('installer', {
   // Filesystem
   createDirectories: (paths: unknown) => ipcRenderer.invoke('fs:create-dirs', paths),
   createShortcuts:   (opts: unknown)  => ipcRenderer.invoke('fs:create-shortcuts', opts),
+  writeRegistry:     (opts: unknown)  => ipcRenderer.invoke('fs:write-registry', opts),
 
   // Health
   runHealthCheck: (opts: unknown) => ipcRenderer.invoke('health:run', opts),
@@ -45,6 +46,12 @@ contextBridge.exposeInMainWorld('installer', {
   detectVersion: () => ipcRenderer.invoke('upgrade:detect'),
   runUpgrade:    (opts: unknown) => ipcRenderer.invoke('upgrade:run', opts),
   rollback:      (opts: unknown) => ipcRenderer.invoke('upgrade:rollback', opts),
+
+  // Uninstall
+  uninstall: (opts: unknown) => ipcRenderer.invoke('uninstall:run', opts),
+
+  // Mark installed (writes version.json)
+  markInstalled: (opts: unknown) => ipcRenderer.invoke('setup:mark-installed', opts),
 
   // Progress stream listener
   onProgress: (cb: (e: unknown) => void) => {

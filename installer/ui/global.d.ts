@@ -39,7 +39,11 @@ interface InstallerAPI {
 
   // Filesystem
   createDirectories: (paths: import('../core/types').PathsConfig) => Promise<{ ok: boolean }>;
-  createShortcuts: (opts: { targetPath: string; iconPath: string; installDir: string }) => Promise<{ ok: boolean }>;
+  createShortcuts: (opts: { installDir: string; appExe: string; iconPath: string }) => Promise<{ ok: boolean }>;
+  writeRegistry: (opts: {
+    installDir: string; version: string;
+    uninstallExe: string; iconPath: string; sizeKB: number;
+  }) => Promise<{ ok: boolean }>;
 
   // Health
   runHealthCheck: (opts: {
@@ -55,6 +59,9 @@ interface InstallerAPI {
   detectVersion: () => Promise<import('../core/types').VersionInfo | null>;
   runUpgrade: (opts: unknown) => Promise<{ success: boolean; backupDir?: string }>;
   rollback: (opts: unknown) => Promise<{ ok: boolean }>;
+
+  // Uninstall
+  uninstall: (opts: import('../core/uninstall/UninstallManager').UninstallOptions) => Promise<{ ok: boolean }>;
 
   // Progress stream
   onProgress: (cb: (e: import('../core/types').ProgressEvent) => void) => () => void;
