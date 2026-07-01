@@ -13,6 +13,12 @@ export default function LoginPage() {
   const firstRunQ = trpc.setup.isFirstRun.useQuery(undefined, { retry: false });
 
   useEffect(() => {
+    // ✅ معالجة فشل الاستعلام — إظهار نموذج الدخول مباشرة
+    if (firstRunQ.isError) {
+      setError('تعذّر الاتصال بالخادم — يرجى تسجيل الدخول يدوياً');
+      setStatus('error');
+      return;
+    }
     if (firstRunQ.data?.firstRun === true) {
       setShowWizard(true);
       setStatus('error');
@@ -40,7 +46,8 @@ export default function LoginPage() {
         }
       })();
     }
-  }, [firstRunQ.data]);
+  // ✅ نشمل isError في dependency array حتى تُعالَج أخطاء الاستعلام فوراً
+  }, [firstRunQ.data, firstRunQ.isError]);
 
   if (showWizard) {
     return (

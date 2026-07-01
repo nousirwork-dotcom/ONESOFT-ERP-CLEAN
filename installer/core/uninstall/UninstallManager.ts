@@ -86,36 +86,54 @@ export class UninstallManager {
   }
 
   private async _dropDatabase(opts: DatabaseConnectionOptions, emit: Emit): Promise<void> {
-    if (process.platform !== 'win32') {
-      emit({ level: 'warning', message: 'حذف قاعدة البيانات يتطلب Windows', timestamp: now() });
-      return;
-    }
+    // ✅ نستخدم مكتبة pg مع Parameterized queries بدلاً من shell interpolation
+    // هذا يمنع SQL Injection تماماً
+    const { Pool } = await import('pg');
+    const pool = new Pool({
+      host: opts.host,
+      port: opts.port,
+      database: 'postgres',
+      user: opts.user,
+      password: opts.password,
+      connectionTimeoutMillis: 10_000,
+    });
+
     try {
-      const pgBin = this._findPgBin();
-      const env = { ...process.env, PGPASSWORD: opts.password };
+      const client = await pool.connect();
+      try {
+        // إنهاء الاتصالات المفتوحة — $1 parameterized لمنع injection
+        await client.query(
+          `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1`,
+          [opts.database],
+        );
 
-      // إنهاء جميع الاتصالات المفتوحة بقاعدة البيانات
-      execSync(
-        `"${pgBin}\\psql.exe" -h ${opts.host} -p ${opts.port} -U ${opts.user} -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${opts.database}'"`,
-        { env, stdio: 'pipe', timeout: 10_000 }
-      );
+        // حذف قاعدة البيانات — نتحقق من الاسم قبل interpolation
+        const safeDbName = this._validateIdentifier(opts.database);
+        await client.query(`DROP DATABASE IF EXISTS "${safeDbName}"`);
+        emit({ level: 'success', message: `تم حذف قاعدة البيانات "${safeDbName}"`, timestamp: now() });
 
-      // حذف قاعدة البيانات
-      execSync(
-        `"${pgBin}\\psql.exe" -h ${opts.host} -p ${opts.port} -U ${opts.user} -d postgres -c "DROP DATABASE IF EXISTS \\"${opts.database}\\""`,
-        { env, stdio: 'pipe', timeout: 10_000 }
-      );
-
-      // حذف مستخدم التطبيق
-      execSync(
-        `"${pgBin}\\psql.exe" -h ${opts.host} -p ${opts.port} -U ${opts.user} -d postgres -c "DROP USER IF EXISTS onesoft_app"`,
-        { env, stdio: 'pipe', timeout: 10_000 }
-      );
-
-      emit({ level: 'success', message: `تم حذف قاعدة البيانات "${opts.database}"`, timestamp: now() });
+        // حذف مستخدم التطبيق — اسم ثابت (لا input من المستخدم)
+        await client.query(`DROP USER IF EXISTS "onesoft_app"`);
+        emit({ level: 'success', message: 'تم حذف مستخدم التطبيق', timestamp: now() });
+      } finally {
+        client.release();
+      }
     } catch (e: unknown) {
-      emit({ level: 'warning', message: `تحذير: ${e instanceof Error ? e.message : String(e)}`, timestamp: now() });
+      emit({ level: 'warning', message: `تحذير حذف DB: ${e instanceof Error ? e.message : String(e)}`, timestamp: now() });
+    } finally {
+      await pool.end().catch(() => {});
     }
+  }
+
+  /**
+   * يتحقق من أن اسم المُعرِّف (قاعدة بيانات، مستخدم) آمن
+   * يسمح فقط بحروف وأرقام وشرطات سفلية
+   */
+  private _validateIdentifier(name: string): string {
+    if (!/^[a-zA-Z0-9_]+$/.test(name)) {
+      throw new Error(`اسم قاعدة البيانات غير صالح: "${name}" — يُسمح فقط بـ [a-z A-Z 0-9 _]`);
+    }
+    return name;
   }
 
   private _removeDir(dirPath: string, emit: Emit): void {

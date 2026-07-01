@@ -32,7 +32,8 @@ export function registerDatabaseIpc(ipc: IpcMain, win: BrowserWindow | null) {
   });
 
   ipc.handle('database:migrate', async (_, databaseUrl: string) => {
-    const serverAppPath = path.join(process.resourcesPath ?? process.cwd(), '..', 'server-app');
+    // ✅ المسار الصحيح داخل حزمة electron-builder: resources/app/server-app
+    const serverAppPath = path.join(process.resourcesPath ?? process.cwd(), 'app', 'server-app');
     const runner = new MigrationRunner(serverAppPath);
     return runner.runMigrations(databaseUrl, emit as any);
   });
