@@ -6,9 +6,11 @@ import type { ServiceName, ServiceStatus, ServiceInfo, ServiceOperationResult, P
 type Emit = (e: ProgressEvent) => void;
 
 // NSSM مُضمَّن في resources/bin/nssm.exe
-// process.resourcesPath متاح فقط في Electron — نصل إليه بشكل آمن
+// process.resourcesPath متاح فقط في Electron — نصل إليه بشكل آمن لتجنب TS2352
 const electronResourcesPath: string =
-  (process as Record<string, unknown>)['resourcesPath'] as string ?? '';
+  'resourcesPath' in process
+    ? String((process as typeof process & { resourcesPath?: string }).resourcesPath ?? '')
+    : '';
 
 function getNssmPath(): string {
   const candidates = [
