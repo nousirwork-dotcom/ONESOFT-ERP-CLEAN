@@ -54,6 +54,14 @@ contextBridge.exposeInMainWorld('installer', {
   // Mark installed (writes version.json)
   markInstalled: (opts: unknown) => ipcRenderer.invoke('setup:mark-installed', opts),
 
+  // Deployment — Change Mode / Repair / DB Migration
+  getDeploymentPlan:  (mode: string) => ipcRenderer.invoke('deploy:get-plan', mode),
+  listModes:          ()             => ipcRenderer.invoke('deploy:list-modes'),
+  changeMode:         (req: unknown) => ipcRenderer.invoke('deploy:change-mode', req),
+  changeEndpoint:     (cfg: unknown) => ipcRenderer.invoke('deploy:change-endpoint', cfg),
+  repair:             (req: unknown) => ipcRenderer.invoke('deploy:repair', req),
+  migrateDatabase:    (req: unknown) => ipcRenderer.invoke('database:migrate-to-host', req),
+
   // Progress stream listener
   onProgress: (cb: (e: unknown) => void) => {
     ipcRenderer.on('installer:progress', (_, event) => cb(event));

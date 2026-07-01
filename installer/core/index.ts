@@ -42,3 +42,15 @@ export { UpgradeManager }       from './upgrade/UpgradeManager.js';
 // Uninstall
 export { UninstallManager }     from './uninstall/UninstallManager.js';
 export type { UninstallOptions } from './uninstall/UninstallManager.js';
+
+// Deployment Orchestrator (v1.1+)
+export { DeploymentOrchestrator } from './deployment/DeploymentOrchestrator.js';
+
+// Change Mode (v1.1+)
+export { ChangeModeManager }    from './change/ChangeModeManager.js';
+
+// Repair (v1.1+)
+export { RepairManager }        from './repair/RepairManager.js';
+
+// Database Migrator (v1.1+)
+export { DatabaseMigrator }     from './database/DatabaseMigrator.js';
