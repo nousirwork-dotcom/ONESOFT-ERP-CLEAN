@@ -129,7 +129,8 @@ export class ServiceManager {
     const nodePath = findNode();
 
     // OneSoft-Server (Backend)
-    const serverScript = path.join(installDir, 'server-app', 'dist', 'index.js');
+    // ✅ server-app يبني إلى dist/index.mjs (esbuild ESM format)
+    const serverScript = path.join(installDir, 'server-app', 'dist', 'index.mjs');
     this.install(
       'OneSoft-Server', nodePath,
       [serverScript],

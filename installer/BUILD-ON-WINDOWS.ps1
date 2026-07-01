@@ -163,10 +163,11 @@ if (-not $SkipAppBuild) {
     if (Test-Path "dist") { Remove-Item "dist" -Recurse -Force }
     pnpm run build 2>&1 | ForEach-Object { if ($Verbose) { Write-Info $_ } }
 
-    if (-not (Test-Path "dist\index.js")) {
-        Write-Fail "فشل بناء server-app — لم يُنتج dist\index.js"
+    # ✅ server-app يبني إلى dist/index.mjs (esbuild ESM outfile)
+    if (-not (Test-Path "dist\index.mjs")) {
+        Write-Fail "فشل بناء server-app — لم يُنتج dist\index.mjs"
     }
-    Write-Ok "server-app مبني ✓ (dist\index.js)"
+    Write-Ok "server-app مبني ✓ (dist\index.mjs)"
 }
 
 # ──────────────────────────────────────────────────────────────────────────────

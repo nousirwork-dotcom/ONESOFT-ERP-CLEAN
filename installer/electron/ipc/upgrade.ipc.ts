@@ -17,7 +17,8 @@ export function registerUpgradeIpc(ipc: IpcMain, win: BrowserWindow | null) {
     databaseUrl: string;
     targetVersion: string;
   }) => {
-    const serverAppPath = path.join(process.resourcesPath ?? process.cwd(), '..', 'server-app');
+    // ✅ المسار الصحيح في حزمة electron-builder: resources/app/server-app
+    const serverAppPath = path.join(process.resourcesPath ?? process.cwd(), 'app', 'server-app');
     const mgr = new UpgradeManager();
     return mgr.upgrade({ serverAppPath, ...opts }, emit as any, (status) => {
       win?.webContents.send('installer:progress', { level: 'info', message: `status:${status}`, timestamp: new Date().toISOString() });
