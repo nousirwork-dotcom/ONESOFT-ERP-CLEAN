@@ -94,6 +94,74 @@ export type ConnectivityMode =
   | 'internet+lan';
 
 // ══════════════════════════════════════════════════════════════════════════════
+// Licensing Mode — نوع الترخيص (اختيار واحد، Radio)
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * LicensingMode — نوع الترخيص الممنوح للعميل
+ *
+ * trial               : تجريبي مؤقت (30 يوماً بشكل افتراضي)
+ * standard            : أساسي — ميزات جوهرية لشركة صغيرة
+ * professional        : احترافي — ميزات متقدمة
+ * enterprise          : مؤسسي — متعدد الفروع + دعم مخصص
+ * cloud-subscription  : اشتراك سحابي شهري/سنوي
+ */
+export type LicensingMode =
+  | 'trial'
+  | 'standard'
+  | 'professional'
+  | 'enterprise'
+  | 'cloud-subscription';
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Update Channel — قناة التحديث (اختيار واحد، Radio)
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * UpdateChannel — القناة التي يتلقى منها الجهاز التحديثات
+ *
+ * stable           : إصدارات مستقرة فقط — للعملاء الإنتاجيين
+ * beta             : إصدارات تجريبية — للعملاء الراغبين في التجربة المبكرة
+ * internal-testing : للفريق الداخلي والاختبار فقط
+ */
+export type UpdateChannel =
+  | 'stable'
+  | 'beta'
+  | 'internal-testing';
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Backup Policy — سياسة النسخ الاحتياطي
+// ══════════════════════════════════════════════════════════════════════════════
+
+/** تكرار النسخ الاحتياطي */
+export type BackupFrequency = 'disabled' | 'daily' | 'weekly' | 'monthly';
+
+/** وجهة تخزين النسخ الاحتياطي */
+export type BackupLocation = 'local' | 'network' | 'cloud';
+
+/** سياسة النسخ الاحتياطي الكاملة */
+export interface BackupPolicy {
+  frequency:  BackupFrequency;  // معدل التكرار
+  locations:  BackupLocation[]; // وجهات التخزين (متعددة)
+  retainDays: number;           // عدد الأيام للاحتفاظ بالنسخ
+  path?:      string;           // مسار النسخ المحلية (اختياري)
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Telemetry Config — إعدادات التشخيص والقياس (Opt-In — معطل افتراضياً)
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * TelemetryConfig — ما يوافق العميل على إرساله لـ OneSoft
+ * كل الخيارات معطلة افتراضياً — يجب الموافقة الصريحة
+ */
+export interface TelemetryConfig {
+  crashReports:    boolean; // تقارير الأعطال التلقائية
+  diagnosticLogs:  boolean; // سجلات التشخيص
+  usageStatistics: boolean; // إحصاءات الاستخدام المجهولة
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // Legacy — محتفظ بها للتوافق مع الإصدارات القديمة (deprecated)
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -244,6 +312,12 @@ export interface OneSoftConfig {
   databaseMode:    DatabaseMode;      // مصدر قاعدة البيانات
   machineRole:     MachineRole;       // دور الجهاز في الشبكة
   connectivityMode: ConnectivityMode; // سلوك الاتصال بالشبكة
+
+  // ── الأبعاد الجديدة (configVersion >= 4) ────────────────────────────────
+  licensingMode:  LicensingMode;   // نوع الترخيص
+  updateChannel:  UpdateChannel;   // قناة التحديث
+  backupPolicy:   BackupPolicy;    // سياسة النسخ الاحتياطي
+  telemetry:      TelemetryConfig; // إعدادات التشخيص (Opt-In)
 
   // ── البنية القديمة (محتفظ بها للتوافق، deprecated) ────────────────────────
   /** @deprecated استخدم deploymentType */
@@ -413,6 +487,10 @@ export interface WizardState {
   databaseMode:     DatabaseMode;
   machineRole:      MachineRole;
   connectivityMode: ConnectivityMode;
+  licensingMode:    LicensingMode;
+  updateChannel:    UpdateChannel;
+  backupPolicy:     BackupPolicy;
+  telemetry:        TelemetryConfig;
   dbOptions:        DatabaseConnectionOptions;
   organization:     OrganizationSetup;
   firstUser:        FirstUserSetup;

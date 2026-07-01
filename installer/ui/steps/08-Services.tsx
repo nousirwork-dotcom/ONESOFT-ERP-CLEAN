@@ -12,6 +12,7 @@ export default function Step09Services() {
   const {
     progressLog, nextStep, dbOpts, organization, firstUser,
     deploymentType, accessModes, databaseMode, machineRole, connectivityMode,
+    licensingMode, updateChannel, backupPolicy, telemetry,
     setOrgId, setOrgCode, getDatabaseUrl, clearProgress,
   } = store;
 
@@ -103,15 +104,21 @@ export default function Step09Services() {
         sizeKB:       150000,
       });
 
-      // 10. حفظ الإعدادات بالبنية الجديدة (configVersion: 3)
+      // 10. حفظ الإعدادات بالبنية الكاملة (configVersion: 4 — تسعة أبعاد)
       await window.installer?.saveConfig?.({
         version:         '1.0.0',
-        configVersion:   3,
+        configVersion:   4,
+        // ── الأبعاد الخمسة الأصلية ──────────────────────────────────────
         deploymentType,
         accessModes,
         databaseMode,
         machineRole,
         connectivityMode,
+        // ── الأبعاد الأربعة الجديدة ──────────────────────────────────────
+        licensingMode,
+        updateChannel,
+        backupPolicy,
+        telemetry,
         database: {
           host: dbOpts.host, port: dbOpts.port,
           name: dbOpts.database, user: 'onesoft_app',

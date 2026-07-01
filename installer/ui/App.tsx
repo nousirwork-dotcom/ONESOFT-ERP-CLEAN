@@ -1,36 +1,55 @@
 import { useEffect } from 'react';
 import { useInstallerStore } from './store/installer.store';
 import WizardShell from './components/WizardShell';
+
+// ── الخطوات الموجودة ──────────────────────────────────────────────────────────
 import Step01Welcome      from './steps/01-Welcome';
 import Step02License      from './steps/02-License';
 import Step03Requirements from './steps/03-Requirements';
 import Step04InstallType  from './steps/04-InstallType';
 import Step05AccessModes  from './steps/05-AccessModes';
-import Step06DatabaseMode from './steps/05-Database';      // وضع + إعداد قاعدة البيانات
-import Step07MachineRole  from './steps/06-MachineRole';   // دور الجهاز
-import Step08Connectivity from './steps/07-Connectivity';  // طريقة الاتصال
-import Step09Organization from './steps/06-Organization';  // المؤسسة
-import Step10FirstUser    from './steps/07-FirstUser';     // المستخدم الأول
-import Step11Services     from './steps/08-Services';      // تثبيت الخدمات
-import Step12HealthCheck  from './steps/09-HealthCheck';   // فحص الصحة
-import Step13Complete     from './steps/10-Complete';      // الانتهاء
+
+// ── الخطوات الجديدة (الأبعاد التسعة) ─────────────────────────────────────────
+import Step06DatabaseMode from './steps/05-Database';       // 6: وضع قاعدة البيانات
+import Step07MachineRole  from './steps/06-MachineRole';    // 7: دور الجهاز
+import Step08Connectivity from './steps/07-Connectivity';   // 8: طريقة الاتصال
+import Step09Licensing    from './steps/08-Licensing';       // 9: نوع الترخيص
+import Step10UpdateChannel from './steps/09-UpdateChannel'; // 10: قناة التحديث
+import Step11BackupPolicy  from './steps/10-BackupPolicy';  // 11: سياسة النسخ
+import Step12Telemetry     from './steps/11-Telemetry';     // 12: الخصوصية
+
+// ── بيانات التثبيت ────────────────────────────────────────────────────────────
+import Step13Organization from './steps/06-Organization';   // 13: المؤسسة
+import Step14FirstUser    from './steps/07-FirstUser';      // 14: المستخدم الأول
+
+// ── ملخص + تنفيذ + انتهاء ────────────────────────────────────────────────────
+import Step15Summary      from './steps/15-DeploymentSummary'; // 15: ملخص التثبيت ← زر البدء
+import Step16Services     from './steps/08-Services';          // 16: التثبيت الفعلي
+import Step17HealthCheck  from './steps/09-HealthCheck';       // 17: فحص الصحة
+import Step18Complete     from './steps/10-Complete';          // 18: الانتهاء
+
 import UninstallWizard    from './steps/Uninstall';
 
-// ── خطوات المعالج — 13 خطوة ──────────────────────────────────────────────────
+// ── تعريف خطوات المعالج — 18 خطوة ───────────────────────────────────────────
 const STEPS_INSTALL = [
   { id: 1,  label: 'مرحباً'           },
   { id: 2,  label: 'الترخيص'          },
   { id: 3,  label: 'المتطلبات'        },
   { id: 4,  label: 'نوع التثبيت'      },
   { id: 5,  label: 'طرق الاستخدام'    },
-  { id: 6,  label: 'قاعدة البيانات'   },  // ← DatabaseMode (جديد — شامل)
-  { id: 7,  label: 'دور الجهاز'       },  // ← MachineRole (جديد)
-  { id: 8,  label: 'الاتصال بالشبكة'  },  // ← Connectivity (جديد)
-  { id: 9,  label: 'المؤسسة'          },
-  { id: 10, label: 'المستخدم الأول'   },
-  { id: 11, label: 'التثبيت'          },
-  { id: 12, label: 'فحص الصحة'        },
-  { id: 13, label: 'الانتهاء'         },
+  { id: 6,  label: 'قاعدة البيانات'   },
+  { id: 7,  label: 'دور الجهاز'       },
+  { id: 8,  label: 'الاتصال'          },
+  { id: 9,  label: 'الترخيص'          },  // LicensingMode
+  { id: 10, label: 'التحديثات'        },  // UpdateChannel
+  { id: 11, label: 'نسخ احتياطي'      },  // BackupPolicy
+  { id: 12, label: 'الخصوصية'         },  // Telemetry
+  { id: 13, label: 'المؤسسة'          },
+  { id: 14, label: 'المستخدم الأول'   },
+  { id: 15, label: 'المراجعة'         },  // Deployment Summary ← زر التثبيت هنا
+  { id: 16, label: 'التثبيت'          },
+  { id: 17, label: 'فحص الصحة'        },
+  { id: 18, label: 'الانتهاء'         },
 ];
 
 const isUninstall = typeof window !== 'undefined' &&
@@ -52,8 +71,7 @@ export default function App() {
       <div style={{
         minHeight: '100vh', background: '#F5F2EC',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontFamily: "'Segoe UI', Tahoma, Arial, sans-serif",
-        direction: 'rtl',
+        fontFamily: "'Segoe UI', Tahoma, Arial, sans-serif", direction: 'rtl',
       }}>
         <div style={{
           background: '#fff', borderRadius: 16, padding: 36,
@@ -76,14 +94,22 @@ export default function App() {
       case 3:  return <Step03Requirements />;
       case 4:  return <Step04InstallType />;
       case 5:  return <Step05AccessModes />;
-      case 6:  return <Step06DatabaseMode />;   // وضع + إعداد قاعدة البيانات
+      // ── الأبعاد التسعة ──────────────────────────────────────────────────
+      case 6:  return <Step06DatabaseMode />;   // وضع قاعدة البيانات
       case 7:  return <Step07MachineRole />;    // دور الجهاز
       case 8:  return <Step08Connectivity />;   // طريقة الاتصال
-      case 9:  return <Step09Organization />;
-      case 10: return <Step10FirstUser />;
-      case 11: return <Step11Services />;
-      case 12: return <Step12HealthCheck />;
-      case 13: return <Step13Complete />;
+      case 9:  return <Step09Licensing />;      // نوع الترخيص
+      case 10: return <Step10UpdateChannel />;  // قناة التحديث
+      case 11: return <Step11BackupPolicy />;   // سياسة النسخ الاحتياطي
+      case 12: return <Step12Telemetry />;      // الخصوصية والتشخيص
+      // ── بيانات التثبيت ──────────────────────────────────────────────────
+      case 13: return <Step13Organization />;
+      case 14: return <Step14FirstUser />;
+      // ── ملخص + تنفيذ ────────────────────────────────────────────────────
+      case 15: return <Step15Summary />;        // مراجعة كاملة ← زر "بدء التثبيت"
+      case 16: return <Step16Services />;       // التثبيت الفعلي
+      case 17: return <Step17HealthCheck />;    // فحص ما بعد التثبيت
+      case 18: return <Step18Complete />;       // الانتهاء
       default: return <Step01Welcome />;
     }
   };

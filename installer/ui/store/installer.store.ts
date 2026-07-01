@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type {
   DeploymentType, AccessMode,
   DatabaseMode, MachineRole, ConnectivityMode,
+  LicensingMode, UpdateChannel, BackupPolicy, BackupFrequency, BackupLocation, TelemetryConfig,
   DatabaseConnectionOptions,
   OrganizationSetup, FirstUserSetup,
   RequirementsReport, HealthReport, ProgressEvent, OneSoftConfig,
@@ -18,28 +19,47 @@ interface InstallerStore {
   acceptedLicense: boolean;
   setAcceptedLicense: (v: boolean) => void;
 
-  // ── نوع التثبيت (ما يُثبَّت على الجهاز) ────────────────────────────────
+  // ── 1. نوع التثبيت ────────────────────────────────────────────────────────
   deploymentType: DeploymentType;
   setDeploymentType: (t: DeploymentType) => void;
 
-  // ── طرق الاستخدام (كيف يصل المستخدمون — متعددة) ──────────────────────
+  // ── 2. طرق الاستخدام (متعددة) ────────────────────────────────────────────
   accessModes: AccessMode[];
   setAccessModes: (modes: AccessMode[]) => void;
   toggleAccessMode: (mode: AccessMode) => void;
 
-  // ── وضع قاعدة البيانات ────────────────────────────────────────────────
+  // ── 3. وضع قاعدة البيانات ─────────────────────────────────────────────────
   databaseMode: DatabaseMode;
   setDatabaseMode: (m: DatabaseMode) => void;
 
-  // ── دور الجهاز في الشبكة ─────────────────────────────────────────────
+  // ── 4. دور الجهاز ─────────────────────────────────────────────────────────
   machineRole: MachineRole;
   setMachineRole: (r: MachineRole) => void;
 
-  // ── طريقة الاتصال بالشبكة ────────────────────────────────────────────
+  // ── 5. طريقة الاتصال ──────────────────────────────────────────────────────
   connectivityMode: ConnectivityMode;
   setConnectivityMode: (c: ConnectivityMode) => void;
 
-  // Database
+  // ── 6. نوع الترخيص ────────────────────────────────────────────────────────
+  licensingMode: LicensingMode;
+  setLicensingMode: (l: LicensingMode) => void;
+
+  // ── 7. قناة التحديث ───────────────────────────────────────────────────────
+  updateChannel: UpdateChannel;
+  setUpdateChannel: (ch: UpdateChannel) => void;
+
+  // ── 8. سياسة النسخ الاحتياطي ──────────────────────────────────────────────
+  backupPolicy: BackupPolicy;
+  setBackupFrequency: (f: BackupFrequency) => void;
+  toggleBackupLocation: (loc: BackupLocation) => void;
+  setBackupRetainDays: (days: number) => void;
+  setBackupPath: (p: string) => void;
+
+  // ── 9. إعدادات التشخيص (Telemetry) ───────────────────────────────────────
+  telemetry: TelemetryConfig;
+  setTelemetry: (t: Partial<TelemetryConfig>) => void;
+
+  // Database connection options
   dbOpts: DatabaseConnectionOptions;
   setDbOpts: (opts: Partial<DatabaseConnectionOptions>) => void;
 
@@ -69,7 +89,7 @@ interface InstallerStore {
   addProgress: (e: ProgressEvent) => void;
   clearProgress: () => void;
 
-  // Derived: database URL
+  // Derived
   getDatabaseUrl: () => string;
 
   // Config snapshot
@@ -86,59 +106,89 @@ export const useInstallerStore = create<InstallerStore>((set, get) => ({
   acceptedLicense: false,
   setAcceptedLicense: (v) => set({ acceptedLicense: v }),
 
-  // ── نوع التثبيت — الافتراضي: server+client ───────────────────────────
+  // ── 1. نوع التثبيت ────────────────────────────────────────────────────────
   deploymentType: 'server+client',
   setDeploymentType: (t) => set({ deploymentType: t }),
 
-  // ── طرق الاستخدام — الافتراضي: Desktop + Web ─────────────────────────
+  // ── 2. طرق الاستخدام ─────────────────────────────────────────────────────
   accessModes: ['desktop', 'web'],
   setAccessModes: (modes) => set({ accessModes: modes }),
   toggleAccessMode: (mode) => set(s => {
-    const current = s.accessModes;
-    const next = current.includes(mode)
-      ? current.filter(m => m !== mode)
-      : [...current, mode];
-    return { accessModes: next.length > 0 ? next : current };
+    const next = s.accessModes.includes(mode)
+      ? s.accessModes.filter(m => m !== mode)
+      : [...s.accessModes, mode];
+    return { accessModes: next.length > 0 ? next : s.accessModes };
   }),
 
-  // ── وضع قاعدة البيانات — الافتراضي: تثبيت جديد ───────────────────────
+  // ── 3. وضع قاعدة البيانات ─────────────────────────────────────────────────
   databaseMode: 'local-install',
   setDatabaseMode: (m) => set({ databaseMode: m }),
 
-  // ── دور الجهاز — الافتراضي: سيرفر رئيسي ─────────────────────────────
+  // ── 4. دور الجهاز ─────────────────────────────────────────────────────────
   machineRole: 'main-server',
   setMachineRole: (r) => set({ machineRole: r }),
 
-  // ── طريقة الاتصال — الافتراضي: متصل دائماً ──────────────────────────
+  // ── 5. طريقة الاتصال ──────────────────────────────────────────────────────
   connectivityMode: 'always-online',
   setConnectivityMode: (c) => set({ connectivityMode: c }),
 
+  // ── 6. نوع الترخيص — افتراضي: تجريبي ─────────────────────────────────────
+  licensingMode: 'trial',
+  setLicensingMode: (l) => set({ licensingMode: l }),
+
+  // ── 7. قناة التحديث — افتراضي: مستقر ─────────────────────────────────────
+  updateChannel: 'stable',
+  setUpdateChannel: (ch) => set({ updateChannel: ch }),
+
+  // ── 8. سياسة النسخ الاحتياطي ──────────────────────────────────────────────
+  backupPolicy: {
+    frequency:  'daily',
+    locations:  ['local'],
+    retainDays: 30,
+    path:       undefined,
+  },
+  setBackupFrequency: (f) => set(s => ({
+    backupPolicy: { ...s.backupPolicy, frequency: f },
+  })),
+  toggleBackupLocation: (loc) => set(s => {
+    const locs = s.backupPolicy.locations;
+    const next = locs.includes(loc)
+      ? locs.filter(l => l !== loc)
+      : [...locs, loc];
+    return { backupPolicy: { ...s.backupPolicy, locations: next.length > 0 ? next : locs } };
+  }),
+  setBackupRetainDays: (days) => set(s => ({
+    backupPolicy: { ...s.backupPolicy, retainDays: days },
+  })),
+  setBackupPath: (p) => set(s => ({
+    backupPolicy: { ...s.backupPolicy, path: p },
+  })),
+
+  // ── 9. إعدادات التشخيص — كلها معطلة افتراضياً (Opt-In) ────────────────────
+  telemetry: {
+    crashReports:    false,
+    diagnosticLogs:  false,
+    usageStatistics: false,
+  },
+  setTelemetry: (t) => set(s => ({ telemetry: { ...s.telemetry, ...t } })),
+
+  // Database
   dbOpts: {
-    host:     'localhost',
-    port:     5432,
-    database: 'onesoft_erp',
-    user:     'postgres',
-    password: '',
+    host: 'localhost', port: 5432,
+    database: 'onesoft_erp', user: 'postgres', password: '',
   },
   setDbOpts: (opts) => set(s => ({ dbOpts: { ...s.dbOpts, ...opts } })),
 
+  // Organization
   organization: {
-    code:     '1001',
-    name:     '',
-    nameEn:   '',
-    country:  'SA',
-    currency: 'SAR',
-    language: 'ar',
-    timezone: 'Asia/Riyadh',
-    taxNumber:'',
+    code: '1001', name: '', nameEn: '',
+    country: 'SA', currency: 'SAR', language: 'ar',
+    timezone: 'Asia/Riyadh', taxNumber: '',
   },
   setOrganization: (o) => set(s => ({ organization: { ...s.organization, ...o } })),
 
-  firstUser: {
-    fullName: '',
-    username: 'admin',
-    password: '',
-  },
+  // First user
+  firstUser: { fullName: '', username: 'admin', password: '' },
   setFirstUser: (u) => set(s => ({ firstUser: { ...s.firstUser, ...u } })),
 
   requirementsReport: null,
