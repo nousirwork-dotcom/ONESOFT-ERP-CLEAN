@@ -43,14 +43,14 @@ export { UpgradeManager }       from './upgrade/UpgradeManager.js';
 export { UninstallManager }     from './uninstall/UninstallManager.js';
 export type { UninstallOptions } from './uninstall/UninstallManager.js';
 
-// Deployment Orchestrator (v1.1+)
+// Deployment Orchestrator — المرجع الوحيد لحسابات النشر
 export { DeploymentOrchestrator } from './deployment/DeploymentOrchestrator.js';
 
-// Change Mode (v1.1+)
+// Change Deployment — تغيير نوع التثبيت أو طرق الاستخدام بدون إعادة تثبيت
 export { ChangeModeManager }    from './change/ChangeModeManager.js';
 
-// Repair (v1.1+)
+// Repair
 export { RepairManager }        from './repair/RepairManager.js';
 
-// Database Migrator (v1.1+)
+// Database Migrator — نقل DB إلى جهاز آخر
 export { DatabaseMigrator }     from './database/DatabaseMigrator.js';

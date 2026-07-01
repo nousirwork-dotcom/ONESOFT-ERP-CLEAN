@@ -1,165 +1,165 @@
 import type {
-  InstallMode,
+  DeploymentType,
+  AccessMode,
   DeploymentPlan,
   InstalledComponents,
   ProgressEvent,
+  InstallMode,
+  legacyModeToDeploymentType as LegacyFn,
 } from '../types.js';
+import { legacyModeToDeploymentType, legacyRunModeToAccessModes } from '../types.js';
 
 type Emit = (e: ProgressEvent) => void;
 
 // ──────────────────────────────────────────────────────────────────────────────
-// خطط النشر لكل InstallMode — المرجع الوحيد لما يُثبَّت في كل وضع
+// مصفوفة البنية التحتية — ما يُثبَّت لكل DeploymentType
+// هذا هو المرجع الوحيد الذي يحدد المكونات المحلية لكل نوع تثبيت
 // ──────────────────────────────────────────────────────────────────────────────
-const PLANS: Record<string, Omit<DeploymentPlan, 'mode'>> = {
-  standalone: {
-    description: 'نسخة مستقلة — DB + Backend + Frontend على نفس الجهاز',
-    installDatabase:      true,
-    installBackend:       true,
-    installFrontend:      true,
-    installUpdater:       true,
-    installBackup:        true,
-    runMigrations:        true,
-    seedAccounts:         true,
-    createShortcuts:      true,
-    registerInRegistry:   true,
+interface InfraSpec {
+  database:            boolean;
+  backend:             boolean;
+  frontendBase:        boolean;  // هل يُثبَّت Frontend service افتراضياً؟
+  frontendIfWeb:       boolean;  // هل يُضاف Frontend إذا كان 'web' في AccessModes؟
+  updater:             boolean;
+  backup:              boolean;
+  runMigrations:       boolean;
+  seedAccounts:        boolean;
+  requiresRemoteServer: boolean;
+}
+
+const INFRA: Record<DeploymentType, InfraSpec> = {
+  /**
+   * server: سيرفر رئيسي — DB + Backend
+   * - لا واجهة محلية افتراضياً
+   * - إذا أُضيف 'web' في AccessModes: يُثبَّت Frontend service لخدمة المتصفحات البعيدة
+   */
+  'server': {
+    database: true, backend: true,
+    frontendBase: false, frontendIfWeb: true,
+    updater: true, backup: true,
+    runMigrations: true, seedAccounts: true,
     requiresRemoteServer: false,
   },
-  'single-user': {   // legacy alias
-    description: 'نسخة مستخدم واحد (standalone)',
-    installDatabase:      true,
-    installBackend:       true,
-    installFrontend:      true,
-    installUpdater:       true,
-    installBackup:        true,
-    runMigrations:        true,
-    seedAccounts:         true,
-    createShortcuts:      true,
-    registerInRegistry:   true,
-    requiresRemoteServer: false,
-  },
-  'server-only': {
-    description: 'سيرفر رئيسي — Backend + DB بدون واجهة محلية',
-    installDatabase:      true,
-    installBackend:       true,
-    installFrontend:      false,
-    installUpdater:       true,
-    installBackup:        true,
-    runMigrations:        true,
-    seedAccounts:         true,
-    createShortcuts:      false,
-    registerInRegistry:   true,
-    requiresRemoteServer: false,
-  },
-  'client-only': {
-    description: 'عميل فقط — يتصل بسيرفر بعيد، بدون DB محلية',
-    installDatabase:      false,
-    installBackend:       false,
-    installFrontend:      true,
-    installUpdater:       true,
-    installBackup:        false,
-    runMigrations:        false,
-    seedAccounts:         false,
-    createShortcuts:      true,
-    registerInRegistry:   true,
+
+  /**
+   * client: عميل فقط — يتصل بسيرفر بعيد
+   * - لا DB ولا Backend محلي
+   * - Electron أو Browser يتصل بالسيرفر البعيد مباشرةً
+   */
+  'client': {
+    database: false, backend: false,
+    frontendBase: false, frontendIfWeb: false,
+    updater: true, backup: false,
+    runMigrations: false, seedAccounts: false,
     requiresRemoteServer: true,
   },
+
+  /**
+   * server+client: سيرفر + عميل على نفس الجهاز
+   * - DB + Backend + Frontend جميعاً محلياً
+   * - يدعم LAN بشكل افتراضي
+   */
   'server+client': {
-    description: 'سيرفر + عميل — نفس الجهاز، متاح لشبكة LAN',
-    installDatabase:      true,
-    installBackend:       true,
-    installFrontend:      true,
-    installUpdater:       true,
-    installBackup:        true,
-    runMigrations:        true,
-    seedAccounts:         true,
-    createShortcuts:      true,
-    registerInRegistry:   true,
+    database: true, backend: true,
+    frontendBase: true, frontendIfWeb: false,
+    updater: true, backup: true,
+    runMigrations: true, seedAccounts: true,
     requiresRemoteServer: false,
   },
-  'multi-user': {   // legacy alias
-    description: 'متعدد المستخدمين — LAN (server+client)',
-    installDatabase:      true,
-    installBackend:       true,
-    installFrontend:      true,
-    installUpdater:       true,
-    installBackup:        true,
-    runMigrations:        true,
-    seedAccounts:         true,
-    createShortcuts:      true,
-    registerInRegistry:   true,
-    requiresRemoteServer: false,
-  },
-  branch: {
-    description: 'فرع — يتصل بسيرفر رئيسي مع DB محلية للتخزين المؤقت',
-    installDatabase:      true,
-    installBackend:       true,
-    installFrontend:      true,
-    installUpdater:       true,
-    installBackup:        true,
-    runMigrations:        true,
-    seedAccounts:         false,   // يرث الحسابات من الرئيسي
-    createShortcuts:      true,
-    registerInRegistry:   true,
+
+  /**
+   * branch: فرع — DB + Backend محلي + يتصل بالسيرفر الرئيسي
+   * - يملك DB محلية للعمل في حالة انقطاع الاتصال
+   * - لا يبذر شجرة الحسابات (يرثها من الرئيسي)
+   */
+  'branch': {
+    database: true, backend: true,
+    frontendBase: true, frontendIfWeb: false,
+    updater: true, backup: true,
+    runMigrations: true, seedAccounts: false,
     requiresRemoteServer: true,
   },
-  'branch-server': {   // legacy alias
-    description: 'سيرفر فرع (branch)',
-    installDatabase:      true,
-    installBackend:       true,
-    installFrontend:      true,
-    installUpdater:       true,
-    installBackup:        true,
-    runMigrations:        true,
-    seedAccounts:         false,
-    createShortcuts:      true,
-    registerInRegistry:   true,
-    requiresRemoteServer: true,
-  },
-  'hybrid-cloud': {
-    description: 'هجين — محلي مع مزامنة سحابية',
-    installDatabase:      true,
-    installBackend:       true,
-    installFrontend:      true,
-    installUpdater:       true,
-    installBackup:        true,
-    runMigrations:        true,
-    seedAccounts:         true,
-    createShortcuts:      true,
-    registerInRegistry:   true,
-    requiresRemoteServer: true,
-  },
-  'cloud-only': {
-    description: 'سحابي كامل — بدون تثبيت محلي',
-    installDatabase:      false,
-    installBackend:       false,
-    installFrontend:      false,
-    installUpdater:       false,
-    installBackup:        false,
-    runMigrations:        false,
-    seedAccounts:         false,
-    createShortcuts:      false,
-    registerInRegistry:   false,
+
+  /**
+   * cloud: سحابي كامل — بدون أي تثبيت محلي
+   * - يحتاج فقط عنوان السيرفر السحابي
+   */
+  'cloud': {
+    database: false, backend: false,
+    frontendBase: false, frontendIfWeb: false,
+    updater: false, backup: false,
+    runMigrations: false, seedAccounts: false,
     requiresRemoteServer: true,
   },
 };
 
+// ──────────────────────────────────────────────────────────────────────────────
+// وصف كل نوع تثبيت (للـ UI)
+// ──────────────────────────────────────────────────────────────────────────────
+const DESCRIPTIONS: Record<DeploymentType, string> = {
+  'server':        'سيرفر رئيسي — DB + Backend فقط، العملاء يتصلون من الشبكة',
+  'client':        'عميل فقط — يتصل بسيرفر بعيد، بدون تثبيت DB أو Backend',
+  'server+client': 'سيرفر + عميل — كل شيء على نفس الجهاز، مناسب لـ LAN',
+  'branch':        'فرع — DB محلية + يتصل بالسيرفر الرئيسي للمزامنة',
+  'cloud':         'سحابي — بدون تثبيت محلي، وصول عبر الإنترنت فقط',
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// DeploymentOrchestrator — المرجع الوحيد لحسابات النشر
+// ──────────────────────────────────────────────────────────────────────────────
 export class DeploymentOrchestrator {
+
   /**
-   * إرجاع خطة النشر الكاملة لوضع معين
+   * احسب خطة النشر الكاملة بناءً على:
+   *   - deploymentType: ما يُثبَّت على الجهاز
+   *   - accessModes:    كيف يصل المستخدمون للنظام
    */
-  getPlan(mode: InstallMode): DeploymentPlan {
-    const plan = PLANS[mode];
-    if (!plan) {
-      throw new Error(`وضع التثبيت غير معروف: ${mode}`);
-    }
-    return { mode, ...plan };
+  getPlan(deploymentType: DeploymentType, accessModes: AccessMode[]): DeploymentPlan {
+    const infra = INFRA[deploymentType];
+
+    const hasWeb     = accessModes.includes('web');
+    const hasDesktop = accessModes.includes('desktop');
+    const hasOffline = accessModes.includes('offline');
+
+    // installFrontend:
+    //   = frontendBase (دائماً لـ server+client و branch)
+    //   OR frontendIfWeb مع 'web' في accessModes (لـ server عند تفعيل Web Access)
+    const installFrontend = infra.frontendBase || (infra.frontendIfWeb && hasWeb);
+
+    // createDesktopShortcut: منطقي فقط إذا لم يكن cloud-only
+    const createDesktopShortcut = hasDesktop && deploymentType !== 'cloud';
+
+    return {
+      deploymentType,
+      accessModes: [...accessModes],
+
+      // البنية التحتية
+      installDatabase:       infra.database,
+      installBackend:        infra.backend,
+      installFrontend,
+      installUpdater:        infra.updater,
+      installBackup:         infra.backup,
+      runMigrations:         infra.runMigrations,
+      seedAccounts:          infra.seedAccounts,
+      requiresRemoteServer:  infra.requiresRemoteServer,
+
+      // طبقة الوصول
+      createDesktopShortcut,
+      enableWebAccess:       hasWeb,
+      enableOfflineSync:     hasOffline,
+
+      // نظام
+      registerInRegistry:    deploymentType !== 'cloud',
+      description:           DESCRIPTIONS[deploymentType],
+    };
   }
 
   /**
-   * إرجاع مكونات النشر النشطة بناءً على الوضع
+   * اشتقاق InstalledComponents من خطة النشر
+   * (يُستخدم لتتبع ما هو مثبَّت فعلياً في onesoft.config.json)
    */
-  getComponents(mode: InstallMode): InstalledComponents {
-    const plan = this.getPlan(mode);
+  getComponents(deploymentType: DeploymentType, accessModes: AccessMode[]): InstalledComponents {
+    const plan = this.getPlan(deploymentType, accessModes);
     return {
       database: plan.installDatabase,
       backend:  plan.installBackend,
@@ -170,19 +170,19 @@ export class DeploymentOrchestrator {
   }
 
   /**
-   * حساب الفرق بين وضعين — ما يُضاف وما يُزال عند تغيير الوضع
+   * احسب الفرق بين نوعَي تثبيت — ما يُضاف وما يُزال عند التحويل
    */
   diff(
-    currentMode: InstallMode,
-    targetMode: InstallMode,
+    currentType: DeploymentType, currentModes: AccessMode[],
+    targetType:  DeploymentType, targetModes:  AccessMode[],
     emit: Emit,
   ): {
     toInstall:   (keyof InstalledComponents)[];
     toUninstall: (keyof InstalledComponents)[];
     unchanged:   (keyof InstalledComponents)[];
   } {
-    const current = this.getComponents(currentMode);
-    const target  = this.getComponents(targetMode);
+    const current = this.getComponents(currentType, currentModes);
+    const target  = this.getComponents(targetType,  targetModes);
 
     const toInstall:   (keyof InstalledComponents)[] = [];
     const toUninstall: (keyof InstalledComponents)[] = [];
@@ -191,7 +191,7 @@ export class DeploymentOrchestrator {
     for (const key of Object.keys(current) as (keyof InstalledComponents)[]) {
       if (!current[key] && target[key]) {
         toInstall.push(key);
-        emit({ level: 'info', message: `سيُضاف المكوّن: ${key}`, timestamp: now() });
+        emit({ level: 'info',    message: `سيُضاف المكوّن: ${key}`,  timestamp: now() });
       } else if (current[key] && !target[key]) {
         toUninstall.push(key);
         emit({ level: 'warning', message: `سيُزال المكوّن: ${key}`, timestamp: now() });
@@ -204,32 +204,57 @@ export class DeploymentOrchestrator {
   }
 
   /**
-   * التحقق من أن جميع متطلبات الوضع المطلوب متوفرة
+   * تحقق من صحة الطلب قبل تطبيقه
    */
-  validate(mode: InstallMode): { valid: boolean; errors: string[] } {
-    const plan = this.getPlan(mode);
+  validate(
+    deploymentType: DeploymentType,
+    accessModes: AccessMode[],
+    remoteServerUrl?: string | null,
+  ): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
+    const plan = this.getPlan(deploymentType, accessModes);
 
-    if (plan.requiresRemoteServer && mode === 'client-only') {
-      errors.push('وضع client-only يتطلب تحديد عنوان السيرفر الرئيسي');
+    if (plan.requiresRemoteServer && !remoteServerUrl) {
+      errors.push(`نوع التثبيت "${deploymentType}" يتطلب تحديد عنوان السيرفر الرئيسي`);
+    }
+
+    if (accessModes.length === 0) {
+      errors.push('يجب اختيار طريقة وصول واحدة على الأقل');
+    }
+
+    if (deploymentType === 'cloud' && accessModes.includes('offline')) {
+      errors.push('وضع أوفلاين غير مدعوم مع النوع السحابي');
     }
 
     return { valid: errors.length === 0, errors };
   }
 
   /**
-   * قائمة جميع أوضاع التثبيت المتاحة (بدون legacy aliases)
+   * قائمة أنواع التثبيت المتاحة للمستخدم
    */
-  static availableModes(): InstallMode[] {
-    return [
-      'standalone',
-      'server-only',
-      'client-only',
-      'server+client',
-      'branch',
-      'hybrid-cloud',
-      'cloud-only',
-    ];
+  static availableDeploymentTypes(): DeploymentType[] {
+    return ['server', 'client', 'server+client', 'branch', 'cloud'];
+  }
+
+  /**
+   * قائمة طرق الاستخدام المتاحة
+   */
+  static availableAccessModes(): AccessMode[] {
+    return ['desktop', 'web', 'offline'];
+  }
+
+  // ── دعم backward compat للكود القديم ──────────────────────────────────────
+
+  /**
+   * @deprecated استخدم getPlan(deploymentType, accessModes)
+   * يقبل InstallMode القديم للتوافق مع الكود الموجود
+   */
+  getPlanByLegacyMode(mode: InstallMode): DeploymentPlan {
+    const deploymentType = legacyModeToDeploymentType(mode);
+    const accessModes    = mode === 'server-only' ? ['web'] as AccessMode[]
+                         : mode === 'client-only' ? ['desktop'] as AccessMode[]
+                         : ['desktop', 'web'] as AccessMode[];
+    return this.getPlan(deploymentType, accessModes);
   }
 }
 

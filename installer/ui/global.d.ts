@@ -3,12 +3,12 @@
 interface InstallerAPI {
   // Window
   minimize: () => Promise<void>;
-  close: () => Promise<void>;
-  openUrl: (url: string) => Promise<void>;
+  close:    () => Promise<void>;
+  openUrl:  (url: string) => Promise<void>;
 
   // Requirements
   checkRequirements: () => Promise<import('../core/types').RequirementsReport>;
-  fixRequirement: (id: string) => Promise<{ ok: boolean }>;
+  fixRequirement:    (id: string) => Promise<{ ok: boolean }>;
 
   // Database
   testConnection: (opts: import('../core/types').DatabaseConnectionOptions) => Promise<{ ok: boolean; detail: string; ms: number }>;
@@ -30,16 +30,23 @@ interface InstallerAPI {
   }) => Promise<{ id: number }>;
   seedAccounts: (url: string) => Promise<{ ok: boolean }>;
 
-  // Services
-  installServices: (opts: { installDir: string; logsDir: string; runMode: string }) => Promise<{ ok: boolean }>;
+  // Services — يستخدم deploymentType + accessModes (البنية الجديدة)
+  installServices: (opts: {
+    installDir:     string;
+    logsDir:        string;
+    deploymentType: import('../core/types').DeploymentType;
+    accessModes:    import('../core/types').AccessMode[];
+  }) => Promise<{ ok: boolean }>;
   getServiceStatus: (name: string) => Promise<import('../core/types').ServiceStatus>;
-  startService: (name: string) => Promise<import('../core/types').ServiceOperationResult>;
-  stopService: (name: string) => Promise<import('../core/types').ServiceOperationResult>;
-  restartService: (name: string) => Promise<import('../core/types').ServiceOperationResult>;
+  startService:     (name: string) => Promise<import('../core/types').ServiceOperationResult>;
+  stopService:      (name: string) => Promise<import('../core/types').ServiceOperationResult>;
+  restartService:   (name: string) => Promise<import('../core/types').ServiceOperationResult>;
 
   // Filesystem
   createDirectories: (paths: import('../core/types').PathsConfig) => Promise<{ ok: boolean }>;
-  createShortcuts: (opts: { installDir: string; appExe: string; iconPath: string }) => Promise<{ ok: boolean }>;
+  createShortcuts: (opts: {
+    installDir: string; appExe: string; iconPath: string;
+  }) => Promise<{ ok: boolean }>;
   writeRegistry: (opts: {
     installDir: string; version: string;
     uninstallExe: string; iconPath: string; sizeKB: number;
@@ -52,13 +59,13 @@ interface InstallerAPI {
   }) => Promise<import('../core/types').HealthReport>;
 
   // Config
-  getConfig: () => Promise<import('../core/types').OneSoftConfig | null>;
+  getConfig:  () => Promise<import('../core/types').OneSoftConfig | null>;
   saveConfig: (cfg: Partial<import('../core/types').OneSoftConfig>) => Promise<{ ok: boolean }>;
 
   // Upgrade
   detectVersion: () => Promise<import('../core/types').VersionInfo | null>;
-  runUpgrade: (opts: unknown) => Promise<{ success: boolean; backupDir?: string }>;
-  rollback: (opts: unknown) => Promise<{ ok: boolean }>;
+  runUpgrade:    (opts: unknown) => Promise<{ success: boolean; backupDir?: string }>;
+  rollback:      (opts: unknown) => Promise<{ ok: boolean }>;
 
   // Uninstall
   uninstall: (opts: import('../core/uninstall/UninstallManager').UninstallOptions) => Promise<{ ok: boolean }>;

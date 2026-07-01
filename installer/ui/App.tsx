@@ -5,28 +5,30 @@ import Step01Welcome      from './steps/01-Welcome';
 import Step02License      from './steps/02-License';
 import Step03Requirements from './steps/03-Requirements';
 import Step04InstallType  from './steps/04-InstallType';
-import Step05Database     from './steps/05-Database';
-import Step06Organization from './steps/06-Organization';
-import Step07FirstUser    from './steps/07-FirstUser';
-import Step08Services     from './steps/08-Services';
-import Step09HealthCheck  from './steps/09-HealthCheck';
-import Step10Complete     from './steps/10-Complete';
+import Step05AccessModes  from './steps/05-AccessModes';
+import Step06Database     from './steps/05-Database';
+import Step07Organization from './steps/06-Organization';
+import Step08FirstUser    from './steps/07-FirstUser';
+import Step09Services     from './steps/08-Services';
+import Step10HealthCheck  from './steps/09-HealthCheck';
+import Step11Complete     from './steps/10-Complete';
 import UninstallWizard    from './steps/Uninstall';
 
+// ── خطوات المعالج — 11 خطوة (بعد إضافة طرق الاستخدام) ──────────────────────
 const STEPS_INSTALL = [
   { id: 1,  label: 'مرحباً'           },
   { id: 2,  label: 'الترخيص'          },
   { id: 3,  label: 'المتطلبات'        },
   { id: 4,  label: 'نوع التثبيت'      },
-  { id: 5,  label: 'قاعدة البيانات'   },
-  { id: 6,  label: 'المؤسسة'          },
-  { id: 7,  label: 'المستخدم الأول'   },
-  { id: 8,  label: 'التثبيت'          },
-  { id: 9,  label: 'فحص الصحة'        },
-  { id: 10, label: 'الانتهاء'         },
+  { id: 5,  label: 'طرق الاستخدام'    },  // ← خطوة جديدة (AccessModes)
+  { id: 6,  label: 'قاعدة البيانات'   },
+  { id: 7,  label: 'المؤسسة'          },
+  { id: 8,  label: 'المستخدم الأول'   },
+  { id: 9,  label: 'التثبيت'          },
+  { id: 10, label: 'فحص الصحة'        },
+  { id: 11, label: 'الانتهاء'         },
 ];
 
-// كشف وضع التشغيل: uninstall أو install
 const isUninstall = typeof window !== 'undefined' &&
   (window.location.search.includes('uninstall') ||
    (window as any).__ONESOFT_MODE__ === 'uninstall');
@@ -41,7 +43,6 @@ export default function App() {
     return () => { if (typeof off === 'function') off(); };
   }, [addProgress]);
 
-  // وضع إلغاء التثبيت — شاشة مستقلة بدون WizardShell
   if (isUninstall) {
     return (
       <div style={{
@@ -70,12 +71,13 @@ export default function App() {
       case 2:  return <Step02License />;
       case 3:  return <Step03Requirements />;
       case 4:  return <Step04InstallType />;
-      case 5:  return <Step05Database />;
-      case 6:  return <Step06Organization />;
-      case 7:  return <Step07FirstUser />;
-      case 8:  return <Step08Services />;
-      case 9:  return <Step09HealthCheck />;
-      case 10: return <Step10Complete />;
+      case 5:  return <Step05AccessModes />;   // ← خطوة طرق الاستخدام
+      case 6:  return <Step06Database />;
+      case 7:  return <Step07Organization />;
+      case 8:  return <Step08FirstUser />;
+      case 9:  return <Step09Services />;
+      case 10: return <Step10HealthCheck />;
+      case 11: return <Step11Complete />;
       default: return <Step01Welcome />;
     }
   };

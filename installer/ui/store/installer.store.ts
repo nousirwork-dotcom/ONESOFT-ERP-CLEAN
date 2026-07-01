@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type {
-  InstallMode, RunMode, DatabaseConnectionOptions,
+  DeploymentType, AccessMode,
+  DatabaseConnectionOptions,
   OrganizationSetup, FirstUserSetup,
   RequirementsReport, HealthReport, ProgressEvent, OneSoftConfig,
 } from '../../core/types';
@@ -16,18 +17,24 @@ interface InstallerStore {
   acceptedLicense: boolean;
   setAcceptedLicense: (v: boolean) => void;
 
-  installMode: InstallMode;
-  setInstallMode: (m: InstallMode) => void;
+  // ── نوع التثبيت (ما يُثبَّت على الجهاز) ────────────────────────────────
+  deploymentType: DeploymentType;
+  setDeploymentType: (t: DeploymentType) => void;
 
-  runMode: RunMode;
-  setRunMode: (m: RunMode) => void;
+  // ── طرق الاستخدام (كيف يصل المستخدمون — متعددة) ──────────────────────
+  accessModes: AccessMode[];
+  setAccessModes: (modes: AccessMode[]) => void;
+  toggleAccessMode: (mode: AccessMode) => void;
 
+  // Database
   dbOpts: DatabaseConnectionOptions;
   setDbOpts: (opts: Partial<DatabaseConnectionOptions>) => void;
 
+  // Organization
   organization: OrganizationSetup;
   setOrganization: (o: Partial<OrganizationSetup>) => void;
 
+  // First user
   firstUser: FirstUserSetup;
   setFirstUser: (u: Partial<FirstUserSetup>) => void;
 
@@ -59,37 +66,47 @@ interface InstallerStore {
 
 export const useInstallerStore = create<InstallerStore>((set, get) => ({
   currentStep: 1,
-  setStep: (step) => set({ currentStep: step }),
-  nextStep: () => set(s => ({ currentStep: s.currentStep + 1 })),
-  prevStep: () => set(s => ({ currentStep: Math.max(1, s.currentStep - 1) })),
+  setStep:   (step) => set({ currentStep: step }),
+  nextStep:  () => set(s => ({ currentStep: s.currentStep + 1 })),
+  prevStep:  () => set(s => ({ currentStep: Math.max(1, s.currentStep - 1) })),
 
   acceptedLicense: false,
   setAcceptedLicense: (v) => set({ acceptedLicense: v }),
 
-  installMode: 'single-user',
-  setInstallMode: (m) => set({ installMode: m }),
+  // ── نوع التثبيت — الافتراضي: server+client (مناسب لأغلب الحالات) ──────
+  deploymentType: 'server+client',
+  setDeploymentType: (t) => set({ deploymentType: t }),
 
-  runMode: 'desktop+web',
-  setRunMode: (m) => set({ runMode: m }),
+  // ── طرق الاستخدام — الافتراضي: Desktop + Web ─────────────────────────
+  accessModes: ['desktop', 'web'],
+  setAccessModes: (modes) => set({ accessModes: modes }),
+  toggleAccessMode: (mode) => set(s => {
+    const current = s.accessModes;
+    const next = current.includes(mode)
+      ? current.filter(m => m !== mode)
+      : [...current, mode];
+    // يجب أن يبقى اختيار واحد على الأقل
+    return { accessModes: next.length > 0 ? next : current };
+  }),
 
   dbOpts: {
-    host: 'localhost',
-    port: 5432,
+    host:     'localhost',
+    port:     5432,
     database: 'onesoft_erp',
-    user: 'postgres',
+    user:     'postgres',
     password: '',
   },
   setDbOpts: (opts) => set(s => ({ dbOpts: { ...s.dbOpts, ...opts } })),
 
   organization: {
-    code: '1001',
-    name: '',
-    nameEn: '',
-    country: 'SA',
+    code:     '1001',
+    name:     '',
+    nameEn:   '',
+    country:  'SA',
     currency: 'SAR',
     language: 'ar',
     timezone: 'Asia/Riyadh',
-    taxNumber: '',
+    taxNumber:'',
   },
   setOrganization: (o) => set(s => ({ organization: { ...s.organization, ...o } })),
 
@@ -113,8 +130,8 @@ export const useInstallerStore = create<InstallerStore>((set, get) => ({
   setOrgCode: (c) => set({ orgCode: c }),
 
   progressLog: [],
-  addProgress: (e) => set(s => ({ progressLog: [...s.progressLog, e] })),
-  clearProgress: () => set({ progressLog: [] }),
+  addProgress:   (e) => set(s => ({ progressLog: [...s.progressLog, e] })),
+  clearProgress: ()  => set({ progressLog: [] }),
 
   getDatabaseUrl: () => {
     const { dbOpts } = get();

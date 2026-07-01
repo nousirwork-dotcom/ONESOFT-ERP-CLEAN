@@ -1,8 +1,10 @@
 import type {
-  ChangeModeRequest,
-  ChangeModeResult,
+  ChangeDeploymentRequest,
+  ChangeDeploymentResult,
   ProgressEvent,
   RemoteServerConfig,
+  DeploymentType,
+  AccessMode,
 } from '../types.js';
 import { DeploymentOrchestrator } from '../deployment/DeploymentOrchestrator.js';
 import { ConfigManager } from '../config/ConfigManager.js';
@@ -10,36 +12,47 @@ import { ConfigManager } from '../config/ConfigManager.js';
 type Emit = (e: ProgressEvent) => void;
 
 /**
- * تغيير وضع التثبيت (InstallMode) أو عنوان السيرفر بدون إعادة تثبيت كاملة
+ * تغيير نوع التثبيت (DeploymentType) أو طرق الاستخدام (AccessModes) أو عنوان السيرفر
+ * بدون إعادة تثبيت كاملة
  *
  * السيناريوهات المدعومة:
- *   standalone  → server+client    (فتح LAN)
- *   standalone  → hybrid-cloud     (إضافة مزامنة سحابية)
- *   server-only → server+client    (إضافة Frontend)
- *   client-only → standalone       (إضافة DB + Backend محلية)
- *   أي وضع     → cloud-only       (التحويل الكامل للسحابة)
+ *   server+client → server         (إزالة Frontend المحلي)
+ *   server+client → branch         (ربط بسيرفر رئيسي)
+ *   client        → server+client  (إضافة DB + Backend محلي)
+ *   أي نوع       → cloud          (التحويل الكامل للسحابة)
+ *   [desktop]     → [desktop, web] (إضافة Web access بدون مسّ الخدمات)
+ *   [desktop, web]→ [desktop]      (إيقاف Web access)
  */
 export class ChangeModeManager {
   private readonly orchestrator: DeploymentOrchestrator;
-  private readonly config: ConfigManager;
 
-  constructor(configDir?: string) {
+  constructor() {
     this.orchestrator = new DeploymentOrchestrator();
-    this.config       = new ConfigManager(configDir);
   }
 
-  async changeMode(req: ChangeModeRequest, emit: Emit): Promise<ChangeModeResult> {
+  async changeDeployment(req: ChangeDeploymentRequest, emit: Emit): Promise<ChangeDeploymentResult> {
     const stepsApplied: string[] = [];
     const stepsSkipped: string[] = [];
 
     try {
-      emit({ level: 'info', message: `تغيير الوضع: ${req.currentMode} → ${req.targetMode}`, timestamp: now() });
+      emit({
+        level: 'info',
+        message: `تغيير نوع التثبيت: ${req.currentDeploymentType} → ${req.targetDeploymentType}`,
+        timestamp: now(),
+      });
+      emit({
+        level: 'info',
+        message: `طرق الاستخدام: [${req.currentAccessModes.join(', ')}] → [${req.targetAccessModes.join(', ')}]`,
+        timestamp: now(),
+      });
 
-      // 1. حساب الفرق
-      const diff = this.orchestrator.diff(req.currentMode, req.targetMode, emit);
-
-      // 2. التحقق من صحة الطلب
-      const validation = this.orchestrator.validate(req.targetMode);
+      // 1. التحقق من صحة الطلب
+      const remoteUrl = req.remoteServer?.apiUrl;
+      const validation = this.orchestrator.validate(
+        req.targetDeploymentType,
+        req.targetAccessModes,
+        remoteUrl,
+      );
       if (!validation.valid) {
         return {
           success: false,
@@ -50,7 +63,14 @@ export class ChangeModeManager {
         };
       }
 
-      // 3. تطبيق التغييرات
+      // 2. حساب الفرق بين المكونات
+      const diff = this.orchestrator.diff(
+        req.currentDeploymentType, req.currentAccessModes,
+        req.targetDeploymentType,  req.targetAccessModes,
+        emit,
+      );
+
+      // 3. تطبيق التغييرات (التنفيذ الفعلي سيُكتمل في v1.1)
       for (const component of diff.toInstall) {
         emit({ level: 'info', message: `تثبيت مكوّن: ${component}`, timestamp: now() });
         await this._installComponent(component, emit);
@@ -67,16 +87,25 @@ export class ChangeModeManager {
         stepsSkipped.push(`unchanged:${component}`);
       }
 
-      // 4. تحديث Config
-      const cfg = await this.config.load();
-      cfg.installMode = req.targetMode;
-      if (req.targetRunMode) cfg.runMode = req.targetRunMode;
-      if (req.remoteServer) cfg.remoteServer = req.remoteServer;
-      cfg.components = this.orchestrator.getComponents(req.targetMode);
-      await this.config.save(cfg);
+      // 4. تحديث onesoft.config.json
+      const cfg = ConfigManager.load();
+      cfg.deploymentType = req.targetDeploymentType;
+      cfg.accessModes    = req.targetAccessModes;
+      cfg.components     = this.orchestrator.getComponents(
+        req.targetDeploymentType,
+        req.targetAccessModes,
+      );
+      if (req.remoteServer) {
+        cfg.remoteServer = req.remoteServer;
+      }
+      ConfigManager.save(cfg);
       stepsApplied.push('update-config');
 
-      emit({ level: 'success', message: 'تم تغيير الوضع بنجاح — يُرجى إعادة التشغيل', timestamp: now() });
+      emit({
+        level: 'success',
+        message: 'تم تحديث إعدادات النشر — يُرجى إعادة التشغيل',
+        timestamp: now(),
+      });
 
       return {
         success: true,
@@ -84,22 +113,26 @@ export class ChangeModeManager {
         stepsSkipped,
         requiresRestart: diff.toInstall.length > 0 || diff.toUninstall.length > 0,
       };
+
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      emit({ level: 'error', message: `فشل تغيير الوضع: ${msg}`, timestamp: now() });
+      emit({ level: 'error', message: `فشل تغيير النشر: ${msg}`, timestamp: now() });
       return { success: false, stepsApplied, stepsSkipped, error: msg, requiresRestart: false };
     }
   }
 
   /**
-   * تغيير عنوان السيرفر أو الـ API بدون إعادة تثبيت
+   * تغيير عنوان السيرفر أو الـ API بدون مسّ الخدمات
    */
-  async changeEndpoint(remoteServer: RemoteServerConfig, emit: Emit): Promise<{ success: boolean; error?: string }> {
+  async changeEndpoint(
+    remoteServer: RemoteServerConfig,
+    emit: Emit,
+  ): Promise<{ success: boolean; error?: string }> {
     try {
-      const cfg = await this.config.load();
+      const cfg = ConfigManager.load();
       const old = cfg.remoteServer.apiUrl;
       cfg.remoteServer = remoteServer;
-      await this.config.save(cfg);
+      ConfigManager.save(cfg);
       emit({
         level: 'success',
         message: `تم تغيير عنوان السيرفر: ${old} → ${remoteServer.apiUrl}`,
@@ -112,23 +145,31 @@ export class ChangeModeManager {
     }
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // Private helpers
-  // ────────────────────────────────────────────────────────────────────────────
-
-  private async _installComponent(
-    component: string,
+  /**
+   * تغيير طرق الاستخدام فقط (بدون تغيير نوع التثبيت)
+   */
+  async changeAccessModes(
+    currentModes: AccessMode[],
+    targetModes:  AccessMode[],
     emit: Emit,
-  ): Promise<void> {
-    // هذه الوحدة تُنسّق — التنفيذ الفعلي في ServiceManager/DatabaseInstaller
+  ): Promise<ChangeDeploymentResult> {
+    const cfg = ConfigManager.load();
+    return this.changeDeployment({
+      currentDeploymentType: cfg.deploymentType,
+      currentAccessModes:    currentModes,
+      targetDeploymentType:  cfg.deploymentType,
+      targetAccessModes:     targetModes,
+    }, emit);
+  }
+
+  // ── Private helpers (v1.1: ربط فعلي بـ ServiceManager) ──────────────────
+
+  private async _installComponent(component: string, emit: Emit): Promise<void> {
     emit({ level: 'info', message: `→ تثبيت ${component} (سيُطبَّق في v1.1)`, timestamp: now() });
     await sleep(200);
   }
 
-  private async _uninstallComponent(
-    component: string,
-    emit: Emit,
-  ): Promise<void> {
+  private async _uninstallComponent(component: string, emit: Emit): Promise<void> {
     emit({ level: 'info', message: `→ إيقاف ${component} (سيُطبَّق في v1.1)`, timestamp: now() });
     await sleep(200);
   }

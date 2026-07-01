@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import type { OneSoftConfig, InstallMode, RemoteServerConfig, ChangeModeRequest } from '../../core/types';
+import type {
+  OneSoftConfig,
+  DeploymentType,
+  AccessMode,
+  RemoteServerConfig,
+  ChangeDeploymentRequest,
+} from '../../core/types';
 import { DeploymentOrchestrator } from '../../core/deployment/DeploymentOrchestrator';
 
 const orchestrator = new DeploymentOrchestrator();
@@ -7,23 +13,27 @@ const orchestrator = new DeploymentOrchestrator();
 type Tab = 'overview' | 'server' | 'database' | 'mode' | 'backup' | 'updates' | 'license';
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'overview', label: 'نظرة عامة',    icon: '🖥️' },
-  { id: 'mode',     label: 'وضع التثبيت',  icon: '⚙️' },
-  { id: 'server',   label: 'السيرفر',      icon: '🌐' },
-  { id: 'database', label: 'قاعدة البيانات', icon: '🗄️' },
+  { id: 'overview', label: 'نظرة عامة',        icon: '🖥️' },
+  { id: 'mode',     label: 'نوع التثبيت',       icon: '⚙️' },
+  { id: 'server',   label: 'السيرفر',           icon: '🌐' },
+  { id: 'database', label: 'قاعدة البيانات',    icon: '🗄️' },
   { id: 'backup',   label: 'النسخ الاحتياطية', icon: '💾' },
-  { id: 'updates',  label: 'التحديثات',    icon: '🔄' },
-  { id: 'license',  label: 'الترخيص',      icon: '🔑' },
+  { id: 'updates',  label: 'التحديثات',         icon: '🔄' },
+  { id: 'license',  label: 'الترخيص',           icon: '🔑' },
 ];
 
-const MODE_LABELS: Record<string, string> = {
-  standalone:    'مستقل — جهاز واحد',
-  'server-only': 'سيرفر فقط',
-  'client-only': 'عميل فقط',
-  'server+client': 'سيرفر + عميل',
-  branch:        'فرع',
-  'hybrid-cloud': 'هجين سحابي',
-  'cloud-only':  'سحابي كامل',
+const DEPLOYMENT_LABELS: Record<DeploymentType, string> = {
+  'server':        'سيرفر — DB + Backend فقط',
+  'client':        'عميل — يتصل بسيرفر بعيد',
+  'server+client': 'سيرفر + عميل — نظام كامل',
+  'branch':        'فرع — مرتبط بسيرفر رئيسي',
+  'cloud':         'سحابي — لا شيء محلي',
+};
+
+const ACCESS_LABELS: Record<AccessMode, string> = {
+  desktop: 'سطح المكتب',
+  web:     'متصفح الويب',
+  offline: 'بدون إنترنت (Offline)',
 };
 
 export function DeploymentSettings() {
@@ -92,7 +102,7 @@ export function DeploymentSettings() {
         )}
 
         {tab === 'overview'  && <OverviewTab config={config} />}
-        {tab === 'mode'      && <ModeTab config={config} onSave={save} saving={saving} />}
+        {tab === 'mode'      && <ModeTab config={config} onSave={save} saving={saving} setConfig={setConfig} />}
         {tab === 'server'    && <ServerTab config={config} onSave={save} saving={saving} />}
         {tab === 'database'  && <DatabaseTab config={config} onSave={save} saving={saving} />}
         {tab === 'backup'    && <BackupTab config={config} onSave={save} saving={saving} />}
@@ -107,7 +117,7 @@ export function DeploymentSettings() {
 // Tab: Overview
 // ──────────────────────────────────────────────────────────────────────────────
 function OverviewTab({ config }: { config: OneSoftConfig }) {
-  const plan = orchestrator.getPlan(config.installMode);
+  const plan = orchestrator.getPlan(config.deploymentType, config.accessModes);
   const components = [
     { label: 'قاعدة البيانات (PostgreSQL)', active: config.components.database },
     { label: 'خادم التطبيق (Backend)',       active: config.components.backend },
@@ -119,9 +129,15 @@ function OverviewTab({ config }: { config: OneSoftConfig }) {
     <div className="space-y-6">
       <Section title="حالة النظام">
         <div className="grid grid-cols-2 gap-4">
-          <InfoCard label="وضع التثبيت" value={MODE_LABELS[config.installMode] ?? config.installMode} />
-          <InfoCard label="وضع التشغيل" value={config.runMode} />
-          <InfoCard label="إصدار النظام" value={config.version} />
+          <InfoCard
+            label="نوع التثبيت"
+            value={DEPLOYMENT_LABELS[config.deploymentType] ?? config.deploymentType}
+          />
+          <InfoCard
+            label="طرق الاستخدام"
+            value={config.accessModes.map(m => ACCESS_LABELS[m]).join(' + ') || '—'}
+          />
+          <InfoCard label="إصدار النظام"    value={config.version} />
           <InfoCard label="نسخة الإعدادات" value={`v${config.configVersion ?? 1}`} />
         </div>
       </Section>
@@ -147,29 +163,52 @@ function OverviewTab({ config }: { config: OneSoftConfig }) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Tab: Change Mode
+// Tab: Change Deployment Type + Access Modes
 // ──────────────────────────────────────────────────────────────────────────────
-function ModeTab({ config, onSave, saving }: TabProps) {
-  const [targetMode, setTargetMode] = useState<InstallMode>(config.installMode);
+function ModeTab({ config, onSave, saving, setConfig }: TabProps & { setConfig: (c: OneSoftConfig) => void }) {
+  const [targetType,  setTargetType]  = useState<DeploymentType>(config.deploymentType);
+  const [targetModes, setTargetModes] = useState<AccessMode[]>(config.accessModes);
   const [applying, setApplying] = useState(false);
-  const [log, setLog] = useState<string[]>([]);
+  const [log,      setLog]      = useState<string[]>([]);
 
-  const modes = DeploymentOrchestrator.availableModes();
-  const plan  = orchestrator.getPlan(targetMode);
-  const changed = targetMode !== config.installMode;
+  const allTypes   = DeploymentOrchestrator.availableDeploymentTypes();
+  const allAccess  = DeploymentOrchestrator.availableAccessModes();
+  const plan       = orchestrator.getPlan(targetType, targetModes);
+
+  const typeChanged  = targetType !== config.deploymentType;
+  const modesChanged = JSON.stringify([...targetModes].sort()) !== JSON.stringify([...config.accessModes].sort());
+  const changed      = typeChanged || modesChanged;
+
+  function toggleMode(mode: AccessMode) {
+    setTargetModes(prev =>
+      prev.includes(mode)
+        ? prev.length > 1 ? prev.filter(m => m !== mode) : prev
+        : [...prev, mode]
+    );
+  }
 
   async function apply() {
     setApplying(true);
     setLog([]);
     try {
-      const req: ChangeModeRequest = {
-        currentMode: config.installMode,
-        targetMode,
+      const req: ChangeDeploymentRequest = {
+        currentDeploymentType: config.deploymentType,
+        targetDeploymentType:  targetType,
+        currentAccessModes:    config.accessModes,
+        targetAccessModes:     targetModes,
       };
-      const result = await (window as any).installer?.changeMode(req);
+      const result = await (window as any).installer?.changeDeployment(req);
       if (result?.success) {
-        setLog(prev => [...prev, '✅ تم تغيير الوضع بنجاح — أعد تشغيل النظام']);
-        await onSave({ installMode: targetMode, components: orchestrator.getComponents(targetMode) } as any);
+        setLog(prev => [...prev, '✅ تم تغيير إعدادات النشر بنجاح — أعد تشغيل النظام']);
+        const components = orchestrator.getComponents(targetType, targetModes);
+        const updated: OneSoftConfig = {
+          ...config,
+          deploymentType: targetType,
+          accessModes:    targetModes,
+          components,
+        };
+        await onSave(updated);
+        setConfig(updated);
       } else {
         setLog(prev => [...prev, `❌ فشل: ${result?.error}`]);
       }
@@ -182,32 +221,75 @@ function ModeTab({ config, onSave, saving }: TabProps) {
 
   return (
     <div className="space-y-6">
-      <Section title="اختيار وضع التثبيت">
+      {/* نوع التثبيت */}
+      <Section title="نوع التثبيت (اختر واحداً)">
         <div className="space-y-2">
-          {modes.map(m => (
-            <label key={m} className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-              targetMode === m ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'
+          {allTypes.map(dt => (
+            <label key={dt} className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+              targetType === dt ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'
             }`}>
-              <input type="radio" name="mode" value={m} checked={targetMode === m}
-                onChange={() => setTargetMode(m)} className="mt-1" />
+              <input
+                type="radio"
+                name="deploymentType"
+                value={dt}
+                checked={targetType === dt}
+                onChange={() => setTargetType(dt)}
+                className="mt-1"
+              />
               <div>
-                <div className="text-sm font-medium">{MODE_LABELS[m] ?? m}</div>
-                <div className="text-xs text-gray-500">{orchestrator.getPlan(m).description}</div>
+                <div className="text-sm font-medium">{DEPLOYMENT_LABELS[dt]}</div>
+                <div className="text-xs text-gray-500">
+                  {orchestrator.getPlan(dt, targetModes).description}
+                </div>
               </div>
             </label>
           ))}
         </div>
       </Section>
 
+      {/* طرق الاستخدام */}
+      <Section title="طرق الاستخدام (يمكن اختيار أكثر من واحد)">
+        <div className="space-y-2">
+          {allAccess.map(mode => (
+            <label key={mode} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+              targetModes.includes(mode) ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'
+            }`}>
+              <input
+                type="checkbox"
+                checked={targetModes.includes(mode)}
+                onChange={() => toggleMode(mode)}
+                className="rounded"
+                disabled={targetModes.includes(mode) && targetModes.length === 1}
+              />
+              <span className="text-sm font-medium">{ACCESS_LABELS[mode]}</span>
+            </label>
+          ))}
+        </div>
+        <p className="text-xs text-gray-500 mt-1">* لا يمكن إزالة طريقة الاستخدام الوحيدة</p>
+      </Section>
+
+      {/* ملخص التغييرات */}
       {changed && (
         <Section title="التغييرات المطلوبة">
-          <div className="text-sm text-amber-700 bg-amber-50 p-3 rounded-lg">
-            ⚠️ التحويل من <b>{MODE_LABELS[config.installMode]}</b> إلى <b>{MODE_LABELS[targetMode]}</b>
-            قد يتطلب إعادة تشغيل الخدمات
-          </div>
-          <button onClick={apply} disabled={applying || saving}
-            className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50">
-            {applying ? 'جارٍ التطبيق...' : 'تطبيق التغيير'}
+          {typeChanged && (
+            <div className="text-sm text-amber-700 bg-amber-50 p-3 rounded-lg mb-2">
+              ⚠️ تغيير نوع التثبيت من <b>{DEPLOYMENT_LABELS[config.deploymentType]}</b> إلى{' '}
+              <b>{DEPLOYMENT_LABELS[targetType]}</b> — قد يتطلب إعادة تشغيل الخدمات
+            </div>
+          )}
+          {modesChanged && (
+            <div className="text-sm text-blue-700 bg-blue-50 p-3 rounded-lg mb-2">
+              ℹ️ تغيير طرق الاستخدام:{' '}
+              [{config.accessModes.map(m => ACCESS_LABELS[m]).join(', ')}] →{' '}
+              [{targetModes.map(m => ACCESS_LABELS[m]).join(', ')}]
+            </div>
+          )}
+          <button
+            onClick={apply}
+            disabled={applying || saving}
+            className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
+          >
+            {applying ? 'جارٍ التطبيق...' : 'تطبيق التغييرات'}
           </button>
         </Section>
       )}
@@ -219,6 +301,20 @@ function ModeTab({ config, onSave, saving }: TabProps) {
           </div>
         </Section>
       )}
+
+      {/* معاينة الخطة */}
+      <Section title="معاينة الخطة الحالية">
+        <p className="text-xs text-gray-500">{plan.description}</p>
+        <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+          {(['database','backend','frontend','updater','backup'] as const).map(k => (
+            <div key={k} className={`p-2 rounded text-center ${
+              plan.infra[k] ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-400'
+            }`}>
+              {k} {plan.infra[k] ? '✓' : '—'}
+            </div>
+          ))}
+        </div>
+      </Section>
     </div>
   );
 }
@@ -230,9 +326,11 @@ function ServerTab({ config, onSave, saving }: TabProps) {
   const [backend,  setBackend]  = useState(config.server.backendPort);
   const [frontend, setFrontend] = useState(config.server.frontendPort);
   const [apiUrl,   setApiUrl]   = useState(config.remoteServer?.apiUrl ?? '');
-  const [syncMode, setSyncMode] = useState<RemoteServerConfig['syncMode']>(config.remoteServer?.syncMode ?? 'realtime');
+  const [syncMode, setSyncMode] = useState<RemoteServerConfig['syncMode']>(
+    config.remoteServer?.syncMode ?? 'realtime'
+  );
 
-  const showRemote = config.components && !config.components.backend;
+  const showRemote = !config.components.backend;
 
   return (
     <div className="space-y-6">
@@ -266,7 +364,12 @@ function ServerTab({ config, onSave, saving }: TabProps) {
             </select>
           </Field>
           <SaveButton saving={saving} onClick={async () => {
-            const cfg: RemoteServerConfig = { enabled: true, apiUrl, apiKey: config.remoteServer?.apiKey ?? null, syncMode };
+            const cfg: RemoteServerConfig = {
+              enabled: true,
+              apiUrl,
+              apiKey: config.remoteServer?.apiKey ?? null,
+              syncMode,
+            };
             await (window as any).installer?.changeEndpoint(cfg);
             onSave({ remoteServer: cfg });
           }} />
@@ -280,10 +383,10 @@ function ServerTab({ config, onSave, saving }: TabProps) {
 // Tab: Database
 // ──────────────────────────────────────────────────────────────────────────────
 function DatabaseTab({ config, onSave, saving }: TabProps) {
-  const [host, setHost]   = useState(config.database.host);
-  const [port, setPort]   = useState(config.database.port);
-  const [name, setName]   = useState(config.database.name);
-  const [user, setUser]   = useState(config.database.user);
+  const [host, setHost] = useState(config.database.host);
+  const [port, setPort] = useState(config.database.port);
+  const [name, setName] = useState(config.database.name);
+  const [user, setUser] = useState(config.database.user);
 
   return (
     <div className="space-y-6">
@@ -343,7 +446,7 @@ function BackupTab({ config, onSave, saving }: TabProps) {
                 className={INPUT} min={1} max={365} />
             </Field>
             <Toggle label="ضغط الملفات (ZIP)" checked={compress} onChange={setCompress} />
-            <Toggle label="تضمين المرفقات" checked={attachments} onChange={setAttachments} />
+            <Toggle label="تضمين المرفقات"     checked={attachments} onChange={setAttachments} />
           </>
         )}
         <SaveButton saving={saving} onClick={() => onSave({
@@ -391,8 +494,8 @@ function LicenseTab({ config, onSave, saving }: TabProps) {
   const [key, setKey] = useState(config.license.key ?? '');
 
   const TYPE_LABELS: Record<string, string> = {
-    trial: 'تجريبي',
-    standard: 'معياري',
+    trial:      'تجريبي',
+    standard:   'معياري',
     enterprise: 'مؤسسي',
   };
 
@@ -400,10 +503,10 @@ function LicenseTab({ config, onSave, saving }: TabProps) {
     <div className="space-y-6">
       <Section title="معلومات الترخيص">
         <div className="grid grid-cols-2 gap-4 mb-4">
-          <InfoCard label="نوع الترخيص" value={TYPE_LABELS[config.license.type] ?? config.license.type} />
+          <InfoCard label="نوع الترخيص"           value={TYPE_LABELS[config.license.type] ?? config.license.type} />
           <InfoCard label="الحد الأقصى للمستخدمين" value={String(config.license.maxUsers)} />
-          <InfoCard label="تاريخ التفعيل"   value={config.license.activatedAt ?? 'غير مفعّل'} />
-          <InfoCard label="تاريخ الانتهاء"  value={config.license.expiresAt ?? 'غير محدد'} />
+          <InfoCard label="تاريخ التفعيل"          value={config.license.activatedAt ?? 'غير مفعّل'} />
+          <InfoCard label="تاريخ الانتهاء"         value={config.license.expiresAt ?? 'غير محدد'} />
         </div>
       </Section>
       <Section title="تفعيل مفتاح الترخيص">
@@ -457,8 +560,10 @@ function InfoCard({ label, value }: { label: string; value: string }) {
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <label className="flex items-center gap-3 cursor-pointer">
-      <div className={`w-10 h-5 rounded-full transition-colors relative ${checked ? 'bg-blue-600' : 'bg-gray-300'}`}
-        onClick={() => onChange(!checked)}>
+      <div
+        className={`w-10 h-5 rounded-full transition-colors relative ${checked ? 'bg-blue-600' : 'bg-gray-300'}`}
+        onClick={() => onChange(!checked)}
+      >
         <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all ${checked ? 'right-0.5' : 'left-0.5'}`} />
       </div>
       <span className="text-sm text-gray-700">{label}</span>

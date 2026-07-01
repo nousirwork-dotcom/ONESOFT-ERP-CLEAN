@@ -10,14 +10,13 @@ contextBridge.exposeInMainWorld('installer', {
 
   // Requirements
   checkRequirements: () => ipcRenderer.invoke('requirements:check'),
-  // ✅ pgPassword مطلوب عند إصلاح postgresql تلقائياً
   fixRequirement: (id: string, pgPassword?: string) => ipcRenderer.invoke('requirements:fix', id, pgPassword),
 
   // Database
   testConnection:  (opts: unknown) => ipcRenderer.invoke('database:test-connection', opts),
   installPostgres: (password: string) => ipcRenderer.invoke('database:install-postgres', password),
   createDatabase:  (opts: unknown) => ipcRenderer.invoke('database:create', opts),
-  runMigrations:   (url: string) => ipcRenderer.invoke('database:migrate', url),
+  runMigrations:   (url: string)   => ipcRenderer.invoke('database:migrate', url),
 
   // Setup
   createOrganization: (opts: unknown) => ipcRenderer.invoke('setup:create-org', opts),
@@ -54,15 +53,34 @@ contextBridge.exposeInMainWorld('installer', {
   // Mark installed (writes version.json)
   markInstalled: (opts: unknown) => ipcRenderer.invoke('setup:mark-installed', opts),
 
-  // Deployment — Change Mode / Repair / DB Migration
-  getDeploymentPlan:  (mode: string) => ipcRenderer.invoke('deploy:get-plan', mode),
-  listModes:          ()             => ipcRenderer.invoke('deploy:list-modes'),
-  changeMode:         (req: unknown) => ipcRenderer.invoke('deploy:change-mode', req),
-  changeEndpoint:     (cfg: unknown) => ipcRenderer.invoke('deploy:change-endpoint', cfg),
-  repair:             (req: unknown) => ipcRenderer.invoke('deploy:repair', req),
-  migrateDatabase:    (req: unknown) => ipcRenderer.invoke('database:migrate-to-host', req),
+  // ─── Deployment — المعمارية الجديدة ─────────────────────────────────────────
+  // الحصول على خطة النشر بناءً على DeploymentType + AccessModes
+  getDeploymentPlan: (opts: unknown) => ipcRenderer.invoke('deploy:get-plan', opts),
 
-  // Progress stream listener
+  // قائمة أنواع التثبيت وطرق الاستخدام المتاحة
+  listDeploymentTypes: () => ipcRenderer.invoke('deploy:list-types'),
+
+  // تغيير نوع التثبيت و/أو طرق الاستخدام
+  changeDeployment: (req: unknown) => ipcRenderer.invoke('deploy:change', req),
+
+  // تغيير طرق الاستخدام فقط (بدون تغيير نوع التثبيت)
+  changeAccessModes: (opts: unknown) => ipcRenderer.invoke('deploy:change-access', opts),
+
+  // تغيير عنوان السيرفر البعيد
+  changeEndpoint: (cfg: unknown) => ipcRenderer.invoke('deploy:change-endpoint', cfg),
+
+  // إصلاح التثبيت
+  repair: (req: unknown) => ipcRenderer.invoke('deploy:repair', req),
+
+  // نقل قاعدة البيانات إلى مضيف آخر
+  migrateDatabase: (req: unknown) => ipcRenderer.invoke('database:migrate-to-host', req),
+
+  // ─── Backward Compatibility ─────────────────────────────────────────────────
+  // محتفظ بها لأي كود قديم — تُوجَّه داخلياً إلى القنوات الجديدة
+  changeMode: (req: unknown) => ipcRenderer.invoke('deploy:change', req),
+  listModes:  ()             => ipcRenderer.invoke('deploy:list-types'),
+
+  // ─── Progress stream ────────────────────────────────────────────────────────
   onProgress: (cb: (e: unknown) => void) => {
     ipcRenderer.on('installer:progress', (_, event) => cb(event));
     return () => ipcRenderer.removeAllListeners('installer:progress');

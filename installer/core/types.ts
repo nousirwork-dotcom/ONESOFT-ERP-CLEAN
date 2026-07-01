@@ -3,24 +3,49 @@
 // يُستخدم من Core وElectron IPC والـ UI
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Installation Modes & Run Modes
+// Deployment Type — ما يُثبَّت على الجهاز (اختيار واحد، Radio)
 // ══════════════════════════════════════════════════════════════════════════════
 
 /**
- * InstallMode — وضع التثبيت
+ * DeploymentType — نوع التثبيت (البنية التحتية المحلية)
  *
- * standalone     : جهاز واحد مستقل (DB + Backend + Frontend على نفس الجهاز)
- * server-only    : سيرفر رئيسي بدون واجهة محلية (للـ headless servers)
- * client-only    : عميل فقط يتصل بسيرفر بعيد (لا يحتاج PostgreSQL)
- * server+client  : سيرفر + عميل على نفس الجهاز (= standalone مع LAN)
- * branch         : فرع يتصل بسيرفر رئيسي مع قاعدة بيانات محلية اختيارية
- * hybrid-cloud   : محلي مع مزامنة سحابية
- * cloud-only     : SaaS كامل بدون تثبيت محلي
+ * server       : سيرفر رئيسي — DB + Backend فقط، بدون واجهة محلية
+ * client       : عميل فقط — يتصل بسيرفر بعيد، بدون DB أو Backend محلي
+ * server+client: سيرفر + عميل على نفس الجهاز — مناسب لـ LAN
+ * branch       : فرع — DB + Backend محلي يتصل بالسيرفر الرئيسي
+ * cloud        : سحابي — بدون تثبيت محلي (SaaS)
+ */
+export type DeploymentType =
+  | 'server'
+  | 'client'
+  | 'server+client'
+  | 'branch'
+  | 'cloud';
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Access Modes — طرق استخدام النظام (اختيار متعدد، Checkboxes)
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * AccessMode — طريقة وصول المستخدم للنظام
+ * يمكن اختيار أكثر من طريقة في آنٍ واحد
  *
- * الأوضاع القديمة محتفظ بها كـ aliases للتوافق:
- *   single-user  → standalone
- *   multi-user   → server+client
- *   branch-server → branch
+ * desktop : تطبيق مكتبي (Electron — اختصار على سطح المكتب)
+ * web     : متصفح (Browser — وصول عبر الشبكة المحلية أو الإنترنت)
+ * offline : وضع أوفلاين (DB محلية + مزامنة تلقائية عند الاتصال)
+ */
+export type AccessMode =
+  | 'desktop'
+  | 'web'
+  | 'offline';
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Legacy — محتفظ بها للتوافق مع الإصدارات القديمة (deprecated)
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * @deprecated استخدم DeploymentType بدلاً منه
+ * محتفظ به للتوافق مع onesoft.config.json القديمة
  */
 export type InstallMode =
   | 'standalone'
@@ -30,11 +55,14 @@ export type InstallMode =
   | 'branch'
   | 'hybrid-cloud'
   | 'cloud-only'
-  // legacy aliases (kept for backward compat with saved configs)
   | 'single-user'
   | 'multi-user'
   | 'branch-server';
 
+/**
+ * @deprecated استخدم AccessMode[] بدلاً منه
+ * محتفظ به للتوافق مع onesoft.config.json القديمة
+ */
 export type RunMode =
   | 'desktop'
   | 'web'
@@ -129,19 +157,19 @@ export interface PathsConfig {
 }
 
 /**
- * المكونات المثبّتة — يُحدّد ما هو نشط فعلياً
+ * المكونات المثبّتة — يحدد ما يعمل فعلياً على هذا الجهاز
  * يمكن تغييره لاحقاً بدون إعادة تثبيت (Change Installation)
  */
 export interface InstalledComponents {
   database:  boolean;  // PostgreSQL محلية
   backend:   boolean;  // OneSoft-Server service
-  frontend:  boolean;  // OneSoft-Client service
+  frontend:  boolean;  // OneSoft-Client service (واجهة الويب)
   updater:   boolean;  // OneSoft-Updater service
   backup:    boolean;  // OneSoft-Backup service
 }
 
 /**
- * إعدادات السيرفر البعيد (للـ client-only و branch)
+ * إعدادات السيرفر البعيد (للـ client و branch و cloud)
  */
 export interface RemoteServerConfig {
   enabled:  boolean;
@@ -152,9 +180,18 @@ export interface RemoteServerConfig {
 
 export interface OneSoftConfig {
   version:       string;
-  configVersion: number;   // رقم إصدار schema الـ config — يُستخدم للترحيل
-  installMode:   InstallMode;
-  runMode:       RunMode;
+  configVersion: number;  // رقم إصدار schema — يُستخدم للترحيل
+
+  // ── البنية المعمارية الجديدة (configVersion >= 2) ─────────────────────────
+  deploymentType: DeploymentType;   // نوع التثبيت (واحد)
+  accessModes:    AccessMode[];     // طرق الاستخدام (متعددة)
+
+  // ── البنية القديمة (محتفظ بها للتوافق، deprecated) ────────────────────────
+  /** @deprecated استخدم deploymentType */
+  installMode?: InstallMode;
+  /** @deprecated استخدم accessModes */
+  runMode?: RunMode;
+
   components:    InstalledComponents;
   database:      DatabaseConfig;
   remoteServer:  RemoteServerConfig;
@@ -263,8 +300,12 @@ export interface HealthReport {
 export interface VersionInfo {
   version: string;
   installedAt: string;
-  installMode: InstallMode;
-  runMode: RunMode;
+  deploymentType: DeploymentType;
+  accessModes: AccessMode[];
+  /** @deprecated */
+  installMode?: InstallMode;
+  /** @deprecated */
+  runMode?: RunMode;
 }
 
 export interface UpgradePlan {
@@ -308,8 +349,8 @@ export interface ProgressEvent {
 
 export interface WizardState {
   currentStep: number;
-  installMode: InstallMode;
-  runMode: RunMode;
+  deploymentType: DeploymentType;
+  accessModes: AccessMode[];
   dbOptions: DatabaseConnectionOptions;
   organization: OrganizationSetup;
   firstUser: FirstUserSetup;
@@ -361,60 +402,90 @@ export const IPC = {
   RUN_UPGRADE: 'upgrade:run',
   ROLLBACK: 'upgrade:rollback',
 
-  // Change Mode / Repair / Components
-  GET_DEPLOYMENT_PLAN: 'deploy:get-plan',
-  CHANGE_MODE: 'deploy:change-mode',
-  CHANGE_ENDPOINT: 'deploy:change-endpoint',
-  REPAIR: 'deploy:repair',
-  ADD_COMPONENT: 'deploy:add-component',
-  REMOVE_COMPONENT: 'deploy:remove-component',
+  // Change Deployment / Repair / Components
+  GET_DEPLOYMENT_PLAN:  'deploy:get-plan',
+  LIST_DEPLOYMENT_TYPES:'deploy:list-types',
+  CHANGE_DEPLOYMENT:    'deploy:change',       // نوع التثبيت + طرق الاستخدام
+  CHANGE_ACCESS_MODES:  'deploy:change-access',
+  CHANGE_ENDPOINT:      'deploy:change-endpoint',
+  REPAIR:               'deploy:repair',
+  ADD_COMPONENT:        'deploy:add-component',
+  REMOVE_COMPONENT:     'deploy:remove-component',
 
   // Database Operations
   MIGRATE_DATABASE: 'database:migrate-to-host',
-  EXPORT_DATABASE: 'database:export',
-  IMPORT_DATABASE: 'database:import',
+  EXPORT_DATABASE:  'database:export',
+  IMPORT_DATABASE:  'database:import',
 
   // Deployment Settings (post-install)
   GET_DEPLOYMENT_STATUS: 'settings:status',
-  SAVE_BACKUP_SCHEDULE: 'settings:backup-schedule',
-  SAVE_UPDATE_SETTINGS: 'settings:update-config',
-  VALIDATE_LICENSE: 'settings:validate-license',
-  ACTIVATE_LICENSE: 'settings:activate-license',
+  SAVE_BACKUP_SCHEDULE:  'settings:backup-schedule',
+  SAVE_UPDATE_SETTINGS:  'settings:update-config',
+  VALIDATE_LICENSE:      'settings:validate-license',
+  ACTIVATE_LICENSE:      'settings:activate-license',
 
   // Progress stream
   PROGRESS: 'installer:progress',
 } as const;
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Deployment Plan — خطة النشر لكل InstallMode
+// Deployment Plan — خطة النشر الكاملة
 // ══════════════════════════════════════════════════════════════════════════════
 
 export interface DeploymentPlan {
-  mode: InstallMode;
-  installDatabase: boolean;
-  installBackend: boolean;
-  installFrontend: boolean;
-  installUpdater: boolean;
-  installBackup: boolean;
-  runMigrations: boolean;
-  seedAccounts: boolean;
-  createShortcuts: boolean;
+  // المدخلات
+  deploymentType: DeploymentType;
+  accessModes: AccessMode[];
+
+  // ── البنية التحتية (من DeploymentType) ────────────────────────────────────
+  installDatabase:     boolean;  // PostgreSQL محلية
+  installBackend:      boolean;  // OneSoft-Server service
+  installFrontend:     boolean;  // OneSoft-Client service (خادم الويب)
+  installUpdater:      boolean;  // OneSoft-Updater service
+  installBackup:       boolean;  // OneSoft-Backup service
+  runMigrations:       boolean;  // تشغيل DB migrations
+  seedAccounts:        boolean;  // بذر شجرة الحسابات
+  requiresRemoteServer: boolean; // يتطلب تحديد سيرفر بعيد
+
+  // ── طبقة الوصول (من AccessModes) ──────────────────────────────────────────
+  createDesktopShortcut: boolean;  // desktop ∈ accessModes
+  enableWebAccess:       boolean;  // web ∈ accessModes
+  enableOfflineSync:     boolean;  // offline ∈ accessModes
+
+  // ── نظام ──────────────────────────────────────────────────────────────────
   registerInRegistry: boolean;
-  requiresRemoteServer: boolean;
   description: string;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Change Mode — تغيير وضع التثبيت بدون إعادة تثبيت
+// Change Deployment — تغيير نوع التثبيت أو طرق الاستخدام بدون إعادة تثبيت
 // ══════════════════════════════════════════════════════════════════════════════
 
-export interface ChangeModeRequest {
-  currentMode: InstallMode;
-  targetMode:  InstallMode;
-  targetRunMode?: RunMode;
+export interface ChangeDeploymentRequest {
+  currentDeploymentType: DeploymentType;
+  currentAccessModes:    AccessMode[];
+  targetDeploymentType:  DeploymentType;
+  targetAccessModes:     AccessMode[];
   remoteServer?: RemoteServerConfig;
 }
 
+export interface ChangeDeploymentResult {
+  success: boolean;
+  stepsApplied: string[];
+  stepsSkipped: string[];
+  error?: string;
+  requiresRestart: boolean;
+}
+
+// Legacy aliases — للتوافق مع ChangeModeManager القديم
+/** @deprecated استخدم ChangeDeploymentRequest */
+export interface ChangeModeRequest {
+  currentMode:     InstallMode;
+  targetMode:      InstallMode;
+  targetRunMode?:  RunMode;
+  remoteServer?:   RemoteServerConfig;
+}
+/** @deprecated استخدم ChangeDeploymentResult */
 export interface ChangeModeResult {
   success: boolean;
   stepsApplied: string[];
@@ -470,10 +541,67 @@ export interface RepairResult {
 // ══════════════════════════════════════════════════════════════════════════════
 
 export interface IpcAdapter {
-  /** تسجيل معالج لقناة IPC */
   handle(channel: string, fn: (args: unknown) => Promise<unknown>): void;
-  /** إرسال حدث للـ UI */
   emit(channel: string, data: unknown): void;
-  /** الاستماع لأحداث من الـ UI */
   on(channel: string, fn: (args: unknown) => void): void;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Utility — تحويل بين الأنواع الجديدة والقديمة (للتوافق)
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * تحويل DeploymentType القديم (InstallMode) إلى الجديد
+ */
+export function legacyModeToDeploymentType(mode: InstallMode): DeploymentType {
+  switch (mode) {
+    case 'standalone':
+    case 'single-user':
+    case 'server+client':
+    case 'multi-user':     return 'server+client';
+    case 'server-only':    return 'server';
+    case 'client-only':    return 'client';
+    case 'branch':
+    case 'branch-server':  return 'branch';
+    case 'hybrid-cloud':
+    case 'cloud-only':     return 'cloud';
+    default:               return 'server+client';
+  }
+}
+
+/**
+ * تحويل RunMode القديم إلى AccessMode[]
+ */
+export function legacyRunModeToAccessModes(runMode: RunMode): AccessMode[] {
+  switch (runMode) {
+    case 'desktop':      return ['desktop'];
+    case 'web':          return ['web'];
+    case 'desktop+web':  return ['desktop', 'web'];
+    default:             return ['desktop', 'web'];
+  }
+}
+
+/**
+ * اشتقاق InstallMode من DeploymentType (للتوافق مع الإصدارات القديمة)
+ */
+export function deploymentTypeToLegacyMode(type: DeploymentType): InstallMode {
+  switch (type) {
+    case 'server':        return 'server-only';
+    case 'client':        return 'client-only';
+    case 'server+client': return 'server+client';
+    case 'branch':        return 'branch';
+    case 'cloud':         return 'cloud-only';
+    default:              return 'server+client';
+  }
+}
+
+/**
+ * اشتقاق RunMode من AccessMode[] (للتوافق مع الإصدارات القديمة)
+ */
+export function accessModesToLegacyRunMode(modes: AccessMode[]): RunMode {
+  const d = modes.includes('desktop');
+  const w = modes.includes('web');
+  if (d && w) return 'desktop+web';
+  if (w)      return 'web';
+  return 'desktop';
 }

@@ -1,7 +1,7 @@
 import { execSync, spawnSync } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
-import type { ServiceName, ServiceStatus, ServiceInfo, ServiceOperationResult, ProgressEvent } from '../types.js';
+import type { ServiceName, ServiceStatus, ServiceInfo, ServiceOperationResult, ProgressEvent, DeploymentType, AccessMode } from '../types.js';
 
 type Emit = (e: ProgressEvent) => void;
 
@@ -117,29 +117,37 @@ export class ServiceManager {
   }
 
   // ─── تثبيت جميع خدمات النظام ───────────────────────────────────────────────
+  // يُحدَّد ما يُثبَّت بناءً على DeploymentType + AccessModes
   async installAll(
     opts: {
-      installDir: string;
-      logsDir: string;
-      runMode: 'desktop' | 'web' | 'desktop+web';
+      installDir:     string;
+      logsDir:        string;
+      deploymentType: DeploymentType;
+      accessModes:    AccessMode[];
     },
     emit: Emit,
   ): Promise<void> {
-    const { installDir, logsDir, runMode } = opts;
+    const { installDir, logsDir, deploymentType, accessModes } = opts;
     const nodePath = findNode();
 
-    // OneSoft-Server (Backend)
-    // ✅ server-app يبني إلى dist/index.mjs (esbuild ESM format)
-    const serverScript = path.join(installDir, 'server-app', 'dist', 'index.mjs');
-    this.install(
-      'OneSoft-Server', nodePath,
-      [serverScript],
-      path.join(logsDir, 'server.log'),
-      emit,
-    );
+    const needsBackend  = ['server', 'server+client', 'branch'].includes(deploymentType);
+    const needsFrontend = ['server+client', 'branch'].includes(deploymentType)
+                       || (deploymentType === 'server' && accessModes.includes('web'));
+    const needsUpdater  = deploymentType !== 'cloud';
 
-    // OneSoft-Client (Frontend) — فقط إذا وضع Web أو Hybrid
-    if (runMode === 'web' || runMode === 'desktop+web') {
+    // OneSoft-Server (Backend) — يعمل فقط إذا كان على هذا الجهاز DB + Backend
+    if (needsBackend) {
+      const serverScript = path.join(installDir, 'server-app', 'dist', 'index.mjs');
+      this.install(
+        'OneSoft-Server', nodePath,
+        [serverScript],
+        path.join(logsDir, 'server.log'),
+        emit,
+      );
+    }
+
+    // OneSoft-Client (Frontend) — يعمل إذا كان هناك واجهة محلية
+    if (needsFrontend) {
       const clientScript = path.join(installDir, 'client-app', 'dist-serve', 'server.js');
       this.install(
         'OneSoft-Client', nodePath,
@@ -149,22 +157,27 @@ export class ServiceManager {
       );
     }
 
-    // OneSoft-Updater
-    const updaterScript = path.join(installDir, 'installer', 'core', 'updater.js');
-    if (fs.existsSync(updaterScript)) {
-      this.install(
-        'OneSoft-Updater', nodePath,
-        [updaterScript],
-        path.join(logsDir, 'updater.log'),
-        emit,
-      );
+    // OneSoft-Updater — يعمل في كل الأوضاع ما عدا cloud
+    if (needsUpdater) {
+      const updaterScript = path.join(installDir, 'installer', 'core', 'updater.js');
+      if (fs.existsSync(updaterScript)) {
+        this.install(
+          'OneSoft-Updater', nodePath,
+          [updaterScript],
+          path.join(logsDir, 'updater.log'),
+          emit,
+        );
+      }
     }
 
-    // تشغيل الخدمات
+    // تشغيل الخدمات بالترتيب الصحيح
     emit({ level: 'info', message: 'جارٍ تشغيل الخدمات...', timestamp: now() });
-    this.start('OneSoft-Server');
 
-    if (runMode === 'web' || runMode === 'desktop+web') {
+    if (needsBackend) {
+      this.start('OneSoft-Server');
+    }
+
+    if (needsFrontend) {
       await sleep(2000); // انتظر Server يبدأ أولاً
       this.start('OneSoft-Client');
     }

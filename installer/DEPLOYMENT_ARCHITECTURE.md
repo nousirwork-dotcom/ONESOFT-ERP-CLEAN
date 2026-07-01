@@ -1,282 +1,234 @@
-# OneSoft ERP — معمارية النشر الشاملة
-# Deployment Architecture — 10-Year Scalability Review
+# OneSoft ERP — Deployment Architecture v2.0
+# معمارية النشر — الفصل بين نوع التثبيت وطرق الاستخدام
 
 ---
 
-## 1. المبدأ الأساسي: الفصل الكامل بين الطبقات
+## المبدأ الجوهري: طبقتان مستقلتان
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         OneSoft Installer Architecture                      │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   PRESENTATION LAYER (قابلة للاستبدال كلياً)                               │
-│   ┌───────────────┐  ┌───────────────┐  ┌───────────────┐                  │
-│   │  Electron UI  │  │  Web Wizard   │  │  CLI / Batch  │                  │
-│   │  (الحالي)     │  │  (مستقبلاً)  │  │  (للـ MSI)    │                  │
-│   └───────┬───────┘  └───────┬───────┘  └───────┬───────┘                  │
-│           │                  │                  │                           │
-│   ─────── IPC Adapter Layer ─────────────────────────────────────           │
-│   ┌───────────────────────────────────────────────────────────┐             │
-│   │  interface IpcAdapter { emit, invoke, on }               │             │
-│   │  ElectronIpcAdapter │ HttpIpcAdapter │ CliIpcAdapter      │             │
-│   └───────────────────────────────┬───────────────────────────┘             │
-│                                   │                                         │
-│   ─────── INSTALLER CORE (ثابت — لا يتغير) ─────────────────────           │
-│   ┌─────────────────┐ ┌──────────────────┐ ┌──────────────────┐            │
-│   │  Requirements   │ │  Database Engine │ │  Service Engine  │            │
-│   │  Engine         │ │  (pg only)       │ │  (NSSM/sc)       │            │
-│   └─────────────────┘ └──────────────────┘ └──────────────────┘            │
-│   ┌─────────────────┐ ┌──────────────────┐ ┌──────────────────┐            │
-│   │  Deployment     │ │  Config Engine   │ │  Health Engine   │            │
-│   │  Orchestrator   │ │  (JSON+Schema)   │ │                  │            │
-│   └─────────────────┘ └──────────────────┘ └──────────────────┘            │
-│                                                                             │
-│   ─────── DATA LAYER ────────────────────────────────────────────           │
-│   ┌────────────────────────────────────────────────────────────┐            │
-│   │  C:\ProgramData\OneSoft\                                   │            │
-│   │  ├── config\onesoft.config.json  (الإعدادات الكاملة)      │            │
-│   │  ├── version.json                (سجل الإصدار)            │            │
-│   │  ├── deployments\               (خطط النشر المحفوظة)       │            │
-│   │  ├── backups\                   (النسخ الاحتياطية)         │            │
-│   │  ├── logs\                      (سجلات النظام)             │            │
-│   │  └── licenses\                  (ملفات الترخيص)           │            │
-│   └────────────────────────────────────────────────────────────┘            │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                     LAYER 1: DEPLOYMENT TYPE                         │
+│              ما يُثبَّت على الجهاز — اختيار واحد (Radio)             │
+│                                                                      │
+│    server  │  client  │  server+client  │  branch  │  cloud          │
+│   ─────────────────────────────────────────────────────────          │
+│   يحدد: DB + Backend + Frontend + Services المحلية                   │
+└──────────────────────────────┬───────────────────────────────────────┘
+                               │
+                        مستقلان تماماً
+                               │
+┌──────────────────────────────▼───────────────────────────────────────┐
+│                     LAYER 2: ACCESS MODES                            │
+│          كيف يصل المستخدمون — اختيار متعدد (Checkboxes)             │
+│                                                                      │
+│    ☑ desktop      ☑ web      ☑ offline                               │
+│   ─────────────────────────────────────────────────────────          │
+│   يحدد: Shortcuts + Browser Access + OfflineSync                     │
+└──────────────────────────────────────────────────────────────────────┘
 ```
+
+**لماذا هذا الفصل مهم:**
+- شركة تختار `server+client` يمكنها تشغيل Desktop فقط، أو Web فقط، أو كليهما معاً
+- تغيير طريقة الوصول (مثلاً إضافة Web) لا يتطلب تغيير نوع التثبيت
+- كل بُعد مستقل تماماً — لا تشابك في الكود أو في Config
 
 ---
 
-## 2. سيناريوهات النشر الست — خريطة كاملة
+## أولاً: مصفوفة المكونات (Deployment Type → Infrastructure)
 
-```
-InstallMode (موسّع)
-├── standalone          ← نسخة مستقلة لجهاز واحد (offline)
-├── server-only         ← سيرفر رئيسي بدون واجهة محلية
-├── client-only         ← عميل يتصل بسيرفر بعيد
-├── server+client       ← سيرفر + عميل على نفس الجهاز
-├── branch              ← فرع يتصل بسيرفر رئيسي
-├── hybrid-cloud        ← محلي مع مزامنة سحابية
-└── cloud-only          ← SaaS كامل (بدون تثبيت محلي)
+| المكوّن | server | client | server+client | branch | cloud |
+|---------|:------:|:------:|:-------------:|:------:|:-----:|
+| PostgreSQL (DB) | ✅ | ❌ | ✅ | ✅ | ❌ |
+| OneSoft-Server (Backend API) | ✅ | ❌ | ✅ | ✅ | ❌ |
+| OneSoft-Client (Frontend Web) | إذا web✓ | ❌ | ✅ | ✅ | ❌ |
+| OneSoft-Updater | ✅ | ✅ | ✅ | ✅ | ❌ |
+| OneSoft-Backup | ✅ | ❌ | ✅ | ✅ | ❌ |
+| DB Migrations | ✅ | ❌ | ✅ | ✅ | ❌ |
+| Seed Accounts | ✅ | ❌ | ✅ | ❌† | ❌ |
+| Remote Server Required | ❌ | ✅ | ❌ | ✅ | ✅ |
 
-RunMode (موسّع)
-├── desktop             ← تطبيق Electron محلي
-├── web                 ← متصفح فقط
-└── desktop+web         ← الاثنان معاً
-```
-
-### ما يُثبَّت في كل وضع:
-
-| المكوّن           | standalone | server-only | client-only | server+client | branch |
-|-------------------|:---------:|:-----------:|:-----------:|:-------------:|:------:|
-| PostgreSQL        | ✅        | ✅          | ❌          | ✅            | ✅ (optional) |
-| Backend Service   | ✅        | ✅          | ❌          | ✅            | ✅     |
-| Frontend Service  | ✅        | ❌          | ✅          | ✅            | ✅     |
-| Migrations        | ✅        | ✅          | ❌          | ✅            | ✅     |
-| Account Seeder    | ✅        | ✅          | ❌          | ✅            | ❌ (يرث من الرئيسي) |
-| Desktop Shortcut  | ✅        | ❌          | ✅          | ✅            | ✅     |
+> † `branch` يرث شجرة الحسابات من السيرفر الرئيسي
 
 ---
 
-## 3. المعمارية الحالية — نقاط القوة
+## ثانياً: أثر Access Modes على التثبيت
 
-### ✅ ما هو ممتاز ولا يحتاج تغيير:
-
-1. **فصل Core عن Electron** — `installer/core/` لا يستورد من Electron أبداً
-2. **IPC كجسر** — `installer/electron/ipc/` هو الوحيد الذي يعرف Electron
-3. **أنواع مركزية** — `types.ts` مرجع واحد للجميع
-4. **MigrationRunner مستقل** — يعمل بـ pg مباشرةً بدون drizzle-kit
-5. **AccountSeeder مستقل** — بيانات مُضمّنة، لا اعتماد على dev tools
-6. **HealthChecker منفصل** — 6 فحوصات مستقلة
-7. **ConfigManager** — JSON + schema validation
+| الطريقة | يُفعِّل |
+|---------|--------|
+| `desktop` | اختصار سطح المكتب، تسجيل في Windows Programs |
+| `web` | OneSoft-Client service على port 5000 (إذا `server` وإلا مُفعَّل أصلاً) |
+| `offline` | OfflineSync service + Local DB Cache (v1.1) |
 
 ---
 
-## 4. الثغرات الحالية والحلول
+## ثالثاً: السيناريوهات الكاملة
 
-### ثغرة 1: IPC مُربوط بـ Electron مباشرةً
+### 🏢 شركة صغيرة
+```
+Deployment:  server+client
+Access:      [desktop, offline]
+─────────────────────────────────────────────────────
+يُثبَّت:    DB, Backend, Frontend*, Updater, Backup, OfflineSync
+Shortcuts:  ✅ نعم
+Web:        ❌ لا (desktop فقط)
+Offline:    ✅ نعم
 
-**المشكلة الحالية:**
-```typescript
-// كل ipc handler يستورد من Electron مباشرةً
-import { ipcMain } from 'electron'; // ← مشكلة
+* Frontend يُثبَّت لأن server+client يتضمنه دائماً
 ```
 
-**الحل — Abstract IPC Adapter:**
-```typescript
-// installer/core/ipc/IpcAdapter.ts
-export interface IpcAdapter {
-  handle(channel: string, fn: (...args: unknown[]) => Promise<unknown>): void;
-  emit(window: unknown, channel: string, data: unknown): void;
-  on(channel: string, fn: (...args: unknown[]) => void): void;
-}
-// يُنفَّذ بـ ElectronIpcAdapter أو HttpIpcAdapter أو CliIpcAdapter
+### 🌐 شركة متعددة الفروع — السيرفر الرئيسي
+```
+Deployment:  server
+Access:      [web]
+─────────────────────────────────────────────────────
+يُثبَّت:    DB, Backend, Frontend (لأن web✓), Updater, Backup
+Shortcuts:  ❌ لا
+Web:        ✅ نعم — port 5000، المستخدمون يتصلون من الشبكة
 ```
 
-### ثغرة 2: عدم وجود DeploymentOrchestrator
-
-**الحل:**
+### 🌿 شركة متعددة الفروع — الفرع
 ```
-installer/core/deployment/
-├── DeploymentOrchestrator.ts   ← يُنسّق كل خطوات النشر حسب InstallMode
-├── DeploymentPlan.ts           ← يُحدّد ما يُثبَّت في كل وضع
-└── plans/
-    ├── standalone.plan.ts
-    ├── server-only.plan.ts
-    ├── client-only.plan.ts
-    ├── branch.plan.ts
-    └── hybrid-cloud.plan.ts
+Deployment:  branch
+Access:      [desktop, web, offline]
+─────────────────────────────────────────────────────
+يُثبَّت:    DB, Backend, Frontend, Updater, Backup, OfflineSync
+Shortcuts:  ✅ نعم
+Web:        ✅ نعم
+Offline:    ✅ نعم
+يتصل بـ:   السيرفر الرئيسي للمزامنة
 ```
 
-### ثغرة 3: لا يوجد ChangeMode (تحويل وضع التثبيت)
-
-يحتاج إضافة:
+### 👔 مدير الشركة — من أي مكان
 ```
-installer/core/change/
-├── ChangeModeManager.ts   ← تغيير InstallMode بدون إعادة تثبيت
-└── ComponentManager.ts    ← إضافة/إزالة مكونات
-```
-
-### ثغرة 4: لا يوجد DatabaseMigrationManager (نقل DB)
-
-يحتاج إضافة:
-```
-installer/core/database/
-└── DatabaseMigrator.ts   ← نقل قاعدة البيانات إلى جهاز آخر
+Deployment:  client
+Access:      [web]
+─────────────────────────────────────────────────────
+يُثبَّت:    Updater فقط
+لا يُثبَّت: DB, Backend, Frontend service
+يتصل بـ:   السيرفر الرئيسي عبر الإنترنت
+Shortcuts:  ❌ لا (Browser فقط)
 ```
 
-### ثغرة 5: لا يوجد شاشة Deployment Settings
-
-يحتاج إضافة:
+### ☁️ شركة سحابية (مستقبلاً)
 ```
-installer/ui/settings/
-├── DeploymentSettings.tsx    ← شاشة الإعدادات الرئيسية
-├── tabs/
-│   ├── ServerSettings.tsx   ← إعدادات السيرفر
-│   ├── DatabaseSettings.tsx ← إعدادات قاعدة البيانات
-│   ├── BackupSettings.tsx   ← جدول النسخ الاحتياطية
-│   ├── UpdateSettings.tsx   ← إعدادات التحديثات
-│   └── LicenseSettings.tsx  ← إدارة الترخيص
+Deployment:  cloud
+Access:      [web]
+─────────────────────────────────────────────────────
+يُثبَّت:    لا شيء محلياً
+يتصل بـ:   السيرفر السحابي
 ```
 
 ---
 
-## 5. خريطة الطريق — 10 سنوات
+## رابعاً: تصميم الكود (Architecture)
 
-### v1.0 (الحالي) — MVP ✅
-- [x] التثبيت الكامل (standalone + server+client)
-- [x] Upgrade + Rollback
-- [x] Uninstall
-- [x] Health Check
-- [x] Windows Services
-
-### v1.1 (التالي) — Server/Client/Branch
-- [ ] إضافة `server-only` و `client-only` و `branch` كـ InstallMode
-- [ ] DeploymentOrchestrator
-- [ ] تغيير عنوان السيرفر (ChangeEndpoint)
-
-### v1.2 — Change & Repair
-- [ ] Repair Installation
-- [ ] Change Installation (إضافة/إزالة مكونات)
-- [ ] نقل قاعدة البيانات
-- [ ] تحويل وضع التثبيت (ChangeMode)
-
-### v1.3 — Deployment Settings UI
-- [ ] شاشة إعدادات Deployment كاملة
-- [ ] إدارة الترخيص
-- [ ] جدولة النسخ الاحتياطية
-
-### v2.0 — Multi-UI Shell
-- [ ] IpcAdapter مجرّد
-- [ ] Web Wizard (بدون Electron)
-- [ ] CLI Mode للتثبيت الصامت
-
-### v3.0 — Cloud & Enterprise
-- [ ] Auto-Update Server
-- [ ] Centralized License Server
-- [ ] Multi-tenant deployment
+```
+installer/
+├── core/types.ts                       ← Single Source of Truth
+│   ├── DeploymentType (5 values)
+│   ├── AccessMode[] (3 values)
+│   ├── OneSoftConfig {deploymentType, accessModes, ...}
+│   ├── DeploymentPlan (infra + access layers)
+│   └── utility funcs: legacy ↔ new conversion
+│
+├── core/deployment/DeploymentOrchestrator.ts
+│   ├── INFRA{} matrix — what each DeploymentType installs
+│   ├── getPlan(type, modes) → DeploymentPlan
+│   ├── getComponents(type, modes) → InstalledComponents
+│   ├── diff(from, to) → {toInstall, toUninstall, unchanged}
+│   └── validate(type, modes, remoteUrl) → {valid, errors}
+│
+├── core/config/ConfigManager.ts
+│   ├── load() — يقرأ + يُرحِّل v1 → v2 تلقائياً
+│   ├── save() — يكتب deploymentType + يشتق legacy fields
+│   └── _migrate() — v1 installMode/runMode → v2 deploymentType/accessModes
+│
+├── core/services/ServiceManager.ts
+│   └── installAll(deploymentType, accessModes) — ينظر للطبقتين
+│
+├── core/change/ChangeModeManager.ts
+│   ├── changeDeployment(req) — تغيير نوع + طريقة
+│   ├── changeAccessModes(current, target) — طريقة فقط
+│   └── changeEndpoint(remoteServer) — عنوان السيرفر فقط
+│
+└── ui/
+    ├── store/installer.store.ts
+    │   ├── deploymentType: DeploymentType
+    │   ├── accessModes: AccessMode[]
+    │   └── toggleAccessMode(mode) — يمنع إزالة الخيار الأخير
+    │
+    └── steps/
+        ├── 04-InstallType.tsx   ← Radio — نوع التثبيت (واحد)
+        ├── 05-AccessModes.tsx   ← Checkboxes — طرق الاستخدام (متعدد)
+        └── 08-Services.tsx      ← يستخدم deploymentType + accessModes
+```
 
 ---
 
-## 6. نموذج Config الموسّع (v2)
+## خامساً: Config Schema v2
 
-```jsonc
+```json
 {
   "version": "1.0.0",
   "configVersion": 2,
-  "installMode": "branch",          // standalone|server-only|client-only|server+client|branch|hybrid-cloud|cloud-only
-  "runMode": "desktop+web",         // desktop|web|desktop+web
-  "components": {                   // المكونات المثبّتة
-    "database":  true,
-    "backend":   true,
-    "frontend":  true,
-    "updater":   true,
-    "backup":    true
+
+  "deploymentType": "server+client",
+  "accessModes": ["desktop", "web"],
+
+  "installMode": "server+client",
+  "runMode": "desktop+web",
+
+  "components": {
+    "database": true,
+    "backend":  true,
+    "frontend": true,
+    "updater":  true,
+    "backup":   true
   },
-  "database": {
-    "host": "localhost",
-    "port": 5432,
-    "name": "onesoft_erp",
-    "user": "postgres",
-    "password": "***",
-    "poolMin": 2,
-    "poolMax": 10
-  },
-  "remoteServer": {                 // للـ client-only و branch
-    "enabled": false,
-    "apiUrl": null,
-    "apiKey": null,
-    "syncMode": "realtime"          // realtime|scheduled|manual
-  },
-  "server": {
-    "backendPort": 3000,
-    "frontendPort": 5000,
-    "host": "0.0.0.0",
-    "allowedOrigins": ["http://localhost:5000"]
-  },
-  "backup": {
-    "enabled": true,
-    "schedule": "0 2 * * *",
-    "retentionDays": 30,
-    "path": "C:\\ProgramData\\OneSoft\\Backups",
-    "compress": true,
-    "includeAttachments": true,
-    "remoteEnabled": false,
-    "remoteUrl": null
-  },
-  "update": {
-    "autoCheck": true,
-    "autoInstall": false,
-    "channel": "stable",
-    "updateServerUrl": "https://updates.onesoft.app",
-    "checkInterval": 86400
-  },
-  "license": {
-    "key": null,
-    "type": "trial",
-    "expiresAt": null,
-    "maxUsers": 5,
-    "activatedAt": null,
-    "offlineGrace": 30
+
+  "remoteServer": {
+    "enabled":  false,
+    "apiUrl":   null,
+    "apiKey":   null,
+    "syncMode": "realtime"
   }
 }
 ```
 
+**ترحيل configs قديمة (v1 → v2) — تلقائي:**
+```
+installMode: "standalone"  → deploymentType: "server+client"
+runMode: "desktop+web"     → accessModes: ["desktop", "web"]
+```
+
 ---
 
-## 7. قاعدة التوافق للمستقبل
+## سادساً: قابلية التوسع للميزات المستقبلية
 
-### قانون 1: Core لا يعرف Electron
-لا يجوز أي import من `electron` داخل `installer/core/**`
+| الميزة | ما يُضاف |
+|--------|---------|
+| Branch Sync | `syncMode` في RemoteServerConfig + SyncService |
+| Offline Mode كامل | `enableOfflineSync=true` في DeploymentPlan + OfflineSync service |
+| Mobile App | `client` + `web` — يتصل بـ Backend API مباشرةً |
+| Web Portal | `client` + `web` — نفس النمط |
+| Auto Update | موجود — UpdateConfig + UpgradeManager |
+| License Server | موجود — LicenseConfig + تحقق |
+| Multi-Tenant | يتطلب schema change في DB — خارج نطاق Installer |
+| Remote Management | إضافة `remote-admin` AccessMode مستقبلاً |
 
-### قانون 2: Business Logic في Core فقط
-كل قرار يتعلق بالتثبيت/الترقية/الإزالة يكون في Core — IPC مجرد ناقل للأحداث
+---
 
-### قانون 3: config.json هو مصدر الحقيقة الوحيد
-كل مكون يقرأ حالته من `onesoft.config.json` — لا hardcoded values
+## سابعاً: القوانين الستة غير القابلة للكسر
 
-### قانون 4: كل خطوة قابلة للإعادة (Idempotent)
-تشغيل أي خطوة تثبيت مرتين يُعطي نفس النتيجة — `ON CONFLICT DO NOTHING`
+```
+1. Core لا يستورد من 'electron'                → صفر coupling
+2. DeploymentOrchestrator حكم وحيد             → getPlan() فقط يقرر ما يُثبَّت
+3. onesoft.config.json مصدر الحقيقة الوحيد    → لا منطق مضمَّن في الكود
+4. كل خطوة idempotent                          → يمكن إعادتها بأمان
+5. deploymentType + accessModes (لا installMode → لا تستخدم legacy في كود جديد
+6. legacy fields للقراءة فقط                   → لا تُضيف منطقاً عليها
+```
 
-### قانون 5: Emit-based Progress
-كل عملية طويلة تُصدر `ProgressEvent` — لا polling من الـ UI
+---
+
+*configVersion: 2 | معمارية ثنائية الطبقة | 2026-07-01*
