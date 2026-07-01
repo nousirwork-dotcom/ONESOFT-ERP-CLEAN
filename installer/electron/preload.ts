@@ -10,7 +10,8 @@ contextBridge.exposeInMainWorld('installer', {
 
   // Requirements
   checkRequirements: () => ipcRenderer.invoke('requirements:check'),
-  fixRequirement:    (id: string) => ipcRenderer.invoke('requirements:fix', id),
+  // ✅ pgPassword مطلوب عند إصلاح postgresql تلقائياً
+  fixRequirement: (id: string, pgPassword?: string) => ipcRenderer.invoke('requirements:fix', id, pgPassword),
 
   // Database
   testConnection:  (opts: unknown) => ipcRenderer.invoke('database:test-connection', opts),

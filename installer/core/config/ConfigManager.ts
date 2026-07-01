@@ -121,7 +121,10 @@ export class ConfigManager {
       throw new Error('Config file does not exist yet — call initDefault first');
     }
     const current = ConfigManager.load();
-    const merged = deepMerge(current, updates) as OneSoftConfig;
+    const merged = deepMerge(
+      current as unknown as Record<string, unknown>,
+      updates as unknown as Record<string, unknown>,
+    ) as unknown as OneSoftConfig;
     ConfigManager.save(merged);
     return merged;
   }

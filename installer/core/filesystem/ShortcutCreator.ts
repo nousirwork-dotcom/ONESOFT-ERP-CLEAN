@@ -23,7 +23,7 @@ export class ShortcutCreator {
     for (const lnk of lnks) {
       try {
         fs.mkdirSync(path.dirname(lnk), { recursive: true });
-        this._ps(lnk, appExe, iconPath, installDir);
+        this._createShortcut({ dest: lnk, target: appExe, icon: iconPath, description: 'OneSoft ERP — نظام إدارة الأعمال' }, emit);
         emit({ level: 'success', message: `✅ ${lnk}`, timestamp: now() });
       } catch (e: unknown) {
         emit({ level: 'warning', message: `⚠️ ${e instanceof Error ? e.message : String(e)}`, timestamp: now() });

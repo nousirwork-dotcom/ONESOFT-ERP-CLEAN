@@ -14,7 +14,15 @@ const PG_INSTALL_DIR = 'C:\\Program Files\\PostgreSQL\\16';
 const PG_DATA_DIR    = 'C:\\Program Files\\PostgreSQL\\16\\data';
 
 export class PostgreSQLFixer {
-  constructor(private readonly pgPassword: string = 'postgres') {}
+  /**
+   * @param pgPassword كلمة مرور superuser لـ PostgreSQL
+   *   يجب أن يُمرِّرها المستخدم عبر نموذج التثبيت — لا قيمة افتراضية
+   */
+  constructor(private readonly pgPassword: string) {
+    if (!pgPassword || pgPassword.trim().length < 8) {
+      throw new Error('كلمة مرور PostgreSQL مطلوبة ويجب أن تكون 8 أحرف على الأقل');
+    }
+  }
 
   async fix(emit: Emit): Promise<void> {
     emit({ level: 'info', message: 'جارٍ تنزيل PostgreSQL 16...', timestamp: now() });

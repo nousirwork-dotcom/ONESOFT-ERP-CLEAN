@@ -6,9 +6,13 @@ import type { ServiceName, ServiceStatus, ServiceInfo, ServiceOperationResult, P
 type Emit = (e: ProgressEvent) => void;
 
 // NSSM مُضمَّن في resources/bin/nssm.exe
+// process.resourcesPath متاح فقط في Electron — نصل إليه بشكل آمن
+const electronResourcesPath: string =
+  (process as Record<string, unknown>)['resourcesPath'] as string ?? '';
+
 function getNssmPath(): string {
   const candidates = [
-    path.join(process.resourcesPath ?? '', 'bin', 'nssm.exe'),
+    path.join(electronResourcesPath, 'bin', 'nssm.exe'),
     path.join(__dirname, '..', '..', 'resources', 'bin', 'nssm.exe'),
     path.join(process.cwd(), 'resources', 'bin', 'nssm.exe'),
     'nssm.exe',
@@ -54,7 +58,7 @@ export class ServiceManager {
     emit?.({ level: 'info', message: `جارٍ تثبيت خدمة ${name}...`, timestamp: now() });
 
     if (process.platform !== 'win32') {
-      emit?.({ level: 'warn', message: `تخطي تثبيت ${name} (غير Windows)`, timestamp: now() });
+      emit?.({ level: 'warning', message: `تخطي تثبيت ${name} (غير Windows)`, timestamp: now() });
       return { success: true };
     }
 

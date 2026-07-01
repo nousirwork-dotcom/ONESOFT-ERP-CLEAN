@@ -13,6 +13,9 @@ export default function Step03Requirements() {
   const { requirementsReport, setRequirementsReport, nextStep, prevStep } = useInstallerStore();
   const [loading, setLoading] = useState(false);
   const [fixingId, setFixingId] = useState<string | null>(null);
+  const [pgPasswordPrompt, setPgPasswordPrompt] = useState(false);
+  const [pgPassword, setPgPassword] = useState('');
+  const [pgError, setPgError] = useState('');
 
   const run = async () => {
     setLoading(true);
@@ -24,9 +27,27 @@ export default function Step03Requirements() {
   useEffect(() => { run(); }, []);
 
   const fix = async (id: string) => {
+    if (id === 'postgresql') {
+      setPgPasswordPrompt(true);
+      return;
+    }
     setFixingId(id);
     await window.installer?.fixRequirement?.(id);
     setFixingId(null);
+    await run();
+  };
+
+  const fixPostgres = async () => {
+    if (!pgPassword || pgPassword.length < 8) {
+      setPgError('كلمة المرور يجب أن تكون 8 أحرف على الأقل');
+      return;
+    }
+    setPgPasswordPrompt(false);
+    setPgError('');
+    setFixingId('postgresql');
+    await window.installer?.fixRequirement?.('postgresql', pgPassword);
+    setFixingId(null);
+    setPgPassword('');
     await run();
   };
 
@@ -35,6 +56,43 @@ export default function Step03Requirements() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+      {/* ✅ نموذج كلمة مرور PostgreSQL عند التثبيت التلقائي */}
+      {pgPasswordPrompt && (
+        <div style={{
+          background: '#EFF6FF', border: '1px solid #93C5FD', borderRadius: 10,
+          padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10,
+        }}>
+          <div style={{ fontWeight: 700, color: '#1E344F', fontSize: 14 }}>
+            🔐 تثبيت PostgreSQL تلقائياً
+          </div>
+          <div style={{ fontSize: 12, color: '#4B5563' }}>
+            أدخل كلمة مرور لمستخدم postgres — ستُستخدم فقط للتثبيت الصامت
+          </div>
+          <input
+            type="password"
+            placeholder="كلمة مرور superuser (8 أحرف على الأقل)"
+            value={pgPassword}
+            onChange={e => { setPgPassword(e.target.value); setPgError(''); }}
+            style={{
+              background: '#fff', border: '1px solid #D1D5DB', borderRadius: 7,
+              padding: '8px 12px', fontSize: 13, fontFamily: 'inherit',
+              color: '#1E344F', outline: 'none', width: '100%', boxSizing: 'border-box',
+            }}
+          />
+          {pgError && <div style={{ fontSize: 11, color: '#B91C1C' }}>{pgError}</div>}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={fixPostgres} style={{ ...btnPrimary, padding: '7px 18px', fontSize: 12 }}>
+              🚀 تثبيت PostgreSQL
+            </button>
+            <button onClick={() => { setPgPasswordPrompt(false); setPgPassword(''); setPgError(''); }}
+              style={{ ...btnSecondary, padding: '7px 14px', fontSize: 12 }}>
+              إلغاء
+            </button>
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <h2 style={{ fontSize: 20, fontWeight: 800, color: '#1E344F', margin: '0 0 4px' }}>
