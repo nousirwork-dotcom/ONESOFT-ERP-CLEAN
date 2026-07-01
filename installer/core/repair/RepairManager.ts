@@ -15,12 +15,6 @@ type Emit = (e: ProgressEvent) => void;
  *   fix-config             ← إصلاح ملف الإعدادات
  */
 export class RepairManager {
-  private readonly config: ConfigManager;
-
-  constructor(configDir?: string) {
-    this.config = new ConfigManager(configDir);
-  }
-
   async repair(req: RepairRequest, emit: Emit): Promise<RepairResult> {
     const actionsApplied: RepairAction[] = [];
     const errors: string[] = [];
@@ -53,8 +47,8 @@ export class RepairManager {
   private async _execute(action: RepairAction, emit: Emit): Promise<void> {
     switch (action) {
       case 'fix-config': {
-        const cfg = await this.config.load();
-        await this.config.save(cfg);
+        const cfg = ConfigManager.load();
+        ConfigManager.save(cfg);
         emit({ level: 'info', message: 'تم إعادة كتابة ملف الإعدادات', timestamp: now() });
         break;
       }
@@ -62,7 +56,7 @@ export class RepairManager {
       case 'fix-permissions': {
         if (process.platform !== 'win32') break;
         const { execSync } = await import('child_process');
-        const cfg = await this.config.load();
+        const cfg = ConfigManager.load();
         const dirs = [
           cfg.paths.data,
           cfg.paths.logs,

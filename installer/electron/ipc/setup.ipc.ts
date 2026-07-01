@@ -1,7 +1,6 @@
 import type { IpcMain, BrowserWindow } from 'electron';
 import { OrganizationCreator, UserCreator, AccountSeeder, VersionDetector } from '../../core/index.js';
 import type { OrganizationSetup, FirstUserSetup } from '../../core/types.js';
-import * as path from 'path';
 
 export function registerSetupIpc(ipc: IpcMain, win: BrowserWindow | null) {
   const emit = (e: unknown) => win?.webContents.send('installer:progress', e);
@@ -21,8 +20,7 @@ export function registerSetupIpc(ipc: IpcMain, win: BrowserWindow | null) {
   });
 
   ipc.handle('setup:seed-accounts', async (_, databaseUrl: string) => {
-    const serverAppPath = path.join(process.resourcesPath ?? process.cwd(), 'app', 'server-app');
-    const seeder = new AccountSeeder(serverAppPath);
+    const seeder = new AccountSeeder();
     await seeder.seed(databaseUrl, emit as any);
     return { ok: true };
   });
