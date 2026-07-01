@@ -29,9 +29,10 @@
 param(
     [string]$ProjectRoot = $PSScriptRoot,
     [switch]$SkipAppBuild,
-    [switch]$SkipInstall,
-    [switch]$Verbose
+    [switch]$SkipInstall
 )
+
+$VerboseOutput = $PSBoundParameters.ContainsKey('Verbose')
 
 $ErrorActionPreference = 'Stop'
 $Host.UI.RawUI.WindowTitle = "OneSoft ERP - Build Installer"
@@ -132,17 +133,17 @@ if (-not $SkipInstall) {
 
     Write-Info "installer..."
     Set-Location "$ProjectRoot\installer"
-    pnpm install --frozen-lockfile 2>&1 | ForEach-Object { if ($Verbose) { Write-Info $_ } }
+    pnpm install --frozen-lockfile 2>&1 | ForEach-Object { if ($VerboseOutput) { Write-Info $_ } }
     Write-Ok "installer deps"
 
     Write-Info "server-app..."
     Set-Location "$ProjectRoot\server-app"
-    pnpm install --frozen-lockfile 2>&1 | ForEach-Object { if ($Verbose) { Write-Info $_ } }
+    pnpm install --frozen-lockfile 2>&1 | ForEach-Object { if ($VerboseOutput) { Write-Info $_ } }
     Write-Ok "server-app deps"
 
     Write-Info "client-app..."
     Set-Location "$ProjectRoot\client-app"
-    pnpm install --frozen-lockfile 2>&1 | ForEach-Object { if ($Verbose) { Write-Info $_ } }
+    pnpm install --frozen-lockfile 2>&1 | ForEach-Object { if ($VerboseOutput) { Write-Info $_ } }
     Write-Ok "client-app deps"
 }
 
@@ -152,7 +153,7 @@ if (-not $SkipAppBuild) {
     Set-Location "$ProjectRoot\server-app"
 
     if (Test-Path "dist") { Remove-Item "dist" -Recurse -Force }
-    pnpm run build 2>&1 | ForEach-Object { if ($Verbose) { Write-Info $_ } }
+    pnpm run build 2>&1 | ForEach-Object { if ($VerboseOutput) { Write-Info $_ } }
 
     if (-not (Test-Path "dist\index.mjs")) {
         Write-Fail "server-app build failed - dist\index.mjs not found"
@@ -166,7 +167,7 @@ if (-not $SkipAppBuild) {
     Set-Location "$ProjectRoot\client-app"
 
     if (Test-Path "dist") { Remove-Item "dist" -Recurse -Force }
-    pnpm run build 2>&1 | ForEach-Object { if ($Verbose) { Write-Info $_ } }
+    pnpm run build 2>&1 | ForEach-Object { if ($VerboseOutput) { Write-Info $_ } }
 
     if (-not (Test-Path "dist\index.html")) {
         Write-Fail "client-app build failed - dist\index.html not found"
@@ -226,7 +227,7 @@ if (-not (Test-Path "dist-electron\electron\main.js")) {
 Write-Ok "TypeScript -> dist-electron"
 
 Write-Info "Building React UI..."
-pnpm exec vite build 2>&1 | ForEach-Object { if ($Verbose) { Write-Info $_ } }
+pnpm exec vite build 2>&1 | ForEach-Object { if ($VerboseOutput) { Write-Info $_ } }
 if (-not (Test-Path "dist-ui\index.html")) {
     Write-Fail "React build failed - dist-ui\index.html not found"
 }
@@ -240,7 +241,7 @@ $env:GH_TOKEN = ""
 pnpm exec electron-builder --win --x64 --config electron-builder.config.ts 2>&1 | ForEach-Object {
     if ($_ -match 'error|Error|failed|Failed') { Write-Host "  $_" -ForegroundColor Red }
     elseif ($_ -match 'built|Built|done|Done|success') { Write-Host "  $_" -ForegroundColor Green }
-    else { if ($Verbose) { Write-Info $_ } }
+    else { if ($VerboseOutput) { Write-Info $_ } }
 }
 
 # STEP 8: Verify output
