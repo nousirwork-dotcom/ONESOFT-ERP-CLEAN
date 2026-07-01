@@ -6,27 +6,31 @@ import Step02License      from './steps/02-License';
 import Step03Requirements from './steps/03-Requirements';
 import Step04InstallType  from './steps/04-InstallType';
 import Step05AccessModes  from './steps/05-AccessModes';
-import Step06Database     from './steps/05-Database';
-import Step07Organization from './steps/06-Organization';
-import Step08FirstUser    from './steps/07-FirstUser';
-import Step09Services     from './steps/08-Services';
-import Step10HealthCheck  from './steps/09-HealthCheck';
-import Step11Complete     from './steps/10-Complete';
+import Step06DatabaseMode from './steps/05-Database';      // وضع + إعداد قاعدة البيانات
+import Step07MachineRole  from './steps/06-MachineRole';   // دور الجهاز
+import Step08Connectivity from './steps/07-Connectivity';  // طريقة الاتصال
+import Step09Organization from './steps/06-Organization';  // المؤسسة
+import Step10FirstUser    from './steps/07-FirstUser';     // المستخدم الأول
+import Step11Services     from './steps/08-Services';      // تثبيت الخدمات
+import Step12HealthCheck  from './steps/09-HealthCheck';   // فحص الصحة
+import Step13Complete     from './steps/10-Complete';      // الانتهاء
 import UninstallWizard    from './steps/Uninstall';
 
-// ── خطوات المعالج — 11 خطوة (بعد إضافة طرق الاستخدام) ──────────────────────
+// ── خطوات المعالج — 13 خطوة ──────────────────────────────────────────────────
 const STEPS_INSTALL = [
   { id: 1,  label: 'مرحباً'           },
   { id: 2,  label: 'الترخيص'          },
   { id: 3,  label: 'المتطلبات'        },
   { id: 4,  label: 'نوع التثبيت'      },
-  { id: 5,  label: 'طرق الاستخدام'    },  // ← خطوة جديدة (AccessModes)
-  { id: 6,  label: 'قاعدة البيانات'   },
-  { id: 7,  label: 'المؤسسة'          },
-  { id: 8,  label: 'المستخدم الأول'   },
-  { id: 9,  label: 'التثبيت'          },
-  { id: 10, label: 'فحص الصحة'        },
-  { id: 11, label: 'الانتهاء'         },
+  { id: 5,  label: 'طرق الاستخدام'    },
+  { id: 6,  label: 'قاعدة البيانات'   },  // ← DatabaseMode (جديد — شامل)
+  { id: 7,  label: 'دور الجهاز'       },  // ← MachineRole (جديد)
+  { id: 8,  label: 'الاتصال بالشبكة'  },  // ← Connectivity (جديد)
+  { id: 9,  label: 'المؤسسة'          },
+  { id: 10, label: 'المستخدم الأول'   },
+  { id: 11, label: 'التثبيت'          },
+  { id: 12, label: 'فحص الصحة'        },
+  { id: 13, label: 'الانتهاء'         },
 ];
 
 const isUninstall = typeof window !== 'undefined' &&
@@ -71,13 +75,15 @@ export default function App() {
       case 2:  return <Step02License />;
       case 3:  return <Step03Requirements />;
       case 4:  return <Step04InstallType />;
-      case 5:  return <Step05AccessModes />;   // ← خطوة طرق الاستخدام
-      case 6:  return <Step06Database />;
-      case 7:  return <Step07Organization />;
-      case 8:  return <Step08FirstUser />;
-      case 9:  return <Step09Services />;
-      case 10: return <Step10HealthCheck />;
-      case 11: return <Step11Complete />;
+      case 5:  return <Step05AccessModes />;
+      case 6:  return <Step06DatabaseMode />;   // وضع + إعداد قاعدة البيانات
+      case 7:  return <Step07MachineRole />;    // دور الجهاز
+      case 8:  return <Step08Connectivity />;   // طريقة الاتصال
+      case 9:  return <Step09Organization />;
+      case 10: return <Step10FirstUser />;
+      case 11: return <Step11Services />;
+      case 12: return <Step12HealthCheck />;
+      case 13: return <Step13Complete />;
       default: return <Step01Welcome />;
     }
   };

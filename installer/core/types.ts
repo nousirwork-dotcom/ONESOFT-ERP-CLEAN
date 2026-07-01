@@ -40,6 +40,60 @@ export type AccessMode =
   | 'offline';
 
 // ══════════════════════════════════════════════════════════════════════════════
+// Database Mode — كيف تُدار قاعدة البيانات (اختيار واحد، Radio)
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * DatabaseMode — مصدر قاعدة البيانات
+ *
+ * local-install  : تثبيت PostgreSQL جديد على هذا الجهاز
+ * local-existing : استخدام PostgreSQL موجود مسبقاً على هذا الجهاز
+ * remote         : الاتصال بـ PostgreSQL على جهاز/سيرفر آخر عبر الشبكة
+ * cloud          : قاعدة بيانات سحابية (محجوز للمستقبل)
+ */
+export type DatabaseMode =
+  | 'local-install'
+  | 'local-existing'
+  | 'remote'
+  | 'cloud';
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Machine Role — دور هذا الجهاز في البنية (اختيار واحد، Radio)
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * MachineRole — دور الجهاز داخل شبكة OneSoft
+ *
+ * main-server         : السيرفر الرئيسي — مصدر البيانات الأساسي
+ * branch-server       : سيرفر فرع — بيانات محلية + مزامنة مع الرئيسي
+ * client-workstation  : محطة عمل — عميل يتصل بسيرفر
+ * mobile-workstation  : محمول — محجوز للمستقبل
+ */
+export type MachineRole =
+  | 'main-server'
+  | 'branch-server'
+  | 'client-workstation'
+  | 'mobile-workstation';
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Connectivity Mode — طريقة اتصال هذا الجهاز (اختيار واحد، Radio)
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * ConnectivityMode — سلوك الاتصال بالشبكة
+ *
+ * always-online  : متصل دائماً بالإنترنت — بيانات فورية
+ * offline-first  : يعمل بدون إنترنت ويزامن عند الاتصال
+ * lan-only       : شبكة محلية فقط — بدون إنترنت
+ * internet+lan   : إنترنت + شبكة محلية — أقصى مرونة
+ */
+export type ConnectivityMode =
+  | 'always-online'
+  | 'offline-first'
+  | 'lan-only'
+  | 'internet+lan';
+
+// ══════════════════════════════════════════════════════════════════════════════
 // Legacy — محتفظ بها للتوافق مع الإصدارات القديمة (deprecated)
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -182,9 +236,14 @@ export interface OneSoftConfig {
   version:       string;
   configVersion: number;  // رقم إصدار schema — يُستخدم للترحيل
 
-  // ── البنية المعمارية الجديدة (configVersion >= 2) ─────────────────────────
-  deploymentType: DeploymentType;   // نوع التثبيت (واحد)
-  accessModes:    AccessMode[];     // طرق الاستخدام (متعددة)
+  // ── البنية المعمارية (configVersion >= 2) ────────────────────────────────
+  deploymentType:  DeploymentType;    // نوع التثبيت (واحد)
+  accessModes:     AccessMode[];      // طرق الاستخدام (متعددة)
+
+  // ── الأبعاد الجديدة (configVersion >= 3) ────────────────────────────────
+  databaseMode:    DatabaseMode;      // مصدر قاعدة البيانات
+  machineRole:     MachineRole;       // دور الجهاز في الشبكة
+  connectivityMode: ConnectivityMode; // سلوك الاتصال بالشبكة
 
   // ── البنية القديمة (محتفظ بها للتوافق، deprecated) ────────────────────────
   /** @deprecated استخدم deploymentType */
@@ -348,15 +407,18 @@ export interface ProgressEvent {
 // ══════════════════════════════════════════════════════════════════════════════
 
 export interface WizardState {
-  currentStep: number;
-  deploymentType: DeploymentType;
-  accessModes: AccessMode[];
-  dbOptions: DatabaseConnectionOptions;
-  organization: OrganizationSetup;
-  firstUser: FirstUserSetup;
-  acceptedLicense: boolean;
+  currentStep:      number;
+  deploymentType:   DeploymentType;
+  accessModes:      AccessMode[];
+  databaseMode:     DatabaseMode;
+  machineRole:      MachineRole;
+  connectivityMode: ConnectivityMode;
+  dbOptions:        DatabaseConnectionOptions;
+  organization:     OrganizationSetup;
+  firstUser:        FirstUserSetup;
+  acceptedLicense:  boolean;
   requirementsReport: RequirementsReport | null;
-  healthReport: HealthReport | null;
+  healthReport:       HealthReport | null;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

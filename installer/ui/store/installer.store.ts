@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type {
   DeploymentType, AccessMode,
+  DatabaseMode, MachineRole, ConnectivityMode,
   DatabaseConnectionOptions,
   OrganizationSetup, FirstUserSetup,
   RequirementsReport, HealthReport, ProgressEvent, OneSoftConfig,
@@ -25,6 +26,18 @@ interface InstallerStore {
   accessModes: AccessMode[];
   setAccessModes: (modes: AccessMode[]) => void;
   toggleAccessMode: (mode: AccessMode) => void;
+
+  // ── وضع قاعدة البيانات ────────────────────────────────────────────────
+  databaseMode: DatabaseMode;
+  setDatabaseMode: (m: DatabaseMode) => void;
+
+  // ── دور الجهاز في الشبكة ─────────────────────────────────────────────
+  machineRole: MachineRole;
+  setMachineRole: (r: MachineRole) => void;
+
+  // ── طريقة الاتصال بالشبكة ────────────────────────────────────────────
+  connectivityMode: ConnectivityMode;
+  setConnectivityMode: (c: ConnectivityMode) => void;
 
   // Database
   dbOpts: DatabaseConnectionOptions;
@@ -73,7 +86,7 @@ export const useInstallerStore = create<InstallerStore>((set, get) => ({
   acceptedLicense: false,
   setAcceptedLicense: (v) => set({ acceptedLicense: v }),
 
-  // ── نوع التثبيت — الافتراضي: server+client (مناسب لأغلب الحالات) ──────
+  // ── نوع التثبيت — الافتراضي: server+client ───────────────────────────
   deploymentType: 'server+client',
   setDeploymentType: (t) => set({ deploymentType: t }),
 
@@ -85,9 +98,20 @@ export const useInstallerStore = create<InstallerStore>((set, get) => ({
     const next = current.includes(mode)
       ? current.filter(m => m !== mode)
       : [...current, mode];
-    // يجب أن يبقى اختيار واحد على الأقل
     return { accessModes: next.length > 0 ? next : current };
   }),
+
+  // ── وضع قاعدة البيانات — الافتراضي: تثبيت جديد ───────────────────────
+  databaseMode: 'local-install',
+  setDatabaseMode: (m) => set({ databaseMode: m }),
+
+  // ── دور الجهاز — الافتراضي: سيرفر رئيسي ─────────────────────────────
+  machineRole: 'main-server',
+  setMachineRole: (r) => set({ machineRole: r }),
+
+  // ── طريقة الاتصال — الافتراضي: متصل دائماً ──────────────────────────
+  connectivityMode: 'always-online',
+  setConnectivityMode: (c) => set({ connectivityMode: c }),
 
   dbOpts: {
     host:     'localhost',

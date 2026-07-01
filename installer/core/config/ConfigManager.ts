@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type {
   OneSoftConfig, DeploymentType, AccessMode, InstallMode, RunMode,
+  DatabaseMode, MachineRole, ConnectivityMode,
 } from '../types.js';
 import {
   legacyModeToDeploymentType, legacyRunModeToAccessModes,
@@ -17,24 +18,33 @@ const CONFIG_FILE = path.join(CONFIG_DIR, 'onesoft.config.json');
 
 // ─── الإعدادات الافتراضية ─────────────────────────────────────────────────────
 export function buildDefaultConfig(partial: {
-  deploymentType?: DeploymentType;
-  accessModes?: AccessMode[];
+  deploymentType?:  DeploymentType;
+  accessModes?:     AccessMode[];
+  databaseMode?:    DatabaseMode;
+  machineRole?:     MachineRole;
+  connectivityMode?: ConnectivityMode;
   dbPassword: string;
 }): OneSoftConfig {
   const programData = process.platform === 'win32'
     ? path.join(process.env['ProgramData'] || 'C:\\ProgramData', 'OneSoft')
     : path.join(process.env['HOME'] || '/tmp', '.onesoft');
 
-  const deploymentType = partial.deploymentType ?? 'server+client';
-  const accessModes    = partial.accessModes    ?? ['desktop', 'web'];
+  const deploymentType  = partial.deploymentType  ?? 'server+client';
+  const accessModes     = partial.accessModes     ?? ['desktop', 'web'];
+  const databaseMode    = partial.databaseMode    ?? 'local-install';
+  const machineRole     = partial.machineRole     ?? 'main-server';
+  const connectivityMode = partial.connectivityMode ?? 'always-online';
 
   return {
     version:        '1.0.0',
-    configVersion:  2,
+    configVersion:  3,
 
     // ── البنية الجديدة ──────────────────────────────────────────────────────
     deploymentType,
     accessModes,
+    databaseMode,
+    machineRole,
+    connectivityMode,
 
     // ── Legacy fields — محسوبة تلقائياً للتوافق مع كود قديم ────────────────
     installMode: deploymentTypeToLegacyMode(deploymentType),
@@ -186,6 +196,33 @@ export class ConfigManager {
       raw['deploymentType'] = legacyModeToDeploymentType(legacyMode);
       raw['accessModes']    = legacyRunModeToAccessModes(legacyRunMode);
       raw['configVersion']  = 2;
+    }
+
+    if (version < 3) {
+      // v2 → v3: أضف الأبعاد الثلاثة الجديدة بقيم افتراضية ذكية
+      const dt = raw['deploymentType'] as string | undefined;
+
+      // databaseMode: اشتق من deploymentType
+      if (!raw['databaseMode']) {
+        raw['databaseMode'] = dt === 'client' || dt === 'cloud'
+          ? 'remote'
+          : 'local-install';
+      }
+
+      // machineRole: اشتق من deploymentType
+      if (!raw['machineRole']) {
+        if (dt === 'branch') raw['machineRole'] = 'branch-server';
+        else if (dt === 'client' || dt === 'cloud') raw['machineRole'] = 'client-workstation';
+        else raw['machineRole'] = 'main-server';
+      }
+
+      // connectivityMode: افتراضي آمن
+      if (!raw['connectivityMode']) {
+        const modes = raw['accessModes'] as string[] | undefined ?? [];
+        raw['connectivityMode'] = modes.includes('offline') ? 'offline-first' : 'always-online';
+      }
+
+      raw['configVersion'] = 3;
     }
 
     return raw as unknown as OneSoftConfig;
