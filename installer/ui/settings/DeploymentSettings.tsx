@@ -416,7 +416,7 @@ function DatabaseTab({ config, onSave, saving }: TabProps) {
           انقل قاعدة البيانات الحالية إلى سيرفر PostgreSQL آخر مع الاحتفاظ بجميع البيانات.
         </p>
         <button
-          onClick={() => {/* TODO: فتح معالج نقل قاعدة البيانات */}}
+          onClick={() => alert('ميزة نقل قاعدة البيانات ستكون متاحة في الإصدار القادم')}
           className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
         >
           بدء معالج نقل قاعدة البيانات

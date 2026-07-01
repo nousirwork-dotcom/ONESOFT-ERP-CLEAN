@@ -23,7 +23,7 @@ function createWindow() {
     center: true,
     frame: false,
     titleBarStyle: 'hidden',
-    icon: path.join(__dirname, '..', 'resources', 'icons', 'onesoft.ico'),
+    icon: path.join(__dirname, '..', '..', 'resources', 'icons', 'onesoft.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -36,7 +36,7 @@ function createWindow() {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path.join(__dirname, '..', 'dist-ui', 'index.html'));
+    mainWindow.loadFile(path.join(__dirname, '..', '..', 'dist-ui', 'index.html'));
   }
 
   mainWindow.on('closed', () => { mainWindow = null; });

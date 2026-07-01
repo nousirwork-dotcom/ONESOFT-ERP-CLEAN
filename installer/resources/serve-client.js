@@ -11,7 +11,7 @@ const path  = require('path');
 const url   = require('url');
 
 const PORT      = parseInt(process.env['ONESOFT_FRONTEND_PORT'] || '5000', 10);
-const DIST_DIR  = path.join(__dirname, '..', 'client-app', 'dist');
+const DIST_DIR  = path.join(__dirname, '..', 'dist');
 const INDEX     = path.join(DIST_DIR, 'index.html');
 
 const MIME = {

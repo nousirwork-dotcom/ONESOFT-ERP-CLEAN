@@ -240,8 +240,8 @@ if (Test-Path "release")       { Remove-Item "release"       -Recurse -Force }
 # بناء TypeScript (Electron)
 Write-Info "تجميع TypeScript..."
 pnpm exec tsc -p tsconfig.electron.json --noEmit false 2>&1 | ForEach-Object { Write-Info $_ }
-if (-not (Test-Path "dist-electron\main.js")) {
-    Write-Fail "فشل تجميع TypeScript — لم يُنتج dist-electron\main.js"
+if (-not (Test-Path "dist-electron\electron\main.js")) {
+    Write-Fail "فشل تجميع TypeScript — لم يُنتج dist-electron\electron\main.js"
 }
 Write-Ok "TypeScript → dist-electron"
 
