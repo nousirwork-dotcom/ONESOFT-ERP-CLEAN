@@ -170,11 +170,11 @@ foreach ($target in $CleanTargets) {
         Remove-Item $target.Path -Recurse -Force
         Write-Ok "$($target.Label) removed"
     } else {
-        Write-Info "$($target.Label) not found — skipped"
+        Write-Info "$($target.Label) not found - skipped"
     }
 }
 
-Write-Ok 'Clean complete — starting fresh build'
+Write-Ok 'Clean complete - starting fresh build'
 
 # ---------------------------------------------------------------------------
 # STEP 1 - Verify requirements
