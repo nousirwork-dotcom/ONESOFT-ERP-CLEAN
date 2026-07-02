@@ -1,12 +1,12 @@
 import { execSync, spawnSync } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as http from 'http';
 import type { ServiceName, ServiceStatus, ServiceInfo, ServiceOperationResult, ProgressEvent, DeploymentType, AccessMode } from '../types.js';
 
 type Emit = (e: ProgressEvent) => void;
 
 // NSSM مُضمَّن في resources/bin/nssm.exe
-// process.resourcesPath متاح فقط في Electron — نصل إليه بشكل آمن لتجنب TS2352
 const electronResourcesPath: string =
   'resourcesPath' in process
     ? String((process as typeof process & { resourcesPath?: string }).resourcesPath ?? '')
@@ -22,7 +22,7 @@ function getNssmPath(): string {
   for (const p of candidates) {
     if (fs.existsSync(p)) return p;
   }
-  return 'nssm'; // fallback — يُفترض وجوده في PATH
+  return 'nssm';
 }
 
 export class ServiceManager {
@@ -65,20 +65,18 @@ export class ServiceManager {
     }
 
     try {
-      // إزالة الخدمة القديمة إذا كانت موجودة
       const existing = this.getStatus(name);
       if (existing !== 'not-installed') {
         this.remove(name);
       }
 
-      // تسجيل الخدمة
       exec(this.nssm, ['install', name, executablePath, ...args]);
       exec(this.nssm, ['set', name, 'AppDirectory', path.dirname(executablePath)]);
       exec(this.nssm, ['set', name, 'Start', 'SERVICE_AUTO_START']);
       exec(this.nssm, ['set', name, 'AppStdout', logPath]);
       exec(this.nssm, ['set', name, 'AppStderr', logPath]);
       exec(this.nssm, ['set', name, 'AppRotateFiles', '1']);
-      exec(this.nssm, ['set', name, 'AppRotateBytes', '10485760']); // 10MB
+      exec(this.nssm, ['set', name, 'AppRotateBytes', '10485760']);
 
       emit?.({ level: 'success', message: `تم تثبيت خدمة ${name}`, timestamp: now() });
       return { success: true };
@@ -116,8 +114,44 @@ export class ServiceManager {
     }
   }
 
+  // ─── انتظار حتى يستجيب منفذ TCP ───────────────────────────────────────────
+  // يُرسل GET إلى localhost:port كل pollMs حتى يصل timeout (ms)
+  // يعيد true عند النجاح، false عند انتهاء الوقت
+  async waitForPort(
+    port: number,
+    emit: Emit,
+    timeoutMs = 90_000,
+    pollMs = 3_000,
+  ): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+    emit({ level: 'info', message: `⏳ انتظار المنفذ ${port}...`, timestamp: now() });
+
+    while (Date.now() < deadline) {
+      const ok = await new Promise<boolean>(resolve => {
+        const req = http.get(
+          { hostname: '127.0.0.1', port, path: '/', timeout: 2_500 },
+          res => { res.resume(); resolve(true); },
+        );
+        req.on('error', () => resolve(false));
+        req.on('timeout', () => { req.destroy(); resolve(false); });
+      });
+
+      if (ok) {
+        emit({ level: 'success', message: `✅ المنفذ ${port} يستجيب`, timestamp: now() });
+        return true;
+      }
+
+      // أيضاً نعتبره جاهزاً إذا كان مقبولاً (ECONNREFUSED → الخدمة لم تبدأ بعد)
+      const elapsed = Math.round((Date.now() - (deadline - timeoutMs)) / 1000);
+      emit({ level: 'info', message: `⏳ المنفذ ${port} لم يستجب بعد (${elapsed}s)...`, timestamp: now() });
+      await sleep(pollMs);
+    }
+
+    emit({ level: 'warning', message: `⚠️ انتهى الوقت — المنفذ ${port} لم يستجب خلال ${timeoutMs / 1000}s`, timestamp: now() });
+    return false;
+  }
+
   // ─── تثبيت جميع خدمات النظام ───────────────────────────────────────────────
-  // يُحدَّد ما يُثبَّت بناءً على DeploymentType + AccessModes
   async installAll(
     opts: {
       installDir:     string;
@@ -135,7 +169,7 @@ export class ServiceManager {
                        || (deploymentType === 'server' && accessModes.includes('web'));
     const needsUpdater  = deploymentType !== 'cloud';
 
-    // OneSoft-Server (Backend) — يعمل فقط إذا كان على هذا الجهاز DB + Backend
+    // ── تثبيت الخدمات ──────────────────────────────────────────────────────
     if (needsBackend) {
       const serverScript = path.join(installDir, 'server-app', 'dist', 'index.mjs');
       this.install(
@@ -146,7 +180,6 @@ export class ServiceManager {
       );
     }
 
-    // OneSoft-Client (Frontend) — يعمل إذا كان هناك واجهة محلية
     if (needsFrontend) {
       const clientScript = path.join(installDir, 'client-app', 'dist-serve', 'server.js');
       this.install(
@@ -157,7 +190,6 @@ export class ServiceManager {
       );
     }
 
-    // OneSoft-Updater — يعمل في كل الأوضاع ما عدا cloud
     if (needsUpdater) {
       const updaterScript = path.join(installDir, 'installer', 'core', 'updater.js');
       if (fs.existsSync(updaterScript)) {
@@ -170,19 +202,32 @@ export class ServiceManager {
       }
     }
 
-    // تشغيل الخدمات بالترتيب الصحيح
+    // ── تشغيل الخدمات بالترتيب الصحيح مع انتظار حقيقي ────────────────────
     emit({ level: 'info', message: 'جارٍ تشغيل الخدمات...', timestamp: now() });
 
     if (needsBackend) {
+      emit({ level: 'info', message: 'تشغيل OneSoft-Server (Backend)...', timestamp: now() });
       this.start('OneSoft-Server');
+
+      // انتظر حتى يستجيب Backend على المنفذ 3000 (مهلة 90 ثانية)
+      const backendReady = await this.waitForPort(3000, emit, 90_000);
+      if (!backendReady) {
+        emit({ level: 'warning', message: '⚠️ Backend لم يبدأ في الوقت المحدد — قد تحتاج لإعادة تشغيل الخدمة يدوياً', timestamp: now() });
+      }
     }
 
     if (needsFrontend) {
-      await sleep(2000); // انتظر Server يبدأ أولاً
+      emit({ level: 'info', message: 'تشغيل OneSoft-Client (Frontend)...', timestamp: now() });
       this.start('OneSoft-Client');
+
+      // انتظر حتى يستجيب Frontend على المنفذ 5000 (مهلة 60 ثانية)
+      const frontendReady = await this.waitForPort(5000, emit, 60_000);
+      if (!frontendReady) {
+        emit({ level: 'warning', message: '⚠️ Frontend لم يبدأ في الوقت المحدد — قد تحتاج لإعادة تشغيل الخدمة يدوياً', timestamp: now() });
+      }
     }
 
-    emit({ level: 'success', message: 'تم تشغيل جميع الخدمات', timestamp: now() });
+    emit({ level: 'success', message: '✅ اكتمل تشغيل الخدمات', timestamp: now() });
   }
 
   // ─── Private ───────────────────────────────────────────────────────────────
@@ -207,7 +252,7 @@ function findNode(): string {
   try {
     return execSync('where node', { encoding: 'utf-8' }).trim().split('\n')[0] || 'node';
   } catch {
-    return process.execPath; // مسار Node.js الحالي
+    return process.execPath;
   }
 }
 

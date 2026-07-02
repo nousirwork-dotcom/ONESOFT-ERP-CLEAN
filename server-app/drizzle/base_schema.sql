@@ -944,4 +944,50 @@ DO $$ BEGIN
         ON DELETE NO ACTION ON UPDATE NO ACTION;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+-- ── send_settings ────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS "send_settings" (
+  "id"                        serial PRIMARY KEY,
+  "org_id"                    integer NOT NULL REFERENCES "organizations"("id") ON DELETE CASCADE,
+  "whatsapp_enabled"          boolean NOT NULL DEFAULT true,
+  "telegram_enabled"          boolean NOT NULL DEFAULT false,
+  "email_enabled"             boolean NOT NULL DEFAULT false,
+  "telegram_bot_token"        text,
+  "email_provider"            varchar(20) DEFAULT 'resend',
+  "email_api_key"             text,
+  "email_from_name"           varchar(255),
+  "email_from_email"          varchar(255),
+  "whatsapp_message_template" text,
+  "telegram_message_template" text,
+  "email_subject_template"    varchar(500),
+  "email_body_template"       text,
+  "waba_enabled"              boolean NOT NULL DEFAULT false,
+  "waba_api_url"              text,
+  "waba_access_token"         text,
+  "waba_phone_number_id"      varchar(100),
+  "waba_sender_name"          varchar(255),
+  "waba_business_account_id"  varchar(100),
+  "waba_verify_token"         varchar(255),
+  "waba_webhook_url"          varchar(500),
+  "created_at"                timestamp NOT NULL DEFAULT now(),
+  "updated_at"                timestamp NOT NULL DEFAULT now()
+);
+
+-- ── document_send_logs ────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS "document_send_logs" (
+  "id"                serial PRIMARY KEY,
+  "org_id"            integer NOT NULL REFERENCES "organizations"("id") ON DELETE CASCADE,
+  "doc_type"          varchar(50) NOT NULL,
+  "doc_id"            integer,
+  "doc_number"        varchar(100),
+  "method"            varchar(20) NOT NULL,
+  "status"            varchar(20) NOT NULL DEFAULT 'pending',
+  "recipient_name"    varchar(255),
+  "recipient_contact" varchar(500),
+  "message_sent"      text,
+  "error_message"     text,
+  "meta_message_id"   varchar(100),
+  "sent_by_user_id"   integer REFERENCES "users"("id") ON DELETE SET NULL,
+  "sent_at"           timestamp NOT NULL DEFAULT now()
+);
+
 -- ── base_schema.sql complete ───────────────────────────────────────────
