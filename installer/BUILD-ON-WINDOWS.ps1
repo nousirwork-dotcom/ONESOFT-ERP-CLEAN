@@ -472,7 +472,7 @@ Write-Info 'Subsequent runs use the local cache and are much faster.'
 $env:GH_TOKEN   = ''
 $env:ELECTRON_MIRROR = 'https://npmmirror.com/mirrors/electron/'   # fallback mirror
 
-Invoke-Pnpm -ArgList @('exec','electron-builder','--win','--x64','--config','electron-builder.config.ts') `
+Invoke-Pnpm -ArgList @('exec','electron-builder','--win','--x64','--config','electron-builder.yml') `
             -WorkDir $InstallerDir `
             -OnFail  'electron-builder failed to produce the installer.' `
             -Fix     @"

@@ -1,0 +1,58 @@
+appId: com.onesoft.erp
+productName: OneSoft ERP
+artifactName: OneSoftSetup-${version}.${ext}
+copyright: Copyright © 2026 OneSoft
+
+extraMetadata:
+  version: "1.0.0"
+
+directories:
+  output: release
+  buildResources: resources
+
+files:
+  - dist-electron/**/*
+  - dist-ui/**/*
+  - package.json
+
+extraResources:
+  - from: resources/bin
+    to: bin
+    filter:
+      - "**/*"
+  - from: resources/serve-client.js
+    to: serve-client.js
+  - from: resources/app
+    to: app
+    filter:
+      - "**/*"
+  - from: resources/icon.ico
+    to: icon.ico
+  - from: resources/icon.png
+    to: icon.png
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: resources/icon.ico
+  requestedExecutionLevel: requireAdministrator
+  verifyUpdateCodeSignature: false
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: false
+  createStartMenuShortcut: false
+  shortcutName: OneSoft ERP
+  menuCategory: OneSoft
+  language: "1025"
+  installerIcon: resources/icon.ico
+  uninstallerIcon: resources/icon.ico
+  installerHeaderIcon: resources/icon.ico
+  license: resources/LICENSE.txt
+  uninstallDisplayName: OneSoft ERP
+  deleteAppDataOnUninstall: false
+
+publish: ~
