@@ -27,7 +27,7 @@
 
 [CmdletBinding()]
 param(
-    [string]$ProjectRoot = $PSScriptRoot,
+    [string]$ProjectRoot = (Split-Path $PSScriptRoot -Parent),
     [switch]$SkipAppBuild,
     [switch]$SkipInstall
 )
