@@ -1,8 +1,9 @@
 import type { Configuration } from 'electron-builder';
 
 const config: Configuration = {
-  appId: 'app.onesoft.erp',
+  appId: 'com.onesoft.erp',
   productName: 'OneSoft ERP',
+  artifactName: 'OneSoftSetup-${version}.${ext}',
   copyright: 'Copyright © 2026 OneSoft',
 
   // ── Windows metadata (shows in Settings → Apps & Programs and Features) ──
