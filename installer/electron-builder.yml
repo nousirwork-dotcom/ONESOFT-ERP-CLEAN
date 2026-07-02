@@ -10,13 +10,19 @@ directories:
   output: release
   buildResources: resources
 
-# dist-electron/electron/main.js is an esbuild bundle — all JS deps are inline.
-# node-windows must remain external (loads VBS/BAT scripts from its own directory).
+# Architecture:
+#   dist-electron/electron/main.js   = esbuild bundle (pg + all JS deps inlined)
+#   dist-electron/electron/preload.js = esbuild bundle
+#   node_modules/node-windows         = auto-collected (only prod dep in package.json)
+#
+# electron-builder.collectNodeModules reads package.json "dependencies"
+# (only node-windows) and follows that dep tree — pg/pg-types/obuf etc.
+# are devDependencies and are NOT collected. esbuild bundle is the sole
+# source for all JS packages.
 files:
   - dist-electron/**/*
   - dist-ui/**/*
   - package.json
-  - node_modules/node-windows/**/*
 
 extraResources:
   - from: resources/bin
