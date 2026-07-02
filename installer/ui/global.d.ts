@@ -1,3 +1,7 @@
+// Asset imports (Vite handles PNG/SVG as URL strings)
+declare module '*.png' { const src: string; export default src; }
+declare module '*.svg' { const src: string; export default src; }
+
 // Type declarations for Electron contextBridge API exposed as window.installer
 
 interface InstallerAPI {

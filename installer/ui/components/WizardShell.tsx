@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import logoUrl from '../assets/logo.png';
 
 interface Step { id: number; label: string; }
 
@@ -29,10 +30,20 @@ export default function WizardShell({ steps, currentStep, children }: Props) {
         flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <img
+            src={logoUrl}
+            alt="OneSoft"
+            style={{ width: 28, height: 28, borderRadius: 7, objectFit: 'cover' }}
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = 'none';
+              (e.currentTarget.nextSibling as HTMLElement).style.display = 'flex';
+            }}
+          />
+          {/* Fallback letter — hidden when image loads */}
           <div style={{
-            width: 28, height: 28, borderRadius: 8,
+            width: 28, height: 28, borderRadius: 7,
             background: 'linear-gradient(135deg, #406B93, #2d5070)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            display: 'none', alignItems: 'center', justifyContent: 'center',
             boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
           }}>
             <span style={{ color: '#fff', fontSize: 14, fontWeight: 800 }}>O</span>
@@ -42,8 +53,8 @@ export default function WizardShell({ steps, currentStep, children }: Props) {
           </span>
         </div>
         <div style={{ display: 'flex', gap: 8, WebkitAppRegion: 'no-drag' as any }}>
-          <button onClick={handleMinimize} style={btnStyle('#6B7280')}>—</button>
-          <button onClick={handleClose}    style={btnStyle('#B91C1C')}>✕</button>
+          <button onClick={handleMinimize} style={btnStyle()}>—</button>
+          <button onClick={handleClose}    style={{ ...btnStyle(), background: 'rgba(185,28,28,0.6)' }}>✕</button>
         </div>
       </div>
 
@@ -59,9 +70,7 @@ export default function WizardShell({ steps, currentStep, children }: Props) {
           const active = step.id === currentStep;
           return (
             <div key={step.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <div style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-              }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
                 <div style={{
                   width: 26, height: 26, borderRadius: '50%',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -98,7 +107,7 @@ export default function WizardShell({ steps, currentStep, children }: Props) {
   );
 }
 
-function btnStyle(hoverBg: string): React.CSSProperties {
+function btnStyle(): React.CSSProperties {
   return {
     width: 22, height: 22, borderRadius: '50%',
     background: 'rgba(255,255,255,0.15)', border: 'none',

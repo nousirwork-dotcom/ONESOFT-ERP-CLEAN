@@ -23,7 +23,7 @@ function createWindow() {
     center: true,
     frame: false,
     titleBarStyle: 'hidden',
-    icon: path.join(__dirname, '..', '..', 'resources', 'icons', 'onesoft.ico'),
+    icon: path.join(__dirname, '..', '..', 'resources', 'icon.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

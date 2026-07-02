@@ -113,17 +113,19 @@ if (-not (Test-Path $NssmDest)) {
 }
 Write-Ok "nssm.exe: $NssmDest"
 
-# Icon
-$IconPath = "$ProjectRoot\installer\resources\icons\onesoft.ico"
+# Icon — canonical path: installer/resources/icon.ico
+$IconPath = "$ProjectRoot\installer\resources\icon.ico"
 if (-not (Test-Path $IconPath)) {
-    Write-Warn "onesoft.ico not found - Will use default Electron icon"
-    New-Item -ItemType Directory -Force -Path (Split-Path $IconPath) | Out-Null
+    Write-Warn "icon.ico not found at resources\icon.ico"
+    Write-Warn "A placeholder icon was included in the repo."
+    Write-Warn "To use your own: replace installer\resources\icon.ico (256x256 multi-size ICO)"
+    # Fall back to bundled Electron icon so the build does not fail
     $ElectronIcon = Get-ChildItem -Path "$ProjectRoot\installer\node_modules\electron" `
                     -Filter "*.ico" -Recurse -ErrorAction SilentlyContinue |
                     Select-Object -First 1
     if ($ElectronIcon) {
         Copy-Item $ElectronIcon.FullName $IconPath -ErrorAction SilentlyContinue
-        Write-Info "Using default Electron icon temporarily"
+        Write-Info "Copied default Electron icon as temporary placeholder"
     }
 }
 
