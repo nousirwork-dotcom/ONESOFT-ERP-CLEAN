@@ -142,6 +142,83 @@ function Invoke-Pnpm {
     Invoke-Cmd -Exe 'pnpm' -ArgList $ArgList -WorkDir $WorkDir -OnFail $OnFail -Fix $Fix
 }
 
+# ---------------------------------------------------------------------------
+# Helper: Stop any process that may hold locks on build output directories.
+# Called automatically before STEP 0 so Remove-Item never hits "access denied".
+# ---------------------------------------------------------------------------
+function Stop-BuildBlockingProcesses {
+    # Names without .exe suffix (Get-Process does not use the extension)
+    $names = @('OneSoft ERP', 'electron', 'OneSoftSetup', 'crashpad_handler')
+    $stopped = @()
+
+    foreach ($name in $names) {
+        $procs = Get-Process -Name $name -ErrorAction SilentlyContinue
+        if ($procs) {
+            foreach ($p in $procs) {
+                Write-Warn "Stopping locked process: $($p.Name)  PID $($p.Id)"
+                Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+                $stopped += $p
+            }
+        }
+    }
+
+    if ($stopped.Count -gt 0) {
+        Write-Info "Waiting for $($stopped.Count) process(es) to fully exit..."
+        foreach ($p in $stopped) {
+            try { $p.WaitForExit(8000) | Out-Null } catch {}
+        }
+        # Extra pause so OS releases file handles
+        Start-Sleep -Milliseconds 1500
+        Write-Ok "All blocking processes stopped"
+    } else {
+        Write-Info "No blocking app processes detected"
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Helper: Delete a build directory with lock detection.
+# If Remove-Item fails, tries handle.exe (Sysinternals) to name the culprit.
+# Exits the script with a clear message if the folder stays locked.
+# ---------------------------------------------------------------------------
+function Remove-BuildDir {
+    param(
+        [string]$DirPath,
+        [string]$Label
+    )
+
+    if (-not (Test-Path $DirPath)) {
+        Write-Info "$Label not found - skipped"
+        return
+    }
+
+    try {
+        Remove-Item $DirPath -Recurse -Force -ErrorAction Stop
+        Write-Ok "$Label removed"
+        return
+    } catch {
+        Write-Warn "$Label delete failed: $($_.Exception.Message)"
+    }
+
+    # --- Identify the locking process ----------------------------------------
+    $handleCmd = Get-Command 'handle.exe' -ErrorAction SilentlyContinue
+    if ($handleCmd) {
+        Write-Warn "Processes still locking '$Label':"
+        & handle.exe -accepteula -nobanner $DirPath 2>&1 |
+            ForEach-Object { Write-Host "    $_" -ForegroundColor Yellow }
+    } else {
+        Write-Warn "handle.exe not found - cannot identify the locking process."
+        Write-Warn "Tip: download Sysinternals Handle from"
+        Write-Warn "     https://learn.microsoft.com/en-us/sysinternals/downloads/handle"
+        Write-Warn "     and place handle.exe on PATH to get the process name here."
+    }
+
+    Write-Fail `
+        -Stage   $Script:StageLabel `
+        -Command "Remove-Item $DirPath" `
+        -Reason  "The directory is locked by another process (access denied)." `
+        -Fix     "Close all running OneSoft ERP windows, then re-run this script."
+}
+
 # ===========================================================================
 # START
 # ===========================================================================
@@ -152,9 +229,11 @@ Write-Info "Started at   : $($Script:StartTime.ToString('HH:mm:ss'))"
 Write-Info "SkipAppBuild : $SkipAppBuild   SkipInstall: $SkipInstall"
 
 # ---------------------------------------------------------------------------
-# STEP 0 - Clean previous build artifacts
+# STEP 0 - Stop running app instances, then clean previous build artifacts
 # ---------------------------------------------------------------------------
-Write-Stage 0 'Cleaning previous build artifacts'
+Write-Stage 0 'Stopping app processes and cleaning previous build artifacts'
+
+Stop-BuildBlockingProcesses
 
 $CleanTargets = @(
     @{ Path = "$ProjectRoot\installer\release";        Label = 'installer/release'        },
@@ -166,12 +245,7 @@ $CleanTargets = @(
 )
 
 foreach ($target in $CleanTargets) {
-    if (Test-Path $target.Path) {
-        Remove-Item $target.Path -Recurse -Force
-        Write-Ok "$($target.Label) removed"
-    } else {
-        Write-Info "$($target.Label) not found - skipped"
-    }
+    Remove-BuildDir -DirPath $target.Path -Label $target.Label
 }
 
 Write-Ok 'Clean complete - starting fresh build'
