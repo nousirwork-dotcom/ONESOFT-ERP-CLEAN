@@ -6,9 +6,11 @@ declare module '*.svg' { const src: string; export default src; }
 
 interface InstallerAPI {
   // Window
-  minimize: () => Promise<void>;
-  close:    () => Promise<void>;
-  openUrl:  (url: string) => Promise<void>;
+  minimize:    () => Promise<void>;
+  maximize:    () => Promise<void>;
+  isMaximized: () => Promise<boolean>;
+  close:       () => Promise<void>;
+  openUrl:     (url: string) => Promise<void>;
 
   // Requirements
   checkRequirements: () => Promise<import('../core/types').RequirementsReport>;

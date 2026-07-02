@@ -102,11 +102,6 @@ export default function Step09HealthCheck() {
         )}
       </div>
 
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-        <button onClick={nextStep} style={btnPrimary}>
-          إنهاء التثبيت ▶
-        </button>
-      </div>
     </div>
   );
 }

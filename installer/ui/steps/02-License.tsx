@@ -28,7 +28,7 @@ const LICENSE_TEXT = `اتفاقية ترخيص مستخدم OneSoft ERP
    تخضع هذه الاتفاقية للقوانين المعمول بها في المملكة العربية السعودية.`;
 
 export default function Step02License() {
-  const { acceptedLicense, setAcceptedLicense, nextStep, prevStep } = useInstallerStore();
+  const { acceptedLicense, setAcceptedLicense } = useInstallerStore();
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%' }}>
@@ -73,16 +73,6 @@ export default function Step02License() {
         </div>
       </label>
 
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-        <button onClick={prevStep} style={btnSecondary}>◀ السابق</button>
-        <button onClick={nextStep} disabled={!acceptedLicense} style={{
-          ...btnPrimary,
-          opacity: acceptedLicense ? 1 : 0.4,
-          cursor: acceptedLicense ? 'pointer' : 'not-allowed',
-        }}>
-          التالي ▶
-        </button>
-      </div>
     </div>
   );
 }

@@ -36,7 +36,7 @@ const CHANNELS: {
 ];
 
 export default function Step10UpdateChannel() {
-  const { updateChannel, setUpdateChannel, nextStep, prevStep } = useInstallerStore();
+  const { updateChannel, setUpdateChannel } = useInstallerStore();
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -123,11 +123,6 @@ export default function Step10UpdateChannel() {
         </div>
       )}
 
-      {/* التنقل */}
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-        <button onClick={prevStep} style={btnSecondary}>◀ السابق</button>
-        <button onClick={nextStep} style={btnPrimary}>التالي ▶</button>
-      </div>
     </div>
   );
 }

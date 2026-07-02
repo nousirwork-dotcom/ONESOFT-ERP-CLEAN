@@ -27,7 +27,7 @@ const TELEMETRY_OPTIONS: {
 ];
 
 export default function Step12Telemetry() {
-  const { telemetry, setTelemetry, nextStep, prevStep } = useInstallerStore();
+  const { telemetry, setTelemetry } = useInstallerStore();
 
   const anyEnabled = telemetry.crashReports || telemetry.diagnosticLogs || telemetry.usageStatistics;
 
@@ -123,11 +123,6 @@ export default function Step12Telemetry() {
         }
       </div>
 
-      {/* التنقل */}
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-        <button onClick={prevStep} style={btnSecondary}>◀ السابق</button>
-        <button onClick={nextStep} style={btnPrimary}>التالي ▶</button>
-      </div>
     </div>
   );
 }

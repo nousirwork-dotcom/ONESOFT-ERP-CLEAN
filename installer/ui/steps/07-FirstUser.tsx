@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useInstallerStore } from '../store/installer.store';
 
 export default function Step07FirstUser() {
-  const { firstUser, setFirstUser, nextStep, prevStep } = useInstallerStore();
+  const { firstUser, setFirstUser } = useInstallerStore();
   const [confirmPwd, setConfirmPwd] = useState('');
   const [showPwd, setShowPwd] = useState(false);
 
@@ -93,15 +93,6 @@ export default function Step07FirstUser() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-        <button onClick={prevStep} style={btnSecondary}>◀ السابق</button>
-        <button onClick={nextStep} disabled={!isValid} style={{
-          ...btnPrimary, opacity: isValid ? 1 : 0.4,
-          cursor: isValid ? 'pointer' : 'not-allowed',
-        }}>
-          بدء التثبيت ▶
-        </button>
-      </div>
     </div>
   );
 }

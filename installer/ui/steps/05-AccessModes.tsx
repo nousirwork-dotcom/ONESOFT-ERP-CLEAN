@@ -54,7 +54,7 @@ const SCENARIOS: Array<{
 ];
 
 export default function Step05AccessModes() {
-  const { deploymentType, accessModes, toggleAccessMode, setAccessModes, nextStep, prevStep } = useInstallerStore();
+  const { deploymentType, accessModes, toggleAccessMode, setAccessModes } = useInstallerStore();
 
   const availableOptions = ACCESS_OPTIONS.filter(o => isAvailable(o, deploymentType));
   const applicableScenarios = SCENARIOS.filter(s => !s.forTypes || s.forTypes.includes(deploymentType));
@@ -169,10 +169,6 @@ export default function Step05AccessModes() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-        <button onClick={prevStep} style={btnSecondary}>◀ السابق</button>
-        <button onClick={nextStep} style={btnPrimary}>التالي — قاعدة البيانات ▶</button>
-      </div>
     </div>
   );
 }

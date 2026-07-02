@@ -130,6 +130,8 @@ function createWindow() {
     minWidth: 760,
     minHeight: 560,
     resizable: true,
+    maximizable: true,
+    minimizable: true,
     center: true,
     frame: false,
     titleBarStyle: 'hidden',
@@ -249,6 +251,17 @@ app.whenReady()
     ipcMain.handle('window:minimize', () => {
       writeLog('INFO', 'IPC window:minimize');
       mainWindow?.minimize();
+    });
+    ipcMain.handle('window:maximize', () => {
+      writeLog('INFO', 'IPC window:maximize');
+      if (mainWindow?.isMaximized()) {
+        mainWindow.restore();
+      } else {
+        mainWindow?.maximize();
+      }
+    });
+    ipcMain.handle('window:is-maximized', () => {
+      return mainWindow?.isMaximized() ?? false;
     });
     ipcMain.handle('window:close', () => {
       writeLog('INFO', `IPC window:close\n${stackTrace()}`);

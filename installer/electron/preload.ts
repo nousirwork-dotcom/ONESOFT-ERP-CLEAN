@@ -4,9 +4,11 @@ import type { IPC } from '../core/types.js';
 // ─── API آمن معرّض للـ UI عبر window.installer ────────────────────────────────
 contextBridge.exposeInMainWorld('installer', {
   // Window controls
-  minimize: () => ipcRenderer.invoke('window:minimize'),
-  close:    () => ipcRenderer.invoke('window:close'),
-  openUrl:  (url: string) => ipcRenderer.invoke('window:openUrl', url),
+  minimize:    () => ipcRenderer.invoke('window:minimize'),
+  maximize:    () => ipcRenderer.invoke('window:maximize'),
+  isMaximized: () => ipcRenderer.invoke('window:is-maximized'),
+  close:       () => ipcRenderer.invoke('window:close'),
+  openUrl:     (url: string) => ipcRenderer.invoke('window:openUrl', url),
 
   // Requirements
   checkRequirements: () => ipcRenderer.invoke('requirements:check'),

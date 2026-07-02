@@ -1,8 +1,6 @@
-import { useInstallerStore } from '../store/installer.store';
 import logoUrl from '../assets/logo.png';
 
 export default function Step01Welcome() {
-  const { nextStep } = useInstallerStore();
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 28, paddingTop: 20 }}>
@@ -66,15 +64,6 @@ export default function Step01Welcome() {
         ))}
       </div>
 
-      <button onClick={nextStep} style={{
-        background: 'linear-gradient(135deg, #406B93, #2d5070)',
-        color: '#fff', border: 'none', borderRadius: 10,
-        padding: '12px 48px', fontSize: 15, fontWeight: 700,
-        cursor: 'pointer', boxShadow: '0 4px 16px rgba(64,107,147,0.4)',
-        fontFamily: 'inherit',
-      }}>
-        بدء التثبيت ◀
-      </button>
 
       <p style={{ color: '#9CA3AF', fontSize: 11, margin: 0 }}>
         الإصدار 1.0.0 — OneSoft ERP

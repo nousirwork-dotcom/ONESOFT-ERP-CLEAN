@@ -98,7 +98,6 @@ export default function Step15DeploymentSummary() {
     deploymentType, accessModes, databaseMode, machineRole, connectivityMode,
     licensingMode, updateChannel, backupPolicy, telemetry,
     organization, firstUser, dbOpts,
-    nextStep, prevStep,
   } = useInstallerStore();
 
   const telemetryList = [
@@ -189,24 +188,6 @@ export default function Step15DeploymentSummary() {
         </div>
       )}
 
-      {/* زر التثبيت */}
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
-        <button onClick={prevStep} style={btnSecondary}>◀ تعديل</button>
-        <button
-          onClick={nextStep}
-          style={{
-            background: 'linear-gradient(135deg, #16A34A, #15803D)',
-            color: '#fff', border: 'none', borderRadius: 10,
-            padding: '12px 36px', fontSize: 15, fontWeight: 800,
-            cursor: 'pointer', fontFamily: 'inherit',
-            boxShadow: '0 4px 12px rgba(22,163,74,0.35)',
-            display: 'flex', alignItems: 'center', gap: 10,
-          }}
-        >
-          <span style={{ fontSize: 18 }}>🚀</span>
-          بدء التثبيت
-        </button>
-      </div>
     </div>
   );
 }

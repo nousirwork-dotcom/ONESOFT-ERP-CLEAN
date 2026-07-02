@@ -41,7 +41,7 @@ const CONNECTIVITY_MODES: {
 ];
 
 export default function Step08Connectivity() {
-  const { connectivityMode, setConnectivityMode, nextStep, prevStep } = useInstallerStore();
+  const { connectivityMode, setConnectivityMode } = useInstallerStore();
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -131,11 +131,6 @@ export default function Step08Connectivity() {
       {/* ملخص الإعدادات حتى الآن */}
       <Summary />
 
-      {/* التنقل */}
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-        <button onClick={prevStep} style={btnSecondary}>◀ السابق</button>
-        <button onClick={nextStep} style={btnPrimary}>التالي ▶</button>
-      </div>
     </div>
   );
 }

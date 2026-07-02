@@ -21,7 +21,6 @@ export default function Step11BackupPolicy() {
     backupPolicy,
     setBackupFrequency, toggleBackupLocation,
     setBackupRetainDays, setBackupPath,
-    nextStep, prevStep,
   } = useInstallerStore();
 
   const inp: React.CSSProperties = {
@@ -172,11 +171,6 @@ export default function Step11BackupPolicy() {
         ℹ️ خدمة النسخ الاحتياطي التلقائي تُفعَّل في الإصدار القادم — الإعدادات تُحفظ الآن في ملف الإعدادات
       </div>
 
-      {/* التنقل */}
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-        <button onClick={prevStep} style={btnSecondary}>◀ السابق</button>
-        <button onClick={nextStep} style={btnPrimary}>التالي ▶</button>
-      </div>
     </div>
   );
 }

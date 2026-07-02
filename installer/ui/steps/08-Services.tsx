@@ -10,10 +10,11 @@ const LEVEL_COLOR: Record<string, string> = {
 export default function Step09Services() {
   const store = useInstallerStore();
   const {
-    progressLog, nextStep, dbOpts, organization, firstUser,
+    progressLog, dbOpts, organization, firstUser,
     deploymentType, accessModes, databaseMode, machineRole, connectivityMode,
     licensingMode, updateChannel, backupPolicy, telemetry,
     setOrgId, setOrgCode, getDatabaseUrl, clearProgress,
+    setInstallRunning, setInstallDone,
   } = store;
 
   const [running, setRunning] = useState(false);
@@ -30,6 +31,8 @@ export default function Step09Services() {
   const run = async () => {
     clearProgress();
     setRunning(true);
+    setInstallRunning(true);
+    setInstallDone(false);
     setError(null);
 
     try {
@@ -138,10 +141,12 @@ export default function Step09Services() {
       });
 
       setDone(true);
+      setInstallDone(true);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setRunning(false);
+      setInstallRunning(false);
     }
   };
 
@@ -216,17 +221,11 @@ export default function Step09Services() {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-        {error && (
+      {error && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <button onClick={run} style={btnSecondary}>🔄 إعادة المحاولة</button>
-        )}
-        <button onClick={nextStep} disabled={!done} style={{
-          ...btnPrimary, opacity: done ? 1 : 0.4,
-          cursor: done ? 'pointer' : 'not-allowed',
-        }}>
-          التالي — فحص الصحة ▶
-        </button>
-      </div>
+        </div>
+      )}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>

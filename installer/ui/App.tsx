@@ -23,7 +23,7 @@ import Step13Organization from './steps/06-Organization';   // 13: المؤسس�
 import Step14FirstUser    from './steps/07-FirstUser';      // 14: المستخدم الأول
 
 // ── ملخص + تنفيذ + انتهاء ────────────────────────────────────────────────────
-import Step15Summary      from './steps/15-DeploymentSummary'; // 15: ملخص التثبيت ← زر البدء
+import Step15Summary      from './steps/15-DeploymentSummary'; // 15: ملخص التثبيت
 import Step16Services     from './steps/08-Services';          // 16: التثبيت الفعلي
 import Step17HealthCheck  from './steps/09-HealthCheck';       // 17: فحص الصحة
 import Step18Complete     from './steps/10-Complete';          // 18: الانتهاء
@@ -40,13 +40,13 @@ const STEPS_INSTALL = [
   { id: 6,  label: 'قاعدة البيانات'   },
   { id: 7,  label: 'دور الجهاز'       },
   { id: 8,  label: 'الاتصال'          },
-  { id: 9,  label: 'الترخيص'          },  // LicensingMode
-  { id: 10, label: 'التحديثات'        },  // UpdateChannel
-  { id: 11, label: 'نسخ احتياطي'      },  // BackupPolicy
-  { id: 12, label: 'الخصوصية'         },  // Telemetry
+  { id: 9,  label: 'الترخيص'          },
+  { id: 10, label: 'التحديثات'        },
+  { id: 11, label: 'نسخ احتياطي'      },
+  { id: 12, label: 'الخصوصية'         },
   { id: 13, label: 'المؤسسة'          },
   { id: 14, label: 'المستخدم الأول'   },
-  { id: 15, label: 'المراجعة'         },  // Deployment Summary ← زر التثبيت هنا
+  { id: 15, label: 'المراجعة'         },
   { id: 16, label: 'التثبيت'          },
   { id: 17, label: 'فحص الصحة'        },
   { id: 18, label: 'الانتهاء'         },
@@ -57,7 +57,11 @@ const isUninstall = typeof window !== 'undefined' &&
    (window as any).__ONESOFT_MODE__ === 'uninstall');
 
 export default function App() {
-  const { currentStep, addProgress } = useInstallerStore();
+  const {
+    currentStep, nextStep, prevStep, addProgress,
+    acceptedLicense, requirementsReport, organization, firstUser,
+    installRunning, installDone, healthReport,
+  } = useInstallerStore();
 
   useEffect(() => {
     const off = window.installer?.onProgress?.((e: unknown) => {
@@ -87,6 +91,49 @@ export default function App() {
     );
   }
 
+  // ── حساب حالة أزرار التنقل بناءً على الخطوة الحالية ─────────────────────────
+  const orgValid  = organization.name.trim() !== '';
+  const userValid = firstUser.password.length >= 6 && firstUser.username.length >= 3;
+
+  type NavConfig = {
+    canBack: boolean;
+    canNext: boolean;
+    isLast?: boolean;
+    hideNav?: boolean;
+    nextLabel?: string;
+  };
+
+  const navConfig: NavConfig = (() => {
+    switch (currentStep) {
+      case 1:  return { canBack: false, canNext: true };
+      case 2:  return { canBack: true, canNext: acceptedLicense };
+      case 3:  return { canBack: true, canNext: requirementsReport?.canContinue ?? false };
+      case 4:
+      case 5:
+      case 6:
+      case 7:
+      case 8:
+      case 9:
+      case 10:
+      case 11:
+      case 12: return { canBack: true, canNext: true };
+      case 13: return { canBack: true, canNext: orgValid };
+      case 14: return { canBack: true, canNext: userValid };
+      case 15: return { canBack: true, canNext: true, nextLabel: 'بدء التثبيت 🚀' };
+      case 16: return {
+        canBack: false,
+        canNext: installDone,
+        hideNav: installRunning && !installDone,
+      };
+      case 17: return { canBack: false, canNext: healthReport !== null };
+      case 18: return { canBack: false, canNext: true, isLast: true, nextLabel: 'إنهاء' };
+      default: return { canBack: true, canNext: true };
+    }
+  })();
+
+  const handleCancel = () => window.installer?.close?.();
+  const handleFinish = () => window.installer?.close?.();
+
   const renderStep = () => {
     switch (currentStep) {
       case 1:  return <Step01Welcome />;
@@ -94,28 +141,36 @@ export default function App() {
       case 3:  return <Step03Requirements />;
       case 4:  return <Step04InstallType />;
       case 5:  return <Step05AccessModes />;
-      // ── الأبعاد التسعة ──────────────────────────────────────────────────
-      case 6:  return <Step06DatabaseMode />;   // وضع قاعدة البيانات
-      case 7:  return <Step07MachineRole />;    // دور الجهاز
-      case 8:  return <Step08Connectivity />;   // طريقة الاتصال
-      case 9:  return <Step09Licensing />;      // نوع الترخيص
-      case 10: return <Step10UpdateChannel />;  // قناة التحديث
-      case 11: return <Step11BackupPolicy />;   // سياسة النسخ الاحتياطي
-      case 12: return <Step12Telemetry />;      // الخصوصية والتشخيص
-      // ── بيانات التثبيت ──────────────────────────────────────────────────
+      case 6:  return <Step06DatabaseMode />;
+      case 7:  return <Step07MachineRole />;
+      case 8:  return <Step08Connectivity />;
+      case 9:  return <Step09Licensing />;
+      case 10: return <Step10UpdateChannel />;
+      case 11: return <Step11BackupPolicy />;
+      case 12: return <Step12Telemetry />;
       case 13: return <Step13Organization />;
       case 14: return <Step14FirstUser />;
-      // ── ملخص + تنفيذ ────────────────────────────────────────────────────
-      case 15: return <Step15Summary />;        // مراجعة كاملة ← زر "بدء التثبيت"
-      case 16: return <Step16Services />;       // التثبيت الفعلي
-      case 17: return <Step17HealthCheck />;    // فحص ما بعد التثبيت
-      case 18: return <Step18Complete />;       // الانتهاء
+      case 15: return <Step15Summary />;
+      case 16: return <Step16Services />;
+      case 17: return <Step17HealthCheck />;
+      case 18: return <Step18Complete />;
       default: return <Step01Welcome />;
     }
   };
 
   return (
-    <WizardShell steps={STEPS_INSTALL} currentStep={currentStep}>
+    <WizardShell
+      steps={STEPS_INSTALL}
+      currentStep={currentStep}
+      canBack={navConfig.canBack}
+      canNext={navConfig.canNext}
+      isLast={navConfig.isLast}
+      hideNav={navConfig.hideNav}
+      nextLabel={navConfig.nextLabel}
+      onBack={prevStep}
+      onNext={navConfig.isLast ? handleFinish : nextStep}
+      onCancel={handleCancel}
+    >
       {renderStep()}
     </WizardShell>
   );

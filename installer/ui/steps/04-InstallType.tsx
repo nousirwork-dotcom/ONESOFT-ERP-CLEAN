@@ -49,7 +49,7 @@ const DEPLOYMENT_TYPES: Array<{
 ];
 
 export default function Step04InstallType() {
-  const { deploymentType, setDeploymentType, nextStep, prevStep } = useInstallerStore();
+  const { deploymentType, setDeploymentType } = useInstallerStore();
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -129,10 +129,6 @@ export default function Step04InstallType() {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-        <button onClick={prevStep} style={btnSecondary}>◀ السابق</button>
-        <button onClick={nextStep} style={btnPrimary}>التالي — طرق الاستخدام ▶</button>
-      </div>
     </div>
   );
 }

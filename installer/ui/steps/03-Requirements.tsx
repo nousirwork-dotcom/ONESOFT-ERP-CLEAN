@@ -10,7 +10,7 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 export default function Step03Requirements() {
-  const { requirementsReport, setRequirementsReport, nextStep, prevStep } = useInstallerStore();
+  const { requirementsReport, setRequirementsReport } = useInstallerStore();
   const [loading, setLoading] = useState(false);
   const [fixingId, setFixingId] = useState<string | null>(null);
   const [pgPasswordPrompt, setPgPasswordPrompt] = useState(false);
@@ -167,15 +167,6 @@ export default function Step03Requirements() {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-        <button onClick={prevStep} style={btnSecondary}>◀ السابق</button>
-        <button onClick={nextStep} disabled={!canContinue || loading} style={{
-          ...btnPrimary, opacity: (canContinue && !loading) ? 1 : 0.4,
-          cursor: (canContinue && !loading) ? 'pointer' : 'not-allowed',
-        }}>
-          التالي ▶
-        </button>
-      </div>
     </div>
   );
 }

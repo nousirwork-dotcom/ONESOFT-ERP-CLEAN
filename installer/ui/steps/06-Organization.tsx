@@ -13,7 +13,7 @@ const COUNTRIES = [
 ];
 
 export default function Step06Organization() {
-  const { organization, setOrganization, nextStep, prevStep } = useInstallerStore();
+  const { organization, setOrganization } = useInstallerStore();
 
   const inp: React.CSSProperties = {
     width: '100%', boxSizing: 'border-box', padding: '8px 12px',
@@ -84,15 +84,6 @@ export default function Step06Organization() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-        <button onClick={prevStep} style={btnSecondary}>◀ السابق</button>
-        <button onClick={nextStep} disabled={!isValid} style={{
-          ...btnPrimary, opacity: isValid ? 1 : 0.4,
-          cursor: isValid ? 'pointer' : 'not-allowed',
-        }}>
-          التالي ▶
-        </button>
-      </div>
     </div>
   );
 }

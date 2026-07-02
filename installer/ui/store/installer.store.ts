@@ -78,6 +78,12 @@ interface InstallerStore {
   healthReport: HealthReport | null;
   setHealthReport: (r: HealthReport) => void;
 
+  // Install phase tracking (for unified nav bar)
+  installRunning: boolean;
+  installDone: boolean;
+  setInstallRunning: (v: boolean) => void;
+  setInstallDone:    (v: boolean) => void;
+
   orgId: number | null;
   setOrgId: (id: number) => void;
 
@@ -196,6 +202,11 @@ export const useInstallerStore = create<InstallerStore>((set, get) => ({
 
   healthReport: null,
   setHealthReport: (r) => set({ healthReport: r }),
+
+  installRunning: false,
+  installDone:    false,
+  setInstallRunning: (v) => set({ installRunning: v }),
+  setInstallDone:    (v) => set({ installDone: v }),
 
   orgId: null,
   setOrgId: (id) => set({ orgId: id }),

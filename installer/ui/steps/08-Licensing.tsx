@@ -54,7 +54,7 @@ const LICENSES: {
 ];
 
 export default function Step09Licensing() {
-  const { licensingMode, setLicensingMode, nextStep, prevStep } = useInstallerStore();
+  const { licensingMode, setLicensingMode } = useInstallerStore();
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -142,11 +142,6 @@ export default function Step09Licensing() {
         ℹ️ الترخيص المختار يُحفظ في الإعدادات فقط — لا يتطلب مفتاح تفعيل الآن، يمكن تفعيله من داخل التطبيق لاحقاً
       </div>
 
-      {/* التنقل */}
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-        <button onClick={prevStep} style={btnSecondary}>◀ السابق</button>
-        <button onClick={nextStep} style={btnPrimary}>التالي ▶</button>
-      </div>
     </div>
   );
 }

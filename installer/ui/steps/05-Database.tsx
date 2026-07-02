@@ -41,7 +41,6 @@ export default function Step06DatabaseMode() {
   const {
     databaseMode, setDatabaseMode,
     dbOpts, setDbOpts,
-    nextStep, prevStep,
   } = useInstallerStore();
 
   const [testing,    setTesting]    = useState(false);
@@ -317,17 +316,6 @@ export default function Step06DatabaseMode() {
         </div>
       )}
 
-      {/* التنقل */}
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-        <button onClick={prevStep} style={btnSecondary}>◀ السابق</button>
-        <button
-          onClick={nextStep}
-          disabled={!canContinue}
-          style={{ ...btnPrimary, opacity: canContinue ? 1 : 0.4, cursor: canContinue ? 'pointer' : 'not-allowed' }}
-        >
-          التالي ▶
-        </button>
-      </div>
     </div>
   );
 }

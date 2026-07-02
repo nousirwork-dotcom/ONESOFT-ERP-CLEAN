@@ -41,7 +41,7 @@ const ROLES: {
 ];
 
 export default function Step07MachineRole() {
-  const { machineRole, setMachineRole, nextStep, prevStep } = useInstallerStore();
+  const { machineRole, setMachineRole } = useInstallerStore();
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -122,11 +122,6 @@ export default function Step07MachineRole() {
         </div>
       )}
 
-      {/* التنقل */}
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-        <button onClick={prevStep} style={btnSecondary}>◀ السابق</button>
-        <button onClick={nextStep} style={btnPrimary}>التالي ▶</button>
-      </div>
     </div>
   );
 }
