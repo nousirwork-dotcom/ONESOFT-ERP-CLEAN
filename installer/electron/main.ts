@@ -1,5 +1,12 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import * as path from 'path';
+
+// Force esbuild to bundle these transitive deps that pg uses dynamically.
+// postgres-bytea@3 (ESM, used by pg-protocol) imports obuf at runtime.
+// Without this explicit require, esbuild misses obuf and the app crashes
+// with "Cannot find module 'obuf'" when pg opens the first connection.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+require('obuf');
 import { registerRequirementsIpc } from './ipc/requirements.ipc.js';
 import { registerDatabaseIpc }     from './ipc/database.ipc.js';
 import { registerSetupIpc }        from './ipc/setup.ipc.js';
