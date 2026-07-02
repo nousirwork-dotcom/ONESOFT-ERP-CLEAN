@@ -152,6 +152,31 @@ Write-Info "Started at   : $($Script:StartTime.ToString('HH:mm:ss'))"
 Write-Info "SkipAppBuild : $SkipAppBuild   SkipInstall: $SkipInstall"
 
 # ---------------------------------------------------------------------------
+# STEP 0 - Clean previous build artifacts
+# ---------------------------------------------------------------------------
+Write-Stage 0 'Cleaning previous build artifacts'
+
+$CleanTargets = @(
+    @{ Path = "$ProjectRoot\installer\release";        Label = 'installer/release'        },
+    @{ Path = "$ProjectRoot\installer\dist-electron";  Label = 'installer/dist-electron'  },
+    @{ Path = "$ProjectRoot\installer\dist-ui";        Label = 'installer/dist-ui'        },
+    @{ Path = "$ProjectRoot\installer\resources\app";  Label = 'installer/resources/app'  },
+    @{ Path = "$ProjectRoot\client-app\dist";          Label = 'client-app/dist'          },
+    @{ Path = "$ProjectRoot\server-app\dist";          Label = 'server-app/dist'          }
+)
+
+foreach ($target in $CleanTargets) {
+    if (Test-Path $target.Path) {
+        Remove-Item $target.Path -Recurse -Force
+        Write-Ok "$($target.Label) removed"
+    } else {
+        Write-Info "$($target.Label) not found — skipped"
+    }
+}
+
+Write-Ok 'Clean complete — starting fresh build'
+
+# ---------------------------------------------------------------------------
 # STEP 1 - Verify requirements
 # ---------------------------------------------------------------------------
 Write-Stage 1 'Verifying requirements'
