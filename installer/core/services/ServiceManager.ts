@@ -25,6 +25,26 @@ function getNssmPath(): string {
   return 'nssm';
 }
 
+// ─── تحديد مسار السكريبت الفعلي ──────────────────────────────────────────────
+// يبحث في resourcesPath أولاً (المسار الحقيقي داخل حزمة Electron)
+// ثم يعود لـ installDir كـ fallback
+function resolveScript(
+  candidates: string[],
+  emit: Emit,
+  label: string,
+): string | null {
+  for (const p of candidates) {
+    const normalized = p.replace(/\\/g, '/');
+    emit({ level: 'info', message: `🔍 فحص مسار ${label}: ${normalized}`, timestamp: now() });
+    if (fs.existsSync(p)) {
+      emit({ level: 'success', message: `✅ وُجد ${label}: ${normalized}`, timestamp: now() });
+      return p;
+    }
+  }
+  emit({ level: 'error', message: `❌ لم يُعثر على ${label} في أيٍّ من المسارات المتوقعة`, timestamp: now() });
+  return null;
+}
+
 export class ServiceManager {
   private readonly nssm: string;
 
@@ -71,7 +91,7 @@ export class ServiceManager {
       }
 
       exec(this.nssm, ['install', name, executablePath, ...args]);
-      exec(this.nssm, ['set', name, 'AppDirectory', path.dirname(executablePath)]);
+      exec(this.nssm, ['set', name, 'AppDirectory', path.dirname(args[0] ?? executablePath)]);
       exec(this.nssm, ['set', name, 'Start', 'SERVICE_AUTO_START']);
       exec(this.nssm, ['set', name, 'AppStdout', logPath]);
       exec(this.nssm, ['set', name, 'AppStderr', logPath]);
@@ -114,14 +134,12 @@ export class ServiceManager {
     }
   }
 
-  // ─── انتظار حتى يستجيب منفذ TCP ───────────────────────────────────────────
-  // يُرسل GET إلى localhost:port كل pollMs حتى يصل timeout (ms)
-  // يعيد true عند النجاح، false عند انتهاء الوقت
+  // ─── انتظار حتى يستجيب منفذ HTTP ─────────────────────────────────────────
   async waitForPort(
     port: number,
     emit: Emit,
     timeoutMs = 90_000,
-    pollMs = 3_000,
+    pollMs    = 3_000,
   ): Promise<boolean> {
     const deadline = Date.now() + timeoutMs;
     emit({ level: 'info', message: `⏳ انتظار المنفذ ${port}...`, timestamp: now() });
@@ -141,58 +159,95 @@ export class ServiceManager {
         return true;
       }
 
-      // أيضاً نعتبره جاهزاً إذا كان مقبولاً (ECONNREFUSED → الخدمة لم تبدأ بعد)
       const elapsed = Math.round((Date.now() - (deadline - timeoutMs)) / 1000);
-      emit({ level: 'info', message: `⏳ المنفذ ${port} لم يستجب بعد (${elapsed}s)...`, timestamp: now() });
+      emit({ level: 'info', message: `⏳ المنفذ ${port} لم يستجب بعد (${elapsed}s من أصل ${timeoutMs / 1000}s)...`, timestamp: now() });
       await sleep(pollMs);
     }
 
-    emit({ level: 'warning', message: `⚠️ انتهى الوقت — المنفذ ${port} لم يستجب خلال ${timeoutMs / 1000}s`, timestamp: now() });
+    emit({ level: 'warning', message: `⚠️ انتهت المهلة (${timeoutMs / 1000}s) — المنفذ ${port} لم يستجب`, timestamp: now() });
     return false;
   }
 
-  // ─── تثبيت جميع خدمات النظام ───────────────────────────────────────────────
+  // ─── تثبيت جميع الخدمات وتشغيلها ──────────────────────────────────────────
   async installAll(
     opts: {
       installDir:     string;
       logsDir:        string;
       deploymentType: DeploymentType;
       accessModes:    AccessMode[];
+      resourcesPath?: string;   // ← process.resourcesPath من Electron (المسار الحقيقي للتطبيق)
     },
     emit: Emit,
   ): Promise<void> {
     const { installDir, logsDir, deploymentType, accessModes } = opts;
+
+    // المسار الحقيقي للتطبيق المحزوم داخل Electron
+    const rp = opts.resourcesPath ?? electronResourcesPath;
+    emit({ level: 'info', message: `📂 resourcesPath: ${rp}`, timestamp: now() });
+    emit({ level: 'info', message: `📂 installDir:    ${installDir}`, timestamp: now() });
+
     const nodePath = findNode();
+    emit({ level: 'info', message: `📂 node: ${nodePath}`, timestamp: now() });
 
     const needsBackend  = ['server', 'server+client', 'branch'].includes(deploymentType);
     const needsFrontend = ['server+client', 'branch'].includes(deploymentType)
                        || (deploymentType === 'server' && accessModes.includes('web'));
     const needsUpdater  = deploymentType !== 'cloud';
 
-    // ── تثبيت الخدمات ──────────────────────────────────────────────────────
+    // ── Backend (OneSoft-Server) ─────────────────────────────────────────────
     if (needsBackend) {
-      const serverScript = path.join(installDir, 'server-app', 'dist', 'index.mjs');
-      this.install(
-        'OneSoft-Server', nodePath,
-        [serverScript],
-        path.join(logsDir, 'server.log'),
-        emit,
-      );
+      const serverScript = resolveScript([
+        // 1. داخل حزمة Electron (المسار الصحيح الأساسي)
+        path.join(rp, 'app', 'server-app', 'dist', 'index.mjs'),
+        // 2. مجلد التثبيت (للترقية أو النسخ اليدوي)
+        path.join(installDir, 'server-app', 'dist', 'index.mjs'),
+        // 3. مجلد عمل العملية
+        path.join(process.cwd(), 'server-app', 'dist', 'index.mjs'),
+      ], emit, 'Backend (index.mjs)');
+
+      if (serverScript) {
+        this.install(
+          'OneSoft-Server', nodePath,
+          [serverScript],
+          path.join(logsDir, 'server.log'),
+          emit,
+        );
+      } else {
+        emit({ level: 'warning', message: '⚠️ تخطي تثبيت OneSoft-Server — ملف index.mjs غير موجود', timestamp: now() });
+      }
     }
 
+    // ── Frontend (OneSoft-Client) ────────────────────────────────────────────
     if (needsFrontend) {
-      const clientScript = path.join(installDir, 'client-app', 'dist-serve', 'server.js');
-      this.install(
-        'OneSoft-Client', nodePath,
-        [clientScript],
-        path.join(logsDir, 'client.log'),
-        emit,
-      );
+      const clientScript = resolveScript([
+        // 1. serve-client.js في جذر resources (مُخصَّص بـ electron-builder extraResources)
+        path.join(rp, 'serve-client.js'),
+        // 2. داخل app/client-app
+        path.join(rp, 'app', 'client-app', 'dist-serve', 'server.js'),
+        // 3. مجلد التثبيت
+        path.join(installDir, 'client-app', 'dist-serve', 'server.js'),
+      ], emit, 'Frontend (serve-client.js)');
+
+      if (clientScript) {
+        this.install(
+          'OneSoft-Client', nodePath,
+          [clientScript],
+          path.join(logsDir, 'client.log'),
+          emit,
+        );
+      } else {
+        emit({ level: 'warning', message: '⚠️ تخطي تثبيت OneSoft-Client — ملف الخادم غير موجود', timestamp: now() });
+      }
     }
 
+    // ── Updater (OneSoft-Updater) ────────────────────────────────────────────
     if (needsUpdater) {
-      const updaterScript = path.join(installDir, 'installer', 'core', 'updater.js');
-      if (fs.existsSync(updaterScript)) {
+      const updaterCandidates = [
+        path.join(rp, 'app', 'installer', 'core', 'updater.js'),
+        path.join(installDir, 'installer', 'core', 'updater.js'),
+      ];
+      const updaterScript = updaterCandidates.find(p => fs.existsSync(p));
+      if (updaterScript) {
         this.install(
           'OneSoft-Updater', nodePath,
           [updaterScript],
@@ -202,32 +257,34 @@ export class ServiceManager {
       }
     }
 
-    // ── تشغيل الخدمات بالترتيب الصحيح مع انتظار حقيقي ────────────────────
-    emit({ level: 'info', message: 'جارٍ تشغيل الخدمات...', timestamp: now() });
+    // ── تشغيل الخدمات بالترتيب الصحيح مع انتظار حقيقي ───────────────────────
+    emit({ level: 'info', message: '▶ جارٍ تشغيل الخدمات...', timestamp: now() });
 
-    if (needsBackend) {
+    if (needsBackend && this.getStatus('OneSoft-Server') !== 'not-installed') {
       emit({ level: 'info', message: 'تشغيل OneSoft-Server (Backend)...', timestamp: now() });
-      this.start('OneSoft-Server');
-
-      // انتظر حتى يستجيب Backend على المنفذ 3000 (مهلة 90 ثانية)
+      const r = this.start('OneSoft-Server');
+      if (!r.success) {
+        emit({ level: 'warning', message: `⚠️ تعذّر تشغيل Backend: ${r.error ?? ''}`, timestamp: now() });
+      }
       const backendReady = await this.waitForPort(3000, emit, 90_000);
       if (!backendReady) {
-        emit({ level: 'warning', message: '⚠️ Backend لم يبدأ في الوقت المحدد — قد تحتاج لإعادة تشغيل الخدمة يدوياً', timestamp: now() });
+        emit({ level: 'warning', message: '⚠️ Backend لم يبدأ خلال 90 ثانية — راجع السجلات في ProgramData\\OneSoft\\Logs\\server.log', timestamp: now() });
       }
     }
 
-    if (needsFrontend) {
+    if (needsFrontend && this.getStatus('OneSoft-Client') !== 'not-installed') {
       emit({ level: 'info', message: 'تشغيل OneSoft-Client (Frontend)...', timestamp: now() });
-      this.start('OneSoft-Client');
-
-      // انتظر حتى يستجيب Frontend على المنفذ 5000 (مهلة 60 ثانية)
+      const r = this.start('OneSoft-Client');
+      if (!r.success) {
+        emit({ level: 'warning', message: `⚠️ تعذّر تشغيل Frontend: ${r.error ?? ''}`, timestamp: now() });
+      }
       const frontendReady = await this.waitForPort(5000, emit, 60_000);
       if (!frontendReady) {
-        emit({ level: 'warning', message: '⚠️ Frontend لم يبدأ في الوقت المحدد — قد تحتاج لإعادة تشغيل الخدمة يدوياً', timestamp: now() });
+        emit({ level: 'warning', message: '⚠️ Frontend لم يبدأ خلال 60 ثانية — راجع السجلات في ProgramData\\OneSoft\\Logs\\client.log', timestamp: now() });
       }
     }
 
-    emit({ level: 'success', message: '✅ اكتمل تشغيل الخدمات', timestamp: now() });
+    emit({ level: 'success', message: '✅ اكتمل تثبيت الخدمات وتشغيلها', timestamp: now() });
   }
 
   // ─── Private ───────────────────────────────────────────────────────────────
@@ -250,7 +307,8 @@ function exec(cmd: string, args: string[]): string {
 
 function findNode(): string {
   try {
-    return execSync('where node', { encoding: 'utf-8' }).trim().split('\n')[0] || 'node';
+    const result = execSync('where node', { encoding: 'utf-8' }).trim().split('\n');
+    return result[0]?.trim() || process.execPath;
   } catch {
     return process.execPath;
   }

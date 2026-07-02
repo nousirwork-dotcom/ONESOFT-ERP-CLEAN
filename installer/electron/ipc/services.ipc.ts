@@ -13,7 +13,11 @@ export function registerServicesIpc(ipc: IpcMain, win: BrowserWindow | null) {
     deploymentType: DeploymentType;
     accessModes:    AccessMode[];
   }) => {
-    await mgr.installAll(opts, emit as any);
+    // تمرير process.resourcesPath لتحديد المسار الحقيقي لملفات التطبيق داخل حزمة Electron
+    await mgr.installAll({
+      ...opts,
+      resourcesPath: process.resourcesPath ?? '',
+    }, emit as any);
     return { ok: true };
   });
 
