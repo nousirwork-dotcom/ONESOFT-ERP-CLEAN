@@ -5,7 +5,9 @@
   "main": "dist-electron/electron/main.js",
   "scripts": {
     "dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
-    "build": "tsc -p tsconfig.electron.json && vite build && electron-builder",
+    "build": "pnpm run build:electron && pnpm run build:preload && vite build && electron-builder",
+    "build:electron": "esbuild electron/main.ts --bundle --platform=node --target=node20 --format=cjs --external:electron --external:pg-native --external:node-windows --tsconfig=tsconfig.electron.json --outfile=dist-electron/electron/main.js --log-level=warning",
+    "build:preload": "esbuild electron/preload.ts --bundle --platform=node --target=node20 --format=cjs --external:electron --tsconfig=tsconfig.electron.json --outfile=dist-electron/electron/preload.js --log-level=warning",
     "build:core": "tsc -p tsconfig.core.json",
     "test:core": "tsx core/index.ts",
     "pack": "electron-builder --dir",

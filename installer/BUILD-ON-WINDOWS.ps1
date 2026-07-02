@@ -447,19 +447,40 @@ foreach ($d in @('dist-electron','dist-ui','release')) {
     if (Test-Path "$InstallerDir\$d") { Remove-Item "$InstallerDir\$d" -Recurse -Force }
 }
 
-# -- TypeScript compile -----------------------------------------------------
-Write-Info 'Compiling TypeScript (Electron main)...'
-Invoke-Pnpm -ArgList @('exec','tsc','-p','tsconfig.electron.json','--noEmit','false') `
+# -- esbuild: bundle Electron main (all JS deps inlined, no node_modules at runtime) ---
+Write-Info 'Bundling Electron main process with esbuild...'
+Write-Info '  (pg, drizzle-orm, archiver, fs-extra, etc. all bundled inline)'
+Invoke-Pnpm -ArgList @(
+    'exec','esbuild','electron/main.ts',
+    '--bundle','--platform=node','--target=node20','--format=cjs',
+    '--external:electron','--external:pg-native','--external:node-windows',
+    '--tsconfig=tsconfig.electron.json',
+    '--outfile=dist-electron/electron/main.js',
+    '--log-level=warning'
+) `
             -WorkDir $InstallerDir `
-            -OnFail  'TypeScript compilation failed for the Electron main process.' `
-            -Fix     "Run: cd $InstallerDir && pnpm exec tsc -p tsconfig.electron.json  and fix the errors shown."
+            -OnFail  'esbuild bundling failed for Electron main process.' `
+            -Fix     "Run: cd $InstallerDir && pnpm exec esbuild --version  (verify esbuild is available)"
+
+Write-Info 'Bundling Electron preload script with esbuild...'
+Invoke-Pnpm -ArgList @(
+    'exec','esbuild','electron/preload.ts',
+    '--bundle','--platform=node','--target=node20','--format=cjs',
+    '--external:electron',
+    '--tsconfig=tsconfig.electron.json',
+    '--outfile=dist-electron/electron/preload.js',
+    '--log-level=warning'
+) `
+            -WorkDir $InstallerDir `
+            -OnFail  'esbuild bundling failed for Electron preload.' `
+            -Fix     "Run: cd $InstallerDir && pnpm exec esbuild electron/preload.ts --bundle --external:electron --outfile=dist-electron/electron/preload.js"
 
 if (-not (Test-Path "$InstallerDir\dist-electron\electron\main.js")) {
-    Write-Fail -Stage $Script:StageLabel -Command 'tsc -p tsconfig.electron.json' `
-        -Reason 'dist-electron\electron\main.js not found after TypeScript compile.' `
-        -Fix    "Inspect tsconfig.electron.json outDir setting and confirm src/electron/main.ts exists."
+    Write-Fail -Stage $Script:StageLabel -Command 'esbuild (electron/main.ts)' `
+        -Reason 'dist-electron\electron\main.js not found after esbuild bundle.' `
+        -Fix    "Confirm electron/main.ts exists and that esbuild is available: pnpm exec esbuild --version"
 }
-Write-Ok 'TypeScript -> dist-electron'
+Write-Ok 'esbuild -> dist-electron (all deps bundled inline)'
 
 # -- Vite: React installer UI -----------------------------------------------
 Write-Info 'Building React installer UI (Vite)...'
