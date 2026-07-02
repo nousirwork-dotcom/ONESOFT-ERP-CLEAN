@@ -264,29 +264,57 @@ if (-not (Test-Path $IconPath)) {
 # ---------------------------------------------------------------------------
 # STEP 3 - Install dependencies
 # ---------------------------------------------------------------------------
+# pnpm 10 enforces an allowlist for lifecycle scripts (onlyBuiltDependencies).
+# Rather than maintain a platform-specific allowlist, we install with
+# --ignore-scripts (no ERR_PNPM_IGNORED_BUILDS) then explicitly rebuild the
+# one package that needs a native binary at build time: esbuild.
+# The electron binary is downloaded by electron-builder itself (Step 8) and
+# does NOT need to be present in node_modules at build time.
+# ---------------------------------------------------------------------------
 if (-not $SkipInstall) {
-    Write-Stage 3 'Installing dependencies'
+    Write-Stage 3 'Installing dependencies (pnpm 10 compatible)'
 
-    Write-Info 'installer...'
-    Invoke-Pnpm -ArgList @('install', '--no-frozen-lockfile') `
+    # ---- installer -------------------------------------------------------
+    Write-Info 'installer: installing packages...'
+    Invoke-Pnpm -ArgList @('install', '--no-frozen-lockfile', '--ignore-scripts') `
                 -WorkDir "$ProjectRoot\installer" `
-                -OnFail  'pnpm install failed for installer package.' `
-                -Fix     "Run manually: cd $ProjectRoot\installer && pnpm install"
-    Write-Ok 'installer deps installed'
+                -OnFail  'pnpm install failed for installer.' `
+                -Fix     "Run: cd $ProjectRoot\installer && pnpm install --ignore-scripts"
 
-    Write-Info 'server-app...'
-    Invoke-Pnpm -ArgList @('install', '--no-frozen-lockfile') `
+    Write-Info 'installer: rebuilding esbuild native binary...'
+    Invoke-Pnpm -ArgList @('rebuild', 'esbuild') `
+                -WorkDir "$ProjectRoot\installer" `
+                -OnFail  'pnpm rebuild esbuild failed for installer.' `
+                -Fix     "Run: cd $ProjectRoot\installer && pnpm rebuild esbuild"
+    Write-Ok 'installer deps ready'
+
+    # ---- server-app ------------------------------------------------------
+    Write-Info 'server-app: installing packages...'
+    Invoke-Pnpm -ArgList @('install', '--no-frozen-lockfile', '--ignore-scripts') `
                 -WorkDir "$ProjectRoot\server-app" `
                 -OnFail  'pnpm install failed for server-app.' `
-                -Fix     "Run manually: cd $ProjectRoot\server-app && pnpm install"
-    Write-Ok 'server-app deps installed'
+                -Fix     "Run: cd $ProjectRoot\server-app && pnpm install --ignore-scripts"
 
-    Write-Info 'client-app...'
-    Invoke-Pnpm -ArgList @('install', '--no-frozen-lockfile') `
+    Write-Info 'server-app: rebuilding esbuild native binary...'
+    Invoke-Pnpm -ArgList @('rebuild', 'esbuild') `
+                -WorkDir "$ProjectRoot\server-app" `
+                -OnFail  'pnpm rebuild esbuild failed for server-app.' `
+                -Fix     "Run: cd $ProjectRoot\server-app && pnpm rebuild esbuild"
+    Write-Ok 'server-app deps ready'
+
+    # ---- client-app ------------------------------------------------------
+    Write-Info 'client-app: installing packages...'
+    Invoke-Pnpm -ArgList @('install', '--no-frozen-lockfile', '--ignore-scripts') `
                 -WorkDir "$ProjectRoot\client-app" `
                 -OnFail  'pnpm install failed for client-app.' `
-                -Fix     "Run manually: cd $ProjectRoot\client-app && pnpm install"
-    Write-Ok 'client-app deps installed'
+                -Fix     "Run: cd $ProjectRoot\client-app && pnpm install --ignore-scripts"
+
+    Write-Info 'client-app: rebuilding esbuild native binary...'
+    Invoke-Pnpm -ArgList @('rebuild', 'esbuild') `
+                -WorkDir "$ProjectRoot\client-app" `
+                -OnFail  'pnpm rebuild esbuild failed for client-app.' `
+                -Fix     "Run: cd $ProjectRoot\client-app && pnpm rebuild esbuild"
+    Write-Ok 'client-app deps ready'
 
 } else {
     Write-Stage 3 'Skipping dependency installation (--SkipInstall)'
