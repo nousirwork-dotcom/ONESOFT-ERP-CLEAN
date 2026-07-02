@@ -93,7 +93,8 @@ export default function App() {
 
   // ── حساب حالة أزرار التنقل بناءً على الخطوة الحالية ─────────────────────────
   const orgValid  = organization.name.trim() !== '';
-  const userValid = firstUser.password.length >= 6 && firstUser.username.length >= 3;
+  // كلمة المرور اختيارية — الشرط: الاسم الكامل + اسم الدخول فقط
+  const userValid = firstUser.fullName.trim().length >= 2 && firstUser.username.length >= 3;
 
   type NavConfig = {
     canBack: boolean;

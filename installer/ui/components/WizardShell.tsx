@@ -49,7 +49,7 @@ export default function WizardShell({
       userSelect: 'none', overflow: 'hidden',
     }} dir="rtl">
 
-      {/* Title Bar */}
+      {/* ── Title Bar ──────────────────────────────────────────────────────── */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '10px 16px',
@@ -62,7 +62,7 @@ export default function WizardShell({
             src={logoUrl}
             alt="OneSoft"
             style={{ width: 28, height: 28, borderRadius: 7, objectFit: 'cover' }}
-            onError={(e) => {
+            onError={e => {
               (e.currentTarget as HTMLImageElement).style.display = 'none';
               (e.currentTarget.nextSibling as HTMLElement).style.display = 'flex';
             }}
@@ -84,14 +84,15 @@ export default function WizardShell({
           <button onClick={handleMaximize} title={maximized ? 'استعادة' : 'تكبير'} style={titleBtnStyle()}>
             {maximized ? '❐' : '□'}
           </button>
-          <button onClick={handleClose} title="إغلاق" style={{ ...titleBtnStyle(), background: 'rgba(185,28,28,0.6)' }}>✕</button>
+          <button onClick={handleClose} title="إغلاق"
+            style={{ ...titleBtnStyle(), background: 'rgba(185,28,28,0.6)' }}>✕</button>
         </div>
       </div>
 
-      {/* Step Indicator */}
+      {/* ── Step Indicator ─────────────────────────────────────────────────── */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '12px 20px', gap: 4,
+        padding: '10px 20px', gap: 3,
         background: '#fff', borderBottom: '1px solid #E5E0D8',
         flexShrink: 0, flexWrap: 'wrap',
       }}>
@@ -99,12 +100,12 @@ export default function WizardShell({
           const done   = step.id < currentStep;
           const active = step.id === currentStep;
           return (
-            <div key={step.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+            <div key={step.id} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                 <div style={{
-                  width: 26, height: 26, borderRadius: '50%',
+                  width: 24, height: 24, borderRadius: '50%',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 11, fontWeight: 700,
+                  fontSize: 10, fontWeight: 700,
                   background: done ? '#16A34A' : active ? '#406B93' : '#E5E0D8',
                   color: done || active ? '#fff' : '#9CA3AF',
                   transition: 'all 0.2s',
@@ -112,14 +113,14 @@ export default function WizardShell({
                   {done ? '✓' : step.id}
                 </div>
                 {active && (
-                  <span style={{ fontSize: 9, color: '#406B93', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: 8, color: '#406B93', fontWeight: 600, whiteSpace: 'nowrap' }}>
                     {step.label}
                   </span>
                 )}
               </div>
               {i < steps.length - 1 && (
                 <div style={{
-                  width: 20, height: 2, borderRadius: 1,
+                  width: 16, height: 2, borderRadius: 1,
                   background: done ? '#16A34A' : '#E5E0D8',
                   transition: 'background 0.2s',
                 }} />
@@ -129,17 +130,23 @@ export default function WizardShell({
         })}
       </div>
 
-      {/* Content — scrollable, centered */}
+      {/* ── Content — fully responsive ─────────────────────────────────────── */}
       <div style={{
         flex: 1, overflowY: 'auto', overflowX: 'hidden',
-        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        display: 'flex', flexDirection: 'column',
       }}>
-        <div style={{ width: '100%', maxWidth: 820, padding: '24px 32px', boxSizing: 'border-box' }}>
+        {/* الحاوية الداخلية تمتد لتملأ العرض الكامل، مع padding مناسب */}
+        <div style={{
+          flex: 1,
+          width: '100%',
+          padding: '24px 32px',
+          boxSizing: 'border-box',
+        }}>
           {children}
         </div>
       </div>
 
-      {/* Fixed Bottom Navigation Bar */}
+      {/* ── Fixed Bottom Navigation Bar ────────────────────────────────────── */}
       {!hideNav && (
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -149,7 +156,7 @@ export default function WizardShell({
           flexShrink: 0,
           boxShadow: '0 -2px 12px rgba(0,0,0,0.06)',
         }}>
-          {/* Back button */}
+          {/* Back */}
           <button
             onClick={onBack}
             disabled={!canBack}
@@ -162,12 +169,12 @@ export default function WizardShell({
             ◀ السابق
           </button>
 
-          {/* Cancel button */}
+          {/* Cancel */}
           <button onClick={onCancel} style={navBtnCancel}>
             إلغاء
           </button>
 
-          {/* Next / Finish button */}
+          {/* Next / Finish */}
           <button
             onClick={onNext}
             disabled={!canNext && !isLast}
@@ -202,8 +209,7 @@ const navBtnPrimary: React.CSSProperties = {
   color: '#fff', border: 'none', borderRadius: 8,
   padding: '10px 32px', fontSize: 14, fontWeight: 700,
   cursor: 'pointer', fontFamily: "'Cairo', Tahoma, sans-serif",
-  minWidth: 120,
-  transition: 'opacity 0.15s',
+  minWidth: 120, transition: 'opacity 0.15s',
 };
 
 const navBtnSecondary: React.CSSProperties = {

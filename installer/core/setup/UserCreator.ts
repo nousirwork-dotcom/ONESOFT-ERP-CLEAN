@@ -27,7 +27,8 @@ export class UserCreator {
         return row;
       }
 
-      const passwordHash = hashSync(user.password, 10);
+      // كلمة المرور اختيارية — إذا كانت فارغة نُخزّن hash لسلسلة فارغة
+      const passwordHash = hashSync(user.password ?? '', 10);
 
       const result = await client.query<{ id: number }>(`
         INSERT INTO users (org_id, username, password_hash, name, role, is_active, created_at, updated_at)
