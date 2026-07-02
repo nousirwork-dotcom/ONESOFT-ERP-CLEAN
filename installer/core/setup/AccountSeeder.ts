@@ -39,7 +39,7 @@ export class AccountSeeder {
 
         // هل سبق تثبيت الحسابات؟
         const countRes = await client.query<{ cnt: string }>(
-          'SELECT COUNT(*) AS cnt FROM chart_of_accounts WHERE organization_id = $1',
+          'SELECT COUNT(*) AS cnt FROM chart_of_accounts WHERE org_id = $1',
           [orgId],
         );
         if (parseInt(countRes.rows[0].cnt, 10) > 0) {
@@ -54,7 +54,7 @@ export class AccountSeeder {
           let parentId: number | null = null;
           if (acc.parentCode) {
             const pRes = await client.query<{ id: number }>(
-              'SELECT id FROM chart_of_accounts WHERE code = $1 AND organization_id = $2',
+              'SELECT id FROM chart_of_accounts WHERE code = $1 AND org_id = $2',
               [acc.parentCode, orgId],
             );
             parentId = pRes.rows[0]?.id ?? null;
@@ -62,9 +62,9 @@ export class AccountSeeder {
 
           await client.query(
             `INSERT INTO chart_of_accounts
-               (organization_id, code, name, type, nature, level, parent_id, is_parent, allow_posting)
+               (org_id, code, name, account_type, nature, level, parent_id, is_parent, allow_posting)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-             ON CONFLICT (organization_id, code) DO NOTHING`,
+             ON CONFLICT DO NOTHING`,
             [orgId, acc.code, acc.name, acc.type, acc.nature, acc.level,
              parentId, acc.isParent, acc.allowPosting],
           );

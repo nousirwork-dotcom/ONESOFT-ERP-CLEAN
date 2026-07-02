@@ -7,6 +7,10 @@ type Emit = (e: ProgressEvent) => void;
 /**
  * يُطبّق ملفات SQL من مجلد drizzle/ مباشرةً عبر pg
  * لا يعتمد على pnpm أو drizzle-kit أو أي أداة dev على جهاز العميل
+ *
+ * الترتيب:
+ *   1. base_schema.sql  — ينشئ الجداول الأساسية الـ 30 (IF NOT EXISTS)
+ *   2. journal entries  — ALTER TABLE / CREATE TABLE التدريجية (0000-0012)
  */
 export class MigrationRunner {
   constructor(private readonly serverAppPath: string) {}
@@ -14,7 +18,6 @@ export class MigrationRunner {
   async runMigrations(databaseUrl: string, emit: Emit): Promise<MigrationResult> {
     emit({ level: 'info', message: 'جارٍ تطبيق Database Migrations...', timestamp: now() });
 
-    // ─── مسار ملفات SQL المُجمَّعة مع البرنامج ───────────────────────────────
     const drizzleDir = path.join(this.serverAppPath, 'drizzle');
 
     if (!fs.existsSync(drizzleDir)) {
@@ -23,7 +26,7 @@ export class MigrationRunner {
       return { applied: [], skipped: [], failed: msg };
     }
 
-    // ─── قراءة Journal لمعرفة ترتيب Migrations ───────────────────────────────
+    // ─── قراءة Journal ────────────────────────────────────────────────────────
     const journalPath = path.join(drizzleDir, 'meta', '_journal.json');
     let entries: Array<{ tag: string }> = [];
 
@@ -33,15 +36,15 @@ export class MigrationRunner {
           entries: Array<{ tag: string }>;
         };
         entries = journal.entries ?? [];
+        emit({ level: 'info', message: `Journal يحتوي على ${entries.length} migration`, timestamp: now() });
       } catch {
-        // fallback: نقرأ كل ملفات .sql مرتّبة
+        // fallback: كل .sql مرتّبة أبجدياً (ماعدا base_schema)
       }
     }
 
     if (entries.length === 0) {
-      // بدون journal — نأخذ كل .sql مرتّبة أبجدياً
       entries = fs.readdirSync(drizzleDir)
-        .filter(f => f.endsWith('.sql'))
+        .filter(f => f.endsWith('.sql') && f !== 'base_schema.sql')
         .sort()
         .map(f => ({ tag: f.replace('.sql', '') }));
     }
@@ -56,7 +59,37 @@ export class MigrationRunner {
     try {
       const client = await pool.connect();
       try {
-        // جدول تتبع Migrations (مشابه لـ drizzle journal)
+        // ── STEP 1: تطبيق base_schema.sql (ينشئ الجداول الأساسية) ────────────
+        const baseSchemaFile = path.join(drizzleDir, 'base_schema.sql');
+        if (fs.existsSync(baseSchemaFile)) {
+          emit({ level: 'info', message: 'تطبيق base_schema.sql (الجداول الأساسية)...', timestamp: now() });
+          const baseSql = fs.readFileSync(baseSchemaFile, 'utf-8');
+          try {
+            await client.query(baseSql);
+            emit({ level: 'success', message: '✅ base_schema.sql — الجداول الأساسية جاهزة', timestamp: now() });
+          } catch (baseErr: unknown) {
+            const msg = baseErr instanceof Error ? baseErr.message : String(baseErr);
+            emit({ level: 'error', message: `❌ فشل base_schema.sql: ${msg}`, timestamp: now() });
+            return { applied, skipped, failed: `base_schema.sql: ${msg}` };
+          }
+        } else {
+          emit({ level: 'error', message: `base_schema.sql غير موجود في: ${drizzleDir}`, timestamp: now() });
+          return { applied, skipped, failed: 'base_schema.sql not found' };
+        }
+
+        // ── STEP 2: التحقق من وجود جدول organizations ─────────────────────────
+        const orgCheck = await client.query(
+          `SELECT to_regclass('public.organizations') AS tbl`
+        );
+        const orgExists = orgCheck.rows[0]?.tbl !== null;
+        if (!orgExists) {
+          const msg = 'The database schema was not created successfully (organizations table missing).';
+          emit({ level: 'error', message: msg, timestamp: now() });
+          return { applied, skipped, failed: msg };
+        }
+        emit({ level: 'success', message: '✅ جدول organizations موجود', timestamp: now() });
+
+        // ── STEP 3: جدول تتبع Migrations ──────────────────────────────────────
         await client.query(`
           CREATE TABLE IF NOT EXISTS __drizzle_migrations (
             id         SERIAL PRIMARY KEY,
@@ -65,14 +98,17 @@ export class MigrationRunner {
           )
         `);
 
+        // ── STEP 4: تطبيق Journal migrations بالترتيب ─────────────────────────
+        emit({ level: 'info', message: `تطبيق ${entries.length} migration من الـ journal...`, timestamp: now() });
+
         for (const entry of entries) {
           const sqlFile = path.join(drizzleDir, `${entry.tag}.sql`);
           if (!fs.existsSync(sqlFile)) {
+            emit({ level: 'info', message: `تخطي (ملف غير موجود): ${entry.tag}`, timestamp: now() });
             skipped.push(entry.tag);
             continue;
           }
 
-          // هل سُبق تطبيقه؟
           const { rowCount } = await client.query(
             'SELECT 1 FROM __drizzle_migrations WHERE tag = $1',
             [entry.tag],
@@ -102,6 +138,17 @@ export class MigrationRunner {
             return { applied, skipped, failed: msg };
           }
         }
+
+        // ── STEP 5: تحقق نهائي من organizations ───────────────────────────────
+        const finalCheck = await client.query(
+          `SELECT to_regclass('public.organizations') AS tbl`
+        );
+        if (finalCheck.rows[0]?.tbl === null) {
+          const msg = 'The database schema was not created successfully.';
+          emit({ level: 'error', message: msg, timestamp: now() });
+          return { applied, skipped, failed: msg };
+        }
+
       } finally {
         client.release();
       }
@@ -111,7 +158,12 @@ export class MigrationRunner {
 
     emit({
       level: 'success',
-      message: `تمت Migrations: ${applied.length} مُطبَّق، ${skipped.length} مُتخطَّى`,
+      message: `✅ تمت Migrations: ${applied.length} مُطبَّق، ${skipped.length} مُتخطَّى`,
+      timestamp: now(),
+    });
+    emit({
+      level: 'info',
+      message: `Migrations مُطبَّقة: ${applied.join(', ') || 'لا شيء جديد'}`,
       timestamp: now(),
     });
     return { applied, skipped };

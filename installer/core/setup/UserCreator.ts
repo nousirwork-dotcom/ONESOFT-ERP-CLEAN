@@ -19,7 +19,7 @@ export class UserCreator {
     try {
       // التحقق من عدم وجود المستخدم
       const exists = await client.query(
-        `SELECT id FROM users WHERE "orgId" = $1 AND username = $2`, [orgId, user.username]
+        `SELECT id FROM users WHERE org_id = $1 AND username = $2`, [orgId, user.username]
       );
       if ((exists.rowCount ?? 0) > 0) {
         const row = exists.rows[0] as { id: number };
@@ -30,8 +30,8 @@ export class UserCreator {
       const passwordHash = hashSync(user.password, 10);
 
       const result = await client.query<{ id: number }>(`
-        INSERT INTO users ("orgId", username, "passwordHash", name, role, status, "createdAt", "updatedAt")
-        VALUES ($1, $2, $3, $4, 'admin', 'active', NOW(), NOW())
+        INSERT INTO users (org_id, username, password_hash, name, role, is_active, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, 'admin', true, NOW(), NOW())
         RETURNING id
       `, [orgId, user.username, passwordHash, user.fullName]);
 

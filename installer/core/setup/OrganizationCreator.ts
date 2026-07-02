@@ -26,10 +26,10 @@ export class OrganizationCreator {
       }
 
       const result = await client.query<{ id: number; code: string }>(`
-        INSERT INTO organizations (code, name, "nameEn", currency, status, "maxUsers", "createdAt", "updatedAt")
+        INSERT INTO organizations (code, name, name_en, currency, status, max_users, created_at, updated_at)
         VALUES ($1, $2, $3, $4, 'active', 10, NOW(), NOW())
         RETURNING id, code
-      `, [org.code, org.name, org.nameEn, org.currency]);
+      `, [org.code, org.name, org.nameEn ?? null, org.currency]);
 
       const row = result.rows[0]!;
       emit({ level: 'success', message: `تم إنشاء المؤسسة — كود: ${row.code}`, timestamp: now() });
