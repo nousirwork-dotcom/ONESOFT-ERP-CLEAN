@@ -286,6 +286,19 @@ if (-not $SkipInstall) {
                 -WorkDir "$ProjectRoot\installer" `
                 -OnFail  'pnpm rebuild esbuild failed for installer.' `
                 -Fix     "Run: cd $ProjectRoot\installer && pnpm rebuild esbuild"
+
+    Write-Info 'installer: downloading app-builder binary (used by electron-builder)...'
+    Invoke-Pnpm -ArgList @('rebuild', 'app-builder-bin') `
+                -WorkDir "$ProjectRoot\installer" `
+                -OnFail  'app-builder-bin download failed.' `
+                -Fix     @"
+app-builder.exe could not be downloaded from GitHub.
+Common causes:
+  1. Firewall / Windows Defender blocking GitHub downloads
+     -> Add rule: allow outbound HTTPS to github.com / objects.githubusercontent.com
+  2. Corporate proxy  -> set HTTPS_PROXY env var before running this script
+  3. Try manually:   cd $ProjectRoot\installer && pnpm rebuild app-builder-bin
+"@
     Write-Ok 'installer deps ready'
 
     # ---- server-app ------------------------------------------------------
