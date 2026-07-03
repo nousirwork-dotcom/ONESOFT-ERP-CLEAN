@@ -134,7 +134,7 @@ export async function loginHandler(req: Request, res: Response) {
 }
 
 // ─── تسجيل الخروج ────────────────────────────────────────────────────────────
-export function logoutHandler(_req: Request, res: Response) {
+export function logoutHandler(req: Request, res: Response) {
   res.clearCookie(ENV.cookieName, {
     httpOnly: true,
     secure: false,
