@@ -53,8 +53,17 @@ app.get('/api/health', (_req, res) => res.json({
   ts:        new Date().toISOString(),
 }));
 
-// ─── System/Services Status ───────────────────────────────────────────────────
-app.get('/api/system/status', (_req, res) => {
+// ─── System/Services Status (requires authenticated admin/superadmin session) ──
+app.get('/api/system/status', async (req, res) => {
+  const { getUserFromRequest } = await import('./auth.js');
+  const user = await getUserFromRequest(req);
+  if (!user) return res.status(401).json({ error: 'يجب تسجيل الدخول أولاً' });
+
+  const adminRoles = ['admin', 'superadmin'];
+  if (!adminRoles.includes(user.role)) {
+    return res.status(403).json({ error: 'هذه الصفحة متاحة للمسؤولين فقط' });
+  }
+
   const configPath = process.platform === 'win32'
     ? 'C:\\ProgramData\\OneSoft\\config\\onesoft.config.json'
     : path.join(process.env['HOME'] ?? '/tmp', '.onesoft', 'config', 'onesoft.config.json');
@@ -83,7 +92,7 @@ app.get('/api/system/status', (_req, res) => {
   const srv   = config?.['server']   as Record<string, unknown> | undefined;
   const paths = config?.['paths']    as Record<string, unknown> | undefined;
 
-  res.json({
+  return res.json({
     backendPort:    ENV.port,
     frontendPort:   Number(srv?.['frontendPort'] ?? 5000),
     backendStatus:  svcStatus('OneSoft-Server'),
@@ -101,15 +110,33 @@ app.get('/api/system/status', (_req, res) => {
   });
 });
 
+// ─── Restart Windows Service (requires superadmin session + same-origin) ───────
 app.post('/api/system/restart-service', async (req, res) => {
+  // Auth check — superadmin only
+  const { getUserFromRequest } = await import('./auth.js');
+  const user = await getUserFromRequest(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'يجب تسجيل الدخول أولاً' });
+  if (user.role !== 'superadmin') {
+    return res.status(403).json({ ok: false, error: 'هذه العملية متاحة للمسؤول الأعلى فقط' });
+  }
+
+  // Origin guard — reject cross-origin requests
+  const origin = req.headers['origin'] ?? '';
+  const host   = req.headers['host']   ?? '';
+  if (origin && !origin.includes(host.split(':')[0]!)) {
+    return res.status(403).json({ ok: false, error: 'طلب مرفوض — مصدر غير مسموح' });
+  }
+
   if (process.platform !== 'win32') {
     return res.json({ ok: true, message: 'Linux — لا توجد خدمات Windows' });
   }
+
   const { name } = req.body as { name?: string };
   const allowed  = ['OneSoft-Server', 'OneSoft-Client'];
   if (!name || !allowed.includes(name)) {
     return res.status(400).json({ ok: false, error: 'اسم خدمة غير مسموح' });
   }
+
   try {
     spawnSync('sc', ['stop', name],  { encoding: 'utf-8', stdio: 'pipe' });
     await new Promise(r => setTimeout(r, 2500));
