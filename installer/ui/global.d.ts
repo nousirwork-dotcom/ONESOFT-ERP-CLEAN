@@ -65,8 +65,10 @@ interface InstallerAPI {
   }) => Promise<import('../core/types').HealthReport>;
 
   // Config
-  getConfig:  () => Promise<import('../core/types').OneSoftConfig | null>;
-  saveConfig: (cfg: Partial<import('../core/types').OneSoftConfig>) => Promise<{ ok: boolean }>;
+  getConfig:     () => Promise<import('../core/types').OneSoftConfig | null>;
+  saveConfig:    (cfg: Partial<import('../core/types').OneSoftConfig>) => Promise<{ ok: boolean }>;
+  verifyConfig:  () => Promise<{ ok: boolean; detail?: string; configPath?: string; ms?: number } | null>;
+  clearConfig:   () => Promise<{ ok: boolean; detail?: string }>;
 
   // Upgrade
   detectVersion: () => Promise<import('../core/types').VersionInfo | null>;

@@ -38,6 +38,23 @@ export function registerServicesIpc(ipc: IpcMain, win: BrowserWindow | null) {
     );
   });
 
+  // ── مسح ملف الإعدادات (عند فشل الاختبار أو تغيير كلمة المرور) ───────────────
+  ipc.handle('backend:clear-config', async () => {
+    try {
+      if (ConfigManager.exists()) {
+        const configPath = ConfigManager.getConfigPath();
+        const fs = await import('fs');
+        fs.unlinkSync(configPath);
+        emit({ level: 'info', message: `🗑️ تم مسح ملف الإعدادات: ${configPath}`, timestamp: new Date().toISOString() });
+      }
+      return { ok: true };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      emit({ level: 'warn', message: `تعذّر مسح ملف الإعدادات: ${msg}`, timestamp: new Date().toISOString() });
+      return { ok: false, detail: msg };
+    }
+  });
+
   // ── اختبار تجريبي: التحقق من صحة الإعدادات المحفوظة قبل تثبيت الخدمة ────
   ipc.handle('backend:verify-config', async () => {
     const start = Date.now();
@@ -63,11 +80,14 @@ export function registerServicesIpc(ipc: IpcMain, win: BrowserWindow | null) {
         };
       }
 
-      emit({ level: 'info', message: `اختبار الاتصال بـ ${db.host}:${db.port} كـ "${db.user}"...`, timestamp: new Date().toISOString() });
+      // استخدم adminUser للتحقق (onesoft_app غير موجود بعد في مرحلة الإعداد)
+      const verifyUser = db.adminUser ?? db.user;
+      const verifyPass = db.adminPassword ?? db.password;
+      emit({ level: 'info', message: `اختبار الاتصال بـ ${db.host}:${db.port} كـ "${verifyUser}"...`, timestamp: new Date().toISOString() });
 
       const pool = new Pool({
         host: db.host, port: db.port,
-        database: db.name, user: db.user, password: db.password,
+        database: 'postgres', user: verifyUser, password: verifyPass,
         connectionTimeoutMillis: 8000, max: 1,
       });
 

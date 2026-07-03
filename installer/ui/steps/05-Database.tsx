@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useInstallerStore } from '../store/installer.store';
 import type { DatabaseMode } from '../../core/types';
 
-// ── تعريف الأوضاع ─────────────────────────────────────────────────────────────
 const DB_MODES: {
   id: DatabaseMode;
   icon: string;
@@ -37,95 +36,147 @@ const DB_MODES: {
   },
 ];
 
+type ChainStep = 'idle' | 'testing' | 'saving' | 'verifying' | 'done' | 'failed';
+type StepState = 'pending' | 'running' | 'ok' | 'fail';
+
 export default function Step06DatabaseMode() {
   const {
     databaseMode, setDatabaseMode,
     dbOpts, setDbOpts,
+    setDbConfigVerified,
   } = useInstallerStore();
 
-  const [testing,    setTesting]    = useState(false);
-  const [testResult, setTestResult] = useState<{ ok: boolean; detail: string } | null>(null);
-  const [detecting,  setDetecting]  = useState(false);
+  // حالة السلسلة الكاملة
+  const [chainStep, setChainStep] = useState<ChainStep>('idle');
+  const [testState,   setTestState]   = useState<StepState>('pending');
+  const [saveState,   setSaveState]   = useState<StepState>('pending');
+  const [verifyState, setVerifyState] = useState<StepState>('pending');
+  const [errorMsg,    setErrorMsg]    = useState<string | null>(null);
+  const [configPath,  setConfigPath]  = useState<string | null>(null);
+
+  // للاكتشاف التلقائي (local-existing)
+  const [detecting,   setDetecting]   = useState(false);
   const [detectedDbs, setDetectedDbs] = useState<string[]>([]);
-  const [saving,     setSaving]     = useState(false);
-  const [saveResult, setSaveResult] = useState<{ ok: boolean; detail: string; configPath?: string } | null>(null);
+
+  // ── إعادة الضبط عند تغيير أي حقل ────────────────────────────────────────────
+  const resetChain = () => {
+    setChainStep('idle');
+    setTestState('pending');
+    setSaveState('pending');
+    setVerifyState('pending');
+    setErrorMsg(null);
+    setConfigPath(null);
+    setDbConfigVerified(false);
+    // مسح أي config محفوظ قديم
+    (window.installer as any)?.clearConfig?.().catch(() => {});
+  };
 
   const selectMode = (m: DatabaseMode) => {
     setDatabaseMode(m);
-    setTestResult(null);
-    setSaveResult(null);
+    resetChain();
     setDetectedDbs([]);
     if (m === 'local-install' || m === 'local-existing') {
       setDbOpts({ host: 'localhost' });
     }
   };
 
-  const testConnection = async () => {
-    setTesting(true);
-    setTestResult(null);
-    setSaveResult(null);
-    const r = await window.installer?.testConnection?.({
-      host: dbOpts.host, port: dbOpts.port,
-      database: 'postgres', user: dbOpts.user, password: dbOpts.password,
-    });
-    setTestResult(r ?? { ok: false, detail: 'لا استجابة من الاتصال' });
-    setTesting(false);
+  const onFieldChange = (opts: Parameters<typeof setDbOpts>[0]) => {
+    setDbOpts(opts);
+    resetChain();
   };
 
-  // حفظ الإعدادات في ملف config.json + التحقق من صحتها
-  const saveAndVerify = async () => {
-    setSaving(true);
-    setSaveResult(null);
+  // ── السلسلة الكاملة: test → save → verify ────────────────────────────────────
+  const runChain = async () => {
+    if (!dbOpts.password) return;
+
+    resetChain();
+    setChainStep('testing');
+    setTestState('running');
+
+    // ── 1️⃣ اختبار الاتصال ───────────────────────────────────────────────────
+    let testOk = false;
     try {
-      // 1️⃣ بناء كائن الإعدادات الكامل
-      const cfg = {
-        version: '1.0.0',
-        database: {
-          host:          dbOpts.host,
-          port:          dbOpts.port,
-          name:          dbOpts.database,
-          user:          'onesoft_app',
-          password:      dbOpts.password,
-          adminUser:     dbOpts.user,
-          adminPassword: dbOpts.password,
-          poolMin:       2,
-          poolMax:       10,
-        },
-        server: {
-          backendPort:  3000,
-          frontendPort: 5000,
-        },
-      };
-
-      // 2️⃣ حفظ في C:\ProgramData\OneSoft\config\onesoft.config.json
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await window.installer?.saveConfig?.(cfg as any);
-
-      // 3️⃣ التحقق من صحة الإعدادات المحفوظة (اتصال فعلي بـ onesoft_app)
-      const verify = await (window.installer as any)?.verifyConfig?.() ?? null;
-
-      if (verify?.ok) {
-        setSaveResult({
-          ok: true,
-          detail: verify.detail ?? 'تم حفظ الإعدادات والتحقق منها بنجاح',
-          configPath: verify.configPath,
-        });
-      } else {
-        setSaveResult({
-          ok: false,
-          detail: verify?.detail ?? 'تم الحفظ لكن فشل التحقق',
-        });
+      const r = await window.installer?.testConnection?.({
+        host: dbOpts.host, port: dbOpts.port,
+        database: 'postgres', user: dbOpts.user, password: dbOpts.password,
+      });
+      testOk = r?.ok === true;
+      setTestState(testOk ? 'ok' : 'fail');
+      if (!testOk) {
+        setErrorMsg(r?.detail ?? 'فشل اختبار الاتصال — تأكد من كلمة المرور');
+        setChainStep('failed');
+        // مسح أي إعدادات قديمة
+        await (window.installer as any)?.clearConfig?.().catch(() => {});
+        return;
       }
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setSaveResult({ ok: false, detail: `خطأ غير متوقع: ${msg}` });
-    } finally {
-      setSaving(false);
+      setTestState('fail');
+      setErrorMsg(e instanceof Error ? e.message : String(e));
+      setChainStep('failed');
+      await (window.installer as any)?.clearConfig?.().catch(() => {});
+      return;
+    }
+
+    // ── 2️⃣ حفظ الإعدادات ───────────────────────────────────────────────────
+    setChainStep('saving');
+    setSaveState('running');
+
+    const cfg = {
+      version: '1.0.0',
+      database: {
+        host:          dbOpts.host,
+        port:          dbOpts.port,
+        name:          dbOpts.database,
+        user:          'onesoft_app',
+        password:      dbOpts.password,
+        adminUser:     dbOpts.user,
+        adminPassword: dbOpts.password,
+        poolMin:       2,
+        poolMax:       10,
+      },
+      server: {
+        backendPort:  3000,
+        frontendPort: 5000,
+      },
+    };
+
+    try {
+      await window.installer?.saveConfig?.(cfg as any);
+      setSaveState('ok');
+    } catch (e: unknown) {
+      setSaveState('fail');
+      setErrorMsg(`فشل الحفظ: ${e instanceof Error ? e.message : String(e)}`);
+      setChainStep('failed');
+      return;
+    }
+
+    // ── 3️⃣ إعادة القراءة والتحقق ───────────────────────────────────────────
+    setChainStep('verifying');
+    setVerifyState('running');
+
+    try {
+      const verify = await (window.installer as any)?.verifyConfig?.() ?? null;
+      if (verify?.ok) {
+        setVerifyState('ok');
+        setConfigPath(verify.configPath ?? null);
+        setChainStep('done');
+        setDbConfigVerified(true);
+      } else {
+        setVerifyState('fail');
+        setErrorMsg(verify?.detail ?? 'تعذّر التحقق من الإعدادات المحفوظة');
+        setChainStep('failed');
+      }
+    } catch (e: unknown) {
+      setVerifyState('fail');
+      setErrorMsg(e instanceof Error ? e.message : String(e));
+      setChainStep('failed');
     }
   };
 
+  // ── اكتشاف تلقائي (local-existing) ────────────────────────────────────────
   const detectDatabases = async () => {
     setDetecting(true);
+    resetChain();
     try {
       const r = await window.installer?.testConnection?.({
         host: 'localhost', port: dbOpts.port,
@@ -134,21 +185,14 @@ export default function Step06DatabaseMode() {
       if (r?.ok) {
         setDetectedDbs(['onesoft_erp', 'postgres']);
         setDbOpts({ host: 'localhost' });
-        setTestResult({ ok: true, detail: 'تم اكتشاف PostgreSQL المحلي بنجاح' });
-      } else {
-        setTestResult({ ok: false, detail: r?.detail ?? 'لم يُعثر على PostgreSQL محلي' });
       }
     } finally {
       setDetecting(false);
     }
   };
 
-  // هل يمكن المتابعة؟
-  const canContinue: boolean = (() => {
-    if (databaseMode === 'local-install') return !!dbOpts.password;
-    if (databaseMode === 'cloud') return false; // محجوز
-    return testResult?.ok === true;
-  })();
+  const isBusy = chainStep === 'testing' || chainStep === 'saving' || chainStep === 'verifying';
+  const isDone = chainStep === 'done';
 
   const inp: React.CSSProperties = {
     width: '100%', boxSizing: 'border-box', padding: '8px 12px',
@@ -159,9 +203,26 @@ export default function Step06DatabaseMode() {
     fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 4, display: 'block',
   };
 
+  const stepIcon = (s: StepState, label: string) => {
+    const icons: Record<StepState, string> = { pending: '○', running: '⏳', ok: '✅', fail: '❌' };
+    const colors: Record<StepState, string> = {
+      pending: '#9CA3AF', running: '#2563EB', ok: '#15803D', fail: '#B91C1C',
+    };
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: colors[s] }}>
+        <span style={{ fontSize: 16, minWidth: 20, textAlign: 'center' }}>{icons[s]}</span>
+        <span style={{ fontWeight: s === 'running' ? 700 : s === 'ok' ? 700 : 500 }}>{label}</span>
+      </div>
+    );
+  };
+
+  const needsConnectionFields = databaseMode === 'local-existing' || databaseMode === 'remote';
+  const canTest = !!dbOpts.password && (databaseMode === 'local-existing' ? true : databaseMode === 'remote' ? !!dbOpts.host : false);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* العنوان */}
+
+      {/* ── العنوان ──────────────────────────────────────────────────────── */}
       <div>
         <h2 style={{ fontSize: 20, fontWeight: 800, color: '#1E344F', margin: '0 0 4px' }}>
           🗄️ إعداد قاعدة البيانات
@@ -171,7 +232,7 @@ export default function Step06DatabaseMode() {
         </p>
       </div>
 
-      {/* بطاقات الأوضاع */}
+      {/* ── بطاقات الأوضاع ───────────────────────────────────────────────── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {DB_MODES.map(m => (
           <button
@@ -212,7 +273,7 @@ export default function Step06DatabaseMode() {
         ))}
       </div>
 
-      {/* ─── حقول local-install ─────────────────────────────────────────────── */}
+      {/* ── حقول local-install (كلمة مرور فقط) ──────────────────────────── */}
       {databaseMode === 'local-install' && (
         <div style={{ background: '#fff', borderRadius: 10, padding: '16px 20px', border: '1px solid #E5E0D8' }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#1E344F', marginBottom: 12 }}>
@@ -222,17 +283,22 @@ export default function Step06DatabaseMode() {
             <label style={lbl}>كلمة المرور التي ستُضبَط عند التثبيت</label>
             <input
               style={inp} type="password" value={dbOpts.password}
-              onChange={e => setDbOpts({ password: e.target.value })}
+              onChange={e => onFieldChange({ password: e.target.value })}
               placeholder="••••••••"
             />
           </div>
           <div style={{ marginTop: 8, padding: '8px 12px', background: '#F0F9FF', borderRadius: 8, fontSize: 12, color: '#0369A1' }}>
             ℹ️ سيتم تثبيت PostgreSQL 16 تلقائياً وإنشاء قاعدة بيانات <b>onesoft_erp</b>
           </div>
+          {dbOpts.password && (
+            <div style={{ marginTop: 8, padding: '8px 12px', background: '#F0FDF4', borderRadius: 8, fontSize: 12, color: '#15803D', fontWeight: 600 }}>
+              ✅ تم إدخال كلمة المرور — يمكنك المتابعة للخطوة التالية
+            </div>
+          )}
         </div>
       )}
 
-      {/* ─── حقول local-existing ────────────────────────────────────────────── */}
+      {/* ── حقول local-existing ───────────────────────────────────────────── */}
       {databaseMode === 'local-existing' && (
         <div style={{ background: '#fff', borderRadius: 10, padding: '16px 20px', border: '1px solid #E5E0D8', display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -241,12 +307,12 @@ export default function Step06DatabaseMode() {
             </div>
             <button
               onClick={detectDatabases}
-              disabled={detecting || !dbOpts.password}
+              disabled={detecting || !dbOpts.password || isBusy}
               style={{
                 background: detecting ? '#9CA3AF' : '#6366F1',
                 color: '#fff', border: 'none', borderRadius: 7,
                 padding: '6px 16px', fontSize: 12, fontWeight: 600,
-                cursor: (detecting || !dbOpts.password) ? 'not-allowed' : 'pointer',
+                cursor: (detecting || !dbOpts.password || isBusy) ? 'not-allowed' : 'pointer',
                 fontFamily: 'inherit',
               }}
             >
@@ -258,28 +324,25 @@ export default function Step06DatabaseMode() {
             <div>
               <label style={lbl}>المستخدم الإداري</label>
               <input style={inp} value={dbOpts.user}
-                onChange={e => setDbOpts({ user: e.target.value })} placeholder="postgres" />
+                onChange={e => onFieldChange({ user: e.target.value })} placeholder="postgres" />
             </div>
             <div>
               <label style={lbl}>المنفذ</label>
               <input style={inp} type="number" value={dbOpts.port}
-                onChange={e => setDbOpts({ port: parseInt(e.target.value) || 5432 })} />
+                onChange={e => onFieldChange({ port: parseInt(e.target.value) || 5432 })} />
             </div>
           </div>
           <div>
             <label style={lbl}>كلمة المرور</label>
             <input style={inp} type="password" value={dbOpts.password}
-              onChange={e => setDbOpts({ password: e.target.value })} placeholder="••••••••" />
+              onChange={e => onFieldChange({ password: e.target.value })} placeholder="••••••••" />
           </div>
 
           {detectedDbs.length > 0 && (
             <div>
               <label style={lbl}>قاعدة البيانات</label>
-              <select
-                style={inp}
-                value={dbOpts.database}
-                onChange={e => setDbOpts({ database: e.target.value })}
-              >
+              <select style={inp} value={dbOpts.database}
+                onChange={e => onFieldChange({ database: e.target.value })}>
                 <option value="onesoft_erp">onesoft_erp (جديدة — ستُنشأ)</option>
                 {detectedDbs.filter(d => d !== 'onesoft_erp').map(d => (
                   <option key={d} value={d}>{d}</option>
@@ -287,24 +350,10 @@ export default function Step06DatabaseMode() {
               </select>
             </div>
           )}
-
-          <button
-            onClick={testConnection}
-            disabled={testing || !dbOpts.password}
-            style={{
-              background: testing ? '#9CA3AF' : '#1E344F',
-              color: '#fff', border: 'none', borderRadius: 8,
-              padding: '9px 20px', fontSize: 13, fontWeight: 600,
-              cursor: (testing || !dbOpts.password) ? 'not-allowed' : 'pointer',
-              alignSelf: 'flex-start', fontFamily: 'inherit',
-            }}
-          >
-            {testing ? '⏳ جارٍ الاختبار...' : '🔌 اختبار الاتصال'}
-          </button>
         </div>
       )}
 
-      {/* ─── حقول remote ────────────────────────────────────────────────────── */}
+      {/* ── حقول remote ───────────────────────────────────────────────────── */}
       {databaseMode === 'remote' && (
         <div style={{ background: '#fff', borderRadius: 10, padding: '16px 20px', border: '1px solid #E5E0D8', display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#1E344F', marginBottom: 4 }}>
@@ -313,112 +362,109 @@ export default function Step06DatabaseMode() {
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
             <div>
               <label style={lbl}>عنوان السيرفر (IP أو Hostname)</label>
-              <input
-                style={inp} value={dbOpts.host}
-                onChange={e => setDbOpts({ host: e.target.value })}
-                placeholder="192.168.1.100 أو db.example.com"
-                dir="ltr"
-              />
+              <input style={inp} value={dbOpts.host}
+                onChange={e => onFieldChange({ host: e.target.value })}
+                placeholder="192.168.1.100 أو db.example.com" dir="ltr" />
             </div>
             <div>
               <label style={lbl}>المنفذ</label>
               <input style={inp} type="number" value={dbOpts.port}
-                onChange={e => setDbOpts({ port: parseInt(e.target.value) || 5432 })} />
+                onChange={e => onFieldChange({ port: parseInt(e.target.value) || 5432 })} />
             </div>
           </div>
           <div>
             <label style={lbl}>اسم قاعدة البيانات</label>
             <input style={inp} value={dbOpts.database}
-              onChange={e => setDbOpts({ database: e.target.value })} placeholder="onesoft_erp" dir="ltr" />
+              onChange={e => onFieldChange({ database: e.target.value })} placeholder="onesoft_erp" dir="ltr" />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label style={lbl}>المستخدم</label>
               <input style={inp} value={dbOpts.user}
-                onChange={e => setDbOpts({ user: e.target.value })} placeholder="postgres" dir="ltr" />
+                onChange={e => onFieldChange({ user: e.target.value })} placeholder="postgres" dir="ltr" />
             </div>
             <div>
               <label style={lbl}>كلمة المرور</label>
               <input style={inp} type="password" value={dbOpts.password}
-                onChange={e => setDbOpts({ password: e.target.value })} placeholder="••••••••" />
+                onChange={e => onFieldChange({ password: e.target.value })} placeholder="••••••••" />
             </div>
           </div>
-          <button
-            onClick={testConnection}
-            disabled={testing || !dbOpts.password || !dbOpts.host}
-            style={{
-              background: testing ? '#9CA3AF' : '#1E344F',
-              color: '#fff', border: 'none', borderRadius: 8,
-              padding: '9px 20px', fontSize: 13, fontWeight: 600,
-              cursor: (testing || !dbOpts.password || !dbOpts.host) ? 'not-allowed' : 'pointer',
-              alignSelf: 'flex-start', fontFamily: 'inherit',
-            }}
-          >
-            {testing ? '⏳ جارٍ الاختبار...' : '🔌 اختبار الاتصال'}
-          </button>
         </div>
       )}
 
-      {/* نتيجة الاختبار */}
-      {testResult && (
-        <div style={{
-          padding: '10px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600,
-          background: testResult.ok ? '#F0FDF4' : '#FEF2F2',
-          border: `1px solid ${testResult.ok ? '#86EFAC' : '#FCA5A5'}`,
-          color: testResult.ok ? '#15803D' : '#B91C1C',
-        }}>
-          {testResult.ok ? '✅' : '❌'} {testResult.detail}
-        </div>
-      )}
+      {/* ── زر الاختبار + مؤشر السلسلة (local-existing / remote) ─────────── */}
+      {needsConnectionFields && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-      {/* زر الحفظ + التحقق — يظهر فقط بعد نجاح اختبار الاتصال */}
-      {testResult?.ok && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{
-            padding: '10px 14px', borderRadius: 8, fontSize: 12,
-            background: '#FFFBEB', border: '1px solid #FCD34D', color: '#92400E',
-          }}>
-            ⚠️ يجب حفظ الإعدادات قبل المتابعة حتى يتمكن الخادم من قراءتها عند التثبيت
-          </div>
+          {/* زر "اختبار الاتصال وحفظ" */}
           <button
-            onClick={saveAndVerify}
-            disabled={saving}
+            onClick={runChain}
+            disabled={!canTest || isBusy || isDone}
             style={{
-              background: saving ? '#9CA3AF' : 'linear-gradient(135deg, #059669, #047857)',
+              background: isDone
+                ? 'linear-gradient(135deg, #059669, #047857)'
+                : isBusy
+                  ? '#9CA3AF'
+                  : 'linear-gradient(135deg, #1E344F, #2d5070)',
               color: '#fff', border: 'none', borderRadius: 8,
               padding: '10px 24px', fontSize: 13, fontWeight: 700,
-              cursor: saving ? 'not-allowed' : 'pointer',
+              cursor: (!canTest || isBusy || isDone) ? 'not-allowed' : 'pointer',
               fontFamily: 'inherit', alignSelf: 'flex-start',
               display: 'flex', alignItems: 'center', gap: 8,
+              transition: 'all 0.2s',
             }}
           >
-            {saving ? '⏳ جارٍ الحفظ والتحقق...' : '💾 حفظ الإعدادات + اختبار التكوين'}
+            {isDone ? '✅ تم التحقق بنجاح' : isBusy ? '⏳ جارٍ...' : '🔌 اختبار الاتصال وحفظ الإعدادات'}
           </button>
 
-          {/* نتيجة الحفظ والتحقق */}
-          {saveResult && (
+          {/* مؤشر التقدم — يظهر عند بدء السلسلة */}
+          {chainStep !== 'idle' && (
+            <div style={{
+              background: '#F9FAFB', border: '1px solid #E5E7EB',
+              borderRadius: 10, padding: '14px 18px',
+              display: 'flex', flexDirection: 'column', gap: 10,
+            }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 2 }}>
+                خطوات التحقق:
+              </div>
+              {stepIcon(testState,   '1️⃣  اختبار الاتصال بـ PostgreSQL')}
+              {stepIcon(saveState,   '2️⃣  حفظ الإعدادات في ملف Config')}
+              {stepIcon(verifyState, '3️⃣  إعادة قراءة الملف والتحقق منه')}
+            </div>
+          )}
+
+          {/* رسالة الخطأ */}
+          {chainStep === 'failed' && errorMsg && (
             <div style={{
               padding: '12px 16px', borderRadius: 8, fontSize: 13,
-              background: saveResult.ok ? '#F0FDF4' : '#FEF2F2',
-              border: `1px solid ${saveResult.ok ? '#86EFAC' : '#FCA5A5'}`,
-              color: saveResult.ok ? '#15803D' : '#B91C1C',
+              background: '#FEF2F2', border: '1px solid #FCA5A5', color: '#B91C1C',
             }}>
-              <div style={{ fontWeight: 700, marginBottom: 4 }}>
-                {saveResult.ok ? '✅ تم الحفظ والتحقق بنجاح' : '❌ فشل التحقق من الإعدادات'}
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>❌ فشل التحقق</div>
+              <div style={{ fontSize: 12, opacity: 0.9 }}>{errorMsg}</div>
+              <div style={{ marginTop: 8, fontSize: 12, color: '#991B1B' }}>
+                💡 تأكد من كلمة المرور وإعادة الاختبار. لن يُسمح بالمتابعة إلا بعد نجاح جميع الخطوات.
               </div>
-              <div style={{ fontSize: 12, opacity: 0.9 }}>{saveResult.detail}</div>
-              {saveResult.ok && saveResult.configPath && (
+            </div>
+          )}
+
+          {/* رسالة النجاح الكاملة */}
+          {isDone && (
+            <div style={{
+              padding: '14px 18px', borderRadius: 10, fontSize: 13,
+              background: '#F0FDF4', border: '2px solid #86EFAC', color: '#15803D',
+            }}>
+              <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 6 }}>
+                ✅ اكتملت جميع خطوات التحقق — يمكنك الانتقال للخطوة التالية
+              </div>
+              <div style={{ fontSize: 12, color: '#166534', marginBottom: 4 }}>
+                تم اختبار الاتصال ✓ &nbsp;|&nbsp; تم حفظ الإعدادات ✓ &nbsp;|&nbsp; تم التحقق من الملف ✓
+              </div>
+              {configPath && (
                 <div style={{
                   marginTop: 6, fontSize: 11, fontFamily: 'monospace', direction: 'ltr',
-                  background: 'rgba(0,0,0,0.05)', padding: '4px 8px', borderRadius: 4,
-                  color: '#166534',
+                  background: 'rgba(0,0,0,0.05)', padding: '4px 8px', borderRadius: 4, color: '#166534',
                 }}>
-                  📁 {saveResult.configPath}
-                </div>
-              )}
-              {!saveResult.ok && (
-                <div style={{ marginTop: 6, fontSize: 12, color: '#991B1B' }}>
-                  💡 تأكد من أن المستخدم <b>onesoft_app</b> تم إنشاؤه (الخطوة 6) ثم أعد المحاولة
+                  📁 {configPath}
                 </div>
               )}
             </div>
@@ -426,16 +472,16 @@ export default function Step06DatabaseMode() {
         </div>
       )}
 
+      {/* ── تحذير إن لم يكن هناك اتصال بعد ─────────────────────────────────── */}
+      {needsConnectionFields && chainStep === 'idle' && canTest && (
+        <div style={{
+          padding: '10px 14px', borderRadius: 8, fontSize: 12,
+          background: '#FFFBEB', border: '1px solid #FCD34D', color: '#92400E',
+        }}>
+          ⚠️ يجب إجراء اختبار الاتصال وحفظ الإعدادات قبل المتابعة — اضغط الزر أعلاه
+        </div>
+      )}
+
     </div>
   );
 }
-
-const btnPrimary: React.CSSProperties = {
-  background: 'linear-gradient(135deg, #406B93, #2d5070)', color: '#fff',
-  border: 'none', borderRadius: 8, padding: '10px 28px', fontSize: 13,
-  fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-};
-const btnSecondary: React.CSSProperties = {
-  background: '#fff', color: '#6B7280', border: '1px solid #D1D5DB',
-  borderRadius: 8, padding: '10px 20px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
-};

@@ -44,6 +44,7 @@ contextBridge.exposeInMainWorld('installer', {
   getConfig:     ()            => ipcRenderer.invoke('config:get'),
   saveConfig:    (cfg: unknown) => ipcRenderer.invoke('config:save', cfg),
   verifyConfig:  ()            => ipcRenderer.invoke('backend:verify-config'),
+  clearConfig:   ()            => ipcRenderer.invoke('backend:clear-config'),
 
   // Upgrade
   detectVersion: () => ipcRenderer.invoke('upgrade:detect'),

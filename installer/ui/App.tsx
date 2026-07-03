@@ -61,6 +61,7 @@ export default function App() {
     currentStep, nextStep, prevStep, addProgress,
     acceptedLicense, requirementsReport, organization, firstUser,
     installRunning, installDone, healthReport,
+    databaseMode, dbOpts, dbConfigVerified,
   } = useInstallerStore();
 
   useEffect(() => {
@@ -93,8 +94,11 @@ export default function App() {
 
   // ── حساب حالة أزرار التنقل بناءً على الخطوة الحالية ─────────────────────────
   const orgValid  = organization.name.trim() !== '';
-  // كلمة المرور اختيارية — الشرط: الاسم الكامل + اسم الدخول فقط
   const userValid = firstUser.fullName.trim().length >= 2 && firstUser.username.length >= 3;
+  // بوابة خطوة قاعدة البيانات
+  const dbStepOk = databaseMode === 'local-install'
+    ? !!dbOpts.password                // تثبيت جديد: يكفي إدخال كلمة مرور
+    : dbConfigVerified;                // موجود/بعيد: يجب اكتمال test→save→verify
 
   type NavConfig = {
     canBack: boolean;
@@ -110,8 +114,8 @@ export default function App() {
       case 2:  return { canBack: true, canNext: acceptedLicense };
       case 3:  return { canBack: true, canNext: requirementsReport?.canContinue ?? false };
       case 4:
-      case 5:
-      case 6:
+      case 5:  return { canBack: true, canNext: true };
+      case 6:  return { canBack: true, canNext: dbStepOk };   // بوابة قاعدة البيانات
       case 7:
       case 8:
       case 9:

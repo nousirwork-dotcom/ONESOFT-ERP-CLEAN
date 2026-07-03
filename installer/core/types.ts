@@ -221,6 +221,8 @@ export interface DatabaseConfig {
   name: string;
   user: string;
   password: string;
+  adminUser?: string;      // مستخدم postgres الإداري (للتحقق قبل إنشاء onesoft_app)
+  adminPassword?: string;  // كلمة مرور المستخدم الإداري
   poolMin: number;
   poolMax: number;
 }

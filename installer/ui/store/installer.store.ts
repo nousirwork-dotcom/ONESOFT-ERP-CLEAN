@@ -78,6 +78,10 @@ interface InstallerStore {
   healthReport: HealthReport | null;
   setHealthReport: (r: HealthReport) => void;
 
+  // ── بوابة خطوة قاعدة البيانات (يجب اكتمال: test → save → verify) ───────────
+  dbConfigVerified: boolean;
+  setDbConfigVerified: (v: boolean) => void;
+
   // Install phase tracking (for unified nav bar)
   installRunning: boolean;
   installDone: boolean;
@@ -202,6 +206,9 @@ export const useInstallerStore = create<InstallerStore>((set, get) => ({
 
   healthReport: null,
   setHealthReport: (r) => set({ healthReport: r }),
+
+  dbConfigVerified: false,
+  setDbConfigVerified: (v) => set({ dbConfigVerified: v }),
 
   installRunning: false,
   installDone:    false,
