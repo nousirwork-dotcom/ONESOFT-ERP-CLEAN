@@ -135,7 +135,11 @@ export async function loginHandler(req: Request, res: Response) {
 
 // ─── تسجيل الخروج ────────────────────────────────────────────────────────────
 export function logoutHandler(_req: Request, res: Response) {
-  res.clearCookie(ENV.cookieName);
+  res.clearCookie(ENV.cookieName, {
+    httpOnly: true,
+    secure: false,
+    sameSite: 'lax',
+  });
   return res.json({ success: true });
 }
 
