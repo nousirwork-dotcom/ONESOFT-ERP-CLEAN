@@ -7,13 +7,14 @@ import SalesQuotation from "./SalesQuotation";
 import SalesReturnPage from "./SalesReturnPage";
 import SalesQuotePage from "./SalesQuotePage";
 import SalesOrderPage from "./SalesOrderPage";
+import DocumentJournalsPage from "@/modules/settings/pages/DocumentJournalsPage";
 import { useTabManager } from "@/core/contexts/TabManagerContext";
 import {
   ChevronDown, ChevronRight, TrendingUp, FileText, RotateCcw,
   BarChart3, Settings, Users, ClipboardList, ShoppingCart, Tag,
   DollarSign, Receipt, Clock, Wallet, Star, Plus, Search,
   Printer, CheckCircle, RefreshCw, ArrowRight, Filter,
-  Bell, Activity, X,
+  Bell, Activity, X, BookOpen, Hash,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/core/ui/card";
 import { Button } from "@/core/ui/button";
@@ -82,6 +83,15 @@ const menuSections = [
       { id: "sales-totals-reports",      label: "تقارير إجماليات المبيعات",                   icon: TrendingUp, path: "/sales/totals-reports" },
       { id: "sales-invoices-report",     label: "تقرير فواتير ومردودات المبيعات خلال فترة",   icon: FileText,   path: "/sales/invoices-report" },
       { id: "sales-items-reports",       label: "تقارير أصناف المبيعات",                      icon: BarChart3,  path: "/sales/items-reports" },
+    ],
+  },
+  {
+    id: "settings",
+    label: "الإعدادات",
+    icon: Settings,
+    children: [
+      { id: "sales-journals",  label: "دفاتر المبيعات",  icon: BookOpen, path: "/sales/journals" },
+      { id: "sales-coding",    label: "تكويد المبيعات",  icon: Hash,     path: "/sales/coding"   },
     ],
   },
 ];
@@ -2668,6 +2678,111 @@ function SalesInvoiceListView() {
 
 // ─── Content Router ────────────────────────────────────────────────────────────
 
+// ── دفاتر المبيعات — يعرض DocumentJournalsPage مباشرة داخل وحدة المبيعات ──────
+function SalesJournalsView() {
+  return (
+    <div dir="rtl" style={{ height: "100%", overflow: "auto" }}>
+      <DocumentJournalsPage />
+    </div>
+  );
+}
+
+// ── تكويد المبيعات — يعرض تكويد الدفاتر (الأرقام والبادئات) ───────────────────
+function SalesCodingView() {
+  const { data: journals = [], isLoading } = trpc.documentJournals.list.useQuery(
+    { docType: "sales_invoice" } as any
+  );
+  const { data: returnJournals = [] } = trpc.documentJournals.list.useQuery(
+    { docType: "sales_return" } as any
+  );
+  const { data: orderJournals = [] } = trpc.documentJournals.list.useQuery(
+    { docType: "sales_order" } as any
+  );
+  const { data: quoteJournals = [] } = trpc.documentJournals.list.useQuery(
+    { docType: "sales_quote" } as any
+  );
+
+  const allJournals = [
+    ...journals.map((j: any)       => ({ ...j, typeName: "فاتورة مبيعات" })),
+    ...returnJournals.map((j: any) => ({ ...j, typeName: "مردود مبيعات" })),
+    ...orderJournals.map((j: any)  => ({ ...j, typeName: "أمر بيع" })),
+    ...quoteJournals.map((j: any)  => ({ ...j, typeName: "عرض سعر" })),
+  ];
+
+  return (
+    <div dir="rtl" style={{ padding: "16px 20px", fontFamily: "'Cairo', Tahoma, sans-serif" }}>
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 16, fontWeight: 800, color: "#1E344F" }}>📋 تكويد المبيعات</div>
+        <div style={{ fontSize: 12, color: "#6B7280", marginTop: 4 }}>
+          بادئات الترقيم المستخدمة في دفاتر المبيعات — لتعديلها اذهب إلى <b>دفاتر المبيعات</b>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div style={{ color: "#9CA3AF", fontSize: 13 }}>جارٍ التحميل...</div>
+      ) : allJournals.length === 0 ? (
+        <div style={{
+          padding: "32px 20px", textAlign: "center", borderRadius: 10,
+          border: "2px dashed #E5E7EB", color: "#9CA3AF", fontSize: 13,
+        }}>
+          <BookOpen style={{ width: 32, height: 32, color: "#D1D5DB", marginBottom: 8 }} />
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>لا توجد دفاتر مبيعات محددة</div>
+          <div style={{ fontSize: 12 }}>انتقل إلى <b>دفاتر المبيعات</b> لإضافة دفاتر وتحديد بادئات الترقيم</div>
+        </div>
+      ) : (
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead>
+            <tr style={{ background: "#F3F4F6" }}>
+              {["نوع المستند", "اسم الدفتر", "البادئة (Prefix)", "الرقم الحالي", "الوصف"].map(h => (
+                <th key={h} style={{
+                  padding: "8px 12px", textAlign: "right",
+                  color: "#6B7280", fontWeight: 600, fontSize: 12,
+                  borderBottom: "1px solid #E5E7EB", whiteSpace: "nowrap",
+                }}>
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {allJournals.map((j: any) => (
+              <tr key={j.id} style={{ borderBottom: "1px solid #F3F4F6" }}
+                onMouseEnter={e => (e.currentTarget.style.background = "#F9FAFB")}
+                onMouseLeave={e => (e.currentTarget.style.background = "")}
+              >
+                <td style={{ padding: "8px 12px" }}>
+                  <span style={{
+                    padding: "2px 8px", borderRadius: 10, fontSize: 11,
+                    background: "#EFF6FF", color: "#2563EB", fontWeight: 600,
+                  }}>
+                    {j.typeName}
+                  </span>
+                </td>
+                <td style={{ padding: "8px 12px", fontWeight: 600, color: "#111827" }}>{j.name}</td>
+                <td style={{ padding: "8px 12px" }}>
+                  <span style={{
+                    fontFamily: "monospace", fontSize: 13, fontWeight: 700,
+                    color: "#7C3AED", background: "#F5F3FF",
+                    padding: "2px 8px", borderRadius: 6,
+                  }}>
+                    {j.numberPrefix || "—"}
+                  </span>
+                </td>
+                <td style={{ padding: "8px 12px", color: "#374151", fontFamily: "monospace" }}>
+                  {j.currentNumber ?? "1"}
+                </td>
+                <td style={{ padding: "8px 12px", color: "#6B7280", fontSize: 12 }}>
+                  {j.description || "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
 function SalesContent({ activeId, onSelect, settings, onSettingsChange }: {
   activeId: MenuId;
   onSelect: (id: MenuId) => void;
@@ -2696,6 +2811,8 @@ function SalesContent({ activeId, onSelect, settings, onSettingsChange }: {
     case "sales-totals-reports":   return <SalesTotalsReports />;
     case "sales-invoices-report":  return <SalesInvoicesReport />;
     case "sales-items-reports":    return <ComingSoon title="تقارير أصناف المبيعات" />;
+    case "sales-journals":         return <SalesJournalsView />;
+    case "sales-coding":           return <SalesCodingView />;
     default:                      return <SalesOverview onSelect={onSelect} />;
   }
 }
