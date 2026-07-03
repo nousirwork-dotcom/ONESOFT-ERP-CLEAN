@@ -77,7 +77,6 @@ import SettingsModule, {
 import PostingSettingsPage from "@/modules/accounting/pages/PostingSettingsPage";
 import PostingOperationsPage from "@/modules/accounting/pages/PostingOperationsPage";
 import LoginPage from "@/core/auth/LoginPage";
-import SuperAdminPage from "@/core/admin/SuperAdminPage";
 import SourceCodeViewerPage from "@/core/dev/SourceCodeViewerPage";
 import FirstRunWizard from "@/core/auth/FirstRunWizard";
 import { createElement, useEffect, useState } from "react";
@@ -342,9 +341,6 @@ function AppRoutes() {
 
   return (
     <Switch>
-      {user?.role === 'superadmin' && (
-        <Route path="/superadmin" component={SuperAdminPage} />
-      )}
       <Route>
         <TabManagerProvider>
           <DashboardLayout>
