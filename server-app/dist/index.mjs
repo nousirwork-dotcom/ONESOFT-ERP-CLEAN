@@ -1298,8 +1298,8 @@ var require_node = __commonJS({
           }
           break;
         case "FILE":
-          var fs6 = __require("fs");
-          stream2 = new fs6.SyncWriteStream(fd2, { autoClose: false });
+          var fs8 = __require("fs");
+          stream2 = new fs8.SyncWriteStream(fd2, { autoClose: false });
           stream2._type = "fs";
           break;
         case "PIPE":
@@ -19294,7 +19294,7 @@ var require_view = __commonJS({
     "use strict";
     var debug = require_src()("express:view");
     var path8 = __require("path");
-    var fs6 = __require("fs");
+    var fs8 = __require("fs");
     var dirname = path8.dirname;
     var basename = path8.basename;
     var extname = path8.extname;
@@ -19360,7 +19360,7 @@ var require_view = __commonJS({
     function tryStat(path9) {
       debug('stat "%s"', path9);
       try {
-        return fs6.statSync(path9);
+        return fs8.statSync(path9);
       } catch (e) {
         return void 0;
       }
@@ -19715,7 +19715,7 @@ var require_types = __commonJS({
 var require_mime = __commonJS({
   "node_modules/.pnpm/mime@1.6.0/node_modules/mime/mime.js"(exports, module) {
     var path8 = __require("path");
-    var fs6 = __require("fs");
+    var fs8 = __require("fs");
     function Mime() {
       this.types = /* @__PURE__ */ Object.create(null);
       this.extensions = /* @__PURE__ */ Object.create(null);
@@ -19736,7 +19736,7 @@ var require_mime = __commonJS({
     };
     Mime.prototype.load = function(file2) {
       this._loading = file2;
-      var map2 = {}, content = fs6.readFileSync(file2, "ascii"), lines = content.split(/[\r\n]+/);
+      var map2 = {}, content = fs8.readFileSync(file2, "ascii"), lines = content.split(/[\r\n]+/);
       lines.forEach(function(line2) {
         var fields = line2.replace(/\s*#.*|^\s*|\s*$/g, "").split(/\s+/);
         map2[fields.shift()] = fields;
@@ -19974,7 +19974,7 @@ var require_send = __commonJS({
     var escapeHtml = require_escape_html();
     var etag = require_etag();
     var fresh = require_fresh();
-    var fs6 = __require("fs");
+    var fs8 = __require("fs");
     var mime = require_mime();
     var ms = require_ms2();
     var onFinished = require_on_finished();
@@ -20307,7 +20307,7 @@ var require_send = __commonJS({
       var i = 0;
       var self2 = this;
       debug('stat "%s"', path9);
-      fs6.stat(path9, function onstat(err, stat) {
+      fs8.stat(path9, function onstat(err, stat) {
         if (err && err.code === "ENOENT" && !extname(path9) && path9[path9.length - 1] !== sep) {
           return next(err);
         }
@@ -20322,7 +20322,7 @@ var require_send = __commonJS({
         }
         var p = path9 + "." + self2._extensions[i++];
         debug('stat "%s"', p);
-        fs6.stat(p, function(err2, stat) {
+        fs8.stat(p, function(err2, stat) {
           if (err2) return next(err2);
           if (stat.isDirectory()) return next();
           self2.emit("file", p, stat);
@@ -20340,7 +20340,7 @@ var require_send = __commonJS({
         }
         var p = join(path9, self2._index[i]);
         debug('stat "%s"', p);
-        fs6.stat(p, function(err2, stat) {
+        fs8.stat(p, function(err2, stat) {
           if (err2) return next(err2);
           if (stat.isDirectory()) return next();
           self2.emit("file", p, stat);
@@ -20352,7 +20352,7 @@ var require_send = __commonJS({
     SendStream.prototype.stream = function stream(path9, options) {
       var self2 = this;
       var res = this.res;
-      var stream2 = fs6.createReadStream(path9, options);
+      var stream2 = fs8.createReadStream(path9, options);
       this.emit("stream", stream2);
       stream2.pipe(res);
       function cleanup() {
@@ -23823,7 +23823,7 @@ var require_package = __commonJS({
 // node_modules/.pnpm/dotenv@16.6.1/node_modules/dotenv/lib/main.js
 var require_main = __commonJS({
   "node_modules/.pnpm/dotenv@16.6.1/node_modules/dotenv/lib/main.js"(exports, module) {
-    var fs6 = __require("fs");
+    var fs8 = __require("fs");
     var path8 = __require("path");
     var os = __require("os");
     var crypto2 = __require("crypto");
@@ -23932,7 +23932,7 @@ var require_main = __commonJS({
       if (options && options.path && options.path.length > 0) {
         if (Array.isArray(options.path)) {
           for (const filepath of options.path) {
-            if (fs6.existsSync(filepath)) {
+            if (fs8.existsSync(filepath)) {
               possibleVaultPath = filepath.endsWith(".vault") ? filepath : `${filepath}.vault`;
             }
           }
@@ -23942,7 +23942,7 @@ var require_main = __commonJS({
       } else {
         possibleVaultPath = path8.resolve(process.cwd(), ".env.vault");
       }
-      if (fs6.existsSync(possibleVaultPath)) {
+      if (fs8.existsSync(possibleVaultPath)) {
         return possibleVaultPath;
       }
       return null;
@@ -23991,7 +23991,7 @@ var require_main = __commonJS({
       const parsedAll = {};
       for (const path9 of optionPaths) {
         try {
-          const parsed = DotenvModule.parse(fs6.readFileSync(path9, { encoding }));
+          const parsed = DotenvModule.parse(fs8.readFileSync(path9, { encoding }));
           DotenvModule.populate(parsedAll, parsed, options);
         } catch (e) {
           if (debug) {
@@ -24113,23 +24113,137 @@ var require_main = __commonJS({
 // src/env.ts
 import path from "path";
 import { fileURLToPath } from "url";
-var import_dotenv, __dirname, ENV;
+import fs from "fs";
+function loadConfig() {
+  const isProduction = (process.env["NODE_ENV"] ?? "development") === "production";
+  const configExists = fs.existsSync(CONFIG_PATH);
+  if (configExists) {
+    let raw;
+    try {
+      raw = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8"));
+    } catch (e) {
+      const msg = `[OneSoft] \u274C \u0645\u0644\u0641 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0645\u0648\u062C\u0648\u062F \u0644\u0643\u0646 \u062A\u0639\u0630\u0651\u0631 \u0642\u0631\u0627\u0621\u062A\u0647 (JSON \u062E\u0627\u0637\u0626): ${CONFIG_PATH}
+${e}`;
+      if (isProduction) {
+        console.error(msg);
+        process.exit(1);
+      }
+      console.warn(msg + "\n[OneSoft] \u0627\u0644\u0631\u062C\u0648\u0639 \u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0627\u0644\u062A\u0637\u0648\u064A\u0631...");
+      return devFallback(configExists);
+    }
+    const db2 = raw["database"];
+    const srv = raw["server"];
+    const host = String(db2?.["host"] ?? "");
+    const pgPort = Number(db2?.["port"] ?? 5432);
+    const dbName = String(db2?.["name"] ?? "onesoft_erp");
+    const user = String(db2?.["user"] ?? "");
+    const password = String(db2?.["password"] ?? "");
+    const bPort = Number(srv?.["backendPort"] ?? 3e3);
+    const fPort = Number(srv?.["frontendPort"] ?? 5e3);
+    if (!host || !user) {
+      const msg = `[OneSoft] \u274C config.json \u0646\u0627\u0642\u0635: host="${host}" user="${user}" \u2014 \u062A\u062D\u0642\u0642 \u0645\u0646 \u0627\u0644\u0645\u0644\u0641: ${CONFIG_PATH}`;
+      if (isProduction) {
+        console.error(msg);
+        process.exit(1);
+      }
+      console.warn(msg + "\n[OneSoft] \u0627\u0644\u0631\u062C\u0648\u0639 \u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0627\u0644\u062A\u0637\u0648\u064A\u0631...");
+      return devFallback(configExists);
+    }
+    const dbUrl = `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${pgPort}/${dbName}`;
+    return {
+      dbUrl,
+      host,
+      pgPort,
+      user,
+      dbName,
+      passwordLen: password.length,
+      backendPort: bPort,
+      frontendPort: fPort,
+      source: CONFIG_PATH,
+      urlSource: "config.json",
+      configExists: true
+    };
+  }
+  if (isProduction) {
+    console.error("");
+    console.error("\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557");
+    console.error("\u2551  [OneSoft] \u274C FATAL: \u0645\u0644\u0641 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0641\u064A \u0648\u0636\u0639 \u0627\u0644\u0625\u0646\u062A\u0627\u062C       \u2551");
+    console.error(`\u2551  \u0627\u0644\u0645\u0633\u0627\u0631 \u0627\u0644\u0645\u0637\u0644\u0648\u0628: ${CONFIG_PATH}`);
+    console.error("\u2551  \u0644\u0627 \u064A\u0645\u0643\u0646 \u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u062E\u0627\u062F\u0645 \u0628\u062F\u0648\u0646 \u0647\u0630\u0627 \u0627\u0644\u0645\u0644\u0641.                              \u2551");
+    console.error("\u2551  \u0627\u0644\u062D\u0644: \u0623\u0639\u062F \u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u0645\u062B\u0628\u0651\u062A \u0623\u0648 \u0623\u0646\u0634\u0626 \u0627\u0644\u0645\u0644\u0641 \u064A\u062F\u0648\u064A\u0627\u064B.                    \u2551");
+    console.error("\u255A\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255D");
+    console.error("");
+    process.exit(1);
+  }
+  return devFallback(false);
+}
+function devFallback(configExists) {
+  const urlFromEnv = process.env["DATABASE_URL"];
+  const dbUrl = urlFromEnv ?? "postgresql://postgres:postgres@localhost:5432/onesoft_erp";
+  const urlSource = urlFromEnv ? "DATABASE_URL (env)" : "built-in default (dev)";
+  let host = "localhost", pgPort = 5432, user = "postgres", dbName = "onesoft_erp", passwordLen = 0;
+  try {
+    const u = new URL(dbUrl);
+    host = u.hostname;
+    pgPort = Number(u.port) || 5432;
+    user = u.username;
+    dbName = u.pathname.replace("/", "");
+    passwordLen = decodeURIComponent(u.password).length;
+  } catch {
+  }
+  return {
+    dbUrl,
+    host,
+    pgPort,
+    user,
+    dbName,
+    passwordLen,
+    backendPort: parseInt(process.env["PORT"] ?? "3000"),
+    frontendPort: 5e3,
+    source: configExists ? `${CONFIG_PATH} (\u0642\u0631\u0627\u0621\u0629 \u0641\u0627\u0634\u0644\u0629)` : `${CONFIG_PATH} (\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F)`,
+    urlSource,
+    configExists
+  };
+}
+var import_dotenv, __dirname, CONFIG_PATH, _cfg, ENV;
 var init_env = __esm({
   "src/env.ts"() {
     import_dotenv = __toESM(require_main(), 1);
     __dirname = path.dirname(fileURLToPath(import.meta.url));
     import_dotenv.default.config({ path: path.join(__dirname, "..", ".env") });
+    CONFIG_PATH = process.env["ONESOFT_CONFIG"] ?? (process.platform === "win32" ? "C:\\ProgramData\\OneSoft\\config\\onesoft.config.json" : path.join(process.env["HOME"] ?? "/tmp", ".onesoft", "config", "onesoft.config.json"));
+    _cfg = loadConfig();
+    console.log("");
+    console.log("======== OneSoft Startup ========");
+    console.log(`Configuration Source : ${_cfg.source}`);
+    console.log(`Config Exists        : ${_cfg.configExists}`);
+    console.log(`Database Host        : ${_cfg.host}`);
+    console.log(`Database Port        : ${_cfg.pgPort}`);
+    console.log(`Database User        : ${_cfg.user}`);
+    console.log(`Database Name        : ${_cfg.dbName}`);
+    console.log(`Password Length      : ${_cfg.passwordLen} chars`);
+    console.log(`Backend Port         : ${_cfg.backendPort}`);
+    console.log(`Frontend Port        : ${_cfg.frontendPort}`);
+    console.log(`DATABASE_URL Source  : ${_cfg.urlSource}`);
+    console.log("=================================");
+    console.log("");
     ENV = {
-      port: parseInt(process.env.PORT || "3737"),
-      nodeEnv: process.env.NODE_ENV || "development",
-      dbUrl: process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5432/onesoft_erp",
-      dbType: process.env.DB_TYPE || "postgresql",
-      jwtSecret: process.env.JWT_SECRET || "onesoft-erp-secret-2024",
-      backupDir: process.env.BACKUP_DIR || "",
-      logDir: process.env.LOG_DIR || "",
-      isElectron: process.env.ELECTRON_MODE === "1",
+      port: _cfg.backendPort,
+      nodeEnv: process.env["NODE_ENV"] ?? "development",
+      dbUrl: _cfg.dbUrl,
+      dbType: process.env["DB_TYPE"] ?? "postgresql",
+      jwtSecret: process.env["JWT_SECRET"] ?? "onesoft-erp-secret-2024",
+      backupDir: process.env["BACKUP_DIR"] ?? "",
+      logDir: process.env["LOG_DIR"] ?? "",
+      isElectron: process.env["ELECTRON_MODE"] === "1",
       cookieName: "onesoft_session",
-      sessionExpiry: 30 * 24 * 60 * 60 * 1e3
+      sessionExpiry: 30 * 24 * 60 * 60 * 1e3,
+      // معلومات تشخيصية إضافية
+      configSource: _cfg.source,
+      configExists: _cfg.configExists,
+      dbUser: _cfg.user,
+      dbHost: _cfg.host,
+      dbName: _cfg.dbName
     };
   }
 });
@@ -30386,15 +30500,15 @@ var require_pg_connection_string = __commonJS({
       if (config2.sslcert || config2.sslkey || config2.sslrootcert || config2.sslmode) {
         config2.ssl = {};
       }
-      const fs6 = config2.sslcert || config2.sslkey || config2.sslrootcert ? __require("fs") : null;
+      const fs8 = config2.sslcert || config2.sslkey || config2.sslrootcert ? __require("fs") : null;
       if (config2.sslcert) {
-        config2.ssl.cert = fs6.readFileSync(config2.sslcert).toString();
+        config2.ssl.cert = fs8.readFileSync(config2.sslcert).toString();
       }
       if (config2.sslkey) {
-        config2.ssl.key = fs6.readFileSync(config2.sslkey).toString();
+        config2.ssl.key = fs8.readFileSync(config2.sslkey).toString();
       }
       if (config2.sslrootcert) {
-        config2.ssl.ca = fs6.readFileSync(config2.sslrootcert).toString();
+        config2.ssl.ca = fs8.readFileSync(config2.sslrootcert).toString();
       }
       if (options.useLibpqCompat && config2.uselibpqcompat) {
         throw new Error("Both useLibpqCompat and uselibpqcompat are set. Please use only one of them.");
@@ -32331,15 +32445,15 @@ var require_lib5 = __commonJS({
   "node_modules/.pnpm/pgpass@1.0.5/node_modules/pgpass/lib/index.js"(exports, module) {
     "use strict";
     var path8 = __require("path");
-    var fs6 = __require("fs");
+    var fs8 = __require("fs");
     var helper = require_helper();
     module.exports = function(connInfo, cb) {
       var file2 = helper.getFileName();
-      fs6.stat(file2, function(err, stat) {
+      fs8.stat(file2, function(err, stat) {
         if (err || !helper.usePgPass(stat, file2)) {
           return cb(void 0);
         }
-        var st = fs6.createReadStream(file2);
+        var st = fs8.createReadStream(file2);
         helper.getPassword(connInfo, st, cb);
       });
     };
@@ -43784,8 +43898,15 @@ async function loginHandler(req, res) {
     return res.status(500).json({ error: "\u062E\u0637\u0623 \u0641\u064A \u0627\u0644\u062E\u0627\u062F\u0645" });
   }
 }
-function logoutHandler(_req, res) {
-  res.clearCookie(ENV.cookieName);
+function logoutHandler(req, res) {
+  res.clearCookie(ENV.cookieName, {
+    httpOnly: true,
+    secure: false,
+    sameSite: "lax"
+  });
+  if (req.method === "GET") {
+    return res.redirect("/");
+  }
   return res.json({ success: true });
 }
 async function meHandler(req, res) {
@@ -46645,16 +46766,18 @@ function createExpressMiddleware(opts) {
 init_env();
 import path7 from "path";
 import { fileURLToPath as fileURLToPath7 } from "url";
+import fs7 from "fs";
+import { spawnSync as spawnSync2 } from "child_process";
 
 // src/logger.ts
 import path2 from "path";
-import fs from "fs";
+import fs2 from "fs";
 import { fileURLToPath as fileURLToPath2 } from "url";
 var __dirname2 = path2.dirname(fileURLToPath2(import.meta.url));
 var LOG_DIR = process.env.LOG_DIR ?? path2.join(__dirname2, "..", "..", "logs");
-if (!fs.existsSync(LOG_DIR)) {
+if (!fs2.existsSync(LOG_DIR)) {
   try {
-    fs.mkdirSync(LOG_DIR, { recursive: true });
+    fs2.mkdirSync(LOG_DIR, { recursive: true });
   } catch {
   }
 }
@@ -46684,7 +46807,7 @@ function write(level, module, msg, data) {
   console.log(`${color}[${level}]${RESET} ${ts.slice(11, 19)} [${module}] ${msg}${data !== void 0 ? " " + JSON.stringify(data) : ""}`);
   const logFile = path2.join(LOG_DIR, `onesoft-${date6}.log`);
   try {
-    fs.appendFileSync(logFile, entry + "\n");
+    fs2.appendFileSync(logFile, entry + "\n");
   } catch {
   }
   if (level === "INFO" && Math.random() < 0.01) pruneOldLogs();
@@ -46692,9 +46815,9 @@ function write(level, module, msg, data) {
 function pruneOldLogs() {
   try {
     const cutoff = Date.now() - 30 * 24 * 36e5;
-    fs.readdirSync(LOG_DIR).filter((f) => f.startsWith("onesoft-") && f.endsWith(".log")).forEach((f) => {
+    fs2.readdirSync(LOG_DIR).filter((f) => f.startsWith("onesoft-") && f.endsWith(".log")).forEach((f) => {
       const fp = path2.join(LOG_DIR, f);
-      if (fs.statSync(fp).mtimeMs < cutoff) fs.unlinkSync(fp);
+      if (fs2.statSync(fp).mtimeMs < cutoff) fs2.unlinkSync(fp);
     });
   } catch {
   }
@@ -65293,7 +65416,7 @@ var zatcaRouter = router({
 });
 
 // src/routers/sourceCode.ts
-import fs2 from "fs";
+import fs3 from "fs";
 import path3 from "path";
 import { fileURLToPath as fileURLToPath3 } from "url";
 var __dirname3 = path3.dirname(fileURLToPath3(import.meta.url));
@@ -65318,7 +65441,7 @@ var LANG_MAP = {
 function buildTree(dir, relBase) {
   let entries;
   try {
-    entries = fs2.readdirSync(dir, { withFileTypes: true });
+    entries = fs3.readdirSync(dir, { withFileTypes: true });
   } catch {
     return [];
   }
@@ -65333,7 +65456,7 @@ function buildTree(dir, relBase) {
       const ext = e.name.split(".").pop() ?? "";
       let size = 0;
       try {
-        size = fs2.statSync(fullPath).size;
+        size = fs3.statSync(fullPath).size;
       } catch {
       }
       nodes.push({ name: e.name, path: relPath, type: "file", ext, size });
@@ -65371,13 +65494,13 @@ var sourceCodeRouter = router({
     const fullPath = path3.join(ROOT, input.filePath);
     let stat;
     try {
-      stat = fs2.statSync(fullPath);
+      stat = fs3.statSync(fullPath);
     } catch {
       throw new Error("\u0627\u0644\u0645\u0644\u0641 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F");
     }
     if (!stat.isFile()) throw new Error("\u0644\u064A\u0633 \u0645\u0644\u0641\u0627\u064B");
     if (stat.size > MAX_FILE_SIZE) return { content: `/* \u0627\u0644\u0645\u0644\u0641 \u0643\u0628\u064A\u0631 \u062C\u062F\u0627\u064B (${Math.round(stat.size / 1024)} KB) */`, lang: "text", lines: 0, size: stat.size };
-    const content = fs2.readFileSync(fullPath, "utf-8");
+    const content = fs3.readFileSync(fullPath, "utf-8");
     const ext = input.filePath.split(".").pop() ?? "";
     const lang = LANG_MAP[ext] ?? "text";
     return { content, lang, lines: content.split("\n").length, size: stat.size };
@@ -65392,7 +65515,7 @@ var sourceCodeRouter = router({
     function scanDir(dir, rel) {
       let entries;
       try {
-        entries = fs2.readdirSync(dir, { withFileTypes: true });
+        entries = fs3.readdirSync(dir, { withFileTypes: true });
       } catch {
         return;
       }
@@ -65407,9 +65530,9 @@ var sourceCodeRouter = router({
         if (!e.isFile()) continue;
         let content = "";
         try {
-          const stat = fs2.statSync(fp);
+          const stat = fs3.statSync(fp);
           if (stat.size > 200 * 1024) continue;
-          content = fs2.readFileSync(fp, "utf-8");
+          content = fs3.readFileSync(fp, "utf-8");
         } catch {
           continue;
         }
@@ -65429,7 +65552,7 @@ var sourceCodeRouter = router({
 
 // src/routers/backup.ts
 init_env();
-import fs3 from "fs";
+import fs4 from "fs";
 import path4 from "path";
 import { spawnSync } from "child_process";
 import { fileURLToPath as fileURLToPath4 } from "url";
@@ -65442,7 +65565,7 @@ function getBackupDir() {
 }
 function ensureBackupDir() {
   const dir = getBackupDir();
-  if (!fs3.existsSync(dir)) fs3.mkdirSync(dir, { recursive: true });
+  if (!fs4.existsSync(dir)) fs4.mkdirSync(dir, { recursive: true });
   return dir;
 }
 function makeFileName(prefix = "backup") {
@@ -65452,10 +65575,10 @@ function makeFileName(prefix = "backup") {
 }
 function listBackups() {
   const dir = getBackupDir();
-  if (!fs3.existsSync(dir)) return [];
-  return fs3.readdirSync(dir).filter((f) => f.endsWith(".sql") || f.endsWith(".dump") || f.endsWith(".zip")).map((f) => {
+  if (!fs4.existsSync(dir)) return [];
+  return fs4.readdirSync(dir).filter((f) => f.endsWith(".sql") || f.endsWith(".dump") || f.endsWith(".zip")).map((f) => {
     const fp = path4.join(dir, f);
-    const stat = fs3.statSync(fp);
+    const stat = fs4.statSync(fp);
     return {
       name: f,
       path: fp,
@@ -65540,7 +65663,7 @@ var backupRouter = router({
     logger.info("backup", `creating backup: ${file2}`);
     try {
       dumpPostgres(file2);
-      const stat = fs3.statSync(file2);
+      const stat = fs4.statSync(file2);
       logger.info("backup", `backup created: ${file2} (${formatSize(stat.size)})`);
       return { ok: true, name: path4.basename(file2), size: stat.size, sizeStr: formatSize(stat.size) };
     } catch (err) {
@@ -65552,7 +65675,7 @@ var backupRouter = router({
     if (ctx.user?.role !== "superadmin") throw new Error("\u064A\u062A\u0637\u0644\u0628 \u0635\u0644\u0627\u062D\u064A\u0629 \u0627\u0644\u0645\u062F\u064A\u0631 \u0627\u0644\u0639\u0627\u0645");
     const dir = getBackupDir();
     const file2 = path4.join(dir, input.name);
-    if (!fs3.existsSync(file2)) throw new Error("\u0627\u0644\u0645\u0644\u0641 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F");
+    if (!fs4.existsSync(file2)) throw new Error("\u0627\u0644\u0645\u0644\u0641 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F");
     if (!file2.startsWith(dir)) throw new Error("\u0645\u0633\u0627\u0631 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D");
     logger.warn("backup", `restoring from: ${file2}`);
     try {
@@ -65569,29 +65692,29 @@ var backupRouter = router({
     const dir = getBackupDir();
     const file2 = path4.join(dir, input.name);
     if (!file2.startsWith(dir)) throw new Error("\u0645\u0633\u0627\u0631 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D");
-    if (!fs3.existsSync(file2)) throw new Error("\u0627\u0644\u0645\u0644\u0641 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F");
-    fs3.unlinkSync(file2);
+    if (!fs4.existsSync(file2)) throw new Error("\u0627\u0644\u0645\u0644\u0641 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F");
+    fs4.unlinkSync(file2);
     logger.info("backup", `deleted: ${file2}`);
     return { ok: true };
   }),
   getLogs: protectedProcedure.input(external_exports.object({ lines: external_exports.number().min(10).max(1e3).default(200) })).query(async ({ ctx, input }) => {
     if (ctx.user?.role !== "superadmin" && ctx.user?.role !== "admin") throw new Error("\u063A\u064A\u0631 \u0645\u0635\u0631\u062D");
     const logDir = process.env.LOG_DIR ?? path4.join(ROOT2, "logs");
-    if (!fs3.existsSync(logDir)) return { lines: [], dir: logDir };
+    if (!fs4.existsSync(logDir)) return { lines: [], dir: logDir };
     const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     const logFile = path4.join(logDir, `onesoft-${today}.log`);
-    if (!fs3.existsSync(logFile)) return { lines: [], dir: logDir, file: logFile };
-    const content = fs3.readFileSync(logFile, "utf-8");
+    if (!fs4.existsSync(logFile)) return { lines: [], dir: logDir, file: logFile };
+    const content = fs4.readFileSync(logFile, "utf-8");
     const lines = content.split("\n").filter(Boolean).slice(-input.lines);
     return { lines, dir: logDir, file: logFile };
   }),
   getLogFiles: protectedProcedure.query(async ({ ctx }) => {
     if (ctx.user?.role !== "superadmin" && ctx.user?.role !== "admin") throw new Error("\u063A\u064A\u0631 \u0645\u0635\u0631\u062D");
     const logDir = process.env.LOG_DIR ?? path4.join(ROOT2, "logs");
-    if (!fs3.existsSync(logDir)) return [];
-    return fs3.readdirSync(logDir).filter((f) => f.endsWith(".log")).map((f) => {
+    if (!fs4.existsSync(logDir)) return [];
+    return fs4.readdirSync(logDir).filter((f) => f.endsWith(".log")).map((f) => {
       const fp = path4.join(logDir, f);
-      const stat = fs3.statSync(fp);
+      const stat = fs4.statSync(fp);
       return { name: f, size: stat.size, sizeStr: formatSize(stat.size), mtime: stat.mtime.toISOString() };
     }).sort((a, b) => b.mtime.localeCompare(a.mtime));
   })
@@ -65603,7 +65726,7 @@ init_schema2();
 init_auth();
 init_env();
 init_drizzle_orm();
-import fs4 from "fs";
+import fs5 from "fs";
 import path5 from "path";
 import { fileURLToPath as fileURLToPath5 } from "url";
 import process3 from "process";
@@ -65611,7 +65734,7 @@ var __dirname5 = path5.dirname(fileURLToPath5(import.meta.url));
 var ROOT3 = path5.resolve(__dirname5, "..", "..", "..");
 function getAppVersion() {
   try {
-    const pkg = JSON.parse(fs4.readFileSync(path5.join(__dirname5, "..", "..", "package.json"), "utf-8"));
+    const pkg = JSON.parse(fs5.readFileSync(path5.join(__dirname5, "..", "..", "package.json"), "utf-8"));
     return pkg.version ?? "1.0.0";
   } catch {
     return "1.0.0";
@@ -65630,10 +65753,10 @@ async function getPgVersion() {
 }
 function getLastBackupInfo() {
   const dir = process3.env.BACKUP_DIR || path5.join(ROOT3, "backups");
-  if (!fs4.existsSync(dir)) return { date: null, count: 0 };
-  const files = fs4.readdirSync(dir).filter((f) => f.endsWith(".sql") || f.endsWith(".dump"));
+  if (!fs5.existsSync(dir)) return { date: null, count: 0 };
+  const files = fs5.readdirSync(dir).filter((f) => f.endsWith(".sql") || f.endsWith(".dump"));
   if (!files.length) return { date: null, count: 0 };
-  const last = files.map((f) => fs4.statSync(path5.join(dir, f)).mtime).sort((a, b) => b.getTime() - a.getTime())[0];
+  const last = files.map((f) => fs5.statSync(path5.join(dir, f)).mtime).sort((a, b) => b.getTime() - a.getTime())[0];
   return { date: last?.toISOString() ?? null, count: files.length };
 }
 async function isFirstRun() {
@@ -65793,15 +65916,15 @@ var setupRouter = router({
 
 // src/routers/updates.ts
 import path6 from "path";
-import fs5 from "fs";
+import fs6 from "fs";
 import { fileURLToPath as fileURLToPath6 } from "url";
 var __dirname6 = path6.dirname(fileURLToPath6(import.meta.url));
 var ROOT_DIR = path6.join(__dirname6, "..", "..", "..");
 function readVersionFile() {
   try {
     const vPath = path6.join(ROOT_DIR, "version.json");
-    if (fs5.existsSync(vPath)) {
-      return JSON.parse(fs5.readFileSync(vPath, "utf-8"));
+    if (fs6.existsSync(vPath)) {
+      return JSON.parse(fs6.readFileSync(vPath, "utf-8"));
     }
   } catch {
   }
@@ -65817,8 +65940,8 @@ function readVersionFile() {
 var UPDATE_LOG_PATH = path6.join(ROOT_DIR, "logs", "updates.json");
 function readUpdateLog() {
   try {
-    if (fs5.existsSync(UPDATE_LOG_PATH)) {
-      return JSON.parse(fs5.readFileSync(UPDATE_LOG_PATH, "utf-8"));
+    if (fs6.existsSync(UPDATE_LOG_PATH)) {
+      return JSON.parse(fs6.readFileSync(UPDATE_LOG_PATH, "utf-8"));
     }
   } catch {
   }
@@ -65829,8 +65952,8 @@ function appendUpdateLog(entry) {
     const log = readUpdateLog();
     log.unshift(entry);
     const dir = path6.dirname(UPDATE_LOG_PATH);
-    if (!fs5.existsSync(dir)) fs5.mkdirSync(dir, { recursive: true });
-    fs5.writeFileSync(UPDATE_LOG_PATH, JSON.stringify(log.slice(0, 50), null, 2));
+    if (!fs6.existsSync(dir)) fs6.mkdirSync(dir, { recursive: true });
+    fs6.writeFileSync(UPDATE_LOG_PATH, JSON.stringify(log.slice(0, 50), null, 2));
   } catch {
   }
 }
@@ -67988,6 +68111,7 @@ app.use(import_express.default.json({ limit: "10mb" }));
 app.use(import_express.default.urlencoded({ extended: true }));
 app.post("/api/auth/login", loginHandler);
 app.post("/api/auth/logout", logoutHandler);
+app.get("/api/auth/logout", logoutHandler);
 app.get("/api/auth/me", meHandler);
 app.post("/api/auth/auto-login", async (_req, res) => {
   try {
@@ -68013,6 +68137,85 @@ app.get("/api/health", (_req, res) => res.json({
   electron: ENV.isElectron,
   ts: (/* @__PURE__ */ new Date()).toISOString()
 }));
+app.get("/api/system/status", async (req, res) => {
+  const { getUserFromRequest: getUserFromRequest2 } = await Promise.resolve().then(() => (init_auth(), auth_exports));
+  const user = await getUserFromRequest2(req);
+  if (!user) return res.status(401).json({ error: "\u064A\u062C\u0628 \u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062F\u062E\u0648\u0644 \u0623\u0648\u0644\u0627\u064B" });
+  const adminRoles = ["admin", "superadmin"];
+  if (!adminRoles.includes(user.role)) {
+    return res.status(403).json({ error: "\u0647\u0630\u0647 \u0627\u0644\u0635\u0641\u062D\u0629 \u0645\u062A\u0627\u062D\u0629 \u0644\u0644\u0645\u0633\u0624\u0648\u0644\u064A\u0646 \u0641\u0642\u0637" });
+  }
+  const configPath = process.platform === "win32" ? "C:\\ProgramData\\OneSoft\\config\\onesoft.config.json" : path7.join(process.env["HOME"] ?? "/tmp", ".onesoft", "config", "onesoft.config.json");
+  let config2 = null;
+  try {
+    if (fs7.existsSync(configPath)) {
+      config2 = JSON.parse(fs7.readFileSync(configPath, "utf-8"));
+    }
+  } catch {
+  }
+  const svcStatus = (name2) => {
+    if (process.platform !== "win32") return "n/a";
+    try {
+      const r = spawnSync2("sc", ["query", name2], { encoding: "utf-8", stdio: "pipe" });
+      const out = String(r.stdout ?? "");
+      if (out.includes("RUNNING")) return "running";
+      if (out.includes("STOPPED")) return "stopped";
+      if (out.includes("START_PENDING")) return "starting";
+      if (out.includes("1060") || String(r.stderr ?? "").includes("1060")) return "not-installed";
+      return "unknown";
+    } catch {
+      return "unknown";
+    }
+  };
+  const db2 = config2?.["database"];
+  const srv = config2?.["server"];
+  const paths = config2?.["paths"];
+  return res.json({
+    backendPort: ENV.port,
+    frontendPort: Number(srv?.["frontendPort"] ?? 5e3),
+    backendStatus: svcStatus("OneSoft-Server"),
+    frontendStatus: svcStatus("OneSoft-Client"),
+    dbHost: db2 ? String(db2["host"] ?? "localhost") : "localhost",
+    dbPort: db2 ? Number(db2["port"] ?? 5432) : 5432,
+    dbName: db2 ? String(db2["name"] ?? "onesoft_erp") : "onesoft_erp",
+    dbUser: db2 ? String(db2["user"] ?? "onesoft_app") : "onesoft_app",
+    logPath: String(paths?.["logs"] ?? "C:\\ProgramData\\OneSoft\\Logs"),
+    configPath,
+    configFound: config2 !== null,
+    platform: process.platform,
+    nodeVersion: process.version,
+    uptime: Math.floor(process.uptime())
+  });
+});
+app.post("/api/system/restart-service", async (req, res) => {
+  const { getUserFromRequest: getUserFromRequest2 } = await Promise.resolve().then(() => (init_auth(), auth_exports));
+  const user = await getUserFromRequest2(req);
+  if (!user) return res.status(401).json({ ok: false, error: "\u064A\u062C\u0628 \u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062F\u062E\u0648\u0644 \u0623\u0648\u0644\u0627\u064B" });
+  if (user.role !== "superadmin") {
+    return res.status(403).json({ ok: false, error: "\u0647\u0630\u0647 \u0627\u0644\u0639\u0645\u0644\u064A\u0629 \u0645\u062A\u0627\u062D\u0629 \u0644\u0644\u0645\u0633\u0624\u0648\u0644 \u0627\u0644\u0623\u0639\u0644\u0649 \u0641\u0642\u0637" });
+  }
+  const origin = req.headers["origin"] ?? "";
+  const host = req.headers["host"] ?? "";
+  if (origin && !origin.includes(host.split(":")[0])) {
+    return res.status(403).json({ ok: false, error: "\u0637\u0644\u0628 \u0645\u0631\u0641\u0648\u0636 \u2014 \u0645\u0635\u062F\u0631 \u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
+  }
+  if (process.platform !== "win32") {
+    return res.json({ ok: true, message: "Linux \u2014 \u0644\u0627 \u062A\u0648\u062C\u062F \u062E\u062F\u0645\u0627\u062A Windows" });
+  }
+  const { name: name2 } = req.body;
+  const allowed = ["OneSoft-Server", "OneSoft-Client"];
+  if (!name2 || !allowed.includes(name2)) {
+    return res.status(400).json({ ok: false, error: "\u0627\u0633\u0645 \u062E\u062F\u0645\u0629 \u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
+  }
+  try {
+    spawnSync2("sc", ["stop", name2], { encoding: "utf-8", stdio: "pipe" });
+    await new Promise((r) => setTimeout(r, 2500));
+    spawnSync2("sc", ["start", name2], { encoding: "utf-8", stdio: "pipe" });
+    return res.json({ ok: true, message: `\u062A\u0645\u0651\u062A \u0625\u0639\u0627\u062F\u0629 \u062A\u0634\u063A\u064A\u0644 ${name2}` });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
 app.get("/download/backup", async (req, res) => {
   const { getUserFromRequest: getUserFromRequest2 } = await Promise.resolve().then(() => (init_auth(), auth_exports));
   const user = await getUserFromRequest2(req);
