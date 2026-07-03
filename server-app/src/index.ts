@@ -1,3 +1,4 @@
+import './startup-banner.js';  // ← أول import — يطبع بيانات التشخيص قبل أي كود آخر
 import express from 'express';
 import cors from 'cors';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
