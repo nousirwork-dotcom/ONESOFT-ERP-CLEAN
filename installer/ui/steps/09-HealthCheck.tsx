@@ -46,13 +46,22 @@ export default function Step09HealthCheck() {
   const diagRef = useRef<HTMLDivElement>(null);
   const [backendPort,  setBackendPort]  = useState(3000);
   const [frontendPort, setFrontendPort] = useState(5000);
+  const backendPortRef  = useRef(3000);
+  const frontendPortRef = useRef(5000);
 
-  // قراءة المنافذ الفعلية من ملف الإعدادات عند بدء التشغيل
+  // قراءة المنافذ الفعلية من ملف الإعدادات — ثم تشغيل الفحص بعدها مباشرة
   useEffect(() => {
     window.installer?.getConfig?.().then((cfg: any) => {
-      if (cfg?.server?.backendPort)  setBackendPort(cfg.server.backendPort);
-      if (cfg?.server?.frontendPort) setFrontendPort(cfg.server.frontendPort);
-    }).catch(() => {});
+      const bPort = cfg?.server?.backendPort  ?? 3000;
+      const fPort = cfg?.server?.frontendPort ?? 5000;
+      backendPortRef.current  = bPort;
+      frontendPortRef.current = fPort;
+      setBackendPort(bPort);
+      setFrontendPort(fPort);
+      runCheckWithPorts(bPort, fPort);
+    }).catch(() => {
+      runCheckWithPorts(3000, 5000);
+    });
   }, []);
 
   // سجل أحداث التشخيص
@@ -69,7 +78,7 @@ export default function Step09HealthCheck() {
     if (diagRef.current) diagRef.current.scrollTop = diagRef.current.scrollHeight;
   }, [diagLogs]);
 
-  const runCheck = async () => {
+  const runCheckWithPorts = async (bPort = backendPortRef.current, fPort = frontendPortRef.current) => {
     setLoading(true);
     setResults([]);
     const report = await window.installer?.runHealthCheck?.({
@@ -77,8 +86,8 @@ export default function Step09HealthCheck() {
         host: dbOpts.host, port: dbOpts.port,
         database: dbOpts.database, user: 'onesoft_app', password: dbOpts.password,
       },
-      backendPort,
-      frontendPort,
+      backendPort:  bPort,
+      frontendPort: fPort,
     });
     if (report) {
       setHealthReport(report);
@@ -86,6 +95,8 @@ export default function Step09HealthCheck() {
     }
     setLoading(false);
   };
+
+  const runCheck = async () => runCheckWithPorts();
 
   const restartServices = async () => {
     setRestarting(true);
@@ -113,7 +124,7 @@ export default function Step09HealthCheck() {
     setDiagRunning(false);
   };
 
-  useEffect(() => { runCheck(); }, []);
+  // لا useEffect منفرد هنا — الفحص يبدأ فقط بعد تحميل config.json في useEffect أعلاه
 
   const passed      = results.filter(r => r.status === 'healthy').length;
   const total       = results.filter(r => r.status !== 'skipped').length;
@@ -308,8 +319,8 @@ export default function Step09HealthCheck() {
               <DiagRow label="اختبار Frontend"   value={diagReport.frontendTest.ok ? 'نجح ✅' : 'فشل ❌'} ok={diagReport.frontendTest.ok} />
               <DiagRow label="OneSoft-Server"    value={diagReport.serviceBackendStatus}  ok={diagReport.serviceBackendStatus === 'running'} />
               <DiagRow label="OneSoft-Client"    value={diagReport.serviceFrontendStatus} ok={diagReport.serviceFrontendStatus === 'running'} />
-              <DiagRow label="المنفذ 3000"       value={diagReport.port3000 ? 'يستجيب ✅' : 'لا يستجيب ❌'} ok={diagReport.port3000} />
-              <DiagRow label="المنفذ 5000"       value={diagReport.port5000 ? 'يستجيب ✅' : 'لا يستجيب ❌'} ok={diagReport.port5000} />
+              <DiagRow label={`المنفذ ${backendPort} (Backend)`}   value={diagReport.port3000 ? 'يستجيب ✅' : 'لا يستجيب ❌'} ok={diagReport.port3000} />
+              <DiagRow label={`المنفذ ${frontendPort} (Frontend)`} value={diagReport.port5000 ? 'يستجيب ✅' : 'لا يستجيب ❌'} ok={diagReport.port5000} />
               {diagReport.logPath && (
                 <div style={{ color: '#64748B', fontSize: 10, marginTop: 4 }}>
                   📄 التقرير الكامل: {diagReport.logPath}

@@ -42,7 +42,8 @@ interface InstallerAPI {
     logsDir:        string;
     deploymentType: import('../core/types').DeploymentType;
     accessModes:    import('../core/types').AccessMode[];
-  }) => Promise<{ ok: boolean }>;
+    databaseUrl?:   string;
+  }) => Promise<{ ok: boolean; backendPort?: number; frontendPort?: number }>;
   getServiceStatus: (name: string) => Promise<import('../core/types').ServiceStatus>;
   startService:     (name: string) => Promise<import('../core/types').ServiceOperationResult>;
   stopService:      (name: string) => Promise<import('../core/types').ServiceOperationResult>;

@@ -102,13 +102,14 @@ function isAdmin(): boolean {
 /** اختبار تشغيل السكريبت لمدة 5 ثوانٍ — إذا لم يتعطل = جيد */
 function testScript(
   nodePath: string, scriptPath: string, emit: Emit, label: string,
+  databaseUrl?: string,  // مُمرَّر من installServices حتى يتمكن الكود القديم من الاتصال بـ onesoft_app
 ): { ok: boolean; timedOut: boolean; stdout: string; stderr: string; exitCode: number | null } {
   const cmdStr = `"${nodePath}" "${scriptPath}"`;
   emit({ level: 'info', message: `🧪 اختبار ${label} (مهلة 5s):\n  ${cmdStr}`, timestamp: now() });
+  if (databaseUrl) emit({ level: 'info', message: `🔑 DATABASE_URL → ${databaseUrl.replace(/:([^:@]+)@/, ':***@')}`, timestamp: now() });
 
   // PORT مؤقت لتجنب التعارض مع الخدمات الفعلية
-  // NODE_ENV=production: يجبر Backend على قراءة config.json فقط (لا DATABASE_URL)
-  // DATABASE_URL مفرغة: تمنع استخدام أي قيمة مورثة خاطئة من بيئة المثبت
+  // NODE_ENV=production + DATABASE_URL: كود جديد يقرأ config.json؛ كود قديم يستخدم DATABASE_URL
   const result = spawnSync(nodePath, [scriptPath], {
     encoding: 'utf-8',
     stdio: 'pipe',
@@ -119,7 +120,7 @@ function testScript(
       PORT:          '19999',
       FRONTEND_PORT: '19998',
       NODE_ENV:      'production',
-      DATABASE_URL:  '',           // إلغاء أي قيمة مورثة — config.json هو المصدر الوحيد
+      DATABASE_URL:  databaseUrl ?? '',  // إذا وُجد → يُمرَّر (للكود القديم)؛ كود جديد يقرأ config.json
     },
   });
 
@@ -446,16 +447,18 @@ export class ServiceManager {
     }
 
     // ── 5. اختبار تشغيل السكريبت قبل إنشاء الخدمة ─────────────────────────
+    // نُمرّر databaseUrl حتى يتمكن الكود القديم من الاتصال بـ onesoft_app مباشرة
+    // الكود الجديد (env.ts) يقرأ config.json ويتجاهل DATABASE_URL في production
     if (needsBackend && serverScript) {
-      const test = testScript(nodePath, serverScript, emit, 'Backend');
+      const test = testScript(nodePath, serverScript, emit, 'Backend', opts.databaseUrl);
       if (!test.ok) {
         emit({ level: 'error', message: '❌ Backend لا يعمل بشكل صحيح — إلغاء تثبيت الخدمة', timestamp: now() });
-        serverScript = null; // لا تثبت الخدمة
+        serverScript = null;
       }
     }
 
     if (needsFrontend && clientScript) {
-      const test = testScript(nodePath, clientScript, emit, 'Frontend');
+      const test = testScript(nodePath, clientScript, emit, 'Frontend'); // Frontend لا يحتاج DB
       if (!test.ok) {
         emit({ level: 'error', message: '❌ Frontend لا يعمل بشكل صحيح — إلغاء تثبيت الخدمة', timestamp: now() });
         clientScript = null;
