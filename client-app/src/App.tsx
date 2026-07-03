@@ -339,11 +339,18 @@ function AppRoutes() {
   const user = meQuery.data;
 
   return (
-    <TabManagerProvider>
-      <DashboardLayout>
-        <TabContent />
-      </DashboardLayout>
-    </TabManagerProvider>
+    <Switch>
+      {user?.role === 'superadmin' && (
+        <Route path="/superadmin" component={SuperAdminPage} />
+      )}
+      <Route>
+        <TabManagerProvider>
+          <DashboardLayout>
+            <TabContent />
+          </DashboardLayout>
+        </TabManagerProvider>
+      </Route>
+    </Switch>
   );
 }
 
