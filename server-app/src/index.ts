@@ -27,8 +27,17 @@ app.post('/api/auth/logout', logoutHandler);
 app.get('/api/auth/logout', logoutHandler);
 app.get('/api/auth/me', meHandler);
 
-// ─── Auto-Login (dev / single-user mode) ─────────────────────────────────────
-app.post('/api/auth/auto-login', async (_req, res) => {
+// ─── Auto-Login (Electron / dev only — DISABLED in production) ───────────────
+// Only available when:  NODE_ENV !== 'production'  AND  ELECTRON_MODE=1
+// AND the request originates from localhost (127.0.0.1 or ::1).
+app.post('/api/auth/auto-login', async (req, res) => {
+  const isElectronDev = ENV.isElectron && ENV.nodeEnv !== 'production';
+  const isLocalhost   = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '');
+
+  if (!isElectronDev || !isLocalhost) {
+    return res.status(403).json({ error: 'هذا المسار غير متاح في وضع الإنتاج' });
+  }
+
   try {
     const { db } = await import('./db.js');
     const { users } = await import('./schema.js');
@@ -120,10 +129,13 @@ app.post('/api/system/restart-service', async (req, res) => {
     return res.status(403).json({ ok: false, error: 'هذه العملية متاحة للمسؤول الأعلى فقط' });
   }
 
-  // Origin guard — reject cross-origin requests
+  // Origin guard — strict same-origin check
   const origin = req.headers['origin'] ?? '';
   const host   = req.headers['host']   ?? '';
-  if (origin && !origin.includes(host.split(':')[0]!)) {
+  // Compare full scheme+host (strip trailing port from both sides before compare)
+  const normalizeOrigin = (o: string) => o.replace(/^https?:\/\//, '').replace(/:\d+$/, '');
+  const normalizeHost   = (h: string) => h.replace(/:\d+$/, '');
+  if (origin && normalizeOrigin(origin) !== normalizeHost(host)) {
     return res.status(403).json({ ok: false, error: 'طلب مرفوض — مصدر غير مسموح' });
   }
 
@@ -152,7 +164,11 @@ app.get('/download/backup', async (req, res) => {
   const { getUserFromRequest } = await import('./auth.js');
   const user = await getUserFromRequest(req);
   if (!user) return res.status(401).json({ error: 'يجب تسجيل الدخول أولاً' });
+  if (user.role !== 'superadmin') {
+    return res.status(403).json({ error: 'تنزيل النسخة الاحتياطية متاح للمسؤول الأعلى فقط' });
+  }
   const file = path.join(__dirname, '..', '..', 'OneSoft-ERP-backup-20260626.zip');
+  console.log(`[Backup] Download requested by superadmin: ${user.username} (id=${user.id})`);
   res.download(file, 'OneSoft-ERP-backup-20260626.zip', (err) => {
     if (err && !res.headersSent) res.status(404).json({ error: 'الملف غير موجود' });
   });

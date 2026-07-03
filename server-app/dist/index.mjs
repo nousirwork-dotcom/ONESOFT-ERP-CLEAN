@@ -68124,7 +68124,12 @@ app.post("/api/auth/login", loginHandler);
 app.post("/api/auth/logout", logoutHandler);
 app.get("/api/auth/logout", logoutHandler);
 app.get("/api/auth/me", meHandler);
-app.post("/api/auth/auto-login", async (_req, res) => {
+app.post("/api/auth/auto-login", async (req, res) => {
+  const isElectronDev = ENV.isElectron && ENV.nodeEnv !== "production";
+  const isLocalhost = ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress ?? "");
+  if (!isElectronDev || !isLocalhost) {
+    return res.status(403).json({ error: "\u0647\u0630\u0627 \u0627\u0644\u0645\u0633\u0627\u0631 \u063A\u064A\u0631 \u0645\u062A\u0627\u062D \u0641\u064A \u0648\u0636\u0639 \u0627\u0644\u0625\u0646\u062A\u0627\u062C" });
+  }
   try {
     const { db: db2 } = await Promise.resolve().then(() => (init_db2(), db_exports));
     const { users: users2 } = await Promise.resolve().then(() => (init_schema2(), schema_exports));
@@ -68207,7 +68212,9 @@ app.post("/api/system/restart-service", async (req, res) => {
   }
   const origin = req.headers["origin"] ?? "";
   const host = req.headers["host"] ?? "";
-  if (origin && !origin.includes(host.split(":")[0])) {
+  const normalizeOrigin = (o) => o.replace(/^https?:\/\//, "").replace(/:\d+$/, "");
+  const normalizeHost = (h) => h.replace(/:\d+$/, "");
+  if (origin && normalizeOrigin(origin) !== normalizeHost(host)) {
     return res.status(403).json({ ok: false, error: "\u0637\u0644\u0628 \u0645\u0631\u0641\u0648\u0636 \u2014 \u0645\u0635\u062F\u0631 \u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D" });
   }
   if (process.platform !== "win32") {
@@ -68231,7 +68238,11 @@ app.get("/download/backup", async (req, res) => {
   const { getUserFromRequest: getUserFromRequest2 } = await Promise.resolve().then(() => (init_auth(), auth_exports));
   const user = await getUserFromRequest2(req);
   if (!user) return res.status(401).json({ error: "\u064A\u062C\u0628 \u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062F\u062E\u0648\u0644 \u0623\u0648\u0644\u0627\u064B" });
+  if (user.role !== "superadmin") {
+    return res.status(403).json({ error: "\u062A\u0646\u0632\u064A\u0644 \u0627\u0644\u0646\u0633\u062E\u0629 \u0627\u0644\u0627\u062D\u062A\u064A\u0627\u0637\u064A\u0629 \u0645\u062A\u0627\u062D \u0644\u0644\u0645\u0633\u0624\u0648\u0644 \u0627\u0644\u0623\u0639\u0644\u0649 \u0641\u0642\u0637" });
+  }
   const file2 = path7.join(__dirname7, "..", "..", "OneSoft-ERP-backup-20260626.zip");
+  console.log(`[Backup] Download requested by superadmin: ${user.username} (id=${user.id})`);
   res.download(file2, "OneSoft-ERP-backup-20260626.zip", (err) => {
     if (err && !res.headersSent) res.status(404).json({ error: "\u0627\u0644\u0645\u0644\u0641 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" });
   });
