@@ -70,7 +70,7 @@ function execVerbose(
   const cmdStr = `"${cmd}" ${args.map(a => `"${a}"`).join(' ')}`;
   emit({ level: 'info', message: `🔧 [${label}] الأمر الكامل:\n  ${cmdStr}`, timestamp: now() });
 
-  const result = spawnSync(cmd, args, { encoding: 'utf-8', stdio: 'pipe' });
+  const result = spawnSync(cmd, args, { encoding: 'utf-8', stdio: 'pipe', windowsHide: true });
   const stdout   = (result.stdout  ?? '').trim();
   const stderr   = (result.stderr  ?? '').trim();
   const exitCode = result.status ?? -1;
@@ -107,11 +107,20 @@ function testScript(
   emit({ level: 'info', message: `🧪 اختبار ${label} (مهلة 5s):\n  ${cmdStr}`, timestamp: now() });
 
   // PORT مؤقت لتجنب التعارض مع الخدمات الفعلية
+  // NODE_ENV=production: يجبر Backend على قراءة config.json فقط (لا DATABASE_URL)
+  // DATABASE_URL مفرغة: تمنع استخدام أي قيمة مورثة خاطئة من بيئة المثبت
   const result = spawnSync(nodePath, [scriptPath], {
     encoding: 'utf-8',
     stdio: 'pipe',
     timeout: 5000,
-    env: { ...process.env, PORT: '19999', FRONTEND_PORT: '19998' },
+    windowsHide: true,
+    env: {
+      ...process.env,
+      PORT:          '19999',
+      FRONTEND_PORT: '19998',
+      NODE_ENV:      'production',
+      DATABASE_URL:  '',           // إلغاء أي قيمة مورثة — config.json هو المصدر الوحيد
+    },
   });
 
   const stdout   = (result.stdout ?? '').trim();
@@ -276,10 +285,10 @@ export class ServiceManager {
       }
 
       emit?.({ level: 'info', message: `🗑 حذف الخدمة ${name}...`, timestamp: now() });
-      const r = spawnSync(this.nssm, ['remove', name, 'confirm'], { encoding: 'utf-8', stdio: 'pipe' });
+      const r = spawnSync(this.nssm, ['remove', name, 'confirm'], { encoding: 'utf-8', stdio: 'pipe', windowsHide: true });
       if (r.status !== 0) {
         // NSSM فشل — جرّب sc delete
-        spawnSync('sc', ['delete', name], { encoding: 'utf-8', stdio: 'pipe' });
+        spawnSync('sc', ['delete', name], { encoding: 'utf-8', stdio: 'pipe', windowsHide: true });
       }
 
       // انتظار حتى تختفي الخدمة فعلاً
@@ -562,9 +571,9 @@ export class ServiceManager {
     const nodeVersion = (nodeResult.stdout ?? '').trim();
     const nodePath    = findNode();
 
-    // إصدار nssm
-    const nssmR = spawnSync(this.nssm, ['version'], { encoding: 'utf-8', stdio: 'pipe' });
-    const nssmVersion = (nssmR.stdout ?? '').trim().split('\n')[0] ?? 'غير معروف';
+    // إصدار nssm (windowsHide منع ظهور نوافذ GUI)
+    const nssmR = spawnSync(this.nssm, ['version'], { encoding: 'utf-8', stdio: 'pipe', windowsHide: true });
+    const nssmVersion = ((nssmR.stdout ?? '') + (nssmR.stderr ?? '')).trim().split('\n')[0] ?? 'غير معروف';
 
     // صلاحيات
     const admin = isAdmin();
@@ -599,9 +608,21 @@ export class ServiceManager {
     emit({ level: 'info', message: `OneSoft-Server:  ${serviceBackendStatus}`,  timestamp: now() });
     emit({ level: 'info', message: `OneSoft-Client:  ${serviceFrontendStatus}`, timestamp: now() });
 
-    // فحص المنافذ
-    const port3000 = await this.waitForPort(3000, emit, 5_000, 1_000);
-    const port5000 = await this.waitForPort(5000, emit, 5_000, 1_000);
+    // قراءة المنافذ الفعلية من config.json (إن وُجد) — تجنّب القيم المضمّنة
+    let diagBackendPort  = 3000;
+    let diagFrontendPort = 5000;
+    try {
+      const { ConfigManager } = await import('../config/ConfigManager.js');
+      if (ConfigManager.exists()) {
+        const cfg = ConfigManager.load();
+        diagBackendPort  = cfg.server?.backendPort  ?? 3000;
+        diagFrontendPort = cfg.server?.frontendPort ?? 5000;
+        emit({ level: 'info', message: `📌 المنافذ من config.json — Backend: ${diagBackendPort}, Frontend: ${diagFrontendPort}`, timestamp: now() });
+      }
+    } catch { /* ignore — use defaults */ }
+
+    const port3000 = await this.waitForPort(diagBackendPort,  emit, 5_000, 1_000);
+    const port5000 = await this.waitForPort(diagFrontendPort, emit, 5_000, 1_000);
 
     emit({ level: 'success', message: '✅ اكتمل التشخيص', timestamp: now() });
 
