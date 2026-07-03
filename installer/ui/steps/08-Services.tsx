@@ -7,6 +7,17 @@ const LEVEL_COLOR: Record<string, string> = {
   error: '#B91C1C', warn: '#D97706',
 };
 
+// ── خريطة رسائل أخطاء قاعدة البيانات ──────────────────────────────────────
+const DB_ERROR_UI: Record<string, { icon: string; title: string; action: string }> = {
+  auth:     { icon: '🔑', title: 'كلمة مرور PostgreSQL غير صحيحة',       action: 'تعديل كلمة المرور' },
+  user:     { icon: '👤', title: 'اسم المستخدم غير موجود في PostgreSQL',  action: 'تعديل اسم المستخدم' },
+  database: { icon: '🗄️', title: 'قاعدة البيانات غير موجودة',            action: 'تعديل اسم قاعدة البيانات' },
+  service:  { icon: '⚙️', title: 'خدمة PostgreSQL غير مشغّلة',           action: 'تشغيل الخدمة وإعادة المحاولة' },
+  network:  { icon: '🌐', title: 'لا يمكن الوصول إلى السيرفر',           action: 'تعديل عنوان السيرفر' },
+  timeout:  { icon: '⏱️', title: 'انتهت مهلة الاتصال',                   action: 'إعادة المحاولة' },
+  other:    { icon: '❌', title: 'خطأ في الاتصال بقاعدة البيانات',        action: 'إعادة المحاولة' },
+};
+
 export default function Step09Services() {
   const store = useInstallerStore();
   const {
@@ -15,11 +26,15 @@ export default function Step09Services() {
     licensingMode, updateChannel, backupPolicy, telemetry,
     setOrgId, setOrgCode, getDatabaseUrl, clearProgress,
     setInstallRunning, setInstallDone,
+    prevStep,
   } = store;
 
-  const [running, setRunning] = useState(false);
-  const [done,    setDone   ] = useState(false);
-  const [error,   setError  ] = useState<string | null>(null);
+  const [running,   setRunning]   = useState(false);
+  const [done,      setDone]      = useState(false);
+  const [error,     setError]     = useState<string | null>(null);
+  const [dbError,   setDbError]   = useState<{
+    message: string; hint: string; errorType: string;
+  } | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -34,6 +49,7 @@ export default function Step09Services() {
     setInstallRunning(true);
     setInstallDone(false);
     setError(null);
+    setDbError(null);
 
     try {
       const databaseUrl = getDatabaseUrl();
@@ -41,6 +57,32 @@ export default function Step09Services() {
         host: dbOpts.host, port: dbOpts.port,
         database: 'postgres', user: dbOpts.user, password: dbOpts.password,
       };
+
+      // ────────────────────────────────────────────────────────────────────────
+      // 0. اختبار الاتصال بقاعدة البيانات قبل أي خطوة أخرى
+      //    (للـ local-existing و remote — ليس local-install لأن PG لم يُثبَّت بعد)
+      // ────────────────────────────────────────────────────────────────────────
+      if (databaseMode !== 'local-install') {
+        const testResult = await window.installer?.testConnection?.({
+          host:     dbOpts.host,
+          port:     dbOpts.port,
+          database: 'postgres',
+          user:     dbOpts.user,
+          password: dbOpts.password,
+        });
+
+        if (!testResult?.ok) {
+          // إيقاف التثبيت فوراً وإظهار خطأ واضح مع توجيه المستخدم
+          setRunning(false);
+          setInstallRunning(false);
+          setDbError({
+            message:   testResult?.detail   ?? 'فشل الاتصال بقاعدة البيانات',
+            hint:      (testResult as any)?.hint ?? 'راجع بيانات الاتصال وأعد المحاولة',
+            errorType: (testResult as any)?.errorType ?? 'other',
+          });
+          return;
+        }
+      }
 
       const needsLocalDb = ['server', 'server+client', 'branch'].includes(deploymentType);
       const installDir   = 'C:\\Program Files\\OneSoft ERP';
@@ -101,16 +143,16 @@ export default function Step09Services() {
       // 9. كتابة Registry — يظهر في إضافة/إزالة البرامج
       await (window as any).installer?.writeRegistry?.({
         installDir,
-        version:     '1.0.0',
-        uninstallExe:`${installDir}\\OneSoft ERP Setup.exe`,
-        iconPath:    `${installDir}\\resources\\icons\\onesoft.ico`,
+        version:      '1.0.0',
+        uninstallExe: `${installDir}\\OneSoft ERP Setup.exe`,
+        iconPath:     `${installDir}\\resources\\icons\\onesoft.ico`,
         sizeKB:       150000,
       });
 
       // 10. حفظ الإعدادات بالبنية الكاملة (configVersion: 4 — تسعة أبعاد)
       await window.installer?.saveConfig?.({
-        version:         '1.0.0',
-        configVersion:   4,
+        version:       '1.0.0',
+        configVersion: 4,
         // ── الأبعاد الخمسة الأصلية ──────────────────────────────────────
         deploymentType,
         accessModes,
@@ -142,6 +184,7 @@ export default function Step09Services() {
 
       setDone(true);
       setInstallDone(true);
+
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -151,6 +194,97 @@ export default function Step09Services() {
   };
 
   useEffect(() => { run(); }, []);
+
+  // ── حالة خطأ الاتصال بقاعدة البيانات ─────────────────────────────────────
+  if (dbError) {
+    const ui = DB_ERROR_UI[dbError.errorType] ?? DB_ERROR_UI.other;
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div>
+          <h2 style={{ fontSize: 20, fontWeight: 800, color: '#1E344F', margin: '0 0 4px' }}>
+            ⚠️ تعذّر الاتصال بقاعدة البيانات
+          </h2>
+          <p style={{ color: '#6B7280', fontSize: 13, margin: 0 }}>
+            يجب إصلاح هذه المشكلة قبل المتابعة
+          </p>
+        </div>
+
+        {/* بطاقة الخطأ */}
+        <div style={{
+          background: '#FEF2F2', border: '1px solid #FCA5A5',
+          borderRadius: 12, padding: '20px 24px',
+          display: 'flex', flexDirection: 'column', gap: 12,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 32 }}>{ui.icon}</span>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#B91C1C' }}>
+                {ui.title}
+              </div>
+              <div style={{ fontSize: 13, color: '#7F1D1D', marginTop: 2 }}>
+                {dbError.message}
+              </div>
+            </div>
+          </div>
+
+          {/* التلميح */}
+          <div style={{
+            padding: '10px 14px', background: '#FFF7ED',
+            border: '1px solid #FED7AA', borderRadius: 8,
+            fontSize: 13, color: '#9A3412',
+          }}>
+            💡 <strong>كيف تصلحها:</strong> {dbError.hint}
+          </div>
+        </div>
+
+        {/* معلومات الاتصال الحالية */}
+        <div style={{
+          background: '#F8FAFC', border: '1px solid #E2E8F0',
+          borderRadius: 10, padding: '14px 18px',
+        }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 10 }}>
+            📋 بيانات الاتصال المستخدمة:
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '6px 16px', fontSize: 12 }}>
+            <span style={{ color: '#64748B' }}>السيرفر:</span>
+            <span style={{ fontFamily: 'monospace', color: '#1E344F' }}>{dbOpts.host}</span>
+            <span style={{ color: '#64748B' }}>المنفذ:</span>
+            <span style={{ fontFamily: 'monospace', color: '#1E344F' }}>{dbOpts.port}</span>
+            <span style={{ color: '#64748B' }}>المستخدم:</span>
+            <span style={{ fontFamily: 'monospace', color: '#1E344F' }}>{dbOpts.user}</span>
+            <span style={{ color: '#64748B' }}>كلمة المرور:</span>
+            <span style={{ fontFamily: 'monospace', color: '#1E344F' }}>{'•'.repeat(Math.min(dbOpts.password?.length ?? 0, 12))}</span>
+          </div>
+        </div>
+
+        {/* أزرار الإجراء */}
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+          <button
+            onClick={() => prevStep()}
+            style={{
+              background: 'linear-gradient(135deg, #406B93, #2d5070)',
+              color: '#fff', border: 'none', borderRadius: 8,
+              padding: '10px 24px', fontSize: 13, fontWeight: 700,
+              cursor: 'pointer', fontFamily: 'inherit',
+            }}
+          >
+            ← العودة لتعديل بيانات الاتصال
+          </button>
+          <button
+            onClick={run}
+            style={{
+              background: '#fff', color: '#6B7280',
+              border: '1px solid #D1D5DB', borderRadius: 8,
+              padding: '10px 20px', fontSize: 13,
+              cursor: 'pointer', fontFamily: 'inherit',
+            }}
+          >
+            🔄 إعادة الاختبار
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, height: '100%' }}>
@@ -222,7 +356,8 @@ export default function Step09Services() {
       )}
 
       {error && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button onClick={() => prevStep()} style={btnSecondary}>← العودة</button>
           <button onClick={run} style={btnSecondary}>🔄 إعادة المحاولة</button>
         </div>
       )}
@@ -259,12 +394,6 @@ const ACCESS_LABELS: Record<string, string> = {
   offline: 'أوفلاين',
 };
 
-const btnPrimary: React.CSSProperties = {
-  background: 'linear-gradient(135deg, #406B93, #2d5070)',
-  color: '#fff', border: 'none', borderRadius: 8,
-  padding: '10px 28px', fontSize: 13, fontWeight: 700,
-  cursor: 'pointer', fontFamily: 'inherit',
-};
 const btnSecondary: React.CSSProperties = {
   background: '#fff', color: '#6B7280', border: '1px solid #D1D5DB',
   borderRadius: 8, padding: '10px 20px', fontSize: 13,
