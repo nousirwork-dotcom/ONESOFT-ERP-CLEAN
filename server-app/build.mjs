@@ -1,0 +1,91 @@
+/**
+ * OneSoft ERP — Server Build Script
+ *
+ * يُنتج dist/index.mjs ملفاً مستقلاً (standalone) يحتوي جميع الاعتماديات
+ * بدون الحاجة لمجلد node_modules عند التشغيل.
+ *
+ * تشغيل: node build.mjs
+ */
+
+import * as esbuild from 'esbuild';
+import { statSync } from 'fs';
+
+const DEV  = process.argv.includes('--dev');
+const OUTFILE = 'dist/index.mjs';
+
+console.log(`\n🔨 بناء OneSoft Server (${DEV ? 'development' : 'production'})...`);
+
+let result;
+try {
+  result = await esbuild.build({
+    entryPoints: ['src/index.ts'],
+
+    // ── تهيئة Node.js ───────────────────────────────────────────────────────
+    platform: 'node',          // يُفعِّل تحسينات Node.js الداخلية
+    target:   'node20',        // نسخة Node المستهدفة في الإنتاج
+    format:   'esm',           // ESM — تتوافق مع "type":"module" في package.json
+
+    // ── التجميع ─────────────────────────────────────────────────────────────
+    bundle:   true,            // ضم جميع الاعتماديات داخل الملف
+
+    // ── الحزم الخارجية — فقط native bindings لا يمكن تجميعها ───────────────
+    external: [
+      'pg-native',   // addon اختياري لـ pg — يعمل بدونه بـ pure JS
+      'fsevents',    // macOS only — غير مطلوب على Windows
+    ],
+
+    // ── الحل الجذري لـ "Dynamic require is not supported" ───────────────────
+    // بعض حزم CJS (كـ pg وتوابعها) تستخدم require() داخلياً.
+    // في الناتج ESM لا يوجد require() — نضيفه عبر banner.
+    banner: {
+      js: [
+        "import{createRequire}from'module';",
+        "const require=createRequire(import.meta.url);",
+      ].join(''),
+    },
+
+    // ── الإخراج ─────────────────────────────────────────────────────────────
+    outfile:   OUTFILE,
+    sourcemap: DEV ? 'inline' : false,
+    minify:    false,         // لا minify — يُسهّل قراءة stack traces
+    logLevel:  'warning',
+
+    // ── توافق متعدد الحزم ────────────────────────────────────────────────────
+    // يضمن الأولوية الصحيحة عند حل main fields لحزم CJS/ESM مختلطة
+    mainFields: ['module', 'main'],
+    conditions: ['import', 'require', 'node', 'default'],
+
+    // ── ملف بيانات البناء ─────────────────────────────────────────────────────
+    metafile: true,
+  });
+} catch (e) {
+  console.error('\n❌ فشل البناء:\n', e.message ?? e);
+  process.exit(1);
+}
+
+// ── تقرير الحجم ─────────────────────────────────────────────────────────────
+const bytes = statSync(OUTFILE).size;
+const mb    = (bytes / 1024 / 1024).toFixed(2);
+
+console.log(`\n📦 ${OUTFILE} = ${mb} MB`);
+
+// التحقق: إذا كان الملف صغيراً جداً فالحزم لم تُضمَّن
+if (bytes < 500_000) {
+  console.error(`\n❌ الملف صغير جداً (${mb} MB) — يبدو أن الاعتماديات لم تُضمَّن!`);
+  console.error('   تأكد من عدم استخدام --packages=external في الإعداد.');
+  process.exit(1);
+}
+
+// تقرير أكبر 10 modules في الـ bundle
+const modules = Object.entries(result.metafile.inputs)
+  .map(([k, v]) => ({ name: k, bytes: v.bytes }))
+  .sort((a, b) => b.bytes - a.bytes)
+  .slice(0, 10);
+
+console.log('\n📊 أكبر 10 وحدات في الـ bundle:');
+for (const m of modules) {
+  const kb = (m.bytes / 1024).toFixed(0);
+  console.log(`   ${kb.padStart(6)} KB  ${m.name}`);
+}
+
+console.log('\n✅ اكتمل البناء بنجاح\n');
