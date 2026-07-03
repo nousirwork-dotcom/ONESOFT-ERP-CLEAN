@@ -279,7 +279,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       if (location !== "/login") navigate("/login");
     } else {
       if (location === "/login") {
-        navigate(meQuery.data.role === "superadmin" ? "/superadmin" : "/");
+        navigate("/");
       }
     }
   }, [meQuery.data, meQuery.isLoading, location]);
@@ -337,16 +337,6 @@ function TabContent() {
 function AppRoutes() {
   const meQuery = trpc.auth.me.useQuery(undefined, { retry: false });
   const user = meQuery.data;
-
-  if (user?.role === "superadmin") {
-    return (
-      <Switch>
-        <Route path="/dev/source-code" component={SourceCodeViewerPage} />
-        <Route path="/superadmin" component={SuperAdminPage} />
-        <Route component={SuperAdminPage} />
-      </Switch>
-    );
-  }
 
   return (
     <TabManagerProvider>
