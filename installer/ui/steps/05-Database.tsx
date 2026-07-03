@@ -47,12 +47,14 @@ export default function Step06DatabaseMode() {
   const [testResult, setTestResult] = useState<{ ok: boolean; detail: string } | null>(null);
   const [detecting,  setDetecting]  = useState(false);
   const [detectedDbs, setDetectedDbs] = useState<string[]>([]);
+  const [saving,     setSaving]     = useState(false);
+  const [saveResult, setSaveResult] = useState<{ ok: boolean; detail: string; configPath?: string } | null>(null);
 
   const selectMode = (m: DatabaseMode) => {
     setDatabaseMode(m);
     setTestResult(null);
+    setSaveResult(null);
     setDetectedDbs([]);
-    // تحديث الـ host تلقائياً حسب الوضع
     if (m === 'local-install' || m === 'local-existing') {
       setDbOpts({ host: 'localhost' });
     }
@@ -61,12 +63,65 @@ export default function Step06DatabaseMode() {
   const testConnection = async () => {
     setTesting(true);
     setTestResult(null);
+    setSaveResult(null);
     const r = await window.installer?.testConnection?.({
       host: dbOpts.host, port: dbOpts.port,
       database: 'postgres', user: dbOpts.user, password: dbOpts.password,
     });
     setTestResult(r ?? { ok: false, detail: 'لا استجابة من الاتصال' });
     setTesting(false);
+  };
+
+  // حفظ الإعدادات في ملف config.json + التحقق من صحتها
+  const saveAndVerify = async () => {
+    setSaving(true);
+    setSaveResult(null);
+    try {
+      // 1️⃣ بناء كائن الإعدادات الكامل
+      const cfg = {
+        version: '1.0.0',
+        database: {
+          host:          dbOpts.host,
+          port:          dbOpts.port,
+          name:          dbOpts.database,
+          user:          'onesoft_app',
+          password:      dbOpts.password,
+          adminUser:     dbOpts.user,
+          adminPassword: dbOpts.password,
+          poolMin:       2,
+          poolMax:       10,
+        },
+        server: {
+          backendPort:  3000,
+          frontendPort: 5000,
+        },
+      };
+
+      // 2️⃣ حفظ في C:\ProgramData\OneSoft\config\onesoft.config.json
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await window.installer?.saveConfig?.(cfg as any);
+
+      // 3️⃣ التحقق من صحة الإعدادات المحفوظة (اتصال فعلي بـ onesoft_app)
+      const verify = await (window.installer as any)?.verifyConfig?.() ?? null;
+
+      if (verify?.ok) {
+        setSaveResult({
+          ok: true,
+          detail: verify.detail ?? 'تم حفظ الإعدادات والتحقق منها بنجاح',
+          configPath: verify.configPath,
+        });
+      } else {
+        setSaveResult({
+          ok: false,
+          detail: verify?.detail ?? 'تم الحفظ لكن فشل التحقق',
+        });
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setSaveResult({ ok: false, detail: `خطأ غير متوقع: ${msg}` });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const detectDatabases = async () => {
@@ -313,6 +368,61 @@ export default function Step06DatabaseMode() {
           color: testResult.ok ? '#15803D' : '#B91C1C',
         }}>
           {testResult.ok ? '✅' : '❌'} {testResult.detail}
+        </div>
+      )}
+
+      {/* زر الحفظ + التحقق — يظهر فقط بعد نجاح اختبار الاتصال */}
+      {testResult?.ok && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{
+            padding: '10px 14px', borderRadius: 8, fontSize: 12,
+            background: '#FFFBEB', border: '1px solid #FCD34D', color: '#92400E',
+          }}>
+            ⚠️ يجب حفظ الإعدادات قبل المتابعة حتى يتمكن الخادم من قراءتها عند التثبيت
+          </div>
+          <button
+            onClick={saveAndVerify}
+            disabled={saving}
+            style={{
+              background: saving ? '#9CA3AF' : 'linear-gradient(135deg, #059669, #047857)',
+              color: '#fff', border: 'none', borderRadius: 8,
+              padding: '10px 24px', fontSize: 13, fontWeight: 700,
+              cursor: saving ? 'not-allowed' : 'pointer',
+              fontFamily: 'inherit', alignSelf: 'flex-start',
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}
+          >
+            {saving ? '⏳ جارٍ الحفظ والتحقق...' : '💾 حفظ الإعدادات + اختبار التكوين'}
+          </button>
+
+          {/* نتيجة الحفظ والتحقق */}
+          {saveResult && (
+            <div style={{
+              padding: '12px 16px', borderRadius: 8, fontSize: 13,
+              background: saveResult.ok ? '#F0FDF4' : '#FEF2F2',
+              border: `1px solid ${saveResult.ok ? '#86EFAC' : '#FCA5A5'}`,
+              color: saveResult.ok ? '#15803D' : '#B91C1C',
+            }}>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>
+                {saveResult.ok ? '✅ تم الحفظ والتحقق بنجاح' : '❌ فشل التحقق من الإعدادات'}
+              </div>
+              <div style={{ fontSize: 12, opacity: 0.9 }}>{saveResult.detail}</div>
+              {saveResult.ok && saveResult.configPath && (
+                <div style={{
+                  marginTop: 6, fontSize: 11, fontFamily: 'monospace', direction: 'ltr',
+                  background: 'rgba(0,0,0,0.05)', padding: '4px 8px', borderRadius: 4,
+                  color: '#166534',
+                }}>
+                  📁 {saveResult.configPath}
+                </div>
+              )}
+              {!saveResult.ok && (
+                <div style={{ marginTop: 6, fontSize: 12, color: '#991B1B' }}>
+                  💡 تأكد من أن المستخدم <b>onesoft_app</b> تم إنشاؤه (الخطوة 6) ثم أعد المحاولة
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

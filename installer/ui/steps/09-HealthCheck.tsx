@@ -16,14 +16,15 @@ const STATUS_BORDER: Record<string, string> = {
   healthy: '#86EFAC', unhealthy: '#FCA5A5', warning: '#FCD34D', checking: '#E5E7EB', skipped: '#E5E7EB',
 };
 
-function arabicDetail(id: string, detail: string): string {
+function arabicDetail(id: string, detail: string, bPort = 3000, fPort = 5000): string {
   if (!detail) return '';
   if (detail.includes('ECONNREFUSED') || detail.includes('connection refused')) {
-    if (id.includes('backend')  || detail.includes('3000')) return 'الخادم الخلفي لا يستجيب على المنفذ 3000';
-    if (id.includes('frontend') || detail.includes('5000')) return 'الخادم الأمامي لا يستجيب على المنفذ 5000';
+    if (id.includes('backend')  || detail.includes(String(bPort))) return `الخادم الخلفي لا يستجيب على المنفذ ${bPort}`;
+    if (id.includes('frontend') || detail.includes(String(fPort))) return `الخادم الأمامي لا يستجيب على المنفذ ${fPort}`;
     return 'الاتصال مرفوض — الخدمة لم تبدأ بعد';
   }
-  if (detail.includes('password authentication failed')) return 'كلمة مرور قاعدة البيانات غير صحيحة';
+  if (detail.includes('password authentication failed')) return 'كلمة مرور قاعدة البيانات غير صحيحة — تحقق من ملف onesoft.config.json';
+  if (detail.includes('role') && detail.includes('does not exist')) return 'مستخدم قاعدة البيانات غير موجود — أعد تشغيل التثبيت';
   if (detail.includes('relation') && detail.includes('does not exist')) return 'جدول مفقود — يرجى إعادة تشغيل Migrations';
   if (detail.includes('ETIMEDOUT') || detail.includes('timed out')) return 'انتهت مهلة الاتصال — تأكد من تشغيل الخدمة';
   if (detail.includes('not installed') || detail.includes('not-installed')) return 'الخدمة غير مثبتة';
@@ -43,6 +44,16 @@ export default function Step09HealthCheck() {
   const [diagLogs,       setDiagLogs]       = useState<string[]>([]);
   const [showDiag,       setShowDiag]       = useState(false);
   const diagRef = useRef<HTMLDivElement>(null);
+  const [backendPort,  setBackendPort]  = useState(3000);
+  const [frontendPort, setFrontendPort] = useState(5000);
+
+  // قراءة المنافذ الفعلية من ملف الإعدادات عند بدء التشغيل
+  useEffect(() => {
+    window.installer?.getConfig?.().then((cfg: any) => {
+      if (cfg?.server?.backendPort)  setBackendPort(cfg.server.backendPort);
+      if (cfg?.server?.frontendPort) setFrontendPort(cfg.server.frontendPort);
+    }).catch(() => {});
+  }, []);
 
   // سجل أحداث التشخيص
   useEffect(() => {
@@ -66,8 +77,8 @@ export default function Step09HealthCheck() {
         host: dbOpts.host, port: dbOpts.port,
         database: dbOpts.database, user: 'onesoft_app', password: dbOpts.password,
       },
-      backendPort: 3000,
-      frontendPort: 5000,
+      backendPort,
+      frontendPort,
     });
     if (report) {
       setHealthReport(report);
@@ -185,7 +196,7 @@ export default function Step09HealthCheck() {
               }} />
             ))
           : results.map(r => {
-              const friendly   = arabicDetail(r.id, r.detail ?? '');
+              const friendly   = arabicDetail(r.id, r.detail ?? '', backendPort, frontendPort);
               const isExpanded = expandedId === r.id;
               return (
                 <div key={r.id} style={{

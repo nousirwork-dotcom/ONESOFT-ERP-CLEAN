@@ -54,6 +54,17 @@ function loadFromConfigFile(): { dbUrl?: string; port?: number } {
 
 const _cfg = loadFromConfigFile();
 
+// ─── تحذير إذا كنا على Windows ولم نجد ملف الإعدادات ─────────────────────────
+if (process.platform === 'win32' && !_cfg.dbUrl && !process.env['DATABASE_URL']) {
+  const expectedPath = 'C:\\ProgramData\\OneSoft\\config\\onesoft.config.json';
+  console.error('╔══════════════════════════════════════════════════════════════╗');
+  console.error('║  [OneSoft] تحذير: لم يتم العثور على ملف الإعدادات!         ║');
+  console.error(`║  المسار المتوقع: ${expectedPath}`);
+  console.error('║  سيستخدم الخادم بيانات اتصال افتراضية (postgres:postgres)   ║');
+  console.error('║  إذا فشل الاتصال: تحقق من وجود الملف وأعد تشغيل الخدمة    ║');
+  console.error('╚══════════════════════════════════════════════════════════════╝');
+}
+
 export const ENV = {
   port:          _cfg.port ?? parseInt(process.env['PORT'] ?? '3000'),
   nodeEnv:       process.env['NODE_ENV']      ?? 'development',
