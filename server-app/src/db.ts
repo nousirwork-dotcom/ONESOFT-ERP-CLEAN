@@ -5,6 +5,13 @@ import * as schema from './schema.js';
 
 const { Pool } = pg;
 
+// ── تشخيص: طباعة عنوان الاتصال قبل إنشاء الـ Pool ─────────────────────────
+const maskedUrl = ENV.dbUrl.replace(/:([^:@]+)@/, ':***@');
+console.log(`[db] Creating Pool → ${maskedUrl}`);
+console.log(`[db] Config Source  : ${ENV.configSource}`);
+console.log(`[db] DB User        : ${ENV.dbUser}`);
+// ── نهاية التشخيص ─────────────────────────────────────────────────────────
+
 const pool = new Pool({
   connectionString: ENV.dbUrl,
   max: 10,

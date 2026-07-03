@@ -571,9 +571,20 @@ export class ServiceManager {
     const nodeVersion = (nodeResult.stdout ?? '').trim();
     const nodePath    = findNode();
 
-    // إصدار nssm (windowsHide منع ظهور نوافذ GUI)
-    const nssmR = spawnSync(this.nssm, ['version'], { encoding: 'utf-8', stdio: 'pipe', windowsHide: true });
-    const nssmVersion = ((nssmR.stdout ?? '') + (nssmR.stderr ?? '')).trim().split('\n')[0] ?? 'غير معروف';
+    // إصدار nssm — نقرأ من خصائص الملف مباشرة (لا نشغّل nssm version لأنه يفتح GUI)
+    let nssmVersion = 'غير معروف';
+    try {
+      if (process.platform === 'win32' && fs.existsSync(this.nssm)) {
+        const r = spawnSync('powershell', [
+          '-NoProfile', '-NonInteractive', '-Command',
+          `(Get-Item '${this.nssm}').VersionInfo.FileVersion`,
+        ], { encoding: 'utf-8', stdio: 'pipe', windowsHide: true, timeout: 3000 });
+        const ver = (r.stdout ?? '').trim();
+        if (ver) nssmVersion = `NSSM ${ver}`;
+      } else {
+        nssmVersion = fs.existsSync(this.nssm) ? 'NSSM (non-Windows)' : 'NSSM (غير موجود)';
+      }
+    } catch { nssmVersion = 'NSSM (تعذّر قراءة الإصدار)'; }
 
     // صلاحيات
     const admin = isAdmin();

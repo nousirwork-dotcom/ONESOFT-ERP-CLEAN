@@ -65,6 +65,17 @@ const EXPECTED_TABLES = [
 ];
 
 export async function checkSchema(pool: Pool): Promise<boolean> {
+  // ── تشخيص: طباعة بيئة الاتصال قبل أي محاولة ──────────────────────────────
+  console.log('[schema-check] ── Connection Diagnostics ──');
+  console.log(`[schema-check]   NODE_ENV       = ${process.env['NODE_ENV'] ?? '(غير محدد)'}`);
+  console.log(`[schema-check]   DATABASE_URL   = ${
+    process.env['DATABASE_URL']
+      ? process.env['DATABASE_URL'].replace(/:([^:@]+)@/, ':***@')  // إخفاء كلمة المرور
+      : '(غير محدد)'
+  }`);
+  console.log(`[schema-check]   CONFIG_PATH    = ${process.env['ONESOFT_CONFIG'] ?? 'default path'}`);
+  // ── نهاية التشخيص ────────────────────────────────────────────────────────
+
   let client;
   try {
     client = await pool.connect();

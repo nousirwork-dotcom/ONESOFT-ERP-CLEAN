@@ -24115,21 +24115,20 @@ import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
 function loadConfig() {
-  const isProduction = (process.env["NODE_ENV"] ?? "development") === "production";
+  const isProduction2 = (process.env["NODE_ENV"] ?? "development") === "production";
   const configExists = fs.existsSync(CONFIG_PATH);
   if (configExists) {
     let raw;
     try {
       raw = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8"));
     } catch (e) {
-      const msg = `[OneSoft] \u274C \u0645\u0644\u0641 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0645\u0648\u062C\u0648\u062F \u0644\u0643\u0646 \u062A\u0639\u0630\u0651\u0631 \u0642\u0631\u0627\u0621\u062A\u0647 (JSON \u062E\u0627\u0637\u0626): ${CONFIG_PATH}
-${e}`;
-      if (isProduction) {
-        console.error(msg);
-        process.exit(1);
+      const fatal2 = isProduction2 ? `\u274C FATAL: config.json \u0645\u0648\u062C\u0648\u062F \u0644\u0643\u0646 JSON \u062E\u0627\u0637\u0626: ${CONFIG_PATH}
+   ${e}` : void 0;
+      if (!isProduction2) {
+        console.warn(`[OneSoft] config.json \u062A\u0639\u0630\u0651\u0631 \u0642\u0631\u0627\u0621\u062A\u0647 \u2014 \u0627\u0644\u0631\u062C\u0648\u0639 \u0644\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0627\u0644\u0627\u0641\u062A\u0631\u0627\u0636\u064A\u0629
+${e}`);
       }
-      console.warn(msg + "\n[OneSoft] \u0627\u0644\u0631\u062C\u0648\u0639 \u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0627\u0644\u062A\u0637\u0648\u064A\u0631...");
-      return devFallback(configExists);
+      return { ...devFallback(configExists), fatal: fatal2 };
     }
     const db2 = raw["database"];
     const srv = raw["server"];
@@ -24141,13 +24140,11 @@ ${e}`;
     const bPort = Number(srv?.["backendPort"] ?? 3e3);
     const fPort = Number(srv?.["frontendPort"] ?? 5e3);
     if (!host || !user) {
-      const msg = `[OneSoft] \u274C config.json \u0646\u0627\u0642\u0635: host="${host}" user="${user}" \u2014 \u062A\u062D\u0642\u0642 \u0645\u0646 \u0627\u0644\u0645\u0644\u0641: ${CONFIG_PATH}`;
-      if (isProduction) {
-        console.error(msg);
-        process.exit(1);
+      const fatal2 = isProduction2 ? `\u274C FATAL: config.json \u0646\u0627\u0642\u0635 \u2014 host="${host}" user="${user}"` : void 0;
+      if (!isProduction2) {
+        console.warn(`[OneSoft] config.json \u0646\u0627\u0642\u0635 (host/user \u0641\u0627\u0631\u063A) \u2014 \u0627\u0644\u0631\u062C\u0648\u0639 \u0644\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0627\u0644\u0627\u0641\u062A\u0631\u0627\u0636\u064A\u0629`);
       }
-      console.warn(msg + "\n[OneSoft] \u0627\u0644\u0631\u062C\u0648\u0639 \u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0627\u0644\u062A\u0637\u0648\u064A\u0631...");
-      return devFallback(configExists);
+      return { ...devFallback(configExists), fatal: fatal2 };
     }
     const dbUrl = `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${pgPort}/${dbName}`;
     return {
@@ -24164,18 +24161,8 @@ ${e}`;
       configExists: true
     };
   }
-  if (isProduction) {
-    console.error("");
-    console.error("\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557");
-    console.error("\u2551  [OneSoft] \u274C FATAL: \u0645\u0644\u0641 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0641\u064A \u0648\u0636\u0639 \u0627\u0644\u0625\u0646\u062A\u0627\u062C       \u2551");
-    console.error(`\u2551  \u0627\u0644\u0645\u0633\u0627\u0631 \u0627\u0644\u0645\u0637\u0644\u0648\u0628: ${CONFIG_PATH}`);
-    console.error("\u2551  \u0644\u0627 \u064A\u0645\u0643\u0646 \u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u062E\u0627\u062F\u0645 \u0628\u062F\u0648\u0646 \u0647\u0630\u0627 \u0627\u0644\u0645\u0644\u0641.                              \u2551");
-    console.error("\u2551  \u0627\u0644\u062D\u0644: \u0623\u0639\u062F \u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u0645\u062B\u0628\u0651\u062A \u0623\u0648 \u0623\u0646\u0634\u0626 \u0627\u0644\u0645\u0644\u0641 \u064A\u062F\u0648\u064A\u0627\u064B.                    \u2551");
-    console.error("\u255A\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255D");
-    console.error("");
-    process.exit(1);
-  }
-  return devFallback(false);
+  const fatal = isProduction2 ? `\u274C FATAL: config.json \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0641\u064A \u0648\u0636\u0639 \u0627\u0644\u0625\u0646\u062A\u0627\u062C \u2014 \u0627\u0644\u0645\u0633\u0627\u0631: ${CONFIG_PATH}` : void 0;
+  return { ...devFallback(false), fatal };
 }
 function devFallback(configExists) {
   const urlFromEnv = process.env["DATABASE_URL"];
@@ -24200,21 +24187,28 @@ function devFallback(configExists) {
     passwordLen,
     backendPort: parseInt(process.env["PORT"] ?? "3000"),
     frontendPort: 5e3,
-    source: configExists ? `${CONFIG_PATH} (\u0642\u0631\u0627\u0621\u0629 \u0641\u0627\u0634\u0644\u0629)` : `${CONFIG_PATH} (\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F)`,
+    source: configExists ? `${CONFIG_PATH} (\u0641\u0634\u0644 \u0642\u0631\u0627\u0621\u0629)` : `${CONFIG_PATH} (\u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F)`,
     urlSource,
     configExists
   };
 }
-var import_dotenv, __dirname, CONFIG_PATH, _cfg, ENV;
+var import_dotenv, __dirname, CONFIG_PATH, _cfg, isProduction, ENV;
 var init_env = __esm({
   "src/env.ts"() {
     import_dotenv = __toESM(require_main(), 1);
     __dirname = path.dirname(fileURLToPath(import.meta.url));
     import_dotenv.default.config({ path: path.join(__dirname, "..", ".env") });
-    CONFIG_PATH = process.env["ONESOFT_CONFIG"] ?? (process.platform === "win32" ? "C:\\ProgramData\\OneSoft\\config\\onesoft.config.json" : path.join(process.env["HOME"] ?? "/tmp", ".onesoft", "config", "onesoft.config.json"));
+    CONFIG_PATH = process.env["ONESOFT_CONFIG"] ?? (process.platform === "win32" ? path.join(
+      process.env["PROGRAMDATA"] ?? process.env["ProgramData"] ?? "C:\\ProgramData",
+      "OneSoft",
+      "config",
+      "onesoft.config.json"
+    ) : path.join(process.env["HOME"] ?? "/tmp", ".onesoft", "config", "onesoft.config.json"));
     _cfg = loadConfig();
+    isProduction = (process.env["NODE_ENV"] ?? "development") === "production";
     console.log("");
     console.log("======== OneSoft Startup ========");
+    console.log(`NODE_ENV             : ${process.env["NODE_ENV"] ?? "(\u063A\u064A\u0631 \u0645\u062D\u062F\u062F)"}`);
     console.log(`Configuration Source : ${_cfg.source}`);
     console.log(`Config Exists        : ${_cfg.configExists}`);
     console.log(`Database Host        : ${_cfg.host}`);
@@ -24225,8 +24219,18 @@ var init_env = __esm({
     console.log(`Backend Port         : ${_cfg.backendPort}`);
     console.log(`Frontend Port        : ${_cfg.frontendPort}`);
     console.log(`DATABASE_URL Source  : ${_cfg.urlSource}`);
+    if (_cfg.fatal) {
+      console.log(`FATAL ERROR          : ${_cfg.fatal}`);
+    }
     console.log("=================================");
     console.log("");
+    if (_cfg.fatal && isProduction) {
+      console.error("\n\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557");
+      console.error(`\u2551  ${_cfg.fatal}`);
+      console.error("\u2551  \u0627\u0644\u062D\u0644: \u0623\u0639\u062F \u062A\u0634\u063A\u064A\u0644 \u0627\u0644\u0645\u062B\u0628\u0651\u062A \u0623\u0648 \u062A\u062D\u0642\u0642 \u0645\u0646 \u0645\u0644\u0641 onesoft.config.json        \u2551");
+      console.error("\u255A\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255D\n");
+      process.exit(1);
+    }
     ENV = {
       port: _cfg.backendPort,
       nodeEnv: process.env["NODE_ENV"] ?? "development",
@@ -24238,7 +24242,6 @@ var init_env = __esm({
       isElectron: process.env["ELECTRON_MODE"] === "1",
       cookieName: "onesoft_session",
       sessionExpiry: 30 * 24 * 60 * 60 * 1e3,
-      // معلومات تشخيصية إضافية
       configSource: _cfg.source,
       configExists: _cfg.configExists,
       dbUser: _cfg.user,
@@ -43635,7 +43638,7 @@ __export(db_exports, {
   db: () => db,
   pool: () => pool
 });
-var Pool3, pool, db;
+var Pool3, maskedUrl, pool, db;
 var init_db2 = __esm({
   "src/db.ts"() {
     init_node_postgres();
@@ -43643,6 +43646,10 @@ var init_db2 = __esm({
     init_env();
     init_schema2();
     ({ Pool: Pool3 } = esm_default);
+    maskedUrl = ENV.dbUrl.replace(/:([^:@]+)@/, ":***@");
+    console.log(`[db] Creating Pool \u2192 ${maskedUrl}`);
+    console.log(`[db] Config Source  : ${ENV.configSource}`);
+    console.log(`[db] DB User        : ${ENV.dbUser}`);
     pool = new Pool3({
       connectionString: ENV.dbUrl,
       max: 10,
@@ -68044,6 +68051,10 @@ var EXPECTED_TABLES = [
   "zatca_api_history"
 ];
 async function checkSchema(pool2) {
+  console.log("[schema-check] \u2500\u2500 Connection Diagnostics \u2500\u2500");
+  console.log(`[schema-check]   NODE_ENV       = ${process.env["NODE_ENV"] ?? "(\u063A\u064A\u0631 \u0645\u062D\u062F\u062F)"}`);
+  console.log(`[schema-check]   DATABASE_URL   = ${process.env["DATABASE_URL"] ? process.env["DATABASE_URL"].replace(/:([^:@]+)@/, ":***@") : "(\u063A\u064A\u0631 \u0645\u062D\u062F\u062F)"}`);
+  console.log(`[schema-check]   CONFIG_PATH    = ${process.env["ONESOFT_CONFIG"] ?? "default path"}`);
   let client;
   try {
     client = await pool2.connect();
