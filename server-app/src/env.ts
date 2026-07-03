@@ -99,7 +99,9 @@ function loadConfig(): ConfigResult {
 }
 
 function devFallback(configExists: boolean): ConfigResult {
-  const urlFromEnv = process.env['DATABASE_URL'];
+  // ✅ استخدام || بدلاً من ?? لأن السلسلة الفارغة '' تُعامَل كـ falsy
+  // '' ?? 'default' = '' (خاطئ!) — '' || 'default' = 'default' (صحيح)
+  const urlFromEnv = process.env['DATABASE_URL'] || undefined;
   const dbUrl      = urlFromEnv ?? 'postgresql://postgres:postgres@localhost:5432/onesoft_erp';
   const urlSource  = urlFromEnv ? 'DATABASE_URL (env)' : 'built-in default (dev)';
 

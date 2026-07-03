@@ -129,8 +129,8 @@ function testScript(
   const exitCode = result.status;
   const timedOut = result.signal === 'SIGTERM' || result.signal === 'SIGKILL' || exitCode === null;
 
-  if (stdout) emit({ level: 'info',    message: `stdout (5s):\n${stdout.slice(0, 400)}`, timestamp: now() });
-  if (stderr) emit({ level: 'warning', message: `stderr (5s):\n${stderr.slice(0, 400)}`, timestamp: now() });
+  if (stdout) emit({ level: 'info',    message: `stdout (5s):\n${stdout.slice(0, 3000)}`, timestamp: now() });
+  if (stderr) emit({ level: 'warning', message: `stderr (5s):\n${stderr.slice(0, 3000)}`, timestamp: now() });
 
   if (timedOut) {
     emit({ level: 'success', message: `✅ ${label} يعمل — أُوقف بعد 5s دون تعطل`, timestamp: now() });

@@ -1,4 +1,6 @@
 import './startup-banner.js';  // ← أول import — يطبع بيانات التشخيص قبل أي كود آخر
+// [1/6] بانر بدء التشغيل يُطبع داخل startup-banner.js
+console.log('[2/6] Loading environment (env.ts + config.json)...');
 import express from 'express';
 import cors from 'cors';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
@@ -15,6 +17,7 @@ import { pool } from './db.js';
 import { checkSchema } from './check-schema.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+console.log('[3/6] All modules loaded — creating HTTP app...');
 const app = express();
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
@@ -201,14 +204,24 @@ if (existsSync(path.join(clientBuildPath, 'index.html'))) {
   });
 }
 
-// ─── Start ────────────────────────────────────────────────────────────────────
+// ─── Start — مع logging تفصيلي لكل مرحلة ────────────────────────────────────
+console.log('[4/6] Connecting to PostgreSQL...');
+console.log(`      URL  : ${ENV.dbUrl.replace(/:([^:@]+)@/, ':***@')}`);
+console.log(`      User : ${ENV.dbUser}`);
+console.log(`      Host : ${ENV.dbHost}`);
+console.log(`      DB   : ${ENV.dbName}`);
+
 const schemaOk = await checkSchema(pool);
 if (!schemaOk) {
-  console.error('[startup] Aborting: database schema is out of date or unreachable.');
+  console.error('[startup] ❌ [4/6] FAILED — PostgreSQL connection or schema check failed.');
+  console.error(`          DATABASE_URL source: ${ENV.configSource}`);
   process.exit(1);
 }
+console.log('[4/6] ✅ PostgreSQL connected — schema OK');
 
+console.log(`[5/6] Creating HTTP server on port ${ENV.port}...`);
 app.listen(ENV.port, () => {
+  console.log(`[6/6] ✅ OneSoft ERP listening on http://localhost:${ENV.port}`);
   logger.info('server', `OneSoft ERP started on http://localhost:${ENV.port}`, {
     env: ENV.nodeEnv, electron: ENV.isElectron,
   });

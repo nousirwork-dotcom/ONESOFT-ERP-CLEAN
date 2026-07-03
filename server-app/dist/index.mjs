@@ -24165,7 +24165,7 @@ ${e}`);
   return { ...devFallback(false), fatal };
 }
 function devFallback(configExists2) {
-  const urlFromEnv = process.env["DATABASE_URL"];
+  const urlFromEnv = process.env["DATABASE_URL"] || void 0;
   const dbUrl = urlFromEnv ?? "postgresql://postgres:postgres@localhost:5432/onesoft_erp";
   const urlSource = urlFromEnv ? "DATABASE_URL (env)" : "built-in default (dev)";
   let host = "localhost", pgPort = 5432, user = "postgres", dbName = "onesoft_erp", passwordLen = 0;
@@ -68166,7 +68166,9 @@ async function checkSchema(pool2) {
 
 // src/index.ts
 import { existsSync } from "fs";
+console.log("[2/6] Loading environment (env.ts + config.json)...");
 var __dirname7 = path8.dirname(fileURLToPath8(import.meta.url));
+console.log("[3/6] All modules loaded \u2014 creating HTTP app...");
 var app = (0, import_express.default)();
 app.use((0, import_cors.default)({ origin: true, credentials: true }));
 app.use(import_express.default.json({ limit: "10mb" }));
@@ -68318,12 +68320,21 @@ if (existsSync(path8.join(clientBuildPath, "index.html"))) {
     }
   });
 }
+console.log("[4/6] Connecting to PostgreSQL...");
+console.log(`      URL  : ${ENV.dbUrl.replace(/:([^:@]+)@/, ":***@")}`);
+console.log(`      User : ${ENV.dbUser}`);
+console.log(`      Host : ${ENV.dbHost}`);
+console.log(`      DB   : ${ENV.dbName}`);
 var schemaOk = await checkSchema(pool);
 if (!schemaOk) {
-  console.error("[startup] Aborting: database schema is out of date or unreachable.");
+  console.error("[startup] \u274C [4/6] FAILED \u2014 PostgreSQL connection or schema check failed.");
+  console.error(`          DATABASE_URL source: ${ENV.configSource}`);
   process.exit(1);
 }
+console.log("[4/6] \u2705 PostgreSQL connected \u2014 schema OK");
+console.log(`[5/6] Creating HTTP server on port ${ENV.port}...`);
 app.listen(ENV.port, () => {
+  console.log(`[6/6] \u2705 OneSoft ERP listening on http://localhost:${ENV.port}`);
   logger.info("server", `OneSoft ERP started on http://localhost:${ENV.port}`, {
     env: ENV.nodeEnv,
     electron: ENV.isElectron
