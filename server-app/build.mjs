@@ -51,9 +51,12 @@ try {
     logLevel:  'warning',
 
     // ── توافق متعدد الحزم ────────────────────────────────────────────────────
-    // يضمن الأولوية الصحيحة عند حل main fields لحزم CJS/ESM مختلطة
-    mainFields: ['module', 'main'],
-    conditions: ['import', 'require', 'node', 'default'],
+    // السبب: pg@8.20.0 يحتوي نسختين ESM+CJS — "Dual Package Hazard"
+    // إذا سمحنا بـ 'import' أو 'module'، يحمّل esbuild pg/esm/index.mjs
+    // ثم يحوّل Pool إلى Object عبر __toCommonJS فيفشل: class extends #<Object>
+    // الحل: إجبار esbuild على استخدام نسخة CJS فقط (pg/lib/index.js)
+    mainFields: ['main'],                        // لا 'module' — تجنب ESM entry
+    conditions: ['require', 'node', 'default'],  // لا 'import' — تجنب pg/esm/
 
     // ── ملف بيانات البناء ─────────────────────────────────────────────────────
     metafile: true,
