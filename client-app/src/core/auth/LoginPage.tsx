@@ -35,7 +35,7 @@ export default function LoginPage() {
           if (res.ok) {
             await utils.auth.me.invalidate();
             const role = data.user?.role;
-            navigate(role === 'superadmin' ? '/superadmin' : '/');
+            navigate('/');
           } else {
             setError(data.error || 'تعذّر الدخول التلقائي');
             setStatus('error');
@@ -109,7 +109,7 @@ export default function LoginPage() {
             boxShadow: '0 4px 20px rgba(30,52,79,0.1)',
           }}>
             {error && <div style={{ color: '#B91C1C', fontWeight: 600, marginBottom: 14 }}>⚠️ {error}</div>}
-            <ManualLoginForm onSuccess={(role) => navigate(role === 'superadmin' ? '/superadmin' : '/')} utils={utils} />
+            <ManualLoginForm onSuccess={() => navigate('/')} utils={utils} />
           </div>
         )}
       </div>

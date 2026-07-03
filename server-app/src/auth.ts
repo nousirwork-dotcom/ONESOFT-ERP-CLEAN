@@ -140,6 +140,9 @@ export function logoutHandler(_req: Request, res: Response) {
     secure: false,
     sameSite: 'lax',
   });
+  if (req.method === 'GET') {
+    return res.redirect('/');
+  }
   return res.json({ success: true });
 }
 

@@ -22,6 +22,7 @@ app.use(express.urlencoded({ extended: true }));
 // ─── Auth Routes ──────────────────────────────────────────────────────────────
 app.post('/api/auth/login', loginHandler);
 app.post('/api/auth/logout', logoutHandler);
+app.get('/api/auth/logout', logoutHandler);
 app.get('/api/auth/me', meHandler);
 
 // ─── Auto-Login (dev / single-user mode) ─────────────────────────────────────
