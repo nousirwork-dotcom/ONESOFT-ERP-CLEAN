@@ -13,7 +13,6 @@ export function registerServicesIpc(ipc: IpcMain, win: BrowserWindow | null) {
     deploymentType: DeploymentType;
     accessModes:    AccessMode[];
   }) => {
-    // تمرير process.resourcesPath لتحديد المسار الحقيقي لملفات التطبيق داخل حزمة Electron
     await mgr.installAll({
       ...opts,
       resourcesPath: process.resourcesPath ?? '',
@@ -25,4 +24,13 @@ export function registerServicesIpc(ipc: IpcMain, win: BrowserWindow | null) {
   ipc.handle('services:start',   (_, name: ServiceName) => mgr.start(name));
   ipc.handle('services:stop',    (_, name: ServiceName) => mgr.stop(name));
   ipc.handle('services:restart', (_, name: ServiceName) => mgr.restart(name));
+
+  // تشخيص شامل للنظام
+  ipc.handle('services:diagnose', async () => {
+    const installDir = 'C:\\Program Files\\OneSoft ERP';
+    return mgr.diagnose(
+      { installDir, resourcesPath: process.resourcesPath ?? '' },
+      emit as any,
+    );
+  });
 }
