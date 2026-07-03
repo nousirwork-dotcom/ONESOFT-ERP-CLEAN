@@ -12,12 +12,15 @@ export function registerServicesIpc(ipc: IpcMain, win: BrowserWindow | null) {
     logsDir:        string;
     deploymentType: DeploymentType;
     accessModes:    AccessMode[];
+    databaseUrl?:   string;
+    backendPort?:   number;
+    frontendPort?:  number;
   }) => {
-    await mgr.installAll({
+    const result = await mgr.installAll({
       ...opts,
       resourcesPath: process.resourcesPath ?? '',
     }, emit as any);
-    return { ok: true };
+    return { ok: true, backendPort: result.backendPort, frontendPort: result.frontendPort };
   });
 
   ipc.handle('services:status',  (_, name: ServiceName) => mgr.getStatus(name));

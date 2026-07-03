@@ -3,6 +3,8 @@ import cors from 'cors';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
+import { spawnSync } from 'child_process';
 import { ENV } from './env.js';
 import { logger } from './logger.js';
 import { createContext } from './trpc.js';
@@ -50,6 +52,73 @@ app.get('/api/health', (_req, res) => res.json({
   electron:  ENV.isElectron,
   ts:        new Date().toISOString(),
 }));
+
+// ─── System/Services Status ───────────────────────────────────────────────────
+app.get('/api/system/status', (_req, res) => {
+  const configPath = process.platform === 'win32'
+    ? 'C:\\ProgramData\\OneSoft\\config\\onesoft.config.json'
+    : path.join(process.env['HOME'] ?? '/tmp', '.onesoft', 'config', 'onesoft.config.json');
+
+  let config: Record<string, unknown> | null = null;
+  try {
+    if (fs.existsSync(configPath)) {
+      config = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
+    }
+  } catch { /* ignore */ }
+
+  const svcStatus = (name: string): string => {
+    if (process.platform !== 'win32') return 'n/a';
+    try {
+      const r = spawnSync('sc', ['query', name], { encoding: 'utf-8', stdio: 'pipe' });
+      const out = String(r.stdout ?? '');
+      if (out.includes('RUNNING'))       return 'running';
+      if (out.includes('STOPPED'))       return 'stopped';
+      if (out.includes('START_PENDING')) return 'starting';
+      if (out.includes('1060') || String(r.stderr ?? '').includes('1060')) return 'not-installed';
+      return 'unknown';
+    } catch { return 'unknown'; }
+  };
+
+  const db    = config?.['database'] as Record<string, unknown> | undefined;
+  const srv   = config?.['server']   as Record<string, unknown> | undefined;
+  const paths = config?.['paths']    as Record<string, unknown> | undefined;
+
+  res.json({
+    backendPort:    ENV.port,
+    frontendPort:   Number(srv?.['frontendPort'] ?? 5000),
+    backendStatus:  svcStatus('OneSoft-Server'),
+    frontendStatus: svcStatus('OneSoft-Client'),
+    dbHost:         db ? String(db['host'] ?? 'localhost') : 'localhost',
+    dbPort:         db ? Number(db['port']  ?? 5432)       : 5432,
+    dbName:         db ? String(db['name']  ?? 'onesoft_erp') : 'onesoft_erp',
+    dbUser:         db ? String(db['user']  ?? 'onesoft_app') : 'onesoft_app',
+    logPath:        String(paths?.['logs'] ?? 'C:\\ProgramData\\OneSoft\\Logs'),
+    configPath,
+    configFound:    config !== null,
+    platform:       process.platform,
+    nodeVersion:    process.version,
+    uptime:         Math.floor(process.uptime()),
+  });
+});
+
+app.post('/api/system/restart-service', async (req, res) => {
+  if (process.platform !== 'win32') {
+    return res.json({ ok: true, message: 'Linux — لا توجد خدمات Windows' });
+  }
+  const { name } = req.body as { name?: string };
+  const allowed  = ['OneSoft-Server', 'OneSoft-Client'];
+  if (!name || !allowed.includes(name)) {
+    return res.status(400).json({ ok: false, error: 'اسم خدمة غير مسموح' });
+  }
+  try {
+    spawnSync('sc', ['stop', name],  { encoding: 'utf-8', stdio: 'pipe' });
+    await new Promise(r => setTimeout(r, 2500));
+    spawnSync('sc', ['start', name], { encoding: 'utf-8', stdio: 'pipe' });
+    return res.json({ ok: true, message: `تمّت إعادة تشغيل ${name}` });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: String(err) });
+  }
+});
 
 // ─── Backup Download (requires superadmin session) ────────────────────────────
 app.get('/download/backup', async (req, res) => {

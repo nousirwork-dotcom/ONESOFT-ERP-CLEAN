@@ -72,6 +72,7 @@ import SettingsModule, {
   CfgGosiTab, CfgGaztTab,
   CfgZatcaCenterTab,
   CfgSystemInfoTab,
+  CfgServiceManagementTab,
 } from "@/modules/settings/pages/SettingsModule";
 import PostingSettingsPage from "@/modules/accounting/pages/PostingSettingsPage";
 import PostingOperationsPage from "@/modules/accounting/pages/PostingOperationsPage";
@@ -263,6 +264,7 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/cfg/gosi":                   CfgGosiTab,
   "/cfg/gazt":                   CfgGaztTab,
   "/cfg/system-info":            CfgSystemInfoTab,
+  "/cfg/service-management":     CfgServiceManagementTab,
   "/dev/source-code":            SourceCodeViewerPage,
 };
 

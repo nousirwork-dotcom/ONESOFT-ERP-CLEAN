@@ -165,6 +165,59 @@ function resolveScript(candidates: string[], emit: Emit, label: string): string 
 function now() { return new Date().toISOString(); }
 async function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 
+// ─── فحص المنافذ وإيجاد منفذ متاح ───────────────────────────────────────────
+
+/** هل المنفذ مشغول بعملية أخرى؟ */
+function isPortBusy(port: number): boolean {
+  if (process.platform !== 'win32') {
+    try {
+      const r = spawnSync('lsof', ['-i', `:${port}`, '-t'], { encoding: 'utf-8', stdio: 'pipe' });
+      return (r.stdout ?? '').trim().length > 0;
+    } catch { return false; }
+  }
+  try {
+    const r = spawnSync('netstat', ['-ano'], { encoding: 'utf-8', stdio: 'pipe' });
+    const lines = (r.stdout ?? '').split('\n');
+    return lines.some(l => l.includes(`:${port} `) && (l.includes('LISTENING') || l.includes('ESTABLISHED')));
+  } catch { return false; }
+}
+
+/** إيجاد منفذ متاح — يجرب المفضّل أولاً ثم البدائل */
+function findAvailablePort(preferred: number, alternatives: number[], emit: Emit): number {
+  if (!isPortBusy(preferred)) {
+    emit({ level: 'success', message: `✅ المنفذ ${preferred} متاح`, timestamp: now() });
+    return preferred;
+  }
+
+  // اكتشف العملية التي تشغّل المنفذ
+  let occupiedBy = '';
+  try {
+    if (process.platform === 'win32') {
+      const r = spawnSync('netstat', ['-ano'], { encoding: 'utf-8', stdio: 'pipe' });
+      const line = (r.stdout ?? '').split('\n').find(l => l.includes(`:${preferred} `) && l.includes('LISTENING'));
+      if (line) {
+        const pid = line.trim().split(/\s+/).pop() ?? '';
+        const proc = spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], { encoding: 'utf-8', stdio: 'pipe' });
+        occupiedBy = (proc.stdout ?? '').trim().split(',')[0]?.replace(/"/g, '') ?? `PID ${pid}`;
+      }
+    }
+  } catch { /* ignore */ }
+
+  const who = occupiedBy ? ` (يستخدمه: ${occupiedBy})` : '';
+  emit({ level: 'warning', message: `⚠️ المنفذ ${preferred} مشغول${who} — أبحث عن بديل...`, timestamp: now() });
+
+  for (const alt of alternatives) {
+    if (!isPortBusy(alt)) {
+      emit({ level: 'success', message: `✅ سيُستخدم المنفذ البديل ${alt}`, timestamp: now() });
+      return alt;
+    }
+    emit({ level: 'info', message: `   المنفذ ${alt} مشغول أيضاً`, timestamp: now() });
+  }
+
+  emit({ level: 'error', message: `❌ جميع المنافذ مشغولة — سيُستخدم ${preferred} رغم ذلك`, timestamp: now() });
+  return preferred;
+}
+
 // ─── ServiceManager ──────────────────────────────────────────────────────────
 
 export class ServiceManager {
@@ -245,6 +298,7 @@ export class ServiceManager {
     scriptPath: string,
     logPath: string,
     emit: Emit,
+    envVars?: Record<string, string>,
   ): { ok: boolean; installResult: { cmd: string; stdout: string; stderr: string; exitCode: number } } {
     emit({ level: 'info', message: `\n━━━ تثبيت خدمة ${name} ━━━`, timestamp: now() });
     emit({ level: 'info', message: `  Application:  ${nodePath}`, timestamp: now() });
@@ -269,6 +323,13 @@ export class ServiceManager {
     execVerbose(this.nssm, ['set', name, 'AppStderr',    logPath],                  emit, 'AppStderr');
     execVerbose(this.nssm, ['set', name, 'AppRotateFiles','1'],                     emit, 'AppRotate');
     execVerbose(this.nssm, ['set', name, 'AppRotateBytes','10485760'],              emit, 'AppRotateBytes');
+
+    // ضبط متغيرات البيئة (DATABASE_URL, PORT, ...)
+    if (envVars && Object.keys(envVars).length > 0) {
+      const envArgs = Object.entries(envVars).map(([k, v]) => `${k}=${v}`);
+      emit({ level: 'info', message: `🔑 ضبط متغيرات البيئة: ${Object.keys(envVars).join(', ')}`, timestamp: now() });
+      execVerbose(this.nssm, ['set', name, 'AppEnvironmentExtra', ...envArgs], emit, 'AppEnvironmentExtra');
+    }
 
     emit({ level: 'success', message: `✅ تم تثبيت ${name} بنجاح`, timestamp: now() });
     return { ok: true, installResult };
@@ -311,9 +372,12 @@ export class ServiceManager {
       deploymentType:  DeploymentType;
       accessModes:     AccessMode[];
       resourcesPath?:  string;
+      databaseUrl?:    string;
+      backendPort?:    number;
+      frontendPort?:   number;
     },
     emit: Emit,
-  ): Promise<void> {
+  ): Promise<{ backendPort: number; frontendPort: number }> {
     const { installDir, logsDir, deploymentType, accessModes } = opts;
     const rp = opts.resourcesPath ?? electronResourcesPath;
 
@@ -389,12 +453,38 @@ export class ServiceManager {
       }
     }
 
-    // ── 6. تثبيت الخدمات وتسجيل نتيجة nssm كاملة ─────────────────────────
+    // ── 6. اختيار المنافذ المتاحة ──────────────────────────────────────────
+    emit({ level: 'info', message: `\n━━━ فحص المنافذ ━━━`, timestamp: now() });
+    const backendPort  = findAvailablePort(opts.backendPort  ?? 3000, [3001, 3002, 3100, 3200], emit);
+    const frontendPort = findAvailablePort(opts.frontendPort ?? 5000, [5001, 5002, 5100, 5200], emit);
+    emit({ level: 'info', message: `📌 Backend:  منفذ ${backendPort}`, timestamp: now() });
+    emit({ level: 'info', message: `📌 Frontend: منفذ ${frontendPort}`, timestamp: now() });
+
+    // متغيرات البيئة للخدمات
+    const backendEnvVars: Record<string, string> = {
+      NODE_ENV: 'production',
+      PORT:     String(backendPort),
+    };
+    if (opts.databaseUrl) {
+      backendEnvVars['DATABASE_URL'] = opts.databaseUrl;
+      emit({ level: 'info', message: `🔑 DATABASE_URL سيُضبط في OneSoft-Server`, timestamp: now() });
+    } else {
+      emit({ level: 'warning', message: `⚠️ لم يُمرَّر DATABASE_URL — سيستخدم Backend قيمه الافتراضية`, timestamp: now() });
+    }
+
+    const frontendEnvVars: Record<string, string> = {
+      NODE_ENV:    'production',
+      PORT:        String(frontendPort),
+      BACKEND_URL: `http://localhost:${backendPort}`,
+    };
+
+    // ── 7. تثبيت الخدمات وتسجيل نتيجة nssm كاملة ─────────────────────────
     if (needsBackend) {
       if (serverScript) {
         this.installService(
           'OneSoft-Server', nodePath, serverScript,
           path.join(logsDir, 'server.log'), emit,
+          backendEnvVars,
         );
       } else {
         emit({ level: 'warning', message: '⚠️ تخطي OneSoft-Server — السكريبت غير متاح', timestamp: now() });
@@ -406,52 +496,55 @@ export class ServiceManager {
         this.installService(
           'OneSoft-Client', nodePath, clientScript,
           path.join(logsDir, 'client.log'), emit,
+          frontendEnvVars,
         );
       } else {
         emit({ level: 'warning', message: '⚠️ تخطي OneSoft-Client — السكريبت غير متاح', timestamp: now() });
       }
     }
 
-    // ── 7. تشغيل الخدمات مع انتظار حقيقي ────────────────────────────────
+    // ── 8. تشغيل الخدمات مع انتظار حقيقي ────────────────────────────────
     emit({ level: 'info', message: `\n━━━ تشغيل الخدمات ━━━`, timestamp: now() });
 
     let backendOk  = false;
     let frontendOk = false;
 
     if (needsBackend && this.getStatus('OneSoft-Server') !== 'not-installed') {
-      emit({ level: 'info', message: '▶ تشغيل OneSoft-Server...', timestamp: now() });
+      emit({ level: 'info', message: `▶ تشغيل OneSoft-Server على المنفذ ${backendPort}...`, timestamp: now() });
       const r = this.start('OneSoft-Server');
       if (!r.success) {
         emit({ level: 'warning', message: `⚠️ تعذّر تشغيل Backend: ${r.error ?? ''}`, timestamp: now() });
       }
-      backendOk = await this.waitForPort(3000, emit, 90_000);
+      backendOk = await this.waitForPort(backendPort, emit, 90_000);
     } else if (!needsBackend) {
-      backendOk = true; // لا يحتاج Backend
+      backendOk = true;
     }
 
     if (needsFrontend && this.getStatus('OneSoft-Client') !== 'not-installed') {
-      emit({ level: 'info', message: '▶ تشغيل OneSoft-Client...', timestamp: now() });
+      emit({ level: 'info', message: `▶ تشغيل OneSoft-Client على المنفذ ${frontendPort}...`, timestamp: now() });
       const r = this.start('OneSoft-Client');
       if (!r.success) {
         emit({ level: 'warning', message: `⚠️ تعذّر تشغيل Frontend: ${r.error ?? ''}`, timestamp: now() });
       }
-      frontendOk = await this.waitForPort(5000, emit, 60_000);
+      frontendOk = await this.waitForPort(frontendPort, emit, 60_000);
     } else if (!needsFrontend) {
       frontendOk = true;
     }
 
-    // ── 8. ملخص النتيجة ───────────────────────────────────────────────────
+    // ── 9. ملخص النتيجة ───────────────────────────────────────────────────
     emit({ level: 'info', message: `\n${'━'.repeat(50)}`, timestamp: now() });
     if (backendOk && frontendOk) {
       emit({ level: 'success', message: '🎉 جميع الخدمات تعمل بنجاح', timestamp: now() });
     } else {
       const missing = [
-        !backendOk  && needsBackend  ? 'Backend (3000)'  : null,
-        !frontendOk && needsFrontend ? 'Frontend (5000)' : null,
+        !backendOk  && needsBackend  ? `Backend  (${backendPort})`  : null,
+        !frontendOk && needsFrontend ? `Frontend (${frontendPort})` : null,
       ].filter(Boolean).join(', ');
       emit({ level: 'warning', message: `⚠️ بعض الخدمات لم تستجب: ${missing}`, timestamp: now() });
       emit({ level: 'info', message: '💡 ستجد تفاصيل في ProgramData\\OneSoft\\Logs\\', timestamp: now() });
     }
+
+    return { backendPort, frontendPort };
   }
 
   // ── تشخيص شامل للنظام ──────────────────────────────────────────────────

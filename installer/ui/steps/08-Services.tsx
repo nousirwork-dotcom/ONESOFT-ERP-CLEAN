@@ -88,6 +88,27 @@ export default function Step09Services() {
       const installDir   = 'C:\\Program Files\\OneSoft ERP';
       const paths        = buildPaths();
 
+      // بناء DATABASE_URL لمستخدم التطبيق (onesoft_app) — يختلف عن adminOpts
+      const appDatabaseUrl = [
+        'postgresql://onesoft_app',
+        `:${encodeURIComponent(dbOpts.password)}`,
+        `@${dbOpts.host}:${dbOpts.port}/${dbOpts.database}`,
+      ].join('');
+
+      // ── دالة مساعدة لبناء كائن الإعدادات ─────────────────────────────────
+      const buildConfig = (backendPort = 3000, frontendPort = 5000) => ({
+        version: '1.0.0', configVersion: 4,
+        deploymentType, accessModes, databaseMode, machineRole, connectivityMode,
+        licensingMode, updateChannel, backupPolicy, telemetry,
+        database: {
+          host: dbOpts.host, port: dbOpts.port,
+          name: dbOpts.database, user: 'onesoft_app',
+          password: dbOpts.password, poolMin: 2, poolMax: 10,
+        },
+        server: { backendPort, frontendPort, host: '0.0.0.0', allowedOrigins: ['localhost'] },
+        paths,
+      });
+
       // 1. إنشاء مجلدات النظام
       await window.installer?.createDirectories?.(paths);
 
@@ -123,15 +144,26 @@ export default function Step09Services() {
         }
       }
 
-      // 7. تثبيت الخدمات بناءً على نوع التثبيت + طرق الاستخدام
-      await window.installer?.installServices?.({
+      // 7. حفظ الإعدادات قبل تثبيت الخدمات (حتى يتمكن Backend من قراءتها عند أول تشغيل)
+      await window.installer?.saveConfig?.(buildConfig());
+
+      // 8. تثبيت الخدمات مع تمرير DATABASE_URL و اكتشاف المنافذ
+      const installResult = await window.installer?.installServices?.({
         installDir,
         logsDir:        paths.logs,
         deploymentType,
         accessModes,
+        databaseUrl:    appDatabaseUrl,
       });
 
-      // 8. إنشاء اختصارات سطح المكتب (فقط إذا اختار المستخدم Desktop)
+      // إذا اختار المثبّت منافذ بديلة (لتجنب تعارض) — حدّث الإعدادات
+      const actualBackendPort  = (installResult as any)?.backendPort  ?? 3000;
+      const actualFrontendPort = (installResult as any)?.frontendPort ?? 5000;
+      if (actualBackendPort !== 3000 || actualFrontendPort !== 5000) {
+        await window.installer?.saveConfig?.(buildConfig(actualBackendPort, actualFrontendPort));
+      }
+
+      // 9. إنشاء اختصارات سطح المكتب (فقط إذا اختار المستخدم Desktop)
       if (accessModes.includes('desktop')) {
         await window.installer?.createShortcuts?.({
           installDir,
@@ -140,40 +172,13 @@ export default function Step09Services() {
         });
       }
 
-      // 9. كتابة Registry — يظهر في إضافة/إزالة البرامج
+      // 10. كتابة Registry — يظهر في إضافة/إزالة البرامج
       await (window as any).installer?.writeRegistry?.({
         installDir,
         version:      '1.0.0',
         uninstallExe: `${installDir}\\OneSoft ERP Setup.exe`,
         iconPath:     `${installDir}\\resources\\icons\\onesoft.ico`,
         sizeKB:       150000,
-      });
-
-      // 10. حفظ الإعدادات بالبنية الكاملة (configVersion: 4 — تسعة أبعاد)
-      await window.installer?.saveConfig?.({
-        version:       '1.0.0',
-        configVersion: 4,
-        // ── الأبعاد الخمسة الأصلية ──────────────────────────────────────
-        deploymentType,
-        accessModes,
-        databaseMode,
-        machineRole,
-        connectivityMode,
-        // ── الأبعاد الأربعة الجديدة ──────────────────────────────────────
-        licensingMode,
-        updateChannel,
-        backupPolicy,
-        telemetry,
-        database: {
-          host: dbOpts.host, port: dbOpts.port,
-          name: dbOpts.database, user: 'onesoft_app',
-          password: dbOpts.password, poolMin: 2, poolMax: 10,
-        },
-        server: {
-          backendPort: 3000, frontendPort: 5000,
-          host: '0.0.0.0', allowedOrigins: ['localhost'],
-        },
-        paths,
       });
 
       // 11. تسجيل النسخة — لاكتشافها عند الترقية لاحقاً

@@ -6,6 +6,7 @@ import { trpc } from "@/shared/lib/trpc";
 import Warehouses from "./Warehouses";
 import DocumentJournalsPage from "./DocumentJournalsPage";
 import UpdatesPage from "./UpdatesPage";
+import ServiceDiagnosticsPage from "./ServiceDiagnosticsPage";
 
 import TemplatesManagerPage from "./TemplatesManagerPage";
 import ZatcaIntegrationPage from "./ZatcaIntegrationPage";
@@ -128,10 +129,11 @@ const menuSections = [
       { id: "document-journals",   label: "دفاتر المستندات",     status: "partial", path: "/cfg/document-journals" },
       { id: "posting-settings",    label: "ترحيل المستندات",     status: "partial", path: "/cfg/posting-settings" },
 
-      { id: "backup",              label: "النسخ الاحتياطي",     status: "done",    path: "/cfg/backup" },
-      { id: "audit-log",           label: "سجل العمليات",        status: "done",    path: "/cfg/audit-log" },
-      { id: "system-info",         label: "معلومات النظام",      status: "done",    path: "/cfg/system-info" },
-      { id: "updates",             label: "التحديثات",           status: "done",    path: "/cfg/updates" },
+      { id: "backup",              label: "النسخ الاحتياطي",                 status: "done",    path: "/cfg/backup" },
+      { id: "audit-log",           label: "سجل العمليات",                    status: "done",    path: "/cfg/audit-log" },
+      { id: "system-info",         label: "معلومات النظام",                  status: "done",    path: "/cfg/system-info" },
+      { id: "service-management",  label: "إدارة الخدمات والتشخيص",         status: "done",    path: "/cfg/service-management" },
+      { id: "updates",             label: "التحديثات",                        status: "done",    path: "/cfg/updates" },
     ],
   },
   {
@@ -5036,6 +5038,7 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
     case "backup":               return <BackupPage />;
     case "audit-log":            return <AuditLogPage />;
     case "system-info":          return <SystemInfoPageEmbed />;
+    case "service-management":   return <ServiceDiagnosticsPage />;
     case "updates":              return <UpdatesPage />;
     // إعدادات الموارد البشرية
     case "missing-doc-numbers":  return <MissingDocNumbersPage />;
@@ -5172,4 +5175,5 @@ export function CfgZatcaInvoicesTab()    { return <CfgSubPage activeId="zatca-in
 export function CfgZatcaLogsTab()        { return <CfgSubPage activeId="zatca-logs" />; }
 export function CfgGosiTab()             { return <CfgSubPage activeId="gosi-config" />; }
 export function CfgGaztTab()             { return <CfgSubPage activeId="gazt-config" />; }
-export function CfgSystemInfoTab()       { return <CfgSubPage activeId="system-info" />; }
+export function CfgSystemInfoTab()         { return <CfgSubPage activeId="system-info" />; }
+export function CfgServiceManagementTab() { return <CfgSubPage activeId="service-management" />; }
