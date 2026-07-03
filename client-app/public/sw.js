@@ -1,4 +1,4 @@
-const CACHE = 'onesoft-erp-v1';
+const CACHE = 'onesoft-erp-v2';
 const SHELL = ['/', '/index.html'];
 
 self.addEventListener('install', e => {
@@ -17,18 +17,28 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-  // API requests — always go to network
+
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/api/trpc')) {
     return;
   }
-  // Navigation — serve index.html from cache (SPA fallback)
+
+  if (
+    url.pathname.startsWith('/src/') ||
+    url.pathname.startsWith('/@vite/') ||
+    url.pathname.startsWith('/node_modules/') ||
+    url.search.includes('t=') ||
+    url.search.includes('v=')
+  ) {
+    return;
+  }
+
   if (e.request.mode === 'navigate') {
     e.respondWith(
       fetch(e.request).catch(() => caches.match('/index.html'))
     );
     return;
   }
-  // Static assets — cache first
+
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
