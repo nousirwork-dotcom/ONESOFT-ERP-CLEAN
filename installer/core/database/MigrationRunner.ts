@@ -4,6 +4,11 @@ import type { MigrationResult, ProgressEvent } from '../types.js';
 
 type Emit = (e: ProgressEvent) => void;
 
+/** يحمي أسماء الجداول/المستخدمين عند حقنها داخل نص SQL (معرّفات، لا قيم) */
+function quoteIdent(id: string): string {
+  return '"' + id.replace(/"/g, '""') + '"';
+}
+
 /**
  * يُطبّق ملفات SQL من مجلد drizzle/ مباشرةً عبر pg
  * لا يعتمد على pnpm أو drizzle-kit أو أي أداة dev على جهاز العميل
@@ -167,6 +172,19 @@ export class MigrationRunner {
             )
           `);
 
+          // ── حماية دفاعية ──────────────────────────────────────────────────
+          // لو الجدول موجود بالفعل من تجربة/نسخة أقدم (بأعمدة ناقصة)،
+          // "CREATE TABLE IF NOT EXISTS" أعلاه لا يفعل شيئاً بصمت — فنضمن
+          // هنا وجود الأعمدة المطلوبة بغض النظر عن حالة الجدول القديمة.
+          await client.query(`
+            ALTER TABLE _schema_version
+              ADD COLUMN IF NOT EXISTS stamped_at TIMESTAMP NOT NULL DEFAULT NOW()
+          `);
+          await client.query(`
+            ALTER TABLE _schema_version
+              ADD COLUMN IF NOT EXISTS version TEXT
+          `);
+
           await client.query(
             `INSERT INTO _schema_version (id, version, stamped_at)
              VALUES (1, $1, NOW())
@@ -179,6 +197,42 @@ export class MigrationRunner {
           emit({
             level: 'error',
             message: '⚠️ لا توجد migrations في الـ journal — تعذّر ختم _schema_version. سيفشل فحص المخطط عند بدء تشغيل الخادم.',
+            timestamp: now(),
+          });
+        }
+
+        // ── STEP 7: نقل ملكية الجداول لحساب التشغيل (onesoft_app) ──────────
+        // سبب حرج: هذا الاتصال يعمل بحساب المدير (postgres عادة)، فكل جدول
+        // يُنشأ هنا يصبح مملوكاً لحساب المدير. لكن server-app وقت التشغيل
+        // الفعلي يتصل بحساب أقل صلاحية (onesoft_app) — وPostgreSQL لا يسمح
+        // بتعديل تركيب جدول (ALTER TABLE) إلا لمالكه أو لمستخدم Superuser.
+        // بدون هذه الخطوة، أي محاولة تعديل مستقبلية (تحديث أو إصلاح ذاتي من
+        // auto-migrate.ts) تفشل بخطأ "must be owner of table ...".
+        emit({ level: 'info', message: 'جارٍ نقل ملكية الجداول لحساب التشغيل (onesoft_app)...', timestamp: now() });
+        try {
+          const APP_DB_USER = 'onesoft_app';
+          const tablesRes = await client.query(
+            `SELECT tablename FROM pg_tables WHERE schemaname = 'public'`
+          );
+          for (const row of tablesRes.rows) {
+            await client.query(`ALTER TABLE public.${quoteIdent(row.tablename)} OWNER TO ${quoteIdent(APP_DB_USER)}`);
+          }
+          const seqRes = await client.query(
+            `SELECT sequencename FROM pg_sequences WHERE schemaname = 'public'`
+          );
+          for (const row of seqRes.rows) {
+            await client.query(`ALTER SEQUENCE public.${quoteIdent(row.sequencename)} OWNER TO ${quoteIdent(APP_DB_USER)}`);
+          }
+          emit({
+            level: 'success',
+            message: `✅ تم نقل ملكية ${tablesRes.rows.length} جدول و${seqRes.rows.length} sequence إلى ${APP_DB_USER}`,
+            timestamp: now(),
+          });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          emit({
+            level: 'warning',
+            message: `⚠️ تعذّر نقل ملكية بعض الجداول إلى onesoft_app: ${msg} — قد تحدث أخطاء صلاحيات لاحقاً عند أي تحديث`,
             timestamp: now(),
           });
         }
