@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useInstallerStore } from '../store/installer.store';
 import type { DatabaseMode } from '../../core/types';
+import { generateSecurePassword } from '../lib/generatePassword';
 
 const DB_MODES: {
   id: DatabaseMode;
@@ -46,7 +47,6 @@ export default function Step06DatabaseMode() {
     setDbConfigVerified,
   } = useInstallerStore();
 
-  // حالة السلسلة الكاملة
   const [chainStep, setChainStep] = useState<ChainStep>('idle');
   const [testState,   setTestState]   = useState<StepState>('pending');
   const [saveState,   setSaveState]   = useState<StepState>('pending');
@@ -54,11 +54,11 @@ export default function Step06DatabaseMode() {
   const [errorMsg,    setErrorMsg]    = useState<string | null>(null);
   const [configPath,  setConfigPath]  = useState<string | null>(null);
 
-  // للاكتشاف التلقائي (local-existing)
   const [detecting,   setDetecting]   = useState(false);
   const [detectedDbs, setDetectedDbs] = useState<string[]>([]);
 
-  // ── إعادة الضبط عند تغيير أي حقل ────────────────────────────────────────────
+  const [showGeneratedPassword, setShowGeneratedPassword] = useState(false);
+
   const resetChain = () => {
     setChainStep('idle');
     setTestState('pending');
@@ -67,7 +67,6 @@ export default function Step06DatabaseMode() {
     setErrorMsg(null);
     setConfigPath(null);
     setDbConfigVerified(false);
-    // مسح أي config محفوظ قديم
     (window.installer as any)?.clearConfig?.().catch(() => {});
   };
 
@@ -75,9 +74,16 @@ export default function Step06DatabaseMode() {
     setDatabaseMode(m);
     resetChain();
     setDetectedDbs([]);
-    if (m === 'local-install' || m === 'local-existing') {
+    if (m === 'local-install') {
+      setDbOpts({ host: 'localhost', password: generateSecurePassword() });
+    } else if (m === 'local-existing') {
       setDbOpts({ host: 'localhost' });
     }
+  };
+
+  const regeneratePassword = () => {
+    setDbOpts({ password: generateSecurePassword() });
+    resetChain();
   };
 
   const onFieldChange = (opts: Parameters<typeof setDbOpts>[0]) => {
@@ -85,7 +91,6 @@ export default function Step06DatabaseMode() {
     resetChain();
   };
 
-  // ── السلسلة الكاملة: test → save → verify ────────────────────────────────────
   const runChain = async () => {
     if (!dbOpts.password) return;
 
@@ -93,7 +98,6 @@ export default function Step06DatabaseMode() {
     setChainStep('testing');
     setTestState('running');
 
-    // ── 1️⃣ اختبار الاتصال ───────────────────────────────────────────────────
     let testOk = false;
     try {
       const r = await window.installer?.testConnection?.({
@@ -105,7 +109,6 @@ export default function Step06DatabaseMode() {
       if (!testOk) {
         setErrorMsg(r?.detail ?? 'فشل اختبار الاتصال — تأكد من كلمة المرور');
         setChainStep('failed');
-        // مسح أي إعدادات قديمة
         await (window.installer as any)?.clearConfig?.().catch(() => {});
         return;
       }
@@ -117,7 +120,6 @@ export default function Step06DatabaseMode() {
       return;
     }
 
-    // ── 2️⃣ حفظ الإعدادات ───────────────────────────────────────────────────
     setChainStep('saving');
     setSaveState('running');
 
@@ -150,7 +152,6 @@ export default function Step06DatabaseMode() {
       return;
     }
 
-    // ── 3️⃣ إعادة القراءة والتحقق ───────────────────────────────────────────
     setChainStep('verifying');
     setVerifyState('running');
 
@@ -173,7 +174,6 @@ export default function Step06DatabaseMode() {
     }
   };
 
-  // ── اكتشاف تلقائي (local-existing) ────────────────────────────────────────
   const detectDatabases = async () => {
     setDetecting(true);
     resetChain();
@@ -202,6 +202,11 @@ export default function Step06DatabaseMode() {
   const lbl: React.CSSProperties = {
     fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 4, display: 'block',
   };
+  const smallBtn: React.CSSProperties = {
+    flexShrink: 0, padding: '8px 14px', fontSize: 12, fontWeight: 700,
+    borderRadius: 8, border: '1px solid #D1D5DB', background: '#fff',
+    color: '#374151', cursor: 'pointer', whiteSpace: 'nowrap',
+  };
 
   const stepIcon = (s: StepState, label: string) => {
     const icons: Record<StepState, string> = { pending: '○', running: '⏳', ok: '✅', fail: '❌' };
@@ -222,7 +227,6 @@ export default function Step06DatabaseMode() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-      {/* ── العنوان ──────────────────────────────────────────────────────── */}
       <div>
         <h2 style={{ fontSize: 20, fontWeight: 800, color: '#1E344F', margin: '0 0 4px' }}>
           🗄️ إعداد قاعدة البيانات
@@ -232,7 +236,6 @@ export default function Step06DatabaseMode() {
         </p>
       </div>
 
-      {/* ── بطاقات الأوضاع ───────────────────────────────────────────────── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {DB_MODES.map(m => (
           <button
@@ -273,32 +276,35 @@ export default function Step06DatabaseMode() {
         ))}
       </div>
 
-      {/* ── حقول local-install (كلمة مرور فقط) ──────────────────────────── */}
       {databaseMode === 'local-install' && (
         <div style={{ background: '#fff', borderRadius: 10, padding: '16px 20px', border: '1px solid #E5E0D8' }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#1E344F', marginBottom: 12 }}>
-            🔐 كلمة مرور postgres (المستخدم الإداري)
+            🔐 حماية قاعدة البيانات
           </div>
-          <div>
-            <label style={lbl}>كلمة المرور التي ستُضبَط عند التثبيت</label>
+          <div style={{ marginTop: 8, padding: '8px 12px', background: '#F0FDF4', borderRadius: 8, fontSize: 12, color: '#15803D', fontWeight: 600 }}>
+            ✅ تم إنشاء كلمة مرور قوية تلقائياً لهذا الجهاز — لا حاجة لكتابة أو تذكّر أي شيء
+          </div>
+          <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center' }}>
             <input
-              style={inp} type="password" value={dbOpts.password}
-              onChange={e => onFieldChange({ password: e.target.value })}
-              placeholder="••••••••"
+              style={{ ...inp, fontFamily: 'monospace', letterSpacing: 1, background: '#F9FAFB' }}
+              type={showGeneratedPassword ? 'text' : 'password'}
+              value={dbOpts.password}
+              readOnly
             />
+            <button type="button" onClick={() => setShowGeneratedPassword(v => !v)} style={smallBtn}>
+              {showGeneratedPassword ? 'إخفاء' : 'إظهار'}
+            </button>
+            <button type="button" onClick={regeneratePassword} style={smallBtn}>
+              إعادة توليد
+            </button>
           </div>
           <div style={{ marginTop: 8, padding: '8px 12px', background: '#F0F9FF', borderRadius: 8, fontSize: 12, color: '#0369A1' }}>
-            ℹ️ سيتم تثبيت PostgreSQL 16 تلقائياً وإنشاء قاعدة بيانات <b>onesoft_erp</b>
+            ℹ️ سيتم تثبيت PostgreSQL 16 تلقائياً وإنشاء قاعدة بيانات <b>onesoft_erp</b>. تُحفظ كلمة المرور
+            في ملف إعدادات محمي على هذا الجهاز فقط، ولا تظهر لأي شخص آخر.
           </div>
-          {dbOpts.password && (
-            <div style={{ marginTop: 8, padding: '8px 12px', background: '#F0FDF4', borderRadius: 8, fontSize: 12, color: '#15803D', fontWeight: 600 }}>
-              ✅ تم إدخال كلمة المرور — يمكنك المتابعة للخطوة التالية
-            </div>
-          )}
         </div>
       )}
 
-      {/* ── حقول local-existing ───────────────────────────────────────────── */}
       {databaseMode === 'local-existing' && (
         <div style={{ background: '#fff', borderRadius: 10, padding: '16px 20px', border: '1px solid #E5E0D8', display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -353,7 +359,6 @@ export default function Step06DatabaseMode() {
         </div>
       )}
 
-      {/* ── حقول remote ───────────────────────────────────────────────────── */}
       {databaseMode === 'remote' && (
         <div style={{ background: '#fff', borderRadius: 10, padding: '16px 20px', border: '1px solid #E5E0D8', display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#1E344F', marginBottom: 4 }}>
@@ -392,11 +397,8 @@ export default function Step06DatabaseMode() {
         </div>
       )}
 
-      {/* ── زر الاختبار + مؤشر السلسلة (local-existing / remote) ─────────── */}
       {needsConnectionFields && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-          {/* زر "اختبار الاتصال وحفظ" */}
           <button
             onClick={runChain}
             disabled={!canTest || isBusy || isDone}
@@ -417,7 +419,6 @@ export default function Step06DatabaseMode() {
             {isDone ? '✅ تم التحقق بنجاح' : isBusy ? '⏳ جارٍ...' : '🔌 اختبار الاتصال وحفظ الإعدادات'}
           </button>
 
-          {/* مؤشر التقدم — يظهر عند بدء السلسلة */}
           {chainStep !== 'idle' && (
             <div style={{
               background: '#F9FAFB', border: '1px solid #E5E7EB',
@@ -433,7 +434,6 @@ export default function Step06DatabaseMode() {
             </div>
           )}
 
-          {/* رسالة الخطأ */}
           {chainStep === 'failed' && errorMsg && (
             <div style={{
               padding: '12px 16px', borderRadius: 8, fontSize: 13,
@@ -447,7 +447,6 @@ export default function Step06DatabaseMode() {
             </div>
           )}
 
-          {/* رسالة النجاح الكاملة */}
           {isDone && (
             <div style={{
               padding: '14px 18px', borderRadius: 10, fontSize: 13,
@@ -472,7 +471,6 @@ export default function Step06DatabaseMode() {
         </div>
       )}
 
-      {/* ── تحذير إن لم يكن هناك اتصال بعد ─────────────────────────────────── */}
       {needsConnectionFields && chainStep === 'idle' && canTest && (
         <div style={{
           padding: '10px 14px', borderRadius: 8, fontSize: 12,
