@@ -80,22 +80,28 @@ function writeLog(level, msg) {
 
 // ── حالة عامة ─────────────────────────────────────────────────────────────────
 let splashWin   = null;
+let mainWin     = null;
 let tray        = null;
 let serverProc  = null;
 let serverReady = false;
+let isQuitting  = false;
 let cfg         = loadConfig();
 const SERVER_URL = `http://localhost:${cfg.port}`;
 
 // ── قفل النسخة الواحدة ────────────────────────────────────────────────────────
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
-  // نسخة أخرى تعمل بالفعل — افتح المتصفح وأغلق هذه النسخة
-  shell.openExternal(SERVER_URL).catch(() => {});
+  // نسخة أخرى تعمل بالفعل — أظهر نافذتها بدل فتح متصفح جديد
   app.quit();
 } else {
   app.on('second-instance', () => {
-    shell.openExternal(SERVER_URL).catch(() => {});
-    if (splashWin) splashWin.focus();
+    if (mainWin) {
+      if (mainWin.isMinimized()) mainWin.restore();
+      mainWin.show();
+      mainWin.focus();
+    } else if (splashWin) {
+      splashWin.focus();
+    }
   });
 }
 
@@ -208,7 +214,54 @@ function createSplash() {
   });
 }
 
-// ── System Tray ───────────────────────────────────────────────────────────────
+// ── النافذة الرئيسية (React جوّه Electron — بدل المتصفح الخارجي) ──────────────
+function createMainWindow() {
+  if (mainWin && !mainWin.isDestroyed()) {
+    mainWin.show();
+    mainWin.focus();
+    return;
+  }
+
+  mainWin = new BrowserWindow({
+    width:  1400,
+    height: 900,
+    minWidth:  1024,
+    minHeight: 640,
+    show: false, // يظهر فقط بعد اكتمال تحميل الواجهة (لا شاشة بيضاء فارغة)
+    backgroundColor: '#F7F5F0',
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload:          path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration:  false,
+      sandbox:          true,
+    },
+  });
+
+  mainWin.once('ready-to-show', () => mainWin.show());
+
+  mainWin.loadURL(SERVER_URL).catch(err => {
+    writeLog('ERROR', `main window failed to load ${SERVER_URL}: ${err.message}`);
+  });
+
+  // إغلاق النافذة يخفيها فقط (البرنامج يبقى في الـ Tray)، إلا عند الإنهاء الفعلي
+  mainWin.on('close', (e) => {
+    if (!isQuitting) {
+      e.preventDefault();
+      mainWin.hide();
+    }
+  });
+
+  mainWin.on('closed', () => { mainWin = null; });
+
+  // أي رابط خارجي (target=_blank) يُفتح في متصفح النظام، لا نافذة Electron جديدة
+  mainWin.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
+}
+
+
 function createTray() {
   const iconPath = path.join(__dirname, 'assets', 'icon-tray.png');
   const img = fs.existsSync(iconPath)
@@ -217,6 +270,7 @@ function createTray() {
 
   tray = new Tray(img);
   tray.setToolTip('OneSoft ERP');
+  tray.on('double-click', () => createMainWindow());
   updateTrayMenu();
 }
 
@@ -232,7 +286,12 @@ function updateTrayMenu() {
     },
     { type: 'separator' },
     {
-      label: 'فتح البرنامج في المتصفح',
+      label: 'فتح البرنامج',
+      click: () => createMainWindow(),
+      enabled: running,
+    },
+    {
+      label: 'فتح في المتصفح (بديل)',
       click: () => shell.openExternal(SERVER_URL),
       enabled: running,
     },
@@ -301,7 +360,7 @@ app.whenReady().then(async () => {
     serverReady = true;
     writeLog('INFO', 'server is ready');
 
-    // 4. إغلاق Splash وفتح المتصفح
+    // 4. إغلاق Splash وفتح نافذة Electron الرئيسية (بدل المتصفح الخارجي)
     if (splashWin && !splashWin.isDestroyed()) {
       setTimeout(() => {
         try { splashWin.close(); } catch {}
@@ -309,9 +368,7 @@ app.whenReady().then(async () => {
       }, 800);
     }
 
-    if (cfg.openBrowserOnStart) {
-      shell.openExternal(SERVER_URL).catch(e => writeLog('WARN', `open browser: ${e.message}`));
-    }
+    createMainWindow();
 
   } catch (err) {
     writeLog('ERROR', `server failed to start: ${err.message}`);
@@ -336,6 +393,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  isQuitting = true;
   writeLog('INFO', 'app quitting');
   stopServer();
 });
