@@ -422,9 +422,17 @@ export class ServiceManager {
       emit({ level: 'error', message: `❌ nssm.exe غير موجود في ${this.nssm}`, timestamp: now() });
     }
 
-    const needsBackend  = ['server', 'server+client', 'branch'].includes(deploymentType);
-    const needsFrontend = ['server+client', 'branch'].includes(deploymentType)
-                       || (deploymentType === 'server' && accessModes.includes('web'));
+    const needsBackend = ['server', 'server+client', 'branch'].includes(deploymentType);
+
+    // ── تبسيط معماري ─────────────────────────────────────────────────────
+    // تم إلغاء خدمة Frontend المنفصلة (OneSoft-Client على المنفذ 5000) نهائياً.
+    // السبب: server-app/src/index.ts يعرض ملفات React المبنية أصلاً عبر
+    // express.static على نفس منفذ الـ Backend — كانت serve-client.js تخدم
+    // نفس الملفات بالضبط على منفذ منفصل، أي أنها كانت خدمة زائدة بالكامل:
+    // بورت إضافي، Windows Service إضافي، ونقطة فشل إضافية بلا أي فائدة حقيقية.
+    // كل من التطبيق المكتبي (Electron) وأجهزة الكاشير على الشبكة يتصلون الآن
+    // بنفس منفذ الـ Backend مباشرة.
+    const needsFrontend = false;
 
     // ── 4. تحديد المسارات + فحص وجود الملفات ──────────────────────────────
     let serverScript: string | null = null;
@@ -467,10 +475,10 @@ export class ServiceManager {
 
     // ── 6. اختيار المنافذ المتاحة ──────────────────────────────────────────
     emit({ level: 'info', message: `\n━━━ فحص المنافذ ━━━`, timestamp: now() });
-    const backendPort  = findAvailablePort(opts.backendPort  ?? 3000, [3001, 3002, 3100, 3200], emit);
-    const frontendPort = findAvailablePort(opts.frontendPort ?? 5000, [5001, 5002, 5100, 5200], emit);
-    emit({ level: 'info', message: `📌 Backend:  منفذ ${backendPort}`, timestamp: now() });
-    emit({ level: 'info', message: `📌 Frontend: منفذ ${frontendPort}`, timestamp: now() });
+    const backendPort  = findAvailablePort(opts.backendPort ?? 3000, [3001, 3002, 3100, 3200], emit);
+    // frontendPort لم يعد مستقلاً — نفس منفذ الـ Backend (لا خدمة Frontend منفصلة بعد الآن)
+    const frontendPort = backendPort;
+    emit({ level: 'info', message: `📌 المنفذ الموحّد (Backend + الواجهة): ${backendPort}`, timestamp: now() });
 
     // متغيرات البيئة للخدمات
     const backendEnvVars: Record<string, string> = {
