@@ -29,6 +29,8 @@ client-app/logs/
 *backup*
 *-backup-*
 *_backup_*
+# استثناء: ملفات المصدر التي تحتوي "backup" في اسمها
+!server-app/src/routers/backup.ts
 
 # ── Database ──────────────────────────────────────────────
 *.sqlite
