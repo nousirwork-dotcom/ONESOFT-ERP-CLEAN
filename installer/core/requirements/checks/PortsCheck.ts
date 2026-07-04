@@ -1,7 +1,11 @@
 import * as net from 'net';
 import type { RequirementResult } from '../../types.js';
 
-const REQUIRED_PORTS = [3000, 5000];
+// المنفذ الأساسي فقط — لم يعد هناك منفذ Frontend منفصل (تم دمجه مع الـ Backend).
+// ملاحظة: حتى لو كان 3000 مشغولاً، يختار المُثبِّت تلقائياً منفذاً بديلاً
+// (installer/core/services/ServiceManager.ts → findAvailablePort)، لذا هذا
+// الفحص إعلامي فقط ولا يوقف التثبيت.
+const PREFERRED_PORT = 3000;
 
 async function isPortFree(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -16,21 +20,17 @@ async function isPortFree(port: number): Promise<boolean> {
 
 export async function checkPorts(): Promise<RequirementResult> {
   const id = 'ports';
-  const label = 'المنافذ المطلوبة (3000, 5000)';
+  const label = 'المنفذ الافتراضي (3000)';
 
-  const results = await Promise.all(
-    REQUIRED_PORTS.map(async p => ({ port: p, free: await isPortFree(p) }))
-  );
+  const free = await isPortFree(PREFERRED_PORT);
 
-  const blocked = results.filter(r => !r.free).map(r => r.port);
-
-  if (blocked.length === 0) {
-    return { id, label, status: 'pass', detail: 'جميع المنافذ متاحة', fixable: false };
+  if (free) {
+    return { id, label, status: 'pass', detail: 'المنفذ 3000 متاح', fixable: false };
   }
 
   return {
-    id, label, status: 'fail',
-    detail: `المنافذ ${blocked.join(', ')} مشغولة — أغلق البرامج التي تستخدمها`,
+    id, label, status: 'warn',
+    detail: 'المنفذ 3000 مشغول — سيختار المُثبِّت منفذاً بديلاً تلقائياً',
     fixable: false,
   };
 }
