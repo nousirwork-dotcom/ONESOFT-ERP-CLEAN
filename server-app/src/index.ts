@@ -57,6 +57,7 @@ app.post('/api/auth/auto-login', async (req, res) => {
     return res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
+
 app.get('/api/health', (_req, res) => res.json({
   status:    'ok',
   version:   '1.0.0',
@@ -125,7 +126,6 @@ app.get('/api/system/status', async (req, res) => {
 
 // ─── Restart Windows Service (requires superadmin session + same-origin) ───────
 app.post('/api/system/restart-service', async (req, res) => {
-  // Auth check — superadmin only
   const { getUserFromRequest } = await import('./auth.js');
   const user = await getUserFromRequest(req);
   if (!user) return res.status(401).json({ ok: false, error: 'يجب تسجيل الدخول أولاً' });
@@ -133,10 +133,8 @@ app.post('/api/system/restart-service', async (req, res) => {
     return res.status(403).json({ ok: false, error: 'هذه العملية متاحة للمسؤول الأعلى فقط' });
   }
 
-  // Origin guard — strict same-origin check
   const origin = req.headers['origin'] ?? '';
   const host   = req.headers['host']   ?? '';
-  // Compare full scheme+host (strip trailing port from both sides before compare)
   const normalizeOrigin = (o: string) => o.replace(/^https?:\/\//, '').replace(/:\d+$/, '');
   const normalizeHost   = (h: string) => h.replace(/:\d+$/, '');
   if (origin && normalizeOrigin(origin) !== normalizeHost(host)) {
@@ -193,7 +191,6 @@ if (existsSync(path.join(clientBuildPath, 'index.html'))) {
     res.sendFile(path.join(clientBuildPath, 'index.html'));
   });
 } else {
-  // Development: redirect non-API requests to Vite dev server
   const devDomain = process.env.REPLIT_DEV_DOMAIN;
   app.get('*', (req, res) => {
     if (devDomain) {
@@ -211,9 +208,46 @@ console.log(`      User : ${ENV.dbUser}`);
 console.log(`      Host : ${ENV.dbHost}`);
 console.log(`      DB   : ${ENV.dbName}`);
 
-const schemaOk = await checkSchema(pool);
+// ── انتظار جاهزية قاعدة البيانات + إصلاح ذاتي للمخطط ───────────────────────
+const MAX_ATTEMPTS   = 30;
+const RETRY_DELAY_MS = 5_000;
+let autoMigrateTried = false;
+
+async function waitForDatabaseReady(): Promise<boolean> {
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const ok = await checkSchema(pool);
+    if (ok) return true;
+
+    if (!autoMigrateTried) {
+      autoMigrateTried = true;
+      try {
+        await pool.query('SELECT 1');
+        console.log('[startup] الجداول غير مكتملة — جارٍ تطبيق auto-migrate...');
+        const { autoMigrate } = await import('./auto-migrate.js');
+        const result = await autoMigrate(pool);
+        if (result.ok) {
+          console.log('[startup] ✅ auto-migrate نجح — إعادة فحص المخطط...');
+          continue;
+        } else {
+          console.error(`[startup] ❌ auto-migrate فشل: ${result.error}`);
+        }
+      } catch {
+        // فشل الاتصال أصلاً — الانتظار العادي أدناه سيتكفل بإعادة المحاولة
+      }
+    }
+
+    console.log(
+      `[startup] قاعدة البيانات غير جاهزة بعد (محاولة ${attempt}/${MAX_ATTEMPTS}) — ` +
+      `إعادة المحاولة خلال ${RETRY_DELAY_MS / 1000} ثوانٍ...`
+    );
+    await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+  }
+  return false;
+}
+
+const schemaOk = await waitForDatabaseReady();
 if (!schemaOk) {
-  console.error('[startup] ❌ [4/6] FAILED — PostgreSQL connection or schema check failed.');
+  console.error(`[startup] ❌ [4/6] FAILED — تعذّر الاتصال بقاعدة البيانات أو إصلاح المخطط بعد ${MAX_ATTEMPTS} محاولة.`);
   console.error(`          DATABASE_URL source: ${ENV.configSource}`);
   process.exit(1);
 }
