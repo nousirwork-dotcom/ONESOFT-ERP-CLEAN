@@ -30,12 +30,12 @@ interface InfraSpec {
 const INFRA: Record<DeploymentType, InfraSpec> = {
   /**
    * server: سيرفر رئيسي — DB + Backend
-   * - لا واجهة محلية افتراضياً
-   * - إذا أُضيف 'web' في AccessModes: يُثبَّت Frontend service لخدمة المتصفحات البعيدة
+   * الواجهة (React) تُخدَم من نفس منفذ الـ Backend مباشرة (express.static) —
+   * لا توجد خدمة Frontend منفصلة على الإطلاق (أُلغيت — كانت زائدة بالكامل).
    */
   'server': {
     database: true, backend: true,
-    frontendBase: false, frontendIfWeb: true,
+    frontendBase: false, frontendIfWeb: false,
     updater: true, backup: true,
     runMigrations: true, seedAccounts: true,
     requiresRemoteServer: false,
@@ -44,7 +44,7 @@ const INFRA: Record<DeploymentType, InfraSpec> = {
   /**
    * client: عميل فقط — يتصل بسيرفر بعيد
    * - لا DB ولا Backend محلي
-   * - Electron أو Browser يتصل بالسيرفر البعيد مباشرةً
+   * - Electron أو Browser يتصل بالسيرفر البعيد مباشرةً على منفذ الـ Backend
    */
   'client': {
     database: false, backend: false,
@@ -56,12 +56,11 @@ const INFRA: Record<DeploymentType, InfraSpec> = {
 
   /**
    * server+client: سيرفر + عميل على نفس الجهاز
-   * - DB + Backend + Frontend جميعاً محلياً
-   * - يدعم LAN بشكل افتراضي
+   * - DB + Backend محلياً، والواجهة تُخدَم من نفس منفذ الـ Backend
    */
   'server+client': {
     database: true, backend: true,
-    frontendBase: true, frontendIfWeb: false,
+    frontendBase: false, frontendIfWeb: false,
     updater: true, backup: true,
     runMigrations: true, seedAccounts: true,
     requiresRemoteServer: false,
@@ -74,7 +73,7 @@ const INFRA: Record<DeploymentType, InfraSpec> = {
    */
   'branch': {
     database: true, backend: true,
-    frontendBase: true, frontendIfWeb: false,
+    frontendBase: false, frontendIfWeb: false,
     updater: true, backup: true,
     runMigrations: true, seedAccounts: false,
     requiresRemoteServer: true,
