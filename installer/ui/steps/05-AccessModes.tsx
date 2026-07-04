@@ -23,7 +23,7 @@ const ACCESS_OPTIONS: Array<{
     icon: '🌐',
     label: 'متصفح الإنترنت',
     desc: 'الوصول عبر Browser — من أي جهاز على الشبكة',
-    detail: 'http://SERVER-IP:5000 — Chrome, Edge, Firefox',
+    detail: 'http://SERVER-IP:3000 — Chrome, Edge, Firefox',
   },
   {
     id: 'offline',
@@ -161,7 +161,7 @@ export default function Step05AccessModes() {
             <div>✅ <strong>تطبيق مكتبي:</strong> اختصار على سطح المكتب + Electron</div>
           )}
           {accessModes.includes('web') && (
-            <div>✅ <strong>متصفح:</strong> خادم ويب على المنفذ 5000</div>
+            <div>✅ <strong>متصفح:</strong> نفس منفذ الخادم (الافتراضي 3000)</div>
           )}
           {accessModes.includes('offline') && (
             <div>✅ <strong>أوفلاين:</strong> تخزين محلي + مزامنة تلقائية</div>

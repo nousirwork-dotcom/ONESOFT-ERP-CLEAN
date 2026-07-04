@@ -87,6 +87,9 @@ interface InstallerStore {
   installDone: boolean;
   setInstallRunning: (v: boolean) => void;
   setInstallDone:    (v: boolean) => void;
+  // المنفذ الموحّد الفعلي بعد التثبيت (Backend + الواجهة معاً — لا يوجد منفذ منفصل بعد الآن)
+  installedPort: number;
+  setInstalledPort: (p: number) => void;
 
   orgId: number | null;
   setOrgId: (id: number) => void;
@@ -214,6 +217,8 @@ export const useInstallerStore = create<InstallerStore>((set, get) => ({
   installDone:    false,
   setInstallRunning: (v) => set({ installRunning: v }),
   setInstallDone:    (v) => set({ installDone: v }),
+  installedPort: 3000,
+  setInstalledPort: (p) => set({ installedPort: p }),
 
   orgId: null,
   setOrgId: (id) => set({ orgId: id }),

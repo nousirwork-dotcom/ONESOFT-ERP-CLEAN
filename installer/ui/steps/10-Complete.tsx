@@ -1,7 +1,8 @@
 import { useInstallerStore } from '../store/installer.store';
 
 export default function Step10Complete() {
-  const { orgCode, firstUser, healthReport } = useInstallerStore();
+  const { orgCode, firstUser, healthReport, installedPort } = useInstallerStore();
+  const appUrl = `http://localhost:${installedPort}`;
 
   const open  = (url: string) => window.installer?.openUrl?.(url);
   const close = () => window.installer?.close?.();
@@ -10,7 +11,7 @@ export default function Step10Complete() {
   const total  = healthReport?.totalCount  ?? 0;
 
   const launchApp = () => {
-    open('http://localhost:5000');
+    open(appUrl);
     setTimeout(() => close(), 800);
   };
 
@@ -20,7 +21,7 @@ export default function Step10Complete() {
   };
 
   const openDocs = () => {
-    open('http://localhost:5000/help');
+    open(`${appUrl}/help`);
   };
 
   const restartPC = () => {
@@ -78,7 +79,7 @@ export default function Step10Complete() {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
           {[
-            { label: 'العنوان',        value: 'http://localhost:5000' },
+            { label: 'العنوان',        value: appUrl },
             { label: 'كود المؤسسة',   value: orgCode ?? '1001' },
             { label: 'اسم المستخدم', value: firstUser.username || 'admin' },
             { label: 'كلمة المرور',  value: noPassword ? '(بدون كلمة مرور)' : '(التي اخترتها)' },
