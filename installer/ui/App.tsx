@@ -130,7 +130,11 @@ export default function App() {
         canNext: installDone,
         hideNav: installRunning && !installDone,
       };
-      case 17: return { canBack: false, canNext: healthReport !== null };
+      case 17: return {
+        canBack: false,
+        canNext: healthReport?.allHealthy === true,
+        nextLabel: healthReport && !healthReport.allHealthy ? 'أصلح المشاكل أعلاه للمتابعة' : undefined,
+      };
       case 18: return { canBack: false, canNext: true, isLast: true, nextLabel: 'إنهاء' };
       default: return { canBack: true, canNext: true };
     }

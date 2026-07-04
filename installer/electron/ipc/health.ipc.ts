@@ -8,7 +8,7 @@ export function registerHealthIpc(ipc: IpcMain, win: BrowserWindow | null) {
   ipc.handle('health:run', async (_, opts: {
     dbOpts: DatabaseConnectionOptions;
     backendPort: number;
-    frontendPort: number;
+    frontendPort?: number;
   }) => {
     return checker.runAll(opts, (result) => {
       win?.webContents.send('installer:progress', {
