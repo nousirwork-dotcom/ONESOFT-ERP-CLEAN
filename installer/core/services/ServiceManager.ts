@@ -17,17 +17,11 @@ export interface ServiceDiagnostics {
   resourcesPath: string;
   installDir: string;
   backendScript: string;
-  frontendScript: string;
   backendExists: boolean;
-  frontendExists: boolean;
   backendTest: { ok: boolean; timedOut: boolean; stdout: string; stderr: string; exitCode: number | null };
-  frontendTest: { ok: boolean; timedOut: boolean; stdout: string; stderr: string; exitCode: number | null };
   nssmBackendInstall: { cmd: string; stdout: string; stderr: string; exitCode: number } | null;
-  nssmFrontendInstall: { cmd: string; stdout: string; stderr: string; exitCode: number } | null;
   serviceBackendStatus: string;
-  serviceFrontendStatus: string;
   port3000: boolean;
-  port5000: boolean;
   logPath: string;
 }
 
@@ -589,50 +583,36 @@ export class ServiceManager {
     const admin = isAdmin();
     emit({ level: admin ? 'success' : 'error', message: `صلاحيات Admin: ${admin ? 'نعم' : 'لا'}`, timestamp: now() });
 
-    // مسارات السكريبتات
+    // مسار سكريبت الـ Backend
     const backendCandidates = [
       path.join(rp, 'app', 'server-app', 'dist', 'index.mjs'),
       path.join(installDir, 'server-app', 'dist', 'index.mjs'),
     ];
-    const frontendCandidates = [
-      path.join(rp, 'serve-client.js'),
-      path.join(rp, 'app', 'client-app', 'dist-serve', 'server.js'),
-      path.join(installDir, 'client-app', 'dist-serve', 'server.js'),
-    ];
 
     const backendScript  = backendCandidates.find(p => fs.existsSync(p))  ?? backendCandidates[0]!;
-    const frontendScript = frontendCandidates.find(p => fs.existsSync(p)) ?? frontendCandidates[0]!;
     const backendExists  = fs.existsSync(backendScript);
-    const frontendExists = fs.existsSync(frontendScript);
 
     emit({ level: backendExists  ? 'success' : 'error', message: `Backend:  ${backendScript}  [${backendExists  ? 'موجود' : 'غير موجود'}]`, timestamp: now() });
-    emit({ level: frontendExists ? 'success' : 'error', message: `Frontend: ${frontendScript} [${frontendExists ? 'موجود' : 'غير موجود'}]`, timestamp: now() });
 
-    // اختبار تشغيل السكريبتات
+    // اختبار تشغيل السكريبت
     const backendTest  = backendExists  ? testScript(nodePath, backendScript,  emit, 'Backend')  : { ok: false, timedOut: false, stdout: '', stderr: 'الملف غير موجود', exitCode: -1 };
-    const frontendTest = frontendExists ? testScript(nodePath, frontendScript, emit, 'Frontend') : { ok: false, timedOut: false, stdout: '', stderr: 'الملف غير موجود', exitCode: -1 };
 
-    // حالة الخدمات
+    // حالة الخدمة
     const serviceBackendStatus  = this.getStatus('OneSoft-Server');
-    const serviceFrontendStatus = this.getStatus('OneSoft-Client');
     emit({ level: 'info', message: `OneSoft-Server:  ${serviceBackendStatus}`,  timestamp: now() });
-    emit({ level: 'info', message: `OneSoft-Client:  ${serviceFrontendStatus}`, timestamp: now() });
 
-    // قراءة المنافذ الفعلية من config.json (إن وُجد) — تجنّب القيم المضمّنة
+    // قراءة المنفذ الفعلي من config.json (إن وُجد) — تجنّب القيم المضمّنة
     let diagBackendPort  = 3000;
-    let diagFrontendPort = 5000;
     try {
       const { ConfigManager } = await import('../config/ConfigManager.js');
       if (ConfigManager.exists()) {
         const cfg = ConfigManager.load();
         diagBackendPort  = cfg.server?.backendPort  ?? 3000;
-        diagFrontendPort = cfg.server?.frontendPort ?? 5000;
-        emit({ level: 'info', message: `📌 المنافذ من config.json — Backend: ${diagBackendPort}, Frontend: ${diagFrontendPort}`, timestamp: now() });
+        emit({ level: 'info', message: `📌 المنفذ من config.json — Backend: ${diagBackendPort}`, timestamp: now() });
       }
     } catch { /* ignore — use defaults */ }
 
     const port3000 = await this.waitForPort(diagBackendPort,  emit, 5_000, 1_000);
-    const port5000 = await this.waitForPort(diagFrontendPort, emit, 5_000, 1_000);
 
     emit({ level: 'success', message: '✅ اكتمل التشخيص', timestamp: now() });
 
@@ -641,12 +621,12 @@ export class ServiceManager {
       nodeVersion, nodePath,
       nssmPath: this.nssm, nssmVersion,
       resourcesPath: rp, installDir,
-      backendScript, frontendScript,
-      backendExists, frontendExists,
-      backendTest, frontendTest,
-      nssmBackendInstall: null, nssmFrontendInstall: null,
-      serviceBackendStatus, serviceFrontendStatus,
-      port3000, port5000,
+      backendScript,
+      backendExists,
+      backendTest,
+      nssmBackendInstall: null,
+      serviceBackendStatus,
+      port3000,
       logPath,
     };
 
