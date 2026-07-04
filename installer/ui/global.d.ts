@@ -62,7 +62,7 @@ interface InstallerAPI {
   // Health
   runHealthCheck: (opts: {
     dbOpts: import('../core/types').DatabaseConnectionOptions;
-    backendPort: number; frontendPort: number;
+    backendPort: number; frontendPort?: number;
   }) => Promise<import('../core/types').HealthReport>;
 
   // Config
