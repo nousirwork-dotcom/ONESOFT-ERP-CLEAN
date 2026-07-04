@@ -92,6 +92,13 @@
       "when": 1780900000000,
       "tag": "0012_zatca_database_architecture",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1783210000000,
+      "tag": "0013_add_missing_tables",
+      "breakpoints": true
     }
   ]
 }
