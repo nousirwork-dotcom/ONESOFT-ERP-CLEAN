@@ -16,11 +16,10 @@ const STATUS_BORDER: Record<string, string> = {
   healthy: '#86EFAC', unhealthy: '#FCA5A5', warning: '#FCD34D', checking: '#E5E7EB', skipped: '#E5E7EB',
 };
 
-function arabicDetail(id: string, detail: string, bPort = 3000, fPort = 5000): string {
+function arabicDetail(id: string, detail: string, bPort = 3000): string {
   if (!detail) return '';
   if (detail.includes('ECONNREFUSED') || detail.includes('connection refused')) {
-    if (id.includes('backend')  || detail.includes(String(bPort))) return `الخادم الخلفي لا يستجيب على المنفذ ${bPort}`;
-    if (id.includes('frontend') || detail.includes(String(fPort))) return `الخادم الأمامي لا يستجيب على المنفذ ${fPort}`;
+    if (id.includes('backend') || detail.includes(String(bPort))) return `الخادم لا يستجيب على المنفذ ${bPort}`;
     return 'الاتصال مرفوض — الخدمة لم تبدأ بعد';
   }
   if (detail.includes('password authentication failed')) return 'كلمة مرور قاعدة البيانات غير صحيحة — تحقق من ملف onesoft.config.json';
@@ -45,22 +44,17 @@ export default function Step09HealthCheck() {
   const [showDiag,       setShowDiag]       = useState(false);
   const diagRef = useRef<HTMLDivElement>(null);
   const [backendPort,  setBackendPort]  = useState(3000);
-  const [frontendPort, setFrontendPort] = useState(5000);
   const backendPortRef  = useRef(3000);
-  const frontendPortRef = useRef(5000);
 
-  // قراءة المنافذ الفعلية من ملف الإعدادات — ثم تشغيل الفحص بعدها مباشرة
+  // قراءة المنفذ الفعلي من ملف الإعدادات — ثم تشغيل الفحص بعدها مباشرة
   useEffect(() => {
     window.installer?.getConfig?.().then((cfg: any) => {
       const bPort = cfg?.server?.backendPort  ?? 3000;
-      const fPort = cfg?.server?.frontendPort ?? 5000;
       backendPortRef.current  = bPort;
-      frontendPortRef.current = fPort;
       setBackendPort(bPort);
-      setFrontendPort(fPort);
-      runCheckWithPorts(bPort, fPort);
+      runCheckWithPorts(bPort);
     }).catch(() => {
-      runCheckWithPorts(3000, 5000);
+      runCheckWithPorts(3000);
     });
   }, []);
 
@@ -78,7 +72,7 @@ export default function Step09HealthCheck() {
     if (diagRef.current) diagRef.current.scrollTop = diagRef.current.scrollHeight;
   }, [diagLogs]);
 
-  const runCheckWithPorts = async (bPort = backendPortRef.current, fPort = frontendPortRef.current) => {
+  const runCheckWithPorts = async (bPort = backendPortRef.current) => {
     setLoading(true);
     setResults([]);
     const report = await window.installer?.runHealthCheck?.({
@@ -86,8 +80,7 @@ export default function Step09HealthCheck() {
         host: dbOpts.host, port: dbOpts.port,
         database: dbOpts.database, user: 'onesoft_app', password: dbOpts.password,
       },
-      backendPort:  bPort,
-      frontendPort: fPort,
+      backendPort: bPort,
     });
     if (report) {
       setHealthReport(report);
@@ -103,8 +96,6 @@ export default function Step09HealthCheck() {
     try {
       await window.installer?.restartService?.('OneSoft-Server');
       await new Promise(r => setTimeout(r, 5000));
-      await window.installer?.restartService?.('OneSoft-Client');
-      await new Promise(r => setTimeout(r, 3000));
     } catch { /* ignore */ }
     setRestarting(false);
     await runCheck();
@@ -207,7 +198,7 @@ export default function Step09HealthCheck() {
               }} />
             ))
           : results.map(r => {
-              const friendly   = arabicDetail(r.id, r.detail ?? '', backendPort, frontendPort);
+              const friendly   = arabicDetail(r.id, r.detail ?? '', backendPort);
               const isExpanded = expandedId === r.id;
               return (
                 <div key={r.id} style={{
@@ -314,13 +305,9 @@ export default function Step09HealthCheck() {
               <DiagRow label="Node.js"           value={`${diagReport.nodeVersion} — ${diagReport.nodePath}`} ok />
               <DiagRow label="NSSM"              value={diagReport.nssmVersion} ok={fs_exists_hint(diagReport.nssmPath)} />
               <DiagRow label="Backend Script"    value={diagReport.backendScript}  ok={diagReport.backendExists} />
-              <DiagRow label="Frontend Script"   value={diagReport.frontendScript} ok={diagReport.frontendExists} />
               <DiagRow label="اختبار Backend"    value={diagReport.backendTest.ok  ? 'نجح ✅' : 'فشل ❌'} ok={diagReport.backendTest.ok} />
-              <DiagRow label="اختبار Frontend"   value={diagReport.frontendTest.ok ? 'نجح ✅' : 'فشل ❌'} ok={diagReport.frontendTest.ok} />
               <DiagRow label="OneSoft-Server"    value={diagReport.serviceBackendStatus}  ok={diagReport.serviceBackendStatus === 'running'} />
-              <DiagRow label="OneSoft-Client"    value={diagReport.serviceFrontendStatus} ok={diagReport.serviceFrontendStatus === 'running'} />
-              <DiagRow label={`المنفذ ${backendPort} (Backend)`}   value={diagReport.port3000 ? 'يستجيب ✅' : 'لا يستجيب ❌'} ok={diagReport.port3000} />
-              <DiagRow label={`المنفذ ${frontendPort} (Frontend)`} value={diagReport.port5000 ? 'يستجيب ✅' : 'لا يستجيب ❌'} ok={diagReport.port5000} />
+              <DiagRow label={`المنفذ ${backendPort}`}   value={diagReport.port3000 ? 'يستجيب ✅' : 'لا يستجيب ❌'} ok={diagReport.port3000} />
               {diagReport.logPath && (
                 <div style={{ color: '#64748B', fontSize: 10, marginTop: 4 }}>
                   📄 التقرير الكامل: {diagReport.logPath}
