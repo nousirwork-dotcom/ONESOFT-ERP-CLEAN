@@ -1,7 +1,6 @@
 import type { HealthCheckResult, HealthReport, DatabaseConnectionOptions } from '../types.js';
 import { checkPostgresHealth }      from './checks/PostgreSQLHealthCheck.js';
 import { checkBackendHealth }       from './checks/BackendHealthCheck.js';
-import { checkFrontendHealth }      from './checks/FrontendHealthCheck.js';
 import { checkDatabaseConnection }  from './checks/DatabaseConnectionCheck.js';
 import { checkPortsHealth }         from './checks/PortsHealthCheck.js';
 import { checkServicesHealth }      from './checks/ServicesHealthCheck.js';
@@ -12,15 +11,15 @@ export class HealthChecker {
   async runAll(opts: {
     dbOpts: DatabaseConnectionOptions;
     backendPort: number;
-    frontendPort: number;
+    /** @deprecated لم تعد هناك خدمة Frontend منفصلة — يُحتفَظ بالحقل للتوافق مع الاستدعاءات القديمة فقط، وقيمته تُهمَل هنا */
+    frontendPort?: number;
   }, onProgress?: HealthProgressCallback): Promise<HealthReport> {
 
     const checks: Array<() => Promise<HealthCheckResult>> = [
       () => checkPostgresHealth(),
       () => checkDatabaseConnection(opts.dbOpts),
       () => checkBackendHealth(opts.backendPort),
-      () => checkFrontendHealth(opts.frontendPort),
-      () => checkPortsHealth([opts.backendPort, opts.frontendPort]),
+      () => checkPortsHealth([opts.backendPort]),
       () => checkServicesHealth(),
     ];
 
