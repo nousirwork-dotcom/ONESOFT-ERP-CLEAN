@@ -149,6 +149,31 @@ export class MigrationRunner {
           return { applied, skipped, failed: msg };
         }
 
+        // ── STEP 6: كتابة _schema_version (يقرأه السيرفر عند بدء التشغيل) ────
+        // يُستخدم آخر tag في الـ journal كرقم إصدار — يتزامن تلقائياً مع أي
+        // migration جديدة تُضاف مستقبلاً بدون تعديل هنا.
+        const lastTag = entries.length > 0 ? entries[entries.length - 1].tag : 'unknown';
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS _schema_version (
+            id      INTEGER PRIMARY KEY DEFAULT 1,
+            version TEXT    NOT NULL,
+            applied_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            CONSTRAINT _schema_version_singleton CHECK (id = 1)
+          )
+        `);
+        await client.query(`
+          INSERT INTO _schema_version (id, version, applied_at)
+          VALUES (1, $1, now())
+          ON CONFLICT (id) DO UPDATE
+            SET version    = EXCLUDED.version,
+                applied_at = EXCLUDED.applied_at
+        `, [lastTag]);
+        emit({
+          level: 'success',
+          message: `✅ _schema_version = "${lastTag}"`,
+          timestamp: now(),
+        });
+
       } finally {
         client.release();
       }
