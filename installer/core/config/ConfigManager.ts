@@ -180,10 +180,11 @@ export class ConfigManager {
       fs.mkdirSync(CONFIG_DIR, { recursive: true });
     }
     // نتأكد دائماً من مزامنة الحقول القديمة مع الجديدة عند الحفظ
+    // ⚠️ نستخدم ?? للحماية من الـ partial config القادم من الـ UI (بدون deploymentType/accessModes)
     const synced: OneSoftConfig = {
       ...config,
-      installMode: deploymentTypeToLegacyMode(config.deploymentType),
-      runMode:     accessModesToLegacyRunMode(config.accessModes),
+      installMode: deploymentTypeToLegacyMode(config.deploymentType ?? 'server+client'),
+      runMode:     accessModesToLegacyRunMode(config.accessModes   ?? ['desktop', 'web']),
     };
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(synced, null, 2), 'utf-8');
   }
