@@ -120,7 +120,13 @@ export default function Step09Services() {
         });
 
         // 3. تشغيل Migrations
-        await window.installer?.runMigrations?.(databaseUrl);
+        const migrateResult = await window.installer?.runMigrations?.(databaseUrl);
+        if (migrateResult && (migrateResult as any).failed) {
+          setRunning(false);
+          setInstallRunning(false);
+          setError(`فشل تجهيز قاعدة البيانات: ${(migrateResult as any).failed}`);
+          return; // ⛔ توقف فوري — لا تكمل التثبيت على قاعدة بيانات غير جاهزة
+        }
 
         // 4. إنشاء المؤسسة
         const orgResult = await window.installer?.createOrganization?.({
