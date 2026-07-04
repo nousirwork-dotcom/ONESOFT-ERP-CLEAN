@@ -25,7 +25,7 @@ export default function Step09Services() {
     deploymentType, accessModes, databaseMode, machineRole, connectivityMode,
     licensingMode, updateChannel, backupPolicy, telemetry,
     setOrgId, setOrgCode, getDatabaseUrl, clearProgress,
-    setInstallRunning, setInstallDone,
+    setInstallRunning, setInstallDone, setInstalledPort,
     prevStep,
   } = store;
 
@@ -162,6 +162,7 @@ export default function Step09Services() {
       if (actualBackendPort !== 3000 || actualFrontendPort !== 5000) {
         await window.installer?.saveConfig?.(buildConfig(actualBackendPort, actualFrontendPort));
       }
+      setInstalledPort(actualBackendPort);
 
       // 9. إنشاء اختصارات سطح المكتب (فقط إذا اختار المستخدم Desktop)
       if (accessModes.includes('desktop')) {
