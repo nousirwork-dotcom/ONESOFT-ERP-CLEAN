@@ -141,15 +141,57 @@ function testScript(
 }
 
 /** انتظار حتى تختفي الخدمة من sc query */
-function waitForServiceRemoval(name: string, maxWaitMs = 10_000): void {
+/**
+ * ينتظر حتى تختفي الخدمة فعلاً من نظام Windows بعد حذفها.
+ *
+ * ملاحظة حرجة: عندما يحمل عنصر آخر مرجعاً مفتوحاً للخدمة وقت حذفها (نافذة
+ * services.msc، Task Manager، أو حتى عملية سابقة لم تُغلق تماماً)، تدخل
+ * الخدمة في حالة "SERVICE_MARKED_FOR_DELETE" (تظهر كـ STATE: PAUSED في sc
+ * query). هذه الحالة قد تستمر لعدة دقائق، وأحياناً لا تُحل إلا بإعادة تشغيل
+ * الجهاز بالكامل. الانتظار القديم (10 ثوانٍ فقط) كان غير كافٍ إطلاقاً لهذا
+ * السيناريو تحديداً — كان يستسلم بصمت ويكمل التثبيت رغم بقاء الخدمة عالقة،
+ * فيفشل تسجيل الخدمة الجديدة بخطأ غامض لاحقاً.
+ */
+function waitForServiceRemoval(name: string, emit?: Emit, maxWaitMs = 45_000): boolean {
   const deadline = Date.now() + maxWaitMs;
+  let sawMarkedForDeletion = false;
+
   while (Date.now() < deadline) {
     const r = spawnSync('sc', ['query', name], { encoding: 'utf-8', stdio: 'pipe' });
-    if ((r.stdout ?? '').includes('1060') || (r.status ?? 0) !== 0) return;
-    const s = (r.stdout ?? '');
-    if (!s.includes('SERVICE_NAME') && !s.includes('RUNNING') && !s.includes('STOPPED')) return;
+    const s = r.stdout ?? '';
+
+    // 1060 أو exit code != 0 = الخدمة اختفت فعلاً من السجل
+    if (s.includes('1060') || (r.status ?? 0) !== 0) return true;
+
+    // الحالة العالقة: SERVICE_NAME موجود لكن الحالة PAUSED (marked for delete)
+    if (s.includes('SERVICE_NAME') && s.includes('PAUSED')) {
+      if (!sawMarkedForDeletion) {
+        sawMarkedForDeletion = true;
+        emit?.({
+          level: 'warning',
+          message: `⏳ الخدمة "${name}" عالقة في حالة "معلّقة للحذف" — قد يستغرق هذا حتى 45 ثانية...`,
+          timestamp: now(),
+        });
+      }
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1500);
+      continue;
+    }
+
+    // أي حالة أخرى غير معروفة (لا RUNNING ولا STOPPED ولا PAUSED) — اعتبرها اختفت
+    if (!s.includes('SERVICE_NAME') && !s.includes('RUNNING') && !s.includes('STOPPED')) return true;
+
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
   }
+
+  if (sawMarkedForDeletion) {
+    emit?.({
+      level: 'error',
+      message: `❌ الخدمة "${name}" ما زالت عالقة بعد ${maxWaitMs / 1000} ثانية — قد تحتاج الجهاز لإعادة تشغيل قبل المتابعة`,
+      timestamp: now(),
+    });
+    return false;
+  }
+  return true;
 }
 
 /** تحديد مسار السكريبت الحقيقي من قائمة مرشحين */
@@ -286,8 +328,15 @@ export class ServiceManager {
         spawnSync('sc', ['delete', name], { encoding: 'utf-8', stdio: 'pipe', windowsHide: true });
       }
 
-      // انتظار حتى تختفي الخدمة فعلاً
-      waitForServiceRemoval(name);
+      // انتظار حتى تختفي الخدمة فعلاً (حتى 45 ثانية — قد تعلق في PAUSED/marked-for-delete)
+      const fullyRemoved = waitForServiceRemoval(name, emit);
+      if (!fullyRemoved) {
+        return {
+          success: false,
+          error: `الخدمة "${name}" عالقة في حالة "معلّقة للحذف" ولم تُزَل حتى بعد الانتظار. ` +
+                 `أغلق أي نافذة Services/Task Manager مفتوحة، أو أعد تشغيل الجهاز، ثم أعد المحاولة.`,
+        };
+      }
       emit?.({ level: 'success', message: `✅ تم حذف ${name}`, timestamp: now() });
       return { success: true };
     } catch (e: unknown) {
@@ -309,8 +358,15 @@ export class ServiceManager {
     emit({ level: 'info', message: `  Script:       ${scriptPath}`, timestamp: now() });
     emit({ level: 'info', message: `  Log:          ${logPath}`, timestamp: now() });
 
-    // حذف أي نسخة قديمة أولاً
-    this.remove(name as ServiceName, emit);
+    // حذف أي نسخة قديمة أولاً — ولا نكمل إذا فشل الحذف فعلياً
+    const removeResult = this.remove(name as ServiceName, emit);
+    if (!removeResult.success) {
+      emit({ level: 'error', message: `❌ ${removeResult.error}`, timestamp: now() });
+      return {
+        ok: false,
+        installResult: { cmd: '', stdout: '', stderr: removeResult.error ?? '', exitCode: -1 },
+      };
+    }
 
     const install = execVerbose(this.nssm, ['install', name, nodePath, scriptPath], emit, `nssm install ${name}`);
     const installResult = { cmd: install.cmdStr, stdout: install.stdout, stderr: install.stderr, exitCode: install.exitCode };
