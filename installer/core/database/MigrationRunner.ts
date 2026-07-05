@@ -26,7 +26,7 @@ export class MigrationRunner {
     const drizzleDir = path.join(this.serverAppPath, 'drizzle');
 
     if (!fs.existsSync(drizzleDir)) {
-      const msg = `مجلد migrations غير موجود: ${drizzleDir}`;
+      const msg = `مجلد drizzle غير موجود: ${drizzleDir}\nتأكد أن ملفات SQL موجودة داخل server-app/drizzle/ (وليس داخل drizzle/migrations/)`;
       emit({ level: 'error', message: msg, timestamp: now() });
       return { applied: [], skipped: [], failed: msg };
     }
