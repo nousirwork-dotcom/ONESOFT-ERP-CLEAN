@@ -5,7 +5,7 @@ import FirstRunWizard from '@/core/auth/FirstRunWizard';
 
 export default function LoginPage() {
   const [status, setStatus] = useState<'loading' | 'error'>('loading');
-  const [error, setError] = useState('');
+  const [error, setError]   = useState('');
   const [showWizard, setShowWizard] = useState(false);
   const utils = trpc.useUtils();
   const [, navigate] = useLocation();
@@ -13,40 +13,23 @@ export default function LoginPage() {
   const firstRunQ = trpc.setup.isFirstRun.useQuery(undefined, { retry: false });
 
   useEffect(() => {
-    // ✅ معالجة فشل الاستعلام — إظهار نموذج الدخول مباشرة
     if (firstRunQ.isError) {
       setError('تعذّر الاتصال بالخادم — يرجى تسجيل الدخول يدوياً');
       setStatus('error');
       return;
     }
+
     if (firstRunQ.data?.firstRun === true) {
       setShowWizard(true);
       setStatus('error');
       return;
     }
+
     if (firstRunQ.data?.firstRun === false) {
-      (async () => {
-        try {
-          const res = await fetch('/api/auth/auto-login', {
-            method: 'POST',
-            credentials: 'include',
-          });
-          const data = await res.json();
-          if (res.ok) {
-            await utils.auth.me.invalidate();
-            const role = data.user?.role;
-            navigate('/');
-          } else {
-            setError(data.error || 'تعذّر الدخول التلقائي');
-            setStatus('error');
-          }
-        } catch {
-          setError('تعذّر الاتصال بالخادم');
-          setStatus('error');
-        }
-      })();
+      // في وضع الإنتاج نعرض نموذج الدخول مباشرة بدون محاولة auto-login
+      // (auto-login محجوب في production ويُظهر رسالة خطأ مربكة للمستخدم)
+      setStatus('error');
     }
-  // ✅ نشمل isError في dependency array حتى تُعالَج أخطاء الاستعلام فوراً
   }, [firstRunQ.data, firstRunQ.isError]);
 
   if (showWizard) {
@@ -98,7 +81,7 @@ export default function LoginPage() {
               borderRadius: '50%',
               animation: 'spin 0.8s linear infinite',
             }} />
-            <span style={{ color: '#6B7280', fontSize: 13 }}>جارٍ الدخول...</span>
+            <span style={{ color: '#6B7280', fontSize: 13 }}>جارٍ التحقق...</span>
           </div>
         ) : (
           <div style={{
@@ -108,7 +91,11 @@ export default function LoginPage() {
             border: '1px solid #D4CDC1',
             boxShadow: '0 4px 20px rgba(30,52,79,0.1)',
           }}>
-            {error && <div style={{ color: '#B91C1C', fontWeight: 600, marginBottom: 14 }}>⚠️ {error}</div>}
+            {error && (
+              <div style={{ color: '#B91C1C', fontWeight: 600, marginBottom: 14 }}>
+                ⚠️ {error}
+              </div>
+            )}
             <ManualLoginForm onSuccess={() => navigate('/')} utils={utils} />
           </div>
         )}
@@ -120,7 +107,7 @@ export default function LoginPage() {
 }
 
 function ManualLoginForm({ onSuccess, utils }: { onSuccess: (role: string) => void; utils: any }) {
-  const [form, setForm] = useState({ orgCode: '', username: '', password: '' });
+  const [form, setForm]   = useState({ orgCode: '', username: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -159,7 +146,7 @@ function ManualLoginForm({ onSuccess, utils }: { onSuccess: (role: string) => vo
       <input type="password" style={inp} placeholder="كلمة المرور" required value={form.password}
         onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
       <button type="submit" disabled={loading}
-        style={{ background: 'linear-gradient(135deg,#406B93,#2d5070)', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 0', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+        style={{ background: 'linear-gradient(135deg,#406B93,#2d5070)', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 0', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
         {loading ? 'جارٍ الدخول...' : 'تسجيل الدخول'}
       </button>
     </form>
