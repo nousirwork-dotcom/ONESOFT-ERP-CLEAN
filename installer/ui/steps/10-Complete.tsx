@@ -82,7 +82,7 @@ export default function Step10Complete() {
             { label: 'العنوان',        value: appUrl },
             { label: 'كود المؤسسة',   value: orgCode ?? '1001' },
             { label: 'اسم المستخدم', value: firstUser.username || 'admin' },
-            { label: 'كلمة المرور',  value: noPassword ? '(بدون كلمة مرور)' : '(التي اخترتها)' },
+            { label: 'كلمة المرور',  value: noPassword ? '(فارغة — اضغط دخول مباشرة)' : firstUser.password },
           ].map(row => (
             <div key={row.label} style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
