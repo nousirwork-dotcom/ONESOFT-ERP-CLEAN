@@ -59,8 +59,8 @@ win:
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
-  createDesktopShortcut: false
-  createStartMenuShortcut: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
   shortcutName: OneSoft ERP
   menuCategory: OneSoft
   language: "1025"

@@ -47,20 +47,21 @@ function getLastBackupInfo(): { date: string | null; count: number } {
   return { date: last?.toISOString() ?? null, count: files.length };
 }
 
-// ── فحص هل أول تشغيل ─────────────────────────────────────────────────────────
-async function isFirstRun(): Promise<boolean> {
-  try {
-    const result = await db.select({ cnt: sql<number>`count(*)::int` }).from(organizations);
-    return (result[0]?.cnt ?? 0) === 0;
-  } catch { return true; }
-}
-
 // ══════════════════════════════════════════════════════════════════════════════
 export const setupRouter = router({
 
   // ── هل أول تشغيل؟ ────────────────────────────────────────────────────────
+  // dbError: true  → الخادم لم يستطع الاتصال بقاعدة البيانات (خطأ شبكة/باسورد)
+  // firstRun: true → الاتصال نجح لكن لا توجد مؤسسات → يجب إعداد النظام أول مرة
+  // firstRun: false → النظام جاهز → انتقل لصفحة تسجيل الدخول
   isFirstRun: publicProcedure.query(async () => {
-    return { firstRun: await isFirstRun() };
+    try {
+      const result = await db.select({ cnt: sql<number>`count(*)::int` }).from(organizations);
+      return { firstRun: (result[0]?.cnt ?? 0) === 0, dbError: false };
+    } catch {
+      // خطأ في الاتصال بقاعدة البيانات — لا يعني بالضرورة "أول تشغيل"
+      return { firstRun: false, dbError: true };
+    }
   }),
 
   // ── معلومات النظام الكاملة ────────────────────────────────────────────────
@@ -146,7 +147,8 @@ export const setupRouter = router({
       }).optional(),
     }))
     .mutation(async ({ input }) => {
-      const alreadySetup = !(await isFirstRun());
+      const orgCount = await db.select({ cnt: sql<number>`count(*)::int` }).from(organizations);
+      const alreadySetup = (orgCount[0]?.cnt ?? 0) > 0;
       if (alreadySetup) throw new Error('البرنامج تم إعداده مسبقاً');
 
       logger.info('setup', 'first-run wizard started');
