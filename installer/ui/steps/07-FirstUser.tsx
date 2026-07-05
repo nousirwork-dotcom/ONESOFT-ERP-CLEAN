@@ -34,8 +34,8 @@ export default function Step07FirstUser() {
         background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10,
         padding: '10px 14px', fontSize: 12, color: '#1D4ED8',
       }}>
-        💡 كلمة المرور <strong>اختيارية</strong> — يمكنك تركها فارغة والدخول مباشرة.
-        سيطلب منك النظام تعيينها عند أول تسجيل دخول.
+        💡 كلمة المرور <strong>اختيارية</strong> — إذا تركتها فارغة يمكنك الدخول لاحقاً بضغط "دخول" مباشرة بدون كتابة شيء.
+        يُنصح بتعيين كلمة مرور قوية الآن لحماية حسابك.
       </div>
 
       <div style={{

@@ -70,9 +70,11 @@ export async function getUserFromRequest(req: Request) {
 export async function loginHandler(req: Request, res: Response) {
   const { username, password, orgCode } = req.body;
 
-  if (!username || !password) {
-    return res.status(400).json({ error: 'اسم المستخدم وكلمة المرور مطلوبان' });
+  if (!username) {
+    return res.status(400).json({ error: 'اسم المستخدم مطلوب' });
   }
+  // كلمة المرور قد تكون فارغة إذا لم يُعيَّن كلمة مرور أثناء التثبيت
+  const safePassword = password ?? '';
 
   try {
     // البحث عن المؤسسة
@@ -96,7 +98,7 @@ export async function loginHandler(req: Request, res: Response) {
 
     if (!user) return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
 
-    const valid = await verifyPassword(password, user.passwordHash);
+    const valid = await verifyPassword(safePassword, user.passwordHash);
     if (!valid) return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
 
     // تحديث آخر دخول

@@ -143,7 +143,7 @@ function ManualLoginForm({ onSuccess, utils }: { onSuccess: (role: string) => vo
         onChange={e => setForm(f => ({ ...f, orgCode: e.target.value.toUpperCase() }))} />
       <input style={inp} placeholder="اسم المستخدم" required value={form.username}
         onChange={e => setForm(f => ({ ...f, username: e.target.value }))} />
-      <input type="password" style={inp} placeholder="كلمة المرور" required value={form.password}
+      <input type="password" style={inp} placeholder="كلمة المرور (اتركها فارغة إن لم تُعيَّن)" value={form.password}
         onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
       <button type="submit" disabled={loading}
         style={{ background: 'linear-gradient(135deg,#406B93,#2d5070)', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 0', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
