@@ -36,6 +36,12 @@ extraResources:
     filter:
       - "**/*"
       - "!**/node_modules/**"
+      - "!**/drizzle/**"
+  # نسخ drizzle مباشرةً من السورس لضمان تضمينها حتى لو استُثنيت بـ .gitignore
+  - from: ../server-app/drizzle
+    to: app/server-app/drizzle
+    filter:
+      - "**/*"
   - from: resources/icon.ico
     to: icon.ico
   - from: resources/icon.png
