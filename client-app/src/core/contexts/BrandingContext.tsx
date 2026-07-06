@@ -142,6 +142,15 @@ export function applyCssVariables(s: BrandingSettings): void {
       root.classList.remove('view-normal', 'view-compact', 'view-wide');
       root.classList.add(`view-${s.view_mode ?? 'normal'}`);
     } catch { /* ignore */ }
+
+    // sync remember_last_opened_tabs flag to localStorage so TabManagerContext
+    // (which lives outside BrandingProvider) can read it without a direct import
+    try {
+      localStorage.setItem(
+        'onesoft_cfg_remember_tabs',
+        String(s.remember_last_opened_tabs ?? false)
+      );
+    } catch { /* ignore */ }
   } catch {
     // never crash the app because of a CSS variable error
   }
