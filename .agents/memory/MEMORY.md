@@ -5,3 +5,4 @@
 - [toLocaleString comma bug in DB writes](tolocalestring-db-bug.md) — never use toLocaleString for values sent to PostgreSQL decimal columns; use toFixed(4) instead
 - [config.json DB credentials priority](config-json-db-priority.md) — env.ts reads config.json FIRST; in production process.exit(1) if missing; installer step-6 gate ensures test→save→verify before Next
 - [Installer DB step gate pattern](installer-db-gate.md) — Next button in step 6 must gate on dbConfigVerified (Zustand store); only set true after full chain: testConnection→saveConfig→verifyConfig using adminUser
+- [Branding permissions + logo storage](branding-permissions-logo.md) — manage_branding in extra_permissions JSONB (migration 0015); logo saved to uploadsDir/branding/; UPLOADS_DIR env var for Electron userData path

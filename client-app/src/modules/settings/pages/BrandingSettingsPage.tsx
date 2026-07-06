@@ -153,6 +153,7 @@ export default function BrandingSettingsPage() {
   const { user } = useAuth();
   const [form, setForm] = useState<BrandingSettings>({ ...settings });
   const [previewMode, setPreviewMode] = useState<'login' | 'sidebar'>('login');
+  const [logoUploading, setLogoUploading] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { setForm({ ...settings }); }, [settings]);
@@ -178,25 +179,52 @@ export default function BrandingSettingsPage() {
     onError: (e) => toast.error(e.message),
   });
 
-  const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
+  // صلاحية إدارة هوية النظام: admin / superadmin أو manage_branding permission
+  const canManageBranding =
+    user?.role === 'admin' ||
+    user?.role === 'superadmin' ||
+    user?.extraPermissions?.manage_branding === true;
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    setLogoUploading(true);
     const reader = new FileReader();
-    reader.onload = ev => {
-      const url = ev.target?.result as string;
-      set('logo_url', url);
+    reader.onload = async (ev) => {
+      const base64 = ev.target?.result as string;
+      try {
+        const res = await fetch('/api/upload/logo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: base64, mimeType: file.type }),
+          credentials: 'include',
+        });
+        if (res.ok) {
+          const result = await res.json() as { url: string };
+          set('logo_url', result.url);
+          toast.success('تم رفع الشعار وحفظه على الخادم');
+        } else {
+          set('logo_url', base64);
+          toast.info('تم تحميل الشعار (مؤقت — اضغط حفظ لتثبيته)');
+        }
+      } catch {
+        set('logo_url', base64);
+        toast.info('تم تحميل الشعار (مؤقت — اضغط حفظ لتثبيته)');
+      } finally {
+        setLogoUploading(false);
+      }
     };
     reader.readAsDataURL(file);
   };
 
-  if (!isAdmin) {
+  if (!canManageBranding) {
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
         <div className="text-center">
           <Palette className="w-10 h-10 mx-auto mb-3 opacity-30" />
-          <p>هذه الصفحة متاحة للمسؤولين فقط</p>
+          <p>هذه الصفحة تتطلب صلاحية "إدارة هوية النظام"</p>
+          <p className="text-[11px] mt-1 opacity-60">تواصل مع المسؤول لمنحك هذه الصلاحية</p>
         </div>
       </div>
     );
@@ -222,7 +250,7 @@ export default function BrandingSettingsPage() {
           <Button
             size="sm"
             onClick={() => saveMutation.mutate(form)}
-            disabled={saveMutation.isPending || !isAdmin}
+            disabled={saveMutation.isPending}
           >
             <Save className="w-3.5 h-3.5 ml-1" />
             {saveMutation.isPending ? 'جارٍ الحفظ...' : 'حفظ التغييرات'}
@@ -244,9 +272,14 @@ export default function BrandingSettingsPage() {
             </CardHeader>
             <CardContent className="px-4 pb-4 flex items-start gap-4">
               <div
-                className="w-16 h-16 rounded-lg border-2 border-dashed border-border flex items-center justify-center cursor-pointer hover:border-primary transition-colors shrink-0"
+                className="w-16 h-16 rounded-lg border-2 border-dashed border-border flex items-center justify-center cursor-pointer hover:border-primary transition-colors shrink-0 relative"
                 onClick={() => logoInputRef.current?.click()}
               >
+                {logoUploading && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/20 rounded-lg">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  </div>
+                )}
                 {form.logo_url ? (
                   <img src={form.logo_url} className="w-full h-full object-cover rounded-lg" />
                 ) : (
@@ -254,7 +287,7 @@ export default function BrandingSettingsPage() {
                 )}
               </div>
               <div className="flex-1">
-                <Label className="text-[11px] text-muted-foreground mb-1 block">رابط الشعار (URL أو Base64)</Label>
+                <Label className="text-[11px] text-muted-foreground mb-1 block">رابط الشعار (URL)</Label>
                 <div className="flex gap-2">
                   <Input
                     value={form.logo_url ?? ''}
@@ -262,11 +295,13 @@ export default function BrandingSettingsPage() {
                     placeholder="https://example.com/logo.png"
                     className="h-8 text-[11px]"
                   />
-                  <Button variant="outline" size="sm" className="h-8 shrink-0" onClick={() => logoInputRef.current?.click()}>
+                  <Button variant="outline" size="sm" className="h-8 shrink-0" onClick={() => logoInputRef.current?.click()} disabled={logoUploading}>
                     <Upload className="w-3.5 h-3.5" />
                   </Button>
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-1">أو ارفع صورة من جهازك</p>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  ارفع صورة من جهازك — تُحفظ دائماً في مجلد البيانات
+                </p>
                 <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
               </div>
             </CardContent>
