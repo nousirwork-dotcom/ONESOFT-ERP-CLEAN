@@ -81,15 +81,16 @@ export default function LoginPage() {
     >
       <div style={{ textAlign: 'center' }}>
         {/* Logo */}
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          width: 64, height: 64,
-          background: 'linear-gradient(135deg, #406B93 0%, #2d5070 100%)',
-          borderRadius: 18, marginBottom: 20,
-          boxShadow: '0 8px 24px rgba(64,107,147,0.35)',
-        }}>
-          <span style={{ color: '#fff', fontSize: 26, fontWeight: 800 }}>O</span>
-        </div>
+        <img
+          src="/logo.png"
+          alt="OneSoft ERP"
+          style={{
+            width: 88, height: 88, marginBottom: 20,
+            borderRadius: 22,
+            boxShadow: '0 8px 28px rgba(64,107,147,0.35)',
+            objectFit: 'cover',
+          }}
+        />
         <h1 style={{ fontSize: 24, fontWeight: 800, color: '#1E344F', margin: '0 0 6px' }}>
           One<span style={{ color: '#406B93' }}>Soft</span> ERP
         </h1>
