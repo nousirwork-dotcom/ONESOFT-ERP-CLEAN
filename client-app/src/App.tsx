@@ -81,7 +81,7 @@ import BrandingSettingsPage from "@/modules/settings/pages/BrandingSettingsPage"
 import SuperAdminPage from "@/core/admin/SuperAdminPage";
 import SourceCodeViewerPage from "@/core/dev/SourceCodeViewerPage";
 import FirstRunWizard from "@/core/auth/FirstRunWizard";
-import { BrandingProvider } from "@/core/contexts/BrandingContext";
+import { BrandingProvider, BrandingErrorBoundary } from "@/core/contexts/BrandingContext";
 import { createElement, useEffect, useState } from "react";
 import { trpc } from "@/shared/lib/trpc";
 import { Settings } from "lucide-react";
@@ -365,6 +365,7 @@ function App() {
   return (
     <ErrorBoundary>
       <LanguageProvider>
+        <BrandingErrorBoundary>
         <BrandingProvider>
         <ThemeProvider defaultTheme="light">
           <TooltipProvider>
@@ -380,6 +381,7 @@ function App() {
           </TooltipProvider>
         </ThemeProvider>
         </BrandingProvider>
+        </BrandingErrorBoundary>
       </LanguageProvider>
     </ErrorBoundary>
   );
