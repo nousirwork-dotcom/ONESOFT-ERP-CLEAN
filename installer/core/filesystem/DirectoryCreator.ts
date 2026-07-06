@@ -14,6 +14,8 @@ export class DirectoryCreator {
       paths.updates,
       paths.attachments,
       paths.exports,
+      paths.uploads,
+      path.join(paths.uploads, 'branding'),
     ];
 
     emit({ level: 'info', message: 'جارٍ إنشاء مجلدات النظام...', timestamp: now() });

@@ -389,6 +389,7 @@ function buildPaths() {
     updates:     `${base}\\Updates`,
     attachments: `${base}\\Attachments`,
     exports:     `${base}\\Exports`,
+    uploads:     `${base}\\uploads`,
   };
 }
 

@@ -278,6 +278,7 @@ export interface PathsConfig {
   updates: string;
   attachments: string;
   exports: string;
+  uploads: string;
 }
 
 /**
