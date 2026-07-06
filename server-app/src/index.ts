@@ -31,24 +31,36 @@ app.post('/api/auth/logout', logoutHandler);
 app.get('/api/auth/logout', logoutHandler);
 app.get('/api/auth/me', meHandler);
 
-// ─── Auto-Login (Electron / dev only — DISABLED in production) ───────────────
-// Only available when:  NODE_ENV !== 'production'  AND  ELECTRON_MODE=1
-// AND the request originates from localhost (127.0.0.1 or ::1).
+// ─── Auto-Login (Electron — localhost only) ──────────────────────────────────
+// يعمل في كل وضع (dev + production) طالما:
+//   1. الطلب من localhost (127.0.0.1 أو ::1)
+//   2. ELECTRON_MODE=1
+//   3. المستخدم الأول لديه كلمة مرور فارغة (لم تُعيَّن)
+// إذا كان المستخدم قد عيَّن كلمة مرور → يُعاد 403 ويُظهر شاشة الدخول.
 app.post('/api/auth/auto-login', async (req, res) => {
-  const isElectronDev = ENV.isElectron && ENV.nodeEnv !== 'production';
-  const isLocalhost   = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '');
+  const isElectron  = ENV.isElectron;
+  const isLocalhost = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '');
 
-  if (!isElectronDev || !isLocalhost) {
-    return res.status(403).json({ error: 'هذا المسار غير متاح في وضع الإنتاج' });
+  if (!isElectron || !isLocalhost) {
+    return res.status(403).json({ error: 'auto-login متاح فقط لتطبيق Electron من localhost' });
   }
 
   try {
-    const { db } = await import('./db.js');
-    const { users } = await import('./schema.js');
-    const { eq } = await import('drizzle-orm');
-    const { createToken } = await import('./auth.js');
-    const user = await db.query.users.findFirst({ where: eq(users.id, 1) });
-    if (!user) return res.status(404).json({ error: 'لا يوجد مستخدم افتراضي' });
+    const { db }            = await import('./db.js');
+    const { users }         = await import('./schema.js');
+    const { eq }            = await import('drizzle-orm');
+    const { createToken, verifyPassword } = await import('./auth.js');
+
+    // نجيب أول مستخدم نشط
+    const user = await db.query.users.findFirst({ where: eq(users.isActive, true) });
+    if (!user) return res.status(404).json({ error: 'لا يوجد مستخدم' });
+
+    // نتحقق أن كلمة المرور فارغة (لم تُعيَّن) — إذا عيَّن العميل كلمة مرور لا نتجاوزها
+    const hasEmptyPassword = await verifyPassword('', user.passwordHash);
+    if (!hasEmptyPassword) {
+      return res.status(403).json({ error: 'يجب تسجيل الدخول يدوياً' });
+    }
+
     const token = await createToken({ userId: user.id, orgId: user.orgId, username: user.username, role: user.role });
     res.cookie(ENV.cookieName, token, { httpOnly: true, secure: false, sameSite: 'lax', maxAge: ENV.sessionExpiry });
     return res.json({ success: true, user: { id: user.id, name: user.name, username: user.username, role: user.role, orgId: user.orgId } });
