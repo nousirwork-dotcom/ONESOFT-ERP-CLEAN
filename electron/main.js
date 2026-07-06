@@ -277,9 +277,13 @@ function createMainWindow() {
   writeLog('INFO', `createMainWindow: rememberSize=${rememberSize} fullscreen=${fullscreen} savedState=${JSON.stringify(winState)}`);
 
   // ── حساب أبعاد النافذة الأولية ──
+  // الأولوية: fullscreen_on_start يتجاهل الحجم المحفوظ ويبدأ من الحجم الافتراضي ثم يكبّر
+  // remember_window_size يُفعَّل فقط إذا كان fullscreen_on_start مُعطَّلاً
+  const canRestoreSize = rememberSize && !fullscreen;
+
   const winOpts = {
-    width:           (rememberSize && winState?.width)  ? winState.width  : 1400,
-    height:          (rememberSize && winState?.height) ? winState.height : 900,
+    width:           (canRestoreSize && winState?.width)  ? winState.width  : 1400,
+    height:          (canRestoreSize && winState?.height) ? winState.height : 900,
     minWidth:        1024,
     minHeight:       640,
     show:            false,   // يظهر فقط بعد ready-to-show
@@ -293,8 +297,8 @@ function createMainWindow() {
     },
   };
 
-  // استعادة موضع النافذة فقط إذا كانت الإحداثيات محفوظة وصالحة
-  if (rememberSize && winState?.x !== undefined && winState?.y !== undefined) {
+  // استعادة موضع النافذة فقط إذا لم يكن fullscreen مفعّلاً
+  if (canRestoreSize && winState?.x !== undefined && winState?.y !== undefined) {
     winOpts.x = winState.x;
     winOpts.y = winState.y;
   }
