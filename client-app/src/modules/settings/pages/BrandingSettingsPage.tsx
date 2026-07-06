@@ -556,7 +556,7 @@ export default function BrandingSettingsPage() {
                 <Toggle
                   value={form.fullscreen_on_start}
                   onChange={v => set('fullscreen_on_start', v)}
-                  label="فتح ملء الشاشة عند التشغيل"
+                  label="فتح البرنامج مكبّرًا عند التشغيل"
                   hint="يعمل في تطبيق Electron فقط"
                 />
                 <Toggle
