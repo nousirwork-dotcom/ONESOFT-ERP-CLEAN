@@ -407,6 +407,17 @@ function setupAutoUpdater(): void {
 app.whenReady()
   .then(() => {
     writeLog('INFO', 'app.whenReady() — resolved');
+
+    // ─── UPLOADS_DIR ──────────────────────────────────────────────────────────
+    // يُحدَّد هنا ويُمرَّر لأي عملية مشتقة عبر process.env
+    // السبب: ProgramData\OneSoft\uploads لا يُمسح أبداً بالتحديثات (عكس Program Files)
+    //         AppData قد يتغير بين المستخدمين، بينما ProgramData مشترك لكل المستخدمين
+    //         يتطابق مع مسار config.json المستخدم بالفعل في الخادم
+    process.env.UPLOADS_DIR = process.platform === 'win32'
+      ? path.join(process.env['PROGRAMDATA'] || 'C:\\ProgramData', 'OneSoft', 'uploads')
+      : path.join(app.getPath('userData'), 'uploads');
+    writeLog('INFO', `UPLOADS_DIR = ${process.env.UPLOADS_DIR}`);
+
     refreshWindowsIconCache();          // تحديث icon cache عند أول فتح بعد تحديث
     writeLog('INFO', 'calling createWindow()');
     createWindow();

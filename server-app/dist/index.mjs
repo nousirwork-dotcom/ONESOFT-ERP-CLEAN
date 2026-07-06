@@ -69063,7 +69063,7 @@ async function checkSchema(pool2) {
 import { existsSync as existsSync2 } from "fs";
 console.log("[2/6] Loading environment (env.ts + config.json)...");
 var __dirname8 = path9.dirname(fileURLToPath9(import.meta.url));
-var uploadsDir = process.env.UPLOADS_DIR ? process.env.UPLOADS_DIR : path9.join(process.cwd(), "uploads");
+var uploadsDir = process.env.UPLOADS_DIR ? process.env.UPLOADS_DIR : process.platform === "win32" ? path9.join(process.env["PROGRAMDATA"] || "C:\\ProgramData", "OneSoft", "uploads") : path9.join(process.cwd(), "uploads");
 console.log("[3/6] All modules loaded \u2014 creating HTTP app...");
 var app = (0, import_express.default)();
 app.use((0, import_cors.default)({ origin: true, credentials: true }));
