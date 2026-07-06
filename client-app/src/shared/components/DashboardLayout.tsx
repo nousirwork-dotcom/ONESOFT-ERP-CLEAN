@@ -543,9 +543,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Header */}
         <SidebarHeader className="border-b border-sidebar-border/50 p-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-sidebar-primary/20 flex items-center justify-center">
-              <Store className="w-5 h-5 text-sidebar-primary" />
-            </div>
+            <img
+              src="/logo.png"
+              alt="OneSoft"
+              className="w-9 h-9 rounded-xl object-cover shrink-0"
+              style={{ boxShadow: '0 2px 8px rgba(64,107,147,0.25)' }}
+            />
             <div className="flex-1 min-w-0">
               <p className="text-sidebar-foreground font-bold text-sm truncate">ONESOFT ERP</p>
               <p className="text-sidebar-foreground/40 text-xs">{t(lang, "systemSubtitle")}</p>
