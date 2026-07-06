@@ -17,6 +17,14 @@ import { pool } from './db.js';
 import { checkSchema } from './check-schema.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// ─── مجلد رفع الملفات ─────────────────────────────────────────────────────────
+// في Electron: يُعيَّن UPLOADS_DIR إلى {userData}/uploads
+// في dev / web:  {cwd()}/uploads
+const uploadsDir = process.env.UPLOADS_DIR
+  ? process.env.UPLOADS_DIR
+  : path.join(process.cwd(), 'uploads');
+
 console.log('[3/6] All modules loaded — creating HTTP app...');
 const app = express();
 
@@ -83,6 +91,39 @@ app.get('/api/public/branding', async (_req, res) => {
   } catch {
     const { DEFAULT_BRANDING } = await import('./routers/branding.js');
     return res.json(DEFAULT_BRANDING);
+  }
+});
+
+// ─── Static Uploads (شعارات ومرفقات) ─────────────────────────────────────────
+app.use('/uploads', express.static(uploadsDir));
+
+// ─── Logo Upload (يتطلب مصادقة + صلاحية إدارة الهوية) ───────────────────────
+app.post('/api/upload/logo', async (req, res) => {
+  try {
+    const { getUserFromRequest } = await import('./auth.js');
+    const user = await getUserFromRequest(req);
+    if (!user) return res.status(401).json({ error: 'يجب تسجيل الدخول أولاً' });
+
+    const perms = (user.extraPermissions ?? {}) as Record<string, boolean>;
+    const allowed = ['admin', 'superadmin'].includes(user.role) || perms.manage_branding === true;
+    if (!allowed) return res.status(403).json({ error: 'ليس لديك صلاحية إدارة هوية النظام' });
+
+    const { data, mimeType } = req.body as { data?: string; mimeType?: string };
+    if (!data || !mimeType) return res.status(400).json({ error: 'data و mimeType مطلوبان' });
+
+    const ext      = (mimeType.split('/')[1] ?? 'png').replace('jpeg', 'jpg');
+    const filename = `logo_${user.orgId}.${ext}`;
+    const dir      = path.join(uploadsDir, 'branding');
+
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+    const base64 = data.replace(/^data:[^;]+;base64,/, '');
+    fs.writeFileSync(path.join(dir, filename), Buffer.from(base64, 'base64'));
+
+    return res.json({ url: `/uploads/branding/${filename}` });
+  } catch (err) {
+    console.error('[UploadLogo]', err);
+    return res.status(500).json({ error: 'خطأ أثناء حفظ الشعار' });
   }
 });
 
