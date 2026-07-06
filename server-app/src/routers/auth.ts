@@ -8,6 +8,7 @@ export const authRouter = router({
       username: ctx.user.username,
       role: ctx.user.role,
       orgId: ctx.user.orgId,
+      extraPermissions: (ctx.user.extraPermissions ?? {}) as Record<string, boolean>,
     } : null;
   }),
 });
