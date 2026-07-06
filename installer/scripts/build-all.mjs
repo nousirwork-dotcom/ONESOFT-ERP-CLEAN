@@ -175,7 +175,9 @@ ok('UI مبنية');
 
 // ── 5. حزم الـ installer ──────────────────────────────────────────
 header('5/6', 'حزم installer (electron-builder)');
-run('electron-builder');
+const publishFlag = process.env.PUBLISH_RELEASE === 'true' ? ' --publish=always' : '';
+if (publishFlag) info('وضع النشر: --publish=always (سيتم رفع الملفات على GitHub Releases)');
+run(`electron-builder${publishFlag}`);
 ok('installer مُحزَّم');
 
 // ── 6. تحقق نهائي ─────────────────────────────────────────────────
