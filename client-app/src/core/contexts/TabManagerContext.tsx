@@ -1,4 +1,8 @@
-import { createContext, useContext, useState, ReactNode, useCallback, useRef } from "react";
+import { createContext, useContext, useState, ReactNode, useCallback, useRef, useEffect } from "react";
+import {
+  TrendingUp, ShoppingBag, Boxes, Factory, Calculator,
+  UserCheck, Wrench, Settings, LayoutGrid,
+} from "lucide-react";
 
 export type WindowState = "normal" | "minimized" | "maximized";
 
@@ -41,6 +45,87 @@ export function useTabManager() {
   return ctx;
 }
 
+// ─── Tab Persistence Helpers ──────────────────────────────────────────────────
+
+// Maps known paths (and path prefixes) to Icons for restoring tabs after restart.
+// TabManagerProvider lives OUTSIDE BrandingProvider, so we use localStorage for
+// settings sync (onesoft_cfg_remember_tabs is written by BrandingContext).
+
+const NAV_EXACT: Record<string, React.ElementType> = {
+  '/sales-module':          TrendingUp,
+  '/purchases-module':      ShoppingBag,
+  '/inventory-module':      Boxes,
+  '/manufacturing-module':  Factory,
+  '/accounting-module':     Calculator,
+  '/hr-module':             UserCheck,
+  '/assets-module':         Wrench,
+  '/settings':              Settings,
+};
+
+const NAV_PREFIXES: Array<{ prefix: string; Icon: React.ElementType }> = [
+  { prefix: '/sales',   Icon: TrendingUp  },
+  { prefix: '/pur',     Icon: ShoppingBag },
+  { prefix: '/inv',     Icon: Boxes       },
+  { prefix: '/mfg',     Icon: Factory     },
+  { prefix: '/acc',     Icon: Calculator  },
+  { prefix: '/hr',      Icon: UserCheck   },
+  { prefix: '/assets',  Icon: Wrench      },
+  { prefix: '/cfg',     Icon: Settings    },
+];
+
+function pathToIcon(path: string): React.ElementType {
+  if (NAV_EXACT[path]) return NAV_EXACT[path];
+  for (const p of NAV_PREFIXES) {
+    if (path.startsWith(p.prefix)) return p.Icon;
+  }
+  return LayoutGrid;
+}
+
+const TABS_KEY = 'onesoft_open_tabs';
+const FLAG_KEY = 'onesoft_cfg_remember_tabs';
+
+function isRememberEnabled(): boolean {
+  try { return localStorage.getItem(FLAG_KEY) === 'true'; } catch { return false; }
+}
+
+type SavedTab = { path: string; label: string };
+
+function loadSavedTabs(): AppTab[] {
+  try {
+    if (!isRememberEnabled()) return [];
+    const raw = localStorage.getItem(TABS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as SavedTab[];
+    if (!Array.isArray(parsed) || parsed.length === 0) return [];
+    return parsed.map((t, i) => ({
+      id:          `restored-${i}-${t.path.replace(/\//g, '_')}`,
+      path:        t.path,
+      label:       t.label,
+      Icon:        pathToIcon(t.path),
+      pinned:      false,
+      pos:         { x: 40 + i * 8, y: 40 + i * 8 },
+      size:        { w: 1200, h: 760 },
+      prevPos:     { x: 40, y: 40 },
+      prevSize:    { w: 1200, h: 760 },
+      windowState: 'maximized' as WindowState,
+      zIndex:      100 + i,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+function persistTabs(tabs: AppTab[]): void {
+  try {
+    const toSave: SavedTab[] = tabs
+      .filter(t => !t.pinned)
+      .map(t => ({ path: t.path, label: t.label }));
+    localStorage.setItem(TABS_KEY, JSON.stringify(toSave));
+  } catch { /* ignore */ }
+}
+
+// ─── Counters ─────────────────────────────────────────────────────────────────
+
 let tabCounter = 0;
 let zCounter = 100;
 let cascadeN = 0;
@@ -53,6 +138,7 @@ function getDefaultSize() {
     h: Math.round(Math.min(vh * 0.80, 760)),
   };
 }
+
 function getInitialPos(size: { w: number; h: number }) {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
@@ -64,13 +150,27 @@ function getInitialPos(size: { w: number; h: number }) {
   };
 }
 
+// ─── Provider ─────────────────────────────────────────────────────────────────
+
 export function TabManagerProvider({ children }: { children: ReactNode }) {
-  const [tabs, setTabs]               = useState<AppTab[]>([]);
-  const [activeTabId, setActiveTabId] = useState<string | null>(null);
-  const [dashboardVisible, setDashboardVisible] = useState(true);
+  const restoredRef  = useRef<AppTab[]>(loadSavedTabs());
+  const restoredTabs = restoredRef.current;
+
+  const [tabs,           setTabs]           = useState<AppTab[]>(restoredTabs);
+  const [activeTabId,    setActiveTabId]    = useState<string | null>(
+    restoredTabs.length > 0 ? restoredTabs[restoredTabs.length - 1].id : null
+  );
+  const [dashboardVisible, setDashboardVisible] = useState<boolean>(
+    restoredTabs.length === 0
+  );
 
   const toggleDashboard = useCallback(() => setDashboardVisible(v => !v), []);
-  const showDashboard   = useCallback(() => setDashboardVisible(true), []);
+  const showDashboard   = useCallback(() => setDashboardVisible(true),    []);
+
+  // Persist tabs to localStorage whenever they change
+  useEffect(() => {
+    persistTabs(tabs);
+  }, [tabs]);
 
   const bringToFront = useCallback((id: string) => {
     zCounter++;
@@ -87,14 +187,13 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
         zCounter++;
         const z = zCounter;
         setActiveTabId(existing.id);
-        // restore if minimized
         return prev.map(t => t.id === existing.id
           ? { ...t, zIndex: z, windowState: t.windowState === "minimized" ? "normal" : t.windowState }
           : t
         );
       }
       tabCounter++;
-      const id = `tab-${tabCounter}`;
+      const id   = `tab-${tabCounter}`;
       const size = getDefaultSize();
       const pos  = getInitialPos(size);
       zCounter++;
@@ -119,7 +218,6 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
         setActiveTabId(null);
         setDashboardVisible(true);
       } else if (activeTabId === id) {
-        // focus the window with highest zIndex
         const topTab = [...next].sort((a, b) => b.zIndex - a.zIndex)[0];
         setActiveTabId(topTab.id);
       }
@@ -140,7 +238,6 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
 
   const minimizeWindow = useCallback((id: string) => {
     setTabs(prev => prev.map(t => t.id === id ? { ...t, windowState: "minimized" } : t));
-    // focus next visible window
     setTabs(prev => {
       const visible = prev.filter(t => t.id !== id && t.windowState !== "minimized");
       if (visible.length > 0) {
