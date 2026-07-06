@@ -19,11 +19,21 @@ import { checkSchema } from './check-schema.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ─── مجلد رفع الملفات ─────────────────────────────────────────────────────────
-// في Electron: يُعيَّن UPLOADS_DIR إلى {userData}/uploads
-// في dev / web:  {cwd()}/uploads
+// أولوية الاختيار:
+//   1. UPLOADS_DIR  (تُعيَّنه Electron أو أي wrapper قبل تشغيل الخادم)
+//   2. Windows:     C:\ProgramData\OneSoft\uploads   ← لا يُمسح أبداً بالتحديث
+//   3. غير Windows: {cwd()}/uploads
+//
+// لماذا ProgramData وليس AppData أو Program Files؟
+//   • Program Files يُستبدَل كاملاً عند تحديث NSIS installer
+//   • AppData\Roaming يختلف بين المستخدمين
+//   • ProgramData مشترك لكل المستخدمين + يُبقي الـ installer عليه
+//   ← نفس المسار المستخدم بالفعل لـ onesoft.config.json
 const uploadsDir = process.env.UPLOADS_DIR
   ? process.env.UPLOADS_DIR
-  : path.join(process.cwd(), 'uploads');
+  : process.platform === 'win32'
+    ? path.join(process.env['PROGRAMDATA'] || 'C:\\ProgramData', 'OneSoft', 'uploads')
+    : path.join(process.cwd(), 'uploads');
 
 console.log('[3/6] All modules loaded — creating HTTP app...');
 const app = express();
