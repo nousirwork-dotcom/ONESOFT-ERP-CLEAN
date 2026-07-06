@@ -60002,7 +60002,13 @@ var init_branding = __esm({
       font_size: 13,
       sidebar_color: "#132238",
       sidebar_text_color: "#E5E7EB",
-      sidebar_active_color: "#406B93"
+      sidebar_active_color: "#406B93",
+      opening_transition: "none",
+      view_mode: "normal",
+      fullscreen_on_start: false,
+      remember_window_size: true,
+      remember_last_opened_tabs: false,
+      startup_page: "dashboard"
     };
     BrandingInputSchema = external_exports.object({
       primary_color: external_exports.string().optional(),
@@ -60020,15 +60026,17 @@ var init_branding = __esm({
       font_size: external_exports.number().min(10).max(18).optional(),
       sidebar_color: external_exports.string().optional(),
       sidebar_text_color: external_exports.string().optional(),
-      sidebar_active_color: external_exports.string().optional()
+      sidebar_active_color: external_exports.string().optional(),
+      opening_transition: external_exports.enum(["none", "fade", "slide", "zoom", "split_center"]).optional(),
+      view_mode: external_exports.enum(["normal", "compact", "wide"]).optional(),
+      fullscreen_on_start: external_exports.boolean().optional(),
+      remember_window_size: external_exports.boolean().optional(),
+      remember_last_opened_tabs: external_exports.boolean().optional(),
+      startup_page: external_exports.enum(["dashboard", "sales", "pos", "accounting", "last_opened"]).optional()
     }).passthrough();
     brandingRouter = router({
-      getSettings: publicProcedure.query(async () => {
-        return fetchOrgBranding();
-      }),
-      getSettingsAuth: protectedProcedure.query(async ({ ctx }) => {
-        return fetchOrgBranding(ctx.user.orgId);
-      }),
+      getSettings: publicProcedure.query(async () => fetchOrgBranding()),
+      getSettingsAuth: protectedProcedure.query(async ({ ctx }) => fetchOrgBranding(ctx.user.orgId)),
       saveSettings: protectedProcedure.input(BrandingInputSchema).mutation(async ({ input, ctx }) => {
         const user = ctx.user;
         if (!canManageBranding({ role: user.role, extraPermissions: user.extraPermissions })) {

@@ -7,9 +7,55 @@ import { Button } from '@/core/ui/button';
 import { Input } from '@/core/ui/input';
 import { Label } from '@/core/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/core/ui/select';
-import { Palette, RotateCcw, Save, Eye, Monitor, Upload, Image, Sliders } from 'lucide-react';
+import { Palette, RotateCcw, Save, Eye, Monitor, Upload, Image, Sliders, Layers } from 'lucide-react';
 import { useAuth } from '@/core/hooks/useAuth';
 
+// ─── Toggle Switch ─────────────────────────────────────────────────────────────
+function Toggle({ value, onChange, label, hint }: {
+  value: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+  hint?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-0.5">
+      <div className="flex-1 min-w-0">
+        <span className="text-[12px] font-medium text-foreground">{label}</span>
+        {hint && <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{hint}</p>}
+      </div>
+      <button
+        type="button"
+        onClick={() => onChange(!value)}
+        className="relative shrink-0"
+        style={{
+          width: 36, height: 20,
+          borderRadius: 10,
+          background: value ? 'var(--primary)' : 'var(--border)',
+          border: 'none',
+          cursor: 'pointer',
+          transition: 'background 0.2s',
+          padding: 0,
+        }}
+        aria-checked={value}
+        role="switch"
+      >
+        <span style={{
+          display: 'block',
+          width: 14, height: 14,
+          borderRadius: '50%',
+          background: '#fff',
+          position: 'absolute',
+          top: 3,
+          left: value ? 19 : 3,
+          transition: 'left 0.2s',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+        }} />
+      </button>
+    </div>
+  );
+}
+
+// ─── ColorField ────────────────────────────────────────────────────────────────
 function ColorField({
   label, value, onChange, hint,
 }: { label: string; value: string; onChange: (v: string) => void; hint?: string }) {
@@ -41,6 +87,7 @@ function ColorField({
   );
 }
 
+// ─── Section ───────────────────────────────────────────────────────────────────
 function Section({ title, icon: Icon, children }: { title: string; icon: React.ElementType; children: React.ReactNode }) {
   return (
     <Card>
@@ -59,14 +106,13 @@ function Section({ title, icon: Icon, children }: { title: string; icon: React.E
   );
 }
 
+// ─── Previews ─────────────────────────────────────────────────────────────────
 function LoginPreview({ s }: { s: BrandingSettings }) {
   const bg =
     s.login_background_type === 'solid'  ? s.login_background_value :
     s.login_background_type === 'image'  ? `url(${s.login_background_value}) center/cover no-repeat` :
     s.login_background_value;
-
   const r = `${s.border_radius}px`;
-
   return (
     <div style={{
       background: bg, borderRadius: 12, padding: 20, minHeight: 340,
@@ -90,32 +136,21 @@ function LoginPreview({ s }: { s: BrandingSettings }) {
         background: s.card_background_color, borderRadius: r,
         padding: '14px 16px', width: '100%', display: 'flex', flexDirection: 'column', gap: 8,
       }}>
-        <input
-          readOnly placeholder="اسم المستخدم"
-          style={{
-            background: s.background_color, border: `1px solid #D4CDC1`,
-            borderRadius: r, padding: '6px 10px',
-            fontSize: s.font_size - 1, color: s.text_color, outline: 'none', width: '100%',
-            boxSizing: 'border-box',
-          }}
-        />
-        <input
-          readOnly type="password" placeholder="كلمة المرور"
-          style={{
-            background: s.background_color, border: `1px solid #D4CDC1`,
-            borderRadius: r, padding: '6px 10px',
-            fontSize: s.font_size - 1, color: s.text_color, outline: 'none', width: '100%',
-            boxSizing: 'border-box',
-          }}
-        />
+        <input readOnly placeholder="اسم المستخدم" style={{
+          background: s.background_color, border: `1px solid #D4CDC1`, borderRadius: r,
+          padding: '6px 10px', fontSize: s.font_size - 1, color: s.text_color,
+          outline: 'none', width: '100%', boxSizing: 'border-box',
+        }} />
+        <input readOnly type="password" placeholder="كلمة المرور" style={{
+          background: s.background_color, border: `1px solid #D4CDC1`, borderRadius: r,
+          padding: '6px 10px', fontSize: s.font_size - 1, color: s.text_color,
+          outline: 'none', width: '100%', boxSizing: 'border-box',
+        }} />
         <button style={{
-          background: s.button_color, color: s.button_text_color,
-          border: 'none', borderRadius: r, padding: '8px',
-          fontWeight: 700, fontSize: s.font_size - 1, cursor: 'default',
-          width: '100%',
-        }}>
-          تسجيل الدخول
-        </button>
+          background: s.button_color, color: s.button_text_color, border: 'none',
+          borderRadius: r, padding: '8px', fontWeight: 700,
+          fontSize: s.font_size - 1, cursor: 'default', width: '100%',
+        }}>تسجيل الدخول</button>
       </div>
     </div>
   );
@@ -140,14 +175,36 @@ function SidebarPreview({ s }: { s: BrandingSettings }) {
           background: i === 0 ? s.sidebar_active_color : 'transparent',
           color: i === 0 ? s.button_text_color : s.sidebar_text_color,
           fontSize: 12, fontWeight: i === 0 ? 700 : 500,
-        }}>
-          {item}
-        </div>
+        }}>{item}</div>
       ))}
     </div>
   );
 }
 
+// ─── Transition mini-preview ──────────────────────────────────────────────────
+const TRANSITION_LABELS: Record<string, string> = {
+  none:         'بدون حركة — الدخول الفوري',
+  fade:         'تلاشي هادئ (Fade)',
+  slide:        'انزلاق للأعلى (Slide)',
+  zoom:         'تكبير وتلاشي (Zoom)',
+  split_center: 'انقسام من المنتصف ✦',
+};
+
+const STARTUP_PAGE_LABELS: Record<string, string> = {
+  dashboard:    'لوحة التحكم',
+  sales:        'المبيعات',
+  pos:          'نقطة البيع',
+  accounting:   'المحاسبة',
+  last_opened:  'آخر صفحة مفتوحة',
+};
+
+const VIEW_MODE_LABELS: Record<string, string> = {
+  normal:   'عادي',
+  compact:  'مضغوط (Compact)',
+  wide:     'موسّع (Wide)',
+};
+
+// ─── BrandingSettingsPage ──────────────────────────────────────────────────────
 export default function BrandingSettingsPage() {
   const { settings, reload } = useBranding();
   const { user } = useAuth();
@@ -157,10 +214,7 @@ export default function BrandingSettingsPage() {
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { setForm({ ...settings }); }, [settings]);
-
-  useEffect(() => {
-    applyCssVariables(form);
-  }, [form]);
+  useEffect(() => { applyCssVariables(form); }, [form]);
 
   const set = <K extends keyof BrandingSettings>(k: K, v: BrandingSettings[K]) =>
     setForm(p => ({ ...p, [k]: v }));
@@ -179,7 +233,6 @@ export default function BrandingSettingsPage() {
     onError: (e) => toast.error(e.message),
   });
 
-  // صلاحية إدارة هوية النظام: admin / superadmin أو manage_branding permission
   const canManageBranding =
     user?.role === 'admin' ||
     user?.role === 'superadmin' ||
@@ -188,7 +241,6 @@ export default function BrandingSettingsPage() {
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     setLogoUploading(true);
     const reader = new FileReader();
     reader.onload = async (ev) => {
@@ -239,19 +291,11 @@ export default function BrandingSettingsPage() {
           <h1 className="text-base font-bold">هوية النظام والألوان</h1>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline" size="sm"
-            onClick={() => resetMutation.mutate()}
-            disabled={resetMutation.isPending}
-          >
+          <Button variant="outline" size="sm" onClick={() => resetMutation.mutate()} disabled={resetMutation.isPending}>
             <RotateCcw className="w-3.5 h-3.5 ml-1" />
             استعادة الافتراضيات
           </Button>
-          <Button
-            size="sm"
-            onClick={() => saveMutation.mutate(form)}
-            disabled={saveMutation.isPending}
-          >
+          <Button size="sm" onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending}>
             <Save className="w-3.5 h-3.5 ml-1" />
             {saveMutation.isPending ? 'جارٍ الحفظ...' : 'حفظ التغييرات'}
           </Button>
@@ -309,12 +353,12 @@ export default function BrandingSettingsPage() {
 
           {/* الألوان الأساسية */}
           <Section title="الألوان الأساسية" icon={Palette}>
-            <ColorField label="اللون الأساسي" value={form.primary_color} onChange={v => set('primary_color', v)} hint="الأزرار، الروابط" />
-            <ColorField label="اللون الثانوي" value={form.secondary_color} onChange={v => set('secondary_color', v)} />
-            <ColorField label="لون التمييز" value={form.accent_color} onChange={v => set('accent_color', v)} />
-            <ColorField label="لون الخلفية" value={form.background_color} onChange={v => set('background_color', v)} />
-            <ColorField label="خلفية الكارت" value={form.card_background_color} onChange={v => set('card_background_color', v)} />
-            <ColorField label="لون النصوص" value={form.text_color} onChange={v => set('text_color', v)} />
+            <ColorField label="اللون الأساسي"  value={form.primary_color}       onChange={v => set('primary_color', v)}       hint="الأزرار، الروابط" />
+            <ColorField label="اللون الثانوي"  value={form.secondary_color}     onChange={v => set('secondary_color', v)} />
+            <ColorField label="لون التمييز"    value={form.accent_color}        onChange={v => set('accent_color', v)} />
+            <ColorField label="لون الخلفية"    value={form.background_color}    onChange={v => set('background_color', v)} />
+            <ColorField label="خلفية الكارت"   value={form.card_background_color} onChange={v => set('card_background_color', v)} />
+            <ColorField label="لون النصوص"     value={form.text_color}          onChange={v => set('text_color', v)} />
           </Section>
 
           {/* الأزرار */}
@@ -327,8 +371,8 @@ export default function BrandingSettingsPage() {
             </CardHeader>
             <CardContent className="px-4 pb-4">
               <div className="grid grid-cols-2 gap-3">
-                <ColorField label="لون الزر" value={form.button_color} onChange={v => set('button_color', v)} />
-                <ColorField label="نص الزر" value={form.button_text_color} onChange={v => set('button_text_color', v)} />
+                <ColorField label="لون الزر"  value={form.button_color}      onChange={v => set('button_color', v)} />
+                <ColorField label="نص الزر"   value={form.button_text_color} onChange={v => set('button_text_color', v)} />
               </div>
               <div className="mt-3">
                 <Label className="text-[11px] text-muted-foreground mb-1 block">معاينة</Label>
@@ -337,18 +381,16 @@ export default function BrandingSettingsPage() {
                   border: 'none', borderRadius: form.border_radius, padding: '8px 20px',
                   fontWeight: 700, fontSize: 13, cursor: 'default',
                   fontFamily: "'Cairo', Tahoma, sans-serif",
-                }}>
-                  مثال للزر
-                </button>
+                }}>مثال للزر</button>
               </div>
             </CardContent>
           </Card>
 
           {/* الشريط الجانبي */}
           <Section title="الشريط الجانبي" icon={Monitor}>
-            <ColorField label="خلفية الشريط" value={form.sidebar_color} onChange={v => set('sidebar_color', v)} />
-            <ColorField label="نصوص الشريط" value={form.sidebar_text_color} onChange={v => set('sidebar_text_color', v)} />
-            <ColorField label="العنصر النشط" value={form.sidebar_active_color} onChange={v => set('sidebar_active_color', v)} />
+            <ColorField label="خلفية الشريط"  value={form.sidebar_color}        onChange={v => set('sidebar_color', v)} />
+            <ColorField label="نصوص الشريط"  value={form.sidebar_text_color}   onChange={v => set('sidebar_text_color', v)} />
+            <ColorField label="العنصر النشط"  value={form.sidebar_active_color} onChange={v => set('sidebar_active_color', v)} />
           </Section>
 
           {/* شاشة تسجيل الدخول */}
@@ -366,9 +408,7 @@ export default function BrandingSettingsPage() {
                   value={form.login_background_type}
                   onValueChange={v => set('login_background_type', v as BrandingSettings['login_background_type'])}
                 >
-                  <SelectTrigger className="h-8 text-[12px]">
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger className="h-8 text-[12px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="gradient">تدرج لوني (Gradient)</SelectItem>
                     <SelectItem value="solid">لون ثابت (Solid)</SelectItem>
@@ -379,8 +419,7 @@ export default function BrandingSettingsPage() {
               <div>
                 <Label className="text-[11px] text-muted-foreground mb-1 block">
                   {form.login_background_type === 'gradient' ? 'CSS Gradient' :
-                   form.login_background_type === 'solid'    ? 'كود اللون' :
-                   'رابط الصورة'}
+                   form.login_background_type === 'solid'    ? 'كود اللون' : 'رابط الصورة'}
                 </Label>
                 {form.login_background_type === 'solid' ? (
                   <div className="flex gap-2">
@@ -421,12 +460,10 @@ export default function BrandingSettingsPage() {
                   <Label className="text-[11px] text-muted-foreground">نسبة تدوير الزوايا</Label>
                   <span className="text-[11px] font-mono bg-muted px-1.5 py-0.5 rounded">{form.border_radius}px</span>
                 </div>
-                <input
-                  type="range" min={0} max={24} step={1}
+                <input type="range" min={0} max={24} step={1}
                   value={form.border_radius}
                   onChange={e => set('border_radius', Number(e.target.value))}
-                  className="w-full accent-primary"
-                />
+                  className="w-full accent-primary" />
                 <div className="flex justify-between text-[9px] text-muted-foreground mt-0.5">
                   <span>حاد (0px)</span><span>دائري (24px)</span>
                 </div>
@@ -436,16 +473,106 @@ export default function BrandingSettingsPage() {
                   <Label className="text-[11px] text-muted-foreground">حجم الخط الأساسي</Label>
                   <span className="text-[11px] font-mono bg-muted px-1.5 py-0.5 rounded">{form.font_size}px</span>
                 </div>
-                <input
-                  type="range" min={10} max={18} step={1}
+                <input type="range" min={10} max={18} step={1}
                   value={form.font_size}
                   onChange={e => set('font_size', Number(e.target.value))}
-                  className="w-full accent-primary"
-                />
+                  className="w-full accent-primary" />
                 <div className="flex justify-between text-[9px] text-muted-foreground mt-0.5">
                   <span>صغير (10px)</span><span>كبير (18px)</span>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* ── طريقة الفتح والعرض ── */}
+          <Card>
+            <CardHeader className="pb-3 pt-4 px-4">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Layers className="w-4 h-4 text-primary" />
+                طريقة الفتح والعرض
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 flex flex-col gap-4">
+
+              {/* حركة الدخول */}
+              <div>
+                <Label className="text-[11px] text-muted-foreground mb-1.5 block">
+                  حركة الدخول بعد تسجيل الدخول الناجح
+                </Label>
+                <Select
+                  value={form.opening_transition}
+                  onValueChange={v => set('opening_transition', v as BrandingSettings['opening_transition'])}
+                >
+                  <SelectTrigger className="h-8 text-[12px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(TRANSITION_LABELS).map(([val, lbl]) => (
+                      <SelectItem key={val} value={val}>{lbl}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground mt-1 leading-relaxed">
+                  {form.opening_transition === 'split_center'
+                    ? '✦ شاشة الدخول تنقسم من المنتصف — النصف الأيمن يتحرك يميناً والأيسر يساراً ثم يظهر Dashboard'
+                    : form.opening_transition === 'none'
+                    ? 'دخول فوري بدون أي حركة — الأسرع والأخف'
+                    : 'الحركة تعمل فقط عند تسجيل الدخول الناجح — لا تعمل عند الخطأ'}
+                </p>
+              </div>
+
+              {/* وضع العرض */}
+              <div>
+                <Label className="text-[11px] text-muted-foreground mb-1.5 block">وضع عرض الواجهة</Label>
+                <Select
+                  value={form.view_mode}
+                  onValueChange={v => set('view_mode', v as BrandingSettings['view_mode'])}
+                >
+                  <SelectTrigger className="h-8 text-[12px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(VIEW_MODE_LABELS).map(([val, lbl]) => (
+                      <SelectItem key={val} value={val}>{lbl}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* صفحة البداية */}
+              <div>
+                <Label className="text-[11px] text-muted-foreground mb-1.5 block">الصفحة الافتراضية بعد تسجيل الدخول</Label>
+                <Select
+                  value={form.startup_page}
+                  onValueChange={v => set('startup_page', v as BrandingSettings['startup_page'])}
+                >
+                  <SelectTrigger className="h-8 text-[12px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(STARTUP_PAGE_LABELS).map(([val, lbl]) => (
+                      <SelectItem key={val} value={val}>{lbl}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Toggles */}
+              <div className="flex flex-col gap-3 pt-1 border-t border-border">
+                <Toggle
+                  value={form.fullscreen_on_start}
+                  onChange={v => set('fullscreen_on_start', v)}
+                  label="فتح ملء الشاشة عند التشغيل"
+                  hint="يعمل في تطبيق Electron فقط"
+                />
+                <Toggle
+                  value={form.remember_window_size}
+                  onChange={v => set('remember_window_size', v)}
+                  label="تذكر حجم النافذة"
+                  hint="يحفظ أبعاد النافذة بين الجلسات"
+                />
+                <Toggle
+                  value={form.remember_last_opened_tabs}
+                  onChange={v => set('remember_last_opened_tabs', v)}
+                  label="تذكر آخر تبويبات مفتوحة"
+                  hint="يُعيد فتح نفس التبويبات عند إعادة التشغيل"
+                />
+              </div>
+
             </CardContent>
           </Card>
 
@@ -462,26 +589,27 @@ export default function BrandingSettingsPage() {
                 className={`text-[11px] px-2 py-0.5 rounded transition-colors ${
                   previewMode === 'login' ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-secondary'
                 }`}
-              >
-                تسجيل الدخول
-              </button>
+              >تسجيل الدخول</button>
               <button
                 onClick={() => setPreviewMode('sidebar')}
                 className={`text-[11px] px-2 py-0.5 rounded transition-colors ${
                   previewMode === 'sidebar' ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-secondary'
                 }`}
-              >
-                الشريط الجانبي
-              </button>
+              >الشريط الجانبي</button>
             </div>
           </div>
 
           <div className="rounded-xl overflow-hidden border border-border shadow-sm">
-            {previewMode === 'login'
-              ? <LoginPreview s={form} />
-              : <SidebarPreview s={form} />
-            }
+            {previewMode === 'login' ? <LoginPreview s={form} /> : <SidebarPreview s={form} />}
           </div>
+
+          {/* Opening Transition badge */}
+          {form.opening_transition !== 'none' && (
+            <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+              <p className="text-[11px] font-semibold text-primary mb-0.5">حركة الدخول النشطة</p>
+              <p className="text-[11px] text-muted-foreground">{TRANSITION_LABELS[form.opening_transition]}</p>
+            </div>
+          )}
 
           <p className="text-[10px] text-muted-foreground text-center">
             التغييرات تُطبَّق فوراً على الواجهة

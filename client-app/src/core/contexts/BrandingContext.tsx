@@ -1,41 +1,53 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 
 export interface BrandingSettings {
-  primary_color:           string;
-  secondary_color:         string;
-  accent_color:            string;
-  background_color:        string;
-  card_background_color:   string;
-  text_color:              string;
-  button_color:            string;
-  button_text_color:       string;
-  logo_url:                string | null;
-  login_background_type:   'gradient' | 'solid' | 'image';
-  login_background_value:  string;
-  border_radius:           number;
-  font_size:               number;
-  sidebar_color:           string;
-  sidebar_text_color:      string;
-  sidebar_active_color:    string;
+  primary_color:              string;
+  secondary_color:            string;
+  accent_color:               string;
+  background_color:           string;
+  card_background_color:      string;
+  text_color:                 string;
+  button_color:               string;
+  button_text_color:          string;
+  logo_url:                   string | null;
+  login_background_type:      'gradient' | 'solid' | 'image';
+  login_background_value:     string;
+  border_radius:              number;
+  font_size:                  number;
+  sidebar_color:              string;
+  sidebar_text_color:         string;
+  sidebar_active_color:       string;
+  opening_transition:         'none' | 'fade' | 'slide' | 'zoom' | 'split_center';
+  view_mode:                  'normal' | 'compact' | 'wide';
+  fullscreen_on_start:        boolean;
+  remember_window_size:       boolean;
+  remember_last_opened_tabs:  boolean;
+  startup_page:               'dashboard' | 'sales' | 'pos' | 'accounting' | 'last_opened';
 }
 
 export const DEFAULT_BRANDING: BrandingSettings = {
-  primary_color:           '#406B93',
-  secondary_color:         '#E4DFDA',
-  accent_color:            '#EEF3F7',
-  background_color:        '#ECE7DD',
-  card_background_color:   '#FFFFFF',
-  text_color:              '#2F2F2F',
-  button_color:            '#406B93',
-  button_text_color:       '#FFFFFF',
-  logo_url:                null,
-  login_background_type:   'gradient',
-  login_background_value:  'linear-gradient(145deg, #E8E0D4 0%, #D4CCC0 40%, #C8C0B4 100%)',
-  border_radius:           8,
-  font_size:               13,
-  sidebar_color:           '#132238',
-  sidebar_text_color:      '#E5E7EB',
-  sidebar_active_color:    '#406B93',
+  primary_color:              '#406B93',
+  secondary_color:            '#E4DFDA',
+  accent_color:               '#EEF3F7',
+  background_color:           '#ECE7DD',
+  card_background_color:      '#FFFFFF',
+  text_color:                 '#2F2F2F',
+  button_color:               '#406B93',
+  button_text_color:          '#FFFFFF',
+  logo_url:                   null,
+  login_background_type:      'gradient',
+  login_background_value:     'linear-gradient(145deg, #E8E0D4 0%, #D4CCC0 40%, #C8C0B4 100%)',
+  border_radius:              8,
+  font_size:                  13,
+  sidebar_color:              '#132238',
+  sidebar_text_color:         '#E5E7EB',
+  sidebar_active_color:       '#406B93',
+  opening_transition:         'none',
+  view_mode:                  'normal',
+  fullscreen_on_start:        false,
+  remember_window_size:       true,
+  remember_last_opened_tabs:  false,
+  startup_page:               'dashboard',
 };
 
 interface BrandingContextType {
@@ -124,23 +136,40 @@ export function applyCssVariables(s: BrandingSettings): void {
     set('--brand-primary-rgb',   hexToRgb(s.primary_color));
     set('--brand-border-radius', `${s.border_radius}px`);
     set('--brand-font-size',     `${s.font_size}px`);
+
+    // view_mode class on <html>
+    try {
+      root.classList.remove('view-normal', 'view-compact', 'view-wide');
+      root.classList.add(`view-${s.view_mode ?? 'normal'}`);
+    } catch { /* ignore */ }
   } catch {
     // never crash the app because of a CSS variable error
   }
 }
 
 // ─── Apply DEFAULT_BRANDING IMMEDIATELY at module load ─────────────────────────
-// This guarantees the app NEVER shows a white/unstyled screen — even before
-// the first fetch completes or if the server is temporarily unreachable.
 applyCssVariables(DEFAULT_BRANDING);
 
-// ─── BrandingErrorBoundary ─────────────────────────────────────────────────────
-// Catches any React rendering error inside BrandingProvider and falls back
-// to DEFAULT_BRANDING so the app always opens with the default theme.
-
-interface BrandingErrorBoundaryState {
-  hasError: boolean;
+// ─── getStartupPath ────────────────────────────────────────────────────────────
+export function getStartupPath(page: BrandingSettings['startup_page']): string {
+  switch (page) {
+    case 'sales':       return '/sales-module';
+    case 'pos':         return '/pos';
+    case 'accounting':  return '/accounting';
+    case 'last_opened': {
+      try {
+        return localStorage.getItem('onesoft_last_page') || '/';
+      } catch {
+        return '/';
+      }
+    }
+    default: return '/';
+  }
 }
+
+// ─── BrandingErrorBoundary ─────────────────────────────────────────────────────
+
+interface BrandingErrorBoundaryState { hasError: boolean }
 
 export class BrandingErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -152,7 +181,6 @@ export class BrandingErrorBoundary extends React.Component<
   }
 
   static getDerivedStateFromError(): BrandingErrorBoundaryState {
-    // Re-apply defaults so CSS variables remain correct after the crash
     applyCssVariables(DEFAULT_BRANDING);
     return { hasError: true };
   }
@@ -161,13 +189,7 @@ export class BrandingErrorBoundary extends React.Component<
     console.error('[BrandingErrorBoundary] caught error:', error, info);
   }
 
-  render() {
-    if (this.state.hasError) {
-      // Render children directly — branding failed but app must still work
-      return this.props.children;
-    }
-    return this.props.children;
-  }
+  render() { return this.props.children; }
 }
 
 // ─── BrandingProvider ──────────────────────────────────────────────────────────
@@ -187,20 +209,16 @@ export function BrandingProvider({ children }: { children: React.ReactNode }) {
         setSavedSettings(merged);
         applyCssVariables(merged);
       } else {
-        // Server responded but with an error — keep default theme
         applyCssVariables(DEFAULT_BRANDING);
       }
     } catch {
-      // Network error or DB unavailable — keep default theme, no white screen
       applyCssVariables(DEFAULT_BRANDING);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    fetchBranding();
-  }, [fetchBranding]);
+  useEffect(() => { fetchBranding(); }, [fetchBranding]);
 
   const applyPreview = useCallback((overrides: Partial<BrandingSettings>) => {
     const preview = { ...savedSettings, ...overrides };
