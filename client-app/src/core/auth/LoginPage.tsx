@@ -13,14 +13,29 @@ export default function LoginPage() {
     retry: 3,
     retryDelay: 2000,
     staleTime: 0,
-    // retryKey forces re-mount on manual retry
   });
+
+  // محاولة الدخول التلقائي (بدون يوزر أو باسورد) إذا لم يُعيَّن المستخدم كلمة مرور
+  const tryAutoLogin = async () => {
+    try {
+      const res = await fetch('/api/auth/auto-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      if (res.ok) {
+        await utils.auth.me.invalidate();
+        navigate('/');
+        return true;
+      }
+    } catch { /* تجاهل — سيظهر شاشة الدخول العادية */ }
+    return false;
+  };
 
   useEffect(() => {
     if (firstRunQ.isLoading) { setPhase('loading'); return; }
 
     if (firstRunQ.isError) {
-      // خطأ شبكة — الخادم لم يستجب بعد
       setPhase('dbError');
       return;
     }
@@ -28,7 +43,6 @@ export default function LoginPage() {
     const { firstRun, dbError } = firstRunQ.data ?? {};
 
     if (dbError) {
-      // الخادم استجاب لكن قاعدة البيانات غير متاحة (مشكلة config.json / باسورد)
       setPhase('dbError');
       return;
     }
@@ -38,7 +52,10 @@ export default function LoginPage() {
       return;
     }
 
-    setPhase('login');
+    // جرّب الدخول التلقائي أولاً — إذا فشل أظهر شاشة الدخول
+    tryAutoLogin().then(success => {
+      if (!success) setPhase('login');
+    });
   }, [firstRunQ.isLoading, firstRunQ.isError, firstRunQ.data]);
 
   if (phase === 'wizard') {
