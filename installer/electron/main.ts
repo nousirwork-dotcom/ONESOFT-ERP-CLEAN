@@ -91,6 +91,34 @@ app.on('quit', (_, exitCode) => {
   writeLog('INFO', `app.quit event  exitCode=${exitCode}\n${stackTrace()}`);
 });
 
+// ─── Installation state helpers ──────────────────────────────────────────────
+// يقرأ version.json من ProgramData\OneSoft لمعرفة هل البرنامج مثبّت مسبقاً
+function isAlreadyInstalled(): boolean {
+  try {
+    const versionFile = path.join(
+      process.env['ProgramData'] || 'C:\\ProgramData',
+      'OneSoft', 'version.json',
+    );
+    return fs.existsSync(versionFile);
+  } catch {
+    return false;
+  }
+}
+
+// يقرأ بورت الخادم من config.json — الافتراضي 3000
+function readServerPort(): number {
+  try {
+    const configFile = path.join(
+      process.env['ProgramData'] || 'C:\\ProgramData',
+      'OneSoft', 'config', 'onesoft.config.json',
+    );
+    const cfg = JSON.parse(fs.readFileSync(configFile, 'utf-8'));
+    return (cfg?.server?.port as number) ?? 3000;
+  } catch {
+    return 3000;
+  }
+}
+
 // ─── IPC imports ─────────────────────────────────────────────────────────────
 import { registerRequirementsIpc } from './ipc/requirements.ipc.js';
 import { registerDatabaseIpc }     from './ipc/database.ipc.js';
@@ -189,9 +217,10 @@ function createWindow() {
 
   // ── Window event handlers ─────────────────────────────────────────────────
   mainWindow.once('ready-to-show', () => {
-    writeLog('INFO', 'window: ready-to-show — calling show()');
+    writeLog('INFO', 'window: ready-to-show — calling maximize() then show()');
+    mainWindow?.maximize();
     mainWindow?.show();
-    writeLog('INFO', 'window: show() called');
+    writeLog('INFO', 'window: maximize() + show() called');
     if (isDebug) {
       writeLog('INFO', 'ONESOFT_DEBUG=1 — opening DevTools (detach mode)');
       wc.openDevTools({ mode: 'detach' });
@@ -219,8 +248,17 @@ function createWindow() {
     wc.loadURL(testUrl)
       .then(() => writeLog('INFO', 'TEST MODE: loadURL — resolved'))
       .catch((e: unknown) => writeLog('ERROR', 'TEST MODE: loadURL — rejected', e));
+  } else if (isAlreadyInstalled()) {
+    // البرنامج مثبَّت مسبقاً — حمِّل تطبيق العمل مباشرةً (يعمل كـ Windows service)
+    const port      = readServerPort();
+    const serverUrl = `http://localhost:${port}`;
+    writeLog('INFO', `already installed — loadURL ${serverUrl} — start`);
+    mainWindow.loadURL(serverUrl)
+      .then(() => writeLog('INFO', `loadURL ${serverUrl} — resolved`))
+      .catch((e: unknown) => writeLog('ERROR', `loadURL ${serverUrl} — rejected`, e));
   } else {
-    writeLog('INFO', `loadFile ${indexPath} — start`);
+    // أول تشغيل فعلي — اعرض معالج التثبيت
+    writeLog('INFO', `first run — loadFile ${indexPath} — start`);
     mainWindow.loadFile(indexPath)
       .then(() => writeLog('INFO', 'loadFile — resolved'))
       .catch((e: unknown) => writeLog('ERROR', 'loadFile — rejected', e));
