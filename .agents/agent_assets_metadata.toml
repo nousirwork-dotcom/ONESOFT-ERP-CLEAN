@@ -96,3 +96,9 @@ id = "24sppnmtq_J9RL7kEcKVZ"
 uri = "file://OneSoft-ERP-v1.0.zip"
 type = "unspecified"
 title = "OneSoft ERP v1.0 — كود المصدر الكامل"
+
+[[outputs]]
+id = "TAd9dISrvFYayO9gTJVC1"
+uri = "file://docs/WINDOWS_ACCEPTANCE_TEST.md"
+type = "text"
+title = "قائمة اختبار القبول — Windows Build"
