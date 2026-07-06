@@ -79,14 +79,17 @@ function writeLog(level, msg) {
 }
 
 // ── حالة عامة ─────────────────────────────────────────────────────────────────
-let splashWin   = null;
-let mainWin     = null;
-let tray        = null;
-let serverProc  = null;
-let serverReady = false;
-let isQuitting  = false;
-let cfg         = loadConfig();
-const SERVER_URL = `http://localhost:${cfg.port}`;
+let splashWin        = null;
+let mainWin          = null;
+let tray             = null;
+let serverProc       = null;
+let serverReady      = false;
+let isQuitting       = false;
+let cfg              = loadConfig();
+let brandingSettings = {};  // cached after fetchBrandingSettings() at startup
+const SERVER_URL      = `http://localhost:${cfg.port}`;
+
+const WINDOW_STATE_PATH = path.join(DATA_DIR, 'window-state.json');
 
 // ── قفل النسخة الواحدة ────────────────────────────────────────────────────────
 const gotLock = app.requestSingleInstanceLock();
@@ -146,6 +149,50 @@ function stopServer() {
   try { serverProc.kill('SIGTERM'); } catch {}
   serverProc  = null;
   serverReady = false;
+}
+
+// ── Window State (remember_window_size) ───────────────────────────────────────
+function loadWindowState() {
+  try {
+    if (fs.existsSync(WINDOW_STATE_PATH)) {
+      return JSON.parse(fs.readFileSync(WINDOW_STATE_PATH, 'utf-8'));
+    }
+  } catch (e) {
+    writeLog('WARN', `loadWindowState: ${e.message}`);
+  }
+  return null;
+}
+
+function saveWindowState(win) {
+  try {
+    if (!win || win.isDestroyed()) return;
+    if (win.isFullScreen()) return;         // تجنّب حفظ أبعاد وضع ملء الشاشة
+    const bounds      = win.getBounds();
+    const isMaximized = win.isMaximized();
+    fs.writeFileSync(
+      WINDOW_STATE_PATH,
+      JSON.stringify({ ...bounds, isMaximized }, null, 2),
+      'utf-8'
+    );
+  } catch (e) {
+    writeLog('WARN', `saveWindowState: ${e.message}`);
+  }
+}
+
+// ── Branding Settings Fetch (for Electron features) ───────────────────────────
+function fetchBrandingSettings() {
+  return new Promise(resolve => {
+    const req = http.get(`${SERVER_URL}/api/public/branding`, res => {
+      let data = '';
+      res.on('data', d => { data += d; });
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); }
+        catch { resolve({}); }
+      });
+    });
+    req.on('error', () => resolve({}));
+    req.setTimeout(3000, () => { try { req.destroy(); } catch {} resolve({}); });
+  });
 }
 
 // ── انتظار جاهزية الخادم ─────────────────────────────────────────────────────
@@ -222,12 +269,20 @@ function createMainWindow() {
     return;
   }
 
-  mainWin = new BrowserWindow({
-    width:  1400,
-    height: 900,
-    minWidth:  1024,
-    minHeight: 640,
-    show: false, // يظهر فقط بعد اكتمال تحميل الواجهة (لا شاشة بيضاء فارغة)
+  const bs           = brandingSettings || {};
+  const rememberSize = bs.remember_window_size !== false;   // default true
+  const fullscreen   = bs.fullscreen_on_start === true;
+  const winState     = rememberSize ? loadWindowState() : null;
+
+  writeLog('INFO', `createMainWindow: rememberSize=${rememberSize} fullscreen=${fullscreen} savedState=${JSON.stringify(winState)}`);
+
+  // ── حساب أبعاد النافذة الأولية ──
+  const winOpts = {
+    width:           (rememberSize && winState?.width)  ? winState.width  : 1400,
+    height:          (rememberSize && winState?.height) ? winState.height : 900,
+    minWidth:        1024,
+    minHeight:       640,
+    show:            false,   // يظهر فقط بعد ready-to-show
     backgroundColor: '#F7F5F0',
     autoHideMenuBar: true,
     webPreferences: {
@@ -236,9 +291,40 @@ function createMainWindow() {
       nodeIntegration:  false,
       sandbox:          true,
     },
+  };
+
+  // استعادة موضع النافذة فقط إذا كانت الإحداثيات محفوظة وصالحة
+  if (rememberSize && winState?.x !== undefined && winState?.y !== undefined) {
+    winOpts.x = winState.x;
+    winOpts.y = winState.y;
+  }
+
+  mainWin = new BrowserWindow(winOpts);
+
+  mainWin.once('ready-to-show', () => {
+    // fullscreen_on_start: تكبير النافذة لملء الشاشة
+    if (fullscreen || (rememberSize && winState?.isMaximized)) {
+      mainWin.maximize();
+    }
+    mainWin.show();
   });
 
-  mainWin.once('ready-to-show', () => mainWin.show());
+  // حفظ حجم النافذة وموضعها عند تغييرها (remember_window_size)
+  if (rememberSize) {
+    const onBoundsChange = () => saveWindowState(mainWin);
+    mainWin.on('resize',     onBoundsChange);
+    mainWin.on('move',       onBoundsChange);
+    mainWin.on('unmaximize', onBoundsChange);
+    mainWin.on('maximize',   () => {
+      // نحفظ isMaximized = true عند التكبير
+      try {
+        if (!mainWin || mainWin.isDestroyed()) return;
+        const bounds = mainWin.getBounds();
+        fs.writeFileSync(WINDOW_STATE_PATH,
+          JSON.stringify({ ...bounds, isMaximized: true }, null, 2), 'utf-8');
+      } catch {}
+    });
+  }
 
   mainWin.loadURL(SERVER_URL).catch(err => {
     writeLog('ERROR', `main window failed to load ${SERVER_URL}: ${err.message}`);
@@ -375,7 +461,16 @@ app.whenReady().then(async () => {
     serverReady = true;
     writeLog('INFO', 'server is ready');
 
-    // 4. إغلاق Splash وفتح نافذة Electron الرئيسية (بدل المتصفح الخارجي)
+    // 4a. جلب إعدادات الهوية لتطبيق fullscreen_on_start و remember_window_size
+    try {
+      brandingSettings = await fetchBrandingSettings();
+      writeLog('INFO', `branding: transition=${brandingSettings.opening_transition} fullscreen=${brandingSettings.fullscreen_on_start} rememberSize=${brandingSettings.remember_window_size}`);
+    } catch (e) {
+      writeLog('WARN', `fetchBrandingSettings failed: ${e.message}`);
+      brandingSettings = {};
+    }
+
+    // 4b. إغلاق Splash وفتح نافذة Electron الرئيسية (بدل المتصفح الخارجي)
     if (splashWin && !splashWin.isDestroyed()) {
       setTimeout(() => {
         try { splashWin.close(); } catch {}
@@ -410,6 +505,10 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   isQuitting = true;
   writeLog('INFO', 'app quitting');
+  // حفظ حجم النافذة قبل الإغلاق (remember_window_size)
+  if (mainWin && !mainWin.isDestroyed() && brandingSettings?.remember_window_size !== false) {
+    saveWindowState(mainWin);
+  }
   stopServer();
 });
 
