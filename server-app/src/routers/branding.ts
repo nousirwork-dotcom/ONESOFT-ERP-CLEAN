@@ -25,6 +25,12 @@ export const DEFAULT_BRANDING = {
 
 export type BrandingSettings = typeof DEFAULT_BRANDING;
 
+/** يتحقق أن المستخدم يملك صلاحية إدارة هوية النظام */
+function canManageBranding(user: { role: string; extraPermissions?: Record<string, boolean> | null }): boolean {
+  if (['admin', 'superadmin'].includes(user.role)) return true;
+  return user.extraPermissions?.manage_branding === true;
+}
+
 const BrandingInputSchema = z.object({
   primary_color:           z.string().optional(),
   secondary_color:         z.string().optional(),
@@ -73,8 +79,8 @@ export const brandingRouter = router({
     .input(BrandingInputSchema)
     .mutation(async ({ input, ctx }) => {
       const user = ctx.user;
-      if (!['admin', 'superadmin'].includes(user.role)) {
-        throw new Error('هذه العملية تتطلب صلاحية مسؤول النظام');
+      if (!canManageBranding({ role: user.role, extraPermissions: user.extraPermissions as Record<string, boolean> | null })) {
+        throw new Error('هذه العملية تتطلب صلاحية "إدارة هوية النظام"');
       }
       const current = await fetchOrgBranding(user.orgId);
       const merged = { ...current, ...input };
@@ -87,8 +93,8 @@ export const brandingRouter = router({
   resetSettings: protectedProcedure
     .mutation(async ({ ctx }) => {
       const user = ctx.user;
-      if (!['admin', 'superadmin'].includes(user.role)) {
-        throw new Error('هذه العملية تتطلب صلاحية مسؤول النظام');
+      if (!canManageBranding({ role: user.role, extraPermissions: user.extraPermissions as Record<string, boolean> | null })) {
+        throw new Error('هذه العملية تتطلب صلاحية "إدارة هوية النظام"');
       }
       await db.update(organizations)
         .set({ themeSettings: null, updatedAt: new Date() })
