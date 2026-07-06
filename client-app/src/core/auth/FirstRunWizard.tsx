@@ -75,9 +75,7 @@ export default function FirstRunWizard({ onComplete }: Props) {
           {/* ── الشريط الجانبي ─────────────────────────────────────────── */}
           <div className="w-52 bg-slate-900 flex flex-col py-6 px-3 shrink-0">
             <div className="text-center mb-6">
-              <div className="w-12 h-12 rounded-xl bg-amber-500 flex items-center justify-center mx-auto mb-2">
-                <Building2 className="w-6 h-6 text-slate-900" />
-              </div>
+              <img src="/logo.png" alt="OneSoft ERP" className="w-12 h-12 rounded-xl object-cover mx-auto mb-2" />
               <p className="text-amber-400 font-bold text-sm">OneSoft ERP</p>
               <p className="text-slate-500 text-xs">الإعداد الأول</p>
             </div>
