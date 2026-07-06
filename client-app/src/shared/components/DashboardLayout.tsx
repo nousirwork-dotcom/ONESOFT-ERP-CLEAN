@@ -177,16 +177,16 @@ function SidebarNav({ user }: { user: any }) {
                         tooltip={collapsed ? item.label : undefined}
                         className={`h-[38px] rounded-[4px] px-3 transition-colors text-[14px] font-semibold ${
                           hasActiveChild
-                            ? "bg-[#406B93] text-white"
-                            : "text-[#CBD5E1] hover:text-[#E5E7EB] hover:bg-[#1E344F]"
+                            ? "bg-[var(--sidebar-primary)] text-white"
+                            : "text-[var(--sidebar-foreground)] hover:text-white hover:bg-[var(--sidebar-accent)]"
                         }`}
                       >
-                        <item.icon className="w-4 h-4 shrink-0 text-[#CBD5E1]" />
+                        <item.icon className="w-4 h-4 shrink-0 text-[var(--sidebar-foreground)]" />
                         <span className="flex-1 text-right">{item.label}</span>
                         {!collapsed && (
                           expanded
-                            ? <ChevronDown className="w-3.5 h-3.5 shrink-0 text-[#CBD5E1]/60" />
-                            : <ChevronLeft className="w-3.5 h-3.5 shrink-0 text-[#CBD5E1]/60" />
+                            ? <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-60" />
+                            : <ChevronLeft className="w-3.5 h-3.5 shrink-0 opacity-60" />
                         )}
                       </SidebarMenuButton>
                       {!collapsed && expanded && (
@@ -199,8 +199,8 @@ function SidebarNav({ user }: { user: any }) {
                                 onClick={() => openTab(child.path, child.label, child.icon)}
                                 className={`w-full flex items-center gap-2 px-3 h-[34px] text-[12px] font-medium transition-colors rounded-[4px] ${
                                   childActive
-                                    ? "bg-[#406B93] text-white"
-                                    : "text-[#CBD5E1]/80 hover:text-[#E5E7EB] hover:bg-[#1E344F]"
+                                    ? "bg-[var(--sidebar-primary)] text-white"
+                                    : "text-[var(--sidebar-foreground)]/80 hover:text-white hover:bg-[var(--sidebar-accent)]"
                                 }`}
                               >
                                 <child.icon className="w-3.5 h-3.5 shrink-0" />
@@ -223,11 +223,11 @@ function SidebarNav({ user }: { user: any }) {
                       tooltip={collapsed ? item.label : undefined}
                       className={`h-[38px] rounded-[4px] px-3 transition-colors text-[14px] font-semibold ${
                         isActive
-                          ? "bg-[#406B93] text-white"
-                          : "text-[#CBD5E1] hover:text-[#E5E7EB] hover:bg-[#1E344F]"
+                          ? "bg-[var(--sidebar-primary)] text-white"
+                          : "text-[var(--sidebar-foreground)] hover:text-white hover:bg-[var(--sidebar-accent)]"
                       }`}
                     >
-                      <item.icon className={`w-4 h-4 shrink-0 ${isActive ? "text-white" : "text-[#CBD5E1]"}`} />
+                      <item.icon className={`w-4 h-4 shrink-0 ${isActive ? "text-white" : "text-[var(--sidebar-foreground)]"}`} />
                       <span>{item.label}</span>
                       {item.badge && (
                         <Badge variant="destructive" className="mr-auto text-[10px] h-4 px-1">
@@ -273,7 +273,7 @@ function HorizontalNav({ user }: { user: any }) {
                   text-[14.5px] font-[500] whitespace-nowrap
                   transition-colors duration-150 outline-none
                   ${hasActiveChild
-                    ? "bg-[#406B93] text-white shadow-sm"
+                    ? "bg-[var(--primary)] text-white shadow-sm"
                     : "text-foreground/60 hover:text-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.06]"
                   }
                 `}>
@@ -308,7 +308,7 @@ function HorizontalNav({ user }: { user: any }) {
               text-[14.5px] font-[500] whitespace-nowrap
               transition-colors duration-150
               ${isActive
-                ? "bg-[#406B93] text-white shadow-sm"
+                ? "bg-[var(--primary)] text-white shadow-sm"
                 : "text-foreground/60 hover:text-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.06]"
               }
             `}

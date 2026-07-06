@@ -15,7 +15,6 @@ export default function LoginPage() {
     staleTime: 0,
   });
 
-  // محاولة الدخول التلقائي (بدون يوزر أو باسورد) إذا لم يُعيَّن المستخدم كلمة مرور
   const tryAutoLogin = async () => {
     try {
       const res = await fetch('/api/auth/auto-login', {
@@ -34,28 +33,11 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (firstRunQ.isLoading) { setPhase('loading'); return; }
-
-    if (firstRunQ.isError) {
-      setPhase('dbError');
-      return;
-    }
-
+    if (firstRunQ.isError)  { setPhase('dbError'); return; }
     const { firstRun, dbError } = firstRunQ.data ?? {};
-
-    if (dbError) {
-      setPhase('dbError');
-      return;
-    }
-
-    if (firstRun) {
-      setPhase('wizard');
-      return;
-    }
-
-    // جرّب الدخول التلقائي أولاً — إذا فشل أظهر شاشة الدخول
-    tryAutoLogin().then(success => {
-      if (!success) setPhase('login');
-    });
+    if (dbError) { setPhase('dbError'); return; }
+    if (firstRun) { setPhase('wizard'); return; }
+    tryAutoLogin().then(success => { if (!success) setPhase('login'); });
   }, [firstRunQ.isLoading, firstRunQ.isError, firstRunQ.data]);
 
   if (phase === 'wizard') {
@@ -74,9 +56,10 @@ export default function LoginPage() {
       dir="rtl"
       style={{
         minHeight: '100vh',
-        background: 'linear-gradient(145deg, #E8E0D4 0%, #D4CCC0 40%, #C8C0B4 100%)',
+        background: 'var(--brand-login-bg)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontFamily: "'Cairo', Tahoma, sans-serif",
+        fontSize: 'var(--brand-font-size)',
       }}
     >
       <div style={{ textAlign: 'center' }}>
@@ -86,48 +69,50 @@ export default function LoginPage() {
           alt="OneSoft ERP"
           style={{
             width: 88, height: 88, marginBottom: 20,
-            borderRadius: 22,
-            boxShadow: '0 8px 28px rgba(64,107,147,0.35)',
+            borderRadius: 'var(--brand-border-radius)',
+            boxShadow: '0 8px 28px rgba(var(--brand-primary-rgb) / 0.35)',
             objectFit: 'cover',
           }}
         />
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: '#1E344F', margin: '0 0 6px' }}>
-          One<span style={{ color: '#406B93' }}>Soft</span> ERP
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--foreground)', margin: '0 0 6px' }}>
+          One<span style={{ color: 'var(--primary)' }}>Soft</span> ERP
         </h1>
-        <p style={{ color: '#6B7280', fontSize: 13, margin: '0 0 28px' }}>نظام إدارة الأعمال المتكامل</p>
+        <p style={{ color: 'var(--muted-foreground)', fontSize: 13, margin: '0 0 28px' }}>
+          نظام إدارة الأعمال المتكامل
+        </p>
 
         {phase === 'loading' && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
             <div style={{
               width: 36, height: 36,
-              border: '3px solid rgba(64,107,147,0.2)',
-              borderTopColor: '#406B93',
+              border: '3px solid rgba(var(--brand-primary-rgb) / 0.2)',
+              borderTopColor: 'var(--primary)',
               borderRadius: '50%',
               animation: 'spin 0.8s linear infinite',
             }} />
-            <span style={{ color: '#6B7280', fontSize: 13 }}>جارٍ الاتصال بالخادم...</span>
+            <span style={{ color: 'var(--muted-foreground)', fontSize: 13 }}>جارٍ الاتصال بالخادم...</span>
           </div>
         )}
 
         {phase === 'dbError' && (
           <div style={{
-            background: 'rgba(255,255,255,0.9)', borderRadius: 12,
+            background: 'var(--card)', borderRadius: 'var(--brand-border-radius)',
             padding: '24px 28px', border: '1px solid #FCA5A5',
-            boxShadow: '0 4px 20px rgba(30,52,79,0.1)', maxWidth: 340,
+            boxShadow: '0 4px 20px rgba(var(--brand-primary-rgb) / 0.1)', maxWidth: 340,
           }}>
             <div style={{ fontSize: 32, marginBottom: 10 }}>⚠️</div>
             <div style={{ color: '#B91C1C', fontWeight: 700, fontSize: 14, marginBottom: 8 }}>
               تعذّر الاتصال بقاعدة البيانات
             </div>
-            <div style={{ color: '#6B7280', fontSize: 12, marginBottom: 16, lineHeight: 1.6 }}>
+            <div style={{ color: 'var(--muted-foreground)', fontSize: 12, marginBottom: 16, lineHeight: 1.6 }}>
               الخادم يعمل لكن لا يستطيع الاتصال بـ PostgreSQL.
               تأكد من أن الخدمة تعمل وأن ملف config.json صحيح.
             </div>
             <button
               onClick={() => { setPhase('loading'); firstRunQ.refetch(); }}
               style={{
-                background: '#406B93', color: '#fff', border: 'none',
-                borderRadius: 8, padding: '9px 20px', fontWeight: 700,
+                background: 'var(--primary)', color: 'var(--primary-foreground)', border: 'none',
+                borderRadius: 'var(--brand-border-radius)', padding: '9px 20px', fontWeight: 700,
                 fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
                 marginBottom: 10, width: '100%',
               }}
@@ -137,8 +122,8 @@ export default function LoginPage() {
             <button
               onClick={() => setPhase('login')}
               style={{
-                background: 'transparent', color: '#6B7280', border: '1px solid #D1D5DB',
-                borderRadius: 8, padding: '7px 20px', fontWeight: 600,
+                background: 'transparent', color: 'var(--muted-foreground)', border: '1px solid var(--border)',
+                borderRadius: 'var(--brand-border-radius)', padding: '7px 20px', fontWeight: 600,
                 fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', width: '100%',
               }}
             >
@@ -149,9 +134,9 @@ export default function LoginPage() {
 
         {phase === 'login' && (
           <div style={{
-            background: 'rgba(255,255,255,0.85)', borderRadius: 12,
-            padding: '20px 28px', border: '1px solid #D4CDC1',
-            boxShadow: '0 4px 20px rgba(30,52,79,0.1)',
+            background: 'var(--card)', borderRadius: 'var(--brand-border-radius)',
+            padding: '20px 28px', border: '1px solid var(--border)',
+            boxShadow: '0 4px 20px rgba(var(--brand-primary-rgb) / 0.1)',
           }}>
             <ManualLoginForm onSuccess={() => navigate('/')} utils={utils} />
           </div>
@@ -187,9 +172,9 @@ function ManualLoginForm({ onSuccess, utils }: { onSuccess: (role: string) => vo
   };
 
   const inp: React.CSSProperties = {
-    width: '100%', boxSizing: 'border-box', background: '#F7F4F0',
-    border: '1px solid #C8C1B8', borderRadius: 8, padding: '9px 14px',
-    fontSize: 13, color: '#1E344F', outline: 'none',
+    width: '100%', boxSizing: 'border-box', background: 'var(--background)',
+    border: '1px solid var(--border)', borderRadius: 'var(--brand-border-radius)',
+    padding: '9px 14px', fontSize: 13, color: 'var(--foreground)', outline: 'none',
     fontFamily: "'Cairo', Tahoma, sans-serif",
   };
 
@@ -204,9 +189,10 @@ function ManualLoginForm({ onSuccess, utils }: { onSuccess: (role: string) => vo
         onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
       <button type="submit" disabled={loading}
         style={{
-          background: 'linear-gradient(135deg,#406B93,#2d5070)', color: '#fff',
-          border: 'none', borderRadius: 8, padding: '10px 0',
-          fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+          background: 'var(--primary)', color: 'var(--primary-foreground)',
+          border: 'none', borderRadius: 'var(--brand-border-radius)', padding: '10px 0',
+          fontWeight: 700, fontSize: 13, cursor: loading ? 'not-allowed' : 'pointer',
+          fontFamily: 'inherit', opacity: loading ? 0.7 : 1,
         }}>
         {loading ? 'جارٍ الدخول...' : 'تسجيل الدخول'}
       </button>

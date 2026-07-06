@@ -70,6 +70,22 @@ app.post('/api/auth/auto-login', async (req, res) => {
   }
 });
 
+// ─── Public Branding (no auth — needed before login page renders) ────────────
+app.get('/api/public/branding', async (_req, res) => {
+  try {
+    const { DEFAULT_BRANDING } = await import('./routers/branding.js');
+    const { db }               = await import('./db.js');
+    const { organizations }    = await import('./schema.js');
+    const org = await db.query.organizations.findFirst();
+    if (!org) return res.json(DEFAULT_BRANDING);
+    const stored = (org.themeSettings ?? {}) as Record<string, unknown>;
+    return res.json({ ...DEFAULT_BRANDING, ...stored });
+  } catch {
+    const { DEFAULT_BRANDING } = await import('./routers/branding.js');
+    return res.json(DEFAULT_BRANDING);
+  }
+});
+
 app.get('/api/health', (_req, res) => res.json({
   status:    'ok',
   version:   '1.0.0',
