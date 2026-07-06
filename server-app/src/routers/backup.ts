@@ -143,8 +143,12 @@ export const backupRouter = router({
       if (ctx.user?.role !== 'superadmin') throw new Error('يتطلب صلاحية المدير العام');
       const dir  = getBackupDir();
       const file = path.join(dir, input.name);
+      // path.resolve يُجرّد المسارات قبل المقارنة + path.sep يمنع هجوم prefix
+      // (مثال: /backups-evil يبدأ بـ /backups لكن ليس بـ /backups/)
+      const resolvedDir  = path.resolve(dir) + path.sep;
+      const resolvedFile = path.resolve(file);
+      if (!resolvedFile.startsWith(resolvedDir)) throw new Error('مسار غير صالح');
       if (!fs.existsSync(file)) throw new Error('الملف غير موجود');
-      if (!file.startsWith(dir)) throw new Error('مسار غير صالح');
 
       logger.warn('backup', `restoring from: ${file}`);
       try {
@@ -163,7 +167,9 @@ export const backupRouter = router({
       if (ctx.user?.role !== 'superadmin' && ctx.user?.role !== 'admin') throw new Error('غير مصرح');
       const dir  = getBackupDir();
       const file = path.join(dir, input.name);
-      if (!file.startsWith(dir)) throw new Error('مسار غير صالح');
+      const resolvedDir2  = path.resolve(dir) + path.sep;
+      const resolvedFile2 = path.resolve(file);
+      if (!resolvedFile2.startsWith(resolvedDir2)) throw new Error('مسار غير صالح');
       if (!fs.existsSync(file)) throw new Error('الملف غير موجود');
       fs.unlinkSync(file);
       logger.info('backup', `deleted: ${file}`);
