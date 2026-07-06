@@ -282,6 +282,64 @@
   .erp-table tr:hover td { background: #EEF3F7; }
 }
 
+/* ── View Modes (applied to <html> element by BrandingContext) ── */
+
+/* compact: أكثر كثافة — للشاشات الصغيرة أو المستخدمين المحترفين */
+html.view-compact body {
+  font-size: 12px;
+  line-height: 1.5;
+}
+html.view-compact h1 { font-size: 19px; }
+html.view-compact h2 { font-size: 16px; }
+html.view-compact h3 { font-size: 14px; }
+html.view-compact h4, html.view-compact h5, html.view-compact h6 { font-size: 12px; }
+
+html.view-compact .erp-table th {
+  padding: 2px 4px !important;
+  font-size: 11px !important;
+}
+html.view-compact .erp-table td {
+  padding: 1px 4px !important;
+  font-size: 11px !important;
+  height: 21px !important;
+}
+html.view-compact .erp-page-title   { font-size: 18px; }
+html.view-compact .erp-section-title{ font-size: 13px; }
+html.view-compact .erp-label        { font-size: 12px; }
+html.view-compact .erp-value        { font-size: 12px; }
+html.view-compact .erp-secondary    { font-size: 11px; }
+html.view-compact .erp-stat-number  { font-size: 26px; }
+html.view-compact .erp-table-header { font-size: 11px; }
+html.view-compact .erp-table-cell   { font-size: 12px; }
+
+/* wide: أكثر تهوية — للشاشات الكبيرة (1920px+) */
+html.view-wide body {
+  font-size: 14px;
+  line-height: 1.65;
+}
+html.view-wide h1 { font-size: 24px; }
+html.view-wide h2 { font-size: 20px; }
+html.view-wide h3 { font-size: 17px; }
+html.view-wide h4, html.view-wide h5, html.view-wide h6 { font-size: 14px; }
+
+html.view-wide .erp-table th {
+  padding: 5px 10px !important;
+  font-size: 13px !important;
+}
+html.view-wide .erp-table td {
+  padding: 4px 10px !important;
+  font-size: 13px !important;
+  height: 30px !important;
+}
+html.view-wide .erp-page-title   { font-size: 24px; }
+html.view-wide .erp-section-title{ font-size: 18px; }
+html.view-wide .erp-label        { font-size: 14px; }
+html.view-wide .erp-value        { font-size: 14px; }
+html.view-wide .erp-secondary    { font-size: 13px; }
+html.view-wide .erp-stat-number  { font-size: 34px; }
+html.view-wide .erp-table-header { font-size: 13px; }
+html.view-wide .erp-table-cell   { font-size: 14px; }
+
 @layer components {
   .container {
     width: 100%;
