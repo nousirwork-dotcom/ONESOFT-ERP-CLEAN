@@ -1,0 +1,51 @@
+name: Build & Release Installer
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install installer dependencies
+        working-directory: installer
+        run: pnpm install
+
+      - name: Install server-app dependencies
+        working-directory: server-app
+        run: pnpm install
+
+      - name: Build & Publish Release
+        working-directory: installer
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          PUBLISH_RELEASE: 'true'
+        run: node scripts/build-all.mjs
+
+      - name: Upload artifacts (backup)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: installer-release
+          path: |
+            installer/release/*.exe
+            installer/release/*.yml
+            installer/release/*.blockmap
+          retention-days: 30
