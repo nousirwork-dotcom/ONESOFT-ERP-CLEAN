@@ -1,4 +1,17 @@
-import { app, BrowserWindow, ipcMain, shell, session } from 'electron';
+﻿import { app, BrowserWindow, ipcMain, shell, session } from 'electron';
+
+function getVersionFilePath(): string {
+  const base = process.env['ProgramData'] || 'C:\\ProgramData';
+  return path.join(base, 'OneSoft', 'version.json');
+}
+
+function isAlreadyInstalled(): boolean {
+  try {
+    return fs.existsSync(getVersionFilePath());
+  } catch {
+    return false;
+  }
+}
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -190,6 +203,7 @@ function createWindow() {
   // ── Window event handlers ─────────────────────────────────────────────────
   mainWindow.once('ready-to-show', () => {
     writeLog('INFO', 'window: ready-to-show — calling show()');
+    mainWindow.maximize();
     mainWindow?.show();
     writeLog('INFO', 'window: show() called');
     if (isDebug) {
@@ -219,11 +233,16 @@ function createWindow() {
     wc.loadURL(testUrl)
       .then(() => writeLog('INFO', 'TEST MODE: loadURL — resolved'))
       .catch((e: unknown) => writeLog('ERROR', 'TEST MODE: loadURL — rejected', e));
+  } else if (isAlreadyInstalled()) {
+    writeLog('INFO', 'Already installed -> loading http://localhost:3000 in app window');
+    mainWindow.loadURL('http://localhost:3000')
+      .then(() => writeLog('INFO', 'loadURL localhost:3000 - resolved'))
+      .catch((e: unknown) => writeLog('ERROR', 'loadURL localhost:3000 - rejected', e));
   } else {
-    writeLog('INFO', `loadFile ${indexPath} — start`);
+    writeLog('INFO', 'loadFile ' + indexPath + ' - start');
     mainWindow.loadFile(indexPath)
-      .then(() => writeLog('INFO', 'loadFile — resolved'))
-      .catch((e: unknown) => writeLog('ERROR', 'loadFile — rejected', e));
+      .then(() => writeLog('INFO', 'loadFile - resolved'))
+      .catch((e: unknown) => writeLog('ERROR', 'loadFile - rejected', e));
   }
 
   writeLog('INFO', 'createWindow() — end (all listeners attached, load initiated)');
