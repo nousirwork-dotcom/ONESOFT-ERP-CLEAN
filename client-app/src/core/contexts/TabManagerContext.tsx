@@ -81,8 +81,9 @@ function pathToIcon(path: string): React.ElementType {
   return LayoutGrid;
 }
 
-const TABS_KEY = 'onesoft_open_tabs';
-const FLAG_KEY = 'onesoft_cfg_remember_tabs';
+const TABS_KEY        = 'onesoft_open_tabs';
+const FLAG_KEY        = 'onesoft_cfg_remember_tabs';
+const STARTUP_PAGE_KEY = 'onesoft_cfg_startup_page';
 
 function isRememberEnabled(): boolean {
   try { return localStorage.getItem(FLAG_KEY) === 'true'; } catch { return false; }
@@ -93,6 +94,10 @@ type SavedTab = { path: string; label: string };
 function loadSavedTabs(): AppTab[] {
   try {
     if (!isRememberEnabled()) return [];
+    // القاعدة: التبويبات تُستعاد فقط عندما startup_page = 'last_opened'
+    // إذا كان startup_page = dashboard/sales/etc. → يفتح الصفحة المحددة فقط ولا تعارض
+    const startupPage = localStorage.getItem(STARTUP_PAGE_KEY) ?? 'dashboard';
+    if (startupPage !== 'last_opened') return [];
     const raw = localStorage.getItem(TABS_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as SavedTab[];
