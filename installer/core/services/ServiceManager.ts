@@ -377,6 +377,9 @@ export class ServiceManager {
     }
 
     // ضبط إعدادات الخدمة
+    // AppParameters: نستخدم اسم الملف فقط (basename) لأن AppDirectory يحدد المجلد
+    // هذا يتجنب مشاكل المسافات في المسار الكامل مع بعض إصدارات NSSM على Windows
+    execVerbose(this.nssm, ['set', name, 'AppParameters', path.basename(scriptPath)], emit, 'AppParameters');
     execVerbose(this.nssm, ['set', name, 'AppDirectory', path.dirname(scriptPath)], emit, 'AppDirectory');
     execVerbose(this.nssm, ['set', name, 'Start',        'SERVICE_AUTO_START'],     emit, 'Start');
     execVerbose(this.nssm, ['set', name, 'AppStdout',    logPath],                  emit, 'AppStdout');
