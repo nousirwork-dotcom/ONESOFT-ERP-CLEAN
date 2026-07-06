@@ -64,7 +64,7 @@ importers:
         specifier: ^0.31.4
         version: 0.31.10
       esbuild:
-        specifier: ^0.25.0
+        specifier: ^0.25.12
         version: 0.25.12
       tsx:
         specifier: ^4.19.1
