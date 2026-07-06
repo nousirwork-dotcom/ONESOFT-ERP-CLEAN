@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, shell, session, dialog } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import * as path from 'path';
 import * as fs from 'fs';
+import { spawnSync } from 'child_process';
 
 // Force esbuild to bundle obuf (used by postgres-bytea@3 via pg-protocol)
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -25,6 +26,61 @@ app.commandLine.appendSwitch('disable-gpu-sandbox');       // avoids GPU sandbox
 app.commandLine.appendSwitch('no-sandbox');                // belt-and-suspenders for VMs
 // NOTE: --disable-software-rasterizer is intentionally REMOVED.
 //       It was preventing the SwiftShader fallback and causing the fatal crash.
+
+// ─── Icon Cache Refresh (Windows) ────────────────────────────────────────────
+// يُستدعى مرة واحدة بعد كل تحديث لضمان ظهور الأيقونة الجديدة فوراً في:
+//   سطح المكتب · Start Menu · Taskbar · نافذة البرنامج
+function refreshWindowsIconCache(): void {
+  if (process.platform !== 'win32') return;
+
+  const versionFile = path.join(
+    process.env['PROGRAMDATA'] ?? 'C:\\ProgramData',
+    'OneSoft', 'last-run-version.txt',
+  );
+  const currentVersion = app.getVersion();
+
+  let lastVersion = '';
+  try { lastVersion = fs.readFileSync(versionFile, 'utf8').trim(); } catch { /* first run */ }
+
+  if (lastVersion === currentVersion) return; // لا تحديث — لا داعي لتحديث الـ cache
+
+  writeLog('INFO', `Icon cache refresh triggered (${lastVersion || 'first-run'} → ${currentVersion})`);
+
+  // PowerShell: يُخطر Windows بتغيير الأيقونات (SHChangeNotify)
+  // SHCNE_ASSOCCHANGED = 0x8000000 → يُعيد رسم جميع الأيقونات
+  const ps = `
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public class ShellNotify {
+  [DllImport("shell32.dll")]
+  public static extern void SHChangeNotify(int wEventId, uint uFlags, IntPtr dwItem1, IntPtr dwItem2);
+}
+"@
+[ShellNotify]::SHChangeNotify(0x8000000, 0x1000, [IntPtr]::Zero, [IntPtr]::Zero)
+Write-Host "Icon cache refreshed"
+`.trim();
+
+  try {
+    const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], {
+      timeout: 8000,
+      encoding: 'utf8',
+    });
+    if (result.status === 0) {
+      writeLog('INFO', 'Icon cache refresh: OK');
+    } else {
+      writeLog('WARN', 'Icon cache refresh: non-zero exit', result.stderr);
+    }
+  } catch (e) {
+    writeLog('WARN', 'Icon cache refresh: failed (non-critical)', e);
+  }
+
+  // احفظ الإصدار الحالي لتجنب إعادة التشغيل في المرة القادمة
+  try {
+    fs.mkdirSync(path.dirname(versionFile), { recursive: true });
+    fs.writeFileSync(versionFile, currentVersion, 'utf8');
+  } catch { /* non-critical */ }
+}
 
 // ─── Logger ──────────────────────────────────────────────────────────────────
 const LOG_PATH = path.join(app.getPath('userData'), 'onesoft-installer.log');
@@ -351,6 +407,7 @@ function setupAutoUpdater(): void {
 app.whenReady()
   .then(() => {
     writeLog('INFO', 'app.whenReady() — resolved');
+    refreshWindowsIconCache();          // تحديث icon cache عند أول فتح بعد تحديث
     writeLog('INFO', 'calling createWindow()');
     createWindow();
     writeLog('INFO', 'createWindow() returned — registering IPC handlers');
