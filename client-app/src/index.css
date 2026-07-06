@@ -45,6 +45,12 @@
 :root {
   --radius: 0.125rem;
 
+  /* ── Branding/Theme Defaults (overridden at runtime by BrandingContext) ── */
+  --brand-login-bg:       linear-gradient(145deg, #E8E0D4 0%, #D4CCC0 40%, #C8C0B4 100%);
+  --brand-primary-rgb:    64 107 147;
+  --brand-border-radius:  8px;
+  --brand-font-size:      13px;
+
   /* ── ERP Namasoft Classic Palette ── */
   --background:        #ECE7DD;
   --foreground:        #2F2F2F;
