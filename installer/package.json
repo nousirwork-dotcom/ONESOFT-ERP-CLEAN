@@ -12,7 +12,10 @@
     "build:core": "tsc -p tsconfig.core.json",
     "test:core": "tsx core/index.ts",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "release:patch": "node scripts/bump-version.mjs patch",
+    "release:minor": "node scripts/bump-version.mjs minor",
+    "release:major": "node scripts/bump-version.mjs major"
   },
   "dependencies": {
     "node-windows": "^1.0.0-beta.8",
