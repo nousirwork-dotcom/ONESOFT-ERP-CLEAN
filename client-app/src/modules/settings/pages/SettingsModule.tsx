@@ -50,7 +50,8 @@ const menuSections = [
       { id: "qr-settings",     label: "إعدادات QR Code",       status: "done",    path: "/cfg/qr-settings" },
       { id: "fiscal-periods",  label: "الفترات المحاسبية",     status: "done",    path: "/cfg/fiscal" },
       { id: "field-dictionary",label: "تعريف الحقول (Field Dictionary)", status: "done", path: "/cfg/field-dictionary" },
-      { id: "payment-methods", label: "وسائل الدفع",                     status: "done", path: "/cfg/payment-methods" },
+      { id: "payment-methods",  label: "وسائل الدفع",                      status: "done", path: "/cfg/payment-methods"  },
+      { id: "system-branding",  label: "هوية النظام والألوان",             status: "done", path: "/cfg/branding"          },
     ],
   },
   {
