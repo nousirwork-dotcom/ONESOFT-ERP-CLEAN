@@ -27,6 +27,7 @@ export const organizations = pgTable('organizations', {
   subscriptionExpiry: timestamp('subscription_expiry'),
   maxUsers: integer('max_users').notNull().default(5),
   zatcaConfig: jsonb('zatca_config'),
+  themeSettings: jsonb('theme_settings'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
