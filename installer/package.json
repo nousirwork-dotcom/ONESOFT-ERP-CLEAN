@@ -19,6 +19,7 @@
     "obuf": "^0.1.1"
   },
   "devDependencies": {
+    "electron-updater": "^6.3.9",
     "esbuild": "^0.21.0",
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.44.1",
