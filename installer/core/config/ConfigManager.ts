@@ -150,6 +150,7 @@ export function buildDefaultConfig(partial: {
       updates:     path.join(programData, 'Updates'),
       attachments: path.join(programData, 'Attachments'),
       exports:     path.join(programData, 'Exports'),
+      uploads:     path.join(programData, 'uploads'),
     },
   };
 }
