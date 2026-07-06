@@ -342,6 +342,15 @@ ipcMain.handle('get-logs', (_e, n = 100) => {
   } catch { return []; }
 });
 
+// ── فحص هل الخادم يعمل بالفعل (مثلاً Windows Service) ────────────────────────
+function checkServerRunning() {
+  return new Promise(resolve => {
+    http.get(`${SERVER_URL}/api/health`, res => {
+      resolve(res.statusCode === 200);
+    }).on('error', () => resolve(false));
+  });
+}
+
 // ── دورة حياة التطبيق ─────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
   writeLog('INFO', `OneSoft ERP v${app.getVersion()} starting`);
@@ -351,8 +360,14 @@ app.whenReady().then(async () => {
   // 1. إنشاء Splash
   createSplash();
 
-  // 2. تشغيل الخادم
-  startServer();
+  // 2. تشغيل الخادم — فقط إذا لم يكن يعمل بالفعل كـ Windows Service
+  const alreadyRunning = await checkServerRunning();
+  if (alreadyRunning) {
+    writeLog('INFO', 'Windows Service is already running — skipping startServer()');
+    serverReady = true;
+  } else {
+    startServer();
+  }
 
   // 3. انتظار الجاهزية
   try {

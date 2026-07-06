@@ -1,17 +1,5 @@
-﻿import { app, BrowserWindow, ipcMain, shell, session } from 'electron';
-
-function getVersionFilePath(): string {
-  const base = process.env['ProgramData'] || 'C:\\ProgramData';
-  return path.join(base, 'OneSoft', 'version.json');
-}
-
-function isAlreadyInstalled(): boolean {
-  try {
-    return fs.existsSync(getVersionFilePath());
-  } catch {
-    return false;
-  }
-}
+import { app, BrowserWindow, ipcMain, shell, session, dialog } from 'electron';
+import { autoUpdater } from 'electron-updater';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -103,6 +91,40 @@ app.on('window-all-closed', () => {
 app.on('quit', (_, exitCode) => {
   writeLog('INFO', `app.quit event  exitCode=${exitCode}\n${stackTrace()}`);
 });
+
+// ─── Installation state helpers ──────────────────────────────────────────────
+// يقرأ version.json من ProgramData\OneSoft لمعرفة هل البرنامج مثبّت مسبقاً
+function isAlreadyInstalled(): boolean {
+  try {
+    const versionFile = path.join(
+      process.env['ProgramData'] || 'C:\\ProgramData',
+      'OneSoft', 'version.json',
+    );
+    return fs.existsSync(versionFile);
+  } catch {
+    return false;
+  }
+}
+
+// يقرأ بورت الخادم من config.json — الافتراضي 3000
+function readServerPort(): number {
+  try {
+    const configFile = path.join(
+      process.env['ProgramData'] || 'C:\\ProgramData',
+      'OneSoft', 'config', 'onesoft.config.json',
+    );
+    const cfg = JSON.parse(fs.readFileSync(configFile, 'utf-8'));
+    // المفتاح الصحيح هو backendPort (وليس port) كما يحفظه ConfigManager
+    const port = (cfg?.server?.backendPort as number)
+              ?? (cfg?.server?.port      as number)   // توافق مع نسخ قديمة
+              ?? 3000;
+    writeLog('INFO', `readServerPort → ${port} (from ${configFile})`);
+    return port;
+  } catch (e) {
+    writeLog('WARN', `readServerPort fallback to 3000: ${e}`);
+    return 3000;
+  }
+}
 
 // ─── IPC imports ─────────────────────────────────────────────────────────────
 import { registerRequirementsIpc } from './ipc/requirements.ipc.js';
@@ -202,10 +224,10 @@ function createWindow() {
 
   // ── Window event handlers ─────────────────────────────────────────────────
   mainWindow.once('ready-to-show', () => {
-    writeLog('INFO', 'window: ready-to-show — calling show()');
-    mainWindow.maximize();
+    writeLog('INFO', 'window: ready-to-show — calling maximize() then show()');
+    mainWindow?.maximize();
     mainWindow?.show();
-    writeLog('INFO', 'window: show() called');
+    writeLog('INFO', 'window: maximize() + show() called');
     if (isDebug) {
       writeLog('INFO', 'ONESOFT_DEBUG=1 — opening DevTools (detach mode)');
       wc.openDevTools({ mode: 'detach' });
@@ -234,18 +256,95 @@ function createWindow() {
       .then(() => writeLog('INFO', 'TEST MODE: loadURL — resolved'))
       .catch((e: unknown) => writeLog('ERROR', 'TEST MODE: loadURL — rejected', e));
   } else if (isAlreadyInstalled()) {
-    writeLog('INFO', 'Already installed -> loading http://localhost:3000 in app window');
-    mainWindow.loadURL('http://localhost:3000')
-      .then(() => writeLog('INFO', 'loadURL localhost:3000 - resolved'))
-      .catch((e: unknown) => writeLog('ERROR', 'loadURL localhost:3000 - rejected', e));
+    // البرنامج مثبَّت مسبقاً — حمِّل تطبيق العمل مباشرةً (يعمل كـ Windows service)
+    const port      = readServerPort();
+    const serverUrl = `http://localhost:${port}`;
+    writeLog('INFO', `already installed — loadURL ${serverUrl} — start`);
+    mainWindow.loadURL(serverUrl)
+      .then(() => writeLog('INFO', `loadURL ${serverUrl} — resolved`))
+      .catch((e: unknown) => writeLog('ERROR', `loadURL ${serverUrl} — rejected`, e));
   } else {
-    writeLog('INFO', 'loadFile ' + indexPath + ' - start');
+    // أول تشغيل فعلي — اعرض معالج التثبيت
+    writeLog('INFO', `first run — loadFile ${indexPath} — start`);
     mainWindow.loadFile(indexPath)
-      .then(() => writeLog('INFO', 'loadFile - resolved'))
-      .catch((e: unknown) => writeLog('ERROR', 'loadFile - rejected', e));
+      .then(() => writeLog('INFO', 'loadFile — resolved'))
+      .catch((e: unknown) => writeLog('ERROR', 'loadFile — rejected', e));
   }
 
   writeLog('INFO', 'createWindow() — end (all listeners attached, load initiated)');
+}
+
+// ─── Auto-Updater — يعمل فقط بعد اكتمال التثبيت ──────────────────────────────
+function setupAutoUpdater(): void {
+  if (!isAlreadyInstalled()) return;   // لا نُشغّل المحدِّث خلال معالج التثبيت
+
+  autoUpdater.autoDownload    = false; // نسأل المستخدم قبل التنزيل
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('checking-for-update', () => {
+    writeLog('INFO', 'autoUpdater: checking-for-update');
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    writeLog('INFO', `autoUpdater: update-available  version=${info.version}`);
+    dialog.showMessageBox(mainWindow!, {
+      type:    'info',
+      title:   'تحديث جديد متاح',
+      message: `الإصدار ${info.version} متاح للتنزيل`,
+      detail:  'هل تريد تنزيل التحديث الآن؟ سيتم التثبيت عند إغلاق البرنامج.',
+      buttons: ['تنزيل التحديث', 'لاحقاً'],
+      defaultId: 0,
+      cancelId:  1,
+      noLink: true,
+    }).then(({ response }) => {
+      if (response === 0) {
+        writeLog('INFO', 'autoUpdater: user accepted download');
+        autoUpdater.downloadUpdate();
+      } else {
+        writeLog('INFO', 'autoUpdater: user deferred download');
+      }
+    });
+  });
+
+  autoUpdater.on('update-not-available', () => {
+    writeLog('INFO', 'autoUpdater: update-not-available');
+  });
+
+  autoUpdater.on('download-progress', (progress) => {
+    writeLog('INFO', `autoUpdater: download-progress  ${Math.round(progress.percent)}%`);
+    mainWindow?.setProgressBar(progress.percent / 100);
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    writeLog('INFO', `autoUpdater: update-downloaded  version=${info.version}`);
+    mainWindow?.setProgressBar(-1);
+    dialog.showMessageBox(mainWindow!, {
+      type:    'info',
+      title:   'التحديث جاهز',
+      message: `الإصدار ${info.version} تم تنزيله`,
+      detail:  'اضغط "تثبيت الآن" لإعادة تشغيل البرنامج وتطبيق التحديث.',
+      buttons: ['تثبيت الآن', 'عند الإغلاق'],
+      defaultId: 0,
+      cancelId:  1,
+      noLink: true,
+    }).then(({ response }) => {
+      if (response === 0) {
+        autoUpdater.quitAndInstall(false, true);
+      }
+    });
+  });
+
+  autoUpdater.on('error', (err) => {
+    writeLog('ERROR', 'autoUpdater: error', err);
+  });
+
+  // فحص التحديثات بعد 5 ثوان من فتح البرنامج
+  setTimeout(() => {
+    writeLog('INFO', 'autoUpdater: starting checkForUpdates');
+    autoUpdater.checkForUpdates().catch((e) => {
+      writeLog('WARN', 'autoUpdater: checkForUpdates failed', e);
+    });
+  }, 5_000);
 }
 
 // ─── app.whenReady ────────────────────────────────────────────────────────────
@@ -290,6 +389,9 @@ app.whenReady()
       writeLog('INFO', `IPC window:openUrl  url=${url}`);
       return shell.openExternal(url);
     });
+
+    // تفعيل التحديث التلقائي (فقط بعد اكتمال التثبيت)
+    setupAutoUpdater();
 
     writeLog('INFO', 'startup complete — waiting for window events');
   })

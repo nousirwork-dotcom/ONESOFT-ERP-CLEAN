@@ -58,6 +58,7 @@ win:
 
 nsis:
   oneClick: false
+  perMachine: true
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
@@ -71,4 +72,10 @@ nsis:
   uninstallDisplayName: OneSoft ERP
   deleteAppDataOnUninstall: false
 
-publish: ~
+publish:
+  provider: github
+  owner: nousirwork-dotcom
+  repo: ONESOFT-ERP-CLEAN
+  releaseType: release
+  # للريبوات الخاصة: عيّن GH_TOKEN كـ env variable على جهاز البناء
+  # للريبوات العامة: لا حاجة لتوكن

@@ -368,6 +368,12 @@ export class ServiceManager {
       };
     }
 
+    // أغلق أي عملية nssm.exe معلّقة قد تُبقي handle مفتوحاً على SCM وتمنع CreateService
+    // (حالة شائعة بعد إعادة التثبيت أو انهيار محاولة سابقة بشكل غير نظيف)
+    try {
+      spawnSync('taskkill', ['/F', '/IM', 'nssm.exe'], { encoding: 'utf-8', stdio: 'pipe', windowsHide: true });
+    } catch { /* ignore — ليس خطأ إذا لم توجد عملية nssm.exe */ }
+
     const install = execVerbose(this.nssm, ['install', name, nodePath, scriptPath], emit, `nssm install ${name}`);
     const installResult = { cmd: install.cmdStr, stdout: install.stdout, stderr: install.stderr, exitCode: install.exitCode };
 
