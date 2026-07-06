@@ -99,6 +99,13 @@
       "when": 1783210000000,
       "tag": "0013_add_missing_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1783900000000,
+      "tag": "0014_add_theme_settings",
+      "breakpoints": true
     }
   ]
 }
