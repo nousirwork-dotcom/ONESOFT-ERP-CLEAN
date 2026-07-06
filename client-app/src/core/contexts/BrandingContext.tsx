@@ -39,20 +39,22 @@ export const DEFAULT_BRANDING: BrandingSettings = {
 };
 
 interface BrandingContextType {
-  settings:  BrandingSettings;
-  loading:   boolean;
-  reload:    () => void;
+  settings:     BrandingSettings;
+  loading:      boolean;
+  reload:       () => void;
   applyPreview: (overrides: Partial<BrandingSettings>) => void;
   resetPreview: () => void;
 }
 
 const BrandingContext = createContext<BrandingContextType>({
   settings:     DEFAULT_BRANDING,
-  loading:      true,
+  loading:      false,
   reload:       () => {},
   applyPreview: () => {},
   resetPreview: () => {},
 });
+
+// ─── CSS Variables ─────────────────────────────────────────────────────────────
 
 function buildLoginBg(s: BrandingSettings): string {
   if (s.login_background_type === 'solid') return s.login_background_value;
@@ -61,46 +63,16 @@ function buildLoginBg(s: BrandingSettings): string {
 }
 
 function hexToRgb(hex: string): string {
-  const clean = hex.replace('#', '');
-  const r = parseInt(clean.slice(0, 2), 16);
-  const g = parseInt(clean.slice(2, 4), 16);
-  const b = parseInt(clean.slice(4, 6), 16);
-  return `${r} ${g} ${b}`;
-}
-
-export function applyCssVariables(s: BrandingSettings): void {
-  const root = document.documentElement;
-  const set  = (v: string, val: string) => root.style.setProperty(v, val);
-
-  set('--primary',                     s.primary_color);
-  set('--ring',                        s.primary_color);
-  set('--secondary',                   s.secondary_color);
-  set('--secondary-foreground',        s.text_color);
-  set('--accent',                      s.accent_color);
-  set('--accent-foreground',           s.primary_color);
-  set('--background',                  s.background_color);
-  set('--muted',                       s.background_color);
-  set('--card',                        s.card_background_color);
-  set('--card-foreground',             s.text_color);
-  set('--popover',                     s.card_background_color);
-  set('--popover-foreground',          s.text_color);
-  set('--foreground',                  s.text_color);
-  set('--primary-foreground',          s.button_text_color);
-  set('--sidebar',                     s.sidebar_color);
-  set('--sidebar-foreground',          s.sidebar_text_color);
-  set('--sidebar-accent-foreground',   s.sidebar_text_color);
-  set('--sidebar-primary',             s.sidebar_active_color);
-  set('--sidebar-primary-foreground',  s.button_text_color);
-  set('--sidebar-accent',              adjustHex(s.sidebar_color, 20));
-  set('--sidebar-ring',                s.sidebar_active_color);
-
-  const radius = `${(s.border_radius / 8).toFixed(3)}rem`;
-  set('--radius', radius);
-
-  set('--brand-login-bg',        buildLoginBg(s));
-  set('--brand-primary-rgb',     hexToRgb(s.primary_color));
-  set('--brand-border-radius',   `${s.border_radius}px`);
-  set('--brand-font-size',       `${s.font_size}px`);
+  try {
+    const clean = hex.replace('#', '');
+    const r = parseInt(clean.slice(0, 2), 16);
+    const g = parseInt(clean.slice(2, 4), 16);
+    const b = parseInt(clean.slice(4, 6), 16);
+    if (isNaN(r) || isNaN(g) || isNaN(b)) return '64 107 147';
+    return `${r} ${g} ${b}`;
+  } catch {
+    return '64 107 147';
+  }
 }
 
 function adjustHex(hex: string, amount: number): string {
@@ -115,22 +87,111 @@ function adjustHex(hex: string, amount: number): string {
   }
 }
 
+export function applyCssVariables(s: BrandingSettings): void {
+  try {
+    if (typeof document === 'undefined') return;
+    const root = document.documentElement;
+    if (!root) return;
+    const set = (v: string, val: string) => {
+      try { root.style.setProperty(v, val); } catch { /* ignore */ }
+    };
+
+    set('--primary',                     s.primary_color);
+    set('--ring',                        s.primary_color);
+    set('--secondary',                   s.secondary_color);
+    set('--secondary-foreground',        s.text_color);
+    set('--accent',                      s.accent_color);
+    set('--accent-foreground',           s.primary_color);
+    set('--background',                  s.background_color);
+    set('--muted',                       s.background_color);
+    set('--card',                        s.card_background_color);
+    set('--card-foreground',             s.text_color);
+    set('--popover',                     s.card_background_color);
+    set('--popover-foreground',          s.text_color);
+    set('--foreground',                  s.text_color);
+    set('--primary-foreground',          s.button_text_color);
+    set('--sidebar',                     s.sidebar_color);
+    set('--sidebar-foreground',          s.sidebar_text_color);
+    set('--sidebar-accent-foreground',   s.sidebar_text_color);
+    set('--sidebar-primary',             s.sidebar_active_color);
+    set('--sidebar-primary-foreground',  s.button_text_color);
+    set('--sidebar-accent',              adjustHex(s.sidebar_color, 20));
+    set('--sidebar-ring',                s.sidebar_active_color);
+
+    const radius = `${(s.border_radius / 8).toFixed(3)}rem`;
+    set('--radius',              radius);
+    set('--brand-login-bg',      buildLoginBg(s));
+    set('--brand-primary-rgb',   hexToRgb(s.primary_color));
+    set('--brand-border-radius', `${s.border_radius}px`);
+    set('--brand-font-size',     `${s.font_size}px`);
+  } catch {
+    // never crash the app because of a CSS variable error
+  }
+}
+
+// ─── Apply DEFAULT_BRANDING IMMEDIATELY at module load ─────────────────────────
+// This guarantees the app NEVER shows a white/unstyled screen — even before
+// the first fetch completes or if the server is temporarily unreachable.
+applyCssVariables(DEFAULT_BRANDING);
+
+// ─── BrandingErrorBoundary ─────────────────────────────────────────────────────
+// Catches any React rendering error inside BrandingProvider and falls back
+// to DEFAULT_BRANDING so the app always opens with the default theme.
+
+interface BrandingErrorBoundaryState {
+  hasError: boolean;
+}
+
+export class BrandingErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  BrandingErrorBoundaryState
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(): BrandingErrorBoundaryState {
+    // Re-apply defaults so CSS variables remain correct after the crash
+    applyCssVariables(DEFAULT_BRANDING);
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('[BrandingErrorBoundary] caught error:', error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      // Render children directly — branding failed but app must still work
+      return this.props.children;
+    }
+    return this.props.children;
+  }
+}
+
+// ─── BrandingProvider ──────────────────────────────────────────────────────────
+
 export function BrandingProvider({ children }: { children: React.ReactNode }) {
-  const [settings, setSettings] = useState<BrandingSettings>(DEFAULT_BRANDING);
-  const [loading,  setLoading]  = useState(true);
+  const [settings,      setSettings]      = useState<BrandingSettings>(DEFAULT_BRANDING);
+  const [loading,       setLoading]       = useState(true);
   const [savedSettings, setSavedSettings] = useState<BrandingSettings>(DEFAULT_BRANDING);
 
   const fetchBranding = useCallback(async () => {
     try {
       const res = await fetch('/api/public/branding', { credentials: 'include' });
       if (res.ok) {
-        const data = await res.json() as Partial<BrandingSettings>;
+        const data   = await res.json() as Partial<BrandingSettings>;
         const merged = { ...DEFAULT_BRANDING, ...data };
         setSettings(merged);
         setSavedSettings(merged);
         applyCssVariables(merged);
+      } else {
+        // Server responded but with an error — keep default theme
+        applyCssVariables(DEFAULT_BRANDING);
       }
     } catch {
+      // Network error or DB unavailable — keep default theme, no white screen
       applyCssVariables(DEFAULT_BRANDING);
     } finally {
       setLoading(false);
