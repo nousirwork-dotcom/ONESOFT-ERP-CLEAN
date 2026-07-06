@@ -114,8 +114,14 @@ function readServerPort(): number {
       'OneSoft', 'config', 'onesoft.config.json',
     );
     const cfg = JSON.parse(fs.readFileSync(configFile, 'utf-8'));
-    return (cfg?.server?.port as number) ?? 3000;
-  } catch {
+    // المفتاح الصحيح هو backendPort (وليس port) كما يحفظه ConfigManager
+    const port = (cfg?.server?.backendPort as number)
+              ?? (cfg?.server?.port      as number)   // توافق مع نسخ قديمة
+              ?? 3000;
+    writeLog('INFO', `readServerPort → ${port} (from ${configFile})`);
+    return port;
+  } catch (e) {
+    writeLog('WARN', `readServerPort fallback to 3000: ${e}`);
     return 3000;
   }
 }
