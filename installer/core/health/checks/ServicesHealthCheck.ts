@@ -1,7 +1,9 @@
 import { spawnSync } from 'child_process';
 import type { HealthCheckResult } from '../../types.js';
 
-const SERVICES = ['OneSoft-Server', 'OneSoft-Client', 'OneSoft-Updater'] as const;
+// OneSoft-Client أُلغيت (needsFrontend=false) — البيك إند يعرض React مباشرةً
+// OneSoft-Updater اختيارية — لا نفحصها كشرط أساسي
+const SERVICES = ['OneSoft-Server'] as const;
 
 export async function checkServicesHealth(): Promise<HealthCheckResult> {
   const id = 'windows-services';
