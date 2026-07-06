@@ -21,6 +21,7 @@ import { sourceCodeRouter }         from './sourceCode.js';
 import { backupRouter }             from './backup.js';
 import { setupRouter }              from './setup.js';
 import { updatesRouter }            from './updates.js';
+import { brandingRouter }           from './branding.js';
 
 // ─── Newly extracted routers ──────────────────────────────────────────────────
 import { authRouter }                                                           from './auth.js';
@@ -93,6 +94,7 @@ export const appRouter = router({
   backup:              backupRouter,
   setup:               setupRouter,
   updates:             updatesRouter,
+  branding:            brandingRouter,
 });
 
 export type AppRouter = typeof appRouter;
