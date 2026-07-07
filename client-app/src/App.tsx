@@ -83,10 +83,18 @@ import SuperAdminPage from "@/core/admin/SuperAdminPage";
 import SourceCodeViewerPage from "@/core/dev/SourceCodeViewerPage";
 import FirstRunWizard from "@/core/auth/FirstRunWizard";
 import { BrandingProvider, BrandingErrorBoundary } from "@/core/contexts/BrandingContext";
-import { createElement, useEffect, useState } from "react";
+import { createElement, lazy, Suspense, useEffect, useState } from "react";
+
 import { trpc } from "@/shared/lib/trpc";
 import { Settings } from "lucide-react";
 import AppWindow from "@/shared/components/AppWindow";
+
+// ─── Dev-only: Customer License Activation Screen — Preview ──────────────────
+// Vite removes this block in production (import.meta.env.DEV → false → tree-shaken).
+// /dev/license-preview is completely inaccessible in production builds.
+const _DevLicensePreview = import.meta.env.DEV
+  ? lazy(() => import("@/modules/license/pages/LicensePreviewPage"))
+  : null;
 
 // ─── خريطة المسارات إلى المكونات ──────────────────────────────────────────
 export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
@@ -405,6 +413,15 @@ function App() {
             <Toaster position="top-center" richColors />
             <Switch>
               <Route path="/login" component={LoginPage} />
+              {import.meta.env.DEV && _DevLicensePreview && (
+                <Route path="/dev/license-preview">
+                  {() => (
+                    <Suspense fallback={null}>
+                      {_DevLicensePreview && createElement(_DevLicensePreview)}
+                    </Suspense>
+                  )}
+                </Route>
+              )}
               <Route>
                 <AuthGuard>
                   <AppRoutes />
