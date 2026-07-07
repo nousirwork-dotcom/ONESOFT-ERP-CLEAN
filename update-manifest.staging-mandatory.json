@@ -1,26 +1,20 @@
 {
-  "_purpose": "Staging manifest for testing MANDATORY update flow only. NOT used in production. Use on VM/test machine only.",
-  "_usage": "Set ONESOFT_UPDATE_URL=https://raw.githubusercontent.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/main/update-manifest.staging-mandatory.json",
-  "_warning": "لا تستخدم هذا الملف على الجهاز الرئيسي — التحديث الإجباري يمنع الدخول للنظام",
+  "_purpose": "Staging manifest — MANDATORY update test. Use on VM/test machine ONLY. NOT production.",
+  "_usage":   "Set env var: ONESOFT_UPDATE_URL=https://raw.githubusercontent.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/main/update-manifest.staging-mandatory.json",
+  "_warning": "يمنع الدخول للنظام — استخدم على VM اختبار فقط",
 
   "latestVersion":       "1.0.2",
   "minSupportedVersion": "1.0.2",
   "mandatory":           true,
-  "messageAr":           "[STAGING - إجباري] هذا تحديث اختبار إجباري — يُستخدم على VM فقط.",
-  "messageEn":           "[STAGING - MANDATORY] This is a mandatory test update — use on VM only.",
+  "messageAr":           "[STAGING - إجباري] هذا تحديث اختبار إجباري. يُستخدم على VM فقط.",
+  "messageEn":           "[STAGING - MANDATORY] Mandatory test update. Use on VM only.",
   "releaseNotes": [
-    "[اختبار إجباري] التحقق من منع الدخول للنظام",
-    "[اختبار إجباري] التحقق من عدم ظهور زر لاحقاً",
-    "[اختبار إجباري] التحقق من تحميل وتثبيت التحديث",
-    "[اختبار إجباري] التحقق من فتح النظام بعد التحديث"
+    "[اختبار إجباري] يُمنع الدخول للنظام حتى إتمام التحديث",
+    "[اختبار إجباري] لا يظهر زر لاحقاً",
+    "[اختبار إجباري] بعد التثبيت يفتح النظام مباشرةً"
   ],
   "downloadUrl":   "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.2-staging-test/OneSoftSetup-1.0.2.exe",
-  "fileSizeBytes": 80000000,
-  "sha512":        "",
-  "publishedAt":   "2026-07-07T00:00:00.000Z",
-
-  "_test_scenarios": {
-    "mandatory_block": "إذا أصدار المثبَّت < 1.0.2 → تظهر النافذة الإجبارية ولا يظهر زر لاحقاً",
-    "after_update":    "بعد التثبيت يفتح النظام مباشرةً بدون نافذة تحديث"
-  }
+  "fileSizeBytes": 80216064,
+  "sha512":        "a8f0f27674c6d87b180af7d790fd49f54ae580f6273ebf13afb486c0e9939a412eff21dc4d522b142cf89de278d7cb92bef8c673c73b4a1f2a22eb83b1f25e3a",
+  "publishedAt":   "2026-07-07T00:00:00.000Z"
 }
