@@ -274,10 +274,27 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
 };
 
 // ─── Auth Guard ───────────────────────────────────────────────────────────
+// أخطاء الترخيص التي تستوجب التوجيه لشاشة التفعيل (ليس license_not_found = dev mode)
+const LICENSE_BLOCKING_ERRORS = new Set([
+  "expired",
+  "invalid_signature",
+  "unknown_algorithm",
+  "unknown_kid",
+  "date_manipulation_suspected",
+  "invalid_json",
+  "read_error",
+]);
+
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const [location, navigate] = useLocation();
-  const meQuery = trpc.auth.me.useQuery(undefined, { retry: false });
-  const firstRunQ = trpc.setup.isFirstRun.useQuery(undefined, { retry: false, enabled: !!meQuery.data });
+  const meQuery    = trpc.auth.me.useQuery(undefined, { retry: false });
+  const firstRunQ  = trpc.setup.isFirstRun.useQuery(undefined, { retry: false, enabled: !!meQuery.data });
+  const licenseQ   = trpc.license.getStatus.useQuery(undefined, {
+    retry:              false,
+    enabled:            !!meQuery.data,
+    staleTime:          60_000,
+    refetchOnWindowFocus: false,
+  });
   const [wizardDone, setWizardDone] = useState(false);
 
   useEffect(() => {
@@ -290,6 +307,17 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       }
     }
   }, [meQuery.data, meQuery.isLoading, location]);
+
+  // توجيه تلقائي عند انتهاء صلاحية الترخيص أو تلفه
+  // لا يُوجَّه في حالة license_not_found (وضع التطوير — لا قيود)
+  useEffect(() => {
+    if (!meQuery.data) return;
+    if (licenseQ.isLoading || licenseQ.data === undefined) return;
+    const err = licenseQ.data?.error as string | null | undefined;
+    if (err && LICENSE_BLOCKING_ERRORS.has(err) && location !== "/cfg/license") {
+      navigate("/cfg/license");
+    }
+  }, [licenseQ.data, licenseQ.isLoading, meQuery.data, location]);
 
   if (meQuery.isLoading) {
     return (
