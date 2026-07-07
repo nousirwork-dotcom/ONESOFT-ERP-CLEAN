@@ -211,8 +211,16 @@ export const licenseCenterRouter = router({
     return { totalClients: clients.length, totalLicenses: licenses.length, activeLicenses: active, expiringLicenses: expiring, activeDevices: devices.length };
   }),
 
-  // ── Seed demo data ─────────────────────────────────────────────────────────
+  // ── Seed demo data — development only ────────────────────────────────────
   seedDemo: ownerOnlyProcedure.mutation(async () => {
+    // ❌ ممنوع في production — بيانات تجريبية في بيئة الإنتاج مرفوضة
+    if (process.env.NODE_ENV === 'production') {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'seedDemo غير متاح في بيئة الإنتاج',
+      });
+    }
+
     const existing = await db.select().from(lcClients);
     if (existing.length > 0) return { seeded: false, message: 'البيانات التجريبية موجودة مسبقاً' };
 

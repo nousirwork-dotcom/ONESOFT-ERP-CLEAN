@@ -137,6 +137,18 @@ DP_WHITE=$(grep -c "ALLOWED_PREFS\|sanitizePrefs\|whitelist" server-app/src/lib/
 AES=$(grep -c "aes-256-gcm" server-app/src/lib/devicePrefs.ts 2>/dev/null || echo 0)
 [[ "$AES" -gt 0 ]] && ok "device.prefs encrypted with AES-256-GCM in production" || ko "AES-256-GCM encryption missing from devicePrefs.ts"
 
+# seedDemo production guard
+SEED_GUARD=$(grep -c "NODE_ENV.*production\|production.*NODE_ENV" server-app/src/routers/licenseCenter.ts 2>/dev/null || echo 0)
+[[ "$SEED_GUARD" -gt 0 ]] && ok "seedDemo blocked in production (NODE_ENV guard present)" || ko "seedDemo missing production guard — MUST NOT run in production"
+
+# Private key NOT tracked by git
+GIT_KEY=$(git --no-optional-locks ls-files scripts/keys/ 2>/dev/null | wc -l)
+[[ "$GIT_KEY" -eq 0 ]] && ok "Private key NOT tracked by git (scripts/keys/ excluded)" || ko "Private key IS tracked by git — rotate immediately"
+
+# scripts/keys/ in .gitignore
+GITIGNORE_KEY=$(grep -c "scripts/keys" .gitignore 2>/dev/null || echo 0)
+[[ "$GITIGNORE_KEY" -gt 0 ]] && ok "scripts/keys/ present in .gitignore" || ko "scripts/keys/ missing from .gitignore"
+
 echo "" >> "$REPORT_FILE"
 
 {

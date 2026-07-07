@@ -86,16 +86,30 @@ desktop.ini
 *~
 
 # ── License Keys & Signed License Files ───────────────────────────────────────
-# Block ALL .pem by default, then explicitly allow the public key
+# Private Key — ممنوع رفعه إلى GitHub نهائياً
+# المفتاح الخاص يُحفظ على جهاز المالك فقط أو في Secret Store
 *.pem
 !**/public_key.pem
 private_key*
 scripts/keys/
+scripts/keys/*.pem
+scripts/keys/*.key
+license-center/keys/
 license-center/keys/private*
+keys/private*
+# ملفات الترخيص المولّدة
 license.dat
 license.ons
 test-license.ons
 activation-code.txt
+*.ons
+# Electron installer output
+electron-app/dist/
+electron-app/release/
+dist-installer/
+win-unpacked/
+# Security reports (auto-generated)
+reports/
 
 # ── IDE ──────────────────────────────────────────────────
 .vscode/

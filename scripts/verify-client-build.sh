@@ -172,6 +172,14 @@ else
   fail "AES-256-GCM encryption missing from devicePrefs.ts"
 fi
 
+# تحقق من أن seedDemo محظور في production
+SEED_GUARD=$(grep -c "NODE_ENV.*production\|production.*NODE_ENV" server-app/src/routers/licenseCenter.ts 2>/dev/null || echo 0)
+if [[ "$SEED_GUARD" -gt 0 ]]; then
+  pass "seedDemo blocked in production (NODE_ENV=production guard present)"
+else
+  fail "seedDemo missing production guard — must throw NOT_FOUND when NODE_ENV=production"
+fi
+
 # ── 5. تحقق من /cfg/license موجود في client-app ──────────────────────────────
 section "5. Client License Activation Page"
 
