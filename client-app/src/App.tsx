@@ -89,7 +89,7 @@ import { createElement, lazy, Suspense, useEffect, useState } from "react";
 import { trpc } from "@/shared/lib/trpc";
 import { Settings } from "lucide-react";
 import AppWindow from "@/shared/components/AppWindow";
-import UpdateDialog from "@/shared/components/UpdateDialog";
+import UpdateDialog, { useIsMandatoryBlocked } from "@/shared/components/UpdateDialog";
 
 // ─── Dev-only previews ────────────────────────────────────────────────────────
 const _DevLicensePreview = import.meta.env.DEV
@@ -407,6 +407,8 @@ function AppRoutes() {
 // ─── App Root ─────────────────────────────────────────────────────────────
 function App() {
   useSmartCopy();
+  const mandatoryUpdateActive = useIsMandatoryBlocked();
+
   return (
     <ErrorBoundary>
       <LanguageProvider>
@@ -415,34 +417,46 @@ function App() {
         <ThemeProvider defaultTheme="light">
           <TooltipProvider>
             <Toaster position="top-center" richColors />
-            {/* نافذة التحديث التلقائي — تظهر فوق كل شيء عند وجود تحديث */}
+
+            {/*
+              نافذة التحديث التلقائي — دائماً مُركَّبة لاستقبال أحداث IPC.
+              في حالة التحديث الإجباري تحجب الشاشة بالكامل وتمنع أي تفاعل.
+            */}
             <UpdateDialog />
-            <Switch>
-              <Route path="/login" component={LoginPage} />
-              {import.meta.env.DEV && _DevLicensePreview && (
-                <Route path="/dev/license-preview">
-                  {() => (
-                    <Suspense fallback={null}>
-                      {_DevLicensePreview && createElement(_DevLicensePreview)}
-                    </Suspense>
-                  )}
+
+            {/*
+              حجب جميع المسارات عند وجود تحديث إجباري:
+              لا login — لا dashboard — لا أي صفحة أخرى.
+              يُرفع الحجب تلقائياً بعد إعادة التشغيل مع الإصدار الجديد.
+            */}
+            {!mandatoryUpdateActive && (
+              <Switch>
+                <Route path="/login" component={LoginPage} />
+                {import.meta.env.DEV && _DevLicensePreview && (
+                  <Route path="/dev/license-preview">
+                    {() => (
+                      <Suspense fallback={null}>
+                        {_DevLicensePreview && createElement(_DevLicensePreview)}
+                      </Suspense>
+                    )}
+                  </Route>
+                )}
+                {import.meta.env.DEV && _DevUpdatePreview && (
+                  <Route path="/dev/update-preview">
+                    {() => (
+                      <Suspense fallback={null}>
+                        {_DevUpdatePreview && createElement(_DevUpdatePreview)}
+                      </Suspense>
+                    )}
+                  </Route>
+                )}
+                <Route>
+                  <AuthGuard>
+                    <AppRoutes />
+                  </AuthGuard>
                 </Route>
-              )}
-              {import.meta.env.DEV && _DevUpdatePreview && (
-                <Route path="/dev/update-preview">
-                  {() => (
-                    <Suspense fallback={null}>
-                      {_DevUpdatePreview && createElement(_DevUpdatePreview)}
-                    </Suspense>
-                  )}
-                </Route>
-              )}
-              <Route>
-                <AuthGuard>
-                  <AppRoutes />
-                </AuthGuard>
-              </Route>
-            </Switch>
+              </Switch>
+            )}
           </TooltipProvider>
         </ThemeProvider>
         </BrandingProvider>
