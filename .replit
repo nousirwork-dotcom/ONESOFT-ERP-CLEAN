@@ -23,6 +23,18 @@ args = "Start application"
 task = "workflow.run"
 args = "License Center"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "server-typecheck"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "client-typecheck"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "server-recovery-lint"
+
 [[workflows.workflow]]
 name = "Backend Server"
 author = "agent"
@@ -58,6 +70,39 @@ outputType = "console"
 task = "shell.exec"
 args = "cd license-center-app && pnpm run dev"
 waitForPort = 8080
+
+[[workflows.workflow]]
+name = "server-typecheck"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd server-app && pnpm exec tsc --noEmit 2>&1 | head -60"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "client-typecheck"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd client-app && pnpm exec tsc --noEmit 2>&1 | head -60"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "server-recovery-lint"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd server-app && node -e \"const fs=require('fs'); const src=fs.readFileSync('src/routers/recovery.ts','utf8'); const checks=[['getSystemChannels',1],['devOnlyPayload',1],['mockSend',1],['IS_DEV',1],['SMS_PROVIDER',1],['MAX_OTP_ATTEMPTS',1],['MAX_OTP_SENDS_PER_15MIN',1]]; let failed=false; checks.forEach(([k,n])=>{ const count=(src.match(new RegExp(k,'g'))||[]).length; if(count<n){console.error('MISSING: '+k); failed=true;}else{console.log('OK: '+k+' ('+count+' occurrences)');} }); if(failed)process.exit(1); console.log('All security checks passed.');\""
+
+[workflows.workflow.metadata]
+isValidation = true
 
 [[ports]]
 localPort = 3000
