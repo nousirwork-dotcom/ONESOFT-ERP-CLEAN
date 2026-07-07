@@ -57,6 +57,13 @@ export const usersRouter = router({
       });
       if (existing) throw new Error('اسم المستخدم مستخدم بالفعل');
 
+      if (input.phone) {
+        const phoneExists = await db.query.users.findFirst({
+          where: and(eq(users.phone, input.phone), eq(users.orgId, ctx.user.orgId), eq(users.isActive, true)),
+        });
+        if (phoneExists) throw new TRPCError({ code: 'CONFLICT', message: 'رقم الجوال مستخدم لمستخدم آخر في هذه المؤسسة' });
+      }
+
       // if category has autoNumbering and no code provided, generate next code
       let finalCode = input.code;
       if (!finalCode && input.categoryId) {
@@ -118,6 +125,15 @@ export const usersRouter = router({
         where: and(eq(users.id, id), eq(users.orgId, ctx.user.orgId)),
       });
       if (!user) throw new Error('المستخدم غير موجود');
+
+      if (rest.phone) {
+        const phoneExists = await db.query.users.findFirst({
+          where: and(eq(users.phone, rest.phone), eq(users.orgId, ctx.user.orgId), eq(users.isActive, true)),
+        });
+        if (phoneExists && phoneExists.id !== id) {
+          throw new TRPCError({ code: 'CONFLICT', message: 'رقم الجوال مستخدم لمستخدم آخر في هذه المؤسسة' });
+        }
+      }
 
       await db.update(users).set({
         ...rest,
