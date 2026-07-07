@@ -5,9 +5,13 @@ import {
   Copy, Check, RefreshCw, KeyRound, FileUp,
   Users, GitBranch, MonitorSmartphone, Fingerprint,
   Globe, Monitor, WifiOff, Lock, CheckCircle2, XCircle,
-  Terminal, UploadCloud, ClipboardCopy, Info,
-  Timer, Infinity as InfinityIcon, AlertTriangle,
+  UploadCloud, ClipboardCopy, Info, Timer,
+  Infinity as InfinityIcon, AlertTriangle, Phone,
 } from "lucide-react";
+
+// ─── Theme ─────────────────────────────────────────────────────────────────
+// Navy: #1B2B5C  |  Gold: #C9A84C  |  Cream bg: #FAF7F0
+// Cards: white + border-[#C9A84C]/25
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const MODULES = [
@@ -18,8 +22,8 @@ const MODULES = [
   { id: "pos",           label: "نقاط البيع",      icon: "🖥️" },
   { id: "reports",       label: "التقارير",        icon: "📈" },
   { id: "zatca",         label: "ZATCA",           icon: "🏛️" },
-  { id: "manufacturing", label: "التصنيع",         icon: "⚙️" },
   { id: "hr",            label: "الموارد البشرية", icon: "👥" },
+  { id: "manufacturing", label: "التصنيع",         icon: "⚙️" },
 ];
 
 type LicType = "trial" | "subscription" | "lifetime" | undefined;
@@ -30,19 +34,14 @@ function deriveLicType(lt?: LicType, exp?: string): LicType {
   return exp >= "2099-01-01" ? "lifetime" : "subscription";
 }
 
-function daysLeft(exp: string): number {
+function daysLeft(exp: string) {
   return Math.max(0, Math.ceil((new Date(exp + "T23:59:59Z").getTime() - Date.now()) / 86_400_000));
 }
 
-function fmtDate(d?: string | null, full = false) {
+function fmtDate(d?: string | null) {
   if (!d) return "—";
-  try {
-    return new Date(d).toLocaleDateString("ar-SA", {
-      year: "numeric",
-      month: full ? "long" : "2-digit",
-      day: "2-digit",
-    });
-  } catch { return d; }
+  try { return new Date(d).toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "2-digit" }); }
+  catch { return d; }
 }
 
 // ─── useCopy ─────────────────────────────────────────────────────────────────
@@ -54,20 +53,59 @@ function useCopy() {
   return { ck: k, copy };
 }
 
-// ─── InfoCell (inside gradient card) ─────────────────────────────────────────
-function InfoCell({ label, value, copyId, ck, copy }: {
+// ─── Card wrapper ─────────────────────────────────────────────────────────────
+function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`bg-white rounded-2xl border border-[#C9A84C]/25 shadow-sm overflow-hidden ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+// ─── Card Header ─────────────────────────────────────────────────────────────
+function CardHeader({ icon, title, badge }: { icon: React.ReactNode; title: string; badge?: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-[#C9A84C]/20 bg-[#FAF7F0]">
+      <span className="text-[#1B2B5C]">{icon}</span>
+      <span className="font-bold text-[#1B2B5C] text-sm">{title}</span>
+      {badge && <span className="mr-auto">{badge}</span>}
+    </div>
+  );
+}
+
+// ─── InfoCell (inside navy header) ────────────────────────────────────────────
+function InfoCellNav({ label, value, copyId, ck, copy }: {
   label: string; value?: string | null;
-  copyId?: string; ck?: string | null;
-  copy?: (v: string, k: string) => void;
+  copyId?: string; ck?: string | null; copy?: (v: string, k: string) => void;
 }) {
   return (
     <div className="flex flex-col gap-0.5 min-w-0">
-      <span className="text-[9px] font-semibold text-white/45 uppercase tracking-wider">{label}</span>
+      <span className="text-[9px] font-semibold text-white/45 uppercase tracking-widest">{label}</span>
       <div className="flex items-center gap-1">
-        <span className="text-xs font-mono text-white/90 truncate">{value ?? "—"}</span>
+        <span className="text-xs font-mono text-white/90 truncate select-all">{value ?? "—"}</span>
         {copyId && value && copy && (
-          <button onClick={() => copy(value, copyId)} className="text-white/35 hover:text-white transition-colors shrink-0">
+          <button onClick={() => copy(value, copyId)} className="text-white/35 hover:text-white/80 transition-colors shrink-0">
             {ck === copyId ? <Check className="w-3 h-3 text-green-300" /> : <Copy className="w-3 h-3" />}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── InfoCell (white body) ────────────────────────────────────────────────────
+function InfoCell({ label, value, copyId, ck, copy }: {
+  label: string; value?: string | null;
+  copyId?: string; ck?: string | null; copy?: (v: string, k: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5 min-w-0">
+      <span className="text-[9px] font-semibold text-[#C9A84C] uppercase tracking-wider">{label}</span>
+      <div className="flex items-center gap-1">
+        <span className="text-xs font-mono text-[#1B2B5C]/80 truncate">{value ?? "—"}</span>
+        {copyId && value && copy && (
+          <button onClick={() => copy(value, copyId)} className="text-[#C9A84C]/60 hover:text-[#C9A84C] transition-colors shrink-0">
+            {ck === copyId ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
           </button>
         )}
       </div>
@@ -80,20 +118,20 @@ function LimitRow({ label, current, max, icon }: {
   label: string; current: number; max: number; icon: React.ReactNode;
 }) {
   const pct = max > 0 ? Math.min(100, Math.round((current / max) * 100)) : 0;
-  const barColor = pct >= 90 ? "bg-red-500" : pct >= 75 ? "bg-amber-500" : "bg-blue-500";
+  const barColor = pct >= 90 ? "bg-red-500" : pct >= 75 ? "bg-amber-500" : "bg-[#1B2B5C]";
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between text-xs">
-        <div className="flex items-center gap-1.5 text-muted-foreground font-medium">{icon}<span>{label}</span></div>
-        <div className="flex items-center gap-0.5">
-          <span className={`font-bold text-sm ${pct >= 90 ? "text-red-600" : "text-foreground"}`}>{current}</span>
-          <span className="text-muted-foreground text-xs"> / {max}</span>
+        <div className="flex items-center gap-1.5 text-[#4A5568] font-medium">{icon} <span>{label}</span></div>
+        <div className="flex items-baseline gap-0.5">
+          <span className={`font-bold text-sm ${pct >= 90 ? "text-red-600" : "text-[#1B2B5C]"}`}>{current}</span>
+          <span className="text-[#9CA3AF] text-xs"> / {max}</span>
         </div>
       </div>
-      <div className="h-2 rounded-full bg-muted overflow-hidden">
+      <div className="h-2 rounded-full bg-[#E8E0D4] overflow-hidden">
         <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
       </div>
-      <div className="flex justify-between text-[10px] text-muted-foreground">
+      <div className="flex justify-between text-[10px] text-[#9CA3AF]">
         <span>{pct}% مستخدَم</span>
         <span>{Math.max(0, max - current)} متاح</span>
       </div>
@@ -101,18 +139,15 @@ function LimitRow({ label, current, max, icon }: {
   );
 }
 
-// ─── BoolBadge ───────────────────────────────────────────────────────────────
-function BoolBadge({ label, value, icon }: {
-  label: string; value?: boolean | null; icon: React.ReactNode;
-}) {
+// ─── AccessBadge ─────────────────────────────────────────────────────────────
+function AccessBadge({ label, value, icon }: { label: string; value?: boolean | null; icon: React.ReactNode }) {
   const on = value === true;
   return (
-    <div className={`flex items-center justify-between px-3 py-2 rounded-lg border text-xs font-medium ${
-      on ? "bg-green-50 border-green-200 text-green-800 dark:bg-green-950/30 dark:border-green-800 dark:text-green-300"
-         : "bg-muted/50 border-border text-muted-foreground"
+    <div className={`flex items-center justify-between px-3 py-2 rounded-xl border text-xs font-medium ${
+      on ? "bg-green-50 border-green-200 text-green-800" : "bg-[#FAF7F0] border-[#E8E0D4] text-[#9CA3AF]"
     }`}>
-      <div className="flex items-center gap-2">{icon}<span>{label}</span></div>
-      <span className={on ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}>{on ? "✓ مفعّل" : "✕ غير مفعّل"}</span>
+      <div className="flex items-center gap-2">{icon} <span>{label}</span></div>
+      <span className={on ? "text-green-600 font-bold" : ""}>{on ? "✓" : "✕"}</span>
     </div>
   );
 }
@@ -120,19 +155,49 @@ function BoolBadge({ label, value, icon }: {
 // ─── ModuleChip ──────────────────────────────────────────────────────────────
 function ModuleChip({ label, icon, enabled }: { label: string; icon: string; enabled: boolean }) {
   return (
-    <div className={`flex flex-col items-center gap-1.5 py-3 px-1 rounded-xl border text-center transition-colors ${
-      enabled ? "bg-green-50 border-green-200 dark:bg-green-950/40 dark:border-green-800"
-              : "bg-muted/30 border-border opacity-50"
+    <div className={`flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl border text-center transition-colors ${
+      enabled
+        ? "bg-green-50 border-green-200"
+        : "bg-[#FAF7F0] border-[#E8E0D4] opacity-60"
     }`}>
-      <span className="text-lg leading-none">{icon}</span>
-      <span className={`text-[9px] font-semibold leading-tight ${
-        enabled ? "text-green-800 dark:text-green-300" : "text-muted-foreground"
-      }`}>{label}</span>
+      <span className="text-xl leading-none">{icon}</span>
+      <span className={`text-[9px] font-bold leading-tight ${enabled ? "text-green-800" : "text-[#9CA3AF]"}`}>{label}</span>
       {enabled
         ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
-        : <Lock className="w-3 h-3 text-muted-foreground" />
+        : <Lock className="w-3 h-3 text-[#C9A84C]/60" />
       }
     </div>
+  );
+}
+
+// ─── NavyButton ──────────────────────────────────────────────────────────────
+function NavyButton({ children, onClick, disabled, className = "" }: {
+  children: React.ReactNode; onClick?: () => void; disabled?: boolean; className?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#1B2B5C] text-white text-sm font-semibold
+        hover:bg-[#243875] active:bg-[#0F1D3F] disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function OutlineButton({ children, onClick, disabled, className = "" }: {
+  children: React.ReactNode; onClick?: () => void; disabled?: boolean; className?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-[#1B2B5C]/30 text-[#1B2B5C] text-sm font-semibold
+        hover:bg-[#1B2B5C]/5 disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${className}`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -140,11 +205,10 @@ function ModuleChip({ label, icon, enabled }: { label: string; icon: string; ena
 //  Page
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function LicenseActivationPage() {
-  const [tab,         setTab]         = useState<"code" | "file" | "request">("code");
+  const [tab,         setTab]         = useState<"code" | "file" | "trial">("code");
   const [activCode,   setActivCode]   = useState("");
   const [fileContent, setFileContent] = useState("");
   const [fileName,    setFileName]    = useState("");
-  const [reqOrgId,    setReqOrgId]    = useState("");
   const [reqCode,     setReqCode]     = useState("");
   const [notice, setNotice] = useState<{ ok: boolean; msg: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -156,12 +220,12 @@ export default function LicenseActivationPage() {
   const { data: stats }           = trpc.license.getCurrentStats.useQuery(undefined, { retry: false });
 
   const genReq = trpc.license.generateRequestCode.useMutation({
-    onSuccess: d => { setReqCode(d.code); setTab("request"); },
+    onSuccess: d => setReqCode(d.code),
     onError:   e => setNotice({ ok: false, msg: e.message }),
   });
   const byCode = trpc.license.activateByCode.useMutation({
     onSuccess: d => {
-      setNotice({ ok: true, msg: `✅ تم التفعيل — ${d.customer}` });
+      setNotice({ ok: true, msg: `✅ تم تفعيل الترخيص — ${d.customer}` });
       setActivCode("");
       utils.license.getStatus.invalidate(); refetch();
     },
@@ -169,7 +233,7 @@ export default function LicenseActivationPage() {
   });
   const byFile = trpc.license.activateByFile.useMutation({
     onSuccess: d => {
-      setNotice({ ok: true, msg: `✅ تم التفعيل — ${d.customer}` });
+      setNotice({ ok: true, msg: `✅ تم تفعيل الترخيص — ${d.customer}` });
       setFileContent(""); setFileName("");
       utils.license.getStatus.invalidate(); refetch();
     },
@@ -184,17 +248,16 @@ export default function LicenseActivationPage() {
     r.readAsText(f);
   }
 
-  // ── Derived state ───────────────────────────────────────────────────────────
-  const p           = status?.payload;
-  const isValid     = !!status?.valid;
-  const err         = status?.error as string | null | undefined;
-  const lt          = deriveLicType(p?.license_type as LicType, p?.expiry_date);
-  const days        = p?.expiry_date && lt !== "lifetime" ? daysLeft(p.expiry_date) : null;
-  const curUsers    = stats?.current_users ?? 0;
+  // ── Derived state ─────────────────────────────────────────────────────────
+  const p          = status?.payload;
+  const isValid    = !!status?.valid;
+  const err        = status?.error as string | null | undefined;
+  const lt         = deriveLicType(p?.license_type as LicType, p?.expiry_date);
+  const days       = p?.expiry_date && lt !== "lifetime" ? daysLeft(p.expiry_date) : null;
+  const curUsers   = stats?.current_users ?? 0;
   const curBranches = (stats as { current_branches?: number } | undefined)?.current_branches ?? 0;
-  const mods        = new Set(p?.enabled_modules ?? []);
+  const mods       = new Set(p?.enabled_modules ?? []);
 
-  // ── Status booleans ─────────────────────────────────────────────────────────
   const isTrial    = isValid && lt === "trial";
   const isLifetime = isValid && lt === "lifetime";
   const isActive   = isValid && !isTrial;
@@ -203,582 +266,532 @@ export default function LicenseActivationPage() {
   const isInvalid  = !isValid && (err === "invalid_signature" || err === "unknown_algorithm" || err === "unknown_kid" || err === "invalid_json");
   const isDateTamper = !isValid && err === "date_manipulation_suspected";
 
-  // ── Trial duration (total days from start to expiry) ────────────────────────
   const trialDuration = p?.start_date && p?.expiry_date && isTrial
     ? Math.ceil((new Date(p.expiry_date + "T23:59:59Z").getTime() - new Date(p.start_date + "T00:00:00Z").getTime()) / 86_400_000)
     : null;
 
-  // ── BIG type label (shown at top of card, very prominent) ──────────────────
+  // ── Type labels (commercial, no technical terms) ───────────────────────────
   const bigTypeLabel =
-    lt === "trial"           ? "نسخة تجريبية"
-    : lt === "lifetime"      ? "ترخيص دائم"
-    : lt === "subscription" && isValid ? "اشتراك سنوي"
-    : isExpired && lt === "trial"      ? "نسخة تجريبية — منتهية"
-    : isExpired              ? "اشتراك منتهٍ"
-    : isSlate                ? "غير مفعّل"
-    : isInvalid              ? "ترخيص غير صالح"
-    : isDateTamper           ? "تلاعب بالتاريخ"
+    lt === "trial"         ? "فترة تجريبية"
+    : lt === "lifetime"    ? "ترخيص دائم"
+    : isValid              ? "اشتراك مفعّل"
+    : isExpired            ? "انتهت الصلاحية"
+    : isSlate              ? "غير مفعّل"
+    : isInvalid            ? "ترخيص غير صالح"
+    : isDateTamper         ? "خطأ في الساعة"
     : "غير محدد";
 
-  // ── Status badge label ──────────────────────────────────────────────────────
-  const statusBadge = isActive
-    ? { label: "مفعّل",            cls: "bg-white/20 text-white border-white/30" }
-    : isTrial
-    ? { label: "نشط",              cls: "bg-amber-300/20 text-amber-200 border-amber-300/30" }
-    : isExpired
-    ? { label: "انتهت الصلاحية",  cls: "bg-red-300/20 text-red-200 border-red-300/30" }
-    : isSlate
-    ? { label: "غير مفعّل",       cls: "bg-white/10 text-white/70 border-white/20" }
-    : isInvalid
-    ? { label: "غير صالح",         cls: "bg-red-300/20 text-red-200 border-red-300/30" }
-    : isDateTamper
-    ? { label: "تلاعب مكتشف",     cls: "bg-orange-300/20 text-orange-200 border-orange-300/30" }
-    : { label: "غير محدد",         cls: "bg-white/10 text-white/60 border-white/20" };
-
-  // ── Gradient ────────────────────────────────────────────────────────────────
-  const gradient =
-    isActive   ? "from-green-700 to-green-900"
-    : isTrial  ? "from-amber-600 to-amber-800"
-    : isExpired ? "from-red-600 to-red-900"
-    : isSlate   ? "from-slate-600 to-slate-800"
-    : isDateTamper ? "from-orange-700 to-orange-900"
-    : "from-red-700 to-red-900";
+  const statusBadge =
+    isActive && !isTrial ? { label: "مفعّل ✓",           cls: "bg-green-500/20 text-green-200 border-green-400/30" }
+    : isTrial            ? { label: "تجريبي",             cls: "bg-[#C9A84C]/20 text-[#E8C97E] border-[#C9A84C]/30" }
+    : isExpired          ? { label: "منتهٍ",              cls: "bg-red-400/20 text-red-200 border-red-400/30" }
+    : isSlate            ? { label: "غير مفعّل",          cls: "bg-white/10 text-white/60 border-white/20" }
+    : isInvalid          ? { label: "غير صالح",           cls: "bg-red-400/20 text-red-200 border-red-400/30" }
+    : isDateTamper       ? { label: "تلاعب بالتاريخ",    cls: "bg-orange-400/20 text-orange-200 border-orange-400/30" }
+    : { label: "غير محدد",                                cls: "bg-white/10 text-white/60 border-white/20" };
 
   const ShieldIcon =
-    isActive   ? ShieldCheck
-    : isTrial  ? ShieldCheck
-    : isSlate  ? ShieldQuestion
-    : isExpired ? ShieldAlert
+    (isActive && !isTrial) ? ShieldCheck
+    : isTrial              ? ShieldCheck
+    : isSlate              ? ShieldQuestion
+    : isExpired            ? ShieldAlert
     : ShieldOff;
 
   const daysColor =
     days === null  ? "text-white"
     : days <= 7    ? "text-red-300"
-    : days <= 30   ? "text-amber-300"
-    : "text-white";
+    : days <= 30   ? "text-[#E8C97E]"
+    : "text-green-300";
+
+  // Commercial status messages
+  const statusMessage =
+    isSlate      ? "البرنامج غير مفعّل. يرجى إدخال كود التفعيل أو استيراد ملف الترخيص للمتابعة."
+    : isTrial    ? "هذه نسخة تجريبية محدودة المدة."
+    : isExpired  ? "انتهت صلاحية الترخيص. يرجى التواصل مع مزود النظام للتجديد."
+    : isInvalid  ? "ملف الترخيص غير صالح أو تم تعديله. يرجى التواصل مع مزود النظام."
+    : isDateTamper ? "يوجد خطأ في إعدادات التاريخ والوقت. يرجى مراجعة إعدادات الجهاز."
+    : null;
 
   // ─── JSX ──────────────────────────────────────────────────────────────────
   return (
-    <div className="h-full overflow-auto" dir="rtl">
-      <div className="p-4 space-y-4 w-full">
+    <div className="h-full overflow-auto bg-[#FAF7F0]" dir="rtl">
+      <div className="p-5 space-y-4 w-full">
 
-        {/* ══ PAGE HEADER ══════════════════════════════════════════════════════ */}
-        <div className="flex items-start justify-between w-full">
+        {/* ══ PAGE HEADER ════════════════════════════════════════════════════ */}
+        <div className="flex items-start justify-between">
           <div>
-            <div className="flex items-center gap-2">
-              <KeyRound className="w-5 h-5 text-primary" />
-              <h2 className="erp-page-title">الترخيص والتفعيل</h2>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-[#1B2B5C] flex items-center justify-center">
+                <KeyRound className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <h1 className="text-lg font-black text-[#1B2B5C] leading-none">الترخيص والتفعيل</h1>
+                <p className="text-xs text-[#6B7280] mt-0.5">إدارة حالة ترخيص النظام وتفعيل النسخة</p>
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              إدارة ترخيص النظام وتفعيله والاطلاع على حالة الاشتراك والقيود
-            </p>
           </div>
           <button
             onClick={() => { refetch(); setNotice(null); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#C9A84C]/30 bg-white text-[#1B2B5C] text-xs font-semibold hover:bg-[#FAF7F0] transition-colors shadow-sm"
           >
             <RefreshCw className="w-3.5 h-3.5" /> تحديث الحالة
           </button>
         </div>
 
-        {/* ══ NOTICE ═══════════════════════════════════════════════════════════ */}
+        {/* ══ NOTICE ═══════════════════════════════════════════════════════ */}
         {notice && (
-          <div className={`flex items-center gap-2 text-sm rounded-xl px-4 py-3 border w-full ${
+          <div className={`flex items-center gap-2 text-sm rounded-xl px-4 py-3 border ${
             notice.ok
-              ? "bg-green-50 text-green-800 border-green-200 dark:bg-green-950/30 dark:text-green-300 dark:border-green-800"
-              : "bg-red-50 text-red-800 border-red-200 dark:bg-red-950/30 dark:text-red-300 dark:border-red-800"
+              ? "bg-green-50 text-green-800 border-green-200"
+              : "bg-red-50 text-red-800 border-red-200"
           }`}>
-            {notice.ok ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <XCircle className="w-4 h-4 shrink-0" />}
+            {notice.ok ? <CheckCircle2 className="w-4 h-4 shrink-0 text-green-500" /> : <XCircle className="w-4 h-4 shrink-0 text-red-500" />}
             <span className="flex-1">{notice.msg}</span>
             <button onClick={() => setNotice(null)} className="text-xl leading-none opacity-40 hover:opacity-80">×</button>
           </div>
         )}
 
-        {/* ══ STATUS CARD ══════════════════════════════════════════════════════ */}
-        <div className={`w-full rounded-2xl bg-gradient-to-l ${gradient} shadow-lg overflow-hidden`}>
+        {/* ══ STATUS CARD — full width ═════════════════════════════════════ */}
+        <Card>
+          {/* Navy header */}
+          <div className="bg-[#1B2B5C] px-6 py-4">
+            <div className="flex items-center gap-4">
+              {/* Shield */}
+              <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center shrink-0">
+                <ShieldIcon className="w-7 h-7 text-white" />
+              </div>
 
-          {/* ── TYPE HEADER (most prominent section) ── */}
-          <div className="flex items-center gap-4 px-5 pt-5 pb-4 border-b border-white/15">
-            {/* Shield icon */}
-            <div className="w-14 h-14 rounded-2xl bg-white/15 border border-white/25 flex items-center justify-center shrink-0 shadow-inner">
-              <ShieldIcon className="w-8 h-8 text-white drop-shadow" />
-            </div>
+              {/* Type label + package */}
+              <div className="flex-1 min-w-0">
+                <p className="text-[9px] font-semibold text-white/45 uppercase tracking-widest mb-0.5">نوع النسخة</p>
+                <h2 className="text-2xl font-black text-white leading-none">{bigTypeLabel}</h2>
+                {p && (
+                  <p className="text-sm text-white/55 mt-0.5 font-medium">
+                    {p.package_name ?? "Standard"}{p.customer_name ? ` — ${p.customer_name}` : ""}
+                  </p>
+                )}
+              </div>
 
-            {/* TYPE LABEL (big) + package */}
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-semibold text-white/45 uppercase tracking-widest mb-0.5">نوع النسخة</p>
-              <h2 className="text-3xl font-black text-white leading-none tracking-tight">{bigTypeLabel}</h2>
+              {/* Status badge */}
+              <span className={`shrink-0 px-4 py-1.5 rounded-full border text-sm font-bold ${statusBadge.cls}`}>
+                {statusBadge.label}
+              </span>
+
+              {/* Days counter (when license exists) */}
               {p && (
-                <p className="text-sm text-white/60 mt-1 font-medium">
-                  {p.package_name ?? "Standard"}{p.customer_name ? ` — ${p.customer_name}` : ""}
-                </p>
+                <div className="shrink-0 flex flex-col items-center justify-center gap-1 bg-white/8 border border-white/15 rounded-2xl px-5 py-3 min-w-[100px] text-center">
+                  {isLifetime ? (
+                    <>
+                      <InfinityIcon className="w-8 h-8 text-white" />
+                      <span className="text-[9px] text-white/50 font-medium">ترخيص دائم</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className={`text-4xl font-black leading-none ${daysColor}`}>{days}</span>
+                      <span className="text-[9px] text-white/45 text-center font-medium">يوم متبقٍّ</span>
+                      {days !== null && days <= 30 && (
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full mt-0.5 ${
+                          days <= 7 ? "bg-red-400/25 text-red-200" : "bg-[#C9A84C]/25 text-[#E8C97E]"
+                        }`}>{days <= 7 ? "⚠ عاجل" : "قريبًا"}</span>
+                      )}
+                    </>
+                  )}
+                </div>
               )}
             </div>
 
-            {/* Status badge */}
-            <span className={`shrink-0 px-4 py-1.5 rounded-full border text-sm font-bold ${statusBadge.cls}`}>
-              {statusBadge.label}
-            </span>
-
-            {/* Days counter OR Infinity */}
+            {/* IDs grid (inside navy header when license exists) */}
             {p && (
-              <div className="shrink-0 flex flex-col items-center justify-center gap-1 bg-white/10 border border-white/20 rounded-2xl px-5 py-3 min-w-[90px] backdrop-blur-sm">
-                {isLifetime ? (
-                  <>
-                    <InfinityIcon className="w-9 h-9 text-white" />
-                    <span className="text-[9px] text-white/50 font-medium">دائم</span>
-                  </>
-                ) : (
-                  <>
-                    <span className={`text-4xl font-black leading-none ${daysColor}`}>{days}</span>
-                    <span className="text-[9px] text-white/50 text-center">يوم متبقٍّ</span>
-                    {days !== null && days <= 30 && (
-                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full mt-0.5 ${
-                        days <= 7 ? "bg-red-400/30 text-red-200" : "bg-amber-400/30 text-amber-200"
-                      }`}>{days <= 7 ? "⚠ عاجل" : "قريبًا"}</span>
-                    )}
-                  </>
-                )}
+              <div className="mt-4 pt-4 border-t border-white/10 grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3">
+                <InfoCellNav label="Organization ID"  value={p.org_id}         copyId="oid" ck={ck} copy={copy} />
+                <InfoCellNav label="License ID"       value={p.license_id}     copyId="lid" ck={ck} copy={copy} />
+                <InfoCellNav label="Activation ID"    value={p.activation_id}  copyId="aid" ck={ck} copy={copy} />
+                <InfoCellNav label="Device ID"        value={p.device_id || devInfo?.device_id} copyId="did" ck={ck} copy={copy} />
+                <InfoCellNav label="تاريخ التفعيل"   value={fmtDate(p.start_date)} />
+                <InfoCellNav label="تاريخ الانتهاء"  value={isLifetime ? "دائم" : fmtDate(p.expiry_date)} />
+                <InfoCellNav label="الجهة المصدرة"   value={p.issued_by} />
+                {p.customer_name && <InfoCellNav label="اسم المؤسسة" value={p.customer_name} />}
               </div>
             )}
           </div>
 
-          {/* ── BODY: full details when license exists ── */}
-          {p && (
-            <div className="px-5 py-4 grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-4">
-              <InfoCell label="Organization ID"   value={p.org_id}          copyId="oid" ck={ck} copy={copy} />
-              <InfoCell label="License ID"        value={p.license_id}      copyId="lid" ck={ck} copy={copy} />
-              <InfoCell label="Activation ID"     value={p.activation_id}   copyId="aid" ck={ck} copy={copy} />
-              <InfoCell label="Device ID"         value={p.device_id || devInfo?.device_id} copyId="did" ck={ck} copy={copy} />
-              <InfoCell label="تاريخ البداية"    value={fmtDate(p.start_date, true)} />
-              <InfoCell
-                label="تاريخ الانتهاء"
-                value={isLifetime ? "دائم — لا ينتهي" : fmtDate(p.expiry_date, true)}
-              />
-              <InfoCell label="الجهة المصدرة"    value={p.issued_by} />
-              {p.issued_at && (
-                <InfoCell label="تاريخ الإصدار"  value={fmtDate(p.issued_at?.slice(0, 10), true)} />
-              )}
-            </div>
-          )}
-
-          {/* ── BODY: error/empty states ── */}
-          {!p && (
-            <div className="px-5 py-5">
-              {isSlate && (
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-xl font-black text-white">البرنامج غير مفعّل</p>
-                    <p className="text-sm text-white/75 mt-1">
-                      يرجى إدخال كود التفعيل أو استيراد ملف الترخيص من مزود النظام.
-                    </p>
-                  </div>
-                  <div className="flex items-start gap-2 bg-white/10 border border-white/15 rounded-xl px-4 py-3">
-                    <Info className="w-4 h-4 text-white/50 mt-0.5 shrink-0" />
-                    <p className="text-xs text-white/65 leading-relaxed">
-                      في نسخة الإنتاج لن يتم السماح باستخدام النظام بدون ترخيص صالح
-                      أو فترة تجريبية موقّعة. التجريب المفتوح يعمل في وضع التطوير فقط.
-                    </p>
-                  </div>
-                </div>
-              )}
+          {/* White body — error/empty states */}
+          {!p && statusMessage && (
+            <div className="px-6 py-5">
+              <div className={`flex items-start gap-3 rounded-xl px-4 py-3.5 border ${
+                isSlate    ? "bg-[#FAF7F0] border-[#C9A84C]/25"
+                : isInvalid || isDateTamper ? "bg-red-50 border-red-200"
+                : isExpired ? "bg-red-50 border-red-200"
+                : "bg-[#FAF7F0] border-[#C9A84C]/25"
+              }`}>
+                <Info className={`w-4 h-4 mt-0.5 shrink-0 ${isInvalid || isExpired || isDateTamper ? "text-red-500" : "text-[#C9A84C]"}`} />
+                <p className={`text-sm leading-relaxed ${isInvalid || isExpired || isDateTamper ? "text-red-800" : "text-[#4A5568]"}`}>
+                  {statusMessage}
+                </p>
+              </div>
               {isInvalid && (
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-xl font-black text-white">ملف الترخيص غير صالح أو تم تعديله</p>
-                    <p className="text-sm text-white/75 mt-1">
-                      يرجى التواصل مع مزود النظام للحصول على ملف ترخيص صالح.
-                    </p>
-                  </div>
-                  <div className="flex items-start gap-2 bg-red-500/15 border border-red-300/20 rounded-xl px-4 py-3">
-                    <AlertTriangle className="w-4 h-4 text-red-300 mt-0.5 shrink-0" />
-                    <p className="text-xs text-red-200/80 leading-relaxed">
-                      لا تحاول تعديل ملف الترخيص يدوياً. أي تعديل سيُبطل التوقيع الرقمي
-                      ويُوقف عمل النظام بالكامل.
-                    </p>
-                  </div>
-                </div>
-              )}
-              {isDateTamper && (
-                <div className="space-y-2">
-                  <p className="text-xl font-black text-white">تم اكتشاف تلاعب بتاريخ الجهاز</p>
-                  <p className="text-sm text-white/75">
-                    يُرجى التحقق من إعدادات الساعة والتاريخ على هذا الجهاز، ثم أعد تشغيل النظام.
-                  </p>
-                </div>
-              )}
-              {isExpired && (
-                <div className="space-y-2">
-                  <p className="text-xl font-black text-white">انتهت صلاحية الترخيص</p>
-                  <p className="text-sm text-white/75">
-                    {lt === "trial"
-                      ? "انتهت الفترة التجريبية. تواصل مع مزود النظام للحصول على ترخيص دائم."
-                      : "انتهت صلاحية الترخيص. تواصل مع مزود النظام للتجديد."}
+                <div className="mt-3 flex items-start gap-3 rounded-xl px-4 py-3 border bg-amber-50 border-amber-200">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 text-amber-600 shrink-0" />
+                  <p className="text-xs text-amber-800 leading-relaxed">
+                    لا تحاول تعديل ملف الترخيص يدوياً — أي تعديل سيُبطل التوقيع الرقمي ويُوقف عمل النظام.
                   </p>
                 </div>
               )}
             </div>
           )}
 
-          {/* ── TRIAL INFO BANNER ── */}
+          {/* Trial info banner */}
           {isTrial && p && (
-            <div className="border-t border-amber-400/20 bg-amber-500/15 px-5 py-3.5">
+            <div className="border-t border-[#C9A84C]/20 bg-[#FFF8E8] px-6 py-3.5">
               <div className="flex items-center gap-2 mb-2.5">
-                <Timer className="w-4 h-4 text-amber-300 shrink-0" />
-                <span className="text-sm font-bold text-amber-100">تفاصيل الفترة التجريبية</span>
-                <span className="text-xs text-amber-200/60 mr-auto">هذه نسخة تجريبية محدودة — قابلة للتحديث إلى ترخيص كامل</span>
+                <Timer className="w-4 h-4 text-[#C9A84C] shrink-0" />
+                <span className="text-sm font-bold text-[#8B6914]">تفاصيل الفترة التجريبية</span>
+                <span className="text-xs text-[#C9A84C]/70 mr-auto">قابلة للتحديث إلى ترخيص كامل</span>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                 <div>
-                  <p className="text-[9px] text-amber-200/50 uppercase tracking-wider mb-0.5">مدة التجربة</p>
-                  <p className="text-sm font-bold text-amber-100">{trialDuration} يوم</p>
+                  <p className="text-[9px] text-[#C9A84C]/70 uppercase tracking-wider mb-0.5 font-semibold">مدة التجربة</p>
+                  <p className="font-bold text-[#1B2B5C]">{trialDuration} يوم</p>
                 </div>
                 <div>
-                  <p className="text-[9px] text-amber-200/50 uppercase tracking-wider mb-0.5">بداية التجربة</p>
-                  <p className="text-sm font-bold text-amber-100">{fmtDate(p.start_date, true)}</p>
+                  <p className="text-[9px] text-[#C9A84C]/70 uppercase tracking-wider mb-0.5 font-semibold">تاريخ البداية</p>
+                  <p className="font-semibold text-[#1B2B5C]">{fmtDate(p.start_date)}</p>
                 </div>
                 <div>
-                  <p className="text-[9px] text-amber-200/50 uppercase tracking-wider mb-0.5">نهاية التجربة</p>
-                  <p className="text-sm font-bold text-amber-100">{fmtDate(p.expiry_date, true)}</p>
+                  <p className="text-[9px] text-[#C9A84C]/70 uppercase tracking-wider mb-0.5 font-semibold">تاريخ النهاية</p>
+                  <p className="font-semibold text-[#1B2B5C]">{fmtDate(p.expiry_date)}</p>
                 </div>
                 <div>
-                  <p className="text-[9px] text-amber-200/50 uppercase tracking-wider mb-0.5">الأيام المتبقية</p>
-                  <p className={`text-xl font-black leading-none ${daysColor}`}>{days} <span className="text-sm font-medium text-amber-200/70">يوم</span></p>
+                  <p className="text-[9px] text-[#C9A84C]/70 uppercase tracking-wider mb-0.5 font-semibold">الأيام المتبقية</p>
+                  <p className={`text-2xl font-black leading-none ${
+                    (days ?? 0) <= 7 ? "text-red-600" : (days ?? 0) <= 14 ? "text-amber-600" : "text-[#1B2B5C]"
+                  }`}>{days}</p>
                 </div>
               </div>
             </div>
           )}
 
-          {/* ── EXPIRED banner (has payload with expiry data) ── */}
+          {/* Expired banner */}
           {isExpired && p && (
-            <div className="border-t border-red-400/20 bg-red-500/15 px-5 py-3">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertTriangle className="w-4 h-4 text-red-300 shrink-0" />
-                <span className="text-sm font-bold text-red-100">الترخيص منتهٍ</span>
+            <div className="border-t border-red-200 bg-red-50 px-6 py-3.5">
+              <div className="flex items-center gap-2 mb-1.5">
+                <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                <span className="text-sm font-bold text-red-800">انتهت صلاحية الترخيص</span>
               </div>
               <div className="grid grid-cols-3 gap-4 text-xs">
                 <div>
-                  <p className="text-[9px] text-red-200/50 uppercase tracking-wider mb-0.5">تاريخ البداية</p>
-                  <p className="text-red-100 font-medium">{fmtDate(p.start_date, true)}</p>
+                  <p className="text-[9px] text-red-400/70 uppercase tracking-wider mb-0.5">تاريخ البداية</p>
+                  <p className="font-semibold text-red-800">{fmtDate(p.start_date)}</p>
                 </div>
                 <div>
-                  <p className="text-[9px] text-red-200/50 uppercase tracking-wider mb-0.5">تاريخ الانتهاء</p>
-                  <p className="text-red-100 font-medium">{fmtDate(p.expiry_date, true)}</p>
+                  <p className="text-[9px] text-red-400/70 uppercase tracking-wider mb-0.5">تاريخ الانتهاء</p>
+                  <p className="font-semibold text-red-800">{fmtDate(p.expiry_date)}</p>
                 </div>
                 <div>
-                  <p className="text-[9px] text-red-200/50 uppercase tracking-wider mb-0.5">منذ الانتهاء</p>
-                  <p className="text-red-200 font-medium">انتهى</p>
+                  <p className="text-[9px] text-red-400/70 uppercase tracking-wider mb-0.5">الإجراء المطلوب</p>
+                  <p className="font-semibold text-red-800">التواصل مع مزود النظام</p>
                 </div>
               </div>
-              <p className="text-xs text-red-200/70 mt-2">
-                {lt === "trial" ? "تواصل مع مزود النظام للحصول على ترخيص دائم." : "تواصل مع مزود النظام لتجديد الاشتراك."}
-              </p>
             </div>
           )}
-        </div>
 
-        {/* ══ 3-COLUMN GRID ════════════════════════════════════════════════════ */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 w-full">
-
-          {/* ── حدود الترخيص ─────────────────────────────────────────────── */}
-          <div className="rounded-xl border border-border bg-card p-4 space-y-4">
-            <div className="flex items-center gap-2 pb-2 border-b border-border">
-              <span className="text-base">🏅</span>
-              <span className="font-semibold text-sm">حدود الترخيص</span>
+          {/* Active success bar */}
+          {isValid && !isTrial && (
+            <div className="border-t border-green-200 bg-green-50 px-6 py-2.5 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+              <span className="text-sm font-semibold text-green-800">الترخيص مفعّل — جميع خدمات النظام تعمل بشكل طبيعي.</span>
             </div>
+          )}
+        </Card>
 
-            {p ? (
-              <>
+        {/* ══ ROW 2: LIMITS + MODULES ════════════════════════════════════════ */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+          {/* ── حدود الترخيص ──────────────────────────────────────────── */}
+          <Card>
+            <CardHeader icon={<span className="text-base">🏅</span>} title="حدود الترخيص" />
+            <div className="p-5">
+              {p ? (
                 <div className="space-y-5">
-                  <LimitRow
-                    label="المستخدمون"
-                    current={curUsers}
-                    max={p.max_users}
-                    icon={<Users className="w-3.5 h-3.5" />}
-                  />
-                  <LimitRow
-                    label="الفروع"
-                    current={curBranches}
-                    max={p.max_branches}
-                    icon={<GitBranch className="w-3.5 h-3.5" />}
-                  />
-                  <LimitRow
-                    label="نقاط البيع"
-                    current={0}
-                    max={p.max_pos}
-                    icon={<MonitorSmartphone className="w-3.5 h-3.5" />}
-                  />
-                  <LimitRow
-                    label="الأجهزة"
-                    current={0}
-                    max={p.max_devices}
-                    icon={<Fingerprint className="w-3.5 h-3.5" />}
-                  />
-                </div>
-                <div className="space-y-1.5 pt-2 border-t border-border">
-                  <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide mb-2">صلاحيات الوصول</p>
-                  <BoolBadge label="واجهة الويب"    value={p.web_allowed}             icon={<Globe   className="w-3.5 h-3.5" />} />
-                  <BoolBadge label="سطح المكتب"     value={p.desktop_allowed ?? true} icon={<Monitor className="w-3.5 h-3.5" />} />
-                  <BoolBadge label="وضع الأوفلاين"  value={p.offline_allowed}         icon={<WifiOff className="w-3.5 h-3.5" />} />
-                </div>
-              </>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-10 gap-3 text-muted-foreground">
-                <Lock className="w-10 h-10 opacity-20" />
-                <div className="text-center">
-                  <p className="text-sm font-medium">لا يوجد ترخيص مفعّل</p>
-                  <p className="text-xs mt-0.5 opacity-70">سيتم عرض حدود الترخيص بعد التفعيل</p>
-                </div>
-              </div>
-            )}
-          </div>
+                  <LimitRow label="المستخدمون"  current={curUsers}    max={p.max_users}    icon={<Users className="w-3.5 h-3.5"/>} />
+                  <LimitRow label="الفروع"       current={curBranches} max={p.max_branches} icon={<GitBranch className="w-3.5 h-3.5"/>} />
+                  <LimitRow label="نقاط البيع"  current={0}           max={p.max_pos}      icon={<MonitorSmartphone className="w-3.5 h-3.5"/>} />
+                  <LimitRow label="الأجهزة"      current={0}           max={p.max_devices}  icon={<Fingerprint className="w-3.5 h-3.5"/>} />
 
-          {/* ── الموديولات ───────────────────────────────────────────────── */}
-          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-            <div className="flex items-center gap-2 pb-2 border-b border-border">
-              <span className="text-base">📦</span>
-              <span className="font-semibold text-sm">الموديولات المفعّلة</span>
-              {p && (
-                <span className="mr-auto text-xs font-bold px-2.5 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400">
-                  {mods.size} / {MODULES.length}
-                </span>
+                  <div className="pt-3 border-t border-[#C9A84C]/15">
+                    <p className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-2">صلاحيات الوصول</p>
+                    <div className="space-y-2">
+                      <AccessBadge label="واجهة الويب"    value={p.web_allowed}             icon={<Globe   className="w-3.5 h-3.5"/>} />
+                      <AccessBadge label="سطح المكتب"     value={p.desktop_allowed ?? true}  icon={<Monitor className="w-3.5 h-3.5"/>} />
+                      <AccessBadge label="وضع الأوفلاين"  value={p.offline_allowed}          icon={<WifiOff className="w-3.5 h-3.5"/>} />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-10 gap-3">
+                  <Lock className="w-10 h-10 text-[#C9A84C]/30" />
+                  <p className="text-sm text-[#6B7280] font-medium text-center">سيتم عرض حدود الترخيص بعد التفعيل</p>
+                </div>
               )}
             </div>
+          </Card>
 
-            <div className="grid grid-cols-3 gap-2">
-              {MODULES.map(m => (
-                <ModuleChip key={m.id} label={m.label} icon={m.icon} enabled={!!p && mods.has(m.id)} />
-              ))}
-            </div>
-
-            {!p && (
-              <p className="text-center text-xs text-muted-foreground pt-1">
-                فعّل الترخيص لرؤية الموديولات المتاحة
-              </p>
-            )}
-          </div>
-
-          {/* ── التفعيل ──────────────────────────────────────────────────── */}
-          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-            <div className="flex items-center gap-2 pb-2 border-b border-border">
-              <span className="text-base">🔑</span>
-              <span className="font-semibold text-sm">تفعيل الترخيص</span>
-            </div>
-
-            {/* Tab buttons */}
-            <div className="grid grid-cols-3 gap-1.5">
-              {([
-                { key: "code",    icon: <Terminal      className="w-4 h-4" />, label1: "إدخال كود",   label2: "التفعيل" },
-                { key: "file",    icon: <UploadCloud   className="w-4 h-4" />, label1: "استيراد",     label2: "license.ons" },
-                { key: "request", icon: <ClipboardCopy className="w-4 h-4" />, label1: "توليد",       label2: "كود الطلب" },
-              ] as const).map(t => (
-                <button
-                  key={t.key}
-                  onClick={() => { setTab(t.key); setNotice(null); }}
-                  className={`flex flex-col items-center gap-1 py-2.5 px-1 rounded-xl border text-center text-[10px] font-semibold leading-tight transition-all ${
-                    tab === t.key
-                      ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                      : "bg-muted/50 border-border text-muted-foreground hover:bg-accent hover:text-foreground"
-                  }`}
-                >
-                  {t.icon}
-                  <span>{t.label1}</span>
-                  <span className="opacity-75">{t.label2}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* Note: Trial licenses are ONLY issued as signed files from License Center */}
-            <p className="text-[10px] text-muted-foreground border border-dashed border-border rounded-lg px-3 py-2 leading-relaxed">
-              ملاحظة: التفعيل التجريبي يتطلب ملف ترخيص موقّع من License Center — لا يوجد تجربة مفتوحة من هنا.
-            </p>
-
-            {/* ── Tab: Code ── */}
-            {tab === "code" && (
-              <div className="space-y-2.5">
-                <label className="text-xs text-muted-foreground block">
-                  أدخل كود التفعيل الذي حصلت عليه من مزود النظام.
-                </label>
-                <textarea
-                  value={activCode}
-                  onChange={e => setActivCode(e.target.value)}
-                  rows={5}
-                  placeholder="الصق كود التفعيل هنا..."
-                  className="w-full text-[10px] font-mono erp-input resize-none leading-relaxed"
-                  dir="ltr"
-                />
-                <button
-                  onClick={() => { setNotice(null); byCode.mutate({ code: activCode.trim() }); }}
-                  disabled={!activCode.trim() || byCode.isPending}
-                  className="w-full erp-btn-primary text-sm py-2.5 flex items-center justify-center gap-2"
-                >
-                  <KeyRound className="w-4 h-4" />
-                  {byCode.isPending ? "جارٍ التحقق..." : "تفعيل الآن"}
-                </button>
+          {/* ── الموديولات ────────────────────────────────────────────── */}
+          <Card>
+            <CardHeader
+              icon={<span className="text-base">📦</span>}
+              title="الموديولات المفعّلة"
+              badge={p ? (
+                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200">
+                  {mods.size} / {MODULES.length}
+                </span>
+              ) : undefined}
+            />
+            <div className="p-5">
+              <div className="grid grid-cols-3 gap-2.5">
+                {MODULES.map(m => (
+                  <ModuleChip key={m.id} label={m.label} icon={m.icon} enabled={!!p && mods.has(m.id)} />
+                ))}
               </div>
-            )}
-
-            {/* ── Tab: File ── */}
-            {tab === "file" && (
-              <div className="space-y-2.5">
-                <label className="text-xs text-muted-foreground block">
-                  استورد ملف الترخيص (.ons) الصادر من مزود النظام.
-                </label>
-                <div
-                  onClick={() => fileRef.current?.click()}
-                  className="border-2 border-dashed border-border rounded-xl p-5 text-center cursor-pointer hover:border-primary hover:bg-accent/50 transition-colors"
-                >
-                  <FileUp className="w-7 h-7 mx-auto text-muted-foreground mb-1.5" />
-                  {fileName
-                    ? <><p className="text-xs font-medium text-foreground">{fileName}</p><p className="text-[10px] text-green-600 mt-0.5">✓ جاهز للاستيراد</p></>
-                    : <p className="text-xs text-muted-foreground">اضغط لاختيار ملف .ons</p>
-                  }
-                </div>
-                <input ref={fileRef} type="file" accept=".ons,.json" className="hidden" onChange={onFile} />
-                <button
-                  onClick={() => { setNotice(null); byFile.mutate({ content: fileContent }); }}
-                  disabled={!fileContent || byFile.isPending}
-                  className="w-full erp-btn-primary text-sm py-2.5 flex items-center justify-center gap-2"
-                >
-                  <UploadCloud className="w-4 h-4" />
-                  {byFile.isPending ? "جارٍ التحقق..." : "استيراد وتفعيل"}
-                </button>
-              </div>
-            )}
-
-            {/* ── Tab: Request Code ── */}
-            {tab === "request" && (
-              <div className="space-y-2.5">
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  وَلِّد كود الطلب وأرسله لمزود النظام للحصول على ملف الترخيص.
+              {!p && (
+                <p className="text-center text-xs text-[#9CA3AF] mt-3">
+                  فعّل الترخيص لعرض الموديولات المتاحة
                 </p>
-                <div>
-                  <label className="text-xs text-muted-foreground block mb-1">معرّف المؤسسة (اختياري)</label>
-                  <input
-                    value={reqOrgId}
-                    onChange={e => setReqOrgId(e.target.value)}
-                    placeholder="ORG-2026-XXXX"
-                    className="w-full erp-input text-sm"
+              )}
+            </div>
+          </Card>
+        </div>
+
+        {/* ══ ROW 3: ACTIVATION + DEVICE ════════════════════════════════════ */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+          {/* ── كارت التفعيل ──────────────────────────────────────────── */}
+          <Card>
+            <CardHeader icon={<KeyRound className="w-4 h-4"/>} title="تفعيل الترخيص" />
+            <div className="p-5 space-y-4">
+
+              {/* Tabs */}
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { key: "code",  label1: "إدخال كود",  label2: "التفعيل" },
+                  { key: "file",  label1: "استيراد",    label2: "license.ons" },
+                  { key: "trial", label1: "فترة",       label2: "تجريبية" },
+                ] as const).map(t => (
+                  <button
+                    key={t.key}
+                    onClick={() => { setTab(t.key); setNotice(null); }}
+                    className={`flex flex-col items-center gap-0.5 py-2.5 px-2 rounded-xl border text-center text-[10px] font-bold leading-tight transition-all ${
+                      tab === t.key
+                        ? "bg-[#1B2B5C] text-white border-[#1B2B5C] shadow-sm"
+                        : "bg-[#FAF7F0] border-[#C9A84C]/25 text-[#4A5568] hover:bg-[#F0EBE0] hover:border-[#C9A84C]/50"
+                    }`}
+                  >
+                    <span>{t.label1}</span>
+                    <span className={tab === t.key ? "text-white/70" : "text-[#C9A84C]"}>{t.label2}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* ── Code tab ── */}
+              {tab === "code" && (
+                <div className="space-y-3">
+                  <p className="text-xs text-[#6B7280]">أدخل كود التفعيل الذي حصلت عليه من مزود النظام.</p>
+                  <textarea
+                    value={activCode}
+                    onChange={e => setActivCode(e.target.value)}
+                    rows={5}
+                    placeholder="الصق كود التفعيل هنا..."
+                    className="w-full text-[10px] font-mono border border-[#C9A84C]/25 rounded-xl p-3 bg-[#FAF7F0] text-[#1B2B5C] focus:outline-none focus:border-[#1B2B5C]/40 resize-none leading-relaxed"
                     dir="ltr"
                   />
+                  <NavyButton
+                    onClick={() => { setNotice(null); byCode.mutate({ code: activCode.trim() }); }}
+                    disabled={!activCode.trim() || byCode.isPending}
+                    className="w-full"
+                  >
+                    <KeyRound className="w-4 h-4" />
+                    {byCode.isPending ? "جارٍ التحقق..." : "تفعيل الآن"}
+                  </NavyButton>
                 </div>
-                <button
-                  onClick={() => genReq.mutate({ org_id: reqOrgId })}
-                  disabled={genReq.isPending}
-                  className="w-full erp-btn-secondary text-sm py-2 flex items-center justify-center gap-2"
-                >
-                  <ClipboardCopy className="w-4 h-4" />
-                  {genReq.isPending ? "جارٍ التوليد..." : "توليد كود الطلب"}
-                </button>
-                {reqCode && (
-                  <div className="space-y-1">
-                    <div className="flex items-start gap-2">
-                      <textarea
-                        readOnly value={reqCode} rows={4}
-                        className="flex-1 text-[9px] font-mono bg-muted rounded-lg p-2 border border-border resize-none select-all"
-                        dir="ltr"
-                      />
-                      <button onClick={() => copy(reqCode, "rq")} className="p-2 rounded-lg hover:bg-accent text-muted-foreground shrink-0 border border-border mt-0.5" title="نسخ">
-                        {ck === "rq" ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                      </button>
+              )}
+
+              {/* ── File tab ── */}
+              {tab === "file" && (
+                <div className="space-y-3">
+                  <p className="text-xs text-[#6B7280]">استورد ملف الترخيص (.ons) الصادر من مزود النظام.</p>
+                  <div
+                    onClick={() => fileRef.current?.click()}
+                    className="border-2 border-dashed border-[#C9A84C]/35 rounded-xl p-5 text-center cursor-pointer hover:border-[#1B2B5C]/30 hover:bg-[#F0EBE0] transition-colors"
+                  >
+                    <FileUp className="w-7 h-7 mx-auto text-[#C9A84C] mb-1.5" />
+                    {fileName ? (
+                      <><p className="text-xs font-bold text-[#1B2B5C]">{fileName}</p><p className="text-[10px] text-green-600 mt-0.5">✓ جاهز للاستيراد</p></>
+                    ) : (
+                      <p className="text-xs text-[#6B7280]">اضغط لاختيار ملف .ons</p>
+                    )}
+                  </div>
+                  <input ref={fileRef} type="file" accept=".ons,.json" className="hidden" onChange={onFile} />
+                  <NavyButton
+                    onClick={() => { setNotice(null); byFile.mutate({ content: fileContent }); }}
+                    disabled={!fileContent || byFile.isPending}
+                    className="w-full"
+                  >
+                    <UploadCloud className="w-4 h-4" />
+                    {byFile.isPending ? "جارٍ التحقق..." : "استيراد وتفعيل"}
+                  </NavyButton>
+                </div>
+              )}
+
+              {/* ── Trial tab ── */}
+              {tab === "trial" && (
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-[#C9A84C]/25 bg-[#FFF8E8] px-4 py-3.5">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Timer className="w-4 h-4 text-[#C9A84C] shrink-0" />
+                      <span className="text-sm font-bold text-[#8B6914]">الفترة التجريبية</span>
                     </div>
-                    <p className="text-[9px] text-muted-foreground">{reqCode.length} حرف — أرسل هذا الكود لمزود النظام</p>
+                    <p className="text-xs text-[#6B7280] leading-relaxed">
+                      الفترة التجريبية تتطلب ملف ترخيص تجريبي موقّع يُصدره مزود النظام.
+                      تواصل مع مزود النظام وأرسل Device ID الخاص بجهازك للحصول على ملف التجربة.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-semibold text-[#C9A84C] uppercase tracking-wide">الخطوات</p>
+                    {[
+                      "انسخ Device ID أدناه",
+                      "أرسله لمزود النظام",
+                      "استلم ملف الترخيص التجريبي",
+                      "استورده من تبويب «استيراد»",
+                    ].map((s, i) => (
+                      <div key={i} className="flex items-center gap-2.5 text-xs text-[#4A5568]">
+                        <span className="w-5 h-5 rounded-full bg-[#1B2B5C] text-white text-[9px] font-black flex items-center justify-center shrink-0">{i + 1}</span>
+                        {s}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <OutlineButton
+                      onClick={() => devInfo?.device_id && copy(devInfo.device_id, "did-trial")}
+                      className="flex-1 text-xs py-2"
+                    >
+                      {ck === "did-trial" ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                      نسخ Device ID
+                    </OutlineButton>
+                    <OutlineButton
+                      onClick={() => { genReq.mutate({ org_id: "" }); }}
+                      disabled={genReq.isPending}
+                      className="flex-1 text-xs py-2"
+                    >
+                      <ClipboardCopy className="w-3.5 h-3.5" />
+                      توليد كود الطلب
+                    </OutlineButton>
+                  </div>
+                  {reqCode && (
+                    <div className="space-y-1">
+                      <div className="flex items-start gap-2">
+                        <textarea readOnly value={reqCode} rows={3}
+                          className="flex-1 text-[9px] font-mono bg-[#FAF7F0] rounded-xl p-2.5 border border-[#C9A84C]/25 resize-none select-all"
+                          dir="ltr"
+                        />
+                        <button onClick={() => copy(reqCode, "rq")} className="p-2.5 rounded-xl border border-[#C9A84C]/25 hover:bg-[#FAF7F0] text-[#C9A84C] shrink-0 mt-0.5 transition-colors">
+                          {ck === "rq" ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Success bar */}
+              {isValid && (
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-green-50 border border-green-200 text-green-800 text-xs">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-green-500" />
+                  الترخيص مفعّل — لا حاجة لإعادة التفعيل.
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* ── معلومات الجهاز ────────────────────────────────────────── */}
+          <Card>
+            <CardHeader icon={<Fingerprint className="w-4 h-4"/>} title="معلومات الجهاز" />
+            <div className="p-5 space-y-4">
+
+              {/* Device ID */}
+              <div>
+                <p className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1.5">Device ID</p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-xs font-mono bg-[#FAF7F0] border border-[#C9A84C]/25 rounded-xl px-3 py-2.5 text-[#1B2B5C] select-all break-all">
+                    {devInfo?.device_id ?? "جارٍ التحميل..."}
+                  </code>
+                  <button
+                    onClick={() => devInfo?.device_id && copy(devInfo.device_id, "dv")}
+                    className="p-2.5 rounded-xl border border-[#C9A84C]/25 hover:bg-[#FAF7F0] text-[#C9A84C] shrink-0 transition-colors"
+                  >
+                    {ck === "dv" ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Hardware fingerprint */}
+              {devInfo?.hw_fingerprint && (
+                <div>
+                  <p className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1.5">Hardware Fingerprint</p>
+                  <code className="block text-[10px] font-mono bg-[#FAF7F0] border border-[#C9A84C]/25 rounded-xl px-3 py-2 text-[#6B7280] break-all">
+                    {devInfo.hw_fingerprint}
+                  </code>
+                </div>
+              )}
+
+              {/* Device status */}
+              <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-semibold ${
+                isValid
+                  ? "bg-green-50 border-green-200 text-green-800"
+                  : "bg-[#FAF7F0] border-[#C9A84C]/25 text-[#6B7280]"
+              }`}>
+                {isValid
+                  ? <><CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" /> الجهاز مرتبط بترخيص صالح</>
+                  : <><XCircle className="w-4 h-4 text-[#C9A84C]/50 shrink-0" /> الجهاز غير مرتبط بأي ترخيص نشط</>
+                }
+              </div>
+
+              {/* Request Code */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider">كود الطلب</p>
+                  <button
+                    onClick={() => genReq.mutate({ org_id: "" })}
+                    disabled={genReq.isPending}
+                    className="text-[10px] font-semibold text-[#1B2B5C] hover:text-[#243875] flex items-center gap-1 disabled:opacity-50"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    {genReq.isPending ? "جارٍ..." : "توليد"}
+                  </button>
+                </div>
+                {reqCode ? (
+                  <div className="flex items-start gap-2">
+                    <textarea readOnly value={reqCode} rows={4}
+                      className="flex-1 text-[9px] font-mono bg-[#FAF7F0] rounded-xl p-2.5 border border-[#C9A84C]/25 resize-none select-all"
+                      dir="ltr"
+                    />
+                    <button onClick={() => copy(reqCode, "rq2")} className="p-2.5 rounded-xl border border-[#C9A84C]/25 hover:bg-[#FAF7F0] text-[#C9A84C] shrink-0 mt-0.5 transition-colors">
+                      {ck === "rq2" ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="bg-[#FAF7F0] border border-[#C9A84C]/25 rounded-xl px-3 py-3 text-xs text-[#9CA3AF] text-center">
+                    اضغط «توليد» لإنشاء كود الطلب الخاص بهذا الجهاز
                   </div>
                 )}
               </div>
-            )}
 
-            {/* Success bar */}
-            {isValid && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-50 border border-green-200 text-green-800 text-xs dark:bg-green-950/30 dark:border-green-800 dark:text-green-400">
-                <CheckCircle2 className="w-4 h-4 shrink-0 text-green-500" />
-                <span>الترخيص مفعّل — جميع الخدمات تعمل بشكل طبيعي.</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ══ DEVICE INFO ════════════════════════════════════════════════════ */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
-
-          {/* Device ID */}
-          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-            <div className="flex items-center gap-2 pb-2 border-b border-border">
-              <Fingerprint className="w-4 h-4 text-primary" />
-              <span className="font-semibold text-sm">معلومات الجهاز الحالي</span>
-            </div>
-            <div>
-              <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Device ID</p>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 text-xs font-mono bg-muted px-3 py-2.5 rounded-lg border border-border select-all break-all">
-                  {devInfo?.device_id ?? "جارٍ التحميل..."}
-                </code>
-                <button
-                  onClick={() => devInfo?.device_id && copy(devInfo.device_id, "dv")}
-                  className="p-2.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground shrink-0 border border-border transition-colors"
-                >
-                  {ck === "dv" ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                </button>
+              {/* Contact provider */}
+              <div className="flex items-start gap-2 rounded-xl bg-[#FAF7F0] border border-[#C9A84C]/20 px-3 py-3 text-xs text-[#6B7280]">
+                <Phone className="w-3.5 h-3.5 text-[#C9A84C] shrink-0 mt-0.5" />
+                <span>أرسل Device ID أو كود الطلب لمزود النظام للحصول على ملف الترخيص.</span>
               </div>
             </div>
-            {devInfo?.hw_fingerprint && (
-              <div>
-                <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">بصمة الجهاز (Hardware Fingerprint)</p>
-                <code className="block text-[10px] font-mono bg-muted px-3 py-2 rounded-lg border border-border text-muted-foreground break-all">
-                  {devInfo.hw_fingerprint}
-                </code>
-              </div>
-            )}
-            <div className="flex items-center gap-2 text-xs pt-1 border-t border-border">
-              {isValid
-                ? <><CheckCircle2 className="w-3.5 h-3.5 text-green-500" /><span className="text-green-700 dark:text-green-400">الجهاز مرتبط بترخيص صالح</span></>
-                : <><XCircle className="w-3.5 h-3.5 text-muted-foreground" /><span className="text-muted-foreground">الجهاز غير مرتبط بأي ترخيص نشط</span></>
-              }
-            </div>
-            <p className="text-[10px] text-muted-foreground">
-              أرسل Device ID إلى مزود النظام لإصدار ترخيص مخصص لهذا الجهاز.
-            </p>
-          </div>
-
-          {/* Request Code */}
-          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-            <div className="flex items-center gap-2 pb-2 border-b border-border">
-              <ClipboardCopy className="w-4 h-4 text-primary" />
-              <span className="font-semibold text-sm">Request Code — كود الطلب</span>
-            </div>
-            {reqCode ? (
-              <div className="space-y-2">
-                <div className="flex items-start gap-2">
-                  <textarea
-                    readOnly value={reqCode} rows={5}
-                    className="flex-1 text-[9px] font-mono bg-muted rounded-lg p-2.5 border border-border resize-none select-all leading-relaxed"
-                    dir="ltr"
-                  />
-                  <button onClick={() => copy(reqCode, "rq2")} className="p-2.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground shrink-0 border border-border mt-0.5 transition-colors">
-                    {ck === "rq2" ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                  </button>
-                </div>
-                <p className="text-[10px] text-muted-foreground">
-                  أرسل هذا الكود لمزود النظام للحصول على ملف الترخيص.
-                </p>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-6 gap-3 text-center">
-                <ClipboardCopy className="w-8 h-8 text-muted-foreground opacity-25" />
-                <p className="text-xs text-muted-foreground leading-relaxed max-w-[220px]">
-                  كود الطلب يحتوي على Device ID الخاص بهذا الجهاز ويُرسَل لمزود النظام للحصول على ترخيص مناسب.
-                </p>
-                <button
-                  onClick={() => { setTab("request"); genReq.mutate({ org_id: "" }); }}
-                  disabled={genReq.isPending}
-                  className="erp-btn-secondary text-xs py-2 px-4 flex items-center gap-2"
-                >
-                  <ClipboardCopy className="w-3.5 h-3.5" />
-                  {genReq.isPending ? "جارٍ التوليد..." : "توليد كود الطلب"}
-                </button>
-              </div>
-            )}
-          </div>
+          </Card>
         </div>
 
       </div>
