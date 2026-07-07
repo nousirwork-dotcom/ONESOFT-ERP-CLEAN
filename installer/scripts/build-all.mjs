@@ -198,8 +198,11 @@ ok('UI مبنية');
 
 // ── 5. حزم الـ installer ──────────────────────────────────────────
 header('5/6', 'حزم installer (electron-builder)');
-const publishFlag = process.env.PUBLISH_RELEASE === 'true' ? ' --publish=always' : '';
-if (publishFlag) info('وضع النشر: --publish=always (سيتم رفع الملفات على GitHub Releases)');
+// إذا لم يكن PUBLISH_RELEASE=true نمرر --publish never صراحةً
+// حتى لو كان electron-builder.yml يحتوي على publish.provider=github
+const publishFlag = process.env.PUBLISH_RELEASE === 'true' ? ' --publish=always' : ' --publish=never';
+if (process.env.PUBLISH_RELEASE === 'true') info('وضع النشر: --publish=always (سيتم رفع الملفات على GitHub Releases)');
+else info('وضع البناء المحلي/CI: --publish=never (لا نشر تلقائي)');
 run(`electron-builder${publishFlag}`);
 ok('installer مُحزَّم');
 
