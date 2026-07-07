@@ -15,16 +15,22 @@ import {
 const MOCK_DID = "a8d1afc3-4440-4b2e-b85a-dcb910895602";
 const MOCK_ORG = "شركة النخبة للتجارة";
 
-const MODULES = [
-  { id: "sales",         label: "المبيعات",        icon: "🛒" },
-  { id: "purchases",     label: "المشتريات",       icon: "📦" },
-  { id: "inventory",     label: "المخزون",         icon: "🏪" },
-  { id: "accounting",    label: "الحسابات",        icon: "📊" },
-  { id: "pos",           label: "نقاط البيع",      icon: "🖥️" },
-  { id: "reports",       label: "التقارير",        icon: "📈" },
-  { id: "zatca",         label: "ZATCA",           icon: "🏛️" },
-  { id: "hr",            label: "الموارد البشرية", icon: "👥" },
-  { id: "manufacturing", label: "التصنيع",         icon: "⚙️" },
+// القائمة الكاملة للشاشات — تُعرض حسب ما يسمح به الترخيص الصادر من النظام الرئيسي
+const SCREENS = [
+  { id: "sales",         label: "المبيعات",               icon: "🛒" },
+  { id: "purchases",     label: "المشتريات",              icon: "📦" },
+  { id: "inventory",     label: "المخزون",                icon: "🏪" },
+  { id: "accounting",    label: "الحسابات",               icon: "📊" },
+  { id: "pos",           label: "نقاط البيع",             icon: "🖥️" },
+  { id: "reports",       label: "التقارير",               icon: "📈" },
+  { id: "zatca",         label: "الربط مع هيئة الزكاة",  icon: "🏛️" },
+  { id: "hr",            label: "الموارد البشرية",        icon: "👥" },
+  { id: "payroll",       label: "الرواتب",                icon: "💰" },
+  { id: "assets",        label: "الأصول الثابتة",         icon: "🏗️" },
+  { id: "manufacturing", label: "التصنيع",                icon: "⚙️" },
+  { id: "branches",      label: "الفروع",                 icon: "🏢" },
+  { id: "sync",          label: "المزامنة",               icon: "🔄" },
+  { id: "offline",       label: "التشغيل أوفلاين",        icon: "📴" },
 ];
 
 interface MockPayload {
@@ -50,7 +56,7 @@ const MOCKS: Record<string, { label: string; btnColor: string; status: MockStatu
         org_id: "ORG-TRIAL-0001", customer_name: "مؤسسة الاختبار التجريبية",
         package_name: "Trial 30 يوم",
         max_users: 3, max_branches: 1, max_pos: 1, max_devices: 2,
-        enabled_modules: ["sales", "purchases", "inventory", "accounting"],
+        enabled_modules: ["sales", "purchases", "inventory", "accounting", "reports"],
         start_date: "2026-07-01", expiry_date: "2026-07-22",
         license_id: "TRL-2026-0001", activation_id: "ACT-TRIAL-001",
         issued_by: "OneSoft ERP", license_type: "trial",
@@ -66,7 +72,7 @@ const MOCKS: Record<string, { label: string; btnColor: string; status: MockStatu
         org_id: "ORG-2026-XRAY", customer_name: MOCK_ORG,
         package_name: "Professional",
         max_users: 10, max_branches: 3, max_pos: 5, max_devices: 5,
-        enabled_modules: ["sales", "purchases", "inventory", "accounting", "pos", "reports", "zatca"],
+        enabled_modules: ["sales", "purchases", "inventory", "accounting", "pos", "reports", "zatca", "hr", "branches"],
         start_date: "2026-07-07", expiry_date: "2027-07-07",
         license_id: "LIC-2026-ABCD-1234", activation_id: "ACT-7F3A9B2C",
         issued_by: "OneSoft ERP", license_type: "subscription",
@@ -82,7 +88,7 @@ const MOCKS: Record<string, { label: string; btnColor: string; status: MockStatu
         org_id: "ORG-2026-PERM", customer_name: "مجموعة الأفق التجارية",
         package_name: "Enterprise Lifetime",
         max_users: 50, max_branches: 10, max_pos: 20, max_devices: 30,
-        enabled_modules: ["sales", "purchases", "inventory", "accounting", "pos", "reports", "zatca", "hr", "manufacturing"],
+        enabled_modules: ["sales", "purchases", "inventory", "accounting", "pos", "reports", "zatca", "hr", "payroll", "assets", "manufacturing", "branches", "sync", "offline"],
         start_date: "2026-01-01", expiry_date: "2099-12-31",
         license_id: "LIC-PERM-2026-001", activation_id: "ACT-PERM-001",
         issued_by: "OneSoft ERP", license_type: "lifetime",
@@ -552,22 +558,18 @@ function LicenseScreen({ status, ck, copy }: {
               <DevicePanel isValid={false} ck={ck} copy={copy} />
             </Card>
 
-            {/* Modules — compact locked view */}
+            {/* Screens — inactive message */}
             <Card className="p-5">
               <div className="flex items-center gap-2.5 mb-4">
-                <span className="w-8 h-8 rounded-xl bg-[#1B2B5C]/8 flex items-center justify-center text-lg shrink-0">📦</span>
-                <span className="font-extrabold text-[#1B2B5C] text-[17px]">الموديولات</span>
-                <span className="mr-auto text-[12px] font-bold px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-200">مقفولة</span>
+                <span className="w-8 h-8 rounded-xl bg-[#1B2B5C]/8 flex items-center justify-center text-lg shrink-0">🖥️</span>
+                <span className="font-extrabold text-[#1B2B5C] text-[17px]">الشاشات المتاحة ضمن الترخيص</span>
               </div>
-              <div className="grid grid-cols-3 gap-2">
-                {MODULES.map(m => (
-                  <div key={m.id} className="flex items-center gap-1.5 px-2 py-2 rounded-lg bg-[#F4F0E8] border border-[#E0D8CC] opacity-60">
-                    <span className="text-sm">{m.icon}</span>
-                    <span className="text-[11px] font-semibold text-[#9CA3AF] truncate">{m.label}</span>
-                  </div>
-                ))}
+              <div className="flex flex-col items-center gap-3 py-4">
+                <Lock className="w-9 h-9 text-[#C9A84C]/25" />
+                <p className="text-[13px] text-[#9CA3AF] text-center leading-relaxed">
+                  سيتم عرض الشاشات المتاحة<br/>بعد تفعيل الترخيص.
+                </p>
               </div>
-              <p className="mt-3 text-[12px] text-[#9CA3AF] text-center">تُفعَّل الموديولات بعد إدخال الترخيص</p>
             </Card>
           </div>
         </div>
@@ -602,16 +604,16 @@ function LicenseScreen({ status, ck, copy }: {
             )}
           </Card>
 
-          {/* COL 2 (middle): الموديولات + الجهاز */}
+          {/* COL 2 (middle): الشاشات المتاحة + الجهاز */}
           <div className="space-y-5">
             <Card className="p-6">
               <SectionTitle
-                icon={<span>📦</span>}
-                title="الموديولات المفعّلة"
-                badge={p ? <span className="text-[13px] font-bold px-3 py-1 rounded-full bg-green-100 text-green-700 border border-green-200">{mods.size} / {MODULES.length}</span> : undefined}
+                icon={<span>🖥️</span>}
+                title="الشاشات المتاحة ضمن الترخيص"
+                badge={p ? <span className="text-[13px] font-bold px-3 py-1 rounded-full bg-green-100 text-green-700 border border-green-200">{mods.size} / {SCREENS.length}</span> : undefined}
               />
               <div className="space-y-2">
-                {MODULES.map(m => <ModuleChip key={m.id} label={m.label} icon={m.icon} enabled={!!p && mods.has(m.id)} />)}
+                {SCREENS.map(m => <ModuleChip key={m.id} label={m.label} icon={m.icon} enabled={!!p && mods.has(m.id)} />)}
               </div>
             </Card>
             <Card className="p-6">

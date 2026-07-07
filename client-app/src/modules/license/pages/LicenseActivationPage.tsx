@@ -16,16 +16,22 @@ import {
 // ─── Types ─────────────────────────────────────────────────────────────
 type LicType = "trial" | "subscription" | "lifetime" | undefined;
 
-const MODULES = [
-  { id: "sales",         label: "المبيعات",        icon: "🛒" },
-  { id: "purchases",     label: "المشتريات",       icon: "📦" },
-  { id: "inventory",     label: "المخزون",         icon: "🏪" },
-  { id: "accounting",    label: "الحسابات",        icon: "📊" },
-  { id: "pos",           label: "نقاط البيع",      icon: "🖥️" },
-  { id: "reports",       label: "التقارير",        icon: "📈" },
-  { id: "zatca",         label: "ZATCA",           icon: "🏛️" },
-  { id: "hr",            label: "الموارد البشرية", icon: "👥" },
-  { id: "manufacturing", label: "التصنيع",         icon: "⚙️" },
+// القائمة الكاملة للشاشات — تُعرض حسب ما يسمح به الترخيص الصادر من النظام الرئيسي
+const SCREENS = [
+  { id: "sales",         label: "المبيعات",               icon: "🛒" },
+  { id: "purchases",     label: "المشتريات",              icon: "📦" },
+  { id: "inventory",     label: "المخزون",                icon: "🏪" },
+  { id: "accounting",    label: "الحسابات",               icon: "📊" },
+  { id: "pos",           label: "نقاط البيع",             icon: "🖥️" },
+  { id: "reports",       label: "التقارير",               icon: "📈" },
+  { id: "zatca",         label: "الربط مع هيئة الزكاة",  icon: "🏛️" },
+  { id: "hr",            label: "الموارد البشرية",        icon: "👥" },
+  { id: "payroll",       label: "الرواتب",                icon: "💰" },
+  { id: "assets",        label: "الأصول الثابتة",         icon: "🏗️" },
+  { id: "manufacturing", label: "التصنيع",                icon: "⚙️" },
+  { id: "branches",      label: "الفروع",                 icon: "🏢" },
+  { id: "sync",          label: "المزامنة",               icon: "🔄" },
+  { id: "offline",       label: "التشغيل أوفلاين",        icon: "📴" },
 ];
 
 function deriveLicType(lt?: LicType, exp?: string): LicType {
@@ -487,23 +493,30 @@ export default function LicenseActivationPage() {
             )}
           </Card>
 
-          {/* ── COL 2 (middle): الموديولات + معلومات الجهاز ─────────── */}
+          {/* ── COL 2 (middle): الشاشات المتاحة + معلومات الجهاز ─────── */}
           <div className="space-y-4">
             <Card className="p-5">
               <SectionTitle
-                icon={<span className="text-base">📦</span>}
-                title="الموديولات المفعّلة"
+                icon={<span className="text-base">🖥️</span>}
+                title="الشاشات المتاحة ضمن الترخيص"
                 badge={p ? (
                   <span className="text-[12px] font-bold px-2.5 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200">
-                    {mods.size} / {MODULES.length}
+                    {mods.size} / {SCREENS.length}
                   </span>
                 ) : undefined}
               />
-              <div className="space-y-2">
-                {MODULES.map(m => (
-                  <ModuleChip key={m.id} label={m.label} icon={m.icon} enabled={!!p && mods.has(m.id)} />
-                ))}
-              </div>
+              {!p ? (
+                <div className="flex flex-col items-center py-6 gap-2 text-center">
+                  <Lock className="w-8 h-8 text-[#C9A84C]/25" />
+                  <p className="text-[13px] text-[#9CA3AF] leading-relaxed">سيتم عرض الشاشات المتاحة<br/>بعد تفعيل الترخيص</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {SCREENS.map(m => (
+                    <ModuleChip key={m.id} label={m.label} icon={m.icon} enabled={!!p && mods.has(m.id)} />
+                  ))}
+                </div>
+              )}
             </Card>
 
             {/* Device info */}
