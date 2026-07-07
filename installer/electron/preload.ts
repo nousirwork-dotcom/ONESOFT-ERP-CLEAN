@@ -75,4 +75,29 @@ contextBridge.exposeInMainWorld('installer', {
     ipcRenderer.on('installer:progress', (_, event) => cb(event));
     return () => ipcRenderer.removeAllListeners('installer:progress');
   },
+
+  // ─── Auto-Update API ───────────────────────────────────────────────────────
+  updater: {
+    // Main → Renderer events
+    onUpdateStatus: (cb: (e: unknown, data: unknown) => void) => {
+      ipcRenderer.on('update:status', cb);
+      return () => ipcRenderer.removeListener('update:status', cb);
+    },
+    onUpdateProgress: (cb: (e: unknown, data: unknown) => void) => {
+      ipcRenderer.on('update:progress', cb);
+      return () => ipcRenderer.removeListener('update:progress', cb);
+    },
+    onUpdateDownloaded: (cb: (e: unknown, data: unknown) => void) => {
+      ipcRenderer.on('update:downloaded', cb);
+      return () => ipcRenderer.removeListener('update:downloaded', cb);
+    },
+    onUpdateError: (cb: (e: unknown, data: unknown) => void) => {
+      ipcRenderer.on('update:error', cb);
+      return () => ipcRenderer.removeListener('update:error', cb);
+    },
+    // Renderer → Main commands
+    startDownload: () => ipcRenderer.invoke('update:start-download'),
+    installNow:    () => ipcRenderer.invoke('update:install-now'),
+    skipUpdate:    () => ipcRenderer.invoke('update:skip'),
+  },
 });
