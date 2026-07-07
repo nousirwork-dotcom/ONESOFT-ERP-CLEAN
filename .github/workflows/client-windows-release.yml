@@ -161,6 +161,21 @@ jobs:
           # نسخ client-app dist إلى dist-ui (المسار الذي يتوقعه installer)
           cp -r client-app/dist installer/dist-ui 2>/dev/null || true
 
+      # ── إزالة licenseCenter router من نسخة العميل (CLIENT_BUILD) ───────────
+      # TypeScript يُجمِّع static imports دائماً — نستبدل licenseCenter.js بـ stub
+      # خالٍ من الكود الحساس حتى يجتاز فحص verify-installer (check #4)
+      - name: Stub out licenseCenter router in server-app dist (client build)
+        shell: bash
+        run: |
+          ROUTER="installer/resources/app/server-app/dist/routers/licenseCenter.js"
+          if [ -f "$ROUTER" ]; then
+            # نستبدل الملف بـ stub فارغ (ESM) — الـ import في index.js يبقى يعمل
+            printf '// CLIENT_BUILD stub — licenseCenter excluded from client installer\nexport const licenseCenterRouter = null;\n' > "$ROUTER"
+            echo "✅ licenseCenter.js → stub (no sensitive API strings)"
+          else
+            echo "⚠️  $ROUTER not found — skipping stub"
+          fi
+
       # ── إنشاء icon.ico بحجم 256x256 من icon.png ───────────────────────────
       # electron-builder يتطلب 256x256 على الأقل — الـ ico الحالي 32x32 فقط
       - name: Generate 256x256 icon.ico from icon.png
