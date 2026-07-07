@@ -67229,6 +67229,9 @@ init_branding();
 init_zod();
 init_trpc();
 init_dist();
+init_drizzle_orm();
+init_db2();
+init_schema2();
 var licenseRouter = router({
   // ── حالة الترخيص الحالي ────────────────────────────────────────────────────
   getStatus: protectedProcedure.query(() => {
@@ -67255,8 +67258,28 @@ var licenseRouter = router({
         start_date: p.start_date,
         expiry_date: p.expiry_date,
         license_id: p.license_id,
-        issued_by: p.issued_by
+        activation_id: p.activation_id,
+        issued_at: p.issued_at,
+        issued_by: p.issued_by,
+        license_type: p.license_type,
+        package_name: p.package_name,
+        web_allowed: p.web_allowed,
+        desktop_allowed: p.desktop_allowed,
+        offline_allowed: p.offline_allowed
       }
+    };
+  }),
+  // ── إحصائيات الاستخدام الحالي ─────────────────────────────────────────────
+  getCurrentStats: protectedProcedure.query(async ({ ctx }) => {
+    const [[uRow], [bRow]] = await Promise.all([
+      db.select({ cnt: count() }).from(users).where(and(eq(users.orgId, ctx.user.orgId), eq(users.isActive, true))),
+      db.select({ cnt: count() }).from(branches).where(and(eq(branches.orgId, ctx.user.orgId), eq(branches.isActive, true)))
+    ]);
+    return {
+      current_users: uRow?.cnt ?? 0,
+      current_branches: bRow?.cnt ?? 0,
+      current_pos: 0
+      // POS terminals table not yet implemented
     };
   }),
   // ── معرّف الجهاز (للتفعيل) ─────────────────────────────────────────────────

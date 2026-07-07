@@ -3,7 +3,7 @@ import { router, publicProcedure, adminProcedure, protectedProcedure } from '../
 import { TRPCError } from '@trpc/server';
 import { count, eq, and } from 'drizzle-orm';
 import { db } from '../db.js';
-import { users } from '../schema.js';
+import { users, branches } from '../schema.js';
 import {
   getLicense,
   verifySignedLicense,
@@ -57,11 +57,15 @@ export const licenseRouter = router({
 
   // ── إحصائيات الاستخدام الحالي ─────────────────────────────────────────────
   getCurrentStats: protectedProcedure.query(async ({ ctx }) => {
-    const [row] = await db
-      .select({ cnt: count() })
-      .from(users)
-      .where(and(eq(users.orgId, ctx.user.orgId), eq(users.isActive, true)));
-    return { current_users: row?.cnt ?? 0 };
+    const [[uRow], [bRow]] = await Promise.all([
+      db.select({ cnt: count() }).from(users).where(and(eq(users.orgId, ctx.user.orgId), eq(users.isActive, true))),
+      db.select({ cnt: count() }).from(branches).where(and(eq(branches.orgId, ctx.user.orgId), eq(branches.isActive, true))),
+    ]);
+    return {
+      current_users:    uRow?.cnt ?? 0,
+      current_branches: bRow?.cnt ?? 0,
+      current_pos:      0, // POS terminals table not yet implemented
+    };
   }),
 
   // ── معرّف الجهاز (للتفعيل) ─────────────────────────────────────────────────
