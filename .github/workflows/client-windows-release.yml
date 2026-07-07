@@ -66,8 +66,8 @@ jobs:
 
       - name: Install client-app + server-app dependencies
         run: |
-          cd client-app  && pnpm install --frozen-lockfile
-          cd ../server-app && pnpm install --frozen-lockfile
+          cd client-app  && pnpm install --no-frozen-lockfile
+          cd ../server-app && pnpm install --no-frozen-lockfile
 
       - name: Build client-app
         working-directory: client-app
@@ -130,9 +130,9 @@ jobs:
       - name: Install all dependencies
         shell: bash
         run: |
-          cd client-app   && pnpm install --frozen-lockfile && cd ..
-          cd server-app   && pnpm install --frozen-lockfile && cd ..
-          cd installer    && pnpm install --frozen-lockfile && cd ..
+          cd client-app   && pnpm install --no-frozen-lockfile && cd ..
+          cd server-app   && pnpm install --no-frozen-lockfile && cd ..
+          cd installer    && pnpm install --no-frozen-lockfile && cd ..
 
       # ── بناء client-app (Vite) ─────────────────────────────────────────────
       - name: Build client-app
