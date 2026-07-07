@@ -274,8 +274,11 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
 };
 
 // ─── Auth Guard ───────────────────────────────────────────────────────────
-// أخطاء الترخيص التي تستوجب التوجيه لشاشة التفعيل (ليس license_not_found = dev mode)
+// في وضع الإنتاج: حتى license_not_found يُوجَّه إلى شاشة التفعيل
+// في وضع التطوير: license_not_found مسموح (bypass) — لا redirect
+const IS_PRODUCTION = import.meta.env.PROD;
 const LICENSE_BLOCKING_ERRORS = new Set([
+  ...(IS_PRODUCTION ? ["license_not_found"] : []),
   "expired",
   "invalid_signature",
   "unknown_algorithm",
