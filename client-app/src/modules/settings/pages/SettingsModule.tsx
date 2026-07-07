@@ -130,6 +130,7 @@ const menuSections = [
       { id: "document-journals",   label: "دفاتر المستندات",     status: "partial", path: "/cfg/document-journals" },
       { id: "posting-settings",    label: "ترحيل المستندات",     status: "partial", path: "/cfg/posting-settings" },
 
+      { id: "license",             label: "الترخيص والتفعيل",               status: "done",    path: "/cfg/license" },
       { id: "backup",              label: "النسخ الاحتياطي",                 status: "done",    path: "/cfg/backup" },
       { id: "audit-log",           label: "سجل العمليات",                    status: "done",    path: "/cfg/audit-log" },
       { id: "system-info",         label: "معلومات النظام",                  status: "done",    path: "/cfg/system-info" },
