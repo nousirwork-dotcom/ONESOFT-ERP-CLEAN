@@ -2,7 +2,7 @@
   "_purpose": "Staging manifest — optional update test. NOT used in production.",
   "_usage":   "Set env var: ONESOFT_UPDATE_URL=https://raw.githubusercontent.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/main/update-manifest.staging.json",
 
-  "latestVersion":       "1.0.2",
+  "latestVersion":       "1.0.3-staging",
   "minSupportedVersion": "1.0.0",
   "mandatory":           false,
   "messageAr":           "[STAGING] يوجد تحديث للاختبار — هذا ليس إصداراً حقيقياً للعملاء.",
