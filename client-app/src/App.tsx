@@ -79,7 +79,6 @@ import PostingOperationsPage from "@/modules/accounting/pages/PostingOperationsP
 import LoginPage from "@/core/auth/LoginPage";
 import BrandingSettingsPage from "@/modules/settings/pages/BrandingSettingsPage";
 import LicenseActivationPage from "@/modules/license/pages/LicenseActivationPage";
-import LicensePreviewPage from "@/modules/license/pages/LicensePreviewPage";
 import SuperAdminPage from "@/core/admin/SuperAdminPage";
 import SourceCodeViewerPage from "@/core/dev/SourceCodeViewerPage";
 import FirstRunWizard from "@/core/auth/FirstRunWizard";
@@ -403,7 +402,6 @@ function App() {
             <Toaster position="top-center" richColors />
             <Switch>
               <Route path="/login" component={LoginPage} />
-              <Route path="/dev/license-preview" component={LicensePreviewPage} />
               <Route>
                 <AuthGuard>
                   <AppRoutes />
