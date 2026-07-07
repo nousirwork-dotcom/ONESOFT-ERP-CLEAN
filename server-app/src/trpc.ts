@@ -41,6 +41,37 @@ const requireSuperAdmin = t.middleware(({ ctx, next }) => {
   return next({ ctx: { ...ctx, user: ctx.user } });
 });
 
-export const protectedProcedure = t.procedure.use(requireAuth);
-export const adminProcedure = t.procedure.use(requireAdmin);
-export const superAdminProcedure = t.procedure.use(requireSuperAdmin);
+/**
+ * ownerOnlyProcedure — مزدوج الحماية:
+ *
+ * 1. CLIENT_BUILD=true  → جميع الإجراءات تُرجع NOT_FOUND (كأن endpoint غير موجود)
+ *    يُضبط هذا المتغير في بيئة Electron عند بناء نسخة العميل.
+ *
+ * 2. دور المستخدم       → فقط superadmin يُسمح له بالوصول (في بيئة المالك).
+ *
+ * هذا يضمن:
+ * - في نسخة العميل: جميع LC endpoints تُرجع 404 حتى لو جرّب المطوّر الوصول
+ * - في بيئة المالك (License Center): فقط superadmin يستطيع استخدامها
+ */
+const requireOwner = t.middleware(({ ctx, next }) => {
+  // ── طبقة 1: منع الوصول الكامل في بيئة العميل ──────────────────────────
+  if (process.env.CLIENT_BUILD === 'true') {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'هذه الخدمة غير متاحة في هذه البيئة',
+    });
+  }
+  // ── طبقة 2: التحقق من الدور (superadmin فقط في بيئة المالك) ──────────
+  if (!ctx.user) {
+    throw new TRPCError({ code: 'UNAUTHORIZED', message: 'يجب تسجيل الدخول أولاً' });
+  }
+  if (ctx.user.role !== 'superadmin') {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'هذه الخدمة مخصصة لمالك النظام فقط' });
+  }
+  return next({ ctx: { ...ctx, user: ctx.user } });
+});
+
+export const protectedProcedure  = t.procedure.use(requireAuth);
+export const adminProcedure       = t.procedure.use(requireAdmin);
+export const superAdminProcedure  = t.procedure.use(requireSuperAdmin);
+export const ownerOnlyProcedure   = t.procedure.use(requireOwner);

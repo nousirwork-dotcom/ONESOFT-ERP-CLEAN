@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { router, superAdminProcedure } from '../trpc.js';
+import { router, ownerOnlyProcedure } from '../trpc.js';
 import { TRPCError } from '@trpc/server';
 import { db } from '../db.js';
 import { eq, desc, and } from 'drizzle-orm';
@@ -31,11 +31,11 @@ async function logOp(
 export const licenseCenterRouter = router({
 
   // ── Clients ────────────────────────────────────────────────────────────────
-  listClients: superAdminProcedure.query(async () => {
+  listClients: ownerOnlyProcedure.query(async () => {
     return db.select().from(lcClients).where(eq(lcClients.isActive, true)).orderBy(desc(lcClients.createdAt));
   }),
 
-  getClient: superAdminProcedure
+  getClient: ownerOnlyProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ input }) => {
       const [c] = await db.select().from(lcClients).where(eq(lcClients.id, input.id));
@@ -43,7 +43,7 @@ export const licenseCenterRouter = router({
       return c;
     }),
 
-  createClient: superAdminProcedure
+  createClient: ownerOnlyProcedure
     .input(z.object({
       name:          z.string().min(2),
       commercialReg: z.string().optional(),
@@ -59,7 +59,7 @@ export const licenseCenterRouter = router({
       return c;
     }),
 
-  updateClient: superAdminProcedure
+  updateClient: ownerOnlyProcedure
     .input(z.object({
       id:            z.number(),
       name:          z.string().min(2).optional(),
@@ -76,7 +76,7 @@ export const licenseCenterRouter = router({
     }),
 
   // ── Licenses ───────────────────────────────────────────────────────────────
-  listLicensesByClient: superAdminProcedure
+  listLicensesByClient: ownerOnlyProcedure
     .input(z.object({ clientId: z.number() }))
     .query(async ({ input }) => {
       return db.select().from(lcLicenses)
@@ -84,7 +84,7 @@ export const licenseCenterRouter = router({
         .orderBy(desc(lcLicenses.createdAt));
     }),
 
-  getLicenseWithClient: superAdminProcedure
+  getLicenseWithClient: ownerOnlyProcedure
     .input(z.object({ licenseId: z.number() }))
     .query(async ({ input }) => {
       const [lic] = await db.select().from(lcLicenses).where(eq(lcLicenses.id, input.licenseId));
@@ -94,7 +94,7 @@ export const licenseCenterRouter = router({
       return { license: lic, client, devices };
     }),
 
-  createLicense: superAdminProcedure
+  createLicense: ownerOnlyProcedure
     .input(z.object({
       clientId:       z.number(),
       packageName:    z.string().optional(),
@@ -119,7 +119,7 @@ export const licenseCenterRouter = router({
       return lic;
     }),
 
-  suspendLicense: superAdminProcedure
+  suspendLicense: ownerOnlyProcedure
     .input(z.object({ licenseId: z.number() }))
     .mutation(async ({ input }) => {
       const [lic] = await db.update(lcLicenses)
@@ -130,7 +130,7 @@ export const licenseCenterRouter = router({
       return lic;
     }),
 
-  resumeLicense: superAdminProcedure
+  resumeLicense: ownerOnlyProcedure
     .input(z.object({ licenseId: z.number() }))
     .mutation(async ({ input }) => {
       const [lic] = await db.update(lcLicenses)
@@ -141,7 +141,7 @@ export const licenseCenterRouter = router({
       return lic;
     }),
 
-  renewLicense: superAdminProcedure
+  renewLicense: ownerOnlyProcedure
     .input(z.object({ licenseId: z.number(), newExpiryDate: z.string() }))
     .mutation(async ({ input }) => {
       const [lic] = await db.update(lcLicenses)
@@ -153,7 +153,7 @@ export const licenseCenterRouter = router({
     }),
 
   // ── Devices ────────────────────────────────────────────────────────────────
-  listDevices: superAdminProcedure
+  listDevices: ownerOnlyProcedure
     .input(z.object({ licenseId: z.number() }))
     .query(async ({ input }) => {
       return db.select().from(lcDevices)
@@ -161,7 +161,7 @@ export const licenseCenterRouter = router({
         .orderBy(desc(lcDevices.lastActivatedAt));
     }),
 
-  addDevice: superAdminProcedure
+  addDevice: ownerOnlyProcedure
     .input(z.object({
       licenseId:   z.number(),
       deviceName:  z.string().min(1),
@@ -175,7 +175,7 @@ export const licenseCenterRouter = router({
       return dev;
     }),
 
-  revokeDevice: superAdminProcedure
+  revokeDevice: ownerOnlyProcedure
     .input(z.object({ deviceId: z.number() }))
     .mutation(async ({ input }) => {
       const [dev] = await db.update(lcDevices)
@@ -187,7 +187,7 @@ export const licenseCenterRouter = router({
     }),
 
   // ── Operations Log ─────────────────────────────────────────────────────────
-  listOperationsLog: superAdminProcedure
+  listOperationsLog: ownerOnlyProcedure
     .input(z.object({ clientId: z.number().optional(), limit: z.number().default(20) }))
     .query(async ({ input }) => {
       const q = db.select().from(lcOperationsLog);
@@ -198,7 +198,7 @@ export const licenseCenterRouter = router({
     }),
 
   // ── Dashboard summary ──────────────────────────────────────────────────────
-  getDashboardSummary: superAdminProcedure.query(async () => {
+  getDashboardSummary: ownerOnlyProcedure.query(async () => {
     const clients  = await db.select().from(lcClients).where(eq(lcClients.isActive, true));
     const licenses = await db.select().from(lcLicenses);
     const devices  = await db.select().from(lcDevices).where(eq(lcDevices.status, 'active'));
@@ -212,7 +212,7 @@ export const licenseCenterRouter = router({
   }),
 
   // ── Seed demo data ─────────────────────────────────────────────────────────
-  seedDemo: superAdminProcedure.mutation(async () => {
+  seedDemo: ownerOnlyProcedure.mutation(async () => {
     const existing = await db.select().from(lcClients);
     if (existing.length > 0) return { seeded: false, message: 'البيانات التجريبية موجودة مسبقاً' };
 

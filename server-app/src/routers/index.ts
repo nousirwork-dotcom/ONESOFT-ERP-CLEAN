@@ -1,6 +1,6 @@
 import { router } from '../trpc.js';
 
-// ─── Existing extracted routers ───────────────────────────────────────────────
+// ─── Routers ──────────────────────────────────────────────────────────────────
 import { orgsRouter }               from './orgs.js';
 import { usersRouter }              from './users.js';
 import { salesRouter }              from './sales.js';
@@ -23,33 +23,39 @@ import { setupRouter }              from './setup.js';
 import { updatesRouter }            from './updates.js';
 import { brandingRouter }           from './branding.js';
 import { licenseRouter }            from './license.js';
-import { licenseCenterRouter }     from './licenseCenter.js';
-
-// ─── Newly extracted routers ──────────────────────────────────────────────────
-import { authRouter }                                                           from './auth.js';
-import { customersRouter }                                                      from './customers.js';
-import { suppliersRouter }                                                      from './suppliers.js';
-import { productsRouter, categoriesRouter, productGroupsRouter }                from './products.js';
-import { accountsRouter, costCentersRouter }                                    from './accounts.js';
-import { journalRouter }                                                        from './journal.js';
-import { warehousesRouter }                                                     from './warehouses.js';
-import { stockVouchersRouter, inventoryCountRouter }                            from './inventory.js';
-import { dashboardRouter }                                                      from './dashboard.js';
-import { reportsRouter }                                                        from './reports.js';
-import { vouchersRouter, receiptVouchersRouter, paymentVouchersRouter }         from './vouchers.js';
-import { accountingRouter }                                                     from './accounting.js';
+import { licenseCenterRouter }      from './licenseCenter.js';
+import { authRouter }               from './auth.js';
+import { customersRouter }          from './customers.js';
+import { suppliersRouter }          from './suppliers.js';
+import { productsRouter, categoriesRouter, productGroupsRouter } from './products.js';
+import { accountsRouter, costCentersRouter }                     from './accounts.js';
+import { journalRouter }            from './journal.js';
+import { warehousesRouter }         from './warehouses.js';
+import { stockVouchersRouter, inventoryCountRouter }             from './inventory.js';
+import { dashboardRouter }          from './dashboard.js';
+import { reportsRouter }            from './reports.js';
+import { vouchersRouter, receiptVouchersRouter, paymentVouchersRouter } from './vouchers.js';
+import { accountingRouter }         from './accounting.js';
 import {
-  userGroupsRouter,
-  userCategoriesRouter,
-  groupMembersRouter,
-  qrSettingsRouter,
-  branchesRouter,
-  unitsRouter,
-  freeProductsRouter,
+  userGroupsRouter, userCategoriesRouter, groupMembersRouter,
+  qrSettingsRouter, branchesRouter, unitsRouter, freeProductsRouter,
 } from './settings.js';
 
-// ─── App Router (pure aggregator) ────────────────────────────────────────────
-export const appRouter = router({
+// ─── Build mode ───────────────────────────────────────────────────────────────
+//
+//  CLIENT_BUILD=true  → نسخة العميل (Installer)
+//    • licenseCenter router مُستثنى تماماً من appRouter
+//    • /api/trpc/licenseCenter.* يُرجع 404 على مستوى HTTP
+//    • ownerOnlyProcedure أيضاً يُرجع NOT_FOUND كطبقة ثانية
+//
+//  (بدون CLIENT_BUILD)  → بيئة المالك / License Center
+//    • licenseCenter router مُضمَّن
+//    • ownerOnlyProcedure يتحقق من دور superadmin
+//
+const IS_CLIENT_BUILD = process.env.CLIENT_BUILD === 'true';
+
+// ─── Base config (مشترك بين النسختين) ───────────────────────────────────────
+const baseConfig = {
   auth:                authRouter,
   orgs:                orgsRouter,
   users:               usersRouter,
@@ -98,7 +104,23 @@ export const appRouter = router({
   updates:             updatesRouter,
   branding:            brandingRouter,
   license:             licenseRouter,
-  licenseCenter:       licenseCenterRouter,
-});
+};
 
-export type AppRouter = typeof appRouter;
+// ─── Full config (يشمل licenseCenter — للمالك فقط) ──────────────────────────
+const fullConfig = {
+  ...baseConfig,
+  licenseCenter: licenseCenterRouter,
+};
+
+// ─── Runtime router ───────────────────────────────────────────────────────────
+// نسخة العميل: لا تحتوي على licenseCenter إطلاقاً
+// نسخة المالك: تحتوي على licenseCenter (محمي بـ ownerOnlyProcedure)
+export const appRouter = IS_CLIENT_BUILD
+  ? router(baseConfig)
+  : router(fullConfig);
+
+// ─── Type export ──────────────────────────────────────────────────────────────
+// النوع يشمل licenseCenter دائماً حتى يستطيع license-center-app استخدام tRPC types
+// هذا مقبول لأن النوع للـ compile-time فقط، لا يؤثر على runtime client build
+const _typeOnlyFullRouter = router(fullConfig);
+export type AppRouter = typeof _typeOnlyFullRouter;
