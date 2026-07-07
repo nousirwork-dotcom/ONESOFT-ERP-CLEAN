@@ -390,7 +390,6 @@ function AppRoutes() {
       {user?.role === 'superadmin' && (
         <Route path="/superadmin" component={SuperAdminPage} />
       )}
-      <Route path="/license-center" component={LicenseCenterPage} />
       <Route>
         <TabManagerProvider>
           <DashboardLayout>
@@ -415,6 +414,7 @@ function App() {
             <Toaster position="top-center" richColors />
             <Switch>
               <Route path="/login" component={LoginPage} />
+              <Route path="/license-center" component={LicenseCenterPage} />
               {import.meta.env.DEV && _DevLicensePreview && (
                 <Route path="/dev/license-preview">
                   {() => (
