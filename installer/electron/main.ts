@@ -1,5 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, session, dialog } from 'electron';
-import { autoUpdater } from 'electron-updater';
+import { app, BrowserWindow, ipcMain, shell, session } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { spawnSync } from 'child_process';
@@ -182,6 +181,9 @@ function readServerPort(): number {
   }
 }
 
+// ─── Updater import ──────────────────────────────────────────────────────────
+import { setupUpdater, setUpdaterLogger } from './updater.js';
+
 // ─── IPC imports ─────────────────────────────────────────────────────────────
 import { registerRequirementsIpc } from './ipc/requirements.ipc.js';
 import { registerDatabaseIpc }     from './ipc/database.ipc.js';
@@ -333,74 +335,10 @@ function createWindow() {
 // ─── Auto-Updater — يعمل فقط بعد اكتمال التثبيت ──────────────────────────────
 function setupAutoUpdater(): void {
   if (!isAlreadyInstalled()) return;   // لا نُشغّل المحدِّث خلال معالج التثبيت
+  if (!mainWindow) return;
 
-  autoUpdater.autoDownload    = false; // نسأل المستخدم قبل التنزيل
-  autoUpdater.autoInstallOnAppQuit = true;
-
-  autoUpdater.on('checking-for-update', () => {
-    writeLog('INFO', 'autoUpdater: checking-for-update');
-  });
-
-  autoUpdater.on('update-available', (info) => {
-    writeLog('INFO', `autoUpdater: update-available  version=${info.version}`);
-    dialog.showMessageBox(mainWindow!, {
-      type:    'info',
-      title:   'تحديث جديد متاح',
-      message: `الإصدار ${info.version} متاح للتنزيل`,
-      detail:  'هل تريد تنزيل التحديث الآن؟ سيتم التثبيت عند إغلاق البرنامج.',
-      buttons: ['تنزيل التحديث', 'لاحقاً'],
-      defaultId: 0,
-      cancelId:  1,
-      noLink: true,
-    }).then(({ response }) => {
-      if (response === 0) {
-        writeLog('INFO', 'autoUpdater: user accepted download');
-        autoUpdater.downloadUpdate();
-      } else {
-        writeLog('INFO', 'autoUpdater: user deferred download');
-      }
-    });
-  });
-
-  autoUpdater.on('update-not-available', () => {
-    writeLog('INFO', 'autoUpdater: update-not-available');
-  });
-
-  autoUpdater.on('download-progress', (progress) => {
-    writeLog('INFO', `autoUpdater: download-progress  ${Math.round(progress.percent)}%`);
-    mainWindow?.setProgressBar(progress.percent / 100);
-  });
-
-  autoUpdater.on('update-downloaded', (info) => {
-    writeLog('INFO', `autoUpdater: update-downloaded  version=${info.version}`);
-    mainWindow?.setProgressBar(-1);
-    dialog.showMessageBox(mainWindow!, {
-      type:    'info',
-      title:   'التحديث جاهز',
-      message: `الإصدار ${info.version} تم تنزيله`,
-      detail:  'اضغط "تثبيت الآن" لإعادة تشغيل البرنامج وتطبيق التحديث.',
-      buttons: ['تثبيت الآن', 'عند الإغلاق'],
-      defaultId: 0,
-      cancelId:  1,
-      noLink: true,
-    }).then(({ response }) => {
-      if (response === 0) {
-        autoUpdater.quitAndInstall(false, true);
-      }
-    });
-  });
-
-  autoUpdater.on('error', (err) => {
-    writeLog('ERROR', 'autoUpdater: error', err);
-  });
-
-  // فحص التحديثات بعد 5 ثوان من فتح البرنامج
-  setTimeout(() => {
-    writeLog('INFO', 'autoUpdater: starting checkForUpdates');
-    autoUpdater.checkForUpdates().catch((e) => {
-      writeLog('WARN', 'autoUpdater: checkForUpdates failed', e);
-    });
-  }, 5_000);
+  setUpdaterLogger(writeLog);
+  setupUpdater(mainWindow);
 }
 
 // ─── app.whenReady ────────────────────────────────────────────────────────────
