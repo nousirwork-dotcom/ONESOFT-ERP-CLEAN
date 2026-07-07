@@ -68,11 +68,11 @@ function Card({ children, className = "" }: { children: React.ReactNode; classNa
 
 function SectionTitle({ icon, title, badge }: { icon: React.ReactNode; title: string; badge?: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-2 mb-4">
-      <span className="w-7 h-7 rounded-lg bg-[#1B2B5C]/8 flex items-center justify-center text-[#1B2B5C] shrink-0">
+    <div className="flex items-center gap-2.5 mb-5">
+      <span className="w-8 h-8 rounded-xl bg-[#1B2B5C]/8 flex items-center justify-center text-[#1B2B5C] shrink-0">
         {icon}
       </span>
-      <span className="font-extrabold text-[#1B2B5C] text-[15px]">{title}</span>
+      <span className="font-extrabold text-[#1B2B5C] text-[18px] leading-tight">{title}</span>
       {badge && <span className="mr-auto">{badge}</span>}
     </div>
   );
@@ -103,21 +103,21 @@ function LimitCard({ label, current, max, icon }: {
   const barColor = pct >= 90 ? "bg-red-500" : pct >= 75 ? "bg-amber-500" : "bg-[#1B2B5C]";
   const textColor = pct >= 90 ? "text-red-600" : "text-[#1B2B5C]";
   return (
-    <div className="bg-[#FAF7F0] rounded-xl border border-[#C9A84C]/20 px-4 py-3">
+    <div className="bg-[#FAF7F0] rounded-xl border border-[#C9A84C]/20 px-4 py-3.5">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <span className="text-[#1B2B5C]/70">{icon}</span>
-          <span className="text-[13px] font-semibold text-[#374151]">{label}</span>
+          <span className="text-[15px] font-semibold text-[#374151]">{label}</span>
         </div>
         <div className="flex items-baseline gap-1">
-          <span className={`text-[22px] font-black leading-none ${textColor}`}>{current}</span>
-          <span className="text-[13px] text-[#9CA3AF] font-medium"> / {max}</span>
+          <span className={`text-[26px] font-black leading-none ${textColor}`}>{current}</span>
+          <span className="text-[14px] text-[#9CA3AF] font-medium"> / {max}</span>
         </div>
       </div>
-      <div className="h-2 rounded-full bg-[#E5DDD0] overflow-hidden">
+      <div className="h-2.5 rounded-full bg-[#E5DDD0] overflow-hidden">
         <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
       </div>
-      <p className="text-[11px] text-[#9CA3AF] mt-1">{pct}% مستخدَم</p>
+      <p className="text-[13px] text-[#9CA3AF] mt-1.5">{pct}% مستخدَم</p>
     </div>
   );
 }
@@ -126,11 +126,11 @@ function LimitCard({ label, current, max, icon }: {
 function AccessBadge({ label, value, icon }: { label: string; value?: boolean | null; icon: React.ReactNode }) {
   const on = value === true;
   return (
-    <div className={`flex items-center justify-between px-4 py-2.5 rounded-xl border text-[13px] font-semibold ${
+    <div className={`flex items-center justify-between px-4 py-3 rounded-xl border text-[15px] font-semibold ${
       on ? "bg-green-50 border-green-200 text-green-800" : "bg-[#F4F0E8] border-[#E0D8CC] text-[#9CA3AF]"
     }`}>
       <div className="flex items-center gap-2.5">{icon}<span>{label}</span></div>
-      <span className={`text-base ${on ? "text-green-500" : "text-[#CBD5E1]"}`}>{on ? "✓" : "✕"}</span>
+      <span className={`text-lg ${on ? "text-green-500" : "text-[#CBD5E1]"}`}>{on ? "✓" : "✕"}</span>
     </div>
   );
 }
@@ -138,18 +138,18 @@ function AccessBadge({ label, value, icon }: { label: string; value?: boolean | 
 // ─── ModuleChip ──────────────────────────────────────────────────────────
 function ModuleChip({ label, icon, enabled }: { label: string; icon: string; enabled: boolean }) {
   return (
-    <div className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border transition-all ${
+    <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${
       enabled
         ? "bg-green-50 border-green-200"
         : "bg-[#F4F0E8] border-[#E0D8CC] opacity-60"
     }`}>
-      <span className="text-lg leading-none shrink-0">{icon}</span>
-      <span className={`text-[12px] font-bold flex-1 leading-tight ${enabled ? "text-green-900" : "text-[#9CA3AF]"}`}>
+      <span className="text-xl leading-none shrink-0">{icon}</span>
+      <span className={`text-[15px] font-bold flex-1 leading-tight ${enabled ? "text-green-900" : "text-[#9CA3AF]"}`}>
         {label}
       </span>
       {enabled
-        ? <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
-        : <Lock className="w-3.5 h-3.5 text-[#C9A84C]/50 shrink-0" />
+        ? <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
+        : <Lock className="w-4 h-4 text-[#C9A84C]/50 shrink-0" />
       }
     </div>
   );
@@ -163,7 +163,7 @@ function NavyButton({ children, onClick, disabled, className = "" }: {
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#1B2B5C] text-white text-[14px] font-bold
+      className={`flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-[#1B2B5C] text-white text-[16px] font-bold
         hover:bg-[#243875] active:bg-[#0F1D3F] disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-md ${className}`}
     >
       {children}
@@ -178,7 +178,7 @@ function OutlineButton({ children, onClick, disabled, className = "" }: {
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 border-[#1B2B5C]/25 text-[#1B2B5C] text-[13px] font-semibold
+      className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-[#1B2B5C]/25 text-[#1B2B5C] text-[15px] font-semibold
         hover:bg-[#1B2B5C]/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${className}`}
     >
       {children}
@@ -301,12 +301,12 @@ export default function LicenseActivationPage() {
         {/* ══ PAGE HEADER ═══════════════════════════════════════════════ */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-[20px] font-black text-[#1B2B5C] leading-none">الترخيص والتفعيل</h1>
-            <p className="text-[13px] text-[#6B7280] mt-1">إدارة حالة ترخيص النظام وتفعيل النسخة</p>
+            <h1 className="text-[26px] font-black text-[#1B2B5C] leading-none">الترخيص والتفعيل</h1>
+            <p className="text-[15px] text-[#6B7280] mt-1.5">إدارة حالة ترخيص النظام وتفعيل النسخة</p>
           </div>
           <button
             onClick={() => { refetch(); setNotice(null); }}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[#C9A84C]/40 bg-white text-[#1B2B5C] text-[13px] font-semibold hover:bg-[#FAF7F0] transition-colors shadow-sm"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-[#C9A84C]/40 bg-white text-[#1B2B5C] text-[15px] font-semibold hover:bg-[#FAF7F0] transition-colors shadow-sm"
           >
             <RefreshCw className="w-4 h-4" /> تحديث الحالة
           </button>
@@ -314,7 +314,7 @@ export default function LicenseActivationPage() {
 
         {/* ══ NOTICE ═══════════════════════════════════════════════════ */}
         {notice && (
-          <div className={`flex items-center gap-2.5 text-[13px] rounded-xl px-4 py-3 border ${
+          <div className={`flex items-center gap-2.5 text-[15px] rounded-xl px-4 py-3 border ${
             notice.ok ? "bg-green-50 text-green-800 border-green-200" : "bg-red-50 text-red-800 border-red-200"
           }`}>
             {notice.ok ? <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" /> : <XCircle className="w-4 h-4 text-red-500 shrink-0" />}
@@ -346,30 +346,30 @@ export default function LicenseActivationPage() {
               {/* Status + type + package */}
               <div className="flex-1 min-w-0 space-y-2">
                 <div className="flex items-center gap-3 flex-wrap">
-                  <span className={`inline-flex items-center px-4 py-1.5 rounded-full border text-[13px] font-bold ${statusBadge.bg} ${statusBadge.text} ${statusBadge.border}`}>
+                  <span className={`inline-flex items-center px-4 py-1.5 rounded-full border text-[15px] font-bold ${statusBadge.bg} ${statusBadge.text} ${statusBadge.border}`}>
                     {statusBadge.label}
                   </span>
-                  <span className="text-[13px] text-[#6B7280]">
+                  <span className="text-[15px] text-[#6B7280]">
                     {isValid ? "باقي من انتهاء الصلاحية" : ""}
                   </span>
                 </div>
 
                 <div className="flex items-baseline gap-3">
-                  <h2 className="text-[28px] font-black text-[#1B2B5C] leading-none">
+                  <h2 className="text-[30px] font-black text-[#1B2B5C] leading-none">
                     {p?.package_name ?? typeLabel}
                   </h2>
                   {p?.package_name && (
-                    <span className="text-[14px] text-[#6B7280] font-medium">{typeLabel}</span>
+                    <span className="text-[16px] text-[#6B7280] font-medium">{typeLabel}</span>
                   )}
                 </div>
 
                 {p?.customer_name && (
-                  <p className="text-[14px] text-[#6B7280] font-medium">{p.customer_name}</p>
+                  <p className="text-[15px] text-[#6B7280] font-medium">{p.customer_name}</p>
                 )}
 
                 {/* Status message for invalid/inactive */}
                 {statusMessage && !isValid && (
-                  <div className={`flex items-start gap-2 rounded-xl px-3 py-2.5 border text-[13px] mt-2 ${
+                  <div className={`flex items-start gap-2 rounded-xl px-4 py-3 border text-[15px] mt-2 ${
                     isInvalid || isExpired || isDateTamper
                       ? "bg-red-50 border-red-200 text-red-800"
                       : "bg-[#FFF8E0] border-[#C9A84C]/30 text-[#6B5100]"
@@ -389,12 +389,12 @@ export default function LicenseActivationPage() {
                   : "bg-[#F0F9F0] border-green-200"
                 }`}>
                   {isLifetime ? (
-                    <><InfinityIcon className="w-10 h-10 text-[#1B2B5C]" /><p className="text-[11px] text-[#1B2B5C]/60 font-semibold mt-1">دائم</p></>
+                    <><InfinityIcon className="w-10 h-10 text-[#1B2B5C]" /><p className="text-[14px] text-[#1B2B5C]/60 font-semibold mt-1">دائم</p></>
                   ) : (
                     <>
-                      <span className={`text-[42px] font-black leading-none ${daysColor || "text-[#1B2B5C]"}`}>{days}</span>
-                      <span className="text-[12px] text-[#6B7280] font-semibold">يوم</span>
-                      {(days ?? 0) <= 30 && <span className={`text-[11px] font-bold mt-0.5 ${(days ?? 0) <= 7 ? "text-red-600" : "text-amber-600"}`}>{(days ?? 0) <= 7 ? "⚠ عاجل" : "قريبًا"}</span>}
+                      <span className={`text-[44px] font-black leading-none ${daysColor || "text-[#1B2B5C]"}`}>{days}</span>
+                      <span className="text-[14px] text-[#6B7280] font-semibold">يوم</span>
+                      {(days ?? 0) <= 30 && <span className={`text-[14px] font-bold mt-0.5 ${(days ?? 0) <= 7 ? "text-red-600" : "text-amber-600"}`}>{(days ?? 0) <= 7 ? "⚠ عاجل" : "قريبًا"}</span>}
                     </>
                   )}
                 </div>
@@ -414,9 +414,9 @@ export default function LicenseActivationPage() {
                   { label: "الجهة المصدرة",  value: p.issued_by },
                 ].map((item, i) => (
                   <div key={i} className="min-w-0">
-                    <p className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-0.5">{item.label}</p>
+                    <p className="text-[12px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">{item.label}</p>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[12px] font-mono text-[#1B2B5C]/80 truncate">{item.value ?? "—"}</span>
+                      <span className="text-[14px] font-mono text-[#1B2B5C]/80 truncate">{item.value ?? "—"}</span>
                       {item.id && <CopyBtn value={item.value} id={item.id} ck={ck} copy={copy} size="xs" />}
                     </div>
                   </div>
@@ -428,16 +428,16 @@ export default function LicenseActivationPage() {
             {isTrial && p && (
               <div className="mt-4 p-4 bg-[#FFF8E0] rounded-xl border border-[#C9A84C]/30">
                 <div className="flex items-center gap-2 mb-3">
-                  <Timer className="w-4 h-4 text-[#C9A84C]" />
-                  <span className="text-[13px] font-bold text-[#8B6914]">تفاصيل الفترة التجريبية</span>
-                  <span className="text-[12px] text-[#C9A84C]/70 mr-auto">قابلة للترقية إلى ترخيص كامل</span>
+                  <Timer className="w-5 h-5 text-[#C9A84C]" />
+                  <span className="text-[15px] font-bold text-[#8B6914]">تفاصيل الفترة التجريبية</span>
+                  <span className="text-[14px] text-[#C9A84C]/70 mr-auto">قابلة للترقية إلى ترخيص كامل</span>
                 </div>
                 <div className="grid grid-cols-4 gap-4">
-                  <div><p className="text-[10px] text-[#C9A84C]/70 font-bold uppercase mb-0.5">المدة</p><p className="text-[15px] font-black text-[#1B2B5C]">{trialDuration} يوم</p></div>
-                  <div><p className="text-[10px] text-[#C9A84C]/70 font-bold uppercase mb-0.5">تاريخ البداية</p><p className="text-[13px] font-semibold text-[#1B2B5C]">{fmtDate(p.start_date)}</p></div>
-                  <div><p className="text-[10px] text-[#C9A84C]/70 font-bold uppercase mb-0.5">تاريخ النهاية</p><p className="text-[13px] font-semibold text-[#1B2B5C]">{fmtDate(p.expiry_date)}</p></div>
-                  <div><p className="text-[10px] text-[#C9A84C]/70 font-bold uppercase mb-0.5">الأيام المتبقية</p>
-                    <p className={`text-[28px] font-black leading-none ${(days ?? 0) <= 7 ? "text-red-600" : (days ?? 0) <= 14 ? "text-amber-600" : "text-[#1B2B5C]"}`}>{days}</p></div>
+                  <div><p className="text-[13px] text-[#C9A84C]/70 font-bold uppercase mb-1">المدة</p><p className="text-[17px] font-black text-[#1B2B5C]">{trialDuration} يوم</p></div>
+                  <div><p className="text-[13px] text-[#C9A84C]/70 font-bold uppercase mb-1">تاريخ البداية</p><p className="text-[15px] font-semibold text-[#1B2B5C]">{fmtDate(p.start_date)}</p></div>
+                  <div><p className="text-[13px] text-[#C9A84C]/70 font-bold uppercase mb-1">تاريخ النهاية</p><p className="text-[15px] font-semibold text-[#1B2B5C]">{fmtDate(p.expiry_date)}</p></div>
+                  <div><p className="text-[13px] text-[#C9A84C]/70 font-bold uppercase mb-1">الأيام المتبقية</p>
+                    <p className={`text-[30px] font-black leading-none ${(days ?? 0) <= 7 ? "text-red-600" : (days ?? 0) <= 14 ? "text-amber-600" : "text-[#1B2B5C]"}`}>{days}</p></div>
                 </div>
               </div>
             )}
@@ -445,14 +445,14 @@ export default function LicenseActivationPage() {
             {/* Expired details */}
             {isExpired && p && (
               <div className="mt-4 p-4 bg-red-50 rounded-xl border border-red-200">
-                <div className="flex items-center gap-2 mb-2">
-                  <AlertTriangle className="w-4 h-4 text-red-500" />
-                  <span className="text-[13px] font-bold text-red-800">انتهت صلاحية الترخيص</span>
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className="w-5 h-5 text-red-500" />
+                  <span className="text-[15px] font-bold text-red-800">انتهت صلاحية الترخيص</span>
                 </div>
-                <div className="grid grid-cols-3 gap-4 text-[13px]">
-                  <div><p className="text-[10px] text-red-400/70 font-bold uppercase mb-0.5">تاريخ البداية</p><p className="font-semibold text-red-800">{fmtDate(p.start_date)}</p></div>
-                  <div><p className="text-[10px] text-red-400/70 font-bold uppercase mb-0.5">تاريخ الانتهاء</p><p className="font-semibold text-red-800">{fmtDate(p.expiry_date)}</p></div>
-                  <div><p className="text-[10px] text-red-400/70 font-bold uppercase mb-0.5">الإجراء المطلوب</p><p className="font-semibold text-red-800">التواصل مع مزود النظام</p></div>
+                <div className="grid grid-cols-3 gap-4 text-[15px]">
+                  <div><p className="text-[13px] text-red-400/70 font-bold uppercase mb-1">تاريخ البداية</p><p className="font-semibold text-red-800">{fmtDate(p.start_date)}</p></div>
+                  <div><p className="text-[13px] text-red-400/70 font-bold uppercase mb-1">تاريخ الانتهاء</p><p className="font-semibold text-red-800">{fmtDate(p.expiry_date)}</p></div>
+                  <div><p className="text-[13px] text-red-400/70 font-bold uppercase mb-1">الإجراء المطلوب</p><p className="font-semibold text-red-800">التواصل مع مزود النظام</p></div>
                 </div>
               </div>
             )}
@@ -461,7 +461,7 @@ export default function LicenseActivationPage() {
             {isValid && !isTrial && (
               <div className="mt-4 flex items-center gap-2.5 px-4 py-2.5 bg-green-50 rounded-xl border border-green-200">
                 <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
-                <span className="text-[13px] font-semibold text-green-800">الترخيص مفعّل وجميع خدمات النظام تعمل بشكل طبيعي.</span>
+                <span className="text-[15px] font-semibold text-green-800">الترخيص مفعّل وجميع خدمات النظام تعمل بشكل طبيعي.</span>
               </div>
             )}
           </div>
@@ -488,7 +488,7 @@ export default function LicenseActivationPage() {
             ) : (
               <div className="flex flex-col items-center py-10 gap-3">
                 <Lock className="w-12 h-12 text-[#C9A84C]/25" />
-                <p className="text-[13px] text-[#9CA3AF] text-center">سيتم عرض الحدود بعد التفعيل</p>
+                <p className="text-[15px] text-[#9CA3AF] text-center">سيتم عرض الحدود بعد التفعيل</p>
               </div>
             )}
           </Card>
@@ -498,17 +498,17 @@ export default function LicenseActivationPage() {
             <Card className="p-5">
               <SectionTitle
                 icon={<span className="text-base">🖥️</span>}
-                title="الشاشات المتاحة ضمن الترخيص"
+                title="الشاشات المتاحة ضمن ترخيصك"
                 badge={p ? (
-                  <span className="text-[12px] font-bold px-2.5 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200">
+                  <span className="text-[14px] font-bold px-3 py-1 rounded-full bg-green-100 text-green-700 border border-green-200">
                     {mods.size} / {SCREENS.length}
                   </span>
                 ) : undefined}
               />
               {!p ? (
-                <div className="flex flex-col items-center py-6 gap-2 text-center">
-                  <Lock className="w-8 h-8 text-[#C9A84C]/25" />
-                  <p className="text-[13px] text-[#9CA3AF] leading-relaxed">سيتم عرض الشاشات المتاحة<br/>بعد تفعيل الترخيص</p>
+                <div className="flex flex-col items-center py-8 gap-3 text-center">
+                  <Lock className="w-10 h-10 text-[#C9A84C]/25" />
+                  <p className="text-[15px] text-[#9CA3AF] leading-relaxed">سيتم عرض الشاشات المتاحة<br/>بعد تفعيل الترخيص</p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -525,9 +525,9 @@ export default function LicenseActivationPage() {
               <div className="space-y-3">
                 {/* Device ID */}
                 <div className="bg-[#FAF7F0] rounded-xl border border-[#C9A84C]/20 px-4 py-3">
-                  <p className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Device ID</p>
+                  <p className="text-[13px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1.5">Device ID</p>
                   <div className="flex items-center gap-2">
-                    <code className="flex-1 text-[12px] font-mono text-[#1B2B5C] break-all leading-snug">
+                    <code className="flex-1 text-[14px] font-mono text-[#1B2B5C] break-all leading-snug">
                       {deviceId ?? "جارٍ التحميل..."}
                     </code>
                     <CopyBtn value={deviceId} id="dv" ck={ck} copy={copy} />
@@ -536,26 +536,26 @@ export default function LicenseActivationPage() {
                 {/* Request Code */}
                 <div className="bg-[#FAF7F0] rounded-xl border border-[#C9A84C]/20 px-4 py-3">
                   <div className="flex items-center justify-between mb-1">
-                    <p className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider">Request Code</p>
+                    <p className="text-[13px] font-bold text-[#C9A84C] uppercase tracking-wider">Request Code</p>
                     <button
                       onClick={() => genReq.mutate({ org_id: "" })}
                       disabled={genReq.isPending}
-                      className="text-[11px] text-[#1B2B5C] font-semibold flex items-center gap-1 hover:text-[#243875] disabled:opacity-50"
+                      className="text-[14px] text-[#1B2B5C] font-semibold flex items-center gap-1 hover:text-[#243875] disabled:opacity-50"
                     >
-                      <RefreshCw className="w-3 h-3" /> {genReq.isPending ? "جارٍ..." : "توليد"}
+                      <RefreshCw className="w-3.5 h-3.5" /> {genReq.isPending ? "جارٍ..." : "توليد"}
                     </button>
                   </div>
                   {reqCode ? (
                     <div className="flex items-start gap-2">
-                      <code className="flex-1 text-[10px] font-mono text-[#374151] break-all leading-snug">{reqCode}</code>
+                      <code className="flex-1 text-[14px] font-mono text-[#374151] break-all leading-snug">{reqCode}</code>
                       <CopyBtn value={reqCode} id="rq" ck={ck} copy={copy} />
                     </div>
                   ) : (
-                    <p className="text-[12px] text-[#9CA3AF]">LIQ-XXXX-XXXX</p>
+                    <p className="text-[14px] text-[#9CA3AF]">LIQ-XXXX-XXXX</p>
                   )}
                 </div>
                 {/* Status */}
-                <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-[12px] font-semibold ${
+                <div className={`flex items-center gap-2 px-3 py-3 rounded-xl border text-[15px] font-semibold ${
                   isValid ? "bg-green-50 border-green-200 text-green-800" : "bg-[#FAF7F0] border-[#E0D8CC] text-[#9CA3AF]"
                 }`}>
                   {isValid
@@ -563,8 +563,8 @@ export default function LicenseActivationPage() {
                     : <><XCircle className="w-4 h-4 shrink-0" /> الجهاز غير مرتبط بأي ترخيص نشط</>
                   }
                 </div>
-                <div className="flex items-start gap-2 px-3 py-2.5 bg-[#FAF7F0] rounded-xl border border-[#C9A84C]/20 text-[12px] text-[#6B7280]">
-                  <Phone className="w-3.5 h-3.5 text-[#C9A84C] shrink-0 mt-0.5" />
+                <div className="flex items-start gap-2 px-3 py-3 bg-[#FAF7F0] rounded-xl border border-[#C9A84C]/20 text-[14px] text-[#6B7280]">
+                  <Phone className="w-4 h-4 text-[#C9A84C] shrink-0 mt-0.5" />
                   استخدم كود الطلب في حال تواصلت مع مزود النظام لتفعيل النظام.
                 </div>
               </div>
@@ -585,7 +585,7 @@ export default function LicenseActivationPage() {
                 <button
                   key={t.key}
                   onClick={() => { setTab(t.key); setNotice(null); }}
-                  className={`flex-1 py-2.5 text-[11px] font-bold text-center transition-all leading-tight px-1 ${
+                  className={`flex-1 py-3 text-[14px] font-bold text-center transition-all leading-tight px-2 ${
                     tab === t.key
                       ? "bg-[#1B2B5C] text-white"
                       : "bg-white text-[#4A5568] hover:bg-[#FAF7F0]"
@@ -599,17 +599,17 @@ export default function LicenseActivationPage() {
             {/* ── Tab: code ── */}
             {tab === "code" && (
               <div className="space-y-3">
-                <p className="text-[13px] text-[#6B7280] leading-relaxed">
+                <p className="text-[15px] text-[#6B7280] leading-relaxed">
                   أدخل كود التفعيل الذي حصلت عليه من دعم OneSoft ERP.
                 </p>
                 <div>
-                  <p className="text-[11px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1.5">كود التفعيل</p>
+                  <p className="text-[14px] font-bold text-[#C9A84C] uppercase tracking-wider mb-2">كود التفعيل</p>
                   <textarea
                     value={activCode}
                     onChange={e => setActivCode(e.target.value)}
                     rows={5}
                     placeholder="أدخل كود التفعيل..."
-                    className="w-full text-[11px] font-mono border-2 border-[#C9A84C]/25 rounded-xl p-3 bg-[#FAF7F0] text-[#1B2B5C] focus:outline-none focus:border-[#1B2B5C]/40 resize-none leading-relaxed transition-colors"
+                    className="w-full text-[14px] font-mono border-2 border-[#C9A84C]/25 rounded-xl p-3.5 bg-[#FAF7F0] text-[#1B2B5C] focus:outline-none focus:border-[#1B2B5C]/40 resize-none leading-relaxed transition-colors"
                     dir="ltr"
                   />
                 </div>
@@ -627,18 +627,18 @@ export default function LicenseActivationPage() {
             {/* ── Tab: file ── */}
             {tab === "file" && (
               <div className="space-y-3">
-                <p className="text-[13px] text-[#6B7280] leading-relaxed">
+                <p className="text-[15px] text-[#6B7280] leading-relaxed">
                   استورد ملف الترخيص (.ons) الصادر من مزود النظام.
                 </p>
                 <div
                   onClick={() => fileRef.current?.click()}
                   className="border-2 border-dashed border-[#C9A84C]/40 rounded-xl p-6 text-center cursor-pointer hover:border-[#1B2B5C]/30 hover:bg-[#F0EBE0] transition-colors"
                 >
-                  <FileUp className="w-8 h-8 mx-auto text-[#C9A84C] mb-2" />
+                  <FileUp className="w-9 h-9 mx-auto text-[#C9A84C] mb-2" />
                   {fileName ? (
-                    <><p className="text-[13px] font-bold text-[#1B2B5C]">{fileName}</p><p className="text-[12px] text-green-600 mt-1">✓ جاهز للاستيراد</p></>
+                    <><p className="text-[15px] font-bold text-[#1B2B5C]">{fileName}</p><p className="text-[14px] text-green-600 mt-1">✓ جاهز للاستيراد</p></>
                   ) : (
-                    <><p className="text-[13px] font-semibold text-[#6B7280]">اضغط لاختيار ملف</p><p className="text-[12px] text-[#9CA3AF] mt-1">.ons أو .json</p></>
+                    <><p className="text-[15px] font-semibold text-[#6B7280]">اضغط لاختيار ملف</p><p className="text-[14px] text-[#9CA3AF] mt-1">.ons أو .json</p></>
                   )}
                 </div>
                 <input ref={fileRef} type="file" accept=".ons,.json" className="hidden" onChange={onFile} />
@@ -658,18 +658,18 @@ export default function LicenseActivationPage() {
               <div className="space-y-3">
                 <div className="bg-[#FFF8E0] border border-[#C9A84C]/30 rounded-xl p-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <Timer className="w-4 h-4 text-[#C9A84C]" />
-                    <span className="text-[13px] font-bold text-[#8B6914]">الفترة التجريبية</span>
+                    <Timer className="w-5 h-5 text-[#C9A84C]" />
+                    <span className="text-[15px] font-bold text-[#8B6914]">الفترة التجريبية</span>
                   </div>
-                  <p className="text-[12px] text-[#6B7280] leading-relaxed">
+                  <p className="text-[15px] text-[#6B7280] leading-relaxed">
                     للحصول على فترة تجريبية، يجب الحصول على ملف ترخيص تجريبي موقّع من مزود النظام.
                     تواصل معهم وأرسل Device ID الخاص بجهازك.
                   </p>
                 </div>
                 <div className="space-y-2 pt-1">
                   {["انسخ Device ID أدناه", "أرسله لمزود النظام", "استلم ملف الترخيص", "استورده من تبويب «استيراد»"].map((s, i) => (
-                    <div key={i} className="flex items-center gap-3 text-[13px] text-[#4A5568]">
-                      <span className="w-6 h-6 rounded-full bg-[#1B2B5C] text-white text-[10px] font-black flex items-center justify-center shrink-0">{i + 1}</span>
+                    <div key={i} className="flex items-center gap-3 text-[15px] text-[#4A5568]">
+                      <span className="w-7 h-7 rounded-full bg-[#1B2B5C] text-white text-[13px] font-black flex items-center justify-center shrink-0">{i + 1}</span>
                       {s}
                     </div>
                   ))}
@@ -686,7 +686,7 @@ export default function LicenseActivationPage() {
                 {reqCode && (
                   <div className="flex items-start gap-2">
                     <textarea readOnly value={reqCode} rows={3}
-                      className="flex-1 text-[10px] font-mono bg-[#FAF7F0] rounded-xl p-2.5 border border-[#C9A84C]/25 resize-none" dir="ltr" />
+                      className="flex-1 text-[14px] font-mono bg-[#FAF7F0] rounded-xl p-3 border border-[#C9A84C]/25 resize-none" dir="ltr" />
                     <button onClick={() => copy(reqCode, "rq-t")}
                       className="p-2.5 rounded-xl border border-[#C9A84C]/25 text-[#C9A84C] hover:bg-[#FAF7F0] mt-0.5 shrink-0">
                       {ck === "rq-t" ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
@@ -698,7 +698,7 @@ export default function LicenseActivationPage() {
 
             {/* Active state bottom message */}
             {isValid && (
-              <div className="mt-4 flex items-center gap-2 px-3 py-2.5 bg-green-50 border border-green-200 rounded-xl text-[12px] text-green-800 font-semibold">
+              <div className="mt-4 flex items-center gap-2 px-4 py-3 bg-green-50 border border-green-200 rounded-xl text-[15px] text-green-800 font-semibold">
                 <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
                 الترخيص مفعّل وجميع الخدمات تعمل بشكل طبيعي.
               </div>

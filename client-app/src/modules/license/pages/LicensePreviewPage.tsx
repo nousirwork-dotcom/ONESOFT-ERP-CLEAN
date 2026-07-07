@@ -141,7 +141,7 @@ function SectionTitle({ icon, title, badge }: { icon: React.ReactNode; title: st
   return (
     <div className="flex items-center gap-2.5 mb-5">
       <span className="w-8 h-8 rounded-xl bg-[#1B2B5C]/8 flex items-center justify-center text-[#1B2B5C] shrink-0 text-lg">{icon}</span>
-      <span className="font-extrabold text-[#1B2B5C] text-[17px]">{title}</span>
+      <span className="font-extrabold text-[#1B2B5C] text-[18px] leading-tight">{title}</span>
       {badge && <span className="mr-auto">{badge}</span>}
     </div>
   );
@@ -166,7 +166,7 @@ function LimitCard({ label, current, max, icon }: { label: string; current: numb
       <div className="h-2.5 rounded-full bg-[#E5DDD0] overflow-hidden">
         <div className={`h-full rounded-full ${bar} transition-all`} style={{ width: `${pct}%` }} />
       </div>
-      <p className="text-[12px] text-[#9CA3AF] mt-1.5 font-medium">{pct}% مستخدَم</p>
+      <p className="text-[13px] text-[#9CA3AF] mt-1.5 font-medium">{pct}% مستخدَم</p>
     </div>
   );
 }
@@ -183,10 +183,10 @@ function AccessBadge({ label, value, icon }: { label: string; value?: boolean | 
 
 function ModuleChip({ label, icon, enabled }: { label: string; icon: string; enabled: boolean }) {
   return (
-    <div className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border transition-all ${enabled ? "bg-green-50 border-green-200" : "bg-[#F4F0E8] border-[#E0D8CC] opacity-60"}`}>
-      <span className="text-base leading-none shrink-0">{icon}</span>
-      <span className={`text-[13px] font-bold flex-1 leading-tight ${enabled ? "text-green-900" : "text-[#9CA3AF]"}`}>{label}</span>
-      {enabled ? <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" /> : <Lock className="w-3.5 h-3.5 text-[#C9A84C]/50 shrink-0" />}
+    <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${enabled ? "bg-green-50 border-green-200" : "bg-[#F4F0E8] border-[#E0D8CC] opacity-60"}`}>
+      <span className="text-xl leading-none shrink-0">{icon}</span>
+      <span className={`text-[15px] font-bold flex-1 leading-tight ${enabled ? "text-green-900" : "text-[#9CA3AF]"}`}>{label}</span>
+      {enabled ? <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" /> : <Lock className="w-4 h-4 text-[#C9A84C]/50 shrink-0" />}
     </div>
   );
 }
@@ -207,7 +207,7 @@ function ActivationPanel({ isValid, ck, copy }: { isValid: boolean; ck: string |
       <div className="flex rounded-xl border border-[#C9A84C]/25 overflow-hidden mb-5">
         {TABS.map((t, i) => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            className={`flex-1 py-3 text-[13px] font-bold text-center leading-tight px-2 transition-all ${
+            className={`flex-1 py-3 text-[14px] font-bold text-center leading-tight px-2 transition-all ${
               tab === t.key ? "bg-[#1B2B5C] text-white" : "bg-white text-[#4A5568] hover:bg-[#FAF7F0]"
             } ${i < TABS.length - 1 ? "border-l border-[#C9A84C]/25" : ""}`}>
             {t.label}
@@ -218,15 +218,15 @@ function ActivationPanel({ isValid, ck, copy }: { isValid: boolean; ck: string |
       {/* Code tab */}
       {tab === "code" && (
         <div className="space-y-4">
-          <p className="text-[14px] text-[#6B7280] leading-relaxed">أدخل كود التفعيل الذي حصلت عليه من مزود النظام.</p>
+          <p className="text-[15px] text-[#6B7280] leading-relaxed">أدخل كود التفعيل الذي حصلت عليه من مزود النظام.</p>
           <div>
-            <p className="text-[12px] font-bold text-[#C9A84C] uppercase tracking-wider mb-2">كود التفعيل</p>
+            <p className="text-[14px] font-bold text-[#C9A84C] uppercase tracking-wider mb-2">كود التفعيل</p>
             <textarea
               value={activCode}
               onChange={e => setActivCode(e.target.value)}
               rows={5}
               placeholder="أدخل كود التفعيل هنا..."
-              className="w-full text-[13px] font-mono border-2 border-[#C9A84C]/25 rounded-xl p-3.5 bg-[#FAF7F0] text-[#1B2B5C] focus:outline-none focus:border-[#1B2B5C]/40 resize-none leading-relaxed"
+              className="w-full text-[14px] font-mono border-2 border-[#C9A84C]/25 rounded-xl p-3.5 bg-[#FAF7F0] text-[#1B2B5C] focus:outline-none focus:border-[#1B2B5C]/40 resize-none leading-relaxed"
               dir="ltr"
             />
           </div>
@@ -609,8 +609,8 @@ function LicenseScreen({ status, ck, copy }: {
             <Card className="p-6">
               <SectionTitle
                 icon={<span>🖥️</span>}
-                title="الشاشات المتاحة ضمن الترخيص"
-                badge={p ? <span className="text-[13px] font-bold px-3 py-1 rounded-full bg-green-100 text-green-700 border border-green-200">{mods.size} / {SCREENS.length}</span> : undefined}
+                title="الشاشات المتاحة ضمن ترخيصك"
+                badge={p ? <span className="text-[14px] font-bold px-3 py-1 rounded-full bg-green-100 text-green-700 border border-green-200">{mods.size} / {SCREENS.length}</span> : undefined}
               />
               <div className="space-y-2">
                 {SCREENS.map(m => <ModuleChip key={m.id} label={m.label} icon={m.icon} enabled={!!p && mods.has(m.id)} />)}
