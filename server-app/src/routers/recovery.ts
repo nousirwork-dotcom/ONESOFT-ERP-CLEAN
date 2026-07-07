@@ -10,7 +10,8 @@ import {
 } from '../schema.js';
 import { and, eq, gt, isNull, or, count, desc } from 'drizzle-orm';
 import { hashPassword, verifyPassword } from '../auth.js';
-import { randomInt, randomUUID } from 'crypto';
+import { randomInt, randomUUID, randomBytes } from 'crypto';
+import { getOrCreateDeviceId, getHardwareFingerprint } from '../lib/deviceId.js';
 
 // ── Production guard ──────────────────────────────────────────────────────────
 // IS_DEV = true ONLY when NODE_ENV is NOT 'production'.
@@ -82,15 +83,44 @@ function mockSend(channel: 'phone' | 'email', target: string, otp: string, purpo
 }
 
 // ── System channel availability ───────────────────────────────────────────────
-// SMS is only available if SMS_PROVIDER env var is set (e.g. "twilio", "unifonic").
-// Email OTP is always available (mock in dev, real SMTP in production).
-// SECURITY: SMS_PROVIDER / SMTP credentials must NEVER be bundled in client installer.
+// Rules:
+//   Email: always in dev (mock). In production: only if SMTP fully configured.
+//   SMS:   only if ALL 5 required SMS env vars are set AND SMS_ENABLED=true.
+// SECURITY: SMTP/SMS credentials must NEVER be bundled in client installer.
 function getChannelConfig() {
-  return {
-    emailEnabled: true,                               // Always available
-    smsEnabled:   !!process.env.SMS_PROVIDER?.trim(), // Only if provider configured
-    smsProvider:  IS_DEV ? (process.env.SMS_PROVIDER ?? 'mock') : undefined,
-  };
+  // Email: dev = always. Production = requires full SMTP config.
+  const emailEnabled = IS_DEV || !!(
+    process.env.SMTP_HOST?.trim()     &&
+    process.env.SMTP_USER?.trim()     &&
+    process.env.SMTP_PASSWORD?.trim() &&
+    process.env.FROM_EMAIL?.trim()    &&
+    process.env.EMAIL_ENABLED?.trim() === 'true'
+  );
+
+  // SMS: requires all 5 vars to be non-empty AND SMS_ENABLED=true
+  const smsEnabled = !!(
+    process.env.SMS_PROVIDER?.trim()     &&
+    process.env.SMS_API_URL?.trim()      &&
+    process.env.SMS_API_KEY?.trim()      &&
+    process.env.SMS_SENDER_NAME?.trim()  &&
+    process.env.SMS_ENABLED?.trim()      === 'true'
+  );
+
+  return { emailEnabled, smsEnabled };
+}
+
+// ── Support Request Code: 1-hour expiry, nonce, backend-generated ─────────────
+const SUPPORT_REQUEST_CODE_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
+
+function buildSupportRequestCode(orgCode: string | undefined, deviceId: string): string {
+  const nonce    = randomBytes(4).toString('hex').toUpperCase();
+  const tsBase36 = Math.floor(Date.now() / 60000).toString(36).toUpperCase();
+  const devShort = deviceId.replace(/-/g, '').slice(0, 8).toUpperCase();
+  const org      = (orgCode ?? 'XX').replace(/[^A-Z0-9]/gi, '').slice(0, 6).toUpperCase();
+  // Checksum: last 2 digits of sum mod 97
+  const raw    = `${org}-${devShort}-${tsBase36}-${nonce}`;
+  const csum   = raw.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % 97;
+  return `${raw}-${String(csum).padStart(2, '0')}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -106,6 +136,54 @@ export const recoveryRouter = router({
       smsEnabled:   cfg.smsEnabled,
     };
   }),
+
+  // ── هوية الجهاز الحقيقية (من ملف device_id في نظام الترخيص) ─────────────────
+  // Device ID is read from C:\ProgramData\OneSoft\device_id (Windows production)
+  // or ~/.onesoft/device_id (dev/Linux). Created once, survives software updates.
+  // SECURITY: Returns only display-safe info — no private keys, no secrets.
+  getDeviceIdentity: publicProcedure.query(() => {
+    const deviceId            = getOrCreateDeviceId();
+    const hardwareFingerprint = getHardwareFingerprint();
+    return {
+      deviceId,
+      hardwareFingerprint,
+      // Short form for display (last 12 chars of UUID without dashes)
+      deviceIdShort: deviceId.replace(/-/g, '').slice(-12).toUpperCase(),
+    };
+  }),
+
+  // ── توليد Request Code من الباكند (يحتوي nonce + له انتهاء + مرتبط بالجهاز) ──
+  // Phase 1: generates code server-side, logs to security_events, returns to UI.
+  // Phase 2 (later): License Center receives and validates this code.
+  // SECURITY: Code is informational only at this phase — not a binding auth token.
+  generateSupportRequestCode: publicProcedure
+    .input(z.object({
+      orgCode: z.string().max(20).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const deviceId   = getOrCreateDeviceId();
+      const hwFp       = getHardwareFingerprint();
+      const requestCode = buildSupportRequestCode(input.orgCode, deviceId);
+      const expiresAt   = new Date(Date.now() + SUPPORT_REQUEST_CODE_EXPIRY_MS);
+
+      // Log to security_events for audit trail
+      await logEvent({
+        eventType: 'support_recovery_request_code_generated',
+        result:    'success',
+        reason:    `orgCode=${input.orgCode ?? 'none'} deviceId=${deviceId.slice(0, 8)}... hwFp=${hwFp}`,
+      });
+
+      return {
+        requestCode,
+        expiresAt:   expiresAt.toISOString(),
+        deviceId,
+        deviceIdShort: deviceId.replace(/-/g, '').slice(-12).toUpperCase(),
+        hardwareFingerprint: hwFp,
+        // Phase 1 notice: this code is for support reference only
+        phase: 1 as const,
+        note: 'Phase 1: Request Code generated for support reference. Phase 2 will add License Center validation.',
+      };
+    }),
 
   // ── إرسال كود تحقق (المسؤول → جوال/بريد المستخدم) ──────────────────────────
   sendVerification: adminProcedure

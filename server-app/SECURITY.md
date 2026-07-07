@@ -6,9 +6,9 @@
 
 | القناة | الحالة | الشرط |
 |--------|--------|-------|
-| 📧 Email OTP | دائماً متاح | Mock في dev، SMTP في production |
-| 📱 SMS OTP | اختياري | يظهر فقط إذا `SMS_PROVIDER` مضبوط |
-| 🛟 Support Recovery | دائماً متاح | Request Code + Device ID → License Center |
+| 📧 Email OTP | مشروط | Dev=دائماً. Production=يتطلب SMTP_HOST + SMTP_USER + SMTP_PASSWORD + FROM_EMAIL + EMAIL_ENABLED=true |
+| 📱 SMS OTP | مشروط | يتطلب SMS_PROVIDER + SMS_API_URL + SMS_API_KEY + SMS_SENDER_NAME + SMS_ENABLED=true |
+| 🛟 Support Recovery | دائماً متاح (Phase 1) | Request Code من backend → Device ID من ملف الجهاز |
 | 🔑 Backup Codes | قيد التطوير | لا تحتاج إنترنت |
 | 🔐 Authenticator App | قيد التطوير | Google/Microsoft Authenticator |
 
@@ -25,27 +25,56 @@ generateOtp()  →  hashPassword(otp)  →  DB (hash only)
 
 ---
 
+## قواعد availability للقنوات (getChannelConfig)
+
+### Email
+```
+emailEnabled = true  إذا: IS_DEV
+             OR (SMTP_HOST && SMTP_USER && SMTP_PASSWORD && FROM_EMAIL && EMAIL_ENABLED=true)
+```
+
+### SMS
+```
+smsEnabled = true  إذا: SMS_PROVIDER && SMS_API_URL && SMS_API_KEY && SMS_SENDER_NAME && SMS_ENABLED=true
+```
+
+إذا أي شرط ناقص → القناة لا تظهر في الواجهة نهائياً.
+
+---
+
 ## Development vs Production
 
 | الجانب | Development (`NODE_ENV ≠ production`) | Production (`NODE_ENV=production`) |
 |--------|--------------------------------------|-----------------------------------|
-| `devOtp` في response | ✅ يُعاد للتجربة | ❌ **ممنوع تماماً** |
-| طباعة OTP في console | ✅ `[OTP-MOCK]` | ❌ **ممنوع تماماً** |
+| `devOtp` في response | ✅ يُعاد للتجربة | ❌ **ممنوع تماماً — empty object** |
+| طباعة OTP في console | ✅ `[OTP-MOCK]` | ❌ **ممنوع تماماً — silent return** |
+| Email availability | ✅ دائماً (mock) | ✅ فقط إذا SMTP مضبوط كاملاً |
+| SMS availability | ✅ إذا SMS_PROVIDER موجود | ✅ فقط إذا جميع 5 متغيرات موجودة |
 | مزود الإرسال | Mock (console.log) | SMS/SMTP Provider حقيقي |
 
-### ضبط production:
+### ضبط production — متغيرات البيئة المطلوبة:
 ```bash
 NODE_ENV=production
-SMS_PROVIDER=twilio          # أو unifonic / msegat / تركه فارغاً لتعطيل SMS
+
+# Email OTP
+EMAIL_ENABLED=true
 SMTP_HOST=mail.company.com
 SMTP_PORT=587
 SMTP_USER=no-reply@company.com
-SMTP_PASS=<secret>           # من Replit Secrets أو .env — لا يُدمَج في الكود
+SMTP_PASSWORD=<secret>      # Server env only — لا تُدمَج في installer
+FROM_EMAIL=no-reply@company.com
+
+# SMS OTP (اختياري — لا يُفعَّل إلا إذا ضبطت الكل)
+SMS_ENABLED=true
+SMS_PROVIDER=twilio          # أو unifonic / msegat
+SMS_API_URL=https://api.twilio.com/...
+SMS_API_KEY=<secret>         # Server env only — لا تُدمَج في installer
+SMS_SENDER_NAME=OneSoft
 ```
 
-### SECURITY: SMS في CLIENT_BUILD
-- **ممنوع** تضمين `SMS_PROVIDER` credentials في installer/resources.
-- `SMS_PROVIDER` env var يُضبَط على السيرفر فقط، ليس في الـ bundle.
+### SECURITY: لا credentials في CLIENT_BUILD
+- **ممنوع** تضمين SMTP_PASSWORD أو SMS_API_KEY في installer/resources.
+- جميع credentials تُضبَط على السيرفر فقط، لا في الـ bundle.
 
 ---
 
@@ -117,16 +146,40 @@ SMTP_PASS=<secret>           # من Replit Secrets أو .env — لا يُدمَ
 
 ---
 
-## Support Recovery
+## Support Recovery — المرحلة الأولى (Phase 1)
 
-عند عدم توفر email أو SMS:
-1. يعرض النظام: كود المؤسسة، Device ID، Request Code (مولَّد محلياً)
-2. المستخدم يرسل Request Code للدعم الفني
-3. الدعم يُصدر Support Reset Code من License Center
-4. المستخدم يدخل الكود لتغيير كلمة مرورك
+**⚠ المرحلة الأولى: Request Code للمرجعية فقط. Phase 2 سيضيف التحقق الكامل عبر License Center.**
 
-Request Code = `{orgCode}-{timestamp36}-{hwConcurrency}-{checksum}`
-Device ID = FNV-1a hash (32-bit) لـ UserAgent + Screen + Language
+### ما يعرضه النظام:
+| الحقل | المصدر | الوصف |
+|-------|--------|-------|
+| Device ID | `C:\ProgramData\OneSoft\device_id` | UUID ثابت مولَّد مرة واحدة عند التثبيت |
+| Device ID (مختصر) | آخر 12 حرف من UUID | للعرض السريع |
+| Hardware Fingerprint | hostname + platform + arch + MAC addresses | SHA-256 أول 16 حرف |
+| Request Code | backend (nonce + timestamp36 + devShort + org + checksum) | صالح ساعة واحدة |
+
+### Request Code — بنية الكود:
+```
+{ORG}-{DEVID8}-{TS_MINUTE_BASE36}-{NONCE_HEX4}-{CHECKSUM2}
+
+مثال: MYCO-A1B2C3D4-KP7X2-3F9A-72
+```
+- `ORG` = كود المؤسسة (max 6 حروف)
+- `DEVID8` = أول 8 أحرف من Device UUID (بدون dashes)
+- `TS_MINUTE_BASE36` = Unix timestamp/60 بـ base36
+- `NONCE_HEX4` = 4 bytes عشوائية من `crypto.randomBytes()`
+- `CHECKSUM2` = مجموع ASCII لجميع الأحرف mod 97
+
+### تسجيل في security_events:
+كل طلب لـ Request Code يُسجَّل بـ `eventType = support_recovery_request_code_generated`.
+
+### المرحلة الثانية (مستقبلاً):
+- License Center يستقبل Request Code
+- الأدمن يصدر Support Reset Code أو ملف `support-recovery.ons`
+- العميل يستورد الملف
+- يتم التحقق من التوقيع (Ed25519)
+- يُسمح بإعادة تعيين كلمة مرور admin أو إنشاء support-temp مؤقت
+- **لا يوجد Master Password أو Backdoor بأي شكل**
 
 ---
 

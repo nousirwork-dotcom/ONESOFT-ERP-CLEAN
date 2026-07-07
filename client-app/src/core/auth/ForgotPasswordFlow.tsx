@@ -98,32 +98,8 @@ function DevOtpBanner({ otp }: { otp: string }) {
   );
 }
 
-// ─── Request Code generator (client-side, for support) ────────────────────────
-function generateRequestCode(orgCode?: string): string {
-  // Minute-precision timestamp + org + entropy
-  const ts   = Math.floor(Date.now() / 60000).toString(36).toUpperCase();
-  const org  = (orgCode ?? 'XX').replace(/[^A-Z0-9]/gi, '').slice(0, 4).toUpperCase();
-  const hw   = (navigator.hardwareConcurrency || 4).toString(16).toUpperCase();
-  const raw  = `${org}-${ts}-${hw}`;
-  // Simple checksum
-  const sum  = raw.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) % 97;
-  return `${raw}-${sum.toString().padStart(2, '0')}`;
-}
-
-// Stable device fingerprint (non-identifying, for support reference only)
-function getDeviceId(): string {
-  const ua  = navigator.userAgent;
-  const scr = `${screen.width}x${screen.height}`;
-  const lang = navigator.language ?? 'ar';
-  const raw  = `${ua}|${scr}|${lang}|${navigator.hardwareConcurrency}`;
-  // FNV-1a 32-bit
-  let h = 0x811c9dc5;
-  for (let i = 0; i < raw.length; i++) {
-    h ^= raw.charCodeAt(i);
-    h = (h * 0x01000193) >>> 0;
-  }
-  return h.toString(16).padStart(8, '0').toUpperCase();
-}
+// Device ID and Request Code come from the backend (real system identity).
+// No client-side generation — all support codes are server-authoritative.
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function ForgotPasswordFlow({ onBack, orgCode, orgName }: ForgotPasswordFlowProps) {
@@ -142,9 +118,25 @@ export default function ForgotPasswordFlow({ onBack, orgCode, orgName }: ForgotP
     staleTime: 60_000, retry: 1,
   });
 
+  // Real device identity from backend (reads C:\ProgramData\OneSoft\device_id)
+  const deviceQ = trpc.recovery.getDeviceIdentity.useQuery(undefined, {
+    staleTime: Infinity, retry: 1,
+    enabled: step === 'support',
+  });
+
+  // Support Request Code — generated server-side with nonce + expiry
+  const genCode = trpc.recovery.generateSupportRequestCode.useMutation();
+
   useEffect(() => {
     if (!channelsQ.isLoading) setStep('choose');
   }, [channelsQ.isLoading]);
+
+  // Auto-generate request code when entering support step
+  useEffect(() => {
+    if (step === 'support' && !genCode.data && !genCode.isPending) {
+      genCode.mutate({ orgCode: orgCode ?? undefined });
+    }
+  }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const emailEnabled = channelsQ.data?.emailEnabled ?? true;
   const smsEnabled   = channelsQ.data?.smsEnabled   ?? false;
@@ -171,10 +163,9 @@ export default function ForgotPasswordFlow({ onBack, orgCode, orgName }: ForgotP
   };
 
   const handleReset = () => {
-    if (otp.length < 4)          { setError('يرجى إدخال كود التحقق');                    return; }
-    if (newPassword.length < 6)  { setError('كلمة المرور يجب أن تكون 6 أحرف على الأقل'); return; }
-    if (newPassword !== confirmPwd) { setError('كلمتا المرور غير متطابقتين');             return; }
-    if (!resetToken)             { setError('حدث خطأ. يرجى طلب كود جديد.');               return; }
+    if (otp.length < 4)            { setError('يرجى إدخال كود التحقق');          return; }
+    if (newPassword !== confirmPwd) { setError('كلمتا المرور غير متطابقتين');     return; }
+    if (!resetToken)               { setError('حدث خطأ. يرجى طلب كود جديد.');    return; }
     setError('');
     resetPassword.mutate({ resetToken, otp, newPassword });
   };
@@ -410,57 +401,83 @@ export default function ForgotPasswordFlow({ onBack, orgCode, orgName }: ForgotP
 
   // ── Support Recovery ─────────────────────────────────────────────────────────
   if (step === 'support') {
-    const deviceId    = getDeviceId();
-    const requestCode = generateRequestCode(orgCode);
-    const now         = new Date().toLocaleString('ar-SA', { dateStyle: 'medium', timeStyle: 'short' });
+    const isLoading = deviceQ.isLoading || genCode.isPending;
+    const devId     = deviceQ.data?.deviceId ?? '—';
+    const devShort  = deviceQ.data?.deviceIdShort ?? '—';
+    const hwFp      = deviceQ.data?.hardwareFingerprint ?? '—';
+    const reqCode   = genCode.data?.requestCode ?? '—';
+    const expiresAt = genCode.data?.expiresAt
+      ? new Date(genCode.data.expiresAt).toLocaleString('ar-SA', { dateStyle: 'medium', timeStyle: 'short' })
+      : '—';
 
     const info = [
-      { label: 'كود المؤسسة',   value: orgCode   || '—' },
-      { label: 'اسم المؤسسة',   value: orgName   || '—' },
-      { label: 'Device ID',      value: deviceId             },
-      { label: 'Request Code',   value: requestCode          },
-      { label: 'التوقيت',        value: now                  },
+      { label: 'كود المؤسسة',         value: orgCode   || '—', mono: false },
+      { label: 'اسم المؤسسة',         value: orgName   || '—', mono: false },
+      { label: 'Device ID',            value: devId,             mono: true  },
+      { label: 'Device ID (مختصر)',    value: devShort,          mono: true  },
+      { label: 'Hardware Fingerprint', value: hwFp,              mono: true  },
+      { label: 'Request Code',         value: reqCode,           mono: true  },
+      { label: 'صالح حتى',            value: expiresAt,         mono: false },
     ];
 
     const copyText = [
       '=== OneSoft ERP — Support Recovery Request ===',
-      ...info.map((i) => `${i.label}: ${i.value}`),
-      '==============================================',
+      `كود المؤسسة: ${orgCode || '—'}`,
+      `اسم المؤسسة: ${orgName || '—'}`,
+      `Device ID: ${devId}`,
+      `Hardware Fingerprint: ${hwFp}`,
+      `Request Code: ${reqCode}`,
+      `صالح حتى: ${expiresAt}`,
+      '=== Phase 1: للدعم الفني فقط ===',
     ].join('\n');
 
     return (
       <div dir="rtl" style={card}>
         <Title
           t="🛟 Support Recovery"
-          sub="أرسل هذه المعلومات لمسؤول النظام أو فريق الدعم الفني"
+          sub="أرسل هذه المعلومات لفريق الدعم الفني"
         />
 
-        {/* بطاقة المعلومات */}
-        <div style={{
-          background: 'var(--muted)', borderRadius: 10,
-          padding: '12px 14px', fontSize: 12, lineHeight: 2,
-        }}>
-          {info.map((i) => (
-            <div key={i.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
-              <span style={{ color: 'var(--muted-foreground)', fontSize: 11, whiteSpace: 'nowrap' }}>{i.label}</span>
-              <span style={{
-                fontFamily: i.label.includes('ID') || i.label.includes('Code') ? 'monospace' : 'inherit',
-                fontWeight: i.label.includes('Code') ? 800 : 600,
-                color: i.label === 'Request Code' ? 'var(--primary)' : 'var(--foreground)',
-                fontSize: i.label.includes('ID') || i.label.includes('Code') ? 13 : 12,
-                wordBreak: 'break-all', textAlign: 'left',
-              }}>{i.value}</span>
-            </div>
-          ))}
-        </div>
+        {/* بيانات الجهاز من الباكند */}
+        {isLoading ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '16px 0' }}>
+            <Spinner size={16} dark />
+            <span style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>جاري توليد Request Code من النظام...</span>
+          </div>
+        ) : (
+          <div style={{ background: 'var(--muted)', borderRadius: 10, padding: '12px 14px', fontSize: 12, lineHeight: 2 }}>
+            {info.map((i) => (
+              <div key={i.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
+                <span style={{ color: 'var(--muted-foreground)', fontSize: 11, whiteSpace: 'nowrap', flexShrink: 0 }}>{i.label}</span>
+                <span style={{
+                  fontFamily: i.mono ? 'monospace' : 'inherit',
+                  fontWeight: i.label === 'Request Code' ? 800 : 600,
+                  color: i.label === 'Request Code' ? 'var(--primary)' : 'var(--foreground)',
+                  fontSize: i.mono ? 12 : 12,
+                  wordBreak: 'break-all', textAlign: 'left',
+                }}>{i.value}</span>
+              </div>
+            ))}
+          </div>
+        )}
 
-        {/* زر نسخ */}
-        <button
-          onClick={() => navigator.clipboard.writeText(copyText).catch(() => {})}
-          style={{ ...btn(false), border: '1px solid var(--border)', gap: 8 }}
-        >
-          📋 نسخ جميع المعلومات
-        </button>
+        {/* أزرار */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <button
+            disabled={isLoading}
+            onClick={() => navigator.clipboard.writeText(copyText).catch(() => {})}
+            style={{ ...btn(false, isLoading), border: '1px solid var(--border)' }}
+          >
+            📋 نسخ جميع المعلومات
+          </button>
+          <button
+            disabled={genCode.isPending}
+            onClick={() => genCode.mutate({ orgCode: orgCode ?? undefined })}
+            style={{ ...btn(false, genCode.isPending), border: '1px solid var(--border)', fontSize: 12 }}
+          >
+            🔄 توليد Request Code جديد
+          </button>
+        </div>
 
         {/* إرشادات */}
         <div style={{
@@ -468,12 +485,16 @@ export default function ForgotPasswordFlow({ onBack, orgCode, orgName }: ForgotP
           borderRadius: 8, padding: '10px 12px', fontSize: 11,
           color: '#1E40AF', lineHeight: 1.8,
         }}>
-          <strong>كيف يعمل Support Recovery؟</strong>
+          <strong>كيف يعمل Support Recovery؟ (المرحلة الأولى)</strong>
           <ol style={{ margin: '6px 0 0', paddingRight: 16, paddingLeft: 0 }}>
-            <li>أرسل <strong>Request Code</strong> و <strong>Device ID</strong> لمسؤول النظام.</li>
-            <li>يصدر المسؤول كود Support Reset من License Center.</li>
-            <li>أدخل الكود في النظام لتغيير كلمة مرورك.</li>
+            <li>انسخ <strong>Request Code</strong> و <strong>Device ID</strong> وأرسلهما لمسؤول النظام.</li>
+            <li>يصدر المسؤول Support Reset Code من License Center.</li>
+            <li>أدخل الكود في النظام لإعادة تعيين كلمة المرور.</li>
           </ol>
+          <div style={{ marginTop: 6, color: '#92400E', background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: 4, padding: '4px 8px' }}>
+            ⚠ المرحلة الأولى: Request Code للمرجعية فقط.
+            المرحلة الثانية ستضيف التحقق الكامل عبر License Center.
+          </div>
         </div>
 
         <div style={{ fontSize: 11, color: 'var(--muted-foreground)', textAlign: 'center', lineHeight: 1.6 }}>

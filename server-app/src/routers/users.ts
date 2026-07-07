@@ -29,7 +29,7 @@ export const usersRouter = router({
     .input(z.object({
       code: z.string().optional(),
       username: z.string().min(3),
-      password: z.string().min(6),
+      password: z.string().default(''),
       name: z.string().min(2),
       email: z.string().email().optional(),
       phone: z.string().optional(),
