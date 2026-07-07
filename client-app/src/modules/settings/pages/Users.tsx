@@ -195,7 +195,6 @@ export default function Users() {
     if (mode === "create") {
       if (!form.name.trim()) { toast.error("الاسم الكامل مطلوب"); return; }
       if (!form.username.trim()) { toast.error("اسم المستخدم مطلوب"); return; }
-      if (form.password.length < 6) { toast.error("كلمة المرور 6 أحرف على الأقل"); return; }
       createUser.mutate({ code: form.code || undefined, name: form.name, phone: form.phone || undefined, email: form.email || undefined, username: form.username, password: form.password, role: form.role as any });
     } else {
       updateUser.mutate({ id: selectedUser.id, name: form.name || undefined, phone: form.phone || undefined, email: form.email || undefined, role: form.role as any, newPassword: form.newPassword || undefined });
@@ -335,9 +334,64 @@ export default function Users() {
                 </div>
                 <div>
                   <Label>
-                    {mode === "create" ? <><span>كلمة المرور</span> <span className="text-red-500">*</span></> : <span>كلمة مرور جديدة <span className="text-muted-foreground text-xs">(اختياري)</span></span>}
+                    {mode === "create" ? <span>كلمة المرور <span className="text-muted-foreground text-xs">(اختياري)</span></span> : <span>كلمة مرور جديدة <span className="text-muted-foreground text-xs">(اختياري)</span></span>}
                   </Label>
-                  <Input className="mt-1" type="password" placeholder={mode === "create" ? "6 أحرف على الأقل" : "اتركه فارغًا إن لم تُرِد التغيير"} value={mode === "create" ? form.password : form.newPassword} onChange={(e) => setField(mode === "create" ? "password" : "newPassword", e.target.value)} dir="ltr" />
+                  <Input className="mt-1" type="password" placeholder="اتركها فارغة للدخول بدون كلمة مرور" value={mode === "create" ? form.password : form.newPassword} onChange={(e) => setField(mode === "create" ? "password" : "newPassword", e.target.value)} dir="ltr" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <Label>رقم الجوال <span className="text-muted-foreground text-xs">(اختياري)</span></Label>
+                    {mode === "edit" && selectedUser?.phone && !phoneChanged && (
+                      <div className="flex items-center gap-1">
+                        <VerifyBadge verified={!!selectedUser?.phoneVerifiedAt} label="الجوال" />
+                        <Button variant="ghost" size="sm" className="h-6 text-xs gap-1 px-2"
+                          disabled={sendVerification.isPending}
+                          onClick={() => sendVerification.mutate({ userId: selectedUser.id, channel: "phone" })}>
+                          {sendVerification.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                          تحقق
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  <Input
+                    className={phoneError ? "border-red-400" : ""}
+                    placeholder="+9665xxxxxxxx أو 05xxxxxxxx"
+                    value={form.phone}
+                    onChange={(e) => setField("phone", e.target.value)}
+                    dir="ltr" type="tel"
+                  />
+                  {phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}
+                  {phoneChanged && selectedUser?.phoneVerifiedAt && (
+                    <p className="text-amber-600 text-xs mt-1">⚠ تغيير الجوال سيلغي التحقق</p>
+                  )}
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <Label>البريد الإلكتروني <span className="text-muted-foreground text-xs">(اختياري)</span></Label>
+                    {mode === "edit" && selectedUser?.email && !emailChanged && (
+                      <div className="flex items-center gap-1">
+                        <VerifyBadge verified={!!selectedUser?.emailVerifiedAt} label="البريد" />
+                        <Button variant="ghost" size="sm" className="h-6 text-xs gap-1 px-2"
+                          disabled={sendVerification.isPending}
+                          onClick={() => sendVerification.mutate({ userId: selectedUser.id, channel: "email" })}>
+                          {sendVerification.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                          تحقق
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  <Input
+                    placeholder="example@company.com"
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => setField("email", e.target.value)}
+                    dir="ltr"
+                  />
+                  {emailChanged && selectedUser?.emailVerifiedAt && (
+                    <p className="text-amber-600 text-xs mt-1">⚠ تغيير البريد سيلغي التحقق</p>
+                  )}
                 </div>
               </div>
               <div>
