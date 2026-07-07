@@ -73,6 +73,7 @@ import SettingsModule, {
   CfgZatcaCenterTab,
   CfgSystemInfoTab,
   CfgServiceManagementTab,
+  CfgUpdatesTab,
 } from "@/modules/settings/pages/SettingsModule";
 import PostingSettingsPage from "@/modules/accounting/pages/PostingSettingsPage";
 import PostingOperationsPage from "@/modules/accounting/pages/PostingOperationsPage";
@@ -90,11 +91,12 @@ import { Settings } from "lucide-react";
 import AppWindow from "@/shared/components/AppWindow";
 import UpdateDialog from "@/shared/components/UpdateDialog";
 
-// ─── Dev-only: Customer License Activation Screen — Preview ──────────────────
-// Vite removes this block in production (import.meta.env.DEV → false → tree-shaken).
-// /dev/license-preview is completely inaccessible in production builds.
+// ─── Dev-only previews ────────────────────────────────────────────────────────
 const _DevLicensePreview = import.meta.env.DEV
   ? lazy(() => import("@/modules/license/pages/LicensePreviewPage"))
+  : null;
+const _DevUpdatePreview = import.meta.env.DEV
+  ? lazy(() => import("@/modules/update/pages/UpdatePreviewPage"))
   : null;
 
 // ─── خريطة المسارات إلى المكونات ──────────────────────────────────────────
@@ -277,6 +279,7 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/cfg/gazt":                   CfgGaztTab,
   "/cfg/system-info":            CfgSystemInfoTab,
   "/cfg/service-management":     CfgServiceManagementTab,
+  "/cfg/updates":                CfgUpdatesTab,
   "/dev/source-code":            SourceCodeViewerPage,
   "/cfg/branding":               BrandingSettingsPage,
   "/cfg/license":                LicenseActivationPage,
@@ -421,6 +424,15 @@ function App() {
                   {() => (
                     <Suspense fallback={null}>
                       {_DevLicensePreview && createElement(_DevLicensePreview)}
+                    </Suspense>
+                  )}
+                </Route>
+              )}
+              {import.meta.env.DEV && _DevUpdatePreview && (
+                <Route path="/dev/update-preview">
+                  {() => (
+                    <Suspense fallback={null}>
+                      {_DevUpdatePreview && createElement(_DevUpdatePreview)}
                     </Suspense>
                   )}
                 </Route>
