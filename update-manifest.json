@@ -8,26 +8,52 @@
     "تحسين شاشة الترخيص",
     "إصلاح مشاكل التثبيت",
     "تحسين الأمان",
-    "تحديثات في نظام التحديث التلقائي"
+    "تحديثات في نظام التحديث التلقائي",
+    "التحقق من SHA512 بعد تحميل التحديث"
   ],
   "downloadUrl": "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.2/OneSoftSetup-1.0.2.exe",
   "fileSizeBytes": 80000000,
+  "sha512": "",
+  "publishedAt": "2026-07-07T00:00:00.000Z",
 
   "_notes": {
     "MANIFEST_URL": "استضِف هذا الملف على CDN عام أو GitHub Pages بدون توثيق (Public URL).",
-    "minSupportedVersion": "إذا كان الإصدار الحالي أقل من هذا الرقم → تحديث إجباري (لا يُسمح بالدخول).",
+    "ONESOFT_UPDATE_URL": "يمكن تجاوز الرابط الافتراضي عبر متغير البيئة ONESOFT_UPDATE_URL.",
+    "ONESOFT_UPDATE_ENV": "'development' | 'staging' | 'production' (افتراضي: production).",
+    "minSupportedVersion": "إذا كان الإصدار الحالي أقل من هذا الرقم → تحديث إجباري (يُمنع الدخول للنظام).",
     "mandatory": "true = إجباري بغض النظر عن minSupportedVersion.",
-    "downloadUrl": "يجب أن يكون الرابط عاماً (Public) بدون GitHub Token.",
-    "ONESOFT_UPDATE_URL": "يمكن تجاوز الرابط الافتراضي في updater.ts بمتغير البيئة ONESOFT_UPDATE_URL.",
+    "sha512": "Hash الملف بصيغة hex (128 حرف) أو base64. اتركه فارغاً لتخطي التحقق (غير موصى به).",
+    "publishedAt": "تاريخ نشر الإصدار بصيغة ISO 8601.",
+    "downloadUrl": "يجب أن يبدأ بـ https:// — يُرفض أي رابط http://.",
+    "skip_policy": "التحديث الاختياري يُعرض مرة واحدة ثم يُؤجّل 24 ساعة إذا ضغط المستخدم 'لاحقاً'.",
+    "mandatory_block": "التحديث الإجباري يمنع الدخول لجميع صفحات النظام (login / dashboard / إلخ) حتى إتمام التحديث.",
+
+    "generate_sha512": "لحساب sha512 للملف على Windows: certutil -hashfile OneSoftSetup-1.0.2.exe SHA512",
+    "generate_sha512_linux": "sha512sum OneSoftSetup-1.0.2.exe | awk '{print $1}'",
 
     "mandatory_example": {
-      "latestVersion": "1.0.2",
-      "minSupportedVersion": "1.0.2",
+      "latestVersion": "1.0.3",
+      "minSupportedVersion": "1.0.3",
       "mandatory": true,
-      "messageAr": "هذا التحديث إجباري ويحتوي على تعديلات أمنية مهمة.",
+      "messageAr": "هذا التحديث إجباري ويحتوي على تعديلات أمنية مهمة. لا يمكن تخطيه.",
+      "messageEn": "This is a mandatory security update and cannot be skipped.",
       "releaseNotes": ["إصلاح ثغرة أمنية حرجة", "تحسين نظام الترخيص"],
       "downloadUrl": "https://...",
-      "fileSizeBytes": 80000000
+      "fileSizeBytes": 80000000,
+      "sha512": "<hex-hash-here>",
+      "publishedAt": "2026-07-07T00:00:00.000Z"
+    },
+
+    "optional_example": {
+      "latestVersion": "1.0.3",
+      "minSupportedVersion": "1.0.0",
+      "mandatory": false,
+      "messageAr": "يوجد تحديث جديد. يمكنك تأجيله لـ 24 ساعة.",
+      "releaseNotes": ["تحسينات في الأداء"],
+      "downloadUrl": "https://...",
+      "fileSizeBytes": 80000000,
+      "sha512": "<hex-hash-here>",
+      "publishedAt": "2026-07-07T00:00:00.000Z"
     }
   }
 }
