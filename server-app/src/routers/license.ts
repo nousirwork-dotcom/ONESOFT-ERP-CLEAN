@@ -17,6 +17,7 @@ import {
 } from '../lib/deviceId.js';
 import {
   loadDevicePrefs,
+  saveDevicePrefs,
   clearDeviceOrgCode,
 } from '../lib/devicePrefs.js';
 
@@ -73,41 +74,51 @@ export const licenseRouter = router({
   }),
 
   // ── سياق تسجيل الدخول (عام — لشاشة الدخول) ────────────────────────────────
-  // يُعيد: حالة الترخيص + كود المؤسسة المحفوظ على الجهاز + اسمها
+  // المصدر الأساسي: ملف الترخيص (license.payload.org_id)
+  // الاحتياطي:     device.prefs.json (للتطوير أو عند غياب الترخيص)
   getLoginContext: publicProcedure.query(async () => {
-    const lic   = getLicense();
+    const lic = getLicense();
+
+    // ── الترخيص موجود (سواء صالح أو منتهي) ──────────────────────────────────
+    if (lic.error !== 'license_not_found' && lic.payload) {
+      const p = lic.payload;
+      return {
+        hasLicense:  true,
+        isExpired:   lic.error === 'expired',
+        isInvalid:   !lic.valid && lic.error !== 'expired',
+        // كود المؤسسة يأتي دائماً من الترخيص — لا يكتبه المستخدم
+        orgCode:     p.org_id,
+        orgName:     p.customer_name,
+        licenseId:   p.license_id,
+        licExpiry:   p.expiry_date,
+      };
+    }
+
+    // ── لا يوجد ترخيص — استخدم device prefs كاحتياط (بيئة التطوير) ──────────
     const prefs = loadDevicePrefs();
+    let orgName = prefs.savedOrgName ?? null;
 
-    const savedOrgCode = prefs.savedOrgCode ?? null;
-    let   savedOrgName = prefs.savedOrgName ?? null;
-
-    // تحديث اسم المؤسسة من قاعدة البيانات إن وُجد الكود
-    if (savedOrgCode && !savedOrgName) {
+    if (prefs.savedOrgCode && !orgName) {
       try {
         const org = await db.query.organizations.findFirst({
-          where: eq(organizations.code, savedOrgCode),
+          where: eq(organizations.code, prefs.savedOrgCode),
         });
-        if (org) savedOrgName = org.name;
+        if (org) orgName = org.name;
       } catch { /* DB غير متاح */ }
     }
 
-    // اسم المؤسسة من الترخيص كخيار احتياطي
-    const licOrgName   = lic.payload?.customer_name  ?? null;
-    const licOrgId     = lic.payload?.org_id          ?? null;
-    const licExpiry    = lic.payload?.expiry_date      ?? null;
-
     return {
-      hasLicense:  lic.error !== 'license_not_found',
-      isExpired:   lic.error === 'expired',
-      isInvalid:   !lic.valid && lic.error !== 'license_not_found' && lic.error !== 'expired',
-      savedOrgCode,
-      savedOrgName: savedOrgName ?? licOrgName,
-      licOrgId,
-      licExpiry,
+      hasLicense:  false,
+      isExpired:   false,
+      isInvalid:   false,
+      orgCode:     prefs.savedOrgCode ?? null,
+      orgName:     orgName,
+      licenseId:   null,
+      licExpiry:   null,
     };
   }),
 
-  // ── مسح كود المؤسسة المحفوظ (للسماح بتغيير المؤسسة) ──────────────────────
+  // ── مسح كود المؤسسة المحفوظ (بعد التحقق من صلاحية المسؤول) ───────────────
   clearSavedOrgCode: publicProcedure.mutation(() => {
     clearDeviceOrgCode();
     return { ok: true };
@@ -201,10 +212,19 @@ function _applyLicense(signed: SignedLicense) {
   // إعادة قراءة للتأكد
   const fresh = getLicense();
 
+  // حفظ كود المؤسسة واسمها تلقائياً عند التفعيل
+  if (fresh.payload) {
+    saveDevicePrefs({
+      savedOrgCode: fresh.payload.org_id,
+      savedOrgName: fresh.payload.customer_name,
+    });
+  }
+
   return {
     success:  true,
     customer: fresh.payload?.customer_name,
     expiry:   fresh.payload?.expiry_date,
     modules:  fresh.payload?.enabled_modules,
+    orgCode:  fresh.payload?.org_id,
   };
 }

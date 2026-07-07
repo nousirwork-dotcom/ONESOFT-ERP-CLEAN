@@ -6,36 +6,18 @@ import { useBranding, getStartupPath } from '@/core/contexts/BrandingContext';
 
 // ─── Transition durations (ms) ────────────────────────────────────────────────
 const TRANS_DURATION: Record<string, number> = {
-  fade:         500,
-  slide:        550,
-  zoom:         520,
-  split_center: 620,
+  fade: 500, slide: 550, zoom: 520, split_center: 620,
 };
 
 // ─── TransitionOverlay ────────────────────────────────────────────────────────
-function TransitionOverlay({
-  type,
-  loginBg,
-  onDone,
-}: {
-  type: string;
-  loginBg: string;
-  onDone: () => void;
-}) {
+function TransitionOverlay({ type, loginBg, onDone }: { type: string; loginBg: string; onDone: () => void }) {
   const doneRef = useRef(false);
   const duration = TRANS_DURATION[type] ?? 600;
-
   useEffect(() => {
-    const t = setTimeout(() => {
-      if (!doneRef.current) { doneRef.current = true; onDone(); }
-    }, duration + 50);
+    const t = setTimeout(() => { if (!doneRef.current) { doneRef.current = true; onDone(); } }, duration + 50);
     return () => clearTimeout(t);
   }, [duration, onDone]);
-
-  const base: React.CSSProperties = {
-    position: 'fixed', inset: 0, zIndex: 9999, pointerEvents: 'none',
-  };
-
+  const base: React.CSSProperties = { position: 'fixed', inset: 0, zIndex: 9999, pointerEvents: 'none' };
   if (type === 'split_center') return (
     <>
       <div style={{ ...base, width: '50%', left: 0, right: 'auto', background: loginBg, animation: `onesoft-split-left ${duration}ms cubic-bezier(0.4,0,0.2,1) forwards` }} />
@@ -43,83 +25,184 @@ function TransitionOverlay({
       <TransitionStyles />
     </>
   );
-  if (type === 'fade') return (
-    <><div style={{ ...base, background: loginBg, animation: `onesoft-fade-out ${duration}ms ease-in-out forwards` }} /><TransitionStyles /></>
-  );
-  if (type === 'slide') return (
-    <><div style={{ ...base, background: loginBg, animation: `onesoft-slide-up ${duration}ms cubic-bezier(0.4,0,0.2,1) forwards` }} /><TransitionStyles /></>
-  );
-  if (type === 'zoom') return (
-    <><div style={{ ...base, background: loginBg, animation: `onesoft-zoom-out ${duration}ms cubic-bezier(0.4,0,0.6,1) forwards` }} /><TransitionStyles /></>
-  );
+  if (type === 'fade')  return <><div style={{ ...base, background: loginBg, animation: `onesoft-fade-out ${duration}ms ease-in-out forwards` }} /><TransitionStyles /></>;
+  if (type === 'slide') return <><div style={{ ...base, background: loginBg, animation: `onesoft-slide-up ${duration}ms cubic-bezier(0.4,0,0.2,1) forwards` }} /><TransitionStyles /></>;
+  if (type === 'zoom')  return <><div style={{ ...base, background: loginBg, animation: `onesoft-zoom-out ${duration}ms cubic-bezier(0.4,0,0.6,1) forwards` }} /><TransitionStyles /></>;
   return null;
 }
 
 function TransitionStyles() {
-  return (
-    <style>{`
-      @keyframes onesoft-split-left  { 0%{transform:translateX(0);opacity:1} 20%{transform:translateX(0);opacity:1} 100%{transform:translateX(-102%);opacity:0.8} }
-      @keyframes onesoft-split-right { 0%{transform:translateX(0);opacity:1} 20%{transform:translateX(0);opacity:1} 100%{transform:translateX(102%);opacity:0.8}  }
-      @keyframes onesoft-fade-out    { 0%{opacity:1} 30%{opacity:1} 100%{opacity:0} }
-      @keyframes onesoft-slide-up    { 0%{transform:translateY(0);opacity:1} 20%{transform:translateY(0);opacity:1} 100%{transform:translateY(-105%);opacity:0.7} }
-      @keyframes onesoft-zoom-out    { 0%{transform:scale(1);opacity:1} 100%{transform:scale(1.18);opacity:0} }
-      @keyframes spin                { to { transform: rotate(360deg); } }
-    `}</style>
-  );
+  return <style>{`
+    @keyframes onesoft-split-left  { 0%{transform:translateX(0);opacity:1} 20%{transform:translateX(0);opacity:1} 100%{transform:translateX(-102%);opacity:0.8} }
+    @keyframes onesoft-split-right { 0%{transform:translateX(0);opacity:1} 20%{transform:translateX(0);opacity:1} 100%{transform:translateX(102%);opacity:0.8}  }
+    @keyframes onesoft-fade-out    { 0%{opacity:1} 30%{opacity:1} 100%{opacity:0} }
+    @keyframes onesoft-slide-up    { 0%{transform:translateY(0);opacity:1} 20%{transform:translateY(0);opacity:1} 100%{transform:translateY(-105%);opacity:0.7} }
+    @keyframes onesoft-zoom-out    { 0%{transform:scale(1);opacity:1} 100%{transform:scale(1.18);opacity:0} }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  `}</style>;
 }
 
-// ─── Spinner ──────────────────────────────────────────────────────────────────
 function Spinner({ size = 32 }: { size?: number }) {
+  return <div style={{
+    width: size, height: size,
+    border: '3px solid rgba(var(--brand-primary-rgb)/0.18)',
+    borderTopColor: 'var(--primary)',
+    borderRadius: '50%',
+    animation: 'spin 0.8s linear infinite',
+    flexShrink: 0,
+  }} />;
+}
+
+// ─── ChangeOrgDialog — حوار كلمة مرور المسؤول لتغيير المؤسسة ─────────────────
+function ChangeOrgDialog({
+  onConfirmed,
+  onCancel,
+}: {
+  onConfirmed: () => void;
+  onCancel:    () => void;
+}) {
+  const [form, setForm]   = useState({ username: '', password: '' });
+  const [error, setError] = useState('');
+
+  const verifyMut = trpc.auth.verifyAdminPassword.useMutation({
+    onSuccess: () => { onConfirmed(); },
+    onError:   (e) => { setError(e.message); },
+  });
+
+  const inp: React.CSSProperties = {
+    width: '100%', boxSizing: 'border-box',
+    background: 'var(--background)', border: '1px solid var(--border)',
+    borderRadius: 8, padding: '9px 13px', fontSize: 13,
+    color: 'var(--foreground)', outline: 'none',
+    fontFamily: "'Cairo', Tahoma, sans-serif",
+  };
+
   return (
     <div style={{
-      width: size, height: size,
-      border: '3px solid rgba(var(--brand-primary-rgb)/0.18)',
-      borderTopColor: 'var(--primary)',
-      borderRadius: '50%',
-      animation: 'spin 0.8s linear infinite',
-    }} />
+      position: 'fixed', inset: 0, zIndex: 999,
+      background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <div
+        dir="rtl"
+        style={{
+          background: 'var(--card)', borderRadius: 16,
+          padding: '28px 32px', width: 340,
+          boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+          border: '1px solid var(--border)',
+          fontFamily: "'Cairo', Tahoma, sans-serif",
+        }}
+      >
+        <div style={{ fontSize: 28, textAlign: 'center', marginBottom: 8 }}>🔐</div>
+        <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 800, textAlign: 'center', color: 'var(--foreground)' }}>
+          تغيير المؤسسة
+        </h3>
+        <p style={{ margin: '0 0 20px', fontSize: 12, color: 'var(--muted-foreground)', textAlign: 'center', lineHeight: 1.6 }}>
+          يتطلب تغيير المؤسسة التحقق من صلاحية المسؤول
+        </p>
+
+        {error && (
+          <div style={{
+            color: '#B91C1C', fontSize: 12, background: '#FEF2F2',
+            border: '1px solid #FCA5A5', borderRadius: 6,
+            padding: '7px 12px', marginBottom: 12, textAlign: 'center',
+          }}>
+            {error}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 11, color: 'var(--muted-foreground)', marginBottom: 4 }}>
+              اسم مستخدم المسؤول
+            </label>
+            <input
+              style={inp}
+              placeholder="admin"
+              value={form.username}
+              onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
+              autoFocus
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 11, color: 'var(--muted-foreground)', marginBottom: 4 }}>
+              كلمة مرور المسؤول
+            </label>
+            <input
+              type="password"
+              style={inp}
+              placeholder="••••••••"
+              value={form.password}
+              onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+              onKeyDown={e => { if (e.key === 'Enter') verifyMut.mutate(form); }}
+            />
+          </div>
+
+          <button
+            onClick={() => verifyMut.mutate(form)}
+            disabled={verifyMut.isPending || !form.username}
+            style={{
+              background: 'var(--primary)', color: 'var(--primary-foreground)',
+              border: 'none', borderRadius: 8, padding: '10px 0',
+              fontWeight: 700, fontSize: 13, cursor: verifyMut.isPending ? 'not-allowed' : 'pointer',
+              fontFamily: 'inherit', opacity: verifyMut.isPending ? 0.7 : 1,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            }}
+          >
+            {verifyMut.isPending ? <><Spinner size={14} />جارٍ التحقق...</> : 'تأكيد الصلاحية'}
+          </button>
+
+          <button
+            onClick={onCancel}
+            disabled={verifyMut.isPending}
+            style={{
+              background: 'transparent', color: 'var(--muted-foreground)',
+              border: '1px solid var(--border)', borderRadius: 8,
+              padding: '9px 0', fontWeight: 600, fontSize: 12,
+              cursor: 'pointer', fontFamily: 'inherit',
+            }}
+          >
+            إلغاء
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
-// ─── OrgCard — كارت المؤسسة الثابت ───────────────────────────────────────────
-function OrgCard({
+// ─── OrgInfoCard — كارت المؤسسة الثابت (للقراءة فقط) ─────────────────────────
+function OrgInfoCard({
   orgName,
   orgCode,
-  licOrgId,
-  onChangeOrg,
+  licenseId,
+  onRequestChangeOrg,
 }: {
-  orgName:   string | null;
-  orgCode:   string;
-  licOrgId:  string | null;
-  onChangeOrg: () => void;
+  orgName:            string;
+  orgCode:            string;
+  licenseId:          string | null;
+  onRequestChangeOrg: () => void;
 }) {
   return (
     <div style={{
-      background: 'linear-gradient(135deg, rgba(var(--brand-primary-rgb)/0.06) 0%, rgba(var(--brand-primary-rgb)/0.02) 100%)',
-      border: '1.5px solid rgba(var(--brand-primary-rgb)/0.2)',
-      borderRadius: 'var(--brand-border-radius)',
-      padding: '14px 18px',
-      marginBottom: 16,
-      textAlign: 'right',
-      position: 'relative',
+      background: 'linear-gradient(135deg, rgba(var(--brand-primary-rgb)/0.07) 0%, rgba(var(--brand-primary-rgb)/0.02) 100%)',
+      border: '1.5px solid rgba(var(--brand-primary-rgb)/0.22)',
+      borderRadius: 10, padding: '14px 18px', marginBottom: 16,
     }}>
-      {/* أيقونة المؤسسة */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+      {/* رأس الكارت */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
         <div style={{
-          width: 36, height: 36, borderRadius: 8,
+          width: 38, height: 38, borderRadius: 8,
           background: 'rgba(var(--brand-primary-rgb)/0.12)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 18, flexShrink: 0,
-        }}>
-          🏢
-        </div>
+          fontSize: 20, flexShrink: 0,
+        }}>🏢</div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12, color: 'var(--muted-foreground)', marginBottom: 2 }}>المؤسسة</div>
+          <div style={{ fontSize: 11, color: 'var(--muted-foreground)', marginBottom: 2 }}>المؤسسة</div>
           <div style={{
-            fontSize: 14, fontWeight: 700, color: 'var(--foreground)',
+            fontSize: 15, fontWeight: 800, color: 'var(--foreground)',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
-            {orgName ?? orgCode}
+            {orgName}
           </div>
         </div>
       </div>
@@ -127,141 +210,80 @@ function OrgCard({
       {/* كود المؤسسة */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8,
-        background: 'var(--background)',
-        border: '1px solid var(--border)',
-        borderRadius: 6, padding: '5px 10px',
+        background: 'var(--background)', border: '1px solid var(--border)',
+        borderRadius: 7, padding: '6px 12px',
       }}>
-        <span style={{ fontSize: 10, color: 'var(--muted-foreground)', userSelect: 'none' }}>كود المؤسسة</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 10, color: 'var(--muted-foreground)', marginBottom: 1 }}>كود المؤسسة</div>
+          <div style={{
+            fontFamily: "'Courier New', monospace",
+            fontSize: 14, fontWeight: 700, letterSpacing: 0.8,
+            color: 'var(--primary)',
+          }}>
+            {orgCode}
+          </div>
+        </div>
         <span style={{
-          fontFamily: "'Courier New', monospace",
-          fontSize: 13, fontWeight: 700, letterSpacing: 1,
-          color: 'var(--primary)', flex: 1,
-        }}>
-          {orgCode}
-        </span>
-        <span style={{
-          fontSize: 10, color: 'var(--muted-foreground)',
+          fontSize: 9, color: 'var(--muted-foreground)',
           background: 'rgba(var(--brand-primary-rgb)/0.08)',
-          padding: '1px 6px', borderRadius: 4,
-          userSelect: 'none',
+          padding: '2px 7px', borderRadius: 4, fontWeight: 600,
+          whiteSpace: 'nowrap', userSelect: 'none',
         }}>
           للقراءة فقط
         </span>
       </div>
 
-      {licOrgId && (
-        <div style={{ fontSize: 10, color: 'var(--muted-foreground)', marginTop: 6, textAlign: 'left', direction: 'ltr' }}>
-          LICENSE ID: {licOrgId}
+      {licenseId && (
+        <div style={{ fontSize: 10, color: 'var(--muted-foreground)', marginTop: 6, direction: 'ltr', textAlign: 'right' }}>
+          License: {licenseId}
         </div>
       )}
 
-      {/* زر تغيير المؤسسة */}
+      {/* رابط تغيير المؤسسة — يُطلب كلمة مرور مسؤول */}
       <button
         type="button"
-        onClick={onChangeOrg}
+        onClick={onRequestChangeOrg}
         style={{
-          marginTop: 10, background: 'none', border: 'none', padding: 0,
+          display: 'block', width: '100%', marginTop: 10,
+          background: 'none', border: 'none', padding: 0,
           color: 'var(--muted-foreground)', fontSize: 11, cursor: 'pointer',
-          textDecoration: 'underline', fontFamily: 'inherit', display: 'block',
-          width: '100%', textAlign: 'center',
+          textDecoration: 'underline', fontFamily: 'inherit', textAlign: 'center',
         }}
       >
-        تغيير المؤسسة
+        🔄 تغيير المؤسسة (للمسؤول فقط)
       </button>
     </div>
   );
 }
 
-// ─── NoLicenseView — لا يوجد ترخيص ───────────────────────────────────────────
-function NoLicenseView({ onContinueAnyway }: { onContinueAnyway: () => void }) {
-  const [, navigate] = useLocation();
-  return (
-    <div style={{
-      background: 'var(--card)', borderRadius: 'var(--brand-border-radius)',
-      padding: '28px 32px', border: '1px solid #FDE68A',
-      boxShadow: '0 4px 20px rgba(0,0,0,0.08)', maxWidth: 340, textAlign: 'center',
-    }}>
-      <div style={{ fontSize: 40, marginBottom: 12 }}>🔑</div>
-      <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--foreground)', marginBottom: 8 }}>
-        النظام غير مفعّل
-      </div>
-      <div style={{ color: 'var(--muted-foreground)', fontSize: 13, lineHeight: 1.7, marginBottom: 20 }}>
-        لم يتم العثور على ترخيص نشط على هذا الجهاز.
-        يرجى استيراد ملف الترخيص أو إدخال كود التفعيل.
-      </div>
-      <button
-        onClick={() => navigate('/cfg/license')}
-        style={{
-          width: '100%', background: 'var(--primary)', color: 'var(--primary-foreground)',
-          border: 'none', borderRadius: 'var(--brand-border-radius)',
-          padding: '10px 0', fontWeight: 700, fontSize: 13, cursor: 'pointer',
-          fontFamily: 'inherit', marginBottom: 10,
-        }}
-      >
-        🔐 انتقل إلى التفعيل
-      </button>
-      <button
-        onClick={onContinueAnyway}
-        style={{
-          width: '100%', background: 'transparent', color: 'var(--muted-foreground)',
-          border: '1px solid var(--border)', borderRadius: 'var(--brand-border-radius)',
-          padding: '8px 0', fontWeight: 600, fontSize: 12, cursor: 'pointer',
-          fontFamily: 'inherit',
-        }}
-      >
-        المتابعة كوضع التطوير
-      </button>
-    </div>
-  );
-}
-
-// ─── LicenseExpiredView — الترخيص منتهي ──────────────────────────────────────
-function LicenseExpiredView({ expiry }: { expiry: string | null }) {
-  return (
-    <div style={{
-      background: 'var(--card)', borderRadius: 'var(--brand-border-radius)',
-      padding: '28px 32px', border: '1px solid #FCA5A5',
-      boxShadow: '0 4px 20px rgba(0,0,0,0.08)', maxWidth: 340, textAlign: 'center',
-    }}>
-      <div style={{ fontSize: 40, marginBottom: 12 }}>⛔</div>
-      <div style={{ fontWeight: 800, fontSize: 16, color: '#B91C1C', marginBottom: 8 }}>
-        انتهت صلاحية الترخيص
-      </div>
-      {expiry && (
-        <div style={{ fontSize: 12, color: '#B91C1C', marginBottom: 12, fontFamily: "'Courier New', monospace" }}>
-          تاريخ الانتهاء: {expiry}
-        </div>
-      )}
-      <div style={{ color: 'var(--muted-foreground)', fontSize: 13, lineHeight: 1.7 }}>
-        انتهت صلاحية الترخيص أو تم إيقافه.
-        <br />
-        يرجى التواصل مع مزود النظام لتجديد الاشتراك.
-      </div>
-    </div>
-  );
-}
-
-// ─── ManualLoginForm ──────────────────────────────────────────────────────────
-function ManualLoginForm({
+// ─── LoginForm ────────────────────────────────────────────────────────────────
+function LoginForm({
   onSuccess,
   utils,
-  prefillOrgCode,
+  orgCode,
   orgName,
-  licOrgId,
-  onChangeOrg,
-  showOrgCard,
+  licenseId,
+  onRequestChangeOrg,
 }: {
-  onSuccess:     (role: string) => void;
-  utils:         ReturnType<typeof trpc.useUtils>;
-  prefillOrgCode: string | null;
-  orgName:       string | null;
-  licOrgId:      string | null;
-  onChangeOrg:   () => void;
-  showOrgCard:   boolean;
+  onSuccess:          (role: string) => void;
+  utils:              ReturnType<typeof trpc.useUtils>;
+  orgCode:            string;
+  orgName:            string;
+  licenseId:          string | null;
+  onRequestChangeOrg: () => void;
 }) {
-  const [form, setForm]       = useState({ orgCode: prefillOrgCode ?? '', username: '', password: '' });
-  const [error, setError]     = useState('');
-  const [loading, setLoading] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError]       = useState('');
+  const [loading, setLoading]   = useState(false);
+
+  const inp: React.CSSProperties = {
+    width: '100%', boxSizing: 'border-box',
+    background: 'var(--background)', border: '1px solid var(--border)',
+    borderRadius: 'var(--brand-border-radius)', padding: '10px 14px',
+    fontSize: 13, color: 'var(--foreground)', outline: 'none',
+    fontFamily: "'Cairo', Tahoma, sans-serif",
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -273,9 +295,9 @@ function ManualLoginForm({
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          username: form.username,
-          password: form.password,
-          orgCode:  form.orgCode || undefined,
+          username,
+          password,
+          orgCode: orgCode || undefined,
         }),
       });
       const data = await res.json();
@@ -292,44 +314,22 @@ function ManualLoginForm({
     }
   };
 
-  const inp: React.CSSProperties = {
-    width: '100%', boxSizing: 'border-box', background: 'var(--background)',
-    border: '1px solid var(--border)', borderRadius: 'var(--brand-border-radius)',
-    padding: '10px 14px', fontSize: 13, color: 'var(--foreground)', outline: 'none',
-    fontFamily: "'Cairo', Tahoma, sans-serif",
-  };
-
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 300 }}>
 
-      {/* كارت المؤسسة (إن كان الكود محفوظاً) */}
-      {showOrgCard && form.orgCode ? (
-        <OrgCard
-          orgName={orgName}
-          orgCode={form.orgCode}
-          licOrgId={licOrgId}
-          onChangeOrg={onChangeOrg}
-        />
-      ) : (
-        <div>
-          <label style={{ display: 'block', fontSize: 11, color: 'var(--muted-foreground)', marginBottom: 5, textAlign: 'right' }}>
-            كود المؤسسة
-          </label>
-          <input
-            style={inp}
-            placeholder="أدخل كود المؤسسة"
-            value={form.orgCode}
-            onChange={e => setForm(f => ({ ...f, orgCode: e.target.value.toUpperCase() }))}
-            autoComplete="organization"
-          />
-        </div>
-      )}
+      {/* كارت المؤسسة — للقراءة فقط */}
+      <OrgInfoCard
+        orgName={orgName}
+        orgCode={orgCode}
+        licenseId={licenseId}
+        onRequestChangeOrg={onRequestChangeOrg}
+      />
 
       {error && (
         <div style={{
           color: '#B91C1C', fontSize: 12, textAlign: 'center',
           background: '#FEF2F2', border: '1px solid #FCA5A5',
-          borderRadius: 6, padding: '6px 12px',
+          borderRadius: 6, padding: '7px 12px',
         }}>
           {error}
         </div>
@@ -340,13 +340,10 @@ function ManualLoginForm({
           اسم المستخدم
         </label>
         <input
-          style={inp}
-          placeholder="أدخل اسم المستخدم"
-          required
-          value={form.username}
-          onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
-          autoComplete="username"
-          autoFocus
+          style={inp} placeholder="أدخل اسم المستخدم"
+          required autoFocus autoComplete="username"
+          value={username}
+          onChange={e => setUsername(e.target.value)}
         />
       </div>
 
@@ -355,12 +352,11 @@ function ManualLoginForm({
           كلمة المرور
         </label>
         <input
-          type="password"
-          style={inp}
+          type="password" style={inp}
           placeholder="أدخل كلمة المرور"
-          value={form.password}
-          onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
           autoComplete="current-password"
+          value={password}
+          onChange={e => setPassword(e.target.value)}
         />
       </div>
 
@@ -371,39 +367,105 @@ function ManualLoginForm({
           background: 'var(--primary)', color: 'var(--primary-foreground)',
           border: 'none', borderRadius: 'var(--brand-border-radius)', padding: '11px 0',
           fontWeight: 700, fontSize: 14, cursor: loading ? 'not-allowed' : 'pointer',
-          fontFamily: 'inherit', opacity: loading ? 0.7 : 1,
-          marginTop: 4,
+          fontFamily: 'inherit', opacity: loading ? 0.7 : 1, marginTop: 4,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
         }}
       >
-        {loading ? (
-          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-            <Spinner size={16} />
-            جارٍ الدخول...
-          </span>
-        ) : 'تسجيل الدخول'}
+        {loading ? <><Spinner size={16} />جارٍ الدخول...</> : 'تسجيل الدخول'}
       </button>
     </form>
   );
 }
 
+// ─── NoLicenseRedirect — إعادة توجيه عند غياب الترخيص ───────────────────────
+function NoLicenseRedirect() {
+  const [, navigate] = useLocation();
+  const [countdown, setCountdown] = useState(5);
+
+  useEffect(() => {
+    if (countdown <= 0) { navigate('/cfg/license'); return; }
+    const t = setTimeout(() => setCountdown(c => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [countdown, navigate]);
+
+  return (
+    <div style={{
+      background: 'var(--card)', borderRadius: 'var(--brand-border-radius)',
+      padding: '28px 32px', border: '1px solid #FDE68A',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.08)', maxWidth: 340, textAlign: 'center',
+    }}>
+      <div style={{ fontSize: 40, marginBottom: 12 }}>🔑</div>
+      <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--foreground)', marginBottom: 8 }}>
+        النظام غير مفعّل
+      </div>
+      <div style={{ color: 'var(--muted-foreground)', fontSize: 13, lineHeight: 1.7, marginBottom: 20 }}>
+        لم يتم العثور على ترخيص نشط على هذا الجهاز.
+        سيتم توجيهك إلى صفحة التفعيل...
+      </div>
+      <div style={{
+        fontSize: 32, fontWeight: 800, color: 'var(--primary)',
+        marginBottom: 16, fontFamily: 'monospace',
+      }}>
+        {countdown}
+      </div>
+      <button
+        onClick={() => navigate('/cfg/license')}
+        style={{
+          width: '100%', background: 'var(--primary)', color: 'var(--primary-foreground)',
+          border: 'none', borderRadius: 'var(--brand-border-radius)', padding: '10px 0',
+          fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+        }}
+      >
+        🔐 الانتقال إلى التفعيل الآن
+      </button>
+    </div>
+  );
+}
+
+// ─── LicenseExpiredView ───────────────────────────────────────────────────────
+function LicenseExpiredView({ orgName, orgCode, expiry }: { orgName: string; orgCode: string; expiry: string | null }) {
+  return (
+    <div style={{
+      background: 'var(--card)', borderRadius: 'var(--brand-border-radius)',
+      padding: '28px 32px', border: '1px solid #FCA5A5',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.08)', maxWidth: 360, textAlign: 'center',
+    }}>
+      <div style={{ fontSize: 40, marginBottom: 12 }}>⛔</div>
+      <div style={{ fontWeight: 800, fontSize: 16, color: '#B91C1C', marginBottom: 8 }}>
+        انتهت صلاحية الترخيص
+      </div>
+      <div style={{
+        background: '#FEF2F2', border: '1px solid #FCA5A5',
+        borderRadius: 8, padding: '10px 14px', marginBottom: 14, textAlign: 'right',
+      }}>
+        <div style={{ fontSize: 12, color: '#B91C1C', marginBottom: 4 }}>المؤسسة: <strong>{orgName}</strong></div>
+        <div style={{ fontSize: 12, color: '#B91C1C', fontFamily: 'monospace' }}>الكود: {orgCode}</div>
+        {expiry && <div style={{ fontSize: 11, color: '#B91C1C', marginTop: 4 }}>انتهى: {expiry}</div>}
+      </div>
+      <p style={{ color: 'var(--muted-foreground)', fontSize: 13, lineHeight: 1.7, margin: 0 }}>
+        انتهت صلاحية الترخيص أو تم إيقافه.
+        <br />
+        يرجى التواصل مع مزود النظام لتجديد الاشتراك.
+      </p>
+    </div>
+  );
+}
+
 // ─── LoginPage ────────────────────────────────────────────────────────────────
 export default function LoginPage() {
-  const [phase, setPhase]         = useState<'loading' | 'dbError' | 'login' | 'wizard'>('loading');
+  const [phase, setPhase]               = useState<'loading' | 'dbError' | 'login' | 'wizard'>('loading');
   const [transitioning, setTransitioning] = useState(false);
-  const [transType, setTransType] = useState('none');
-  const [showChangeOrg, setShowChangeOrg] = useState(false);
+  const [transType, setTransType]       = useState('none');
+  const [showChangeOrgDialog, setShowChangeOrgDialog] = useState(false);
 
   const utils        = trpc.useUtils();
   const [, navigate] = useLocation();
   const { settings } = useBranding();
 
-  const firstRunQ    = trpc.setup.isFirstRun.useQuery(undefined, { retry: 3, retryDelay: 2000, staleTime: 0 });
-  const licCtxQ      = trpc.license.getLoginContext.useQuery(undefined, { staleTime: 30_000, retry: 1 });
-  const clearOrgMut  = trpc.license.clearSavedOrgCode.useMutation({
-    onSuccess: () => {
-      licCtxQ.refetch();
-      setShowChangeOrg(false);
-    },
+  const firstRunQ   = trpc.setup.isFirstRun.useQuery(undefined, { retry: 3, retryDelay: 2000, staleTime: 0 });
+  const licCtxQ     = trpc.license.getLoginContext.useQuery(undefined, { staleTime: 30_000, retry: 1 });
+  const clearOrgMut = trpc.license.clearSavedOrgCode.useMutation({
+    onSuccess: () => licCtxQ.refetch(),
   });
 
   const loginBg = (() => {
@@ -413,20 +475,12 @@ export default function LoginPage() {
     return s.login_background_value;
   })();
 
-  const doNavigate = useCallback((targetPath: string) => navigate(targetPath), [navigate]);
+  const doNavigate = useCallback((p: string) => navigate(p), [navigate]);
 
   const tryAutoLogin = async () => {
     try {
-      const res = await fetch('/api/auth/auto-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-      });
-      if (res.ok) {
-        await utils.auth.me.invalidate();
-        doNavigate(getStartupPath(settings.startup_page));
-        return true;
-      }
+      const res = await fetch('/api/auth/auto-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include' });
+      if (res.ok) { await utils.auth.me.invalidate(); doNavigate(getStartupPath(settings.startup_page)); return true; }
     } catch { /* show manual login */ }
     return false;
   };
@@ -437,83 +491,58 @@ export default function LoginPage() {
     const { firstRun, dbError } = firstRunQ.data ?? {};
     if (dbError)  { setPhase('dbError'); return; }
     if (firstRun) { setPhase('wizard'); return; }
-    tryAutoLogin().then(success => { if (!success) setPhase('login'); });
+    tryAutoLogin().then(ok => { if (!ok) setPhase('login'); });
   }, [firstRunQ.isLoading, firstRunQ.isError, firstRunQ.data]);
 
   const handleLoginSuccess = useCallback(async (_role: string) => {
     const transition = settings.opening_transition ?? 'none';
     const targetPath = getStartupPath(settings.startup_page);
     if (transition === 'none') { doNavigate(targetPath); return; }
-    try {
-      setTransType(transition);
-      setTransitioning(true);
-      const dur = TRANS_DURATION[transition] ?? 600;
-      await new Promise(r => setTimeout(r, dur + 80));
-    } catch { /* fallback */ }
+    setTransType(transition); setTransitioning(true);
+    await new Promise(r => setTimeout(r, (TRANS_DURATION[transition] ?? 600) + 80));
     doNavigate(targetPath);
   }, [settings.opening_transition, settings.startup_page, doNavigate]);
 
-  const handleChangeOrg = useCallback(() => {
+  // المسؤول تحقق بنجاح → مسح prefs والانتقال لصفحة التفعيل
+  const handleChangeOrgConfirmed = useCallback(() => {
+    setShowChangeOrgDialog(false);
     clearOrgMut.mutate();
-    setShowChangeOrg(true);
-  }, [clearOrgMut]);
+    navigate('/cfg/license');
+  }, [clearOrgMut, navigate]);
 
   // ── First Run Wizard ──
   if (phase === 'wizard') {
-    return (
-      <FirstRunWizard onComplete={async () => {
-        await utils.auth.me.invalidate();
-        doNavigate('/');
-      }} />
-    );
+    return <FirstRunWizard onComplete={async () => { await utils.auth.me.invalidate(); doNavigate('/'); }} />;
   }
-
-  // ── خلفية الصفحة ──
-  const bg = (
-    <div
-      dir="rtl"
-      style={{
-        minHeight: '100vh',
-        background: loginBg,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontFamily: "'Cairo', Tahoma, sans-serif",
-        fontSize: 'var(--brand-font-size)',
-        position: 'relative',
-        overflow: 'hidden',
-      }}
-    />
-  );
-  void bg;
 
   return (
     <div
       dir="rtl"
       style={{
-        minHeight: '100vh',
-        background: loginBg,
+        minHeight: '100vh', background: loginBg,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontFamily: "'Cairo', Tahoma, sans-serif",
-        fontSize: 'var(--brand-font-size)',
-        position: 'relative',
-        overflow: 'hidden',
+        fontSize: 'var(--brand-font-size)', position: 'relative', overflow: 'hidden',
       }}
     >
-      {transitioning && (
-        <TransitionOverlay type={transType} loginBg={loginBg} onDone={() => setTransitioning(false)} />
+      {transitioning && <TransitionOverlay type={transType} loginBg={loginBg} onDone={() => setTransitioning(false)} />}
+
+      {/* حوار التحقق من المسؤول */}
+      {showChangeOrgDialog && (
+        <ChangeOrgDialog
+          onConfirmed={handleChangeOrgConfirmed}
+          onCancel={() => setShowChangeOrgDialog(false)}
+        />
       )}
 
       <div style={{ textAlign: 'center', position: 'relative', zIndex: 1 }}>
         {/* Logo + Title */}
-        <img
-          src="/logo.png"
-          alt="OneSoft ERP"
-          style={{
-            width: 88, height: 88, marginBottom: 20,
-            borderRadius: 'var(--brand-border-radius)',
-            boxShadow: '0 8px 28px rgba(var(--brand-primary-rgb)/0.35)',
-            objectFit: 'cover',
-          }}
-        />
+        <img src="/logo.png" alt="OneSoft ERP" style={{
+          width: 88, height: 88, marginBottom: 20,
+          borderRadius: 'var(--brand-border-radius)',
+          boxShadow: '0 8px 28px rgba(var(--brand-primary-rgb)/0.35)',
+          objectFit: 'cover',
+        }} />
         <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--foreground)', margin: '0 0 6px' }}>
           One<span style={{ color: 'var(--primary)' }}>Soft</span> ERP
         </h1>
@@ -521,7 +550,7 @@ export default function LoginPage() {
           نظام إدارة الأعمال المتكامل
         </p>
 
-        {/* ── حالة التحميل ── */}
+        {/* ── تحميل ── */}
         {phase === 'loading' && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
             <Spinner size={36} />
@@ -529,7 +558,7 @@ export default function LoginPage() {
           </div>
         )}
 
-        {/* ── خطأ في قاعدة البيانات ── */}
+        {/* ── خطأ قاعدة البيانات ── */}
         {phase === 'dbError' && (
           <div style={{
             background: 'var(--card)', borderRadius: 'var(--brand-border-radius)',
@@ -537,96 +566,70 @@ export default function LoginPage() {
             boxShadow: '0 4px 20px rgba(var(--brand-primary-rgb)/0.1)', maxWidth: 340,
           }}>
             <div style={{ fontSize: 32, marginBottom: 10 }}>⚠️</div>
-            <div style={{ color: '#B91C1C', fontWeight: 700, fontSize: 14, marginBottom: 8 }}>
-              تعذّر الاتصال بقاعدة البيانات
-            </div>
+            <div style={{ color: '#B91C1C', fontWeight: 700, fontSize: 14, marginBottom: 8 }}>تعذّر الاتصال بقاعدة البيانات</div>
             <div style={{ color: 'var(--muted-foreground)', fontSize: 12, marginBottom: 16, lineHeight: 1.6 }}>
-              الخادم يعمل لكن لا يستطيع الاتصال بـ PostgreSQL.
-              تأكد من أن الخدمة تعمل وأن ملف config.json صحيح.
+              الخادم يعمل لكن لا يستطيع الاتصال بـ PostgreSQL. تأكد من أن الخدمة تعمل وأن ملف config.json صحيح.
             </div>
-            <button
-              onClick={() => { setPhase('loading'); firstRunQ.refetch(); }}
-              style={{
-                background: 'var(--primary)', color: 'var(--primary-foreground)', border: 'none',
-                borderRadius: 'var(--brand-border-radius)', padding: '9px 20px', fontWeight: 700,
-                fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', marginBottom: 10, width: '100%',
-              }}
-            >
-              🔄 إعادة المحاولة
-            </button>
-            <button
-              onClick={() => setPhase('login')}
-              style={{
-                background: 'transparent', color: 'var(--muted-foreground)', border: '1px solid var(--border)',
-                borderRadius: 'var(--brand-border-radius)', padding: '7px 20px', fontWeight: 600,
-                fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', width: '100%',
-              }}
-            >
-              تسجيل الدخول يدوياً
-            </button>
+            <button onClick={() => { setPhase('loading'); firstRunQ.refetch(); }} style={{
+              background: 'var(--primary)', color: 'var(--primary-foreground)', border: 'none',
+              borderRadius: 'var(--brand-border-radius)', padding: '9px 20px', fontWeight: 700,
+              fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', marginBottom: 10, width: '100%',
+            }}>🔄 إعادة المحاولة</button>
+            <button onClick={() => setPhase('login')} style={{
+              background: 'transparent', color: 'var(--muted-foreground)', border: '1px solid var(--border)',
+              borderRadius: 'var(--brand-border-radius)', padding: '7px 20px', fontWeight: 600,
+              fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', width: '100%',
+            }}>تسجيل الدخول يدوياً</button>
           </div>
         )}
 
-        {/* ── شاشة الدخول الرئيسية ── */}
+        {/* ── شاشة الدخول ── */}
         {phase === 'login' && (
-          <div>
-            {/* جارٍ تحميل سياق الترخيص */}
+          <>
+            {/* تحميل سياق الترخيص */}
             {licCtxQ.isLoading && (
               <div style={{
                 background: 'var(--card)', borderRadius: 'var(--brand-border-radius)',
-                padding: '28px 32px', border: '1px solid var(--border)',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+                padding: '28px 40px', border: '1px solid var(--border)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14,
               }}>
                 <Spinner size={28} />
                 <span style={{ color: 'var(--muted-foreground)', fontSize: 13 }}>جارٍ التحقق من الترخيص...</span>
               </div>
             )}
 
-            {/* ترخيص منتهي الصلاحية */}
+            {/* الترخيص منتهي */}
             {!licCtxQ.isLoading && licCtxQ.data?.isExpired && (
-              <LicenseExpiredView expiry={licCtxQ.data.licExpiry} />
+              <LicenseExpiredView
+                orgName={licCtxQ.data.orgName ?? ''}
+                orgCode={licCtxQ.data.orgCode ?? ''}
+                expiry={licCtxQ.data.licExpiry}
+              />
             )}
 
-            {/* لا يوجد ترخيص + لا يوجد كود محفوظ → يطلب التفعيل أولاً */}
-            {!licCtxQ.isLoading && !licCtxQ.data?.isExpired && !licCtxQ.data?.hasLicense && !licCtxQ.data?.savedOrgCode && !showChangeOrg && (
-              <NoLicenseView onContinueAnyway={() => {
-                setShowChangeOrg(true);
-              }} />
+            {/* لا يوجد ترخيص ولا كود محفوظ → إعادة توجيه */}
+            {!licCtxQ.isLoading && !licCtxQ.data?.isExpired && !licCtxQ.data?.orgCode && (
+              <NoLicenseRedirect />
             )}
 
-            {/* نموذج تسجيل الدخول:
-                - ترخيص موجود، أو
-                - كود مؤسسة محفوظ (دخل سابقاً)، أو
-                - المستخدم اختار "المتابعة" */}
-            {!licCtxQ.isLoading && !licCtxQ.data?.isExpired && (licCtxQ.data?.hasLicense || licCtxQ.data?.savedOrgCode || showChangeOrg) && (
+            {/* الترخيص موجود والكود معروف → نموذج الدخول */}
+            {!licCtxQ.isLoading && !licCtxQ.data?.isExpired && licCtxQ.data?.orgCode && (
               <div style={{
                 background: 'var(--card)', borderRadius: 'var(--brand-border-radius)',
                 padding: '24px 28px', border: '1px solid var(--border)',
                 boxShadow: '0 4px 20px rgba(var(--brand-primary-rgb)/0.1)',
               }}>
-                <ManualLoginForm
+                <LoginForm
                   onSuccess={handleLoginSuccess}
                   utils={utils}
-                  prefillOrgCode={licCtxQ.data?.savedOrgCode ?? null}
-                  orgName={licCtxQ.data?.savedOrgName ?? null}
-                  licOrgId={licCtxQ.data?.licOrgId ?? null}
-                  showOrgCard={!!licCtxQ.data?.savedOrgCode && !showChangeOrg}
-                  onChangeOrg={handleChangeOrg}
+                  orgCode={licCtxQ.data.orgCode}
+                  orgName={licCtxQ.data.orgName ?? licCtxQ.data.orgCode}
+                  licenseId={licCtxQ.data.licenseId}
+                  onRequestChangeOrg={() => setShowChangeOrgDialog(true)}
                 />
               </div>
             )}
-
-            {/* رابط مركز التراخيص (لجميع المستخدمين) */}
-            <div style={{ marginTop: 16, textAlign: 'center' }}>
-              <a
-                href="/license-center"
-                style={{ color: 'var(--muted-foreground)', fontSize: 11, textDecoration: 'none' }}
-                onClick={e => { e.preventDefault(); navigate('/license-center'); }}
-              >
-                🔑 مركز التراخيص
-              </a>
-            </div>
-          </div>
+          </>
         )}
       </div>
 
