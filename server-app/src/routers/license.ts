@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import { router, publicProcedure, adminProcedure, protectedProcedure } from '../trpc.js';
 import { TRPCError } from '@trpc/server';
+import { count, eq, and } from 'drizzle-orm';
+import { db } from '../db.js';
+import { users } from '../schema.js';
 import {
   getLicense,
   verifySignedLicense,
@@ -30,19 +33,35 @@ export const licenseRouter = router({
       valid: true,
       error: null,
       payload: {
-        org_id:          p.org_id,
-        customer_name:   p.customer_name,
-        max_users:       p.max_users,
-        max_pos:         p.max_pos,
-        max_branches:    p.max_branches,
-        max_devices:     p.max_devices,
-        enabled_modules: p.enabled_modules,
-        start_date:      p.start_date,
-        expiry_date:     p.expiry_date,
-        license_id:      p.license_id,
-        issued_by:       p.issued_by,
+        org_id:           p.org_id,
+        customer_name:    p.customer_name,
+        max_users:        p.max_users,
+        max_pos:          p.max_pos,
+        max_branches:     p.max_branches,
+        max_devices:      p.max_devices,
+        enabled_modules:  p.enabled_modules,
+        start_date:       p.start_date,
+        expiry_date:      p.expiry_date,
+        license_id:       p.license_id,
+        activation_id:    p.activation_id,
+        issued_at:        p.issued_at,
+        issued_by:        p.issued_by,
+        license_type:     p.license_type,
+        package_name:     p.package_name,
+        web_allowed:      p.web_allowed,
+        desktop_allowed:  p.desktop_allowed,
+        offline_allowed:  p.offline_allowed,
       },
     };
+  }),
+
+  // ── إحصائيات الاستخدام الحالي ─────────────────────────────────────────────
+  getCurrentStats: protectedProcedure.query(async ({ ctx }) => {
+    const [row] = await db
+      .select({ cnt: count() })
+      .from(users)
+      .where(and(eq(users.orgId, ctx.user.orgId), eq(users.isActive, true)));
+    return { current_users: row?.cnt ?? 0 };
   }),
 
   // ── معرّف الجهاز (للتفعيل) ─────────────────────────────────────────────────
