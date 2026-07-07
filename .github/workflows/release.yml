@@ -1,51 +1,36 @@
-name: Build & Release Installer
+name: Tag Release (via Secure Pipeline)
+
+# هذا الـ workflow لا يُنفِّذ أي بناء أو نشر مباشر.
+# مسار النشر الوحيد المعتمد هو client-windows-release.yml الذي يتضمن:
+#   • 21 فحص أمني على الـ bundle (verify:client-build)
+#   • 10 فحوصات على الـ installer (verify:installer)
+#   • Security Gate يمنع النشر عند أي فشل
+#
+# لنشر إصدار جديد:
+#   Actions → client-windows-release.yml → Run workflow
+#   → dry_run=false + tag=v1.x.x
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
+    inputs:
+      note:
+        description: 'Use client-windows-release.yml for actual releases'
+        required: false
+        default: 'See client-windows-release.yml'
 
 jobs:
-  build-windows:
-    runs-on: windows-latest
-    timeout-minutes: 60
-
+  notice:
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - name: Install installer dependencies
-        working-directory: installer
-        run: pnpm install
-
-      - name: Install server-app dependencies
-        working-directory: server-app
-        run: pnpm install
-
-      - name: Build & Publish Release
-        working-directory: installer
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          PUBLISH_RELEASE: 'true'
-        run: node scripts/build-all.mjs
-
-      - name: Upload artifacts (backup)
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: installer-release
-          path: |
-            installer/release/*.exe
-            installer/release/*.yml
-            installer/release/*.blockmap
-          retention-days: 30
+      - name: Redirect to secure release pipeline
+        run: |
+          echo "══════════════════════════════════════════════════════"
+          echo "  ⚠️  This workflow does not publish releases."
+          echo ""
+          echo "  To create a release, use the secure gated pipeline:"
+          echo "  → Actions → client-windows-release.yml"
+          echo "  → Run workflow → dry_run=false + tag=v1.x.x"
+          echo ""
+          echo "  The secure pipeline runs 21 + 10 security checks"
+          echo "  before publishing any installer to GitHub Releases."
+          echo "══════════════════════════════════════════════════════"
