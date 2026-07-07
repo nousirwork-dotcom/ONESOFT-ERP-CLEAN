@@ -1,0 +1,49 @@
+════════════════════════════════════════════════════════════════
+  OneSoft ERP — Client Build Security Report
+  Generated : 2026-07-07 15:09:20 UTC
+  Host      : repl
+  Node.js   : v20.20.0
+  Dist Dir  : client-app/dist
+════════════════════════════════════════════════════════════════
+
+  SECTION 1 — Build Environment
+  ─────────────────────────────────────────────────────────────
+  CLIENT_BUILD=true not detected (run via 'pnpm release:client') ⚠️  WARN (check manually)
+  NODE_ENV at report time : not set
+
+  SECTION 2 — File Structure
+  ─────────────────────────────────────────────────────────────
+  client-app/dist exists                               ✅ PASS
+  license-center-app NOT in dist                       ✅ PASS
+  assets/ directory present                            ✅ PASS
+  server-app/dist exists                               ✅ PASS
+
+  SECTION 3 — Security Checks (Client Bundle)
+  ─────────────────────────────────────────────────────────────
+  licenseCenter router NOT in client bundle            ✅ PASS
+  Private key NOT in client bundle                     ✅ PASS
+  /license-center route NOT in client bundle           ✅ PASS
+  License issuance APIs NOT in client bundle           ✅ PASS
+  /cfg/license activation route present                ✅ PASS
+
+  SECTION 4 — Source Code Audit
+  ─────────────────────────────────────────────────────────────
+  LicenseCenterPage NOT imported in client-app/src     ✅ PASS
+  Private key NOT in server-app/src                    ✅ PASS
+  ownerOnlyProcedure returns NOT_FOUND when CLIENT_BUILD=true ✅ PASS
+  licenseCenter uses ownerOnlyProcedure (17 procedures) ✅ PASS
+  IS_CLIENT_BUILD guard in routers/index.ts            ✅ PASS
+  devicePrefs.ts has whitelist sanitization            ✅ PASS
+  device.prefs encrypted with AES-256-GCM in production ✅ PASS
+
+  SECTION 5 — Owner / License Center Separation
+  ─────────────────────────────────────────────────────────────
+  license-center-app exists as separate app            ✅ PASS
+  License Center enforces superadmin-only auth (3 references) ✅ PASS
+  License signing NOT in client-app                    ✅ PASS
+
+════════════════════════════════════════════════════════════════
+  ✅ RESULT: ALL CHECKS PASSED — Safe for client distribution
+  Report : reports/CLIENT_BUILD_REPORT_2026-07-07_15-09-20.txt
+════════════════════════════════════════════════════════════════
+

@@ -9,8 +9,16 @@
  *   ملف JSON عادي للراحة في الـ debug.
  *   المسار: ~/.onesoft/device.prefs.json  (mode 0o600)
  *
- * ملاحظة: كلمات المرور لا تُحفظ هنا نهائياً.
- *          فقط كود المؤسسة واسمها (من الترخيص).
+ * ─── قائمة الحقول المسموحة (Whitelist) ───────────────────────────────────────
+ *   ✅ organizationCode  — كود المؤسسة (من ملف الترخيص)
+ *   ✅ organizationId    — معرّف المؤسسة في قاعدة البيانات
+ *   ✅ organizationName  — اسم المؤسسة (للعرض فقط)
+ *   ✅ licenseId         — معرّف الترخيص
+ *   ✅ deviceId          — معرّف الجهاز (نسخة cached)
+ *   ✅ savedOrgCode      — alias قديم لـ organizationCode (backward compat)
+ *   ✅ savedOrgName      — alias قديم لـ organizationName (backward compat)
+ *
+ *   ❌ password / passwordHash / token / secret / privateKey — ممنوع نهائياً
  */
 import * as crypto from 'crypto';
 import * as fs     from 'fs';
@@ -21,6 +29,65 @@ const IS_PRODUCTION = process.env.NODE_ENV === 'production' || process.env.CLIEN
 const PREFS_FILE_DEV  = 'device.prefs.json';
 const PREFS_FILE_PROD = 'device.prefs.enc';
 const SALT = 'onesoft-device-prefs-v1';
+
+// ─── Allowed fields whitelist ─────────────────────────────────────────────────
+// أي حقل خارج هذه القائمة يُرفض ولا يُحفظ
+const ALLOWED_PREFS_KEYS = [
+  'organizationCode',
+  'organizationId',
+  'organizationName',
+  'licenseId',
+  'deviceId',
+  // backward-compat aliases
+  'savedOrgCode',
+  'savedOrgName',
+] as const;
+
+// أنماط الحقول المحظورة — إذا طابق أي مفتاح أحد هذه الأنماط يُرفض فوراً
+const FORBIDDEN_KEY_PATTERNS = [
+  /password/i,
+  /passwd/i,
+  /secret/i,
+  /token/i,
+  /privateKey/i,
+  /private_key/i,
+  /apiKey/i,
+  /api_key/i,
+  /auth/i,
+  /credential/i,
+  /hash/i,
+];
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+export interface DevicePrefs {
+  organizationCode?: string;  // كود المؤسسة (من ملف الترخيص)
+  organizationId?:   string;  // معرّف المؤسسة
+  organizationName?: string;  // اسم المؤسسة (للعرض فقط)
+  licenseId?:        string;  // معرّف الترخيص
+  deviceId?:         string;  // معرّف الجهاز (cached)
+  // backward-compat aliases
+  savedOrgCode?: string;
+  savedOrgName?: string;
+}
+
+// ─── Sanitizer — whitelist enforcement ────────────────────────────────────────
+function sanitizePrefs(raw: Record<string, unknown>): DevicePrefs {
+  const result: DevicePrefs = {};
+  for (const key of Object.keys(raw)) {
+    // رفض الحقول المحظورة (password, token, secret, ...)
+    if (FORBIDDEN_KEY_PATTERNS.some(p => p.test(key))) {
+      console.warn(`[devicePrefs] SECURITY: rejected forbidden field "${key}" — passwords/secrets must never be stored`);
+      continue;
+    }
+    // قبول الحقول الموجودة في القائمة البيضاء فقط
+    if ((ALLOWED_PREFS_KEYS as readonly string[]).includes(key)) {
+      (result as Record<string, unknown>)[key] = raw[key];
+    } else {
+      console.warn(`[devicePrefs] SECURITY: rejected unknown field "${key}" — not in allowed list`);
+    }
+  }
+  return result;
+}
 
 function getPrefsPath(): string {
   return path.join(getOnesoftDataDir(), IS_PRODUCTION ? PREFS_FILE_PROD : PREFS_FILE_DEV);
@@ -52,13 +119,6 @@ function decrypt(data: Buffer): string {
   return decipher.update(enc).toString('utf-8') + decipher.final('utf-8');
 }
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-export interface DevicePrefs {
-  savedOrgCode?: string;  // كود المؤسسة (من ملف الترخيص) — للعرض وتسجيل الدخول
-  savedOrgName?: string;  // اسم المؤسسة (للعرض فقط)
-  // ملاحظة: كلمات المرور لا تُحفظ هنا نهائياً
-}
-
 // ─── Load ─────────────────────────────────────────────────────────────────────
 export function loadDevicePrefs(): DevicePrefs {
   try {
@@ -66,15 +126,14 @@ export function loadDevicePrefs(): DevicePrefs {
     if (!fs.existsSync(p)) return tryLegacyLoad();
     const raw = fs.readFileSync(p);
 
+    let parsed: Record<string, unknown>;
     if (IS_PRODUCTION) {
-      // Encrypted binary
-      const json = decrypt(raw);
-      return JSON.parse(json) as DevicePrefs;
+      parsed = JSON.parse(decrypt(raw)) as Record<string, unknown>;
     } else {
-      // Plain JSON (dev)
       const text = raw.toString('utf-8').trim();
-      return text ? (JSON.parse(text) as DevicePrefs) : {};
+      parsed = text ? (JSON.parse(text) as Record<string, unknown>) : {};
     }
+    return sanitizePrefs(parsed);
   } catch {
     return {};
   }
@@ -86,7 +145,8 @@ function tryLegacyLoad(): DevicePrefs {
     const legacyPath = path.join(getOnesoftDataDir(), PREFS_FILE_DEV);
     if (!fs.existsSync(legacyPath)) return {};
     const raw = fs.readFileSync(legacyPath, 'utf-8').trim();
-    return raw ? (JSON.parse(raw) as DevicePrefs) : {};
+    const parsed = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+    return sanitizePrefs(parsed);
   } catch {
     return {};
   }
@@ -95,12 +155,15 @@ function tryLegacyLoad(): DevicePrefs {
 // ─── Save ─────────────────────────────────────────────────────────────────────
 export function saveDevicePrefs(patch: Partial<DevicePrefs>): void {
   try {
-    const dir     = getOnesoftDataDir();
+    const dir = getOnesoftDataDir();
     fs.mkdirSync(dir, { recursive: true });
-    const current = loadDevicePrefs();
-    const merged  = { ...current, ...patch };
-    const p       = getPrefsPath();
 
+    // فرض القائمة البيضاء على الـ patch قبل الحفظ
+    const safePatch = sanitizePrefs(patch as Record<string, unknown>);
+    const current   = loadDevicePrefs();
+    const merged    = sanitizePrefs({ ...current, ...safePatch } as Record<string, unknown>);
+
+    const p = getPrefsPath();
     if (IS_PRODUCTION) {
       const enc = encrypt(JSON.stringify(merged));
       fs.writeFileSync(p, enc, { mode: 0o600 });
@@ -116,15 +179,19 @@ export function clearDeviceOrgCode(): void {
     const prefs = loadDevicePrefs();
     delete prefs.savedOrgCode;
     delete prefs.savedOrgName;
+    delete prefs.organizationCode;
+    delete prefs.organizationName;
+
     const dir = getOnesoftDataDir();
     fs.mkdirSync(dir, { recursive: true });
     const p = getPrefsPath();
+    const safe = sanitizePrefs(prefs as Record<string, unknown>);
 
     if (IS_PRODUCTION) {
-      const enc = encrypt(JSON.stringify(prefs));
+      const enc = encrypt(JSON.stringify(safe));
       fs.writeFileSync(p, enc, { mode: 0o600 });
     } else {
-      fs.writeFileSync(p, JSON.stringify(prefs, null, 2), { encoding: 'utf-8', mode: 0o600 });
+      fs.writeFileSync(p, JSON.stringify(safe, null, 2), { encoding: 'utf-8', mode: 0o600 });
     }
   } catch { /* صامت */ }
 }

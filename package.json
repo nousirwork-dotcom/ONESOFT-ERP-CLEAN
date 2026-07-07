@@ -10,9 +10,11 @@
     "build:server":         "cd server-app && pnpm run build",
     "build:server:client":  "cd server-app && cross-env CLIENT_BUILD=true pnpm run build",
 
-    "release:client":       "pnpm build:client && pnpm build:server:client",
+    "release:client":       "bash scripts/verify-client-build.sh && pnpm build:client && cross-env CLIENT_BUILD=true pnpm build:server:client && bash scripts/verify-client-build.sh && bash scripts/generate-build-report.sh",
 
     "verify:client-build":  "bash scripts/verify-client-build.sh",
+    "verify:installer":     "bash scripts/verify-installer.sh",
+    "build-report":         "bash scripts/generate-build-report.sh",
 
     "install:all":          "cd client-app && pnpm install && cd ../server-app && pnpm install && cd ../license-center-app && pnpm install"
   },
