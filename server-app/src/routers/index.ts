@@ -122,7 +122,13 @@ export const appRouter = IS_CLIENT_BUILD
   : router(fullConfig);
 
 // ─── Type export ──────────────────────────────────────────────────────────────
-// النوع يشمل licenseCenter دائماً حتى يستطيع license-center-app استخدام tRPC types
-// هذا مقبول لأن النوع للـ compile-time فقط، لا يؤثر على runtime client build
-const _typeOnlyFullRouter = router(fullConfig);
+// IMPORTANT: _typeOnlyFullRouter must NOT call router(fullConfig) in CLIENT_BUILD.
+// In CLIENT_BUILD, the CI pipeline replaces licenseCenter.js with a null stub,
+// so router({licenseCenter: null}) would crash at server startup.
+//
+// • Owner build (IS_CLIENT_BUILD=false): uses fullConfig → AppRouter includes licenseCenter
+//   → license-center-app can use tRPC types correctly.
+// • Client build (IS_CLIENT_BUILD=true): uses baseConfig → no null crash.
+//   license-center-app is never built in CLIENT_BUILD, so type omission is safe.
+const _typeOnlyFullRouter = IS_CLIENT_BUILD ? router(baseConfig) : router(fullConfig);
 export type AppRouter = typeof _typeOnlyFullRouter;
