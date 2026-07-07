@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { trpc } from "@/lib/trpc";
+import { trpc } from "@/shared/lib/trpc";
 import {
   ShieldCheck, ShieldAlert, ShieldOff, Copy, Check,
   RefreshCw, KeyRound, FileUp, ClipboardList, Info,
