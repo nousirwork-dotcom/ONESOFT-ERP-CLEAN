@@ -89,7 +89,8 @@ import { createElement, lazy, Suspense, useEffect, useState } from "react";
 import { trpc } from "@/shared/lib/trpc";
 import { Settings } from "lucide-react";
 import AppWindow from "@/shared/components/AppWindow";
-import UpdateDialog, { useIsMandatoryBlocked } from "@/shared/components/UpdateDialog";
+import UpdateDialog from "@/shared/components/UpdateDialog";
+import { useIsMandatoryBlocked } from "@/shared/lib/update-store";
 
 // ─── Dev-only previews ────────────────────────────────────────────────────────
 const _DevLicensePreview = import.meta.env.DEV
