@@ -81,8 +81,31 @@ function mockSend(channel: 'phone' | 'email', target: string, otp: string, purpo
   console.log(`[OTP-MOCK] ═══════════════════════════════════\n`);
 }
 
+// ── System channel availability ───────────────────────────────────────────────
+// SMS is only available if SMS_PROVIDER env var is set (e.g. "twilio", "unifonic").
+// Email OTP is always available (mock in dev, real SMTP in production).
+// SECURITY: SMS_PROVIDER / SMTP credentials must NEVER be bundled in client installer.
+function getChannelConfig() {
+  return {
+    emailEnabled: true,                               // Always available
+    smsEnabled:   !!process.env.SMS_PROVIDER?.trim(), // Only if provider configured
+    smsProvider:  IS_DEV ? (process.env.SMS_PROVIDER ?? 'mock') : undefined,
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 export const recoveryRouter = router({
+
+  // ── إمكانيات قنوات الاستعادة المتاحة في النظام (عام) ─────────────────────────
+  // Returns which recovery channels are available system-wide (not user-specific).
+  // Safe to expose publicly — no user data returned.
+  getSystemChannels: publicProcedure.query(() => {
+    const cfg = getChannelConfig();
+    return {
+      emailEnabled: cfg.emailEnabled,
+      smsEnabled:   cfg.smsEnabled,
+    };
+  }),
 
   // ── إرسال كود تحقق (المسؤول → جوال/بريد المستخدم) ──────────────────────────
   sendVerification: adminProcedure

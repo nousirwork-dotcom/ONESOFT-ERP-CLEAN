@@ -637,7 +637,11 @@ export default function LoginPage() {
                 boxShadow: '0 4px 20px rgba(var(--brand-primary-rgb)/0.1)',
               }}>
                 {showForgotPassword ? (
-                  <ForgotPasswordFlow onBack={() => setShowForgotPassword(false)} />
+                  <ForgotPasswordFlow
+                    onBack={() => setShowForgotPassword(false)}
+                    orgCode={licCtxQ.data.orgCode}
+                    orgName={licCtxQ.data.orgName ?? licCtxQ.data.orgCode}
+                  />
                 ) : (
                   <LoginForm
                     onSuccess={handleLoginSuccess}
