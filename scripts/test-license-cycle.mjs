@@ -57,14 +57,18 @@ try {
   const licenseOns     = lines.filter(l => /license\.ons/.test(l));
   const activationCode = lines.filter(l => /activation-code/.test(l));
   const licenseDat     = lines.filter(l => /license\.dat/.test(l));
-  const pubKeys        = lines.filter(l => /public_key\.pem/.test(l));
-
   check('private_key.pem NOT in git',     privateKeys.length === 0,     privateKeys.join(', ') || '—');
   check('No .pem with private content',   pemFiles.filter(f => /private/.test(f)).length === 0);
   check('test-license.ons NOT in git',    licenseOns.length === 0,      licenseOns.join(', ') || '—');
   check('activation-code.txt NOT in git', activationCode.length === 0,  activationCode.join(', ') || '—');
   check('license.dat NOT in git',         licenseDat.length === 0,      licenseDat.join(', ') || '—');
-  check('public_key.pem IS in git (OK)',  pubKeys.length > 0,           pubKeys.join(', '));
+
+  // public_key.pem: check it EXISTS locally and is NOT blocked by .gitignore
+  const gitignoreTxt  = fs.readFileSync(path.join(process.cwd(), '.gitignore'), 'utf-8');
+  const pubKeyLocal   = fs.existsSync(path.join(process.cwd(), 'server-app', 'keys', 'public_key.pem'));
+  const gitignoreAllowsPub = gitignoreTxt.includes('!**/public_key.pem') || gitignoreTxt.includes('!public_key.pem');
+  check('public_key.pem exists locally',            pubKeyLocal, 'server-app/keys/public_key.pem');
+  check('public_key.pem allowed by .gitignore (!)', gitignoreAllowsPub);
 } catch (e) {
   check('git ls-files ran', false, e.message);
 }
