@@ -23,6 +23,7 @@ import { setupRouter }              from './setup.js';
 import { updatesRouter }            from './updates.js';
 import { brandingRouter }           from './branding.js';
 import { licenseRouter }            from './license.js';
+import { licenseCenterRouter }     from './licenseCenter.js';
 
 // ─── Newly extracted routers ──────────────────────────────────────────────────
 import { authRouter }                                                           from './auth.js';
@@ -97,6 +98,7 @@ export const appRouter = router({
   updates:             updatesRouter,
   branding:            brandingRouter,
   license:             licenseRouter,
+  licenseCenter:       licenseCenterRouter,
 });
 
 export type AppRouter = typeof appRouter;
