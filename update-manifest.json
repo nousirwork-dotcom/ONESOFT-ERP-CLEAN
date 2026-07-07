@@ -1,0 +1,33 @@
+{
+  "latestVersion": "1.0.2",
+  "minSupportedVersion": "1.0.0",
+  "mandatory": false,
+  "messageAr": "يوجد تحديث جديد يتضمن تحسينات في الأداء وإصلاح مشاكل.",
+  "messageEn": "A new update is available with performance improvements and bug fixes.",
+  "releaseNotes": [
+    "تحسين شاشة الترخيص",
+    "إصلاح مشاكل التثبيت",
+    "تحسين الأمان",
+    "تحديثات في نظام التحديث التلقائي"
+  ],
+  "downloadUrl": "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.2/OneSoftSetup-1.0.2.exe",
+  "fileSizeBytes": 80000000,
+
+  "_notes": {
+    "MANIFEST_URL": "استضِف هذا الملف على CDN عام أو GitHub Pages بدون توثيق (Public URL).",
+    "minSupportedVersion": "إذا كان الإصدار الحالي أقل من هذا الرقم → تحديث إجباري (لا يُسمح بالدخول).",
+    "mandatory": "true = إجباري بغض النظر عن minSupportedVersion.",
+    "downloadUrl": "يجب أن يكون الرابط عاماً (Public) بدون GitHub Token.",
+    "ONESOFT_UPDATE_URL": "يمكن تجاوز الرابط الافتراضي في updater.ts بمتغير البيئة ONESOFT_UPDATE_URL.",
+
+    "mandatory_example": {
+      "latestVersion": "1.0.2",
+      "minSupportedVersion": "1.0.2",
+      "mandatory": true,
+      "messageAr": "هذا التحديث إجباري ويحتوي على تعديلات أمنية مهمة.",
+      "releaseNotes": ["إصلاح ثغرة أمنية حرجة", "تحسين نظام الترخيص"],
+      "downloadUrl": "https://...",
+      "fileSizeBytes": 80000000
+    }
+  }
+}
