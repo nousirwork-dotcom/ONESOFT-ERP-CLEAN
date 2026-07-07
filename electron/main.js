@@ -122,7 +122,8 @@ function startServer() {
     NODE_ENV:     cfg.nodeEnv,
     LOG_DIR:      cfg.logDir,
     BACKUP_DIR:   cfg.backupDir,
-    ELECTRON_MODE: '1',
+    ELECTRON_MODE:       '1',
+    ONESOFT_LICENSE_DIR: path.join(DATA_DIR, 'license'),
   };
   // حذف المفاتيح الفارغة
   Object.keys(env).forEach(k => { if (!env[k]) delete env[k]; });
