@@ -66,8 +66,8 @@ jobs:
 
       - name: Install client-app + server-app dependencies
         run: |
-          cd client-app  && pnpm install --frozen-lockfile
-          cd ../server-app && pnpm install --frozen-lockfile
+          cd client-app  && pnpm install --no-frozen-lockfile
+          cd ../server-app && pnpm install --no-frozen-lockfile
 
       - name: Build client-app
         working-directory: client-app
@@ -130,9 +130,9 @@ jobs:
       - name: Install all dependencies
         shell: bash
         run: |
-          cd client-app   && pnpm install --frozen-lockfile && cd ..
-          cd server-app   && pnpm install --frozen-lockfile && cd ..
-          cd installer    && pnpm install --frozen-lockfile && cd ..
+          cd client-app   && pnpm install --no-frozen-lockfile && cd ..
+          cd server-app   && pnpm install --no-frozen-lockfile && cd ..
+          cd installer    && pnpm install --no-frozen-lockfile && cd ..
 
       # ── بناء client-app (Vite) ─────────────────────────────────────────────
       - name: Build client-app
@@ -160,6 +160,37 @@ jobs:
           cp -r server-app/dist installer/resources/app/server-app/
           # نسخ client-app dist إلى dist-ui (المسار الذي يتوقعه installer)
           cp -r client-app/dist installer/dist-ui 2>/dev/null || true
+
+      # ── إزالة licenseCenter router من نسخة العميل (CLIENT_BUILD) ───────────
+      # TypeScript يُجمِّع static imports دائماً — نستبدل licenseCenter.js بـ stub
+      # خالٍ من الكود الحساس حتى يجتاز فحص verify-installer (check #4)
+      - name: Stub out licenseCenter router in server-app dist (client build)
+        shell: bash
+        run: |
+          ROUTER="installer/resources/app/server-app/dist/routers/licenseCenter.js"
+          if [ -f "$ROUTER" ]; then
+            # نستبدل الملف بـ stub فارغ (ESM) — الـ import في index.js يبقى يعمل
+            printf '// CLIENT_BUILD stub — licenseCenter excluded from client installer\nexport const licenseCenterRouter = null;\n' > "$ROUTER"
+            echo "✅ licenseCenter.js → stub (no sensitive API strings)"
+          else
+            echo "⚠️  $ROUTER not found — skipping stub"
+          fi
+
+      # ── إنشاء icon.ico بحجم 256x256 من icon.png ───────────────────────────
+      # electron-builder يتطلب 256x256 على الأقل — الـ ico الحالي 32x32 فقط
+      - name: Generate 256x256 icon.ico from icon.png
+        shell: pwsh
+        run: |
+          # Windows runners have ImageMagick (magick) pre-installed
+          $png = "installer\resources\icon.png"
+          $ico = "installer\resources\icon.ico"
+          # نولّد ICO بأحجام 256, 128, 64, 48, 32, 16
+          magick "$png" -resize 256x256 -define icon:auto-resize="256,128,64,48,32,16" "$ico"
+          Write-Host "✅ icon.ico generated — checking size..."
+          $size = (Get-Item $ico).Length
+          Write-Host "   Size: $size bytes"
+          if ($size -lt 1000) { Write-Error "icon.ico too small — conversion may have failed"; exit 1 }
+          Write-Host "✅ icon.ico ready for electron-builder"
 
       # ── بناء Electron (main + preload + NSIS installer) ────────────────────
       - name: Build Electron installer

@@ -182,6 +182,21 @@ const pkgSrc = path.join(SERVER_SRC, 'package.json');
 const pkgDst = path.join(RESOURCE_APP, 'package.json');
 if (fs.existsSync(pkgSrc)) { fs.copyFileSync(pkgSrc, pkgDst); ok('نُسخ package.json'); }
 
+// ── 2.5 stub licenseCenter.js (CLIENT_BUILD) ──────────────────────
+// TypeScript يُجمِّع static imports دائماً — licenseCenter.ts يُجمَّع
+// حتى مع CLIENT_BUILD=true. نستبدل الملف بـ stub فارغ حتى لا تصل
+// أي API حساسة (issueNewLicense, renewLicense, ...) إلى نسخة العميل.
+if (process.env.CLIENT_BUILD === 'true') {
+  const lcFile = path.join(destDist, 'routers', 'licenseCenter.js');
+  if (fs.existsSync(lcFile)) {
+    const stub = '// CLIENT_BUILD stub — licenseCenter excluded from client\nexport const licenseCenterRouter = null;\n';
+    fs.writeFileSync(lcFile, stub, 'utf8');
+    ok('licenseCenter.js → stub (no sensitive API strings in client build)');
+  } else {
+    warn('licenseCenter.js غير موجود في dist (تخطّي)');
+  }
+}
+
 // ── 3. بناء Electron main + preload ──────────────────────────────
 header('3/6', 'بناء Electron main + preload');
 const esbuild = path.join(INSTALLER, 'node_modules', '.bin', 'esbuild');
@@ -198,8 +213,11 @@ ok('UI مبنية');
 
 // ── 5. حزم الـ installer ──────────────────────────────────────────
 header('5/6', 'حزم installer (electron-builder)');
-const publishFlag = process.env.PUBLISH_RELEASE === 'true' ? ' --publish=always' : '';
-if (publishFlag) info('وضع النشر: --publish=always (سيتم رفع الملفات على GitHub Releases)');
+// إذا لم يكن PUBLISH_RELEASE=true نمرر --publish never صراحةً
+// حتى لو كان electron-builder.yml يحتوي على publish.provider=github
+const publishFlag = process.env.PUBLISH_RELEASE === 'true' ? ' --publish=always' : ' --publish=never';
+if (process.env.PUBLISH_RELEASE === 'true') info('وضع النشر: --publish=always (سيتم رفع الملفات على GitHub Releases)');
+else info('وضع البناء المحلي/CI: --publish=never (لا نشر تلقائي)');
 run(`electron-builder${publishFlag}`);
 ok('installer مُحزَّم');
 

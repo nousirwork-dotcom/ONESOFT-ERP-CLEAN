@@ -10,15 +10,30 @@
 import * as esbuild from 'esbuild';
 import { statSync } from 'fs';
 
-const DEV  = process.argv.includes('--dev');
-const OUTFILE = 'dist/index.mjs';
+const DEV          = process.argv.includes('--dev');
+const CLIENT_BUILD = process.env.CLIENT_BUILD === 'true';
+const OUTFILE      = 'dist/index.mjs';
 
-console.log(`\n🔨 بناء OneSoft Server (${DEV ? 'development' : 'production'})...`);
+console.log(`\n🔨 بناء OneSoft Server (${DEV ? 'development' : 'production'}${CLIENT_BUILD ? ' | CLIENT_BUILD=true' : ''})...`);
+
+// ── Plugin: stub licenseCenter when CLIENT_BUILD=true ─────────────────────
+// يمنع وصول أي API حساسة (renewLicense, issueNewLicense, ...)
+// إلى bundle العميل حتى مع وجود static import في routers/index.ts
+const licenseCenterStubPlugin = {
+  name: 'license-center-stub',
+  setup(build) {
+    build.onLoad({ filter: /routers[/\\]licenseCenter\.ts$/ }, () => ({
+      contents: '// CLIENT_BUILD stub\nexport const licenseCenterRouter = null;\n',
+      loader: 'ts',
+    }));
+  },
+};
 
 let result;
 try {
   result = await esbuild.build({
     entryPoints: ['src/index.ts'],
+    plugins: CLIENT_BUILD ? [licenseCenterStubPlugin] : [],
 
     // ── تهيئة Node.js ───────────────────────────────────────────────────────
     platform: 'node',          // يُفعِّل تحسينات Node.js الداخلية
