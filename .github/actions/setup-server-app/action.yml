@@ -1,0 +1,42 @@
+name: Setup server-app dependencies
+description: Install pnpm dependencies for server-app with pnpm store and node_modules caching.
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: "20"
+
+    - name: Install pnpm
+      uses: pnpm/action-setup@v3
+      with:
+        version: 9
+        run_install: false
+
+    - name: Get pnpm store directory
+      id: pnpm-cache
+      shell: bash
+      run: echo "store=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+    - name: Cache pnpm store
+      uses: actions/cache@v4
+      with:
+        path: ${{ steps.pnpm-cache.outputs.store }}
+        key: ${{ runner.os }}-pnpm-${{ hashFiles('server-app/pnpm-lock.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-pnpm-
+
+    - name: Cache node_modules
+      id: node-modules-cache
+      uses: actions/cache@v4
+      with:
+        path: server-app/node_modules
+        key: ${{ runner.os }}-node-modules-${{ hashFiles('server-app/pnpm-lock.yaml') }}
+
+    - name: Install dependencies
+      if: steps.node-modules-cache.outputs.cache-hit != 'true'
+      shell: bash
+      working-directory: server-app
+      run: pnpm install --frozen-lockfile
