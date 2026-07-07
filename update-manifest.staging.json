@@ -1,0 +1,23 @@
+{
+  "_purpose": "Staging manifest for testing optional update flow only. NOT used in production.",
+  "_usage": "Set ONESOFT_UPDATE_URL=https://raw.githubusercontent.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/main/update-manifest.staging.json",
+
+  "latestVersion":       "1.0.2",
+  "minSupportedVersion": "1.0.0",
+  "mandatory":           false,
+  "messageAr":           "[STAGING] يوجد تحديث للاختبار — هذا ليس إصداراً حقيقياً.",
+  "messageEn":           "[STAGING] Test update available — this is not a real release.",
+  "releaseNotes": [
+    "[اختبار] التحقق من تدفق تحديث اختياري",
+    "[اختبار] التحقق من زر لاحقاً والتأجيل",
+    "[اختبار] التحقق من شاشة الإعدادات > التحديثات",
+    "[اختبار] التحقق من Progress الحقيقي",
+    "[اختبار] التحقق من SHA512"
+  ],
+  "downloadUrl":   "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.2-staging-test/OneSoftSetup-1.0.2.exe",
+  "fileSizeBytes": 80000000,
+  "sha512":        "",
+  "publishedAt":   "2026-07-07T00:00:00.000Z",
+
+  "_sha512_note": "بعد رفع الملف على GitHub Release، شغّل على Windows: certutil -hashfile OneSoftSetup-1.0.2.exe SHA512 وضع الناتج هنا"
+}
