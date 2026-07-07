@@ -19,6 +19,10 @@ args = "Backend Server"
 task = "workflow.run"
 args = "Start application"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "License Center"
+
 [[workflows.workflow]]
 name = "Backend Server"
 author = "agent"
@@ -43,6 +47,18 @@ waitForPort = 5000
 [workflows.workflow.metadata]
 outputType = "webview"
 
+[[workflows.workflow]]
+name = "License Center"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd license-center-app && pnpm run dev"
+waitForPort = 8080
+
 [[ports]]
 localPort = 3000
 externalPort = 80
@@ -54,6 +70,10 @@ externalPort = 5000
 [[ports]]
 localPort = 5001
 externalPort = 3002
+
+[[ports]]
+localPort = 8080
+externalPort = 8080
 
 [[ports]]
 localPort = 23636

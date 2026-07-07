@@ -1,21 +1,20 @@
 import React, { useState, useEffect } from "react";
-import { trpc } from "@/shared/lib/trpc";
+import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/auth/AuthContext";
 import {
   LayoutDashboard, Users, KeyRound, Monitor, CloudOff, ClipboardList,
   Settings, Shield, Search, Bell, Moon, Plus, RefreshCw,
-  Pause, Play, Code2, MonitorSmartphone, ChevronDown, ChevronLeft,
+  Pause, Play, Code2, MonitorSmartphone, ChevronDown,
   Building2, FileText, Hash, Calendar, CheckCircle2, XCircle,
-  Fingerprint, Clock, AlertTriangle, Globe, WifiOff, User,
+  Clock, AlertTriangle, Globe, LogOut,
 } from "lucide-react";
 
-// ─── colour palette ──────────────────────────────────────────────────────────
 const NAVY   = "#0F1D40";
 const NAVY2  = "#1B2B5C";
 const GOLD   = "#C9A84C";
 const CREAM  = "#F8F5EF";
 const BORDER = "#E5DDD0";
 
-// ─── static demo fallback (shown while loading or if DB is empty) ─────────────
 const DEMO_CLIENT = {
   name: "شركة النور التجارية",
   orgId: "ORG-2024-000125",
@@ -52,23 +51,21 @@ const DEMO_OPS = [
 ];
 const DEMO_USAGE = { users: 4, branches: 3, pos: 2, devices: 6, web: 1 };
 
-// ─── module registry ──────────────────────────────────────────────────────────
 const MODULE_MAP: Record<string, string> = {
-  sales:       "المبيعات",
-  purchases:   "المشتريات",
-  inventory:   "المخزون",
-  accounting:  "الحسابات",
-  reports:     "التقارير",
-  zatca:       "ZATCA",
-  hr:          "الموارد البشرية",
-  payroll:     "الرواتب",
-  assets:      "الأصول",
-  pos:         "نقاط البيع",
+  sales:         "المبيعات",
+  purchases:     "المشتريات",
+  inventory:     "المخزون",
+  accounting:    "الحسابات",
+  reports:       "التقارير",
+  zatca:         "ZATCA",
+  hr:            "الموارد البشرية",
+  payroll:       "الرواتب",
+  assets:        "الأصول",
+  pos:           "نقاط البيع",
   manufacturing: "التصنيع",
-  branches:    "الفروع",
+  branches:      "الفروع",
 };
 
-// ─── helpers ──────────────────────────────────────────────────────────────────
 function fmtDate(d?: string | null) {
   if (!d) return "—";
   try { return new Date(d + (d.includes("T") ? "" : "T00:00:00")).toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric" }); }
@@ -91,10 +88,7 @@ function daysLeft(exp: string) {
   return Math.max(0, Math.ceil((new Date(exp + "T23:59:59Z").getTime() - Date.now()) / 86_400_000));
 }
 
-// ─── sub-components ───────────────────────────────────────────────────────────
-function ProgressCard({
-  label, icon, current, max,
-}: { label: string; icon: React.ReactNode; current: number; max: number }) {
+function ProgressCard({ label, icon, current, max }: { label: string; icon: React.ReactNode; current: number; max: number }) {
   const pct = max > 0 ? Math.min(100, Math.round((current / max) * 100)) : 0;
   const barColor = pct >= 90 ? "#EF4444" : pct >= 75 ? "#F59E0B" : NAVY2;
   return (
@@ -131,9 +125,9 @@ function ModuleChip({ label, active }: { label: string; active: boolean }) {
   );
 }
 
-function ActionBtn({
-  icon, label, variant = "navy", onClick, disabled,
-}: { icon: React.ReactNode; label: string; variant?: "navy" | "orange" | "green"; onClick?: () => void; disabled?: boolean }) {
+function ActionBtn({ icon, label, variant = "navy", onClick, disabled }: {
+  icon: React.ReactNode; label: string; variant?: "navy" | "orange" | "green"; onClick?: () => void; disabled?: boolean;
+}) {
   const bg = variant === "orange" ? "#F97316" : variant === "green" ? "#16A34A" : NAVY2;
   return (
     <button
@@ -151,36 +145,30 @@ function ActionBtn({
 type NavKey = "dashboard" | "clients" | "licenses" | "devices" | "offline" | "log" | "settings";
 const NAV_ITEMS: { key: NavKey; icon: React.ReactNode; label: string }[] = [
   { key: "dashboard", icon: <LayoutDashboard className="w-5 h-5" />, label: "لوحة التحكم" },
-  { key: "clients",   icon: <Users className="w-5 h-5" />,          label: "العملاء" },
-  { key: "licenses",  icon: <KeyRound className="w-5 h-5" />,        label: "التراخيص" },
+  { key: "clients",   icon: <Users className="w-5 h-5" />,           label: "العملاء" },
+  { key: "licenses",  icon: <KeyRound className="w-5 h-5" />,         label: "التراخيص" },
   { key: "devices",   icon: <MonitorSmartphone className="w-5 h-5" />, label: "الأجهزة المفعلة" },
-  { key: "offline",   icon: <CloudOff className="w-5 h-5" />,        label: "التفعيل الأوفلاين" },
-  { key: "log",       icon: <ClipboardList className="w-5 h-5" />,   label: "سجل العمليات" },
-  { key: "settings",  icon: <Settings className="w-5 h-5" />,        label: "الإعدادات" },
+  { key: "offline",   icon: <CloudOff className="w-5 h-5" />,         label: "التفعيل الأوفلاين" },
+  { key: "log",       icon: <ClipboardList className="w-5 h-5" />,    label: "سجل العمليات" },
+  { key: "settings",  icon: <Settings className="w-5 h-5" />,         label: "الإعدادات" },
 ];
 
 function OpDot({ type }: { type: string }) {
   const colors: Record<string, string> = {
-    create_client: "#3B82F6",
-    create_license: "#8B5CF6",
-    activate: "#16A34A",
-    suspend: "#F97316",
-    resume: "#16A34A",
-    renew: "#0EA5E9",
-    revoke_device: "#EF4444",
-    generate_key: GOLD,
-    generate_activation_code: GOLD,
+    create_client: "#3B82F6", create_license: "#8B5CF6",
+    activate: "#16A34A", suspend: "#F97316", resume: "#16A34A",
+    renew: "#0EA5E9", revoke_device: "#EF4444",
+    generate_key: GOLD, generate_activation_code: GOLD,
   };
   return <span className="w-2 h-2 rounded-full shrink-0 mt-1.5" style={{ backgroundColor: colors[type] || GOLD }} />;
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function LicenseCenterPage() {
+  const { user, logout } = useAuth();
   const [activeNav, setActiveNav] = useState<NavKey>("licenses");
   const [searchQ, setSearchQ] = useState("");
 
-  // Seed demo data on first load
-  const seed   = trpc.licenseCenter.seedDemo.useMutation();
+  const seed    = trpc.licenseCenter.seedDemo.useMutation();
   const clients = trpc.licenseCenter.listClients.useQuery(undefined, { retry: false });
   const summary = trpc.licenseCenter.getDashboardSummary.useQuery(undefined, { retry: false });
 
@@ -188,7 +176,6 @@ export default function LicenseCenterPage() {
     seed.mutate(undefined, { onSettled: () => { clients.refetch(); summary.refetch(); } });
   }, []);
 
-  // Pick first client (demo mode = single client)
   const firstClient = clients.data?.[0];
   const clientId    = firstClient?.id;
 
@@ -208,65 +195,70 @@ export default function LicenseCenterPage() {
   const suspend = trpc.licenseCenter.suspendLicense.useMutation({ onSuccess: () => licQ.refetch() });
   const resume  = trpc.licenseCenter.resumeLicense.useMutation({ onSuccess: () => licQ.refetch() });
 
-  const client   = firstClient  ?? DEMO_CLIENT;
-  const license  = licQ.data?.[0] ?? DEMO_LICENSE;
-  const devices  = devQ.data  ?? DEMO_DEVICES;
-  const ops      = opsQ.data  ?? DEMO_OPS;
+  const client  = firstClient  ?? DEMO_CLIENT;
+  const license = licQ.data?.[0] ?? DEMO_LICENSE;
+  const devices = devQ.data ?? DEMO_DEVICES;
+  const ops     = opsQ.data ?? DEMO_OPS;
 
-  const mods = new Set(license?.enabledModules ?? DEMO_LICENSE.enabledModules);
-  const days = license?.expiryDate ? daysLeft(license.expiryDate) : 256;
+  const mods    = new Set(license?.enabledModules ?? DEMO_LICENSE.enabledModules);
+  const days    = license?.expiryDate ? daysLeft(license.expiryDate) : 256;
   const isActive  = license?.status === "active";
   const isSuspend = license?.status === "suspended";
 
   const statusBadge = isActive
-    ? { label: "Active", bg: "#ECFDF5", text: "#16A34A", dot: "#22C55E" }
+    ? { label: "Active",    bg: "#ECFDF5", text: "#16A34A", dot: "#22C55E" }
     : isSuspend
     ? { label: "Suspended", bg: "#FFF7ED", text: "#C2410C", dot: "#F97316" }
-    : { label: "Expired", bg: "#FEF2F2", text: "#DC2626", dot: "#EF4444" };
+    : { label: "Expired",   bg: "#FEF2F2", text: "#DC2626", dot: "#EF4444" };
 
   return (
     <div dir="rtl" className="flex h-screen overflow-hidden select-none" style={{ fontFamily: "'Segoe UI', Tahoma, Arial, sans-serif", backgroundColor: CREAM }}>
 
       {/* ── Sidebar ─────────────────────────────────────────────────── */}
       <aside className="flex flex-col w-[220px] shrink-0 h-full" style={{ backgroundColor: NAVY }}>
-        {/* Logo */}
         <div className="flex items-center justify-center py-5 border-b" style={{ borderColor: "rgba(201,168,76,0.2)" }}>
           <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg" style={{ backgroundColor: GOLD }}>
-            <span className="text-[20px] font-black text-white tracking-widest">ONE</span>
+            <span className="text-[20px] font-black text-white tracking-widest">LC</span>
           </div>
         </div>
 
-        {/* Nav items */}
         <nav className="flex-1 py-4 space-y-1 px-3 overflow-y-auto">
           {NAV_ITEMS.map(item => {
-            const isActive = activeNav === item.key;
+            const active = activeNav === item.key;
             return (
               <button
                 key={item.key}
                 onClick={() => setActiveNav(item.key)}
                 className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-[14px] font-semibold transition-all text-right"
                 style={{
-                  backgroundColor: isActive ? "rgba(201,168,76,0.15)" : "transparent",
-                  color: isActive ? GOLD : "rgba(255,255,255,0.7)",
-                  borderRight: isActive ? `3px solid ${GOLD}` : "3px solid transparent",
+                  backgroundColor: active ? "rgba(201,168,76,0.15)" : "transparent",
+                  color: active ? GOLD : "rgba(255,255,255,0.7)",
+                  borderRight: active ? `3px solid ${GOLD}` : "3px solid transparent",
                 }}
               >
-                <span style={{ color: isActive ? GOLD : "rgba(255,255,255,0.5)" }}>{item.icon}</span>
+                <span style={{ color: active ? GOLD : "rgba(255,255,255,0.5)" }}>{item.icon}</span>
                 {item.label}
               </button>
             );
           })}
         </nav>
 
-        {/* Bottom */}
-        <div className="p-4 border-t" style={{ borderColor: "rgba(201,168,76,0.15)" }}>
+        <div className="p-4 border-t space-y-3" style={{ borderColor: "rgba(201,168,76,0.15)" }}>
           <div className="flex items-center gap-2">
             <Shield className="w-5 h-5 shrink-0" style={{ color: GOLD }} />
             <div>
               <p className="text-[12px] font-bold" style={{ color: "rgba(255,255,255,0.9)" }}>OneSoft ERP</p>
-              <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.45)" }}>v2.5.1</p>
+              <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.45)" }}>License Center v1.0</p>
             </div>
           </div>
+          <button
+            onClick={() => logout()}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-[13px] font-semibold transition-all hover:bg-red-900/30"
+            style={{ color: "rgba(255,255,255,0.6)" }}
+          >
+            <LogOut className="w-4 h-4" />
+            تسجيل الخروج
+          </button>
         </div>
       </aside>
 
@@ -275,13 +267,11 @@ export default function LicenseCenterPage() {
 
         {/* Header */}
         <header className="flex items-center gap-4 px-6 py-3 bg-white border-b shrink-0 shadow-sm" style={{ borderColor: BORDER }}>
-          {/* Title */}
           <div className="ml-auto">
             <h1 className="text-[22px] font-black leading-tight" style={{ color: NAVY2 }}>مركز التراخيص</h1>
             <p className="text-[12px] font-medium" style={{ color: GOLD }}>License Center</p>
           </div>
 
-          {/* Search */}
           <div className="flex-1 max-w-xs">
             <div className="flex items-center gap-2 px-3 py-2 rounded-xl border bg-gray-50" style={{ borderColor: BORDER }}>
               <Search className="w-4 h-4 text-gray-400 shrink-0" />
@@ -295,26 +285,18 @@ export default function LicenseCenterPage() {
             </div>
           </div>
 
-          {/* Badges & profile */}
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[13px] font-bold" style={{ borderColor: GOLD, color: GOLD, backgroundColor: "rgba(201,168,76,0.08)" }}>
-              <Shield className="w-3.5 h-3.5" /> Admin Only
+              <Shield className="w-3.5 h-3.5" /> Owner Only
             </span>
-            <button className="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-gray-100 transition-colors" style={{ color: NAVY2 }}>
-              <Bell className="w-5 h-5" />
-            </button>
-            <button className="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-gray-100 transition-colors" style={{ color: NAVY2 }}>
-              <Moon className="w-5 h-5" />
-            </button>
             <div className="flex items-center gap-2.5 pl-3 border-l" style={{ borderColor: BORDER }}>
               <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-[14px] font-black" style={{ backgroundColor: NAVY2 }}>
-                A
+                {user?.username?.[0]?.toUpperCase() ?? "A"}
               </div>
               <div className="text-right">
-                <p className="text-[14px] font-bold" style={{ color: NAVY2 }}>admin</p>
-                <p className="text-[12px]" style={{ color: "#9CA3AF" }}>المسؤول العام</p>
+                <p className="text-[14px] font-bold" style={{ color: NAVY2 }}>{user?.username ?? "admin"}</p>
+                <p className="text-[12px]" style={{ color: "#9CA3AF" }}>المدير العام</p>
               </div>
-              <ChevronDown className="w-4 h-4 text-gray-400" />
             </div>
           </div>
         </header>
@@ -322,7 +304,7 @@ export default function LicenseCenterPage() {
         {/* Content */}
         <main className="flex-1 overflow-y-auto p-5 space-y-4">
 
-          {/* ── 1. معلومات العميل ───────────────────────────────────── */}
+          {/* 1. معلومات العميل */}
           <div className="bg-white rounded-2xl border shadow-sm" style={{ borderColor: BORDER }}>
             <div className="flex items-center gap-3 px-5 py-3.5 border-b" style={{ borderColor: BORDER, backgroundColor: "rgba(201,168,76,0.04)" }}>
               <span className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ backgroundColor: "rgba(201,168,76,0.12)" }}>
@@ -331,31 +313,26 @@ export default function LicenseCenterPage() {
               <h2 className="text-[17px] font-extrabold" style={{ color: NAVY2 }}>معلومات العميل</h2>
             </div>
             <div className="p-5 grid grid-cols-4 gap-x-8 gap-y-4">
-              {/* Col 1 */}
               <div>
                 <p className="text-[12px] font-bold uppercase tracking-wider mb-1" style={{ color: GOLD }}>اسم العميل</p>
                 <p className="text-[17px] font-black" style={{ color: NAVY2 }}>{(client as any).name}</p>
               </div>
-              {/* Col 2 */}
               <div>
                 <p className="text-[12px] font-bold uppercase tracking-wider mb-1" style={{ color: GOLD }}>السجل التجاري</p>
                 <p className="text-[15px] font-semibold font-mono" style={{ color: NAVY2 }}>{(client as any).commercialReg ?? "—"}</p>
               </div>
-              {/* Col 3 */}
               <div>
                 <p className="text-[12px] font-bold uppercase tracking-wider mb-1" style={{ color: GOLD }}>نوع الباقة</p>
                 <p className="text-[15px] font-bold" style={{ color: NAVY2 }}>{license?.packageName ?? "—"}</p>
               </div>
-              {/* Col 4 */}
               <div>
                 <p className="text-[12px] font-bold uppercase tracking-wider mb-1.5" style={{ color: GOLD }}>
                   <Calendar className="w-3.5 h-3.5 inline ml-1" />تاريخ البداية
                 </p>
                 <p className="text-[15px] font-semibold" style={{ color: NAVY2 }}>{fmtDateShort(license?.startDate)}</p>
               </div>
-              {/* Row 2 */}
               <div>
-                <p className="text-[12px] font-bold uppercase tracking-wider mb-1" style={{ color: "#9CA3AF" }}>رقم المؤسسة · Organization ID</p>
+                <p className="text-[12px] font-bold uppercase tracking-wider mb-1" style={{ color: "#9CA3AF" }}>Organization ID</p>
                 <p className="text-[14px] font-mono font-semibold" style={{ color: NAVY2 }}>{(client as any).orgId}</p>
               </div>
               <div>
@@ -381,7 +358,7 @@ export default function LicenseCenterPage() {
             </div>
           </div>
 
-          {/* ── 2. حدود الترخيص ───────────────────────────────────────── */}
+          {/* 2. حدود الترخيص */}
           <div className="bg-white rounded-2xl border shadow-sm" style={{ borderColor: BORDER }}>
             <div className="flex items-center gap-3 px-5 py-3.5 border-b" style={{ borderColor: BORDER, backgroundColor: "rgba(201,168,76,0.04)" }}>
               <span className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ backgroundColor: "rgba(201,168,76,0.12)" }}>
@@ -390,15 +367,15 @@ export default function LicenseCenterPage() {
               <h2 className="text-[17px] font-extrabold" style={{ color: NAVY2 }}>حدود الترخيص</h2>
             </div>
             <div className="p-5 grid grid-cols-5 gap-4">
-              <ProgressCard label="المستخدمون"   icon={<Users className="w-4 h-4" />}         current={DEMO_USAGE.users}    max={license?.maxUsers ?? 10} />
-              <ProgressCard label="الفروع"        icon={<Building2 className="w-4 h-4" />}      current={DEMO_USAGE.branches} max={license?.maxBranches ?? 5} />
-              <ProgressCard label="نقاط البيع"   icon={<Monitor className="w-4 h-4" />}        current={DEMO_USAGE.pos}      max={license?.maxPos ?? 5} />
+              <ProgressCard label="المستخدمون"   icon={<Users className="w-4 h-4" />}            current={DEMO_USAGE.users}    max={license?.maxUsers ?? 10} />
+              <ProgressCard label="الفروع"        icon={<Building2 className="w-4 h-4" />}        current={DEMO_USAGE.branches} max={license?.maxBranches ?? 5} />
+              <ProgressCard label="نقاط البيع"   icon={<Monitor className="w-4 h-4" />}          current={DEMO_USAGE.pos}      max={license?.maxPos ?? 5} />
               <ProgressCard label="الأجهزة"       icon={<MonitorSmartphone className="w-4 h-4" />} current={DEMO_USAGE.devices} max={license?.maxDevices ?? 10} />
-              <ProgressCard label="الويب"         icon={<Globe className="w-4 h-4" />}          current={DEMO_USAGE.web}      max={license?.maxWeb ?? 2} />
+              <ProgressCard label="الويب"         icon={<Globe className="w-4 h-4" />}            current={DEMO_USAGE.web}      max={license?.maxWeb ?? 2} />
             </div>
           </div>
 
-          {/* ── 3. الموديولات المفعلة ──────────────────────────────────── */}
+          {/* 3. الموديولات المفعلة */}
           <div className="bg-white rounded-2xl border shadow-sm" style={{ borderColor: BORDER }}>
             <div className="flex items-center gap-3 px-5 py-3.5 border-b" style={{ borderColor: BORDER, backgroundColor: "rgba(201,168,76,0.04)" }}>
               <span className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ backgroundColor: "rgba(201,168,76,0.12)" }}>
@@ -416,24 +393,24 @@ export default function LicenseCenterPage() {
             </div>
           </div>
 
-          {/* ── 4. Action Buttons ──────────────────────────────────────── */}
+          {/* 4. Action Buttons */}
           <div className="flex flex-wrap gap-2.5">
-            <ActionBtn icon={<Plus className="w-4 h-4" />}            label="إنشاء عميل جديد"         variant="navy" />
-            <ActionBtn icon={<KeyRound className="w-4 h-4" />}         label="توليد License Key"         variant="navy" />
-            <ActionBtn icon={<RefreshCw className="w-4 h-4" />}        label="تجديد الترخيص"            variant="navy" />
-            <ActionBtn icon={<Pause className="w-4 h-4" />}            label="إيقاف الترخيص"            variant="orange"
+            <ActionBtn icon={<Plus className="w-4 h-4" />}             label="إنشاء عميل جديد"       variant="navy" />
+            <ActionBtn icon={<KeyRound className="w-4 h-4" />}          label="توليد License Key"       variant="navy" />
+            <ActionBtn icon={<RefreshCw className="w-4 h-4" />}         label="تجديد الترخيص"          variant="navy" />
+            <ActionBtn icon={<Pause className="w-4 h-4" />}             label="إيقاف الترخيص"          variant="orange"
               onClick={() => license?.id > 0 && suspend.mutate({ licenseId: license.id })}
               disabled={!isActive || suspend.isPending}
             />
-            <ActionBtn icon={<Play className="w-4 h-4" />}             label="إعادة تفعيل"              variant="green"
+            <ActionBtn icon={<Play className="w-4 h-4" />}              label="إعادة تفعيل"            variant="green"
               onClick={() => license?.id > 0 && resume.mutate({ licenseId: license.id })}
               disabled={!isSuspend || resume.isPending}
             />
-            <ActionBtn icon={<Code2 className="w-4 h-4" />}            label="إصدار Activation Code"    variant="navy" />
-            <ActionBtn icon={<MonitorSmartphone className="w-4 h-4" />} label="عرض الأجهزة المفعلة"    variant="navy" onClick={() => setActiveNav("devices")} />
+            <ActionBtn icon={<Code2 className="w-4 h-4" />}             label="إصدار Activation Code"  variant="navy" />
+            <ActionBtn icon={<MonitorSmartphone className="w-4 h-4" />} label="عرض الأجهزة المفعلة"   variant="navy" onClick={() => setActiveNav("devices")} />
           </div>
 
-          {/* ── 5. Devices + Log ───────────────────────────────────────── */}
+          {/* 5. Devices + Log */}
           <div className="grid grid-cols-2 gap-4">
 
             {/* الأجهزة المفعلة */}
@@ -471,11 +448,11 @@ export default function LicenseCenterPage() {
                           {dev.lastActivatedAt ? fmtTime(String(dev.lastActivatedAt)) : "—"}
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[12px] font-bold ${
-                            dev.status === "active" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-600 border border-red-200"
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[12px] font-bold ${
+                            dev.status === "active" ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"
                           }`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${dev.status === "active" ? "bg-green-500" : "bg-red-400"}`} />
-                            {dev.status === "active" ? "مفعّل" : "غير مفعّل"}
+                            <span className={`w-1.5 h-1.5 rounded-full ${dev.status === "active" ? "bg-green-500" : "bg-gray-400"}`} />
+                            {dev.status === "active" ? "نشط" : "غير نشط"}
                           </span>
                         </td>
                       </tr>
@@ -483,34 +460,24 @@ export default function LicenseCenterPage() {
                   </tbody>
                 </table>
               </div>
-              <div className="px-5 py-3 border-t" style={{ borderColor: BORDER }}>
-                <button className="text-[13px] font-bold flex items-center gap-1.5 hover:opacity-80 transition-opacity" style={{ color: NAVY2 }}>
-                  <ChevronLeft className="w-4 h-4" /> عرض جميع الأجهزة
-                </button>
-              </div>
             </div>
 
             {/* سجل العمليات */}
             <div className="bg-white rounded-2xl border shadow-sm overflow-hidden" style={{ borderColor: BORDER }}>
               <div className="flex items-center gap-3 px-5 py-3.5 border-b" style={{ borderColor: BORDER, backgroundColor: "rgba(201,168,76,0.04)" }}>
-                <Clock className="w-4 h-4" style={{ color: GOLD }} />
-                <h3 className="text-[16px] font-extrabold" style={{ color: NAVY2 }}>سجل العمليات الأخيرة</h3>
+                <ClipboardList className="w-4 h-4" style={{ color: GOLD }} />
+                <h3 className="text-[16px] font-extrabold" style={{ color: NAVY2 }}>سجل العمليات</h3>
               </div>
-              <div className="p-4 space-y-3">
-                {ops.map((op: any, i: number) => (
-                  <div key={op.id ?? i} className="flex items-start gap-3">
+              <div className="p-4 space-y-3 overflow-y-auto max-h-72">
+                {ops.map((op: any) => (
+                  <div key={op.id} className="flex items-start gap-3">
                     <OpDot type={op.operationType} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-[14px] font-semibold leading-tight" style={{ color: NAVY2 }}>{op.description}</p>
-                      <p className="text-[12px] mt-0.5" style={{ color: "#9CA3AF" }}>{fmtTime(String(op.createdAt))}</p>
+                      <p className="text-[13px] font-semibold leading-tight" style={{ color: NAVY2 }}>{op.description}</p>
+                      <p className="text-[11px] mt-0.5" style={{ color: "#9CA3AF" }}>{fmtTime(op.createdAt)}</p>
                     </div>
                   </div>
                 ))}
-              </div>
-              <div className="px-5 py-3 border-t" style={{ borderColor: BORDER }}>
-                <button className="text-[13px] font-bold flex items-center gap-1.5 hover:opacity-80 transition-opacity" style={{ color: NAVY2 }}>
-                  <ChevronLeft className="w-4 h-4" /> عرض جميع العمليات
-                </button>
               </div>
             </div>
 
