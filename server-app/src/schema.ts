@@ -1209,6 +1209,76 @@ export const zatcaApiHistory = pgTable('zatca_api_history', {
   updatedBy:   integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
 });
 
+// ─── License Center (مركز التراخيص) ──────────────────────────────────────────
+export const lcLicenseTypeEnum   = pgEnum('lc_license_type',   ['trial', 'subscription', 'lifetime']);
+export const lcLicenseStatusEnum = pgEnum('lc_license_status', ['active', 'suspended', 'expired', 'revoked']);
+export const lcDeviceStatusEnum  = pgEnum('lc_device_status',  ['active', 'inactive', 'revoked']);
+export const lcOpTypeEnum        = pgEnum('lc_op_type', [
+  'create_client', 'create_license', 'activate', 'suspend',
+  'resume', 'renew', 'revoke_device', 'generate_key', 'generate_activation_code',
+]);
+
+export const lcClients = pgTable('lc_clients', {
+  id:            serial('id').primaryKey(),
+  name:          varchar('name', { length: 255 }).notNull(),
+  orgId:         varchar('org_id', { length: 80 }).notNull().unique(),
+  commercialReg: varchar('commercial_reg', { length: 80 }),
+  taxNumber:     varchar('tax_number', { length: 80 }),
+  phone:         varchar('phone', { length: 50 }),
+  email:         varchar('email', { length: 255 }),
+  notes:         text('notes'),
+  isActive:      boolean('is_active').notNull().default(true),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+  updatedAt:     timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const lcLicenses = pgTable('lc_licenses', {
+  id:              serial('id').primaryKey(),
+  licenseId:       varchar('license_id', { length: 120 }).notNull().unique(),
+  clientId:        integer('client_id').notNull().references(() => lcClients.id, { onDelete: 'cascade' }),
+  packageName:     varchar('package_name', { length: 120 }),
+  licenseType:     lcLicenseTypeEnum('license_type').notNull().default('subscription'),
+  status:          lcLicenseStatusEnum('status').notNull().default('active'),
+  maxUsers:        integer('max_users').notNull().default(5),
+  maxBranches:     integer('max_branches').notNull().default(1),
+  maxPos:          integer('max_pos').notNull().default(1),
+  maxDevices:      integer('max_devices').notNull().default(3),
+  maxWeb:          integer('max_web').notNull().default(1),
+  enabledModules:  jsonb('enabled_modules').$type<string[]>().notNull().default([]),
+  webAllowed:      boolean('web_allowed').notNull().default(false),
+  desktopAllowed:  boolean('desktop_allowed').notNull().default(true),
+  offlineAllowed:  boolean('offline_allowed').notNull().default(false),
+  startDate:       varchar('start_date', { length: 20 }).notNull(),
+  expiryDate:      varchar('expiry_date', { length: 20 }).notNull(),
+  licenseKey:      text('license_key'),
+  notes:           text('notes'),
+  issuedBy:        varchar('issued_by', { length: 120 }).notNull().default('OneSoft ERP'),
+  createdAt:       timestamp('created_at').notNull().defaultNow(),
+  updatedAt:       timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const lcDevices = pgTable('lc_devices', {
+  id:              serial('id').primaryKey(),
+  licenseId:       integer('license_id').notNull().references(() => lcLicenses.id, { onDelete: 'cascade' }),
+  deviceName:      varchar('device_name', { length: 120 }).notNull(),
+  deviceId:        varchar('device_id', { length: 255 }).notNull(),
+  hwFingerprint:   varchar('hw_fingerprint', { length: 255 }),
+  status:          lcDeviceStatusEnum('status').notNull().default('active'),
+  lastActivatedAt: timestamp('last_activated_at'),
+  createdAt:       timestamp('created_at').notNull().defaultNow(),
+});
+
+export const lcOperationsLog = pgTable('lc_operations_log', {
+  id:            serial('id').primaryKey(),
+  clientId:      integer('client_id').references(() => lcClients.id, { onDelete: 'set null' }),
+  licenseId:     integer('license_id').references(() => lcLicenses.id, { onDelete: 'set null' }),
+  operationType: lcOpTypeEnum('operation_type').notNull(),
+  description:   varchar('description', { length: 500 }).notNull(),
+  performedBy:   varchar('performed_by', { length: 120 }),
+  metadata:      jsonb('metadata'),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+});
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type Organization = typeof organizations.$inferSelect;
 export type User = typeof users.$inferSelect;
