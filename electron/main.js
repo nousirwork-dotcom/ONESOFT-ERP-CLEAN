@@ -38,8 +38,26 @@ const CONFIG_PATH = path.join(
 const LOG_DIR = path.join(app.getPath('appData'), 'OneSoftERP', 'logs');
 const DATA_DIR = path.join(app.getPath('appData'), 'OneSoftERP');
 
+// ── ProgramData — مستوى الجهاز (الترخيص + device_id) ─────────────────────────
+// يُستخدم ProgramData لأن البرنامج يعمل كـ Background Service مشترك بين
+// جميع مستخدمي Windows — ليس مرتبطاً بمستخدم واحد مثل AppData\Roaming.
+//
+//   C:\ProgramData\OneSoft\              ← ONESOFT_DATA_DIR
+//   C:\ProgramData\OneSoft\device_id     ← machine-level UUID
+//   C:\ProgramData\OneSoft\license\      ← license.dat + .session
+const PROGRAMDATA_ROOT = process.env.PROGRAMDATA ||
+  (process.platform === 'win32' ? path.join('C:', 'ProgramData') : null);
+const ONESOFT_DATA_DIR = PROGRAMDATA_ROOT
+  ? path.join(PROGRAMDATA_ROOT, 'OneSoft')
+  : DATA_DIR;  // dev fallback (Linux/Mac)
+
 // ── إعداد المجلدات ────────────────────────────────────────────────────────────
-[DATA_DIR, LOG_DIR].forEach(d => { try { fs.mkdirSync(d, { recursive: true }); } catch {} });
+[
+  DATA_DIR,
+  LOG_DIR,
+  ONESOFT_DATA_DIR,
+  path.join(ONESOFT_DATA_DIR, 'license'),
+].forEach(d => { try { fs.mkdirSync(d, { recursive: true }); } catch {} });
 
 // ── قراءة الإعدادات ───────────────────────────────────────────────────────────
 function loadConfig() {
@@ -122,8 +140,8 @@ function startServer() {
     NODE_ENV:     cfg.nodeEnv,
     LOG_DIR:      cfg.logDir,
     BACKUP_DIR:   cfg.backupDir,
-    ELECTRON_MODE:       '1',
-    ONESOFT_LICENSE_DIR: path.join(DATA_DIR, 'license'),
+    ELECTRON_MODE:    '1',
+    ONESOFT_DATA_DIR: ONESOFT_DATA_DIR,
   };
   // حذف المفاتيح الفارغة
   Object.keys(env).forEach(k => { if (!env[k]) delete env[k]; });

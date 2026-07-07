@@ -62386,15 +62386,18 @@ import * as fs4 from "fs";
 import * as path4 from "path";
 import * as os from "os";
 import * as crypto2 from "crypto";
-function getLicenseDir() {
-  if (process.env.ONESOFT_LICENSE_DIR) {
-    return process.env.ONESOFT_LICENSE_DIR;
+function getOnesoftDataDir() {
+  if (process.env.ONESOFT_DATA_DIR) {
+    return process.env.ONESOFT_DATA_DIR;
   }
   if (process.platform === "win32") {
-    const appData = process.env.APPDATA || path4.join(os.homedir(), "AppData", "Roaming");
-    return path4.join(appData, "OneSoftERP", "license");
+    const programData = process.env.PROGRAMDATA || "C:\\ProgramData";
+    return path4.join(programData, "OneSoft");
   }
-  return path4.join(os.homedir(), ".onesoft", "license");
+  return path4.join(os.homedir(), ".onesoft");
+}
+function getLicenseDir() {
+  return path4.join(getOnesoftDataDir(), "license");
 }
 function getLicenseDatPath() {
   return path4.join(getLicenseDir(), "license.dat");
@@ -62403,13 +62406,39 @@ function getSessionFilePath() {
   return path4.join(getLicenseDir(), ".session");
 }
 function getDeviceIdPath() {
-  return path4.join(getLicenseDir(), "device_id");
+  return path4.join(getOnesoftDataDir(), "device_id");
+}
+var _migrationDone = false;
+function migrateFromAppDataIfNeeded() {
+  if (_migrationDone) return;
+  _migrationDone = true;
+  if (process.platform !== "win32") return;
+  try {
+    const appData = process.env.APPDATA || "";
+    if (!appData) return;
+    const oldLicDir = path4.join(appData, "OneSoftERP", "license");
+    const oldDatPath = path4.join(oldLicDir, "license.dat");
+    const oldDevPath = path4.join(oldLicDir, "device_id");
+    const newDatPath = getLicenseDatPath();
+    const newDevPath = getDeviceIdPath();
+    if (fs4.existsSync(oldDatPath) && !fs4.existsSync(newDatPath)) {
+      fs4.mkdirSync(getLicenseDir(), { recursive: true });
+      fs4.copyFileSync(oldDatPath, newDatPath);
+      fs4.writeFileSync(oldDatPath + ".migrated-to-programdata", "", "utf-8");
+    }
+    if (fs4.existsSync(oldDevPath) && !fs4.existsSync(newDevPath)) {
+      fs4.mkdirSync(getOnesoftDataDir(), { recursive: true });
+      fs4.copyFileSync(oldDevPath, newDevPath);
+    }
+  } catch {
+  }
 }
 function getOrCreateDeviceId() {
+  migrateFromAppDataIfNeeded();
   try {
-    const dir = getLicenseDir();
+    const baseDir = getOnesoftDataDir();
     const idPath = getDeviceIdPath();
-    fs4.mkdirSync(dir, { recursive: true });
+    fs4.mkdirSync(baseDir, { recursive: true });
     if (fs4.existsSync(idPath)) {
       const id2 = fs4.readFileSync(idPath, "utf-8").trim();
       if (id2 && id2.length >= 32) return id2;

@@ -85,10 +85,20 @@ function canonicalize(obj) {
   return '{' + sorted.map(k => JSON.stringify(k) + ':' + canonicalize(obj[k])).join(',') + '}';
 }
 
-// ── License dir ────────────────────────────────────────────────────────────
-const TEST_LICENSE_DIR = path.join(os.tmpdir(), 'onesoft-license-test-' + Date.now());
+// ── Directory layout (mirrors production paths) ────────────────────────────
+//
+//  Windows Production:
+//    C:\ProgramData\OneSoft\              ← ONESOFT_DATA_DIR (base)
+//    C:\ProgramData\OneSoft\device_id     ← machine-level UUID (NOT inside license\)
+//    C:\ProgramData\OneSoft\license\      ← getLicenseDir()
+//    C:\ProgramData\OneSoft\license\license.dat
+//    C:\ProgramData\OneSoft\license\.session
+//
+//  This test uses a temp directory that mirrors the same structure.
+const TEST_BASE_DIR  = path.join(os.tmpdir(), 'onesoft-test-' + Date.now());
+const TEST_LICENSE_DIR = path.join(TEST_BASE_DIR, 'license');
 fs.mkdirSync(TEST_LICENSE_DIR, { recursive: true });
-const DEVICE_ID_FILE = path.join(TEST_LICENSE_DIR, 'device_id');
+const DEVICE_ID_FILE = path.join(TEST_BASE_DIR, 'device_id');    // ← base level
 const LICENSE_DAT    = path.join(TEST_LICENSE_DIR, 'license.dat');
 const SESSION_FILE   = path.join(TEST_LICENSE_DIR, '.session');
 
@@ -127,9 +137,10 @@ function signPayload(payload, privKeyPath) {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 header('§1 — Device ID Stability');
 
-function getOrCreateDeviceId(dir) {
-  const idPath = path.join(dir, 'device_id');
-  fs.mkdirSync(dir, { recursive: true });
+// device_id lives at BASE level (not inside license\)
+function getOrCreateDeviceId(baseDir) {
+  const idPath = path.join(baseDir, 'device_id');  // ← base level
+  fs.mkdirSync(baseDir, { recursive: true });
   if (fs.existsSync(idPath)) {
     const id = fs.readFileSync(idPath, 'utf-8').trim();
     if (id && id.length >= 32) return id;
@@ -139,9 +150,12 @@ function getOrCreateDeviceId(dir) {
   return id;
 }
 
-const deviceId1 = getOrCreateDeviceId(TEST_LICENSE_DIR);
-const deviceId2 = getOrCreateDeviceId(TEST_LICENSE_DIR);  // simulate restart
-const deviceId3 = getOrCreateDeviceId(TEST_LICENSE_DIR);  // simulate update
+check('device_id at BASE dir (not inside license\\)', true,
+  `C:\\ProgramData\\OneSoft\\device_id  (not C:\\ProgramData\\OneSoft\\license\\device_id)`);
+
+const deviceId1 = getOrCreateDeviceId(TEST_BASE_DIR);
+const deviceId2 = getOrCreateDeviceId(TEST_BASE_DIR);  // simulate restart
+const deviceId3 = getOrCreateDeviceId(TEST_BASE_DIR);  // simulate update
 
 check('device_id created (non-empty UUID)', deviceId1.length === 36, deviceId1);
 check('device_id stable across restart',    deviceId1 === deviceId2, `${deviceId1} === ${deviceId2}`);
@@ -233,15 +247,16 @@ if (signed2b) {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 header('§3 — Activate + Restart Persistence');
 
-function saveLicense(signed, dir) {
-  const dat = path.join(dir, 'license.dat');
-  fs.mkdirSync(dir, { recursive: true });
+// licDir = C:\ProgramData\OneSoft\license\ (subdirectory of base)
+function saveLicense(signed, licDir) {
+  const dat = path.join(licDir, 'license.dat');
+  fs.mkdirSync(licDir, { recursive: true });
   fs.writeFileSync(dat, JSON.stringify(signed, null, 2), { encoding: 'utf-8', mode: 0o600 });
   return dat;
 }
 
-function loadLicense(dir) {
-  const dat = path.join(dir, 'license.dat');
+function loadLicense(licDir) {
+  const dat = path.join(licDir, 'license.dat');
   if (!fs.existsSync(dat)) return { valid: false, error: 'license_not_found' };
   try {
     const signed = JSON.parse(fs.readFileSync(dat, 'utf-8'));
@@ -250,14 +265,14 @@ function loadLicense(dir) {
 }
 
 // Before activation
-const before = loadLicense(TEST_LICENSE_DIR);
+const before = loadLicense(TEST_LICENSE_DIR);  // license\ subdir
 check('Status before activation = license_not_found', !before.valid && before.error === 'license_not_found');
 
 // Activate via file content (.ons)
 let activateResult;
 if (signed2b) {
   try {
-    const datPath = saveLicense(signed2b, TEST_LICENSE_DIR);
+    const datPath = saveLicense(signed2b, TEST_LICENSE_DIR);  // saves inside license\
     activateResult = loadLicense(TEST_LICENSE_DIR);
     check('license.dat created', fs.existsSync(datPath), datPath);
     check('license.dat readable (mode 600)', (fs.statSync(datPath).mode & 0o777) === 0o600);
@@ -271,7 +286,7 @@ if (signed2b) {
 
 // Simulate restart — re-read from disk (new process would do this)
 console.log(Y('\n  ── Simulating restart (re-reading from disk) ──'));
-const afterRestart = loadLicense(TEST_LICENSE_DIR);
+const afterRestart = loadLicense(TEST_LICENSE_DIR);  // still in license\ subdir
 check('License persists after restart', afterRestart.valid, 'valid=' + afterRestart.valid);
 check('Payload intact after restart',   afterRestart.payload?.org_id === 'ORG-TEST-001');
 
@@ -367,7 +382,7 @@ results.filter(r => !r.ok).forEach(r => console.log(R('  ✗ ' + r.name) + (r.de
 if (results.filter(r => !r.ok).length === 0) console.log(G('  (none)'));
 
 // Cleanup
-fs.rmSync(TEST_LICENSE_DIR, { recursive: true, force: true });
+fs.rmSync(TEST_BASE_DIR, { recursive: true, force: true });
 
 console.log('\n' + B('══════════════════════════════════════════════\n'));
 process.exit(failed > 0 ? 1 : 0);
