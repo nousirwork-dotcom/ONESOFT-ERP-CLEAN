@@ -88,6 +88,7 @@ import { createElement, lazy, Suspense, useEffect, useState } from "react";
 import { trpc } from "@/shared/lib/trpc";
 import { Settings } from "lucide-react";
 import AppWindow from "@/shared/components/AppWindow";
+import UpdateDialog from "@/shared/components/UpdateDialog";
 
 // ─── Dev-only: Customer License Activation Screen — Preview ──────────────────
 // Vite removes this block in production (import.meta.env.DEV → false → tree-shaken).
@@ -411,6 +412,8 @@ function App() {
         <ThemeProvider defaultTheme="light">
           <TooltipProvider>
             <Toaster position="top-center" richColors />
+            {/* نافذة التحديث التلقائي — تظهر فوق كل شيء عند وجود تحديث */}
+            <UpdateDialog />
             <Switch>
               <Route path="/login" component={LoginPage} />
               {import.meta.env.DEV && _DevLicensePreview && (
