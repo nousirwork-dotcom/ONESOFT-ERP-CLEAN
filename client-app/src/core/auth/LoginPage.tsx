@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { trpc } from '@/shared/lib/trpc';
 import { useLocation } from 'wouter';
 import FirstRunWizard from '@/core/auth/FirstRunWizard';
+import ForgotPasswordFlow from '@/core/auth/ForgotPasswordFlow';
 import { useBranding, getStartupPath } from '@/core/contexts/BrandingContext';
 
 // ─── Transition durations (ms) ────────────────────────────────────────────────
@@ -264,6 +265,7 @@ function LoginForm({
   orgName,
   licenseId,
   onRequestChangeOrg,
+  onForgotPassword,
 }: {
   onSuccess:          (role: string) => void;
   utils:              ReturnType<typeof trpc.useUtils>;
@@ -271,6 +273,7 @@ function LoginForm({
   orgName:            string;
   licenseId:          string | null;
   onRequestChangeOrg: () => void;
+  onForgotPassword:   () => void;
 }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -373,6 +376,19 @@ function LoginForm({
       >
         {loading ? <><Spinner size={16} />جارٍ الدخول...</> : 'تسجيل الدخول'}
       </button>
+
+      <button
+        type="button"
+        onClick={onForgotPassword}
+        style={{
+          background: 'none', border: 'none', padding: 0,
+          color: 'var(--muted-foreground)', fontSize: 12,
+          cursor: 'pointer', fontFamily: 'inherit',
+          textDecoration: 'underline', textAlign: 'center',
+        }}
+      >
+        🔐 نسيت كلمة المرور؟
+      </button>
     </form>
   );
 }
@@ -457,6 +473,7 @@ export default function LoginPage() {
   const [transitioning, setTransitioning] = useState(false);
   const [transType, setTransType]       = useState('none');
   const [showChangeOrgDialog, setShowChangeOrgDialog] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   const utils        = trpc.useUtils();
   const [, navigate] = useLocation();
@@ -619,14 +636,19 @@ export default function LoginPage() {
                 padding: '24px 28px', border: '1px solid var(--border)',
                 boxShadow: '0 4px 20px rgba(var(--brand-primary-rgb)/0.1)',
               }}>
-                <LoginForm
-                  onSuccess={handleLoginSuccess}
-                  utils={utils}
-                  orgCode={licCtxQ.data.orgCode}
-                  orgName={licCtxQ.data.orgName ?? licCtxQ.data.orgCode}
-                  licenseId={licCtxQ.data.licenseId}
-                  onRequestChangeOrg={() => setShowChangeOrgDialog(true)}
-                />
+                {showForgotPassword ? (
+                  <ForgotPasswordFlow onBack={() => setShowForgotPassword(false)} />
+                ) : (
+                  <LoginForm
+                    onSuccess={handleLoginSuccess}
+                    utils={utils}
+                    orgCode={licCtxQ.data.orgCode}
+                    orgName={licCtxQ.data.orgName ?? licCtxQ.data.orgCode}
+                    licenseId={licCtxQ.data.licenseId}
+                    onRequestChangeOrg={() => setShowChangeOrgDialog(true)}
+                    onForgotPassword={() => setShowForgotPassword(true)}
+                  />
+                )}
               </div>
             )}
           </>

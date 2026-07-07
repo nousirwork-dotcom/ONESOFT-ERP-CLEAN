@@ -47,6 +47,12 @@ export const users = pgTable('users', {
   categoryId: integer('category_id'),
   isActive: boolean('is_active').notNull().default(true),
   lastLoginAt: timestamp('last_login_at'),
+  phoneVerifiedAt: timestamp('phone_verified_at'),
+  emailVerifiedAt: timestamp('email_verified_at'),
+  passwordChangedAt: timestamp('password_changed_at'),
+  forcePasswordChange: boolean('force_password_change').notNull().default(false),
+  recoveryEnabledPhone: boolean('recovery_enabled_phone').notNull().default(false),
+  recoveryEnabledEmail: boolean('recovery_enabled_email').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -1289,6 +1295,50 @@ export const lcOperationsLog = pgTable('lc_operations_log', {
   performedBy:   varchar('performed_by', { length: 120 }),
   metadata:      jsonb('metadata'),
   createdAt:     timestamp('created_at').notNull().defaultNow(),
+});
+
+// ─── Verification Tokens (0017) ───────────────────────────────────────────────
+export const verificationTokens = pgTable('verification_tokens', {
+  id:            serial('id').primaryKey(),
+  userId:        integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  targetType:    varchar('target_type', { length: 10 }).notNull(),
+  targetValue:   varchar('target_value', { length: 255 }).notNull(),
+  otpHash:       varchar('otp_hash', { length: 255 }).notNull(),
+  expiresAt:     timestamp('expires_at').notNull(),
+  usedAt:        timestamp('used_at'),
+  attemptsCount: integer('attempts_count').notNull().default(0),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+});
+
+// ─── Password Reset Tokens (0017) ─────────────────────────────────────────────
+export const passwordResetTokens = pgTable('password_reset_tokens', {
+  id:            serial('id').primaryKey(),
+  userId:        integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  channel:       varchar('channel', { length: 10 }).notNull(),
+  otpHash:       varchar('otp_hash', { length: 255 }).notNull(),
+  resetToken:    varchar('reset_token', { length: 100 }).notNull().unique(),
+  expiresAt:     timestamp('expires_at').notNull(),
+  usedAt:        timestamp('used_at'),
+  attemptsCount: integer('attempts_count').notNull().default(0),
+  requestIp:     varchar('request_ip', { length: 64 }),
+  deviceInfo:    text('device_info'),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+});
+
+// ─── Security Events (0017) ───────────────────────────────────────────────────
+export const securityEvents = pgTable('security_events', {
+  id:         serial('id').primaryKey(),
+  eventType:  varchar('event_type', { length: 80 }).notNull(),
+  userId:     integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+  username:   varchar('username', { length: 100 }),
+  phone:      varchar('phone', { length: 50 }),
+  email:      varchar('email', { length: 255 }),
+  orgId:      integer('org_id'),
+  result:     varchar('result', { length: 20 }).notNull().default('success'),
+  reason:     text('reason'),
+  ip:         varchar('ip', { length: 64 }),
+  deviceInfo: text('device_info'),
+  createdAt:  timestamp('created_at').notNull().defaultNow(),
 });
 
 // ─── Types ────────────────────────────────────────────────────────────────────

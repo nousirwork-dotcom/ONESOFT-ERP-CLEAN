@@ -25,6 +25,7 @@ import { brandingRouter }           from './branding.js';
 import { licenseRouter }            from './license.js';
 import { licenseCenterRouter }      from './licenseCenter.js';
 import { authRouter }               from './auth.js';
+import { recoveryRouter }           from './recovery.js';
 import { customersRouter }          from './customers.js';
 import { suppliersRouter }          from './suppliers.js';
 import { productsRouter, categoriesRouter, productGroupsRouter } from './products.js';
@@ -57,6 +58,7 @@ const IS_CLIENT_BUILD = process.env.CLIENT_BUILD === 'true';
 // ─── Base config (مشترك بين النسختين) ───────────────────────────────────────
 const baseConfig = {
   auth:                authRouter,
+  recovery:            recoveryRouter,
   orgs:                orgsRouter,
   users:               usersRouter,
   userGroups:          userGroupsRouter,
