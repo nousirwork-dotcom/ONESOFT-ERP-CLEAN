@@ -5179,3 +5179,4 @@ export function CfgGosiTab()             { return <CfgSubPage activeId="gosi-con
 export function CfgGaztTab()             { return <CfgSubPage activeId="gazt-config" />; }
 export function CfgSystemInfoTab()         { return <CfgSubPage activeId="system-info" />; }
 export function CfgServiceManagementTab() { return <CfgSubPage activeId="service-management" />; }
+export function CfgUpdatesTab()           { return <CfgSubPage activeId="updates" />; }
