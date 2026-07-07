@@ -99,5 +99,7 @@ contextBridge.exposeInMainWorld('installer', {
     startDownload: () => ipcRenderer.invoke('update:start-download'),
     installNow:    () => ipcRenderer.invoke('update:install-now'),
     skipUpdate:    () => ipcRenderer.invoke('update:skip'),
+    /** فحص يدوي من داخل شاشة الإعدادات — يُجاهل مهلة الـ 24 ساعة */
+    checkNow:      () => ipcRenderer.invoke('update:check-now'),
   },
 });
