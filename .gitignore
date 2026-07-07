@@ -86,7 +86,9 @@ desktop.ini
 *~
 
 # ── License Keys & Signed License Files ───────────────────────────────────────
+# Block ALL .pem by default, then explicitly allow the public key
 *.pem
+!**/public_key.pem
 private_key*
 scripts/keys/
 license-center/keys/private*
