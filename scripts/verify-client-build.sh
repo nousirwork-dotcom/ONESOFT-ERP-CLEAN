@@ -133,7 +133,8 @@ else
 fi
 
 # تحقق من أن ownerOnlyProcedure تُرجع NOT_FOUND عند CLIENT_BUILD
-NOT_FOUND_GUARD=$(grep -c "NOT_FOUND" server-app/src/trpc.ts 2>/dev/null || echo 0)
+# ملاحظة: نستخدم | wc -l بدلاً من grep -c || echo 0 لتفادي double-output bug
+NOT_FOUND_GUARD=$(grep "NOT_FOUND" server-app/src/trpc.ts 2>/dev/null | wc -l | tr -d ' ')
 if [[ "$NOT_FOUND_GUARD" -gt 0 ]]; then
   pass "ownerOnlyProcedure returns NOT_FOUND (not just FORBIDDEN) in client builds"
 else
@@ -141,7 +142,7 @@ else
 fi
 
 # تحقق من أن ownerOnlyProcedure تحمي licenseCenter
-OOP_LC=$(grep -c "ownerOnlyProcedure" server-app/src/routers/licenseCenter.ts 2>/dev/null || echo 0)
+OOP_LC=$(grep "ownerOnlyProcedure" server-app/src/routers/licenseCenter.ts 2>/dev/null | wc -l | tr -d ' ')
 if [[ "$OOP_LC" -gt 3 ]]; then
   pass "licenseCenter router uses ownerOnlyProcedure ($OOP_LC usages)"
 else
@@ -149,7 +150,7 @@ else
 fi
 
 # تحقق من أن IS_CLIENT_BUILD موجود في index.ts
-CLIENT_BUILD_INDEX=$(grep -c "IS_CLIENT_BUILD\|CLIENT_BUILD" server-app/src/routers/index.ts 2>/dev/null || echo 0)
+CLIENT_BUILD_INDEX=$(grep "IS_CLIENT_BUILD\|CLIENT_BUILD" server-app/src/routers/index.ts 2>/dev/null | wc -l | tr -d ' ')
 if [[ "$CLIENT_BUILD_INDEX" -gt 0 ]]; then
   pass "CLIENT_BUILD conditional present in routers/index.ts"
 else
@@ -157,7 +158,7 @@ else
 fi
 
 # تحقق من أن devicePrefs يحتوي على whitelist
-DP_WHITE=$(grep -c "ALLOWED_PREFS_KEYS\|sanitizePrefs\|FORBIDDEN_KEY_PATTERNS" server-app/src/lib/devicePrefs.ts 2>/dev/null || echo 0)
+DP_WHITE=$(grep "ALLOWED_PREFS_KEYS\|sanitizePrefs\|FORBIDDEN_KEY_PATTERNS" server-app/src/lib/devicePrefs.ts 2>/dev/null | wc -l | tr -d ' ')
 if [[ "$DP_WHITE" -gt 0 ]]; then
   pass "devicePrefs.ts has whitelist + forbidden key enforcement"
 else
@@ -165,7 +166,7 @@ else
 fi
 
 # تحقق من أن devicePrefs يستخدم AES-256-GCM
-AES_ENC=$(grep -c "aes-256-gcm" server-app/src/lib/devicePrefs.ts 2>/dev/null || echo 0)
+AES_ENC=$(grep "aes-256-gcm" server-app/src/lib/devicePrefs.ts 2>/dev/null | wc -l | tr -d ' ')
 if [[ "$AES_ENC" -gt 0 ]]; then
   pass "device.prefs uses AES-256-GCM encryption in production"
 else
@@ -173,7 +174,7 @@ else
 fi
 
 # تحقق من أن seedDemo محظور في production
-SEED_GUARD=$(grep -c "NODE_ENV.*production\|production.*NODE_ENV" server-app/src/routers/licenseCenter.ts 2>/dev/null || echo 0)
+SEED_GUARD=$(grep "NODE_ENV.*production\|production.*NODE_ENV" server-app/src/routers/licenseCenter.ts 2>/dev/null | wc -l | tr -d ' ')
 if [[ "$SEED_GUARD" -gt 0 ]]; then
   pass "seedDemo blocked in production (NODE_ENV=production guard present)"
 else
