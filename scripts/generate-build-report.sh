@@ -117,28 +117,28 @@ LC_IMPORT=$(grep -r "LicenseCenterPage\|/license-center" client-app/src/ 2>/dev/
 PRIV_SRC=$(grep -r "BEGIN PRIVATE KEY" server-app/src/ 2>/dev/null | wc -l)
 [[ "$PRIV_SRC" -eq 0 ]] && ok "Private key NOT in server-app/src" || ko "Private key literal in server-app/src ($PRIV_SRC lines) — CRITICAL"
 
-# ownerOnlyProcedure guard
-OOP=$(grep -c "NOT_FOUND.*CLIENT_BUILD\|CLIENT_BUILD.*NOT_FOUND" server-app/src/trpc.ts 2>/dev/null || echo 0)
+# ownerOnlyProcedure guard — use | wc -l to avoid grep-c double-output bug
+OOP=$(grep "NOT_FOUND" server-app/src/trpc.ts 2>/dev/null | wc -l | tr -d ' ')
 [[ "$OOP" -gt 0 ]] && ok "ownerOnlyProcedure returns NOT_FOUND when CLIENT_BUILD=true" || unknown "Verify NOT_FOUND code in trpc.ts manually"
 
 # licenseCenter uses ownerOnlyProcedure
-OOP_LC=$(grep -c "ownerOnlyProcedure" server-app/src/routers/licenseCenter.ts 2>/dev/null || echo 0)
+OOP_LC=$(grep "ownerOnlyProcedure" server-app/src/routers/licenseCenter.ts 2>/dev/null | wc -l | tr -d ' ')
 [[ "$OOP_LC" -gt 3 ]] && ok "licenseCenter uses ownerOnlyProcedure ($OOP_LC procedures)" || ko "licenseCenter does not use ownerOnlyProcedure ($OOP_LC)"
 
 # IS_CLIENT_BUILD in index.ts
-CB_IDX=$(grep -c "IS_CLIENT_BUILD\|CLIENT_BUILD" server-app/src/routers/index.ts 2>/dev/null || echo 0)
+CB_IDX=$(grep "IS_CLIENT_BUILD\|CLIENT_BUILD" server-app/src/routers/index.ts 2>/dev/null | wc -l | tr -d ' ')
 [[ "$CB_IDX" -gt 0 ]] && ok "IS_CLIENT_BUILD guard in routers/index.ts" || ko "IS_CLIENT_BUILD missing from routers/index.ts"
 
 # devicePrefs whitelist
-DP_WHITE=$(grep -c "ALLOWED_PREFS\|sanitizePrefs\|whitelist" server-app/src/lib/devicePrefs.ts 2>/dev/null || echo 0)
+DP_WHITE=$(grep "ALLOWED_PREFS\|sanitizePrefs\|whitelist" server-app/src/lib/devicePrefs.ts 2>/dev/null | wc -l | tr -d ' ')
 [[ "$DP_WHITE" -gt 0 ]] && ok "devicePrefs.ts has whitelist sanitization" || unknown "devicePrefs whitelist not detected — verify manually"
 
 # AES-256-GCM encryption
-AES=$(grep -c "aes-256-gcm" server-app/src/lib/devicePrefs.ts 2>/dev/null || echo 0)
+AES=$(grep "aes-256-gcm" server-app/src/lib/devicePrefs.ts 2>/dev/null | wc -l | tr -d ' ')
 [[ "$AES" -gt 0 ]] && ok "device.prefs encrypted with AES-256-GCM in production" || ko "AES-256-GCM encryption missing from devicePrefs.ts"
 
 # seedDemo production guard
-SEED_GUARD=$(grep -c "NODE_ENV.*production\|production.*NODE_ENV" server-app/src/routers/licenseCenter.ts 2>/dev/null || echo 0)
+SEED_GUARD=$(grep "NODE_ENV.*production\|production.*NODE_ENV" server-app/src/routers/licenseCenter.ts 2>/dev/null | wc -l | tr -d ' ')
 [[ "$SEED_GUARD" -gt 0 ]] && ok "seedDemo blocked in production (NODE_ENV guard present)" || ko "seedDemo missing production guard — MUST NOT run in production"
 
 # Private key NOT tracked by git
