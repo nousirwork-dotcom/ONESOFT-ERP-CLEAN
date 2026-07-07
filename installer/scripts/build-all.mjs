@@ -35,9 +35,13 @@ function warn(msg)  { console.log(`  ⚠️  ${msg}`); }
 function info(msg)  { console.log(`  ℹ️  ${msg}`); }
 function divider()  { console.log(`  ${sep2}`); }
 
-function run(cmd, cwd) {
+function run(cmd, cwd, extraEnv = {}) {
   console.log(`\n  → ${cmd}`);
-  execSync(cmd, { stdio: 'inherit', cwd: cwd ?? INSTALLER });
+  execSync(cmd, {
+    stdio: 'inherit',
+    cwd: cwd ?? INSTALLER,
+    env: { ...process.env, ...extraEnv },
+  });
 }
 
 function rmDir(dir) {
@@ -107,8 +111,12 @@ fs.mkdirSync(path.join(RESOURCE_APP, 'dist'), { recursive: true });
 ok('جاهز للنسخ');
 
 // ── 1. بناء server-app ────────────────────────────────────────────
-header('1/6', 'بناء server-app');
-run('pnpm run build', SERVER_SRC);
+header('1/6', 'بناء server-app (CLIENT_BUILD=true — licenseCenter excluded)');
+// CLIENT_BUILD=true يضمن:
+//   • licenseCenter router غير موجود في appRouter
+//   • ownerOnlyProcedure تُرجع NOT_FOUND
+//   • device.prefs مشفّر بـ AES-256-GCM
+run('pnpm run build', SERVER_SRC, { CLIENT_BUILD: 'true' });
 
 // تحقق من وجود index.mjs
 const mainFile = path.join(SERVER_DIST, 'index.mjs');
@@ -123,6 +131,21 @@ sub(`  Size      : ${(fs.statSync(mainFile).size / 1024).toFixed(1)} KB`);
 sub(`  Built At  : ${builtAt}`);
 sub(`  SHA256    : ${sha.slice(0,32)}...`);
 sub(`  Git       : ${gitShort()}`);
+
+// ── 1.5 تحقق أمني على bundle (verify-client-build) ──────────────
+// يُشغَّل بعد بناء server-app مباشرةً — يمنع المتابعة عند أي فشل
+header('1.5/6', 'فحص أمني — verify-client-build (21 اختبار)');
+const verifyScript = path.join(ROOT, 'scripts', 'verify-client-build.sh');
+const clientDist   = path.join(ROOT, 'client-app', 'dist');
+if (!fs.existsSync(verifyScript)) {
+  warn('scripts/verify-client-build.sh غير موجود — تخطّي الفحص');
+} else if (!fs.existsSync(clientDist)) {
+  warn('client-app/dist غير موجود — تخطّي فحص bundle (يعمل على source فقط)');
+  run(`bash "${verifyScript}"`, ROOT, { CLIENT_BUILD: 'true' });
+} else {
+  run(`bash "${verifyScript}" "${clientDist}" "${SERVER_DIST}"`, ROOT, { CLIENT_BUILD: 'true' });
+  ok('verify-client-build: 21/21 checks passed ✅');
+}
 
 // ── 2. نسخ server-app/dist → resources/app ───────────────────────
 header('2/6', `نسخ server-app/dist → resources/app/server-app/dist`);
