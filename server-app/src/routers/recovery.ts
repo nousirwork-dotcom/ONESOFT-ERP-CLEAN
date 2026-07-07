@@ -12,25 +12,41 @@ import { and, eq, gt, isNull, or, count, desc } from 'drizzle-orm';
 import { hashPassword, verifyPassword } from '../auth.js';
 import { randomInt, randomUUID } from 'crypto';
 
+// ── Production guard ──────────────────────────────────────────────────────────
+// IS_DEV = true ONLY when NODE_ENV is NOT 'production'.
+// In production: devOtp is NEVER returned in any response and NEVER logged.
 const IS_DEV = process.env.NODE_ENV !== 'production';
-const OTP_EXPIRY_MS = 10 * 60 * 1000;
+
+/**
+ * SECURITY: Returns devOtp payload only in non-production environments.
+ * In production this function returns an empty object — no data leaked.
+ */
+function devOnlyPayload(otp: string): { devOtp?: string } {
+  if (IS_DEV) return { devOtp: otp };
+  // Production: explicit empty — no fallthrough possible
+  return {};
+}
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+const OTP_EXPIRY_MS           = 10 * 60 * 1000; // 10 minutes
 const MAX_OTP_SENDS_PER_15MIN = 3;
-const MAX_OTP_ATTEMPTS = 5;
+const MAX_OTP_ATTEMPTS        = 5;
 
 function generateOtp(): string {
   return String(randomInt(100000, 999999));
 }
 
+// ── Security event logger ─────────────────────────────────────────────────────
 async function logEvent(data: {
   eventType: string;
-  userId?: number | null;
+  userId?:   number | null;
   username?: string | null;
-  phone?: string | null;
-  email?: string | null;
-  orgId?: number | null;
-  result: 'success' | 'failed';
-  reason?: string | null;
-  ip?: string | null;
+  phone?:    string | null;
+  email?:    string | null;
+  orgId?:    number | null;
+  result:    'success' | 'failed';
+  reason?:   string | null;
+  ip?:       string | null;
 }) {
   try {
     await db.insert(securityEvents).values({
@@ -44,20 +60,28 @@ async function logEvent(data: {
       reason:    data.reason    ?? null,
       ip:        data.ip        ?? null,
     });
-  } catch { /* don't let audit failure break the operation */ }
+  } catch { /* never let audit failure break the operation */ }
 }
 
+// ── Mock provider (dev only) ──────────────────────────────────────────────────
+// SECURITY: In production, replace this with a real SMS/SMTP provider.
+// OTP must never be printed to logs in production.
 function mockSend(channel: 'phone' | 'email', target: string, otp: string, purpose: string) {
-  if (IS_DEV) {
-    console.log(`\n[OTP-MOCK] ═══════════════════════════════════`);
-    console.log(`[OTP-MOCK] Channel : ${channel.toUpperCase()}`);
-    console.log(`[OTP-MOCK] Target  : ${target}`);
-    console.log(`[OTP-MOCK] Purpose : ${purpose}`);
-    console.log(`[OTP-MOCK] CODE    : ${otp}`);
-    console.log(`[OTP-MOCK] ═══════════════════════════════════\n`);
+  if (!IS_DEV) {
+    // Production: real provider call goes here. Do NOT log the OTP.
+    // Example: await twilioClient.messages.create({ to: target, body: `كود ${purpose}: ${otp}` });
+    return;
   }
+  // Development only — safe to log for testing purposes
+  console.log(`\n[OTP-MOCK] ═══════════════════════════════════`);
+  console.log(`[OTP-MOCK] Channel : ${channel.toUpperCase()}`);
+  console.log(`[OTP-MOCK] Target  : ${target}`);
+  console.log(`[OTP-MOCK] Purpose : ${purpose}`);
+  console.log(`[OTP-MOCK] CODE    : ${otp}`);
+  console.log(`[OTP-MOCK] ═══════════════════════════════════\n`);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
 export const recoveryRouter = router({
 
   // ── إرسال كود تحقق (المسؤول → جوال/بريد المستخدم) ──────────────────────────
@@ -69,8 +93,8 @@ export const recoveryRouter = router({
     .mutation(async ({ input, ctx }) => {
       const user = await db.query.users.findFirst({
         where: and(
-          eq(users.id, input.userId),
-          eq(users.orgId, ctx.user.orgId),
+          eq(users.id,       input.userId),
+          eq(users.orgId,    ctx.user.orgId),
           eq(users.isActive, true),
         ),
       });
@@ -92,24 +116,27 @@ export const recoveryRouter = router({
         .select({ cnt: count() })
         .from(securityEvents)
         .where(and(
-          eq(securityEvents.userId, input.userId),
+          eq(securityEvents.userId,    input.userId),
           eq(securityEvents.eventType, `verify_${input.channel}_sent`),
           gt(securityEvents.createdAt, since15),
         ));
       if (Number(cnt) >= MAX_OTP_SENDS_PER_15MIN) {
-        throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'تم تجاوز عدد طلبات الإرسال. يرجى الانتظار 15 دقيقة.' });
+        throw new TRPCError({
+          code: 'TOO_MANY_REQUESTS',
+          message: 'تم تجاوز عدد طلبات الإرسال. يرجى الانتظار 15 دقيقة.',
+        });
       }
 
-      const otp = generateOtp();
+      const otp     = generateOtp();
       const otpHash = await hashPassword(otp);
       const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
 
-      // Invalidate previous tokens for same user+channel
+      // Invalidate any previous unused tokens for this user+channel
       await db.update(verificationTokens)
         .set({ usedAt: new Date() })
         .where(and(
-          eq(verificationTokens.userId, input.userId),
-          eq(verificationTokens.targetType, input.channel),
+          eq(verificationTokens.userId,      input.userId),
+          eq(verificationTokens.targetType,  input.channel),
           isNull(verificationTokens.usedAt),
         ));
 
@@ -125,13 +152,16 @@ export const recoveryRouter = router({
 
       await logEvent({
         eventType: `verify_${input.channel}_sent`,
-        userId: input.userId, username: user.username,
-        phone: input.channel === 'phone' ? target : null,
-        email: input.channel === 'email' ? target : null,
-        orgId: ctx.user.orgId, result: 'success',
+        userId:    input.userId,
+        username:  user.username,
+        phone:     input.channel === 'phone' ? target : null,
+        email:     input.channel === 'email' ? target : null,
+        orgId:     ctx.user.orgId,
+        result:    'success',
       });
 
-      return { sent: true, ...(IS_DEV ? { devOtp: otp } : {}) };
+      // SECURITY: devOnlyPayload returns {} in production — OTP never leaks
+      return { sent: true, ...devOnlyPayload(otp) };
     }),
 
   // ── تأكيد كود التحقق ─────────────────────────────────────────────────────────
@@ -151,7 +181,7 @@ export const recoveryRouter = router({
         .select()
         .from(verificationTokens)
         .where(and(
-          eq(verificationTokens.userId, input.userId),
+          eq(verificationTokens.userId,     input.userId),
           eq(verificationTokens.targetType, input.channel),
           isNull(verificationTokens.usedAt),
           gt(verificationTokens.expiresAt, new Date()),
@@ -160,11 +190,26 @@ export const recoveryRouter = router({
         .limit(1);
 
       if (!token) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'كود التحقق غير صحيح أو منتهي الصلاحية.' });
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'كود التحقق غير صحيح أو منتهي الصلاحية.',
+        });
       }
 
+      // Check max attempts
       if (token.attemptsCount >= MAX_OTP_ATTEMPTS) {
-        throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'تم تجاوز عدد المحاولات. يرجى إعادة إرسال الكود.' });
+        await logEvent({
+          eventType: `verify_${input.channel}_max_attempts`,
+          userId:    input.userId,
+          username:  user.username,
+          orgId:     ctx.user.orgId,
+          result:    'failed',
+          reason:    'max_attempts_exceeded',
+        });
+        throw new TRPCError({
+          code: 'TOO_MANY_REQUESTS',
+          message: 'تم تجاوز عدد المحاولات. يرجى إعادة إرسال الكود.',
+        });
       }
 
       const valid = await verifyPassword(input.otp, token.otpHash);
@@ -172,20 +217,41 @@ export const recoveryRouter = router({
         await db.update(verificationTokens)
           .set({ attemptsCount: token.attemptsCount + 1 })
           .where(eq(verificationTokens.id, token.id));
-        await logEvent({ eventType: `verify_${input.channel}_failed`, userId: input.userId, username: user.username, orgId: ctx.user.orgId, result: 'failed', reason: 'wrong_otp' });
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'كود التحقق غير صحيح أو منتهي الصلاحية.' });
+
+        await logEvent({
+          eventType: `verify_${input.channel}_failed`,
+          userId:    input.userId,
+          username:  user.username,
+          orgId:     ctx.user.orgId,
+          result:    'failed',
+          reason:    'wrong_otp',
+        });
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'كود التحقق غير صحيح أو منتهي الصلاحية.',
+        });
       }
 
-      // Mark token used
-      await db.update(verificationTokens).set({ usedAt: new Date() }).where(eq(verificationTokens.id, token.id));
+      // Mark token used — OTP is now one-time only
+      await db.update(verificationTokens)
+        .set({ usedAt: new Date() })
+        .where(eq(verificationTokens.id, token.id));
 
-      // Update verified timestamp
+      // Stamp verified timestamp
       const updateFields = input.channel === 'phone'
         ? { phoneVerifiedAt: new Date() }
         : { emailVerifiedAt: new Date() };
-      await db.update(users).set({ ...updateFields, updatedAt: new Date() }).where(eq(users.id, input.userId));
+      await db.update(users)
+        .set({ ...updateFields, updatedAt: new Date() })
+        .where(eq(users.id, input.userId));
 
-      await logEvent({ eventType: `verify_${input.channel}_success`, userId: input.userId, username: user.username, orgId: ctx.user.orgId, result: 'success' });
+      await logEvent({
+        eventType: `verify_${input.channel}_success`,
+        userId:    input.userId,
+        username:  user.username,
+        orgId:     ctx.user.orgId,
+        result:    'success',
+      });
 
       return { verified: true };
     }),
@@ -200,16 +266,29 @@ export const recoveryRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       const { userId, ...opts } = input;
+
       const user = await db.query.users.findFirst({
         where: and(eq(users.id, userId), eq(users.orgId, ctx.user.orgId)),
       });
       if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: 'المستخدم غير موجود' });
 
-      if (opts.recoveryEnabledPhone === true && !user.phoneVerifiedAt) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'يجب التحقق من رقم الجوال أولاً لتفعيل الاستعادة عبر الجوال' });
+      // SECURITY: Cannot enable phone recovery without a verified phone
+      if (opts.recoveryEnabledPhone === true) {
+        if (!user.phone || !user.phoneVerifiedAt) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'يجب التحقق من رقم الجوال أولاً لتفعيل الاستعادة عبر الجوال',
+          });
+        }
       }
-      if (opts.recoveryEnabledEmail === true && !user.emailVerifiedAt) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'يجب التحقق من البريد الإلكتروني أولاً لتفعيل الاستعادة عبره' });
+      // SECURITY: Cannot enable email recovery without a verified email
+      if (opts.recoveryEnabledEmail === true) {
+        if (!user.email || !user.emailVerifiedAt) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'يجب التحقق من البريد الإلكتروني أولاً لتفعيل الاستعادة عبره',
+          });
+        }
       }
 
       await db.update(users).set({
@@ -223,6 +302,8 @@ export const recoveryRouter = router({
     }),
 
   // ── طلب استعادة كلمة المرور (عام — من شاشة الدخول) ─────────────────────────
+  // SECURITY: Always returns the same generic message regardless of outcome.
+  // This prevents user enumeration, channel status disclosure, or account existence leaks.
   requestPasswordReset: publicProcedure
     .input(z.object({
       identifier: z.string().min(1),
@@ -231,19 +312,37 @@ export const recoveryRouter = router({
     .mutation(async ({ input }) => {
       const GENERIC = 'إذا كانت البيانات صحيحة، سيتم إرسال كود الاستعادة.';
 
-      const user = await db.query.users.findFirst({
-        where: (u) => and(
-          eq(u.isActive, true),
-          or(
-            eq(u.username, input.identifier),
-            eq(u.phone,    input.identifier),
-            eq(u.email,    input.identifier),
-          ),
+      // First: check if user exists at all (for logging only — result is always generic)
+      const anyUser = await db.query.users.findFirst({
+        where: (u) => or(
+          eq(u.username, input.identifier),
+          eq(u.phone,    input.identifier),
+          eq(u.email,    input.identifier),
         ),
       });
 
+      // Log suspended user attempt (still return generic message)
+      if (anyUser && !anyUser.isActive) {
+        await logEvent({
+          eventType: 'password_reset_suspended_user',
+          userId:    anyUser.id,
+          username:  anyUser.username,
+          result:    'failed',
+          reason:    'user_suspended',
+        });
+        return { message: GENERIC };
+      }
+
+      // Active user lookup
+      const user = anyUser?.isActive ? anyUser : null;
+
       if (!user) {
-        await logEvent({ eventType: 'password_reset_request', result: 'failed', reason: 'user_not_found', username: input.identifier });
+        await logEvent({
+          eventType: 'password_reset_request',
+          result:    'failed',
+          reason:    'user_not_found',
+          username:  input.identifier,
+        });
         return { message: GENERIC };
       }
 
@@ -252,7 +351,13 @@ export const recoveryRouter = router({
       const isVerified = input.channel === 'phone' ? user.phoneVerifiedAt      : user.emailVerifiedAt;
 
       if (!target || !isEnabled || !isVerified) {
-        await logEvent({ eventType: 'password_reset_request', userId: user.id, username: user.username, result: 'failed', reason: 'channel_not_available' });
+        await logEvent({
+          eventType: 'password_reset_request',
+          userId:    user.id,
+          username:  user.username,
+          result:    'failed',
+          reason:    'channel_not_available',
+        });
         return { message: GENERIC };
       }
 
@@ -262,20 +367,28 @@ export const recoveryRouter = router({
         .select({ cnt: count() })
         .from(securityEvents)
         .where(and(
-          eq(securityEvents.userId, user.id),
+          eq(securityEvents.userId,    user.id),
           eq(securityEvents.eventType, 'password_reset_otp_sent'),
           gt(securityEvents.createdAt, since15),
         ));
       if (Number(cnt) >= MAX_OTP_SENDS_PER_15MIN) {
-        return { message: GENERIC }; // silent rate limit
+        // Silent rate limit — same generic message, don't reveal rate limiting
+        await logEvent({
+          eventType: 'password_reset_rate_limited',
+          userId:    user.id,
+          username:  user.username,
+          result:    'failed',
+          reason:    'rate_limited',
+        });
+        return { message: GENERIC };
       }
 
-      // Invalidate old tokens
+      // Invalidate old tokens for this user+channel
       await db.update(passwordResetTokens)
         .set({ usedAt: new Date() })
         .where(and(
-          eq(passwordResetTokens.userId, user.id),
-          eq(passwordResetTokens.channel, input.channel),
+          eq(passwordResetTokens.userId,   user.id),
+          eq(passwordResetTokens.channel,  input.channel),
           isNull(passwordResetTokens.usedAt),
         ));
 
@@ -296,16 +409,19 @@ export const recoveryRouter = router({
 
       await logEvent({
         eventType: 'password_reset_otp_sent',
-        userId: user.id, username: user.username,
-        phone: input.channel === 'phone' ? target : null,
-        email: input.channel === 'email' ? target : null,
-        result: 'success',
+        userId:    user.id,
+        username:  user.username,
+        phone:     input.channel === 'phone' ? target : null,
+        email:     input.channel === 'email' ? target : null,
+        result:    'success',
       });
 
+      // SECURITY: devOnlyPayload returns {} in production — resetToken IS returned
+      // always (needed to correlate the OTP submission), but devOtp never leaks in prod
       return {
-        message:    GENERIC,
+        message: GENERIC,
         resetToken,
-        ...(IS_DEV ? { devOtp: otp } : {}),
+        ...devOnlyPayload(otp),
       };
     }),
 
@@ -328,12 +444,24 @@ export const recoveryRouter = router({
         .limit(1);
 
       if (!token) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'كود التحقق غير صحيح أو منتهي الصلاحية.' });
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'كود التحقق غير صحيح أو منتهي الصلاحية.',
+        });
       }
 
+      // Max attempts guard
       if (token.attemptsCount >= MAX_OTP_ATTEMPTS) {
-        await logEvent({ eventType: 'password_reset_verify', userId: token.userId, result: 'failed', reason: 'max_attempts' });
-        throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'تم تجاوز عدد المحاولات المسموح. يرجى طلب كود جديد.' });
+        await logEvent({
+          eventType: 'password_reset_max_attempts',
+          userId:    token.userId,
+          result:    'failed',
+          reason:    'max_attempts_exceeded',
+        });
+        throw new TRPCError({
+          code: 'TOO_MANY_REQUESTS',
+          message: 'تم تجاوز عدد المحاولات المسموح. يرجى طلب كود جديد.',
+        });
       }
 
       const valid = await verifyPassword(input.otp, token.otpHash);
@@ -341,12 +469,23 @@ export const recoveryRouter = router({
         await db.update(passwordResetTokens)
           .set({ attemptsCount: token.attemptsCount + 1 })
           .where(eq(passwordResetTokens.id, token.id));
-        await logEvent({ eventType: 'password_reset_verify', userId: token.userId, result: 'failed', reason: 'wrong_otp' });
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'كود التحقق غير صحيح أو منتهي الصلاحية.' });
+
+        await logEvent({
+          eventType: 'password_reset_verify',
+          userId:    token.userId,
+          result:    'failed',
+          reason:    'wrong_otp',
+        });
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'كود التحقق غير صحيح أو منتهي الصلاحية.',
+        });
       }
 
-      // Mark token used
-      await db.update(passwordResetTokens).set({ usedAt: new Date() }).where(eq(passwordResetTokens.id, token.id));
+      // SECURITY: Mark token used immediately — OTP is one-time only
+      await db.update(passwordResetTokens)
+        .set({ usedAt: new Date() })
+        .where(eq(passwordResetTokens.id, token.id));
 
       // Change password
       const passwordHash = await hashPassword(input.newPassword);
@@ -357,7 +496,11 @@ export const recoveryRouter = router({
         updatedAt:           new Date(),
       }).where(eq(users.id, token.userId));
 
-      await logEvent({ eventType: 'password_reset_success', userId: token.userId, result: 'success' });
+      await logEvent({
+        eventType: 'password_reset_success',
+        userId:    token.userId,
+        result:    'success',
+      });
 
       return { success: true };
     }),

@@ -135,9 +135,17 @@ export const usersRouter = router({
         }
       }
 
+      // ── تصفير التحقق إذا تغير رقم الجوال أو البريد ─────────────────────────
+      const phoneChanged = rest.phone !== undefined && rest.phone !== user.phone;
+      const emailChanged = rest.email !== undefined && rest.email !== user.email;
+
       await db.update(users).set({
         ...rest,
         ...(newPassword ? { passwordHash: await hashPassword(newPassword) } : {}),
+        // إذا تغير الجوال → تصفير التحقق وتعطيل الاستعادة
+        ...(phoneChanged ? { phoneVerifiedAt: null, recoveryEnabledPhone: false } : {}),
+        // إذا تغير البريد → تصفير التحقق وتعطيل الاستعادة
+        ...(emailChanged ? { emailVerifiedAt: null, recoveryEnabledEmail: false } : {}),
         updatedAt: new Date(),
       }).where(eq(users.id, id));
 
