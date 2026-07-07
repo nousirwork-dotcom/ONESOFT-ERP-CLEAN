@@ -3,7 +3,7 @@ import { router, publicProcedure, adminProcedure, protectedProcedure } from '../
 import { TRPCError } from '@trpc/server';
 import { count, eq, and } from 'drizzle-orm';
 import { db } from '../db.js';
-import { users, branches } from '../schema.js';
+import { users, branches, organizations } from '../schema.js';
 import {
   getLicense,
   verifySignedLicense,
@@ -15,6 +15,10 @@ import {
   getOrCreateDeviceId,
   getHardwareFingerprint,
 } from '../lib/deviceId.js';
+import {
+  loadDevicePrefs,
+  clearDeviceOrgCode,
+} from '../lib/devicePrefs.js';
 
 export const licenseRouter = router({
 
@@ -66,6 +70,47 @@ export const licenseRouter = router({
       current_branches: bRow?.cnt ?? 0,
       current_pos:      0, // POS terminals table not yet implemented
     };
+  }),
+
+  // ── سياق تسجيل الدخول (عام — لشاشة الدخول) ────────────────────────────────
+  // يُعيد: حالة الترخيص + كود المؤسسة المحفوظ على الجهاز + اسمها
+  getLoginContext: publicProcedure.query(async () => {
+    const lic   = getLicense();
+    const prefs = loadDevicePrefs();
+
+    const savedOrgCode = prefs.savedOrgCode ?? null;
+    let   savedOrgName = prefs.savedOrgName ?? null;
+
+    // تحديث اسم المؤسسة من قاعدة البيانات إن وُجد الكود
+    if (savedOrgCode && !savedOrgName) {
+      try {
+        const org = await db.query.organizations.findFirst({
+          where: eq(organizations.code, savedOrgCode),
+        });
+        if (org) savedOrgName = org.name;
+      } catch { /* DB غير متاح */ }
+    }
+
+    // اسم المؤسسة من الترخيص كخيار احتياطي
+    const licOrgName   = lic.payload?.customer_name  ?? null;
+    const licOrgId     = lic.payload?.org_id          ?? null;
+    const licExpiry    = lic.payload?.expiry_date      ?? null;
+
+    return {
+      hasLicense:  lic.error !== 'license_not_found',
+      isExpired:   lic.error === 'expired',
+      isInvalid:   !lic.valid && lic.error !== 'license_not_found' && lic.error !== 'expired',
+      savedOrgCode,
+      savedOrgName: savedOrgName ?? licOrgName,
+      licOrgId,
+      licExpiry,
+    };
+  }),
+
+  // ── مسح كود المؤسسة المحفوظ (للسماح بتغيير المؤسسة) ──────────────────────
+  clearSavedOrgCode: publicProcedure.mutation(() => {
+    clearDeviceOrgCode();
+    return { ok: true };
   }),
 
   // ── معرّف الجهاز (للتفعيل) ─────────────────────────────────────────────────

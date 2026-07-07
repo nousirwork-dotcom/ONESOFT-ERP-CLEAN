@@ -5,6 +5,7 @@ import { users, organizations } from './schema.js';
 import { eq, and } from 'drizzle-orm';
 import { ENV } from './env.js';
 import type { Request, Response } from 'express';
+import { saveDevicePrefs } from './lib/devicePrefs.js';
 
 const SECRET = new TextEncoder().encode(ENV.jwtSecret);
 
@@ -79,6 +80,7 @@ export async function loginHandler(req: Request, res: Response) {
   try {
     // البحث عن المؤسسة
     let orgId: number | null = null;
+    let orgRecord: typeof organizations.$inferSelect | null = null;
     if (orgCode) {
       const org = await db.query.organizations.findFirst({
         where: eq(organizations.code, orgCode.toUpperCase()),
@@ -86,7 +88,8 @@ export async function loginHandler(req: Request, res: Response) {
       if (!org) return res.status(401).json({ error: 'كود المؤسسة غير صحيح' });
       if (org.status === 'suspended') return res.status(403).json({ error: 'تم تعليق اشتراك المؤسسة' });
       if (org.status === 'expired') return res.status(403).json({ error: 'انتهى اشتراك المؤسسة' });
-      orgId = org.id;
+      orgId     = org.id;
+      orgRecord = org;
     }
 
     // البحث عن المستخدم
@@ -103,6 +106,19 @@ export async function loginHandler(req: Request, res: Response) {
 
     // تحديث آخر دخول
     await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
+
+    // حفظ كود المؤسسة على الجهاز (إن تم تحديده)
+    if (orgRecord) {
+      saveDevicePrefs({ savedOrgCode: orgRecord.code, savedOrgName: orgRecord.name });
+    } else if (!orgCode) {
+      // لم يُحدَّد كود المؤسسة — احفظ كود المؤسسة من سجل المستخدم
+      try {
+        const userOrg = await db.query.organizations.findFirst({
+          where: eq(organizations.id, user.orgId),
+        });
+        if (userOrg) saveDevicePrefs({ savedOrgCode: userOrg.code, savedOrgName: userOrg.name });
+      } catch { /* صامت */ }
+    }
 
     // إنشاء token
     const token = await createToken({
