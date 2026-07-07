@@ -357,6 +357,14 @@ export function setupUpdater(mainWindow: BrowserWindow): void {
     log('INFO', `update-installing  path=${downloadedFilePath}`);
     send('update:log', { event: 'update-installing', path: downloadedFilePath });
 
+    /**
+     * سلامة البيانات أثناء التحديث:
+     * - المثبّت NSIS مبني بـ electron-builder بوضع "نسبي" (perMachine/perUser)
+     * - لا يحذف: قاعدة البيانات، الترخيص، config.enc، device.prefs.enc
+     * - المجلدات المحمية تلقائياً: ProgramData\OneSoft\*, AppData\Roaming\OneSoft\*
+     * - الملفات التي قد تُستبدل: ملفات البرنامج في Program Files فقط
+     * - /S = silent install (بدون نوافذ) — لا يحذف بيانات المستخدم
+     */
     const child = spawn(downloadedFilePath, ['/S'], { detached: true, stdio: 'ignore', shell: false });
     child.unref();
     setTimeout(() => app.quit(), 500);
