@@ -3,11 +3,12 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/auth/AuthContext";
 import {
   LayoutDashboard, Users, KeyRound, Monitor, CloudOff, ClipboardList,
-  Settings, Shield, Search, Bell, Moon, Plus, RefreshCw,
+  Settings, Shield, Search, Plus, RefreshCw,
   Pause, Play, Code2, MonitorSmartphone, ChevronDown,
   Building2, FileText, Hash, Calendar, CheckCircle2, XCircle,
   Clock, AlertTriangle, Globe, LogOut,
 } from "lucide-react";
+import CustomersTab from "./CustomersTab";
 
 const NAVY   = "#0F1D40";
 const NAVY2  = "#1B2B5C";
@@ -31,7 +32,7 @@ const DEMO_LICENSE = {
   enabledModules: ["sales", "purchases", "inventory", "accounting", "reports", "zatca"],
   startDate: "2024-01-01", expiryDate: "2025-12-31",
   issuedBy: "OneSoft ERP",
-  webAllowed: true, desktopAllowed: true, offlineAllowed: true,
+  webAllowed: true, desktopAllowed: true, offlineAllowed: true, syncAllowed: false,
   clientId: 0, createdAt: new Date(), updatedAt: new Date(),
   licenseKey: null, notes: null,
 };
@@ -52,18 +53,11 @@ const DEMO_OPS = [
 const DEMO_USAGE = { users: 4, branches: 3, pos: 2, devices: 6, web: 1 };
 
 const MODULE_MAP: Record<string, string> = {
-  sales:         "المبيعات",
-  purchases:     "المشتريات",
-  inventory:     "المخزون",
-  accounting:    "الحسابات",
-  reports:       "التقارير",
-  zatca:         "ZATCA",
-  hr:            "الموارد البشرية",
-  payroll:       "الرواتب",
-  assets:        "الأصول",
-  pos:           "نقاط البيع",
-  manufacturing: "التصنيع",
-  branches:      "الفروع",
+  sales: "المبيعات", purchases: "المشتريات", inventory: "المخزون",
+  accounting: "الحسابات", reports: "التقارير", zatca: "ZATCA",
+  hr: "الموارد البشرية", payroll: "الرواتب", assets: "الأصول",
+  pos: "نقاط البيع", manufacturing: "التصنيع", branches: "الفروع",
+  sync: "المزامنة", offline: "أوفلاين", api: "API", ecommerce: "المتجر",
 };
 
 function fmtDate(d?: string | null) {
@@ -116,10 +110,7 @@ function ModuleChip({ label, active }: { label: string; active: boolean }) {
     <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-[15px] font-bold transition-all ${
       active ? "bg-green-50 border-green-200 text-green-800" : "bg-gray-50 border-gray-200 text-gray-400 opacity-60"
     }`}>
-      {active
-        ? <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
-        : <XCircle className="w-5 h-5 text-gray-300 shrink-0" />
-      }
+      {active ? <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" /> : <XCircle className="w-5 h-5 text-gray-300 shrink-0" />}
       {label}
     </div>
   );
@@ -130,14 +121,10 @@ function ActionBtn({ icon, label, variant = "navy", onClick, disabled }: {
 }) {
   const bg = variant === "orange" ? "#F97316" : variant === "green" ? "#16A34A" : NAVY2;
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
+    <button onClick={onClick} disabled={disabled}
       className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-[14px] font-bold transition-all hover:opacity-90 active:scale-[.98] disabled:opacity-40 disabled:cursor-not-allowed shrink-0 shadow-sm"
-      style={{ backgroundColor: bg }}
-    >
-      {icon}
-      {label}
+      style={{ backgroundColor: bg }}>
+      {icon}{label}
     </button>
   );
 }
@@ -146,11 +133,11 @@ type NavKey = "dashboard" | "clients" | "licenses" | "devices" | "offline" | "lo
 const NAV_ITEMS: { key: NavKey; icon: React.ReactNode; label: string }[] = [
   { key: "dashboard", icon: <LayoutDashboard className="w-5 h-5" />, label: "لوحة التحكم" },
   { key: "clients",   icon: <Users className="w-5 h-5" />,           label: "العملاء" },
-  { key: "licenses",  icon: <KeyRound className="w-5 h-5" />,         label: "التراخيص" },
-  { key: "devices",   icon: <MonitorSmartphone className="w-5 h-5" />, label: "الأجهزة المفعلة" },
-  { key: "offline",   icon: <CloudOff className="w-5 h-5" />,         label: "التفعيل الأوفلاين" },
-  { key: "log",       icon: <ClipboardList className="w-5 h-5" />,    label: "سجل العمليات" },
-  { key: "settings",  icon: <Settings className="w-5 h-5" />,         label: "الإعدادات" },
+  { key: "licenses",  icon: <KeyRound className="w-5 h-5" />,        label: "التراخيص" },
+  { key: "devices",   icon: <MonitorSmartphone className="w-5 h-5" />,label: "الأجهزة المفعلة" },
+  { key: "offline",   icon: <CloudOff className="w-5 h-5" />,        label: "التفعيل الأوفلاين" },
+  { key: "log",       icon: <ClipboardList className="w-5 h-5" />,   label: "سجل العمليات" },
+  { key: "settings",  icon: <Settings className="w-5 h-5" />,        label: "الإعدادات" },
 ];
 
 function OpDot({ type }: { type: string }) {
@@ -159,13 +146,15 @@ function OpDot({ type }: { type: string }) {
     activate: "#16A34A", suspend: "#F97316", resume: "#16A34A",
     renew: "#0EA5E9", revoke_device: "#EF4444",
     generate_key: GOLD, generate_activation_code: GOLD,
+    update_client: "#3B82F6", update_license: "#8B5CF6",
+    export_license: "#0EA5E9", generate_web_setup: "#8B5CF6",
   };
   return <span className="w-2 h-2 rounded-full shrink-0 mt-1.5" style={{ backgroundColor: colors[type] || GOLD }} />;
 }
 
 export default function LicenseCenterPage() {
   const { user, logout } = useAuth();
-  const [activeNav, setActiveNav] = useState<NavKey>("licenses");
+  const [activeNav, setActiveNav] = useState<NavKey>("clients");
   const [searchQ, setSearchQ] = useState("");
 
   const seed    = trpc.licenseCenter.seedDemo.useMutation();
@@ -226,16 +215,13 @@ export default function LicenseCenterPage() {
           {NAV_ITEMS.map(item => {
             const active = activeNav === item.key;
             return (
-              <button
-                key={item.key}
-                onClick={() => setActiveNav(item.key)}
+              <button key={item.key} onClick={() => setActiveNav(item.key)}
                 className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-[14px] font-semibold transition-all text-right"
                 style={{
                   backgroundColor: active ? "rgba(201,168,76,0.15)" : "transparent",
                   color: active ? GOLD : "rgba(255,255,255,0.7)",
                   borderRight: active ? `3px solid ${GOLD}` : "3px solid transparent",
-                }}
-              >
+                }}>
                 <span style={{ color: active ? GOLD : "rgba(255,255,255,0.5)" }}>{item.icon}</span>
                 {item.label}
               </button>
@@ -251,11 +237,9 @@ export default function LicenseCenterPage() {
               <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.45)" }}>License Center v1.0</p>
             </div>
           </div>
-          <button
-            onClick={() => logout()}
+          <button onClick={() => logout()}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-[13px] font-semibold transition-all hover:bg-red-900/30"
-            style={{ color: "rgba(255,255,255,0.6)" }}
-          >
+            style={{ color: "rgba(255,255,255,0.6)" }}>
             <LogOut className="w-4 h-4" />
             تسجيل الخروج
           </button>
@@ -275,18 +259,14 @@ export default function LicenseCenterPage() {
           <div className="flex-1 max-w-xs">
             <div className="flex items-center gap-2 px-3 py-2 rounded-xl border bg-gray-50" style={{ borderColor: BORDER }}>
               <Search className="w-4 h-4 text-gray-400 shrink-0" />
-              <input
-                value={searchQ}
-                onChange={e => setSearchQ(e.target.value)}
-                placeholder="بحث عام..."
-                className="flex-1 bg-transparent text-[14px] outline-none text-right"
-                style={{ color: NAVY2 }}
-              />
+              <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="بحث عام..."
+                className="flex-1 bg-transparent text-[14px] outline-none text-right" style={{ color: NAVY2 }} />
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[13px] font-bold" style={{ borderColor: GOLD, color: GOLD, backgroundColor: "rgba(201,168,76,0.08)" }}>
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[13px] font-bold"
+              style={{ borderColor: GOLD, color: GOLD, backgroundColor: "rgba(201,168,76,0.08)" }}>
               <Shield className="w-3.5 h-3.5" /> Owner Only
             </span>
             <div className="flex items-center gap-2.5 pl-3 border-l" style={{ borderColor: BORDER }}>
@@ -302,152 +282,226 @@ export default function LicenseCenterPage() {
         </header>
 
         {/* Content */}
-        <main className="flex-1 overflow-y-auto p-5 space-y-4">
+        <main className="flex-1 overflow-y-auto p-5">
 
-          {/* 1. معلومات العميل */}
-          <div className="bg-white rounded-2xl border shadow-sm" style={{ borderColor: BORDER }}>
-            <div className="flex items-center gap-3 px-5 py-3.5 border-b" style={{ borderColor: BORDER, backgroundColor: "rgba(201,168,76,0.04)" }}>
-              <span className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ backgroundColor: "rgba(201,168,76,0.12)" }}>
-                <Building2 className="w-4 h-4" style={{ color: GOLD }} />
-              </span>
-              <h2 className="text-[17px] font-extrabold" style={{ color: NAVY2 }}>معلومات العميل</h2>
-            </div>
-            <div className="p-5 grid grid-cols-4 gap-x-8 gap-y-4">
-              <div>
-                <p className="text-[12px] font-bold uppercase tracking-wider mb-1" style={{ color: GOLD }}>اسم العميل</p>
-                <p className="text-[17px] font-black" style={{ color: NAVY2 }}>{(client as any).name}</p>
-              </div>
-              <div>
-                <p className="text-[12px] font-bold uppercase tracking-wider mb-1" style={{ color: GOLD }}>السجل التجاري</p>
-                <p className="text-[15px] font-semibold font-mono" style={{ color: NAVY2 }}>{(client as any).commercialReg ?? "—"}</p>
-              </div>
-              <div>
-                <p className="text-[12px] font-bold uppercase tracking-wider mb-1" style={{ color: GOLD }}>نوع الباقة</p>
-                <p className="text-[15px] font-bold" style={{ color: NAVY2 }}>{license?.packageName ?? "—"}</p>
-              </div>
-              <div>
-                <p className="text-[12px] font-bold uppercase tracking-wider mb-1.5" style={{ color: GOLD }}>
-                  <Calendar className="w-3.5 h-3.5 inline ml-1" />تاريخ البداية
-                </p>
-                <p className="text-[15px] font-semibold" style={{ color: NAVY2 }}>{fmtDateShort(license?.startDate)}</p>
-              </div>
-              <div>
-                <p className="text-[12px] font-bold uppercase tracking-wider mb-1" style={{ color: "#9CA3AF" }}>Organization ID</p>
-                <p className="text-[14px] font-mono font-semibold" style={{ color: NAVY2 }}>{(client as any).orgId}</p>
-              </div>
-              <div>
-                <p className="text-[12px] font-bold uppercase tracking-wider mb-1" style={{ color: GOLD }}>الرقم الضريبي</p>
-                <p className="text-[15px] font-semibold font-mono" style={{ color: NAVY2 }}>{(client as any).taxNumber ?? "—"}</p>
-              </div>
-              <div>
-                <p className="text-[12px] font-bold uppercase tracking-wider mb-1" style={{ color: GOLD }}>حالة الترخيص</p>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[14px] font-bold" style={{ backgroundColor: statusBadge.bg, color: statusBadge.text }}>
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusBadge.dot }} />
-                  {statusBadge.label}
-                </span>
-              </div>
-              <div>
-                <p className="text-[12px] font-bold uppercase tracking-wider mb-1.5" style={{ color: GOLD }}>
-                  <Calendar className="w-3.5 h-3.5 inline ml-1" />تاريخ الانتهاء
-                </p>
-                <p className="text-[15px] font-semibold" style={{ color: days <= 30 ? "#EF4444" : NAVY2 }}>
-                  {fmtDateShort(license?.expiryDate)}
-                  <span className="text-[13px] font-medium mr-1.5" style={{ color: days <= 30 ? "#EF4444" : "#6B7280" }}>({days} يوم متبقي)</span>
-                </p>
-              </div>
-            </div>
-          </div>
+          {/* ── Clients Tab ──────────────────────────────────────────── */}
+          {activeNav === "clients" && (
+            <CustomersTab onNavigate={(key) => setActiveNav(key as NavKey)} />
+          )}
 
-          {/* 2. حدود الترخيص */}
-          <div className="bg-white rounded-2xl border shadow-sm" style={{ borderColor: BORDER }}>
-            <div className="flex items-center gap-3 px-5 py-3.5 border-b" style={{ borderColor: BORDER, backgroundColor: "rgba(201,168,76,0.04)" }}>
-              <span className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ backgroundColor: "rgba(201,168,76,0.12)" }}>
-                <Hash className="w-4 h-4" style={{ color: GOLD }} />
-              </span>
-              <h2 className="text-[17px] font-extrabold" style={{ color: NAVY2 }}>حدود الترخيص</h2>
-            </div>
-            <div className="p-5 grid grid-cols-5 gap-4">
-              <ProgressCard label="المستخدمون"   icon={<Users className="w-4 h-4" />}            current={DEMO_USAGE.users}    max={license?.maxUsers ?? 10} />
-              <ProgressCard label="الفروع"        icon={<Building2 className="w-4 h-4" />}        current={DEMO_USAGE.branches} max={license?.maxBranches ?? 5} />
-              <ProgressCard label="نقاط البيع"   icon={<Monitor className="w-4 h-4" />}          current={DEMO_USAGE.pos}      max={license?.maxPos ?? 5} />
-              <ProgressCard label="الأجهزة"       icon={<MonitorSmartphone className="w-4 h-4" />} current={DEMO_USAGE.devices} max={license?.maxDevices ?? 10} />
-              <ProgressCard label="الويب"         icon={<Globe className="w-4 h-4" />}            current={DEMO_USAGE.web}      max={license?.maxWeb ?? 2} />
-            </div>
-          </div>
+          {/* ── Dashboard / Licenses / Default view ──────────────────── */}
+          {activeNav !== "clients" && activeNav !== "log" && activeNav !== "devices" && (
+            <div className="space-y-4">
+              {/* 1. معلومات العميل */}
+              <div className="bg-white rounded-2xl border shadow-sm" style={{ borderColor: BORDER }}>
+                <div className="flex items-center gap-3 px-5 py-3.5 border-b" style={{ borderColor: BORDER, backgroundColor: "rgba(201,168,76,0.04)" }}>
+                  <span className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ backgroundColor: "rgba(201,168,76,0.12)" }}>
+                    <Building2 className="w-4 h-4" style={{ color: GOLD }} />
+                  </span>
+                  <h2 className="text-[17px] font-extrabold" style={{ color: NAVY2 }}>معلومات العميل</h2>
+                </div>
+                <div className="p-5 grid grid-cols-4 gap-x-8 gap-y-4">
+                  <div>
+                    <p className="text-[12px] font-bold uppercase tracking-wider mb-1" style={{ color: GOLD }}>اسم العميل</p>
+                    <p className="text-[17px] font-black" style={{ color: NAVY2 }}>{(client as any).name}</p>
+                  </div>
+                  <div>
+                    <p className="text-[12px] font-bold uppercase tracking-wider mb-1" style={{ color: GOLD }}>السجل التجاري</p>
+                    <p className="text-[15px] font-semibold font-mono" style={{ color: NAVY2 }}>{(client as any).commercialReg ?? "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-[12px] font-bold uppercase tracking-wider mb-1" style={{ color: GOLD }}>نوع الباقة</p>
+                    <p className="text-[15px] font-bold" style={{ color: NAVY2 }}>{license?.packageName ?? "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-[12px] font-bold uppercase tracking-wider mb-1.5" style={{ color: GOLD }}>
+                      <Calendar className="w-3.5 h-3.5 inline ml-1" />تاريخ البداية
+                    </p>
+                    <p className="text-[15px] font-semibold" style={{ color: NAVY2 }}>{fmtDateShort(license?.startDate)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[12px] font-bold uppercase tracking-wider mb-1" style={{ color: "#9CA3AF" }}>Organization ID</p>
+                    <p className="text-[14px] font-mono font-semibold" style={{ color: NAVY2 }}>{(client as any).orgId}</p>
+                  </div>
+                  <div>
+                    <p className="text-[12px] font-bold uppercase tracking-wider mb-1" style={{ color: GOLD }}>الرقم الضريبي</p>
+                    <p className="text-[15px] font-semibold font-mono" style={{ color: NAVY2 }}>{(client as any).taxNumber ?? "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-[12px] font-bold uppercase tracking-wider mb-1" style={{ color: GOLD }}>حالة الترخيص</p>
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[14px] font-bold"
+                      style={{ backgroundColor: statusBadge.bg, color: statusBadge.text }}>
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusBadge.dot }} />
+                      {statusBadge.label}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-[12px] font-bold uppercase tracking-wider mb-1.5" style={{ color: GOLD }}>
+                      <Calendar className="w-3.5 h-3.5 inline ml-1" />تاريخ الانتهاء
+                    </p>
+                    <p className="text-[15px] font-semibold" style={{ color: days <= 30 ? "#EF4444" : NAVY2 }}>
+                      {fmtDateShort(license?.expiryDate)}
+                      <span className="text-[13px] font-medium mr-1.5" style={{ color: days <= 30 ? "#EF4444" : "#6B7280" }}>({days} يوم متبقي)</span>
+                    </p>
+                  </div>
+                </div>
+              </div>
 
-          {/* 3. الموديولات المفعلة */}
-          <div className="bg-white rounded-2xl border shadow-sm" style={{ borderColor: BORDER }}>
-            <div className="flex items-center gap-3 px-5 py-3.5 border-b" style={{ borderColor: BORDER, backgroundColor: "rgba(201,168,76,0.04)" }}>
-              <span className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ backgroundColor: "rgba(201,168,76,0.12)" }}>
-                <LayoutDashboard className="w-4 h-4" style={{ color: GOLD }} />
-              </span>
-              <h2 className="text-[17px] font-extrabold" style={{ color: NAVY2 }}>الموديولات المفعلة</h2>
-              <span className="mr-auto px-3 py-0.5 rounded-full text-[13px] font-bold" style={{ backgroundColor: "#ECFDF5", color: "#16A34A", border: "1px solid #BBF7D0" }}>
-                {mods.size} / {Object.keys(MODULE_MAP).length}
-              </span>
+              {/* 2. حدود الترخيص */}
+              <div className="bg-white rounded-2xl border shadow-sm" style={{ borderColor: BORDER }}>
+                <div className="flex items-center gap-3 px-5 py-3.5 border-b" style={{ borderColor: BORDER, backgroundColor: "rgba(201,168,76,0.04)" }}>
+                  <span className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ backgroundColor: "rgba(201,168,76,0.12)" }}>
+                    <Hash className="w-4 h-4" style={{ color: GOLD }} />
+                  </span>
+                  <h2 className="text-[17px] font-extrabold" style={{ color: NAVY2 }}>حدود الترخيص</h2>
+                </div>
+                <div className="p-5 grid grid-cols-5 gap-4">
+                  <ProgressCard label="المستخدمون"   icon={<Users className="w-4 h-4" />}             current={DEMO_USAGE.users}    max={license?.maxUsers ?? 10} />
+                  <ProgressCard label="الفروع"        icon={<Building2 className="w-4 h-4" />}         current={DEMO_USAGE.branches} max={license?.maxBranches ?? 5} />
+                  <ProgressCard label="نقاط البيع"   icon={<Monitor className="w-4 h-4" />}           current={DEMO_USAGE.pos}      max={license?.maxPos ?? 5} />
+                  <ProgressCard label="الأجهزة"       icon={<MonitorSmartphone className="w-4 h-4" />} current={DEMO_USAGE.devices}  max={license?.maxDevices ?? 10} />
+                  <ProgressCard label="الويب"         icon={<Globe className="w-4 h-4" />}             current={DEMO_USAGE.web}      max={license?.maxWeb ?? 2} />
+                </div>
+              </div>
+
+              {/* 3. الموديولات */}
+              <div className="bg-white rounded-2xl border shadow-sm" style={{ borderColor: BORDER }}>
+                <div className="flex items-center gap-3 px-5 py-3.5 border-b" style={{ borderColor: BORDER, backgroundColor: "rgba(201,168,76,0.04)" }}>
+                  <span className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ backgroundColor: "rgba(201,168,76,0.12)" }}>
+                    <LayoutDashboard className="w-4 h-4" style={{ color: GOLD }} />
+                  </span>
+                  <h2 className="text-[17px] font-extrabold" style={{ color: NAVY2 }}>الموديولات المفعلة</h2>
+                  <span className="mr-auto px-3 py-0.5 rounded-full text-[13px] font-bold"
+                    style={{ backgroundColor: "#ECFDF5", color: "#16A34A", border: "1px solid #BBF7D0" }}>
+                    {mods.size} / {Object.keys(MODULE_MAP).length}
+                  </span>
+                </div>
+                <div className="p-5 flex flex-wrap gap-2.5">
+                  {Object.entries(MODULE_MAP).map(([id, label]) => (
+                    <ModuleChip key={id} label={label} active={mods.has(id)} />
+                  ))}
+                </div>
+              </div>
+
+              {/* 4. Actions */}
+              <div className="flex flex-wrap gap-2.5">
+                <ActionBtn icon={<Plus className="w-4 h-4" />}             label="إنشاء عميل جديد"       variant="navy" onClick={() => setActiveNav("clients")} />
+                <ActionBtn icon={<KeyRound className="w-4 h-4" />}          label="توليد License Key"       variant="navy" />
+                <ActionBtn icon={<RefreshCw className="w-4 h-4" />}         label="تجديد الترخيص"          variant="navy" />
+                <ActionBtn icon={<Pause className="w-4 h-4" />}             label="إيقاف الترخيص"          variant="orange"
+                  onClick={() => license?.id > 0 && suspend.mutate({ licenseId: license.id })}
+                  disabled={!isActive || suspend.isPending}
+                />
+                <ActionBtn icon={<Play className="w-4 h-4" />}              label="إعادة تفعيل"            variant="green"
+                  onClick={() => license?.id > 0 && resume.mutate({ licenseId: license.id })}
+                  disabled={!isSuspend || resume.isPending}
+                />
+                <ActionBtn icon={<Code2 className="w-4 h-4" />}             label="إصدار Activation Code"  variant="navy" />
+                <ActionBtn icon={<MonitorSmartphone className="w-4 h-4" />} label="عرض الأجهزة المفعلة"   variant="navy" onClick={() => setActiveNav("devices")} />
+              </div>
+
+              {/* 5. Devices + Log */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-white rounded-2xl border shadow-sm overflow-hidden" style={{ borderColor: BORDER }}>
+                  <div className="flex items-center gap-3 px-5 py-3.5 border-b" style={{ borderColor: BORDER, backgroundColor: "rgba(201,168,76,0.04)" }}>
+                    <Monitor className="w-4 h-4" style={{ color: GOLD }} />
+                    <h3 className="text-[16px] font-extrabold" style={{ color: NAVY2 }}>الأجهزة المفعلة</h3>
+                    <span className="mr-auto text-[13px] font-bold px-2.5 py-0.5 rounded-full"
+                      style={{ backgroundColor: "#EFF6FF", color: "#1D4ED8", border: "1px solid #BFDBFE" }}>
+                      {devices.filter((d: any) => d.status === "active").length} نشط
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[13px]">
+                      <thead>
+                        <tr style={{ backgroundColor: "#F9FAFB", borderBottom: `1px solid ${BORDER}` }}>
+                          <th className="px-4 py-2.5 text-right font-bold" style={{ color: "#374151" }}>اسم الجهاز</th>
+                          <th className="px-4 py-2.5 text-right font-bold" style={{ color: "#374151" }}>Device ID</th>
+                          <th className="px-4 py-2.5 text-right font-bold" style={{ color: "#374151" }}>آخر تفعيل</th>
+                          <th className="px-4 py-2.5 text-center font-bold" style={{ color: "#374151" }}>الحالة</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {devices.map((dev: any, i: number) => (
+                          <tr key={dev.id} style={{ borderBottom: i < devices.length - 1 ? `1px solid ${BORDER}` : "none" }}
+                            className="hover:bg-gray-50 transition-colors">
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <Monitor className="w-4 h-4 shrink-0" style={{ color: dev.status === "active" ? NAVY2 : "#9CA3AF" }} />
+                                <span className="font-bold" style={{ color: NAVY2 }}>{dev.deviceName}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 font-mono text-[12px]" style={{ color: "#6B7280" }}>
+                              {String(dev.deviceId).substring(0, 20)}…
+                            </td>
+                            <td className="px-4 py-3" style={{ color: "#6B7280" }}>
+                              {dev.lastActivatedAt ? fmtTime(String(dev.lastActivatedAt)) : "—"}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[12px] font-bold ${
+                                dev.status === "active" ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"
+                              }`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${dev.status === "active" ? "bg-green-500" : "bg-gray-400"}`} />
+                                {dev.status === "active" ? "نشط" : "غير نشط"}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-2xl border shadow-sm overflow-hidden" style={{ borderColor: BORDER }}>
+                  <div className="flex items-center gap-3 px-5 py-3.5 border-b" style={{ borderColor: BORDER, backgroundColor: "rgba(201,168,76,0.04)" }}>
+                    <ClipboardList className="w-4 h-4" style={{ color: GOLD }} />
+                    <h3 className="text-[16px] font-extrabold" style={{ color: NAVY2 }}>سجل العمليات</h3>
+                  </div>
+                  <div className="p-4 space-y-3 overflow-y-auto max-h-72">
+                    {ops.map((op: any) => (
+                      <div key={op.id} className="flex items-start gap-3">
+                        <OpDot type={op.operationType} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-semibold leading-tight" style={{ color: NAVY2 }}>{op.description}</p>
+                          <p className="text-[11px] mt-0.5" style={{ color: "#9CA3AF" }}>{fmtTime(op.createdAt)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="p-5 flex flex-wrap gap-2.5">
-              {Object.entries(MODULE_MAP).map(([id, label]) => (
-                <ModuleChip key={id} label={label} active={mods.has(id)} />
-              ))}
-            </div>
-          </div>
+          )}
 
-          {/* 4. Action Buttons */}
-          <div className="flex flex-wrap gap-2.5">
-            <ActionBtn icon={<Plus className="w-4 h-4" />}             label="إنشاء عميل جديد"       variant="navy" />
-            <ActionBtn icon={<KeyRound className="w-4 h-4" />}          label="توليد License Key"       variant="navy" />
-            <ActionBtn icon={<RefreshCw className="w-4 h-4" />}         label="تجديد الترخيص"          variant="navy" />
-            <ActionBtn icon={<Pause className="w-4 h-4" />}             label="إيقاف الترخيص"          variant="orange"
-              onClick={() => license?.id > 0 && suspend.mutate({ licenseId: license.id })}
-              disabled={!isActive || suspend.isPending}
-            />
-            <ActionBtn icon={<Play className="w-4 h-4" />}              label="إعادة تفعيل"            variant="green"
-              onClick={() => license?.id > 0 && resume.mutate({ licenseId: license.id })}
-              disabled={!isSuspend || resume.isPending}
-            />
-            <ActionBtn icon={<Code2 className="w-4 h-4" />}             label="إصدار Activation Code"  variant="navy" />
-            <ActionBtn icon={<MonitorSmartphone className="w-4 h-4" />} label="عرض الأجهزة المفعلة"   variant="navy" onClick={() => setActiveNav("devices")} />
-          </div>
-
-          {/* 5. Devices + Log */}
-          <div className="grid grid-cols-2 gap-4">
-
-            {/* الأجهزة المفعلة */}
+          {/* ── Devices tab ─────────────────────────────────────────────── */}
+          {activeNav === "devices" && (
             <div className="bg-white rounded-2xl border shadow-sm overflow-hidden" style={{ borderColor: BORDER }}>
               <div className="flex items-center gap-3 px-5 py-3.5 border-b" style={{ borderColor: BORDER, backgroundColor: "rgba(201,168,76,0.04)" }}>
-                <Monitor className="w-4 h-4" style={{ color: GOLD }} />
-                <h3 className="text-[16px] font-extrabold" style={{ color: NAVY2 }}>الأجهزة المفعلة</h3>
-                <span className="mr-auto text-[13px] font-bold px-2.5 py-0.5 rounded-full" style={{ backgroundColor: "#EFF6FF", color: "#1D4ED8", border: "1px solid #BFDBFE" }}>
-                  {devices.filter((d: any) => d.status === "active").length} نشط
-                </span>
+                <MonitorSmartphone className="w-4 h-4" style={{ color: GOLD }} />
+                <h2 className="text-[17px] font-extrabold" style={{ color: NAVY2 }}>الأجهزة المفعلة</h2>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-[13px]">
                   <thead>
-                    <tr style={{ backgroundColor: "#F9FAFB", borderBottom: `1px solid ${BORDER}` }}>
-                      <th className="px-4 py-2.5 text-right font-bold" style={{ color: "#374151" }}>اسم الجهاز</th>
-                      <th className="px-4 py-2.5 text-right font-bold" style={{ color: "#374151" }}>Device ID</th>
-                      <th className="px-4 py-2.5 text-right font-bold" style={{ color: "#374151" }}>آخر تفعيل</th>
-                      <th className="px-4 py-2.5 text-center font-bold" style={{ color: "#374151" }}>الحالة</th>
+                    <tr style={{ backgroundColor: "#F9FAFB", borderBottom: `2px solid ${BORDER}` }}>
+                      {["اسم الجهاز", "Device ID", "آخر تفعيل", "الحالة"].map(h => (
+                        <th key={h} className="px-4 py-3 text-right font-extrabold text-[12px] uppercase tracking-wide" style={{ color: "#6B7280" }}>{h}</th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
                     {devices.map((dev: any, i: number) => (
-                      <tr key={dev.id} style={{ borderBottom: i < devices.length - 1 ? `1px solid ${BORDER}` : "none" }} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-4 py-3">
+                      <tr key={dev.id} style={{ borderBottom: i < devices.length - 1 ? `1px solid ${BORDER}` : "none" }}
+                        className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3.5">
                           <div className="flex items-center gap-2">
-                            <Monitor className="w-4 h-4 shrink-0" style={{ color: dev.status === "active" ? NAVY2 : "#9CA3AF" }} />
+                            <Monitor className="w-4 h-4" style={{ color: dev.status === "active" ? NAVY2 : "#9CA3AF" }} />
                             <span className="font-bold" style={{ color: NAVY2 }}>{dev.deviceName}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-3 font-mono text-[12px]" style={{ color: "#6B7280" }}>
-                          {String(dev.deviceId).substring(0, 20)}…
-                        </td>
-                        <td className="px-4 py-3" style={{ color: "#6B7280" }}>
-                          {dev.lastActivatedAt ? fmtTime(String(dev.lastActivatedAt)) : "—"}
-                        </td>
-                        <td className="px-4 py-3 text-center">
+                        <td className="px-4 py-3.5 font-mono text-[12px]" style={{ color: "#6B7280" }}>{dev.deviceId}</td>
+                        <td className="px-4 py-3.5" style={{ color: "#6B7280" }}>{dev.lastActivatedAt ? fmtTime(String(dev.lastActivatedAt)) : "—"}</td>
+                        <td className="px-4 py-3.5">
                           <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[12px] font-bold ${
                             dev.status === "active" ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"
                           }`}>
@@ -461,27 +515,32 @@ export default function LicenseCenterPage() {
                 </table>
               </div>
             </div>
+          )}
 
-            {/* سجل العمليات */}
+          {/* ── Log tab ─────────────────────────────────────────────────── */}
+          {activeNav === "log" && (
             <div className="bg-white rounded-2xl border shadow-sm overflow-hidden" style={{ borderColor: BORDER }}>
               <div className="flex items-center gap-3 px-5 py-3.5 border-b" style={{ borderColor: BORDER, backgroundColor: "rgba(201,168,76,0.04)" }}>
                 <ClipboardList className="w-4 h-4" style={{ color: GOLD }} />
-                <h3 className="text-[16px] font-extrabold" style={{ color: NAVY2 }}>سجل العمليات</h3>
+                <h2 className="text-[17px] font-extrabold" style={{ color: NAVY2 }}>سجل العمليات الكامل</h2>
               </div>
-              <div className="p-4 space-y-3 overflow-y-auto max-h-72">
+              <div className="p-5 space-y-4 max-h-[600px] overflow-y-auto">
                 {ops.map((op: any) => (
-                  <div key={op.id} className="flex items-start gap-3">
+                  <div key={op.id} className="flex items-start gap-3 pb-4 border-b last:border-b-0" style={{ borderColor: BORDER }}>
                     <OpDot type={op.operationType} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-semibold leading-tight" style={{ color: NAVY2 }}>{op.description}</p>
-                      <p className="text-[11px] mt-0.5" style={{ color: "#9CA3AF" }}>{fmtTime(op.createdAt)}</p>
+                      <p className="text-[14px] font-semibold leading-tight" style={{ color: NAVY2 }}>{op.description}</p>
+                      <div className="flex items-center gap-3 mt-1">
+                        <span className="text-[12px]" style={{ color: "#9CA3AF" }}>{fmtTime(op.createdAt)}</span>
+                        <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-md" style={{ backgroundColor: "#F3F4F6", color: "#6B7280" }}>{op.operationType}</span>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
+          )}
 
-          </div>
         </main>
       </div>
     </div>
