@@ -29,6 +29,11 @@ on:
         default: 'true'
         type: choice
         options: ['true', 'false']
+      tag:
+        description: 'Release tag (e.g. v1.0.2) — required when dry_run=false'
+        required: false
+        default: ''
+        type: string
 
 env:
   NODE_VERSION: '20'
@@ -284,10 +289,14 @@ jobs:
           path: reports/
           retention-days: 90
 
-      # ── GitHub Release (push tag + not dry_run فقط) ───────────────────────
+      # ── GitHub Release ─────────────────────────────────────────────────────
+      # يُشغَّل في حالتين:
+      #   A. push tag:           github.ref = refs/tags/v*   (تلقائي)
+      #   B. workflow_dispatch:  dry_run=false + tag=v1.0.2  (يدوي)
       - name: Create GitHub Release
         if: >
-          startsWith(github.ref, 'refs/tags/v') &&
+          (startsWith(github.ref, 'refs/tags/v') ||
+           (github.event.inputs.dry_run == 'false' && github.event.inputs.tag != '')) &&
           github.event.inputs.dry_run != 'true'
         uses: softprops/action-gh-release@v2
         with:
@@ -295,9 +304,10 @@ jobs:
             installer/release/*.exe
             installer/release/latest.yml
             reports/*.txt
-          name: "OneSoft ERP ${{ github.ref_name }}"
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: "OneSoft ERP ${{ github.event.inputs.tag || github.ref_name }}"
           body: |
-            ## OneSoft ERP ${{ github.ref_name }}
+            ## OneSoft ERP ${{ github.event.inputs.tag || github.ref_name }}
 
             ### نتيجة الفحص الأمني
             ✅ **verify:client-build** — 21/21 اختبار نجح (Ubuntu)
