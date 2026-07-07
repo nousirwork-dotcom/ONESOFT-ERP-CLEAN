@@ -34,6 +34,12 @@ export interface LicensePayload {
   activation_id:   string;
   issued_at:       string;
   issued_by:       string;
+  // حقول اختيارية للعرض (لا تؤثر على التحقق)
+  license_type?:    'trial' | 'subscription' | 'lifetime';
+  package_name?:    string;
+  web_allowed?:     boolean;
+  desktop_allowed?: boolean;
+  offline_allowed?: boolean;
 }
 
 export interface SignedLicense {
