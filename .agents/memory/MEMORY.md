@@ -7,3 +7,4 @@
 - [Installer DB step gate pattern](installer-db-gate.md) — Next button in step 6 must gate on dbConfigVerified (Zustand store); only set true after full chain: testConnection→saveConfig→verifyConfig using adminUser
 - [Branding permissions + logo storage](branding-permissions-logo.md) — manage_branding in extra_permissions JSONB (migration 0015); logo saved to uploadsDir/branding/; UPLOADS_DIR env var for Electron userData path
 - [Display settings design decisions](display-settings-decisions.md) — confirmed rules for fullscreen/remember_window_size priority, startup_page vs tabs conflict, view_mode CSS approach
+- [License system Phase 1](license-system-phase1.md) — Ed25519 offline signing; trpc path is @/shared/lib/trpc; ONESOFT_LICENSE_DIR passed from Electron; dev key passphrase in sign-test-license.js

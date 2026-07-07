@@ -85,6 +85,16 @@ desktop.ini
 *.swo
 *~
 
+# ── License Keys & Signed License Files ───────────────────────────────────────
+*.pem
+private_key*
+scripts/keys/
+license-center/keys/private*
+license.dat
+license.ons
+test-license.ons
+activation-code.txt
+
 # ── IDE ──────────────────────────────────────────────────
 .vscode/
 .idea/

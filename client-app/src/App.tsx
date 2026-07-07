@@ -78,6 +78,7 @@ import PostingSettingsPage from "@/modules/accounting/pages/PostingSettingsPage"
 import PostingOperationsPage from "@/modules/accounting/pages/PostingOperationsPage";
 import LoginPage from "@/core/auth/LoginPage";
 import BrandingSettingsPage from "@/modules/settings/pages/BrandingSettingsPage";
+import LicenseActivationPage from "@/modules/license/pages/LicenseActivationPage";
 import SuperAdminPage from "@/core/admin/SuperAdminPage";
 import SourceCodeViewerPage from "@/core/dev/SourceCodeViewerPage";
 import FirstRunWizard from "@/core/auth/FirstRunWizard";
@@ -269,6 +270,7 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/cfg/service-management":     CfgServiceManagementTab,
   "/dev/source-code":            SourceCodeViewerPage,
   "/cfg/branding":               BrandingSettingsPage,
+  "/cfg/license":                LicenseActivationPage,
 };
 
 // ─── Auth Guard ───────────────────────────────────────────────────────────

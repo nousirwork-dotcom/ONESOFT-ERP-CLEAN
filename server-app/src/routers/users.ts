@@ -1,10 +1,11 @@
 import { z } from 'zod';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, count } from 'drizzle-orm';
 import { router, adminProcedure, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import { users, salesInvoices, vouchers, stockVouchers, userCategories } from '../schema.js';
 import { hashPassword } from '../auth.js';
 import { TRPCError } from '@trpc/server';
+import { getLimit } from '../lib/license.js';
 
 export const usersRouter = router({
   // قائمة مبسّطة (id + name) لقوائم الاختيار — متاحة لجميع المستخدمين
@@ -36,6 +37,21 @@ export const usersRouter = router({
       categoryId: z.number().int().positive().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
+      // ── License enforcement: max_users ──────────────────────────────────────
+      const userLimit = getLimit('max_users');
+      if (userLimit !== null) {
+        const [row] = await db
+          .select({ cnt: count() })
+          .from(users)
+          .where(and(eq(users.orgId, ctx.user.orgId), eq(users.isActive, true)));
+        if (Number(row.cnt) >= userLimit) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: `تجاوز الحد الأقصى المسموح به في الترخيص (${userLimit} مستخدم). يرجى التواصل مع الدعم الفني لتحديث الترخيص.`,
+          });
+        }
+      }
+
       const existing = await db.query.users.findFirst({
         where: and(eq(users.username, input.username), eq(users.orgId, ctx.user.orgId)),
       });
