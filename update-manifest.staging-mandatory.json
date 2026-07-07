@@ -1,0 +1,26 @@
+{
+  "_purpose": "Staging manifest for testing MANDATORY update flow only. NOT used in production. Use on VM/test machine only.",
+  "_usage": "Set ONESOFT_UPDATE_URL=https://raw.githubusercontent.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/main/update-manifest.staging-mandatory.json",
+  "_warning": "لا تستخدم هذا الملف على الجهاز الرئيسي — التحديث الإجباري يمنع الدخول للنظام",
+
+  "latestVersion":       "1.0.2",
+  "minSupportedVersion": "1.0.2",
+  "mandatory":           true,
+  "messageAr":           "[STAGING - إجباري] هذا تحديث اختبار إجباري — يُستخدم على VM فقط.",
+  "messageEn":           "[STAGING - MANDATORY] This is a mandatory test update — use on VM only.",
+  "releaseNotes": [
+    "[اختبار إجباري] التحقق من منع الدخول للنظام",
+    "[اختبار إجباري] التحقق من عدم ظهور زر لاحقاً",
+    "[اختبار إجباري] التحقق من تحميل وتثبيت التحديث",
+    "[اختبار إجباري] التحقق من فتح النظام بعد التحديث"
+  ],
+  "downloadUrl":   "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.2-staging-test/OneSoftSetup-1.0.2.exe",
+  "fileSizeBytes": 80000000,
+  "sha512":        "",
+  "publishedAt":   "2026-07-07T00:00:00.000Z",
+
+  "_test_scenarios": {
+    "mandatory_block": "إذا أصدار المثبَّت < 1.0.2 → تظهر النافذة الإجبارية ولا يظهر زر لاحقاً",
+    "after_update":    "بعد التثبيت يفتح النظام مباشرةً بدون نافذة تحديث"
+  }
+}
