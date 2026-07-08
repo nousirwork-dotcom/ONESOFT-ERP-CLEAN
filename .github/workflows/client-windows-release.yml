@@ -215,7 +215,7 @@ jobs:
         env:
           CLIENT_BUILD: 'true'
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_token: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # بناء electron main + preload + UI + installer
           pnpm run build
