@@ -340,28 +340,94 @@ export default function LicenseActivationPage() {
             </div>
             {/* الخيارات المتاحة */}
             <div className="p-5">
-              <p className="text-[15px] font-bold text-red-800 mb-4">الخيارات المتاحة:</p>
+              <p className="text-[15px] font-bold text-red-800 mb-4">الخيارات المتاحة — اضغط للانتقال مباشرة:</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {[
-                  { icon: "⏳", title: "طلب تمديد التجربة",     desc: "تواصل مع مزود النظام لتمديد فترة التجربة",  action: "تواصل مع الدعم" },
-                  { icon: "🔑", title: "إدخال كود التفعيل",      desc: "أدخل كود التفعيل الذي حصلت عليه",           action: "اذهب للتفعيل ↓" },
-                  { icon: "📂", title: "استيراد ملف الترخيص",    desc: "استيراد ملف الترخيص من مزود النظام",        action: "اذهب للاستيراد ↓" },
-                  { icon: "📤", title: "تصدير طلب التفعيل",      desc: "أرسل Request Code لمزود النظام",             action: "اذهب لمعلومات الجهاز ↓" },
-                  { icon: "📧", title: "التواصل مع الدعم",        desc: "support@onesoft.sa",                        action: "نسخ البريد" },
-                  { icon: "📞", title: "الدعم الهاتفي",           desc: "920-XXX-XXXX",                              action: "اتصال" },
-                ].map((item, i) => (
-                  <div key={i} className="flex items-start gap-3 bg-white rounded-xl border border-red-200 px-4 py-3.5">
-                    <span className="text-2xl shrink-0 mt-0.5">{item.icon}</span>
-                    <div className="min-w-0">
-                      <p className="text-[15px] font-bold text-[#1B2B5C] leading-tight">{item.title}</p>
-                      <p className="text-[13px] text-[#6B7280] mt-0.5 leading-snug">{item.desc}</p>
-                    </div>
+                {/* 1 — إدخال كود التفعيل */}
+                <button
+                  onClick={() => {
+                    setTab("code");
+                    setTimeout(() => document.getElementById("section-activation")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                  }}
+                  className="flex items-start gap-3 bg-white rounded-xl border border-red-200 px-4 py-3.5 text-right hover:bg-red-50 hover:border-red-400 transition-colors cursor-pointer w-full"
+                >
+                  <span className="text-2xl shrink-0 mt-0.5">🔑</span>
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-bold text-[#1B2B5C] leading-tight">إدخال كود التفعيل</p>
+                    <p className="text-[13px] text-[#6B7280] mt-0.5 leading-snug">أدخل كود التفعيل الذي حصلت عليه من مزود النظام</p>
+                    <p className="text-[12px] text-red-500 font-semibold mt-1">← اضغط للانتقال</p>
                   </div>
-                ))}
+                </button>
+
+                {/* 2 — استيراد ملف الترخيص */}
+                <button
+                  onClick={() => {
+                    setTab("file");
+                    setTimeout(() => document.getElementById("section-activation")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                  }}
+                  className="flex items-start gap-3 bg-white rounded-xl border border-red-200 px-4 py-3.5 text-right hover:bg-red-50 hover:border-red-400 transition-colors cursor-pointer w-full"
+                >
+                  <span className="text-2xl shrink-0 mt-0.5">📂</span>
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-bold text-[#1B2B5C] leading-tight">استيراد ملف الترخيص</p>
+                    <p className="text-[13px] text-[#6B7280] mt-0.5 leading-snug">استيراد ملف .ons الصادر من مزود النظام</p>
+                    <p className="text-[12px] text-red-500 font-semibold mt-1">← اضغط للانتقال</p>
+                  </div>
+                </button>
+
+                {/* 3 — تصدير طلب التفعيل */}
+                <button
+                  onClick={() => {
+                    document.getElementById("section-device")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    genReq.mutate({ org_id: "" });
+                  }}
+                  className="flex items-start gap-3 bg-white rounded-xl border border-red-200 px-4 py-3.5 text-right hover:bg-red-50 hover:border-red-400 transition-colors cursor-pointer w-full"
+                >
+                  <span className="text-2xl shrink-0 mt-0.5">📤</span>
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-bold text-[#1B2B5C] leading-tight">تصدير طلب التفعيل</p>
+                    <p className="text-[13px] text-[#6B7280] mt-0.5 leading-snug">توليد Request Code وإرساله لمزود النظام</p>
+                    <p className="text-[12px] text-red-500 font-semibold mt-1">← اضغط لتوليد الكود</p>
+                  </div>
+                </button>
+
+                {/* 4 — طلب تمديد التجربة */}
+                <button
+                  onClick={() => {
+                    window.open("mailto:support@onesoft.sa?subject=طلب تمديد فترة التجربة&body=السلام عليكم، أرجو تمديد فترة التجربة الخاصة بنا.", "_blank");
+                  }}
+                  className="flex items-start gap-3 bg-white rounded-xl border border-red-200 px-4 py-3.5 text-right hover:bg-red-50 hover:border-red-400 transition-colors cursor-pointer w-full"
+                >
+                  <span className="text-2xl shrink-0 mt-0.5">⏳</span>
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-bold text-[#1B2B5C] leading-tight">طلب تمديد التجربة</p>
+                    <p className="text-[13px] text-[#6B7280] mt-0.5 leading-snug">إرسال طلب تمديد بالبريد الإلكتروني لمزود النظام</p>
+                    <p className="text-[12px] text-red-500 font-semibold mt-1">← سيفتح بريدك الإلكتروني</p>
+                  </div>
+                </button>
+
+                {/* 5 — الدعم الفني بالبريد */}
+                <button
+                  onClick={() => window.open("mailto:support@onesoft.sa", "_blank")}
+                  className="flex items-start gap-3 bg-white rounded-xl border border-red-200 px-4 py-3.5 text-right hover:bg-red-50 hover:border-red-400 transition-colors cursor-pointer w-full"
+                >
+                  <span className="text-2xl shrink-0 mt-0.5">📧</span>
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-bold text-[#1B2B5C] leading-tight">التواصل مع الدعم</p>
+                    <p className="text-[13px] text-[#6B7280] mt-0.5 leading-snug">support@onesoft.sa</p>
+                    <p className="text-[12px] text-red-500 font-semibold mt-1">← سيفتح بريدك الإلكتروني</p>
+                  </div>
+                </button>
+
+                {/* 6 — الدعم الهاتفي */}
+                <div className="flex items-start gap-3 bg-white rounded-xl border border-red-200 px-4 py-3.5">
+                  <span className="text-2xl shrink-0 mt-0.5">📞</span>
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-bold text-[#1B2B5C] leading-tight">الدعم الهاتفي</p>
+                    <p className="text-[13px] text-[#6B7280] mt-0.5 leading-snug">920-XXX-XXXX</p>
+                    <p className="text-[12px] text-[#9CA3AF] mt-1">أوقات الدوام 9ص — 5م</p>
+                  </div>
+                </div>
               </div>
-              <p className="text-[13px] text-red-600/80 mt-4 text-center">
-                ↓ أدوات التفعيل متوفرة أدناه في هذه الصفحة
-              </p>
             </div>
           </div>
         )}
@@ -563,7 +629,7 @@ export default function LicenseActivationPage() {
             </Card>
 
             {/* Device info */}
-            <Card className="p-5">
+            <Card id="section-device" className="p-5">
               <SectionTitle icon={<Fingerprint className="w-4 h-4" />} title="معلومات الجهاز" />
               <div className="space-y-3">
                 {/* Device ID */}
@@ -615,7 +681,7 @@ export default function LicenseActivationPage() {
           </div>
 
           {/* ── COL 3 (left in RTL): تفعيل الترخيص ──────────────────── */}
-          <Card className="p-5">
+          <Card id="section-activation" className="p-5">
             <SectionTitle icon={<KeyRound className="w-4 h-4" />} title="تفعيل الترخيص" />
 
             {/* Tabs */}

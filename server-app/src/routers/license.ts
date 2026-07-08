@@ -140,11 +140,16 @@ export const licenseRouter = router({
       };
     }
 
-    // ── لا كود محفوظ — ابحث عن مؤسسة Trial في DB ──────────────────────────
+    // ── لا كود محفوظ — ابحث عن مؤسسة Trial أولاً ثم active ────────────────
     try {
-      const org = await db.query.organizations.findFirst({
+      // نجلب كل المؤسسات ونفضّل trial، ثم أي active غير SYSTEM
+      const allOrgs = await db.query.organizations.findMany({
         columns: { id: true, code: true, name: true, status: true, subscriptionExpiry: true },
       });
+      const org =
+        allOrgs.find(o => o.status === 'trial') ??
+        allOrgs.find(o => o.status === 'active' && o.code !== 'SYSTEM') ??
+        null;
       if (org && (org.status === 'trial' || org.status === 'active')) {
         const trialExpired = org.status === 'trial' && org.subscriptionExpiry
           ? new Date(org.subscriptionExpiry) < new Date()
