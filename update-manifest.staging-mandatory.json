@@ -1,14 +1,25 @@
 {
-  "_purpose": "Staging — MANDATORY update test. Use on VM/test machine ONLY. Never on production channel.",
-  "_usage":   "Set: ONESOFT_UPDATE_URL=https://raw.githubusercontent.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/main/update-manifest.staging-mandatory.json",
-  "_warning": "minSupportedVersion=1.0.3 يمنع الدخول لأي نسخة أقل — استخدم على VM فقط",
+  "_purpose":        "Staging — MANDATORY update test. Use on VM/test machine ONLY. Never on production channel.",
+  "_usage":          "Set: ONESOFT_UPDATE_URL=https://raw.githubusercontent.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/main/update-manifest.staging-mandatory.json",
+  "_warning":        "minSupportedVersion=1.0.4 يمنع الدخول لأي نسخة أقل — استخدم على VM فقط",
 
-  "latestVersion":       "1.0.3",
-  "minSupportedVersion": "1.0.3",
+  "_STAGING_STATUS": "⛔ NOT READY FOR TESTING — sha512 فارغ. يجب إكمال الخطوات أدناه أولاً قبل أي اختبار.",
+  "_REQUIRED_STEPS": [
+    "1. push tag v1.0.4-staging-test → GitHub Actions يبني OneSoftSetup-1.0.4.exe",
+    "2. تحميل الـ .exe من GitHub Release artifacts",
+    "3. حساب SHA512: sha512sum OneSoftSetup-1.0.4.exe  (Linux) أو  certutil -hashfile OneSoftSetup-1.0.4.exe SHA512  (Windows)",
+    "4. تحديث حقل sha512 في هذا الملف بالـ hash الحقيقي (128 حرف hex)",
+    "5. تحديث حقل fileSizeBytes بحجم الملف الفعلي بالـ bytes",
+    "6. تحديث _STAGING_STATUS إلى READY",
+    "7. commit + push → فقط بعد ذلك يمكن اختبار التحديث الإجباري على VM"
+  ],
+
+  "latestVersion":       "1.0.4",
+  "minSupportedVersion": "1.0.4",
   "mandatory":           true,
 
-  "messageAr": "[STAGING إجباري] تحديث اختبار إجباري — يُستخدم على VM فقط.",
-  "messageEn": "[STAGING MANDATORY] Mandatory test update — VM only.",
+  "messageAr": "[STAGING إجباري v1.0.4] تحديث اختبار إجباري — يُستخدم على VM فقط.",
+  "messageEn": "[STAGING MANDATORY v1.0.4] Mandatory test update — VM only.",
 
   "releaseNotes": [
     "[اختبار إجباري] يُمنع الدخول للنظام حتى إتمام التحديث",
@@ -16,10 +27,10 @@
     "[اختبار إجباري] بعد التثبيت يفتح النظام مباشرةً دون طلب تحديث"
   ],
 
-  "downloadUrl":   "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.3-staging-test/OneSoftSetup-1.0.3.exe",
-  "fileSizeBytes": 80216064,
-  "sha512":        "6e0c7d6f51b50c6150ca3cdc1fab1310ee0ec5a8ae8483816dc0c0fe01f08a419ec98698c0f8d8dde878e77882623698b20b581a24691fa1fda7101fd6999a16",
-  "publishedAt":   "2026-07-07T00:00:00.000Z",
+  "downloadUrl":   "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.4-staging-test-2/OneSoftSetup-1.0.4.exe",
+  "fileSizeBytes": 0,
+  "sha512":        "⛔_FILL_AFTER_BUILD⛔",
+  "publishedAt":   "2026-07-08T00:00:00.000Z",
 
-  "_version_logic": "currentVersion(1.0.2) < minSupportedVersion(1.0.3) → إجباري. بعد التثبيت app.getVersion()=1.0.3 ≥ 1.0.3 → لا تحديث."
+  "_version_logic": "currentVersion(1.0.3) < minSupportedVersion(1.0.4) → إجباري. بعد التثبيت app.getVersion()=1.0.4 ≥ 1.0.4 → لا تحديث."
 }
