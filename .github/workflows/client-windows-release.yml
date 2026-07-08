@@ -42,6 +42,8 @@ env:
 permissions:
   contents: write
 
+jobs:
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # JOB 1 — Security Pre-Check  (Ubuntu — fast gate)
@@ -219,7 +221,7 @@ jobs:
         env:
           CLIENT_BUILD: 'true'
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-          GH_token: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # بناء electron main + preload + UI + installer
           pnpm run build
@@ -340,7 +342,7 @@ jobs:
             | `/cfg/license` | ✅ موجود للتفعيل |
 
             انظر `installer-security-report` في الـ artifacts للتقرير الكامل.
-          token: ${{ secrets.GH_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           draft: false
           prerelease: false
 
