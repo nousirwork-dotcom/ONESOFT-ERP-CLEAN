@@ -39,6 +39,9 @@ env:
   NODE_VERSION: '20'
   PNPM_VERSION: '9'
 
+permissions:
+  contents: write
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # JOB 1 — Security Pre-Check  (Ubuntu — fast gate)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -336,7 +339,7 @@ jobs:
             | `/cfg/license` | ✅ موجود للتفعيل |
 
             انظر `installer-security-report` في الـ artifacts للتقرير الكامل.
-          token: ${{ secrets.GH_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           draft: false
           prerelease: false
 
