@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { eq, and, sql, count } from 'drizzle-orm';
+import { eq, and, sql, count, inArray } from 'drizzle-orm';
 import { router, adminProcedure, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import { users, organizations, salesInvoices, vouchers, stockVouchers, userCategories } from '../schema.js';
@@ -38,7 +38,13 @@ export const usersRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       // ── License enforcement: max_users ──────────────────────────────────────
-      const userLimit = getLimit('max_users');
+      const _licenseLimit = getLimit('max_users');
+      let userLimit: number | null = _licenseLimit;
+      if (userLimit === null) {
+        const [orgRow] = await db.select({ maxUsers: organizations.maxUsers }).from(organizations)
+          .where(eq(organizations.id, ctx.user.orgId));
+        userLimit = orgRow?.maxUsers ?? null;
+      }
       if (userLimit !== null) {
         const [row] = await db
           .select({ cnt: count() })
@@ -47,7 +53,7 @@ export const usersRouter = router({
         if (Number(row.cnt) >= userLimit) {
           throw new TRPCError({
             code: 'FORBIDDEN',
-            message: `تجاوز الحد الأقصى المسموح به في الترخيص (${userLimit} مستخدم). يرجى التواصل مع الدعم الفني لتحديث الترخيص.`,
+            message: `تجاوز الحد الأقصى المسموح به (${userLimit} مستخدم). يرجى التواصل مع الدعم الفني لتحديث الترخيص.`,
           });
         }
       }
@@ -126,6 +132,43 @@ export const usersRouter = router({
       });
       if (!user) throw new Error('المستخدم غير موجود');
 
+      // ── حماية: لا يمكن إيقاف آخر مدير نشط ────────────────────────────────
+      if (rest.isActive === false && user.isActive &&
+          (user.role === 'admin' || user.role === 'superadmin')) {
+        const [adminRow] = await db.select({ cnt: count() }).from(users)
+          .where(and(
+            eq(users.orgId, ctx.user.orgId),
+            eq(users.isActive, true),
+            inArray(users.role, ['admin', 'superadmin']),
+          ));
+        if (Number(adminRow.cnt) <= 1) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'لا يمكن إيقاف آخر مدير نظام نشط في المؤسسة',
+          });
+        }
+      }
+
+      // ── فحص الحد عند إعادة تفعيل مستخدم موقوف ──────────────────────────
+      if (rest.isActive === true && !user.isActive) {
+        const [cntRow] = await db.select({ cnt: count() }).from(users)
+          .where(and(eq(users.orgId, ctx.user.orgId), eq(users.isActive, true)));
+        const current = Number(cntRow.cnt);
+        const licLimit  = getLimit('max_users');
+        let reactivateLimit: number | null = licLimit;
+        if (reactivateLimit === null) {
+          const [orgRow] = await db.select({ maxUsers: organizations.maxUsers }).from(organizations)
+            .where(eq(organizations.id, ctx.user.orgId));
+          reactivateLimit = orgRow?.maxUsers ?? null;
+        }
+        if (reactivateLimit !== null && current >= reactivateLimit) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: `تجاوز الحد الأقصى المسموح به (${reactivateLimit} مستخدم). لا يمكن إعادة تفعيل المستخدم حتى يتم تحديث الترخيص.`,
+          });
+        }
+      }
+
       if (rest.phone) {
         const phoneExists = await db.query.users.findFirst({
           where: and(eq(users.phone, rest.phone), eq(users.orgId, ctx.user.orgId), eq(users.isActive, true)),
@@ -185,6 +228,32 @@ export const usersRouter = router({
         where: and(eq(users.id, input.id), eq(users.orgId, ctx.user.orgId)),
       });
       if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: 'المستخدم غير موجود' });
+
+      // ── حماية المدير الأساسي (أول مستخدم في المؤسسة) ───────────────────────
+      const firstUser = await db.query.users.findFirst({
+        where: eq(users.orgId, ctx.user.orgId),
+        orderBy: (u, { asc }) => [asc(u.id)],
+        columns: { id: true },
+      });
+      if (firstUser?.id === input.id) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكن حذف المدير الأساسي للنظام' });
+      }
+
+      // ── حماية آخر مدير نشط ────────────────────────────────────────────────
+      if (user.isActive && (user.role === 'admin' || user.role === 'superadmin')) {
+        const [adminRow] = await db.select({ cnt: count() }).from(users)
+          .where(and(
+            eq(users.orgId, ctx.user.orgId),
+            eq(users.isActive, true),
+            inArray(users.role, ['admin', 'superadmin']),
+          ));
+        if (Number(adminRow.cnt) <= 1) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'لا يمكن حذف آخر مدير نظام نشط في المؤسسة',
+          });
+        }
+      }
 
       const hasDraftInvoices = await db
         .select({ id: salesInvoices.id })
