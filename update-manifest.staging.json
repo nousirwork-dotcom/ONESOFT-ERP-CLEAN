@@ -1,24 +1,40 @@
 {
-  "_purpose": "Staging — optional update test. Repo is public so raw.githubusercontent.com works without auth.",
-  "_usage":   "Set: ONESOFT_UPDATE_URL=https://raw.githubusercontent.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/main/update-manifest.staging.json",
+  "_purpose":        "Staging — optional update test. Repo is public so raw.githubusercontent.com works without auth.",
+  "_usage":          "Set: ONESOFT_UPDATE_URL=https://raw.githubusercontent.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/main/update-manifest.staging.json",
 
-  "latestVersion":       "1.0.3",
+  "_STAGING_STATUS": "⛔ NOT READY FOR TESTING — sha512 فارغ. يجب إكمال الخطوات أدناه أولاً قبل أي اختبار.",
+  "_REQUIRED_STEPS": [
+    "1. push tag v1.0.4-staging-test → GitHub Actions يبني OneSoftSetup-1.0.4.exe",
+    "2. تحميل الـ .exe من GitHub Release artifacts",
+    "3. حساب SHA512: sha512sum OneSoftSetup-1.0.4.exe  (Linux) أو  certutil -hashfile OneSoftSetup-1.0.4.exe SHA512  (Windows)",
+    "4. تحديث حقل sha512 في هذا الملف بالـ hash الحقيقي",
+    "5. تحديث حقل fileSizeBytes بحجم الملف الفعلي بالـ bytes",
+    "6. تحديث _STAGING_STATUS إلى READY",
+    "7. commit + push → فقط بعد ذلك يمكن اختبار التحديث"
+  ],
+
+  "latestVersion":       "1.0.4",
   "minSupportedVersion": "1.0.0",
   "mandatory":           false,
 
-  "messageAr": "[STAGING] تحديث اختبار اختياري — يُستخدم للاختبار فقط وليس للعملاء.",
-  "messageEn": "[STAGING] Optional test update — for testing only, not for production users.",
+  "messageAr": "[STAGING v1.0.4] نظام التجربة المجانية + نظام المستخدمين + استعادة كلمة المرور — للاختبار فقط.",
+  "messageEn": "[STAGING v1.0.4] Trial system + Users module + Password Recovery — testing only.",
 
   "releaseNotes": [
-    "[اختبار] التحقق من تدفق تحديث اختياري",
-    "[اختبار] زر لاحقاً → يؤجل ويدخل النظام",
-    "[اختبار] شاشة الإعدادات تعرض التحديث المؤجّل",
-    "[اختبار] Progress حقيقي أثناء التحميل",
-    "[اختبار] SHA512 يُتحقق منه بعد اكتمال التحميل"
+    "نظام Trial Active / Trial Expired — فترة تجربة مجانية 30 يوم",
+    "كود التجربة (🧪) مستقل عن كود المؤسسة الرسمي",
+    "بانر التجربة يظهر في جميع الصفحات مع الأيام المتبقية",
+    "شاشة انتهاء التجربة مع 5 خيارات تفعيل وظيفية",
+    "admin الافتراضي: تسجيل دخول تلقائي بدون كلمة مرور عند أول تشغيل",
+    "تعيين كلمة مرور admin من داخل النظام مع تأكيد",
+    "شاشة المستخدمين: حد المستخدمين حسب الترخيص مع مؤشر بصري",
+    "منع إضافة مستخدم عند تجاوز الحد",
+    "استعادة كلمة المرور (Password Recovery) عبر SMS/Email",
+    "التحقق من رقم الجوال والبريد في شاشة المستخدمين"
   ],
 
-  "downloadUrl":   "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.3-staging-test/OneSoftSetup-1.0.3.exe",
-  "fileSizeBytes": 80216064,
-  "sha512":        "6e0c7d6f51b50c6150ca3cdc1fab1310ee0ec5a8ae8483816dc0c0fe01f08a419ec98698c0f8d8dde878e77882623698b20b581a24691fa1fda7101fd6999a16",
-  "publishedAt":   "2026-07-07T00:00:00.000Z"
+  "downloadUrl":   "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.4-staging-test-2/OneSoftSetup-1.0.4.exe",
+  "fileSizeBytes": 0,
+  "sha512":        "⛔_FILL_AFTER_BUILD⛔",
+  "publishedAt":   "2026-07-08T00:00:00.000Z"
 }
