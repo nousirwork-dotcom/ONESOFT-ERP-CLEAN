@@ -24,9 +24,28 @@ import {
 export const licenseRouter = router({
 
   // ── حالة الترخيص الحالي ────────────────────────────────────────────────────
-  getStatus: protectedProcedure.query(() => {
+  getStatus: protectedProcedure.query(async ({ ctx }) => {
     const status = getLicense();
     if (!status.valid || !status.payload) {
+      // إذا لم يوجد ملف ترخيص → تحقق من وجود نسخة تجريبية في DB
+      if (status.error === 'license_not_found') {
+        try {
+          const org = await db.query.organizations.findFirst({
+            where: eq(organizations.id, ctx.user.orgId),
+            columns: { status: true, subscriptionExpiry: true },
+          });
+          if (org?.status === 'trial') {
+            const trialExpired = org.subscriptionExpiry
+              ? new Date(org.subscriptionExpiry) < new Date()
+              : false;
+            return {
+              valid:   !trialExpired,
+              error:   trialExpired ? 'expired' : ('trial' as string),
+              payload: null,
+            };
+          }
+        } catch { /* DB غير متاح */ }
+      }
       return {
         valid:   false,
         error:   status.error,
@@ -107,14 +126,51 @@ export const licenseRouter = router({
       } catch { /* DB غير متاح */ }
     }
 
+    // إذا كان هناك كود محفوظ في device prefs → استخدمه
+    if (prefs.savedOrgCode) {
+      return {
+        hasLicense:  false,
+        isExpired:   false,
+        isInvalid:   false,
+        orgCode:     prefs.savedOrgCode,
+        orgName:     orgName,
+        licenseId:   null,
+        licExpiry:   null,
+        isTrial:     false,
+      };
+    }
+
+    // ── لا كود محفوظ — ابحث عن مؤسسة Trial في DB ──────────────────────────
+    try {
+      const org = await db.query.organizations.findFirst({
+        columns: { id: true, code: true, name: true, status: true, subscriptionExpiry: true },
+      });
+      if (org && (org.status === 'trial' || org.status === 'active')) {
+        const trialExpired = org.status === 'trial' && org.subscriptionExpiry
+          ? new Date(org.subscriptionExpiry) < new Date()
+          : false;
+        return {
+          hasLicense:  false,
+          isExpired:   trialExpired,
+          isInvalid:   false,
+          orgCode:     org.code,
+          orgName:     org.name,
+          licenseId:   null,
+          licExpiry:   org.subscriptionExpiry?.toISOString() ?? null,
+          isTrial:     org.status === 'trial',
+        };
+      }
+    } catch { /* DB غير متاح */ }
+
     return {
       hasLicense:  false,
       isExpired:   false,
       isInvalid:   false,
-      orgCode:     prefs.savedOrgCode ?? null,
-      orgName:     orgName,
+      orgCode:     null,
+      orgName:     null,
       licenseId:   null,
       licExpiry:   null,
+      isTrial:     false,
     };
   }),
 

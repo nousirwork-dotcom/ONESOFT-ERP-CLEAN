@@ -78,7 +78,6 @@ function SetAdminPasswordModal({ onClose, onSuccess }: { onClose: () => void; on
           </p>
         </div>
 
-        {/* اسم المستخدم readonly */}
         <div>
           <label style={{ display: 'block', fontSize: 11, color: 'var(--muted-foreground)', marginBottom: 4 }}>
             اسم المستخدم
@@ -93,7 +92,8 @@ function SetAdminPasswordModal({ onClose, onSuccess }: { onClose: () => void; on
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <div>
             <label style={{ display: 'block', fontSize: 11, color: 'var(--muted-foreground)', marginBottom: 4 }}>
-              الاسم الكامل <span style={{ color: 'var(--muted-foreground)', fontSize: 10 }}>(اختياري)</span>
+              الاسم الكامل{' '}
+              <span style={{ color: 'var(--muted-foreground)', fontSize: 10 }}>(اختياري)</span>
             </label>
             <input
               style={inp} placeholder="مثال: محمد أحمد"
@@ -103,7 +103,8 @@ function SetAdminPasswordModal({ onClose, onSuccess }: { onClose: () => void; on
           </div>
           <div>
             <label style={{ display: 'block', fontSize: 11, color: 'var(--muted-foreground)', marginBottom: 4 }}>
-              رقم الجوال <span style={{ color: 'var(--muted-foreground)', fontSize: 10 }}>(اختياري)</span>
+              رقم الجوال{' '}
+              <span style={{ color: 'var(--muted-foreground)', fontSize: 10 }}>(اختياري)</span>
             </label>
             <input
               style={{ ...inp, direction: 'ltr' }} placeholder="+9665xxxxxxxx"
@@ -116,7 +117,8 @@ function SetAdminPasswordModal({ onClose, onSuccess }: { onClose: () => void; on
 
         <div>
           <label style={{ display: 'block', fontSize: 11, color: 'var(--muted-foreground)', marginBottom: 4 }}>
-            البريد الإلكتروني <span style={{ color: 'var(--muted-foreground)', fontSize: 10 }}>(اختياري)</span>
+            البريد الإلكتروني{' '}
+            <span style={{ color: 'var(--muted-foreground)', fontSize: 10 }}>(اختياري)</span>
           </label>
           <input
             style={{ ...inp, direction: 'ltr' }} placeholder="admin@company.com"
@@ -201,34 +203,56 @@ export default function TrialBanner() {
   });
 
   if (statusQ.isLoading || !statusQ.data) return null;
-  if (statusQ.data.passwordStatus !== 'not_set') return null;
+
+  const { passwordStatus, isTrial, trialDaysLeft } = statusQ.data;
+  const noPassword = passwordStatus === 'not_set';
+
+  if (!isTrial && !noPassword) return null;
+
+  const isUrgent = noPassword || (trialDaysLeft !== null && trialDaysLeft <= 5);
+  const bg = isUrgent
+    ? 'linear-gradient(90deg, #7F1D1D 0%, #991B1B 100%)'
+    : 'linear-gradient(90deg, #92400E 0%, #B45309 100%)';
 
   return (
     <>
       <div dir="rtl" style={{
-        background: 'linear-gradient(90deg, #92400E 0%, #B45309 100%)',
-        color: '#FEF3C7',
+        background: bg, color: '#FEF3C7',
         padding: '8px 16px',
         display: 'flex', alignItems: 'center', gap: 12,
         fontSize: 12, fontFamily: "'Cairo', Tahoma, sans-serif",
         zIndex: 50, flexShrink: 0,
       }}>
-        <span style={{ fontSize: 16 }}>⚠</span>
-        <span style={{ flex: 1, lineHeight: 1.5 }}>
-          <strong>نسخة تجريبية — النظام غير محمي.</strong>{' '}
-          لم يتم تعيين كلمة مرور مدير النظام بعد. يرجى تعيين كلمة مرور لحماية بياناتك.
+        <span style={{ fontSize: 16 }}>{isUrgent ? '🔴' : '⚠️'}</span>
+
+        <span style={{ flex: 1, lineHeight: 1.6 }}>
+          {isTrial && trialDaysLeft !== null && (
+            <>
+              <strong>نسخة تجريبية</strong>
+              {' — متبقي '}
+              <strong style={{ fontSize: 13 }}>{trialDaysLeft}</strong>
+              {' يوم'}
+              {noPassword && ' · '}
+            </>
+          )}
+          {noPassword && (
+            <strong>لم يتم تعيين كلمة مرور مدير النظام بعد. النظام غير محمي.</strong>
+          )}
         </span>
-        <button
-          onClick={() => setShowModal(true)}
-          style={{
-            background: '#FEF3C7', color: '#92400E',
-            border: 'none', borderRadius: 6, padding: '5px 14px',
-            fontWeight: 700, fontSize: 12, cursor: 'pointer',
-            fontFamily: 'inherit', whiteSpace: 'nowrap', flexShrink: 0,
-          }}
-        >
-          🔐 تعيين كلمة مرور المدير
-        </button>
+
+        {noPassword && (
+          <button
+            onClick={() => setShowModal(true)}
+            style={{
+              background: '#FEF3C7', color: '#92400E',
+              border: 'none', borderRadius: 6, padding: '5px 14px',
+              fontWeight: 700, fontSize: 12, cursor: 'pointer',
+              fontFamily: 'inherit', whiteSpace: 'nowrap', flexShrink: 0,
+            }}
+          >
+            🔐 تعيين كلمة مرور المدير
+          </button>
+        )}
       </div>
 
       {showModal && (
@@ -237,6 +261,8 @@ export default function TrialBanner() {
           onSuccess={() => setShowModal(false)}
         />
       )}
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </>
   );
 }
