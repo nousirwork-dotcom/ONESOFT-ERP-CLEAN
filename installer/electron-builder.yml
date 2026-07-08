@@ -4,7 +4,7 @@ artifactName: OneSoftSetup-${version}.${ext}
 copyright: Copyright © 2026 OneSoft
 
 extraMetadata:
-  version: "1.0.3"
+  version: "1.0.4"
 
 directories:
   output: release
