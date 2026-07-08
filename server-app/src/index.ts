@@ -56,26 +56,31 @@ app.get('/api/auth/me', meHandler);
 //   3. المستخدم الأول لديه كلمة مرور فارغة (لم تُعيَّن)
 // إذا كان المستخدم قد عيَّن كلمة مرور → يُعاد 403 ويُظهر شاشة الدخول.
 app.post('/api/auth/auto-login', async (req, res) => {
-  const isElectron  = ENV.isElectron;
   const isLocalhost = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '');
+  const isElectron  = ENV.isElectron;
 
-  if (!isElectron || !isLocalhost) {
+  // في الإنتاج: يجب أن يكون الطلب من localhost + Electron
+  // في التطوير: مسموح من أي مكان (Replit proxy)
+  if (ENV.nodeEnv === 'production' && (!isElectron || !isLocalhost)) {
     return res.status(403).json({ error: 'auto-login متاح فقط لتطبيق Electron من localhost' });
   }
 
   try {
-    const { db }            = await import('./db.js');
-    const { users }         = await import('./schema.js');
-    const { eq }            = await import('drizzle-orm');
-    const { createToken, verifyPassword } = await import('./auth.js');
+    const { db }        = await import('./db.js');
+    const { users }     = await import('./schema.js');
+    const { eq }        = await import('drizzle-orm');
+    const { createToken } = await import('./auth.js');
 
-    // نجيب أول مستخدم نشط
-    const user = await db.query.users.findFirst({ where: eq(users.isActive, true) });
+    // نجيب أول مستخدم نشط بدور admin أو superadmin
+    const user = await db.query.users.findFirst({
+      where: eq(users.isActive, true),
+      orderBy: (u, { asc }) => [asc(u.id)],
+    });
     if (!user) return res.status(404).json({ error: 'لا يوجد مستخدم' });
 
-    // نتحقق أن كلمة المرور فارغة (لم تُعيَّن) — إذا عيَّن العميل كلمة مرور لا نتجاوزها
-    const hasEmptyPassword = await verifyPassword('', user.passwordHash);
-    if (!hasEmptyPassword) {
+    // الدخول التلقائي يعمل فقط إذا password_status = 'not_set'
+    // بمجرد تعيين كلمة مرور لا يُسمح بالدخول التلقائي أبدًا
+    if (user.passwordStatus !== 'not_set') {
       return res.status(403).json({ error: 'يجب تسجيل الدخول يدوياً' });
     }
 

@@ -134,6 +134,7 @@ export default function Users() {
   const utils = trpc.useUtils();
 
   const { data: users, isLoading } = trpc.users.list.useQuery();
+  const { data: countInfo } = trpc.users.getUserCountInfo.useQuery();
 
   const createUser = trpc.users.create.useMutation({
     onSuccess: () => { utils.users.list.invalidate(); toast.success("تم إنشاء المستخدم بنجاح"); setIsOpen(false); },
@@ -217,10 +218,59 @@ export default function Users() {
           <h1 className="text-2xl font-bold">إدارة المستخدمين</h1>
           <p className="text-muted-foreground text-sm mt-0.5">إدارة المستخدمين وصلاحياتهم وخيارات الأمان</p>
         </div>
-        <Button onClick={openCreate} className="gap-2">
+        <Button onClick={openCreate} disabled={countInfo?.atLimit} className="gap-2">
           <Plus className="w-4 h-4" />إضافة مستخدم
         </Button>
       </div>
+
+      {/* كارت عدد المستخدمين */}
+      {countInfo && (
+        <div className="grid grid-cols-3 gap-4">
+          <Card className="shadow-none border">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                <UsersIcon className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">المستخدمون الحاليون</p>
+                <p className="text-xl font-bold leading-tight">{countInfo.current} <span className="text-sm font-normal text-muted-foreground">/ {countInfo.max}</span></p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className={`shadow-none border ${countInfo.remaining === 0 ? "border-destructive/40 bg-destructive/5" : ""}`}>
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${countInfo.remaining === 0 ? "bg-destructive/10" : "bg-green-500/10"}`}>
+                <Plus className={`w-5 h-5 ${countInfo.remaining === 0 ? "text-destructive" : "text-green-600"}`} />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">المقاعد المتبقية</p>
+                <p className={`text-xl font-bold leading-tight ${countInfo.remaining === 0 ? "text-destructive" : ""}`}>{countInfo.remaining}</p>
+                {countInfo.remaining === 0 && (
+                  <p className="text-[10px] text-destructive leading-tight">تجاوز الحد المسموح</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="shadow-none border">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                <span className="text-base">🪪</span>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">الحد الأقصى بالترخيص</p>
+                <p className="text-xl font-bold leading-tight">{countInfo.max}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {countInfo?.atLimit && (
+        <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-lg px-4 py-2.5">
+          <span>⚠</span>
+          <span>وصلت إلى الحد الأقصى لعدد المستخدمين ({countInfo.max}). لإضافة مستخدمين جدد يرجى ترقية الترخيص.</span>
+        </div>
+      )}
 
       <Card className="border-0 shadow-sm">
         <CardContent className="p-0">

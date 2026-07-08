@@ -46,6 +46,7 @@ export const users = pgTable('users', {
   extraPermissions: jsonb('extra_permissions').$type<Record<string, boolean>>(),
   categoryId: integer('category_id'),
   isActive: boolean('is_active').notNull().default(true),
+  passwordStatus: varchar('password_status', { length: 20 }).notNull().default('set'),
   lastLoginAt: timestamp('last_login_at'),
   phoneVerifiedAt: timestamp('phone_verified_at'),
   emailVerifiedAt: timestamp('email_verified_at'),

@@ -48,8 +48,8 @@ export default function FirstRunWizard({ onComplete }: Props) {
     if (step === 1 && !company.name.trim()) { toast.error("أدخل اسم الشركة"); return; }
     if (step === 2) {
       if (!admin.username.trim() || !admin.name.trim()) { toast.error("أدخل بيانات المدير"); return; }
-      if (admin.password.length < 6) { toast.error("كلمة المرور يجب أن تكون 6 أحرف على الأقل"); return; }
-      if (admin.password !== admin.confirmPassword) { toast.error("كلمة المرور غير متطابقة"); return; }
+      // كلمة المرور اختيارية — إذا أُدخلت يجب التحقق من تطابقها
+      if (admin.password.length > 0 && admin.password !== admin.confirmPassword) { toast.error("كلمة المرور وتأكيدها غير متطابقَين"); return; }
     }
     if (step === 3) {
       setLoading(true);
@@ -188,17 +188,23 @@ export default function FirstRunWizard({ onComplete }: Props) {
                       <Input value={admin.email} onChange={e => A("email")(e.target.value)} placeholder="admin@company.com" className="mt-1" />
                     </div>
                     <div>
-                      <Label className="text-xs text-slate-600">كلمة المرور <span className="text-red-500">*</span></Label>
-                      <Input type="password" value={admin.password} onChange={e => A("password")(e.target.value)} placeholder="6 أحرف على الأقل" className="mt-1" />
+                      <Label className="text-xs text-slate-600">
+                        كلمة المرور{" "}
+                        <span className="text-slate-400 font-normal">(اختياري — يمكن تعيينها لاحقاً)</span>
+                      </Label>
+                      <Input type="password" value={admin.password} onChange={e => A("password")(e.target.value)} placeholder="اتركها فارغة للنسخة التجريبية" className="mt-1" />
                     </div>
                     <div>
-                      <Label className="text-xs text-slate-600">تأكيد كلمة المرور <span className="text-red-500">*</span></Label>
-                      <Input type="password" value={admin.confirmPassword} onChange={e => A("confirmPassword")(e.target.value)} placeholder="أعد الكتابة" className="mt-1" />
+                      <Label className="text-xs text-slate-600">تأكيد كلمة المرور</Label>
+                      <Input type="password" value={admin.confirmPassword} onChange={e => A("confirmPassword")(e.target.value)} placeholder="أعد الكتابة إن أدخلت كلمة مرور" className="mt-1" />
                     </div>
                   </div>
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-1">
                     <p className="text-xs text-amber-800 flex items-center gap-2">
-                      <Lock className="w-3.5 h-3.5" /> كلمة المرور مشفّرة ولا تُخزّن بشكل مقروء.
+                      <Lock className="w-3.5 h-3.5 shrink-0" /> كلمة المرور مشفّرة ولا تُخزّن بشكل مقروء.
+                    </p>
+                    <p className="text-xs text-amber-700">
+                      💡 إذا تركت كلمة المرور فارغة، سيدخل النظام تلقائياً (وضع تجريبي) ويُظهر تحذيراً لتعيينها لاحقاً.
                     </p>
                   </div>
                 </div>

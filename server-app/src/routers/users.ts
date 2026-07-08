@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { eq, and, sql, count } from 'drizzle-orm';
 import { router, adminProcedure, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { users, salesInvoices, vouchers, stockVouchers, userCategories } from '../schema.js';
+import { users, organizations, salesInvoices, vouchers, stockVouchers, userCategories } from '../schema.js';
 import { hashPassword } from '../auth.js';
 import { TRPCError } from '@trpc/server';
 import { getLimit } from '../lib/license.js';
@@ -252,10 +252,67 @@ export const usersRouter = router({
       if (!valid) throw new Error('كلمة المرور الحالية غير صحيحة');
 
       await db.update(users).set({
-        passwordHash: await hashPassword(input.newPassword),
+        passwordHash:   await hashPassword(input.newPassword),
+        passwordStatus: 'set',
         updatedAt: new Date(),
       }).where(eq(users.id, ctx.user.id));
 
       return { success: true };
     }),
+
+  // ── تعيين كلمة مرور admin (وضع تجريبي — password_status = 'not_set') ────────
+  // متاح فقط للمستخدم نفسه عبر الشريط التحذيري
+  setAdminPassword: protectedProcedure
+    .input(z.object({
+      name:            z.string().min(2).optional(),
+      phone:           z.string().optional(),
+      email:           z.string().email().optional().or(z.literal('')),
+      password:        z.string().min(1),
+      confirmPassword: z.string(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (input.password !== input.confirmPassword) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'كلمتا المرور غير متطابقتين' });
+      }
+
+      const hash = await hashPassword(input.password);
+      await db.update(users).set({
+        ...(input.name  ? { name: input.name }   : {}),
+        ...(input.phone ? { phone: input.phone }  : {}),
+        ...(input.email ? { email: input.email }  : {}),
+        passwordHash:     hash,
+        passwordStatus:   'set',
+        passwordChangedAt: new Date(),
+        updatedAt:        new Date(),
+      }).where(eq(users.id, ctx.user.id));
+
+      return { success: true };
+    }),
+
+  // ── معلومات عدد المستخدمين (للكارت في شاشة المستخدمين) ───────────────────
+  getUserCountInfo: adminProcedure.query(async ({ ctx }) => {
+    const [userRow] = await db
+      .select({ cnt: count() })
+      .from(users)
+      .where(and(eq(users.orgId, ctx.user.orgId), eq(users.isActive, true)));
+    const current = Number(userRow.cnt);
+
+    // maxUsers من الترخيص، أو من المؤسسة إذا لم يكن هناك ترخيص
+    const licenseLimit = getLimit('max_users');
+    let max = licenseLimit ?? 5;
+    if (licenseLimit === null) {
+      const [orgRow] = await db
+        .select({ maxUsers: organizations.maxUsers })
+        .from(organizations)
+        .where(eq(organizations.id, ctx.user.orgId));
+      max = orgRow?.maxUsers ?? 5;
+    }
+
+    return {
+      current,
+      max,
+      remaining: Math.max(0, max - current),
+      atLimit:   current >= max,
+    };
+  }),
 });

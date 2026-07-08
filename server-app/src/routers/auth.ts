@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { router, publicProcedure } from '../trpc.js';
+import { router, publicProcedure, protectedProcedure } from '../trpc.js';
 import { TRPCError } from '@trpc/server';
 import { db } from '../db.js';
 import { users } from '../schema.js';
@@ -17,6 +17,15 @@ export const authRouter = router({
       orgId:            ctx.user.orgId,
       extraPermissions: (ctx.user.extraPermissions ?? {}) as Record<string, boolean>,
     } : null;
+  }),
+
+  // ── حالة كلمة مرور المدير (هل تم تعيينها؟) ──────────────────────────────
+  adminPasswordStatus: protectedProcedure.query(async ({ ctx }) => {
+    const user = await db.query.users.findFirst({ where: eq(users.id, ctx.user.id) });
+    return {
+      passwordStatus: (user?.passwordStatus ?? 'set') as 'not_set' | 'set',
+      isAdmin: ctx.user.role === 'admin' || ctx.user.role === 'superadmin',
+    };
   }),
 
   // ── التحقق من صلاحية المسؤول (بدون إنشاء جلسة) ────────────────────────────

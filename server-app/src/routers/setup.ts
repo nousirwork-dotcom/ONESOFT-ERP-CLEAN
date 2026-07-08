@@ -134,7 +134,7 @@ export const setupRouter = router({
       }),
       admin: z.object({
         username:  z.string().min(3),
-        password:  z.string().min(6),
+        password:  z.string().default(''),
         name:      z.string().min(2),
         email:     z.string().email().optional(),
       }),
@@ -153,29 +153,36 @@ export const setupRouter = router({
 
       logger.info('setup', 'first-run wizard started');
 
-      // إنشاء المؤسسة
+      // إنشاء المؤسسة — وضع تجريبي (trial) 30 يومًا
+      const trialExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
       const [org] = await db.insert(organizations).values({
-        name:     input.company.name,
-        nameEn:   input.company.nameEn ?? '',
-        taxNumber:input.company.taxNumber ?? '',
-        phone:    input.company.phone ?? '',
-        email:    input.company.email ?? '',
-        address:  input.company.address ?? '',
-        currency: input.company.currency,
-        status:   'active',
-        maxUsers: 10,
+        code:             'TRIAL',
+        name:             input.company.name,
+        nameEn:           input.company.nameEn ?? '',
+        taxNumber:        input.company.taxNumber ?? '',
+        phone:            input.company.phone ?? '',
+        email:            input.company.email ?? '',
+        address:          input.company.address ?? '',
+        currency:         input.company.currency,
+        status:           'trial',
+        subscriptionExpiry: trialExpiry,
+        maxUsers:         5,
       }).returning();
 
       // إنشاء مستخدم المدير
-      const hashedPass = await hashPassword(input.admin.password);
+      // إذا لم تُعيَّن كلمة مرور → password_status = 'not_set' (وضع auto-login التجريبي)
+      const hasPassword    = input.admin.password.length > 0;
+      const hashedPass     = await hashPassword(input.admin.password);
+      const passwordStatus = hasPassword ? 'set' : 'not_set';
+
       await db.insert(users).values({
-        orgId:        org.id,
-        username:     input.admin.username,
-        passwordHash: hashedPass,
-        name:         input.admin.name,
-        email:        input.admin.email ?? '',
-        role:         'admin',
-        status:       'active',
+        orgId:          org.id,
+        username:       input.admin.username,
+        passwordHash:   hashedPass,
+        passwordStatus,
+        name:           input.admin.name,
+        email:          input.admin.email ?? '',
+        role:           'admin',
       });
 
       // حفظ إعدادات التطبيق
