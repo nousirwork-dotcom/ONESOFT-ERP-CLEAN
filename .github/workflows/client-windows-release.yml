@@ -181,21 +181,32 @@ jobs:
             echo "⚠️  $ROUTER not found — skipping stub"
           fi
 
-      # ── إنشاء icon.ico بحجم 256x256 من icon.png ───────────────────────────
-      # electron-builder يتطلب 256x256 على الأقل — الـ ico الحالي 32x32 فقط
-      - name: Generate 256x256 icon.ico from icon.png
+      # ── إنشاء icon.ico مربع من icon.png ────────────────────────────────────
+      # المصدر: icon.png (قد لا يكون مربعاً) → نضيف حشو شفاف للوسط
+      # الأحجام المولَّدة: 256, 128, 64, 48, 32, 16 — كلها مربعة
+      - name: Generate square icon.ico from icon.png
         shell: pwsh
         run: |
           # Windows runners have ImageMagick (magick) pre-installed
           $png = "installer\resources\icon.png"
           $ico = "installer\resources\icon.ico"
-          # نولّد ICO بأحجام 256, 128, 64, 48, 32, 16
-          magick "$png" -resize 256x256 -define icon:auto-resize="256,128,64,48,32,16" "$ico"
-          Write-Host "✅ icon.ico generated — checking size..."
+          # نولّد ICO مربع 256x256 بحشو شفاف لضمان عدم تشويه الشعار
+          # -resize 256x256        → تصغير مع الحفاظ على النسبة
+          # -gravity center        → توسيط على Canvas
+          # -background transparent → حشو شفاف بدل أبيض
+          # -extent 256x256        → قص Canvas للمربع الكامل
+          magick "$png" -resize 256x256 -gravity center -background transparent -extent 256x256 -define icon:auto-resize="256,128,64,48,32,16" "$ico"
+          Write-Host "✅ icon.ico generated — checking size and dimensions..."
           $size = (Get-Item $ico).Length
           Write-Host "   Size: $size bytes"
           if ($size -lt 1000) { Write-Error "icon.ico too small — conversion may have failed"; exit 1 }
-          Write-Host "✅ icon.ico ready for electron-builder"
+          # التحقق أن الـ ICO مربع (أول بايتات تصف الأبعاد)
+          $bytes = [System.IO.File]::ReadAllBytes($ico)
+          $w = $bytes[6]; if ($w -eq 0) { $w = 256 }
+          $h = $bytes[7]; if ($h -eq 0) { $h = 256 }
+          Write-Host "   First image: ${w}x${h}"
+          if ($w -ne $h) { Write-Error "icon.ico images are NOT square (${w}x${h}) — icon.png may not be square"; exit 1 }
+          Write-Host "✅ icon.ico ready — square dimensions confirmed"
 
       # ── بناء Electron (main + preload + NSIS installer) ────────────────────
       - name: Build Electron installer
