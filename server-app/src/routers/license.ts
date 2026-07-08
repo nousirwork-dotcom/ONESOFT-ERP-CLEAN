@@ -40,7 +40,7 @@ export const licenseRouter = router({
               : false;
             return {
               valid:   !trialExpired,
-              error:   trialExpired ? 'expired' : ('trial' as string),
+              error:   trialExpired ? ('trial_expired' as string) : ('trial_active' as string),
               payload: null,
             };
           }
@@ -150,14 +150,15 @@ export const licenseRouter = router({
           ? new Date(org.subscriptionExpiry) < new Date()
           : false;
         return {
-          hasLicense:  false,
-          isExpired:   trialExpired,
-          isInvalid:   false,
-          orgCode:     org.code,
-          orgName:     org.name,
-          licenseId:   null,
-          licExpiry:   org.subscriptionExpiry?.toISOString() ?? null,
-          isTrial:     org.status === 'trial',
+          hasLicense:   false,
+          isExpired:    false,     // Trial لا يمنع تسجيل الدخول — AuthGuard يعالج الانتهاء
+          isInvalid:    false,
+          orgCode:      org.code,
+          orgName:      org.name,
+          licenseId:    null,
+          licExpiry:    org.subscriptionExpiry?.toISOString() ?? null,
+          isTrial:      org.status === 'trial',
+          trialExpired,
         };
       }
     } catch { /* DB غير متاح */ }

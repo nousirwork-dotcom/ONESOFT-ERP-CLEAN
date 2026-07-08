@@ -243,12 +243,14 @@ export default function LicenseActivationPage() {
   const curBranches = (stats as { current_branches?: number } | undefined)?.current_branches ?? 0;
   const mods        = new Set(p?.enabled_modules ?? []);
 
-  const isTrial     = isValid && lt === "trial";
-  const isLifetime  = isValid && lt === "lifetime";
-  const isExpired   = !isValid && err === "expired";
-  const isSlate     = !isValid && err === "license_not_found";
-  const isInvalid   = !isValid && (err === "invalid_signature" || err === "unknown_algorithm" || err === "unknown_kid" || err === "invalid_json");
-  const isDateTamper = !isValid && err === "date_manipulation_suspected";
+  const isTrial        = isValid && lt === "trial";
+  const isLifetime     = isValid && lt === "lifetime";
+  const isExpired      = !isValid && err === "expired";
+  const isTrialExpired = !isValid && err === "trial_expired";   // انتهت فترة التجربة
+  const isTrialActive  = !isValid && err === "trial_active";    // في فترة التجربة (بدون ملف ترخيص)
+  const isSlate        = !isValid && (err === "license_not_found" || isTrialActive);
+  const isInvalid      = !isValid && (err === "invalid_signature" || err === "unknown_algorithm" || err === "unknown_kid" || err === "invalid_json");
+  const isDateTamper   = !isValid && err === "date_manipulation_suspected";
 
   const trialDuration = p?.start_date && p?.expiry_date && isTrial
     ? Math.ceil((new Date(p.expiry_date + "T23:59:59Z").getTime() - new Date(p.start_date + "T00:00:00Z").getTime()) / 86_400_000)
@@ -320,6 +322,47 @@ export default function LicenseActivationPage() {
             {notice.ok ? <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" /> : <XCircle className="w-4 h-4 text-red-500 shrink-0" />}
             <span className="flex-1">{notice.msg}</span>
             <button onClick={() => setNotice(null)} className="text-xl leading-none opacity-40 hover:opacity-80">×</button>
+          </div>
+        )}
+
+        {/* ══ TRIAL EXPIRED BANNER ══════════════════════════════════════ */}
+        {isTrialExpired && (
+          <div className="rounded-2xl border-2 border-red-300 bg-red-50 overflow-hidden">
+            {/* رأس البانر */}
+            <div className="flex items-center gap-3 bg-red-600 px-6 py-4">
+              <AlertTriangle className="w-7 h-7 text-white shrink-0" />
+              <div>
+                <h2 className="text-[20px] font-black text-white leading-tight">انتهت فترة التجربة</h2>
+                <p className="text-[14px] text-red-100 mt-0.5">
+                  لا يمكن الوصول إلى النظام الكامل حتى يتم التفعيل أو تمديد الفترة التجريبية
+                </p>
+              </div>
+            </div>
+            {/* الخيارات المتاحة */}
+            <div className="p-5">
+              <p className="text-[15px] font-bold text-red-800 mb-4">الخيارات المتاحة:</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {[
+                  { icon: "⏳", title: "طلب تمديد التجربة",     desc: "تواصل مع مزود النظام لتمديد فترة التجربة",  action: "تواصل مع الدعم" },
+                  { icon: "🔑", title: "إدخال كود التفعيل",      desc: "أدخل كود التفعيل الذي حصلت عليه",           action: "اذهب للتفعيل ↓" },
+                  { icon: "📂", title: "استيراد ملف الترخيص",    desc: "استيراد ملف الترخيص من مزود النظام",        action: "اذهب للاستيراد ↓" },
+                  { icon: "📤", title: "تصدير طلب التفعيل",      desc: "أرسل Request Code لمزود النظام",             action: "اذهب لمعلومات الجهاز ↓" },
+                  { icon: "📧", title: "التواصل مع الدعم",        desc: "support@onesoft.sa",                        action: "نسخ البريد" },
+                  { icon: "📞", title: "الدعم الهاتفي",           desc: "920-XXX-XXXX",                              action: "اتصال" },
+                ].map((item, i) => (
+                  <div key={i} className="flex items-start gap-3 bg-white rounded-xl border border-red-200 px-4 py-3.5">
+                    <span className="text-2xl shrink-0 mt-0.5">{item.icon}</span>
+                    <div className="min-w-0">
+                      <p className="text-[15px] font-bold text-[#1B2B5C] leading-tight">{item.title}</p>
+                      <p className="text-[13px] text-[#6B7280] mt-0.5 leading-snug">{item.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[13px] text-red-600/80 mt-4 text-center">
+                ↓ أدوات التفعيل متوفرة أدناه في هذه الصفحة
+              </p>
+            </div>
           </div>
         )}
 

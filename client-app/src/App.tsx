@@ -293,6 +293,7 @@ const IS_PRODUCTION = import.meta.env.PROD;
 const LICENSE_BLOCKING_ERRORS = new Set([
   ...(IS_PRODUCTION ? ["license_not_found"] : []),
   "expired",
+  "trial_expired",           // فترة التجربة انتهت — يُوجَّه إلى /cfg/license
   "invalid_signature",
   "unknown_algorithm",
   "unknown_kid",
@@ -300,6 +301,7 @@ const LICENSE_BLOCKING_ERRORS = new Set([
   "invalid_json",
   "read_error",
 ]);
+// ملاحظة: trial_active ليس في القائمة — يسمح بالوصول الكامل أثناء التجربة
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const [location, navigate] = useLocation();

@@ -176,29 +176,37 @@ function OrgInfoCard({
   orgName,
   orgCode,
   licenseId,
+  isTrial,
   onRequestChangeOrg,
 }: {
   orgName:            string;
   orgCode:            string;
   licenseId:          string | null;
+  isTrial:            boolean;
   onRequestChangeOrg: () => void;
 }) {
   return (
     <div style={{
-      background: 'linear-gradient(135deg, rgba(var(--brand-primary-rgb)/0.07) 0%, rgba(var(--brand-primary-rgb)/0.02) 100%)',
-      border: '1.5px solid rgba(var(--brand-primary-rgb)/0.22)',
+      background: isTrial
+        ? 'linear-gradient(135deg, rgba(234,179,8,0.10) 0%, rgba(234,179,8,0.04) 100%)'
+        : 'linear-gradient(135deg, rgba(var(--brand-primary-rgb)/0.07) 0%, rgba(var(--brand-primary-rgb)/0.02) 100%)',
+      border: isTrial
+        ? '1.5px solid rgba(234,179,8,0.35)'
+        : '1.5px solid rgba(var(--brand-primary-rgb)/0.22)',
       borderRadius: 10, padding: '14px 18px', marginBottom: 16,
     }}>
       {/* رأس الكارت */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
         <div style={{
           width: 38, height: 38, borderRadius: 8,
-          background: 'rgba(var(--brand-primary-rgb)/0.12)',
+          background: isTrial ? 'rgba(234,179,8,0.15)' : 'rgba(var(--brand-primary-rgb)/0.12)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 20, flexShrink: 0,
-        }}>🏢</div>
+        }}>{isTrial ? '🧪' : '🏢'}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 11, color: 'var(--muted-foreground)', marginBottom: 2 }}>المؤسسة</div>
+          <div style={{ fontSize: 11, color: 'var(--muted-foreground)', marginBottom: 2 }}>
+            {isTrial ? 'نسخة تجريبية' : 'المؤسسة'}
+          </div>
           <div style={{
             fontSize: 15, fontWeight: 800, color: 'var(--foreground)',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -208,14 +216,16 @@ function OrgInfoCard({
         </div>
       </div>
 
-      {/* كود المؤسسة */}
+      {/* كود المؤسسة / التجربة */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8,
         background: 'var(--background)', border: '1px solid var(--border)',
         borderRadius: 7, padding: '6px 12px',
       }}>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 10, color: 'var(--muted-foreground)', marginBottom: 1 }}>كود المؤسسة</div>
+          <div style={{ fontSize: 10, color: 'var(--muted-foreground)', marginBottom: 1 }}>
+            {isTrial ? 'كود التجربة' : 'كود المؤسسة'}
+          </div>
           <div style={{
             fontFamily: "'Courier New', monospace",
             fontSize: 14, fontWeight: 700, letterSpacing: 0.8,
@@ -264,6 +274,7 @@ function LoginForm({
   orgCode,
   orgName,
   licenseId,
+  isTrial,
   onRequestChangeOrg,
   onForgotPassword,
 }: {
@@ -272,6 +283,7 @@ function LoginForm({
   orgCode:            string;
   orgName:            string;
   licenseId:          string | null;
+  isTrial:            boolean;
   onRequestChangeOrg: () => void;
   onForgotPassword:   () => void;
 }) {
@@ -325,6 +337,7 @@ function LoginForm({
         orgName={orgName}
         orgCode={orgCode}
         licenseId={licenseId}
+        isTrial={isTrial}
         onRequestChangeOrg={onRequestChangeOrg}
       />
 
@@ -649,6 +662,7 @@ export default function LoginPage() {
                     orgCode={licCtxQ.data.orgCode}
                     orgName={licCtxQ.data.orgName ?? licCtxQ.data.orgCode}
                     licenseId={licCtxQ.data.licenseId}
+                    isTrial={licCtxQ.data.isTrial ?? false}
                     onRequestChangeOrg={() => setShowChangeOrgDialog(true)}
                     onForgotPassword={() => setShowForgotPassword(true)}
                   />
