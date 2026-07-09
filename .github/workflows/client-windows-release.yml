@@ -193,11 +193,20 @@ jobs:
 
       # Download nssm.exe — needed to install OneSoft-Server as a Windows Service
       - name: Download nssm.exe
-        shell: bash
+        shell: pwsh
         run: |
-          curl -fsSL -o /tmp/nssm.zip "https://nssm.cc/release/nssm-2.24.zip"
-          unzip -j /tmp/nssm.zip "nssm-2.24/win64/nssm.exe" -d "installer/resources/bin"
-          echo "nssm.exe downloaded: $(wc -c < installer/resources/bin/nssm.exe) bytes"
+          choco install nssm --yes --no-progress 2>&1 | Out-Null
+          $src  = "C:\ProgramData\chocolatey\bin\nssm.exe"
+          $dest = "installer\resources\bin\nssm.exe"
+          if (-not (Test-Path $src)) {
+            $src = (Get-Command nssm -ErrorAction SilentlyContinue).Source
+          }
+          if (-not $src -or -not (Test-Path $src)) {
+            Write-Error "nssm.exe not found after choco install"; exit 1
+          }
+          Copy-Item $src $dest -Force
+          $size = (Get-Item $dest).Length
+          Write-Host "nssm.exe ready: $size bytes"
 
       # ── إنشاء icon.ico مربع من icon.png ────────────────────────────────────
       # المصدر: icon.png (قد لا يكون مربعاً) → نضيف حشو شفاف للوسط
