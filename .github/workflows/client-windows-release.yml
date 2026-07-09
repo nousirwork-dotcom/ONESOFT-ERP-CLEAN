@@ -191,6 +191,14 @@ jobs:
             echo "⚠️  $ROUTER not found — skipping stub"
           fi
 
+      # Download nssm.exe — needed to install OneSoft-Server as a Windows Service
+      - name: Download nssm.exe
+        shell: bash
+        run: |
+          curl -fsSL -o /tmp/nssm.zip "https://nssm.cc/release/nssm-2.24.zip"
+          unzip -j /tmp/nssm.zip "nssm-2.24/win64/nssm.exe" -d "installer/resources/bin"
+          echo "nssm.exe downloaded: $(wc -c < installer/resources/bin/nssm.exe) bytes"
+
       # ── إنشاء icon.ico مربع من icon.png ────────────────────────────────────
       # المصدر: icon.png (قد لا يكون مربعاً) → نضيف حشو شفاف للوسط
       # الأحجام المولَّدة: 256, 128, 64, 48, 32, 16 — كلها مربعة
@@ -311,16 +319,14 @@ jobs:
           $date    = (Get-Date -AsUTC).ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
           $name    = $ia32Exe.Name
 
-          $yml = @"
-version: $version
-files:
-  - url: $name
-    sha512: $sha512
-    size: $size
-path: $name
-sha512: $sha512
-releaseDate: '$date'
-"@
+          $yml = "version: $version`n" +
+                 "files:`n" +
+                 "  - url: $name`n" +
+                 "    sha512: $sha512`n" +
+                 "    size: $size`n" +
+                 "path: $name`n" +
+                 "sha512: $sha512`n" +
+                 "releaseDate: '$date'"
           Set-Content "$releaseDir/latest-ia32.yml" $yml -Encoding UTF8
           Write-Host "✅ latest-ia32.yml generated"
           Write-Host "   File  : $name"

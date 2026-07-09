@@ -2,7 +2,7 @@
   "_purpose":        "Staging — optional update test. Repo is public so raw.githubusercontent.com works without auth.",
   "_usage":          "Set: ONESOFT_UPDATE_URL=https://raw.githubusercontent.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/main/update-manifest.staging.json",
 
-  "_STAGING_STATUS": "✅ READY FOR TESTING — v1.0.4-staging-test-6 (fix: Windows spawnSync ETIMEDOUT detection + timeout 8s)",
+  "_STAGING_STATUS": "✅ READY FOR TESTING — v1.0.4-staging-test-7 (fix: bundle nssm.exe via CI download + fix YAML @\" heredoc)",
 
   "latestVersion":       "1.0.4",
   "minSupportedVersion": "1.0.0",
@@ -24,8 +24,8 @@
     "التحقق من رقم الجوال والبريد في شاشة المستخدمين"
   ],
 
-  "downloadUrl":   "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.4-staging-test-6/OneSoftSetup-1.0.4-x64.exe",
-  "fileSizeBytes": 80172606,
-  "sha512":        "j8L216eBAgTHWd/5rEoZ9RWrZz/gB9Y/qm+zJ9GDf3+rP9gweZeJFFmM2SrpiKWU3J0OT8z7rNj6us+vuvaBGQ==",
-  "publishedAt":   "2026-07-09T20:42:05Z"
+  "downloadUrl":   "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.4-staging-test-7/OneSoftSetup-1.0.4-x64.exe",
+  "fileSizeBytes": 80274256,
+  "sha512":        "y51d8DxgGCsMqK9Y6jjgpSawew3rdsWd+MlRhlyjlvT42DLMjIJpVf3L7e+//+pEKhC3zdf0mzId9rYGiak3gg==",
+  "publishedAt":   "2026-07-09T21:46:53Z"
 }
