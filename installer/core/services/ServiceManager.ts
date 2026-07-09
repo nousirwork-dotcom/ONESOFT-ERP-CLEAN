@@ -74,6 +74,15 @@ function execVerbose(
   if (stderr) emit({ level: exitCode !== 0 ? 'error' : 'warning',
                      message: `📥 stderr:\n${stderr.slice(0, 800)}`,   timestamp: now() });
 
+  // كشف ENOENT (الأمر غير موجود) وأخطاء spawnSync الأخرى
+  if (result.error) {
+    const errCode = (result.error as NodeJS.ErrnoException).code;
+    const errMsg  = errCode === 'ENOENT'
+      ? `❌ الأمر غير موجود (ENOENT): ${cmd} — تأكد من وجوده في المسار الصحيح`
+      : `⚠️ spawnSync error: ${errCode ?? result.error.message}`;
+    emit({ level: 'error', message: errMsg, timestamp: now() });
+  }
+
   emit({
     level: exitCode === 0 ? 'success' : 'error',
     message: `↩ exit code: ${exitCode}`,
@@ -525,12 +534,26 @@ export class ServiceManager {
     const nodePath = findNode();
     emit({ level: 'info', message: `📍 node.exe: ${nodePath}`, timestamp: now() });
 
-    // ── 3. إيجاد nssm.exe ──────────────────────────────────────────────────
+    // ── 3. فحص وجود nssm.exe (ضروري لتثبيت Windows Services) ──────────────
     emit({ level: 'info', message: `📍 nssm.exe: ${this.nssm}`, timestamp: now() });
-    const nssmExists = fs.existsSync(this.nssm) || this.nssm === 'nssm';
+    const nssmExists = fs.existsSync(this.nssm);
     if (!nssmExists) {
-      emit({ level: 'error', message: `❌ nssm.exe غير موجود في ${this.nssm}`, timestamp: now() });
+      // حاول كل مسار ممكن وأعرضه في السجل
+      const candidates = [
+        path.join(rp, 'bin', 'nssm.exe'),
+        path.join(__dirname, '..', '..', 'resources', 'bin', 'nssm.exe'),
+        path.join(process.cwd(), 'resources', 'bin', 'nssm.exe'),
+        'nssm.exe',
+      ];
+      emit({ level: 'error', message: `❌ nssm.exe غير موجود في المسار: ${this.nssm}`, timestamp: now() });
+      emit({ level: 'info',  message: `🔍 المسارات التي جُرِّبت:\n${candidates.map(c => `  • ${c}  [${fs.existsSync(c) ? '✅ موجود' : '❌ غير موجود'}]`).join('\n')}`, timestamp: now() });
+      throw new Error(
+        `❌ nssm.exe غير موجود — لا يمكن تثبيت Windows Services\n` +
+        `📍 المسار المتوقع: ${path.join(rp, 'bin', 'nssm.exe')}\n` +
+        `💡 هذا يشير إلى خلل في بناء المثبّت. يرجى إعادة تحميل الإصدار أو التواصل مع الدعم الفني.`,
+      );
     }
+    emit({ level: 'success', message: `✅ nssm.exe موجود (${Math.round(fs.statSync(this.nssm).size / 1024)} KB)`, timestamp: now() });
 
     const needsBackend = ['server', 'server+client', 'branch'].includes(deploymentType);
 
