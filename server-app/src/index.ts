@@ -298,11 +298,33 @@ if (existsSync(path.join(clientBuildPath, 'index.html'))) {
 //   3. إذا فشل التهيئة بعد كل المحاولات → process.exit(1) → NSSM يعيد التشغيل.
 
 console.log(`[4/6] Starting HTTP server on port ${ENV.port} (DB init will follow)...`);
-app.listen(ENV.port, () => {
+let _listenRetries = 0;
+const _maxListenRetries = 6;
+
+const server = app.listen(ENV.port, () => {
   console.log(`[5/6] ✅ OneSoft ERP listening on http://localhost:${ENV.port}`);
   logger.info('server', `OneSoft ERP HTTP server started on http://localhost:${ENV.port}`, {
     env: ENV.nodeEnv, electron: ENV.isElectron, status: 'db-initializing',
   });
+});
+
+server.on('error', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EADDRINUSE') {
+    _listenRetries++;
+    if (_listenRetries <= _maxListenRetries) {
+      console.error(`[5/6] ⚠️ المنفذ ${ENV.port} مشغول — إعادة المحاولة خلال 10s (${_listenRetries}/${_maxListenRetries})...`);
+      setTimeout(() => {
+        server.close();
+        server.listen(ENV.port);
+      }, 10_000);
+    } else {
+      console.error(`[5/6] ❌ المنفذ ${ENV.port} مشغول بعد ${_maxListenRetries} محاولات — الخروج.`);
+      process.exit(1);
+    }
+  } else {
+    console.error(`[5/6] ❌ خطأ في تشغيل الخادم: ${err.message}`);
+    process.exit(1);
+  }
 });
 
 // ── انتظار جاهزية قاعدة البيانات + إصلاح ذاتي للمخطط ───────────────────────
