@@ -145,7 +145,7 @@ function testScript(
   const result = spawnSync(nodePath, [scriptPath], {
     encoding: 'utf-8',
     stdio: 'pipe',
-    timeout: 5000,
+    timeout: 8000,
     windowsHide: true,
     env,
   });
@@ -153,10 +153,24 @@ function testScript(
   const stdout   = (result.stdout ?? '').trim();
   const stderr   = (result.stderr ?? '').trim();
   const exitCode = result.status;
-  const timedOut = result.signal === 'SIGTERM' || result.signal === 'SIGKILL' || exitCode === null;
 
-  if (stdout) emit({ level: 'info',    message: `stdout (5s):\n${stdout.slice(0, 3000)}`, timestamp: now() });
-  if (stderr) emit({ level: 'warning', message: `stderr (5s):\n${stderr.slice(0, 3000)}`, timestamp: now() });
+  // ── كشف انتهاء المهلة عبر جميع أنظمة التشغيل ──────────────────────────────
+  // على Windows، عندما تُنهي spawnSync العملية بسبب انتهاء المهلة:
+  //   • result.signal قد يكون null (لا يوجد UNIX signal حقيقي على Windows)
+  //   • result.status قد يكون 1 (ليس null كما يحدث على Linux/macOS)
+  //   • result.error.code === 'ETIMEDOUT' ← الطريقة الموثوقة على جميع المنصات
+  const timedOut =
+    result.signal === 'SIGTERM'
+    || result.signal === 'SIGKILL'
+    || exitCode === null
+    || (result.error as NodeJS.ErrnoException | undefined)?.code === 'ETIMEDOUT';
+
+  // دائماً نُصدر stdout/stderr للتشخيص (حتى لو كانا فارغَين يُشير ذلك لمشكلة مبكرة)
+  emit({ level: 'info',    message: `stdout (8s):\n${stdout.slice(0, 3000) || '(فارغ)'}`, timestamp: now() });
+  emit({ level: 'warning', message: `stderr (8s):\n${stderr.slice(0, 3000) || '(فارغ)'}`, timestamp: now() });
+  if (result.error) {
+    emit({ level: 'warning', message: `spawnSync error: ${(result.error as NodeJS.ErrnoException).code ?? result.error.message}`, timestamp: now() });
+  }
 
   // تنظيف الملف المؤقت بعد الانتهاء
   if (tempConfigPath) {
