@@ -1,6 +1,6 @@
 appId: com.onesoft.erp
 productName: OneSoft ERP
-artifactName: OneSoftSetup-${version}.${ext}
+artifactName: OneSoftSetup-${version}-${arch}.${ext}
 copyright: Copyright © 2026 OneSoft
 
 extraMetadata:
@@ -52,6 +52,7 @@ win:
     - target: nsis
       arch:
         - x64
+        - ia32
   icon: resources/icon.ico
   requestedExecutionLevel: requireAdministrator
   verifyUpdateCodeSignature: false
