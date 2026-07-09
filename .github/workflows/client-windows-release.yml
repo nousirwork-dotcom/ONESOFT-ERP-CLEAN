@@ -191,26 +191,13 @@ jobs:
             echo "⚠️  $ROUTER not found — skipping stub"
           fi
 
-      # ── تحميل nssm.exe (مدير خدمات Windows) ──────────────────────────────
-      # nssm.exe يُستخدم لتثبيت OneSoft-Server كـ Windows Service أثناء التثبيت.
-      # الملف غير محفوظ في الريبو (binary) لذا نحمّله هنا قبل electron-builder.
-      # نستخدم nssm-2.24 الإصدار الرسمي الثابت — x64 يعمل على جميع أجهزة 64-bit.
-      - name: Download nssm.exe (Windows service manager)
-        shell: pwsh
+      # Download nssm.exe — needed to install OneSoft-Server as a Windows Service
+      - name: Download nssm.exe
+        shell: bash
         run: |
-          $url  = "https://nssm.cc/release/nssm-2.24.zip"
-          $zip  = "$env:TEMP\nssm.zip"
-          $dest = "installer\resources\bin\nssm.exe"
-          Write-Host "⬇ Downloading nssm-2.24 from $url ..."
-          Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
-          Expand-Archive -Path $zip -DestinationPath "$env:TEMP\nssm-extracted" -Force
-          Copy-Item "$env:TEMP\nssm-extracted\nssm-2.24\win64\nssm.exe" $dest -Force
-          $size = (Get-Item $dest).Length
-          Write-Host "✅ nssm.exe ready at $dest ($size bytes)"
-          if ($size -lt 100000) { Write-Error "nssm.exe too small — download may have failed"; exit 1 }
-          # طباعة version للتحقق
-          $ver = & $dest "version" 2>&1
-          Write-Host "   nssm version: $ver"
+          curl -fsSL -o /tmp/nssm.zip "https://nssm.cc/release/nssm-2.24.zip"
+          unzip -j /tmp/nssm.zip "nssm-2.24/win64/nssm.exe" -d "installer/resources/bin"
+          echo "nssm.exe downloaded: $(wc -c < installer/resources/bin/nssm.exe) bytes"
 
       # ── إنشاء icon.ico مربع من icon.png ────────────────────────────────────
       # المصدر: icon.png (قد لا يكون مربعاً) → نضيف حشو شفاف للوسط
