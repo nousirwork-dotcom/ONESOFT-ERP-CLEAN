@@ -2,6 +2,7 @@ import { execSync, spawnSync } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as http from 'http';
+import * as os from 'os';
 import type {
   ServiceName, ServiceStatus, ServiceOperationResult,
   ProgressEvent, DeploymentType, AccessMode,
@@ -98,9 +99,46 @@ function testScript(
   nodePath: string, scriptPath: string, emit: Emit, label: string,
   databaseUrl?: string,  // مُمرَّر من installServices حتى يتمكن الكود القديم من الاتصال بـ onesoft_app
 ): { ok: boolean; timedOut: boolean; stdout: string; stderr: string; exitCode: number | null } {
+  const TEST_PORT = 19999;
   const cmdStr = `"${nodePath}" "${scriptPath}"`;
-  emit({ level: 'info', message: `🧪 اختبار ${label} (مهلة 5s):\n  ${cmdStr}`, timestamp: now() });
+  emit({ level: 'info', message: `🧪 اختبار ${label} (مهلة 5s، منفذ الاختبار: ${TEST_PORT}):\n  ${cmdStr}`, timestamp: now() });
   if (databaseUrl) emit({ level: 'info', message: `🔑 DATABASE_URL → ${databaseUrl.replace(/:([^:@]+)@/, ':***@')}`, timestamp: now() });
+
+  // ── إنشاء ملف إعدادات مؤقت بمنفذ الاختبار ─────────────────────────────────
+  // السبب الحرج: env.ts يقرأ backendPort من config.json (ليس من PORT env var).
+  // إذا لم نستبدل المسار، سيحاول الخادم ربط منفذ الإنتاج (3000) لا المنفذ المؤقت (19999)،
+  // مما يُسبب تعارض EADDRINUSE إذا كانت الخدمة تعمل بالفعل → crash → اختبار فاشل.
+  let tempConfigPath: string | null = null;
+  try {
+    const cfgDir  = process.platform === 'win32'
+      ? path.join(process.env['ProgramData'] || 'C:\\ProgramData', 'OneSoft', 'config')
+      : path.join(process.env['HOME'] || '/tmp', '.onesoft', 'config');
+    const cfgFile = path.join(cfgDir, 'onesoft.config.json');
+
+    if (fs.existsSync(cfgFile)) {
+      const original = JSON.parse(fs.readFileSync(cfgFile, 'utf-8')) as Record<string, unknown>;
+      const testCfg  = {
+        ...original,
+        server: { ...(original['server'] as Record<string, unknown> ?? {}), backendPort: TEST_PORT, frontendPort: TEST_PORT - 1 },
+      };
+      tempConfigPath = path.join(os.tmpdir(), `onesoft-test-${Date.now()}.json`);
+      fs.writeFileSync(tempConfigPath, JSON.stringify(testCfg, null, 2), 'utf-8');
+      emit({ level: 'info', message: `📄 config مؤقت للاختبار: ${tempConfigPath} (port=${TEST_PORT})`, timestamp: now() });
+    } else {
+      emit({ level: 'warning', message: `⚠️ config.json غير موجود — الخادم سيستخدم الإعدادات الافتراضية`, timestamp: now() });
+    }
+  } catch (e) {
+    emit({ level: 'warning', message: `⚠️ تعذّر إنشاء config مؤقت: ${e}`, timestamp: now() });
+  }
+
+  const env: Record<string, string> = {
+    ...process.env as Record<string, string>,
+    PORT:          String(TEST_PORT),
+    FRONTEND_PORT: String(TEST_PORT - 1),
+    NODE_ENV:      'production',
+    DATABASE_URL:  databaseUrl ?? '',
+  };
+  if (tempConfigPath) env['ONESOFT_CONFIG'] = tempConfigPath;
 
   // PORT مؤقت لتجنب التعارض مع الخدمات الفعلية
   // NODE_ENV=production + DATABASE_URL: كود جديد يقرأ config.json؛ كود قديم يستخدم DATABASE_URL
@@ -109,13 +147,7 @@ function testScript(
     stdio: 'pipe',
     timeout: 5000,
     windowsHide: true,
-    env: {
-      ...process.env,
-      PORT:          '19999',
-      FRONTEND_PORT: '19998',
-      NODE_ENV:      'production',
-      DATABASE_URL:  databaseUrl ?? '',  // إذا وُجد → يُمرَّر (للكود القديم)؛ كود جديد يقرأ config.json
-    },
+    env,
   });
 
   const stdout   = (result.stdout ?? '').trim();
@@ -125,6 +157,11 @@ function testScript(
 
   if (stdout) emit({ level: 'info',    message: `stdout (5s):\n${stdout.slice(0, 3000)}`, timestamp: now() });
   if (stderr) emit({ level: 'warning', message: `stderr (5s):\n${stderr.slice(0, 3000)}`, timestamp: now() });
+
+  // تنظيف الملف المؤقت بعد الانتهاء
+  if (tempConfigPath) {
+    try { fs.unlinkSync(tempConfigPath); } catch { /* ignore */ }
+  }
 
   if (timedOut) {
     emit({ level: 'success', message: `✅ ${label} يعمل — أُوقف بعد 5s دون تعطل`, timestamp: now() });
@@ -560,11 +597,21 @@ export class ServiceManager {
     // ── 7. تثبيت الخدمات وتسجيل نتيجة nssm كاملة ─────────────────────────
     if (needsBackend) {
       if (serverScript) {
-        this.installService(
+        const svcResult = this.installService(
           'OneSoft-Server', nodePath, serverScript,
           path.join(logsDir, 'server.log'), emit,
           backendEnvVars,
         );
+        if (!svcResult.ok) {
+          const errDetail = svcResult.installResult.stderr || svcResult.installResult.stdout || 'سبب غير محدد';
+          throw new Error(
+            `❌ فشل تثبيت خدمة OneSoft-Server — ${errDetail}\n` +
+            `💡 الحلول المحتملة:\n` +
+            `   1. أغلق نافذة "الخدمات" (services.msc) إن كانت مفتوحة\n` +
+            `   2. أعد تشغيل الجهاز ثم شغّل المعالج مجدداً\n` +
+            `   3. تحقق من صلاحيات Administrator`,
+          );
+        }
       } else {
         emit({ level: 'warning', message: '⚠️ تخطي OneSoft-Server — السكريبت غير متاح', timestamp: now() });
       }
