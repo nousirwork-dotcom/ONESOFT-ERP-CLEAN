@@ -2,7 +2,7 @@
   "_purpose":        "Staging — optional update test. Repo is public so raw.githubusercontent.com works without auth.",
   "_usage":          "Set: ONESOFT_UPDATE_URL=https://raw.githubusercontent.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/main/update-manifest.staging.json",
 
-  "_STAGING_STATUS": "✅ READY FOR TESTING — v1.0.4-staging-test-4 (fix: blank screen on reinstall → wizard shows automatically)",
+  "_STAGING_STATUS": "✅ READY FOR TESTING — v1.0.4-staging-test-5 (fix: Backend Server crash loop — testScript temp config + EADDRINUSE retry)",
 
   "latestVersion":       "1.0.4",
   "minSupportedVersion": "1.0.0",
@@ -24,8 +24,8 @@
     "التحقق من رقم الجوال والبريد في شاشة المستخدمين"
   ],
 
-  "downloadUrl":   "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.4-staging-test-4/OneSoftSetup-1.0.4-x64.exe",
-  "fileSizeBytes": 80172005,
-  "sha512":        "AX1buPbU9mOJFRbajpZQNh6tRFU1f7ftzDQhKFsdauL8E1B8fk8o3HdxMKzRNQh/lqac9ZZKkz51UYt2kkTH3Q==",
-  "publishedAt":   "2026-07-09T15:10:35.943Z"
+  "downloadUrl":   "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.4-staging-test-5/OneSoftSetup-1.0.4-x64.exe",
+  "fileSizeBytes": 80172535,
+  "sha512":        "hBhOgo6N4hRoPfo3DdDXDSmRZcB/61o+laZMl9Ou1MVv/92plvB/dPhk3yhBiaWRZIS2uvjoHajxKsyrisIlfQ==",
+  "publishedAt":   "2026-07-09T16:49:43.134Z"
 }
