@@ -319,16 +319,14 @@ jobs:
           $date    = (Get-Date -AsUTC).ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
           $name    = $ia32Exe.Name
 
-          $yml = @"
-version: $version
-files:
-  - url: $name
-    sha512: $sha512
-    size: $size
-path: $name
-sha512: $sha512
-releaseDate: '$date'
-"@
+          $yml = "version: $version`n" +
+                 "files:`n" +
+                 "  - url: $name`n" +
+                 "    sha512: $sha512`n" +
+                 "    size: $size`n" +
+                 "path: $name`n" +
+                 "sha512: $sha512`n" +
+                 "releaseDate: '$date'"
           Set-Content "$releaseDir/latest-ia32.yml" $yml -Encoding UTF8
           Write-Host "✅ latest-ia32.yml generated"
           Write-Host "   File  : $name"
