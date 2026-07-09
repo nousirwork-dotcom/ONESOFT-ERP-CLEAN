@@ -3,7 +3,7 @@
   "_usage":          "Set: ONESOFT_UPDATE_URL=https://raw.githubusercontent.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/main/update-manifest.staging-mandatory.json",
   "_warning":        "minSupportedVersion=1.0.4 يمنع الدخول لأي نسخة أقل — استخدم على VM فقط",
 
-  "_STAGING_STATUS": "🔴 NOT READY — building staging-test-3 (fix: backend port 3000 not responding)",
+  "_STAGING_STATUS": "✅ READY FOR TESTING — v1.0.4-staging-test-3 (fix: backend port 3000 now responds immediately)",
 
   "latestVersion":       "1.0.4",
   "minSupportedVersion": "1.0.4",
@@ -18,10 +18,10 @@
     "[اختبار إجباري] بعد التثبيت يفتح النظام مباشرةً دون طلب تحديث"
   ],
 
-  "downloadUrl":   "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.4-staging-test-2/OneSoftSetup-1.0.4.exe",
-  "fileSizeBytes": 80171828,
-  "sha512":        "1BZ3HHhaVfJwiHou2agT+zP0YMuqV8ogEOa6ZTTwFI+aK5kaydfS4p6VZ0kQB1NzQpJOu7d44ihvwgaMLuaDhQ==",
-  "publishedAt":   "2026-07-08T22:36:25.062Z",
+  "downloadUrl":   "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.4-staging-test-3/OneSoftSetup-1.0.4-x64.exe",
+  "fileSizeBytes": 80171934,
+  "sha512":        "qrh3ajx502yzSjlUcUq1DsrhHYdlBV4vt/7iXcQV6ld7QbG3Lk5gr4n8ktaSj7yn1dOGrh4ecryHatg0ezSZ+g==",
+  "publishedAt":   "2026-07-09T02:45:15.560Z",
 
   "_version_logic": "currentVersion(1.0.3) < minSupportedVersion(1.0.4) → إجباري. بعد التثبيت app.getVersion()=1.0.4 ≥ 1.0.4 → لا تحديث."
 }
