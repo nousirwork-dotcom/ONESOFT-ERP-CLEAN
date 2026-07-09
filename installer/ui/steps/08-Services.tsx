@@ -162,6 +162,11 @@ export default function Step09Services() {
         databaseUrl:    appDatabaseUrl,
       });
 
+      // التحقق من نجاح تثبيت الخدمات
+      if ((installResult as any)?.ok === false) {
+        throw new Error((installResult as any)?.error ?? 'فشل تثبيت الخدمات — سبب غير محدد');
+      }
+
       // إذا اختار المثبّت منافذ بديلة (لتجنب تعارض) — حدّث الإعدادات
       const actualBackendPort  = (installResult as any)?.backendPort  ?? 3000;
       const actualFrontendPort = (installResult as any)?.frontendPort ?? 5000;
