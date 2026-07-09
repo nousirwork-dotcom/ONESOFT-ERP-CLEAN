@@ -3,7 +3,7 @@ import type { Configuration } from 'electron-builder';
 const config: Configuration = {
   appId: 'com.onesoft.erp',
   productName: 'OneSoft ERP',
-  artifactName: 'OneSoftSetup-${version}.${ext}',
+  artifactName: 'OneSoftSetup-${version}-${arch}.${ext}',
   copyright: 'Copyright © 2026 OneSoft',
 
   // ── Windows metadata (shows in Settings → Apps & Programs and Features) ──
@@ -49,7 +49,7 @@ const config: Configuration = {
   ],
 
   win: {
-    target: [{ target: 'nsis', arch: ['x64'] }],
+    target: [{ target: 'nsis', arch: ['x64', 'ia32'] }],
     // ── Single canonical icon path ──
     icon: 'resources/icon.ico',
     requestedExecutionLevel: 'requireAdministrator',

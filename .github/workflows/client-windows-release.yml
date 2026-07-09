@@ -8,13 +8,20 @@ name: Client Windows Release — Security Verified
 #     ✔ verify:client-build — 21 اختبار على source + bundle
 #   Job 2 — build-windows  (Windows — يعتمد على نجاح Job 1)
 #     ✔ بناء installer/resources بـ CLIENT_BUILD=true
-#     ✔ بناء Electron installer (NSIS + win-unpacked)
-#     ✔ verify:installer على win-unpacked/resources/app.asar
-#     ✔ رفع artifacts: exe + win-unpacked + تقارير الأمان
+#     ✔ بناء Electron installer x64 + ia32 (NSIS)
+#     ✔ توليد latest.yml (x64) و latest-ia32.yml (ia32)
+#     ✔ verify:installer على win-unpacked (x64)
+#     ✔ رفع artifacts: كلا الـ exe + كلا الـ yml + تقارير الأمان
 #   Job 3 — release-gate
 #     ✔ يفشل إذا فشل أي job — يمنع GitHub Release
 #
 # أي فشل في verify:client-build أو verify:installer → exit 1 → لا إصدار
+#
+# ── Architecture naming ────────────────────────────────────────────────────
+#   OneSoftSetup-{version}-x64.exe   → Windows 64-bit  (الأجهزة الحديثة)
+#   OneSoftSetup-{version}-ia32.exe  → Windows 32-bit  (الأجهزة القديمة فقط)
+#   latest.yml      → auto-update manifest للـ x64
+#   latest-ia32.yml → auto-update manifest للـ ia32
 # ─────────────────────────────────────────────────────────────────────────────
 
 on:
@@ -223,23 +230,29 @@ jobs:
           # بناء electron main + preload + UI + installer
           pnpm run build
 
-      # ── البحث عن win-unpacked ──────────────────────────────────────────────
-      - name: Locate win-unpacked directory
+      # ── البحث عن win-unpacked (x64) ───────────────────────────────────────
+      - name: Locate win-unpacked directory (x64)
         id: find-unpacked
         shell: bash
         run: |
           # electron-builder يضع النتيجة في installer/release/ حسب electron-builder.yml
+          # x64 → win-unpacked/   |   ia32 → win-ia32-unpacked/
+          # نبحث عن x64 صراحةً لتشغيل verify:installer على الـ architecture الأساسي
           UNPACKED=$(find installer/release -type d -name "win-unpacked" 2>/dev/null | head -1)
           if [[ -z "$UNPACKED" ]]; then
-            UNPACKED=$(find installer/release -type d -name "*unpacked*" 2>/dev/null | head -1)
+            # fallback: أي unpacked لكن نستثني ia32 صراحةً
+            UNPACKED=$(find installer/release -type d -name "*unpacked*" 2>/dev/null | grep -v ia32 | head -1)
           fi
           if [[ -z "$UNPACKED" ]]; then
-            echo "❌ win-unpacked not found. Directory listing:"
+            echo "❌ win-unpacked (x64) not found. Directory listing:"
             find installer/release -type d 2>/dev/null | head -30 || echo "No release dir"
             exit 1
           fi
           echo "unpacked=$UNPACKED" >> $GITHUB_OUTPUT
-          echo "✅ Found: $UNPACKED"
+          echo "✅ Found x64 unpacked: $UNPACKED"
+          echo ""
+          echo "── All unpacked directories found ──"
+          find installer/release -type d -name "*unpacked*" 2>/dev/null || true
 
       # ── install @electron/asar لفحص app.asar ──────────────────────────────
       - name: Install asar CLI
@@ -270,28 +283,71 @@ jobs:
             echo "  Commit : ${{ github.sha }}"
             echo "  Ref    : ${{ github.ref }}"
             echo "  Dir    : $UNPACKED"
+            echo "  Arch   : x64 (primary)"
             echo "════════════════════════════════════════════════════════════════"
             bash scripts/verify-installer.sh "$UNPACKED" 2>&1 || true
           } | tee "$REPORT"
 
+      # ── توليد latest-ia32.yml لـ auto-update الـ ia32 ─────────────────────
+      # electron-builder يولّد latest.yml للـ x64 تلقائياً
+      # latest-ia32.yml نولّده يدوياً من ملف ia32.exe
+      - name: Generate latest-ia32.yml
+        shell: pwsh
+        run: |
+          $releaseDir = "installer/release"
+          $ia32Exe = Get-ChildItem $releaseDir -Filter "*-ia32.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $ia32Exe) {
+            Write-Warning "⚠️  No ia32 exe found — skipping latest-ia32.yml"
+            exit 0
+          }
+
+          $version = (Get-Content installer/package.json | ConvertFrom-Json).version
+          $size    = $ia32Exe.Length
+          $bytes   = [System.IO.File]::ReadAllBytes($ia32Exe.FullName)
+          $sha512  = [Convert]::ToBase64String(
+            [System.Security.Cryptography.SHA512]::Create().ComputeHash($bytes)
+          )
+          # ISO 8601 date — electron-updater expects this format
+          $date    = (Get-Date -AsUTC).ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
+          $name    = $ia32Exe.Name
+
+          $yml = @"
+version: $version
+files:
+  - url: $name
+    sha512: $sha512
+    size: $size
+path: $name
+sha512: $sha512
+releaseDate: '$date'
+"@
+          Set-Content "$releaseDir/latest-ia32.yml" $yml -Encoding UTF8
+          Write-Host "✅ latest-ia32.yml generated"
+          Write-Host "   File  : $name"
+          Write-Host "   Size  : $size bytes"
+          Write-Host "   SHA512: $($sha512.Substring(0,32))..."
+          Get-Content "$releaseDir/latest-ia32.yml"
+
       # ── رفع الـ artifacts ─────────────────────────────────────────────────
-      - name: "Upload: installer (.exe)"
+      - name: "Upload: installers (x64 + ia32)"
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: installer-exe
           path: |
-            installer/release/*.exe
+            installer/release/*-x64.exe
+            installer/release/*-ia32.exe
             installer/release/*.blockmap
             installer/release/latest.yml
+            installer/release/latest-ia32.yml
           retention-days: 90
           if-no-files-found: warn
 
-      - name: "Upload: win-unpacked (for manual inspection)"
+      - name: "Upload: win-unpacked x64 (for manual inspection)"
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: win-unpacked
+          name: win-unpacked-x64
           path: ${{ steps.find-unpacked.outputs.unpacked }}
           retention-days: 30
 
@@ -315,18 +371,32 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            installer/release/*.exe
+            installer/release/*-x64.exe
+            installer/release/*-ia32.exe
             installer/release/latest.yml
+            installer/release/latest-ia32.yml
             reports/*.txt
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
           name: "OneSoft ERP ${{ github.event.inputs.tag || github.ref_name }}"
           body: |
             ## OneSoft ERP ${{ github.event.inputs.tag || github.ref_name }}
 
+            ### تحميل الإصدار — اختر النسخة المناسبة لجهازك
+
+            | الملف | الاستخدام |
+            |-------|-----------|
+            | `OneSoftSetup-*-x64.exe` | **Windows 64-bit** — الأجهزة الحديثة (موصى به) |
+            | `OneSoftSetup-*-ia32.exe` | Windows 32-bit — الأجهزة القديمة فقط |
+
+            > **كيف أعرف نسخة Windows؟**
+            > ابحث في جهازك: `winver` أو اذهب إلى إعدادات → نظام → حول → نوع النظام
+
+            ---
+
             ### نتيجة الفحص الأمني
             ✅ **verify:client-build** — 21/21 اختبار نجح (Ubuntu)
             ✅ **verify:client-build** — 21/21 اختبار نجح (Windows)
-            ✅ **verify:installer** — win-unpacked نظيف تماماً
+            ✅ **verify:installer** — win-unpacked x64 نظيف تماماً
 
             ### ضمانات نسخة العميل
             | المكوّن | الحكم |
