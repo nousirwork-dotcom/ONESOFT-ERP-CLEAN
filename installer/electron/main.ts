@@ -257,6 +257,23 @@ function createWindow() {
 
   wc.on('did-fail-load', (_, code, desc, url, isMainFrame) => {
     writeLog('ERROR', `wc: did-fail-load  code=${code}  desc=${desc}  url=${url}  mainFrame=${isMainFrame}`);
+
+    // ── Reinstall fallback ────────────────────────────────────────────────
+    // يحدث عند إعادة التثبيت: version.json موجود من نسخة سابقة
+    // فيحاول التطبيق فتح localhost لكن الخدمة لم تُثبَّت بعد → شاشة بيضاء
+    //
+    // الحل: إذا فشل تحميل عنوان السيرفر (http/https) في الـ main frame
+    //        → ارجع لمعالج التثبيت تلقائياً (بدل الشاشة البيضاء)
+    if (isMainFrame && url && !url.startsWith('file://') && !url.startsWith('data:')) {
+      writeLog('WARN', `Server URL failed (code=${code}, url=${url}) — falling back to installer wizard`);
+      if (fs.existsSync(indexPath)) {
+        mainWindow?.loadFile(indexPath)
+          .then(() => writeLog('INFO', 'fallback loadFile — resolved (installer wizard shown)'))
+          .catch((e: unknown) => writeLog('ERROR', 'fallback loadFile — failed', e));
+      } else {
+        writeLog('ERROR', `fallback failed — indexPath not found: ${indexPath}`);
+      }
+    }
   });
 
   wc.on('did-fail-provisional-load', (_, code, desc, url) => {
