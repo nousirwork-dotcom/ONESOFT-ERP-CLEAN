@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/core/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/core/ui/table";
 import { trpc } from "@/shared/lib/trpc";
-import { CheckCircle2, Loader2, Pencil, Plus, Send, Shield, Trash2, Users as UsersIcon, XCircle } from "lucide-react";
+import { CheckCircle2, Loader2, Mail, Pencil, Phone, Plus, Send, Shield, Trash2, Users as UsersIcon, XCircle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -405,13 +405,16 @@ export default function Users() {
                       </div>
                     )}
                   </div>
-                  <Input
-                    className={phoneError ? "border-red-400" : ""}
-                    placeholder="+9665xxxxxxxx أو 05xxxxxxxx"
-                    value={form.phone}
-                    onChange={(e) => setField("phone", e.target.value)}
-                    dir="ltr" type="tel"
-                  />
+                  <div className="relative">
+                    <Phone className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+                    <Input
+                      className={`pl-6 ${phoneError ? "border-red-400" : ""}`}
+                      placeholder="+9665xxxxxxxx أو 05xxxxxxxx"
+                      value={form.phone}
+                      onChange={(e) => setField("phone", e.target.value)}
+                      dir="ltr" type="tel"
+                    />
+                  </div>
                   {phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}
                   {phoneChanged && selectedUser?.phoneVerifiedAt && (
                     <p className="text-amber-600 text-xs mt-1">⚠ تغيير الجوال سيلغي التحقق</p>
@@ -432,13 +435,17 @@ export default function Users() {
                       </div>
                     )}
                   </div>
-                  <Input
-                    placeholder="example@company.com"
-                    type="email"
-                    value={form.email}
-                    onChange={(e) => setField("email", e.target.value)}
-                    dir="ltr"
-                  />
+                  <div className="relative">
+                    <Mail className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+                    <Input
+                      className="pl-6"
+                      placeholder="example@company.com"
+                      type="email"
+                      value={form.email}
+                      onChange={(e) => setField("email", e.target.value)}
+                      dir="ltr"
+                    />
+                  </div>
                   {emailChanged && selectedUser?.emailVerifiedAt && (
                     <p className="text-amber-600 text-xs mt-1">⚠ تغيير البريد سيلغي التحقق</p>
                   )}
@@ -483,13 +490,16 @@ export default function Users() {
                     </div>
                   )}
                 </div>
-                <Input
-                  className={`${phoneError ? "border-red-400" : ""}`}
-                  placeholder="+9665xxxxxxxx أو 05xxxxxxxx"
-                  value={form.phone}
-                  onChange={(e) => setField("phone", e.target.value)}
-                  dir="ltr" type="tel"
-                />
+                <div className="relative">
+                  <Phone className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+                  <Input
+                    className={`pl-6 ${phoneError ? "border-red-400" : ""}`}
+                    placeholder="+9665xxxxxxxx أو 05xxxxxxxx"
+                    value={form.phone}
+                    onChange={(e) => setField("phone", e.target.value)}
+                    dir="ltr" type="tel"
+                  />
+                </div>
                 {phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}
                 {phoneChanged && selectedUser?.phoneVerifiedAt && (
                   <p className="text-amber-600 text-xs mt-1">⚠ تغيير الجوال سيلغي التحقق الحالي ويتطلب إعادة التحقق.</p>
@@ -519,13 +529,17 @@ export default function Users() {
                     </div>
                   )}
                 </div>
-                <Input
-                  placeholder="example@company.com"
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setField("email", e.target.value)}
-                  dir="ltr"
-                />
+                <div className="relative">
+                  <Mail className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+                  <Input
+                    className="pl-6"
+                    placeholder="example@company.com"
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => setField("email", e.target.value)}
+                    dir="ltr"
+                  />
+                </div>
                 {emailChanged && selectedUser?.emailVerifiedAt && (
                   <p className="text-amber-600 text-xs mt-1">⚠ تغيير البريد سيلغي التحقق الحالي ويتطلب إعادة التحقق.</p>
                 )}
