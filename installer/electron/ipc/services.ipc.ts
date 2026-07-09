@@ -17,11 +17,17 @@ export function registerServicesIpc(ipc: IpcMain, win: BrowserWindow | null) {
     backendPort?:   number;
     frontendPort?:  number;
   }) => {
-    const result = await mgr.installAll({
-      ...opts,
-      resourcesPath: process.resourcesPath ?? '',
-    }, emit as any);
-    return { ok: true, backendPort: result.backendPort, frontendPort: result.frontendPort };
+    try {
+      const result = await mgr.installAll({
+        ...opts,
+        resourcesPath: process.resourcesPath ?? '',
+      }, emit as any);
+      return { ok: true, backendPort: result.backendPort, frontendPort: result.frontendPort };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      emit({ level: 'error', message: `❌ installAll فشل: ${msg}`, timestamp: new Date().toISOString() });
+      return { ok: false, error: msg };
+    }
   });
 
   ipc.handle('services:status',  (_, name: ServiceName) => mgr.getStatus(name));
