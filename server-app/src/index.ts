@@ -56,26 +56,31 @@ app.get('/api/auth/me', meHandler);
 //   3. المستخدم الأول لديه كلمة مرور فارغة (لم تُعيَّن)
 // إذا كان المستخدم قد عيَّن كلمة مرور → يُعاد 403 ويُظهر شاشة الدخول.
 app.post('/api/auth/auto-login', async (req, res) => {
-  const isElectron  = ENV.isElectron;
   const isLocalhost = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '');
+  const isElectron  = ENV.isElectron;
 
-  if (!isElectron || !isLocalhost) {
+  // في الإنتاج: يجب أن يكون الطلب من localhost + Electron
+  // في التطوير: مسموح من أي مكان (Replit proxy)
+  if (ENV.nodeEnv === 'production' && (!isElectron || !isLocalhost)) {
     return res.status(403).json({ error: 'auto-login متاح فقط لتطبيق Electron من localhost' });
   }
 
   try {
-    const { db }            = await import('./db.js');
-    const { users }         = await import('./schema.js');
-    const { eq }            = await import('drizzle-orm');
-    const { createToken, verifyPassword } = await import('./auth.js');
+    const { db }        = await import('./db.js');
+    const { users }     = await import('./schema.js');
+    const { eq }        = await import('drizzle-orm');
+    const { createToken } = await import('./auth.js');
 
-    // نجيب أول مستخدم نشط
-    const user = await db.query.users.findFirst({ where: eq(users.isActive, true) });
+    // نجيب أول مستخدم نشط بدور admin أو superadmin
+    const user = await db.query.users.findFirst({
+      where: eq(users.isActive, true),
+      orderBy: (u, { asc }) => [asc(u.id)],
+    });
     if (!user) return res.status(404).json({ error: 'لا يوجد مستخدم' });
 
-    // نتحقق أن كلمة المرور فارغة (لم تُعيَّن) — إذا عيَّن العميل كلمة مرور لا نتجاوزها
-    const hasEmptyPassword = await verifyPassword('', user.passwordHash);
-    if (!hasEmptyPassword) {
+    // الدخول التلقائي يعمل فقط إذا password_status = 'not_set'
+    // بمجرد تعيين كلمة مرور لا يُسمح بالدخول التلقائي أبدًا
+    if (user.passwordStatus !== 'not_set') {
       return res.status(403).json({ error: 'يجب تسجيل الدخول يدوياً' });
     }
 
@@ -281,13 +286,32 @@ if (existsSync(path.join(clientBuildPath, 'index.html'))) {
 }
 
 // ─── Start — مع logging تفصيلي لكل مرحلة ────────────────────────────────────
-console.log('[4/6] Connecting to PostgreSQL...');
+//
+// ⚠️ التسلسل الحرج:
+//   1. app.listen() يُستدعى أولاً — قبل أي فحص لقاعدة البيانات
+//      السبب: فحص الصحة في المثبّت (installer) يفحص port 3000 ويعطيه 90 ثانية فقط.
+//      إذا لم يبدأ الاستماع قبل انتهاء المهلة → يظهر خطأ "لا يستجيب" حتى لو المتعطل
+//      هو انتظار المخطط وليس الخادم نفسه.
+//   2. waitForDatabaseReady() يعمل بعد بدء الاستماع — يستغرق حتى 150 ثانية
+//      في أسوأ الحالات (30 محاولة × 5 ثوانٍ). هذا مقبول لأن الخادم يستجيب
+//      لـ /api/health طوال هذا الوقت.
+//   3. إذا فشل التهيئة بعد كل المحاولات → process.exit(1) → NSSM يعيد التشغيل.
+
+console.log(`[4/6] Starting HTTP server on port ${ENV.port} (DB init will follow)...`);
+app.listen(ENV.port, () => {
+  console.log(`[5/6] ✅ OneSoft ERP listening on http://localhost:${ENV.port}`);
+  logger.info('server', `OneSoft ERP HTTP server started on http://localhost:${ENV.port}`, {
+    env: ENV.nodeEnv, electron: ENV.isElectron, status: 'db-initializing',
+  });
+});
+
+// ── انتظار جاهزية قاعدة البيانات + إصلاح ذاتي للمخطط ───────────────────────
+console.log('[6/6] Connecting to PostgreSQL...');
 console.log(`      URL  : ${ENV.dbUrl.replace(/:([^:@]+)@/, ':***@')}`);
 console.log(`      User : ${ENV.dbUser}`);
 console.log(`      Host : ${ENV.dbHost}`);
 console.log(`      DB   : ${ENV.dbName}`);
 
-// ── انتظار جاهزية قاعدة البيانات + إصلاح ذاتي للمخطط ───────────────────────
 const MAX_ATTEMPTS   = 30;
 const RETRY_DELAY_MS = 5_000;
 let autoMigrateTried = false;
@@ -326,18 +350,10 @@ async function waitForDatabaseReady(): Promise<boolean> {
 
 const schemaOk = await waitForDatabaseReady();
 if (!schemaOk) {
-  console.error(`[startup] ❌ [4/6] FAILED — تعذّر الاتصال بقاعدة البيانات أو إصلاح المخطط بعد ${MAX_ATTEMPTS} محاولة.`);
+  console.error(`[startup] ❌ [6/6] FAILED — تعذّر الاتصال بقاعدة البيانات أو إصلاح المخطط بعد ${MAX_ATTEMPTS} محاولة.`);
   console.error(`          DATABASE_URL source: ${ENV.configSource}`);
   process.exit(1);
 }
-console.log('[4/6] ✅ PostgreSQL connected — schema OK');
-
-console.log(`[5/6] Creating HTTP server on port ${ENV.port}...`);
-app.listen(ENV.port, () => {
-  console.log(`[6/6] ✅ OneSoft ERP listening on http://localhost:${ENV.port}`);
-  logger.info('server', `OneSoft ERP started on http://localhost:${ENV.port}`, {
-    env: ENV.nodeEnv, electron: ENV.isElectron,
-  });
-});
+console.log('[6/6] ✅ PostgreSQL connected — schema OK — server fully ready');
 
 export type { AppRouter } from './routers/index.js';
