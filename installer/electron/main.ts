@@ -198,6 +198,10 @@ import { registerDeploymentIpc }   from './ipc/deployment.ipc.js';
 
 let mainWindow: BrowserWindow | null = null;
 
+// عدد محاولات إعادة الاتصال بالسيرفر بعد التثبيت
+let serverLoadRetries = 0;
+const MAX_SERVER_RETRIES = 10;   // 10 × 3s = 30 ثانية
+
 // ─── createWindow ─────────────────────────────────────────────────────────────
 function createWindow() {
   const preloadPath = path.join(__dirname, 'preload.js');
@@ -258,20 +262,39 @@ function createWindow() {
   wc.on('did-fail-load', (_, code, desc, url, isMainFrame) => {
     writeLog('ERROR', `wc: did-fail-load  code=${code}  desc=${desc}  url=${url}  mainFrame=${isMainFrame}`);
 
-    // ── Reinstall fallback ────────────────────────────────────────────────
-    // يحدث عند إعادة التثبيت: version.json موجود من نسخة سابقة
-    // فيحاول التطبيق فتح localhost لكن الخدمة لم تُثبَّت بعد → شاشة بيضاء
+    // ── Server retry / Reinstall fallback ─────────────────────────────────
+    // السيناريوهان الممكنان لفشل تحميل http://localhost:PORT:
     //
-    // الحل: إذا فشل تحميل عنوان السيرفر (http/https) في الـ main frame
-    //        → ارجع لمعالج التثبيت تلقائياً (بدل الشاشة البيضاء)
+    //   1. أول فتح بعد التثبيت: الـ Windows Service تحتاج بضع ثوانٍ لتبدأ
+    //      → أعد المحاولة حتى MAX_SERVER_RETRIES مرة (كل 3 ثوانٍ = 30 ث)
+    //
+    //   2. إعادة تثبيت: version.json موجود لكن الخدمة لم تُثبَّت بعد
+    //      → بعد انتهاء المحاولات، ارجع لمعالج التثبيت
+    //
     if (isMainFrame && url && !url.startsWith('file://') && !url.startsWith('data:')) {
-      writeLog('WARN', `Server URL failed (code=${code}, url=${url}) — falling back to installer wizard`);
-      if (fs.existsSync(indexPath)) {
-        mainWindow?.loadFile(indexPath)
-          .then(() => writeLog('INFO', 'fallback loadFile — resolved (installer wizard shown)'))
-          .catch((e: unknown) => writeLog('ERROR', 'fallback loadFile — failed', e));
+      if (isAlreadyInstalled() && serverLoadRetries < MAX_SERVER_RETRIES) {
+        serverLoadRetries++;
+        const delay = 3000;
+        writeLog('WARN',
+          `Server not ready — retry ${serverLoadRetries}/${MAX_SERVER_RETRIES} in ${delay}ms (url=${url}, code=${code})`);
+        setTimeout(() => {
+          const port = readServerPort();
+          const retryUrl = `http://localhost:${port}`;
+          writeLog('INFO', `retry ${serverLoadRetries}: loadURL ${retryUrl}`);
+          mainWindow?.loadURL(retryUrl)
+            .catch((e: unknown) => writeLog('ERROR', `retry ${serverLoadRetries}: loadURL rejected`, e));
+        }, delay);
       } else {
-        writeLog('ERROR', `fallback failed — indexPath not found: ${indexPath}`);
+        serverLoadRetries = 0;
+        writeLog('WARN',
+          `Server URL failed after retries (code=${code}, url=${url}) — falling back to installer wizard`);
+        if (fs.existsSync(indexPath)) {
+          mainWindow?.loadFile(indexPath)
+            .then(() => writeLog('INFO', 'fallback loadFile — resolved (installer wizard shown)'))
+            .catch((e: unknown) => writeLog('ERROR', 'fallback loadFile — failed', e));
+        } else {
+          writeLog('ERROR', `fallback failed — indexPath not found: ${indexPath}`);
+        }
       }
     }
   });
