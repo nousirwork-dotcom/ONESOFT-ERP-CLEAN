@@ -2,7 +2,7 @@
   "_purpose":        "Staging — optional update test. Repo is public so raw.githubusercontent.com works without auth.",
   "_usage":          "Set: ONESOFT_UPDATE_URL=https://raw.githubusercontent.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/main/update-manifest.staging.json",
 
-  "_STAGING_STATUS": "✅ READY FOR TESTING — v1.0.4-staging-test-2",
+  "_STAGING_STATUS": "🔴 NOT READY — building staging-test-3 (fix: backend port 3000 not responding)",
 
   "latestVersion":       "1.0.4",
   "minSupportedVersion": "1.0.0",

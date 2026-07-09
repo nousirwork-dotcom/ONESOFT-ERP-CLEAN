@@ -286,13 +286,32 @@ if (existsSync(path.join(clientBuildPath, 'index.html'))) {
 }
 
 // ─── Start — مع logging تفصيلي لكل مرحلة ────────────────────────────────────
-console.log('[4/6] Connecting to PostgreSQL...');
+//
+// ⚠️ التسلسل الحرج:
+//   1. app.listen() يُستدعى أولاً — قبل أي فحص لقاعدة البيانات
+//      السبب: فحص الصحة في المثبّت (installer) يفحص port 3000 ويعطيه 90 ثانية فقط.
+//      إذا لم يبدأ الاستماع قبل انتهاء المهلة → يظهر خطأ "لا يستجيب" حتى لو المتعطل
+//      هو انتظار المخطط وليس الخادم نفسه.
+//   2. waitForDatabaseReady() يعمل بعد بدء الاستماع — يستغرق حتى 150 ثانية
+//      في أسوأ الحالات (30 محاولة × 5 ثوانٍ). هذا مقبول لأن الخادم يستجيب
+//      لـ /api/health طوال هذا الوقت.
+//   3. إذا فشل التهيئة بعد كل المحاولات → process.exit(1) → NSSM يعيد التشغيل.
+
+console.log(`[4/6] Starting HTTP server on port ${ENV.port} (DB init will follow)...`);
+app.listen(ENV.port, () => {
+  console.log(`[5/6] ✅ OneSoft ERP listening on http://localhost:${ENV.port}`);
+  logger.info('server', `OneSoft ERP HTTP server started on http://localhost:${ENV.port}`, {
+    env: ENV.nodeEnv, electron: ENV.isElectron, status: 'db-initializing',
+  });
+});
+
+// ── انتظار جاهزية قاعدة البيانات + إصلاح ذاتي للمخطط ───────────────────────
+console.log('[6/6] Connecting to PostgreSQL...');
 console.log(`      URL  : ${ENV.dbUrl.replace(/:([^:@]+)@/, ':***@')}`);
 console.log(`      User : ${ENV.dbUser}`);
 console.log(`      Host : ${ENV.dbHost}`);
 console.log(`      DB   : ${ENV.dbName}`);
 
-// ── انتظار جاهزية قاعدة البيانات + إصلاح ذاتي للمخطط ───────────────────────
 const MAX_ATTEMPTS   = 30;
 const RETRY_DELAY_MS = 5_000;
 let autoMigrateTried = false;
@@ -331,18 +350,10 @@ async function waitForDatabaseReady(): Promise<boolean> {
 
 const schemaOk = await waitForDatabaseReady();
 if (!schemaOk) {
-  console.error(`[startup] ❌ [4/6] FAILED — تعذّر الاتصال بقاعدة البيانات أو إصلاح المخطط بعد ${MAX_ATTEMPTS} محاولة.`);
+  console.error(`[startup] ❌ [6/6] FAILED — تعذّر الاتصال بقاعدة البيانات أو إصلاح المخطط بعد ${MAX_ATTEMPTS} محاولة.`);
   console.error(`          DATABASE_URL source: ${ENV.configSource}`);
   process.exit(1);
 }
-console.log('[4/6] ✅ PostgreSQL connected — schema OK');
-
-console.log(`[5/6] Creating HTTP server on port ${ENV.port}...`);
-app.listen(ENV.port, () => {
-  console.log(`[6/6] ✅ OneSoft ERP listening on http://localhost:${ENV.port}`);
-  logger.info('server', `OneSoft ERP started on http://localhost:${ENV.port}`, {
-    env: ENV.nodeEnv, electron: ENV.isElectron,
-  });
-});
+console.log('[6/6] ✅ PostgreSQL connected — schema OK — server fully ready');
 
 export type { AppRouter } from './routers/index.js';

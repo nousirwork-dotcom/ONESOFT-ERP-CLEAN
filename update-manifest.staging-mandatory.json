@@ -3,7 +3,7 @@
   "_usage":          "Set: ONESOFT_UPDATE_URL=https://raw.githubusercontent.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/main/update-manifest.staging-mandatory.json",
   "_warning":        "minSupportedVersion=1.0.4 يمنع الدخول لأي نسخة أقل — استخدم على VM فقط",
 
-  "_STAGING_STATUS": "✅ READY FOR TESTING — v1.0.4-staging-test-2",
+  "_STAGING_STATUS": "🔴 NOT READY — building staging-test-3 (fix: backend port 3000 not responding)",
 
   "latestVersion":       "1.0.4",
   "minSupportedVersion": "1.0.4",
