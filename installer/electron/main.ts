@@ -200,7 +200,7 @@ let mainWindow: BrowserWindow | null = null;
 
 // عدد محاولات إعادة الاتصال بالسيرفر بعد التثبيت
 let serverLoadRetries = 0;
-const MAX_SERVER_RETRIES = 5;   // 5 × 3s = 15 ثانية
+const MAX_SERVER_RETRIES = 15;  // 15 × 4s = 60 ثانية — وقت كافٍ لبدء Windows Service
 
 // صفحة "جارٍ الاتصال..." تُعرض أثناء انتظار بدء الـ Windows Service
 function connectingPageHtml(attempt: number, max: number): string {
@@ -289,19 +289,16 @@ function createWindow() {
   wc.on('did-fail-load', (_, code, desc, url, isMainFrame) => {
     writeLog('ERROR', `wc: did-fail-load  code=${code}  desc=${desc}  url=${url}  mainFrame=${isMainFrame}`);
 
-    // ── Server retry / Reinstall fallback ─────────────────────────────────
-    // السيناريوهان الممكنان لفشل تحميل http://localhost:PORT:
-    //
-    //   1. أول فتح بعد التثبيت: الـ Windows Service تحتاج بضع ثوانٍ لتبدأ
-    //      → أعد المحاولة حتى MAX_SERVER_RETRIES مرة (كل 3 ثوانٍ = 30 ث)
-    //
-    //   2. إعادة تثبيت: version.json موجود لكن الخدمة لم تُثبَّت بعد
-    //      → بعد انتهاء المحاولات، ارجع لمعالج التثبيت
+    // ── Server retry logic ────────────────────────────────────────────────
+    // فشل تحميل http://localhost:PORT:
+    //   الـ Windows Service تحتاج حتى 60 ثانية لتبدأ بعد التثبيت/إعادة التشغيل
+    //   → أعد المحاولة حتى MAX_SERVER_RETRIES مرة (كل 4 ثوانٍ = 60 ث إجمالاً)
+    //   → لا نحذف version.json أبداً — إذا انتهت المحاولات نعرض صفحة خطأ بزر retry
     //
     if (isMainFrame && url && !url.startsWith('file://') && !url.startsWith('data:')) {
-      if (isAlreadyInstalled() && serverLoadRetries < MAX_SERVER_RETRIES) {
+      if (serverLoadRetries < MAX_SERVER_RETRIES) {
         serverLoadRetries++;
-        const delay = 3000;
+        const delay = 4000;
         writeLog('WARN',
           `Server not ready — retry ${serverLoadRetries}/${MAX_SERVER_RETRIES} in ${delay}ms (url=${url}, code=${code})`);
         // عرض صفحة "جارٍ الاتصال..." بدلاً من الصفحة البيضاء
@@ -316,26 +313,31 @@ function createWindow() {
         }, delay);
       } else {
         serverLoadRetries = 0;
-        writeLog('WARN',
-          `Server URL failed after all retries (code=${code}, url=${url}) — opening installer wizard`);
-        // احذف version.json القديم حتى يعمل معالج التثبيت من البداية
-        try {
-          const vf = path.join(
-            process.env['ProgramData'] || 'C:\\ProgramData',
-            'OneSoft', 'version.json',
-          );
-          if (fs.existsSync(vf)) {
-            fs.unlinkSync(vf);
-            writeLog('INFO', `Deleted stale version.json: ${vf}`);
-          }
-        } catch (e) {
-          writeLog('WARN', 'Could not delete version.json', e);
-        }
-        // استدعاء loadFile مباشرة — بدون existsSync لأن ASAR يُعيد false بشكل مضلّل
-        writeLog('INFO', `loading wizard: ${indexPath}`);
-        mainWindow?.loadFile(indexPath)
-          .then(() => writeLog('INFO', 'fallback loadFile — installer wizard shown'))
-          .catch((e: unknown) => writeLog('ERROR', 'fallback loadFile — failed', e));
+        writeLog('ERROR',
+          `Server URL failed after all retries (code=${code}, url=${url}) — showing error page`);
+        // لا نحذف version.json ولا نعرض المعالج — البرنامج مثبَّت لكن الخادم لا يستجيب
+        // نعرض صفحة خطأ واضحة مع زر "إعادة المحاولة"
+        const port = readServerPort();
+        const errPage = `data:text/html;charset=utf-8,<!DOCTYPE html>
+<html dir="rtl" lang="ar"><head><meta charset="utf-8">
+<style>
+body{margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;
+background:#F8FAFC;font-family:system-ui,sans-serif;direction:rtl;}
+.box{text-align:center;max-width:480px;padding:32px;}
+h2{font-size:20px;color:#1E344F;margin:0 0 8px;}
+p{font-size:13px;color:#6B7280;margin:4px 0;}
+button{margin-top:24px;padding:10px 28px;background:#3B82F6;color:#fff;
+border:none;border-radius:8px;font-size:15px;cursor:pointer;}
+button:hover{background:#2563EB;}
+</style></head>
+<body><div class="box">
+<div style="font-size:52px">⚙️</div>
+<h2>الخادم لا يستجيب</h2>
+<p>جارٍ تشغيل خدمة OneSoft Server...</p>
+<p style="font-size:12px;margin-top:8px">إذا استمرت المشكلة، افتح services.msc وتحقق من خدمة <b>OneSoftServer</b></p>
+<button onclick="window.location.href='http://localhost:${port}'">إعادة المحاولة</button>
+</div></body></html>`;
+        mainWindow?.loadURL(errPage).catch(() => { /* ignore */ });
       }
     } else if (isMainFrame && url && url.startsWith('file://') && code !== 0) {
       // فشل تحميل ملف file:// (مثل index.html) — اعرض صفحة تشخيص بدلاً من الصفحة البيضاء
