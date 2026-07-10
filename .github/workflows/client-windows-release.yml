@@ -196,14 +196,18 @@ jobs:
         shell: pwsh
         run: |
           choco install nssm --yes --no-progress 2>&1 | Out-Null
-          $src  = "C:\ProgramData\chocolatey\bin\nssm.exe"
           $dest = "installer\resources\bin\nssm.exe"
-          if (-not (Test-Path $src)) {
-            $src = (Get-Command nssm -ErrorAction SilentlyContinue).Source
-          }
-          if (-not $src -or -not (Test-Path $src)) {
+          # الملف الحقيقي في lib\nssm\tools — وليس الـ shim في bin\
+          $candidates = @(
+            "C:\ProgramData\chocolatey\lib\nssm\tools\nssm.exe",
+            "C:\ProgramData\chocolatey\lib\nssm\tools\nssm\nssm.exe",
+            "C:\ProgramData\chocolatey\bin\nssm.exe"
+          )
+          $src = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $src) {
             Write-Error "nssm.exe not found after choco install"; exit 1
           }
+          Write-Host "nssm.exe source: $src"
           Copy-Item $src $dest -Force
           $size = (Get-Item $dest).Length
           Write-Host "nssm.exe ready: $size bytes"
