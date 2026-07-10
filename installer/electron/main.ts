@@ -200,7 +200,31 @@ let mainWindow: BrowserWindow | null = null;
 
 // عدد محاولات إعادة الاتصال بالسيرفر بعد التثبيت
 let serverLoadRetries = 0;
-const MAX_SERVER_RETRIES = 10;   // 10 × 3s = 30 ثانية
+const MAX_SERVER_RETRIES = 5;   // 5 × 3s = 15 ثانية
+
+// صفحة "جارٍ الاتصال..." تُعرض أثناء انتظار بدء الـ Windows Service
+function connectingPageHtml(attempt: number, max: number): string {
+  const dots = '.'.repeat((attempt % 3) + 1);
+  return `data:text/html;charset=utf-8,<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head><meta charset="utf-8">
+<style>
+  body { margin:0; display:flex; align-items:center; justify-content:center;
+         min-height:100vh; background:#F8FAFC; font-family:system-ui,sans-serif; direction:rtl; }
+  .box { text-align:center; color:#1E344F; }
+  .logo { font-size:48px; margin-bottom:16px; }
+  h2 { font-size:20px; margin:0 0 8px; }
+  p  { font-size:14px; color:#6B7280; margin:0 0 4px; }
+  .dots { font-size:24px; color:#3B82F6; letter-spacing:4px; margin-top:16px; }
+</style></head>
+<body><div class="box">
+  <div class="logo">⚙️</div>
+  <h2>OneSoft ERP</h2>
+  <p>جارٍ تشغيل الخادم${dots}</p>
+  <p style="font-size:12px;color:#9CA3AF">المحاولة ${attempt} من ${max}</p>
+  <div class="dots">●●●</div>
+</div></body></html>`;
+}
 
 // ─── createWindow ─────────────────────────────────────────────────────────────
 function createWindow() {
@@ -277,6 +301,9 @@ function createWindow() {
         const delay = 3000;
         writeLog('WARN',
           `Server not ready — retry ${serverLoadRetries}/${MAX_SERVER_RETRIES} in ${delay}ms (url=${url}, code=${code})`);
+        // عرض صفحة "جارٍ الاتصال..." بدلاً من الصفحة البيضاء
+        mainWindow?.loadURL(connectingPageHtml(serverLoadRetries, MAX_SERVER_RETRIES))
+          .catch(() => { /* ignore */ });
         setTimeout(() => {
           const port = readServerPort();
           const retryUrl = `http://localhost:${port}`;
@@ -287,10 +314,23 @@ function createWindow() {
       } else {
         serverLoadRetries = 0;
         writeLog('WARN',
-          `Server URL failed after retries (code=${code}, url=${url}) — falling back to installer wizard`);
+          `Server URL failed after all retries (code=${code}, url=${url}) — opening installer wizard`);
+        // احذف version.json القديم حتى يعمل معالج التثبيت من البداية
+        try {
+          const vf = path.join(
+            process.env['ProgramData'] || 'C:\\ProgramData',
+            'OneSoft', 'version.json',
+          );
+          if (fs.existsSync(vf)) {
+            fs.unlinkSync(vf);
+            writeLog('INFO', `Deleted stale version.json: ${vf}`);
+          }
+        } catch (e) {
+          writeLog('WARN', 'Could not delete version.json', e);
+        }
         if (fs.existsSync(indexPath)) {
           mainWindow?.loadFile(indexPath)
-            .then(() => writeLog('INFO', 'fallback loadFile — resolved (installer wizard shown)'))
+            .then(() => writeLog('INFO', 'fallback loadFile — installer wizard shown'))
             .catch((e: unknown) => writeLog('ERROR', 'fallback loadFile — failed', e));
         } else {
           writeLog('ERROR', `fallback failed — indexPath not found: ${indexPath}`);
