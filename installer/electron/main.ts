@@ -229,11 +229,14 @@ function connectingPageHtml(attempt: number, max: number): string {
 // ─── createWindow ─────────────────────────────────────────────────────────────
 function createWindow() {
   const preloadPath = path.join(__dirname, 'preload.js');
-  const indexPath   = path.join(__dirname, '..', '..', 'dist-ui', 'index.html');
+  // app.getAppPath() → المسار الصحيح داخل ASAR (يعمل مع fs.existsSync)
+  // بعكس path.join(__dirname, '..', '..') الذي يخرج من ASAR ويُعيد false
+  const indexPath   = path.join(app.getAppPath(), 'dist-ui', 'index.html');
   const isDebug     = process.env['ONESOFT_DEBUG'] === '1';
   const testMode    = process.env['ONESOFT_TEST_URL'] === '1';  // loads data:text/html instead
 
   writeLog('INFO', '--- createWindow ---');
+  writeLog('INFO', `appPath  : ${app.getAppPath()}`);
   writeLog('INFO', `preload  : ${preloadPath}  exists=${fs.existsSync(preloadPath)}`);
   writeLog('INFO', `index    : ${indexPath}  exists=${fs.existsSync(indexPath)}`);
   writeLog('INFO', `isDebug=${isDebug}  testMode=${testMode}`);
@@ -328,14 +331,29 @@ function createWindow() {
         } catch (e) {
           writeLog('WARN', 'Could not delete version.json', e);
         }
-        if (fs.existsSync(indexPath)) {
-          mainWindow?.loadFile(indexPath)
-            .then(() => writeLog('INFO', 'fallback loadFile — installer wizard shown'))
-            .catch((e: unknown) => writeLog('ERROR', 'fallback loadFile — failed', e));
-        } else {
-          writeLog('ERROR', `fallback failed — indexPath not found: ${indexPath}`);
-        }
+        // استدعاء loadFile مباشرة — بدون existsSync لأن ASAR يُعيد false بشكل مضلّل
+        writeLog('INFO', `loading wizard: ${indexPath}`);
+        mainWindow?.loadFile(indexPath)
+          .then(() => writeLog('INFO', 'fallback loadFile — installer wizard shown'))
+          .catch((e: unknown) => writeLog('ERROR', 'fallback loadFile — failed', e));
       }
+    } else if (isMainFrame && url && url.startsWith('file://') && code !== 0) {
+      // فشل تحميل ملف file:// (مثل index.html) — اعرض صفحة تشخيص بدلاً من الصفحة البيضاء
+      writeLog('ERROR', `file:// load failed  code=${code}  url=${url}`);
+      const errPage = `data:text/html;charset=utf-8,<!DOCTYPE html>
+<html dir="rtl" lang="ar"><head><meta charset="utf-8">
+<style>body{margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;
+background:#FEF2F2;font-family:system-ui,sans-serif;direction:rtl;}
+.box{text-align:center;color:#991B1B;max-width:500px;padding:32px;}
+h2{margin:0 0 12px;font-size:20px;}p{font-size:13px;color:#6B7280;margin:4px 0;word-break:break-all;}</style>
+</head><body><div class="box">
+<div style="font-size:48px">⚠️</div>
+<h2>تعذّر تحميل واجهة التثبيت</h2>
+<p>المسار: ${indexPath.replace(/</g, '&lt;')}</p>
+<p>رمز الخطأ: ${code}</p>
+<p style="margin-top:16px;font-size:12px">أغلق التطبيق وأعد تشغيله. إذا تكررت المشكلة راجع الدعم الفني.</p>
+</div></body></html>`;
+      mainWindow?.loadURL(errPage).catch(() => { /* ignore */ });
     }
   });
 
