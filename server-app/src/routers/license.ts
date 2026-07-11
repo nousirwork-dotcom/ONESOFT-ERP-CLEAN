@@ -24,11 +24,12 @@ import {
 export const licenseRouter = router({
 
   // ── حالة الترخيص الحالي ────────────────────────────────────────────────────
-  getStatus: protectedProcedure.query(async ({ ctx }) => {
+  // publicProcedure — تعمل بدون مصادقة لدعم صفحة التفعيل على جهاز جديد
+  getStatus: publicProcedure.query(async ({ ctx }) => {
     const status = getLicense();
     if (!status.valid || !status.payload) {
-      // إذا لم يوجد ملف ترخيص → تحقق من وجود نسخة تجريبية في DB
-      if (status.error === 'license_not_found') {
+      // إذا لم يوجد ملف ترخيص → تحقق من حالة المؤسسة في DB (فقط إذا كان المستخدم مسجلاً)
+      if (status.error === 'license_not_found' && ctx.user) {
         try {
           const org = await db.query.organizations.findFirst({
             where: eq(organizations.id, ctx.user.orgId),
@@ -41,6 +42,15 @@ export const licenseRouter = router({
             return {
               valid:   !trialExpired,
               error:   trialExpired ? ('trial_expired' as string) : ('trial_active' as string),
+              payload: null,
+            };
+          }
+          // مؤسسات قديمة (status='active' بدون ملف ترخيص) — تثبيتات سابقة قبل نظام التراخيص
+          // تُعامَل كـ trial_active حتى يحصلوا على ترخيص رسمي
+          if (org?.status === 'active') {
+            return {
+              valid: true,
+              error: 'trial_active' as string,
               payload: null,
             };
           }
@@ -80,7 +90,11 @@ export const licenseRouter = router({
   }),
 
   // ── إحصائيات الاستخدام الحالي ─────────────────────────────────────────────
-  getCurrentStats: protectedProcedure.query(async ({ ctx }) => {
+  // publicProcedure — يعيد أصفاراً إن لم يكن المستخدم مسجلاً (جهاز بدون ترخيص)
+  getCurrentStats: publicProcedure.query(async ({ ctx }) => {
+    if (!ctx.user) {
+      return { current_users: 0, current_branches: 0, current_pos: 0 };
+    }
     const [[uRow], [bRow]] = await Promise.all([
       db.select({ cnt: count() }).from(users).where(and(eq(users.orgId, ctx.user.orgId), eq(users.isActive, true))),
       db.select({ cnt: count() }).from(branches).where(and(eq(branches.orgId, ctx.user.orgId), eq(branches.isActive, true))),
@@ -88,7 +102,7 @@ export const licenseRouter = router({
     return {
       current_users:    uRow?.cnt ?? 0,
       current_branches: bRow?.cnt ?? 0,
-      current_pos:      0, // POS terminals table not yet implemented
+      current_pos:      0,
     };
   }),
 
@@ -215,7 +229,9 @@ export const licenseRouter = router({
     }),
 
   // ── تفعيل عبر كود (Activation Code — base64url) ────────────────────────────
-  activateByCode: adminProcedure
+  // publicProcedure — يعمل بدون مصادقة (جهاز جديد يحتاج تفعيل)
+  // الأمان يعتمد على التحقق الرياضي من التوقيع الرقمي للترخيص
+  activateByCode: publicProcedure
     .input(z.object({ code: z.string().min(10) }))
     .mutation(({ input }) => {
       let signed: SignedLicense;
@@ -232,7 +248,8 @@ export const licenseRouter = router({
     }),
 
   // ── تفعيل عبر محتوى ملف license.ons ───────────────────────────────────────
-  activateByFile: adminProcedure
+  // publicProcedure — يعمل بدون مصادقة (جهاز جديد يحتاج تفعيل)
+  activateByFile: publicProcedure
     .input(z.object({ content: z.string().min(10) }))
     .mutation(({ input }) => {
       let signed: SignedLicense;

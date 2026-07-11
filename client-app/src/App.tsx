@@ -435,6 +435,8 @@ function App() {
             {!mandatoryUpdateActive && (
               <Switch>
                 <Route path="/login" component={LoginPage} />
+                {/* صفحة التفعيل عامة — لا تحتاج تسجيل دخول (جهاز جديد بدون ترخيص) */}
+                <Route path="/cfg/license" component={LicenseActivationPage} />
                 {import.meta.env.DEV && _DevLicensePreview && (
                   <Route path="/dev/license-preview">
                     {() => (
