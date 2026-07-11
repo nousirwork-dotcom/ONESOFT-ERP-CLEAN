@@ -10,10 +10,10 @@
     "إصلاح الدخول التلقائي بدون كلمة مرور عند التثبيت الأول",
     "تحسينات عامة في الأداء والاستقرار"
   ],
-  "downloadUrl": "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.4/OneSoftSetup-1.0.4-x64.exe",
-  "fileSizeBytes": 81589600,
-  "sha512": "0kTkFtoP9JNNr1B1Bh6XNOCXPheMCPMlK2WEWuWXVR6OpPtIkYr3yJ3uIjPPX+uhKGx5O2y6+UfHlG8kh6AUsQ==",
-  "publishedAt": "2026-07-11T01:45:04.629Z",
+  "downloadUrl": "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.5/OneSoftSetup-1.0.5-x64.exe",
+  "fileSizeBytes": 81589802,
+  "sha512": "QzaPFOjUdSnHV+AFRMSv8ed2zuWzw7skcBjctzIqvpZiQdhDqS9HM2nVFyt6nkCfy9OPJ4MPlfy+dTiyETaG4w==",
+  "publishedAt": "2026-07-11T02:08:29.696Z",
   "_notes": {
     "MANIFEST_URL": "استضِف هذا الملف على CDN عام أو GitHub Pages بدون توثيق (Public URL).",
     "ONESOFT_UPDATE_URL": "يمكن تجاوز الرابط الافتراضي عبر متغير البيئة ONESOFT_UPDATE_URL.",
@@ -35,5 +35,7 @@
       "5. ارفع الملف على https://updates.onesoft.app/update-manifest.json",
       "6. الأجهزة المثبّت عليها الإصدار السابق ستستقبل التحديث تلقائياً في 5 ثوانٍ من الفتح"
     ]
-  }
+  },
+  "version": "1.0.5",
+  "notes": "v1.0.5 — شريط العنوان يُظهر إصدار التطبيق، مزامنة كاملة مع GitHub"
 }

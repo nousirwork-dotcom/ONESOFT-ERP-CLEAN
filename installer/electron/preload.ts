@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('installer', {
   isMaximized: () => ipcRenderer.invoke('window:is-maximized'),
   close:       () => ipcRenderer.invoke('window:close'),
   openUrl:     (url: string) => ipcRenderer.invoke('window:openUrl', url),
+  getVersion:  () => ipcRenderer.invoke('app:get-version'),
 
   // Requirements
   checkRequirements: () => ipcRenderer.invoke('requirements:check'),
