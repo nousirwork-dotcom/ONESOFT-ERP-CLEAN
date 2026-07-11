@@ -434,7 +434,7 @@ h2{margin:0 0 12px;font-size:20px;}p{font-size:13px;color:#6B7280;margin:4px 0;w
   });
 
   // ── Window event handlers ─────────────────────────────────────────────────
-  const IS_STAGING = true;  // ← اضبطه false قبل إصدار الإنتاج النهائي
+  const IS_STAGING = false; // production — DevTools تُفتح بـ Ctrl+Shift+I فقط
   mainWindow.once('ready-to-show', () => {
     writeLog('INFO', 'window: ready-to-show — calling maximize() then show()');
     mainWindow?.maximize();
