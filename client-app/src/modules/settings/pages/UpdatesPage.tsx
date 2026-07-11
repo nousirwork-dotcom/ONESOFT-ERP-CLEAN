@@ -28,16 +28,37 @@ interface ElectronUpdater {
   onUpdateProgress:   (cb: (e: unknown, data: unknown) => void) => () => void;
   onUpdateDownloaded: (cb: (e: unknown, data: unknown) => void) => () => void;
   onUpdateError:      (cb: (e: unknown, data: unknown) => void) => () => void;
+  onUpdateLog?:       (cb: (e: unknown, data: unknown) => void) => () => void;
   startDownload:      () => Promise<{ ok: boolean; error?: string }>;
   installNow:         () => Promise<{ ok: boolean; error?: string }>;
   skipUpdate:         () => Promise<void>;
   checkNow:           () => Promise<{ ok: boolean; error?: string }>;
 }
+interface InstallerBridge {
+  updater?: ElectronUpdater;
+  getVersion?: () => Promise<string>;
+}
 function getUpdater(): ElectronUpdater | null {
-  const w = window as unknown as { installer?: { updater?: ElectronUpdater } };
+  const w = window as unknown as { installer?: InstallerBridge };
   return w?.installer?.updater ?? null;
 }
+function getInstaller(): InstallerBridge | null {
+  const w = window as unknown as { installer?: InstallerBridge };
+  return w?.installer ?? null;
+}
 const isElectron = !!getUpdater();
+
+// ─── Diagnostic log entry ─────────────────────────────────────────────────────
+interface DiagEntry {
+  event: string;
+  currentVersion?: string;
+  latestVersion?: string;
+  isNewer?: boolean;
+  downloadUrl?: string;
+  source?: string;
+  url?: string;
+  [key: string]: unknown;
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type CheckPhase = "idle" | "checking" | "no-update" | "update-available" | "error";
@@ -72,11 +93,23 @@ function fmtTime(d: Date): string {
 export default function UpdatesPage() {
   const store = useUpdateState();
 
+  // ─── الإصدار الحقيقي من app.getVersion() عبر IPC ───────────────────────────
+  const [electronVersion, setElectronVersion] = useState("");
+  useEffect(() => {
+    getInstaller()?.getVersion?.()
+      .then((v) => { if (v) setElectronVersion(v); })
+      .catch(() => {});
+  }, []);
+
   // ─── حالة الفحص ────────────────────────────────────────────────────────────
   const [checkPhase, setCheckPhase]     = useState<CheckPhase>("idle");
   const [checkError, setCheckError]     = useState("");
   const [manifest, setManifest]         = useState<PendingManifest | null>(null);
   const [currentVer, setCurrentVer]     = useState("");
+
+  // ─── لوجات التشخيص ─────────────────────────────────────────────────────────
+  const [diagLogs, setDiagLogs]         = useState<DiagEntry[]>([]);
+  const [showDiag, setShowDiag]         = useState(false);
 
   // ─── حالة التحميل / التثبيت ────────────────────────────────────────────────
   const [dlPhase, setDlPhase]           = useState<DownloadPhase>("idle");
@@ -120,17 +153,21 @@ export default function UpdatesPage() {
         setCheckPhase("checking");
         setCheckError("");
         setManifest(null);
+        setDiagLogs([]);
       } else if (data.type === "optional" || data.type === "mandatory") {
         setManifest(data.manifest ?? null);
         setCurrentVer(data.currentVersion ?? "");
         setCheckPhase("update-available");
+        setShowDiag(true);
       } else if (data.type === "no-update") {
         setManifest(null);
         setCurrentVer(data.currentVersion ?? "");
         setCheckPhase("no-update");
+        setShowDiag(true);
       } else if (data.type === "error") {
         setCheckError(data.message ?? "خطأ غير معروف");
         setCheckPhase("error");
+        setShowDiag(true);
       }
     });
 
@@ -148,7 +185,11 @@ export default function UpdatesPage() {
       setDlPhase("error");
     });
 
-    return () => { offStatus(); offProgress(); offDownloaded(); offError(); };
+    const offLog = updater.onUpdateLog?.((_, raw) => {
+      setDiagLogs((prev) => [...prev.slice(-30), raw as DiagEntry]);
+    });
+
+    return () => { offStatus(); offProgress(); offDownloaded(); offError(); offLog?.(); };
   }, []);
 
   // ─── البحث اليدوي عن تحديثات ────────────────────────────────────────────
@@ -224,24 +265,23 @@ export default function UpdatesPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {versionQ.isLoading ? (
+          {versionQ.isLoading && !electronVersion ? (
             <div className="animate-pulse space-y-2">
               <div className="h-4 bg-gray-100 rounded w-1/3" />
               <div className="h-4 bg-gray-100 rounded w-1/2" />
             </div>
-          ) : versionInfo ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <InfoTile icon={<Package className="w-4 h-4" />}    label="الإصدار"        value={versionInfo.version} gold />
-              <InfoTile icon={<Zap className="w-4 h-4" />}        label="رقم البناء"     value={versionInfo.build} />
-              <InfoTile icon={<Clock className="w-4 h-4" />}      label="تاريخ الإصدار"  value={versionInfo.releaseDate} />
-              <InfoTile icon={<Cpu className="w-4 h-4" />}        label="المنصة"         value={`${versionInfo.platform} ${versionInfo.arch}`} />
-              <InfoTile icon={<Server className="w-4 h-4" />}     label="Node.js"        value={versionInfo.nodeVersion} />
-              <InfoTile icon={<HardDrive className="w-4 h-4" />}  label="الذاكرة"        value={`${versionInfo.memoryMb} MB`} />
-              <InfoTile icon={<Clock className="w-4 h-4" />}      label="وقت التشغيل"    value={versionInfo.uptime} />
-              <InfoTile icon={<Shield className="w-4 h-4" />}     label="Schema"         value={versionInfo.schemaVersion?.slice(0, 8) + "…"} />
-            </div>
           ) : (
-            <p className="text-sm text-gray-400">معلومات الإصدار غير متاحة</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {/* الإصدار: مصدره app.getVersion() عبر IPC — هو الرقم الحقيقي المثبت */}
+              <InfoTile icon={<Package className="w-4 h-4" />}    label="الإصدار (Electron)" value={electronVersion || versionInfo?.version || "—"} gold />
+              <InfoTile icon={<Zap className="w-4 h-4" />}        label="رقم البناء"          value={versionInfo?.build || "—"} />
+              <InfoTile icon={<Clock className="w-4 h-4" />}      label="تاريخ الإصدار"       value={versionInfo?.releaseDate || "—"} />
+              <InfoTile icon={<Cpu className="w-4 h-4" />}        label="المنصة"              value={versionInfo ? `${versionInfo.platform} ${versionInfo.arch}` : "—"} />
+              <InfoTile icon={<Server className="w-4 h-4" />}     label="Node.js"             value={versionInfo?.nodeVersion || "—"} />
+              <InfoTile icon={<HardDrive className="w-4 h-4" />}  label="الذاكرة"             value={versionInfo ? `${versionInfo.memoryMb} MB` : "—"} />
+              <InfoTile icon={<Clock className="w-4 h-4" />}      label="وقت التشغيل"         value={versionInfo?.uptime || "—"} />
+              <InfoTile icon={<Shield className="w-4 h-4" />}     label="Schema"              value={versionInfo?.schemaVersion ? versionInfo.schemaVersion.slice(0, 8) + "…" : "—"} />
+            </div>
           )}
         </CardContent>
       </Card>
@@ -427,10 +467,67 @@ export default function UpdatesPage() {
             <div>
               <p className="text-sm font-semibold text-green-700">أنت تستخدم أحدث إصدار</p>
               <p className="text-xs text-green-600 mt-0.5">
-                الإصدار {currentVer || versionInfo?.version} — لا توجد تحديثات متاحة حالياً
+                الإصدار {currentVer || electronVersion || versionInfo?.version} — لا توجد تحديثات متاحة حالياً
               </p>
             </div>
           </CardContent>
+        </Card>
+      )}
+
+      {/* ── Panel تشخيصي ─────────────────────────────────────────────────────── */}
+      {diagLogs.length > 0 && (
+        <Card className="border-gray-200">
+          <CardHeader className="pb-2">
+            <button
+              className="flex items-center gap-2 w-full text-right"
+              onClick={() => setShowDiag((v) => !v)}
+            >
+              <Info className="w-4 h-4 text-gray-500" />
+              <span className="font-semibold text-sm text-gray-700">تشخيص المقارنة (Diagnostic Log)</span>
+              <span className="mr-auto text-gray-400">
+                {showDiag ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+              </span>
+            </button>
+          </CardHeader>
+          {showDiag && (
+            <CardContent className="pt-0">
+              <div className="rounded-lg bg-gray-950 text-green-400 font-mono text-xs p-3 space-y-1 overflow-x-auto" dir="ltr">
+                {diagLogs.map((entry, i) => {
+                  if (entry.event === 'semver-comparison') {
+                    return (
+                      <div key={i} className="space-y-0.5">
+                        <div className="text-yellow-400 font-bold">── semver comparison ──</div>
+                        <div>app.getVersion()     = <span className="text-white">{entry.currentVersion ?? '—'}</span></div>
+                        <div>manifest.latestVersion = <span className="text-white">{entry.latestVersion ?? '—'}</span></div>
+                        <div>isNewer (update needed) = <span className={entry.isNewer ? 'text-green-300' : 'text-red-400'}>{String(entry.isNewer)}</span></div>
+                        <div>downloadUrl = <span className="text-blue-400 break-all">{entry.downloadUrl ?? '—'}</span></div>
+                        <div>source = <span className="text-gray-300">{entry.source ?? '—'}</span></div>
+                      </div>
+                    );
+                  }
+                  if (entry.event === 'update-not-available') {
+                    return (
+                      <div key={i} className="text-red-400">
+                        ✗ update-not-available — current={entry.currentVersion} latest={entry.latestVersion}
+                      </div>
+                    );
+                  }
+                  if (entry.event === 'update-available') {
+                    return (
+                      <div key={i} className="text-green-300">
+                        ✓ update-available — {entry.currentVersion} → {entry.latestVersion}
+                      </div>
+                    );
+                  }
+                  return (
+                    <div key={i} className="text-gray-400">
+                      [{entry.event}] {JSON.stringify(entry, null, 0).slice(0, 200)}
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          )}
         </Card>
       )}
 
