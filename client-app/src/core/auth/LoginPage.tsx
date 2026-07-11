@@ -3,6 +3,7 @@ import { trpc } from '@/shared/lib/trpc';
 import { useLocation } from 'wouter';
 import FirstRunWizard from '@/core/auth/FirstRunWizard';
 import ForgotPasswordFlow from '@/core/auth/ForgotPasswordFlow';
+import ElectronTitleBar from '@/shared/components/ElectronTitleBar';
 import { useBranding, getStartupPath } from '@/core/contexts/BrandingContext';
 
 // ─── Transition durations (ms) ────────────────────────────────────────────────
@@ -553,8 +554,11 @@ export default function LoginPage() {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontFamily: "'Cairo', Tahoma, sans-serif",
         fontSize: 'var(--brand-font-size)', position: 'relative', overflow: 'hidden',
+        paddingTop: 32,
       }}
     >
+      <ElectronTitleBar />
+
       {transitioning && <TransitionOverlay type={transType} loginBg={loginBg} onDone={() => setTransitioning(false)} />}
 
       {/* حوار التحقق من المسؤول */}
@@ -565,10 +569,11 @@ export default function LoginPage() {
         />
       )}
 
-      <div style={{ textAlign: 'center', position: 'relative', zIndex: 1 }}>
+      <div style={{ textAlign: 'center', position: 'relative', zIndex: 1, width: '100%', maxWidth: 400 }}>
         {/* Logo + Title */}
         <img src="/logo.png" alt="OneSoft ERP" style={{
-          width: 88, height: 88, marginBottom: 20,
+          width: 118, height: 118,
+          display: 'block', margin: '0 auto 20px',
           borderRadius: 'var(--brand-border-radius)',
           boxShadow: '0 8px 28px rgba(var(--brand-primary-rgb)/0.35)',
           objectFit: 'cover',

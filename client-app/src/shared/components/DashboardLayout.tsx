@@ -63,6 +63,7 @@ import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import ChatWidget from "./ChatWidget";
 import TrialBanner from "./TrialBanner";
 import WindowTaskbar from "./WindowTaskbar";
+import ElectronTitleBar from "./ElectronTitleBar";
 import { useTabManager } from "@/core/contexts/TabManagerContext";
 import { WorkspaceContext } from "@/core/contexts/WorkspaceContext";
 import { useLang } from "@/core/contexts/LanguageContext";
@@ -529,6 +530,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
       <WindowTaskbar />
       <ChatWidget />
+      <ElectronTitleBar />
       </>
     );
   }
@@ -643,6 +645,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     </SidebarProvider>
     <WindowTaskbar />
     <ChatWidget />
+    <ElectronTitleBar />
     </>
   );
 }
