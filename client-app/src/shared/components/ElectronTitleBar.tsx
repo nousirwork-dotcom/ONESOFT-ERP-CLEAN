@@ -5,6 +5,7 @@ interface ElectronAPI {
   maximize:    () => Promise<void>;
   isMaximized: () => Promise<boolean>;
   close:       () => Promise<void>;
+  getVersion:  () => Promise<string>;
 }
 
 function getElectronAPI(): ElectronAPI | null {
@@ -14,11 +15,13 @@ function getElectronAPI(): ElectronAPI | null {
 export default function ElectronTitleBar() {
   const [isMaximized, setIsMaximized] = useState(false);
   const [hovered, setHovered] = useState<'min' | 'max' | 'close' | null>(null);
+  const [version, setVersion] = useState<string>('');
 
   useEffect(() => {
     const api = getElectronAPI();
     if (!api) return;
     api.isMaximized().then(setIsMaximized).catch(() => {});
+    api.getVersion().then(setVersion).catch(() => {});
   }, []);
 
   const api = getElectronAPI();
@@ -46,7 +49,7 @@ export default function ElectronTitleBar() {
     zIndex: 99999,
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     background: 'transparent',
     userSelect: 'none',
     WebkitAppRegion: 'drag',
@@ -59,6 +62,15 @@ export default function ElectronTitleBar() {
 
   return (
     <div style={dragStyle}>
+      {/* App name + version — left side */}
+      <span style={{
+        fontSize: 12, fontWeight: 600, paddingLeft: 12,
+        color: 'rgba(60,60,60,0.55)', letterSpacing: 0.2,
+        pointerEvents: 'none',
+      }}>
+        OneSoft ERP{version ? ` v${version}` : ''}
+      </span>
+
       <div style={noDragStyle}>
 
         {/* Minimize */}
