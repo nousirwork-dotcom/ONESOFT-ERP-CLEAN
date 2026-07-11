@@ -238,19 +238,92 @@ export const updatesRouter = router({
 
   /* ── CHANGELOG المحلي ── */
   getChangelog: protectedProcedure.query(async () => {
+    // يحاول أولاً قراءة changelog.json — إن لم يوجد يستخدم القائمة الثابتة
+    const changelogPath = path.join(ROOT_DIR, 'changelog.json');
+    if (fs.existsSync(changelogPath)) {
+      try {
+        return JSON.parse(fs.readFileSync(changelogPath, 'utf-8')) as ChangelogEntry[];
+      } catch {}
+    }
+
     const entries: ChangelogEntry[] = [
+      {
+        version: '1.0.8',
+        date:    '2026-07-11',
+        type:    'patch',
+        title:   'إصلاح عرض الإصدار + لوجات تشخيصية',
+        changes: [
+          { category: 'fixed',    text: 'إصلاح: بطاقة الإصدار تعرض الآن الرقم الحقيقي من app.getVersion() بدلاً من 1.0.0 الثابتة' },
+          { category: 'added',    text: 'إضافة Panel تشخيصي (للمدير فقط) يعرض currentVersion و latestVersion ونتيجة المقارنة' },
+          { category: 'added',    text: 'لوجات تفصيلية في الـ updater: semver-comparison قبل كل قرار تحديث' },
+          { category: 'improved', text: 'تحسينات عامة في الاستقرار' },
+        ],
+      },
+      {
+        version: '1.0.7',
+        date:    '2026-07-11',
+        type:    'patch',
+        title:   'إصلاح نهائي لأخطاء التسطيب',
+        changes: [
+          { category: 'fixed',    text: 'إصلاح خطأ عمود password_status مفقود عند إعادة التثبيت على جهاز سابق' },
+          { category: 'fixed',    text: 'ضمان تطبيق migrations 0016/0017/0018 تلقائياً على قواعد البيانات القديمة' },
+          { category: 'security', text: 'حماية دفاعية: إضافة الأعمدة الناقصة قبل إنشاء المستخدم (ALTER TABLE IF NOT EXISTS)' },
+        ],
+      },
+      {
+        version: '1.0.6',
+        date:    '2026-07-10',
+        type:    'patch',
+        title:   'إصلاح base_schema للتسطيب النظيف',
+        changes: [
+          { category: 'fixed',    text: 'إضافة جميع الأعمدة المفقودة في base_schema.sql لضمان نجاح التسطيب من الصفر' },
+          { category: 'fixed',    text: 'إضافة journal entries للمايجريشنز 0016/0017/0018' },
+        ],
+      },
+      {
+        version: '1.0.5',
+        date:    '2026-07-09',
+        type:    'patch',
+        title:   'تحسينات نظام الترخيص والتحديث',
+        changes: [
+          { category: 'improved', text: 'تحسين نظام الترخيص وصفحة مركز التراخيص' },
+          { category: 'improved', text: 'تحسينات في نظام التحديث التلقائي' },
+        ],
+      },
+      {
+        version: '1.0.4',
+        date:    '2026-07-05',
+        type:    'patch',
+        title:   'تحسينات شاشة الدخول ونظام التحديث',
+        changes: [
+          { category: 'improved', text: 'توسيط الشعار وتكبيره في شاشة الدخول' },
+          { category: 'added',    text: 'إضافة أزرار التصغير والتكبير والإغلاق' },
+          { category: 'fixed',    text: 'إصلاح الدخول التلقائي بدون كلمة مرور عند التثبيت الأول' },
+          { category: 'added',    text: 'تفعيل نظام التحديث التلقائي عبر GitHub Releases' },
+        ],
+      },
+      {
+        version: '1.0.3',
+        date:    '2026-07-01',
+        type:    'patch',
+        title:   'الإصدار الأول الرسمي للعملاء',
+        changes: [
+          { category: 'added',    text: 'أول إصدار رسمي موقَّع وموثَّق للتوزيع' },
+          { category: 'security', text: 'فصل نسخة العميل عن License Center تماماً' },
+          { category: 'improved', text: 'تحسينات في أداء الـ installer وسرعة التسطيب' },
+        ],
+      },
       {
         version: '1.0.0',
         date:    '2026-06-30',
         type:    'major',
-        title:   'الإصدار الأول الرسمي',
+        title:   'الإصدار التأسيسي',
         changes: [
           { category: 'added',    text: 'نظام المبيعات الكامل مع دعم ZATCA' },
           { category: 'added',    text: 'نظام المشتريات والمخزون' },
           { category: 'added',    text: 'المحاسبة المالية الكاملة' },
           { category: 'added',    text: 'الموارد البشرية والرواتب' },
           { category: 'added',    text: 'نظام الطباعة الموحد (Unified Print Engine)' },
-          { category: 'added',    text: 'بنية معمارية Modular للـ Frontend والـ Backend' },
           { category: 'security', text: 'JWT + bcrypt للمصادقة' },
           { category: 'added',    text: 'نسخ احتياطي تلقائي وسجل عمليات' },
         ],
