@@ -167,12 +167,11 @@ export default function Step09Services() {
         throw new Error((installResult as any)?.error ?? 'فشل تثبيت الخدمات — سبب غير محدد');
       }
 
-      // إذا اختار المثبّت منافذ بديلة (لتجنب تعارض) — حدّث الإعدادات
+      // دائماً نحدّث config بالمنفذ الفعلي الذي اختاره المثبّت
+      // (نتجنب حالة: config=3000 والسيرفر على 3001 → شاشة بيضاء)
       const actualBackendPort  = (installResult as any)?.backendPort  ?? 3000;
       const actualFrontendPort = (installResult as any)?.frontendPort ?? 5000;
-      if (actualBackendPort !== 3000 || actualFrontendPort !== 5000) {
-        await window.installer?.saveConfig?.(buildConfig(actualBackendPort, actualFrontendPort));
-      }
+      await window.installer?.saveConfig?.(buildConfig(actualBackendPort, actualFrontendPort));
       setInstalledPort(actualBackendPort);
 
       // 9. إنشاء اختصارات سطح المكتب (فقط إذا اختار المستخدم Desktop)

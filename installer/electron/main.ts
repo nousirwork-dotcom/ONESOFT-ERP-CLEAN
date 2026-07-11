@@ -165,7 +165,7 @@ function isAlreadyInstalled(): boolean {
 function readServerPort(): number {
   try {
     const configFile = path.join(
-      process.env['ProgramData'] || 'C:\\ProgramData',
+      process.env['ProgramData'] || process.env['PROGRAMDATA'] || 'C:\\ProgramData',
       'OneSoft', 'config', 'onesoft.config.json',
     );
     const cfg = JSON.parse(fs.readFileSync(configFile, 'utf-8'));
@@ -179,6 +179,38 @@ function readServerPort(): number {
     writeLog('WARN', `readServerPort fallback to 3000: ${e}`);
     return 3000;
   }
+}
+
+// يسكان البورتات الشائعة ليجد السيرفر الفعلي (fallback عند فشل config)
+// يُستخدَم فقط عند التجديد لا عند أول تحميل
+function scanForLivePort(primaryPort: number): Promise<number> {
+  const candidates = [primaryPort, 3000, 3001, 3002, 3003].filter(
+    (p, i, arr) => arr.indexOf(p) === i,
+  );
+  return new Promise((resolve) => {
+    let checked = 0;
+    let found   = false;
+    for (const port of candidates) {
+      const req = require('http').get(
+        { hostname: 'localhost', port, path: '/api/trpc', timeout: 1500 },
+        (res: { statusCode?: number }) => {
+          if (!found && res.statusCode !== undefined) {
+            found = true;
+            writeLog('INFO', `scanForLivePort → found server at :${port}`);
+            resolve(port);
+          }
+        },
+      );
+      req.on('error', () => {
+        checked++;
+        if (checked === candidates.length && !found) {
+          writeLog('WARN', `scanForLivePort → no server found, using primary :${primaryPort}`);
+          resolve(primaryPort);
+        }
+      });
+      req.end();
+    }
+  });
 }
 
 // ─── Updater import ──────────────────────────────────────────────────────────
@@ -305,11 +337,21 @@ function createWindow() {
         mainWindow?.loadURL(connectingPageHtml(serverLoadRetries, MAX_SERVER_RETRIES))
           .catch(() => { /* ignore */ });
         setTimeout(() => {
-          const port = readServerPort();
-          const retryUrl = `http://localhost:${port}`;
-          writeLog('INFO', `retry ${serverLoadRetries}: loadURL ${retryUrl}`);
-          mainWindow?.loadURL(retryUrl)
-            .catch((e: unknown) => writeLog('ERROR', `retry ${serverLoadRetries}: loadURL rejected`, e));
+          const primaryPort = readServerPort();
+          const retryNum = serverLoadRetries;
+          // من المحاولة الثالثة: سكان البورتات 3000-3003 لإيجاد السيرفر الفعلي
+          const portPromise = retryNum >= 3
+            ? scanForLivePort(primaryPort)
+            : Promise.resolve(primaryPort);
+          portPromise.then((port) => {
+            const retryUrl = `http://localhost:${port}`;
+            writeLog('INFO', `retry ${retryNum}: loadURL ${retryUrl}`);
+            mainWindow?.loadURL(retryUrl)
+              .catch((e: unknown) => writeLog('ERROR', `retry ${retryNum}: loadURL rejected`, e));
+          }).catch(() => {
+            const retryUrl = `http://localhost:${primaryPort}`;
+            mainWindow?.loadURL(retryUrl).catch(() => { /* ignore */ });
+          });
         }, delay);
       } else {
         serverLoadRetries = 0;

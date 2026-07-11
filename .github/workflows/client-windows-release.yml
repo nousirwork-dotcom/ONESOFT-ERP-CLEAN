@@ -173,8 +173,14 @@ jobs:
           mkdir -p installer/resources/app/server-app
           # server-app dist
           cp -r server-app/dist installer/resources/app/server-app/
-          # نسخ client-app dist إلى dist-ui (المسار الذي يتوقعه installer)
+          # نسخ client-app dist إلى dist-ui (المسار الذي يتوقعه installer للمعالج)
           cp -r client-app/dist installer/dist-ui 2>/dev/null || true
+          # نسخ client-app dist إلى resources/app/client-app/dist
+          # (server-app/src/index.ts يبحث عنها هناك عبر express.static)
+          mkdir -p installer/resources/app/client-app
+          cp -r client-app/dist installer/resources/app/client-app/
+          echo "✅ client-app/dist → resources/app/client-app/dist"
+          ls installer/resources/app/client-app/dist/ | head -5
 
       # ── إزالة licenseCenter router من نسخة العميل (CLIENT_BUILD) ───────────
       # TypeScript يُجمِّع static imports دائماً — نستبدل licenseCenter.js بـ stub
