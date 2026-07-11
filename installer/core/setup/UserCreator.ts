@@ -27,14 +27,16 @@ export class UserCreator {
         return row;
       }
 
-      // كلمة المرور اختيارية — إذا كانت فارغة نُخزّن hash لسلسلة فارغة
-      const passwordHash = hashSync(user.password ?? '', 10);
+      // كلمة المرور اختيارية — إذا كانت فارغة → password_status = 'not_set' (auto-login)
+      const hasPassword    = (user.password ?? '').length > 0;
+      const passwordHash   = hashSync(user.password ?? '', 10);
+      const passwordStatus = hasPassword ? 'set' : 'not_set';
 
       const result = await client.query<{ id: number }>(`
-        INSERT INTO users (org_id, username, password_hash, name, role, is_active, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, 'admin', true, NOW(), NOW())
+        INSERT INTO users (org_id, username, password_hash, name, role, is_active, password_status, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, 'admin', true, $5, NOW(), NOW())
         RETURNING id
-      `, [orgId, user.username, passwordHash, user.fullName]);
+      `, [orgId, user.username, passwordHash, user.fullName, passwordStatus]);
 
       const row = result.rows[0]!;
       emit({ level: 'success', message: `تم إنشاء المستخدم الإداري "${user.username}"`, timestamp: now() });
