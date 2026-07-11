@@ -249,11 +249,23 @@ export function setupUpdater(mainWindow: BrowserWindow): void {
 
     log('INFO', `manifest  latest=${manifest.latestVersion}  minSupported=${manifest.minSupportedVersion}  mandatory=${manifest.mandatory}  sha512=${manifest.sha512 ? '✓' : '✗'}  publishedAt=${manifest.publishedAt ?? '—'}`);
 
+    // ── تشخيص صريح: القيم الفعلية قبل المقارنة ──────────────────────────────
+    const isNewer = semverLt(currentVersion, manifest.latestVersion);
+    log('INFO', `semver-comparison  current="${currentVersion}"  latest="${manifest.latestVersion}"  isNewer=${isNewer}  downloadUrl=${manifest.downloadUrl}`);
+    send('update:log', {
+      event:          'semver-comparison',
+      currentVersion,
+      latestVersion:  manifest.latestVersion,
+      isNewer,
+      downloadUrl:    manifest.downloadUrl,
+      source,
+    });
+
     // لا يوجد تحديث
-    if (!semverLt(currentVersion, manifest.latestVersion)) {
+    if (!isNewer) {
       log('INFO', 'update-not-available');
       send('update:status', { type: 'no-update', currentVersion } satisfies UpdateStatusEvent);
-      send('update:log',    { event: 'update-not-available', currentVersion });
+      send('update:log',    { event: 'update-not-available', currentVersion, latestVersion: manifest.latestVersion });
       return;
     }
 

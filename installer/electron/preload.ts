@@ -96,6 +96,10 @@ contextBridge.exposeInMainWorld('installer', {
       ipcRenderer.on('update:error', cb);
       return () => ipcRenderer.removeListener('update:error', cb);
     },
+    onUpdateLog: (cb: (e: unknown, data: unknown) => void) => {
+      ipcRenderer.on('update:log', cb);
+      return () => ipcRenderer.removeListener('update:log', cb);
+    },
     // Renderer → Main commands
     startDownload: () => ipcRenderer.invoke('update:start-download'),
     installNow:    () => ipcRenderer.invoke('update:install-now'),
