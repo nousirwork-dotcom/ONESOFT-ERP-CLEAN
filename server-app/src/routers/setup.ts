@@ -56,10 +56,15 @@ export const setupRouter = router({
   // firstRun: false → النظام جاهز → انتقل لصفحة تسجيل الدخول
   isFirstRun: publicProcedure.query(async () => {
     try {
-      const result = await db.select({ cnt: sql<number>`count(*)::int` }).from(organizations);
+      // timeout 6 ثوانٍ — إذا PostgreSQL بطيء أو معطل لا نعلّق الطلب للأبد
+      const dbQuery = db.select({ cnt: sql<number>`count(*)::int` }).from(organizations);
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('DB_TIMEOUT')), 6000),
+      );
+      const result = await Promise.race([dbQuery, timeoutPromise]);
       return { firstRun: (result[0]?.cnt ?? 0) === 0, dbError: false };
     } catch {
-      // خطأ في الاتصال بقاعدة البيانات — لا يعني بالضرورة "أول تشغيل"
+      // خطأ في الاتصال بقاعدة البيانات أو timeout — لا يعني بالضرورة "أول تشغيل"
       return { firstRun: false, dbError: true };
     }
   }),

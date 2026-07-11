@@ -525,6 +525,15 @@ export default function LoginPage() {
     tryAutoLogin().then(ok => { if (!ok) setPhase('login'); });
   }, [firstRunQ.isLoading, firstRunQ.isError, firstRunQ.data]);
 
+  // إذا بقي التحميل أكثر من 15 ثانية → أظهر خطأ مع زر إعادة المحاولة
+  useEffect(() => {
+    if (phase !== 'loading') return;
+    const timer = setTimeout(() => {
+      setPhase('dbError');
+    }, 15000);
+    return () => clearTimeout(timer);
+  }, [phase]);
+
   const handleLoginSuccess = useCallback(async (_role: string) => {
     const transition = settings.opening_transition ?? 'none';
     const targetPath = getStartupPath(settings.startup_page);
