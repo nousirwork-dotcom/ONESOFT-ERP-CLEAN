@@ -29,10 +29,14 @@ import { spawn }           from 'child_process';
 import type { BrowserWindow } from 'electron';
 
 // ─── روابط Manifest حسب البيئة ────────────────────────────────────────────────
+// GitHub raw content — يعمل مباشرة بدون خادم خارجي
+// الملف: update-manifest.json في جذر الـ repository (main branch)
+const GITHUB_RAW_MANIFEST = 'https://raw.githubusercontent.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/main/update-manifest.json';
+
 const ENV_MANIFEST_URLS: Record<string, string> = {
-  development: 'https://updates-dev.onesoft.app/update-manifest.json',
-  staging:     'https://updates-staging.onesoft.app/update-manifest.json',
-  production:  'https://updates.onesoft.app/update-manifest.json',
+  development: GITHUB_RAW_MANIFEST,
+  staging:     GITHUB_RAW_MANIFEST,
+  production:  GITHUB_RAW_MANIFEST,
 };
 
 const MANIFEST_URL: string = (() => {

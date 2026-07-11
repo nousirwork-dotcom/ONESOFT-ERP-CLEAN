@@ -1,19 +1,27 @@
 import { useState, useEffect } from 'react';
 
-const inst = (): NonNullable<typeof window.installer> | null =>
-  (window as any).installer ?? null;
+interface ElectronAPI {
+  minimize:    () => Promise<void>;
+  maximize:    () => Promise<void>;
+  isMaximized: () => Promise<boolean>;
+  close:       () => Promise<void>;
+}
+
+function getElectronAPI(): ElectronAPI | null {
+  return (window as unknown as { installer?: ElectronAPI }).installer ?? null;
+}
 
 export default function ElectronTitleBar() {
   const [isMaximized, setIsMaximized] = useState(false);
   const [hovered, setHovered] = useState<'min' | 'max' | 'close' | null>(null);
 
   useEffect(() => {
-    const api = inst();
+    const api = getElectronAPI();
     if (!api) return;
     api.isMaximized().then(setIsMaximized).catch(() => {});
   }, []);
 
-  const api = inst();
+  const api = getElectronAPI();
   if (!api) return null;
 
   const handleMinimize = () => api.minimize();
@@ -31,23 +39,27 @@ export default function ElectronTitleBar() {
     return btn === 'close' ? '#C42B1C' : 'rgba(120,120,120,0.18)';
   };
 
+  const dragStyle: React.CSSProperties & { WebkitAppRegion?: string } = {
+    position: 'fixed',
+    top: 0, left: 0, right: 0,
+    height: 32,
+    zIndex: 99999,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    background: 'transparent',
+    userSelect: 'none',
+    WebkitAppRegion: 'drag',
+  };
+
+  const noDragStyle: React.CSSProperties & { WebkitAppRegion?: string } = {
+    display: 'flex',
+    WebkitAppRegion: 'no-drag',
+  };
+
   return (
-    <div
-      style={{
-        position: 'fixed',
-        top: 0, left: 0, right: 0,
-        height: 32,
-        zIndex: 99999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'flex-end',
-        WebkitAppRegion: 'drag',
-        background: 'transparent',
-        userSelect: 'none',
-        pointerEvents: 'auto',
-      } as React.CSSProperties}
-    >
-      <div style={{ display: 'flex', WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+    <div style={dragStyle}>
+      <div style={noDragStyle}>
 
         {/* Minimize */}
         <button
@@ -59,8 +71,7 @@ export default function ElectronTitleBar() {
             width: 46, height: 32, border: 'none', outline: 'none',
             background: btnBg('min'), cursor: 'default',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            transition: 'background 0.1s',
-            color: 'rgba(80,80,80,0.85)',
+            transition: 'background 0.1s', color: 'rgba(80,80,80,0.85)',
           }}
         >
           <svg width="10" height="1" viewBox="0 0 10 1">
@@ -78,8 +89,7 @@ export default function ElectronTitleBar() {
             width: 46, height: 32, border: 'none', outline: 'none',
             background: btnBg('max'), cursor: 'default',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            transition: 'background 0.1s',
-            color: 'rgba(80,80,80,0.85)',
+            transition: 'background 0.1s', color: 'rgba(80,80,80,0.85)',
           }}
         >
           {isMaximized ? (
@@ -104,8 +114,7 @@ export default function ElectronTitleBar() {
             width: 46, height: 32, border: 'none', outline: 'none',
             background: btnBg('close'), cursor: 'default',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            transition: 'background 0.1s',
-            color: 'rgba(80,80,80,0.85)',
+            transition: 'background 0.1s', color: 'rgba(80,80,80,0.85)',
           }}
         >
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
