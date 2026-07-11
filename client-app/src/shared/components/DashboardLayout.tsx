@@ -61,7 +61,9 @@ import {
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import ChatWidget from "./ChatWidget";
+import TrialBanner from "./TrialBanner";
 import WindowTaskbar from "./WindowTaskbar";
+import ElectronTitleBar from "./ElectronTitleBar";
 import { useTabManager } from "@/core/contexts/TabManagerContext";
 import { WorkspaceContext } from "@/core/contexts/WorkspaceContext";
 import { useLang } from "@/core/contexts/LanguageContext";
@@ -516,6 +518,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Main Content — desktop area */}
         <WorkspaceContext.Provider value={workspaceEl}>
+          <TrialBanner />
           <main
             ref={setWorkspaceEl as any}
             className="flex-1 overflow-hidden"
@@ -527,6 +530,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
       <WindowTaskbar />
       <ChatWidget />
+      <ElectronTitleBar />
       </>
     );
   }
@@ -628,6 +632,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Main Content — desktop area */}
         <WorkspaceContext.Provider value={workspaceEl}>
+          <TrialBanner />
           <main
             ref={setWorkspaceEl as any}
             className="flex-1 overflow-hidden"
@@ -640,6 +645,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     </SidebarProvider>
     <WindowTaskbar />
     <ChatWidget />
+    <ElectronTitleBar />
     </>
   );
 }
