@@ -11,9 +11,9 @@
     "تحسينات عامة في الأداء والاستقرار"
   ],
   "downloadUrl": "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.5/OneSoftSetup-1.0.5-x64.exe",
-  "fileSizeBytes": 81589600,
-  "sha512": "8+jTVT6IYOhCtM2NVHMH652IDoXhjr++yWYr3iCtYgUyjoRxgYUxN7RPLXI97bbzPTrHLH+9EKMfZ7WFPDKDxA==",
-  "publishedAt": "2026-07-11T02:00:55.298Z",
+  "fileSizeBytes": 81589802,
+  "sha512": "QzaPFOjUdSnHV+AFRMSv8ed2zuWzw7skcBjctzIqvpZiQdhDqS9HM2nVFyt6nkCfy9OPJ4MPlfy+dTiyETaG4w==",
+  "publishedAt": "2026-07-11T02:08:29.696Z",
   "_notes": {
     "MANIFEST_URL": "استضِف هذا الملف على CDN عام أو GitHub Pages بدون توثيق (Public URL).",
     "ONESOFT_UPDATE_URL": "يمكن تجاوز الرابط الافتراضي عبر متغير البيئة ONESOFT_UPDATE_URL.",
@@ -37,5 +37,5 @@
     ]
   },
   "version": "1.0.5",
-  "notes": "v1.0.5 — شريط العنوان يُظهر الإصدار الحالي، مزامنة كاملة مع GitHub"
+  "notes": "v1.0.5 — شريط العنوان يُظهر إصدار التطبيق، مزامنة كاملة مع GitHub"
 }
