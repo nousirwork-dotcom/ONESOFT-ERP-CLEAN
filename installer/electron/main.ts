@@ -549,6 +549,7 @@ app.whenReady()
       writeLog('INFO', `IPC window:openUrl  url=${url}`);
       return shell.openExternal(url);
     });
+    ipcMain.handle('app:get-version', () => app.getVersion());
 
     // تفعيل التحديث التلقائي (فقط بعد اكتمال التثبيت)
     setupAutoUpdater();
