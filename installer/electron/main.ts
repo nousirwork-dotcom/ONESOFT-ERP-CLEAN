@@ -422,14 +422,26 @@ h2{margin:0 0 12px;font-size:20px;}p{font-size:13px;color:#6B7280;margin:4px 0;w
     writeLog('RENDERER', `[L${level}] [${source}:${line}] ${message}`);
   });
 
+  // ── DevTools keyboard shortcut (Ctrl+Shift+I) — مفيد في الـ staging ─────────
+  wc.on('before-input-event', (_event, input) => {
+    if (input.type === 'keyDown' && input.control && input.shift && input.key === 'I') {
+      if (wc.isDevToolsOpened()) {
+        wc.closeDevTools();
+      } else {
+        wc.openDevTools({ mode: 'detach' });
+      }
+    }
+  });
+
   // ── Window event handlers ─────────────────────────────────────────────────
+  const IS_STAGING = true;  // ← اضبطه false قبل إصدار الإنتاج النهائي
   mainWindow.once('ready-to-show', () => {
     writeLog('INFO', 'window: ready-to-show — calling maximize() then show()');
     mainWindow?.maximize();
     mainWindow?.show();
     writeLog('INFO', 'window: maximize() + show() called');
-    if (isDebug) {
-      writeLog('INFO', 'ONESOFT_DEBUG=1 — opening DevTools (detach mode)');
+    if (isDebug || IS_STAGING) {
+      writeLog('INFO', 'opening DevTools (detach mode) — debug/staging');
       wc.openDevTools({ mode: 'detach' });
     }
   });
