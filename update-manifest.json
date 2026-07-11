@@ -11,10 +11,9 @@
     "تحسينات عامة في الأداء والاستقرار"
   ],
   "downloadUrl": "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.4/OneSoftSetup-1.0.4-x64.exe",
-  "fileSizeBytes": 85000000,
-  "sha512": "",
-  "publishedAt": "2026-07-11T00:00:00.000Z",
-
+  "fileSizeBytes": 81589600,
+  "sha512": "0kTkFtoP9JNNr1B1Bh6XNOCXPheMCPMlK2WEWuWXVR6OpPtIkYr3yJ3uIjPPX+uhKGx5O2y6+UfHlG8kh6AUsQ==",
+  "publishedAt": "2026-07-11T01:45:04.629Z",
   "_notes": {
     "MANIFEST_URL": "استضِف هذا الملف على CDN عام أو GitHub Pages بدون توثيق (Public URL).",
     "ONESOFT_UPDATE_URL": "يمكن تجاوز الرابط الافتراضي عبر متغير البيئة ONESOFT_UPDATE_URL.",
@@ -26,10 +25,8 @@
     "downloadUrl": "يجب أن يبدأ بـ https:// — يُرفض أي رابط http://.",
     "skip_policy": "التحديث الاختياري يُعرض مرة واحدة ثم يُؤجّل 24 ساعة إذا ضغط المستخدم 'لاحقاً'.",
     "mandatory_block": "التحديث الإجباري يمنع الدخول لجميع صفحات النظام (login / dashboard / إلخ) حتى إتمام التحديث.",
-
     "generate_sha512": "لحساب sha512 للملف على Windows: certutil -hashfile OneSoftSetup-1.0.4-x64.exe SHA512",
     "generate_sha512_linux": "sha512sum OneSoftSetup-1.0.4-x64.exe | awk '{print $1}'",
-
     "after_build_instructions": [
       "1. انتظر اكتمال CI build على GitHub Actions",
       "2. افتح GitHub Release لـ v1.0.4",
