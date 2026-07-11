@@ -491,9 +491,17 @@ CREATE TABLE IF NOT EXISTS "users" (
     "email" VARCHAR(255),
     "phone" VARCHAR(50),
     "role" "user_role" NOT NULL DEFAULT 'cashier',
+    "extra_permissions" jsonb DEFAULT '{}'::jsonb,
     "category_id" INTEGER,
     "is_active" BOOLEAN NOT NULL DEFAULT true,
+    "password_status" VARCHAR(20) NOT NULL DEFAULT 'set',
     "last_login_at" TIMESTAMP,
+    "phone_verified_at" TIMESTAMP,
+    "email_verified_at" TIMESTAMP,
+    "password_changed_at" TIMESTAMP,
+    "force_password_change" BOOLEAN NOT NULL DEFAULT FALSE,
+    "recovery_enabled_phone" BOOLEAN NOT NULL DEFAULT FALSE,
+    "recovery_enabled_email" BOOLEAN NOT NULL DEFAULT FALSE,
     "created_at" TIMESTAMP NOT NULL DEFAULT now(),
     "updated_at" TIMESTAMP NOT NULL DEFAULT now()
 );
