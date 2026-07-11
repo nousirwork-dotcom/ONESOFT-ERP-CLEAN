@@ -1,13 +1,13 @@
 {
-  "latestVersion": "1.0.4",
+  "latestVersion": "1.0.7",
   "minSupportedVersion": "1.0.0",
   "mandatory": false,
-  "messageAr": "يوجد تحديث جديد (v1.0.4) يتضمن تحسينات في شاشة تسجيل الدخول وإصلاح الدخول بدون كلمة مرور للتثبيت الأول.",
-  "messageEn": "New update (v1.0.4) with login screen improvements and first-install auto-login fix.",
+  "messageAr": "يوجد تحديث جديد (v1.0.7) يتضمن إصلاح خطأ التسطيب على الأجهزة التي سبق تثبيت إصدار قديم عليها، وتحسينات عامة في الاستقرار.",
+  "messageEn": "New update (v1.0.7) with install fix for machines with prior failed installs, and general stability improvements.",
   "releaseNotes": [
-    "توسيط الشعار وتكبيره في شاشة الدخول",
-    "إضافة أزرار التصغير والتكبير والإغلاق",
-    "إصلاح الدخول التلقائي بدون كلمة مرور عند التثبيت الأول",
+    "إصلاح خطأ التسطيب: عمود password_status مفقود عند إعادة التثبيت",
+    "ضمان تطبيق migrations 0016/0017/0018 تلقائياً",
+    "حماية دفاعية: إضافة الأعمدة الناقصة قبل إنشاء المستخدم",
     "تحسينات عامة في الأداء والاستقرار"
   ],
   "downloadUrl": "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.7/OneSoftSetup-1.0.7-x64.exe",
