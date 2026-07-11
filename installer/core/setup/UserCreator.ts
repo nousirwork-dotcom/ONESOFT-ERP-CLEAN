@@ -27,6 +27,20 @@ export class UserCreator {
         return row;
       }
 
+      // ── ضمان دفاعي: تأكّد من وجود الأعمدة الحيوية حتى لو جاءت الـ migrations ناقصة
+      // (يحدث عند إعادة التثبيت على قاعدة بيانات فيها بيانات متبقية من محاولة سابقة فاشلة)
+      await client.query(`
+        ALTER TABLE users
+          ADD COLUMN IF NOT EXISTS password_status       VARCHAR(20)  NOT NULL DEFAULT 'set',
+          ADD COLUMN IF NOT EXISTS extra_permissions     JSONB                 DEFAULT '{}'::jsonb,
+          ADD COLUMN IF NOT EXISTS phone_verified_at     TIMESTAMP,
+          ADD COLUMN IF NOT EXISTS email_verified_at     TIMESTAMP,
+          ADD COLUMN IF NOT EXISTS password_changed_at   TIMESTAMP,
+          ADD COLUMN IF NOT EXISTS force_password_change BOOLEAN      NOT NULL DEFAULT FALSE,
+          ADD COLUMN IF NOT EXISTS recovery_enabled_phone BOOLEAN     NOT NULL DEFAULT FALSE,
+          ADD COLUMN IF NOT EXISTS recovery_enabled_email BOOLEAN     NOT NULL DEFAULT FALSE
+      `);
+
       // كلمة المرور اختيارية — إذا كانت فارغة → password_status = 'not_set' (auto-login)
       const hasPassword    = (user.password ?? '').length > 0;
       const passwordHash   = hashSync(user.password ?? '', 10);
