@@ -53,4 +53,13 @@ CREATE TABLE IF NOT EXISTS security_events (
   created_at  TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-UPDATE _schema_version SET version = '0017_password_recovery' WHERE id = 1;
+-- ختم الإصدار — مع إنشاء الجدول أولاً إذا لم يكن موجوداً (fresh install)
+-- (نفس تعريف auto-migrate.ts خطوة 4)
+CREATE TABLE IF NOT EXISTS _schema_version (
+  id         INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  version    TEXT    NOT NULL,
+  stamped_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+INSERT INTO _schema_version (id, version, stamped_at)
+VALUES (1, '0017_password_recovery', NOW())
+ON CONFLICT (id) DO UPDATE SET version = '0017_password_recovery', stamped_at = NOW();
