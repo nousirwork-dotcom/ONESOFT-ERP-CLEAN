@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/core/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/core/ui/table";
 import { trpc } from "@/shared/lib/trpc";
-import { CheckCircle2, Loader2, Mail, Pencil, Phone, Plus, Send, Shield, Trash2, Users as UsersIcon, XCircle } from "lucide-react";
+import { CheckCircle2, KeyRound, Loader2, Mail, Pencil, Phone, Plus, Send, Shield, Trash2, Users as UsersIcon, XCircle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -113,6 +113,94 @@ function VerifyOtpDialog({
   );
 }
 
+// ─── ChangeUserPasswordDialog ────────────────────────────────────────────────
+function ChangeUserPasswordDialog({
+  user, onClose,
+}: {
+  user: any; onClose: () => void;
+}) {
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [noPassword, setNoPassword] = useState(false);
+  const [error, setError] = useState("");
+  const utils = trpc.useUtils();
+
+  const updateUser = trpc.users.update.useMutation({
+    onSuccess: () => {
+      utils.users.list.invalidate();
+      toast.success(noPassword ? "تمت إزالة كلمة المرور — يمكن للمستخدم الدخول بدونها" : "تم تغيير كلمة المرور بنجاح");
+      onClose();
+    },
+    onError: (e) => setError(e.message),
+  });
+
+  const handleSubmit = () => {
+    setError("");
+    if (noPassword) {
+      updateUser.mutate({ id: user.id, clearPassword: true });
+      return;
+    }
+    if (next.length < 6) { setError("كلمة المرور يجب أن تكون 6 أحرف على الأقل"); return; }
+    if (next !== confirm) { setError("كلمتا المرور غير متطابقتين"); return; }
+    updateUser.mutate({ id: user.id, newPassword: next });
+  };
+
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-sm" dir="rtl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <KeyRound className="w-4 h-4" />
+            تغيير كلمة مرور: {user.name}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-1">
+          {user.role !== "admin" && user.role !== "superadmin" && (
+            <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
+              <div>
+                <p className="text-sm font-medium">بدون كلمة مرور</p>
+                <p className="text-xs text-muted-foreground">يدخل المستخدم باسم المستخدم فقط (من جهاز السيرفر)</p>
+              </div>
+              <Switch checked={noPassword} onCheckedChange={setNoPassword} />
+            </div>
+          )}
+          {!noPassword && (
+            <>
+              <div>
+                <Label>كلمة المرور الجديدة <span className="text-red-500">*</span></Label>
+                <Input
+                  className="mt-1" type="password" dir="ltr"
+                  placeholder="6 أحرف على الأقل"
+                  value={next} onChange={(e) => setNext(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              <div>
+                <Label>تأكيد كلمة المرور <span className="text-red-500">*</span></Label>
+                <Input
+                  className="mt-1" type="password" dir="ltr"
+                  placeholder="أعد كتابتها"
+                  value={confirm} onChange={(e) => setConfirm(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && !updateUser.isPending && handleSubmit()}
+                />
+              </div>
+            </>
+          )}
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">{error}</p>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={updateUser.isPending}>إلغاء</Button>
+          <Button onClick={handleSubmit} disabled={updateUser.isPending || (!noPassword && (!next || !confirm))}>
+            {updateUser.isPending ? <><Loader2 className="w-3.5 h-3.5 animate-spin me-1" />جاري الحفظ...</> : "حفظ"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Users ────────────────────────────────────────────────────────────────────
 export default function Users() {
   const [isOpen, setIsOpen] = useState(false);
@@ -121,6 +209,7 @@ export default function Users() {
   const [form, setForm] = useState<FormState>(emptyForm());
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [passwordUser, setPasswordUser] = useState<any>(null);
 
   // Verification dialog state
   const [verifyDialog, setVerifyDialog] = useState<{ open: boolean; channel: "phone" | "email"; devOtp?: string } | null>(null);
@@ -142,6 +231,13 @@ export default function Users() {
   });
   const updateUser = trpc.users.update.useMutation({
     onSuccess: () => { utils.users.list.invalidate(); toast.success("تم حفظ التعديلات"); setIsOpen(false); },
+    onError: (e) => toast.error(e.message),
+  });
+  const toggleActive = trpc.users.update.useMutation({
+    onSuccess: (_d, vars) => {
+      utils.users.list.invalidate();
+      toast.success(vars.isActive ? "تم تفعيل المستخدم" : "تم إيقاف المستخدم");
+    },
     onError: (e) => toast.error(e.message),
   });
   const deleteUser = trpc.users.delete.useMutation({
@@ -335,14 +431,27 @@ export default function Users() {
                       </span>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={u.isActive ? "default" : "secondary"} className="text-xs">
-                        {u.isActive ? "نشط" : "موقوف"}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={u.isActive}
+                          disabled={toggleActive.isPending}
+                          onCheckedChange={(v) => toggleActive.mutate({ id: u.id, isActive: v })}
+                          title={u.isActive ? "إيقاف المستخدم" : "تفعيل المستخدم"}
+                        />
+                        <Badge variant={u.isActive ? "default" : "secondary"} className="text-xs">
+                          {u.isActive ? "نشط" : "موقوف"}
+                        </Badge>
+                      </div>
                     </TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(u)}>
-                        <Pencil className="w-3.5 h-3.5" />
-                      </Button>
+                      <div className="flex items-center gap-0.5">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" title="تعديل" onClick={() => openEdit(u)}>
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" title="تغيير كلمة المرور" onClick={() => setPasswordUser(u)}>
+                          <KeyRound className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
@@ -635,6 +744,10 @@ export default function Users() {
       </Dialog>
 
       {/* ─── نافذة تأكيد OTP ────────────────────────────────────────────────── */}
+      {passwordUser && (
+        <ChangeUserPasswordDialog user={passwordUser} onClose={() => setPasswordUser(null)} />
+      )}
+
       {verifyDialog && selectedUser && (
         <VerifyOtpDialog
           open={verifyDialog.open}

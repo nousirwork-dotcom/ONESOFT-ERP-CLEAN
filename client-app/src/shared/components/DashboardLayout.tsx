@@ -28,6 +28,7 @@ import {
 } from "@/core/ui/sidebar";
 import { useAuth } from "@/core/hooks/useAuth";
 import { useIsMobile } from "@/shared/hooks/useMobile";
+import ChangeMyPasswordDialog from "@/shared/components/ChangeMyPasswordDialog";
 import {
   BarChart3,
   Boxes,
@@ -38,6 +39,7 @@ import {
   ClipboardList,
   Code2,
   Cog,
+  KeyRound,
   Factory,
   FileText,
   LayoutDashboard,
@@ -338,6 +340,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   });
 
   const [workspaceEl, setWorkspaceEl] = useState<HTMLElement | null>(null);
+  const [showChangePassword, setShowChangePassword] = useState(false);
   const { loading, user, logout } = useAuth();
   const isMobile = useIsMobile();
   const { openTab } = useTabManager();
@@ -420,14 +423,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <ChevronDown className="w-3 h-3 text-muted-foreground hidden sm:block" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48" dir={dir}>
+      <DropdownMenuContent align="end" className="w-48" dir={dir} collisionPadding={{ top: 40 }}>
         <DropdownMenuLabel className="text-xs text-muted-foreground">{user.email}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => openTab("/settings", t(lang, "settings"), Settings)}>
           <Settings className="w-4 h-4 ml-2" />
           {t(lang, "settings")}
         </DropdownMenuItem>
-        {(user?.role === "superadmin" || user?.role === "admin") && (
+        <DropdownMenuItem onClick={() => setShowChangePassword(true)}>
+          <KeyRound className="w-4 h-4 ml-2" />
+          تغيير كلمة المرور
+        </DropdownMenuItem>
+        {import.meta.env.DEV && (user?.role === "superadmin" || user?.role === "admin") && (
           <DropdownMenuItem onClick={() => openTab("/dev/source-code", "مستعرض الكود", Code2)}>
             <Code2 className="w-4 h-4 ml-2" />
             مستعرض الكود
@@ -481,7 +488,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (layoutMode === "horizontal") {
     return (
       <>
-      <div className="flex flex-col h-screen overflow-hidden bg-background">
+      <div className="flex flex-col h-screen overflow-hidden bg-background" style={{ paddingTop: "var(--titlebar-h, 0px)" }}>
         {/* Top Bar */}
         <header className="sticky top-0 z-20 border-b border-[#D4CDC1] dark:border-slate-700 bg-[#DDD4C4] dark:bg-slate-900">
           {/* Row 1: Logo + User */}
@@ -518,12 +525,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Main Content — desktop area */}
         <WorkspaceContext.Provider value={workspaceEl}>
-          <TrialBanner />
           <main
             ref={setWorkspaceEl as any}
             className="flex-1 overflow-hidden"
-            style={{ position: "relative", paddingBottom: 48 }}
+            style={{ position: "relative", paddingBottom: 40 }}
           >
+            <TrialBanner />
             {children}
           </main>
         </WorkspaceContext.Provider>
@@ -531,6 +538,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <WindowTaskbar />
       <ChatWidget />
       <ElectronTitleBar />
+      <ChangeMyPasswordDialog open={showChangePassword} onClose={() => setShowChangePassword(false)} />
       </>
     );
   }
@@ -585,7 +593,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <ChevronDown className="w-3.5 h-3.5 text-sidebar-foreground/40 shrink-0" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48" dir={dir}>
+            <DropdownMenuContent align="end" className="w-48" dir={dir} collisionPadding={{ top: 40 }}>
               <DropdownMenuLabel className="text-xs text-muted-foreground">
                 {user.email}
               </DropdownMenuLabel>
@@ -593,6 +601,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <DropdownMenuItem onClick={() => openTab("/settings", t(lang, "settings"), Settings)}>
                 <Settings className="w-4 h-4 ml-2" />
                 {t(lang, "settings")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setShowChangePassword(true)}>
+                <KeyRound className="w-4 h-4 ml-2" />
+                تغيير كلمة المرور
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -615,7 +627,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         )}
       </Sidebar>
 
-      <SidebarInset className="flex flex-col h-screen overflow-hidden">
+      <SidebarInset className="flex flex-col h-screen overflow-hidden" style={{ paddingTop: "var(--titlebar-h, 0px)" }}>
         {/* Top Bar */}
         <header className="sticky top-0 z-10 flex items-center gap-3 px-4 h-10 border-b border-[#D4CDC1] bg-[#DDD4C4] dark:bg-slate-900 dark:border-slate-700" dir={dir}>
           <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
@@ -632,12 +644,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Main Content — desktop area */}
         <WorkspaceContext.Provider value={workspaceEl}>
-          <TrialBanner />
           <main
             ref={setWorkspaceEl as any}
             className="flex-1 overflow-hidden"
-            style={{ position: "relative", paddingBottom: 48 }}
+            style={{ position: "relative", paddingBottom: 40 }}
           >
+            <TrialBanner />
             {children}
           </main>
         </WorkspaceContext.Provider>
@@ -646,6 +658,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <WindowTaskbar />
     <ChatWidget />
     <ElectronTitleBar />
+    <ChangeMyPasswordDialog open={showChangePassword} onClose={() => setShowChangePassword(false)} />
     </>
   );
 }

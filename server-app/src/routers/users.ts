@@ -15,12 +15,12 @@ export const usersRouter = router({
       .where(and(eq(users.orgId, ctx.user.orgId), eq(users.isActive, true)));
   }),
 
-  // قائمة مستخدمي المؤسسة (للمديرين فقط)
+  // قائمة مستخدمي المؤسسة (للمديرين فقط) — تشمل الموقوفين حتى يمكن إعادة تفعيلهم
   list: adminProcedure.query(async ({ ctx }) => {
     return db.query.users.findMany({
-      where: and(eq(users.orgId, ctx.user.orgId), eq(users.isActive, true)),
+      where: eq(users.orgId, ctx.user.orgId),
       columns: { passwordHash: false },
-      orderBy: (u, { asc }) => [asc(u.name)],
+      orderBy: (u, { desc, asc }) => [desc(u.isActive), asc(u.name)],
     });
   }),
 
@@ -123,14 +123,26 @@ export const usersRouter = router({
       role: z.enum(['admin', 'cashier', 'accountant', 'warehouse_manager', 'viewer']).optional(),
       isActive: z.boolean().optional(),
       newPassword: z.string().min(6).optional(),
+      clearPassword: z.boolean().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      const { id, newPassword, ...rest } = input;
+      const { id, newPassword, clearPassword, ...rest } = input;
 
       const user = await db.query.users.findFirst({
         where: and(eq(users.id, id), eq(users.orgId, ctx.user.orgId)),
       });
       if (!user) throw new Error('المستخدم غير موجود');
+
+      // ── حماية: لا يمكن إزالة كلمة مرور حسابات الإدارة ──────────────────────
+      if (clearPassword && !newPassword) {
+        const targetRole = rest.role ?? user.role;
+        if (targetRole === 'admin' || targetRole === 'superadmin') {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'لا يمكن إزالة كلمة مرور حساب مدير النظام — يجب أن يبقى محمياً بكلمة مرور',
+          });
+        }
+      }
 
       // ── حماية: لا يمكن إيقاف آخر مدير نشط ────────────────────────────────
       if (rest.isActive === false && user.isActive &&
@@ -184,7 +196,11 @@ export const usersRouter = router({
 
       await db.update(users).set({
         ...rest,
-        ...(newPassword ? { passwordHash: await hashPassword(newPassword) } : {}),
+        ...(newPassword ? { passwordHash: await hashPassword(newPassword), passwordStatus: 'set' } : {}),
+        // إزالة كلمة المرور (دخول بدون كلمة مرور — من جهاز السيرفر فقط حسب سياسة الدخول)
+        ...(!newPassword && clearPassword
+          ? { passwordHash: await hashPassword(''), passwordStatus: 'not_set' }
+          : {}),
         // إذا تغير الجوال → تصفير التحقق وتعطيل الاستعادة
         ...(phoneChanged ? { phoneVerifiedAt: null, recoveryEnabledPhone: false } : {}),
         // إذا تغير البريد → تصفير التحقق وتعطيل الاستعادة

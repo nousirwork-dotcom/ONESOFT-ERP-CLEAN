@@ -31,6 +31,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useState, useEffect } from "react";
+import { formatCurrency } from "@/shared/utils/currency";
 
 const WIDGET_DEFS = [
   { id: "stats",         label: "بطاقات الإحصائيات" },
@@ -190,8 +191,6 @@ export default function Dashboard() {
   const { vis, toggle } = useWidgetVisibility();
   const [showSettings, setShowSettings] = useState(false);
 
-  const formatCurrency = (val: number) =>
-    new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR", maximumFractionDigits: 0 }).format(val);
 
   const chartFormatted = (chartData ?? []).map((d) => ({
     date: new Date(d.date).toLocaleDateString("ar-SA", { month: "short", day: "numeric" }),
@@ -312,8 +311,15 @@ export default function Dashboard() {
                     </AreaChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
-                    لا توجد بيانات مبيعات بعد
+                  <div className="h-[200px] flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                    <BarChart3 className="w-8 h-8 opacity-25" />
+                    <p className="text-sm">لا توجد بيانات مبيعات بعد</p>
+                    <button
+                      onClick={() => navigate("/pos")}
+                      className="text-xs text-[#406B93] hover:underline"
+                    >
+                      أنشئ أول فاتورة من الكاشير
+                    </button>
                   </div>
                 )}
               </CardContent>
@@ -347,8 +353,10 @@ export default function Dashboard() {
                     ))}
                   </div>
                 ) : (
-                  <div className="h-[160px] flex items-center justify-center text-muted-foreground text-sm">
-                    لا توجد بيانات بعد
+                  <div className="h-[160px] flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                    <Package className="w-8 h-8 opacity-25" />
+                    <p className="text-sm">لا توجد مبيعات أصناف بعد</p>
+                    <p className="text-xs opacity-70">ستظهر الأصناف الأكثر مبيعًا هنا بعد أول عملية بيع</p>
                   </div>
                 )}
               </CardContent>

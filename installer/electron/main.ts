@@ -432,14 +432,22 @@ h2{margin:0 0 12px;font-size:20px;}p{font-size:13px;color:#6B7280;margin:4px 0;w
     writeLog('RENDERER', `[L${level}] [${source}:${line}] ${message}`);
   });
 
-  // ── DevTools keyboard shortcut (Ctrl+Shift+I) — مفيد في الـ staging ─────────
-  wc.on('before-input-event', (_event, input) => {
-    if (input.type === 'keyDown' && input.control && input.shift && input.key === 'I') {
+  // ── DevTools — في الإنتاج تُمنع تماماً (Ctrl+Shift+I و F12 معطّلان) ──────────
+  // تعمل فقط عند التشغيل بوضع التصحيح ONESOFT_DEBUG=1
+  wc.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return;
+    const isDevToolsCombo =
+      (input.control && input.shift && (input.key === 'I' || input.key === 'J' || input.key === 'C')) ||
+      input.key === 'F12';
+    if (!isDevToolsCombo) return;
+    if (isDebug) {
       if (wc.isDevToolsOpened()) {
         wc.closeDevTools();
       } else {
         wc.openDevTools({ mode: 'detach' });
       }
+    } else {
+      event.preventDefault();
     }
   });
 
