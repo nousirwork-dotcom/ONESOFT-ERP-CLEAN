@@ -251,7 +251,7 @@ jobs:
       - name: Sync version from git tag
         shell: bash
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
           node -e '
             const fs = require("fs");
@@ -270,6 +270,10 @@ jobs:
             console.log("  ✅ installer/package.json: " + old + " → " + v);
             let yml = fs.readFileSync("installer/electron-builder.yml","utf8");
             yml = yml.replace(/(extraMetadata:\s*\n\s*version:\s*")[^"]+(")/, (mm,a,b)=>a+v+b);
+            if (yml.indexOf("version: \"" + v + "\"") === -1) {
+              console.error("❌ electron-builder.yml still missing version \"" + v + "\" after sync — regex did not match, aborting to avoid version drift");
+              process.exit(1);
+            }
             fs.writeFileSync("installer/electron-builder.yml", yml);
             console.log("  ✅ electron-builder.yml extraMetadata.version → " + v);
           '
@@ -278,7 +282,7 @@ jobs:
       - name: Verify version consistency before build
         shell: bash
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
           node -e '
             const fs = require("fs");
@@ -320,7 +324,7 @@ jobs:
       - name: Verify EXE names match tag version
         shell: bash
         run: |
-          TAG="${{ github.ref_name }}"
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
           if [[ "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
             VERSION="${BASH_REMATCH[1]}"
             EXPECTED_X64="OneSoftSetup-${VERSION}-x64.exe"
