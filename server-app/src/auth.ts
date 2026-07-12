@@ -104,6 +104,20 @@ export async function loginHandler(req: Request, res: Response) {
     const valid = await verifyPassword(safePassword, user.passwordHash);
     if (!valid) return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
 
+    // ── أمان: حساب افتراضي بكلمة مرور غير مُعيَّنة (ADMIN أول تشغيل) ──────────
+    // يُسمح بالدخول إليه فقط من نفس الجهاز (localhost) حتى تُعيَّن كلمة مرور.
+    // يمنع استغلال الحساب الافتراضي الفارغ عبر الشبكة المحلية قبل ضبط كلمة المرور.
+    // المستخدمون العاديون (password_status='set') لا يتأثرون.
+    if (user.passwordStatus === 'not_set') {
+      const remoteAddr = req.socket.remoteAddress ?? '';
+      const isLocalhost = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(remoteAddr);
+      if (!isLocalhost) {
+        return res.status(403).json({
+          error: 'يجب تعيين كلمة مرور لهذا الحساب قبل الدخول عن بُعد. سجّل الدخول من التطبيق على الجهاز نفسه أولاً ثم عيّن كلمة المرور.',
+        });
+      }
+    }
+
     // تحديث آخر دخول
     await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
 
