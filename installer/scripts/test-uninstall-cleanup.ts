@@ -47,6 +47,7 @@ async function main(): Promise<void> {
   // ملفات إعداد في الجذر (يجب أن تُحذف)
   fs.writeFileSync(path.join(dataDir, 'onesoft.config.json'), '{}');
   fs.writeFileSync(path.join(dataDir, 'config.json'), '{}');
+  fs.writeFileSync(path.join(dataDir, 'version.json'), '{"version":"1.0.13"}');
 
   const mgr = new UninstallManager();
   const emit = (_e: ProgressEvent) => {};
@@ -61,6 +62,7 @@ async function main(): Promise<void> {
   }
   assert(!fs.existsSync(path.join(dataDir, 'onesoft.config.json')), 'حُذف onesoft.config.json');
   assert(!fs.existsSync(path.join(dataDir, 'config.json')), 'حُذف config.json');
+  assert(!fs.existsSync(path.join(dataDir, 'version.json')), 'حُذف version.json (يمنع الصفحة البيضاء بعد إعادة التثبيت)');
 
   console.log('التحقق من الحفاظ على المجلدات المهمة:');
   for (const d of preserved) {
