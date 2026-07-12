@@ -251,7 +251,7 @@ jobs:
       - name: Sync version from git tag
         shell: bash
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
           node -e '
             const fs = require("fs");
@@ -270,6 +270,10 @@ jobs:
             console.log("  ✅ installer/package.json: " + old + " → " + v);
             let yml = fs.readFileSync("installer/electron-builder.yml","utf8");
             yml = yml.replace(/(extraMetadata:\s*\n\s*version:\s*")[^"]+(")/, (mm,a,b)=>a+v+b);
+            if (yml.indexOf("version: \"" + v + "\"") === -1) {
+              console.error("❌ electron-builder.yml still missing version \"" + v + "\" after sync — regex did not match, aborting to avoid version drift");
+              process.exit(1);
+            }
             fs.writeFileSync("installer/electron-builder.yml", yml);
             console.log("  ✅ electron-builder.yml extraMetadata.version → " + v);
           '
@@ -278,7 +282,7 @@ jobs:
       - name: Verify version consistency before build
         shell: bash
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
           node -e '
             const fs = require("fs");
@@ -320,7 +324,7 @@ jobs:
       - name: Verify EXE names match tag version
         shell: bash
         run: |
-          TAG="${{ github.ref_name }}"
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
           if [[ "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
             VERSION="${BASH_REMATCH[1]}"
             EXPECTED_X64="OneSoftSetup-${VERSION}-x64.exe"
@@ -578,165 +582,3 @@ jobs:
           echo "     No licenseCenter, No private key,"
           echo "     No /license-center, No issuance API"
           echo "══════════════════════════════════════════════"
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# JOB 4 — Auto-update update-manifest.json + changelog.json
-# يُشغَّل بعد نجاح build-windows ويحدّث الـ manifest في main branch تلقائياً
-# ═══════════════════════════════════════════════════════════════════════════════
-  update-manifest:
-    name: "Auto-update manifest + changelog"
-    runs-on: ubuntu-latest
-    needs: build-windows
-    if: >
-      needs.build-windows.result == 'success' &&
-      (startsWith(github.ref, 'refs/tags/v') ||
-       (github.event.inputs.dry_run == 'false' && github.event.inputs.tag != '')) &&
-      github.event.inputs.dry_run != 'true'
-
-    steps:
-      - name: Checkout main branch
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          token: ${{ secrets.GH_TOKEN }}
-          fetch-depth: 1
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Fetch release assets and update manifest
-        env:
-          GH_TOKEN:   ${{ secrets.GH_TOKEN }}
-          GITHUB_REF: ${{ github.ref }}
-          INPUT_TAG:  ${{ github.event.inputs.tag }}
-          REPO:       ${{ github.repository }}
-        run: |
-          TAG="${INPUT_TAG:-${GITHUB_REF#refs/tags/}}"
-          VERSION="${TAG#v}"
-          echo "── Processing release: tag=$TAG  version=$VERSION ──"
-
-          # ── انتظر حتى تظهر الـ assets في GitHub API (قد تتأخر بضع ثوانٍ) ──
-          for i in 1 2 3 4 5; do
-            RELEASE=$(curl -sfH "Authorization: Bearer $GH_TOKEN" \
-              "https://api.github.com/repos/$REPO/releases/tags/$TAG" || echo '{}')
-            ASSET_COUNT=$(echo "$RELEASE" | node -e \
-              "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); \
-               console.log((d.assets||[]).length);")
-            echo "  attempt $i — assets found: $ASSET_COUNT"
-            [[ "$ASSET_COUNT" -ge 2 ]] && break
-            sleep 15
-          done
-
-          # ── استخرج بيانات ملف x64.exe ──────────────────────────────────────
-          DOWNLOAD_URL=$(echo "$RELEASE" | node -e \
-            "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); \
-             const a=(d.assets||[]).find(x=>x.name.endsWith('-x64.exe')); \
-             console.log(a?.browser_download_url||'');")
-
-          FILE_SIZE=$(echo "$RELEASE" | node -e \
-            "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); \
-             const a=(d.assets||[]).find(x=>x.name.endsWith('-x64.exe')); \
-             console.log(a?.size||0);")
-
-          PUBLISHED_AT=$(echo "$RELEASE" | node -e \
-            "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); \
-             console.log(d.published_at||new Date().toISOString());")
-
-          # ── استخرج SHA512 من latest.yml ─────────────────────────────────────
-          LATEST_YML_URL=$(echo "$RELEASE" | node -e \
-            "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); \
-             const a=(d.assets||[]).find(x=>x.name==='latest.yml'); \
-             console.log(a?.browser_download_url||'');")
-
-          SHA512=""
-          if [[ -n "$LATEST_YML_URL" ]]; then
-            curl -sfLH "Authorization: Bearer $GH_TOKEN" "$LATEST_YML_URL" -o /tmp/latest.yml || true
-            # الـ SHA512 في latest.yml يكون إما تحت files[].sha512 أو sha512: مباشرة
-            # نأخذ السطر الذي يطابق اسم ملف x64 ثم السطر التالي
-            SHA512=$(python3 - <<'PYEOF'
-import re, sys
-with open('/tmp/latest.yml') as f:
-    content = f.read()
-# Try to extract sha512 from the x64 file entry
-m = re.search(r'url: [^\n]*-x64\.exe\n\s+sha512: ([^\n]+)', content)
-if m:
-    print(m.group(1).strip())
-    sys.exit(0)
-# Fallback: top-level sha512
-m = re.search(r'^sha512: ([^\n]+)', content, re.MULTILINE)
-if m:
-    print(m.group(1).strip())
-PYEOF
-)
-          fi
-
-          echo "  VERSION     : $VERSION"
-          echo "  DOWNLOAD_URL: $DOWNLOAD_URL"
-          echo "  FILE_SIZE   : $FILE_SIZE"
-          echo "  SHA512      : ${SHA512:0:40}..."
-          echo "  PUBLISHED_AT: $PUBLISHED_AT"
-
-          if [[ -z "$DOWNLOAD_URL" ]]; then
-            echo "❌ لم يُعثر على x64.exe في الـ release — تأكد من نجاح build-windows"
-            exit 1
-          fi
-
-          # ── حدّث update-manifest.json ────────────────────────────────────────
-          node -e "
-            const fs = require('fs');
-            const m  = JSON.parse(fs.readFileSync('update-manifest.json', 'utf8'));
-            m.latestVersion  = '$VERSION';
-            m.version        = '$VERSION';
-            m.downloadUrl    = '$DOWNLOAD_URL';
-            m.fileSizeBytes  = $FILE_SIZE;
-            if ('$SHA512') m.sha512 = '$SHA512';
-            m.publishedAt    = '$PUBLISHED_AT';
-            m.releaseDate    = '$PUBLISHED_AT'.slice(0,10);
-            fs.writeFileSync('update-manifest.json', JSON.stringify(m, null, 2) + '\n');
-            console.log('✅ update-manifest.json updated');
-          "
-
-          # ── أضف إدخالاً جديداً في changelog.json إن لم يكن موجوداً ─────────
-          node -e "
-            const fs = require('fs');
-            const path = require('path');
-            const clPath = 'changelog.json';
-            let entries = [];
-            if (fs.existsSync(clPath)) {
-              try { entries = JSON.parse(fs.readFileSync(clPath, 'utf8')); } catch {}
-            }
-            const exists = entries.some(e => e.version === '$VERSION');
-            if (!exists) {
-              entries.unshift({
-                version: '$VERSION',
-                date:    '$PUBLISHED_AT'.slice(0,10),
-                type:    'patch',
-                title:   'الإصدار $VERSION',
-                changes: [
-                  { category: 'improved', text: 'تحسينات عامة في الأداء والاستقرار' }
-                ]
-              });
-              fs.writeFileSync(clPath, JSON.stringify(entries, null, 2) + '\n');
-              console.log('✅ changelog.json — added v$VERSION');
-            } else {
-              console.log('ℹ changelog.json — v$VERSION already exists, skipping');
-            }
-          "
-
-          cat update-manifest.json
-
-      - name: Commit and push updated files
-        run: |
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git config user.name  "github-actions[bot]"
-          git add update-manifest.json changelog.json
-          if git diff --staged --quiet; then
-            echo "ℹ️  No changes to commit"
-          else
-            TAG="${{ github.event.inputs.tag || github.ref_name }}"
-            git commit -m "chore: auto-update manifest → ${TAG#v} [skip ci]"
-            git push origin main
-            echo "✅ Committed and pushed update-manifest.json + changelog.json"
-          fi
