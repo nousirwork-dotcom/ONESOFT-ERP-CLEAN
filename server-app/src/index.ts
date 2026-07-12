@@ -403,6 +403,16 @@ if (!schemaOk) {
   console.error(`          DATABASE_URL source: ${ENV.configSource}`);
   process.exit(1);
 }
+// ─── تهيئة أول تشغيل ─────────────────────────────────────────────────────────
+// على قاعدة بيانات جديدة (جدول المستخدمين فارغ): يُنشئ مؤسسة تجريبية + مستخدم ADMIN
+// بكلمة مرور فارغة. على قاعدة موجودة: no-op (لا يمس أي مستخدم أو صلاحية).
+try {
+  const { ensureDefaultAdmin } = await import('./bootstrap.js');
+  await ensureDefaultAdmin();
+} catch (err) {
+  console.error('[startup] ⚠️ ensureDefaultAdmin error:', err);
+}
+
 console.log('[6/6] ✅ PostgreSQL connected — schema OK — server fully ready');
 
 export type { AppRouter } from './routers/index.js';

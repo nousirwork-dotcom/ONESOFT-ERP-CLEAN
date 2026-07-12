@@ -56,6 +56,13 @@ export const setupRouter = router({
   // firstRun: false → النظام جاهز → انتقل لصفحة تسجيل الدخول
   isFirstRun: publicProcedure.query(async () => {
     try {
+      // قبل اكتمال تهيئة الإقلاع (بذر ADMIN/المؤسسة) قد تكون الجداول فارغة مؤقتاً.
+      // نُعيد dbError حتى يُظهر العميل حالة «جارٍ الاتصال» ويُعيد المحاولة،
+      // بدل إظهار معالج «إنشاء أول مدير» الممنوع في أول تشغيل.
+      const { isBootstrapComplete } = await import('../bootstrap.js');
+      if (!isBootstrapComplete()) {
+        return { firstRun: false, dbError: true };
+      }
       // timeout 6 ثوانٍ — إذا PostgreSQL بطيء أو معطل لا نعلّق الطلب للأبد
       const dbQuery = db.select({ cnt: sql<number>`count(*)::int` }).from(organizations);
       const timeoutPromise = new Promise<never>((_, reject) =>

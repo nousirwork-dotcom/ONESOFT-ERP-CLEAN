@@ -333,14 +333,16 @@ function LoginForm({
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 300 }}>
 
-      {/* كارت المؤسسة — للقراءة فقط */}
-      <OrgInfoCard
-        orgName={orgName}
-        orgCode={orgCode}
-        licenseId={licenseId}
-        isTrial={isTrial}
-        onRequestChangeOrg={onRequestChangeOrg}
-      />
+      {/* كارت المؤسسة — للقراءة فقط (يظهر فقط عند توفر كود المؤسسة) */}
+      {orgCode && (
+        <OrgInfoCard
+          orgName={orgName}
+          orgCode={orgCode}
+          licenseId={licenseId}
+          isTrial={isTrial}
+          onRequestChangeOrg={onRequestChangeOrg}
+        />
+      )}
 
       {error && (
         <div style={{
@@ -404,51 +406,6 @@ function LoginForm({
         🔐 نسيت كلمة المرور؟
       </button>
     </form>
-  );
-}
-
-// ─── NoLicenseRedirect — إعادة توجيه عند غياب الترخيص ───────────────────────
-function NoLicenseRedirect() {
-  const [, navigate] = useLocation();
-  const [countdown, setCountdown] = useState(5);
-
-  useEffect(() => {
-    if (countdown <= 0) { navigate('/cfg/license'); return; }
-    const t = setTimeout(() => setCountdown(c => c - 1), 1000);
-    return () => clearTimeout(t);
-  }, [countdown, navigate]);
-
-  return (
-    <div style={{
-      background: 'var(--card)', borderRadius: 'var(--brand-border-radius)',
-      padding: '28px 32px', border: '1px solid #FDE68A',
-      boxShadow: '0 4px 20px rgba(0,0,0,0.08)', maxWidth: 340, textAlign: 'center',
-    }}>
-      <div style={{ fontSize: 40, marginBottom: 12 }}>🔑</div>
-      <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--foreground)', marginBottom: 8 }}>
-        النظام غير مفعّل
-      </div>
-      <div style={{ color: 'var(--muted-foreground)', fontSize: 13, lineHeight: 1.7, marginBottom: 20 }}>
-        لم يتم العثور على ترخيص نشط على هذا الجهاز.
-        سيتم توجيهك إلى صفحة التفعيل...
-      </div>
-      <div style={{
-        fontSize: 32, fontWeight: 800, color: 'var(--primary)',
-        marginBottom: 16, fontFamily: 'monospace',
-      }}>
-        {countdown}
-      </div>
-      <button
-        onClick={() => navigate('/cfg/license')}
-        style={{
-          width: '100%', background: 'var(--primary)', color: 'var(--primary-foreground)',
-          border: 'none', borderRadius: 'var(--brand-border-radius)', padding: '10px 0',
-          fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
-        }}
-      >
-        🔐 الانتقال إلى التفعيل الآن
-      </button>
-    </div>
   );
 }
 
@@ -651,13 +608,8 @@ export default function LoginPage() {
               />
             )}
 
-            {/* لا يوجد ترخيص ولا كود محفوظ → إعادة توجيه */}
-            {!licCtxQ.isLoading && !licCtxQ.data?.isExpired && !licCtxQ.data?.orgCode && (
-              <NoLicenseRedirect />
-            )}
-
-            {/* الترخيص موجود والكود معروف → نموذج الدخول */}
-            {!licCtxQ.isLoading && !licCtxQ.data?.isExpired && licCtxQ.data?.orgCode && (
+            {/* غير منتهي فعلياً → نموذج الدخول دائماً (لا حلقة، لا عدّاد، لا توجيه) */}
+            {!licCtxQ.isLoading && !licCtxQ.data?.isExpired && (
               <div style={{
                 background: 'var(--card)', borderRadius: 'var(--brand-border-radius)',
                 padding: '24px 28px', border: '1px solid var(--border)',
@@ -666,17 +618,17 @@ export default function LoginPage() {
                 {showForgotPassword ? (
                   <ForgotPasswordFlow
                     onBack={() => setShowForgotPassword(false)}
-                    orgCode={licCtxQ.data.orgCode}
-                    orgName={licCtxQ.data.orgName ?? licCtxQ.data.orgCode}
+                    orgCode={licCtxQ.data?.orgCode ?? ''}
+                    orgName={licCtxQ.data?.orgName ?? licCtxQ.data?.orgCode ?? ''}
                   />
                 ) : (
                   <LoginForm
                     onSuccess={handleLoginSuccess}
                     utils={utils}
-                    orgCode={licCtxQ.data.orgCode}
-                    orgName={licCtxQ.data.orgName ?? licCtxQ.data.orgCode}
-                    licenseId={licCtxQ.data.licenseId}
-                    isTrial={licCtxQ.data.isTrial ?? false}
+                    orgCode={licCtxQ.data?.orgCode ?? ''}
+                    orgName={licCtxQ.data?.orgName ?? licCtxQ.data?.orgCode ?? ''}
+                    licenseId={licCtxQ.data?.licenseId ?? null}
+                    isTrial={licCtxQ.data?.isTrial ?? false}
                     onRequestChangeOrg={() => setShowChangeOrgDialog(true)}
                     onForgotPassword={() => setShowForgotPassword(true)}
                   />
