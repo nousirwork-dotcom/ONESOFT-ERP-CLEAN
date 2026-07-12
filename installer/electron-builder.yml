@@ -4,7 +4,7 @@ artifactName: OneSoftSetup-${version}-${arch}.${ext}
 copyright: Copyright © 2026 OneSoft
 
 extraMetadata:
-  version: "1.0.14"
+  version: "1.0.15"
 
 directories:
   output: release
@@ -58,6 +58,7 @@ win:
   verifyUpdateCodeSignature: false
 
 nsis:
+  include: resources/installer.nsh
   oneClick: false
   perMachine: true
   allowToChangeInstallationDirectory: true
