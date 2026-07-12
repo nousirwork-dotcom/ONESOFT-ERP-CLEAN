@@ -245,6 +245,65 @@ jobs:
           if ($w -ne $h) { Write-Error "icon.ico images are NOT square (${w}x${h}) — icon.png may not be square"; exit 1 }
           Write-Host "✅ icon.ico ready — square dimensions confirmed"
 
+      # ── مزامنة الإصدار من اسم الـ Tag → package.json + electron-builder.yml ──
+      # electron-builder يقرأ الإصدار من package.json، لذا نضمن تطابقه مع الـ Tag
+      # يمنع تكرار مشكلة v1.0.9 (Tag=1.0.9 لكن exe=1.0.8)
+      - name: Sync version from git tag
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const tag = process.env.TAG || "";
+            const m = tag.match(/^v(\d+\.\d+\.\d+.*)$/);
+            if (!m) {
+              const p = JSON.parse(fs.readFileSync("installer/package.json","utf8"));
+              console.log("⚠️  Tag \"" + tag + "\" does not match v*.*.* — using package.json version: " + p.version);
+              process.exit(0);
+            }
+            const v = m[1];
+            console.log("── Syncing version: tag=" + tag + " → version=" + v + " ──");
+            const pkg = JSON.parse(fs.readFileSync("installer/package.json","utf8"));
+            const old = pkg.version; pkg.version = v;
+            fs.writeFileSync("installer/package.json", JSON.stringify(pkg, null, 2) + "\n");
+            console.log("  ✅ installer/package.json: " + old + " → " + v);
+            let yml = fs.readFileSync("installer/electron-builder.yml","utf8");
+            yml = yml.replace(/(extraMetadata:\s*\n\s*version:\s*")[^"]+(")/, (mm,a,b)=>a+v+b);
+            fs.writeFileSync("installer/electron-builder.yml", yml);
+            console.log("  ✅ electron-builder.yml extraMetadata.version → " + v);
+          '
+
+      # ── فحص تطابق الإصدار قبل البناء (يفشل CI عند عدم التطابق) ─────────────
+      - name: Verify version consistency before build
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const tag = (process.env.TAG || "").replace(/^v/, "");
+            const pkg = JSON.parse(fs.readFileSync("installer/package.json","utf8")).version;
+            const yml = fs.readFileSync("installer/electron-builder.yml","utf8");
+            const m = yml.match(/extraMetadata:\s*\n\s*version:\s*"([^"]+)"/);
+            const eb = m ? m[1] : "NOT_FOUND";
+            console.log("  Git Tag                : " + (process.env.TAG || ""));
+            console.log("  installer/package.json : " + pkg);
+            console.log("  electron-builder.yml   : " + eb);
+            let fail = false;
+            const isVer = /^\d+\.\d+\.\d+/.test(tag);
+            if (isVer && pkg !== tag) { console.error("❌ MISMATCH: package.json (" + pkg + ") ≠ tag (" + tag + ")"); fail = true; }
+            if (isVer && eb  !== tag) { console.error("❌ MISMATCH: electron-builder.yml (" + eb + ") ≠ tag (" + tag + ")"); fail = true; }
+            if (pkg !== eb) { console.error("❌ MISMATCH: package.json (" + pkg + ") ≠ electron-builder.yml (" + eb + ")"); fail = true; }
+            if (fail) {
+              console.error("══════════════════════════════════════════════");
+              console.error("  ❌ BUILD BLOCKED — version sources inconsistent");
+              console.error("══════════════════════════════════════════════");
+              process.exit(1);
+            }
+            console.log("✅ All version sources consistent: " + pkg);
+          '
+
       # ── بناء Electron (main + preload + NSIS installer) ────────────────────
       - name: Build Electron installer
         working-directory: installer
@@ -256,6 +315,36 @@ jobs:
         run: |
           # بناء electron main + preload + UI + installer
           pnpm run build
+
+      # ── فحص أسماء ملفات EXE الناتجة تطابق الـ Tag (يفشل CI عند عدم التطابق) ──
+      - name: Verify EXE names match tag version
+        shell: bash
+        run: |
+          TAG="${{ github.ref_name }}"
+          if [[ "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
+            VERSION="${BASH_REMATCH[1]}"
+            EXPECTED_X64="OneSoftSetup-${VERSION}-x64.exe"
+            EXPECTED_IA32="OneSoftSetup-${VERSION}-ia32.exe"
+            echo "── Checking EXE names for version $VERSION ──"
+            echo "  Expected x64 : $EXPECTED_X64"
+            echo "  Expected ia32: $EXPECTED_IA32"
+            echo "  EXE files found in installer/release:"
+            find installer/release -name "*.exe" 2>/dev/null | sort | sed 's/^/    /'
+            X64_FOUND=$(find installer/release -name "$EXPECTED_X64" 2>/dev/null | head -1)
+            IA32_FOUND=$(find installer/release -name "$EXPECTED_IA32" 2>/dev/null | head -1)
+            FAIL=0
+            if [[ -z "$X64_FOUND" ]]; then echo "❌ MISSING: $EXPECTED_X64"; FAIL=1; fi
+            if [[ -z "$IA32_FOUND" ]]; then echo "❌ MISSING: $EXPECTED_IA32"; FAIL=1; fi
+            if [[ "$FAIL" -eq 1 ]]; then
+              echo "══════════════════════════════════════════════"
+              echo "  ❌ RELEASE BLOCKED — EXE names ≠ tag version"
+              echo "══════════════════════════════════════════════"
+              exit 1
+            fi
+            echo "✅ EXE names match tag version $VERSION"
+          else
+            echo "ℹ️  Non-version tag — skipping EXE name check"
+          fi
 
       # ── البحث عن win-unpacked (x64) ───────────────────────────────────────
       - name: Locate win-unpacked directory (x64)
