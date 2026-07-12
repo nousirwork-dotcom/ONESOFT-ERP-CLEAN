@@ -81,11 +81,15 @@
     nsExec::Exec 'netsh advfirewall firewall delete rule name="OneSoft ERP Server"'
 
     ; حذف علامات "الإعداد مكتمل" — مسار مطلق مستقل عن مجلد التثبيت
-    ; $COMMONAPPDATA = C:\ProgramData
-    RMDir /r "$COMMONAPPDATA\OneSoft\config"
-    Delete "$COMMONAPPDATA\OneSoft\version.json"
+    ; نقرأ PROGRAMDATA من البيئة وقت التشغيل (C:\ProgramData عادةً)
+    ReadEnvStr $R6 "PROGRAMDATA"
+    ${If} $R6 == ""
+      StrCpy $R6 "C:\ProgramData"
+    ${EndIf}
+    RMDir /r "$R6\OneSoft\config"
+    Delete "$R6\OneSoft\version.json"
 
-    ; ملاحظة: لا نحذف $COMMONAPPDATA\OneSoft نفسه —
+    ; ملاحظة: لا نحذف مجلد OneSoft نفسه —
     ; Backups / uploads / Logs / Data / Attachments / Exports تبقى كاملة،
     ; وقاعدة PostgreSQL لا تُمَسّ إطلاقاً.
   ${EndIf}
