@@ -57,11 +57,11 @@ export const setupRouter = router({
   isFirstRun: publicProcedure.query(async () => {
     try {
       // قبل اكتمال تهيئة الإقلاع (بذر ADMIN/المؤسسة) قد تكون الجداول فارغة مؤقتاً.
-      // نُعيد dbError حتى يُظهر العميل حالة «جارٍ الاتصال» ويُعيد المحاولة،
-      // بدل إظهار معالج «إنشاء أول مدير» الممنوع في أول تشغيل.
+      // ليست حالة خطأ: نُعيد initializing حتى يُبقي العميل شاشة التحميل ويستطلع
+      // تلقائياً حتى الجاهزية — بدل إظهار معالج «إنشاء أول مدير» أو شاشة خطأ قاعدة البيانات.
       const { isBootstrapComplete } = await import('../bootstrap.js');
       if (!isBootstrapComplete()) {
-        return { firstRun: false, dbError: true };
+        return { firstRun: false, dbError: false, initializing: true };
       }
       // timeout 6 ثوانٍ — إذا PostgreSQL بطيء أو معطل لا نعلّق الطلب للأبد
       const dbQuery = db.select({ cnt: sql<number>`count(*)::int` }).from(organizations);
@@ -69,10 +69,10 @@ export const setupRouter = router({
         setTimeout(() => reject(new Error('DB_TIMEOUT')), 6000),
       );
       const result = await Promise.race([dbQuery, timeoutPromise]);
-      return { firstRun: (result[0]?.cnt ?? 0) === 0, dbError: false };
+      return { firstRun: (result[0]?.cnt ?? 0) === 0, dbError: false, initializing: false };
     } catch {
       // خطأ في الاتصال بقاعدة البيانات أو timeout — لا يعني بالضرورة "أول تشغيل"
-      return { firstRun: false, dbError: true };
+      return { firstRun: false, dbError: true, initializing: false };
     }
   }),
 

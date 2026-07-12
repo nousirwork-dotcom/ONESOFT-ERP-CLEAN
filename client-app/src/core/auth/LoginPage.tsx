@@ -450,7 +450,13 @@ export default function LoginPage() {
   const [, navigate] = useLocation();
   const { settings } = useBranding();
 
-  const firstRunQ   = trpc.setup.isFirstRun.useQuery(undefined, { retry: 3, retryDelay: 2000, staleTime: 0 });
+  const firstRunQ   = trpc.setup.isFirstRun.useQuery(undefined, {
+    retry: 3,
+    retryDelay: 2000,
+    staleTime: 0,
+    // أثناء تهيئة الإقلاع نستطلع كل ثانية حتى تكتمل ثم ننتقل تلقائياً لشاشة الدخول
+    refetchInterval: (query) => (query.state.data?.initializing ? 1000 : false),
+  });
   const licCtxQ     = trpc.license.getLoginContext.useQuery(undefined, { staleTime: 30_000, retry: 1 });
   const clearOrgMut = trpc.license.clearSavedOrgCode.useMutation({
     onSuccess: () => licCtxQ.refetch(),
@@ -476,7 +482,8 @@ export default function LoginPage() {
   useEffect(() => {
     if (firstRunQ.isLoading) { setPhase('loading'); return; }
     if (firstRunQ.isError)   { setPhase('dbError'); return; }
-    const { firstRun, dbError } = firstRunQ.data ?? {};
+    const { firstRun, dbError, initializing } = firstRunQ.data ?? {};
+    if (initializing) { setPhase('loading'); return; } // ما زال الخادم يهيّئ — استمر بالتحميل والاستطلاع
     if (dbError)  { setPhase('dbError'); return; }
     if (firstRun) { setPhase('wizard'); return; }
     tryAutoLogin().then(ok => { if (!ok) setPhase('login'); });
