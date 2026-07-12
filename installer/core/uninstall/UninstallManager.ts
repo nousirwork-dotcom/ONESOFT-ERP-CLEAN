@@ -190,8 +190,10 @@ export class UninstallManager {
       }
     }
 
-    // حذف ملف الإعداد المحلي إن كان في جذر مجلد البيانات (حتى يبدأ المعالج نظيفاً)
-    for (const cfgName of ['onesoft.config.json', 'config.json']) {
+    // حذف ملف الإعداد المحلي وملف version.json من جذر مجلد البيانات
+    // (version.json هو ما يجعل المُثبِّت يعتقد أن البرنامج مثبَّت — إن بقي بعد
+    //  إلغاء التثبيت تُفتح صفحة بيضاء بدل معالج التثبيت عند إعادة التثبيت)
+    for (const cfgName of ['onesoft.config.json', 'config.json', 'version.json']) {
       const cfgPath = path.join(dataDir, cfgName);
       if (fs.existsSync(cfgPath)) {
         try {

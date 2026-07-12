@@ -148,14 +148,24 @@ app.on('quit', (_, exitCode) => {
 });
 
 // ─── Installation state helpers ──────────────────────────────────────────────
-// يقرأ version.json من ProgramData\OneSoft لمعرفة هل البرنامج مثبّت مسبقاً
+// يقرأ version.json من ProgramData\OneSoft لمعرفة هل البرنامج مثبّت مسبقاً.
+// شرط إضافي: يجب أن يوجد config.json أيضاً — إلغاء التثبيت يحذف config لكن
+// النسخ القديمة لم تكن تحذف version.json، فكان المُثبِّت يظن أن البرنامج
+// مثبَّت ويحمِّل localhost بدل المعالج → صفحة بيضاء. التثبيت السليم يملك
+// الملفين معاً دائماً.
 function isAlreadyInstalled(): boolean {
   try {
-    const versionFile = path.join(
-      process.env['ProgramData'] || 'C:\\ProgramData',
-      'OneSoft', 'version.json',
+    const oneSoftDir = path.join(
+      process.env['ProgramData'] || 'C:\\ProgramData', 'OneSoft',
     );
-    return fs.existsSync(versionFile);
+    const versionFile = path.join(oneSoftDir, 'version.json');
+    const configFile  = path.join(oneSoftDir, 'config', 'onesoft.config.json');
+    const installed = fs.existsSync(versionFile) && fs.existsSync(configFile);
+    if (fs.existsSync(versionFile) && !fs.existsSync(configFile)) {
+      writeLog('WARN',
+        'version.json موجود لكن config.json مفقود — حالة ما بعد إلغاء تثبيت قديم؛ سيُعرض معالج التثبيت');
+    }
+    return installed;
   } catch {
     return false;
   }
