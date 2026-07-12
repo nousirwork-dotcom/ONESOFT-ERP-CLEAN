@@ -7,6 +7,7 @@ import type {
   OrganizationSetup, FirstUserSetup,
   RequirementsReport, HealthReport, ProgressEvent, OneSoftConfig,
 } from '../../core/types';
+import type { ExistingDbInfo } from '../../core/database/ExistingDbDetector';
 
 interface InstallerStore {
   // Navigation
@@ -81,6 +82,14 @@ interface InstallerStore {
   // ── بوابة خطوة قاعدة البيانات (يجب اكتمال: test → save → verify) ───────────
   dbConfigVerified: boolean;
   setDbConfigVerified: (v: boolean) => void;
+
+  // ── الاتصال بقاعدة بيانات OneSoft موجودة (إعادة تثبيت آمنة) ─────────────────
+  // عند true: يتخطّى المُثبِّت إنشاء المؤسسة/المستخدم وبذر الحسابات، ويشغّل
+  // migrations آمنة فقط، ثم يوجّه لتسجيل الدخول بالمستخدمين الحاليين.
+  connectToExisting: boolean;
+  setConnectToExisting: (v: boolean) => void;
+  existingDbInfo: ExistingDbInfo | null;
+  setExistingDbInfo: (info: ExistingDbInfo | null) => void;
 
   // Install phase tracking (for unified nav bar)
   installRunning: boolean;
@@ -212,6 +221,11 @@ export const useInstallerStore = create<InstallerStore>((set, get) => ({
 
   dbConfigVerified: false,
   setDbConfigVerified: (v) => set({ dbConfigVerified: v }),
+
+  connectToExisting: false,
+  setConnectToExisting: (v) => set({ connectToExisting: v }),
+  existingDbInfo: null,
+  setExistingDbInfo: (info) => set({ existingDbInfo: info }),
 
   installRunning: false,
   installDone:    false,

@@ -16,6 +16,8 @@ export { PostgreSQLFixer }      from './requirements/fixers/PostgreSQLFixer.js';
 export { ConnectionTester }     from './database/ConnectionTester.js';
 export { DatabaseInstaller }    from './database/DatabaseInstaller.js';
 export { MigrationRunner }      from './database/MigrationRunner.js';
+export { ExistingDbDetector }   from './database/ExistingDbDetector.js';
+export type { ExistingDbInfo }  from './database/ExistingDbDetector.js';
 
 // Setup
 export { OrganizationCreator }  from './setup/OrganizationCreator.js';

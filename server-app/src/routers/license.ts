@@ -3,7 +3,7 @@ import { router, publicProcedure, adminProcedure, protectedProcedure } from '../
 import { TRPCError } from '@trpc/server';
 import { count, eq, and } from 'drizzle-orm';
 import { db } from '../db.js';
-import { users, branches } from '../schema.js';
+import { users, branches, organizations } from '../schema.js';
 import {
   getLicense,
   verifySignedLicense,
@@ -15,13 +15,47 @@ import {
   getOrCreateDeviceId,
   getHardwareFingerprint,
 } from '../lib/deviceId.js';
+import {
+  loadDevicePrefs,
+  saveDevicePrefs,
+  clearDeviceOrgCode,
+} from '../lib/devicePrefs.js';
 
 export const licenseRouter = router({
 
   // ── حالة الترخيص الحالي ────────────────────────────────────────────────────
-  getStatus: protectedProcedure.query(() => {
+  // publicProcedure — تعمل بدون مصادقة لدعم صفحة التفعيل على جهاز جديد
+  getStatus: publicProcedure.query(async ({ ctx }) => {
     const status = getLicense();
     if (!status.valid || !status.payload) {
+      // إذا لم يوجد ملف ترخيص → تحقق من حالة المؤسسة في DB (فقط إذا كان المستخدم مسجلاً)
+      if (status.error === 'license_not_found' && ctx.user) {
+        try {
+          const org = await db.query.organizations.findFirst({
+            where: eq(organizations.id, ctx.user.orgId),
+            columns: { status: true, subscriptionExpiry: true },
+          });
+          if (org?.status === 'trial') {
+            const trialExpired = org.subscriptionExpiry
+              ? new Date(org.subscriptionExpiry) < new Date()
+              : false;
+            return {
+              valid:   !trialExpired,
+              error:   trialExpired ? ('trial_expired' as string) : ('trial_active' as string),
+              payload: null,
+            };
+          }
+          // مؤسسات قديمة (status='active' بدون ملف ترخيص) — تثبيتات سابقة قبل نظام التراخيص
+          // تُعامَل كـ trial_active حتى يحصلوا على ترخيص رسمي
+          if (org?.status === 'active') {
+            return {
+              valid: true,
+              error: 'trial_active' as string,
+              payload: null,
+            };
+          }
+        } catch { /* DB غير متاح */ }
+      }
       return {
         valid:   false,
         error:   status.error,
@@ -56,7 +90,11 @@ export const licenseRouter = router({
   }),
 
   // ── إحصائيات الاستخدام الحالي ─────────────────────────────────────────────
-  getCurrentStats: protectedProcedure.query(async ({ ctx }) => {
+  // publicProcedure — يعيد أصفاراً إن لم يكن المستخدم مسجلاً (جهاز بدون ترخيص)
+  getCurrentStats: publicProcedure.query(async ({ ctx }) => {
+    if (!ctx.user) {
+      return { current_users: 0, current_branches: 0, current_pos: 0 };
+    }
     const [[uRow], [bRow]] = await Promise.all([
       db.select({ cnt: count() }).from(users).where(and(eq(users.orgId, ctx.user.orgId), eq(users.isActive, true))),
       db.select({ cnt: count() }).from(branches).where(and(eq(branches.orgId, ctx.user.orgId), eq(branches.isActive, true))),
@@ -64,8 +102,102 @@ export const licenseRouter = router({
     return {
       current_users:    uRow?.cnt ?? 0,
       current_branches: bRow?.cnt ?? 0,
-      current_pos:      0, // POS terminals table not yet implemented
+      current_pos:      0,
     };
+  }),
+
+  // ── سياق تسجيل الدخول (عام — لشاشة الدخول) ────────────────────────────────
+  // المصدر الأساسي: ملف الترخيص (license.payload.org_id)
+  // الاحتياطي:     device.prefs.json (للتطوير أو عند غياب الترخيص)
+  getLoginContext: publicProcedure.query(async () => {
+    const lic = getLicense();
+
+    // ── الترخيص موجود (سواء صالح أو منتهي) ──────────────────────────────────
+    if (lic.error !== 'license_not_found' && lic.payload) {
+      const p = lic.payload;
+      return {
+        hasLicense:  true,
+        isExpired:   lic.error === 'expired',
+        isInvalid:   !lic.valid && lic.error !== 'expired',
+        // كود المؤسسة يأتي دائماً من الترخيص — لا يكتبه المستخدم
+        orgCode:     p.org_id,
+        orgName:     p.customer_name,
+        licenseId:   p.license_id,
+        licExpiry:   p.expiry_date,
+      };
+    }
+
+    // ── لا يوجد ترخيص — استخدم device prefs كاحتياط (بيئة التطوير) ──────────
+    const prefs = loadDevicePrefs();
+    let orgName = prefs.savedOrgName ?? null;
+
+    if (prefs.savedOrgCode && !orgName) {
+      try {
+        const org = await db.query.organizations.findFirst({
+          where: eq(organizations.code, prefs.savedOrgCode),
+        });
+        if (org) orgName = org.name;
+      } catch { /* DB غير متاح */ }
+    }
+
+    // إذا كان هناك كود محفوظ في device prefs → استخدمه
+    if (prefs.savedOrgCode) {
+      return {
+        hasLicense:  false,
+        isExpired:   false,
+        isInvalid:   false,
+        orgCode:     prefs.savedOrgCode,
+        orgName:     orgName,
+        licenseId:   null,
+        licExpiry:   null,
+        isTrial:     false,
+      };
+    }
+
+    // ── لا كود محفوظ — ابحث عن مؤسسة Trial أولاً ثم active ────────────────
+    try {
+      // نجلب كل المؤسسات ونفضّل trial، ثم أي active غير SYSTEM
+      const allOrgs = await db.query.organizations.findMany({
+        columns: { id: true, code: true, name: true, status: true, subscriptionExpiry: true },
+      });
+      const org =
+        allOrgs.find(o => o.status === 'trial') ??
+        allOrgs.find(o => o.status === 'active' && o.code !== 'SYSTEM') ??
+        null;
+      if (org && (org.status === 'trial' || org.status === 'active')) {
+        const trialExpired = org.status === 'trial' && org.subscriptionExpiry
+          ? new Date(org.subscriptionExpiry) < new Date()
+          : false;
+        return {
+          hasLicense:   false,
+          isExpired:    false,     // Trial لا يمنع تسجيل الدخول — AuthGuard يعالج الانتهاء
+          isInvalid:    false,
+          orgCode:      org.code,
+          orgName:      org.name,
+          licenseId:    null,
+          licExpiry:    org.subscriptionExpiry?.toISOString() ?? null,
+          isTrial:      org.status === 'trial',
+          trialExpired,
+        };
+      }
+    } catch { /* DB غير متاح */ }
+
+    return {
+      hasLicense:  false,
+      isExpired:   false,
+      isInvalid:   false,
+      orgCode:     null,
+      orgName:     null,
+      licenseId:   null,
+      licExpiry:   null,
+      isTrial:     false,
+    };
+  }),
+
+  // ── مسح كود المؤسسة المحفوظ (بعد التحقق من صلاحية المسؤول) ───────────────
+  clearSavedOrgCode: publicProcedure.mutation(() => {
+    clearDeviceOrgCode();
+    return { ok: true };
   }),
 
   // ── معرّف الجهاز (للتفعيل) ─────────────────────────────────────────────────
@@ -97,7 +229,9 @@ export const licenseRouter = router({
     }),
 
   // ── تفعيل عبر كود (Activation Code — base64url) ────────────────────────────
-  activateByCode: adminProcedure
+  // publicProcedure — يعمل بدون مصادقة (جهاز جديد يحتاج تفعيل)
+  // الأمان يعتمد على التحقق الرياضي من التوقيع الرقمي للترخيص
+  activateByCode: publicProcedure
     .input(z.object({ code: z.string().min(10) }))
     .mutation(({ input }) => {
       let signed: SignedLicense;
@@ -114,7 +248,8 @@ export const licenseRouter = router({
     }),
 
   // ── تفعيل عبر محتوى ملف license.ons ───────────────────────────────────────
-  activateByFile: adminProcedure
+  // publicProcedure — يعمل بدون مصادقة (جهاز جديد يحتاج تفعيل)
+  activateByFile: publicProcedure
     .input(z.object({ content: z.string().min(10) }))
     .mutation(({ input }) => {
       let signed: SignedLicense;
@@ -156,10 +291,19 @@ function _applyLicense(signed: SignedLicense) {
   // إعادة قراءة للتأكد
   const fresh = getLicense();
 
+  // حفظ كود المؤسسة واسمها تلقائياً عند التفعيل
+  if (fresh.payload) {
+    saveDevicePrefs({
+      savedOrgCode: fresh.payload.org_id,
+      savedOrgName: fresh.payload.customer_name,
+    });
+  }
+
   return {
     success:  true,
     customer: fresh.payload?.customer_name,
     expiry:   fresh.payload?.expiry_date,
     modules:  fresh.payload?.enabled_modules,
+    orgCode:  fresh.payload?.org_id,
   };
 }

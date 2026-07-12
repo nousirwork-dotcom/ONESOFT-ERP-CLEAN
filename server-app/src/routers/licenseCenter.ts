@@ -2,10 +2,30 @@ import { z } from 'zod';
 import { router, ownerOnlyProcedure } from '../trpc.js';
 import { TRPCError } from '@trpc/server';
 import { db } from '../db.js';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import {
   lcClients, lcLicenses, lcDevices, lcOperationsLog,
 } from '../schema.js';
+
+// ─── Module Catalog (not hardcoded in UI) ─────────────────────────────────────
+export const MODULE_CATALOG = [
+  { id: 'sales',         name: 'المبيعات',           group: 'core' },
+  { id: 'purchases',     name: 'المشتريات',          group: 'core' },
+  { id: 'inventory',     name: 'المخزون',            group: 'core' },
+  { id: 'accounting',    name: 'الحسابات',           group: 'core' },
+  { id: 'pos',           name: 'نقاط البيع',         group: 'core' },
+  { id: 'reports',       name: 'التقارير',           group: 'core' },
+  { id: 'zatca',         name: 'ربط هيئة الزكاة',    group: 'integration' },
+  { id: 'hr',            name: 'الموارد البشرية',    group: 'hr' },
+  { id: 'payroll',       name: 'الرواتب',            group: 'hr' },
+  { id: 'assets',        name: 'الأصول الثابتة',     group: 'advanced' },
+  { id: 'manufacturing', name: 'التصنيع',            group: 'advanced' },
+  { id: 'branches',      name: 'الفروع',             group: 'advanced' },
+  { id: 'sync',          name: 'المزامنة',           group: 'connectivity' },
+  { id: 'offline',       name: 'التشغيل أوفلاين',   group: 'connectivity' },
+  { id: 'api',           name: 'API',                group: 'connectivity' },
+  { id: 'ecommerce',     name: 'المتجر الإلكتروني',  group: 'advanced' },
+];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function genLicenseId() {
@@ -15,24 +35,87 @@ function genLicenseId() {
 }
 function genOrgId() {
   const yr  = new Date().getFullYear();
-  const rnd = Math.floor(Math.random() * 900000 + 100000);
+  const rnd = String(Math.floor(Math.random() * 900000 + 100000)).padStart(6, '0');
   return `ORG-${yr}-${rnd}`;
 }
+function genWebToken() {
+  return Array.from({ length: 32 }, () => Math.random().toString(36)[2]).join('');
+}
+function genActivationCode() {
+  const seg = () => Math.random().toString(36).substring(2, 7).toUpperCase();
+  return `${seg()}-${seg()}-${seg()}-${seg()}`;
+}
+
+type OpType =
+  | 'create_client' | 'create_license' | 'activate' | 'suspend'
+  | 'resume' | 'renew' | 'revoke_device' | 'generate_key' | 'generate_activation_code'
+  | 'update_client' | 'update_license' | 'export_license' | 'generate_web_setup';
+
 async function logOp(
   clientId: number | null,
   licenseId: number | null,
-  operationType: 'create_client' | 'create_license' | 'activate' | 'suspend' | 'resume' | 'renew' | 'revoke_device' | 'generate_key' | 'generate_activation_code',
+  operationType: OpType,
   description: string,
   performedBy = 'admin',
 ) {
   await db.insert(lcOperationsLog).values({ clientId, licenseId, operationType, description, performedBy });
 }
 
+// ─── Shared input schemas ─────────────────────────────────────────────────────
+const clientFields = z.object({
+  name:          z.string().min(2),
+  tradeName:     z.string().optional(),
+  commercialReg: z.string().optional(),
+  taxNumber:     z.string().optional(),
+  country:       z.string().optional(),
+  city:          z.string().optional(),
+  phone:         z.string().optional(),
+  email:         z.string().email().optional().or(z.literal('')),
+  activityType:  z.string().optional(),
+  contactName:   z.string().optional(),
+  contactPhone:  z.string().optional(),
+  contactEmail:  z.string().email().optional().or(z.literal('')),
+  runType:       z.enum(['desktop', 'web', 'hybrid']).default('desktop'),
+  notes:         z.string().optional(),
+});
+
+const licenseFields = z.object({
+  packageName:    z.string().optional(),
+  licenseType:    z.enum(['trial', 'subscription', 'lifetime']).default('subscription'),
+  startDate:      z.string(),
+  expiryDate:     z.string(),
+  maxUsers:       z.number().int().min(1).default(5),
+  maxBranches:    z.number().int().min(1).default(1),
+  maxPos:         z.number().int().min(0).default(1),
+  maxDevices:     z.number().int().min(1).default(3),
+  maxWeb:         z.number().int().min(0).default(0),
+  webAllowed:     z.boolean().default(false),
+  desktopAllowed: z.boolean().default(true),
+  offlineAllowed: z.boolean().default(false),
+  syncAllowed:    z.boolean().default(false),
+  enabledModules: z.array(z.string()).default([]),
+  notes:          z.string().optional(),
+});
+
 export const licenseCenterRouter = router({
+
+  // ── Module catalog (dynamic, not hardcoded in UI) ──────────────────────────
+  listModuleCatalog: ownerOnlyProcedure.query(() => MODULE_CATALOG),
 
   // ── Clients ────────────────────────────────────────────────────────────────
   listClients: ownerOnlyProcedure.query(async () => {
     return db.select().from(lcClients).where(eq(lcClients.isActive, true)).orderBy(desc(lcClients.createdAt));
+  }),
+
+  listClientsDetailed: ownerOnlyProcedure.query(async () => {
+    const clients  = await db.select().from(lcClients).where(eq(lcClients.isActive, true)).orderBy(desc(lcClients.createdAt));
+    const licenses = await db.select().from(lcLicenses).orderBy(desc(lcLicenses.createdAt));
+
+    return clients.map(c => {
+      const clientLicenses = licenses.filter(l => l.clientId === c.id);
+      const primaryLic = clientLicenses.find(l => l.status === 'active') ?? clientLicenses[0] ?? null;
+      return { ...c, license: primaryLic };
+    });
   }),
 
   getClient: ownerOnlyProcedure
@@ -44,35 +127,82 @@ export const licenseCenterRouter = router({
     }),
 
   createClient: ownerOnlyProcedure
-    .input(z.object({
-      name:          z.string().min(2),
-      commercialReg: z.string().optional(),
-      taxNumber:     z.string().optional(),
-      phone:         z.string().optional(),
-      email:         z.string().email().optional(),
-      notes:         z.string().optional(),
-    }))
+    .input(clientFields)
     .mutation(async ({ input }) => {
       const orgId = genOrgId();
-      const [c] = await db.insert(lcClients).values({ ...input, orgId }).returning();
+      const cleanEmail = input.email || undefined;
+      const cleanContactEmail = input.contactEmail || undefined;
+      const [c] = await db.insert(lcClients).values({ ...input, email: cleanEmail, contactEmail: cleanContactEmail, orgId }).returning();
       await logOp(c.id, null, 'create_client', `إنشاء عميل جديد: ${c.name}`);
       return c;
     }),
 
+  createClientWithLicense: ownerOnlyProcedure
+    .input(clientFields.merge(licenseFields))
+    .mutation(async ({ input }) => {
+      const orgId = genOrgId();
+      const { packageName, licenseType, startDate, expiryDate, maxUsers, maxBranches,
+              maxPos, maxDevices, maxWeb, webAllowed, desktopAllowed, offlineAllowed,
+              syncAllowed, enabledModules, notes: licNotes, ...clientData } = input;
+      const cleanEmail = clientData.email || undefined;
+      const cleanContactEmail = clientData.contactEmail || undefined;
+
+      const [c] = await db.insert(lcClients).values({
+        ...clientData,
+        email: cleanEmail,
+        contactEmail: cleanContactEmail,
+        orgId,
+      }).returning();
+
+      const licenseId = genLicenseId();
+      const [lic] = await db.insert(lcLicenses).values({
+        licenseId, clientId: c.id, packageName, licenseType, status: 'active',
+        startDate, expiryDate, maxUsers, maxBranches, maxPos, maxDevices, maxWeb,
+        webAllowed, desktopAllowed, offlineAllowed, syncAllowed, enabledModules,
+        notes: licNotes, issuedBy: 'OneSoft ERP',
+      }).returning();
+
+      await logOp(c.id, lic.id, 'create_client', `إنشاء عميل جديد: ${c.name} (${orgId})`);
+      await logOp(c.id, lic.id, 'create_license', `إصدار ترخيص: ${licenseId} — ${licenseType}`);
+
+      return { client: c, license: lic };
+    }),
+
   updateClient: ownerOnlyProcedure
-    .input(z.object({
-      id:            z.number(),
-      name:          z.string().min(2).optional(),
-      commercialReg: z.string().optional(),
-      taxNumber:     z.string().optional(),
-      phone:         z.string().optional(),
-      email:         z.string().email().optional(),
-      notes:         z.string().optional(),
-    }))
+    .input(clientFields.partial().extend({ id: z.number() }))
     .mutation(async ({ input }) => {
       const { id, ...data } = input;
-      const [c] = await db.update(lcClients).set({ ...data, updatedAt: new Date() }).where(eq(lcClients.id, id)).returning();
+      const cleanEmail = data.email === '' ? null : data.email;
+      const cleanContactEmail = data.contactEmail === '' ? null : data.contactEmail;
+      const [c] = await db.update(lcClients)
+        .set({ ...data, email: cleanEmail ?? undefined, contactEmail: cleanContactEmail ?? undefined, updatedAt: new Date() })
+        .where(eq(lcClients.id, id))
+        .returning();
+      await logOp(c.id, null, 'update_client', `تعديل بيانات العميل: ${c.name}`);
       return c;
+    }),
+
+  generateWebSetupToken: ownerOnlyProcedure
+    .input(z.object({ clientId: z.number() }))
+    .mutation(async ({ input }) => {
+      const token = genWebToken();
+      const [c] = await db.update(lcClients)
+        .set({ webSetupToken: token, webSetupTokenUsed: false, updatedAt: new Date() })
+        .where(eq(lcClients.id, input.clientId))
+        .returning();
+      await logOp(c.id, null, 'generate_web_setup', `إنشاء رابط Web Setup للعميل: ${c.name}`);
+      const url = `https://app.onesoft.sa/setup/${c.orgId}/${token}`;
+      return { token, url, orgId: c.orgId };
+    }),
+
+  generateActivationCode: ownerOnlyProcedure
+    .input(z.object({ licenseId: z.number() }))
+    .mutation(async ({ input }) => {
+      const [lic] = await db.select().from(lcLicenses).where(eq(lcLicenses.id, input.licenseId));
+      if (!lic) throw new TRPCError({ code: 'NOT_FOUND', message: 'الترخيص غير موجود' });
+      const code = genActivationCode();
+      await logOp(lic.clientId, lic.id, 'generate_activation_code', `إصدار Activation Code للترخيص: ${lic.licenseId}`);
+      return { code, licenseId: lic.licenseId };
     }),
 
   // ── Licenses ───────────────────────────────────────────────────────────────
@@ -95,27 +225,23 @@ export const licenseCenterRouter = router({
     }),
 
   createLicense: ownerOnlyProcedure
-    .input(z.object({
-      clientId:       z.number(),
-      packageName:    z.string().optional(),
-      licenseType:    z.enum(['trial', 'subscription', 'lifetime']).default('subscription'),
-      maxUsers:       z.number().default(5),
-      maxBranches:    z.number().default(1),
-      maxPos:         z.number().default(1),
-      maxDevices:     z.number().default(3),
-      maxWeb:         z.number().default(1),
-      enabledModules: z.array(z.string()).default([]),
-      webAllowed:     z.boolean().default(false),
-      desktopAllowed: z.boolean().default(true),
-      offlineAllowed: z.boolean().default(false),
-      startDate:      z.string(),
-      expiryDate:     z.string(),
-      notes:          z.string().optional(),
-    }))
+    .input(licenseFields.extend({ clientId: z.number() }))
     .mutation(async ({ input }) => {
       const licenseId = genLicenseId();
       const [lic] = await db.insert(lcLicenses).values({ ...input, licenseId }).returning();
       await logOp(input.clientId, lic.id, 'create_license', `إنشاء ترخيص جديد: ${licenseId}`);
+      return lic;
+    }),
+
+  updateLicense: ownerOnlyProcedure
+    .input(licenseFields.partial().extend({ licenseId: z.number() }))
+    .mutation(async ({ input }) => {
+      const { licenseId, ...data } = input;
+      const [lic] = await db.update(lcLicenses)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(lcLicenses.id, licenseId))
+        .returning();
+      await logOp(lic.clientId, lic.id, 'update_license', `تعديل الترخيص: ${lic.licenseId}`);
       return lic;
     }),
 
@@ -163,9 +289,9 @@ export const licenseCenterRouter = router({
 
   addDevice: ownerOnlyProcedure
     .input(z.object({
-      licenseId:   z.number(),
-      deviceName:  z.string().min(1),
-      deviceId:    z.string().min(1),
+      licenseId:     z.number(),
+      deviceName:    z.string().min(1),
+      deviceId:      z.string().min(1),
       hwFingerprint: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
@@ -213,21 +339,19 @@ export const licenseCenterRouter = router({
 
   // ── Seed demo data — development only ────────────────────────────────────
   seedDemo: ownerOnlyProcedure.mutation(async () => {
-    // ❌ ممنوع في production — بيانات تجريبية في بيئة الإنتاج مرفوضة
     if (process.env.NODE_ENV === 'production') {
-      throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: 'seedDemo غير متاح في بيئة الإنتاج',
-      });
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'seedDemo غير متاح في بيئة الإنتاج' });
     }
-
     const existing = await db.select().from(lcClients);
     if (existing.length > 0) return { seeded: false, message: 'البيانات التجريبية موجودة مسبقاً' };
 
     const [c] = await db.insert(lcClients).values({
-      name: 'شركة النور التجارية', orgId: 'ORG-2024-000125',
+      name: 'شركة النور التجارية', tradeName: 'النور', orgId: 'ORG-2024-000125',
       commercialReg: '1010456789', taxNumber: '300123456700003',
       phone: '0501234567', email: 'info@alnoor.sa',
+      country: 'السعودية', city: 'الرياض', activityType: 'تجارة عامة',
+      contactName: 'محمد العبدالله', contactPhone: '0551234567',
+      runType: 'desktop',
     }).returning();
 
     const [lic] = await db.insert(lcLicenses).values({
@@ -235,7 +359,7 @@ export const licenseCenterRouter = router({
       packageName: 'باقة احترافية', licenseType: 'subscription', status: 'active',
       maxUsers: 10, maxBranches: 5, maxPos: 5, maxDevices: 10, maxWeb: 2,
       enabledModules: ['sales', 'purchases', 'inventory', 'accounting', 'reports', 'zatca'],
-      webAllowed: true, desktopAllowed: true, offlineAllowed: true,
+      webAllowed: true, desktopAllowed: true, offlineAllowed: true, syncAllowed: false,
       startDate: '2024-01-01', expiryDate: '2025-12-31', issuedBy: 'OneSoft ERP',
     }).returning();
 
@@ -258,7 +382,6 @@ export const licenseCenterRouter = router({
     for (const op of opsSeed) {
       await db.insert(lcOperationsLog).values({ clientId: c.id, licenseId: lic.id, performedBy: 'admin', ...op });
     }
-
     return { seeded: true, clientId: c.id, licenseId: lic.id };
   }),
 });

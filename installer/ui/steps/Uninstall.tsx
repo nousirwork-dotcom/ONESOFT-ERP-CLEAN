@@ -11,10 +11,14 @@ interface UninstallConfig {
   dbPassword: string;
 }
 
+type UninstallMode = 'keep-db' | 'remove-all';
+
 export default function UninstallWizard() {
   const [step, setStep] = useState<'confirm' | 'options' | 'running' | 'done'>('confirm');
-  const [deleteDb, setDeleteDb] = useState(false);
-  const [deleteData, setDeleteData] = useState(false);
+  // الوضع الافتراضي: إزالة البرنامج فقط مع الاحتفاظ بقاعدة البيانات
+  const [mode, setMode] = useState<UninstallMode>('keep-db');
+  const deleteDb = mode === 'remove-all';
+  const deleteData = mode === 'remove-all';
   const [config] = useState<UninstallConfig>({
     installDir: 'C:\\Program Files\\OneSoft ERP',
     dataDir: 'C:\\ProgramData\\OneSoft',
@@ -78,27 +82,56 @@ export default function UninstallWizard() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div>
         <h2 style={{ fontSize: 20, fontWeight: 800, color: '#1E344F', margin: '0 0 4px' }}>خيارات الإلغاء</h2>
-        <p style={{ color: '#6B7280', fontSize: 13, margin: 0 }}>اختر ما تريد الاحتفاظ به</p>
+        <p style={{ color: '#6B7280', fontSize: 13, margin: 0 }}>اختر طريقة الإزالة المناسبة</p>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {[
-          { key: 'db', label: 'حذف قاعدة البيانات', desc: 'سيتم حذف جميع بياناتك نهائياً', value: deleteDb, set: setDeleteDb, danger: true },
-          { key: 'data', label: 'حذف مجلد البيانات (C:\\ProgramData\\OneSoft)', desc: 'النسخ الاحتياطية والمرفقات والسجلات', value: deleteData, set: setDeleteData, danger: true },
-        ].map(opt => (
-          <label key={opt.key} style={{
-            display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer',
-            background: opt.value ? '#FEF2F2' : '#fff',
-            border: `1px solid ${opt.value ? '#FCA5A5' : '#E5E0D8'}`, borderRadius: 8, padding: '10px 14px',
-          }}>
-            <input type="checkbox" checked={opt.value} onChange={e => opt.set(e.target.checked)}
-              style={{ width: 18, height: 18, accentColor: '#B91C1C', cursor: 'pointer' }} />
-            <div>
-              <div style={{ fontWeight: 700, color: opt.danger ? '#B91C1C' : '#1E344F', fontSize: 13 }}>{opt.label}</div>
-              <div style={{ color: '#6B7280', fontSize: 11 }}>{opt.desc}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {/* الخيار الافتراضي — الاحتفاظ بقاعدة البيانات */}
+        <label style={{
+          display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer',
+          background: mode === 'keep-db' ? '#EFF6FF' : '#fff',
+          border: `2px solid ${mode === 'keep-db' ? '#3B82F6' : '#E5E0D8'}`,
+          borderRadius: 10, padding: '14px 16px',
+        }}>
+          <input type="radio" name="uninstall-mode" checked={mode === 'keep-db'}
+            onChange={() => setMode('keep-db')}
+            style={{ width: 18, height: 18, marginTop: 2, accentColor: '#2563EB', cursor: 'pointer' }} />
+          <div>
+            <div style={{ fontWeight: 800, color: '#1D4ED8', fontSize: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+              إزالة البرنامج فقط مع الاحتفاظ بقاعدة البيانات
+              <span style={{
+                fontSize: 10, fontWeight: 700, color: '#1D4ED8',
+                background: '#DBEAFE', padding: '1px 8px', borderRadius: 10,
+              }}>موصى به</span>
             </div>
-          </label>
-        ))}
+            <div style={{ color: '#374151', fontSize: 12, marginTop: 4, lineHeight: 1.6 }}>
+              يوقف الخدمات ويحذف البرنامج والاختصارات والمهام المجدولة وقواعد الجدار الناري
+              وملفات الإعداد والذاكرة المؤقتة والسجلات. <b>تبقى قاعدة البيانات والنسخ الاحتياطية
+              والمرفقات والبيانات كما هي</b> — يمكنك إعادة التثبيت والاتصال بها لاحقاً.
+            </div>
+          </div>
+        </label>
+
+        {/* الخيار الخطير — إزالة كل شيء */}
+        <label style={{
+          display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer',
+          background: mode === 'remove-all' ? '#FEF2F2' : '#fff',
+          border: `2px solid ${mode === 'remove-all' ? '#FCA5A5' : '#E5E0D8'}`,
+          borderRadius: 10, padding: '14px 16px',
+        }}>
+          <input type="radio" name="uninstall-mode" checked={mode === 'remove-all'}
+            onChange={() => setMode('remove-all')}
+            style={{ width: 18, height: 18, marginTop: 2, accentColor: '#B91C1C', cursor: 'pointer' }} />
+          <div>
+            <div style={{ fontWeight: 800, color: '#B91C1C', fontSize: 14 }}>
+              إزالة كل شيء نهائياً — بما فيها قاعدة البيانات
+            </div>
+            <div style={{ color: '#374151', fontSize: 12, marginTop: 4, lineHeight: 1.6 }}>
+              يحذف كل ما سبق <b>بالإضافة إلى قاعدة البيانات ومستخدم التطبيق وكامل مجلد البيانات
+              (النسخ الاحتياطية والمرفقات)</b>. لا يمكن التراجع عن هذا الإجراء.
+            </div>
+          </div>
+        </label>
       </div>
 
       {deleteDb && (
@@ -112,9 +145,15 @@ export default function UninstallWizard() {
         </div>
       )}
 
-      <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#B91C1C' }}>
-        ⚠️ <strong>تحذير:</strong> {deleteDb ? 'ستُحذف قاعدة البيانات بشكل دائم ولا يمكن استرجاعها.' : 'ستُحذف ملفات البرنامج فقط — بياناتك محفوظة.'}
-      </div>
+      {deleteDb ? (
+        <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#B91C1C' }}>
+          ⚠️ <strong>تحذير:</strong> ستُحذف قاعدة البيانات وكل بياناتك بشكل دائم ولا يمكن استرجاعها.
+        </div>
+      ) : (
+        <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#15803D' }}>
+          ✅ ستُحذف ملفات البرنامج فقط — قاعدة البيانات والنسخ الاحتياطية والمرفقات محفوظة.
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
         <button onClick={() => setStep('confirm')} style={btnSecondary}>◀ رجوع</button>

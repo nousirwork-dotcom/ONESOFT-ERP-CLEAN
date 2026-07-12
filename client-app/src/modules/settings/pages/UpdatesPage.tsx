@@ -93,6 +93,10 @@ function fmtTime(d: Date): string {
 export default function UpdatesPage() {
   const store = useUpdateState();
 
+  // ─── دور المستخدم الحالي (الـ Panel التشخيصي للمدير فقط) ──────────────────
+  const meQ = trpc.auth.me.useQuery(undefined, { staleTime: 300_000 });
+  const isSuperAdmin = meQ.data?.role === 'superadmin';
+
   // ─── الإصدار الحقيقي من app.getVersion() عبر IPC ───────────────────────────
   const [electronVersion, setElectronVersion] = useState("");
   useEffect(() => {
@@ -474,8 +478,8 @@ export default function UpdatesPage() {
         </Card>
       )}
 
-      {/* ── Panel تشخيصي ─────────────────────────────────────────────────────── */}
-      {diagLogs.length > 0 && (
+      {/* ── Panel تشخيصي — للمدير العام فقط ────────────────────────────────────── */}
+      {isSuperAdmin && diagLogs.length > 0 && (
         <Card className="border-gray-200">
           <CardHeader className="pb-2">
             <button

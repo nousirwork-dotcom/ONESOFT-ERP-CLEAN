@@ -46,7 +46,14 @@ export const users = pgTable('users', {
   extraPermissions: jsonb('extra_permissions').$type<Record<string, boolean>>(),
   categoryId: integer('category_id'),
   isActive: boolean('is_active').notNull().default(true),
+  passwordStatus: varchar('password_status', { length: 20 }).notNull().default('set'),
   lastLoginAt: timestamp('last_login_at'),
+  phoneVerifiedAt: timestamp('phone_verified_at'),
+  emailVerifiedAt: timestamp('email_verified_at'),
+  passwordChangedAt: timestamp('password_changed_at'),
+  forcePasswordChange: boolean('force_password_change').notNull().default(false),
+  recoveryEnabledPhone: boolean('recovery_enabled_phone').notNull().default(false),
+  recoveryEnabledEmail: boolean('recovery_enabled_email').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -1216,20 +1223,31 @@ export const lcDeviceStatusEnum  = pgEnum('lc_device_status',  ['active', 'inact
 export const lcOpTypeEnum        = pgEnum('lc_op_type', [
   'create_client', 'create_license', 'activate', 'suspend',
   'resume', 'renew', 'revoke_device', 'generate_key', 'generate_activation_code',
+  'update_client', 'update_license', 'export_license', 'generate_web_setup',
 ]);
 
 export const lcClients = pgTable('lc_clients', {
-  id:            serial('id').primaryKey(),
-  name:          varchar('name', { length: 255 }).notNull(),
-  orgId:         varchar('org_id', { length: 80 }).notNull().unique(),
-  commercialReg: varchar('commercial_reg', { length: 80 }),
-  taxNumber:     varchar('tax_number', { length: 80 }),
-  phone:         varchar('phone', { length: 50 }),
-  email:         varchar('email', { length: 255 }),
-  notes:         text('notes'),
-  isActive:      boolean('is_active').notNull().default(true),
-  createdAt:     timestamp('created_at').notNull().defaultNow(),
-  updatedAt:     timestamp('updated_at').notNull().defaultNow(),
+  id:                  serial('id').primaryKey(),
+  name:                varchar('name', { length: 255 }).notNull(),
+  orgId:               varchar('org_id', { length: 80 }).notNull().unique(),
+  tradeName:           varchar('trade_name', { length: 255 }),
+  commercialReg:       varchar('commercial_reg', { length: 80 }),
+  taxNumber:           varchar('tax_number', { length: 80 }),
+  country:             varchar('country', { length: 80 }),
+  city:                varchar('city', { length: 80 }),
+  phone:               varchar('phone', { length: 50 }),
+  email:               varchar('email', { length: 255 }),
+  activityType:        varchar('activity_type', { length: 120 }),
+  contactName:         varchar('contact_name', { length: 120 }),
+  contactPhone:        varchar('contact_phone', { length: 50 }),
+  contactEmail:        varchar('contact_email', { length: 255 }),
+  runType:             varchar('run_type', { length: 20 }).notNull().default('desktop'),
+  webSetupToken:       varchar('web_setup_token', { length: 120 }),
+  webSetupTokenUsed:   boolean('web_setup_token_used').notNull().default(false),
+  notes:               text('notes'),
+  isActive:            boolean('is_active').notNull().default(true),
+  createdAt:           timestamp('created_at').notNull().defaultNow(),
+  updatedAt:           timestamp('updated_at').notNull().defaultNow(),
 });
 
 export const lcLicenses = pgTable('lc_licenses', {
@@ -1248,6 +1266,7 @@ export const lcLicenses = pgTable('lc_licenses', {
   webAllowed:      boolean('web_allowed').notNull().default(false),
   desktopAllowed:  boolean('desktop_allowed').notNull().default(true),
   offlineAllowed:  boolean('offline_allowed').notNull().default(false),
+  syncAllowed:     boolean('sync_allowed').notNull().default(false),
   startDate:       varchar('start_date', { length: 20 }).notNull(),
   expiryDate:      varchar('expiry_date', { length: 20 }).notNull(),
   licenseKey:      text('license_key'),
@@ -1277,6 +1296,50 @@ export const lcOperationsLog = pgTable('lc_operations_log', {
   performedBy:   varchar('performed_by', { length: 120 }),
   metadata:      jsonb('metadata'),
   createdAt:     timestamp('created_at').notNull().defaultNow(),
+});
+
+// ─── Verification Tokens (0017) ───────────────────────────────────────────────
+export const verificationTokens = pgTable('verification_tokens', {
+  id:            serial('id').primaryKey(),
+  userId:        integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  targetType:    varchar('target_type', { length: 10 }).notNull(),
+  targetValue:   varchar('target_value', { length: 255 }).notNull(),
+  otpHash:       varchar('otp_hash', { length: 255 }).notNull(),
+  expiresAt:     timestamp('expires_at').notNull(),
+  usedAt:        timestamp('used_at'),
+  attemptsCount: integer('attempts_count').notNull().default(0),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+});
+
+// ─── Password Reset Tokens (0017) ─────────────────────────────────────────────
+export const passwordResetTokens = pgTable('password_reset_tokens', {
+  id:            serial('id').primaryKey(),
+  userId:        integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  channel:       varchar('channel', { length: 10 }).notNull(),
+  otpHash:       varchar('otp_hash', { length: 255 }).notNull(),
+  resetToken:    varchar('reset_token', { length: 100 }).notNull().unique(),
+  expiresAt:     timestamp('expires_at').notNull(),
+  usedAt:        timestamp('used_at'),
+  attemptsCount: integer('attempts_count').notNull().default(0),
+  requestIp:     varchar('request_ip', { length: 64 }),
+  deviceInfo:    text('device_info'),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+});
+
+// ─── Security Events (0017) ───────────────────────────────────────────────────
+export const securityEvents = pgTable('security_events', {
+  id:         serial('id').primaryKey(),
+  eventType:  varchar('event_type', { length: 80 }).notNull(),
+  userId:     integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+  username:   varchar('username', { length: 100 }),
+  phone:      varchar('phone', { length: 50 }),
+  email:      varchar('email', { length: 255 }),
+  orgId:      integer('org_id'),
+  result:     varchar('result', { length: 20 }).notNull().default('success'),
+  reason:     text('reason'),
+  ip:         varchar('ip', { length: 64 }),
+  deviceInfo: text('device_info'),
+  createdAt:  timestamp('created_at').notNull().defaultNow(),
 });
 
 // ─── Types ────────────────────────────────────────────────────────────────────

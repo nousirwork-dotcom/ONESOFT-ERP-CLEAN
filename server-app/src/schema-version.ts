@@ -5,4 +5,4 @@
  * constant to match the new filename (without the .sql extension), then
  * run `pnpm migrate` so the live database is stamped with the new version.
  */
-export const REQUIRED_SCHEMA_VERSION = '0015_add_user_permissions';
+export const REQUIRED_SCHEMA_VERSION = '0019_fix_active_orgs_to_trial';

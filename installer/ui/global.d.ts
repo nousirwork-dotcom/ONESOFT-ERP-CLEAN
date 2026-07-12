@@ -18,6 +18,7 @@ interface InstallerAPI {
 
   // Database
   testConnection: (opts: import('../core/types').DatabaseConnectionOptions) => Promise<{ ok: boolean; detail: string; ms: number }>;
+  detectExistingDb: (opts: import('../core/types').DatabaseConnectionOptions) => Promise<import('../core/database/ExistingDbDetector').ExistingDbInfo>;
   installPostgres: (password: string) => Promise<void>;
   createDatabase: (opts: {
     adminOpts: import('../core/types').DatabaseConnectionOptions;

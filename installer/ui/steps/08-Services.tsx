@@ -24,6 +24,7 @@ export default function Step09Services() {
     progressLog, dbOpts, organization, firstUser,
     deploymentType, accessModes, databaseMode, machineRole, connectivityMode,
     licensingMode, updateChannel, backupPolicy, telemetry,
+    connectToExisting,
     setOrgId, setOrgCode, getDatabaseUrl, clearProgress,
     setInstallRunning, setInstallDone, setInstalledPort,
     prevStep,
@@ -128,25 +129,32 @@ export default function Step09Services() {
           return; // ⛔ توقف فوري — لا تكمل التثبيت على قاعدة بيانات غير جاهزة
         }
 
-        // 4. إنشاء المؤسسة
-        const orgResult = await window.installer?.createOrganization?.({
-          databaseUrl, org: organization,
-        });
-        if (orgResult?.id) {
-          setOrgId(orgResult.id);
-          setOrgCode(orgResult.code);
-        }
-
-        // 5. إنشاء المستخدم الأول
-        if (orgResult?.id) {
-          await window.installer?.createUser?.({
-            databaseUrl, orgId: orgResult.id, user: firstUser,
+        // ⚠️ عند الاتصال بقاعدة OneSoft موجودة: نتوقّف بعد الـ migrations الآمنة.
+        //    لا نُنشئ مؤسسة/مستخدم ولا نبذر شجرة الحسابات — البيانات والمستخدمون
+        //    الحاليون يُحفظون كما هم، ويسجّل المستخدم الدخول بحسابه الحالي.
+        if (connectToExisting) {
+          // لا شيء إضافي — الـ migrations الآمنة كافية للاتصال بالقاعدة الموجودة
+        } else {
+          // 4. إنشاء المؤسسة
+          const orgResult = await window.installer?.createOrganization?.({
+            databaseUrl, org: organization,
           });
-        }
+          if (orgResult?.id) {
+            setOrgId(orgResult.id);
+            setOrgCode(orgResult.code);
+          }
 
-        // 6. بذر شجرة الحسابات (فقط لـ server و server+client — ليس branch)
-        if (deploymentType !== 'branch') {
-          await window.installer?.seedAccounts?.(databaseUrl);
+          // 5. إنشاء المستخدم الأول
+          if (orgResult?.id) {
+            await window.installer?.createUser?.({
+              databaseUrl, orgId: orgResult.id, user: firstUser,
+            });
+          }
+
+          // 6. بذر شجرة الحسابات (فقط لـ server و server+client — ليس branch)
+          if (deploymentType !== 'branch') {
+            await window.installer?.seedAccounts?.(databaseUrl);
+          }
         }
       }
 
@@ -167,12 +175,11 @@ export default function Step09Services() {
         throw new Error((installResult as any)?.error ?? 'فشل تثبيت الخدمات — سبب غير محدد');
       }
 
-      // إذا اختار المثبّت منافذ بديلة (لتجنب تعارض) — حدّث الإعدادات
+      // دائماً نحدّث config بالمنفذ الفعلي الذي اختاره المثبّت
+      // (نتجنب حالة: config=3000 والسيرفر على 3001 → شاشة بيضاء)
       const actualBackendPort  = (installResult as any)?.backendPort  ?? 3000;
       const actualFrontendPort = (installResult as any)?.frontendPort ?? 5000;
-      if (actualBackendPort !== 3000 || actualFrontendPort !== 5000) {
-        await window.installer?.saveConfig?.(buildConfig(actualBackendPort, actualFrontendPort));
-      }
+      await window.installer?.saveConfig?.(buildConfig(actualBackendPort, actualFrontendPort));
       setInstalledPort(actualBackendPort);
 
       // 9. إنشاء اختصارات سطح المكتب (فقط إذا اختار المستخدم Desktop)

@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { eq, and, sql, count } from 'drizzle-orm';
+import { eq, and, sql, count, inArray } from 'drizzle-orm';
 import { router, adminProcedure, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { users, salesInvoices, vouchers, stockVouchers, userCategories } from '../schema.js';
+import { users, organizations, salesInvoices, vouchers, stockVouchers, userCategories } from '../schema.js';
 import { hashPassword } from '../auth.js';
 import { TRPCError } from '@trpc/server';
 import { getLimit } from '../lib/license.js';
@@ -29,7 +29,7 @@ export const usersRouter = router({
     .input(z.object({
       code: z.string().optional(),
       username: z.string().min(3),
-      password: z.string().min(6),
+      password: z.string().default(''),
       name: z.string().min(2),
       email: z.string().email().optional(),
       phone: z.string().optional(),
@@ -38,7 +38,13 @@ export const usersRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       // ── License enforcement: max_users ──────────────────────────────────────
-      const userLimit = getLimit('max_users');
+      const _licenseLimit = getLimit('max_users');
+      let userLimit: number | null = _licenseLimit;
+      if (userLimit === null) {
+        const [orgRow] = await db.select({ maxUsers: organizations.maxUsers }).from(organizations)
+          .where(eq(organizations.id, ctx.user.orgId));
+        userLimit = orgRow?.maxUsers ?? null;
+      }
       if (userLimit !== null) {
         const [row] = await db
           .select({ cnt: count() })
@@ -47,7 +53,7 @@ export const usersRouter = router({
         if (Number(row.cnt) >= userLimit) {
           throw new TRPCError({
             code: 'FORBIDDEN',
-            message: `تجاوز الحد الأقصى المسموح به في الترخيص (${userLimit} مستخدم). يرجى التواصل مع الدعم الفني لتحديث الترخيص.`,
+            message: `تجاوز الحد الأقصى المسموح به (${userLimit} مستخدم). يرجى التواصل مع الدعم الفني لتحديث الترخيص.`,
           });
         }
       }
@@ -56,6 +62,13 @@ export const usersRouter = router({
         where: and(eq(users.username, input.username), eq(users.orgId, ctx.user.orgId)),
       });
       if (existing) throw new Error('اسم المستخدم مستخدم بالفعل');
+
+      if (input.phone) {
+        const phoneExists = await db.query.users.findFirst({
+          where: and(eq(users.phone, input.phone), eq(users.orgId, ctx.user.orgId), eq(users.isActive, true)),
+        });
+        if (phoneExists) throw new TRPCError({ code: 'CONFLICT', message: 'رقم الجوال مستخدم لمستخدم آخر في هذه المؤسسة' });
+      }
 
       // if category has autoNumbering and no code provided, generate next code
       let finalCode = input.code;
@@ -119,9 +132,63 @@ export const usersRouter = router({
       });
       if (!user) throw new Error('المستخدم غير موجود');
 
+      // ── حماية: لا يمكن إيقاف آخر مدير نشط ────────────────────────────────
+      if (rest.isActive === false && user.isActive &&
+          (user.role === 'admin' || user.role === 'superadmin')) {
+        const [adminRow] = await db.select({ cnt: count() }).from(users)
+          .where(and(
+            eq(users.orgId, ctx.user.orgId),
+            eq(users.isActive, true),
+            inArray(users.role, ['admin', 'superadmin']),
+          ));
+        if (Number(adminRow.cnt) <= 1) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'لا يمكن إيقاف آخر مدير نظام نشط في المؤسسة',
+          });
+        }
+      }
+
+      // ── فحص الحد عند إعادة تفعيل مستخدم موقوف ──────────────────────────
+      if (rest.isActive === true && !user.isActive) {
+        const [cntRow] = await db.select({ cnt: count() }).from(users)
+          .where(and(eq(users.orgId, ctx.user.orgId), eq(users.isActive, true)));
+        const current = Number(cntRow.cnt);
+        const licLimit  = getLimit('max_users');
+        let reactivateLimit: number | null = licLimit;
+        if (reactivateLimit === null) {
+          const [orgRow] = await db.select({ maxUsers: organizations.maxUsers }).from(organizations)
+            .where(eq(organizations.id, ctx.user.orgId));
+          reactivateLimit = orgRow?.maxUsers ?? null;
+        }
+        if (reactivateLimit !== null && current >= reactivateLimit) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: `تجاوز الحد الأقصى المسموح به (${reactivateLimit} مستخدم). لا يمكن إعادة تفعيل المستخدم حتى يتم تحديث الترخيص.`,
+          });
+        }
+      }
+
+      if (rest.phone) {
+        const phoneExists = await db.query.users.findFirst({
+          where: and(eq(users.phone, rest.phone), eq(users.orgId, ctx.user.orgId), eq(users.isActive, true)),
+        });
+        if (phoneExists && phoneExists.id !== id) {
+          throw new TRPCError({ code: 'CONFLICT', message: 'رقم الجوال مستخدم لمستخدم آخر في هذه المؤسسة' });
+        }
+      }
+
+      // ── تصفير التحقق إذا تغير رقم الجوال أو البريد ─────────────────────────
+      const phoneChanged = rest.phone !== undefined && rest.phone !== user.phone;
+      const emailChanged = rest.email !== undefined && rest.email !== user.email;
+
       await db.update(users).set({
         ...rest,
         ...(newPassword ? { passwordHash: await hashPassword(newPassword) } : {}),
+        // إذا تغير الجوال → تصفير التحقق وتعطيل الاستعادة
+        ...(phoneChanged ? { phoneVerifiedAt: null, recoveryEnabledPhone: false } : {}),
+        // إذا تغير البريد → تصفير التحقق وتعطيل الاستعادة
+        ...(emailChanged ? { emailVerifiedAt: null, recoveryEnabledEmail: false } : {}),
         updatedAt: new Date(),
       }).where(eq(users.id, id));
 
@@ -161,6 +228,32 @@ export const usersRouter = router({
         where: and(eq(users.id, input.id), eq(users.orgId, ctx.user.orgId)),
       });
       if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: 'المستخدم غير موجود' });
+
+      // ── حماية المدير الأساسي (أول مستخدم في المؤسسة) ───────────────────────
+      const firstUser = await db.query.users.findFirst({
+        where: eq(users.orgId, ctx.user.orgId),
+        orderBy: (u, { asc }) => [asc(u.id)],
+        columns: { id: true },
+      });
+      if (firstUser?.id === input.id) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكن حذف المدير الأساسي للنظام' });
+      }
+
+      // ── حماية آخر مدير نشط ────────────────────────────────────────────────
+      if (user.isActive && (user.role === 'admin' || user.role === 'superadmin')) {
+        const [adminRow] = await db.select({ cnt: count() }).from(users)
+          .where(and(
+            eq(users.orgId, ctx.user.orgId),
+            eq(users.isActive, true),
+            inArray(users.role, ['admin', 'superadmin']),
+          ));
+        if (Number(adminRow.cnt) <= 1) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'لا يمكن حذف آخر مدير نظام نشط في المؤسسة',
+          });
+        }
+      }
 
       const hasDraftInvoices = await db
         .select({ id: salesInvoices.id })
@@ -228,10 +321,67 @@ export const usersRouter = router({
       if (!valid) throw new Error('كلمة المرور الحالية غير صحيحة');
 
       await db.update(users).set({
-        passwordHash: await hashPassword(input.newPassword),
+        passwordHash:   await hashPassword(input.newPassword),
+        passwordStatus: 'set',
         updatedAt: new Date(),
       }).where(eq(users.id, ctx.user.id));
 
       return { success: true };
     }),
+
+  // ── تعيين كلمة مرور admin (وضع تجريبي — password_status = 'not_set') ────────
+  // متاح فقط للمستخدم نفسه عبر الشريط التحذيري
+  setAdminPassword: protectedProcedure
+    .input(z.object({
+      name:            z.string().min(2).optional(),
+      phone:           z.string().optional(),
+      email:           z.string().email().optional().or(z.literal('')),
+      password:        z.string().min(1),
+      confirmPassword: z.string(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (input.password !== input.confirmPassword) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'كلمتا المرور غير متطابقتين' });
+      }
+
+      const hash = await hashPassword(input.password);
+      await db.update(users).set({
+        ...(input.name  ? { name: input.name }   : {}),
+        ...(input.phone ? { phone: input.phone }  : {}),
+        ...(input.email ? { email: input.email }  : {}),
+        passwordHash:     hash,
+        passwordStatus:   'set',
+        passwordChangedAt: new Date(),
+        updatedAt:        new Date(),
+      }).where(eq(users.id, ctx.user.id));
+
+      return { success: true };
+    }),
+
+  // ── معلومات عدد المستخدمين (للكارت في شاشة المستخدمين) ───────────────────
+  getUserCountInfo: adminProcedure.query(async ({ ctx }) => {
+    const [userRow] = await db
+      .select({ cnt: count() })
+      .from(users)
+      .where(and(eq(users.orgId, ctx.user.orgId), eq(users.isActive, true)));
+    const current = Number(userRow.cnt);
+
+    // maxUsers من الترخيص، أو من المؤسسة إذا لم يكن هناك ترخيص
+    const licenseLimit = getLimit('max_users');
+    let max = licenseLimit ?? 5;
+    if (licenseLimit === null) {
+      const [orgRow] = await db
+        .select({ maxUsers: organizations.maxUsers })
+        .from(organizations)
+        .where(eq(organizations.id, ctx.user.orgId));
+      max = orgRow?.maxUsers ?? 5;
+    }
+
+    return {
+      current,
+      max,
+      remaining: Math.max(0, max - current),
+      atLimit:   current >= max,
+    };
+  }),
 });

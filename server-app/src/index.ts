@@ -269,10 +269,16 @@ app.use('/api/trpc', createExpressMiddleware({
 // ─── Static Files (React Build - Production Only) ─────────────────────────────
 import { existsSync } from 'fs';
 const clientBuildPath = path.join(__dirname, '..', '..', 'client-app', 'dist');
-if (existsSync(path.join(clientBuildPath, 'index.html'))) {
+const clientIndexPath = path.join(clientBuildPath, 'index.html');
+const clientFilesExist = existsSync(clientIndexPath);
+console.log(`[OneSoft] __dirname        = ${__dirname}`);
+console.log(`[OneSoft] clientBuildPath  = ${clientBuildPath}`);
+console.log(`[OneSoft] index.html found = ${clientFilesExist}`);
+
+if (clientFilesExist) {
   app.use(express.static(clientBuildPath));
   app.get('*', (_req, res) => {
-    res.sendFile(path.join(clientBuildPath, 'index.html'));
+    res.sendFile(clientIndexPath);
   });
 } else {
   const devDomain = process.env.REPLIT_DEV_DOMAIN;
@@ -280,7 +286,28 @@ if (existsSync(path.join(clientBuildPath, 'index.html'))) {
     if (devDomain) {
       res.redirect(`https://${devDomain}:5000${req.path}`);
     } else {
-      res.redirect(`http://localhost:5000${req.path}`);
+      // في الـ production: اعرض صفحة تشخيص بدل إعادة توجيه فارغة
+      const diagPage = `<!DOCTYPE html>
+<html dir="rtl" lang="ar"><head><meta charset="utf-8">
+<style>body{margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;
+background:#FEF3C7;font-family:system-ui,sans-serif;direction:rtl;}
+.box{max-width:600px;padding:32px;background:#fff;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,.1);}
+h2{color:#92400E;margin:0 0 16px;}
+code{display:block;background:#F3F4F6;padding:8px 12px;border-radius:6px;font-size:12px;margin:4px 0;word-break:break-all;}
+</style></head>
+<body><div class="box">
+<h2>⚠️ ملفات الواجهة غير موجودة</h2>
+<p>لم يجد الخادم ملفات React في المسار المتوقع.</p>
+<p><b>المسار المتوقع:</b></p>
+<code>${clientBuildPath.replace(/</g,'&lt;')}</code>
+<p><b>__dirname:</b></p>
+<code>${__dirname.replace(/</g,'&lt;')}</code>
+<p><b>PORT:</b> ${process.env.PORT || 3000}</p>
+<p style="margin-top:16px;color:#6B7280;font-size:12px">
+  إذا رأيت هذه الصفحة، أرسل هذه المعلومات للدعم الفني.
+</p>
+</div></body></html>`;
+      res.status(503).send(diagPage);
     }
   });
 }
@@ -376,6 +403,16 @@ if (!schemaOk) {
   console.error(`          DATABASE_URL source: ${ENV.configSource}`);
   process.exit(1);
 }
+// ─── تهيئة أول تشغيل ─────────────────────────────────────────────────────────
+// على قاعدة بيانات جديدة (جدول المستخدمين فارغ): يُنشئ مؤسسة تجريبية + مستخدم ADMIN
+// بكلمة مرور فارغة. على قاعدة موجودة: no-op (لا يمس أي مستخدم أو صلاحية).
+try {
+  const { ensureDefaultAdmin } = await import('./bootstrap.js');
+  await ensureDefaultAdmin();
+} catch (err) {
+  console.error('[startup] ⚠️ ensureDefaultAdmin error:', err);
+}
+
 console.log('[6/6] ✅ PostgreSQL connected — schema OK — server fully ready');
 
 export type { AppRouter } from './routers/index.js';

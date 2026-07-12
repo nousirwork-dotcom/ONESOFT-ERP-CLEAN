@@ -287,12 +287,11 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
 };
 
 // ─── Auth Guard ───────────────────────────────────────────────────────────
-// في وضع الإنتاج: حتى license_not_found يُوجَّه إلى شاشة التفعيل
-// في وضع التطوير: license_not_found مسموح (bypass) — لا redirect
-const IS_PRODUCTION = import.meta.env.PROD;
+// license_not_found ليس ضمن القائمة — جهاز بلا ملف ترخيص لكنه في فترة تجربة
+// صالحة يجب ألا يُجبَر على شاشة التفعيل. التفعيل يظهر فقط عند انتهاء فعلي.
 const LICENSE_BLOCKING_ERRORS = new Set([
-  ...(IS_PRODUCTION ? ["license_not_found"] : []),
   "expired",
+  "trial_expired",           // فترة التجربة انتهت — يُوجَّه إلى /cfg/license
   "invalid_signature",
   "unknown_algorithm",
   "unknown_kid",
@@ -300,6 +299,7 @@ const LICENSE_BLOCKING_ERRORS = new Set([
   "invalid_json",
   "read_error",
 ]);
+// ملاحظة: trial_active و license_not_found ليسا في القائمة — يُسمح بالوصول الكامل
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const [location, navigate] = useLocation();
@@ -433,6 +433,8 @@ function App() {
             {!mandatoryUpdateActive && (
               <Switch>
                 <Route path="/login" component={LoginPage} />
+                {/* صفحة التفعيل عامة — لا تحتاج تسجيل دخول (جهاز جديد بدون ترخيص) */}
+                <Route path="/cfg/license" component={LicenseActivationPage} />
                 {import.meta.env.DEV && _DevLicensePreview && (
                   <Route path="/dev/license-preview">
                     {() => (

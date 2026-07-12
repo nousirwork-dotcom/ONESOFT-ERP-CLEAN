@@ -62,6 +62,10 @@ const EXPECTED_TABLES = [
   'zatca_qr_codes',
   'zatca_settings',
   'zatca_api_history',
+  // Password Recovery (0017)
+  'verification_tokens',
+  'password_reset_tokens',
+  'security_events',
 ];
 
 export async function checkSchema(pool: Pool): Promise<boolean> {

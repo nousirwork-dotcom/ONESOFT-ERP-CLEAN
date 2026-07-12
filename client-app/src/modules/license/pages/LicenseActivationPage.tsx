@@ -243,12 +243,14 @@ export default function LicenseActivationPage() {
   const curBranches = (stats as { current_branches?: number } | undefined)?.current_branches ?? 0;
   const mods        = new Set(p?.enabled_modules ?? []);
 
-  const isTrial     = isValid && lt === "trial";
-  const isLifetime  = isValid && lt === "lifetime";
-  const isExpired   = !isValid && err === "expired";
-  const isSlate     = !isValid && err === "license_not_found";
-  const isInvalid   = !isValid && (err === "invalid_signature" || err === "unknown_algorithm" || err === "unknown_kid" || err === "invalid_json");
-  const isDateTamper = !isValid && err === "date_manipulation_suspected";
+  const isTrial        = isValid && lt === "trial";
+  const isLifetime     = isValid && lt === "lifetime";
+  const isExpired      = !isValid && err === "expired";
+  const isTrialExpired = !isValid && err === "trial_expired";   // انتهت فترة التجربة
+  const isTrialActive  = !isValid && err === "trial_active";    // في فترة التجربة (بدون ملف ترخيص)
+  const isSlate        = !isValid && (err === "license_not_found" || isTrialActive);
+  const isInvalid      = !isValid && (err === "invalid_signature" || err === "unknown_algorithm" || err === "unknown_kid" || err === "invalid_json");
+  const isDateTamper   = !isValid && err === "date_manipulation_suspected";
 
   const trialDuration = p?.start_date && p?.expiry_date && isTrial
     ? Math.ceil((new Date(p.expiry_date + "T23:59:59Z").getTime() - new Date(p.start_date + "T00:00:00Z").getTime()) / 86_400_000)
@@ -320,6 +322,113 @@ export default function LicenseActivationPage() {
             {notice.ok ? <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" /> : <XCircle className="w-4 h-4 text-red-500 shrink-0" />}
             <span className="flex-1">{notice.msg}</span>
             <button onClick={() => setNotice(null)} className="text-xl leading-none opacity-40 hover:opacity-80">×</button>
+          </div>
+        )}
+
+        {/* ══ TRIAL EXPIRED BANNER ══════════════════════════════════════ */}
+        {isTrialExpired && (
+          <div className="rounded-2xl border-2 border-red-300 bg-red-50 overflow-hidden">
+            {/* رأس البانر */}
+            <div className="flex items-center gap-3 bg-red-600 px-6 py-4">
+              <AlertTriangle className="w-7 h-7 text-white shrink-0" />
+              <div>
+                <h2 className="text-[20px] font-black text-white leading-tight">انتهت فترة التجربة</h2>
+                <p className="text-[14px] text-red-100 mt-0.5">
+                  لا يمكن الوصول إلى النظام الكامل حتى يتم التفعيل أو تمديد الفترة التجريبية
+                </p>
+              </div>
+            </div>
+            {/* الخيارات المتاحة */}
+            <div className="p-5">
+              <p className="text-[15px] font-bold text-red-800 mb-4">الخيارات المتاحة — اضغط للانتقال مباشرة:</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {/* 1 — إدخال كود التفعيل */}
+                <button
+                  onClick={() => {
+                    setTab("code");
+                    setTimeout(() => document.getElementById("section-activation")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                  }}
+                  className="flex items-start gap-3 bg-white rounded-xl border border-red-200 px-4 py-3.5 text-right hover:bg-red-50 hover:border-red-400 transition-colors cursor-pointer w-full"
+                >
+                  <span className="text-2xl shrink-0 mt-0.5">🔑</span>
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-bold text-[#1B2B5C] leading-tight">إدخال كود التفعيل</p>
+                    <p className="text-[13px] text-[#6B7280] mt-0.5 leading-snug">أدخل كود التفعيل الذي حصلت عليه من مزود النظام</p>
+                    <p className="text-[12px] text-red-500 font-semibold mt-1">← اضغط للانتقال</p>
+                  </div>
+                </button>
+
+                {/* 2 — استيراد ملف الترخيص */}
+                <button
+                  onClick={() => {
+                    setTab("file");
+                    setTimeout(() => document.getElementById("section-activation")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                  }}
+                  className="flex items-start gap-3 bg-white rounded-xl border border-red-200 px-4 py-3.5 text-right hover:bg-red-50 hover:border-red-400 transition-colors cursor-pointer w-full"
+                >
+                  <span className="text-2xl shrink-0 mt-0.5">📂</span>
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-bold text-[#1B2B5C] leading-tight">استيراد ملف الترخيص</p>
+                    <p className="text-[13px] text-[#6B7280] mt-0.5 leading-snug">استيراد ملف .ons الصادر من مزود النظام</p>
+                    <p className="text-[12px] text-red-500 font-semibold mt-1">← اضغط للانتقال</p>
+                  </div>
+                </button>
+
+                {/* 3 — تصدير طلب التفعيل */}
+                <button
+                  onClick={() => {
+                    document.getElementById("section-device")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    genReq.mutate({ org_id: "" });
+                  }}
+                  className="flex items-start gap-3 bg-white rounded-xl border border-red-200 px-4 py-3.5 text-right hover:bg-red-50 hover:border-red-400 transition-colors cursor-pointer w-full"
+                >
+                  <span className="text-2xl shrink-0 mt-0.5">📤</span>
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-bold text-[#1B2B5C] leading-tight">تصدير طلب التفعيل</p>
+                    <p className="text-[13px] text-[#6B7280] mt-0.5 leading-snug">توليد Request Code وإرساله لمزود النظام</p>
+                    <p className="text-[12px] text-red-500 font-semibold mt-1">← اضغط لتوليد الكود</p>
+                  </div>
+                </button>
+
+                {/* 4 — طلب تمديد التجربة */}
+                <button
+                  onClick={() => {
+                    window.open("mailto:support@onesoft.sa?subject=طلب تمديد فترة التجربة&body=السلام عليكم، أرجو تمديد فترة التجربة الخاصة بنا.", "_blank");
+                  }}
+                  className="flex items-start gap-3 bg-white rounded-xl border border-red-200 px-4 py-3.5 text-right hover:bg-red-50 hover:border-red-400 transition-colors cursor-pointer w-full"
+                >
+                  <span className="text-2xl shrink-0 mt-0.5">⏳</span>
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-bold text-[#1B2B5C] leading-tight">طلب تمديد التجربة</p>
+                    <p className="text-[13px] text-[#6B7280] mt-0.5 leading-snug">إرسال طلب تمديد بالبريد الإلكتروني لمزود النظام</p>
+                    <p className="text-[12px] text-red-500 font-semibold mt-1">← سيفتح بريدك الإلكتروني</p>
+                  </div>
+                </button>
+
+                {/* 5 — الدعم الفني بالبريد */}
+                <button
+                  onClick={() => window.open("mailto:support@onesoft.sa", "_blank")}
+                  className="flex items-start gap-3 bg-white rounded-xl border border-red-200 px-4 py-3.5 text-right hover:bg-red-50 hover:border-red-400 transition-colors cursor-pointer w-full"
+                >
+                  <span className="text-2xl shrink-0 mt-0.5">📧</span>
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-bold text-[#1B2B5C] leading-tight">التواصل مع الدعم</p>
+                    <p className="text-[13px] text-[#6B7280] mt-0.5 leading-snug">support@onesoft.sa</p>
+                    <p className="text-[12px] text-red-500 font-semibold mt-1">← سيفتح بريدك الإلكتروني</p>
+                  </div>
+                </button>
+
+                {/* 6 — الدعم الهاتفي */}
+                <div className="flex items-start gap-3 bg-white rounded-xl border border-red-200 px-4 py-3.5">
+                  <span className="text-2xl shrink-0 mt-0.5">📞</span>
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-bold text-[#1B2B5C] leading-tight">الدعم الهاتفي</p>
+                    <p className="text-[13px] text-[#6B7280] mt-0.5 leading-snug">920-XXX-XXXX</p>
+                    <p className="text-[12px] text-[#9CA3AF] mt-1">أوقات الدوام 9ص — 5م</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -520,7 +629,7 @@ export default function LicenseActivationPage() {
             </Card>
 
             {/* Device info */}
-            <Card className="p-5">
+            <Card id="section-device" className="p-5">
               <SectionTitle icon={<Fingerprint className="w-4 h-4" />} title="معلومات الجهاز" />
               <div className="space-y-3">
                 {/* Device ID */}
@@ -572,7 +681,7 @@ export default function LicenseActivationPage() {
           </div>
 
           {/* ── COL 3 (left in RTL): تفعيل الترخيص ──────────────────── */}
-          <Card className="p-5">
+          <Card id="section-activation" className="p-5">
             <SectionTitle icon={<KeyRound className="w-4 h-4" />} title="تفعيل الترخيص" />
 
             {/* Tabs */}
