@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('installer', {
 
   // Database
   testConnection:  (opts: unknown) => ipcRenderer.invoke('database:test-connection', opts),
+  detectExistingDb:(opts: unknown) => ipcRenderer.invoke('database:detect-existing', opts),
   installPostgres: (password: string) => ipcRenderer.invoke('database:install-postgres', password),
   createDatabase:  (opts: unknown) => ipcRenderer.invoke('database:create', opts),
   runMigrations:   (url: string)   => ipcRenderer.invoke('database:migrate', url),

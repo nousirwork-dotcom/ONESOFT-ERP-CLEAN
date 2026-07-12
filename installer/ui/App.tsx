@@ -58,10 +58,11 @@ const isUninstall = typeof window !== 'undefined' &&
 
 export default function App() {
   const {
-    currentStep, nextStep, prevStep, addProgress,
+    currentStep, nextStep, prevStep, setStep, addProgress,
     acceptedLicense, requirementsReport, organization, firstUser,
     installRunning, installDone, healthReport,
     databaseMode, dbOpts, dbConfigVerified,
+    connectToExisting,
   } = useInstallerStore();
 
   useEffect(() => {
@@ -143,6 +144,16 @@ export default function App() {
   const handleCancel = () => window.installer?.close?.();
   const handleFinish = () => window.installer?.close?.();
 
+  // ── تنقّل يتخطّى خطوتي «المؤسسة» و«المستخدم الأول» عند الاتصال بقاعدة موجودة ──
+  const goNext = () => {
+    if (connectToExisting && currentStep === 12) { setStep(15); return; }
+    nextStep();
+  };
+  const goBack = () => {
+    if (connectToExisting && currentStep === 15) { setStep(12); return; }
+    prevStep();
+  };
+
   const renderStep = () => {
     switch (currentStep) {
       case 1:  return <Step01Welcome />;
@@ -176,8 +187,8 @@ export default function App() {
       isLast={navConfig.isLast}
       hideNav={navConfig.hideNav}
       nextLabel={navConfig.nextLabel}
-      onBack={prevStep}
-      onNext={navConfig.isLast ? handleFinish : nextStep}
+      onBack={goBack}
+      onNext={navConfig.isLast ? handleFinish : goNext}
       onCancel={handleCancel}
     >
       {renderStep()}

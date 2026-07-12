@@ -1,5 +1,5 @@
 import type { IpcMain, BrowserWindow } from 'electron';
-import { ConnectionTester, DatabaseInstaller, MigrationRunner } from '../../core/index.js';
+import { ConnectionTester, DatabaseInstaller, MigrationRunner, ExistingDbDetector } from '../../core/index.js';
 import { PostgreSQLFixer } from '../../core/requirements/fixers/PostgreSQLFixer.js';
 import type { DatabaseConnectionOptions } from '../../core/types.js';
 import * as path from 'path';
@@ -11,6 +11,12 @@ export function registerDatabaseIpc(ipc: IpcMain, win: BrowserWindow | null) {
 
   ipc.handle('database:test-connection', async (_, opts: DatabaseConnectionOptions) => {
     return tester.test(opts);
+  });
+
+  // اكتشاف قاعدة بيانات OneSoft موجودة مسبقاً — قراءة فقط، لا تعديل
+  ipc.handle('database:detect-existing', async (_, opts: DatabaseConnectionOptions) => {
+    const detector = new ExistingDbDetector();
+    return detector.detect(opts);
   });
 
   // Handler مفقود سابقاً — تثبيت PostgreSQL تلقائياً

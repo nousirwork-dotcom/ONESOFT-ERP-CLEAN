@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useInstallerStore } from '../store/installer.store';
 import type { DatabaseMode } from '../../core/types';
+import type { ExistingDbInfo } from '../../core/database/ExistingDbDetector';
 import { generateSecurePassword } from '../lib/generatePassword';
 
 const DB_MODES: {
@@ -45,7 +46,11 @@ export default function Step06DatabaseMode() {
     databaseMode, setDatabaseMode,
     dbOpts, setDbOpts,
     setDbConfigVerified,
+    connectToExisting, setConnectToExisting,
+    existingDbInfo, setExistingDbInfo,
   } = useInstallerStore();
+
+  const [detectingExisting, setDetectingExisting] = useState(false);
 
   const [chainStep, setChainStep] = useState<ChainStep>('idle');
   const [testState,   setTestState]   = useState<StepState>('pending');
@@ -67,7 +72,33 @@ export default function Step06DatabaseMode() {
     setErrorMsg(null);
     setConfigPath(null);
     setDbConfigVerified(false);
+    setConnectToExisting(false);
+    setExistingDbInfo(null);
     (window.installer as any)?.clearConfig?.().catch(() => {});
+  };
+
+  // بعد نجاح سلسلة التحقق: افحص إن كانت قاعدة OneSoft موجودة مسبقاً
+  const detectExisting = async () => {
+    setDetectingExisting(true);
+    try {
+      const info = await window.installer?.detectExistingDb?.({
+        host: dbOpts.host, port: dbOpts.port,
+        database: dbOpts.database, user: dbOpts.user, password: dbOpts.password,
+      });
+      if (info) {
+        setExistingDbInfo(info as ExistingDbInfo);
+        // نفعّل الاتصال بالموجود افتراضياً فقط عند اكتشاف قاعدة OneSoft مأهولة
+        // بها مستخدم واحد على الأقل — وإلا فلا يوجد حساب لتسجيل الدخول، فنُعامِلها
+        // كتثبيت جديد (سيُنشئ المعالج المؤسسة والمستخدم الأول).
+        const canConnectToExisting = info.exists === true && info.userCount > 0;
+        setConnectToExisting(canConnectToExisting);
+      }
+    } catch {
+      setExistingDbInfo(null);
+      setConnectToExisting(false);
+    } finally {
+      setDetectingExisting(false);
+    }
   };
 
   const selectMode = (m: DatabaseMode) => {
@@ -162,6 +193,8 @@ export default function Step06DatabaseMode() {
         setConfigPath(verify.configPath ?? null);
         setChainStep('done');
         setDbConfigVerified(true);
+        // بعد التحقق: افحص إن كانت قاعدة OneSoft موجودة على هذا الاتصال
+        await detectExisting();
       } else {
         setVerifyState('fail');
         setErrorMsg(verify?.detail ?? 'تعذّر التحقق من الإعدادات المحفوظة');
@@ -466,6 +499,80 @@ export default function Step06DatabaseMode() {
                   📁 {configPath}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ── اكتشاف قاعدة بيانات OneSoft موجودة ─────────────────────────── */}
+          {isDone && detectingExisting && (
+            <div style={{
+              padding: '10px 14px', borderRadius: 8, fontSize: 12,
+              background: '#F0F9FF', border: '1px solid #BAE6FD', color: '#0369A1',
+            }}>
+              ⏳ جارٍ فحص قاعدة البيانات للبحث عن تثبيت OneSoft موجود...
+            </div>
+          )}
+
+          {isDone && !detectingExisting && existingDbInfo?.exists && (
+            <div style={{
+              padding: '16px 18px', borderRadius: 12,
+              background: '#EFF6FF', border: '2px solid #3B82F6',
+              display: 'flex', flexDirection: 'column', gap: 12,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 26 }}>🗄️</span>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: '#1D4ED8' }}>
+                    تم العثور على قاعدة بيانات OneSoft موجودة
+                  </div>
+                  <div style={{ fontSize: 12, color: '#1E40AF', marginTop: 2 }}>
+                    {existingDbInfo.orgCount} مؤسسة · {existingDbInfo.userCount} مستخدم
+                    {existingDbInfo.schemaVersion ? ` · مخطط ${existingDbInfo.schemaVersion}` : ''}
+                  </div>
+                </div>
+              </div>
+
+              <label style={{
+                display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer',
+                background: connectToExisting ? '#DBEAFE' : '#fff',
+                border: `1px solid ${connectToExisting ? '#3B82F6' : '#CBD5E1'}`,
+                borderRadius: 8, padding: '10px 14px',
+              }}>
+                <input
+                  type="checkbox"
+                  checked={connectToExisting}
+                  onChange={e => setConnectToExisting(e.target.checked)}
+                  style={{ width: 18, height: 18, marginTop: 1, accentColor: '#2563EB', cursor: 'pointer' }}
+                />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#1E3A8A' }}>
+                    الاتصال بالقاعدة الموجودة (إعادة تثبيت آمنة)
+                  </div>
+                  <div style={{ fontSize: 12, color: '#3730A3', marginTop: 2 }}>
+                    سيتم الاحتفاظ بكل بياناتك ومستخدميك — لن تُنشأ مؤسسة أو مستخدم جديد،
+                    ولن تُبذر شجرة الحسابات، وستُطبَّق فقط تحديثات المخطط الآمنة.
+                    سجّل الدخول بحسابك الحالي بعد الانتهاء.
+                  </div>
+                </div>
+              </label>
+
+              {!connectToExisting && (
+                <div style={{
+                  padding: '8px 12px', background: '#FEF3C7', border: '1px solid #FCD34D',
+                  borderRadius: 8, fontSize: 12, color: '#92400E',
+                }}>
+                  ⚠️ ألغيت خيار الاتصال بالموجود — سيطلب المُثبِّت إنشاء مؤسسة ومستخدم جديدين.
+                  لن تُحذف بياناتك، لكن قد يفشل الإنشاء لوجود مؤسسة مسبقاً.
+                </div>
+              )}
+            </div>
+          )}
+
+          {isDone && !detectingExisting && existingDbInfo && !existingDbInfo.exists && existingDbInfo.databaseExists && (
+            <div style={{
+              padding: '10px 14px', borderRadius: 8, fontSize: 12,
+              background: '#F9FAFB', border: '1px solid #E5E7EB', color: '#4B5563',
+            }}>
+              ℹ️ {existingDbInfo.detail} — سيُكمل المُثبِّت كتثبيت جديد.
             </div>
           )}
         </div>

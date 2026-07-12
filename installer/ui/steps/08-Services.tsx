@@ -24,6 +24,7 @@ export default function Step09Services() {
     progressLog, dbOpts, organization, firstUser,
     deploymentType, accessModes, databaseMode, machineRole, connectivityMode,
     licensingMode, updateChannel, backupPolicy, telemetry,
+    connectToExisting,
     setOrgId, setOrgCode, getDatabaseUrl, clearProgress,
     setInstallRunning, setInstallDone, setInstalledPort,
     prevStep,
@@ -128,25 +129,32 @@ export default function Step09Services() {
           return; // ⛔ توقف فوري — لا تكمل التثبيت على قاعدة بيانات غير جاهزة
         }
 
-        // 4. إنشاء المؤسسة
-        const orgResult = await window.installer?.createOrganization?.({
-          databaseUrl, org: organization,
-        });
-        if (orgResult?.id) {
-          setOrgId(orgResult.id);
-          setOrgCode(orgResult.code);
-        }
-
-        // 5. إنشاء المستخدم الأول
-        if (orgResult?.id) {
-          await window.installer?.createUser?.({
-            databaseUrl, orgId: orgResult.id, user: firstUser,
+        // ⚠️ عند الاتصال بقاعدة OneSoft موجودة: نتوقّف بعد الـ migrations الآمنة.
+        //    لا نُنشئ مؤسسة/مستخدم ولا نبذر شجرة الحسابات — البيانات والمستخدمون
+        //    الحاليون يُحفظون كما هم، ويسجّل المستخدم الدخول بحسابه الحالي.
+        if (connectToExisting) {
+          // لا شيء إضافي — الـ migrations الآمنة كافية للاتصال بالقاعدة الموجودة
+        } else {
+          // 4. إنشاء المؤسسة
+          const orgResult = await window.installer?.createOrganization?.({
+            databaseUrl, org: organization,
           });
-        }
+          if (orgResult?.id) {
+            setOrgId(orgResult.id);
+            setOrgCode(orgResult.code);
+          }
 
-        // 6. بذر شجرة الحسابات (فقط لـ server و server+client — ليس branch)
-        if (deploymentType !== 'branch') {
-          await window.installer?.seedAccounts?.(databaseUrl);
+          // 5. إنشاء المستخدم الأول
+          if (orgResult?.id) {
+            await window.installer?.createUser?.({
+              databaseUrl, orgId: orgResult.id, user: firstUser,
+            });
+          }
+
+          // 6. بذر شجرة الحسابات (فقط لـ server و server+client — ليس branch)
+          if (deploymentType !== 'branch') {
+            await window.installer?.seedAccounts?.(databaseUrl);
+          }
         }
       }
 
