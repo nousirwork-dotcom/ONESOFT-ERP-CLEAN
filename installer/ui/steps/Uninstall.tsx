@@ -195,8 +195,20 @@ export default function UninstallWizard() {
           تم إلغاء التثبيت بنجاح
         </h2>
         <p style={{ color: '#6B7280', fontSize: 14 }}>
-          تمت إزالة OneSoft ERP من جهازك بالكامل.
+          {mode === 'keep-db'
+            ? 'تمت إزالة برنامج OneSoft ERP من جهازك.'
+            : 'تمت إزالة OneSoft ERP من جهازك بالكامل — بما فيها قاعدة البيانات.'}
         </p>
+        {mode === 'keep-db' && (
+          <p style={{
+            color: '#15803D', fontSize: 13, fontWeight: 600,
+            background: '#F0FDF4', border: '1px solid #86EFAC',
+            borderRadius: 8, padding: '10px 14px', maxWidth: 420, margin: '10px auto 0',
+          }}>
+            🗄️ قاعدة البيانات والنسخ الاحتياطية والمرفقات محفوظة كما هي —
+            عند إعادة التثبيت اختر «الاتصال بالقاعدة الموجودة» لاستعادة كل بياناتك.
+          </p>
+        )}
       </div>
       <button onClick={() => window.installer?.close?.()} style={btnPrimary}>إغلاق</button>
     </div>
