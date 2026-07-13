@@ -89,6 +89,7 @@ import {
 } from "@/modules/helpservices/pages/HsPages";
 import AIAssistantPage from "@/modules/helpservices/pages/AIAssistantPage";
 import SupportRequestPage from "@/modules/helpservices/pages/SupportRequestPage";
+import CustodyTrackingPage from "@/modules/helpservices/pages/CustodyTrackingPage";
 import LicenseActivationPage from "@/modules/license/pages/LicenseActivationPage";
 import SuperAdminPage from "@/core/admin/SuperAdminPage";
 import SourceCodeViewerPage from "@/core/dev/SourceCodeViewerPage";
@@ -127,7 +128,8 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/help-services-module": HelpServicesModule,
   // المساعدة والخدمات
   "/hs/rentals":       HsRentalsPage,
-  "/hs/custody":       HsCustodyPage,
+  "/hs/custody":          HsCustodyPage,
+  "/hs/custody-tracking": CustodyTrackingPage,
   "/hs/customers":     HsCustomersPage,
   "/hs/tasks":         HsTasksPage,
   "/hs/gov-links":     HsGovLinksPage,

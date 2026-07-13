@@ -50,6 +50,7 @@ export function HsCustodyPage() {
           labelEn: "Custody Tracking",
           descAr: "سجل تفصيلي لعمليات العهدة وأرصدتها.",
           descEn: "Detailed log of custody transactions and balances.",
+          route: "/hs/custody-tracking",
         },
       ]}
     />

@@ -1545,6 +1545,28 @@ export const hsTasks = pgTable('hs_tasks', {
   updatedAt:       timestamp('updated_at').notNull().defaultNow(),
 });
 
+// ─── متابعة العهد — أداة مساعدة داخلية مستقلة (0022) ────────────────────────
+// تنبيه: هذا الجدول مستقل تمامًا عن النظام المحاسبي ولا يرتبط بأي قيد أو سند
+export const hsCustodyEntries = pgTable('hs_custody_entries', {
+  id:               serial('id').primaryKey(),
+  orgId:            integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  createdByUserId:  integer('created_by_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  entryDate:        varchar('entry_date', { length: 10 }).notNull(), // YYYY-MM-DD
+  description:      text('description').notNull().default(''),
+  referenceNumber:  varchar('reference_number', { length: 100 }),
+  // الوارد
+  incomeDue:        decimal('income_due',       { precision: 15, scale: 4 }).notNull().default('0'),
+  incomeCollected:  decimal('income_collected', { precision: 15, scale: 4 }).notNull().default('0'),
+  incomeNote:       text('income_note'),
+  // المنصرف
+  expenseDue:       decimal('expense_due',  { precision: 15, scale: 4 }).notNull().default('0'),
+  expensePaid:      decimal('expense_paid', { precision: 15, scale: 4 }).notNull().default('0'),
+  expenseNote:      text('expense_note'),
+  sortOrder:        integer('sort_order').notNull().default(0),
+  createdAt:        timestamp('created_at').notNull().defaultNow(),
+  updatedAt:        timestamp('updated_at').notNull().defaultNow(),
+});
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type Organization = typeof organizations.$inferSelect;
 export type User = typeof users.$inferSelect;
