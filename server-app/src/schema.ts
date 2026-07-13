@@ -828,7 +828,9 @@ export const appSettings = pgTable('app_settings', {
   key:       varchar('key', { length: 100 }).notNull(),
   value:     text('value'),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
-});
+}, (t) => [
+  uniqueIndex('app_settings_org_key_uidx').on(t.orgId, t.key),
+]);
 
 // ─── Currencies ───────────────────────────────────────────────────────────────
 export const currencies = pgTable('currencies', {

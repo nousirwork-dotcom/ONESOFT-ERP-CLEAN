@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from '../trpc.js';
+import { TRPCError } from '@trpc/server';
 import { db } from '../db.js';
 import { appSettings } from '../schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 
 export const appSettingsRouter = router({
 
@@ -19,18 +20,24 @@ export const appSettingsRouter = router({
   set: protectedProcedure
     .input(z.object({ key: z.string(), value: z.any() }))
     .mutation(async ({ input, ctx }) => {
+      // ── مفاتيح الأمان: للمديرين فقط ────────────────────────────────────────
+      if (input.key.startsWith('security.') &&
+          ctx.user.role !== 'admin' && ctx.user.role !== 'superadmin') {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'إعدادات الأمان متاحة لمديري النظام فقط',
+        });
+      }
+
       const orgId = ctx.user.orgId;
       const serialized = JSON.stringify(input.value);
-      const existing = await db.select({ id: appSettings.id }).from(appSettings)
-        .where(and(eq(appSettings.orgId, orgId), eq(appSettings.key, input.key)))
-        .limit(1);
-      if (existing.length) {
-        await db.update(appSettings)
-          .set({ value: serialized, updatedAt: new Date() })
-          .where(and(eq(appSettings.orgId, orgId), eq(appSettings.key, input.key)));
-      } else {
-        await db.insert(appSettings).values({ orgId, key: input.key, value: serialized });
-      }
+      // upsert ذرّي — يعتمد على القيد الفريد (org_id, key)
+      await db.insert(appSettings)
+        .values({ orgId, key: input.key, value: serialized })
+        .onConflictDoUpdate({
+          target: [appSettings.orgId, appSettings.key],
+          set: { value: serialized, updatedAt: sql`now()` },
+        });
       return { success: true };
     }),
 });
