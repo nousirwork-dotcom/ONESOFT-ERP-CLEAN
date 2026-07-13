@@ -367,3 +367,11 @@ html.view-wide .erp-table-cell   { font-size: 14px; }
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
+/* ─── Electron custom titlebar: reserve a dedicated 32px strip ─────────────── */
+:root { --titlebar-h: 0px; }
+html.electron-shell { --titlebar-h: 32px; }
+html.electron-shell [data-slot="sidebar-container"] {
+  top: var(--titlebar-h) !important;
+  height: calc(100svh - var(--titlebar-h)) !important;
+}

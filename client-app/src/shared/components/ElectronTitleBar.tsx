@@ -20,8 +20,11 @@ export default function ElectronTitleBar() {
   useEffect(() => {
     const api = getElectronAPI();
     if (!api) return;
+    // Reserve a dedicated strip for the titlebar so app content never sits under it
+    document.documentElement.classList.add('electron-shell');
     api.isMaximized().then(setIsMaximized).catch(() => {});
     api.getVersion().then(setVersion).catch(() => {});
+    return () => document.documentElement.classList.remove('electron-shell');
   }, []);
 
   const api = getElectronAPI();
@@ -50,7 +53,8 @@ export default function ElectronTitleBar() {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    background: 'transparent',
+    background: 'var(--background, #F7F5F1)',
+    borderBottom: '1px solid var(--border, #E2DDD3)',
     userSelect: 'none',
     WebkitAppRegion: 'drag',
   };

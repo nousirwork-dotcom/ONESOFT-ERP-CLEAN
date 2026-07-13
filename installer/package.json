@@ -1,6 +1,6 @@
 {
   "name": "onesoft-installer",
-  "version": "1.0.15",
+  "version": "1.0.16",
   "description": "OneSoft ERP — Professional Installer",
   "main": "dist-electron/electron/main.js",
   "scripts": {

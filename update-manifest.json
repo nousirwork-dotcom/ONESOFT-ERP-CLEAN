@@ -1,21 +1,21 @@
 {
-  "latestVersion": "1.0.12",
+  "latestVersion": "1.0.15",
   "minSupportedVersion": "1.0.0",
   "mandatory": false,
-  "messageAr": "يوجد تحديث جديد (v1.0.12): تسجيل الدخول مباشرة بعد التثبيت الجديد، إنشاء حساب ADMIN تلقائياً، تحصين أمني لحساب ADMIN الافتراضي (الدخول بكلمة مرور فارغة من جهاز السيرفر فقط)، والاحتفاظ بقاعدة البيانات عند إعادة التثبيت.",
-  "messageEn": "New update (v1.0.12): direct login after fresh install, automatic ADMIN account creation, security hardening for the default ADMIN account (empty-password login from the server machine only), and database preservation on reinstall.",
+  "messageAr": "يوجد تحديث جديد (v1.0.15): إلغاء التثبيت من لوحة التحكم أصبح ينظّف الخدمات وعلامات الإعداد تلقائياً، مع الحفاظ الكامل على قاعدة البيانات والنسخ الاحتياطية — إعادة التثبيت تعرض معالج الإعداد وتكتشف القاعدة الموجودة.",
+  "messageEn": "New update (v1.0.15): uninstalling from Control Panel now automatically cleans up services and setup markers while fully preserving the database and backups — reinstalling shows the setup wizard and detects the existing database.",
   "releaseNotes": [
-    "التثبيت الجديد يفتح على شاشة تسجيل الدخول مباشرة (بدون شاشة تفعيل أو معالج إنشاء مدير)",
-    "إنشاء مؤسسة وحساب ADMIN تلقائياً عند أول تشغيل — الدخول باسم ADMIN وكلمة مرور فارغة",
-    "تحصين أمني: حساب ADMIN بكلمة مرور فارغة يُقبل فقط من جهاز السيرفر نفسه (localhost) — مرفوض عبر الشبكة حتى تعيين كلمة مرور",
-    "تنبيه واضح بعد أول دخول لتعيين كلمة مرور للمدير",
-    "إزالة التثبيت تحتفظ بقاعدة البيانات، وإعادة التثبيت تكتشف القاعدة الموجودة دون تكرار المؤسسة أو المستخدمين",
-    "إصلاح حالة التهيئة عند الإقلاع: لا تظهر رسالة خطأ اتصال قاعدة البيانات أثناء التحضير الأولي"
+    "إلغاء التثبيت من لوحة التحكم يوقف ويحذف خدمات OneSoft تلقائياً قبل حذف الملفات",
+    "حذف المهام المجدولة وقواعد جدار الحماية الخاصة بـ OneSoft عند إلغاء التثبيت",
+    "حذف علامات الإعداد (config و version.json) — إعادة التثبيت تعرض معالج الإعداد وتكتشف القاعدة الموجودة",
+    "الحفاظ الكامل على النسخ الاحتياطية والملفات المرفوعة والسجلات وقاعدة PostgreSQL — لا تُمَسّ إطلاقاً",
+    "التحديث المباشر فوق نسخة موجودة لا يمس الإعداد ولا يعرض المعالج (--updated)",
+    "إصلاح الشاشة البيضاء عند التثبيت فوق نسخة قديمة دون إلغاء تثبيت"
   ],
-  "downloadUrl": "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.12/OneSoftSetup-1.0.12-x64.exe",
-  "fileSizeBytes": 81606540,
-  "sha512": "u1IyKgkJvGH2QxSNFlYme2OIu/HFIm5IBDCFtuChiUaVdaC+NFGHF3yTyUJEMEcKvBbVp5YA/iHYfRkWfzQ6EQ==",
-  "publishedAt": "2026-07-12T14:38:40.688Z",
+  "downloadUrl": "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.15/OneSoftSetup-1.0.15-x64.exe",
+  "fileSizeBytes": 81608562,
+  "sha512": "3OcHN7KGXmE2A5qAPukW89z793+r7o3bqmtCS+XgPVHamuh8O7bP4c8t5d50zAm9uU33iGosH/ycezvY/HUwYQ==",
+  "publishedAt": "2026-07-12T22:37:42.615Z",
   "_notes": {
     "MANIFEST_URL": "استضِف هذا الملف على CDN عام أو GitHub Pages بدون توثيق (Public URL).",
     "ONESOFT_UPDATE_URL": "يمكن تجاوز الرابط الافتراضي عبر متغير البيئة ONESOFT_UPDATE_URL.",
@@ -38,6 +38,6 @@
       "6. الأجهزة المثبّت عليها الإصدار السابق ستستقبل التحديث تلقائياً في 5 ثوانٍ من الفتح"
     ]
   },
-  "version": "1.0.12",
-  "notes": "v1.0.12 — دخول مباشر بعد التثبيت + تحصين أمني لحساب ADMIN الافتراضي + الاحتفاظ بالقاعدة عند إعادة التثبيت"
+  "version": "1.0.15",
+  "notes": "v1.0.15 — تنظيف كامل عند إلغاء التثبيت (خدمات + علامات الإعداد) مع الحفاظ على القاعدة والنسخ الاحتياطية"
 }

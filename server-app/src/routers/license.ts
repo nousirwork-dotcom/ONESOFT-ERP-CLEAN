@@ -115,13 +115,22 @@ export const licenseRouter = router({
     // ── الترخيص موجود (سواء صالح أو منتهي) ──────────────────────────────────
     if (lic.error !== 'license_not_found' && lic.payload) {
       const p = lic.payload;
+      // معلومات الشركة (جدول المؤسسات) هي مصدر العرض — الترخيص احتياط
+      let dbOrgName: string | null = null;
+      try {
+        const org = await db.query.organizations.findFirst({
+          where: eq(organizations.code, p.org_id),
+          columns: { name: true },
+        });
+        if (org?.name) dbOrgName = org.name;
+      } catch { /* DB غير متاح */ }
       return {
         hasLicense:  true,
         isExpired:   lic.error === 'expired',
         isInvalid:   !lic.valid && lic.error !== 'expired',
         // كود المؤسسة يأتي دائماً من الترخيص — لا يكتبه المستخدم
         orgCode:     p.org_id,
-        orgName:     p.customer_name,
+        orgName:     dbOrgName ?? p.customer_name,
         licenseId:   p.license_id,
         licExpiry:   p.expiry_date,
       };
@@ -266,7 +275,7 @@ export const licenseRouter = router({
 });
 
 // ─── مساعد مشترك: التحقق + الحفظ ────────────────────────────────────────────
-function _applyLicense(signed: SignedLicense) {
+async function _applyLicense(signed: SignedLicense) {
   const result = verifySignedLicense(signed);
 
   if (!result.valid) {
@@ -297,6 +306,37 @@ function _applyLicense(signed: SignedLicense) {
       savedOrgCode: fresh.payload.org_id,
       savedOrgName: fresh.payload.customer_name,
     });
+
+    // مزامنة معلومات الشركة (جدول المؤسسات) مع بيانات الترخيص:
+    // الاسم والكود يأتيان من الترخيص، والحالة تصبح active (تختفي شارة التجربة)
+    try {
+      const p = fresh.payload;
+      const existing = await db.query.organizations.findFirst({
+        where: eq(organizations.code, p.org_id),
+        columns: { id: true },
+      });
+      if (existing) {
+        await db.update(organizations)
+          .set({ name: p.customer_name, status: 'active', updatedAt: new Date() })
+          .where(eq(organizations.id, existing.id));
+      } else {
+        // لا مؤسسة بهذا الكود — حدِّث المؤسسة الرئيسية (trial أو active غير SYSTEM)
+        const allOrgs = await db.query.organizations.findMany({
+          columns: { id: true, code: true, status: true },
+        });
+        const main =
+          allOrgs.find(o => o.status === 'trial') ??
+          allOrgs.find(o => o.status === 'active' && o.code !== 'SYSTEM') ??
+          null;
+        if (main) {
+          await db.update(organizations)
+            .set({ code: p.org_id, name: p.customer_name, status: 'active', updatedAt: new Date() })
+            .where(eq(organizations.id, main.id));
+        }
+      }
+    } catch (err) {
+      console.error('[license] org sync after activation failed:', err);
+    }
   }
 
   return {

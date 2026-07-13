@@ -3,7 +3,7 @@ import { useTabManager } from "@/core/contexts/TabManagerContext";
 import { LayoutDashboard, Store } from "lucide-react";
 import { useState, useEffect } from "react";
 
-const TASKBAR_H = 48;
+const TASKBAR_H = 40;
 
 export default function WindowTaskbar() {
   const { tabs, activeTabId, activateTab, minimizeWindow, toggleDashboard, dashboardVisible, showDashboard } = useTabManager();
@@ -41,8 +41,8 @@ export default function WindowTaskbar() {
         onClick={toggleDashboard}
         title="لوحة التحكم"
         style={{
-          width: 42,
-          height: 36,
+          width: 40,
+          height: 30,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -81,7 +81,7 @@ export default function WindowTaskbar() {
               }}
               title={tab.label}
               style={{
-                height: 36,
+                height: 30,
                 minWidth: 48,
                 maxWidth: 180,
                 display: "flex",

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { trpc } from '@/shared/lib/trpc';
 import { toast } from 'sonner';
+import { useTabManager } from '@/core/contexts/TabManagerContext';
+import { KeySquare } from 'lucide-react';
 
 function Spinner({ size = 14 }: { size?: number }) {
   return (
@@ -197,6 +199,7 @@ function SetAdminPasswordModal({ onClose, onSuccess }: { onClose: () => void; on
 
 export default function TrialBanner() {
   const [showModal, setShowModal] = useState(false);
+  const { openTab } = useTabManager();
   const statusQ = trpc.auth.adminPasswordStatus.useQuery(undefined, {
     staleTime: 30_000,
     retry: 1,
@@ -209,46 +212,60 @@ export default function TrialBanner() {
 
   if (!isTrial && !noPassword) return null;
 
-  const isUrgent = noPassword || (trialDaysLeft !== null && trialDaysLeft <= 5);
-  const bg = isUrgent
-    ? 'linear-gradient(90deg, #7F1D1D 0%, #991B1B 100%)'
-    : 'linear-gradient(90deg, #92400E 0%, #B45309 100%)';
+  const isUrgent = trialDaysLeft !== null && trialDaysLeft <= 5;
+
+  const pill: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 8,
+    padding: '4px 10px', borderRadius: 999,
+    fontSize: 11, fontWeight: 700,
+    fontFamily: "'Cairo', Tahoma, sans-serif",
+    boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+    whiteSpace: 'nowrap',
+  };
 
   return (
     <>
       <div dir="rtl" style={{
-        background: bg, color: '#FEF3C7',
-        padding: '8px 16px',
-        display: 'flex', alignItems: 'center', gap: 12,
-        fontSize: 12, fontFamily: "'Cairo', Tahoma, sans-serif",
-        zIndex: 50, flexShrink: 0,
+        position: 'absolute', top: 8, insetInlineStart: 12,
+        zIndex: 1500,
+        display: 'flex', flexDirection: 'column', gap: 6,
+        alignItems: 'flex-start',
+        pointerEvents: 'none',
       }}>
-        <span style={{ fontSize: 16 }}>{isUrgent ? '🔴' : '⚠️'}</span>
-
-        <span style={{ flex: 1, lineHeight: 1.6 }}>
-          {isTrial && trialDaysLeft !== null && (
-            <>
-              <strong>نسخة تجريبية</strong>
-              {' — متبقي '}
-              <strong style={{ fontSize: 13 }}>{trialDaysLeft}</strong>
-              {' يوم'}
-              {noPassword && ' · '}
-            </>
-          )}
-          {noPassword && (
-            <strong>لم يتم تعيين كلمة مرور مدير النظام بعد. النظام غير محمي.</strong>
-          )}
-        </span>
+        {isTrial && trialDaysLeft !== null && (
+          <div style={{
+            ...pill,
+            pointerEvents: 'auto',
+            background: isUrgent ? '#FEF2F2' : '#FFFBEB',
+            border: `1px solid ${isUrgent ? '#FCA5A5' : '#FCD34D'}`,
+            color: isUrgent ? '#991B1B' : '#92400E',
+          }}>
+            <span>{isUrgent ? '🔴' : '⏳'}</span>
+            <span>نسخة تجريبية — متبقي {trialDaysLeft} يوم</span>
+            <button
+              onClick={() => openTab('/cfg/license', 'تفعيل الترخيص', KeySquare)}
+              style={{
+                background: isUrgent ? '#991B1B' : '#B45309',
+                color: '#fff', border: 'none', borderRadius: 999,
+                padding: '2px 10px', fontWeight: 700, fontSize: 10.5,
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              تفعيل الترخيص
+            </button>
+          </div>
+        )}
 
         {noPassword && (
           <button
             onClick={() => setShowModal(true)}
             style={{
-              background: '#FEF3C7', color: '#92400E',
-              border: 'none', borderRadius: 6, padding: '5px 14px',
-              fontWeight: 700, fontSize: 12, cursor: 'pointer',
-              fontFamily: 'inherit', whiteSpace: 'nowrap', flexShrink: 0,
+              ...pill,
+              pointerEvents: 'auto',
+              background: '#FEF2F2', border: '1px solid #FCA5A5',
+              color: '#991B1B', cursor: 'pointer',
             }}
+            title="لم يتم تعيين كلمة مرور مدير النظام بعد — النظام غير محمي"
           >
             🔐 تعيين كلمة مرور المدير
           </button>
