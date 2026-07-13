@@ -2,9 +2,10 @@ import { z } from 'zod';
 import { router, ownerOnlyProcedure } from '../trpc.js';
 import { TRPCError } from '@trpc/server';
 import { db } from '../db.js';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 import {
   lcClients, lcLicenses, lcDevices, lcOperationsLog,
+  lcSupportTickets, lcSupportTicketMessages, lcSupportTicketNotes,
 } from '../schema.js';
 
 // ─── Module Catalog (not hardcoded in UI) ─────────────────────────────────────
@@ -336,6 +337,128 @@ export const licenseCenterRouter = router({
       return days <= 30 && days > 0;
     }).length;
     return { totalClients: clients.length, totalLicenses: licenses.length, activeLicenses: active, expiringLicenses: expiring, activeDevices: devices.length };
+  }),
+
+  // ── Support Tickets (LC Side) ──────────────────────────────────────────────
+  listSupportTickets: ownerOnlyProcedure
+    .input(z.object({
+      status:   z.string().optional(),
+      limit:    z.number().default(50),
+    }))
+    .query(async ({ input }) => {
+      const q = db.select().from(lcSupportTickets).orderBy(desc(lcSupportTickets.updatedAt)).limit(input.limit);
+      return q;
+    }),
+
+  getSupportTicket: ownerOnlyProcedure
+    .input(z.object({ ticketId: z.number() }))
+    .query(async ({ input }) => {
+      const [ticket] = await db.select().from(lcSupportTickets)
+        .where(eq(lcSupportTickets.id, input.ticketId));
+      if (!ticket) throw new TRPCError({ code: 'NOT_FOUND', message: 'التذكرة غير موجودة' });
+
+      const messages = await db.select().from(lcSupportTicketMessages)
+        .where(eq(lcSupportTicketMessages.ticketId, ticket.id))
+        .orderBy(lcSupportTicketMessages.createdAt);
+
+      const notes = await db.select().from(lcSupportTicketNotes)
+        .where(eq(lcSupportTicketNotes.ticketId, ticket.id))
+        .orderBy(lcSupportTicketNotes.createdAt);
+
+      await db.update(lcSupportTicketMessages)
+        .set({ isReadBySupport: true })
+        .where(and(
+          eq(lcSupportTicketMessages.ticketId, ticket.id),
+          eq(lcSupportTicketMessages.isReadBySupport, false),
+        ));
+
+      return { ticket, messages, notes };
+    }),
+
+  replyToTicket: ownerOnlyProcedure
+    .input(z.object({
+      ticketId:   z.number(),
+      body:       z.string().min(1).max(5000),
+      senderName: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const [ticket] = await db.select().from(lcSupportTickets)
+        .where(eq(lcSupportTickets.id, input.ticketId));
+      if (!ticket) throw new TRPCError({ code: 'NOT_FOUND', message: 'التذكرة غير موجودة' });
+
+      const name = input.senderName ?? ctx.user.username ?? 'فريق الدعم';
+      const [msg] = await db.insert(lcSupportTicketMessages).values({
+        ticketId:        ticket.id,
+        senderType:      'support',
+        senderName:      name,
+        body:            input.body,
+        isReadBySupport: true,
+        isReadByClient:  false,
+      }).returning();
+
+      if (ticket.status === 'open') {
+        await db.update(lcSupportTickets)
+          .set({ status: 'in_progress', updatedAt: new Date() })
+          .where(eq(lcSupportTickets.id, ticket.id));
+      } else {
+        await db.update(lcSupportTickets)
+          .set({ updatedAt: new Date() })
+          .where(eq(lcSupportTickets.id, ticket.id));
+      }
+
+      return msg;
+    }),
+
+  updateTicketStatus: ownerOnlyProcedure
+    .input(z.object({
+      ticketId: z.number(),
+      status:   z.enum(['open', 'in_progress', 'resolved', 'closed']),
+      note:     z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const now = new Date();
+      const [ticket] = await db.update(lcSupportTickets)
+        .set({
+          status:     input.status,
+          resolvedAt: input.status === 'resolved' ? now : undefined,
+          closedAt:   input.status === 'closed'   ? now : undefined,
+          updatedAt:  now,
+        })
+        .where(eq(lcSupportTickets.id, input.ticketId))
+        .returning();
+
+      if (input.note) {
+        await db.insert(lcSupportTicketNotes).values({
+          ticketId: ticket.id,
+          author:   ctx.user.username ?? 'admin',
+          body:     input.note,
+        });
+      }
+
+      return ticket;
+    }),
+
+  addInternalNote: ownerOnlyProcedure
+    .input(z.object({
+      ticketId: z.number(),
+      body:     z.string().min(1).max(3000),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const [note] = await db.insert(lcSupportTicketNotes).values({
+        ticketId: input.ticketId,
+        author:   ctx.user.username ?? 'admin',
+        body:     input.body,
+      }).returning();
+      return note;
+    }),
+
+  getSupportDashboard: ownerOnlyProcedure.query(async () => {
+    const tickets = await db.select().from(lcSupportTickets);
+    const open       = tickets.filter(t => t.status === 'open').length;
+    const inProgress = tickets.filter(t => t.status === 'in_progress').length;
+    const resolved   = tickets.filter(t => t.status === 'resolved').length;
+    const closed     = tickets.filter(t => t.status === 'closed').length;
+    return { total: tickets.length, open, inProgress, resolved, closed };
   }),
 
   // ── Seed demo data — development only ────────────────────────────────────

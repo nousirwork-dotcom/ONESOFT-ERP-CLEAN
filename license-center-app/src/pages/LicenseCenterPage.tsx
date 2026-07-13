@@ -9,6 +9,7 @@ import {
   Clock, AlertTriangle, Globe, LogOut,
 } from "lucide-react";
 import CustomersTab from "./CustomersTab";
+import SupportTicketsTab from "./SupportTicketsTab";
 
 const NAVY   = "#0F1D40";
 const NAVY2  = "#1B2B5C";
@@ -129,7 +130,7 @@ function ActionBtn({ icon, label, variant = "navy", onClick, disabled }: {
   );
 }
 
-type NavKey = "dashboard" | "clients" | "licenses" | "devices" | "offline" | "log" | "settings";
+type NavKey = "dashboard" | "clients" | "licenses" | "devices" | "offline" | "log" | "support" | "settings";
 const NAV_ITEMS: { key: NavKey; icon: React.ReactNode; label: string }[] = [
   { key: "dashboard", icon: <LayoutDashboard className="w-5 h-5" />, label: "لوحة التحكم" },
   { key: "clients",   icon: <Users className="w-5 h-5" />,           label: "العملاء" },
@@ -137,6 +138,7 @@ const NAV_ITEMS: { key: NavKey; icon: React.ReactNode; label: string }[] = [
   { key: "devices",   icon: <MonitorSmartphone className="w-5 h-5" />,label: "الأجهزة المفعلة" },
   { key: "offline",   icon: <CloudOff className="w-5 h-5" />,        label: "التفعيل الأوفلاين" },
   { key: "log",       icon: <ClipboardList className="w-5 h-5" />,   label: "سجل العمليات" },
+  { key: "support",   icon: <span className="w-5 h-5 flex items-center justify-center text-[16px]">🎧</span>, label: "الدعم الفني" },
   { key: "settings",  icon: <Settings className="w-5 h-5" />,        label: "الإعدادات" },
 ];
 
@@ -289,8 +291,11 @@ export default function LicenseCenterPage() {
             <CustomersTab onNavigate={(key) => setActiveNav(key as NavKey)} />
           )}
 
+          {/* ── Support Tickets Tab ───────────────────────────────────── */}
+          {activeNav === "support" && <SupportTicketsTab />}
+
           {/* ── Dashboard / Licenses / Default view ──────────────────── */}
-          {activeNav !== "clients" && activeNav !== "log" && activeNav !== "devices" && (
+          {activeNav !== "clients" && activeNav !== "log" && activeNav !== "devices" && activeNav !== "support" && (
             <div className="space-y-4">
               {/* 1. معلومات العميل */}
               <div className="bg-white rounded-2xl border shadow-sm" style={{ borderColor: BORDER }}>

@@ -25,6 +25,7 @@ const HS_PERM_DEFS: Array<{ key: string; label: string; isModule?: boolean }> = 
   { key: "hs_gov_links",     label: "الروابط والخدمات الحكومية" },
   { key: "hs_notes",         label: "الملاحظات" },
   { key: "hs_internal_comm", label: "التواصل الداخلي" },
+  { key: "hs_support",       label: "طلب الدعم الفني" },
 ];
 
 const roleLabels: Record<string, string> = {

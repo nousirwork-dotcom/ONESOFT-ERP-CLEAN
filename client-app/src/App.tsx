@@ -88,6 +88,7 @@ import {
   HsGovLinksPage, HsNotesPage, HsInternalCommPage,
 } from "@/modules/helpservices/pages/HsPages";
 import AIAssistantPage from "@/modules/helpservices/pages/AIAssistantPage";
+import SupportRequestPage from "@/modules/helpservices/pages/SupportRequestPage";
 import LicenseActivationPage from "@/modules/license/pages/LicenseActivationPage";
 import SuperAdminPage from "@/core/admin/SuperAdminPage";
 import SourceCodeViewerPage from "@/core/dev/SourceCodeViewerPage";
@@ -133,6 +134,7 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/hs/notes":         HsNotesPage,
   "/hs/internal-comm": HsInternalCommPage,
   "/hs/ai-assistant":  AIAssistantPage,
+  "/hs/support":       SupportRequestPage,
   "/purchases/suppliers":         PurchaseSuppliersPage,
   "/purchases/supplier-groups":  PurchaseSupplierGroupsPage,
   "/purchases/orders":           PurchaseOrdersPage,

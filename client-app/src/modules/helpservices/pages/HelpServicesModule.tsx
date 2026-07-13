@@ -1,6 +1,6 @@
 import {
   LifeBuoy, FileSignature, Wallet, UserSearch, ListTodo, Landmark,
-  StickyNote, MessagesSquare, Sparkles,
+  StickyNote, MessagesSquare, Sparkles, Headphones,
 } from "lucide-react";
 import { Card, CardContent } from "@/core/ui/card";
 import { useLang } from "@/core/contexts/LanguageContext";
@@ -26,6 +26,7 @@ export const menuSections = [
       { id: "hs-notes",         label: "الملاحظات",                   icon: StickyNote,     path: "/hs/notes" },
       { id: "hs-internal-comm", label: "التواصل الداخلي",             icon: MessagesSquare, path: "/hs/internal-comm" },
       { id: "hs-ai-assistant",  label: "المساعد الذكي",               icon: Sparkles,       path: "/hs/ai-assistant" },
+      { id: "hs-support",       label: "طلب الدعم الفني",             icon: Headphones,     path: "/hs/support" },
     ] as Array<{ id: string; label: string; icon: React.ElementType; path?: string }>,
   },
 ];
@@ -139,6 +140,18 @@ export const HS_CARDS: HsCard[] = [
     descEn: "Smart assistant for searching, summarizing, follow-up, and drafting inside the system.",
     color: "text-fuchsia-600 dark:text-fuchsia-400",
     bg: "bg-fuchsia-500/10",
+  },
+  {
+    id: "support",
+    perm: "hs_support",
+    path: "/hs/support",
+    icon: Headphones,
+    labelAr: "طلب الدعم الفني",
+    labelEn: "Technical Support",
+    descAr: "تقديم طلبات الدعم الفني ومتابعة الردود وتقييم الخدمة.",
+    descEn: "Submit support requests, follow up on replies, and rate the service.",
+    color: "text-cyan-600 dark:text-cyan-400",
+    bg: "bg-cyan-500/10",
   },
 ];
 

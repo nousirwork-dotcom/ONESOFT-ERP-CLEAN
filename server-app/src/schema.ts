@@ -1300,6 +1300,107 @@ export const lcOperationsLog = pgTable('lc_operations_log', {
   createdAt:     timestamp('created_at').notNull().defaultNow(),
 });
 
+// ─── Support Tickets — Client Side (0021) ────────────────────────────────────
+export const supportTicketsLocal = pgTable('support_tickets_local', {
+  id:                serial('id').primaryKey(),
+  ticketNumber:      varchar('ticket_number', { length: 30 }).notNull().unique(),
+  orgId:             integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  createdByUserId:   integer('created_by_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  subject:           varchar('subject', { length: 500 }).notNull(),
+  description:       text('description').notNull(),
+  category:          varchar('category', { length: 50 }).notNull().default('general'),
+  priority:          varchar('priority', { length: 20 }).notNull().default('normal'),
+  status:            varchar('status', { length: 30 }).notNull().default('draft'),
+  sourceInfo:        jsonb('source_info').$type<Record<string, any>>(),
+  isOfflineDraft:    boolean('is_offline_draft').notNull().default(false),
+  submittedAt:       timestamp('submitted_at'),
+  lcTicketRef:       varchar('lc_ticket_ref', { length: 50 }),
+  lastReplyAt:       timestamp('last_reply_at'),
+  unreadReplies:     integer('unread_replies').notNull().default(0),
+  rating:            integer('rating'),
+  ratingComment:     text('rating_comment'),
+  ratedAt:           timestamp('rated_at'),
+  cancelledAt:       timestamp('cancelled_at'),
+  resolvedAt:        timestamp('resolved_at'),
+  createdAt:         timestamp('created_at').notNull().defaultNow(),
+  updatedAt:         timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const supportTicketMessagesLocal = pgTable('support_ticket_messages_local', {
+  id:          serial('id').primaryKey(),
+  ticketId:    integer('ticket_id').notNull().references(() => supportTicketsLocal.id, { onDelete: 'cascade' }),
+  senderType:  varchar('sender_type', { length: 20 }).notNull().default('user'),
+  senderName:  varchar('sender_name', { length: 200 }),
+  body:        text('body').notNull(),
+  isRead:      boolean('is_read').notNull().default(false),
+  sentAt:      timestamp('sent_at').notNull().defaultNow(),
+  lcMsgRef:    varchar('lc_msg_ref', { length: 50 }),
+  createdAt:   timestamp('created_at').notNull().defaultNow(),
+});
+
+export const supportTicketAttachmentsLocal = pgTable('support_ticket_attachments_local', {
+  id:         serial('id').primaryKey(),
+  ticketId:   integer('ticket_id').notNull().references(() => supportTicketsLocal.id, { onDelete: 'cascade' }),
+  messageId:  integer('message_id').references(() => supportTicketMessagesLocal.id, { onDelete: 'set null' }),
+  filename:   varchar('filename', { length: 300 }).notNull(),
+  filePath:   text('file_path').notNull(),
+  fileSize:   integer('file_size'),
+  mimeType:   varchar('mime_type', { length: 100 }),
+  createdAt:  timestamp('created_at').notNull().defaultNow(),
+});
+
+// ─── Support Tickets — LC Side (0021) ────────────────────────────────────────
+export const lcSupportTickets = pgTable('lc_support_tickets', {
+  id:             serial('id').primaryKey(),
+  ticketNumber:   varchar('ticket_number', { length: 30 }).notNull().unique(),
+  clientId:       integer('client_id').references(() => lcClients.id, { onDelete: 'set null' }),
+  orgId:          varchar('org_id', { length: 50 }),
+  orgName:        varchar('org_name', { length: 300 }),
+  subject:        varchar('subject', { length: 500 }).notNull(),
+  description:    text('description').notNull(),
+  category:       varchar('category', { length: 50 }).notNull().default('general'),
+  priority:       varchar('priority', { length: 20 }).notNull().default('normal'),
+  status:         varchar('status', { length: 30 }).notNull().default('open'),
+  submitterName:  varchar('submitter_name', { length: 200 }),
+  submitterEmail: varchar('submitter_email', { length: 200 }),
+  sourceInfo:     jsonb('source_info').$type<Record<string, any>>(),
+  assignedTo:     varchar('assigned_to', { length: 200 }),
+  resolvedAt:     timestamp('resolved_at'),
+  closedAt:       timestamp('closed_at'),
+  createdAt:      timestamp('created_at').notNull().defaultNow(),
+  updatedAt:      timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const lcSupportTicketMessages = pgTable('lc_support_ticket_messages', {
+  id:                serial('id').primaryKey(),
+  ticketId:          integer('ticket_id').notNull().references(() => lcSupportTickets.id, { onDelete: 'cascade' }),
+  senderType:        varchar('sender_type', { length: 20 }).notNull().default('client'),
+  senderName:        varchar('sender_name', { length: 200 }),
+  body:              text('body').notNull(),
+  isReadByClient:    boolean('is_read_by_client').notNull().default(false),
+  isReadBySupport:   boolean('is_read_by_support').notNull().default(false),
+  createdAt:         timestamp('created_at').notNull().defaultNow(),
+});
+
+export const lcSupportTicketAttachments = pgTable('lc_support_ticket_attachments', {
+  id:         serial('id').primaryKey(),
+  ticketId:   integer('ticket_id').notNull().references(() => lcSupportTickets.id, { onDelete: 'cascade' }),
+  messageId:  integer('message_id').references(() => lcSupportTicketMessages.id, { onDelete: 'set null' }),
+  filename:   varchar('filename', { length: 300 }).notNull(),
+  fileUrl:    text('file_url').notNull(),
+  fileSize:   integer('file_size'),
+  mimeType:   varchar('mime_type', { length: 100 }),
+  createdAt:  timestamp('created_at').notNull().defaultNow(),
+});
+
+export const lcSupportTicketNotes = pgTable('lc_support_ticket_notes', {
+  id:        serial('id').primaryKey(),
+  ticketId:  integer('ticket_id').notNull().references(() => lcSupportTickets.id, { onDelete: 'cascade' }),
+  author:    varchar('author', { length: 200 }),
+  body:      text('body').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
 // ─── Verification Tokens (0017) ───────────────────────────────────────────────
 export const verificationTokens = pgTable('verification_tokens', {
   id:            serial('id').primaryKey(),
