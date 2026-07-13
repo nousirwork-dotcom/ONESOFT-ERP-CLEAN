@@ -1,4 +1,4 @@
-const CACHE = 'onesoft-erp-v4';
+const CACHE = 'onesoft-erp-v5';
 const SHELL = ['/', '/index.html'];
 
 self.addEventListener('install', e => {

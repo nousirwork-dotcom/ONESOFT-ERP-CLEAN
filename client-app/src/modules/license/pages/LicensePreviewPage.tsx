@@ -671,9 +671,7 @@ export default function LicensePreviewPage() {
         {/* Logo */}
         <div className="px-5 py-5 border-b border-white/10">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-[#C9A84C] flex items-center justify-center shrink-0">
-              <ShieldCheck className="w-5 h-5 text-[#1B2B5C]" />
-            </div>
+            <img src="/logo.png" alt="OneSoft" className="w-9 h-9 rounded-xl object-contain shrink-0" />
             <div>
               <p className="text-[14px] font-black text-white leading-none">OneSoft</p>
               <p className="text-[10px] text-white/40 font-medium">ERP</p>

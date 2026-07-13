@@ -23,17 +23,17 @@
     .logo-ring {
       width: 90px; height: 90px;
       border-radius: 22px;
-      background: linear-gradient(135deg, #D19C05 0%, #F5B800 100%);
+      background: #1C4576;
       display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 0 40px rgba(209,156,5,0.4), 0 8px 32px rgba(0,0,0,0.5);
+      box-shadow: 0 0 40px rgba(28,69,118,0.5), 0 8px 32px rgba(0,0,0,0.5);
       margin-bottom: 24px;
       animation: pulse 2s ease-in-out infinite;
     }
-    .logo-ring svg { width: 54px; height: 54px; fill: #0f172a; }
+    .logo-ring svg { width: 90px; height: 90px; border-radius: 22px; }
 
     @keyframes pulse {
-      0%, 100% { box-shadow: 0 0 30px rgba(209,156,5,0.3), 0 8px 32px rgba(0,0,0,0.5); }
-      50%       { box-shadow: 0 0 60px rgba(209,156,5,0.6), 0 8px 32px rgba(0,0,0,0.5); }
+      0%, 100% { box-shadow: 0 0 30px rgba(28,69,118,0.4), 0 8px 32px rgba(0,0,0,0.5); }
+      50%       { box-shadow: 0 0 60px rgba(216,174,85,0.5), 0 8px 32px rgba(0,0,0,0.5); }
     }
 
     h1 {
@@ -93,8 +93,9 @@
 <body>
 
   <div class="logo-ring">
-    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-      <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+    <svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+      <rect x="6" y="6" width="500" height="500" rx="118" fill="#1C4576"/>
+      <text x="256" y="300" font-family="Arial,Helvetica,sans-serif" font-size="168" font-weight="900" letter-spacing="6" text-anchor="middle" fill="#D8AE55">ONE</text>
     </svg>
   </div>
 

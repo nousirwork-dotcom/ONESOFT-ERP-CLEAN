@@ -46,12 +46,7 @@ export default function LoginPage() {
 
         {/* Logo */}
         <div className="flex flex-col items-center mb-8 gap-3">
-          <div
-            className="w-20 h-20 rounded-3xl flex items-center justify-center shadow-xl"
-            style={{ backgroundColor: NAVY }}
-          >
-            <span className="text-[24px] font-black tracking-widest" style={{ color: GOLD }}>LC</span>
-          </div>
+          <img src="/logo.png" alt="OneSoft" className="w-20 h-20 rounded-3xl shadow-xl object-contain" />
           <div className="text-center">
             <h1 className="text-[22px] font-black" style={{ color: NAVY2 }}>
               <span style={{ color: NAVY2 }}>OneSoft</span>{" "}

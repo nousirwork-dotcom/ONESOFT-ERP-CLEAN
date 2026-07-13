@@ -254,13 +254,14 @@ function connectingPageHtml(attempt: number, max: number): string {
   body { margin:0; display:flex; align-items:center; justify-content:center;
          min-height:100vh; background:#F8FAFC; font-family:system-ui,sans-serif; direction:rtl; }
   .box { text-align:center; color:#1E344F; }
-  .logo { font-size:48px; margin-bottom:16px; }
+  .logo { margin-bottom:16px; }
+  .logo svg { width:72px; height:72px; }
   h2 { font-size:20px; margin:0 0 8px; }
   p  { font-size:14px; color:#6B7280; margin:0 0 4px; }
   .dots { font-size:24px; color:#3B82F6; letter-spacing:4px; margin-top:16px; }
 </style></head>
 <body><div class="box">
-  <div class="logo">⚙️</div>
+  <div class="logo"><svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="6" width="500" height="500" rx="118" fill="%231C4576"/><text x="256" y="300" font-family="Arial,Helvetica,sans-serif" font-size="168" font-weight="900" letter-spacing="6" text-anchor="middle" fill="%23D8AE55">ONE</text></svg></div>
   <h2>OneSoft ERP</h2>
   <p>جارٍ تشغيل الخادم${dots}</p>
   <p style="font-size:12px;color:#9CA3AF">المحاولة ${attempt} من ${max}</p>
