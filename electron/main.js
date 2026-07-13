@@ -353,12 +353,28 @@ function createMainWindow() {
     writeLog('ERROR', `main window failed to load ${SERVER_URL}: ${err.message}`);
   });
 
-  // إغلاق النافذة يخفيها فقط (البرنامج يبقى في الـ Tray)، إلا عند الإنهاء الفعلي
+  // علامة X الرئيسية: رسالة تأكيد قبل إغلاق البرنامج بالكامل
+  // (مع خيار التصغير إلى شريط النظام للحفاظ على سلوك الـ Tray)
   mainWin.on('close', (e) => {
-    if (!isQuitting) {
-      e.preventDefault();
+    if (isQuitting) return;
+    e.preventDefault();
+    const choice = dialog.showMessageBoxSync(mainWin, {
+      type: 'question',
+      title: 'إغلاق OneSoft ERP',
+      message: 'هل تريد إغلاق برنامج OneSoft ERP؟',
+      detail: 'يمكنك أيضاً تصغير البرنامج إلى شريط النظام ليبقى يعمل في الخلفية.',
+      buttons: ['إغلاق البرنامج', 'تصغير إلى شريط النظام', 'إلغاء'],
+      defaultId: 0,
+      cancelId: 2,
+      noLink: true,
+    });
+    if (choice === 0) {
+      isQuitting = true;
+      app.quit();
+    } else if (choice === 1) {
       mainWin.hide();
     }
+    // choice === 2 → إلغاء: لا شيء
   });
 
   mainWin.on('closed', () => { mainWin = null; });

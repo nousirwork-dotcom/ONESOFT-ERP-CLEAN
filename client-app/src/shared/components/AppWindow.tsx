@@ -2,13 +2,12 @@ import { useRef, useEffect, useState, useCallback } from "react";
 import { Minus, Square, X } from "lucide-react";
 import { useTabManager, AppTab } from "@/core/contexts/TabManagerContext";
 import { useWorkspaceEl } from "@/core/contexts/WorkspaceContext";
+import { TASKBAR_H } from "@/shared/components/WindowTaskbar";
 
 interface AppWindowProps {
   tab: AppTab;
   children: React.ReactNode;
 }
-
-const TASKBAR_H = 48;
 
 export default function AppWindow({ tab, children }: AppWindowProps) {
   const {
@@ -39,29 +38,43 @@ export default function AppWindow({ tab, children }: AppWindowProps) {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
 
-  /* ─── Computed style ─── */
+  /* ─── Computed style ───
+     كل النوافذ الداخلية تبقى داخل منطقة الـ workspace فقط:
+     تحت شريط العنوان (Electron) وشريط البرنامج العلوي،
+     وفوق شريط المهام السفلي، ودون تغطية القائمة الجانبية. */
+  /* لا نرسم النافذة قبل معرفة حدود منطقة العمل — منعًا لوميض
+     يغطي فيه إطار النافذة شريط العنوان العلوي عند أول رسم */
+  const rectReady = wsRect !== null;
+  const wsLeft   = wsRect?.left  ?? 0;
+  const wsTop    = wsRect?.top   ?? 0;
+  const wsWidth  = wsRect?.width ?? vw;
+  /* أسفل منطقة العمل = أعلى شريط المهام السفلي دائمًا */
+  const wsBottom = vh - TASKBAR_H;
+
   let style: React.CSSProperties;
 
   if (isMax) {
-    /* تكبير كامل — يغطي كل الشاشة ما عدا شريط المهام */
+    /* تكبير — يملأ منطقة العمل بالكامل (لا يغطي الشريط العلوي ولا السفلي) */
     style = {
-      position: "fixed", left: 0, top: 0,
-      width: vw, height: vh - TASKBAR_H,
+      position: "fixed",
+      left: wsLeft, top: wsTop,
+      width: wsWidth,
+      height: Math.max(0, wsBottom - wsTop),
       zIndex: tab.zIndex,
-      display: isMin ? "none" : "flex",
+      display: isMin || !rectReady ? "none" : "flex",
       flexDirection: "column",
     };
   } else {
-    /* وضع العمل — يملأ منطقة الـ workspace (تحت شريط التنقل) */
-    const left   = wsRect?.left   ?? 0;
-    const top    = wsRect?.top    ?? 0;
-    const width  = wsRect?.width  ?? vw;
-    const height = wsRect ? wsRect.height - TASKBAR_H : vh - TASKBAR_H - 80;
+    /* استعادة الحجم — نافذة أصغر قليلًا داخل منطقة العمل */
+    const inset = 24;
     style = {
       position: "fixed",
-      left, top, width, height,
+      left: wsLeft + inset,
+      top: wsTop + inset * 0.6,
+      width: Math.max(320, wsWidth - inset * 2),
+      height: Math.max(240, wsBottom - wsTop - inset * 1.2),
       zIndex: tab.zIndex,
-      display: isMin ? "none" : "flex",
+      display: isMin || !rectReady ? "none" : "flex",
       flexDirection: "column",
     };
   }

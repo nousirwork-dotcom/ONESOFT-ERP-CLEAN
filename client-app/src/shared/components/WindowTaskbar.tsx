@@ -3,7 +3,7 @@ import { useTabManager } from "@/core/contexts/TabManagerContext";
 import { LayoutDashboard, Store } from "lucide-react";
 import { useState, useEffect } from "react";
 
-const TASKBAR_H = 40;
+export const TASKBAR_H = 40;
 
 export default function WindowTaskbar() {
   const { tabs, activeTabId, activateTab, minimizeWindow, toggleDashboard, dashboardVisible, showDashboard } = useTabManager();
