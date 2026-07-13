@@ -63,7 +63,6 @@ import {
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import ChatWidget from "./ChatWidget";
-import TrialBanner from "./TrialBanner";
 import WindowTaskbar from "./WindowTaskbar";
 import ElectronTitleBar from "./ElectronTitleBar";
 import { useTabManager } from "@/core/contexts/TabManagerContext";
@@ -530,7 +529,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             className="flex-1 overflow-hidden"
             style={{ position: "relative", paddingBottom: 40 }}
           >
-            <TrialBanner />
             {children}
           </main>
         </WorkspaceContext.Provider>
@@ -649,7 +647,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             className="flex-1 overflow-hidden"
             style={{ position: "relative", paddingBottom: 40 }}
           >
-            <TrialBanner />
             {children}
           </main>
         </WorkspaceContext.Provider>

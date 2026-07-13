@@ -32,6 +32,7 @@ import {
 } from "recharts";
 import { useState, useEffect } from "react";
 import { formatCurrency } from "@/shared/utils/currency";
+import TrialBanner from "@/shared/components/TrialBanner";
 
 const WIDGET_DEFS = [
   { id: "stats",         label: "بطاقات الإحصائيات" },
@@ -205,6 +206,9 @@ export default function Dashboard() {
       {showSettings && (
         <SettingsPanel vis={vis} toggle={toggle} onClose={() => setShowSettings(false)} />
       )}
+
+      {/* تنبيه النسخة التجريبية — يظهر في لوحة التحكم فقط */}
+      <TrialBanner />
 
       {/* Page Header */}
       <div className="flex items-center justify-between">
