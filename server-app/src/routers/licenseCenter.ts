@@ -25,6 +25,7 @@ export const MODULE_CATALOG = [
   { id: 'offline',       name: 'التشغيل أوفلاين',   group: 'connectivity' },
   { id: 'api',           name: 'API',                group: 'connectivity' },
   { id: 'ecommerce',     name: 'المتجر الإلكتروني',  group: 'advanced' },
+  { id: 'AI_ASSISTANT',  name: 'المساعد الذكي',      group: 'advanced' },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

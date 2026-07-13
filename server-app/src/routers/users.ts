@@ -259,6 +259,12 @@ export const usersRouter = router({
           'help_services',
           'hs_rentals', 'hs_custody', 'hs_customers', 'hs_tasks',
           'hs_gov_links', 'hs_notes', 'hs_internal_comm',
+          // المساعد الذكي
+          'ai_use',
+          'ai_ask_customers', 'ai_ask_rentals', 'ai_ask_custody',
+          'ai_ask_projects', 'ai_ask_tasks',
+          'ai_draft_messages', 'ai_propose_tasks', 'ai_confirm_tasks',
+          'ai_view_history', 'ai_delete_conversations', 'ai_manage_settings',
         ]),
         z.boolean(),
       ),

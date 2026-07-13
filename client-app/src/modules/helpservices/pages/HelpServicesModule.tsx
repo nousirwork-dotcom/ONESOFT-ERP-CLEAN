@@ -1,12 +1,13 @@
 import {
   LifeBuoy, FileSignature, Wallet, UserSearch, ListTodo, Landmark,
-  StickyNote, MessagesSquare,
+  StickyNote, MessagesSquare, Sparkles,
 } from "lucide-react";
 import { Card, CardContent } from "@/core/ui/card";
 import { useLang } from "@/core/contexts/LanguageContext";
 import { useAuth } from "@/core/hooks/useAuth";
 import { useTabManager } from "@/core/contexts/TabManagerContext";
 import { canViewHsScreen, type HsScreenPerm } from "@/shared/lib/hsPermissions";
+import { canUseAi } from "@/shared/lib/aiPermissions";
 
 // ─── وحدة «المساعدة والخدمات» ─────────────────────────────────────────────────
 // 7 بطاقات، لكل بطاقة صفحة أولية بمسار مستقل يفتح داخل نظام التبويبات.
@@ -24,13 +25,14 @@ export const menuSections = [
       { id: "hs-gov-links",     label: "الروابط والخدمات الحكومية",   icon: Landmark,       path: "/hs/gov-links" },
       { id: "hs-notes",         label: "الملاحظات",                   icon: StickyNote,     path: "/hs/notes" },
       { id: "hs-internal-comm", label: "التواصل الداخلي",             icon: MessagesSquare, path: "/hs/internal-comm" },
+      { id: "hs-ai-assistant",  label: "المساعد الذكي",               icon: Sparkles,       path: "/hs/ai-assistant" },
     ] as Array<{ id: string; label: string; icon: React.ElementType; path?: string }>,
   },
 ];
 
 type HsCard = {
   id: string;
-  perm: HsScreenPerm;
+  perm: HsScreenPerm | "ai_use";
   path: string;
   icon: React.ElementType;
   labelAr: string;
@@ -126,6 +128,18 @@ export const HS_CARDS: HsCard[] = [
     color: "text-violet-600 dark:text-violet-400",
     bg: "bg-violet-500/10",
   },
+  {
+    id: "ai-assistant",
+    perm: "ai_use",
+    path: "/hs/ai-assistant",
+    icon: Sparkles,
+    labelAr: "المساعد الذكي",
+    labelEn: "AI Assistant",
+    descAr: "مساعد ذكي للبحث والتلخيص والمتابعة وإنشاء المسودات داخل النظام.",
+    descEn: "Smart assistant for searching, summarizing, follow-up, and drafting inside the system.",
+    color: "text-fuchsia-600 dark:text-fuchsia-400",
+    bg: "bg-fuchsia-500/10",
+  },
 ];
 
 export default function HelpServicesModule() {
@@ -134,7 +148,11 @@ export default function HelpServicesModule() {
   const { openTab } = useTabManager();
   const ar = lang === "ar";
 
-  const visibleCards = HS_CARDS.filter(card => canViewHsScreen(user, card.perm));
+  const visibleCards = HS_CARDS.filter(card =>
+    card.perm === "ai_use"
+      ? canUseAi(user)
+      : canViewHsScreen(user, card.perm as HsScreenPerm)
+  );
 
   return (
     <div className="h-full overflow-y-auto bg-background" dir={dir}>

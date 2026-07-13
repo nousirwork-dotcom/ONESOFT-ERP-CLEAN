@@ -24,6 +24,7 @@ import { setupRouter }              from './setup.js';
 import { updatesRouter }            from './updates.js';
 import { brandingRouter }           from './branding.js';
 import { licenseRouter }            from './license.js';
+import { aiRouter }                 from './ai.js';
 import { licenseCenterRouter }      from './licenseCenter.js';
 import { authRouter }               from './auth.js';
 import { recoveryRouter }           from './recovery.js';
@@ -108,6 +109,7 @@ const baseConfig = {
   updates:             updatesRouter,
   branding:            brandingRouter,
   license:             licenseRouter,
+  ai:                  aiRouter,
 };
 
 // ─── Full config (يشمل licenseCenter — للمالك فقط) ──────────────────────────
