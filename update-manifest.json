@@ -1,21 +1,21 @@
 {
-  "latestVersion": "1.0.15",
+  "latestVersion": "1.0.21",
   "minSupportedVersion": "1.0.0",
   "mandatory": false,
-  "messageAr": "يوجد تحديث جديد (v1.0.15): إلغاء التثبيت من لوحة التحكم أصبح ينظّف الخدمات وعلامات الإعداد تلقائياً، مع الحفاظ الكامل على قاعدة البيانات والنسخ الاحتياطية — إعادة التثبيت تعرض معالج الإعداد وتكتشف القاعدة الموجودة.",
-  "messageEn": "New update (v1.0.15): uninstalling from Control Panel now automatically cleans up services and setup markers while fully preserving the database and backups — reinstalling shows the setup wizard and detects the existing database.",
+  "messageAr": "يوجد تحديث جديد (v1.0.21): المساعد الذكي لمساعدتك في العمليات اليومية، مصمّم نماذج الطباعة، تحسينات شاشة التطبيقات والواجهة.",
+  "messageEn": "New update (v1.0.21): AI Assistant for daily operations, print template designer, apps home screen polish and UI improvements.",
   "releaseNotes": [
-    "إلغاء التثبيت من لوحة التحكم يوقف ويحذف خدمات OneSoft تلقائياً قبل حذف الملفات",
-    "حذف المهام المجدولة وقواعد جدار الحماية الخاصة بـ OneSoft عند إلغاء التثبيت",
-    "حذف علامات الإعداد (config و version.json) — إعادة التثبيت تعرض معالج الإعداد وتكتشف القاعدة الموجودة",
-    "الحفاظ الكامل على النسخ الاحتياطية والملفات المرفوعة والسجلات وقاعدة PostgreSQL — لا تُمَسّ إطلاقاً",
-    "التحديث المباشر فوق نسخة موجودة لا يمس الإعداد ولا يعرض المعالج (--updated)",
-    "إصلاح الشاشة البيضاء عند التثبيت فوق نسخة قديمة دون إلغاء تثبيت"
+    "المساعد الذكي (المرحلة الأولى): محادثة ذكية تساعد في العمليات اليومية مع اقتراح مهام تلقائي",
+    "صفحة إعدادات المساعد الذكي: دعم OpenAI وOpenRouter وDeepSeek وGroq",
+    "مصمّم نماذج الطباعة: دعم أوامر الشراء والمصروفات",
+    "تحسينات شاشة التطبيقات الرئيسية والقائمة الجانبية",
+    "إضافة وحدة المساعدة والخدمات بسبع بطاقات وصلاحيات مفصّلة",
+    "تحسينات عامة في الأداء والواجهة"
   ],
-  "downloadUrl": "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.15/OneSoftSetup-1.0.15-x64.exe",
-  "fileSizeBytes": 81608562,
-  "sha512": "3OcHN7KGXmE2A5qAPukW89z793+r7o3bqmtCS+XgPVHamuh8O7bP4c8t5d50zAm9uU33iGosH/ycezvY/HUwYQ==",
-  "publishedAt": "2026-07-12T22:37:42.615Z",
+  "downloadUrl": "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.21/OneSoftSetup-1.0.21-x64.exe",
+  "fileSizeBytes": 81452138,
+  "sha512": "GutL0k8HFRq3+fL0lax2SgiHCAayzi/rxnFAkn9IB29kpHRbBx28T/7qz7G0SY9+KoEHWNC+oB+xslwq5kK7mg==",
+  "publishedAt": "2026-07-13T05:50:12.183Z",
   "_notes": {
     "MANIFEST_URL": "استضِف هذا الملف على CDN عام أو GitHub Pages بدون توثيق (Public URL).",
     "ONESOFT_UPDATE_URL": "يمكن تجاوز الرابط الافتراضي عبر متغير البيئة ONESOFT_UPDATE_URL.",
@@ -24,20 +24,11 @@
     "mandatory": "true = إجباري بغض النظر عن minSupportedVersion.",
     "sha512": "Hash الملف بصيغة hex (128 حرف) أو base64. اتركه فارغاً لتخطي التحقق (غير موصى به). أضفه بعد اكتمال البناء من ملف latest.yml في GitHub Release.",
     "publishedAt": "تاريخ نشر الإصدار بصيغة ISO 8601.",
-    "downloadUrl": "يجب أن يبدأ بـ https:// — يُرفض أي رابط http://.",
     "skip_policy": "التحديث الاختياري يُعرض مرة واحدة ثم يُؤجّل 24 ساعة إذا ضغط المستخدم 'لاحقاً'.",
     "mandatory_block": "التحديث الإجباري يمنع الدخول لجميع صفحات النظام (login / dashboard / إلخ) حتى إتمام التحديث.",
-    "generate_sha512": "لحساب sha512 للملف على Windows: certutil -hashfile OneSoftSetup-1.0.4-x64.exe SHA512",
-    "generate_sha512_linux": "sha512sum OneSoftSetup-1.0.4-x64.exe | awk '{print $1}'",
-    "after_build_instructions": [
-      "1. انتظر اكتمال CI build على GitHub Actions",
-      "2. افتح GitHub Release لـ v1.0.4",
-      "3. حمّل latest.yml وانسخ قيمة sha512",
-      "4. ضع sha512 في هذا الملف",
-      "5. ارفع الملف على https://updates.onesoft.app/update-manifest.json",
-      "6. الأجهزة المثبّت عليها الإصدار السابق ستستقبل التحديث تلقائياً في 5 ثوانٍ من الفتح"
-    ]
+    "generate_sha512": "لحساب sha512 للملف على Windows: certutil -hashfile OneSoftSetup-1.0.21-x64.exe SHA512",
+    "generate_sha512_linux": "sha512sum OneSoftSetup-1.0.21-x64.exe | awk '{print $1}'"
   },
-  "version": "1.0.15",
-  "notes": "v1.0.15 — تنظيف كامل عند إلغاء التثبيت (خدمات + علامات الإعداد) مع الحفاظ على القاعدة والنسخ الاحتياطية"
+  "version": "1.0.21",
+  "notes": "v1.0.21 — المساعد الذكي + مصمّم نماذج الطباعة + تحسينات الواجهة"
 }
