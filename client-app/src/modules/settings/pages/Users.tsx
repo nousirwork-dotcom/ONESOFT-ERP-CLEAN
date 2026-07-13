@@ -115,9 +115,9 @@ function VerifyOtpDialog({
 
 // ─── ChangeUserPasswordDialog ────────────────────────────────────────────────
 function ChangeUserPasswordDialog({
-  user, onClose,
+  user, onClose, allowPasswordless,
 }: {
-  user: any; onClose: () => void;
+  user: any; onClose: () => void; allowPasswordless?: boolean;
 }) {
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -155,7 +155,7 @@ function ChangeUserPasswordDialog({
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-1">
-          {user.role !== "admin" && user.role !== "superadmin" && (
+          {user.role !== "admin" && user.role !== "superadmin" && allowPasswordless && (
             <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
               <div>
                 <p className="text-sm font-medium">بدون كلمة مرور</p>
@@ -225,6 +225,18 @@ export default function Users() {
   const { data: users, isLoading } = trpc.users.list.useQuery();
   const { data: countInfo } = trpc.users.getUserCountInfo.useQuery();
 
+  // ── سياسة المؤسسة: السماح بمستخدمين بدون كلمة مرور ──────────────────────
+  const PASSWORDLESS_KEY = "security.allow_passwordless_users";
+  const { data: passwordlessPolicy } = trpc.appSettings.get.useQuery({ key: PASSWORDLESS_KEY });
+  const allowPasswordless = passwordlessPolicy === true;
+  const setPolicy = trpc.appSettings.set.useMutation({
+    onSuccess: () => {
+      utils.appSettings.get.invalidate({ key: PASSWORDLESS_KEY });
+      toast.success("تم تحديث سياسة كلمات المرور");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   const createUser = trpc.users.create.useMutation({
     onSuccess: () => { utils.users.list.invalidate(); toast.success("تم إنشاء المستخدم بنجاح"); setIsOpen(false); },
     onError: (e) => toast.error(e.message),
@@ -292,6 +304,11 @@ export default function Users() {
     if (mode === "create") {
       if (!form.name.trim()) { toast.error("الاسم الكامل مطلوب"); return; }
       if (!form.username.trim()) { toast.error("اسم المستخدم مطلوب"); return; }
+      if (!form.password && (!allowPasswordless || form.role === "admin")) {
+        toast.error(form.role === "admin" ? "حسابات مدير النظام يجب أن تكون محمية بكلمة مرور" : "كلمة المرور مطلوبة — سياسة المؤسسة لا تسمح بمستخدمين بدون كلمة مرور");
+        return;
+      }
+      if (form.password && form.password.length < 6) { toast.error("كلمة المرور يجب أن تكون 6 أحرف على الأقل"); return; }
       createUser.mutate({ code: form.code || undefined, name: form.name, phone: form.phone || undefined, email: form.email || undefined, username: form.username, password: form.password, role: form.role as any });
     } else {
       updateUser.mutate({ id: selectedUser.id, name: form.name || undefined, phone: form.phone || undefined, email: form.email || undefined, role: form.role as any, newPassword: form.newPassword || undefined });
@@ -317,6 +334,26 @@ export default function Users() {
         <Button onClick={openCreate} disabled={countInfo?.atLimit} className="gap-2">
           <Plus className="w-4 h-4" />إضافة مستخدم
         </Button>
+      </div>
+
+      {/* ── سياسة كلمات المرور ── */}
+      <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+            <KeyRound className="w-4 h-4 text-amber-600" />
+          </div>
+          <div>
+            <p className="text-sm font-medium">السماح بمستخدمين بدون كلمة مرور</p>
+            <p className="text-xs text-muted-foreground">
+              ينطبق على المستخدمين غير الإداريين فقط — حسابات مدير النظام تبقى محمية بكلمة مرور دائماً
+            </p>
+          </div>
+        </div>
+        <Switch
+          checked={allowPasswordless}
+          disabled={setPolicy.isPending}
+          onCheckedChange={(v) => setPolicy.mutate({ key: PASSWORDLESS_KEY, value: v })}
+        />
       </div>
 
       {/* كارت عدد المستخدمين */}
@@ -493,9 +530,11 @@ export default function Users() {
                 </div>
                 <div>
                   <Label>
-                    {mode === "create" ? <span>كلمة المرور <span className="text-muted-foreground text-xs">(اختياري)</span></span> : <span>كلمة مرور جديدة <span className="text-muted-foreground text-xs">(اختياري)</span></span>}
+                    {mode === "create"
+                      ? <span>كلمة المرور {allowPasswordless && form.role !== "admin" ? <span className="text-muted-foreground text-xs">(اختياري)</span> : <span className="text-red-500">*</span>}</span>
+                      : <span>كلمة مرور جديدة <span className="text-muted-foreground text-xs">(اختياري)</span></span>}
                   </Label>
-                  <Input className="mt-1" type="password" placeholder="اتركها فارغة للدخول بدون كلمة مرور" value={mode === "create" ? form.password : form.newPassword} onChange={(e) => setField(mode === "create" ? "password" : "newPassword", e.target.value)} dir="ltr" />
+                  <Input className="mt-1" type="password" placeholder={mode === "create" && allowPasswordless && form.role !== "admin" ? "اتركها فارغة للدخول بدون كلمة مرور" : "6 أحرف على الأقل"} value={mode === "create" ? form.password : form.newPassword} onChange={(e) => setField(mode === "create" ? "password" : "newPassword", e.target.value)} dir="ltr" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -745,7 +784,7 @@ export default function Users() {
 
       {/* ─── نافذة تأكيد OTP ────────────────────────────────────────────────── */}
       {passwordUser && (
-        <ChangeUserPasswordDialog user={passwordUser} onClose={() => setPasswordUser(null)} />
+        <ChangeUserPasswordDialog user={passwordUser} onClose={() => setPasswordUser(null)} allowPasswordless={allowPasswordless} />
       )}
 
       {verifyDialog && selectedUser && (

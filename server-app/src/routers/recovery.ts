@@ -592,6 +592,7 @@ export const recoveryRouter = router({
       const passwordHash = await hashPassword(input.newPassword);
       await db.update(users).set({
         passwordHash,
+        passwordStatus:      'set',
         passwordChangedAt:   new Date(),
         forcePasswordChange: false,
         updatedAt:           new Date(),

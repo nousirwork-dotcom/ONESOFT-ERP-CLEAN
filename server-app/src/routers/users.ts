@@ -2,10 +2,21 @@ import { z } from 'zod';
 import { eq, and, sql, count, inArray } from 'drizzle-orm';
 import { router, adminProcedure, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { users, organizations, salesInvoices, vouchers, stockVouchers, userCategories } from '../schema.js';
+import { users, organizations, salesInvoices, vouchers, stockVouchers, userCategories, appSettings } from '../schema.js';
 import { hashPassword } from '../auth.js';
 import { TRPCError } from '@trpc/server';
 import { getLimit } from '../lib/license.js';
+
+// ── سياسة المؤسسة: السماح بمستخدمين بدون كلمة مرور (غير الإداريين فقط) ─────────
+export const PASSWORDLESS_POLICY_KEY = 'security.allow_passwordless_users';
+
+async function isPasswordlessAllowed(orgId: number): Promise<boolean> {
+  const rows = await db.select({ value: appSettings.value }).from(appSettings)
+    .where(and(eq(appSettings.orgId, orgId), eq(appSettings.key, PASSWORDLESS_POLICY_KEY)))
+    .limit(1);
+  if (!rows.length) return false; // الافتراضي: غير مسموح
+  try { return JSON.parse(rows[0].value ?? 'false') === true; } catch { return false; }
+}
 
 export const usersRouter = router({
   // قائمة مبسّطة (id + name) لقوائم الاختيار — متاحة لجميع المستخدمين
@@ -63,6 +74,25 @@ export const usersRouter = router({
       });
       if (existing) throw new Error('اسم المستخدم مستخدم بالفعل');
 
+      // ── سياسة كلمة المرور الفارغة ──────────────────────────────────────────
+      const wantsPasswordless = !input.password;
+      if (wantsPasswordless) {
+        if (input.role === 'admin') {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'حسابات مدير النظام يجب أن تكون محمية بكلمة مرور',
+          });
+        }
+        if (!(await isPasswordlessAllowed(ctx.user.orgId))) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'سياسة المؤسسة لا تسمح بإنشاء مستخدمين بدون كلمة مرور — فعّل الخيار من إعدادات المستخدمين أو عيّن كلمة مرور',
+          });
+        }
+      } else if (input.password.length < 6) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' });
+      }
+
       if (input.phone) {
         const phoneExists = await db.query.users.findFirst({
           where: and(eq(users.phone, input.phone), eq(users.orgId, ctx.user.orgId), eq(users.isActive, true)),
@@ -108,6 +138,7 @@ export const usersRouter = router({
         role: input.role,
         categoryId: input.categoryId,
         isActive: true,
+        passwordStatus: wantsPasswordless ? 'not_set' : 'set',
       }).returning({ id: users.id, code: users.code, name: users.name, username: users.username, role: users.role });
 
       return user;
@@ -140,6 +171,13 @@ export const usersRouter = router({
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message: 'لا يمكن إزالة كلمة مرور حساب مدير النظام — يجب أن يبقى محمياً بكلمة مرور',
+          });
+        }
+        // ── سياسة المؤسسة: السماح بكلمة مرور فارغة لغير الإداريين ──────────
+        if (!(await isPasswordlessAllowed(ctx.user.orgId))) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'سياسة المؤسسة لا تسمح بمستخدمين بدون كلمة مرور — فعّل الخيار من إعدادات المستخدمين أولاً',
           });
         }
       }
