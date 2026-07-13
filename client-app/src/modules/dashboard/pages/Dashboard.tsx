@@ -18,6 +18,7 @@ import {
   Boxes,
   Eye,
   EyeOff,
+  LifeBuoy,
   X,
 } from "lucide-react";
 import { useLocation } from "wouter";
@@ -399,6 +400,7 @@ export default function Dashboard() {
               { label: "الحسابات",        icon: Calculator,   path: "/accounting-module",    color: "text-emerald-500", bg: "bg-emerald-500/10" },
               { label: "الموارد البشرية", icon: Users,        path: "/hr-module",            color: "text-pink-500",    bg: "bg-pink-500/10" },
               { label: "الأصول الثابتة",  icon: Building2,    path: "/assets-module",        color: "text-cyan-500",    bg: "bg-cyan-500/10" },
+              { label: "المساعدة والخدمات", icon: LifeBuoy,   path: "/help-services-module", color: "text-teal-500",    bg: "bg-teal-500/10" },
               { label: "الإعدادات",       icon: Settings,     path: "/settings",             color: "text-slate-500",   bg: "bg-slate-500/10" },
             ].map((m) => (
               <button key={m.path} onClick={() => navigate(m.path)}

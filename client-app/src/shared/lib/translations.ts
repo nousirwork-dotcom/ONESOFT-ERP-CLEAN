@@ -13,6 +13,7 @@ const AR = {
   accounting: "الحسابات العامة",
   hr: "الموارد البشرية",
   fixedAssets: "الأصول الثابتة",
+  helpServices: "المساعدة والخدمات",
   settings: "الإعدادات",
 
   // ─── Header ───────────────────────────────────
@@ -55,6 +56,7 @@ const EN: Record<keyof typeof AR, string> = {
   accounting: "General Accounting",
   hr: "Human Resources",
   fixedAssets: "Fixed Assets",
+  helpServices: "Help & Services",
   settings: "Settings",
   systemSubtitle: "Business Management System",
   online: "Online",

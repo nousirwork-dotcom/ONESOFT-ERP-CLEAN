@@ -44,6 +44,7 @@ import HRModule, {
   HRAttendanceReportTab, HRScheduleTab, HRLeaveRequestTab, HRLeavesTab,
   HRLeaveBalanceTab, HRHeadcountTab, HRPayrollReportTab, HRAttendanceSummaryTab,
 } from "@/modules/hr/pages/HRModule";
+import HelpServicesModule from "@/modules/helpservices/pages/HelpServicesModule";
 import AssetsModule, {
   AssetsListTab, AssetsAddTab, AssetsCategoriesTab, AssetsDepreciationTab,
   AssetsDeprScheduleTab, AssetsTransferTab, AssetsTransferListTab,
@@ -117,6 +118,7 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/accounting-module":    AccountingModule,
   "/hr-module":            HRModule,
   "/assets-module":        AssetsModule,
+  "/help-services-module": HelpServicesModule,
   "/purchases/suppliers":         PurchaseSuppliersPage,
   "/purchases/supplier-groups":  PurchaseSupplierGroupsPage,
   "/purchases/orders":           PurchaseOrdersPage,

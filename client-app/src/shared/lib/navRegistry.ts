@@ -1,5 +1,5 @@
 import {
-  Boxes, Calculator, Factory, LayoutDashboard, Settings,
+  Boxes, Calculator, Factory, LayoutDashboard, LifeBuoy, Settings,
   ShoppingBag, TrendingUp, UserCheck, Wrench,
 } from "lucide-react";
 import { t } from "@/shared/lib/translations";
@@ -12,6 +12,7 @@ import { menuSections as accountingMenu } from "@/modules/accounting/pages/Accou
 import { menuSections as hrMenu } from "@/modules/hr/pages/HRModule";
 import { menuSections as assetsMenu } from "@/modules/assets/pages/AssetsModule";
 import { menuSections as settingsMenu } from "@/modules/settings/pages/SettingsModule";
+import { menuSections as helpServicesMenu } from "@/modules/helpservices/pages/HelpServicesModule";
 
 export type AppModule = {
   path: string;
@@ -37,6 +38,7 @@ export const APP_MODULES: AppModule[] = [
   { path: "/accounting-module",    labelKey: "accounting",        icon: Calculator },
   { path: "/hr-module",            labelKey: "hr",                icon: UserCheck },
   { path: "/assets-module",        labelKey: "fixedAssets",       icon: Wrench },
+  { path: "/help-services-module", labelKey: "helpServices",      icon: LifeBuoy },
   { path: "/settings",             labelKey: "settings",          icon: Settings },
 ];
 
@@ -88,6 +90,7 @@ export function getAllScreens(): AppScreen[] {
     ...flatten(accountingMenu as RawSection[],    "/accounting-module",    "accounting",        Calculator),
     ...flatten(hrMenu as RawSection[],            "/hr-module",            "hr",                UserCheck),
     ...flatten(assetsMenu as RawSection[],        "/assets-module",        "fixedAssets",       Wrench),
+    ...flatten(helpServicesMenu as RawSection[],  "/help-services-module", "helpServices",      LifeBuoy),
     ...flatten(settingsMenu as RawSection[],      "/settings",             "settings",          Settings),
   ];
   return screensCache;
