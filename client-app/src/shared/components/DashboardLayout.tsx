@@ -528,14 +528,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </span>
             <LangToggleBtn />
             <LayoutToggleBtn />
-            <button
-              onClick={() => openTab("/settings", t(lang, "settings"), Settings)}
-              title={t(lang, "settings")}
-              className="flex items-center gap-1.5 px-2.5 h-7 rounded-md text-[12px] font-medium text-foreground/70 hover:text-foreground hover:bg-black/[0.08] transition-colors border border-transparent hover:border-black/10"
-            >
-              <Settings className="w-3.5 h-3.5" />
-              <span className="hidden sm:block">{t(lang, "settings")}</span>
-            </button>
             <UserMenu />
           </div>
         </header>
@@ -583,14 +575,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </span>
             <LangToggleBtn />
             <LayoutToggleBtn />
-            <button
-              onClick={() => openTab("/settings", t(lang, "settings"), Settings)}
-              title={t(lang, "settings")}
-              className="flex items-center gap-1.5 px-2.5 h-7 rounded-md text-[12px] font-medium text-foreground/70 hover:text-foreground hover:bg-black/[0.08] transition-colors border border-transparent hover:border-black/10"
-            >
-              <Settings className="w-3.5 h-3.5" />
-              <span className="hidden sm:block">{t(lang, "settings")}</span>
-            </button>
             <UserMenu />
           </div>
 
