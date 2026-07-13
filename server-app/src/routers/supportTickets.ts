@@ -163,7 +163,8 @@ export const supportTicketsRouter = router({
       const now = new Date();
 
       // ── تسجيل في جانب LC (نفس قاعدة البيانات) ──────────────────────────────
-      let lcTicketRef = ticket.ticketNumber;
+      // lcTicketRef يبقى null حتى يتم إدراج LC بنجاح؛ retryOutbox يعيد المحاولة عند null
+      let lcTicketRef: string | null = null;
       try {
         const srcInfo = (ticket.sourceInfo ?? {}) as Record<string, any>;
         const [lcRow] = await db.insert(lcSupportTickets).values({

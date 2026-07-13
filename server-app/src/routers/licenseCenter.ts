@@ -427,6 +427,8 @@ export const licenseCenterRouter = router({
         .where(eq(lcSupportTickets.id, input.ticketId))
         .returning();
 
+      if (!ticket) throw new TRPCError({ code: 'NOT_FOUND', message: 'التذكرة غير موجودة' });
+
       if (input.note) {
         await db.insert(lcSupportTicketNotes).values({
           ticketId: ticket.id,
