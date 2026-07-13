@@ -23,12 +23,12 @@ export default function Step01Welcome() {
         {/* Fallback — hidden when image loads */}
         <div style={{
           width: 96, height: 96, borderRadius: 24,
-          background: 'linear-gradient(135deg, #406B93 0%, #2d5070 100%)',
+          background: '#1C4576',
           display: 'none', alignItems: 'center', justifyContent: 'center',
-          boxShadow: '0 12px 32px rgba(64,107,147,0.35)',
+          boxShadow: '0 12px 32px rgba(28,69,118,0.35)',
           position: 'absolute', top: 0, left: 0,
         }}>
-          <span style={{ color: '#fff', fontSize: 46, fontWeight: 900, lineHeight: 1 }}>O</span>
+          <span style={{ color: '#D8AE55', fontSize: 30, fontWeight: 900, lineHeight: 1, letterSpacing: 1 }}>ONE</span>
         </div>
       </div>
 

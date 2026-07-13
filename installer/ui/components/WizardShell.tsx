@@ -69,11 +69,11 @@ export default function WizardShell({
           />
           <div style={{
             width: 28, height: 28, borderRadius: 7,
-            background: 'linear-gradient(135deg, #406B93, #2d5070)',
+            background: '#1C4576',
             display: 'none', alignItems: 'center', justifyContent: 'center',
             boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
           }}>
-            <span style={{ color: '#fff', fontSize: 14, fontWeight: 800 }}>O</span>
+            <span style={{ color: '#D8AE55', fontSize: 9, fontWeight: 900, letterSpacing: 0.5 }}>ONE</span>
           </div>
           <span style={{ color: '#fff', fontWeight: 700, fontSize: 13 }}>
             OneSoft ERP — معالج التثبيت
