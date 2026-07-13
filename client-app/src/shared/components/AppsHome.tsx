@@ -43,17 +43,17 @@ export default function AppsHome() {
 
   return (
     <div className="h-full overflow-y-auto bg-gradient-to-br from-muted/60 via-background to-muted/40" dir={dir}>
-      <div className="max-w-4xl mx-auto px-6 py-10">
+      <div className="max-w-4xl mx-auto px-6 py-6">
 
         {/* ── شريط البحث ── */}
-        <div className="max-w-xl mx-auto mb-12 relative">
+        <div className="w-full max-w-md mx-auto mb-7 relative">
           <Search className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground ${dir === "rtl" ? "right-3.5" : "left-3.5"}`} />
           <input
             autoFocus
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder={lang === "ar" ? "ابحث عن وحدة أو شاشة أو تقرير..." : "Search modules, screens, reports..."}
-            className={`w-full h-11 rounded-xl border border-border bg-card shadow-sm text-sm outline-none focus:ring-2 focus:ring-primary/30 transition-shadow ${dir === "rtl" ? "pr-10 pl-9" : "pl-10 pr-9"}`}
+            placeholder={lang === "ar" ? "بحث عن وحدة أو شاشة أو تقرير..." : "Search modules, screens, reports..."}
+            className={`w-full h-10 rounded-xl border border-border/50 bg-card shadow-[0_1px_3px_rgba(0,0,0,0.05)] text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15 ${dir === "rtl" ? "pr-10 pl-9" : "pl-10 pr-9"}`}
             data-testid="input-apps-search"
           />
           {searching && (
@@ -108,7 +108,7 @@ export default function AppsHome() {
           <>
             {/* ── المفضلة (صف مصغّر بدون عنوان ضخم) ── */}
             {favorites.length > 0 && (
-              <div className="flex flex-wrap justify-center gap-2 mb-10">
+              <div className="flex flex-wrap justify-center gap-2 mb-6">
                 {favorites.map(f => {
                   const Icon = iconForPath(f.path);
                   return (
@@ -138,7 +138,7 @@ export default function AppsHome() {
             )}
 
             {/* ── شبكة التطبيقات بنمط Odoo (بدون عنوان) ── */}
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-x-4 gap-y-10 justify-items-center">
+            <div className="max-w-[42rem] mx-auto grid grid-cols-2 min-[480px]:grid-cols-3 sm:grid-cols-4 gap-3 justify-items-center">
               {modules.map((m, i) => {
                 const label = moduleLabel(lang, m);
                 const color = TILE_COLORS[i % TILE_COLORS.length];
@@ -146,17 +146,17 @@ export default function AppsHome() {
                   <button
                     key={m.path}
                     type="button"
-                    className="group relative flex flex-col items-center gap-3 w-28 cursor-pointer select-none rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    className="group relative flex flex-col items-center gap-2.5 w-full max-w-[9.5rem] pt-4 pb-2 px-2 cursor-pointer select-none rounded-xl border border-transparent transition-all duration-150 hover:bg-card hover:border-border/60 hover:shadow-sm active:scale-[0.96] active:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                     onClick={() => open(m.path, label)}
                     data-testid={`app-tile-${m.path.replace(/\//g, "_")}`}
                   >
-                    <div className={`w-16 h-16 rounded-2xl ${color} flex items-center justify-center shadow-sm transition-transform duration-150 group-hover:scale-110 group-hover:shadow-md`}>
-                      <m.icon className="w-8 h-8" />
+                    <div className={`w-[4.5rem] h-[4.5rem] shrink-0 rounded-2xl ${color} flex items-center justify-center shadow-sm transition-transform duration-150 group-hover:scale-105`}>
+                      <m.icon className="w-9 h-9" />
                     </div>
-                    <span className="text-base font-bold text-foreground text-center leading-snug">
+                    <span className="text-[15px] font-semibold text-foreground text-center leading-snug line-clamp-2 min-h-[2.6em] w-full">
                       {label}
                     </span>
-                    <div className={`absolute -top-2 ${dir === "rtl" ? "-left-1" : "-right-1"} opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity`}>
+                    <div className={`absolute top-1.5 ${dir === "rtl" ? "left-1.5" : "right-1.5"} opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity`}>
                       <FavStar path={m.path} label={label} />
                     </div>
                   </button>
