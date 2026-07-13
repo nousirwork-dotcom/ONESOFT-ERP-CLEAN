@@ -1,23 +1,23 @@
 {
   "_purpose": "Staging — optional update test. Repo is public so raw.githubusercontent.com works without auth.",
-  "_usage": "Set: ONESOFT_UPDATE_URL=https://raw.githubusercontent.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/main/update-manifest.staging.json",
-  "_STAGING_STATUS": "✅ READY FOR TESTING — v1.0.19 (إعداد التحكم في التحديث التلقائي)",
-  "latestVersion": "1.0.19",
+  "_usage": "قناة Staging تُختار من داخل البرنامج (الإعدادات ← التحديثات ← قناة التحديث) — لا حاجة لأي متغير بيئة.",
+  "_STAGING_STATUS": "✅ READY FOR TESTING — v1.0.20 (قناة التحديث داخل البرنامج + إعداد التحكم في التحديث التلقائي)",
+  "latestVersion": "1.0.20",
   "minSupportedVersion": "1.0.0",
   "mandatory": false,
-  "messageAr": "[STAGING v1.0.19] إعداد التحكم في التحديث التلقائي — للاختبار فقط.",
-  "messageEn": "[STAGING v1.0.19] Auto-update control setting — testing only.",
+  "messageAr": "[STAGING v1.0.20] قناة التحديث داخل البرنامج (Stable/Staging) — للاختبار فقط.",
+  "messageEn": "[STAGING v1.0.20] In-app update channel (Stable/Staging) — testing only.",
   "releaseNotes": [
-    "مفتاح تشغيل/إيقاف التحقق التلقائي من التحديثات (للمسؤول فقط) في صفحة التحديثات",
-    "عند الإيقاف: لا إشعارات تلقائية — التحديثات الإجبارية تظهر دائماً",
-    "زر التحقق اليدوي يعمل دائماً بغض النظر عن الإعداد",
-    "خيار «لا تذكرني بهذا الإصدار مرة أخرى» — تخطي دائم للإصدار الحالي فقط",
-    "«لاحقًا» تعيد عرض الرسالة عند التشغيل القادم (إلغاء تأجيل 24 ساعة)",
-    "فشل التحقق عند عدم وجود إنترنت: تسجيل في Logs فقط بدون رسالة خطأ",
-    "بطاقة «إعدادات التحديث»: الإصدار الحالي + آخر تحقق + حالة التحديث"
+    "إعداد «قناة التحديث» داخل البرنامج: مستقر Stable / تجريبي Staging (للمسؤول فقط)",
+    "لا حاجة لكتابة ONESOFT_UPDATE_URL في PowerShell بعد الآن",
+    "القناة محفوظة على الجهاز — تبقى بعد إغلاق البرنامج وإعادة تشغيل Windows",
+    "الوضع الافتراضي لجميع الأجهزة: القناة المستقرة Stable",
+    "عرض القناة الحالية في شاشة إعدادات التحديث مع تنبيه لقناة الاختبار",
+    "زر «التحقق من وجود تحديث الآن» داخل بطاقة إعدادات التحديث",
+    "مفتاح تشغيل/إيقاف التحقق التلقائي + «لا تذكرني بهذا الإصدار» (من v1.0.19)"
   ],
-  "downloadUrl": "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.19/OneSoftSetup-1.0.19-x64.exe",
-  "fileSizeBytes": 81426411,
-  "sha512": "tI5cOeAfncUdmPsu/mWk2ePrln3pw4wqj8/bmNxkGrIx8a85rBJlg4uTzGUUGUsxedVOX/eRDlGRIwdZFO6HuQ==",
-  "publishedAt": "2026-07-13T01:44:06.601Z"
+  "downloadUrl": "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.20/OneSoftSetup-1.0.20-x64.exe",
+  "fileSizeBytes": 81427057,
+  "sha512": "9OQRY/Rl+k8ShiULOBAZXq7EIqShPcPPQqCNLCSPWgAKn3jQHY2SzA2iDi54B2sHcqI916f+vwbwOSenP3mJCw==",
+  "publishedAt": "2026-07-13T02:34:59.110Z"
 }

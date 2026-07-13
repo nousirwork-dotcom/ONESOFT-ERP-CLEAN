@@ -36,11 +36,14 @@ interface ElectronUpdater {
   checkNow:           () => Promise<{ ok: boolean; error?: string }>;
   getPrefs?:          () => Promise<UpdatePrefsInfo>;
   setAutoUpdate?:     (enabled: boolean) => Promise<{ ok: boolean; autoUpdateEnabled: boolean }>;
+  setChannel?:        (channel: UpdateChannel) => Promise<{ ok: boolean; updateChannel?: UpdateChannel; error?: string }>;
 }
+type UpdateChannel = "stable" | "staging";
 interface UpdatePrefsInfo {
   autoUpdateEnabled: boolean;
   skippedVersion:    string | null;
   lastCheckAt:       number | null;
+  updateChannel?:    UpdateChannel;
   currentVersion:    string;
 }
 interface InstallerBridge {
@@ -129,6 +132,27 @@ export default function UpdatesPage() {
       setSavingPref(false);
     }
   }, [refreshPrefs, savingPref]);
+
+  // ─── تغيير قناة التحديث (stable / staging) — للمسؤول فقط ─────────────────
+  const [channelError, setChannelError] = useState("");
+  const handleSetChannel = useCallback(async (channel: UpdateChannel) => {
+    const updater = getUpdater();
+    if (!updater?.setChannel || savingPref) return;
+    if (prefs?.updateChannel === channel) return;
+    setSavingPref(true);
+    setChannelError("");
+    try {
+      const result = await updater.setChannel(channel);
+      if (!result.ok) {
+        setChannelError(result.error ?? "تعذّر تغيير قناة التحديث");
+      }
+      await refreshPrefs();
+    } catch (e) {
+      setChannelError(e instanceof Error ? e.message : "تعذّر تغيير قناة التحديث");
+    } finally {
+      setSavingPref(false);
+    }
+  }, [refreshPrefs, savingPref, prefs?.updateChannel]);
 
   // ─── الإصدار الحقيقي من app.getVersion() عبر IPC ───────────────────────────
   const [electronVersion, setElectronVersion] = useState("");
@@ -327,6 +351,79 @@ export default function UpdatesPage() {
                 disabled={!isAdmin || savingPref || !prefs}
                 onCheckedChange={(v) => void handleToggleAutoUpdate(v)}
               />
+            </div>
+
+            {/* قناة التحديث (stable / staging) */}
+            <div className="p-3 rounded-lg bg-gray-50 border border-gray-100 space-y-2">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">قناة التحديث</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {prefs?.updateChannel === "staging"
+                      ? "قناة الاختبار — يستقبل هذا الجهاز الإصدارات التجريبية قبل طرحها للعملاء"
+                      : "القناة المستقرة — الإصدارات الرسمية المعتمدة فقط (الوضع الافتراضي لجميع العملاء)"}
+                  </p>
+                  {!isAdmin && (
+                    <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                      <Shield className="w-3 h-3" />
+                      تغيير القناة متاح لمدير النظام فقط
+                    </p>
+                  )}
+                </div>
+                <Badge className={`text-xs text-white shrink-0 ${prefs?.updateChannel === "staging" ? "bg-purple-500" : "bg-emerald-600"}`}>
+                  {prefs?.updateChannel === "staging" ? "تجريبي Staging" : "مستقر Stable"}
+                </Badge>
+              </div>
+              {isAdmin && (
+                <div className="flex gap-2" dir="rtl">
+                  <Button
+                    size="sm"
+                    variant={prefs?.updateChannel !== "staging" ? "default" : "outline"}
+                    className={prefs?.updateChannel !== "staging" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : ""}
+                    disabled={savingPref || !prefs}
+                    onClick={() => void handleSetChannel("stable")}
+                  >
+                    <CheckCircle className="w-3.5 h-3.5 ml-1" />
+                    الإصدار المستقر Stable
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={prefs?.updateChannel === "staging" ? "default" : "outline"}
+                    className={prefs?.updateChannel === "staging" ? "bg-purple-600 hover:bg-purple-700 text-white" : ""}
+                    disabled={savingPref || !prefs}
+                    onClick={() => void handleSetChannel("staging")}
+                  >
+                    <Zap className="w-3.5 h-3.5 ml-1" />
+                    الإصدار التجريبي Staging
+                  </Button>
+                </div>
+              )}
+              {isAdmin && prefs?.updateChannel === "staging" && (
+                <p className="text-xs text-purple-600 flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  هذا الجهاز على قناة الاختبار — الإصدارات التجريبية قد تحتوي على ميزات غير مكتملة
+                </p>
+              )}
+              {channelError && (
+                <p className="text-xs text-red-600 flex items-center gap-1.5">
+                  <XCircle className="w-3.5 h-3.5" />
+                  {channelError}
+                </p>
+              )}
+            </div>
+
+            {/* زر التحقق اليدوي */}
+            <div className="flex items-center justify-between gap-4 p-3 rounded-lg border border-gray-100">
+              <p className="text-xs text-gray-500">التحقق اليدوي يعمل دائماً بغض النظر عن إعدادات التحقق التلقائي</p>
+              <Button
+                size="sm"
+                onClick={handleCheck}
+                disabled={checkPhase === "checking" || dlPhase === "downloading" || dlPhase === "installing"}
+                className="gap-2 bg-[#1B2B5C] hover:bg-[#162247] text-white shrink-0"
+              >
+                <RefreshCw className={`w-4 h-4 ${checkPhase === "checking" ? "animate-spin" : ""}`} />
+                التحقق من وجود تحديث الآن
+              </Button>
             </div>
 
             {/* ملخص الحالة */}

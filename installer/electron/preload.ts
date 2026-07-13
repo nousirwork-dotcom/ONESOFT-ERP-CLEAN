@@ -114,5 +114,7 @@ contextBridge.exposeInMainWorld('installer', {
     getPrefs:      () => ipcRenderer.invoke('update:get-prefs'),
     /** تشغيل/إيقاف التحقق التلقائي — إعداد خاص بالجهاز */
     setAutoUpdate: (enabled: boolean) => ipcRenderer.invoke('update:set-auto-update', enabled),
+    /** تغيير قناة التحديث (stable / staging) — إعداد خاص بالجهاز */
+    setChannel:    (channel: 'stable' | 'staging') => ipcRenderer.invoke('update:set-channel', channel),
   },
 });
