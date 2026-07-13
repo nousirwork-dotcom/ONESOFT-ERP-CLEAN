@@ -230,6 +230,7 @@ export default function TrialBanner() {
       <div dir={dir} style={{
         display: 'flex', flexDirection: 'column', gap: 6,
         alignItems: 'flex-start',
+        padding: '8px 16px 0',
       }}>
         {isTrial && trialDaysLeft !== null && (
           <div style={{

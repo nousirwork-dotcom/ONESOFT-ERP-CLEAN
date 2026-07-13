@@ -9,6 +9,7 @@ import { ThemeProvider } from "@/core/contexts/ThemeContext";
 import { TabManagerProvider, useTabManager } from "@/core/contexts/TabManagerContext";
 import { UiPrefsProvider, useUiPrefs } from "@/core/contexts/UiPrefsContext";
 import AppsHome from "@/shared/components/AppsHome";
+import TrialBanner from "@/shared/components/TrialBanner";
 import { LanguageProvider } from "@/core/contexts/LanguageContext";
 import Dashboard from "@/modules/dashboard/pages/Dashboard";
 import POS from "@/modules/sales/pages/POS";
@@ -370,6 +371,9 @@ function TabContent() {
     <>
       {showDashboard && (
         <div className="absolute inset-0 overflow-auto" dir="rtl">
+          {/* تنبيه النسخة التجريبية — يظهر مرة واحدة أعلى الشاشة الرئيسية فقط،
+              ويختفي تلقائياً عند فتح أي شاشة أخرى لأن هذه الطبقة تُخفى */}
+          <TrialBanner />
           {layoutMode === "apps" ? <AppsHome /> : <Dashboard />}
         </div>
       )}
