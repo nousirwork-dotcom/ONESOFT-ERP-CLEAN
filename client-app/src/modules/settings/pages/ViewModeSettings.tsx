@@ -7,9 +7,9 @@ import { useUiPrefs, type LayoutMode } from '@/core/contexts/UiPrefsContext';
 // اختيار شخصي لكل مستخدم + افتراضي المنشأة (للمسؤول فقط)
 
 const MODES: Array<{ value: LayoutMode; label: string; desc: string }> = [
-  { value: 'vertical',   label: 'قائمة جانبية رأسية',  desc: 'القائمة الكلاسيكية على جانب الشاشة' },
-  { value: 'horizontal', label: 'قائمة علوية أفقية',   desc: 'شريط وحدات أفقي أعلى الشاشة' },
-  { value: 'apps',       label: 'شاشة تطبيقات مركزية', desc: 'شبكة تطبيقات بأسلوب عصري مع بحث ومفضلة' },
+  { value: 'vertical',   label: 'رأسية',   desc: 'القائمة الرئيسية بشكل رأسي على جانب الشاشة' },
+  { value: 'horizontal', label: 'أفقية',   desc: 'القائمة الرئيسية بشكل أفقي أعلى الشاشة' },
+  { value: 'apps',       label: 'مركزية',  desc: 'وحدات النظام في منتصف الصفحة على شكل أيقونات' },
 ];
 
 function ModeThumb({ mode }: { mode: LayoutMode }) {

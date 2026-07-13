@@ -456,9 +456,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   /* ---- Layout Toggle Button (3 أنماط) ---- */
   const MODE_META: Record<LayoutMode, { icon: React.ElementType; label: string }> = {
-    vertical:   { icon: PanelRight, label: isAr ? "قائمة جانبية"  : "Sidebar" },
-    horizontal: { icon: LayoutGrid, label: isAr ? "قائمة علوية"   : "Top menu" },
-    apps:       { icon: Grid3x3,    label: isAr ? "شاشة تطبيقات" : "Apps screen" },
+    vertical:   { icon: PanelRight, label: isAr ? "رأسية"  : "Vertical" },
+    horizontal: { icon: LayoutGrid, label: isAr ? "أفقية"  : "Horizontal" },
+    apps:       { icon: Grid3x3,    label: isAr ? "مركزية" : "Centered" },
   };
   const LayoutToggleBtn = () => {
     const CurrentIcon = MODE_META[layoutMode]?.icon ?? PanelRight;

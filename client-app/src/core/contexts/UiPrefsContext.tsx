@@ -56,7 +56,7 @@ export function useUiPrefs() {
 
 export function UiPrefsProvider({ children }: { children: ReactNode }) {
   // عرض فوري من مفتاح الجهاز — يُستبدل بقيمة المستخدم/الخادم فور توفرها
-  const [layoutMode, setLayoutModeState] = useState<LayoutMode>(() => loadMode(DEVICE_MODE_KEY) ?? "vertical");
+  const [layoutMode, setLayoutModeState] = useState<LayoutMode>(() => loadMode(DEVICE_MODE_KEY) ?? "apps");
   const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
   const [recents, setRecents] = useState<RecentItem[]>([]);
   const [orgDefault, setOrgDefault] = useState<LayoutMode | null>(null);
@@ -104,12 +104,12 @@ export function UiPrefsProvider({ children }: { children: ReactNode }) {
     const { prefs, orgDefaultLayoutMode } = prefsQuery.data;
     setOrgDefault(orgDefaultLayoutMode ?? null);
 
-    // طريقة العرض: تفضيل المستخدم ← وإلا افتراضي المنشأة ← وإلا القيمة المحلية المفصولة ← وإلا رأسي
+    // طريقة العرض: تفضيل المستخدم ← وإلا افتراضي المنشأة ← وإلا القيمة المحلية المفصولة ← وإلا مركزية
     const resolved: LayoutMode =
       (prefs.layoutMode && VALID_MODES.includes(prefs.layoutMode) ? prefs.layoutMode : null)
       ?? orgDefaultLayoutMode
       ?? loadMode(scoped(MODE_KEY, userId))
-      ?? "vertical";
+      ?? "apps";
     setLayoutModeState(resolved);
     localStorage.setItem(scoped(MODE_KEY, userId), resolved);
     localStorage.setItem(DEVICE_MODE_KEY, resolved);
