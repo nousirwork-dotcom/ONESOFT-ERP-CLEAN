@@ -37,7 +37,7 @@ import { toast } from "sonner";
 type MenuId = string;
 
 // status: "done" = ✅ أخضر, "partial" = ▲ برتقالي, "missing" = ❌ أحمر
-const menuSections = [
+export const menuSections = [
   {
     id: "general",
     label: "الإعدادات العامة",

@@ -20,6 +20,14 @@ export const appSettingsRouter = router({
   set: protectedProcedure
     .input(z.object({ key: z.string(), value: z.any() }))
     .mutation(async ({ input, ctx }) => {
+      // ── مفاتيح محجوزة: تُكتب فقط عبر راوتر uiPrefs (عزل لكل مستخدم) ─────────
+      if (input.key.startsWith('ui_prefs.') || input.key === 'ui.default_layout_mode') {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'هذا المفتاح محجوز لتفضيلات الواجهة ولا يُعدَّل مباشرة',
+        });
+      }
+
       // ── مفاتيح الأمان: للمديرين فقط ────────────────────────────────────────
       if (input.key.startsWith('security.') &&
           ctx.user.role !== 'admin' && ctx.user.role !== 'superadmin') {

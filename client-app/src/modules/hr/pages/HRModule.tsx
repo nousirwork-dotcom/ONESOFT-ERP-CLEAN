@@ -18,7 +18,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 
 type MenuId = string;
 
-const menuSections = [
+export const menuSections = [
   {
     id: "employees",
     label: "الموظفون",

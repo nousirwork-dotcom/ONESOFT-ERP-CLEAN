@@ -42,7 +42,7 @@ import {
 type MenuId = string;
 
 // ─── Menu Structure ────────────────────────────────────────────────────────────
-const menuSections = [
+export const menuSections = [
   {
     id: "journal",
     label: "اليومية العامة",

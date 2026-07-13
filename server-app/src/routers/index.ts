@@ -15,6 +15,7 @@ import { postingRouter }            from './posting.js';
 import { currenciesRouter }         from './currencies.js';
 import { fieldDictionaryRouter }    from './fieldDictionary.js';
 import { appSettingsRouter }        from './appSettings.js';
+import { uiPrefsRouter }            from './uiPrefs.js';
 import { paymentMethodsRouter }     from './paymentMethods.js';
 import { zatcaRouter }              from './zatca.js';
 import { sourceCodeRouter }         from './sourceCode.js';
@@ -98,6 +99,7 @@ const baseConfig = {
   currencies:          currenciesRouter,
   fieldDictionary:     fieldDictionaryRouter,
   appSettings:         appSettingsRouter,
+  uiPrefs:             uiPrefsRouter,
   paymentMethods:      paymentMethodsRouter,
   zatca:               zatcaRouter,
   sourceCode:          sourceCodeRouter,

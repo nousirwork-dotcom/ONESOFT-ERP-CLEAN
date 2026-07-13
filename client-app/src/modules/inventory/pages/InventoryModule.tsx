@@ -40,7 +40,7 @@ type MenuSection = {
   children?: MenuChild[];
 };
 
-const menuSections: MenuSection[] = [
+export const menuSections: MenuSection[] = [
   {
     id: "products-section",
     label: "الأصناف",
