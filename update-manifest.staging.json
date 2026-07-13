@@ -1,31 +1,23 @@
 {
-  "_purpose":        "Staging — optional update test. Repo is public so raw.githubusercontent.com works without auth.",
-  "_usage":          "Set: ONESOFT_UPDATE_URL=https://raw.githubusercontent.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/main/update-manifest.staging.json",
-
-  "_STAGING_STATUS": "✅ READY FOR TESTING — v1.0.4-staging-test-9 (fix: connecting page during startup; auto-delete stale version.json)",
-
-  "latestVersion":       "1.0.4",
+  "_purpose": "Staging — optional update test. Repo is public so raw.githubusercontent.com works without auth.",
+  "_usage": "Set: ONESOFT_UPDATE_URL=https://raw.githubusercontent.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/main/update-manifest.staging.json",
+  "_STAGING_STATUS": "✅ READY FOR TESTING — v1.0.19 (إعداد التحكم في التحديث التلقائي)",
+  "latestVersion": "1.0.19",
   "minSupportedVersion": "1.0.0",
-  "mandatory":           false,
-
-  "messageAr": "[STAGING v1.0.4] نظام التجربة المجانية + نظام المستخدمين + استعادة كلمة المرور — للاختبار فقط.",
-  "messageEn": "[STAGING v1.0.4] Trial system + Users module + Password Recovery — testing only.",
-
+  "mandatory": false,
+  "messageAr": "[STAGING v1.0.19] إعداد التحكم في التحديث التلقائي — للاختبار فقط.",
+  "messageEn": "[STAGING v1.0.19] Auto-update control setting — testing only.",
   "releaseNotes": [
-    "نظام Trial Active / Trial Expired — فترة تجربة مجانية 30 يوم",
-    "كود التجربة (🧪) مستقل عن كود المؤسسة الرسمي",
-    "بانر التجربة يظهر في جميع الصفحات مع الأيام المتبقية",
-    "شاشة انتهاء التجربة مع 5 خيارات تفعيل وظيفية",
-    "admin الافتراضي: تسجيل دخول تلقائي بدون كلمة مرور عند أول تشغيل",
-    "تعيين كلمة مرور admin من داخل النظام مع تأكيد",
-    "شاشة المستخدمين: حد المستخدمين حسب الترخيص مع مؤشر بصري",
-    "منع إضافة مستخدم عند تجاوز الحد",
-    "استعادة كلمة المرور (Password Recovery) عبر SMS/Email",
-    "التحقق من رقم الجوال والبريد في شاشة المستخدمين"
+    "مفتاح تشغيل/إيقاف التحقق التلقائي من التحديثات (للمسؤول فقط) في صفحة التحديثات",
+    "عند الإيقاف: لا إشعارات تلقائية — التحديثات الإجبارية تظهر دائماً",
+    "زر التحقق اليدوي يعمل دائماً بغض النظر عن الإعداد",
+    "خيار «لا تذكرني بهذا الإصدار مرة أخرى» — تخطي دائم للإصدار الحالي فقط",
+    "«لاحقًا» تعيد عرض الرسالة عند التشغيل القادم (إلغاء تأجيل 24 ساعة)",
+    "فشل التحقق عند عدم وجود إنترنت: تسجيل في Logs فقط بدون رسالة خطأ",
+    "بطاقة «إعدادات التحديث»: الإصدار الحالي + آخر تحقق + حالة التحديث"
   ],
-
-  "downloadUrl":   "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.4-staging-test-9/OneSoftSetup-1.0.4-x64.exe",
-  "fileSizeBytes": 80205867,
-  "sha512":        "aJdaooJYqWvyic50T0Ro2nWv9kZ3NnQZgA+daqoYkLXqn+X+3hTbZcEEnKLIlyvoGGlR+qz5Zvom0y9xgUVLMw==",
-  "publishedAt":   "2026-07-09T23:59:23Z"
+  "downloadUrl": "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.19/OneSoftSetup-1.0.19-x64.exe",
+  "fileSizeBytes": 81426411,
+  "sha512": "tI5cOeAfncUdmPsu/mWk2ePrln3pw4wqj8/bmNxkGrIx8a85rBJlg4uTzGUUGUsxedVOX/eRDlGRIwdZFO6HuQ==",
+  "publishedAt": "2026-07-13T01:44:06.601Z"
 }
