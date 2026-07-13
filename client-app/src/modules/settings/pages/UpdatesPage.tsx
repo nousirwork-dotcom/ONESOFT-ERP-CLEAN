@@ -13,6 +13,7 @@ import { trpc } from "@/shared/lib/trpc";
 import { Button } from "@/core/ui/button";
 import { Badge } from "@/core/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/core/ui/card";
+import { Switch } from "@/core/ui/switch";
 import {
   RefreshCw, Download, CheckCircle2, XCircle, AlertTriangle,
   Info, Shield, Clock, Cpu, HardDrive, Wifi, WifiOff,
@@ -33,6 +34,14 @@ interface ElectronUpdater {
   installNow:         () => Promise<{ ok: boolean; error?: string }>;
   skipUpdate:         () => Promise<void>;
   checkNow:           () => Promise<{ ok: boolean; error?: string }>;
+  getPrefs?:          () => Promise<UpdatePrefsInfo>;
+  setAutoUpdate?:     (enabled: boolean) => Promise<{ ok: boolean; autoUpdateEnabled: boolean }>;
+}
+interface UpdatePrefsInfo {
+  autoUpdateEnabled: boolean;
+  skippedVersion:    string | null;
+  lastCheckAt:       number | null;
+  currentVersion:    string;
 }
 interface InstallerBridge {
   updater?: ElectronUpdater;
@@ -96,6 +105,30 @@ export default function UpdatesPage() {
   // ─── دور المستخدم الحالي (الـ Panel التشخيصي للمدير فقط) ──────────────────
   const meQ = trpc.auth.me.useQuery(undefined, { staleTime: 300_000 });
   const isSuperAdmin = meQ.data?.role === 'superadmin';
+  const isAdmin = meQ.data?.role === 'admin' || isSuperAdmin;
+
+  // ─── تفضيلات التحديث المحلية (خاصة بالجهاز — من Electron) ────────────────
+  const [prefs, setPrefs]         = useState<UpdatePrefsInfo | null>(null);
+  const [savingPref, setSavingPref] = useState(false);
+  const refreshPrefs = useCallback(async () => {
+    try {
+      const p = await getUpdater()?.getPrefs?.();
+      if (p) setPrefs(p);
+    } catch { /* غير متاح خارج Electron */ }
+  }, []);
+  useEffect(() => { void refreshPrefs(); }, [refreshPrefs]);
+
+  const handleToggleAutoUpdate = useCallback(async (enabled: boolean) => {
+    const updater = getUpdater();
+    if (!updater?.setAutoUpdate || savingPref) return;
+    setSavingPref(true);
+    try {
+      await updater.setAutoUpdate(enabled);
+      await refreshPrefs();
+    } finally {
+      setSavingPref(false);
+    }
+  }, [refreshPrefs, savingPref]);
 
   // ─── الإصدار الحقيقي من app.getVersion() عبر IPC ───────────────────────────
   const [electronVersion, setElectronVersion] = useState("");
@@ -211,7 +244,8 @@ export default function UpdatesPage() {
       setCheckError(result.error);
       setCheckPhase("error");
     }
-  }, []);
+    await refreshPrefs(); // تحديث "آخر تحقق"
+  }, [refreshPrefs]);
 
   // ─── تحميل التحديث ───────────────────────────────────────────────────────
   const handleDownload = useCallback(async () => {
@@ -259,6 +293,79 @@ export default function UpdatesPage() {
           <p className="text-sm text-gray-500">إدارة إصدارات OneSoft ERP وتحديثاتها يدوياً</p>
         </div>
       </div>
+
+      {/* ── إعدادات التحديث (خاصة بهذا الجهاز) ─────────────────────────────── */}
+      {isElectron && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 text-amber-600" />
+              إعدادات التحديث
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+
+            {/* مفتاح التحقق التلقائي */}
+            <div className="flex items-center justify-between gap-4 p-3 rounded-lg bg-gray-50 border border-gray-100">
+              <div>
+                <p className="text-sm font-semibold text-gray-800">التحقق التلقائي من وجود تحديثات</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {prefs?.autoUpdateEnabled !== false
+                    ? "يتحقق البرنامج تلقائياً من وجود إصدار جديد عند التشغيل"
+                    : "لن يتحقق البرنامج تلقائياً — يمكنك الفحص يدوياً في أي وقت"}
+                </p>
+                {!isAdmin && (
+                  <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                    <Shield className="w-3 h-3" />
+                    تغيير هذا الإعداد متاح لمدير النظام فقط
+                  </p>
+                )}
+              </div>
+              <Switch
+                dir="ltr"
+                checked={prefs?.autoUpdateEnabled !== false}
+                disabled={!isAdmin || savingPref || !prefs}
+                onCheckedChange={(v) => void handleToggleAutoUpdate(v)}
+              />
+            </div>
+
+            {/* ملخص الحالة */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+              <div className="p-3 rounded-lg border border-gray-100">
+                <p className="text-xs text-gray-500 mb-1">الإصدار الحالي</p>
+                <p className="font-bold text-gray-800" dir="ltr">v{electronVersion || prefs?.currentVersion || "—"}</p>
+              </div>
+              <div className="p-3 rounded-lg border border-gray-100">
+                <p className="text-xs text-gray-500 mb-1">آخر تحقق</p>
+                <p className="font-semibold text-gray-700">
+                  {prefs?.lastCheckAt
+                    ? new Date(prefs.lastCheckAt).toLocaleString("ar-SA", { dateStyle: "medium", timeStyle: "short" })
+                    : "لم يتم التحقق بعد"}
+                </p>
+              </div>
+              <div className="p-3 rounded-lg border border-gray-100">
+                <p className="text-xs text-gray-500 mb-1">حالة التحديث</p>
+                <p className="font-semibold text-gray-700">
+                  {checkPhase === "checking"          ? "جاري التحقق..."
+                   : checkPhase === "update-available" ? `يتوفر إصدار أحدث${manifest ? ` (v${manifest.latestVersion})` : ""}`
+                   : checkPhase === "no-update"        ? "الإصدار الحالي هو الأحدث"
+                   : checkPhase === "error"            ? "تعذّر التحقق"
+                   : "—"}
+                </p>
+              </div>
+            </div>
+
+            {/* إصدار متجاهَل */}
+            {prefs?.skippedVersion && (
+              <p className="text-xs text-gray-500 flex items-center gap-1.5">
+                <Info className="w-3.5 h-3.5" />
+                اخترت عدم التذكير بالإصدار <span dir="ltr" className="font-semibold">v{prefs.skippedVersion}</span> — ستظهر الرسالة عند صدور إصدار أحدث
+              </p>
+            )}
+
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── معلومات الإصدار الحالي (من tRPC) ────────────────────────────────── */}
       <Card>

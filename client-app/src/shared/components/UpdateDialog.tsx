@@ -4,7 +4,8 @@
  * تظهر تلقائياً عند بدء التشغيل إذا وجد تحديث.
  * تكتب الحالة إلى update-store حتى تقرأها شاشة الإعدادات (UpdatesPage).
  *
- * optional  → "تحديث الآن" + "لاحقاً" (يؤجّل 24 ساعة)
+ * optional  → "تحديث الآن" + "لاحقاً" (تظهر مجدداً عند التشغيل القادم)
+ *              + خيار "لا تذكرني بهذا الإصدار مرة أخرى" (تخطي دائم لهذا الإصدار)
  * mandatory → "تحديث الآن" فقط — يمنع الدخول لأي صفحة
  */
 
@@ -48,6 +49,7 @@ interface ElectronUpdater {
   startDownload:      () => Promise<{ ok: boolean; error?: string }>;
   installNow:         () => Promise<{ ok: boolean; error?: string }>;
   skipUpdate:         () => Promise<void>;
+  skipVersion?:       () => Promise<{ ok: boolean; error?: string }>;
 }
 function getUpdater(): ElectronUpdater | null {
   const w = window as unknown as { installer?: { updater?: ElectronUpdater } };
@@ -76,6 +78,7 @@ export default function UpdateDialog() {
   const [errMsg, setErrMsg]         = useState("");
   const [showNotes, setShowNotes]   = useState(false);
   const [loading, setLoading]       = useState(false);
+  const [dontRemind, setDontRemind] = useState(false);
   const downloadedRef               = useRef(false);
 
   useEffect(() => {
@@ -86,6 +89,7 @@ export default function UpdateDialog() {
       if (data.type === "optional") {
         setManifest(data.manifest);
         setCurrentVer(data.currentVersion);
+        setDontRemind(false); // إعادة تعيين الخيار مع كل تحديث جديد
         setState("optional");
         updateStore.setOptional(data.manifest, data.currentVersion);
       } else if (data.type === "mandatory") {
@@ -148,10 +152,19 @@ export default function UpdateDialog() {
 
   async function handleSkip() {
     const updater = getUpdater();
-    if (updater) await updater.skipUpdate();
+    if (updater) {
+      if (dontRemind && updater.skipVersion) {
+        // "لا تذكرني بهذا الإصدار مرة أخرى" — تخطي دائم لهذا الإصدار
+        await updater.skipVersion();
+      } else {
+        // "لاحقاً" — يغلق النافذة فقط، تظهر مجدداً عند التشغيل القادم
+        await updater.skipUpdate();
+      }
+    }
     // يُخفي النافذة لكن يبقي الـ manifest في updateStore
     // حتى تتمكن شاشة الإعدادات من إظهاره
     updateStore.setOptional(manifest!, currentVer); // يبقى في الـ store
+    setDontRemind(false); // إعادة التعيين حتى لا يلتصق الخيار بنوافذ قادمة
     setState("idle");
   }
 
@@ -275,6 +288,21 @@ export default function UpdateDialog() {
             </p>
           )}
         </div>
+
+        {/* خيار "لا تذكرني بهذا الإصدار" — للتحديث الاختياري فقط */}
+        {!isMandatory && (state === "optional") && (
+          <label className="flex items-center gap-2 px-6 pb-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={dontRemind}
+              onChange={(e) => setDontRemind(e.target.checked)}
+              className="w-4 h-4 rounded accent-[#1B2B5C]"
+            />
+            <span className="text-xs" style={{ color: "#6b7280" }}>
+              لا تذكرني بهذا الإصدار مرة أخرى
+            </span>
+          </label>
+        )}
 
         {/* Footer */}
         <div className="flex items-center gap-3 px-6 pb-5 pt-2" style={{ borderTop: "1px solid rgba(201,168,76,0.15)" }}>
