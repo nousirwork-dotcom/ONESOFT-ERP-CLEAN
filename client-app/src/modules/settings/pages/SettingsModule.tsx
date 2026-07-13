@@ -11,6 +11,7 @@ import ServiceDiagnosticsPage from "./ServiceDiagnosticsPage";
 import TemplatesManagerPage from "./TemplatesManagerPage";
 import ZatcaIntegrationPage from "./ZatcaIntegrationPage";
 import ZatcaCenterPage from "./ZatcaCenterPage";
+import AISettingsPage from "./AISettingsPage";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/core/ui/dialog";
 import {
   ChevronDown, ChevronRight, Settings, Building2, DollarSign,
@@ -149,6 +150,7 @@ export const menuSections = [
       { id: "messaging-email",     label: "البريد الإلكتروني",    status: "partial", path: "/cfg/messaging-email"     },
       { id: "messaging-templates", label: "قوالب الرسائل",        status: "partial", path: "/cfg/messaging-templates" },
       { id: "messaging-log",       label: "سجل الإرسال",          status: "partial", path: "/cfg/messaging-log"       },
+      { id: "ai-assistant",        label: "المساعد الذكي",        status: "partial", path: "/cfg/ai-assistant"        },
     ],
   },
   {
@@ -5088,6 +5090,7 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
     case "messaging-email":      return <MessagingEmailPage />;
     case "messaging-templates":  return <MessagingTemplatesPage />;
     case "messaging-log":        return <MessagingLogPage />;
+    case "ai-assistant":         return <AISettingsPage />;
     // التصميم والطباعة
     case "print-settings":       return <PrintSettingsPage />;
     case "logo-stamp":           return <LogoStampPage />;
@@ -5164,6 +5167,7 @@ export function CfgMessagingTelegramTab()  { return <CfgSubPage activeId="messag
 export function CfgMessagingEmailTab()     { return <CfgSubPage activeId="messaging-email" />; }
 export function CfgMessagingTemplatesTab() { return <CfgSubPage activeId="messaging-templates" />; }
 export function CfgMessagingLogTab()       { return <CfgSubPage activeId="messaging-log" />; }
+export function CfgAiAssistantTab()        { return <CfgSubPage activeId="ai-assistant" />; }
 export function CfgZatcaCenterTab()        { return <CfgSubPage activeId="zatca-center-dashboard" />; }
 export function CfgPrintSettingsTab()      { return <CfgSubPage activeId="print-settings" />; }
 export function CfgLogoStampTab()          { return <CfgSubPage activeId="logo-stamp" />; }

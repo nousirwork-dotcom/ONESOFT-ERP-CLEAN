@@ -69,7 +69,7 @@ import SettingsModule, {
   CfgShiftsTab, CfgReportDesignerTab, CfgTestSetupTab, CfgTestEditTab, CfgFieldSpecsTab,
   CfgLoyaltyPointsTab, CfgLoyaltyTiersTab, CfgLoyaltyPromosTab, CfgLoyaltyMessagesTab,
   CfgMessagingWhatsAppTab, CfgMessagingTelegramTab, CfgMessagingEmailTab,
-  CfgMessagingTemplatesTab, CfgMessagingLogTab,
+  CfgMessagingTemplatesTab, CfgMessagingLogTab, CfgAiAssistantTab,
   CfgPrintSettingsTab, CfgLogoStampTab, CfgSignaturesTab, CfgEmailPdfTab,
   CfgFieldDictionaryTab, CfgPaymentMethodsTab,
   CfgZatcaTab, CfgZatcaMonitorTab, CfgZatcaInvoicesTab, CfgZatcaLogsTab,
@@ -87,6 +87,7 @@ import {
   HsRentalsPage, HsCustodyPage, HsCustomersPage, HsTasksPage,
   HsGovLinksPage, HsNotesPage, HsInternalCommPage,
 } from "@/modules/helpservices/pages/HsPages";
+import AIAssistantPage from "@/modules/helpservices/pages/AIAssistantPage";
 import LicenseActivationPage from "@/modules/license/pages/LicenseActivationPage";
 import SuperAdminPage from "@/core/admin/SuperAdminPage";
 import SourceCodeViewerPage from "@/core/dev/SourceCodeViewerPage";
@@ -131,6 +132,7 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/hs/gov-links":     HsGovLinksPage,
   "/hs/notes":         HsNotesPage,
   "/hs/internal-comm": HsInternalCommPage,
+  "/hs/ai-assistant":  AIAssistantPage,
   "/purchases/suppliers":         PurchaseSuppliersPage,
   "/purchases/supplier-groups":  PurchaseSupplierGroupsPage,
   "/purchases/orders":           PurchaseOrdersPage,
@@ -283,6 +285,7 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/cfg/messaging-telegram":     CfgMessagingTelegramTab,
   "/cfg/messaging-email":        CfgMessagingEmailTab,
   "/cfg/messaging-templates":    CfgMessagingTemplatesTab,
+  "/cfg/ai-assistant":           CfgAiAssistantTab,
   "/cfg/messaging-log":          CfgMessagingLogTab,
   "/cfg/print-settings":         CfgPrintSettingsTab,
   "/cfg/logo-stamp":             CfgLogoStampTab,
