@@ -9,12 +9,13 @@
  *   - "لاحقاً" يغلق النافذة فقط (تظهر مجدداً عند التشغيل القادم)
  *   - "لا تذكرني بهذا الإصدار" تخطي دائم لإصدار محدد (skippedVersion)
  *   - فحص يدوي من شاشة الإعدادات (update:check-now) — يعمل دائماً ويتجاهل التخطي
- *   - روابط manifest مختلفة حسب البيئة (dev / staging / production)
+ *   - قناة التحديث لكل جهاز (updateChannel: stable | staging — افتراضي: stable)
+ *     stable → update-manifest.json | staging → update-manifest.staging.json
+ *     تُغيَّر من شاشة الإعدادات (للمسؤول فقط) — لا حاجة لأي Environment Variable
  *   - logging منظَّم لكل الأحداث
  *
- * متغيرات البيئة (اختيارية):
- *   ONESOFT_UPDATE_URL  — تجاوز كامل لرابط manifest
- *   ONESOFT_UPDATE_ENV  — 'development' | 'staging' | 'production'  (افتراضي: production)
+ * متغيرات البيئة (اختيارية — للتجاوز اليدوي فقط):
+ *   ONESOFT_UPDATE_URL  — تجاوز كامل لرابط manifest (أولوية أعلى من القناة)
  *
  * منطق التحديث:
  *   currentVersion < minSupportedVersion  → إجباري  (يُمنع الدخول للنظام)
@@ -31,23 +32,29 @@ import * as crypto         from 'crypto';
 import { spawn }           from 'child_process';
 import type { BrowserWindow } from 'electron';
 
-// ─── روابط Manifest حسب البيئة ────────────────────────────────────────────────
+// ─── روابط Manifest حسب قناة التحديث ─────────────────────────────────────────
 // GitHub raw content — يعمل مباشرة بدون خادم خارجي
-// الملف: update-manifest.json في جذر الـ repository (main branch)
-const GITHUB_RAW_MANIFEST = 'https://raw.githubusercontent.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/main/update-manifest.json';
+// قناة Stable  → update-manifest.json          (الإنتاج — جميع العملاء)
+// قناة Staging → update-manifest.staging.json  (الاختبار — أجهزة التجربة فقط)
+const RAW_BASE = 'https://raw.githubusercontent.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/main';
 
-const ENV_MANIFEST_URLS: Record<string, string> = {
-  development: GITHUB_RAW_MANIFEST,
-  staging:     GITHUB_RAW_MANIFEST,
-  production:  GITHUB_RAW_MANIFEST,
+export type UpdateChannel = 'stable' | 'staging';
+
+const CHANNEL_MANIFEST_URLS: Record<UpdateChannel, string> = {
+  stable:  `${RAW_BASE}/update-manifest.json`,
+  staging: `${RAW_BASE}/update-manifest.staging.json`,
 };
 
-const MANIFEST_URL: string = (() => {
+/**
+ * يُحدَّد رابط الـ manifest عند كل فحص (وليس مرة واحدة عند التشغيل)
+ * حتى يسري تغيير القناة فوراً بدون إعادة تشغيل.
+ * الأولوية: ONESOFT_UPDATE_URL (تجاوز يدوي اختياري) ← قناة الجهاز المحفوظة ← stable
+ */
+function resolveManifestUrl(): string {
   const override = process.env['ONESOFT_UPDATE_URL'];
   if (override) return override;
-  const env = process.env['ONESOFT_UPDATE_ENV'] ?? 'production';
-  return ENV_MANIFEST_URLS[env] ?? ENV_MANIFEST_URLS['production']!;
-})();
+  return CHANNEL_MANIFEST_URLS[getUpdateChannel()];
+}
 
 // ملاحظة: زر "لاحقاً" لم يعد يحفظ أي تأجيل — الرسالة تظهر مجدداً عند التشغيل القادم.
 // "لا تذكرني بهذا الإصدار" يحفظ skippedVersion بشكل دائم (حتى صدور إصدار أحدث).
@@ -94,6 +101,8 @@ interface UpdatePrefs {
   skippedAt?:      number;
   /** آخر وقت تم فيه فحص التحديثات (ناجح أو فاشل) */
   lastCheckAt?:    number;
+  /** قناة التحديث (افتراضي: stable — جميع العملاء) */
+  updateChannel?:  UpdateChannel;
 }
 
 function prefsPath(): string {
@@ -111,6 +120,10 @@ function writePrefs(patch: Partial<UpdatePrefs>): void {
 }
 function isAutoUpdateEnabled(): boolean {
   return readPrefs().autoUpdateEnabled !== false; // الافتراضي: مفعّل
+}
+/** قناة التحديث المحفوظة للجهاز — أي قيمة غير معروفة تُعامل كـ stable */
+function getUpdateChannel(): UpdateChannel {
+  return readPrefs().updateChannel === 'staging' ? 'staging' : 'stable';
 }
 /** تخطي دائم لإصدار محدد — للفحص التلقائي فقط، الفحص اليدوي يعرضه دائماً */
 function shouldSkipOptional(version: string): boolean {
@@ -250,14 +263,16 @@ export function setupUpdater(mainWindow: BrowserWindow): void {
    */
   async function doCheck(opts: { source: 'auto' | 'manual'; silentUnlessMandatory?: boolean } = { source: 'auto' }): Promise<void> {
     const { source, silentUnlessMandatory = false } = opts;
-    log('INFO', `checking-for-update  url=${MANIFEST_URL}  version=${currentVersion}  source=${source}  silent=${silentUnlessMandatory}  env=${process.env['ONESOFT_UPDATE_ENV'] ?? 'production'}`);
+    const manifestUrl = resolveManifestUrl();
+    const channel     = getUpdateChannel();
+    log('INFO', `checking-for-update  url=${manifestUrl}  channel=${channel}  version=${currentVersion}  source=${source}  silent=${silentUnlessMandatory}`);
     if (!silentUnlessMandatory) {
       send('update:status', { type: 'checking' } satisfies UpdateStatusEvent);
     }
-    send('update:log', { event: 'checking-for-update', currentVersion, url: MANIFEST_URL, source });
+    send('update:log', { event: 'checking-for-update', currentVersion, url: manifestUrl, channel, source });
     writePrefs({ lastCheckAt: Date.now() });
 
-    const raw      = await fetchJson(MANIFEST_URL);
+    const raw      = await fetchJson(manifestUrl);
     const manifest = raw as UpdateManifest;
 
     if (!manifest?.latestVersion) throw new Error('Invalid manifest: missing latestVersion');
@@ -438,8 +453,20 @@ export function setupUpdater(mainWindow: BrowserWindow): void {
       autoUpdateEnabled: prefs.autoUpdateEnabled !== false,
       skippedVersion:    prefs.skippedVersion ?? null,
       lastCheckAt:       prefs.lastCheckAt ?? null,
+      updateChannel:     getUpdateChannel(),
       currentVersion,
     };
+  });
+
+  // ─── IPC: تغيير قناة التحديث (stable / staging) — إعداد خاص بالجهاز ────────
+  ipcMain.handle('update:set-channel', (_event, channel: unknown) => {
+    if (channel !== 'stable' && channel !== 'staging') {
+      return { ok: false, error: 'قناة غير معروفة — القيم المسموحة: stable أو staging' };
+    }
+    log('INFO', `update-channel-changed  channel=${channel}  url=${CHANNEL_MANIFEST_URLS[channel]}`);
+    send('update:log', { event: 'update-channel-changed', channel });
+    writePrefs({ updateChannel: channel });
+    return { ok: true, updateChannel: channel };
   });
 
   // ─── IPC: تشغيل/إيقاف التحقق التلقائي (إعداد خاص بالجهاز) ────────────────
