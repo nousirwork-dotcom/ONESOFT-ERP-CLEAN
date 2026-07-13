@@ -1344,6 +1344,106 @@ export const securityEvents = pgTable('security_events', {
   createdAt:  timestamp('created_at').notNull().defaultNow(),
 });
 
+// ─── AI Assistant (المساعد الذكي) — 0020 ─────────────────────────────────────
+// جميع الجداول معزولة بالمؤسسة (org_id) — المرحلة الأولى: قراءة واقتراح فقط.
+
+// إعدادات المساعد الذكي (سجل واحد لكل مؤسسة)
+export const aiSettings = pgTable('ai_settings', {
+  id:            serial('id').primaryKey(),
+  orgId:         integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  enabled:       boolean('enabled').notNull().default(false),
+  provider:      varchar('provider', { length: 50 }).notNull().default('openai'),
+  baseUrl:       varchar('base_url', { length: 500 }).notNull().default('https://api.openai.com/v1'),
+  model:         varchar('model', { length: 100 }).notNull().default('gpt-4o-mini'),
+  // مفتاح API — يُخزَّن مشفراً بنمط ENC: (AES-256-GCM) ولا يُعاد للواجهة أبداً
+  apiKeyEnc:     text('api_key_enc'),
+  maxTokens:     integer('max_tokens').notNull().default(1024),
+  temperature:   decimal('temperature', { precision: 3, scale: 2 }).notNull().default('0.30'),
+  allowOrgData:  boolean('allow_org_data').notNull().default(true),
+  keepHistory:   boolean('keep_history').notNull().default(true),
+  retentionDays: integer('retention_days').notNull().default(90),
+  lastError:     text('last_error'),
+  lastOkAt:      timestamp('last_ok_at'),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+  updatedAt:     timestamp('updated_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('ai_settings_org_uidx').on(t.orgId),
+]);
+
+// محادثات المساعد الذكي
+export const aiConversations = pgTable('ai_conversations', {
+  id:        serial('id').primaryKey(),
+  orgId:     integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  userId:    integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  title:     varchar('title', { length: 255 }).notNull().default('محادثة جديدة'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+// رسائل المحادثات
+export const aiMessages = pgTable('ai_messages', {
+  id:             serial('id').primaryKey(),
+  orgId:          integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  conversationId: integer('conversation_id').notNull().references(() => aiConversations.id, { onDelete: 'cascade' }),
+  userId:         integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  role:           varchar('role', { length: 20 }).notNull(),          // 'user' | 'assistant'
+  content:        text('content').notNull(),
+  // المصادر المستخدمة في الإجابة: [{ type, id, label, path }]
+  sources:        jsonb('sources').$type<Array<Record<string, any>>>(),
+  createdAt:      timestamp('created_at').notNull().defaultNow(),
+});
+
+// اقتراحات العمليات (مثل: إنشاء مهمة) — لا تُنفَّذ إلا بعد تأكيد صريح
+export const aiActionProposals = pgTable('ai_action_proposals', {
+  id:             serial('id').primaryKey(),
+  orgId:          integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  userId:         integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  conversationId: integer('conversation_id').references(() => aiConversations.id, { onDelete: 'set null' }),
+  actionType:     varchar('action_type', { length: 50 }).notNull(),   // 'create_task' (المرحلة الأولى)
+  payload:        jsonb('payload').$type<Record<string, any>>().notNull(),
+  status:         varchar('status', { length: 20 }).notNull().default('pending'), // pending | confirmed | cancelled | failed
+  resultMessage:  text('result_message'),
+  createdAt:      timestamp('created_at').notNull().defaultNow(),
+  updatedAt:      timestamp('updated_at').notNull().defaultNow(),
+});
+
+// سجل تدقيق المساعد الذكي — كل طلب وكل عملية
+export const aiAuditLogs = pgTable('ai_audit_logs', {
+  id:             serial('id').primaryKey(),
+  orgId:          integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  userId:         integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  conversationId: integer('conversation_id'),
+  question:       text('question'),
+  operationType:  varchar('operation_type', { length: 50 }).notNull(), // ask | test_connection | confirm_action | ...
+  sections:       jsonb('sections').$type<string[]>(),                 // الأقسام المستخدمة كمصادر
+  recordsUsed:    jsonb('records_used').$type<Array<Record<string, any>>>(),
+  answerSummary:  text('answer_summary'),
+  proposed:       boolean('proposed').notNull().default(false),
+  confirmed:      boolean('confirmed').notNull().default(false),
+  result:         varchar('result', { length: 20 }).notNull().default('ok'), // ok | error | denied
+  errorMessage:   text('error_message'),
+  provider:       varchar('provider', { length: 50 }),
+  model:          varchar('model', { length: 100 }),
+  createdAt:      timestamp('created_at').notNull().defaultNow(),
+});
+
+// مهام «المساعدة والخدمات» — الوجهة الفعلية للمهام المؤكَّدة من المساعد الذكي
+export const hsTasks = pgTable('hs_tasks', {
+  id:              serial('id').primaryKey(),
+  orgId:           integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  createdByUserId: integer('created_by_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  assigneeUserId:  integer('assignee_user_id').references(() => users.id, { onDelete: 'set null' }),
+  title:           varchar('title', { length: 300 }).notNull(),
+  details:         text('details'),
+  dueDate:         varchar('due_date', { length: 10 }),   // YYYY-MM-DD
+  dueTime:         varchar('due_time', { length: 5 }),    // HH:MM
+  priority:        varchar('priority', { length: 10 }).notNull().default('normal'), // low | normal | high
+  status:          varchar('status', { length: 20 }).notNull().default('open'),     // open | done | cancelled
+  source:          varchar('source', { length: 20 }).notNull().default('manual'),   // manual | ai
+  createdAt:       timestamp('created_at').notNull().defaultNow(),
+  updatedAt:       timestamp('updated_at').notNull().defaultNow(),
+});
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type Organization = typeof organizations.$inferSelect;
 export type User = typeof users.$inferSelect;

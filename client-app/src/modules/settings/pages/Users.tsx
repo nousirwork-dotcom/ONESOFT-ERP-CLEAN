@@ -9,9 +9,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/core/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/core/ui/table";
 import { trpc } from "@/shared/lib/trpc";
-import { CheckCircle2, KeyRound, Loader2, Mail, Pencil, Phone, Plus, Send, Shield, Trash2, Users as UsersIcon, XCircle } from "lucide-react";
+import { CheckCircle2, KeyRound, LifeBuoy, Loader2, Mail, Pencil, Phone, Plus, Send, Shield, Sparkles, Trash2, Users as UsersIcon, XCircle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { HS_MODULE_PERM } from "@/shared/lib/hsPermissions";
+import { AI_MODULE_PERM, AI_PERM_DEFS } from "@/shared/lib/aiPermissions";
+
+// ── صلاحيات وحدة «المساعدة والخدمات» (extra_permissions) ─────────────────────
+const HS_PERM_DEFS: Array<{ key: string; label: string; isModule?: boolean }> = [
+  { key: HS_MODULE_PERM,    label: "عرض وحدة المساعدة والخدمات", isModule: true },
+  { key: "hs_rentals",       label: "الإيجارات والعقود" },
+  { key: "hs_custody",       label: "العهد والمصروفات" },
+  { key: "hs_customers",     label: "متابعة العملاء" },
+  { key: "hs_tasks",         label: "المهام والتذكيرات" },
+  { key: "hs_gov_links",     label: "الروابط والخدمات الحكومية" },
+  { key: "hs_notes",         label: "الملاحظات" },
+  { key: "hs_internal_comm", label: "التواصل الداخلي" },
+];
 
 const roleLabels: Record<string, string> = {
   admin: "مدير النظام", accountant: "محاسب", cashier: "كاشير",
@@ -220,6 +234,10 @@ export default function Users() {
   const [forcePasswordChange, setForcePasswordChange] = useState(false);
   const [recoveryDirty, setRecoveryDirty] = useState(false);
 
+  // صلاحيات وحدة «المساعدة والخدمات» (تعديل فقط)
+  const [extraPerms, setExtraPerms] = useState<Record<string, boolean>>({});
+  const [permsDirty, setPermsDirty] = useState(false);
+
   const utils = trpc.useUtils();
 
   const { data: users, isLoading } = trpc.users.list.useQuery();
@@ -270,6 +288,16 @@ export default function Users() {
     onError: (e) => toast.error(e.message),
   });
 
+  const setExtraPermissions = trpc.users.setExtraPermissions.useMutation({
+    onSuccess: () => {
+      utils.users.list.invalidate();
+      utils.auth.me.invalidate();
+      toast.success("تم حفظ صلاحيات المساعدة والخدمات");
+      setPermsDirty(false);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   const openCreate = () => {
     setMode("create"); setSelectedUser(null); setForm(emptyForm()); setPhoneError(null); setIsOpen(true);
   };
@@ -281,7 +309,21 @@ export default function Users() {
     setRecoveryEnabledEmail(u.recoveryEnabledEmail ?? false);
     setForcePasswordChange(u.forcePasswordChange ?? false);
     setRecoveryDirty(false);
+    setExtraPerms({ ...(u.extraPermissions ?? {}) });
+    setPermsDirty(false);
     setIsOpen(true);
+  };
+
+  const togglePerm = (key: string, v: boolean) => {
+    setExtraPerms(p => ({ ...p, [key]: v }));
+    setPermsDirty(true);
+  };
+
+  const handleSavePerms = () => {
+    const permissions: Record<string, boolean> = {};
+    for (const d of HS_PERM_DEFS) permissions[d.key] = extraPerms[d.key] === true;
+    for (const d of AI_PERM_DEFS) permissions[d.key] = extraPerms[d.key] === true;
+    setExtraPermissions.mutate({ userId: selectedUser.id, permissions: permissions as any });
   };
 
   const setField = (k: keyof FormState, v: string) => {
@@ -745,6 +787,98 @@ export default function Users() {
                     {setRecoveryOptions.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                     حفظ إعدادات الأمان
                   </Button>
+                )}
+              </section>
+            )}
+
+            {/* ── صلاحيات وحدة «المساعدة والخدمات» (تعديل فقط) ── */}
+            {mode === "edit" && (
+              <section className="space-y-3 border-t pt-4">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                  <LifeBuoy className="w-3.5 h-3.5" />
+                  صلاحيات وحدة المساعدة والخدمات
+                </p>
+
+                {(selectedUser?.role === "admin" || selectedUser?.role === "superadmin") ? (
+                  <p className="text-xs text-muted-foreground bg-muted/40 border rounded-lg px-3 py-2.5">
+                    مدير النظام يرى وحدة المساعدة والخدمات وجميع شاشاتها دائمًا — لا حاجة لتفعيل صلاحيات.
+                  </p>
+                ) : (
+                  <>
+                    <div className="space-y-3 rounded-lg border p-3">
+                      {HS_PERM_DEFS.map((d, i) => (
+                        <div key={d.key} className={`flex items-center justify-between ${i > 0 ? "border-t pt-3" : ""}`}>
+                          <div>
+                            <p className={`text-sm ${d.isModule ? "font-semibold" : "font-medium"}`}>{d.label}</p>
+                            {d.isModule && (
+                              <p className="text-xs text-muted-foreground">بدونها لا تظهر الوحدة إطلاقًا في أي طريقة عرض</p>
+                            )}
+                          </div>
+                          <Switch
+                            checked={extraPerms[d.key] === true}
+                            disabled={!d.isModule && extraPerms[HS_MODULE_PERM] !== true}
+                            onCheckedChange={(v) => togglePerm(d.key, v)}
+                            data-testid={`switch-perm-${d.key}`}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    {extraPerms[HS_MODULE_PERM] !== true && (
+                      <p className="text-xs text-amber-600">⚠ فعّل صلاحية الوحدة أولًا لتتمكن من تفعيل صلاحيات الشاشات.</p>
+                    )}
+                    {permsDirty && (
+                      <Button size="sm" variant="outline" onClick={handleSavePerms} disabled={setExtraPermissions.isPending} className="gap-1" data-testid="button-save-hs-perms">
+                        {setExtraPermissions.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                        حفظ صلاحيات المساعدة والخدمات
+                      </Button>
+                    )}
+                  </>
+                )}
+              </section>
+            )}
+
+            {/* ── صلاحيات «المساعد الذكي» (تعديل فقط) ── */}
+            {mode === "edit" && (
+              <section className="space-y-3 border-t pt-4">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  صلاحيات المساعد الذكي
+                </p>
+
+                {(selectedUser?.role === "admin" || selectedUser?.role === "superadmin") ? (
+                  <p className="text-xs text-muted-foreground bg-muted/40 border rounded-lg px-3 py-2.5">
+                    مدير النظام يملك جميع صلاحيات المساعد الذكي دائمًا — لا حاجة لتفعيل صلاحيات.
+                  </p>
+                ) : (
+                  <>
+                    <div className="space-y-3 rounded-lg border p-3">
+                      {AI_PERM_DEFS.map((d, i) => (
+                        <div key={d.key} className={`flex items-center justify-between ${i > 0 ? "border-t pt-3" : ""}`}>
+                          <div>
+                            <p className={`text-sm ${d.isModule ? "font-semibold" : "font-medium"}`}>{d.label}</p>
+                            {d.isModule && (
+                              <p className="text-xs text-muted-foreground">بدونها لا يستطيع المستخدم فتح المساعد الذكي إطلاقًا</p>
+                            )}
+                          </div>
+                          <Switch
+                            checked={extraPerms[d.key] === true}
+                            disabled={!d.isModule && extraPerms[AI_MODULE_PERM] !== true}
+                            onCheckedChange={(v) => togglePerm(d.key, v)}
+                            data-testid={`switch-perm-${d.key}`}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    {extraPerms[AI_MODULE_PERM] !== true && (
+                      <p className="text-xs text-amber-600">⚠ فعّل صلاحية «استخدام المساعد الذكي» أولًا لتتمكن من تفعيل بقية الصلاحيات.</p>
+                    )}
+                    {permsDirty && (
+                      <Button size="sm" variant="outline" onClick={handleSavePerms} disabled={setExtraPermissions.isPending} className="gap-1" data-testid="button-save-ai-perms">
+                        {setExtraPermissions.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                        حفظ صلاحيات المساعد الذكي
+                      </Button>
+                    )}
+                  </>
                 )}
               </section>
             )}

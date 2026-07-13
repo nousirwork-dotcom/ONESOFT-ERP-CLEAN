@@ -10,7 +10,7 @@
  * القاعدة: أي منطق متعلق بمكونات المستند يُضاف هنا.
  */
 
-import { resolveFieldValue } from './PostingEngine.js';
+import { resolveInvoiceFieldValue as resolveFieldValue } from './PostingEngine.js';
 import type { salesInvoices } from '../schema.js';
 
 // ─── أنواع ─────────────────────────────────────────────────────────────────────

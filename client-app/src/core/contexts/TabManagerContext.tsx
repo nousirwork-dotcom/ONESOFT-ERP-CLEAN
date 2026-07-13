@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, ReactNode, useCallback, useRef, useEffect } from "react";
 import {
   TrendingUp, ShoppingBag, Boxes, Factory, Calculator,
-  UserCheck, Wrench, Settings, LayoutGrid,
+  UserCheck, Wrench, Settings, LayoutGrid, LifeBuoy,
 } from "lucide-react";
 
 export type WindowState = "normal" | "minimized" | "maximized";
@@ -59,6 +59,7 @@ const NAV_EXACT: Record<string, React.ElementType> = {
   '/accounting-module':     Calculator,
   '/hr-module':             UserCheck,
   '/assets-module':         Wrench,
+  '/help-services-module':  LifeBuoy,
   '/settings':              Settings,
 };
 
@@ -70,6 +71,7 @@ const NAV_PREFIXES: Array<{ prefix: string; Icon: React.ElementType }> = [
   { prefix: '/acc',     Icon: Calculator  },
   { prefix: '/hr',      Icon: UserCheck   },
   { prefix: '/assets',  Icon: Wrench      },
+  { prefix: '/hs',      Icon: LifeBuoy    },
   { prefix: '/cfg',     Icon: Settings    },
 ];
 

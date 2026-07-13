@@ -34,6 +34,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/core/ui/dial
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/core/ui/tabs";
 import { toast } from "sonner";
 import { trpc } from "@/shared/lib/trpc";
+import { PrintEngine } from "@/shared/lib/print";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, BarChart, Bar,
@@ -1273,6 +1274,129 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
   );
 }
 
+// ─── Voucher Print Helper ─────────────────────────────────────────────────────
+function buildVoucherHtml(v: {
+  voucherNumber: string;
+  voucherDate: string | Date;
+  party: string;
+  amount: string | number;
+  paymentMethod: string;
+  description?: string;
+  notes?: string;
+  voucherType: "receipt" | "payment";
+}, orgName?: string, templateCfg?: { primaryColor?: string } | null) {
+  const isReceipt = v.voucherType === "receipt";
+  const defaultColor = isReceipt ? "#16A34A" : "#DC2626";
+  const color     = templateCfg?.primaryColor ?? defaultColor;
+  const titleAr   = isReceipt ? "سند قبض" : "سند صرف";
+  const titleEn   = isReceipt ? "RECEIPT VOUCHER" : "PAYMENT VOUCHER";
+  const partyLabel = isReceipt ? "استُلم من / Received From" : "صُرف لـ / Paid To";
+  const amt       = parseFloat(String(v.amount) || "0");
+  const fmtAmt    = amt.toLocaleString("ar-SA", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+  const dateStr   = v.voucherDate instanceof Date
+    ? v.voucherDate.toLocaleDateString("ar-SA")
+    : String(v.voucherDate);
+  const pmLabels: Record<string, string> = { cash: "نقدي / Cash", check: "شيك / Cheque", transfer: "تحويل / Transfer", card: "بطاقة / Card" };
+  const pmLabel = pmLabels[v.paymentMethod] ?? v.paymentMethod;
+
+  return `<!DOCTYPE html><html dir="rtl" lang="ar">
+<head><meta charset="UTF-8"><title>${titleAr}</title>
+<style>
+  body{font-family:'Cairo',Tahoma,Arial,sans-serif;margin:0;padding:24px;background:#fff;color:#222;font-size:13px}
+  .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid ${color};padding-bottom:12px;margin-bottom:16px}
+  .title{font-size:22px;font-weight:bold;color:${color}}
+  .title-en{font-size:13px;color:${color};opacity:.8}
+  .org{font-size:12px;color:#555;text-align:left}
+  .row{display:flex;gap:16px;margin-bottom:10px}
+  .field{flex:1;border:1px solid #ddd;border-radius:4px;padding:6px 10px}
+  .field label{font-size:10px;color:#888;display:block;margin-bottom:2px}
+  .field .val{font-size:13px;font-weight:600}
+  .amount-box{border:2px solid ${color};border-radius:8px;padding:16px 24px;text-align:center;margin:20px 0}
+  .amount-label{font-size:11px;color:#666;margin-bottom:4px}
+  .amount-val{font-size:28px;font-weight:bold;color:${color}}
+  .sigs{display:flex;gap:32px;margin-top:40px}
+  .sig{flex:1;text-align:center;border-top:1px solid #999;padding-top:6px;font-size:11px;color:#666}
+  @media print{body{padding:12px}@page{margin:10mm;size:A4}}
+</style></head><body>
+<div class="header">
+  <div><div class="title">${titleAr}</div><div class="title-en">${titleEn}</div></div>
+  <div class="org">${orgName ?? "OneSoft ERP"}<br/><span style="font-size:11px;color:#888">${v.voucherNumber}</span></div>
+</div>
+<div class="row">
+  <div class="field"><label>رقم السند / Voucher No.</label><div class="val">${v.voucherNumber}</div></div>
+  <div class="field"><label>التاريخ / Date</label><div class="val">${dateStr}</div></div>
+  <div class="field"><label>طريقة الدفع / Payment Method</label><div class="val">${pmLabel}</div></div>
+</div>
+<div class="row">
+  <div class="field" style="flex:2"><label>${partyLabel}</label><div class="val">${v.party || "—"}</div></div>
+</div>
+${v.description ? `<div class="row"><div class="field" style="flex:2"><label>البيان / Description</label><div class="val">${v.description}</div></div></div>` : ""}
+${v.notes ? `<div class="row"><div class="field" style="flex:2"><label>ملاحظات / Notes</label><div class="val">${v.notes}</div></div></div>` : ""}
+<div class="amount-box">
+  <div class="amount-label">المبلغ / Amount</div>
+  <div class="amount-val">${fmtAmt}</div>
+</div>
+<div class="sigs">
+  <div class="sig">المستلم / Receiver</div>
+  <div class="sig">المحاسب / Accountant</div>
+  <div class="sig">المدير / Manager</div>
+</div>
+</body></html>`;
+}
+
+// ─── VoucherPrintModal ─────────────────────────────────────────────────────────
+interface VoucherPrintData {
+  voucherNumber: string;
+  voucherDate: string | Date;
+  party: string;
+  amount: string | number;
+  paymentMethod: string;
+  description?: string;
+  notes?: string;
+  voucherType: "receipt" | "payment";
+}
+function VoucherPrintModal({ data, docType, onClose }: {
+  data: VoucherPrintData;
+  docType: "receipt_voucher" | "payment_voucher";
+  onClose: () => void;
+}) {
+  const templateQuery = trpc.documentTemplates.getDefault.useQuery({ docType });
+  const templateCfg = (() => {
+    try {
+      const raw = templateQuery.data?.layoutJson;
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed.type === "config_v1" ? parsed : null;
+    } catch { return null; }
+  })();
+  const html = buildVoucherHtml(data, undefined, templateCfg);
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col" dir="rtl">
+      <div className="flex items-center gap-3 px-6 py-3 shrink-0 shadow-md"
+        style={{ background: templateCfg?.primaryColor ?? (docType === "receipt_voucher" ? "#16A34A" : "#DC2626") }}>
+        <Printer className="w-5 h-5 text-white/80" />
+        <span className="text-white font-bold text-base flex-1">
+          معاينة الطباعة — {docType === "receipt_voucher" ? "سند قبض" : "سند صرف"} {data.voucherNumber}
+        </span>
+        <Button size="sm"
+          onClick={() => PrintEngine.print(html)}
+          className="bg-white hover:bg-gray-100 h-8 px-4 text-sm font-bold gap-1"
+          style={{ color: templateCfg?.primaryColor ?? "#16A34A" }}>
+          <Printer className="w-4 h-4" />طباعة / PDF
+        </Button>
+        <button onClick={onClose} className="text-white/70 hover:text-white transition-colors">
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto bg-gray-300 flex items-start justify-center py-6">
+        <iframe srcDoc={html} className="bg-white shadow-2xl"
+          style={{ width: 900, minHeight: 700, border: "none", boxShadow: "0 4px 32px rgba(0,0,0,0.3)" }}
+          title="معاينة السند" />
+      </div>
+    </div>
+  );
+}
+
 // ─── Receipt Voucher (سند قبض) ────────────────────────────────────────────────
 function ReceiptVoucherPage() {
   const { setDirty, registerSave } = useContext(DirtyCtx);
@@ -1302,6 +1426,7 @@ function ReceiptVoucherPage() {
   });
 
   const [showForm, setShowForm] = useState(false);
+  const [printVoucher, setPrintVoucher] = useState<VoucherPrintData | null>(null);
   const [form, setForm] = useState({
     voucherDate: new Date().toISOString().split("T")[0],
     receivedFrom: "", amount: "", paymentMethod: "cash" as const,
@@ -1392,13 +1517,32 @@ function ReceiptVoucherPage() {
                 <TableCell className="text-center text-sm font-bold text-emerald-600">{parseFloat(v.amount ?? "0").toLocaleString()}</TableCell>
                 <TableCell className="text-xs">{v.description ?? "-"}</TableCell>
                 <TableCell>
-                  <Button variant="ghost" size="sm" className="h-6 text-xs gap-1"><Printer className="w-3 h-3" /></Button>
+                  <Button variant="ghost" size="sm" className="h-6 text-xs gap-1" onClick={() => {
+                    setPrintVoucher({
+                      voucherNumber: v.voucherNumber,
+                      voucherDate: v.voucherDate,
+                      party: v.receivedFrom ?? "",
+                      amount: v.amount ?? "0",
+                      paymentMethod: String(v.paymentMethod ?? "cash"),
+                      description: v.description ?? undefined,
+                      notes: v.notes ?? undefined,
+                      voucherType: "receipt",
+                    });
+                  }}><Printer className="w-3 h-3" /></Button>
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </Card>
+
+      {printVoucher && (
+        <VoucherPrintModal
+          data={printVoucher}
+          docType="receipt_voucher"
+          onClose={() => setPrintVoucher(null)}
+        />
+      )}
 
       {/* Form Dialog */}
       <Dialog open={showForm} onOpenChange={v => { if (!v) setDirty(false); setShowForm(v); }}>
@@ -1516,6 +1660,7 @@ function PaymentVoucherPage() {
   });
 
   const [showForm, setShowForm] = useState(false);
+  const [printVoucher, setPrintVoucher] = useState<VoucherPrintData | null>(null);
   const [form, setForm] = useState({
     voucherDate: new Date().toISOString().split("T")[0],
     paidTo: "", amount: "", paymentMethod: "cash" as const,
@@ -1603,13 +1748,32 @@ function PaymentVoucherPage() {
                 <TableCell className="text-center text-sm font-bold text-destructive">{parseFloat(v.amount ?? "0").toLocaleString()}</TableCell>
                 <TableCell className="text-xs">{v.description ?? "-"}</TableCell>
                 <TableCell>
-                  <Button variant="ghost" size="sm" className="h-6 text-xs"><Printer className="w-3 h-3" /></Button>
+                  <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => {
+                    setPrintVoucher({
+                      voucherNumber: v.voucherNumber,
+                      voucherDate: v.voucherDate,
+                      party: v.paidTo ?? "",
+                      amount: v.amount ?? "0",
+                      paymentMethod: String(v.paymentMethod ?? "cash"),
+                      description: v.description ?? undefined,
+                      notes: v.notes ?? undefined,
+                      voucherType: "payment",
+                    });
+                  }}><Printer className="w-3 h-3" /></Button>
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </Card>
+
+      {printVoucher && (
+        <VoucherPrintModal
+          data={printVoucher}
+          docType="payment_voucher"
+          onClose={() => setPrintVoucher(null)}
+        />
+      )}
 
       <Dialog open={showForm} onOpenChange={v => { if (!v) setDirty(false); setShowForm(v); }}>
         <DialogContent className="max-w-2xl" dir="rtl">

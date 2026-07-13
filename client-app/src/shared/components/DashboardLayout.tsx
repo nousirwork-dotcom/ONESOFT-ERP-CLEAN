@@ -46,6 +46,7 @@ import {
   Grid3x3,
   LayoutDashboard,
   LayoutGrid,
+  LifeBuoy,
   LogOut,
   PanelRight,
   Receipt,
@@ -72,6 +73,7 @@ import { WorkspaceContext } from "@/core/contexts/WorkspaceContext";
 import { useLang } from "@/core/contexts/LanguageContext";
 import { useUiPrefs } from "@/core/contexts/UiPrefsContext";
 import { t } from "@/shared/lib/translations";
+import { canViewHelpServices } from "@/shared/lib/hsPermissions";
 import { Languages } from "lucide-react";
 
 const SIDEBAR_WIDTH_KEY = "erp-sidebar-width";
@@ -114,6 +116,7 @@ function getNavGroups(lang: "ar" | "en"): NavGroup[] {
         { icon: Calculator,      label: t(lang, "accounting"),       path: "/accounting-module" },
         { icon: UserCheck,       label: t(lang, "hr"),               path: "/hr-module" },
         { icon: Wrench,          label: t(lang, "fixedAssets"),      path: "/assets-module" },
+        { icon: LifeBuoy,        label: t(lang, "helpServices"),     path: "/help-services-module" },
         { icon: Settings,        label: t(lang, "settings"),         path: "/settings" },
       ],
     },
@@ -159,7 +162,9 @@ function SidebarNav({ user }: { user: any }) {
     <SidebarContent className="py-1 overflow-y-auto">
       {navGroups.map((group) => {
         const visibleItems = group.items.filter(
-          (item) => !item.roles || (user?.role && item.roles.includes(user.role))
+          (item) =>
+            (!item.roles || (user?.role && item.roles.includes(user.role))) &&
+            (item.path !== "/help-services-module" || canViewHelpServices(user))
         );
         if (!visibleItems.length) return null;
         return (
@@ -262,7 +267,11 @@ function HorizontalNav({ user }: { user: any }) {
   const { lang } = useLang();
   const activeTab = tabs.find(tab => tab.id === activeTabId);
   const allItems = getNavGroups(lang).flatMap((g) =>
-    g.items.filter((item) => !item.roles || (user?.role && item.roles.includes(user.role)))
+    g.items.filter(
+      (item) =>
+        (!item.roles || (user?.role && item.roles.includes(user.role))) &&
+        (item.path !== "/help-services-module" || canViewHelpServices(user))
+    )
   );
 
   return (
@@ -456,9 +465,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   /* ---- Layout Toggle Button (3 أنماط) ---- */
   const MODE_META: Record<LayoutMode, { icon: React.ElementType; label: string }> = {
-    vertical:   { icon: PanelRight, label: isAr ? "قائمة جانبية"  : "Sidebar" },
-    horizontal: { icon: LayoutGrid, label: isAr ? "قائمة علوية"   : "Top menu" },
-    apps:       { icon: Grid3x3,    label: isAr ? "شاشة تطبيقات" : "Apps screen" },
+    vertical:   { icon: PanelRight, label: isAr ? "رأسية"  : "Vertical" },
+    horizontal: { icon: LayoutGrid, label: isAr ? "أفقية"  : "Horizontal" },
+    apps:       { icon: Grid3x3,    label: isAr ? "مركزية" : "Centered" },
   };
   const LayoutToggleBtn = () => {
     const CurrentIcon = MODE_META[layoutMode]?.icon ?? PanelRight;
@@ -528,14 +537,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </span>
             <LangToggleBtn />
             <LayoutToggleBtn />
-            <button
-              onClick={() => openTab("/settings", t(lang, "settings"), Settings)}
-              title={t(lang, "settings")}
-              className="flex items-center gap-1.5 px-2.5 h-7 rounded-md text-[12px] font-medium text-foreground/70 hover:text-foreground hover:bg-black/[0.08] transition-colors border border-transparent hover:border-black/10"
-            >
-              <Settings className="w-3.5 h-3.5" />
-              <span className="hidden sm:block">{t(lang, "settings")}</span>
-            </button>
             <UserMenu />
           </div>
         </header>
@@ -583,14 +584,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </span>
             <LangToggleBtn />
             <LayoutToggleBtn />
-            <button
-              onClick={() => openTab("/settings", t(lang, "settings"), Settings)}
-              title={t(lang, "settings")}
-              className="flex items-center gap-1.5 px-2.5 h-7 rounded-md text-[12px] font-medium text-foreground/70 hover:text-foreground hover:bg-black/[0.08] transition-colors border border-transparent hover:border-black/10"
-            >
-              <Settings className="w-3.5 h-3.5" />
-              <span className="hidden sm:block">{t(lang, "settings")}</span>
-            </button>
             <UserMenu />
           </div>
 

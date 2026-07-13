@@ -9,6 +9,7 @@ import { ThemeProvider } from "@/core/contexts/ThemeContext";
 import { TabManagerProvider, useTabManager } from "@/core/contexts/TabManagerContext";
 import { UiPrefsProvider, useUiPrefs } from "@/core/contexts/UiPrefsContext";
 import AppsHome from "@/shared/components/AppsHome";
+import TrialBanner from "@/shared/components/TrialBanner";
 import { LanguageProvider } from "@/core/contexts/LanguageContext";
 import Dashboard from "@/modules/dashboard/pages/Dashboard";
 import POS from "@/modules/sales/pages/POS";
@@ -43,6 +44,7 @@ import HRModule, {
   HRAttendanceReportTab, HRScheduleTab, HRLeaveRequestTab, HRLeavesTab,
   HRLeaveBalanceTab, HRHeadcountTab, HRPayrollReportTab, HRAttendanceSummaryTab,
 } from "@/modules/hr/pages/HRModule";
+import HelpServicesModule from "@/modules/helpservices/pages/HelpServicesModule";
 import AssetsModule, {
   AssetsListTab, AssetsAddTab, AssetsCategoriesTab, AssetsDepreciationTab,
   AssetsDeprScheduleTab, AssetsTransferTab, AssetsTransferListTab,
@@ -67,7 +69,7 @@ import SettingsModule, {
   CfgShiftsTab, CfgReportDesignerTab, CfgTestSetupTab, CfgTestEditTab, CfgFieldSpecsTab,
   CfgLoyaltyPointsTab, CfgLoyaltyTiersTab, CfgLoyaltyPromosTab, CfgLoyaltyMessagesTab,
   CfgMessagingWhatsAppTab, CfgMessagingTelegramTab, CfgMessagingEmailTab,
-  CfgMessagingTemplatesTab, CfgMessagingLogTab,
+  CfgMessagingTemplatesTab, CfgMessagingLogTab, CfgAiAssistantTab,
   CfgPrintSettingsTab, CfgLogoStampTab, CfgSignaturesTab, CfgEmailPdfTab,
   CfgFieldDictionaryTab, CfgPaymentMethodsTab,
   CfgZatcaTab, CfgZatcaMonitorTab, CfgZatcaInvoicesTab, CfgZatcaLogsTab,
@@ -81,6 +83,11 @@ import PostingSettingsPage from "@/modules/accounting/pages/PostingSettingsPage"
 import PostingOperationsPage from "@/modules/accounting/pages/PostingOperationsPage";
 import LoginPage from "@/core/auth/LoginPage";
 import BrandingSettingsPage from "@/modules/settings/pages/BrandingSettingsPage";
+import {
+  HsRentalsPage, HsCustodyPage, HsCustomersPage, HsTasksPage,
+  HsGovLinksPage, HsNotesPage, HsInternalCommPage,
+} from "@/modules/helpservices/pages/HsPages";
+import AIAssistantPage from "@/modules/helpservices/pages/AIAssistantPage";
 import LicenseActivationPage from "@/modules/license/pages/LicenseActivationPage";
 import SuperAdminPage from "@/core/admin/SuperAdminPage";
 import SourceCodeViewerPage from "@/core/dev/SourceCodeViewerPage";
@@ -116,6 +123,16 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/accounting-module":    AccountingModule,
   "/hr-module":            HRModule,
   "/assets-module":        AssetsModule,
+  "/help-services-module": HelpServicesModule,
+  // المساعدة والخدمات
+  "/hs/rentals":       HsRentalsPage,
+  "/hs/custody":       HsCustodyPage,
+  "/hs/customers":     HsCustomersPage,
+  "/hs/tasks":         HsTasksPage,
+  "/hs/gov-links":     HsGovLinksPage,
+  "/hs/notes":         HsNotesPage,
+  "/hs/internal-comm": HsInternalCommPage,
+  "/hs/ai-assistant":  AIAssistantPage,
   "/purchases/suppliers":         PurchaseSuppliersPage,
   "/purchases/supplier-groups":  PurchaseSupplierGroupsPage,
   "/purchases/orders":           PurchaseOrdersPage,
@@ -268,6 +285,7 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/cfg/messaging-telegram":     CfgMessagingTelegramTab,
   "/cfg/messaging-email":        CfgMessagingEmailTab,
   "/cfg/messaging-templates":    CfgMessagingTemplatesTab,
+  "/cfg/ai-assistant":           CfgAiAssistantTab,
   "/cfg/messaging-log":          CfgMessagingLogTab,
   "/cfg/print-settings":         CfgPrintSettingsTab,
   "/cfg/logo-stamp":             CfgLogoStampTab,
@@ -370,6 +388,9 @@ function TabContent() {
     <>
       {showDashboard && (
         <div className="absolute inset-0 overflow-auto" dir="rtl">
+          {/* تنبيه النسخة التجريبية — يظهر مرة واحدة أعلى الشاشة الرئيسية فقط،
+              ويختفي تلقائياً عند فتح أي شاشة أخرى لأن هذه الطبقة تُخفى */}
+          <TrialBanner />
           {layoutMode === "apps" ? <AppsHome /> : <Dashboard />}
         </div>
       )}

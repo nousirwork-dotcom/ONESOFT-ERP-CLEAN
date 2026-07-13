@@ -249,11 +249,16 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     { enabled: !!warehouseId }
   );
 
-  // نوع الفاتورة للطباعة: فاتورة مشتريات أو مردود مبيعات
+  // نوع الفاتورة للطباعة
   const isPrintEnabled =
-    (config.docCategory === "purchase" && config.invoiceType === "invoice") ||
+    (config.docCategory === "purchase" && ["invoice", "order", "return"].includes(config.invoiceType)) ||
     (config.docCategory === "sales"    && config.invoiceType === "return");
-  const printDocType = config.docCategory === "purchase" ? "purchase_invoice" : "sales_invoice";
+
+  const printDocType: string =
+    config.docCategory === "purchase" && config.invoiceType === "order"  ? "purchase_order"  :
+    config.docCategory === "purchase" && config.invoiceType === "return" ? "purchase_return" :
+    config.docCategory === "purchase"                                    ? "purchase_invoice" :
+    "sales_invoice";
 
   const orgQuery             = trpc.orgs.currentOrg.useQuery();
   const qrSettingsQuery      = trpc.qrSettings.get.useQuery();
@@ -1072,7 +1077,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
         <InvoicePrintModal
           open={showPrintModal}
           onClose={() => setShowPrintModal(false)}
-          docType={printDocType as "sales_invoice" | "purchase_invoice"}
+          docType={printDocType as "sales_invoice" | "purchase_invoice" | "purchase_order" | "purchase_return"}
           templateConfig={(() => {
             try {
               const raw = defaultTemplateQuery.data?.layoutJson;

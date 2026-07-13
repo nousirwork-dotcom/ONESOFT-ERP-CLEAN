@@ -95,6 +95,7 @@ const DOC_TYPES = [
   { id: "pos_receipt",      label: "إيصال نقاط البيع", icon: <LayoutTemplate className="w-3.5 h-3.5" />, cat: "sales"    },
   { id: "sales_return",     label: "مردود مبيعات",      icon: <RotateCcw className="w-3.5 h-3.5" />,     cat: "sales"    },
   { id: "purchase_invoice", label: "فاتورة مشتريات",   icon: <BookMarked className="w-3.5 h-3.5" />,    cat: "purchase" },
+  { id: "purchase_order",   label: "أمر شراء",          icon: <ClipboardList className="w-3.5 h-3.5" />, cat: "purchase" },
   { id: "purchase_return",  label: "مردود مشتريات",     icon: <RotateCcw className="w-3.5 h-3.5" />,     cat: "purchase" },
   { id: "stock_receipt",    label: "استلام مخزني",      icon: <ClipboardList className="w-3.5 h-3.5" />, cat: "inventory"},
   { id: "stock_issue",      label: "إذن صرف مخزني",    icon: <ClipboardList className="w-3.5 h-3.5" />, cat: "inventory"},
@@ -361,8 +362,8 @@ export default function TemplatesManagerPage() {
   const cfgCols    = { ...DEFAULT_COLS, ...parsedLayout?.columns };
   const cfgSecs    = { ...DEFAULT_SECS, ...parsedLayout?.sections };
   const cfgMinRows = parsedLayout?.minRows ?? 5;
-  const showCfgPanel = ["sales_invoice","sales_return","purchase_invoice","purchase_return",
-                         "receipt_voucher","payment_voucher"].includes(selectedType);
+  const showCfgPanel = ["sales_invoice","sales_return","purchase_invoice","purchase_order",
+                         "purchase_return","receipt_voucher","payment_voucher"].includes(selectedType);
 
   const patchUi = <K extends keyof UITemplateCfg>(k: K, v: UITemplateCfg[K]) => {
     setUiCfg(p => ({ ...p, [k]: v })); setUiDirty(true);
