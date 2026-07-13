@@ -104,8 +104,15 @@ contextBridge.exposeInMainWorld('installer', {
     // Renderer → Main commands
     startDownload: () => ipcRenderer.invoke('update:start-download'),
     installNow:    () => ipcRenderer.invoke('update:install-now'),
+    /** "لاحقاً" — يغلق النافذة فقط، تظهر مجدداً عند التشغيل القادم */
     skipUpdate:    () => ipcRenderer.invoke('update:skip'),
-    /** فحص يدوي من داخل شاشة الإعدادات — يُجاهل مهلة الـ 24 ساعة */
+    /** "لا تذكرني بهذا الإصدار مرة أخرى" — تخطي دائم لهذا الإصدار */
+    skipVersion:   () => ipcRenderer.invoke('update:skip-version'),
+    /** فحص يدوي من داخل شاشة الإعدادات — يعمل حتى لو كان التحقق التلقائي متوقفاً */
     checkNow:      () => ipcRenderer.invoke('update:check-now'),
+    /** قراءة تفضيلات التحديث المحلية (autoUpdateEnabled, skippedVersion, lastCheckAt) */
+    getPrefs:      () => ipcRenderer.invoke('update:get-prefs'),
+    /** تشغيل/إيقاف التحقق التلقائي — إعداد خاص بالجهاز */
+    setAutoUpdate: (enabled: boolean) => ipcRenderer.invoke('update:set-auto-update', enabled),
   },
 });

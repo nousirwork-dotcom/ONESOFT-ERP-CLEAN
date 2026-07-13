@@ -4,8 +4,11 @@
  * الميزات:
  *   - HTTPS فقط — يرفض أي رابط http://
  *   - التحقق من SHA512 بعد اكتمال التحميل قبل تشغيل المثبّت
- *   - سياسة تأجيل 24 ساعة للتحديث الاختياري (من نافذة البداية فقط)
- *   - فحص يدوي من شاشة الإعدادات (update:check-now) — يتجاهل مهلة الـ 24 ساعة
+ *   - إعداد "التحقق التلقائي من التحديثات" لكل جهاز (autoUpdateEnabled — افتراضي: مفعّل)
+ *     عند إيقافه: فحص صامت يُظهر التحديث الإجباري فقط — لا إزعاج بالتحديثات الاختيارية
+ *   - "لاحقاً" يغلق النافذة فقط (تظهر مجدداً عند التشغيل القادم)
+ *   - "لا تذكرني بهذا الإصدار" تخطي دائم لإصدار محدد (skippedVersion)
+ *   - فحص يدوي من شاشة الإعدادات (update:check-now) — يعمل دائماً ويتجاهل التخطي
  *   - روابط manifest مختلفة حسب البيئة (dev / staging / production)
  *   - logging منظَّم لكل الأحداث
  *
@@ -46,8 +49,8 @@ const MANIFEST_URL: string = (() => {
   return ENV_MANIFEST_URLS[env] ?? ENV_MANIFEST_URLS['production']!;
 })();
 
-// مدة تأجيل التحديث الاختياري — 24 ساعة
-const SKIP_COOLDOWN_MS = 24 * 60 * 60 * 1_000;
+// ملاحظة: زر "لاحقاً" لم يعد يحفظ أي تأجيل — الرسالة تظهر مجدداً عند التشغيل القادم.
+// "لا تذكرني بهذا الإصدار" يحفظ skippedVersion بشكل دائم (حتى صدور إصدار أحدث).
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface UpdateManifest {
@@ -82,10 +85,15 @@ type LogFn = (level: string, msg: string, detail?: unknown) => void;
 let log: LogFn = () => {};
 export function setUpdaterLogger(fn: LogFn): void { log = fn; }
 
-// ─── تفضيلات التحديث ─────────────────────────────────────────────────────────
+// ─── تفضيلات التحديث (لكل جهاز — تُحفظ في userData) ─────────────────────────
 interface UpdatePrefs {
+  /** التحقق التلقائي من التحديثات عند بدء التشغيل (افتراضي: مفعّل) */
+  autoUpdateEnabled?: boolean;
+  /** إصدار اختار المستخدم عدم التذكير به مجدداً (دائم حتى صدور أحدث) */
   skippedVersion?: string;
   skippedAt?:      number;
+  /** آخر وقت تم فيه فحص التحديثات (ناجح أو فاشل) */
+  lastCheckAt?:    number;
 }
 
 function prefsPath(): string {
@@ -95,14 +103,18 @@ function readPrefs(): UpdatePrefs {
   try { return JSON.parse(fs.readFileSync(prefsPath(), 'utf8')) as UpdatePrefs; }
   catch { return {}; }
 }
-function writePrefs(prefs: UpdatePrefs): void {
-  try { fs.writeFileSync(prefsPath(), JSON.stringify(prefs, null, 2), 'utf8'); }
-  catch (e) { log('WARN', `writePrefs failed: ${e}`); }
+function writePrefs(patch: Partial<UpdatePrefs>): void {
+  try {
+    const merged = { ...readPrefs(), ...patch };
+    fs.writeFileSync(prefsPath(), JSON.stringify(merged, null, 2), 'utf8');
+  } catch (e) { log('WARN', `writePrefs failed: ${e}`); }
 }
+function isAutoUpdateEnabled(): boolean {
+  return readPrefs().autoUpdateEnabled !== false; // الافتراضي: مفعّل
+}
+/** تخطي دائم لإصدار محدد — للفحص التلقائي فقط، الفحص اليدوي يعرضه دائماً */
 function shouldSkipOptional(version: string): boolean {
-  const prefs = readPrefs();
-  if (prefs.skippedVersion !== version || !prefs.skippedAt) return false;
-  return (Date.now() - prefs.skippedAt) < SKIP_COOLDOWN_MS;
+  return readPrefs().skippedVersion === version;
 }
 
 // ─── HTTPS enforcement ────────────────────────────────────────────────────────
@@ -232,11 +244,18 @@ export function setupUpdater(mainWindow: BrowserWindow): void {
   }
 
   // ─── منطق الفحص (مُعاد الاستخدام) ─────────────────────────────────────────
-  async function doCheck(opts: { source: 'auto' | 'manual' } = { source: 'auto' }): Promise<void> {
-    const { source } = opts;
-    log('INFO', `checking-for-update  url=${MANIFEST_URL}  version=${currentVersion}  source=${source}  env=${process.env['ONESOFT_UPDATE_ENV'] ?? 'production'}`);
-    send('update:status', { type: 'checking' } satisfies UpdateStatusEvent);
-    send('update:log',    { event: 'checking-for-update', currentVersion, url: MANIFEST_URL, source });
+  /**
+   * silentUnlessMandatory: يُستخدم عندما يكون التحديث التلقائي متوقفاً —
+   * نفحص بصمت (بدون أي أحداث للواجهة) ونُظهر النافذة فقط إذا كان التحديث إجبارياً.
+   */
+  async function doCheck(opts: { source: 'auto' | 'manual'; silentUnlessMandatory?: boolean } = { source: 'auto' }): Promise<void> {
+    const { source, silentUnlessMandatory = false } = opts;
+    log('INFO', `checking-for-update  url=${MANIFEST_URL}  version=${currentVersion}  source=${source}  silent=${silentUnlessMandatory}  env=${process.env['ONESOFT_UPDATE_ENV'] ?? 'production'}`);
+    if (!silentUnlessMandatory) {
+      send('update:status', { type: 'checking' } satisfies UpdateStatusEvent);
+    }
+    send('update:log', { event: 'checking-for-update', currentVersion, url: MANIFEST_URL, source });
+    writePrefs({ lastCheckAt: Date.now() });
 
     const raw      = await fetchJson(MANIFEST_URL);
     const manifest = raw as UpdateManifest;
@@ -264,8 +283,10 @@ export function setupUpdater(mainWindow: BrowserWindow): void {
     // لا يوجد تحديث
     if (!isNewer) {
       log('INFO', 'update-not-available');
-      send('update:status', { type: 'no-update', currentVersion } satisfies UpdateStatusEvent);
-      send('update:log',    { event: 'update-not-available', currentVersion, latestVersion: manifest.latestVersion });
+      if (!silentUnlessMandatory) {
+        send('update:status', { type: 'no-update', currentVersion } satisfies UpdateStatusEvent);
+      }
+      send('update:log', { event: 'update-not-available', currentVersion, latestVersion: manifest.latestVersion });
       return;
     }
 
@@ -283,12 +304,17 @@ export function setupUpdater(mainWindow: BrowserWindow): void {
       return;
     }
 
-    // تحديث اختياري — فحص التأجيل (للفحص التلقائي فقط)
+    // التحديث التلقائي متوقف — تحديث اختياري → صمت تام (لا نافذة ولا حالة)
+    if (silentUnlessMandatory) {
+      log('INFO', `optional-update-suppressed (auto-update disabled)  version=${manifest.latestVersion}`);
+      send('update:log', { event: 'optional-update-suppressed', reason: 'auto-update-disabled', version: manifest.latestVersion });
+      return;
+    }
+
+    // تحديث اختياري — "لا تذكرني بهذا الإصدار" (للفحص التلقائي فقط، دائم)
     if (source === 'auto' && shouldSkipOptional(manifest.latestVersion)) {
-      const prefs     = readPrefs();
-      const hoursLeft = Math.ceil((SKIP_COOLDOWN_MS - (Date.now() - (prefs.skippedAt ?? 0))) / 3_600_000);
-      log('INFO', `update-skipped-cooldown  version=${manifest.latestVersion}  hoursLeft=${hoursLeft}`);
-      send('update:log',    { event: 'update-skipped-cooldown', version: manifest.latestVersion, hoursLeft });
+      log('INFO', `update-skipped-version  version=${manifest.latestVersion}`);
+      send('update:log',    { event: 'update-skipped-version', version: manifest.latestVersion });
       send('update:status', { type: 'no-update', currentVersion } satisfies UpdateStatusEvent);
       return;
     }
@@ -387,15 +413,45 @@ export function setupUpdater(mainWindow: BrowserWindow): void {
     return { ok: true };
   });
 
-  // ─── IPC: تأجيل التحديث الاختياري (24 ساعة) ──────────────────────────────
+  // ─── IPC: "لاحقاً" — يغلق النافذة فقط، تظهر مجدداً عند التشغيل القادم ────
   ipcMain.handle('update:skip', () => {
     const version = pendingManifest?.latestVersion ?? 'unknown';
-    log('INFO', `user-skipped-optional-update  version=${version}`);
-    send('update:log', { event: 'user-skipped-optional-update', version });
-    writePrefs({ skippedVersion: version, skippedAt: Date.now() });
+    log('INFO', `user-postponed-optional-update  version=${version}`);
+    send('update:log', { event: 'user-postponed-optional-update', version });
+    // لا يُحفظ أي شيء — الرسالة تظهر مرة أخرى عند التشغيل القادم
   });
 
-  // ─── IPC: فحص يدوي من شاشة الإعدادات (يتجاهل مهلة الـ 24 ساعة) ──────────
+  // ─── IPC: "لا تذكرني بهذا الإصدار مرة أخرى" — تخطي دائم لهذا الإصدار ─────
+  ipcMain.handle('update:skip-version', () => {
+    const version = pendingManifest?.latestVersion;
+    if (!version) return { ok: false, error: 'No pending update' };
+    log('INFO', `user-skipped-version-permanently  version=${version}`);
+    send('update:log', { event: 'user-skipped-version-permanently', version });
+    writePrefs({ skippedVersion: version, skippedAt: Date.now() });
+    return { ok: true };
+  });
+
+  // ─── IPC: قراءة تفضيلات التحديث ──────────────────────────────────────────
+  ipcMain.handle('update:get-prefs', () => {
+    const prefs = readPrefs();
+    return {
+      autoUpdateEnabled: prefs.autoUpdateEnabled !== false,
+      skippedVersion:    prefs.skippedVersion ?? null,
+      lastCheckAt:       prefs.lastCheckAt ?? null,
+      currentVersion,
+    };
+  });
+
+  // ─── IPC: تشغيل/إيقاف التحقق التلقائي (إعداد خاص بالجهاز) ────────────────
+  ipcMain.handle('update:set-auto-update', (_event, enabled: unknown) => {
+    const value = enabled === true;
+    log('INFO', `auto-update-setting-changed  enabled=${value}`);
+    send('update:log', { event: 'auto-update-setting-changed', enabled: value });
+    writePrefs({ autoUpdateEnabled: value });
+    return { ok: true, autoUpdateEnabled: value };
+  });
+
+  // ─── IPC: فحص يدوي من شاشة الإعدادات (يعمل دائماً — يتجاهل الإيقاف والتخطي) ──
   ipcMain.handle('update:check-now', async () => {
     try {
       await doCheck({ source: 'manual' });
@@ -410,14 +466,25 @@ export function setupUpdater(mainWindow: BrowserWindow): void {
   });
 
   // ─── فحص تلقائي بعد 5 ثوان من بدء التشغيل ────────────────────────────────
+  // - إذا كان التحقق التلقائي مفعّلاً: فحص عادي (نافذة عند وجود تحديث)
+  // - إذا كان متوقفاً: فحص صامت — يُظهر النافذة فقط للتحديث الإجباري
+  //   (خيار الإيقاف لا يتجاوز التحديث الإجباري أبداً)
+  // - أي فشل (انقطاع إنترنت مثلاً): يُسجَّل في اللوج فقط — بدون رسائل مزعجة
   setTimeout(async () => {
+    const autoEnabled = isAutoUpdateEnabled();
     try {
-      await doCheck({ source: 'auto' });
+      if (autoEnabled) {
+        await doCheck({ source: 'auto' });
+      } else {
+        log('INFO', 'auto-update disabled — silent check for mandatory updates only');
+        send('update:log', { event: 'auto-update-disabled-silent-check' });
+        await doCheck({ source: 'auto', silentUnlessMandatory: true });
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      log('WARN', `auto check failed (non-critical) — ${msg}`);
-      send('update:status', { type: 'error', message: msg } satisfies UpdateStatusEvent);
-      send('update:log',    { event: 'update-error', error: msg });
+      // فشل الفحص عند بدء التشغيل (غالباً انقطاع إنترنت) — لوج فقط، لا شاشة خطأ
+      log('WARN', `auto check failed (non-critical, silent) — ${msg}`);
+      send('update:log', { event: 'update-check-failed-silent', error: msg });
     }
   }, 5_000);
 }
