@@ -25,7 +25,7 @@ import { trpc } from "@/shared/lib/trpc";
 type MenuId = string;
 
 // ─── Menu Structure ────────────────────────────────────────────────────────────
-const menuSections = [
+export const menuSections = [
   {
     id: "transactions-group",
     label: "المعاملات",

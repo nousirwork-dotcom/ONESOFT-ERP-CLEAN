@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { trpc } from '@/shared/lib/trpc';
 import { toast } from 'sonner';
 import { useTabManager } from '@/core/contexts/TabManagerContext';
+import { useLang } from '@/core/contexts/LanguageContext';
 import { KeySquare } from 'lucide-react';
 
 function Spinner({ size = 14 }: { size?: number }) {
@@ -200,6 +201,7 @@ function SetAdminPasswordModal({ onClose, onSuccess }: { onClose: () => void; on
 export default function TrialBanner() {
   const [showModal, setShowModal] = useState(false);
   const { openTab } = useTabManager();
+  const { dir } = useLang();
   const statusQ = trpc.auth.adminPasswordStatus.useQuery(undefined, {
     staleTime: 30_000,
     retry: 1,
@@ -225,12 +227,9 @@ export default function TrialBanner() {
 
   return (
     <>
-      <div dir="rtl" style={{
-        position: 'absolute', top: 8, insetInlineStart: 12,
-        zIndex: 1500,
+      <div dir={dir} style={{
         display: 'flex', flexDirection: 'column', gap: 6,
         alignItems: 'flex-start',
-        pointerEvents: 'none',
       }}>
         {isTrial && trialDaysLeft !== null && (
           <div style={{

@@ -9,6 +9,7 @@ import { Label } from '@/core/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/core/ui/select';
 import { Palette, RotateCcw, Save, Eye, Monitor, Upload, Image, Sliders, Layers } from 'lucide-react';
 import { useAuth } from '@/core/hooks/useAuth';
+import ViewModeSettings from './ViewModeSettings';
 
 // ─── Toggle Switch ─────────────────────────────────────────────────────────────
 function Toggle({ value, onChange, label, hint }: {
@@ -305,6 +306,9 @@ export default function BrandingSettingsPage() {
       <div className="grid grid-cols-[1fr_320px] gap-4">
         {/* ── Settings Panel ── */}
         <div className="flex flex-col gap-4 overflow-auto">
+
+          {/* طريقة عرض واجهة النظام */}
+          <ViewModeSettings />
 
           {/* الشعار */}
           <Card>

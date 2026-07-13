@@ -7,6 +7,8 @@ import ErrorBoundary from "@/shared/components/ErrorBoundary";
 import DashboardLayout from "@/shared/components/DashboardLayout";
 import { ThemeProvider } from "@/core/contexts/ThemeContext";
 import { TabManagerProvider, useTabManager } from "@/core/contexts/TabManagerContext";
+import { UiPrefsProvider, useUiPrefs } from "@/core/contexts/UiPrefsContext";
+import AppsHome from "@/shared/components/AppsHome";
 import { LanguageProvider } from "@/core/contexts/LanguageContext";
 import Dashboard from "@/modules/dashboard/pages/Dashboard";
 import POS from "@/modules/sales/pages/POS";
@@ -361,13 +363,14 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 // ─── نوافذ عائمة Windows-style ───────────────────────────────────────────
 function TabContent() {
   const { tabs, dashboardVisible } = useTabManager();
+  const { layoutMode } = useUiPrefs();
   const showDashboard = dashboardVisible || tabs.length === 0;
 
   return (
     <>
       {showDashboard && (
         <div className="absolute inset-0 overflow-auto" dir="rtl">
-          <Dashboard />
+          {layoutMode === "apps" ? <AppsHome /> : <Dashboard />}
         </div>
       )}
       {tabs.map(tab => {
@@ -396,9 +399,11 @@ function AppRoutes() {
       )}
       <Route>
         <TabManagerProvider>
-          <DashboardLayout>
-            <TabContent />
-          </DashboardLayout>
+          <UiPrefsProvider>
+            <DashboardLayout>
+              <TabContent />
+            </DashboardLayout>
+          </UiPrefsProvider>
         </TabManagerProvider>
       </Route>
     </Switch>

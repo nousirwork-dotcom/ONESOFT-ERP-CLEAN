@@ -33,6 +33,7 @@ import {
   BarChart3,
   Boxes,
   Calculator,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -42,6 +43,7 @@ import {
   KeyRound,
   Factory,
   FileText,
+  Grid3x3,
   LayoutDashboard,
   LayoutGrid,
   LogOut,
@@ -63,22 +65,21 @@ import {
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import ChatWidget from "./ChatWidget";
-import TrialBanner from "./TrialBanner";
 import WindowTaskbar from "./WindowTaskbar";
 import ElectronTitleBar from "./ElectronTitleBar";
 import { useTabManager } from "@/core/contexts/TabManagerContext";
 import { WorkspaceContext } from "@/core/contexts/WorkspaceContext";
 import { useLang } from "@/core/contexts/LanguageContext";
+import { useUiPrefs } from "@/core/contexts/UiPrefsContext";
 import { t } from "@/shared/lib/translations";
 import { Languages } from "lucide-react";
 
 const SIDEBAR_WIDTH_KEY = "erp-sidebar-width";
-const LAYOUT_MODE_KEY = "erp-layout-mode";
 const DEFAULT_WIDTH = 260;
 const MIN_WIDTH = 220;
 const MAX_WIDTH = 320;
 
-type LayoutMode = "vertical" | "horizontal";
+type LayoutMode = "vertical" | "horizontal" | "apps";
 
 type SubNavItem = {
   icon: React.ElementType;
@@ -335,15 +336,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
   });
 
-  const [layoutMode, setLayoutMode] = useState<LayoutMode>(() => {
-    return (localStorage.getItem(LAYOUT_MODE_KEY) as LayoutMode) ?? "vertical";
-  });
+  const { layoutMode, setLayoutMode } = useUiPrefs();
 
   const [workspaceEl, setWorkspaceEl] = useState<HTMLElement | null>(null);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const { loading, user, logout } = useAuth();
   const isMobile = useIsMobile();
-  const { openTab } = useTabManager();
+  const { openTab, showDashboard } = useTabManager();
   const { lang, toggleLang, dir, isAr } = useLang();
   const isResizing = useRef(false);
   const startX = useRef(0);
@@ -354,12 +353,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       window.location.replace('/login');
     }
   }, [loading, user]);
-
-  const toggleLayout = () => {
-    const next: LayoutMode = layoutMode === "vertical" ? "horizontal" : "vertical";
-    setLayoutMode(next);
-    localStorage.setItem(LAYOUT_MODE_KEY, next);
-  };
 
   const handleMouseDown = (e: React.MouseEvent) => {
     isResizing.current = true;
@@ -461,26 +454,110 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     </button>
   );
 
-  /* ---- Layout Toggle Button ---- */
-  const LayoutToggleBtn = () => (
-    <button
-      onClick={toggleLayout}
-      title={layoutMode === "vertical" ? t(lang, "switchToHorizontal") : t(lang, "switchToVertical")}
-      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-all duration-150"
-    >
-      {layoutMode === "vertical" ? (
-        <>
-          <LayoutGrid className="w-3.5 h-3.5" />
-          <span className="hidden sm:block">{t(lang, "horizontal")}</span>
-        </>
-      ) : (
-        <>
-          <PanelRight className="w-3.5 h-3.5" />
-          <span className="hidden sm:block">{t(lang, "vertical")}</span>
-        </>
-      )}
-    </button>
-  );
+  /* ---- Layout Toggle Button (3 أنماط) ---- */
+  const MODE_META: Record<LayoutMode, { icon: React.ElementType; label: string }> = {
+    vertical:   { icon: PanelRight, label: isAr ? "قائمة جانبية"  : "Sidebar" },
+    horizontal: { icon: LayoutGrid, label: isAr ? "قائمة علوية"   : "Top menu" },
+    apps:       { icon: Grid3x3,    label: isAr ? "شاشة تطبيقات" : "Apps screen" },
+  };
+  const LayoutToggleBtn = () => {
+    const CurrentIcon = MODE_META[layoutMode]?.icon ?? PanelRight;
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            title={isAr ? "طريقة عرض واجهة النظام" : "Interface view mode"}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-all duration-150"
+            data-testid="button-layout-switcher"
+          >
+            <CurrentIcon className="w-3.5 h-3.5" />
+            <span className="hidden sm:block">{MODE_META[layoutMode]?.label}</span>
+            <ChevronDown className="w-3 h-3 opacity-60" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-44" dir={dir}>
+          {(Object.keys(MODE_META) as LayoutMode[]).map(m => {
+            const Icon = MODE_META[m].icon;
+            return (
+              <DropdownMenuItem
+                key={m}
+                onClick={() => setLayoutMode(m)}
+                className={layoutMode === m ? "bg-accent font-semibold" : ""}
+                data-testid={`menu-layout-${m}`}
+              >
+                <Icon className="w-4 h-4 ml-2" />
+                {MODE_META[m].label}
+                {layoutMode === m && <Check className="w-3.5 h-3.5 mr-auto text-primary" />}
+              </DropdownMenuItem>
+            );
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  };
+
+  /* ================================================
+     APPS LAYOUT RENDER (شاشة تطبيقات مركزية)
+  ================================================ */
+  if (layoutMode === "apps") {
+    return (
+      <>
+      <div className="flex flex-col h-screen overflow-hidden bg-background" style={{ paddingTop: "var(--titlebar-h, 0px)" }}>
+        {/* Top Bar */}
+        <header className="sticky top-0 z-20 border-b border-[#D4CDC1] dark:border-slate-700 bg-[#DDD4C4] dark:bg-slate-900">
+          <div className="flex items-center gap-3 px-4 h-10" dir={dir}>
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-primary/20 flex items-center justify-center">
+                <Store className="w-4 h-4 text-primary" />
+              </div>
+              <span className="font-bold text-sm tracking-wider text-foreground">ONESOFT ERP</span>
+            </div>
+            <button
+              onClick={showDashboard}
+              title={isAr ? "الرئيسية" : "Home"}
+              className="flex items-center gap-1.5 px-2.5 h-7 rounded-md text-[12px] font-medium text-foreground/80 hover:text-foreground hover:bg-black/[0.08] transition-colors border border-transparent hover:border-black/10"
+              data-testid="button-apps-home"
+            >
+              <Grid3x3 className="w-3.5 h-3.5" />
+              <span>{isAr ? "الرئيسية" : "Home"}</span>
+            </button>
+            <div className="flex-1" />
+            <OnlineIndicator />
+            <span className="text-xs text-muted-foreground hidden md:block">
+              {fmtDate(new Date())}
+            </span>
+            <LangToggleBtn />
+            <LayoutToggleBtn />
+            <button
+              onClick={() => openTab("/settings", t(lang, "settings"), Settings)}
+              title={t(lang, "settings")}
+              className="flex items-center gap-1.5 px-2.5 h-7 rounded-md text-[12px] font-medium text-foreground/70 hover:text-foreground hover:bg-black/[0.08] transition-colors border border-transparent hover:border-black/10"
+            >
+              <Settings className="w-3.5 h-3.5" />
+              <span className="hidden sm:block">{t(lang, "settings")}</span>
+            </button>
+            <UserMenu />
+          </div>
+        </header>
+
+        {/* Main Content — desktop area */}
+        <WorkspaceContext.Provider value={workspaceEl}>
+          <main
+            ref={setWorkspaceEl as any}
+            className="flex-1 overflow-hidden"
+            style={{ position: "relative", paddingBottom: 40 }}
+          >
+            {children}
+          </main>
+        </WorkspaceContext.Provider>
+      </div>
+      <WindowTaskbar />
+      <ChatWidget />
+      <ElectronTitleBar />
+      <ChangeMyPasswordDialog open={showChangePassword} onClose={() => setShowChangePassword(false)} />
+      </>
+    );
+  }
 
   /* ================================================
      HORIZONTAL LAYOUT RENDER
@@ -530,7 +607,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             className="flex-1 overflow-hidden"
             style={{ position: "relative", paddingBottom: 40 }}
           >
-            <TrialBanner />
             {children}
           </main>
         </WorkspaceContext.Provider>
@@ -649,7 +725,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             className="flex-1 overflow-hidden"
             style={{ position: "relative", paddingBottom: 40 }}
           >
-            <TrialBanner />
             {children}
           </main>
         </WorkspaceContext.Provider>

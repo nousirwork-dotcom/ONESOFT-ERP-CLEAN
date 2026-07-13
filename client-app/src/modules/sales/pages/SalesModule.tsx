@@ -36,7 +36,7 @@ import {
 
 type MenuId = string;
 
-const menuSections = [
+export const menuSections = [
   {
     id: "transactions",
     label: "المعاملات",
