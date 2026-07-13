@@ -83,6 +83,10 @@ import PostingSettingsPage from "@/modules/accounting/pages/PostingSettingsPage"
 import PostingOperationsPage from "@/modules/accounting/pages/PostingOperationsPage";
 import LoginPage from "@/core/auth/LoginPage";
 import BrandingSettingsPage from "@/modules/settings/pages/BrandingSettingsPage";
+import {
+  HsRentalsPage, HsCustodyPage, HsCustomersPage, HsTasksPage,
+  HsGovLinksPage, HsNotesPage, HsInternalCommPage,
+} from "@/modules/helpservices/pages/HsPages";
 import LicenseActivationPage from "@/modules/license/pages/LicenseActivationPage";
 import SuperAdminPage from "@/core/admin/SuperAdminPage";
 import SourceCodeViewerPage from "@/core/dev/SourceCodeViewerPage";
@@ -119,6 +123,14 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/hr-module":            HRModule,
   "/assets-module":        AssetsModule,
   "/help-services-module": HelpServicesModule,
+  // المساعدة والخدمات
+  "/hs/rentals":       HsRentalsPage,
+  "/hs/custody":       HsCustodyPage,
+  "/hs/customers":     HsCustomersPage,
+  "/hs/tasks":         HsTasksPage,
+  "/hs/gov-links":     HsGovLinksPage,
+  "/hs/notes":         HsNotesPage,
+  "/hs/internal-comm": HsInternalCommPage,
   "/purchases/suppliers":         PurchaseSuppliersPage,
   "/purchases/supplier-groups":  PurchaseSupplierGroupsPage,
   "/purchases/orders":           PurchaseOrdersPage,

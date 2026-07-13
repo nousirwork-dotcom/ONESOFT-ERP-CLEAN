@@ -29,10 +29,13 @@ export default function AppsHome() {
   const { favorites, toggleFavorite } = useUiPrefs();
   const [query, setQuery] = useState("");
 
-  const modules = useMemo(() => visibleModules(user?.role), [user?.role]);
+  const modules = useMemo(
+    () => visibleModules(user?.role, user?.extraPermissions),
+    [user?.role, user?.extraPermissions],
+  );
   const results = useMemo(
-    () => searchNav(query, lang, user?.role),
-    [query, lang, user?.role],
+    () => searchNav(query, lang, user?.role, user?.extraPermissions),
+    [query, lang, user?.role, user?.extraPermissions],
   );
 
   const open = (path: string, label: string) => {

@@ -71,6 +71,7 @@ const NAV_PREFIXES: Array<{ prefix: string; Icon: React.ElementType }> = [
   { prefix: '/acc',     Icon: Calculator  },
   { prefix: '/hr',      Icon: UserCheck   },
   { prefix: '/assets',  Icon: Wrench      },
+  { prefix: '/hs',      Icon: LifeBuoy    },
   { prefix: '/cfg',     Icon: Settings    },
 ];
 

@@ -249,6 +249,39 @@ export const usersRouter = router({
       return { success: true };
     }),
 
+  // ── تحديث الصلاحيات الإضافية (extra_permissions JSONB) — للمديرين فقط ──────
+  setExtraPermissions: adminProcedure
+    .input(z.object({
+      userId: z.number(),
+      permissions: z.record(
+        z.enum([
+          'manage_branding',
+          'help_services',
+          'hs_rentals', 'hs_custody', 'hs_customers', 'hs_tasks',
+          'hs_gov_links', 'hs_notes', 'hs_internal_comm',
+        ]),
+        z.boolean(),
+      ),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const user = await db.query.users.findFirst({
+        where: and(eq(users.id, input.userId), eq(users.orgId, ctx.user.orgId)),
+      });
+      if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: 'المستخدم غير موجود' });
+
+      const merged: Record<string, boolean> = {
+        ...((user.extraPermissions ?? {}) as Record<string, boolean>),
+        ...input.permissions,
+      };
+
+      await db.update(users).set({
+        extraPermissions: merged,
+        updatedAt: new Date(),
+      }).where(and(eq(users.id, input.userId), eq(users.orgId, ctx.user.orgId)));
+
+      return { success: true };
+    }),
+
   // تحديث دور المستخدم
   updateRole: adminProcedure
     .input(z.object({

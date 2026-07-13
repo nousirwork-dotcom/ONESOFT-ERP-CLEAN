@@ -33,6 +33,8 @@ import {
 } from "recharts";
 import { useState, useEffect } from "react";
 import { formatCurrency } from "@/shared/utils/currency";
+import { useAuth } from "@/core/hooks/useAuth";
+import { canViewHelpServices } from "@/shared/lib/hsPermissions";
 
 const WIDGET_DEFS = [
   { id: "stats",         label: "بطاقات الإحصائيات" },
@@ -186,6 +188,7 @@ function SettingsPanel({
 
 export default function Dashboard() {
   const [, navigate] = useLocation();
+  const { user } = useAuth();
   const { data: stats, isLoading } = trpc.dashboard.stats.useQuery();
   const { data: chartData } = trpc.dashboard.salesChart.useQuery({ days: 7 });
   const { data: topProducts } = trpc.dashboard.topProducts.useQuery({ limit: 5 });
@@ -402,7 +405,9 @@ export default function Dashboard() {
               { label: "الأصول الثابتة",  icon: Building2,    path: "/assets-module",        color: "text-cyan-500",    bg: "bg-cyan-500/10" },
               { label: "المساعدة والخدمات", icon: LifeBuoy,   path: "/help-services-module", color: "text-teal-500",    bg: "bg-teal-500/10" },
               { label: "الإعدادات",       icon: Settings,     path: "/settings",             color: "text-slate-500",   bg: "bg-slate-500/10" },
-            ].map((m) => (
+            ]
+              .filter((m) => m.path !== "/help-services-module" || canViewHelpServices(user))
+              .map((m) => (
               <button key={m.path} onClick={() => navigate(m.path)}
                 className="flex flex-col items-center gap-2 p-4 rounded-xl border border-border/50 hover:border-primary/30 hover:bg-accent/20 transition-all duration-150 text-center">
                 <div className={`w-10 h-10 rounded-xl ${m.bg} flex items-center justify-center`}>

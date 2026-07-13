@@ -73,6 +73,7 @@ import { WorkspaceContext } from "@/core/contexts/WorkspaceContext";
 import { useLang } from "@/core/contexts/LanguageContext";
 import { useUiPrefs } from "@/core/contexts/UiPrefsContext";
 import { t } from "@/shared/lib/translations";
+import { canViewHelpServices } from "@/shared/lib/hsPermissions";
 import { Languages } from "lucide-react";
 
 const SIDEBAR_WIDTH_KEY = "erp-sidebar-width";
@@ -161,7 +162,9 @@ function SidebarNav({ user }: { user: any }) {
     <SidebarContent className="py-1 overflow-y-auto">
       {navGroups.map((group) => {
         const visibleItems = group.items.filter(
-          (item) => !item.roles || (user?.role && item.roles.includes(user.role))
+          (item) =>
+            (!item.roles || (user?.role && item.roles.includes(user.role))) &&
+            (item.path !== "/help-services-module" || canViewHelpServices(user))
         );
         if (!visibleItems.length) return null;
         return (
@@ -264,7 +267,11 @@ function HorizontalNav({ user }: { user: any }) {
   const { lang } = useLang();
   const activeTab = tabs.find(tab => tab.id === activeTabId);
   const allItems = getNavGroups(lang).flatMap((g) =>
-    g.items.filter((item) => !item.roles || (user?.role && item.roles.includes(user.role)))
+    g.items.filter(
+      (item) =>
+        (!item.roles || (user?.role && item.roles.includes(user.role))) &&
+        (item.path !== "/help-services-module" || canViewHelpServices(user))
+    )
   );
 
   return (

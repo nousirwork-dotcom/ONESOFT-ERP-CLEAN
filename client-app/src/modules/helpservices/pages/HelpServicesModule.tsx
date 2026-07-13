@@ -1,24 +1,37 @@
 import {
-  LifeBuoy, Wallet, Landmark, StickyNote, MessagesSquare,
+  LifeBuoy, FileSignature, Wallet, UserSearch, ListTodo, Landmark,
+  StickyNote, MessagesSquare,
 } from "lucide-react";
 import { Card, CardContent } from "@/core/ui/card";
 import { useLang } from "@/core/contexts/LanguageContext";
+import { useAuth } from "@/core/hooks/useAuth";
+import { useTabManager } from "@/core/contexts/TabManagerContext";
+import { canViewHsScreen, type HsScreenPerm } from "@/shared/lib/hsPermissions";
 
 // ─── وحدة «المساعدة والخدمات» ─────────────────────────────────────────────────
-// شاشات فرعية مستقبلية (غير مفعّلة حاليًا). لا مسارات فعّالة حتى لا تُسجَّل
-// في فهرس البحث أو نظام التبويبات قبل تنفيذها.
+// 7 بطاقات، لكل بطاقة صفحة أولية بمسار مستقل يفتح داخل نظام التبويبات.
 
 export const menuSections = [
   {
     id: "help-services",
     label: "الخدمات المساعدة",
     icon: LifeBuoy,
-    children: [] as Array<{ id: string; label: string; icon: React.ElementType; path?: string }>,
+    children: [
+      { id: "hs-rentals",       label: "الإيجارات والعقود",           icon: FileSignature,  path: "/hs/rentals" },
+      { id: "hs-custody",       label: "العهد والمصروفات",            icon: Wallet,         path: "/hs/custody" },
+      { id: "hs-customers",     label: "متابعة العملاء",              icon: UserSearch,     path: "/hs/customers" },
+      { id: "hs-tasks",         label: "المهام والتذكيرات",           icon: ListTodo,       path: "/hs/tasks" },
+      { id: "hs-gov-links",     label: "الروابط والخدمات الحكومية",   icon: Landmark,       path: "/hs/gov-links" },
+      { id: "hs-notes",         label: "الملاحظات",                   icon: StickyNote,     path: "/hs/notes" },
+      { id: "hs-internal-comm", label: "التواصل الداخلي",             icon: MessagesSquare, path: "/hs/internal-comm" },
+    ] as Array<{ id: string; label: string; icon: React.ElementType; path?: string }>,
   },
 ];
 
-type UpcomingCard = {
+type HsCard = {
   id: string;
+  perm: HsScreenPerm;
+  path: string;
   icon: React.ElementType;
   labelAr: string;
   labelEn: string;
@@ -28,19 +41,59 @@ type UpcomingCard = {
   bg: string;
 };
 
-const UPCOMING_CARDS: UpcomingCard[] = [
+export const HS_CARDS: HsCard[] = [
   {
-    id: "custody-log",
+    id: "rentals",
+    perm: "hs_rentals",
+    path: "/hs/rentals",
+    icon: FileSignature,
+    labelAr: "الإيجارات والعقود",
+    labelEn: "Rentals & Contracts",
+    descAr: "متابعة عقود الإيجار ومواعيدها وتنبيهاتها.",
+    descEn: "Track rental contracts, their dates, and alerts.",
+    color: "text-indigo-600 dark:text-indigo-400",
+    bg: "bg-indigo-500/10",
+  },
+  {
+    id: "custody",
+    perm: "hs_custody",
+    path: "/hs/custody",
     icon: Wallet,
-    labelAr: "سجل العهدة",
-    labelEn: "Custody Log",
-    descAr: "تسجيل ومتابعة عمليات العهدة (الوارد والمنصرف والرصيد).",
-    descEn: "Record and track custody transactions (received, spent, balance).",
+    labelAr: "العهد والمصروفات",
+    labelEn: "Custody & Expenses",
+    descAr: "تسجيل ومتابعة العهد والمصروفات (الوارد والمنصرف والرصيد).",
+    descEn: "Record and track custody and expenses (received, spent, balance).",
     color: "text-emerald-600 dark:text-emerald-400",
     bg: "bg-emerald-500/10",
   },
   {
+    id: "customers",
+    perm: "hs_customers",
+    path: "/hs/customers",
+    icon: UserSearch,
+    labelAr: "متابعة العملاء",
+    labelEn: "Customer Follow-up",
+    descAr: "متابعة العملاء والتواصل معهم وتسجيل الملاحظات عليهم.",
+    descEn: "Follow up with customers, communicate, and record notes.",
+    color: "text-rose-600 dark:text-rose-400",
+    bg: "bg-rose-500/10",
+  },
+  {
+    id: "tasks",
+    perm: "hs_tasks",
+    path: "/hs/tasks",
+    icon: ListTodo,
+    labelAr: "المهام والتذكيرات",
+    labelEn: "Tasks & Reminders",
+    descAr: "إدارة المهام اليومية والتذكيرات والمواعيد.",
+    descEn: "Manage daily tasks, reminders, and appointments.",
+    color: "text-orange-600 dark:text-orange-400",
+    bg: "bg-orange-500/10",
+  },
+  {
     id: "gov-links",
+    perm: "hs_gov_links",
+    path: "/hs/gov-links",
     icon: Landmark,
     labelAr: "الروابط والخدمات الحكومية",
     labelEn: "Government Links & Services",
@@ -51,16 +104,20 @@ const UPCOMING_CARDS: UpcomingCard[] = [
   },
   {
     id: "notes",
+    perm: "hs_notes",
+    path: "/hs/notes",
     icon: StickyNote,
     labelAr: "الملاحظات",
     labelEn: "Notes",
-    descAr: "تدوين الملاحظات والمهام والتذكيرات الداخلية.",
-    descEn: "Write down internal notes, tasks, and reminders.",
+    descAr: "تدوين الملاحظات الداخلية وتنظيمها.",
+    descEn: "Write down and organize internal notes.",
     color: "text-amber-600 dark:text-amber-400",
     bg: "bg-amber-500/10",
   },
   {
-    id: "internal-chat",
+    id: "internal-comm",
+    perm: "hs_internal_comm",
+    path: "/hs/internal-comm",
     icon: MessagesSquare,
     labelAr: "التواصل الداخلي",
     labelEn: "Internal Communication",
@@ -73,7 +130,11 @@ const UPCOMING_CARDS: UpcomingCard[] = [
 
 export default function HelpServicesModule() {
   const { lang, dir } = useLang();
+  const { user } = useAuth();
+  const { openTab } = useTabManager();
   const ar = lang === "ar";
+
+  const visibleCards = HS_CARDS.filter(card => canViewHsScreen(user, card.perm));
 
   return (
     <div className="h-full overflow-y-auto bg-background" dir={dir}>
@@ -96,44 +157,49 @@ export default function HelpServicesModule() {
           </div>
         </div>
 
-        {/* ── البطاقات (غير مفعّلة — قريبًا) ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {UPCOMING_CARDS.map(card => (
-            <Card
-              key={card.id}
-              className="border-border/50 opacity-70 cursor-not-allowed select-none"
-              aria-disabled="true"
-              data-testid={`card-helpservices-${card.id}`}
-            >
-              <CardContent className="p-5">
-                <div className="flex items-start gap-3.5">
-                  <div className={`w-11 h-11 shrink-0 rounded-xl ${card.bg} flex items-center justify-center`}>
-                    <card.icon className={`w-[22px] h-[22px] ${card.color}`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
+        {/* ── البطاقات ── */}
+        {visibleCards.length === 0 ? (
+          <p className="text-center text-sm text-muted-foreground py-12">
+            {ar
+              ? "لا تملك صلاحية الوصول إلى أي من شاشات هذه الوحدة."
+              : "You don't have permission to access any screen in this module."}
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {visibleCards.map(card => (
+              <Card
+                key={card.id}
+                className="border-border/50 cursor-pointer transition-all duration-150 hover:border-primary/30 hover:shadow-md active:scale-[0.99]"
+                role="button"
+                tabIndex={0}
+                onClick={() => openTab(card.path, ar ? card.labelAr : card.labelEn, card.icon)}
+                onKeyDown={e => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    openTab(card.path, ar ? card.labelAr : card.labelEn, card.icon);
+                  }
+                }}
+                data-testid={`card-helpservices-${card.id}`}
+              >
+                <CardContent className="p-5">
+                  <div className="flex items-start gap-3.5">
+                    <div className={`w-11 h-11 shrink-0 rounded-xl ${card.bg} flex items-center justify-center`}>
+                      <card.icon className={`w-[22px] h-[22px] ${card.color}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-foreground">
                         {ar ? card.labelAr : card.labelEn}
                       </p>
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/60">
-                        {ar ? "قريبًا" : "Coming soon"}
-                      </span>
+                      <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                        {ar ? card.descAr : card.descEn}
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
-                      {ar ? card.descAr : card.descEn}
-                    </p>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        <p className="text-center text-xs text-muted-foreground/70 mt-8">
-          {ar
-            ? "هذه الخدمات قيد التجهيز وستتوفر في التحديثات القادمة."
-            : "These services are under preparation and will be available in upcoming updates."}
-        </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
