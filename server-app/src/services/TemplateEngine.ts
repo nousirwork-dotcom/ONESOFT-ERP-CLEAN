@@ -14,7 +14,7 @@
 import { db } from '../db.js';
 import { documentTemplates } from '../schema.js';
 import { eq, and } from 'drizzle-orm';
-import { resolveFieldValue } from './PostingEngine.js';
+import { resolveInvoiceFieldValue as resolveFieldValue } from './PostingEngine.js';
 import type { salesInvoices } from '../schema.js';
 
 // ─── أنواع ─────────────────────────────────────────────────────────────────────
@@ -88,12 +88,15 @@ export async function getById(
 export function extractConfig(
   template: typeof documentTemplates.$inferSelect,
 ): TemplateConfig | null {
-  const layout = template.templateLayout as Record<string, unknown> | null;
+  let layout: Record<string, unknown> | null = null;
+  try {
+    layout = template.layoutJson ? JSON.parse(template.layoutJson) as Record<string, unknown> : null;
+  } catch { return null; }
   if (!layout || layout.type !== 'config_v1') return null;
 
   return {
     id:           template.id,
-    name:         template.name,
+    name:         template.nameAr,
     docType:      template.docType,
     primaryColor: (layout.primaryColor as string) ?? '#D19C05',
     logoUrl:      (layout.logoUrl as string | null) ?? null,

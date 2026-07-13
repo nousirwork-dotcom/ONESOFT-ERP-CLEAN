@@ -27,7 +27,7 @@ interface InvoicePrintModalProps {
   data:            PrintInvoiceData;
   qrSettings?:     QrSettings | null;
   templateConfig?: DocTemplateConfig | null;
-  docType?:        "sales_invoice" | "purchase_invoice";
+  docType?:        "sales_invoice" | "purchase_invoice" | "purchase_order" | "purchase_return";
 }
 
 /* ═══════════════════ Component ═══════════════════ */
@@ -61,8 +61,9 @@ export default function InvoicePrintModal({
 
   /* ── HTML الفاتورة — نفس المخرج للمعاينة والطباعة ── */
   const invoiceHtml = useMemo(() => {
+    const isPurchaseDoc = docType === "purchase_invoice" || docType === "purchase_order" || docType === "purchase_return";
     const showQR = !!(qrSettings?.isEnabled && qrDataUrl && (
-      docType === "purchase_invoice"
+      isPurchaseDoc
         ? qrSettings?.showOnPurchaseInvoice
         : qrSettings?.showOnSalesInvoice
     ));
@@ -78,7 +79,10 @@ export default function InvoicePrintModal({
 
   if (!open) return null;
 
-  const docLabel = docType === "purchase_invoice" ? "فاتورة مشتريات" : "فاتورة";
+  const docLabel = docType === "purchase_invoice" ? "فاتورة مشتريات"
+                 : docType === "purchase_order"   ? "أمر شراء"
+                 : docType === "purchase_return"  ? "مردود مشتريات"
+                 : "فاتورة";
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col" dir="rtl">
@@ -93,7 +97,10 @@ export default function InvoicePrintModal({
           معاينة الطباعة — {docLabel} {data.invoiceNumber}
           {cfg.language === "bilingual" && (
             <span className="text-white/60 font-normal text-sm mr-2">
-              | {docType === "purchase_invoice" ? "PINV01" : "INV01"} ثنائي اللغة
+              | {docType === "purchase_invoice" ? "PINV01"
+                : docType === "purchase_order"  ? "POD01"
+                : docType === "purchase_return" ? "PRN01"
+                : "INV01"} ثنائي اللغة
             </span>
           )}
         </span>

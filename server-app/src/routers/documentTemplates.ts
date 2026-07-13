@@ -93,6 +93,136 @@ const PINV01_CONFIG = JSON.stringify({
   ],
 });
 
+const POD01_CONFIG = JSON.stringify({
+  version: 1,
+  type: "config_v1",
+  paperSize: "A4",
+  orientation: "portrait",
+  language: "bilingual",
+  primaryColor: "#1565C0",
+  columns: {
+    num: true, code: true, name: true, unit: true,
+    qty: true, price: true, discount: false,
+    taxable: false, taxRate: false, taxAmt: false, total: true,
+  },
+  minRows: 5,
+  sections: {
+    sellerInfo: true, customerInfo: true,
+    amountInWords: true, pageNumber: true, signatures: true,
+  },
+  elements: [
+    { id: "e_title", type: "text",          x: 60,  y: 5,   w: 90,  h: 20,  content: "أمر شراء\nPURCHASE ORDER", fontSize: 15, fontWeight: "bold", textAlign: "center", color: "#1565C0" },
+    { id: "e_co",    type: "company_info",  x: 112, y: 4,   w: 93,  h: 30,  fontSize: 9 },
+    { id: "e_d1",    type: "line",          x: 5,   y: 37,  w: 200, h: 1,   color: "#1565C0" },
+    { id: "e_inv",   type: "invoice_info",  x: 5,   y: 40,  w: 200, h: 14,  fontSize: 9 },
+    { id: "e_d2",    type: "line",          x: 5,   y: 56,  w: 200, h: 1,   color: "#dddddd" },
+    { id: "e_cust",  type: "customer_info", x: 5,   y: 59,  w: 98,  h: 34,  fontSize: 9, border: true },
+    { id: "e_d3",    type: "line",          x: 5,   y: 95,  w: 200, h: 1,   color: "#dddddd" },
+    { id: "e_items", type: "items_table",   x: 5,   y: 98,  w: 200, h: 120, fontSize: 9 },
+    { id: "e_total", type: "totals",        x: 130, y: 222, w: 75,  h: 40,  fontSize: 10, border: true },
+    { id: "e_words", type: "notes",         x: 5,   y: 222, w: 120, h: 15,  content: "المبلغ كتابةً: {{AmountInWords}}", fontSize: 9 },
+    { id: "e_notes", type: "notes",         x: 5,   y: 239, w: 120, h: 12,  content: "ملاحظات: {{Notes}}", fontSize: 9 },
+    { id: "e_d4",    type: "line",          x: 5,   y: 275, w: 200, h: 1,   color: "#dddddd" },
+    { id: "e_foot",  type: "text",          x: 5,   y: 278, w: 200, h: 8,   content: "OneSoft ERP  ·  صفحة 1 من 1 / Page 1 of 1", fontSize: 7.5, textAlign: "center", color: "#999999" },
+  ],
+});
+
+const PRN01_CONFIG = JSON.stringify({
+  version: 1,
+  type: "config_v1",
+  paperSize: "A4",
+  orientation: "portrait",
+  language: "bilingual",
+  primaryColor: "#C0392B",
+  columns: {
+    num: true, code: true, name: true, unit: false,
+    qty: true, price: true, discount: true,
+    taxable: false, taxRate: true, taxAmt: true, total: true,
+  },
+  minRows: 5,
+  sections: {
+    sellerInfo: true, customerInfo: true,
+    amountInWords: true, pageNumber: true, signatures: false,
+  },
+  elements: [
+    { id: "e_title", type: "text",          x: 60,  y: 5,   w: 90,  h: 20,  content: "مردود مشتريات\nPURCHASE RETURN", fontSize: 14, fontWeight: "bold", textAlign: "center", color: "#C0392B" },
+    { id: "e_co",    type: "company_info",  x: 112, y: 4,   w: 93,  h: 30,  fontSize: 9 },
+    { id: "e_d1",    type: "line",          x: 5,   y: 37,  w: 200, h: 1,   color: "#C0392B" },
+    { id: "e_inv",   type: "invoice_info",  x: 5,   y: 40,  w: 200, h: 14,  fontSize: 9 },
+    { id: "e_d2",    type: "line",          x: 5,   y: 56,  w: 200, h: 1,   color: "#dddddd" },
+    { id: "e_cust",  type: "customer_info", x: 5,   y: 59,  w: 98,  h: 34,  fontSize: 9, border: true },
+    { id: "e_d3",    type: "line",          x: 5,   y: 95,  w: 200, h: 1,   color: "#dddddd" },
+    { id: "e_items", type: "items_table",   x: 5,   y: 98,  w: 200, h: 120, fontSize: 9 },
+    { id: "e_total", type: "totals",        x: 118, y: 222, w: 87,  h: 50,  fontSize: 10, border: true },
+    { id: "e_words", type: "notes",         x: 5,   y: 222, w: 109, h: 15,  content: "المبلغ كتابةً: {{AmountInWords}}", fontSize: 9 },
+    { id: "e_notes", type: "notes",         x: 5,   y: 239, w: 109, h: 12,  content: "ملاحظات: {{Notes}}", fontSize: 9 },
+    { id: "e_d4",    type: "line",          x: 5,   y: 275, w: 200, h: 1,   color: "#dddddd" },
+    { id: "e_foot",  type: "text",          x: 5,   y: 278, w: 200, h: 8,   content: "OneSoft ERP  ·  صفحة 1 من 1 / Page 1 of 1", fontSize: 7.5, textAlign: "center", color: "#999999" },
+  ],
+});
+
+const RVCH01_CONFIG = JSON.stringify({
+  version: 1,
+  type: "config_v1",
+  paperSize: "A4",
+  orientation: "portrait",
+  language: "bilingual",
+  primaryColor: "#16A34A",
+  columns: {
+    num: false, code: false, name: true, unit: false,
+    qty: false, price: false, discount: false,
+    taxable: false, taxRate: false, taxAmt: false, total: false,
+  },
+  minRows: 3,
+  sections: {
+    sellerInfo: true, customerInfo: false,
+    amountInWords: true, pageNumber: false, signatures: true,
+  },
+  elements: [
+    { id: "e_title", type: "text",          x: 60,  y: 8,   w: 90,  h: 20,  content: "سند قبض\nRECEIPT VOUCHER", fontSize: 16, fontWeight: "bold", textAlign: "center", color: "#16A34A" },
+    { id: "e_co",    type: "company_info",  x: 112, y: 6,   w: 93,  h: 28,  fontSize: 9 },
+    { id: "e_d1",    type: "line",          x: 5,   y: 38,  w: 200, h: 1,   color: "#16A34A" },
+    { id: "e_inv",   type: "invoice_info",  x: 5,   y: 42,  w: 200, h: 14,  fontSize: 9 },
+    { id: "e_d2",    type: "line",          x: 5,   y: 58,  w: 200, h: 1,   color: "#dddddd" },
+    { id: "e_total", type: "totals",        x: 60,  y: 65,  w: 140, h: 40,  fontSize: 12, border: true },
+    { id: "e_words", type: "notes",         x: 5,   y: 115, w: 200, h: 15,  content: "المبلغ كتابةً: {{AmountInWords}}", fontSize: 10 },
+    { id: "e_notes", type: "notes",         x: 5,   y: 135, w: 200, h: 12,  content: "البيان: {{Notes}}", fontSize: 9 },
+    { id: "e_d4",    type: "line",          x: 5,   y: 275, w: 200, h: 1,   color: "#dddddd" },
+    { id: "e_foot",  type: "text",          x: 5,   y: 278, w: 200, h: 8,   content: "OneSoft ERP  ·  سند قبض / Receipt Voucher", fontSize: 7.5, textAlign: "center", color: "#999999" },
+  ],
+});
+
+const PVCH01_CONFIG = JSON.stringify({
+  version: 1,
+  type: "config_v1",
+  paperSize: "A4",
+  orientation: "portrait",
+  language: "bilingual",
+  primaryColor: "#DC2626",
+  columns: {
+    num: false, code: false, name: true, unit: false,
+    qty: false, price: false, discount: false,
+    taxable: false, taxRate: false, taxAmt: false, total: false,
+  },
+  minRows: 3,
+  sections: {
+    sellerInfo: true, customerInfo: false,
+    amountInWords: true, pageNumber: false, signatures: true,
+  },
+  elements: [
+    { id: "e_title", type: "text",          x: 60,  y: 8,   w: 90,  h: 20,  content: "سند صرف\nPAYMENT VOUCHER", fontSize: 16, fontWeight: "bold", textAlign: "center", color: "#DC2626" },
+    { id: "e_co",    type: "company_info",  x: 112, y: 6,   w: 93,  h: 28,  fontSize: 9 },
+    { id: "e_d1",    type: "line",          x: 5,   y: 38,  w: 200, h: 1,   color: "#DC2626" },
+    { id: "e_inv",   type: "invoice_info",  x: 5,   y: 42,  w: 200, h: 14,  fontSize: 9 },
+    { id: "e_d2",    type: "line",          x: 5,   y: 58,  w: 200, h: 1,   color: "#dddddd" },
+    { id: "e_total", type: "totals",        x: 60,  y: 65,  w: 140, h: 40,  fontSize: 12, border: true },
+    { id: "e_words", type: "notes",         x: 5,   y: 115, w: 200, h: 15,  content: "المبلغ كتابةً: {{AmountInWords}}", fontSize: 10 },
+    { id: "e_notes", type: "notes",         x: 5,   y: 135, w: 200, h: 12,  content: "البيان: {{Notes}}", fontSize: 9 },
+    { id: "e_d4",    type: "line",          x: 5,   y: 275, w: 200, h: 1,   color: "#dddddd" },
+    { id: "e_foot",  type: "text",          x: 5,   y: 278, w: 200, h: 8,   content: "OneSoft ERP  ·  سند صرف / Payment Voucher", fontSize: 7.5, textAlign: "center", color: "#999999" },
+  ],
+});
+
 export const documentTemplatesRouter = router({
 
   list: protectedProcedure
@@ -129,6 +259,22 @@ export const documentTemplatesRouter = router({
           purchase_invoice: {
             code: 'PINV01', nameAr: 'نموذج المشتريات الأساسي', nameEn: 'Standard Purchase Invoice',
             paperSize: 'A4', layoutJson: PINV01_CONFIG,
+          },
+          purchase_order: {
+            code: 'POD01', nameAr: 'نموذج أوامر الشراء الأساسي', nameEn: 'Standard Purchase Order',
+            paperSize: 'A4', layoutJson: POD01_CONFIG,
+          },
+          purchase_return: {
+            code: 'PRN01', nameAr: 'نموذج مردود المشتريات الأساسي', nameEn: 'Standard Purchase Return',
+            paperSize: 'A4', layoutJson: PRN01_CONFIG,
+          },
+          receipt_voucher: {
+            code: 'RVCH01', nameAr: 'نموذج سند القبض الأساسي', nameEn: 'Standard Receipt Voucher',
+            paperSize: 'A4', layoutJson: RVCH01_CONFIG,
+          },
+          payment_voucher: {
+            code: 'PVCH01', nameAr: 'نموذج سند الصرف الأساسي', nameEn: 'Standard Payment Voucher',
+            paperSize: 'A4', layoutJson: PVCH01_CONFIG,
           },
           pos_receipt: {
             code: 'POS01', nameAr: 'نموذج نقاط البيع الحراري', nameEn: 'POS Thermal Receipt',
@@ -175,6 +321,26 @@ export const documentTemplatesRouter = router({
           paperSize: 'A4', layoutJson: PINV01_CONFIG,
           notes: 'النموذج الافتراضي — فاتورة مشتريات ثنائية اللغة',
         },
+        purchase_order: {
+          code: 'POD01', nameAr: 'نموذج أوامر الشراء الأساسي', nameEn: 'Standard Purchase Order',
+          paperSize: 'A4', layoutJson: POD01_CONFIG,
+          notes: 'النموذج الافتراضي — أمر شراء ثنائي اللغة',
+        },
+        purchase_return: {
+          code: 'PRN01', nameAr: 'نموذج مردود المشتريات الأساسي', nameEn: 'Standard Purchase Return',
+          paperSize: 'A4', layoutJson: PRN01_CONFIG,
+          notes: 'النموذج الافتراضي — مردود مشتريات ثنائي اللغة',
+        },
+        receipt_voucher: {
+          code: 'RVCH01', nameAr: 'نموذج سند القبض الأساسي', nameEn: 'Standard Receipt Voucher',
+          paperSize: 'A4', layoutJson: RVCH01_CONFIG,
+          notes: 'النموذج الافتراضي — سند قبض',
+        },
+        payment_voucher: {
+          code: 'PVCH01', nameAr: 'نموذج سند الصرف الأساسي', nameEn: 'Standard Payment Voucher',
+          paperSize: 'A4', layoutJson: PVCH01_CONFIG,
+          notes: 'النموذج الافتراضي — سند صرف',
+        },
         pos_receipt: {
           code: 'POS01', nameAr: 'نموذج نقاط البيع الحراري', nameEn: 'POS Thermal Receipt',
           paperSize: '80mm', layoutJson: POS01_CONFIG,
@@ -215,6 +381,26 @@ export const documentTemplatesRouter = router({
           code: 'PINV01', nameAr: 'نموذج المشتريات الأساسي', nameEn: 'Standard Purchase Invoice',
           docType: 'purchase_invoice', paperSize: 'A4', layoutJson: PINV01_CONFIG,
           notes: 'النموذج الافتراضي — فاتورة مشتريات ثنائية اللغة',
+        },
+        {
+          code: 'POD01', nameAr: 'نموذج أوامر الشراء الأساسي', nameEn: 'Standard Purchase Order',
+          docType: 'purchase_order', paperSize: 'A4', layoutJson: POD01_CONFIG,
+          notes: 'النموذج الافتراضي — أمر شراء ثنائي اللغة',
+        },
+        {
+          code: 'PRN01', nameAr: 'نموذج مردود المشتريات الأساسي', nameEn: 'Standard Purchase Return',
+          docType: 'purchase_return', paperSize: 'A4', layoutJson: PRN01_CONFIG,
+          notes: 'النموذج الافتراضي — مردود مشتريات ثنائي اللغة',
+        },
+        {
+          code: 'RVCH01', nameAr: 'نموذج سند القبض الأساسي', nameEn: 'Standard Receipt Voucher',
+          docType: 'receipt_voucher', paperSize: 'A4', layoutJson: RVCH01_CONFIG,
+          notes: 'النموذج الافتراضي — سند قبض',
+        },
+        {
+          code: 'PVCH01', nameAr: 'نموذج سند الصرف الأساسي', nameEn: 'Standard Payment Voucher',
+          docType: 'payment_voucher', paperSize: 'A4', layoutJson: PVCH01_CONFIG,
+          notes: 'النموذج الافتراضي — سند صرف',
         },
         {
           code: 'POS01', nameAr: 'نموذج نقاط البيع الحراري', nameEn: 'POS Thermal Receipt',
