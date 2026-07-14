@@ -66,7 +66,7 @@ const EXPECTED_TABLES = [
   'verification_tokens',
   'password_reset_tokens',
   'security_events',
-  // Real Estate Purchases (0025 + 0026)
+  // Real Estate Purchases (0025 + 0026 + 0027)
   're_purchases',
   're_purchase_statements',
 ];
