@@ -78,9 +78,9 @@ app.post('/api/auth/auto-login', async (req, res) => {
     });
     if (!user) return res.status(404).json({ error: 'لا يوجد مستخدم' });
 
-    // الدخول التلقائي يعمل فقط إذا password_status = 'not_set'
-    // بمجرد تعيين كلمة مرور لا يُسمح بالدخول التلقائي أبدًا
-    if (user.passwordStatus !== 'not_set') {
+    // الدخول التلقائي يعمل فقط إذا password_status = 'not_set' (في الإنتاج)
+    // في التطوير: نسمح بالدخول التلقائي دائماً لتسهيل الاختبار
+    if (ENV.nodeEnv === 'production' && user.passwordStatus !== 'not_set') {
       return res.status(403).json({ error: 'يجب تسجيل الدخول يدوياً' });
     }
 

@@ -58,7 +58,7 @@ const invoiceInputSchema = z.object({
   totalValue:    z.number().min(0).default(0),
   notes:         z.string().nullable().optional(),
   attachmentUrl: z.string().nullable().optional(),
-});
+}).partial();
 
 const statementInputSchema = z.object({
   name:           z.string().min(1).max(255),
@@ -371,14 +371,14 @@ export const rePurchasesRouter = router({
       statementId: z.number(),
       rows: z.array(z.object({
         supplierName: z.string(),
-        supplierTaxId: z.string().optional(),
+        supplierTaxId: z.string().nullable().optional(),
         invoiceDate: z.string(),
         invoiceNumber: z.string(),
-        totalValue: z.number().min(0),
-        notes: z.string().optional(),
+        totalValue: z.number(),
+        notes: z.string().nullable().optional(),
       })),
     }))
-    .query(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
       assertImportPerm(ctx.user);
       const orgId = ctx.user.orgId;
       const [stmt]=await db.select().from(rePurchaseStatements).where(and(eq(rePurchaseStatements.id,input.statementId),eq(rePurchaseStatements.orgId,orgId)));
@@ -509,6 +509,6 @@ export const rePurchasesRouter = router({
         }
       }
 
-      return { imported: results.length, skipped: skipped.length, errors, results };
+      return { importedCount: results.length, skippedCount: skipped.length, errorCount: errors.length, errors, results };
     }),
 });
