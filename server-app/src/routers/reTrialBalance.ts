@@ -617,9 +617,31 @@ export const reTrialBalanceRouter = router({
         .orderBy(asc(reTbAccounts.sortOrder));
       const entries = await db.select().from(reTbEntries).where(eq(reTbEntries.trialBalanceId, trialBalanceId));
       const entryMap = new Map(entries.map(e => [e.accountId, e]));
+
+      // Build parentId set for hasChildren detection
+      const parentIds = new Set<number>();
+      for (const a of accounts) if (a.parentId) parentIds.add(a.parentId);
+
       const rows = accounts.map(a => {
         const e = entryMap.get(a.id);
-        return { account: a, entry: e ?? null };
+        // Aggregate child entries for parent accounts
+        const hasChildren = parentIds.has(a.id);
+        let aggEntry = null;
+        if (hasChildren) {
+          const children = accounts.filter(ca => ca.parentId === a.id);
+          const od = children.reduce((sum, c) => sum + toNum(entryMap.get(c.id)?.openingDebit ?? 0), 0);
+          const oc = children.reduce((sum, c) => sum + toNum(entryMap.get(c.id)?.openingCredit ?? 0), 0);
+          const md = children.reduce((sum, c) => sum + toNum(entryMap.get(c.id)?.movementDebit ?? 0), 0);
+          const mc = children.reduce((sum, c) => sum + toNum(entryMap.get(c.id)?.movementCredit ?? 0), 0);
+          const net = od - oc + md - mc;
+          aggEntry = {
+            openingDebit: od.toFixed(2), openingCredit: oc.toFixed(2),
+            movementDebit: md.toFixed(2), movementCredit: mc.toFixed(2),
+            endingDebit: net >= 0 ? net.toFixed(2) : '0',
+            endingCredit: net < 0 ? (-net).toFixed(2) : '0',
+          } as any;
+        }
+        return { account: { ...a, hasChildren }, entry: hasChildren ? aggEntry : (e ?? null), isParent: hasChildren };
       });
       const totals = {
         openingDebit: 0, openingCredit: 0,
