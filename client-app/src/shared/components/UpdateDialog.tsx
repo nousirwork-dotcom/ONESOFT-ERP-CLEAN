@@ -2,7 +2,7 @@
  * UpdateDialog — نافذة التحديث التلقائي لـ OneSoft ERP  (v4)
  *
  * optional  → "تحديث الآن" + "تحميل في الخلفية" + "لاحقاً"
- * mandatory → "تحديث الآن" / "تحميل في الخلفية" — يمنع الدخول
+ * mandatory → "تحديث الآن" فقط — يمنع الدخول (بدون خيار الخلفية)
  * downloading → "تحميل في الخلفية" + "إلغاء التحميل"
  * downloaded → نافذة خفيفة (غير حاجبة): "تثبيت الآن" + "لاحقاً"
  *
@@ -89,6 +89,7 @@ export default function UpdateDialog() {
   const [loading, setLoading]       = useState(false);
   const [dontRemind, setDontRemind] = useState(false);
   const downloadedRef               = useRef(false);
+  const mandatoryRef                = useRef(false);
 
   // مزامنة رؤية النافذة مع update-store
   const storeState = updateStore.getState();
@@ -107,6 +108,7 @@ export default function UpdateDialog() {
       } else if (data.type === "mandatory") {
         setManifest(data.manifest);
         setCurrentVer(data.currentVersion);
+        mandatoryRef.current = true;
         setState("mandatory");
         updateStore.setMandatory(data.manifest, data.currentVersion);
       } else if (data.type === "no-update") {
@@ -475,14 +477,16 @@ export default function UpdateDialog() {
           {/* ── حالة: جارٍ التحميل ───────────────────────────────────────── */}
           {state === "downloading" && (
             <>
-              <button
-                onClick={handleDownloadBackground}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm"
-                style={{ backgroundColor: "rgba(27,43,92,0.08)", color: "#1B2B5C", border: "1px solid rgba(27,43,92,0.2)" }}
-              >
-                <ArrowDownToLine size={15} />
-                تحميل في الخلفية
-              </button>
+              {!mandatoryRef.current && (
+                <button
+                  onClick={handleDownloadBackground}
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm"
+                  style={{ backgroundColor: "rgba(27,43,92,0.08)", color: "#1B2B5C", border: "1px solid rgba(27,43,92,0.2)" }}
+                >
+                  <ArrowDownToLine size={15} />
+                  تحميل في الخلفية
+                </button>
+              )}
               <button
                 onClick={handleCancelDownload}
                 className="px-4 py-2.5 rounded-xl font-semibold text-sm"
@@ -508,16 +512,18 @@ export default function UpdateDialog() {
                 <Download size={15} />
                 تحديث الآن
               </button>
-              <button
-                onClick={handleDownloadBackground}
-                disabled={loading}
-                className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl font-semibold text-sm"
-                style={{ backgroundColor: "rgba(27,43,92,0.06)", color: "#1B2B5C", border: "1px solid rgba(27,43,92,0.15)" }}
-                title="تحميل في الخلفية ومتابعة العمل"
-              >
-                <ArrowDownToLine size={14} />
-                <span className="hidden sm:inline">في الخلفية</span>
-              </button>
+              {!isMandatory && (
+                <button
+                  onClick={handleDownloadBackground}
+                  disabled={loading}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl font-semibold text-sm"
+                  style={{ backgroundColor: "rgba(27,43,92,0.06)", color: "#1B2B5C", border: "1px solid rgba(27,43,92,0.15)" }}
+                  title="تحميل في الخلفية ومتابعة العمل"
+                >
+                  <ArrowDownToLine size={14} />
+                  <span className="hidden sm:inline">في الخلفية</span>
+                </button>
+              )}
               {!isMandatory && (
                 <button
                   onClick={handleSkip}
