@@ -179,7 +179,7 @@ function fetchJson(url: string): Promise<unknown> {
 
 // ─── Download file with progress (cancelable) ─────────────────────────────────
 let downloadedFilePath: string | null = null;
-let _activeRequest:     import('https').ClientRequest | null = null;
+let _activeRequest:     import('http').ClientRequest | null = null;
 let _downloadAborted    = false;
 
 /** إلغاء التحميل الجاري — يُطلق من update:cancel-download */
