@@ -250,7 +250,21 @@ export default function ReDocumentsFullPage() {
   }
 
   // ── Project Detail ──────────────────────────────────────────────────────────────────
-  if (view === "projectDetail" && selProjectId && projectQ.data) {
+  if (view === "projectDetail" && selProjectId) {
+    if (projectQ.isLoading) {
+      return (
+        <div className="h-full flex items-center justify-center" dir={dir}>
+          <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      );
+    }
+    if (!projectQ.data) {
+      return (
+        <div className="h-full flex items-center justify-center text-muted-foreground" dir={dir}>
+          <p className="text-sm">{ar ? 'لم يتم العثور على بيانات المشروع' : 'Project data not found'}</p>
+        </div>
+      );
+    }
     const proj = projectQ.data;
     const docs = (docsQ.data ?? []) as any[];
     const types = typesQ.data ?? [];
