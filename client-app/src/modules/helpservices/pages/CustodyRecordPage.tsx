@@ -157,7 +157,7 @@ export default function CustodyRecordPage() {
   }
 
   // ── حفظ ──
-  const doSave = useCallback(async (): Promise<number | null> => {
+  const doSave = useCallback(async (options?: { skipAutoSend?: boolean }): Promise<number | null> => {
     if (!custodyName.trim()) {
       toast.error("اسم العهدة مطلوب");
       return null;
@@ -202,6 +202,23 @@ export default function CustodyRecordPage() {
         openTab(`/hs/custody-record/${id}`, `عهدة: ${custodyName.trim()}`, Save);
       }
       toast.success("تم الحفظ بنجاح");
+
+      // ── الإرسال التلقائي بعد الحفظ (غير حاجز) ──
+      if (!options?.skipAutoSend && autoSend && id && email.trim()) {
+        try {
+          const result = await sendEmailM.mutateAsync({ custodyId: id });
+          if (result.status === "sent") {
+            toast.success("تم إرسال كشف العهدة تلقائياً إلى البريد الإلكتروني");
+          } else if (result.status === "not_configured") {
+            toast.warning("تم حفظ البيانات بنجاح، ولكن خدمة البريد غير مهيأة — راجع إعدادات الإرسال");
+          } else {
+            toast.warning(`تم حفظ البيانات بنجاح، ولكن تعذر إرسال البريد الإلكتروني: ${result.errorMsg ?? ""}`);
+          }
+        } catch (e: any) {
+          toast.warning("تم حفظ البيانات بنجاح، ولكن تعذر إرسال البريد الإلكتروني");
+        }
+      }
+
       return id;
     } catch (e: any) {
       toast.error(e?.message ?? "فشل الحفظ");
@@ -209,11 +226,12 @@ export default function CustodyRecordPage() {
     } finally {
       setSaving(false);
     }
-  }, [custodyName, email, autoSend, entries, custodyId, isNew, createM, updateM, saveEntrM, openTab]);
+  }, [custodyName, email, autoSend, entries, custodyId, isNew, createM, updateM, saveEntrM, openTab, sendEmailM]);
 
   // ── حفظ وإرسال ──
   const handleSaveAndSend = useCallback(async () => {
-    const id = await doSave();
+    // skipAutoSend لأن سنرسل يدوياً بعد الحفظ
+    const id = await doSave({ skipAutoSend: true });
     if (!id) return;
     setSending(true);
     try {
@@ -258,6 +276,7 @@ export default function CustodyRecordPage() {
   const totalPaid      = entries.reduce((s, e) => s + e.amountPaid, 0);
   const diff           = totalCollected - totalPaid;
 
+  // ── تسمية الفرق بين المحصل والمسدد ──
   const diffLabel = diff > 0
     ? `رصيد متبقٍ بالعهدة: ${fmt(diff)}`
     : diff < 0

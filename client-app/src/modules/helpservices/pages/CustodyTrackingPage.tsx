@@ -4,11 +4,15 @@ import { useTabManager } from "@/core/contexts/TabManagerContext";
 import { toast } from "sonner";
 import {
   Plus, Search, Trash2, AlertTriangle, ArrowRight,
-  Loader2, RefreshCw, ExternalLink, Mail, FileText,
+  Loader2, RefreshCw, ExternalLink, Mail, FileText, Pencil,
 } from "lucide-react";
 import { Button } from "@/core/ui/button";
 import { Input } from "@/core/ui/input";
 import { Badge } from "@/core/ui/badge";
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel,
+} from "@/core/ui/alert-dialog";
 
 function fmt(n: number) {
   if (!n) return "—";
@@ -23,6 +27,9 @@ export default function CustodyTrackingPage() {
   const [search, setSearch]     = useState("");
   const [deleting, setDeleting] = useState<number | null>(null);
   const [sending, setSending]   = useState<number | null>(null);
+  // ── مربع تأكيد الحذف ──
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmRecord, setConfirmRecord] = useState<{ id: number; name: string } | null>(null);
 
   const listQ = trpc.custodyTracking.listRecords.useQuery(
     { search: search || undefined },
@@ -41,18 +48,28 @@ export default function CustodyTrackingPage() {
     openTab("/hs/custody-record/new", "متابعة عهدة جديدة", Plus);
   }, [openTab]);
 
-  const handleDelete = useCallback(async (id: number, name: string) => {
-    if (!confirm(`هل تريد حذف متابعة العهدة "${name}" وجميع حركاتها بشكل نهائي؟`)) return;
+  // ── فتح مربع تأكيد الحذف ──
+  const askDelete = useCallback((id: number, name: string) => {
+    setConfirmRecord({ id, name });
+    setConfirmOpen(true);
+  }, []);
+
+  // ── تنفيذ الحذف بعد التأكيد ──
+  const confirmDelete = useCallback(async () => {
+    if (!confirmRecord) return;
+    const { id, name } = confirmRecord;
+    setConfirmOpen(false);
     setDeleting(id);
     try {
       await deleteM.mutateAsync({ id });
-      toast.success("تم حذف السجل وجميع حركاته");
+      toast.success(`تم حذف "${name}" وجميع حركاتها`);
     } catch (e: any) {
       toast.error(e?.message ?? "فشل الحذف");
     } finally {
       setDeleting(null);
+      setConfirmRecord(null);
     }
-  }, [deleteM]);
+  }, [confirmRecord, deleteM]);
 
   const handleSendEmail = useCallback(async (id: number) => {
     setSending(id);
@@ -198,7 +215,7 @@ export default function CustodyTrackingPage() {
                           title="تعديل / عرض العهدة"
                           onClick={() => handleOpen(r.id, r.custody_name)}
                         >
-                          <ExternalLink className="w-3 h-3" />
+                          <Pencil className="w-3 h-3" />
                           تعديل
                         </button>
                         {r.email && (
@@ -217,7 +234,7 @@ export default function CustodyTrackingPage() {
                           className="p-1.5 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors disabled:opacity-40"
                           title="حذف"
                           disabled={deleting === r.id}
-                          onClick={() => handleDelete(r.id, r.custody_name)}
+                          onClick={() => askDelete(r.id, r.custody_name)}
                         >
                           {deleting === r.id
                             ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -241,6 +258,35 @@ export default function CustodyTrackingPage() {
           <span>انقر مرتين على أي سطر لفتح العهدة</span>
         </div>
       )}
+
+      {/* ── مربع تأكيد الحذف ── */}
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="w-5 h-5" />
+              تأكيد الحذف
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              هل أنت متأكد من حذف متابعة العهدة
+              <span className="font-bold text-foreground mx-1">"{confirmRecord?.name ?? ""}"</span>
+              وجميع حركاتها بشكل نهائي؟<br />
+              <span className="text-red-500 text-xs">لا يمكن التراجع عن هذا الإجراء.</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel onClick={() => { setConfirmOpen(false); setConfirmRecord(null); }}>
+              إلغاء
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              نعم، احذف
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

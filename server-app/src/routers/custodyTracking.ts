@@ -245,6 +245,22 @@ export const custodyTrackingRouter = router({
         : diff < 0
           ? `تجاوز في المصروفات: ${fmtNum(Math.abs(diff))}`
           : 'العهدة مسواة بالكامل: 0';
+      // إجماليات واردة للكشف
+      const summaryHtml = `
+        <div style="margin-top:14px;background:#f8fafc;border:1px solid #e2e8f0;padding:12px 14px;border-radius:4px;font-size:13px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+            <span><strong>إجمالي المحصل:</strong></span>
+            <span style="color:#166534">${fmtNum(totalCollected)}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+            <span><strong>إجمالي المسدد:</strong></span>
+            <span style="color:#991B1B">${fmtNum(totalPaid)}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;border-top:1px solid #e2e8f0;padding-top:6px">
+            <span><strong>الفرق بين المحصل والمسدد:</strong></span>
+            <span style="color:${diffColor};font-weight:bold">${diffMsg}</span>
+          </div>
+        </div>`;
 
       const subject  = `كشف متابعة العهدة — ${record.custodyName} (رقم ${record.recordNumber})`;
       const bodyHtml = `
@@ -262,7 +278,9 @@ export const custodyTrackingRouter = router({
             </tr>
             <tr>
               <td style="padding:4px 8px;font-weight:bold">تاريخ الكشف:</td>
-              <td colspan="3" style="padding:4px 8px">${new Date().toISOString().slice(0, 10)}</td>
+              <td style="padding:4px 8px">${new Date().toISOString().slice(0, 10)}</td>
+              <td style="padding:4px 8px;font-weight:bold">آخر تحديث:</td>
+              <td style="padding:4px 8px">${record.updatedAt ? new Date(record.updatedAt).toLocaleString('ar-SA') : '—'}</td>
             </tr>
           </table>
           <table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -287,8 +305,9 @@ export const custodyTrackingRouter = router({
               </tr>
             </tbody>
           </table>
-          <p style="text-align:center;font-size:14px;font-weight:bold;margin-top:16px;color:${diffColor}">
-            الفرق بين المحصل والمسدد: ${diffMsg}
+          ${summaryHtml}
+          <p style="text-align:center;font-size:12px;color:#64748b;margin-top:12px">
+            الفرق بين المحصل والمسدد = إجمالي المحصل – إجمالي المسدد
           </p>
         </div>`;
 
