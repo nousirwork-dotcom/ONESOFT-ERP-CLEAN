@@ -165,6 +165,19 @@ export default function ReDocumentsFullPage() {
           </div>
           <h1 className="text-lg font-bold mb-3">{ar ? 'ملفات المشروعات' : 'Project Files'}</h1>
 
+          {/* Loading / Error states */}
+          {projectsQ.isLoading && (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+          {projectsQ.isError && (
+            <div className="flex items-center justify-center py-12 text-red-500">
+              <AlertTriangle className="w-5 h-5 me-2" />
+              <span className="text-sm">{ar ? 'خطأ في تحميل البيانات' : 'Error loading data'}</span>
+            </div>
+          )}
+
           {/* Search */}
           <div className="flex items-center gap-2 mb-3">
             <div className="relative flex-1 max-w-sm">
@@ -634,7 +647,12 @@ export default function ReDocumentsFullPage() {
     );
   }
 
-  return null;
+  // Fallback — should never reach here
+  return (
+    <div className="h-full flex items-center justify-center text-muted-foreground" dir={dir}>
+      <p className="text-sm">{ar ? 'الصفحة غير متوفرة' : 'View not available'}</p>
+    </div>
+  );
 }
 
 // ─── Versions Dialog ──────────────────────────────────────────────────────────────────
