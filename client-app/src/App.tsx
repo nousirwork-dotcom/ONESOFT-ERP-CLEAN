@@ -90,6 +90,8 @@ import {
 import AIAssistantPage from "@/modules/helpservices/pages/AIAssistantPage";
 import SupportRequestPage from "@/modules/helpservices/pages/SupportRequestPage";
 import CustodyTrackingPage from "@/modules/helpservices/pages/CustodyTrackingPage";
+import CustodyRecordPage from "@/modules/helpservices/pages/CustodyRecordPage";
+import { TabPathContext } from "@/core/contexts/TabPathContext";
 import LicenseActivationPage from "@/modules/license/pages/LicenseActivationPage";
 import SuperAdminPage from "@/core/admin/SuperAdminPage";
 import SourceCodeViewerPage from "@/core/dev/SourceCodeViewerPage";
@@ -400,11 +402,14 @@ function TabContent() {
         </div>
       )}
       {tabs.map(tab => {
-        const Component = PAGE_MAP[tab.path];
+        const Component = PAGE_MAP[tab.path]
+          ?? (tab.path.startsWith("/hs/custody-record/") ? CustodyRecordPage : null);
         return (
           <AppWindow key={tab.id} tab={tab}>
             <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }} dir="rtl">
-              {Component ? <Component /> : <NotFound />}
+              <TabPathContext.Provider value={tab.path}>
+                {Component ? <Component /> : <NotFound />}
+              </TabPathContext.Provider>
             </div>
           </AppWindow>
         );

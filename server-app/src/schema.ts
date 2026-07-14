@@ -1545,20 +1545,35 @@ export const hsTasks = pgTable('hs_tasks', {
   updatedAt:       timestamp('updated_at').notNull().defaultNow(),
 });
 
-// ─── متابعة العهد — أداة مساعدة داخلية مستقلة (0022) ────────────────────────
-// تنبيه: هذا الجدول مستقل تمامًا عن النظام المحاسبي ولا يرتبط بأي قيد أو سند
+// ─── متابعة العهد — أداة مساعدة داخلية مستقلة (0022/0023) ───────────────────
+// تنبيه: هذه الجداول مستقلة تمامًا عن النظام المحاسبي ولا ترتبط بأي قيد أو سند
+
+// سجل العهدة (الهيدر) — 0023
+export const hsCustodyRecords = pgTable('hs_custody_records', {
+  id:               serial('id').primaryKey(),
+  orgId:            integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  createdByUserId:  integer('created_by_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  recordNumber:     integer('record_number').notNull().default(1),
+  custodyName:      text('custody_name').notNull().default(''),
+  email:            varchar('email', { length: 255 }),
+  autoSendEmail:    boolean('auto_send_email').notNull().default(false),
+  createdAt:        timestamp('created_at').notNull().defaultNow(),
+  updatedAt:        timestamp('updated_at').notNull().defaultNow(),
+});
+
+// حركات العهدة — 0022 + إضافة custodyId في 0023
 export const hsCustodyEntries = pgTable('hs_custody_entries', {
   id:               serial('id').primaryKey(),
   orgId:            integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   createdByUserId:  integer('created_by_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  custodyId:        integer('custody_id').references(() => hsCustodyRecords.id, { onDelete: 'cascade' }),
   entryDate:        varchar('entry_date', { length: 10 }).notNull(), // YYYY-MM-DD
   description:      text('description').notNull().default(''),
   referenceNumber:  varchar('reference_number', { length: 100 }),
-  // الوارد
+  // المبلغ المحصل (incomeCollected) + المبلغ المسدد (expensePaid) — حقول التتبع الجديدة
   incomeDue:        decimal('income_due',       { precision: 15, scale: 4 }).notNull().default('0'),
   incomeCollected:  decimal('income_collected', { precision: 15, scale: 4 }).notNull().default('0'),
   incomeNote:       text('income_note'),
-  // المنصرف
   expenseDue:       decimal('expense_due',  { precision: 15, scale: 4 }).notNull().default('0'),
   expensePaid:      decimal('expense_paid', { precision: 15, scale: 4 }).notNull().default('0'),
   expenseNote:      text('expense_note'),
