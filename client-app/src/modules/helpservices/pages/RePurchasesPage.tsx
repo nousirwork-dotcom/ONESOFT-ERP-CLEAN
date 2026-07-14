@@ -21,6 +21,16 @@ import * as XLSX from "xlsx";
 
 const C = { primary: "#406B93", border: "#D0D0D0", bgAlt: "#FAFAFA", header: "#E8EEF4", danger: "#C0392B", warn: "#F59E0B", success: "#16A34A", dupBg: "#FEF3C7", errBg: "#FEE2E2" };
 
+// ─── Number input component (module-level to preserve focus on re-render)
+function NumInput({ value, onChange, onBlur, onKeyDown, placeholder, className = "", style = {}, readOnly = false }: any) {
+  return (
+    <input type="text" inputMode="decimal" dir="ltr" lang="en" value={value} onChange={onChange} onBlur={onBlur} onKeyDown={onKeyDown}
+      placeholder={placeholder} readOnly={readOnly}
+      className={`border rounded px-2 text-xs ${readOnly ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : ''} ${className}`}
+      style={{ borderColor: C.border, ...style }} />
+  );
+}
+
 // ─── تنسيق الأرقام ──────────────────────────────────────────────────────────────────────
 function toEnDigits(str: string): string {
   return str.replace(/[٠-٩]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0x0660 + 0x0030));
@@ -678,16 +688,6 @@ ${rows.map((r: any, i: number) => {
       <th onClick={() => toggleInvSort(col)} style={{ textAlign: "right", padding: "6px 10px", fontWeight: 700, color: "#2B4A6A", fontSize: 12, whiteSpace: "nowrap", cursor: "pointer", userSelect: "none" }}>
         <span className="flex items-center gap-1">{label}{active && (invSortDir === "asc" ? <SortAsc className="w-3 h-3" /> : <SortDesc className="w-3 h-3" />)}</span>
       </th>
-    );
-  }
-
-  // ─── Number input component ────────────────────────────────────────────────────────
-  function NumInput({ value, onChange, onBlur, onKeyDown, placeholder, className = "", style = {}, readOnly = false }: any) {
-    return (
-      <input type="text" inputMode="decimal" dir="ltr" lang="en" value={value} onChange={onChange} onBlur={onBlur} onKeyDown={onKeyDown}
-        placeholder={placeholder} readOnly={readOnly}
-        className={`border rounded px-2 text-xs ${readOnly ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : ''} ${className}`}
-        style={{ borderColor: C.border, ...style }} />
     );
   }
 
