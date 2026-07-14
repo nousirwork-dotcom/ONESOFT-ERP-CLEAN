@@ -116,5 +116,12 @@ contextBridge.exposeInMainWorld('installer', {
     setAutoUpdate: (enabled: boolean) => ipcRenderer.invoke('update:set-auto-update', enabled),
     /** تغيير قناة التحديث (stable / staging) — إعداد خاص بالجهاز */
     setChannel:    (channel: 'stable' | 'staging') => ipcRenderer.invoke('update:set-channel', channel),
+    /** إلغاء التحميل الجاري وحذف الملف الجزئي */
+    cancelDownload: () => ipcRenderer.invoke('update:cancel-download'),
+    /** الاستماع لحدث اكتمال الإلغاء */
+    onUpdateCancelled: (cb: (e: unknown) => void) => {
+      ipcRenderer.on('update:cancelled', cb);
+      return () => ipcRenderer.removeListener('update:cancelled', cb);
+    },
   },
 });

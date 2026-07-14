@@ -101,6 +101,7 @@ import { trpc } from "@/shared/lib/trpc";
 import { Settings } from "lucide-react";
 import AppWindow from "@/shared/components/AppWindow";
 import UpdateDialog from "@/shared/components/UpdateDialog";
+import UpdateProgressBadge from "@/shared/components/UpdateProgressBadge";
 import { useIsMandatoryBlocked } from "@/shared/lib/update-store";
 
 // ─── Dev-only previews ────────────────────────────────────────────────────────
@@ -454,6 +455,7 @@ function App() {
               في حالة التحديث الإجباري تحجب الشاشة بالكامل وتمنع أي تفاعل.
             */}
             <UpdateDialog />
+            <UpdateProgressBadge />
 
             {/*
               حجب جميع المسارات عند وجود تحديث إجباري:

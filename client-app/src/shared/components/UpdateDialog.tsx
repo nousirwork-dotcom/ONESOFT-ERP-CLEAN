@@ -1,23 +1,23 @@
 /**
- * UpdateDialog — نافذة التحديث التلقائي لـ OneSoft ERP  (v3)
+ * UpdateDialog — نافذة التحديث التلقائي لـ OneSoft ERP  (v4)
  *
- * تظهر تلقائياً عند بدء التشغيل إذا وجد تحديث.
- * تكتب الحالة إلى update-store حتى تقرأها شاشة الإعدادات (UpdatesPage).
+ * optional  → "تحديث الآن" + "تحميل في الخلفية" + "لاحقاً"
+ * mandatory → "تحديث الآن" / "تحميل في الخلفية" — يمنع الدخول
+ * downloading → "تحميل في الخلفية" + "إلغاء التحميل"
+ * downloaded → نافذة خفيفة (غير حاجبة): "تثبيت الآن" + "لاحقاً"
  *
- * optional  → "تحديث الآن" + "لاحقاً" (تظهر مجدداً عند التشغيل القادم)
- *              + خيار "لا تذكرني بهذا الإصدار مرة أخرى" (تخطي دائم لهذا الإصدار)
- * mandatory → "تحديث الآن" فقط — يمنع الدخول لأي صفحة
+ * تاريخ الإصدار: ميلادي فقط yyyy-MM-dd من publishedAt في manifest
  */
 
 import { useEffect, useRef, useState } from "react";
 import {
   Download, RefreshCw, AlertTriangle, CheckCircle2,
-  ChevronDown, ChevronUp, Clock, Zap, ShieldAlert,
+  ChevronDown, ChevronUp, Clock, Zap, ShieldAlert, X,
+  ArrowDownToLine,
 } from "lucide-react";
 import { updateStore } from "@/shared/lib/update-store";
 import type { PendingManifest } from "@/shared/lib/update-store";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 type UpdateStatusEvent =
   | { type: "checking" }
   | { type: "no-update";  currentVersion: string }
@@ -40,23 +40,23 @@ type DialogState =
   | "downloaded"
   | "error";
 
-// ─── Electron bridge ──────────────────────────────────────────────────────────
 interface ElectronUpdater {
-  onUpdateStatus:     (cb: (e: unknown, data: UpdateStatusEvent) => void) => () => void;
-  onUpdateProgress:   (cb: (e: unknown, data: DownloadProgress) => void) => () => void;
-  onUpdateDownloaded: (cb: (e: unknown, data: { version: string }) => void) => () => void;
-  onUpdateError:      (cb: (e: unknown, data: { message: string }) => void) => () => void;
-  startDownload:      () => Promise<{ ok: boolean; error?: string }>;
-  installNow:         () => Promise<{ ok: boolean; error?: string }>;
-  skipUpdate:         () => Promise<void>;
-  skipVersion?:       () => Promise<{ ok: boolean; error?: string }>;
+  onUpdateStatus:      (cb: (e: unknown, data: UpdateStatusEvent) => void) => () => void;
+  onUpdateProgress:    (cb: (e: unknown, data: DownloadProgress) => void) => () => void;
+  onUpdateDownloaded:  (cb: (e: unknown, data: { version: string }) => void) => () => void;
+  onUpdateError:       (cb: (e: unknown, data: { message: string }) => void) => () => void;
+  onUpdateCancelled?:  (cb: (e: unknown) => void) => () => void;
+  startDownload:       () => Promise<{ ok: boolean; error?: string }>;
+  installNow:          () => Promise<{ ok: boolean; error?: string }>;
+  skipUpdate:          () => Promise<void>;
+  skipVersion?:        () => Promise<{ ok: boolean; error?: string }>;
+  cancelDownload?:     () => Promise<{ ok: boolean }>;
 }
 function getUpdater(): ElectronUpdater | null {
   const w = window as unknown as { installer?: { updater?: ElectronUpdater } };
   return w?.installer?.updater ?? null;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtBytes(b: number): string {
   if (b >= 1_073_741_824) return `${(b / 1_073_741_824).toFixed(1)} GB`;
   if (b >= 1_048_576)     return `${(b / 1_048_576).toFixed(1)} MB`;
@@ -69,7 +69,16 @@ function fmtSpeed(bps: number): string {
   return `${bps} B/ث`;
 }
 
-// ─── UpdateDialog ─────────────────────────────────────────────────────────────
+/** تنسيق تاريخ الإصدار: ميلادي yyyy-MM-dd فقط */
+function fmtReleaseDate(publishedAt?: string): string {
+  if (!publishedAt) return "";
+  try {
+    return new Date(publishedAt).toISOString().slice(0, 10);
+  } catch {
+    return publishedAt.slice(0, 10);
+  }
+}
+
 export default function UpdateDialog() {
   const [state, setState]           = useState<DialogState>("idle");
   const [manifest, setManifest]     = useState<PendingManifest | null>(null);
@@ -81,6 +90,9 @@ export default function UpdateDialog() {
   const [dontRemind, setDontRemind] = useState(false);
   const downloadedRef               = useRef(false);
 
+  // مزامنة رؤية النافذة مع update-store
+  const storeState = updateStore.getState();
+
   useEffect(() => {
     const updater = getUpdater();
     if (!updater) return;
@@ -89,7 +101,7 @@ export default function UpdateDialog() {
       if (data.type === "optional") {
         setManifest(data.manifest);
         setCurrentVer(data.currentVersion);
-        setDontRemind(false); // إعادة تعيين الخيار مع كل تحديث جديد
+        setDontRemind(false);
         setState("optional");
         updateStore.setOptional(data.manifest, data.currentVersion);
       } else if (data.type === "mandatory") {
@@ -106,29 +118,77 @@ export default function UpdateDialog() {
 
     const offProgress = updater.onUpdateProgress((_, data) => {
       setProgress(data);
+      updateStore.setDownloading(Math.round(data.percent));
     });
 
     const offDownloaded = updater.onUpdateDownloaded(() => {
       downloadedRef.current = true;
       setLoading(false);
       setState("downloaded");
+      updateStore.setDownloadDone();
     });
 
     const offError = updater.onUpdateError((_, data) => {
+      const wasCancelled = data.message?.includes("download-cancelled") ||
+                           data.message?.includes("cancelled");
+      if (wasCancelled) {
+        // إلغاء طوعي — لا نعرض خطأ
+        setLoading(false);
+        setState(storeState.updateType === "mandatory" ? "mandatory" : "optional");
+        updateStore.setDownloadCancelled();
+        return;
+      }
       setErrMsg(data.message);
       setLoading(false);
       setState(downloadedRef.current ? "downloaded" : "error");
+      updateStore.setError(data.message);
     });
 
-    return () => { offStatus(); offProgress(); offDownloaded(); offError(); };
+    const offCancelled = updater.onUpdateCancelled?.((_, ) => {
+      setLoading(false);
+      setState(storeState.updateType === "mandatory" ? "mandatory" : "optional");
+      updateStore.setDownloadCancelled();
+    });
+
+    return () => {
+      offStatus();
+      offProgress();
+      offDownloaded();
+      offError();
+      offCancelled?.();
+    };
   }, []);
 
-  // نافذة البداية لا تظهر إذا لا يوجد تحديث
-  if (state === "idle") return null;
+  // مزامنة عرض النافذة من store (مثلاً عند الضغط على "عرض" في الـ badge)
+  useEffect(() => {
+    return updateStore.subscribe(() => {
+      const s = updateStore.getState();
+      if (s.dialogVisible && s.downloadReady && state !== "downloaded") {
+        setState("downloaded");
+      }
+    });
+  }, [state]);
+
+  // إخفاء النافذة عند طلب الإخفاء من store
+  useEffect(() => {
+    return updateStore.subscribe(() => {
+      const s = updateStore.getState();
+      if (!s.dialogVisible && state !== "idle" && state !== "downloading") {
+        // لا نُخفي أثناء التحميل إلا إذا انتقل للخلفية
+      }
+    });
+  }, [state]);
+
+  const visible = state !== "idle";
+  if (!visible) return null;
 
   const isMandatory = state === "mandatory";
+  // النافذة حاجبة فقط إذا: تحديث إجباري، أو اختياري قبل بدء التحميل، أو خطأ
+  const isBlocking = isMandatory || state === "optional" || state === "error";
+  // بعد اكتمال التحميل: نافذة خفيفة غير حاجبة
+  const isReadyDialog = state === "downloaded";
 
-  // ─── Handlers ────────────────────────────────────────────────────────────
+  // ─── Handlers ──────────────────────────────────────────────────────────────
   async function handleDownload() {
     const updater = getUpdater();
     if (!updater) return;
@@ -137,10 +197,55 @@ export default function UpdateDialog() {
     setProgress(null);
     const result = await updater.startDownload();
     if (!result.ok) {
-      setErrMsg(result.error ?? "فشل التحميل");
-      setLoading(false);
-      setState("error");
+      const wasCancelled = result.error?.includes("cancelled");
+      if (!wasCancelled) {
+        setErrMsg(result.error ?? "فشل التحميل");
+        setLoading(false);
+        setState("error");
+      }
     }
+  }
+
+  async function handleDownloadBackground() {
+    const updater = getUpdater();
+    if (!updater) return;
+
+    const isCurrentlyDownloading = state === "downloading";
+
+    // أغلق النافذة فقط
+    setState("idle");
+    updateStore.hideDialog();
+
+    if (isCurrentlyDownloading) {
+      // التحميل جارٍ بالفعل — لا داعي لبدء جديد
+      return;
+    }
+
+    // ابدأ التحميل في الخلفية
+    setLoading(false);
+    setProgress(null);
+    downloadedRef.current = false;
+    updateStore.setDownloading(0);
+    const result = await updater.startDownload();
+    if (!result.ok) {
+      const wasCancelled = result.error?.includes("cancelled");
+      if (!wasCancelled) {
+        setErrMsg(result.error ?? "فشل التحميل");
+        setState("error");
+        updateStore.setError(result.error ?? "فشل التحميل");
+        updateStore.showDialog();
+      }
+    }
+  }
+
+  async function handleCancelDownload() {
+    const updater = getUpdater();
+    if (updater?.cancelDownload) {
+      await updater.cancelDownload();
+    }
+    setLoading(false);
+    setState(isMandatory ? "mandatory" : "optional");
+    updateStore.setDownloadCancelled();
   }
 
   async function handleInstall() {
@@ -154,17 +259,14 @@ export default function UpdateDialog() {
     const updater = getUpdater();
     if (updater) {
       if (dontRemind && updater.skipVersion) {
-        // "لا تذكرني بهذا الإصدار مرة أخرى" — تخطي دائم لهذا الإصدار
         await updater.skipVersion();
       } else {
-        // "لاحقاً" — يغلق النافذة فقط، تظهر مجدداً عند التشغيل القادم
         await updater.skipUpdate();
       }
     }
-    // يُخفي النافذة لكن يبقي الـ manifest في updateStore
-    // حتى تتمكن شاشة الإعدادات من إظهاره
-    updateStore.setOptional(manifest!, currentVer); // يبقى في الـ store
-    setDontRemind(false); // إعادة التعيين حتى لا يلتصق الخيار بنوافذ قادمة
+    updateStore.setOptional(manifest!, currentVer);
+    updateStore.hideDialog();
+    setDontRemind(false);
     setState("idle");
   }
 
@@ -175,11 +277,15 @@ export default function UpdateDialog() {
     await handleDownload();
   }
 
-  // ─── Overlay ──────────────────────────────────────────────────────────────
+  // ─── Overlay (حاجب أو شفاف) ────────────────────────────────────────────────
+  const overlayStyle = isBlocking
+    ? { backgroundColor: "rgba(27,43,92,0.55)", backdropFilter: "blur(6px)", pointerEvents: "all" as const }
+    : { backgroundColor: "rgba(0,0,0,0.15)", backdropFilter: "blur(2px)", pointerEvents: "all" as const };
+
   return (
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center"
-      style={{ backgroundColor: "rgba(27,43,92,0.55)", backdropFilter: "blur(6px)", pointerEvents: "all" }}
+      style={overlayStyle}
       dir="rtl"
     >
       <div
@@ -205,7 +311,7 @@ export default function UpdateDialog() {
              : state === "error"       ? <AlertTriangle size={22} style={{ color: "#dc2626" }} />
              : <RefreshCw size={22} style={{ color: "#1B2B5C" }} />}
           </div>
-          <div>
+          <div className="flex-1">
             <h2 className="font-extrabold text-lg leading-tight" style={{ color: "#1B2B5C" }}>
               {state === "downloaded"   ? "التحديث جاهز للتثبيت"
                : state === "downloading" ? "جاري تحميل التحديث..."
@@ -217,10 +323,20 @@ export default function UpdateDialog() {
               <p className="text-xs mt-0.5" style={{ color: "#6b7280" }}>
                 {manifest.messageAr || (isMandatory
                   ? "هذا التحديث إجباري ويحتوي على تعديلات مهمة."
-                  : "يوجد تحديث جديد — يمكنك التحديث الآن أو لاحقاً من الإعدادات.")}
+                  : "يوجد تحديث جديد — يمكنك التحديث الآن أو لاحقاً.")}
               </p>
             )}
           </div>
+          {/* زر إغلاق للنافذة الخفيفة فقط (حالة downloaded) */}
+          {isReadyDialog && (
+            <button
+              onClick={handleSkip}
+              className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors"
+              title="لاحقاً"
+            >
+              <X size={16} style={{ color: "#9ca3af" }} />
+            </button>
+          )}
         </div>
 
         {/* Body */}
@@ -251,7 +367,7 @@ export default function UpdateDialog() {
             <div className="flex items-center gap-2 p-3 rounded-xl" style={{ backgroundColor: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.25)" }}>
               <CheckCircle2 size={18} style={{ color: "#22c55e" }} />
               <p className="text-sm font-semibold" style={{ color: "#15803d" }}>
-                اكتمل التحميل — سيتم إعادة تشغيل البرنامج لتطبيق التحديث
+                اكتمل التحميل — سيُعاد تشغيل البرنامج لتطبيق التحديث
               </p>
             </div>
           )}
@@ -284,13 +400,13 @@ export default function UpdateDialog() {
 
           {manifest?.publishedAt && (
             <p className="text-xs" style={{ color: "#9ca3af" }}>
-              تاريخ الإصدار: {new Date(manifest.publishedAt).toLocaleDateString("ar-SA")}
+              تاريخ الإصدار: <strong>{fmtReleaseDate(manifest.publishedAt)}</strong>
             </p>
           )}
         </div>
 
-        {/* خيار "لا تذكرني بهذا الإصدار" — للتحديث الاختياري فقط */}
-        {!isMandatory && (state === "optional") && (
+        {/* خيار "لا تذكرني بهذا الإصدار" */}
+        {!isMandatory && state === "optional" && (
           <label className="flex items-center gap-2 px-6 pb-2 cursor-pointer select-none">
             <input
               type="checkbox"
@@ -305,39 +421,116 @@ export default function UpdateDialog() {
         )}
 
         {/* Footer */}
-        <div className="flex items-center gap-3 px-6 pb-5 pt-2" style={{ borderTop: "1px solid rgba(201,168,76,0.15)" }}>
-          {state === "downloaded" ? (
-            <button onClick={handleInstall} disabled={loading} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm" style={{ backgroundColor: "#1B2B5C", color: "#fff", opacity: loading ? 0.7 : 1 }}>
-              <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
-              إعادة التشغيل والتحديث
-            </button>
-          ) : state === "error" ? (
-            <button onClick={handleRetry} disabled={loading} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm" style={{ backgroundColor: "#1B2B5C", color: "#fff" }}>
-              <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
-              إعادة المحاولة
-            </button>
-          ) : state === "downloading" ? (
-            <div className="flex-1 py-2.5 rounded-xl text-center text-sm font-semibold" style={{ backgroundColor: "rgba(27,43,92,0.08)", color: "#1B2B5C" }}>
-              <span className="flex items-center justify-center gap-2">
-                <Zap size={14} className="animate-pulse" />
-                {progress ? `${Math.round(progress.percent)}% — ${fmtSpeed(progress.bytesPerSecond)}` : "جاري التحميل..."}
-              </span>
-            </div>
-          ) : (
-            <button onClick={handleDownload} disabled={loading} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm" style={{ backgroundColor: "#1B2B5C", color: "#fff", opacity: loading ? 0.7 : 1 }}>
-              <Download size={15} />
-              تحديث الآن
-            </button>
+        <div className="flex items-center gap-2 px-6 pb-5 pt-2 flex-wrap" style={{ borderTop: "1px solid rgba(201,168,76,0.15)" }}>
+
+          {/* ── حالة: التحميل اكتمل ──────────────────────────────────────── */}
+          {state === "downloaded" && (
+            <>
+              <button
+                onClick={handleInstall}
+                disabled={loading}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm"
+                style={{ backgroundColor: "#1B2B5C", color: "#fff", opacity: loading ? 0.7 : 1 }}
+              >
+                <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
+                إعادة التشغيل والتثبيت
+              </button>
+              <button
+                onClick={handleSkip}
+                className="px-4 py-2.5 rounded-xl font-semibold text-sm"
+                style={{ backgroundColor: "rgba(107,114,128,0.1)", color: "#4b5563" }}
+              >
+                <span className="flex items-center gap-1.5">
+                  <Clock size={14} />
+                  لاحقاً
+                </span>
+              </button>
+            </>
           )}
 
-          {/* زر لاحقاً — اختياري فقط */}
-          {!isMandatory && state !== "downloading" && state !== "downloaded" && (
-            <button onClick={handleSkip} className="px-5 py-2.5 rounded-xl font-semibold text-sm" style={{ backgroundColor: "rgba(107,114,128,0.1)", color: "#4b5563" }}>
-              <span className="flex items-center gap-1.5">
-                <Clock size={14} />
-                لاحقاً
-              </span>
-            </button>
+          {/* ── حالة: خطأ ────────────────────────────────────────────────── */}
+          {state === "error" && (
+            <>
+              <button
+                onClick={handleRetry}
+                disabled={loading}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm"
+                style={{ backgroundColor: "#1B2B5C", color: "#fff" }}
+              >
+                <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
+                إعادة المحاولة
+              </button>
+              {!isMandatory && (
+                <button
+                  onClick={handleSkip}
+                  className="px-4 py-2.5 rounded-xl font-semibold text-sm"
+                  style={{ backgroundColor: "rgba(107,114,128,0.1)", color: "#4b5563" }}
+                >
+                  لاحقاً
+                </button>
+              )}
+            </>
+          )}
+
+          {/* ── حالة: جارٍ التحميل ───────────────────────────────────────── */}
+          {state === "downloading" && (
+            <>
+              <button
+                onClick={handleDownloadBackground}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm"
+                style={{ backgroundColor: "rgba(27,43,92,0.08)", color: "#1B2B5C", border: "1px solid rgba(27,43,92,0.2)" }}
+              >
+                <ArrowDownToLine size={15} />
+                تحميل في الخلفية
+              </button>
+              <button
+                onClick={handleCancelDownload}
+                className="px-4 py-2.5 rounded-xl font-semibold text-sm"
+                style={{ backgroundColor: "rgba(239,68,68,0.08)", color: "#dc2626", border: "1px solid rgba(239,68,68,0.2)" }}
+              >
+                <span className="flex items-center gap-1.5">
+                  <X size={14} />
+                  إلغاء
+                </span>
+              </button>
+            </>
+          )}
+
+          {/* ── حالة: تحديث متاح (اختياري أو إجباري) ────────────────────── */}
+          {(state === "optional" || state === "mandatory") && (
+            <>
+              <button
+                onClick={handleDownload}
+                disabled={loading}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm"
+                style={{ backgroundColor: "#1B2B5C", color: "#fff", opacity: loading ? 0.7 : 1 }}
+              >
+                <Download size={15} />
+                تحديث الآن
+              </button>
+              <button
+                onClick={handleDownloadBackground}
+                disabled={loading}
+                className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl font-semibold text-sm"
+                style={{ backgroundColor: "rgba(27,43,92,0.06)", color: "#1B2B5C", border: "1px solid rgba(27,43,92,0.15)" }}
+                title="تحميل في الخلفية ومتابعة العمل"
+              >
+                <ArrowDownToLine size={14} />
+                <span className="hidden sm:inline">في الخلفية</span>
+              </button>
+              {!isMandatory && (
+                <button
+                  onClick={handleSkip}
+                  className="px-4 py-2.5 rounded-xl font-semibold text-sm"
+                  style={{ backgroundColor: "rgba(107,114,128,0.1)", color: "#4b5563" }}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Clock size={14} />
+                    لاحقاً
+                  </span>
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -345,7 +538,6 @@ export default function UpdateDialog() {
   );
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
 function VersionBadge({ label, version, dim, highlight }: { label: string; version: string; dim?: boolean; highlight?: boolean }) {
   return (
     <div className="flex-1 rounded-xl p-3 text-center" style={{ backgroundColor: highlight ? "rgba(27,43,92,0.06)" : "rgba(107,114,128,0.06)", border: `1px solid ${highlight ? "rgba(27,43,92,0.2)" : "rgba(107,114,128,0.15)"}` }}>
@@ -367,7 +559,10 @@ function ProgressSection({ progress }: { progress: { percent: number; transferre
         <div className="h-full rounded-full transition-all duration-300" style={{ width: `${pct}%`, background: "linear-gradient(90deg, #1B2B5C, #C9A84C)" }} />
       </div>
       {progress && progress.bytesPerSecond > 0 && (
-        <p className="text-xs text-center" style={{ color: "#6b7280" }}>سرعة التحميل: <strong>{fmtSpeed(progress.bytesPerSecond)}</strong></p>
+        <p className="text-xs text-center flex items-center justify-center gap-1.5" style={{ color: "#6b7280" }}>
+          <Zap size={11} className="text-amber-500" />
+          سرعة التحميل: <strong>{fmtSpeed(progress.bytesPerSecond)}</strong>
+        </p>
       )}
     </div>
   );
