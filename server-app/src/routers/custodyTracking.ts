@@ -324,30 +324,50 @@ export const custodyTrackingRouter = router({
       return { status, emailEnabled: !!(apiKey && cfg?.emailEnabled), errorMsg };
     }),
 
-  // ── التوافق مع الكود القديم ───────────────────────────────────────────────
+  // ── إجراءات مُهملة — استخدم listRecords / saveEntries / deleteRecord بدلاً منها ──
+  // هذه الإجراءات مُقفلة بعد إعادة هيكلة شاشة متابعة العهد إلى نموذج ذي مستويين.
+  // تُبقى هنا لمنع كسر أي استدعاء قديم مع إعطاء رسالة خطأ واضحة.
   listEntries: protectedProcedure
     .input(z.object({ search: z.string().optional() }).optional())
-    .query(async ({ ctx }) => {
-      assertCustodyPerm(ctx.user);
-      return [];
+    .query(async () => {
+      throw new TRPCError({
+        code: 'METHOD_NOT_SUPPORTED',
+        message: 'listEntries مهمل — استخدم listRecords بدلاً منه',
+      });
     }),
 
   saveEntry: protectedProcedure
     .input(z.object({ id: z.number().optional() }).passthrough())
-    .mutation(async () => { return null; }),
+    .mutation(async () => {
+      throw new TRPCError({
+        code: 'METHOD_NOT_SUPPORTED',
+        message: 'saveEntry مهمل — استخدم createRecord + saveEntries بدلاً منه',
+      });
+    }),
 
   saveBatch: protectedProcedure
     .input(z.array(z.any()))
-    .mutation(async () => { return { saved: 0 }; }),
+    .mutation(async () => {
+      throw new TRPCError({
+        code: 'METHOD_NOT_SUPPORTED',
+        message: 'saveBatch مهمل — استخدم saveEntries بدلاً منه',
+      });
+    }),
 
   deleteEntry: protectedProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.number(), custodyId: z.number() }))
     .mutation(async ({ ctx, input }) => {
       assertCustodyPerm(ctx.user);
-      const [existing] = await db.select({ id: hsCustodyEntries.id, orgId: hsCustodyEntries.orgId })
-        .from(hsCustodyEntries).where(eq(hsCustodyEntries.id, input.id));
+      // التحقق من أن الحركة تنتمي لسجل عهدة تابع لهذه المنظمة
+      const [existing] = await db.select({
+        id:        hsCustodyEntries.id,
+        orgId:     hsCustodyEntries.orgId,
+        custodyId: hsCustodyEntries.custodyId,
+      })
+        .from(hsCustodyEntries)
+        .where(and(eq(hsCustodyEntries.id, input.id), eq(hsCustodyEntries.custodyId, input.custodyId)));
       if (!existing || existing.orgId !== ctx.user.orgId)
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'الإدخال غير موجود' });
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'الحركة غير موجودة أو لا تنتمي لهذه العهدة' });
       await db.delete(hsCustodyEntries).where(eq(hsCustodyEntries.id, input.id));
       return { deleted: true };
     }),

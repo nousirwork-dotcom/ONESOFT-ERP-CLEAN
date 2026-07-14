@@ -154,8 +154,9 @@ export default function CustodyTrackingPage() {
                 <th className="border border-gray-300 bg-[#1B2B5C] text-white px-3 py-2 text-left whitespace-nowrap">الفرق</th>
                 <th className="border border-gray-300 bg-[#1B2B5C] text-white px-3 py-2 text-center whitespace-nowrap">الحركات</th>
                 <th className="border border-gray-300 bg-[#1B2B5C] text-white px-3 py-2 text-center whitespace-nowrap">الإرسال</th>
+                <th className="border border-gray-300 bg-[#1B2B5C] text-white px-3 py-2 whitespace-nowrap">تاريخ الإنشاء</th>
                 <th className="border border-gray-300 bg-[#1B2B5C] text-white px-3 py-2 whitespace-nowrap">آخر تحديث</th>
-                <th className="border border-gray-300 bg-[#1B2B5C] text-white px-3 py-2 text-center w-28 whitespace-nowrap">إجراءات</th>
+                <th className="border border-gray-300 bg-[#1B2B5C] text-white px-3 py-2 text-center w-32 whitespace-nowrap">إجراءات</th>
               </tr>
             </thead>
             <tbody>
@@ -185,16 +186,20 @@ export default function CustodyTrackingPage() {
                         : <span className="text-muted-foreground text-[11px]">يدوي</span>}
                     </td>
                     <td className="border border-gray-200 px-3 py-2 text-muted-foreground text-[11px] font-mono">
+                      {r.created_at ? new Date(r.created_at).toISOString().slice(0, 10) : "—"}
+                    </td>
+                    <td className="border border-gray-200 px-3 py-2 text-muted-foreground text-[11px] font-mono">
                       {r.updated_at ? new Date(r.updated_at).toISOString().slice(0, 10) : "—"}
                     </td>
                     <td className="border border-gray-200 px-3 py-2">
                       <div className="flex items-center justify-center gap-1">
                         <button
-                          className="p-1.5 rounded hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-600 transition-colors"
-                          title="فتح العهدة"
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800 transition-colors"
+                          title="تعديل / عرض العهدة"
                           onClick={() => handleOpen(r.id, r.custody_name)}
                         >
-                          <ExternalLink className="w-3.5 h-3.5" />
+                          <ExternalLink className="w-3 h-3" />
+                          تعديل
                         </button>
                         {r.email && (
                           <button
