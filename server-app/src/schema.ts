@@ -1582,6 +1582,40 @@ export const hsCustodyEntries = pgTable('hs_custody_entries', {
   updatedAt:        timestamp('updated_at').notNull().defaultNow(),
 });
 
+// ─── 0024: الروابط والخدمات ───────────────────────────────────────────────────
+export const hsLinkSections = pgTable('hs_link_sections', {
+  id:         serial('id').primaryKey(),
+  orgId:      integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  name:       varchar('name', { length: 200 }).notNull(),
+  icon:       varchar('icon', { length: 50 }),
+  color:      varchar('color', { length: 20 }),
+  sortOrder:  integer('sort_order').notNull().default(0),
+  createdBy:  integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt:  timestamp('created_at').notNull().defaultNow(),
+  updatedAt:  timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const hsLinks = pgTable('hs_links', {
+  id:          serial('id').primaryKey(),
+  orgId:       integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  sectionId:   integer('section_id').references(() => hsLinkSections.id, { onDelete: 'set null' }),
+  name:        varchar('name', { length: 200 }).notNull(),
+  url:         text('url').notNull(),
+  description: text('description'),
+  icon:        varchar('icon', { length: 50 }),
+  cardColor:   varchar('card_color', { length: 20 }),
+  openMode:    varchar('open_mode',    { length: 20 }).notNull().default('external'),
+  browserType: varchar('browser_type', { length: 20 }).notNull().default('default'),
+  browserPath: text('browser_path'),
+  isActive:    boolean('is_active').notNull().default(true),
+  isFavorite:  boolean('is_favorite').notNull().default(false),
+  isPinned:    boolean('is_pinned').notNull().default(false),
+  sortOrder:   integer('sort_order').notNull().default(0),
+  createdBy:   integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt:   timestamp('created_at').notNull().defaultNow(),
+  updatedAt:   timestamp('updated_at').notNull().defaultNow(),
+});
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type Organization = typeof organizations.$inferSelect;
 export type User = typeof users.$inferSelect;

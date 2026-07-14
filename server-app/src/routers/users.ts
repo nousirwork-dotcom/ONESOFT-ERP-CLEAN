@@ -259,6 +259,7 @@ export const usersRouter = router({
           'help_services',
           'hs_rentals', 'hs_custody', 'hs_customers', 'hs_tasks',
           'hs_gov_links', 'hs_notes', 'hs_internal_comm',
+          'hs_links_add', 'hs_links_edit', 'hs_links_delete', 'hs_links_manage_sections',
           // المساعد الذكي
           'ai_use',
           'ai_ask_customers', 'ai_ask_rentals', 'ai_ask_custody',

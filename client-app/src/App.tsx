@@ -85,8 +85,9 @@ import LoginPage from "@/core/auth/LoginPage";
 import BrandingSettingsPage from "@/modules/settings/pages/BrandingSettingsPage";
 import {
   HsRentalsPage, HsCustodyPage, HsCustomersPage, HsTasksPage,
-  HsGovLinksPage, HsNotesPage, HsInternalCommPage,
+  HsNotesPage, HsInternalCommPage,
 } from "@/modules/helpservices/pages/HsPages";
+import LinksServicesPage from "@/modules/helpservices/pages/LinksServicesPage";
 import AIAssistantPage from "@/modules/helpservices/pages/AIAssistantPage";
 import SupportRequestPage from "@/modules/helpservices/pages/SupportRequestPage";
 import CustodyTrackingPage from "@/modules/helpservices/pages/CustodyTrackingPage";
@@ -135,7 +136,7 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/hs/custody-tracking": CustodyTrackingPage,
   "/hs/customers":     HsCustomersPage,
   "/hs/tasks":         HsTasksPage,
-  "/hs/gov-links":     HsGovLinksPage,
+  "/hs/gov-links":     LinksServicesPage,
   "/hs/notes":         HsNotesPage,
   "/hs/internal-comm": HsInternalCommPage,
   "/hs/ai-assistant":  AIAssistantPage,
