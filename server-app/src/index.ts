@@ -59,8 +59,8 @@ app.post('/api/auth/auto-login', async (req, res) => {
   const isLocalhost = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '');
   const isElectron  = ENV.isElectron;
 
-  // في الإنتاج: يجب أن يكون الطلب من localhost + Electron
-  // في التطوير: مسموح من أي مكان (Replit proxy)
+  // في الإنتاج: auto-login يجب أن يكون الطلب من localhost + Electron
+  // في التطوير (Replit preview): نرخّص الـ Electron فقط في production.
   if (ENV.nodeEnv === 'production' && (!isElectron || !isLocalhost)) {
     return res.status(403).json({ error: 'auto-login متاح فقط لتطبيق Electron من localhost' });
   }

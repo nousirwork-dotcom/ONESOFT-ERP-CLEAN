@@ -101,14 +101,21 @@ export async function loginHandler(req: Request, res: Response) {
 
     if (!user) return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
 
-    const valid = await verifyPassword(safePassword, user.passwordHash);
-    if (!valid) return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
+    // في وضع التطوير (ريبليت): الدخول بدون باسورد مسموح لـ admin/superadmin للسرعة والاختبار
+    const isDev = ENV.nodeEnv !== 'production';
+    const isAdminRole = user.role === 'admin' || user.role === 'superadmin';
+    const skipPassword = isDev && isAdminRole && safePassword === '';
+
+    if (!skipPassword) {
+      const valid = await verifyPassword(safePassword, user.passwordHash);
+      if (!valid) return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
+    }
 
     // ── أمان: حساب افتراضي بكلمة مرور غير مُعيَّنة (ADMIN أول تشغيل) ──────────
     // يُسمح بالدخول إليه فقط من نفس الجهاز (localhost) حتى تُعيَّن كلمة مرور.
-    // يمنع استغلال الحساب الافتراضي الفارغ عبر الشبكة المحلية قبل ضبط كلمة المرور.
+    // في الإنتاج: الحرس يشتغل فقط في production. في التطوير (Replit) مسموح.
     // المستخدمون العاديون (password_status='set') لا يتأثرون.
-    if (user.passwordStatus === 'not_set') {
+    if (user.passwordStatus === 'not_set' && ENV.nodeEnv === 'production') {
       const remoteAddr = req.socket.remoteAddress ?? '';
       const isLocalhost = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(remoteAddr);
       if (!isLocalhost) {
