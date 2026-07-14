@@ -92,6 +92,8 @@ import AIAssistantPage from "@/modules/helpservices/pages/AIAssistantPage";
 import SupportRequestPage from "@/modules/helpservices/pages/SupportRequestPage";
 import CustodyTrackingPage from "@/modules/helpservices/pages/CustodyTrackingPage";
 import CustodyRecordPage from "@/modules/helpservices/pages/CustodyRecordPage";
+import RealEstatePage from "@/modules/helpservices/pages/RealEstatePage";
+import { RePurchasesPage, ReDocumentsPage, ReTrialBalancePage } from "@/modules/helpservices/pages/ReSubPages";
 import { TabPathContext } from "@/core/contexts/TabPathContext";
 import LicenseActivationPage from "@/modules/license/pages/LicenseActivationPage";
 import SuperAdminPage from "@/core/admin/SuperAdminPage";
@@ -141,6 +143,11 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/hs/internal-comm": HsInternalCommPage,
   "/hs/ai-assistant":  AIAssistantPage,
   "/hs/support":       SupportRequestPage,
+  // المطور العقاري
+  "/hs/real-estate":   RealEstatePage,
+  "/hs/re-purchases":  RePurchasesPage,
+  "/hs/re-documents":  ReDocumentsPage,
+  "/hs/re-trial-balance": ReTrialBalancePage,
   "/purchases/suppliers":         PurchaseSuppliersPage,
   "/purchases/supplier-groups":  PurchaseSupplierGroupsPage,
   "/purchases/orders":           PurchaseOrdersPage,

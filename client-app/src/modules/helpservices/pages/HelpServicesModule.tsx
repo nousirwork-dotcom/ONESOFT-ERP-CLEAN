@@ -1,6 +1,6 @@
 import {
   LifeBuoy, FileSignature, Wallet, UserSearch, ListTodo, Landmark,
-  StickyNote, MessagesSquare, Sparkles, Headphones,
+  StickyNote, MessagesSquare, Sparkles, Headphones, Building2,
 } from "lucide-react";
 import { Card, CardContent } from "@/core/ui/card";
 import { useLang } from "@/core/contexts/LanguageContext";
@@ -27,6 +27,7 @@ export const menuSections = [
       { id: "hs-internal-comm", label: "التواصل الداخلي",             icon: MessagesSquare, path: "/hs/internal-comm" },
       { id: "hs-ai-assistant",  label: "المساعد الذكي",               icon: Sparkles,       path: "/hs/ai-assistant" },
       { id: "hs-support",       label: "طلب الدعم الفني",             icon: Headphones,     path: "/hs/support" },
+      { id: "hs-real-estate",  label: "المطور العقاري",              icon: Building2,     path: "/hs/real-estate" },
     ] as Array<{ id: string; label: string; icon: React.ElementType; path?: string }>,
   },
 ];
@@ -152,6 +153,18 @@ export const HS_CARDS: HsCard[] = [
     descEn: "Submit support requests, follow up on replies, and rate the service.",
     color: "text-cyan-600 dark:text-cyan-400",
     bg: "bg-cyan-500/10",
+  },
+  {
+    id: "real-estate",
+    perm: "hs_real_estate",
+    path: "/hs/real-estate",
+    icon: Building2,
+    labelAr: "المطور العقاري",
+    labelEn: "Real Estate Developer",
+    descAr: "إدارة مشاريع التطوير العقاري: المشتريات، المستندات، والمراجعة المبسطة.",
+    descEn: "Manage real estate development projects: purchases, documents, and simplified review.",
+    color: "text-teal-600 dark:text-teal-400",
+    bg: "bg-teal-500/10",
   },
 ];
 

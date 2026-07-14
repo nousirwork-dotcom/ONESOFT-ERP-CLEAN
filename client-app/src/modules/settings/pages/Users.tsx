@@ -26,6 +26,10 @@ const HS_PERM_DEFS: Array<{ key: string; label: string; isModule?: boolean }> = 
   { key: "hs_notes",         label: "الملاحظات" },
   { key: "hs_internal_comm", label: "التواصل الداخلي" },
   { key: "hs_support",       label: "طلب الدعم الفني" },
+  { key: "hs_real_estate",   label: "المطور العقاري" },
+  { key: "hs_re_purchases",  label: "المطور العقاري — البيان التفصيلي للمشتريات" },
+  { key: "hs_re_documents",  label: "المطور العقاري — أوراق المشروع" },
+  { key: "hs_re_trial_balance", label: "المطور العقاري — ميزان المراجعة المبسط" },
 ];
 
 const roleLabels: Record<string, string> = {
