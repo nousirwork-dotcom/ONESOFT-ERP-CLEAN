@@ -3,7 +3,7 @@ import { and, eq, desc, asc, sql, ilike, or, gte, lte } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { rePurchases, users, organizations } from '../schema.js';
+import { rePurchases, rePurchaseStatements, users, organizations } from '../schema.js';
 
 // ─── التحقق من الصلاحيات ─────────────────────────────────────────────────────────
 
@@ -98,9 +98,9 @@ function recalcFromTax(tax: number, taxRate: number) {
   return { preTax, tax, total };
 }
 
-// ─── Schemas ───────────────────────────────────────────────────────────────────────────────────
+// ─── Schemas ────────────────────────────────────────────────────────────────────
 
-const purchaseInputSchema = z.object({
+const invoiceInputSchema = z.object({
   supplierName:  z.string().min(1).max(255),
   supplierTaxId: z.string().max(50).nullable().optional(),
   invoiceDate:   z.string().min(1),
@@ -113,7 +113,15 @@ const purchaseInputSchema = z.object({
   attachmentUrl: z.string().nullable().optional(),
 });
 
-// ─── Duplicate detection ──────────────────────────────────────────────────────────────────────────────
+const statementInputSchema = z.object({
+  name:     z.string().min(1).max(255),
+  project:  z.string().max(255).nullable().optional(),
+  dateFrom: z.string().min(1),
+  dateTo:   z.string().min(1),
+  notes:    z.string().nullable().optional(),
+});
+
+// ─── Duplicate detection ──────────────────────────────────────────────────────────
 
 async function findDuplicate(supplierTaxId: string | null | undefined, invoiceNumber: string, excludeId?: number) {
   if (!supplierTaxId || !invoiceNumber) return null;
@@ -124,37 +132,263 @@ async function findDuplicate(supplierTaxId: string | null | undefined, invoiceNu
   if (excludeId !== undefined) {
     conditions.push(sql`${rePurchases.id} <> ${excludeId}`);
   }
-  const rows = await db.select()
+  const rows = await db.select({
+    id: rePurchases.id,
+    statementId: rePurchases.statementId,
+    supplierName: rePurchases.supplierName,
+    invoiceDate: rePurchases.invoiceDate,
+    totalValue: rePurchases.totalValue,
+  })
     .from(rePurchases)
     .where(and(...conditions))
     .limit(1);
   return rows[0] ?? null;
 }
 
-// ─── Router ───────────────────────────────────────────────────────────────────────────────────────────
+// ─── Router ───────────────────────────────────────────────────────────────────────
 
 export const rePurchasesRouter = router({
 
-  // ─── قائمة فواتير المشتريات (مع الإجماليات) ──────────────────────────────
-  list: protectedProcedure
+  // ════════════════════════════════════════════════════════════════════════════
+  //  STATEMENTS
+  // ════════════════════════════════════════════════════════════════════════════
+
+  // ─── قائمة البيانات (مع الإجماليات) ─────────────────────────────────────────
+  listStatements: protectedProcedure
     .input(z.object({
-      search:        z.string().optional(),
-      supplierName:  z.string().optional(),
-      supplierTaxId: z.string().optional(),
-      dateFrom:      z.string().optional(),
-      dateTo:        z.string().optional(),
-      sortBy:        z.enum(['supplierName', 'supplierTaxId', 'invoiceDate', 'id']).optional(),
-      sortDir:       z.enum(['asc', 'desc']).optional(),
-      page:          z.number().default(1),
-      limit:         z.number().default(200),
+      search:   z.string().optional(),
+      project:  z.string().optional(),
+      dateFrom: z.string().optional(),
+      dateTo:   z.string().optional(),
+      sortBy:   z.enum(['name', 'project', 'dateFrom', 'id']).optional(),
+      sortDir:  z.enum(['asc', 'desc']).optional(),
+      page:     z.number().default(1),
+      limit:    z.number().default(200),
     }).optional())
     .query(async ({ ctx, input }) => {
       assertViewPerm(ctx.user);
-
       const orgId = ctx.user.orgId;
+
+      const rows = await db.execute(sql`
+        SELECT
+          s.id,
+          s.name,
+          s.project,
+          s.date_from,
+          s.date_to,
+          s.notes,
+          s.created_at,
+          s.updated_at,
+          u1.name AS created_by_name,
+          COALESCE(COUNT(p.id), 0)   AS invoice_count,
+          COALESCE(SUM(p.pre_tax_value), 0) AS pre_tax_total,
+          COALESCE(SUM(p.tax_amount), 0)    AS tax_total,
+          COALESCE(SUM(p.total_value), 0)   AS grand_total
+        FROM re_purchase_statements s
+        LEFT JOIN re_purchases p ON p.statement_id = s.id
+        LEFT JOIN users u1 ON u1.id = s.created_by
+        WHERE s.org_id = ${orgId}
+        GROUP BY s.id, s.name, s.project, s.date_from, s.date_to, s.notes, s.created_at, s.updated_at, u1.name
+        ORDER BY s.created_at DESC, s.id DESC
+      `);
+
+      let data = rows.rows as Array<Record<string, any>>;
+
+      const q = input?.search?.trim();
+      if (q) {
+        const ql = q.toLowerCase();
+        data = data.filter((r) =>
+          (r.name ?? '').toLowerCase().includes(ql) ||
+          (r.project ?? '').toLowerCase().includes(ql)
+        );
+      }
+
+      if (input?.project) {
+        const f = input.project.toLowerCase();
+        data = data.filter(r => (r.project ?? '').toLowerCase().includes(f));
+      }
+
+      if (input?.dateFrom) {
+        const from = new Date(input.dateFrom); from.setHours(0,0,0,0);
+        data = data.filter(r => new Date(r.date_from) >= from);
+      }
+      if (input?.dateTo) {
+        const to = new Date(input.dateTo); to.setHours(23,59,59,999);
+        data = data.filter(r => new Date(r.date_to) <= to);
+      }
+
+      const sortBy = input?.sortBy ?? 'created_at';
+      const sortDir = input?.sortDir ?? 'desc';
+      const dir = sortDir === 'asc' ? 1 : -1;
+      data.sort((a, b) => {
+        const va = a[sortBy] ?? '';
+        const vb = b[sortBy] ?? '';
+        if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
+        return String(va).localeCompare(String(vb), 'ar') * dir;
+      });
+
+      const totals = {
+        preTax: data.reduce((s, r) => s + Number(r.pre_tax_total ?? 0), 0),
+        tax:    data.reduce((s, r) => s + Number(r.tax_total    ?? 0), 0),
+        total:  data.reduce((s, r) => s + Number(r.grand_total  ?? 0), 0),
+        count:  data.length,
+      };
+
+      const limit = input?.limit || 200;
+      const page  = input?.page  || 1;
+      const paginated = data.slice((page - 1) * limit, page * limit);
+
+      return { rows: paginated, totals };
+    }),
+
+  // ─── جلب بيان واحد ──────────────────────────────────────────────────────────
+  getStatement: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ ctx, input }) => {
+      assertViewPerm(ctx.user);
+      const [row] = await db.select()
+        .from(rePurchaseStatements)
+        .where(and(
+          eq(rePurchaseStatements.id, input.id),
+          eq(rePurchaseStatements.orgId, ctx.user.orgId)
+        ));
+      if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: 'البيان غير موجود' });
+      return row;
+    }),
+
+  // ─── إنشاء بيان جديد ───────────────────────────────────────────────────────
+  createStatement: protectedProcedure
+    .input(z.object({ data: statementInputSchema }))
+    .mutation(async ({ ctx, input }) => {
+      assertAddPerm(ctx.user);
+      const [row] = await db.insert(rePurchaseStatements).values({
+        orgId:     ctx.user.orgId,
+        name:      input.data.name,
+        project:   input.data.project ?? null,
+        dateFrom:  new Date(input.data.dateFrom),
+        dateTo:    new Date(input.data.dateTo),
+        notes:     input.data.notes ?? null,
+        createdBy: ctx.user.id,
+        updatedBy: ctx.user.id,
+      }).returning();
+      return row;
+    }),
+
+  // ─── تعديل بيان ────────────────────────────────────────────────────────────
+  updateStatement: protectedProcedure
+    .input(z.object({ id: z.number(), data: statementInputSchema.partial() }))
+    .mutation(async ({ ctx, input }) => {
+      assertEditPerm(ctx.user);
+      const [existing] = await db.select()
+        .from(rePurchaseStatements)
+        .where(and(
+          eq(rePurchaseStatements.id, input.id),
+          eq(rePurchaseStatements.orgId, ctx.user.orgId)
+        ));
+      if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'البيان غير موجود' });
+
+      const updateData: Record<string, any> = { updatedBy: ctx.user.id, updatedAt: new Date() };
+      if (input.data.name !== undefined) updateData.name = input.data.name;
+      if (input.data.project !== undefined) updateData.project = input.data.project ?? null;
+      if (input.data.dateFrom !== undefined) updateData.dateFrom = new Date(input.data.dateFrom);
+      if (input.data.dateTo !== undefined) updateData.dateTo = new Date(input.data.dateTo);
+      if (input.data.notes !== undefined) updateData.notes = input.data.notes ?? null;
+
+      const [row] = await db.update(rePurchaseStatements)
+        .set(updateData)
+        .where(eq(rePurchaseStatements.id, input.id))
+        .returning();
+      return row;
+    }),
+
+  // ─── حذف بيان ──────────────────────────────────────────────────────────────
+  deleteStatement: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      assertDeletePerm(ctx.user);
+      const [existing] = await db.select()
+        .from(rePurchaseStatements)
+        .where(and(
+          eq(rePurchaseStatements.id, input.id),
+          eq(rePurchaseStatements.orgId, ctx.user.orgId)
+        ));
+      if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'البيان غير موجود' });
+      await db.delete(rePurchaseStatements).where(eq(rePurchaseStatements.id, input.id));
+      return { success: true };
+    }),
+
+  // ─── نسخ بيان (مع جميع فواتيره) ─────────────────────────────────────────────
+  copyStatement: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      assertAddPerm(ctx.user);
+      const orgId = ctx.user.orgId;
+      const [src] = await db.select().from(rePurchaseStatements).where(
+        and(eq(rePurchaseStatements.id, input.id), eq(rePurchaseStatements.orgId, orgId))
+      );
+      if (!src) throw new TRPCError({ code: 'NOT_FOUND', message: 'البيان غير موجود' });
+
+      // Create copy
+      const [newStmt] = await db.insert(rePurchaseStatements).values({
+        orgId, name: `${src.name} (نسخ)`,
+        project: src.project, dateFrom: src.dateFrom, dateTo: src.dateTo,
+        notes: src.notes, createdBy: ctx.user.id, updatedBy: ctx.user.id,
+      }).returning();
+
+      // Copy invoices
+      const invoices = await db.select().from(rePurchases).where(
+        and(eq(rePurchases.statementId, src.id), eq(rePurchases.orgId, orgId))
+      );
+      for (const inv of invoices) {
+        await db.insert(rePurchases).values({
+          orgId, statementId: newStmt.id,
+          supplierName: inv.supplierName, supplierTaxId: inv.supplierTaxId,
+          invoiceDate: inv.invoiceDate, invoiceNumber: inv.invoiceNumber,
+          preTaxValue: inv.preTaxValue, taxRate: inv.taxRate,
+          taxAmount: inv.taxAmount, totalValue: inv.totalValue,
+          notes: inv.notes, attachmentUrl: inv.attachmentUrl,
+          createdBy: ctx.user.id, updatedBy: ctx.user.id,
+        });
+      }
+
+      return newStmt;
+    }),
+
+  // ════════════════════════════════════════════════════════════════════════════
+  //  INVOICES (WITHIN A STATEMENT)
+  // ════════════════════════════════════════════════════════════════════════════
+
+  // ─── قائمة فواتير بيان محدد ─────────────────────────────────────────────────
+  listInvoices: protectedProcedure
+    .input(z.object({
+      statementId: z.number(),
+      search:      z.string().optional(),
+      supplierName: z.string().optional(),
+      supplierTaxId: z.string().optional(),
+      dateFrom:    z.string().optional(),
+      dateTo:      z.string().optional(),
+      sortBy:      z.enum(['supplierName', 'supplierTaxId', 'invoiceDate', 'id']).optional(),
+      sortDir:     z.enum(['asc', 'desc']).optional(),
+      page:        z.number().default(1),
+      limit:       z.number().default(200),
+    }))
+    .query(async ({ ctx, input }) => {
+      assertViewPerm(ctx.user);
+      const orgId = ctx.user.orgId;
+
+      // Verify statement ownership
+      const [stmt] = await db.select()
+        .from(rePurchaseStatements)
+        .where(and(
+          eq(rePurchaseStatements.id, input.statementId),
+          eq(rePurchaseStatements.orgId, orgId)
+        ));
+      if (!stmt) throw new TRPCError({ code: 'NOT_FOUND', message: 'البيان غير موجود' });
+
       const rows = await db.execute(sql`
         SELECT
           p.id,
+          p.statement_id,
           p.supplier_name,
           p.supplier_tax_id,
           p.invoice_date,
@@ -173,13 +407,13 @@ export const rePurchasesRouter = router({
         LEFT JOIN users u1 ON u1.id = p.created_by
         LEFT JOIN users u2 ON u2.id = p.updated_by
         WHERE p.org_id = ${orgId}
+          AND p.statement_id = ${input.statementId}
         ORDER BY p.invoice_date DESC, p.id DESC
       `);
 
       let data = rows.rows as Array<Record<string, any>>;
 
-      // Search by name / invoice number / tax id
-      const q = input?.search?.trim();
+      const q = input.search?.trim();
       if (q) {
         const ql = q.toLowerCase();
         data = data.filter((r) =>
@@ -189,30 +423,24 @@ export const rePurchasesRouter = router({
         );
       }
 
-      // Filter by supplier name
-      if (input?.supplierName) {
+      if (input.supplierName) {
         const f = input.supplierName.toLowerCase();
         data = data.filter(r => (r.supplier_name ?? '').toLowerCase().includes(f));
       }
-
-      // Filter by supplier tax id
-      if (input?.supplierTaxId) {
-        data = data.filter(r => (r.supplier_tax_id ?? '').includes(input.supplierTaxId!));
+      if (input.supplierTaxId) {
+        data = data.filter(r => (r.supplier_tax_id ?? '').includes(input.supplierTaxId));
       }
-
-      // Date range filter
-      if (input?.dateFrom) {
-        const from = new Date(input.dateFrom); from.setHours(0, 0, 0, 0);
+      if (input.dateFrom) {
+        const from = new Date(input.dateFrom); from.setHours(0,0,0,0);
         data = data.filter(r => new Date(r.invoice_date) >= from);
       }
-      if (input?.dateTo) {
-        const to = new Date(input.dateTo); to.setHours(23, 59, 59, 999);
+      if (input.dateTo) {
+        const to = new Date(input.dateTo); to.setHours(23,59,59,999);
         data = data.filter(r => new Date(r.invoice_date) <= to);
       }
 
-      // Sorting
-      const sortBy = input?.sortBy ?? 'invoiceDate';
-      const sortDir = input?.sortDir ?? 'desc';
+      const sortBy = input.sortBy ?? 'invoiceDate';
+      const sortDir = input.sortDir ?? 'desc';
       const dir = sortDir === 'asc' ? 1 : -1;
       data.sort((a, b) => {
         const va = a[sortBy] ?? '';
@@ -221,24 +449,22 @@ export const rePurchasesRouter = router({
         return String(va).localeCompare(String(vb), 'ar') * dir;
       });
 
-      // Totals before pagination
       const totals = {
-        preTax:   data.reduce((s, r) => s + Number(r.pre_tax_value  ?? 0), 0),
-        tax:      data.reduce((s, r) => s + Number(r.tax_amount     ?? 0), 0),
-        total:    data.reduce((s, r) => s + Number(r.total_value    ?? 0), 0),
-        count:    data.length,
+        preTax: data.reduce((s, r) => s + Number(r.pre_tax_value  ?? 0), 0),
+        tax:    data.reduce((s, r) => s + Number(r.tax_amount     ?? 0), 0),
+        total:  data.reduce((s, r) => s + Number(r.total_value    ?? 0), 0),
+        count:  data.length,
       };
 
-      // Pagination
-      const limit = input?.limit || 200;
-      const page  = input?.page  || 1;
+      const limit = input.limit || 200;
+      const page  = input.page  || 1;
       const paginated = data.slice((page - 1) * limit, page * limit);
 
-      return { rows: paginated, totals };
+      return { rows: paginated, totals, statement: stmt };
     }),
 
-  // ─── جلب فاتورة واحدة ─────────────────────────────────────────────────────────────────────────────────────
-  get: protectedProcedure
+  // ─── جلب فاتورة واحدة ─────────────────────────────────────────────────────
+  getInvoice: protectedProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ ctx, input }) => {
       assertViewPerm(ctx.user);
@@ -252,7 +478,7 @@ export const rePurchasesRouter = router({
       return row;
     }),
 
-  // ─── اكتشاف المكرر ───────────────────────────────────────────────────────────────────────────────────────────────
+  // ─── اكتشاف المكرر ─────────────────────────────────────────────────────────
   checkDuplicate: protectedProcedure
     .input(z.object({
       supplierTaxId: z.string().max(50),
@@ -263,23 +489,42 @@ export const rePurchasesRouter = router({
       assertViewPerm(ctx.user);
       const dup = await findDuplicate(input.supplierTaxId, input.invoiceNumber, input.excludeId);
       if (!dup) return null;
+      let stmtName: string | null = null;
+      if (dup.statementId) {
+        const [s] = await db.select({ name: rePurchaseStatements.name })
+          .from(rePurchaseStatements)
+          .where(eq(rePurchaseStatements.id, dup.statementId));
+        stmtName = s?.name ?? null;
+      }
       return {
         id: dup.id,
+        statementId: dup.statementId,
+        statementName: stmtName,
         supplierName: dup.supplierName,
         invoiceDate: dup.invoiceDate,
         totalValue: dup.totalValue,
       };
     }),
 
-  // ─── إضافة فاتورة ─────────────────────────────────────────────────────────────────────────────────────────────────
-  create: protectedProcedure
+  // ─── إضافة فاتورة ──────────────────────────────────────────────────────────
+  createInvoice: protectedProcedure
     .input(z.object({
-      data: purchaseInputSchema,
+      statementId:    z.number(),
+      data:           invoiceInputSchema,
       allowDuplicate: z.boolean().default(false),
     }))
     .mutation(async ({ ctx, input }) => {
       assertAddPerm(ctx.user);
       const { data, allowDuplicate } = input;
+
+      // Verify statement ownership
+      const [stmt] = await db.select()
+        .from(rePurchaseStatements)
+        .where(and(
+          eq(rePurchaseStatements.id, input.statementId),
+          eq(rePurchaseStatements.orgId, ctx.user.orgId)
+        ));
+      if (!stmt) throw new TRPCError({ code: 'NOT_FOUND', message: 'البيان غير موجود' });
 
       // Duplicate check across ALL organizations
       if (data.supplierTaxId && !allowDuplicate) {
@@ -287,16 +532,16 @@ export const rePurchasesRouter = router({
         if (dup) {
           throw new TRPCError({
             code: 'CONFLICT',
-            message: `تنبيه: توجد فاتورة مسجلة سابقاً لنفس المورد بنفس رقم الفاتورة. المورد: ${dup.supplierName} | التاريخ: ${String(dup.invoiceDate).split('T')[0]} | القيمة: ${dup.totalValue}`,
+            message: `تنبيه: توجد فاتورة مسجلة سابقاً لنفس المورد بنفس رقم الفاتورة.`,
           });
         }
       }
 
-      // Recalculate from preTax to ensure consistency
       const calc = recalcFromPreTax(data.preTaxValue, data.taxRate);
 
       const [row] = await db.insert(rePurchases).values({
         orgId:         ctx.user.orgId,
+        statementId:   input.statementId,
         supplierName:  data.supplierName,
         supplierTaxId: data.supplierTaxId ?? null,
         invoiceDate:   new Date(data.invoiceDate),
@@ -314,18 +559,74 @@ export const rePurchasesRouter = router({
       return row;
     }),
 
-  // ─── تعديل فاتورة ──────────────────────────────────────────────────────────────────────────────────────────────────────────
-  update: protectedProcedure
+  // ─── إضافة فواتير بالجملة (للجدول المباشر) ─────────────────────────────────
+  bulkCreateInvoices: protectedProcedure
+    .input(z.object({
+      statementId: z.number(),
+      invoices:    z.array(invoiceInputSchema.extend({
+        allowDuplicate: z.boolean().default(false),
+      })),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      assertAddPerm(ctx.user);
+
+      const [stmt] = await db.select()
+        .from(rePurchaseStatements)
+        .where(and(
+          eq(rePurchaseStatements.id, input.statementId),
+          eq(rePurchaseStatements.orgId, ctx.user.orgId)
+        ));
+      if (!stmt) throw new TRPCError({ code: 'NOT_FOUND', message: 'البيان غير موجود' });
+
+      const results: any[] = [];
+      const errors: string[] = [];
+
+      for (const inv of input.invoices) {
+        try {
+          if (inv.supplierTaxId && !inv.allowDuplicate) {
+            const dup = await findDuplicate(inv.supplierTaxId, inv.invoiceNumber);
+            if (dup) {
+              errors.push(`فاتورة مكررة: ${inv.invoiceNumber} — الرقم الضريبي ${inv.supplierTaxId}`);
+              continue;
+            }
+          }
+          const calc = recalcFromPreTax(inv.preTaxValue, inv.taxRate);
+          const [row] = await db.insert(rePurchases).values({
+            orgId:         ctx.user.orgId,
+            statementId:   input.statementId,
+            supplierName:  inv.supplierName,
+            supplierTaxId: inv.supplierTaxId ?? null,
+            invoiceDate:   new Date(inv.invoiceDate),
+            invoiceNumber: inv.invoiceNumber,
+            preTaxValue:   String(calc.preTax),
+            taxRate:       String(inv.taxRate),
+            taxAmount:     String(calc.tax),
+            totalValue:    String(calc.total),
+            notes:         inv.notes ?? null,
+            attachmentUrl: inv.attachmentUrl ?? null,
+            createdBy:     ctx.user.id,
+            updatedBy:     ctx.user.id,
+          }).returning();
+          results.push(row);
+        } catch (e: any) {
+          errors.push(inv.invoiceNumber + ': ' + (e.message ?? 'خطأ غير معروف'));
+        }
+      }
+
+      return { results, errors, successCount: results.length, errorCount: errors.length };
+    }),
+
+  // ─── تعديل فاتورة ───────────────────────────────────────────────────────────
+  updateInvoice: protectedProcedure
     .input(z.object({
       id: z.number(),
-      data: purchaseInputSchema,
+      data: invoiceInputSchema,
       allowDuplicate: z.boolean().default(false),
     }))
     .mutation(async ({ ctx, input }) => {
       assertEditPerm(ctx.user);
       const { data, allowDuplicate } = input;
 
-      // Verify ownership
       const [existing] = await db.select()
         .from(rePurchases)
         .where(and(
@@ -334,18 +635,16 @@ export const rePurchasesRouter = router({
         ));
       if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'الفاتورة غير موجودة' });
 
-      // Duplicate check across ALL organizations
       if (data.supplierTaxId && !allowDuplicate) {
         const dup = await findDuplicate(data.supplierTaxId, data.invoiceNumber, input.id);
         if (dup) {
           throw new TRPCError({
             code: 'CONFLICT',
-            message: `تنبيه: توجد فاتورة مسجلة سابقاً لنفس المورد بنفس رقم الفاتورة. المورد: ${dup.supplierName} | التاريخ: ${String(dup.invoiceDate).split('T')[0]} | القيمة: ${dup.totalValue}`,
+            message: `تنبيه: توجد فاتورة مسجلة سابقاً لنفس المورد بنفس رقم الفاتورة.`,
           });
         }
       }
 
-      // Recalculate from preTax to ensure consistency
       const calc = recalcFromPreTax(data.preTaxValue, data.taxRate);
 
       const [row] = await db.update(rePurchases)
@@ -369,8 +668,8 @@ export const rePurchasesRouter = router({
       return row;
     }),
 
-  // ─── حذف فاتورة ───────────────────────────────────────────────────────────────────────────────────────────────────────────
-  delete: protectedProcedure
+  // ─── حذف فاتورة ────────────────────────────────────────────────────────────
+  deleteInvoice: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       assertDeletePerm(ctx.user);
@@ -381,7 +680,6 @@ export const rePurchasesRouter = router({
           eq(rePurchases.orgId, ctx.user.orgId)
         ));
       if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'الفاتورة غير موجودة' });
-
       await db.delete(rePurchases).where(eq(rePurchases.id, input.id));
       return { success: true };
     }),

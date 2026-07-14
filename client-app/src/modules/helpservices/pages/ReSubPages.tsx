@@ -1,5 +1,5 @@
 import {
-  ReceiptText, FolderOpen, Scale, Building2,
+  FolderOpen, Scale, Building2,
   ArrowRight, ArrowLeft,
 } from "lucide-react";
 import { Card, CardContent } from "@/core/ui/card";
@@ -100,22 +100,6 @@ function ReShell({
         </Card>
       </div>
     </div>
-  );
-}
-
-// ─── البيان التفصيلي للمشتريات ──
-export function RePurchasesPage() {
-  return (
-    <ReShell
-      perm="hs_re_purchases"
-      icon={ReceiptText}
-      titleAr="البيان التفصيلي للمشتريات"
-      titleEn="Purchases Detail Statement"
-      descAr="رقم وتفاصيل كاملة للمشتريات الخاصة بالمشروع."
-      descEn="Complete number and details of purchases related to the project."
-      color="text-emerald-600 dark:text-emerald-400"
-      bg="bg-emerald-500/10"
-    />
   );
 }
 

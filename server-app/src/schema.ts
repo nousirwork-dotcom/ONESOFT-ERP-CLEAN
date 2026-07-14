@@ -1617,9 +1617,24 @@ export const hsLinks = pgTable('hs_links', {
 });
 
 // ─── 0025: البيان التفصيلي للمشتريات (المطور العقاري) ─────────────────
+export const rePurchaseStatements = pgTable('re_purchase_statements', {
+  id:          serial('id').primaryKey(),
+  orgId:       integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  name:        varchar('name',      { length: 255 }).notNull(),
+  project:     varchar('project',   { length: 255 }),
+  dateFrom:    timestamp('date_from').notNull(),
+  dateTo:      timestamp('date_to').notNull(),
+  notes:       text('notes'),
+  createdBy:   integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:   integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt:   timestamp('created_at').notNull().defaultNow(),
+  updatedAt:   timestamp('updated_at').notNull().defaultNow(),
+});
+
 export const rePurchases = pgTable('re_purchases', {
   id:              serial('id').primaryKey(),
   orgId:           integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  statementId:     integer('statement_id').references(() => rePurchaseStatements.id, { onDelete: 'cascade' }),
   supplierName:    varchar('supplier_name',    { length: 255 }).notNull(),
   supplierTaxId:   varchar('supplier_tax_id',  { length: 50 }),
   invoiceDate:     timestamp('invoice_date').notNull().defaultNow(),
@@ -1666,5 +1681,6 @@ export type ZatcaQrCode              = typeof zatcaQrCodes.$inferSelect;
 export type ZatcaSettings            = typeof zatcaSettings.$inferSelect;
 export type ZatcaApiHistory          = typeof zatcaApiHistory.$inferSelect;
 
-// Real Estate Purchases Type
+// Real Estate Purchases Types
+export type RePurchaseStatement      = typeof rePurchaseStatements.$inferSelect;
 export type RePurchase               = typeof rePurchases.$inferSelect;
