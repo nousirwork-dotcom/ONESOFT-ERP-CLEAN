@@ -40,19 +40,11 @@ function assertImportPerm(user: { role: string; extraPermissions?: Record<string
 }
 
 // ─── الحساب التلقائي ────────────────────────────────────────────────────────────────────
-function recalcFromPreTax(preTax: number, taxRate: number) {
-  const tax = +(preTax * (taxRate / 100)).toFixed(4);
-  const total = +(preTax + tax).toFixed(4);
-  return { preTax, tax, total };
-}
-function recalcFromTotal(total: number, taxRate: number) {
-  const preTax = +(total / (1 + taxRate / 100)).toFixed(4);
+// Phase 3c: only "total" is editable; preTax and tax are auto-computed from total + statement taxRate
+function calcFromTotal(total: number, taxRate: number) {
+  const rate = taxRate / 100;
+  const preTax = +(total / (1 + rate)).toFixed(4);
   const tax = +(total - preTax).toFixed(4);
-  return { preTax, tax, total };
-}
-function recalcFromTax(tax: number, taxRate: number) {
-  const preTax = +(tax / (taxRate / 100)).toFixed(4);
-  const total = +(preTax + tax).toFixed(4);
   return { preTax, tax, total };
 }
 
@@ -62,9 +54,7 @@ const invoiceInputSchema = z.object({
   supplierTaxId: z.string().max(50).nullable().optional(),
   invoiceDate:   z.string().min(1),
   invoiceNumber: z.string().min(1).max(100),
-  preTaxValue:   z.number().min(0).default(0),
-  taxRate:       z.number().min(0).max(100).default(15),
-  taxAmount:     z.number().min(0).default(0),
+  // Phase 3c: total is the only editable field; preTax/tax/taxRate auto-computed from statement
   totalValue:    z.number().min(0).default(0),
   notes:         z.string().nullable().optional(),
   attachmentUrl: z.string().nullable().optional(),
@@ -181,15 +171,15 @@ export const rePurchasesRouter = router({
     if(input.data.defaultTaxRate!==undefined) updateData.defaultTaxRate=String(input.data.defaultTaxRate);
     if(input.data.notes!==undefined) updateData.notes=input.data.notes??null;
     const [row]=await db.update(rePurchaseStatements).set(updateData).where(eq(rePurchaseStatements.id,input.id)).returning();
-    // Cascade tax rate to all invoices if requested
+    // Cascade tax rate to all invoices if requested (Phase 3c: recalc from total)
     if(input.applyToAll && input.data.defaultTaxRate!==undefined) {
       const invoices = await db.select().from(rePurchases).where(eq(rePurchases.statementId, input.id));
       for (const inv of invoices) {
-        const calc = recalcFromPreTax(Number(inv.preTaxValue), input.data.defaultTaxRate!);
+        const calc = calcFromTotal(Number(inv.totalValue), input.data.defaultTaxRate!);
         await db.update(rePurchases).set({
           taxRate: String(input.data.defaultTaxRate),
+          preTaxValue: String(calc.preTax),
           taxAmount: String(calc.tax),
-          totalValue: String(calc.total),
           updatedBy: ctx.user.id, updatedAt: new Date(),
         }).where(eq(rePurchases.id, inv.id));
       }
@@ -295,12 +285,13 @@ export const rePurchasesRouter = router({
     const [stmt]=await db.select().from(rePurchaseStatements).where(and(eq(rePurchaseStatements.id,input.statementId),eq(rePurchaseStatements.orgId,ctx.user.orgId)));
     if(!stmt) throw new TRPCError({ code:'NOT_FOUND', message:'البيان غير موجود' });
     if(data.supplierTaxId && !allowDuplicate){ const dup=await findDuplicate(data.supplierTaxId,data.invoiceNumber); if(dup) throw new TRPCError({ code:'CONFLICT', message:'تنبيه: توجد فاتورة مسجلة سابقاً لنفس المورد بنفس رقم الفاتورة.' }); }
-    const calc=recalcFromPreTax(data.preTaxValue,data.taxRate);
+    const taxRate = Number(stmt.defaultTaxRate ?? 15);
+    const calc = calcFromTotal(data.totalValue, taxRate);
     const seq = await getNextSequence(input.statementId);
     const [row]=await db.insert(rePurchases).values({
       orgId:ctx.user.orgId, statementId:input.statementId, sequence:seq,
       supplierName:data.supplierName, supplierTaxId:data.supplierTaxId??null, invoiceDate:new Date(data.invoiceDate), invoiceNumber:data.invoiceNumber,
-      preTaxValue:String(calc.preTax), taxRate:String(data.taxRate), taxAmount:String(calc.tax), totalValue:String(calc.total),
+      preTaxValue:String(calc.preTax), taxRate:String(taxRate), taxAmount:String(calc.tax), totalValue:String(calc.total),
       notes:data.notes??null, attachmentUrl:data.attachmentUrl??null, createdBy:ctx.user.id, updatedBy:ctx.user.id,
     }).returning();
     return row;
@@ -310,16 +301,17 @@ export const rePurchasesRouter = router({
     assertAddPerm(ctx.user);
     const [stmt]=await db.select().from(rePurchaseStatements).where(and(eq(rePurchaseStatements.id,input.statementId),eq(rePurchaseStatements.orgId,ctx.user.orgId)));
     if(!stmt) throw new TRPCError({ code:'NOT_FOUND', message:'البيان غير موجود' });
+    const taxRate = Number(stmt.defaultTaxRate ?? 15);
     const results:any[]=[]; const errors:string[]=[];
     for(const inv of input.invoices){
       try{
         if(inv.supplierTaxId && !inv.allowDuplicate){ const dup=await findDuplicate(inv.supplierTaxId,inv.invoiceNumber); if(dup){ errors.push(`فاتورة مكررة: ${inv.invoiceNumber}`); continue; } }
-        const calc=recalcFromPreTax(inv.preTaxValue,inv.taxRate);
+        const calc = calcFromTotal(inv.totalValue, taxRate);
         const seq=await getNextSequence(input.statementId);
         const [row]=await db.insert(rePurchases).values({
           orgId:ctx.user.orgId, statementId:input.statementId, sequence:seq,
           supplierName:inv.supplierName, supplierTaxId:inv.supplierTaxId??null, invoiceDate:new Date(inv.invoiceDate), invoiceNumber:inv.invoiceNumber,
-          preTaxValue:String(calc.preTax), taxRate:String(inv.taxRate), taxAmount:String(calc.tax), totalValue:String(calc.total),
+          preTaxValue:String(calc.preTax), taxRate:String(taxRate), taxAmount:String(calc.tax), totalValue:String(calc.total),
           notes:inv.notes??null, attachmentUrl:inv.attachmentUrl??null, createdBy:ctx.user.id, updatedBy:ctx.user.id,
         }).returning();
         results.push(row);
@@ -333,10 +325,13 @@ export const rePurchasesRouter = router({
     const [existing]=await db.select().from(rePurchases).where(and(eq(rePurchases.id,input.id),eq(rePurchases.orgId,ctx.user.orgId)));
     if(!existing) throw new TRPCError({ code:'NOT_FOUND', message:'الفاتورة غير موجودة' });
     if(data.supplierTaxId && !allowDuplicate){ const dup=await findDuplicate(data.supplierTaxId,data.invoiceNumber,input.id); if(dup) throw new TRPCError({ code:'CONFLICT', message:'تنبيه: توجد فاتورة مسجلة سابقاً.' }); }
-    const calc=recalcFromPreTax(data.preTaxValue,data.taxRate);
+    // Phase 3c: tax rate comes from the statement, only total is editable
+    const [stmt]=await db.select({ defaultTaxRate: rePurchaseStatements.defaultTaxRate }).from(rePurchaseStatements).where(eq(rePurchaseStatements.id, existing.statementId));
+    const taxRate = Number(stmt?.defaultTaxRate ?? 15);
+    const calc = calcFromTotal(data.totalValue, taxRate);
     const [row]=await db.update(rePurchases).set({
       supplierName:data.supplierName, supplierTaxId:data.supplierTaxId??null, invoiceDate:new Date(data.invoiceDate), invoiceNumber:data.invoiceNumber,
-      preTaxValue:String(calc.preTax), taxRate:String(data.taxRate), taxAmount:String(calc.tax), totalValue:String(calc.total),
+      preTaxValue:String(calc.preTax), taxRate:String(taxRate), taxAmount:String(calc.tax), totalValue:String(calc.total),
       notes:data.notes??null, attachmentUrl:data.attachmentUrl??null, updatedBy:ctx.user.id, updatedAt:new Date(),
     }).where(eq(rePurchases.id,input.id)).returning();
     return row;
@@ -368,5 +363,152 @@ export const rePurchasesRouter = router({
         count: invoices.length,
       };
       return { org, statement:stmt, invoices, totals };
+    }),
+
+  // ─── Excel import: preview rows before saving ──────────────────────────────────────────────────
+  previewImport: protectedProcedure
+    .input(z.object({
+      statementId: z.number(),
+      rows: z.array(z.object({
+        supplierName: z.string(),
+        supplierTaxId: z.string().optional(),
+        invoiceDate: z.string(),
+        invoiceNumber: z.string(),
+        totalValue: z.number().min(0),
+        notes: z.string().optional(),
+      })),
+    }))
+    .query(async ({ ctx, input }) => {
+      assertImportPerm(ctx.user);
+      const orgId = ctx.user.orgId;
+      const [stmt]=await db.select().from(rePurchaseStatements).where(and(eq(rePurchaseStatements.id,input.statementId),eq(rePurchaseStatements.orgId,orgId)));
+      if(!stmt) throw new TRPCError({ code:'NOT_FOUND', message:'البيان غير موجود' });
+      const taxRate = Number(stmt.defaultTaxRate ?? 15);
+
+      // Fetch existing invoices for duplicate detection
+      const existing = await db.select({
+        supplierTaxId: rePurchases.supplierTaxId, invoiceNumber: rePurchases.invoiceNumber,
+        statementName: rePurchaseStatements.name,
+      })
+        .from(rePurchases)
+        .leftJoin(rePurchaseStatements, eq(rePurchaseStatements.id, rePurchases.statementId))
+        .where(eq(rePurchases.orgId, orgId));
+
+      const existingKeySet = new Set<string>();
+      for (const e of existing) {
+        if (e.supplierTaxId && e.invoiceNumber) {
+          existingKeySet.add(`${e.supplierTaxId}::${e.invoiceNumber}`);
+        }
+      }
+
+      // Track duplicates within the import file itself
+      const fileKeySet = new Set<string>();
+
+      const preview = input.rows.map((r, i) => {
+        const errors: string[] = [];
+        if (!r.supplierName.trim()) errors.push('اسم المورد مطلوب');
+        if (!r.invoiceNumber.trim()) errors.push('رقم الفاتورة مطلوب');
+        if (!r.invoiceDate.trim()) errors.push('تاريخ الفاتورة مطلوب');
+        if (isNaN(Date.parse(r.invoiceDate))) errors.push('تاريخ غير صالح');
+        if (r.totalValue <= 0) errors.push('إجمالي الفاتورة يجب أن يكون > 0');
+        if (r.supplierTaxId && !/^\d+$/.test(r.supplierTaxId.trim())) errors.push('رقم ضريبي غير صالح');
+
+        const key = r.supplierTaxId ? `${r.supplierTaxId.trim()}::${r.invoiceNumber.trim()}` : null;
+        let dupInfo: any = null;
+        if (key && errors.length === 0) {
+          if (fileKeySet.has(key)) {
+            errors.push('فاتورة مكررة في الملف');
+          } else {
+            fileKeySet.add(key);
+          }
+          if (existingKeySet.has(key)) {
+            const existingRow = existing.find(e => e.supplierTaxId === r.supplierTaxId && e.invoiceNumber === r.invoiceNumber);
+            dupInfo = { statementName: existingRow?.statementName ?? null };
+            errors.push('فاتورة مكررة في النظام');
+          }
+        }
+
+        const calc = calcFromTotal(r.totalValue, taxRate);
+        return {
+          index: i,
+          supplierName: r.supplierName,
+          supplierTaxId: r.supplierTaxId ?? null,
+          invoiceDate: r.invoiceDate,
+          invoiceNumber: r.invoiceNumber,
+          totalValue: r.totalValue,
+          preTaxValue: calc.preTax,
+          taxAmount: calc.tax,
+          taxRate,
+          notes: r.notes ?? null,
+          errors,
+          dupInfo,
+          valid: errors.length === 0,
+        };
+      });
+
+      const totalRows = preview.length;
+      const validRows = preview.filter(r => r.valid);
+      const errorRows = preview.filter(r => !r.valid);
+      const dupRows = preview.filter(r => r.dupInfo);
+      const totalImported = validRows.reduce((s, r) => s + r.totalValue, 0);
+      const preTaxTotal = validRows.reduce((s, r) => s + r.preTaxValue, 0);
+      const taxTotal = validRows.reduce((s, r) => s + r.taxAmount, 0);
+
+      return {
+        preview,
+        summary: { totalRows, validCount: validRows.length, errorCount: errorRows.length, dupCount: dupRows.length, totalImported, preTaxTotal, taxTotal },
+        taxRate,
+      };
+    }),
+
+  // ─── Execute import after preview confirmation ──────────────────────────────────────────────
+  executeImport: protectedProcedure
+    .input(z.object({
+      statementId: z.number(),
+      rows: z.array(z.object({
+        supplierName: z.string(),
+        supplierTaxId: z.string().nullable().optional(),
+        invoiceDate: z.string(),
+        invoiceNumber: z.string(),
+        totalValue: z.number(),
+        notes: z.string().nullable().optional(),
+        allowDuplicate: z.boolean().default(false),
+      })),
+      skipDuplicates: z.boolean().default(false),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      assertImportPerm(ctx.user);
+      const orgId = ctx.user.orgId;
+      const [stmt]=await db.select().from(rePurchaseStatements).where(and(eq(rePurchaseStatements.id,input.statementId),eq(rePurchaseStatements.orgId,orgId)));
+      if(!stmt) throw new TRPCError({ code:'NOT_FOUND', message:'البيان غير موجود' });
+      const taxRate = Number(stmt.defaultTaxRate ?? 15);
+
+      const results: any[] = [];
+      const skipped: any[] = [];
+      const errors: string[] = [];
+
+      for (const row of input.rows) {
+        try {
+          if (row.supplierTaxId && !row.allowDuplicate && input.skipDuplicates) {
+            const dup = await findDuplicate(row.supplierTaxId, row.invoiceNumber);
+            if (dup) { skipped.push(row); continue; }
+          }
+          const calc = calcFromTotal(row.totalValue, taxRate);
+          const seq = await getNextSequence(input.statementId);
+          const [inv] = await db.insert(rePurchases).values({
+            orgId, statementId: input.statementId, sequence: seq,
+            supplierName: row.supplierName, supplierTaxId: row.supplierTaxId ?? null,
+            invoiceDate: new Date(row.invoiceDate), invoiceNumber: row.invoiceNumber,
+            preTaxValue: String(calc.preTax), taxRate: String(taxRate),
+            taxAmount: String(calc.tax), totalValue: String(calc.total),
+            notes: row.notes ?? null, createdBy: ctx.user.id, updatedBy: ctx.user.id,
+          }).returning();
+          results.push(inv);
+        } catch(e: any) {
+          errors.push(`${row.invoiceNumber}: ${e.message ?? 'خطأ'}`);
+        }
+      }
+
+      return { imported: results.length, skipped: skipped.length, errors, results };
     }),
 });
