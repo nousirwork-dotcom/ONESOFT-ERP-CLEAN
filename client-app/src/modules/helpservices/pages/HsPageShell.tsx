@@ -104,7 +104,7 @@ export default function HsPageShell({
                 className={`border-border/50 transition-all ${opt.route ? "cursor-pointer hover:border-primary/40 hover:shadow-md active:scale-[.99]" : "opacity-70 cursor-not-allowed select-none"}`}
                 aria-disabled={!opt.route}
                 data-testid={`card-hs-sub-${opt.id}`}
-                onClick={() => opt.route && openTab(opt.route, ar ? opt.labelAr : opt.labelEn)}
+                onClick={() => opt.route && openTab(opt.route, ar ? opt.labelAr : opt.labelEn, opt.icon)}
               >
                 <CardContent className="p-5">
                   <div className="flex items-start gap-3.5">
