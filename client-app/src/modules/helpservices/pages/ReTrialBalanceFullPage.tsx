@@ -103,37 +103,48 @@ export default function ReTrialBalanceFullPage() {
 
   // Mutations
   const createTB = trpc.reTrialBalance.createTrialBalance.useMutation({
-    onSuccess: () => { toast.success(ar ? "تم إنشاء ميزان المراجعة" : "Trial balance created"); utils.reTrialBalance.listTrialBalances.invalidate(); setShowForm(false); setForm({}); },
+    onSuccess: () => { toast.success(ar ? "تم إنشاء ميزان المراجعة" : "Trial balance created"); utils.reTrialBalance.listTrialBalances.invalidate(); setShowForm(false); setForm({ name: "", periodLabel: "", fromDate: "", toDate: "", projectId: null, scope: "org", notes: "" }); },
+    onError: (e) => { toast.error(ar ? "فشل الإنشاء: " + e.message : "Create failed: " + e.message); console.error("createTB error", e); },
   });
   const updateTB = trpc.reTrialBalance.updateTrialBalance.useMutation({
     onSuccess: () => { toast.success(ar ? "تم التحديث" : "Updated"); utils.reTrialBalance.listTrialBalances.invalidate(); tbQ.refetch(); setShowForm(false); setEditId(null); },
+    onError: (e) => { toast.error(ar ? "فشل التحديث: " + e.message : "Update failed: " + e.message); console.error("updateTB error", e); },
   });
   const deleteTB = trpc.reTrialBalance.deleteTrialBalance.useMutation({
     onSuccess: () => { toast.success(ar ? "تم الحذف" : "Deleted"); utils.reTrialBalance.listTrialBalances.invalidate(); setShowDel(null); setView("list"); setSelTB(null); },
+    onError: (e) => { toast.error(ar ? "فشل الحذف: " + e.message : "Delete failed: " + e.message); },
   });
   const saveEntries = trpc.reTrialBalance.saveEntries.useMutation({
     onSuccess: () => { toast.success(ar ? "تم حفظ الأرقام" : "Saved"); setUnsaved(false); utils.reTrialBalance.getEntries.invalidate(); bsQ.refetch(); },
+    onError: (e) => { toast.error(ar ? "فشل الحفظ: " + e.message : "Save failed: " + e.message); console.error("saveEntries error", e); },
   });
   const createAcct = trpc.reTrialBalance.createAccount.useMutation({
     onSuccess: () => { toast.success(ar ? "تم إضافة الحساب" : "Account added"); utils.reTrialBalance.listAccounts.invalidate(); utils.reTrialBalance.getBalanceSheet.invalidate(); setShowAcctForm(false); },
+    onError: (e) => { toast.error(ar ? "فشل إضافة الحساب: " + e.message : "Add account failed: " + e.message); },
   });
   const updateAcct = trpc.reTrialBalance.updateAccount.useMutation({
     onSuccess: () => { toast.success(ar ? "تم تحديث الحساب" : "Account updated"); utils.reTrialBalance.listAccounts.invalidate(); setShowAcctForm(false); setAcctEditId(null); },
+    onError: (e) => { toast.error(ar ? "فشل تحديث الحساب: " + e.message : "Update account failed: " + e.message); },
   });
   const deleteAcct = trpc.reTrialBalance.deleteAccount.useMutation({
     onSuccess: () => { toast.success(ar ? "تم حذف الحساب" : "Account deleted"); utils.reTrialBalance.listAccounts.invalidate(); utils.reTrialBalance.getBalanceSheet.invalidate(); },
+    onError: (e) => { toast.error(ar ? "فشل حذف الحساب: " + e.message : "Delete account failed: " + e.message); },
   });
   const resetDefaults = trpc.reTrialBalance.resetDefaultAccounts.useMutation({
     onSuccess: () => { toast.success(ar ? "تم إعادة الدليل الافتراضي" : "Reset to defaults"); utils.reTrialBalance.listAccounts.invalidate(); utils.reTrialBalance.getEntries.invalidate(); utils.reTrialBalance.getBalanceSheet.invalidate(); utils.reTrialBalance.getTaxReturn.invalidate(); setDraftEntries({}); setUnsaved(false); },
+    onError: (e) => { toast.error(ar ? "فشل إعادة الضبط: " + e.message : "Reset failed: " + e.message); },
   });
   const saveTax = trpc.reTrialBalance.saveTaxReturn.useMutation({
     onSuccess: () => { toast.success(ar ? "تم حفظ الضريبة" : "Tax return saved"); utils.reTrialBalance.getTaxReturn.invalidate(); },
+    onError: (e) => { toast.error(ar ? "فشل حفظ الضريبة: " + e.message : "Tax save failed: " + e.message); },
   });
   const saveReview = trpc.reTrialBalance.updateReview.useMutation({
     onSuccess: () => { toast.success(ar ? "تم حفظ المراجعة" : "Review saved"); utils.reTrialBalance.getReviewPanel.invalidate(); utils.reTrialBalance.getBalanceSheet.invalidate(); },
+    onError: (e) => { toast.error(ar ? "فشل حفظ المراجعة: " + e.message : "Review save failed: " + e.message); },
   });
   const saveSettle = trpc.reTrialBalance.saveSettlement.useMutation({
     onSuccess: () => { toast.success(ar ? "تم حفظ التسوية" : "Settlement saved"); utils.reTrialBalance.getSettlement.invalidate(); utils.reTrialBalance.getBalanceSheet.invalidate(); },
+    onError: (e) => { toast.error(ar ? "فشل حفظ التسوية: " + e.message : "Settlement save failed: " + e.message); },
   });
 
   // Build entry map from DB
