@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import {
   FolderOpen, Scale, Building2,
   ArrowRight, ArrowLeft,
@@ -8,6 +9,8 @@ import { useLang } from "@/core/contexts/LanguageContext";
 import { useAuth } from "@/core/hooks/useAuth";
 import { useTabManager } from "@/core/contexts/TabManagerContext";
 import { canViewHsScreen, type HsScreenPerm } from "@/shared/lib/hsPermissions";
+
+const ReDocumentsFullPage = lazy(() => import("./ReDocumentsFullPage"));
 
 // ─── إطار شاشات «المطور العقاري» الفرعية — سلة موحدة قابلة للاستخدام عدة مرات
 
@@ -105,17 +108,25 @@ function ReShell({
 
 // ─── أوراق ومستندات المشروع ──
 export function ReDocumentsPage() {
+  const { user } = useAuth();
+  if (!canViewHsScreen(user, 'hs_re_documents')) {
+    return (
+      <ReShell
+        perm="hs_re_documents"
+        icon={FolderOpen}
+        titleAr="أوراق ومستندات المشروع"
+        titleEn="Project Papers & Documents"
+        descAr="أدارة وتدوين أوراق ومستندات المشروع العقاري."
+        descEn="Manage and organize project real-estate papers and documents."
+        color="text-amber-600 dark:text-amber-400"
+        bg="bg-amber-500/10"
+      />
+    );
+  }
   return (
-    <ReShell
-      perm="hs_re_documents"
-      icon={FolderOpen}
-      titleAr="أوراق ومستندات المشروع"
-      titleEn="Project Papers & Documents"
-      descAr="أدارة وتدوين أوراق ومستندات المشروع العقاري."
-      descEn="Manage and organize project real-estate papers and documents."
-      color="text-amber-600 dark:text-amber-400"
-      bg="bg-amber-500/10"
-    />
+    <Suspense fallback={<div className="h-full flex items-center justify-center"><div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /></div>}>
+      <ReDocumentsFullPage />
+    </Suspense>
   );
 }
 

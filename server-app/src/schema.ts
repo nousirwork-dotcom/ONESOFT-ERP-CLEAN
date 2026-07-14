@@ -1653,6 +1653,74 @@ export const rePurchases = pgTable('re_purchases', {
   updatedAt:       timestamp('updated_at').notNull().defaultNow(),
 });
 
+// ─── Real Estate: Project Documents ────────────────────────────────────────────
+export const reProjects = pgTable('re_projects', {
+  id:            serial('id').primaryKey(),
+  orgId:         integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  code:          varchar('code',    { length: 50 }).notNull(),
+  name:          varchar('name',    { length: 255 }).notNull(),
+  location:      varchar('location',{ length: 255 }),
+  ownerName:     varchar('owner_name', { length: 255 }),
+  plotNumber:    varchar('plot_number',{ length: 50 }),
+  planNumber:    varchar('plan_number',{ length: 50 }),
+  startDate:     timestamp('start_date'),
+  expectedEndDate: timestamp('expected_end_date'),
+  status:        varchar('status',{ length: 20 }).notNull().default('active'),
+  notes:         text('notes'),
+  createdBy:     integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:     integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+  updatedAt:     timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const reDocumentTypes = pgTable('re_document_types', {
+  id:            serial('id').primaryKey(),
+  orgId:         integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  name:          varchar('name',{ length: 255 }).notNull(),
+  icon:          varchar('icon',{ length: 50 }),
+  sortOrder:     integer('sort_order').notNull().default(0),
+  isSystem:      boolean('is_system').notNull().default(false),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+  updatedAt:     timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const reDocuments = pgTable('re_documents', {
+  id:            serial('id').primaryKey(),
+  orgId:         integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  projectId:     integer('project_id').notNull().references(() => reProjects.id, { onDelete: 'cascade' }),
+  documentTypeId: integer('document_type_id').notNull().references(() => reDocumentTypes.id, { onDelete: 'restrict' }),
+  name:          varchar('name',{ length: 255 }).notNull(),
+  documentNumber: varchar('document_number',{ length: 100 }),
+  issuer:        varchar('issuer',{ length: 255 }),
+  issueDate:     timestamp('issue_date'),
+  expiryDate:    timestamp('expiry_date'),
+  needsRenewal:  boolean('needs_renewal').notNull().default(false),
+  alertDays:     integer('alert_days').default(30),
+  notes:         text('notes'),
+  filePath:      text('file_path'),
+  originalName:  varchar('original_name',{ length: 255 }),
+  fileSize:      integer('file_size'),
+  mimeType:      varchar('mime_type',{ length: 100 }),
+  createdBy:     integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:     integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+  updatedAt:     timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const reDocumentVersions = pgTable('re_document_versions', {
+  id:            serial('id').primaryKey(),
+  orgId:         integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  documentId:    integer('document_id').notNull().references(() => reDocuments.id, { onDelete: 'cascade' }),
+  versionNumber: integer('version_number').notNull(),
+  filePath:      text('file_path').notNull(),
+  originalName:  varchar('original_name',{ length: 255 }),
+  fileSize:      integer('file_size'),
+  mimeType:      varchar('mime_type',{ length: 100 }),
+  notes:         text('notes'),
+  createdBy:     integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+});
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type Organization = typeof organizations.$inferSelect;
 export type User = typeof users.$inferSelect;
@@ -1686,3 +1754,9 @@ export type ZatcaApiHistory          = typeof zatcaApiHistory.$inferSelect;
 // Real Estate Purchases Types
 export type RePurchaseStatement      = typeof rePurchaseStatements.$inferSelect;
 export type RePurchase               = typeof rePurchases.$inferSelect;
+
+// Real Estate Documents Types
+export type ReProject                = typeof reProjects.$inferSelect;
+export type ReDocumentType           = typeof reDocumentTypes.$inferSelect;
+export type ReDocument               = typeof reDocuments.$inferSelect;
+export type ReDocumentVersion        = typeof reDocumentVersions.$inferSelect;
