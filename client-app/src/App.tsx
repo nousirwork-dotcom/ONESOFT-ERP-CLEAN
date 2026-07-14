@@ -93,7 +93,8 @@ import SupportRequestPage from "@/modules/helpservices/pages/SupportRequestPage"
 import CustodyTrackingPage from "@/modules/helpservices/pages/CustodyTrackingPage";
 import CustodyRecordPage from "@/modules/helpservices/pages/CustodyRecordPage";
 import RealEstatePage from "@/modules/helpservices/pages/RealEstatePage";
-import { RePurchasesPage, ReDocumentsPage, ReTrialBalancePage } from "@/modules/helpservices/pages/ReSubPages";
+import RePurchasesPage from "@/modules/helpservices/pages/RePurchasesPage";
+import { ReDocumentsPage, ReTrialBalancePage } from "@/modules/helpservices/pages/ReSubPages";
 import { TabPathContext } from "@/core/contexts/TabPathContext";
 import LicenseActivationPage from "@/modules/license/pages/LicenseActivationPage";
 import SuperAdminPage from "@/core/admin/SuperAdminPage";

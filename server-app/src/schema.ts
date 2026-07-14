@@ -1616,6 +1616,26 @@ export const hsLinks = pgTable('hs_links', {
   updatedAt:   timestamp('updated_at').notNull().defaultNow(),
 });
 
+// ─── 0025: البيان التفصيلي للمشتريات (المطور العقاري) ─────────────────
+export const rePurchases = pgTable('re_purchases', {
+  id:              serial('id').primaryKey(),
+  orgId:           integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  supplierName:    varchar('supplier_name',    { length: 255 }).notNull(),
+  supplierTaxId:   varchar('supplier_tax_id',  { length: 50 }),
+  invoiceDate:     timestamp('invoice_date').notNull().defaultNow(),
+  invoiceNumber:   varchar('invoice_number',   { length: 100 }).notNull(),
+  preTaxValue:     decimal('pre_tax_value',    { precision: 18, scale: 4 }).notNull().default('0'),
+  taxRate:         decimal('tax_rate',         { precision: 5,  scale: 2 }).notNull().default('15'),
+  taxAmount:       decimal('tax_amount',       { precision: 18, scale: 4 }).notNull().default('0'),
+  totalValue:      decimal('total_value',      { precision: 18, scale: 4 }).notNull().default('0'),
+  notes:           text('notes'),
+  attachmentUrl:   text('attachment_url'),
+  createdBy:       integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:       integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt:       timestamp('created_at').notNull().defaultNow(),
+  updatedAt:       timestamp('updated_at').notNull().defaultNow(),
+});
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type Organization = typeof organizations.$inferSelect;
 export type User = typeof users.$inferSelect;
@@ -1645,3 +1665,6 @@ export type ZatcaXmlDocument         = typeof zatcaXmlDocuments.$inferSelect;
 export type ZatcaQrCode              = typeof zatcaQrCodes.$inferSelect;
 export type ZatcaSettings            = typeof zatcaSettings.$inferSelect;
 export type ZatcaApiHistory          = typeof zatcaApiHistory.$inferSelect;
+
+// Real Estate Purchases Type
+export type RePurchase               = typeof rePurchases.$inferSelect;

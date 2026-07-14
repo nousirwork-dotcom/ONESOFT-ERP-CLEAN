@@ -66,6 +66,8 @@ const EXPECTED_TABLES = [
   'verification_tokens',
   'password_reset_tokens',
   'security_events',
+  // Real Estate Purchases (0025)
+  're_purchases',
 ];
 
 export async function checkSchema(pool: Pool): Promise<boolean> {

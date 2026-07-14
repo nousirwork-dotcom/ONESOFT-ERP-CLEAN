@@ -28,6 +28,7 @@ import { aiRouter }                 from './ai.js';
 import { supportTicketsRouter }     from './supportTickets.js';
 import { custodyTrackingRouter }    from './custodyTracking.js';
 import { linksServicesRouter }      from './linksServices.js';
+import { rePurchasesRouter }        from './rePurchases.js';
 import { licenseCenterRouter }      from './licenseCenter.js';
 import { authRouter }               from './auth.js';
 import { recoveryRouter }           from './recovery.js';
@@ -116,6 +117,7 @@ const baseConfig = {
   supportTickets:      supportTicketsRouter,
   custodyTracking:     custodyTrackingRouter,
   linksServices:       linksServicesRouter,
+  rePurchases:           rePurchasesRouter,
 };
 
 // ─── Full config (يشمل licenseCenter — للمالك فقط) ──────────────────────────
