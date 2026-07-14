@@ -1760,3 +1760,126 @@ export type ReProject                = typeof reProjects.$inferSelect;
 export type ReDocumentType           = typeof reDocumentTypes.$inferSelect;
 export type ReDocument               = typeof reDocuments.$inferSelect;
 export type ReDocumentVersion        = typeof reDocumentVersions.$inferSelect;
+
+// ─── Real Estate: Simplified Trial Balance ───────────────────────────────────
+export const reTrialBalances = pgTable('re_trial_balances', {
+  id:            serial('id').primaryKey(),
+  orgId:         integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  name:          varchar('name',    { length: 255 }).notNull(),
+  periodLabel:   varchar('period_label',{ length: 100 }),
+  fromDate:      timestamp('from_date'),
+  toDate:        timestamp('to_date'),
+  projectId:     integer('project_id').references(() => reProjects.id, { onDelete: 'set null' }),
+  scope:         varchar('scope',   { length: 20 }).notNull().default('org'), // 'org' | 'project'
+  settlementAccountId: integer('settlement_account_id').references(() => reTbAccounts.id, { onDelete: 'set null' }),
+  notes:         text('notes'),
+  status:        varchar('status',  { length: 20 }).notNull().default('draft'), // 'draft' | 'balanced' | 'unbalanced' | 'reviewed'
+  createdBy:     integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:     integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+  updatedAt:     timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const reTbAccounts = pgTable('re_tb_accounts', {
+  id:            serial('id').primaryKey(),
+  orgId:         integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  trialBalanceId: integer('trial_balance_id').notNull().references(() => reTrialBalances.id, { onDelete: 'cascade' }),
+  parentId:      integer('parent_id').references(() => reTbAccounts.id, { onDelete: 'cascade' }),
+  code:          varchar('code',    { length: 50 }).notNull(),
+  name:          varchar('name',    { length: 255 }).notNull(),
+  category:      varchar('category',{ length: 50 }).notNull(), // 'assets' | 'liabilities' | 'equity' | 'revenue' | 'expenses'
+  nature:        varchar('nature',  { length: 10 }).notNull().default('debit'), // 'debit' | 'credit'
+  sortOrder:     integer('sort_order').notNull().default(0),
+  isSystem:      boolean('is_system').notNull().default(false),
+  isActive:      boolean('is_active').notNull().default(true),
+  reviewStatus:  varchar('review_status',{ length: 20 }).notNull().default('not_reviewed'), // 'not_reviewed' | 'reviewed' | 'has_diff' | 'needs_doc'
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+  updatedAt:     timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const reTbEntries = pgTable('re_tb_entries', {
+  id:            serial('id').primaryKey(),
+  orgId:         integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  trialBalanceId: integer('trial_balance_id').notNull().references(() => reTrialBalances.id, { onDelete: 'cascade' }),
+  accountId:     integer('account_id').notNull().references(() => reTbAccounts.id, { onDelete: 'cascade' }),
+  openingDebit:  decimal('opening_debit',  { precision: 18, scale: 2 }).notNull().default('0'),
+  openingCredit: decimal('opening_credit', { precision: 18, scale: 2 }).notNull().default('0'),
+  movementDebit: decimal('movement_debit', { precision: 18, scale: 2 }).notNull().default('0'),
+  movementCredit: decimal('movement_credit',{ precision: 18, scale: 2 }).notNull().default('0'),
+  endingDebit:   decimal('ending_debit',   { precision: 18, scale: 2 }).notNull().default('0'),
+  endingCredit:  decimal('ending_credit',  { precision: 18, scale: 2 }).notNull().default('0'),
+  notes:         text('notes'),
+  createdBy:     integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:     integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+  updatedAt:     timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const reTbTaxReturns = pgTable('re_tb_tax_returns', {
+  id:                  serial('id').primaryKey(),
+  orgId:               integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  trialBalanceId:      integer('trial_balance_id').notNull().references(() => reTrialBalances.id, { onDelete: 'cascade' }),
+  periodLabel:         varchar('period_label',{ length: 100 }),
+  purchasesPreTax:     decimal('purchases_pre_tax',    { precision: 18, scale: 2 }).notNull().default('0'),
+  purchaseReturns:     decimal('purchase_returns',     { precision: 18, scale: 2 }).notNull().default('0'),
+  netPurchases:        decimal('net_purchases',        { precision: 18, scale: 2 }).notNull().default('0'),
+  deductibleTax:     decimal('deductible_tax',       { precision: 18, scale: 2 }).notNull().default('0'),
+  openingTaxBalance: decimal('opening_tax_balance',  { precision: 18, scale: 2 }).notNull().default('0'),
+  actualRefund:        decimal('actual_refund',        { precision: 18, scale: 2 }).notNull().default('0'),
+  actualOffset:        decimal('actual_offset',        { precision: 18, scale: 2 }).notNull().default('0'),
+  refundStatus:        varchar('refund_status',{ length: 30 }).notNull().default('not_submitted'), // 'not_submitted' | 'under_review' | 'approved' | 'refunded' | 'offset'
+  notes:               text('notes'),
+  createdBy:           integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:           integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt:           timestamp('created_at').notNull().defaultNow(),
+  updatedAt:           timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const reTbPurchaseLinks = pgTable('re_tb_purchase_links', {
+  id:            serial('id').primaryKey(),
+  orgId:         integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  trialBalanceId: integer('trial_balance_id').notNull().references(() => reTrialBalances.id, { onDelete: 'cascade' }),
+  accountId:     integer('account_id').notNull().references(() => reTbAccounts.id, { onDelete: 'cascade' }),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+});
+
+export const reTbAuditLog = pgTable('re_tb_audit_log', {
+  id:            serial('id').primaryKey(),
+  orgId:         integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  trialBalanceId: integer('trial_balance_id').notNull().references(() => reTrialBalances.id, { onDelete: 'cascade' }),
+  accountId:     integer('account_id').references(() => reTbAccounts.id, { onDelete: 'set null' }),
+  action:        varchar('action',{ length: 50 }).notNull(), // 'create' | 'update' | 'delete' | 'settlement' | 'reset_accounts'
+  fieldName:     varchar('field_name',{ length: 50 }),
+  oldValue:      text('old_value'),
+  newValue:      text('new_value'),
+  userId:        integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+  userName:      varchar('user_name',{ length: 255 }),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+});
+
+export const reTbSettlements = pgTable('re_tb_settlements', {
+  id:            serial('id').primaryKey(),
+  orgId:         integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  trialBalanceId: integer('trial_balance_id').notNull().references(() => reTrialBalances.id, { onDelete: 'cascade' }),
+  accountId:     integer('account_id').notNull().references(() => reTbAccounts.id, { onDelete: 'cascade' }),
+  difference:    decimal('difference',{ precision: 18, scale: 2 }).notNull(),
+  direction:     varchar('direction',{ length: 10 }).notNull(), // 'debit' | 'credit'
+  previousBalanceDebit:  decimal('prev_balance_debit',  { precision: 18, scale: 2 }).notNull().default('0'),
+  previousBalanceCredit: decimal('prev_balance_credit', { precision: 18, scale: 2 }).notNull().default('0'),
+  newBalanceDebit:       decimal('new_balance_debit',   { precision: 18, scale: 2 }).notNull().default('0'),
+  newBalanceCredit:      decimal('new_balance_credit',  { precision: 18, scale: 2 }).notNull().default('0'),
+  userConfirmed: boolean('user_confirmed').notNull().default(false),
+  confirmedAt:   timestamp('confirmed_at'),
+  notes:         text('notes'),
+  createdBy:     integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+});
+
+// Real Estate Trial Balance Types
+export type ReTrialBalance           = typeof reTrialBalances.$inferSelect;
+export type ReTbAccount              = typeof reTbAccounts.$inferSelect;
+export type ReTbEntry                = typeof reTbEntries.$inferSelect;
+export type ReTbTaxReturn            = typeof reTbTaxReturns.$inferSelect;
+export type ReTbPurchaseLink         = typeof reTbPurchaseLinks.$inferSelect;
+export type ReTbAuditLogEntry        = typeof reTbAuditLog.$inferSelect;
+export type ReTbSettlement           = typeof reTbSettlements.$inferSelect;

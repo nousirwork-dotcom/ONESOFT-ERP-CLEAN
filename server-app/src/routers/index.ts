@@ -30,6 +30,7 @@ import { custodyTrackingRouter }    from './custodyTracking.js';
 import { linksServicesRouter }      from './linksServices.js';
 import { rePurchasesRouter }        from './rePurchases.js';
 import { reDocumentsRouter }        from './reDocuments.js';
+import { reTrialBalanceRouter }     from './reTrialBalance.js';
 import { licenseCenterRouter }      from './licenseCenter.js';
 import { authRouter }               from './auth.js';
 import { recoveryRouter }           from './recovery.js';
@@ -120,6 +121,7 @@ const baseConfig = {
   linksServices:       linksServicesRouter,
   rePurchases:           rePurchasesRouter,
   reDocuments:           reDocumentsRouter,
+  reTrialBalance:        reTrialBalanceRouter,
 };
 
 // ─── Full config (يشمل licenseCenter — للمالك فقط) ──────────────────────────

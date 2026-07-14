@@ -1,7 +1,7 @@
 import { lazy, Suspense } from "react";
 import {
   FolderOpen, Scale, Building2,
-  ArrowRight, ArrowLeft,
+  ArrowRight, ArrowLeft, ShieldAlert,
 } from "lucide-react";
 import { Card, CardContent } from "@/core/ui/card";
 import { Button } from "@/core/ui/button";
@@ -131,17 +131,22 @@ export function ReDocumentsPage() {
 }
 
 // ─── ميزان المراجعة المبسط ──
+const ReTrialBalanceFullPage = lazy(() => import("./ReTrialBalanceFullPage"));
+
 export function ReTrialBalancePage() {
+  const { user } = useAuth();
+  const { lang } = useLang();
+  if (!canViewHsScreen(user, 'hs_re_trial_balance')) {
+    return (
+      <div className="flex items-center justify-center h-full text-gray-400">
+        <ShieldAlert className="w-12 h-12 mr-2" />
+        {lang === "ar" ? "ليس لديك صلاحية الوصول" : "Access denied"}
+      </div>
+    );
+  }
   return (
-    <ReShell
-      perm="hs_re_trial_balance"
-      icon={Scale}
-      titleAr="ميزان المراجعة المبسط"
-      titleEn="Simplified Trial Balance"
-      descAr="نظرة سريعة على الحسابات والأرصدة مرتبطة بالمشروع."
-      descEn="Quick overview of accounts and balances related to the project."
-      color="text-indigo-600 dark:text-indigo-400"
-      bg="bg-indigo-500/10"
-    />
+    <Suspense fallback={<div className="flex items-center justify-center h-full"><span className="text-gray-400 text-sm">{lang === "ar" ? "جاري التحميل..." : "Loading..."}</span></div>}>
+      <ReTrialBalanceFullPage />
+    </Suspense>
   );
 }
