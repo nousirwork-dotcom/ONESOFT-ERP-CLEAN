@@ -5,4 +5,4 @@
  * constant to match the new filename (without the .sql extension), then
  * run `pnpm migrate` so the live database is stamped with the new version.
  */
-export const REQUIRED_SCHEMA_VERSION = '0031_re_housing_units';
+export const REQUIRED_SCHEMA_VERSION = '0032_add_record_type_system_key';

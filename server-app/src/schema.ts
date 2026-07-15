@@ -255,6 +255,8 @@ export const chartOfAccounts = pgTable('chart_of_accounts', {
   notes: text('notes'),
   isActive: boolean('is_active').notNull().default(true),
   balance: decimal('balance', { precision: 18, scale: 4 }).default('0'),
+  recordType: varchar('record_type', { length: 30 }).notNull().default('user'),
+  systemKey: varchar('system_key', { length: 100 }),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 

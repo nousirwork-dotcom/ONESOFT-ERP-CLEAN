@@ -1926,6 +1926,33 @@ type TAccount = {
   isParent: boolean | null;
   allowPosting: boolean | null;
   parentId: number | null;
+  recordType?: string | null;
+  systemKey?: string | null;
+};
+
+/** هل السجل محمي من الحذف تماماً؟ */
+const isDeleteProtected = (rt: string | null | undefined) =>
+  rt === 'system_protected' || rt === 'system_editable';
+
+/** هل السجل محمي من التعديل تماماً؟ */
+const isEditProtected = (rt: string | null | undefined) =>
+  rt === 'system_protected';
+
+/** شارة نوع السجل النظامي */
+const RecordTypeBadge = ({ rt }: { rt: string | null | undefined }) => {
+  if (!rt || rt === 'user') return null;
+  const cfg: Record<string, { label: string; cls: string }> = {
+    system_protected: { label: '🔒 محمي',         cls: 'bg-red-100 text-red-700 border-red-200' },
+    system_editable:  { label: '🔐 نظامي',        cls: 'bg-amber-100 text-amber-700 border-amber-200' },
+    system_flexible:  { label: '⚙ مرن',           cls: 'bg-blue-100 text-blue-600 border-blue-200' },
+  };
+  const c = cfg[rt];
+  if (!c) return null;
+  return (
+    <span className={`text-[9px] px-1 py-0 rounded border font-medium shrink-0 ${c.cls}`}>
+      {c.label}
+    </span>
+  );
 };
 
 const TREE_INDENT = 18;
@@ -1954,7 +1981,7 @@ function TreeContextMenu({
   onAddChild: (a: TAccount) => void;
   onView: (a: TAccount) => void;
   onCopy: (a: TAccount) => void;
-  onDelete: (id: number, name: string) => void;
+  onDelete: (id: number, name: string, rt?: string | null) => void;
 }) {
   useEffect(() => {
     if (!state) return;
@@ -2036,7 +2063,7 @@ function TreeContextMenu({
       {item(
         <Trash2 className="w-3.5 h-3.5 shrink-0" />,
         "حذف الحساب",
-        () => onDelete(state.account.id, state.account.name ?? ""),
+        () => onDelete(state.account.id, state.account.name ?? "", state.account.recordType),
         "text-red-600 hover:bg-red-50",
       )}
     </div>
@@ -2049,7 +2076,7 @@ function AccountTreeNode({ account, depth, selectedId, onSelect, onDelete, onCon
   depth: number;
   selectedId: number | null;
   onSelect: (a: TAccount) => void;
-  onDelete: (id: number, name: string) => void;
+  onDelete: (id: number, name: string, rt?: string | null) => void;
   onContextMenu: (a: TAccount, e: React.MouseEvent) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -2096,6 +2123,9 @@ function AccountTreeNode({ account, depth, selectedId, onSelect, onDelete, onCon
         {/* name */}
         <span className={`flex-1 truncate ${lvlText(lvl)}`}>{account.name}</span>
 
+        {/* شارة نوع السجل النظامي */}
+        <RecordTypeBadge rt={account.recordType} />
+
         {/* meta — visible on hover */}
         <span className="hidden group-hover:flex items-center gap-1.5 shrink-0">
           <span className="text-[10px] text-slate-400">{treeTypeLabel(account.accountType)}</span>
@@ -2116,10 +2146,11 @@ function AccountTreeNode({ account, depth, selectedId, onSelect, onDelete, onCon
           >
             <MoreVertical className="w-3 h-3" />
           </button>
-          {!account.isParent && (
+          {!account.isParent && !isDeleteProtected(account.recordType) && (
             <button
               className="text-red-300 hover:text-red-500"
               onClick={e => { e.stopPropagation(); onDelete(account.id, account.name ?? ""); }}
+              title="حذف"
             >
               <Trash2 className="w-3 h-3" />
             </button>
@@ -2147,7 +2178,7 @@ function AccountTreeNode({ account, depth, selectedId, onSelect, onDelete, onCon
 function AccountTreeRootView({ selectedId, onSelect, onDelete, onContextMenu }: {
   selectedId: number | null;
   onSelect: (a: TAccount) => void;
-  onDelete: (id: number, name: string) => void;
+  onDelete: (id: number, name: string, rt?: string | null) => void;
   onContextMenu: (a: TAccount, e: React.MouseEvent) => void;
 }) {
   const rootQ = trpc.accounts.children.useQuery({ parentId: null }, { staleTime: 30_000 });
@@ -2502,7 +2533,11 @@ function ChartOfAccountsPage() {
 
   const typeLabel = (t: string) => ({ assets: "أصول", liabilities: "خصوم", equity: "حقوق ملكية", revenue: "إيرادات", expenses: "مصروفات" }[t] ?? t);
 
-  const handleTreeDelete = (id: number, name: string) => {
+  const handleTreeDelete = (id: number, name: string, rt?: string | null) => {
+    if (isDeleteProtected(rt)) {
+      toast.error(`لا يمكن حذف هذا الحساب — ${rt === 'system_protected' ? 'سجل نظامي محمي' : 'سجل نظامي أساسي'}`);
+      return;
+    }
     if (confirm(`هل تريد حذف الحساب "${name}"؟`)) {
       deleteMutation.mutate({ id });
     }
@@ -2670,7 +2705,7 @@ function ChartOfAccountsPage() {
             onAddChild={handleCtxAddChild}
             onView={handleCtxView}
             onCopy={handleCtxCopy}
-            onDelete={(id, name) => { setCtxMenu(null); handleTreeDelete(id, name); }}
+            onDelete={(id, name, rt) => { setCtxMenu(null); handleTreeDelete(id, name, rt); }}
           />
 
           {/* detail panel */}
@@ -2715,12 +2750,20 @@ function ChartOfAccountsPage() {
                     </span>
                   </div>
                 </div>
-                {!selectedAccount.isParent && (
+                {/* نوع السجل */}
+                {selectedAccount.recordType && selectedAccount.recordType !== 'user' && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">نوع السجل</span>
+                    <RecordTypeBadge rt={selectedAccount.recordType} />
+                  </div>
+                )}
+
+                {!selectedAccount.isParent && !isDeleteProtected(selectedAccount.recordType) && (
                   <Button
                     variant="destructive" size="sm"
                     className="w-full h-7 text-xs mt-2"
                     disabled={deleteMutation.isPending}
-                    onClick={() => handleTreeDelete(selectedAccount.id, selectedAccount.name ?? "")}
+                    onClick={() => handleTreeDelete(selectedAccount.id, selectedAccount.name ?? "", selectedAccount.recordType)}
                   >
                     <Trash2 className="w-3 h-3 ml-1" /> حذف الحساب
                   </Button>
@@ -2728,6 +2771,12 @@ function ChartOfAccountsPage() {
                 {selectedAccount.isParent && (
                   <p className="text-[10px] text-amber-600 flex items-center gap-1 bg-amber-50 rounded p-1.5 border border-amber-100">
                     <AlertCircle className="w-3 h-3 shrink-0" /> لا يمكن حذف هذا الحساب لأنه يحتوي على حسابات فرعية
+                  </p>
+                )}
+                {!selectedAccount.isParent && isDeleteProtected(selectedAccount.recordType) && (
+                  <p className="text-[10px] text-slate-500 flex items-center gap-1 bg-slate-50 rounded p-1.5 border border-slate-200">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    {selectedAccount.recordType === 'system_protected' ? 'سجل نظامي محمي — لا يمكن حذفه أو تعديله' : 'سجل نظامي أساسي — لا يمكن حذفه'}
                   </p>
                 )}
               </div>
