@@ -578,6 +578,45 @@ export default function DocumentJournalsPage() {
   const { data: fieldDictList = [] }   = trpc.fieldDictionary.list.useQuery();
   const syncFieldsMut = trpc.fieldDictionary.syncSystemFields.useMutation();
 
+  // ── navigate intent (مطالعة من صفحة أخرى) ──────────────────────────────
+  const djpIntentRef = useRef<{ docType?: string; editId?: number } | null>(null);
+
+  // Case 1: الصفحة لم تكن مفتوحة → sessionStorage
+  useEffect(() => {
+    const raw = sessionStorage.getItem("djp_intent");
+    if (raw) {
+      sessionStorage.removeItem("djp_intent");
+      try {
+        const intent = JSON.parse(raw) as { docType?: string; editId?: number };
+        djpIntentRef.current = intent;
+        if (intent.docType) setSelectedType(intent.docType);
+      } catch { /* ignore */ }
+    }
+  }, []);
+
+  // Case 1 cont: لما تحمل البيانات نفذ التنقل
+  useEffect(() => {
+    if (!djpIntentRef.current?.editId || allJournals.length === 0) return;
+    const j = allJournals.find(jj => jj.id === djpIntentRef.current!.editId);
+    if (j) { openEdit(j); setView("form"); }
+    djpIntentRef.current = null;
+  }, [allJournals]);
+
+  // Case 2: الصفحة مفتوحة بالفعل → CustomEvent
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ docType?: string; editId?: number }>).detail;
+      if (detail.docType) setSelectedType(detail.docType);
+      if (detail.editId) {
+        const j = allJournals.find(jj => jj.id === detail.editId);
+        if (j) { openEdit(j); setView("form"); }
+        else { djpIntentRef.current = detail; }
+      }
+    };
+    window.addEventListener("djp_navigate", handler);
+    return () => window.removeEventListener("djp_navigate", handler);
+  }, [allJournals]);
+
   // ── مزامنة الحقول النظامية عند تحميل الصفحة ───────────────────────────
   const syncedRef = useRef(false);
   useEffect(() => {
@@ -772,6 +811,7 @@ export default function DocumentJournalsPage() {
 
   const handleMutalaah = useCallback(() => {
     const fieldId = activeField.id;
+    const fieldValue = activeField.value;
     if (!fieldId) {
       toast.info("لم يتم تحديد أي حقل — اضغط على حقل أولاً");
       return;
@@ -781,8 +821,19 @@ export default function DocumentJournalsPage() {
       toast.info("لا يوجد سجل مرتبط بالحقل المحدد.");
       return;
     }
+    // للحقول المرتبطة بدفاتر المستندات — افتح السجل المحدد مباشرةً
+    const djpFields = ["customersJournal", "suppliersJournal", "issuanceJournalBookId", "issuanceInventoryDocBookId"];
+    if (djpFields.includes(fieldId) && fieldValue) {
+      const journalId = parseInt(fieldValue);
+      if (journalId) {
+        const linked = allJournals.find(j => j.id === journalId);
+        const intent = { docType: linked?.docType, editId: journalId };
+        sessionStorage.setItem("djp_intent", JSON.stringify(intent));
+        window.dispatchEvent(new CustomEvent("djp_navigate", { detail: intent }));
+      }
+    }
     tabManager.openTab(mapped.path, mapped.label, mapped.icon);
-  }, [activeField.id, tabManager]);
+  }, [activeField.id, activeField.value, allJournals, tabManager]);
 
   const handlePrint = useCallback(() => {
     if (isDirty) {
