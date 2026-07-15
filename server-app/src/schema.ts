@@ -1875,6 +1875,26 @@ export const reTbSettlements = pgTable('re_tb_settlements', {
   createdAt:     timestamp('created_at').notNull().defaultNow(),
 });
 
+// ─── Real Estate: Housing Units (Phase 1) ──────────────────────────────────────
+export const reHousingUnits = pgTable('re_housing_units', {
+  id:            serial('id').primaryKey(),
+  orgId:         integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  projectId:     integer('project_id').references(() => reProjects.id, { onDelete: 'set null' }),
+  unitNo:        varchar('unit_no',    { length: 50 }).notNull(),
+  unitType:      varchar('unit_type',  { length: 30 }).notNull().default('apartment'),
+  status:        varchar('status',     { length: 20 }).notNull().default('available'),
+  area:          decimal('area',       { precision: 12, scale: 2 }),
+  price:         decimal('price',      { precision: 18, scale: 4 }),
+  floor:         varchar('floor',      { length: 20 }),
+  block:         varchar('block',      { length: 30 }),
+  building:      varchar('building',   { length: 30 }),
+  notes:         text('notes'),
+  createdBy:     integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:     integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+  updatedAt:     timestamp('updated_at').notNull().defaultNow(),
+});
+
 // Real Estate Trial Balance Types
 export type ReTrialBalance           = typeof reTrialBalances.$inferSelect;
 export type ReTbAccount              = typeof reTbAccounts.$inferSelect;
@@ -1883,3 +1903,6 @@ export type ReTbTaxReturn            = typeof reTbTaxReturns.$inferSelect;
 export type ReTbPurchaseLink         = typeof reTbPurchaseLinks.$inferSelect;
 export type ReTbAuditLogEntry        = typeof reTbAuditLog.$inferSelect;
 export type ReTbSettlement           = typeof reTbSettlements.$inferSelect;
+
+// Real Estate Housing Units Types
+export type ReHousingUnit            = typeof reHousingUnits.$inferSelect;

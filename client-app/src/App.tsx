@@ -95,6 +95,7 @@ import CustodyRecordPage from "@/modules/helpservices/pages/CustodyRecordPage";
 import RealEstatePage from "@/modules/helpservices/pages/RealEstatePage";
 import RePurchasesPage from "@/modules/helpservices/pages/RePurchasesPage";
 import { ReDocumentsPage, ReTrialBalancePage } from "@/modules/helpservices/pages/ReSubPages";
+import ReUnitsPage from "@/modules/helpservices/pages/ReUnitsPage";
 import { TabPathContext } from "@/core/contexts/TabPathContext";
 import LicenseActivationPage from "@/modules/license/pages/LicenseActivationPage";
 import SuperAdminPage from "@/core/admin/SuperAdminPage";
@@ -149,6 +150,7 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/hs/re-purchases":  RePurchasesPage,
   "/hs/re-documents":  ReDocumentsPage,
   "/hs/re-trial-balance": ReTrialBalancePage,
+  "/hs/re-units":      ReUnitsPage,
   "/purchases/suppliers":         PurchaseSuppliersPage,
   "/purchases/supplier-groups":  PurchaseSupplierGroupsPage,
   "/purchases/orders":           PurchaseOrdersPage,

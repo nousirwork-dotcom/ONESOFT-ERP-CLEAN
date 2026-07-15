@@ -18,6 +18,7 @@ export const HS_SCREEN_PERMS = [
   "hs_re_purchases",
   "hs_re_documents",
   "hs_re_trial_balance",
+  "hs_re_units",
 ] as const;
 
 export type HsScreenPerm = (typeof HS_SCREEN_PERMS)[number];
@@ -60,4 +61,5 @@ export const HS_PATH_PERM: Record<string, HsScreenPerm> = {
   "/hs/re-purchases":  "hs_re_purchases",
   "/hs/re-documents":  "hs_re_documents",
   "/hs/re-trial-balance": "hs_re_trial_balance",
+  "/hs/re-units":          "hs_re_units",
 };

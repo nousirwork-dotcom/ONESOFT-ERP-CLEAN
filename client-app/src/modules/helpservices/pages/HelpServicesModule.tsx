@@ -28,6 +28,7 @@ export const menuSections = [
       { id: "hs-ai-assistant",  label: "المساعد الذكي",               icon: Sparkles,       path: "/hs/ai-assistant" },
       { id: "hs-support",       label: "طلب الدعم الفني",             icon: Headphones,     path: "/hs/support" },
       { id: "hs-real-estate",  label: "المطور العقاري",              icon: Building2,     path: "/hs/real-estate" },
+      { id: "hs-re-units",      label: "الوحدات السكنية",              icon: Building2,     path: "/hs/re-units" },
     ] as Array<{ id: string; label: string; icon: React.ElementType; path?: string }>,
   },
 ];

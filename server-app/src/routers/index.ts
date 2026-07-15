@@ -31,6 +31,7 @@ import { linksServicesRouter }      from './linksServices.js';
 import { rePurchasesRouter }        from './rePurchases.js';
 import { reDocumentsRouter }        from './reDocuments.js';
 import { reTrialBalanceRouter }     from './reTrialBalance.js';
+import { reUnitsRouter }             from './reUnits.js';
 import { licenseCenterRouter }      from './licenseCenter.js';
 import { authRouter }               from './auth.js';
 import { recoveryRouter }           from './recovery.js';
@@ -122,6 +123,7 @@ const baseConfig = {
   rePurchases:           rePurchasesRouter,
   reDocuments:           reDocumentsRouter,
   reTrialBalance:        reTrialBalanceRouter,
+  reUnits:               reUnitsRouter,
 };
 
 // ─── Full config (يشمل licenseCenter — للمالك فقط) ──────────────────────────

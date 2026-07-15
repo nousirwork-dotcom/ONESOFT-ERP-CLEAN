@@ -1,5 +1,5 @@
 import {
-  Building2, ReceiptText, FolderOpen, Scale,
+  Building2, ReceiptText, FolderOpen, Scale, Home,
 } from "lucide-react";
 import { Card, CardContent } from "@/core/ui/card";
 import { Button } from "@/core/ui/button";
@@ -14,7 +14,7 @@ import { ArrowRight, ArrowLeft, ShieldAlert } from "lucide-react";
 
 type SubCard = {
   id: string;
-  perm: "hs_re_purchases" | "hs_re_documents" | "hs_re_trial_balance";
+  perm: "hs_re_purchases" | "hs_re_documents" | "hs_re_trial_balance" | "hs_re_units";
   path: string;
   icon: React.ElementType;
   labelAr: string;
@@ -37,6 +37,18 @@ const SUB_CARDS: SubCard[] = [
     descEn: "Complete number and details of purchases related to the project.",
     color: "text-emerald-600 dark:text-emerald-400",
     bg: "bg-emerald-500/10",
+  },
+  {
+    id: "re-units",
+    perm: "hs_re_units",
+    path: "/hs/re-units",
+    icon: Home,
+    labelAr: "الوحدات السكنية",
+    labelEn: "Housing Units",
+    descAr: "إدارة وتسجيل الوحدات السكنية للمشروع العقاري.",
+    descEn: "Manage and register housing units for the real estate project.",
+    color: "text-teal-600 dark:text-teal-400",
+    bg: "bg-teal-500/10",
   },
   {
     id: "re-documents",
