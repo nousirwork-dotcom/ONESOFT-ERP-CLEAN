@@ -26,8 +26,9 @@ const SelectTrigger = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Trigger>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger> & {
     size?: "sm" | "default";
+    hideArrow?: boolean;
   }
->(({ className, size = "default", children, ...props }, ref) => {
+>(({ className, size = "default", hideArrow, children, ...props }, ref) => {
   return (
     <SelectPrimitive.Trigger
       ref={ref}
@@ -40,9 +41,11 @@ const SelectTrigger = React.forwardRef<
       {...props}
     >
       {children}
-      <SelectPrimitive.Icon asChild>
-        <ChevronDownIcon className="size-4 opacity-50" />
-      </SelectPrimitive.Icon>
+      {!hideArrow && (
+        <SelectPrimitive.Icon asChild>
+          <ChevronDownIcon className="size-4 opacity-50" />
+        </SelectPrimitive.Icon>
+      )}
     </SelectPrimitive.Trigger>
   );
 });

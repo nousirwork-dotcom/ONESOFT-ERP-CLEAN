@@ -1,14 +1,17 @@
-import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import React, { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { Input } from "@/core/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/core/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/core/ui/dialog";
 import { Button } from "@/core/ui/button";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/core/ui/tooltip";
 import { trpc } from "@/shared/lib/trpc";
+import { useTabManager } from "@/core/contexts/TabManagerContext";
 import {
   BookOpen, BookMarked, RotateCcw, ClipboardList, ArrowLeftRight, Tag,
   Plus, Save, Trash2, ChevronFirst, ChevronLast, RefreshCw,
   ChevronLeft as CLeft, ChevronRight as CRight, ArrowLeft, FileText, Eye,
   BookText, PackageMinus, PackagePlus, Users, Truck, Copy,
+  ListFilter, Search,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -361,35 +364,83 @@ const FI = ({ value, onChange, placeholder, disabled, mono }: {
   <Input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} disabled={disabled}
     className={`h-7 text-[11px] px-2 border-slate-200 focus:border-indigo-400 focus-visible:ring-0 focus-visible:ring-offset-0 bg-white rounded disabled:bg-slate-50 disabled:text-slate-400 ${mono ? "font-mono" : ""}`} />
 );
-const FS = ({ value, onValueChange, children, placeholder }: {
-  value: string; onValueChange: (v: string) => void; children: React.ReactNode; placeholder?: string;
+/* ── Active-Field context ── */
+type ActiveFieldState = {
+  id: string | null;
+  value: string;
+  previewPage: string | null;
+  previewLabel: string;
+};
+const ActiveFieldCtx = React.createContext<{
+  state: ActiveFieldState;
+  set: (s: ActiveFieldState) => void;
+} | null>(null);
+
+function useActiveField() {
+  const ctx = React.useContext(ActiveFieldCtx);
+  if (!ctx) throw new Error("useActiveField must be inside ActiveFieldCtx.Provider");
+  return ctx;
+}
+
+const FS = ({ id, value, onValueChange, children, placeholder, previewPage, previewLabel }: {
+  id: string;
+  value: string;
+  onValueChange: (v: string) => void;
+  children: React.ReactNode;
+  placeholder?: string;
+  previewPage?: string;
+  previewLabel?: string;
 }) => {
   const [open, setOpen] = useState(false);
+  const { state, set } = useActiveField();
+  const isActive = state.id === id;
 
   return (
-    <Select
-      value={value || "__none__"}
-      onValueChange={v => { onValueChange(v === "__none__" ? "" : v); setOpen(false); }}
-      open={open}
-      onOpenChange={isOpen => { if (!isOpen) setOpen(false); }}
-    >
-      <SelectTrigger
-        className="h-7 text-[11px] px-2 border-slate-200 focus:ring-0 focus:ring-offset-0 bg-white rounded cursor-text select-none"
-        onPointerDown={e => {
-          if (e.button === 0) {
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div
+          className={`relative flex items-center rounded border bg-white h-7 px-2 text-[11px] cursor-text select-none transition-all ${
+            isActive
+              ? "border-indigo-400 ring-1 ring-indigo-200"
+              : "border-slate-200 hover:border-slate-300"
+          }`}
+          onPointerDown={e => {
+            if (e.button === 0) {
+              e.preventDefault();
+              e.stopPropagation();
+              set({ id, value, previewPage: previewPage ?? null, previewLabel: previewLabel ?? "" });
+              (e.currentTarget as HTMLDivElement).focus();
+            }
+          }}
+          onContextMenu={e => {
             e.preventDefault();
-            e.currentTarget.focus();
-          }
-        }}
-        onContextMenu={e => {
-          e.preventDefault();
-          setOpen(true);
-        }}
-      >
-        <SelectValue placeholder={placeholder ?? "— اختر —"} />
-      </SelectTrigger>
-      <SelectContent onInteractOutside={() => setOpen(false)}>{children}</SelectContent>
-    </Select>
+            e.stopPropagation();
+            set({ id, value, previewPage: previewPage ?? null, previewLabel: previewLabel ?? "" });
+            setOpen(true);
+          }}
+          tabIndex={0}
+        >
+          <Select
+            value={value || "__none__"}
+            onValueChange={v => { onValueChange(v === "__none__" ? "" : v); setOpen(false); }}
+            open={open}
+            onOpenChange={isOpen => { if (!isOpen) setOpen(false); }}
+          >
+            <SelectTrigger
+              hideArrow
+              className="h-full w-full border-0 bg-transparent p-0 shadow-none focus:ring-0 focus:ring-offset-0 focus-visible:ring-0 cursor-text"
+            >
+              <SelectValue placeholder={placeholder ?? "— اختر —"} />
+            </SelectTrigger>
+            <SelectContent onInteractOutside={() => setOpen(false)}>{children}</SelectContent>
+          </Select>
+          <span className="absolute left-1 top-1/2 -translate-y-1/2 pointer-events-none opacity-40">
+            <ListFilter className="w-3 h-3 text-slate-400" />
+          </span>
+        </div>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" align="center">كليك يمين لعرض الاختيارات</TooltipContent>
+    </Tooltip>
   );
 };
 const P = ({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) => (
@@ -506,6 +557,8 @@ export default function DocumentJournalsPage() {
   const [ptConfig, setPtConfig]         = useState<PTC>(DEFAULT_PTC);
   const [activeTab, setActiveTab]       = useState<"basic" | "payment-types" | "accounting-links" | "issuance" | "options" | "doc-components">("basic");
   const [docComponents, setDocComponents] = useState<DocComponent[]>([]);
+  const [activeField, setActiveField]     = useState<ActiveFieldState>({ id: null, value: null, previewPage: null, previewLabel: null });
+  const tabManager = useTabManager();
 
   /* ── queries ── */
   const listQuery = trpc.documentJournals.list.useQuery();
@@ -871,6 +924,7 @@ export default function DocumentJournalsPage() {
             </div>
 
             {/* ── Tab Content ── */}
+            <ActiveFieldCtx.Provider value={{ state: activeField, set: setActiveField }}>
             <div className="flex-1 overflow-hidden">
 
             {/* ── TAB: البيانات الأساسية ── */}
@@ -881,7 +935,7 @@ export default function DocumentJournalsPage() {
               <P title="البيانات الأساسية">
                 <div className="grid grid-cols-2 gap-x-5 gap-y-2">
                   <R label="نوع المستند">
-                    <FS value={form.docType} onValueChange={v => set("docType", v)}>
+                    <FS id="docType" value={form.docType} onValueChange={v => set("docType", v)}>
                       <SelectItem value="__none__">— اختر —</SelectItem>
                       {DOC_TYPES.map(dt => <SelectItem key={dt.id} value={dt.id}>{dt.label}</SelectItem>)}
                     </FS>
@@ -906,19 +960,19 @@ export default function DocumentJournalsPage() {
                 <P title="حدود الاستخدام">
                   <div className="grid grid-cols-1 gap-y-2">
                     <R label="مجموعة مستخدمين" lw={130}>
-                      <FS value={form.userGroup} onValueChange={v => set("userGroup", v)}>
+                      <FS id="userGroup" value={form.userGroup} onValueChange={v => set("userGroup", v)}>
                         <SelectItem value="__none__">الكل</SelectItem>
                         {(userGroupsList ?? []).map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>)}
                       </FS>
                     </R>
                     <R label="مستخدم" lw={130}>
-                      <FS value={form.user} onValueChange={v => set("user", v)}>
+                      <FS id="user" value={form.user} onValueChange={v => set("user", v)}>
                         <SelectItem value="__none__">الكل</SelectItem>
                         {(users as any[])?.map((u: any) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
                       </FS>
                     </R>
                     <R label="مخزن" lw={130}>
-                      <FS value={form.warehouse} onValueChange={v => set("warehouse", v)}>
+                      <FS id="warehouse" value={form.warehouse} onValueChange={v => set("warehouse", v)} previewPage="/cfg/warehouses" previewLabel="المخازن">
                         <SelectItem value="__none__">الكل</SelectItem>
                         {(warehousesList as any[])?.map((w: any) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
                       </FS>
@@ -932,7 +986,7 @@ export default function DocumentJournalsPage() {
                 <P title="ربط العملاء والموردين بالدفتر">
                   <div className="grid grid-cols-1 gap-y-2">
                     <R label="تكويد العملاء" lw={120}>
-                      <FS value={form.customersJournal} onValueChange={v => set("customersJournal", v)}>
+                      <FS id="customersJournal" value={form.customersJournal} onValueChange={v => set("customersJournal", v)}>
                         <SelectItem value="none">— بدون ربط —</SelectItem>
                         {(custJournalsList as any[] ?? []).map((j: any) => (
                           <SelectItem key={j.id} value={String(j.id)}>
@@ -942,7 +996,7 @@ export default function DocumentJournalsPage() {
                       </FS>
                     </R>
                     <R label="تكويد الموردين" lw={120}>
-                      <FS value={form.suppliersJournal} onValueChange={v => set("suppliersJournal", v)}>
+                      <FS id="suppliersJournal" value={form.suppliersJournal} onValueChange={v => set("suppliersJournal", v)}>
                         <SelectItem value="none">— بدون ربط —</SelectItem>
                         {(suppJournalsList as any[] ?? []).map((j: any) => (
                           <SelectItem key={j.id} value={String(j.id)}>
@@ -990,7 +1044,7 @@ export default function DocumentJournalsPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2 items-center pt-2" style={{ borderTop: "1px solid #f1f5f9" }}>
                   <R label="إعادة الترقيم" lw={110}>
-                    <FS value={form.resetFrequency} onValueChange={v => set("resetFrequency", v)}>
+                    <FS id="resetFrequency" value={form.resetFrequency} onValueChange={v => set("resetFrequency", v)}>
                       <SelectItem value="none">بدون إعادة</SelectItem>
                       <SelectItem value="daily">يومي</SelectItem>
                       <SelectItem value="monthly">شهري</SelectItem>
@@ -1013,7 +1067,7 @@ export default function DocumentJournalsPage() {
                 <P title="نماذج الطباعة">
                   <div className="space-y-2">
                     <R label="النموذج الأساسي">
-                      <FS value={form.printTemplate} onValueChange={v => set("printTemplate", v)} placeholder="— اختر نموذج —">
+                      <FS id="printTemplate" value={form.printTemplate} onValueChange={v => set("printTemplate", v)} placeholder="— اختر نموذج —">
                         <SelectItem value="__none__">— بدون نموذج —</SelectItem>
                         {(templates ?? []).map(t => (
                           <SelectItem key={t.code} value={t.code}>
@@ -1023,7 +1077,7 @@ export default function DocumentJournalsPage() {
                       </FS>
                     </R>
                     <R label="النموذج الثانوي">
-                      <FS value={form.printTemplate2} onValueChange={v => set("printTemplate2", v)} placeholder="— اختر نموذج —">
+                      <FS id="printTemplate2" value={form.printTemplate2} onValueChange={v => set("printTemplate2", v)} placeholder="— اختر نموذج —">
                         <SelectItem value="__none__">— بدون نموذج —</SelectItem>
                         {(templates ?? []).map(t => (
                           <SelectItem key={t.code} value={t.code}>
@@ -1252,14 +1306,14 @@ export default function DocumentJournalsPage() {
               <P title="خصائص السندات المصدرة">
                 <div className="grid grid-cols-2 gap-x-5 gap-y-2.5">
                   <R label="نوع القيد" lw={145}>
-                    <FS value={form.issuanceJournalType} onValueChange={v => set("issuanceJournalType", v)}>
+                    <FS id="issuanceJournalType" value={form.issuanceJournalType} onValueChange={v => set("issuanceJournalType", v)}>
                       <SelectItem value="__none__">— اختر —</SelectItem>
                       {DOC_TYPES.filter(dt => ["journal_entry","purchase_invoice","receipt_voucher","payment_voucher"].includes(dt.id))
                         .map(dt => <SelectItem key={dt.id} value={dt.id}>{dt.label}</SelectItem>)}
                     </FS>
                   </R>
                   <R label="دفتر القيد" lw={145}>
-                    <FS value={form.issuanceJournalBookId} onValueChange={v => set("issuanceJournalBookId", v)}>
+                    <FS id="issuanceJournalBookId" value={form.issuanceJournalBookId} onValueChange={v => set("issuanceJournalBookId", v)}>
                       <SelectItem value="__none__">— اختر —</SelectItem>
                       {allJournals
                         .filter(j => !form.issuanceJournalType || j.docType === form.issuanceJournalType)
@@ -1271,14 +1325,14 @@ export default function DocumentJournalsPage() {
                     </FS>
                   </R>
                   <R label="نوع مستند المخزون" lw={145}>
-                    <FS value={form.issuanceInventoryDocType} onValueChange={v => { set("issuanceInventoryDocType", v); set("issuanceInventoryDocBookId", ""); }}>
+                    <FS id="issuanceInventoryDocType" value={form.issuanceInventoryDocType} onValueChange={v => { set("issuanceInventoryDocType", v); set("issuanceInventoryDocBookId", ""); }}>
                       <SelectItem value="__none__">— اختر —</SelectItem>
                       {DOC_TYPES.filter(dt => ["stock_issue_items","stock_receipt_items","stock_transfer","stock_receipt","stock_issue"].includes(dt.id))
                         .map(dt => <SelectItem key={dt.id} value={dt.id}>{dt.label}</SelectItem>)}
                     </FS>
                   </R>
                   <R label="دفتر مستند المخزون" lw={145}>
-                    <FS value={form.issuanceInventoryDocBookId} onValueChange={v => set("issuanceInventoryDocBookId", v)}>
+                    <FS id="issuanceInventoryDocBookId" value={form.issuanceInventoryDocBookId} onValueChange={v => set("issuanceInventoryDocBookId", v)}>
                       <SelectItem value="__none__">— اختر —</SelectItem>
                       {allJournals
                         .filter(j => !form.issuanceInventoryDocType || j.docType === form.issuanceInventoryDocType)
@@ -1311,7 +1365,7 @@ export default function DocumentJournalsPage() {
                 {/* سطر الطباعة */}
                 <div className="flex items-center gap-4 mb-3">
                   <span className="text-[11px] text-slate-500 font-medium shrink-0" style={{ width: 100 }}>نموذج الطباعة</span>
-                  <FS value={form.printPageSize} onValueChange={v => set("printPageSize", v)} placeholder="نموذج الطباعة">
+                  <FS id="printPageSize" value={form.printPageSize} onValueChange={v => set("printPageSize", v)} placeholder="نموذج الطباعة">
                     <SelectItem value="A4">A4</SelectItem>
                     <SelectItem value="A5">A5</SelectItem>
                     <SelectItem value="letter">Letter</SelectItem>
@@ -1347,7 +1401,7 @@ export default function DocumentJournalsPage() {
               <P title="خيارات الأصناف">
                 <div className="grid grid-cols-2 gap-x-8 gap-y-2.5">
                   <R label="أقصى عدد الوحدات" lw={160}>
-                    <FS value={form.maxUnitsCount} onValueChange={v => set("maxUnitsCount", v)}>
+                    <FS id="maxUnitsCount" value={form.maxUnitsCount} onValueChange={v => set("maxUnitsCount", v)}>
                       <SelectItem value="1">وحدة واحدة</SelectItem>
                       <SelectItem value="2">وحدتان</SelectItem>
                       <SelectItem value="3">ثلاث وحدات</SelectItem>
@@ -1383,13 +1437,13 @@ export default function DocumentJournalsPage() {
               <P title="خيارات الكميات">
                 <div className="grid grid-cols-2 gap-x-8 gap-y-2.5">
                   <R label="الكمية المتاحة" lw={140}>
-                    <FS value={form.availableQtyDisplay} onValueChange={v => set("availableQtyDisplay", v)}>
+                    <FS id="availableQtyDisplay" value={form.availableQtyDisplay} onValueChange={v => set("availableQtyDisplay", v)}>
                       <SelectItem value="show">إظهار</SelectItem>
                       <SelectItem value="hide">إخفاء</SelectItem>
                     </FS>
                   </R>
                   <R label="الكمية الموجودة" lw={140}>
-                    <FS value={form.currentQtyDisplay} onValueChange={v => set("currentQtyDisplay", v)}>
+                    <FS id="currentQtyDisplay" value={form.currentQtyDisplay} onValueChange={v => set("currentQtyDisplay", v)}>
                       <SelectItem value="show">إظهار</SelectItem>
                       <SelectItem value="hide">إخفاء</SelectItem>
                     </FS>
@@ -1630,6 +1684,7 @@ export default function DocumentJournalsPage() {
             )}
 
             </div>
+            </ActiveFieldCtx.Provider>
             {/* end Tab Content */}
 
             {/* ══ Sticky Toolbar ══ */}
@@ -1647,6 +1702,15 @@ export default function DocumentJournalsPage() {
                   <span>{label}</span>
                 </button>
               ))}
+              {activeField.previewPage && (
+                <button
+                  onClick={() => tabManager.openTab(activeField.previewPage!, activeField.previewLabel || "", Search)}
+                  className="flex items-center gap-1 px-3 h-8 rounded-md text-[11px] font-medium transition-colors whitespace-nowrap text-slate-600 hover:bg-slate-100 border border-slate-200"
+                >
+                  <Search className="w-3.5 h-3.5" />
+                  <span>عرض {activeField.previewLabel || "القائمة"}</span>
+                </button>
+              )}
               {isDirty && <span className="text-[10px] text-amber-600 mr-auto flex items-center gap-1">● تعديلات غير محفوظة</span>}
             </div>
           </div>
