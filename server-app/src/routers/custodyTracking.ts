@@ -22,9 +22,14 @@ const entryInputSchema = z.object({
   entryDate:       z.string().min(1),
   description:     z.string().default(''),
   referenceNumber: z.string().nullable().optional(),
+  // ── الوارد ──
+  incomeDue:       z.number().default(0),
   amountCollected: z.number().default(0),
+  incomeNote:      z.string().nullable().optional(),
+  // ── المصروف ──
+  expenseDue:      z.number().default(0),
   amountPaid:      z.number().default(0),
-  note:            z.string().nullable().optional(),
+  expenseNote:     z.string().nullable().optional(),
   sortOrder:       z.number().default(0),
 });
 
@@ -184,12 +189,12 @@ export const custodyTrackingRouter = router({
             entryDate:       e.entryDate,
             description:     e.description,
             referenceNumber: e.referenceNumber ?? null,
-            incomeDue:       '0',
+            incomeDue:       String(e.incomeDue ?? 0),
             incomeCollected: String(e.amountCollected),
-            incomeNote:      e.note ?? null,
-            expenseDue:      '0',
+            incomeNote:      e.incomeNote ?? null,
+            expenseDue:      String(e.expenseDue ?? 0),
             expensePaid:     String(e.amountPaid),
-            expenseNote:     null,
+            expenseNote:     e.expenseNote ?? null,
             sortOrder:       e.sortOrder ?? i,
             createdAt:       now,
             updatedAt:       now,
@@ -224,20 +229,32 @@ export const custodyTrackingRouter = router({
         db.select().from(organizations).where(eq(organizations.id, ctx.user.orgId)).then(r => r[0] ?? null),
       ]);
 
-      const totalCollected = entries.reduce((s, e) => s + Number(e.incomeCollected), 0);
-      const totalPaid      = entries.reduce((s, e) => s + Number(e.expensePaid),     0);
-      const diff           = totalCollected - totalPaid;
+      const totalIncomeDue       = entries.reduce((s, e) => s + Number(e.incomeDue),       0);
+      const totalCollected       = entries.reduce((s, e) => s + Number(e.incomeCollected), 0);
+      const totalIncomeRemaining = entries.reduce((s, e) => s + Math.max(0, Number(e.incomeDue) - Number(e.incomeCollected)), 0);
+      const totalExpenseDue      = entries.reduce((s, e) => s + Number(e.expenseDue),      0);
+      const totalPaid            = entries.reduce((s, e) => s + Number(e.expensePaid),     0);
+      const totalExpenseRemaining= entries.reduce((s, e) => s + Math.max(0, Number(e.expenseDue) - Number(e.expensePaid)), 0);
+      const diff                 = totalCollected - totalPaid;
 
-      const rowsHtml = entries.map((e, i) => `
-        <tr style="${i % 2 === 1 ? 'background:#f8f8f8' : ''}">
+      const rowsHtml = entries.map((e, i) => {
+        const incRem = Math.max(0, Number(e.incomeDue) - Number(e.incomeCollected));
+        const expRem = Math.max(0, Number(e.expenseDue) - Number(e.expensePaid));
+        return `<tr style="${i % 2 === 1 ? 'background:#f8f8f8' : ''}">
           <td style="text-align:center;padding:4px 6px;border:1px solid #ddd">${i + 1}</td>
           <td style="padding:4px 6px;border:1px solid #ddd">${e.entryDate}</td>
           <td style="padding:4px 6px;border:1px solid #ddd">${e.description}</td>
           <td style="padding:4px 6px;border:1px solid #ddd">${e.referenceNumber ?? ''}</td>
-          <td style="text-align:left;padding:4px 6px;border:1px solid #ddd">${Number(e.incomeCollected) ? fmtNum(Number(e.incomeCollected)) : ''}</td>
-          <td style="text-align:left;padding:4px 6px;border:1px solid #ddd">${Number(e.expensePaid) ? fmtNum(Number(e.expensePaid)) : ''}</td>
+          <td style="text-align:left;padding:4px 6px;border:1px solid #ddd">${Number(e.incomeDue)       ? fmtNum(Number(e.incomeDue))       : ''}</td>
+          <td style="text-align:left;padding:4px 6px;border:1px solid #ddd">${Number(e.incomeCollected)? fmtNum(Number(e.incomeCollected)) : ''}</td>
+          <td style="text-align:left;padding:4px 6px;border:1px solid #ddd">${incRem ? fmtNum(incRem) : ''}</td>
           <td style="padding:4px 6px;border:1px solid #ddd">${e.incomeNote ?? ''}</td>
-        </tr>`).join('');
+          <td style="text-align:left;padding:4px 6px;border:1px solid #ddd">${Number(e.expenseDue)   ? fmtNum(Number(e.expenseDue))   : ''}</td>
+          <td style="text-align:left;padding:4px 6px;border:1px solid #ddd">${Number(e.expensePaid)  ? fmtNum(Number(e.expensePaid))  : ''}</td>
+          <td style="text-align:left;padding:4px 6px;border:1px solid #ddd">${expRem ? fmtNum(expRem) : ''}</td>
+          <td style="padding:4px 6px;border:1px solid #ddd">${e.expenseNote ?? ''}</td>
+        </tr>`;
+      }).join('');
 
       const diffColor = diff > 0 ? '#166534' : diff < 0 ? '#991B1B' : '#1B2B5C';
       const diffMsg   = diff > 0
@@ -264,7 +281,7 @@ export const custodyTrackingRouter = router({
 
       const subject  = `كشف متابعة العهدة — ${record.custodyName} (رقم ${record.recordNumber})`;
       const bodyHtml = `
-        <div dir="rtl" style="font-family:Arial,sans-serif;max-width:720px;margin:auto;color:#1a1a1a">
+        <div dir="rtl" style="font-family:Arial,sans-serif;max-width:900px;margin:auto;color:#1a1a1a">
           <h2 style="color:#1B2B5C;text-align:center;margin-bottom:8px">كشف متابعة العهدة</h2>
           <div style="background:#FEF3C7;border:1px solid #F59E0B;padding:8px 14px;font-size:12px;border-radius:4px;color:#92400E;margin-bottom:14px">
             ⚠ شاشة متابعة داخلية مستقلة — لا تؤثر على الحسابات أو الصندوق أو المخزون
@@ -286,21 +303,35 @@ export const custodyTrackingRouter = router({
           <table style="width:100%;border-collapse:collapse;font-size:12px">
             <thead>
               <tr style="background:#1B2B5C;color:white">
-                <th style="padding:6px 8px;border:1px solid #1B2B5C;text-align:center">م</th>
-                <th style="padding:6px 8px;border:1px solid #1B2B5C">التاريخ</th>
-                <th style="padding:6px 8px;border:1px solid #1B2B5C">البيان</th>
-                <th style="padding:6px 8px;border:1px solid #1B2B5C">رقم المرجع</th>
-                <th style="padding:6px 8px;border:1px solid #1B2B5C;text-align:left">المبلغ المحصل</th>
-                <th style="padding:6px 8px;border:1px solid #1B2B5C;text-align:left">المبلغ المسدد</th>
-                <th style="padding:6px 8px;border:1px solid #1B2B5C">ملاحظة</th>
+                <th rowspan="2" style="padding:6px 4px;border:1px solid #1B2B5C;text-align:center">م</th>
+                <th rowspan="2" style="padding:6px 4px;border:1px solid #1B2B5C">التاريخ</th>
+                <th rowspan="2" style="padding:6px 4px;border:1px solid #1B2B5C">البيان</th>
+                <th rowspan="2" style="padding:6px 4px;border:1px solid #1B2B5C">رقم المرجع</th>
+                <th colspan="4" style="padding:6px 4px;border:1px solid #1B2B5C;text-align:center;background:#2D4F9C">الوارد</th>
+                <th colspan="4" style="padding:6px 4px;border:1px solid #1B2B5C;text-align:center;background:#1E6B3A">المصروف</th>
+              </tr>
+              <tr style="background:#1B2B5C;color:white">
+                <th style="padding:4px 4px;border:1px solid #1B2B5C;text-align:left;background:#3B5FA8">المستحق</th>
+                <th style="padding:4px 4px;border:1px solid #1B2B5C;text-align:left;background:#3B5FA8">المحصل</th>
+                <th style="padding:4px 4px;border:1px solid #1B2B5C;text-align:left;background:#3B5FA8">المتبقي</th>
+                <th style="padding:4px 4px;border:1px solid #1B2B5C;background:#3B5FA8">ملحوظة</th>
+                <th style="padding:4px 4px;border:1px solid #1B2B5C;text-align:left;background:#2E8B4A">المستحق</th>
+                <th style="padding:4px 4px;border:1px solid #1B2B5C;text-align:left;background:#2E8B4A">المسدد</th>
+                <th style="padding:4px 4px;border:1px solid #1B2B5C;text-align:left;background:#2E8B4A">المتبقي</th>
+                <th style="padding:4px 4px;border:1px solid #1B2B5C;background:#2E8B4A">ملحوظة</th>
               </tr>
             </thead>
             <tbody>
               ${rowsHtml}
               <tr style="background:#E0E7FF;font-weight:bold">
                 <td colspan="4" style="text-align:center;padding:6px 8px;border:1px solid #ccc">الإجمالي</td>
-                <td style="text-align:left;padding:6px 8px;border:1px solid #ccc">${fmtNum(totalCollected)}</td>
-                <td style="text-align:left;padding:6px 8px;border:1px solid #ccc">${fmtNum(totalPaid)}</td>
+                <td style="text-align:left;padding:6px 4px;border:1px solid #ccc">${fmtNum(totalIncomeDue)}</td>
+                <td style="text-align:left;padding:6px 4px;border:1px solid #ccc">${fmtNum(totalCollected)}</td>
+                <td style="text-align:left;padding:6px 4px;border:1px solid #ccc">${fmtNum(totalIncomeRemaining)}</td>
+                <td style="border:1px solid #ccc"></td>
+                <td style="text-align:left;padding:6px 4px;border:1px solid #ccc">${fmtNum(totalExpenseDue)}</td>
+                <td style="text-align:left;padding:6px 4px;border:1px solid #ccc">${fmtNum(totalPaid)}</td>
+                <td style="text-align:left;padding:6px 4px;border:1px solid #ccc">${fmtNum(totalExpenseRemaining)}</td>
                 <td style="border:1px solid #ccc"></td>
               </tr>
             </tbody>
