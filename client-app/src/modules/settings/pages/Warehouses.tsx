@@ -3,7 +3,8 @@ import { Button } from "@/core/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/core/ui/dialog";
 import { Input } from "@/core/ui/input";
 import { Label } from "@/core/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/core/ui/select";
+import { SelectItem } from "@/core/ui/select";
+import RightClickSelect from "@/core/ui/RightClickSelect";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/core/ui/table";
 import { trpc } from "@/shared/lib/trpc";
 import {
@@ -146,20 +147,14 @@ const FI = ({
   );
 };
 
-/** Select — height adapts to density */
+/** Select — right-click to open dropdown, left-click to focus */
 const FS = ({
   value, onValueChange, placeholder, children,
-}: { value: string; onValueChange: (v: string) => void; placeholder?: string; children: React.ReactNode }) => {
-  const c = useContext(Density) === "compact";
-  return (
-    <Select value={value} onValueChange={onValueChange}>
-      <SelectTrigger className={`${c ? "h-5 text-[10px] px-1.5 py-0" : "h-9 text-sm"} border-slate-200 focus:ring-0 focus:ring-offset-0 bg-white rounded`}>
-        <SelectValue placeholder={placeholder ?? "— اختر —"} />
-      </SelectTrigger>
-      <SelectContent>{children}</SelectContent>
-    </Select>
-  );
-};
+}: { value: string; onValueChange: (v: string) => void; placeholder?: string; children: React.ReactNode }) => (
+  <RightClickSelect value={value} onValueChange={onValueChange} placeholder={placeholder ?? "— اختر —"} className="w-full">
+    {children}
+  </RightClickSelect>
+);
 
 /** ERP compact section panel — رأس رمادي + محتوى أبيض */
 const P = ({ title, children }: { title: string; children: React.ReactNode }) => {
@@ -826,9 +821,9 @@ export default function Warehouses() {
         <div
           className="sticky bottom-0 z-30 flex items-center gap-1 px-3 shrink-0"
           style={{
-            borderTop: "1px solid #d8d3c8",
-            background: "#EBE7DE",
-            boxShadow: "0 -2px 10px rgba(0,0,0,0.07)",
+            borderTop: "1px solid #C8CDD6",
+            background: "#E8EBF0",
+            boxShadow: "0 -2px 8px rgba(0,0,0,0.07)",
             height: c ? 36 : 44,
           }}
           dir="rtl"

@@ -105,14 +105,14 @@ const POSTING_BADGE: Record<NonNullable<PostingStatus>, { label: string; bg: str
 
 // ─── Colors ─────────────────────────────────────────────────────────────────
 const C = {
-  bg:      "#F8F7F4",
-  border:  "#DDD8CE",
+  bg:      "#E8EBF0",
+  border:  "#C8CDD6",
   text:    "#2B2B2B",
   muted:   "#6B7280",
   primary: "#406B93",
   gold:    "#B89B5E",
   danger:  "#C0392B",
-  divider: "#D5D0C8",
+  divider: "#C8CDD6",
 };
 
 // ─── Single Toolbar Button ─────────────────────────────────────────────────────
@@ -285,7 +285,7 @@ export default function ERPToolbar({
         overflowX: "auto",
         overflowY: "hidden",
         flexShrink: 0,
-        boxShadow: "0 1px 3px rgba(0,0,0,0.07)",
+        boxShadow: "0 2px 6px rgba(0,0,0,0.07)",
         minHeight: 48,
       }}>
         {visibleButtons.map((btn, idx) => (
@@ -315,7 +315,7 @@ export default function ERPToolbar({
           alignItems: "center",
           justifyContent: "space-between",
           padding: "2px 12px",
-          background: "#F2F0EC",
+          background: "#ECEEF2",
           borderBottom: `1px solid ${C.border}`,
           fontSize: 11,
           color: C.muted,

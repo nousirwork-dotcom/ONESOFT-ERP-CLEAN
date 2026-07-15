@@ -43,6 +43,7 @@ export default function ContextSelectInput({
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuPos,     setMenuPos]     = useState({ x: 0, y: 0 });
   const [hovered,     setHovered]     = useState<string | null>(null);
+  const [focused,     setFocused]     = useState(false);
 
   const menuRef  = useRef<HTMLDivElement>(null);
   const wrapRef  = useRef<HTMLDivElement>(null);
@@ -83,10 +84,8 @@ export default function ContextSelectInput({
   function handleClick(e: MouseEvent<HTMLDivElement>) {
     if (disabled) return;
     if (menuVisible) { setMenuVisible(false); return; }
-    /* فتح تحت الحقل مباشرة */
-    const rect = wrapRef.current?.getBoundingClientRect();
-    if (rect) openMenu(rect.right, rect.bottom + 1);
-    else       openMenu(e.clientX, e.clientY);
+    /* كليك يسار: تحديد/تظليل الحقل فقط — لا فتح القائمة */
+    (e.currentTarget as HTMLDivElement).focus();
   }
 
   function handleContextMenu(e: MouseEvent<HTMLDivElement>) {
@@ -113,9 +112,17 @@ export default function ContextSelectInput({
       <div
         ref={wrapRef}
         className="relative flex-1 min-w-0"
-        style={{ cursor: disabled ? "not-allowed" : "default" }}
+        style={{
+          cursor: disabled ? "not-allowed" : "default",
+          outline: focused && !menuVisible ? "2px solid #818cf8" : "none",
+          outlineOffset: -1,
+          borderRadius: 2,
+        }}
+        tabIndex={disabled ? -1 : 0}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
+        onFocus={() => setFocused(true)}
+        onBlur={() => { setFocused(false); }}
       >
         <input
           type="text"

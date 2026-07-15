@@ -4,7 +4,8 @@
  */
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Input } from "@/core/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/core/ui/select";
+import { SelectItem } from "@/core/ui/select";
+import RightClickSelect from "@/core/ui/RightClickSelect";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/core/ui/dialog";
 import { Button } from "@/core/ui/button";
 import { trpc } from "@/shared/lib/trpc";
@@ -153,12 +154,9 @@ const FI = ({ value, onChange, placeholder, disabled }: {
 const FS = ({ value, onValueChange, children }: {
   value: string; onValueChange: (v: string) => void; children: React.ReactNode;
 }) => (
-  <Select value={value} onValueChange={onValueChange}>
-    <SelectTrigger className="h-7 text-[11px] px-2 border-slate-200 focus:ring-0 focus:ring-offset-0 bg-white rounded">
-      <SelectValue placeholder="— اختر —" />
-    </SelectTrigger>
-    <SelectContent>{children}</SelectContent>
-  </Select>
+  <RightClickSelect value={value} onValueChange={onValueChange} placeholder="— اختر —" className="w-full">
+    {children}
+  </RightClickSelect>
 );
 
 function Panel({ title, icon, children, action }: {
@@ -473,7 +471,7 @@ export default function TemplatesManagerPage() {
 
         {/* Toolbar */}
         <div className="flex items-center gap-1.5 px-3 py-1.5 shrink-0"
-          style={{ background: "#EBE7DE", borderBottom: "1px solid #d8d3c8" }}>
+          style={{ background: "#E8EBF0", borderBottom: "1px solid #C8CDD6", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
           <div className="flex items-center gap-1 text-[11px] text-slate-500">
             <Layers className="w-3.5 h-3.5 text-indigo-400" />
             <span>القوالب</span>
