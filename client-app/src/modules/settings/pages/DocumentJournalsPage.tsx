@@ -421,8 +421,8 @@ const FS = ({ id, value, onValueChange, children, placeholder, previewPage, prev
           tabIndex={0}
         >
           <Select
-            value={value || "__none__"}
-            onValueChange={v => { onValueChange(v === "__none__" ? "" : v); setOpen(false); }}
+            value={value || ""}
+            onValueChange={v => { onValueChange(v); setOpen(false); }}
             open={open}
             onOpenChange={isOpen => { if (!isOpen) setOpen(false); }}
           >
@@ -430,7 +430,7 @@ const FS = ({ id, value, onValueChange, children, placeholder, previewPage, prev
               hideArrow
               className="h-full w-full border-0 bg-transparent p-0 shadow-none focus:ring-0 focus:ring-offset-0 focus-visible:ring-0 cursor-text"
             >
-              <SelectValue placeholder={placeholder ?? "— اختر —"} />
+              <SelectValue placeholder={placeholder ?? ""} />
             </SelectTrigger>
             <SelectContent onInteractOutside={() => setOpen(false)}>{children}</SelectContent>
           </Select>
@@ -936,7 +936,6 @@ export default function DocumentJournalsPage() {
                 <div className="grid grid-cols-2 gap-x-5 gap-y-2">
                   <R label="نوع المستند">
                     <FS id="docType" value={form.docType} onValueChange={v => set("docType", v)}>
-                      <SelectItem value="__none__">— اختر —</SelectItem>
                       {DOC_TYPES.map(dt => <SelectItem key={dt.id} value={dt.id}>{dt.label}</SelectItem>)}
                     </FS>
                   </R>
@@ -961,19 +960,16 @@ export default function DocumentJournalsPage() {
                   <div className="grid grid-cols-1 gap-y-2">
                     <R label="مجموعة مستخدمين" lw={130}>
                       <FS id="userGroup" value={form.userGroup} onValueChange={v => set("userGroup", v)}>
-                        <SelectItem value="__none__">الكل</SelectItem>
                         {(userGroupsList ?? []).map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>)}
                       </FS>
                     </R>
                     <R label="مستخدم" lw={130}>
                       <FS id="user" value={form.user} onValueChange={v => set("user", v)}>
-                        <SelectItem value="__none__">الكل</SelectItem>
                         {(users as any[])?.map((u: any) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
                       </FS>
                     </R>
                     <R label="مخزن" lw={130}>
                       <FS id="warehouse" value={form.warehouse} onValueChange={v => set("warehouse", v)} previewPage="/cfg/warehouses" previewLabel="المخازن">
-                        <SelectItem value="__none__">الكل</SelectItem>
                         {(warehousesList as any[])?.map((w: any) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
                       </FS>
                     </R>
@@ -1067,8 +1063,7 @@ export default function DocumentJournalsPage() {
                 <P title="نماذج الطباعة">
                   <div className="space-y-2">
                     <R label="النموذج الأساسي">
-                      <FS id="printTemplate" value={form.printTemplate} onValueChange={v => set("printTemplate", v)} placeholder="— اختر نموذج —">
-                        <SelectItem value="__none__">— بدون نموذج —</SelectItem>
+                      <FS id="printTemplate" value={form.printTemplate} onValueChange={v => set("printTemplate", v)}>
                         {(templates ?? []).map(t => (
                           <SelectItem key={t.code} value={t.code}>
                             {t.code} — {t.nameAr}
@@ -1077,8 +1072,7 @@ export default function DocumentJournalsPage() {
                       </FS>
                     </R>
                     <R label="النموذج الثانوي">
-                      <FS id="printTemplate2" value={form.printTemplate2} onValueChange={v => set("printTemplate2", v)} placeholder="— اختر نموذج —">
-                        <SelectItem value="__none__">— بدون نموذج —</SelectItem>
+                      <FS id="printTemplate2" value={form.printTemplate2} onValueChange={v => set("printTemplate2", v)}>
                         {(templates ?? []).map(t => (
                           <SelectItem key={t.code} value={t.code}>
                             {t.code} — {t.nameAr}
@@ -1307,14 +1301,12 @@ export default function DocumentJournalsPage() {
                 <div className="grid grid-cols-2 gap-x-5 gap-y-2.5">
                   <R label="نوع القيد" lw={145}>
                     <FS id="issuanceJournalType" value={form.issuanceJournalType} onValueChange={v => set("issuanceJournalType", v)}>
-                      <SelectItem value="__none__">— اختر —</SelectItem>
                       {DOC_TYPES.filter(dt => ["journal_entry","purchase_invoice","receipt_voucher","payment_voucher"].includes(dt.id))
                         .map(dt => <SelectItem key={dt.id} value={dt.id}>{dt.label}</SelectItem>)}
                     </FS>
                   </R>
                   <R label="دفتر القيد" lw={145}>
                     <FS id="issuanceJournalBookId" value={form.issuanceJournalBookId} onValueChange={v => set("issuanceJournalBookId", v)}>
-                      <SelectItem value="__none__">— اختر —</SelectItem>
                       {allJournals
                         .filter(j => !form.issuanceJournalType || j.docType === form.issuanceJournalType)
                         .map(j => (
@@ -1326,14 +1318,12 @@ export default function DocumentJournalsPage() {
                   </R>
                   <R label="نوع مستند المخزون" lw={145}>
                     <FS id="issuanceInventoryDocType" value={form.issuanceInventoryDocType} onValueChange={v => { set("issuanceInventoryDocType", v); set("issuanceInventoryDocBookId", ""); }}>
-                      <SelectItem value="__none__">— اختر —</SelectItem>
                       {DOC_TYPES.filter(dt => ["stock_issue_items","stock_receipt_items","stock_transfer","stock_receipt","stock_issue"].includes(dt.id))
                         .map(dt => <SelectItem key={dt.id} value={dt.id}>{dt.label}</SelectItem>)}
                     </FS>
                   </R>
                   <R label="دفتر مستند المخزون" lw={145}>
                     <FS id="issuanceInventoryDocBookId" value={form.issuanceInventoryDocBookId} onValueChange={v => set("issuanceInventoryDocBookId", v)}>
-                      <SelectItem value="__none__">— اختر —</SelectItem>
                       {allJournals
                         .filter(j => !form.issuanceInventoryDocType || j.docType === form.issuanceInventoryDocType)
                         .map(j => (
