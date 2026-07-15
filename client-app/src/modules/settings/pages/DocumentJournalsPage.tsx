@@ -363,14 +363,35 @@ const FI = ({ value, onChange, placeholder, disabled, mono }: {
 );
 const FS = ({ value, onValueChange, children, placeholder }: {
   value: string; onValueChange: (v: string) => void; children: React.ReactNode; placeholder?: string;
-}) => (
-  <Select value={value || "__none__"} onValueChange={v => onValueChange(v === "__none__" ? "" : v)}>
-    <SelectTrigger className="h-7 text-[11px] px-2 border-slate-200 focus:ring-0 focus:ring-offset-0 bg-white rounded">
-      <SelectValue placeholder={placeholder ?? "— اختر —"} />
-    </SelectTrigger>
-    <SelectContent>{children}</SelectContent>
-  </Select>
-);
+}) => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Select
+      value={value || "__none__"}
+      onValueChange={v => { onValueChange(v === "__none__" ? "" : v); setOpen(false); }}
+      open={open}
+      onOpenChange={isOpen => { if (!isOpen) setOpen(false); }}
+    >
+      <SelectTrigger
+        className="h-7 text-[11px] px-2 border-slate-200 focus:ring-0 focus:ring-offset-0 bg-white rounded cursor-text select-none"
+        onPointerDown={e => {
+          if (e.button === 0) {
+            e.preventDefault();
+            e.currentTarget.focus();
+          }
+        }}
+        onContextMenu={e => {
+          e.preventDefault();
+          setOpen(true);
+        }}
+      >
+        <SelectValue placeholder={placeholder ?? "— اختر —"} />
+      </SelectTrigger>
+      <SelectContent onInteractOutside={() => setOpen(false)}>{children}</SelectContent>
+    </Select>
+  );
+};
 const P = ({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) => (
   <div className="overflow-hidden" style={{ border: "1px solid #d8d3c8", borderRadius: 6, boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
     <div className="px-3 py-1.5 flex items-center justify-between" style={{ background: "linear-gradient(to left, #f0ece3, #e8e3d8)", borderBottom: "1px solid #d8d3c8" }}>
