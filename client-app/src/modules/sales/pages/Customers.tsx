@@ -42,6 +42,7 @@ export default function Customers() {
         onSearch={() => {}}
         onRefresh={() => refetch()}
         onPrint={() => toast.info("جاري الطباعة...")}
+        onBrowse={() => toast.info("حدّد عميلاً من القائمة لمطالعة بياناته")}
       />
 
       {/* ── Search ── */}

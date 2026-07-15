@@ -35,6 +35,7 @@ export default function Invoices() {
         onSearch={() => toast.info("بحث في الفواتير...")}
         onRefresh={() => window.location.reload()}
         onPrint={() => toast.info("طباعة القائمة...")}
+        onBrowse={() => toast.info("حدّد فاتورة من القائمة لمطالعتها")}
       />
 
       <Card className="border-0 shadow-sm">

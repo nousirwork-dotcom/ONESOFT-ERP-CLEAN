@@ -352,6 +352,7 @@ export default function ReTrialBalanceFullPage() {
           <div className="flex items-center gap-1 flex-wrap">
             {unsaved && <span className="text-xs text-amber-600 font-medium px-2 py-0.5 rounded bg-amber-50 border border-amber-200">{ar ? "تغييرات غير محفوظة" : "Unsaved changes"}</span>}
             <Button size="sm" variant="outline" onClick={handleSaveEntries} disabled={!unsaved || saveEntries.isLoading}><Save className="w-3.5 h-3.5 mr-1" />{ar ? "حفظ" : "Save"}</Button>
+            <Button size="sm" variant="outline" className="text-indigo-700 hover:bg-indigo-50 border-indigo-200" onClick={() => setView("detail")}><Eye className="w-3.5 h-3.5 mr-1" />{ar ? "مطالعة" : "Browse"}</Button>
             <Button size="sm" variant="outline" onClick={() => setView("taxReturn")}><Receipt className="w-3.5 h-3.5 mr-1" />{ar ? "الضريبة" : "Tax"}</Button>
             <Button size="sm" variant="outline" onClick={() => setView("review")}><ClipboardCheck className="w-3.5 h-3.5 mr-1" />{ar ? "المراجعة" : "Review"}</Button>
             <Button size="sm" variant="outline" onClick={() => setView("accountTree")}><FolderTree className="w-3.5 h-3.5 mr-1" />{ar ? "الدليل" : "Accounts"}</Button>

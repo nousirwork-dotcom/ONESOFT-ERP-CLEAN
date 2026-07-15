@@ -13,6 +13,7 @@ export type ERPAction =
   | "post" | "unpost" | "repost" | "preview-journal" | "approve" | "cancel"
   | "print" | "send"
   | "first" | "prev" | "next" | "last"
+  | "browse"
   | "close";
 
 export type ERPMode = "view" | "new" | "edit" | "search";
@@ -44,6 +45,7 @@ export interface ERPToolbarProps {
   onPrev?: () => void;
   onNext?: () => void;
   onLast?: () => void;
+  onBrowse?: () => void;
   onClose?: () => void;
   enableShortcuts?: boolean;
   hideStatusBar?: boolean;
@@ -86,7 +88,8 @@ const ALL_BUTTONS: BtnDef[] = [
   { id: "first",           label: "أول",             icon: ChevronsRight },
   { id: "prev",            label: "السابق",          icon: ChevronRight },
   { id: "next",            label: "التالي",          icon: ChevronLeft },
-  { id: "last",            label: "آخر",             icon: ChevronsLeft,  dividerAfter: true },
+  { id: "last",            label: "آخر",             icon: ChevronsLeft },
+  { id: "browse",          label: "مطالعة",          icon: Eye,           dividerAfter: true },
   { id: "close",           label: "إغلاق",           icon: X,             variant: "ghost" },
 ];
 
@@ -207,6 +210,7 @@ export default function ERPToolbar({
   onPost, onUnpost, onRepost, onPreviewJournal, onApprove, onCancel,
   onPrint, onSend,
   onFirst, onPrev, onNext, onLast,
+  onBrowse,
   onClose,
   enableShortcuts = true,
   hideStatusBar = false,
@@ -226,6 +230,7 @@ export default function ERPToolbar({
     print: onPrint,
     send:  onSend,
     first: onFirst, prev: onPrev, next: onNext, last: onLast,
+    browse: onBrowse,
     close: onClose,
   };
 

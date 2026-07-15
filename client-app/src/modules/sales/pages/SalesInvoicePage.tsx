@@ -1889,6 +1889,10 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           const ids = [...(allInvoicesQuery.data ?? [])].sort((a, b) => a.id - b.id).map(i => i.id);
           if (ids.length) { setNavInvoiceId(ids[ids.length - 1]); setErpMode("view"); }
         }}
+        onBrowse={() => {
+          if (!savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً"); return; }
+          setShowPostingPreview(true);
+        }}
         onClose={() => toast.info("إغلاق")}
         enableShortcuts
       />
