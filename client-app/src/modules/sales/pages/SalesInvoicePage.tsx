@@ -1889,7 +1889,17 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           const ids = [...(allInvoicesQuery.data ?? [])].sort((a, b) => a.id - b.id).map(i => i.id);
           if (ids.length) { setNavInvoiceId(ids[ids.length - 1]); setErpMode("view"); }
         }}
-        onBrowse={() => { setErpMode("view"); }}
+        onBrowse={() => {
+          const ids = [...(allInvoicesQuery.data ?? [])].sort((a, b) => a.id - b.id).map(i => i.id);
+          if (navInvoiceId) {
+            setErpMode("view");
+          } else if (ids.length) {
+            setNavInvoiceId(ids[ids.length - 1]);
+            setErpMode("view");
+          } else {
+            toast.info("لا توجد فواتير محفوظة بعد");
+          }
+        }}
         onClose={() => toast.info("إغلاق")}
         enableShortcuts
       />

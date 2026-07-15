@@ -645,7 +645,13 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
           }
         }}
         onFirst={() => {}} onPrev={() => {}} onNext={() => {}} onLast={() => {}}
-        onBrowse={() => { setErpMode("view"); }}
+        onBrowse={() => {
+          if (savedInvoiceId) {
+            setErpMode("view");
+          } else {
+            toast.info("لا يوجد سجل محفوظ للمطالعة");
+          }
+        }}
         onClose={() => toast.info("إغلاق")}
         enableShortcuts
       />
