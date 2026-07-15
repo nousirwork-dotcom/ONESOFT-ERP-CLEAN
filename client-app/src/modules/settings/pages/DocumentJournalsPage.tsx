@@ -11,7 +11,7 @@ import {
   Plus, Save, Trash2, ChevronFirst, ChevronLast, RefreshCw,
   ChevronLeft as CLeft, ChevronRight as CRight, ArrowLeft, FileText, Eye,
   BookText, PackageMinus, PackagePlus, Users, Truck, Copy,
-  ListFilter, Search,
+  ListFilter, Search, Printer,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -757,18 +757,62 @@ export default function DocumentJournalsPage() {
     toast.success("تم نسخ الدفتر — راجع البيانات ثم احفظ");
   }, [editId]);
 
+  /* ── مطالعة: map field id → page path + label ── */
+  const FIELD_PAGE_MAP: Record<string, { path: string; label: string; icon: React.ElementType }> = {
+    userGroup:                 { path: "/cfg/user-groups",        label: "مجموعات المستخدمين", icon: Users },
+    user:                      { path: "/cfg/users",              label: "المستخدمين",          icon: Users },
+    warehouse:                 { path: "/cfg/warehouses",         label: "المخازن",             icon: Truck },
+    customersJournal:          { path: "/cfg/document-journals",  label: "دفاتر المستندات",     icon: BookOpen },
+    suppliersJournal:          { path: "/cfg/document-journals",  label: "دفاتر المستندات",     icon: BookOpen },
+    issuanceJournalBookId:     { path: "/cfg/document-journals",  label: "دفاتر المستندات",     icon: BookOpen },
+    issuanceInventoryDocBookId:{ path: "/cfg/document-journals",  label: "دفاتر المستندات",     icon: BookOpen },
+    printTemplate:             { path: "/cfg/print-settings",     label: "نماذج الطباعة",       icon: Printer },
+    printTemplate2:            { path: "/cfg/print-settings",     label: "نماذج الطباعة",       icon: Printer },
+  };
+
+  const handleMutalaah = useCallback(() => {
+    const fieldId = activeField.id;
+    if (!fieldId) {
+      toast.info("لم يتم تحديد أي حقل — اضغط على حقل أولاً");
+      return;
+    }
+    const mapped = FIELD_PAGE_MAP[fieldId];
+    if (!mapped) {
+      toast.info("لا يوجد سجل مرتبط بالحقل المحدد.");
+      return;
+    }
+    tabManager.openTab(mapped.path, mapped.label, mapped.icon);
+  }, [activeField.id, tabManager]);
+
+  const handlePrint = useCallback(() => {
+    if (isDirty) {
+      toast.warning("يرجى حفظ البيانات أولاً قبل الطباعة");
+      return;
+    }
+    if (!editId) {
+      toast.info("لا يوجد سجل محفوظ للطباعة");
+      return;
+    }
+    window.print();
+  }, [isDirty, editId]);
+
   /* ── Toolbar ── */
   const isBusy = createMut.isPending || updateMut.isPending || deleteMut.isPending;
   const toolbar = [
-    { label: "حفظ",           icon: <Save className="w-3.5 h-3.5" />,  action: handleSave,       primary: true,  disabled: isBusy },
-    { label: "جديد",          icon: <Plus className="w-3.5 h-3.5" />,  action: () => safeNavigate(openCreate) },
-    { label: "نسخة مماثلة",   icon: <Copy className="w-3.5 h-3.5" />,  action: handleDuplicate,  disabled: !editId },
-    { label: "الأخير", icon: <ChevronLast className="w-3.5 h-3.5" />,  action: () => typeJournals.at(-1) && safeNavigate(() => openEdit(typeJournals.at(-1)!)) },
-    { label: "التالي", icon: <CLeft className="w-3.5 h-3.5" />,        action: () => currentIndex < typeJournals.length - 1 && safeNavigate(() => openEdit(typeJournals[currentIndex + 1])) },
-    { label: "السابق", icon: <CRight className="w-3.5 h-3.5" />,       action: () => currentIndex > 0 && safeNavigate(() => openEdit(typeJournals[currentIndex - 1])) },
-    { label: "الأول",  icon: <ChevronFirst className="w-3.5 h-3.5" />, action: () => typeJournals[0] && safeNavigate(() => openEdit(typeJournals[0])) },
-    { label: "حذف",    icon: <Trash2 className="w-3.5 h-3.5" />,       action: () => editId && setShowDelete(true), danger: true, disabled: !editId },
-    { label: "خروج",   icon: <ArrowLeft className="w-3.5 h-3.5" />,    action: () => safeNavigate(() => { setView("list"); setEditId(null); }) },
+    { label: "حفظ",          icon: <Save className="w-3.5 h-3.5" />,         action: handleSave,        primary: true,  disabled: isBusy },
+    { label: "جديد",         icon: <Plus className="w-3.5 h-3.5" />,         action: () => safeNavigate(openCreate) },
+    { label: "نسخة مماثلة",  icon: <Copy className="w-3.5 h-3.5" />,         action: handleDuplicate,   disabled: !editId },
+    { label: "حذف",          icon: <Trash2 className="w-3.5 h-3.5" />,       action: () => editId && setShowDelete(true), danger: true, disabled: !editId },
+    { label: "sep1", sep: true },
+    { label: "الأول",        icon: <ChevronFirst className="w-3.5 h-3.5" />, action: () => typeJournals[0] && safeNavigate(() => openEdit(typeJournals[0])) },
+    { label: "السابق",       icon: <CRight className="w-3.5 h-3.5" />,       action: () => currentIndex > 0 && safeNavigate(() => openEdit(typeJournals[currentIndex - 1])) },
+    { label: "التالي",       icon: <CLeft className="w-3.5 h-3.5" />,        action: () => currentIndex < typeJournals.length - 1 && safeNavigate(() => openEdit(typeJournals[currentIndex + 1])) },
+    { label: "الأخير",       icon: <ChevronLast className="w-3.5 h-3.5" />,  action: () => typeJournals.at(-1) && safeNavigate(() => openEdit(typeJournals.at(-1)!)) },
+    { label: "sep2", sep: true },
+    { label: "مطالعة",       icon: <Eye className="w-3.5 h-3.5" />,          action: handleMutalaah },
+    { label: "طباعة",        icon: <Printer className="w-3.5 h-3.5" />,      action: handlePrint },
+    { label: "sep3", sep: true },
+    { label: "خروج",         icon: <ArrowLeft className="w-3.5 h-3.5" />,    action: () => safeNavigate(() => { setView("list"); setEditId(null); }) },
   ];
 
   /* ──────────────── RENDER ──────────────── */
@@ -1678,30 +1722,27 @@ export default function DocumentJournalsPage() {
             {/* end Tab Content */}
 
             {/* ══ Sticky Toolbar ══ */}
-            <div className="shrink-0 flex items-center gap-1 px-3"
-              style={{ borderTop: "1px solid #d8d3c8", background: "#EBE7DE", boxShadow: "0 -2px 8px rgba(0,0,0,0.04)", height: 44 }}>
-              {toolbar.map(({ label, icon, action, primary, danger, disabled: dis }: any) => (
-                <button key={label} onClick={action} disabled={dis || isBusy}
-                  className={[
-                    "flex items-center gap-1 px-3 h-8 rounded-md text-[11px] font-medium transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed",
-                    primary ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm"
-                      : danger ? "text-red-500 hover:bg-red-50 border border-red-200"
-                        : "text-slate-600 hover:bg-slate-100 border border-slate-200",
-                  ].join(" ")}>
-                  <span className="w-3.5 h-3.5 flex">{icon}</span>
-                  <span>{label}</span>
-                </button>
-              ))}
-              {activeField.previewPage && (
-                <button
-                  onClick={() => tabManager.openTab(activeField.previewPage!, activeField.previewLabel || "", Search)}
-                  className="flex items-center gap-1 px-3 h-8 rounded-md text-[11px] font-medium transition-colors whitespace-nowrap text-slate-600 hover:bg-slate-100 border border-slate-200"
-                >
-                  <Search className="w-3.5 h-3.5" />
-                  <span>عرض {activeField.previewLabel || "القائمة"}</span>
-                </button>
-              )}
-              {isDirty && <span className="text-[10px] text-amber-600 mr-auto flex items-center gap-1">● تعديلات غير محفوظة</span>}
+            <div className="shrink-0 flex items-center gap-0.5 px-2"
+              style={{ borderTop: "1px solid #d8d3c8", background: "#EBE7DE", boxShadow: "0 -2px 8px rgba(0,0,0,0.04)", height: 42 }}>
+              {toolbar.map((item: any) => {
+                if (item.sep) return (
+                  <div key={item.label} className="w-px h-5 bg-slate-300 mx-1 shrink-0" />
+                );
+                const { label, icon, action, primary, danger, disabled: dis } = item;
+                return (
+                  <button key={label} onClick={action} disabled={dis || isBusy}
+                    className={[
+                      "flex items-center gap-1 px-2.5 h-7 rounded-md text-[11px] font-medium transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed shrink-0",
+                      primary ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm"
+                        : danger ? "text-red-500 hover:bg-red-50 border border-red-200"
+                          : "text-slate-600 hover:bg-slate-100 border border-slate-200",
+                    ].join(" ")}>
+                    <span className="w-3.5 h-3.5 flex shrink-0">{icon}</span>
+                    <span>{label}</span>
+                  </button>
+                );
+              })}
+              {isDirty && <span className="text-[10px] text-amber-600 mr-auto flex items-center gap-1 shrink-0">● تعديلات غير محفوظة</span>}
             </div>
           </div>
         )}
