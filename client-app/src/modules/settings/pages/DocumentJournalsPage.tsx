@@ -14,6 +14,8 @@ import {
   ListFilter, Search, Printer,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/core/hooks/useAuth";
+import { FoundationPolicyPanel } from "@/shared/components/FoundationPolicyPanel";
 
 /* ──────────────── types ──────────────── */
 type JournalForm = {
@@ -41,6 +43,7 @@ type JournalForm = {
   maxUnitsCount: string; suggestedSalesUnit: string; returnPeriodDays: string;
   availableQtyDisplay: string; currentQtyDisplay: string;
   colWidthItemCode: string; colWidthItemName: string; colWidthUnit: string; colWidthAccount: string;
+  recordPolicy: string; includeInFoundation: boolean; foundationKey: string;
 };
 
 type DBJournal = {
@@ -53,6 +56,7 @@ type DBJournal = {
   resetFrequency?: string | null;
   autoSerial: boolean; printOnSave: boolean;
   isActive: boolean; sortOrder: number;
+  recordPolicy?: string | null; foundationKey?: string | null; includeInFoundation?: boolean | null;
 };
 
 type DocComponent = {
@@ -91,6 +95,7 @@ const EMPTY: JournalForm = {
   maxUnitsCount: "3", suggestedSalesUnit: "", returnPeriodDays: "0",
   availableQtyDisplay: "show", currentQtyDisplay: "show",
   colWidthItemCode: "0", colWidthItemName: "32", colWidthUnit: "12", colWidthAccount: "25",
+  recordPolicy: "flexible", includeInFoundation: false, foundationKey: "",
 };
 
 /* ── أنواع السندات (sales journal only) ── */
@@ -535,6 +540,9 @@ function dbToForm(j: DBJournal): JournalForm {
     colWidthItemName:         oc.colWidthItemName         ?? "32",
     colWidthUnit:             oc.colWidthUnit             ?? "12",
     colWidthAccount:          oc.colWidthAccount          ?? "25",
+    recordPolicy:             (j as any).recordPolicy          ?? "flexible",
+    includeInFoundation:      (j as any).includeInFoundation   ?? false,
+    foundationKey:            (j as any).foundationKey         ?? "",
   };
 }
 
@@ -560,6 +568,8 @@ export default function DocumentJournalsPage() {
   const [docComponents, setDocComponents] = useState<DocComponent[]>([]);
   const [activeField, setActiveField]     = useState<ActiveFieldState>({ id: null, value: null, previewPage: null, previewLabel: null });
   const tabManager = useTabManager();
+  const { user } = useAuth();
+  const isSuperadmin = user?.role === 'superadmin';
 
   /* ── queries ── */
   const listQuery = trpc.documentJournals.list.useQuery();
@@ -772,6 +782,10 @@ export default function DocumentJournalsPage() {
         documentComponents:       docComponents,
       },
       sortOrder:        0,
+      ...(isSuperadmin ? {
+        recordPolicy:        form.recordPolicy as 'protected' | 'editable' | 'flexible',
+        includeInFoundation: form.includeInFoundation,
+      } : {}),
     };
     if (editId != null) {
       updateMut.mutate({ id: editId, ...payload });
@@ -1770,6 +1784,21 @@ export default function DocumentJournalsPage() {
             )}
 
             </div>
+
+            {/* ══ Foundation Policy Panel (superadmin only) ══ */}
+            {isSuperadmin && (
+              <div className="px-4 pb-3">
+                <FoundationPolicyPanel
+                  recordPolicy={(form.recordPolicy as any) || 'flexible'}
+                  foundationKey={form.foundationKey || null}
+                  includeInFoundation={form.includeInFoundation}
+                  onChange={(policy, include) => {
+                    setForm(p => ({ ...p, recordPolicy: policy, includeInFoundation: include }));
+                    setIsDirty(true);
+                  }}
+                />
+              </div>
+            )}
             </ActiveFieldCtx.Provider>
             {/* end Tab Content */}
 

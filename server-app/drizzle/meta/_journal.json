@@ -232,6 +232,13 @@
       "when": 1790100000000,
       "tag": "0032_add_record_type_system_key",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1790200000000,
+      "tag": "0033_foundation_policy_fields",
+      "breakpoints": true
     }
   ]
 }

@@ -102,8 +102,11 @@ export const branches = pgTable('branches', {
   name: varchar('name', { length: 255 }).notNull(),
   address: text('address'),
   phone: varchar('phone', { length: 50 }),
-  isActive: boolean('is_active').notNull().default(true),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
+  isActive:             boolean('is_active').notNull().default(true),
+  recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
+  foundationKey:        varchar('foundation_key', { length: 100 }),
+  includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  createdAt:            timestamp('created_at').notNull().defaultNow(),
 });
 
 // ─── Warehouses ───────────────────────────────────────────────────────────────
@@ -126,8 +129,11 @@ export const warehouses = pgTable('warehouses', {
   salesAccount1Id: integer('sales_account1_id').references(() => chartOfAccounts.id, { onDelete: 'set null' }),
   allowedUserId: integer('allowed_user_id').references(() => users.id, { onDelete: 'set null' }),
   allowedUserGroup: varchar('allowed_user_group', { length: 255 }),
-  copyFromWarehouseId: integer('copy_from_warehouse_id'),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
+  copyFromWarehouseId:  integer('copy_from_warehouse_id'),
+  recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
+  foundationKey:        varchar('foundation_key', { length: 100 }),
+  includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  createdAt:            timestamp('created_at').notNull().defaultNow(),
 });
 
 // ─── Warehouse Account Links ───────────────────────────────────────────────────
@@ -144,7 +150,10 @@ export const units = pgTable('units', {
   id: serial('id').primaryKey(),
   orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   name: varchar('name', { length: 100 }).notNull(),
-  symbol: varchar('symbol', { length: 20 }),
+  symbol:               varchar('symbol', { length: 20 }),
+  recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
+  foundationKey:        varchar('foundation_key', { length: 100 }),
+  includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
 });
 
 // ─── Product Groups ───────────────────────────────────────────────────────────
@@ -163,8 +172,11 @@ export const productGroups = pgTable('product_groups', {
   lastNumber: integer('last_number').default(99999),
   increment: integer('increment').default(1),
   codeDigits: integer('code_digits').default(5),
-  color: varchar('color', { length: 30 }),
-  isActive: boolean('is_active').default(true),
+  color:                varchar('color', { length: 30 }),
+  isActive:             boolean('is_active').default(true),
+  recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
+  foundationKey:        varchar('foundation_key', { length: 100 }),
+  includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
 });
 
 // ─── Products ─────────────────────────────────────────────────────────────────
@@ -256,8 +268,9 @@ export const chartOfAccounts = pgTable('chart_of_accounts', {
   isActive: boolean('is_active').notNull().default(true),
   balance: decimal('balance', { precision: 18, scale: 4 }).default('0'),
   recordType: varchar('record_type', { length: 30 }).notNull().default('user'),
-  systemKey: varchar('system_key', { length: 100 }),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
+  systemKey:           varchar('system_key', { length: 100 }),
+  includeInFoundation: boolean('include_in_foundation').notNull().default(false),
+  createdAt:           timestamp('created_at').notNull().defaultNow(),
 });
 
 // ─── Sales Invoices ───────────────────────────────────────────────────────────
@@ -642,11 +655,14 @@ export const documentJournals = pgTable('document_journals', {
   paymentTypesConfig: jsonb('payment_types_config'),
   issuanceConfig:   jsonb('issuance_config'),
   optionsConfig:    jsonb('options_config'),
-  notes:            text('notes'),
-  isActive:         boolean('is_active').notNull().default(true),
-  sortOrder:        integer('sort_order').notNull().default(0),
-  createdAt:        timestamp('created_at').notNull().defaultNow(),
-  updatedAt:        timestamp('updated_at').notNull().defaultNow(),
+  notes:                text('notes'),
+  recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
+  foundationKey:        varchar('foundation_key', { length: 100 }),
+  includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  isActive:             boolean('is_active').notNull().default(true),
+  sortOrder:            integer('sort_order').notNull().default(0),
+  createdAt:            timestamp('created_at').notNull().defaultNow(),
+  updatedAt:            timestamp('updated_at').notNull().defaultNow(),
 });
 
 export type DocumentJournal = typeof documentJournals.$inferSelect;
@@ -700,6 +716,9 @@ export const documentTypes = pgTable('document_types', {
   supplierAccountId:    integer('supplier_account_id').references(() => chartOfAccounts.id, { onDelete: 'set null' }),
   sortOrder:            integer('sort_order').notNull().default(0),
   isActive:             boolean('is_active').notNull().default(true),
+  recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
+  foundationKey:        varchar('foundation_key', { length: 100 }),
+  includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
   createdAt:            timestamp('created_at').notNull().defaultNow(),
   updatedAt:            timestamp('updated_at').notNull().defaultNow(),
 });
@@ -720,10 +739,13 @@ export const documentTemplates = pgTable('document_templates', {
   isDefault:   boolean('is_default').notNull().default(false),
   layoutJson:  text('layout_json'),
   notes:       text('notes'),
-  isActive:    boolean('is_active').notNull().default(true),
-  sortOrder:   integer('sort_order').notNull().default(0),
-  createdAt:   timestamp('created_at').notNull().defaultNow(),
-  updatedAt:   timestamp('updated_at').notNull().defaultNow(),
+  isActive:             boolean('is_active').notNull().default(true),
+  sortOrder:            integer('sort_order').notNull().default(0),
+  recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
+  foundationKey:        varchar('foundation_key', { length: 100 }),
+  includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  createdAt:            timestamp('created_at').notNull().defaultNow(),
+  updatedAt:            timestamp('updated_at').notNull().defaultNow(),
 });
 
 export type DocumentTemplate = typeof documentTemplates.$inferSelect;
@@ -739,8 +761,11 @@ export const costCenters = pgTable('cost_centers', {
   parentId:   integer('parent_id'),
   level:      integer('level').notNull().default(1),
   notes:      text('notes'),
-  isActive:   boolean('is_active').notNull().default(true),
-  createdAt:  timestamp('created_at').notNull().defaultNow(),
+  isActive:             boolean('is_active').notNull().default(true),
+  recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
+  foundationKey:        varchar('foundation_key', { length: 100 }),
+  includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  createdAt:            timestamp('created_at').notNull().defaultNow(),
 });
 
 // ─── QR Settings ──────────────────────────────────────────────────────────────
@@ -850,9 +875,12 @@ export const currencies = pgTable('currencies', {
   subUnitAr:      varchar('sub_unit_ar', { length: 50 }),
   mainUnitEn:     varchar('main_unit_en', { length: 50 }),
   subUnitEn:      varchar('sub_unit_en', { length: 50 }),
-  isActive:       boolean('is_active').notNull().default(true),
-  createdAt:      timestamp('created_at').notNull().defaultNow(),
-  updatedAt:      timestamp('updated_at').notNull().defaultNow(),
+  isActive:             boolean('is_active').notNull().default(true),
+  recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
+  foundationKey:        varchar('foundation_key', { length: 100 }),
+  includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  createdAt:            timestamp('created_at').notNull().defaultNow(),
+  updatedAt:            timestamp('updated_at').notNull().defaultNow(),
 });
 
 // ─── Posting Definitions ─────────────────────────────────────────────────────
@@ -862,10 +890,13 @@ export const postingDefinitions = pgTable('posting_definitions', {
   docType:   varchar('doc_type', { length: 30 }).notNull(),
   variant:   varchar('variant', { length: 20 }).notNull().default(''),
   name:      varchar('name', { length: 200 }).notNull(),
-  isActive:  boolean('is_active').notNull().default(true),
-  sortOrder: integer('sort_order').notNull().default(0),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  isActive:             boolean('is_active').notNull().default(true),
+  sortOrder:            integer('sort_order').notNull().default(0),
+  recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
+  foundationKey:        varchar('foundation_key', { length: 100 }),
+  includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  createdAt:            timestamp('created_at').notNull().defaultNow(),
+  updatedAt:            timestamp('updated_at').notNull().defaultNow(),
 });
 
 export const postingDefinitionLines = pgTable('posting_definition_lines', {
@@ -909,9 +940,12 @@ export const paymentMethods = pgTable('payment_methods', {
   isActive:    boolean('is_active').notNull().default(true),
   isVisible:   boolean('is_visible').notNull().default(true),
   isBuiltIn:   boolean('is_built_in').notNull().default(false),
-  sortOrder:   integer('sort_order').notNull().default(0),
-  createdAt:   timestamp('created_at').notNull().defaultNow(),
-  updatedAt:   timestamp('updated_at').notNull().defaultNow(),
+  sortOrder:            integer('sort_order').notNull().default(0),
+  recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
+  foundationKey:        varchar('foundation_key', { length: 100 }),
+  includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  createdAt:            timestamp('created_at').notNull().defaultNow(),
+  updatedAt:            timestamp('updated_at').notNull().defaultNow(),
 });
 
 // ─── Sales Invoice Payments (حركات السداد المستقلة) ──────────────────────────

@@ -32,6 +32,7 @@ import { rePurchasesRouter }        from './rePurchases.js';
 import { reDocumentsRouter }        from './reDocuments.js';
 import { reTrialBalanceRouter }     from './reTrialBalance.js';
 import { reUnitsRouter }             from './reUnits.js';
+import { foundationAdminRouter }    from './foundationAdmin.js';
 import { licenseCenterRouter }      from './licenseCenter.js';
 import { authRouter }               from './auth.js';
 import { recoveryRouter }           from './recovery.js';
@@ -124,6 +125,7 @@ const baseConfig = {
   reDocuments:           reDocumentsRouter,
   reTrialBalance:        reTrialBalanceRouter,
   reUnits:               reUnitsRouter,
+  foundationAdmin:       foundationAdminRouter,
 };
 
 // ─── Full config (يشمل licenseCenter — للمالك فقط) ──────────────────────────

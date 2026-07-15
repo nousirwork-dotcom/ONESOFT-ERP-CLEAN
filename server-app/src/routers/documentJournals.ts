@@ -3,6 +3,7 @@ import { eq, and, asc, inArray } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import { documentJournals } from '../schema.js';
+import { assertCanUpdate, assertCanDelete, deriveFoundationKey } from '../lib/foundation-framework.js';
 
 export const DOC_TYPES = [
   { id: 'sales_invoice',    label: 'فاتورة مبيعات' },
@@ -57,8 +58,10 @@ const journalInputShape = {
   optionsConfig:    z.record(z.string(), z.any()).nullable().optional(),
   allowUnpost:      z.boolean().optional(),
   allowEditAfterPost: z.boolean().optional(),
-  notes:            z.string().optional(),
-  sortOrder:        z.number().default(0),
+  notes:               z.string().optional(),
+  sortOrder:            z.number().default(0),
+  recordPolicy:         z.enum(['protected', 'editable', 'flexible']).optional(),
+  includeInFoundation:  z.boolean().optional(),
 };
 
 export const documentJournalsRouter = router({
@@ -92,11 +95,15 @@ export const documentJournalsRouter = router({
   create: protectedProcedure
     .input(z.object(journalInputShape))
     .mutation(async ({ ctx, input }) => {
+      const { recordPolicy: _rp, includeInFoundation: _if, ...inputData } = input;
       const [row] = await db.insert(documentJournals).values({
-        ...input,
+        ...inputData,
         orgId: ctx.user.orgId,
         currentSeq: 0,
         isActive: true,
+        recordPolicy: 'flexible',
+        includeInFoundation: false,
+        foundationKey: null,
       }).returning();
       return row;
     }),
@@ -104,9 +111,35 @@ export const documentJournalsRouter = router({
   update: protectedProcedure
     .input(z.object({ id: z.number(), ...Object.fromEntries(Object.entries(journalInputShape).map(([k, v]) => [k, (v as any).optional()])) }))
     .mutation(async ({ ctx, input }) => {
-      const { id, ...data } = input;
+      const { id, ...rawData } = input;
+      const inputAny = input as any;
+      const newPolicy = inputAny.recordPolicy as 'protected' | 'editable' | 'flexible' | undefined;
+      const newInclude = inputAny.includeInFoundation as boolean | undefined;
+      // Strip policy fields from data going into Drizzle to avoid type mismatch
+      const { recordPolicy: _rp, includeInFoundation: _if, ...data } = rawData as any;
+      const current = await db.query.documentJournals.findFirst({
+        where: and(eq(documentJournals.id, id), eq(documentJournals.orgId, ctx.user.orgId)),
+      });
+      if (!current) throw new Error('الدفتر غير موجود');
+      const isSuperadmin = ctx.user.role === 'superadmin';
+      assertCanUpdate(current.recordPolicy, current.name, isSuperadmin);
+      const policyFields: Record<string, unknown> = {};
+      if (isSuperadmin) {
+        if (newPolicy !== undefined) policyFields.recordPolicy = newPolicy;
+        if (newInclude !== undefined) {
+          policyFields.includeInFoundation = newInclude;
+          if (newInclude && !current.foundationKey) {
+            policyFields.foundationKey = deriveFoundationKey('document_journals', {
+              docType: ((data as any).docType ?? current.docType) as string,
+              code:    ((data as any).code    ?? current.code)    as string,
+            });
+          } else if (!newInclude) {
+            policyFields.foundationKey = null;
+          }
+        }
+      }
       const [row] = await db.update(documentJournals)
-        .set({ ...data, updatedAt: new Date() })
+        .set({ ...data, ...policyFields, updatedAt: new Date() } as any)
         .where(and(eq(documentJournals.id, id), eq(documentJournals.orgId, ctx.user.orgId)))
         .returning();
       return row;
@@ -115,6 +148,11 @@ export const documentJournalsRouter = router({
   delete: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
+      const current = await db.query.documentJournals.findFirst({
+        where: and(eq(documentJournals.id, input.id), eq(documentJournals.orgId, ctx.user.orgId)),
+      });
+      if (!current) throw new Error('الدفتر غير موجود');
+      assertCanDelete(current.recordPolicy, current.name, ctx.user.role === 'superadmin');
       await db.update(documentJournals)
         .set({ isActive: false, updatedAt: new Date() })
         .where(and(eq(documentJournals.id, input.id), eq(documentJournals.orgId, ctx.user.orgId)));
