@@ -994,7 +994,7 @@ export default function DocumentJournalsPage() {
             </div>
 
             {/* ── Tabs Bar ── */}
-            <div className="shrink-0 flex items-center gap-0 px-3" style={{ borderBottom: "1px solid #d8d3c8", background: "#EBE7DE" }} dir="rtl">
+            <div className="shrink-0 flex items-center gap-0 px-2" style={{ borderBottom: "1px solid #D8DCE2", background: "#F2F4F7" }} dir="rtl">
               {[
                 { id: "basic",             label: "البيانات الأساسية" },
                 { id: "payment-types",     label: "أنواع السندات" },
@@ -1006,11 +1006,11 @@ export default function DocumentJournalsPage() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className="relative px-4 py-2.5 text-[11px] font-semibold transition-colors whitespace-nowrap"
+                  className="relative px-4 py-2 text-[11px] font-semibold transition-all whitespace-nowrap rounded-t"
                   style={{
                     color: activeTab === tab.id ? "#406B93" : "#64748b",
                     borderBottom: activeTab === tab.id ? "2px solid #406B93" : "2px solid transparent",
-                    background: "transparent",
+                    background: activeTab === tab.id ? "#FFFFFF" : "transparent",
                     marginBottom: -1,
                   }}
                 >
@@ -1775,7 +1775,7 @@ export default function DocumentJournalsPage() {
 
             {/* ══ Sticky Toolbar ══ */}
             <div className="shrink-0 flex items-center gap-0.5 px-2"
-              style={{ borderTop: "1px solid #d8d3c8", background: "#EBE7DE", boxShadow: "0 -2px 8px rgba(0,0,0,0.04)", height: 42 }}>
+              style={{ borderTop: "1px solid #C8CDD6", background: "#E8EBF0", boxShadow: "0 -2px 8px rgba(0,0,0,0.07)", height: 42 }}>
               {toolbar.map((item: any) => {
                 if (item.sep) return (
                   <div key={item.label} className="w-px h-5 bg-slate-300 mx-1 shrink-0" />
