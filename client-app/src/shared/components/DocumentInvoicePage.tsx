@@ -645,10 +645,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
           }
         }}
         onFirst={() => {}} onPrev={() => {}} onNext={() => {}} onLast={() => {}}
-        onBrowse={config.canPost !== false && config.docCategory === "sales" ? () => {
-          if (!savedInvoiceId) { toast.warning("يجب حفظ المستند أولاً"); return; }
-          setShowPostingPreview(true);
-        } : undefined}
+        onBrowse={() => { setErpMode("view"); }}
         onClose={() => toast.info("إغلاق")}
         enableShortcuts
       />
