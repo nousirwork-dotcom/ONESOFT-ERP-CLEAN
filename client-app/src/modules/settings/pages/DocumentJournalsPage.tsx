@@ -428,7 +428,8 @@ const FS = ({ id, value, onValueChange, children, placeholder, previewPage, prev
           >
             <SelectTrigger
               hideArrow
-              className="h-full w-full border-0 bg-transparent p-0 shadow-none focus:ring-0 focus:ring-offset-0 focus-visible:ring-0 cursor-text"
+              dir="rtl"
+              className="h-full w-full border-0 bg-transparent p-0 shadow-none focus:ring-0 focus:ring-offset-0 focus-visible:ring-0 cursor-text text-right"
             >
               <SelectValue placeholder={placeholder ?? ""} />
             </SelectTrigger>
