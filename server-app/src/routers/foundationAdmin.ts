@@ -144,12 +144,11 @@ function enrichWithFkRefs(
     enriched['_warehouseId_fk'] = warehouseFkMap.get(row.warehouseId) ?? null;
   }
 
-  if (tableName === 'document_journals' || tableName === 'posting_definitions') {
-    for (const field of ACCOUNT_FK_FIELDS) {
-      const id = row[field];
-      if (typeof id === 'number') {
-        enriched[`_${field}_fk`] = accountSkMap.get(id) ?? null;
-      }
+  // أضف refs للحسابات لأي جدول يحتوي على حقول account FK
+  for (const field of ACCOUNT_FK_FIELDS) {
+    const id = row[field];
+    if (typeof id === 'number') {
+      enriched[`_${field}_fk`] = accountSkMap.get(id) ?? null;
     }
   }
 
@@ -161,13 +160,32 @@ function enrichWithFkRefs(
  * يفحص أي حقل branchId أو warehouseId في أي جدول تأسيسي.
  * يُعيد قائمة بأخطاء FK — أي FK تُشير إلى سجل بلا foundationKey.
  */
+// الجداول التي تحتوي على integer FKs لحسابات الدفتر العام
+const TABLES_WITH_ACCOUNT_FKS = new Set<string>([
+  'document_journals', 'posting_definitions', 'document_types',
+]);
+
+// تسمية العربية لحقول account FK
+const ACCOUNT_FK_LABELS: Record<string, string> = {
+  salesAccountId:      'حساب المبيعات',
+  cashAccountId:       'حساب النقد',
+  creditAccountId:     'حساب الدائن',
+  taxAccountId:        'حساب الضريبة',
+  discountAccountId:   'حساب الخصم',
+  purchaseAccountId:   'حساب المشتريات',
+  supplierAccountId:   'حساب المورد',
+  inventoryAccountId:  'حساب المخزون',
+  cogsAccountId:       'حساب تكلفة المبيعات',
+  settlementAccountId: 'حساب التسوية',
+};
+
 function collectFkErrors(
   tableName: string,
   rows: Record<string, unknown>[],
-  fkMaps: { branchFkMap: Map<number, string>; warehouseFkMap: Map<number, string> },
+  fkMaps: { branchFkMap: Map<number, string>; warehouseFkMap: Map<number, string>; accountSkMap: Map<number, string> },
 ): string[] {
   const errors: string[] = [];
-  const { branchFkMap, warehouseFkMap } = fkMaps;
+  const { branchFkMap, warehouseFkMap, accountSkMap } = fkMaps;
 
   const TABLE_LABELS_AR: Record<string, string> = {
     document_journals:   'دفتر',
@@ -201,6 +219,19 @@ function collectFkErrors(
       errors.push(
         `${entityLabel} "${name}": المخزن (id=${whId}) لا يملك foundationKey — فعّل "إدراج في القالب" للمخزن أولاً`,
       );
+    }
+
+    // فحص account FKs للجداول التي تحتوي عليها (document_journals, posting_definitions, document_types)
+    if (TABLES_WITH_ACCOUNT_FKS.has(tableName)) {
+      for (const field of ACCOUNT_FK_FIELDS) {
+        const acctId = typeof row[field] === 'number' ? (row[field] as number) : null;
+        if (acctId && !accountSkMap.has(acctId)) {
+          const fieldLabel = ACCOUNT_FK_LABELS[field] ?? field;
+          errors.push(
+            `${entityLabel} "${name}": ${fieldLabel} (id=${acctId}) لا يملك systemKey — لن يُحلَّ عند التطبيق`,
+          );
+        }
+      }
     }
   }
 
