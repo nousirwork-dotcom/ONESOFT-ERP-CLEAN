@@ -921,7 +921,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
               <th className="inv-th w-7"></th>
             </tr>
           </thead>
-          <tbody data-global-keyboard="false">
+          <tbody data-nav-internal="true">
             {lines.map((line, rowIdx) => (
               <tr key={line.id}
                 className={`border-b border-[#e8e4dc] ${selectedLineIdx === rowIdx ? "bg-[#EEF4FA]" : rowIdx % 2 === 0 ? "bg-white" : "bg-[#FAFAF8]"}`}

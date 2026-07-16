@@ -618,7 +618,7 @@ function QuotationForm({
                 <th className="w-8"></th>
               </tr>
             </thead>
-            <tbody data-global-keyboard="false">
+            <tbody data-nav-internal="true">
               {lines.map((line, rowIdx) => (
                 <tr
                   key={line.id}

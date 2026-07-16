@@ -1503,7 +1503,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
               <th className="inv-th w-7"></th>
             </tr>
           </thead>
-          <tbody data-global-keyboard="false">
+          <tbody data-nav-internal="true">
             {lines.map((line, rowIdx) => (
               <tr
                 key={line.id}

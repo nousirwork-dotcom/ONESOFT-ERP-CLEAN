@@ -1135,7 +1135,7 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
                 <TableHead className="w-8"></TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody data-global-keyboard="false">
+            <TableBody data-nav-internal="true">
               {lines.map((line, i) => {
                 const hasDebit  = parseFloat(line.debit  || "0") > 0;
                 const hasCredit = parseFloat(line.credit || "0") > 0;

@@ -6,11 +6,15 @@ const FOCUSABLE_SELECTOR = [
   "textarea:not([disabled])",
 ].join(", ");
 
-function isExcluded(el: HTMLElement): boolean {
+function isFullyExcluded(el: HTMLElement): boolean {
   if (el.getAttribute("data-global-keyboard") === "false") return true;
   if (el.hasAttribute("data-no-desktop-field")) return true;
   if (!!el.closest('[data-global-keyboard="false"]')) return true;
   return false;
+}
+
+function isInInternalNavZone(el: HTMLElement): boolean {
+  return !!el.closest("[data-nav-internal]");
 }
 
 function getVisible(): HTMLElement[] {
@@ -18,9 +22,9 @@ function getVisible(): HTMLElement[] {
     document.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
   ).filter(
     (el) =>
-      !isExcluded(el) &&
+      !isFullyExcluded(el) &&
       el.offsetParent !== null &&
-      !(el.closest("[tabindex=\"-1\"]"))
+      !(el.closest('[tabindex="-1"]'))
   );
 }
 
@@ -31,7 +35,9 @@ export function useGlobalEnterNavigation() {
 
       const target = e.target as HTMLElement;
 
-      if (isExcluded(target)) return;
+      if (isFullyExcluded(target)) return;
+
+      if (isInInternalNavZone(target)) return;
 
       if (target.tagName === "BUTTON") return;
       if (
