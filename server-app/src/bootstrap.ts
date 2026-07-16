@@ -73,6 +73,14 @@ export async function ensureDefaultAdmin(): Promise<void> {
 
     // ── بذر شجرة الحسابات الأساسية للمؤسسة الجديدة ──────────────────────────
     await seedFoundationAccounts(org.id);
+
+    // ── تطبيق قالب التأسيس (إن وُجد) ──────────────────────────────────────
+    try {
+      const { seedFromFoundationTemplate } = await import('./foundation-update.js');
+      await seedFromFoundationTemplate(org.id);
+    } catch (ftErr) {
+      logger.warn('bootstrap', `seedFromFoundationTemplate: ${(ftErr as Error).message}`);
+    }
   } catch (err) {
     // لا نوقف الخادم — نسجّل الخطأ فقط؛ شاشة الدخول ستُظهر خطأً واضحاً بدل حلقة
     logger.error('bootstrap', `ensureDefaultAdmin failed: ${(err as Error).message}`);

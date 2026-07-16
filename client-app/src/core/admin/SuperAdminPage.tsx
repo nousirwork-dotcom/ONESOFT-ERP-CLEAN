@@ -2,9 +2,10 @@ import { fmtDate } from "@/shared/utils/dateUtils";
 import { useState } from 'react';
 import { trpc } from '@/shared/lib/trpc';
 import { toast } from 'sonner';
+import FoundationAdminTab from './FoundationAdminTab';
 
 export default function SuperAdminPage() {
-  
+  const [activeTab, setActiveTab] = useState<'orgs' | 'foundation'>('orgs');
   const [showAddOrg, setShowAddOrg] = useState(false);
   const [showAddUser, setShowAddUser] = useState<number | null>(null);
   const [newOrg, setNewOrg] = useState({
@@ -68,6 +69,26 @@ export default function SuperAdminPage() {
       </div>
 
       <div className="p-6 max-w-6xl mx-auto">
+
+        {/* تبويبات */}
+        <div className="flex gap-1 mb-6 bg-slate-800 border border-slate-700 rounded-xl p-1 w-fit">
+          <button
+            onClick={() => setActiveTab('orgs')}
+            className={`px-5 py-2 rounded-lg text-sm font-medium transition ${activeTab === 'orgs' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
+          >
+            🏢 المؤسسات
+          </button>
+          <button
+            onClick={() => setActiveTab('foundation')}
+            className={`px-5 py-2 rounded-lg text-sm font-medium transition ${activeTab === 'foundation' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'}`}
+          >
+            📦 قالب التأسيس
+          </button>
+        </div>
+
+        {activeTab === 'foundation' && <FoundationAdminTab />}
+
+        {activeTab === 'orgs' && (<>
         {/* إحصائيات */}
         <div className="grid grid-cols-3 gap-4 mb-6">
           {[
@@ -158,6 +179,7 @@ export default function SuperAdminPage() {
             </div>
           )}
         </div>
+      </>)}
       </div>
 
       {/* Modal إضافة مؤسسة */}

@@ -1,37 +1,4 @@
-/**
- * Foundation Template Data
- *
- * AUTO-GENERATED on 2026-07-16T01:30:11.860Z by foundationAdmin.exportTemplate
- * Exported by: superadmin (org: 1)
- *
- * DO NOT EDIT MANUALLY — run "تصدير قالب التأسيس" from the superadmin panel.
- * Total records: 16
- *
- * FK refs (_xxx_fk fields) are embedded for automatic resolution when applying.
- */
-
-export type FoundationRecord = Record<string, unknown> & {
-  foundationKey: string;
-  recordPolicy: 'protected' | 'editable' | 'flexible';
-};
-
-export interface FoundationData {
-  documentJournals:   FoundationRecord[];
-  documentTypes:      FoundationRecord[];
-  branches:           FoundationRecord[];
-  warehouses:         FoundationRecord[];
-  units:              FoundationRecord[];
-  productGroups:      FoundationRecord[];
-  paymentMethods:     FoundationRecord[];
-  costCenters:        FoundationRecord[];
-  currencies:         FoundationRecord[];
-  documentTemplates:  FoundationRecord[];
-  postingDefinitions: FoundationRecord[];
-  exportedAt: string;
-  totalRecords: number;
-}
-
-export const FOUNDATION_DATA: FoundationData = {
+{
   "documentJournals": [
     {
       "docType": "sales",
@@ -2824,4 +2791,4 @@ export const FOUNDATION_DATA: FoundationData = {
   "postingDefinitions": [],
   "exportedAt": "2026-07-16T01:30:11.860Z",
   "totalRecords": 16
-};
+}

@@ -413,6 +413,15 @@ try {
   console.error('[startup] ⚠️ ensureDefaultAdmin error:', err);
 }
 
+// ── Foundation Update للعملاء الحاليين ───────────────────────────────────────
+// يُضيف السجلات التأسيسية الجديدة فقط (idempotent — لا يُعدّل أو يحذف أي سجل).
+try {
+  const { runFoundationUpdateForAllOrgs } = await import('./foundation-update.js');
+  await runFoundationUpdateForAllOrgs(ENV.dbUrl);
+} catch (err) {
+  console.error('[startup] ⚠️ foundation-update error:', err);
+}
+
 console.log('[6/6] ✅ PostgreSQL connected — schema OK — server fully ready');
 
 export type { AppRouter } from './routers/index.js';
