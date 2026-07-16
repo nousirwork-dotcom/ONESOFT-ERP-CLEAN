@@ -617,7 +617,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   return (
     <div
       className="flex flex-col h-full text-[#1a1a1a] select-none"
-      style={{ fontFamily: "'Cairo', Tahoma, Arial, sans-serif", fontSize: "12px", background: "#ECE7DD" }}
+      style={{ fontFamily: "'Cairo', Tahoma, Arial, sans-serif", fontSize: "12px", background: "var(--background)" }}
       dir="rtl"
     >
       {/* ── ERP Toolbar ───────────────────────────────────────────────────── */}

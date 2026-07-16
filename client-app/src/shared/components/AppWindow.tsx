@@ -112,7 +112,7 @@ export default function AppWindow({ tab, children }: AppWindowProps) {
         boxShadow: isActive
           ? "0 8px 32px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.16)"
           : "0 4px 16px rgba(0,0,0,0.18)",
-        background: "#fff",
+        background: "var(--background)",
         transition: "box-shadow 0.15s",
       }}>
 

@@ -350,7 +350,7 @@ export default function Warehouses() {
       <Density.Provider value={density}>
       <div
         className="flex flex-col min-h-full -mx-6 -mt-6 px-6 pt-4"
-        style={{ background: "#ECE7DD" }}
+        style={{ background: "var(--background)" }}
         dir="rtl"
       >
         {/* ── Page title ── */}

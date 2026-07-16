@@ -923,7 +923,7 @@ export default function DocumentJournalsPage() {
       </div>
 
       {/* ══ Main Area ══ */}
-      <div className="flex-1 min-w-0 flex flex-col overflow-hidden" style={{ background: "#ECE7DD" }}>
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden bg-background">
 
         {view === "list" ? (
           /* ─────────────── List View ─────────────── */
