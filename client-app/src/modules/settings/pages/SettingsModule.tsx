@@ -1316,6 +1316,7 @@ function MemberRow({ memberType, setMemberType, memberCode, setMemberCode, membe
               onBlur={handleCodeBlur}
               onKeyDown={handleKeyDown}
               onContextMenu={e => { e.preventDefault(); setShowPicker(v => !v); }}
+              disableSelectOnFocus
             />
             <button
               type="button"

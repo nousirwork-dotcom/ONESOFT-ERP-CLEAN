@@ -1,5 +1,6 @@
 import { Toaster } from "@/core/ui/sonner";
 import { useSmartCopy } from "@/shared/hooks/useSmartCopy";
+import { useGlobalDesktopFields } from "@/shared/hooks/useGlobalDesktopFields";
 import { TooltipProvider } from "@/core/ui/tooltip";
 import NotFound from "@/shared/components/NotFound";
 import { Route, Switch, useLocation } from "wouter";
@@ -455,6 +456,7 @@ function AppRoutes() {
 // ─── App Root ─────────────────────────────────────────────────────────────
 function App() {
   useSmartCopy();
+  useGlobalDesktopFields();
   const mandatoryUpdateActive = useIsMandatoryBlocked();
 
   return (

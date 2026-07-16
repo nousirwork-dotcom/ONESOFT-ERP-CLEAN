@@ -505,6 +505,7 @@ function SmartAccountInput({
         onFocus={() => { setOpen(true); onFocusCb?.(); if (selected) setQ(""); }}
         onBlur={() => { setTimeout(() => { if (!wrapRef.current?.contains(document.activeElement)) { setOpen(false); setQ(selected?.code ?? ""); } }, 120); }}
         onKeyDown={onKey}
+        data-no-desktop-field
         placeholder="كود أو اسم الحساب..."
         className={`h-7 w-full text-xs px-2 py-1 border border-input rounded-md bg-background
           focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/60

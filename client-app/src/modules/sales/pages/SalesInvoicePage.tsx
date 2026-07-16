@@ -1196,6 +1196,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                       onFocus={() => { if (!customerLocked && !customerId) setShowCustDrop(true); }}
                       onClick={() => { if (!customerLocked && customerId) clearCustomer(); }}
                       readOnly={!!(customerId || customerLocked)}
+                      data-no-desktop-field
                       placeholder="ابحث عن عميل..."
                       className="classic-input flex-1 min-w-0"
                       style={{
@@ -2385,6 +2386,7 @@ function ProductNameCell({
     <div className="relative w-full">
       <input
         ref={el => { (inputRef as any).current = el; if (el) cellRefs.current.set(`${rowIdx}-1`, el); }}
+        data-no-desktop-field
         value={search}
         onChange={e => { if (!isStockItem) handleChange(e.target.value); }}
         onFocus={onFocus}

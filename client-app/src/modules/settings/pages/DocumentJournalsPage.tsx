@@ -199,6 +199,7 @@ function AccCodeSearch({
       <input
         value={open || !selected ? q : (selected?.code ?? "")}
         dir="ltr"
+        data-no-desktop-field
         onChange={e => { setQ(e.target.value); setOpen(true); setHi(0); }}
         onFocus={() => { setOpen(true); if (selected) setQ(""); }}
         onBlur={() => setTimeout(() => { if (!wrapRef.current?.contains(document.activeElement)) { setOpen(false); setQ(selected?.code ?? ""); } }, 120)}

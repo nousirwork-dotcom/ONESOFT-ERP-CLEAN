@@ -540,6 +540,7 @@ function QuotationForm({
               onBlur={() => setTimeout(() => setShowCustDropdown(false), 150)}
               placeholder="اسم العميل أو رمزه..."
               className="h-8 text-sm"
+              disableSelectOnFocus
             />
             {showCustDropdown && filteredCustomers.length > 0 && (
               <div className="absolute z-50 top-full mt-1 w-full bg-card border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
@@ -577,6 +578,7 @@ function QuotationForm({
               onFocus={() => { setShowProdDropdown(true); setSearchForRow(selectedIdx); }}
               onBlur={() => setTimeout(() => setShowProdDropdown(false), 150)}
               className="h-7 text-xs"
+              disableSelectOnFocus
             />
             {showProdDropdown && productSearch && filteredProducts.length > 0 && (
               <div className="absolute z-50 top-full mt-1 w-full bg-card border border-border rounded-lg shadow-xl max-h-56 overflow-y-auto">
