@@ -443,15 +443,31 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     }
     if (e.key === "Tab" || e.key === "Enter") {
       e.preventDefault();
-      if (colIdx + 1 < totalCols) { cellRefs.current.get(`${rowIdx}-${colIdx + 1}`)?.focus(); }
-      else if (rowIdx + 1 < totalRows) { setSelectedLineIdx(rowIdx + 1); cellRefs.current.get(`${rowIdx + 1}-0`)?.focus(); }
-      else { addLine(); setTimeout(() => cellRefs.current.get(`${rowIdx + 1}-0`)?.focus(), 50); }
+      const nextKey = `${rowIdx}-${colIdx + 1}`;
+      if (cellRefs.current.has(nextKey)) {
+        cellRefs.current.get(nextKey)?.focus();
+      } else if (rowIdx + 1 < totalRows) {
+        setSelectedLineIdx(rowIdx + 1);
+        cellRefs.current.get(`${rowIdx + 1}-0`)?.focus();
+      } else {
+        addLine();
+        setTimeout(() => cellRefs.current.get(`${rowIdx + 1}-0`)?.focus(), 50);
+      }
       return;
     }
     if (e.shiftKey && e.key === "Tab") {
       e.preventDefault();
-      if (colIdx - 1 >= 0) cellRefs.current.get(`${rowIdx}-${colIdx - 1}`)?.focus();
-      else if (rowIdx > 0) cellRefs.current.get(`${rowIdx - 1}-${totalCols - 1}`)?.focus();
+      const prevCol = colIdx - 1;
+      if (prevCol >= 0 && cellRefs.current.has(`${rowIdx}-${prevCol}`)) {
+        cellRefs.current.get(`${rowIdx}-${prevCol}`)?.focus();
+      } else if (rowIdx > 0) {
+        for (let c = totalCols; c >= 0; c--) {
+          if (cellRefs.current.has(`${rowIdx - 1}-${c}`)) {
+            cellRefs.current.get(`${rowIdx - 1}-${c}`)?.focus();
+            break;
+          }
+        }
+      }
       return;
     }
     if (e.ctrlKey && e.key === "Delete") { e.preventDefault(); deleteLine(rowIdx); }

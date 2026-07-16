@@ -4,6 +4,7 @@ const FOCUSABLE_SELECTOR = [
   'input:not([disabled]):not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="reset"])',
   "select:not([disabled])",
   "textarea:not([disabled])",
+  '[data-enter-nav="true"]:not([disabled])',
 ].join(", ");
 
 function isFullyExcluded(el: HTMLElement): boolean {
@@ -24,7 +25,7 @@ function getVisible(): HTMLElement[] {
     (el) =>
       !isFullyExcluded(el) &&
       el.offsetParent !== null &&
-      !(el.closest('[tabindex="-1"]'))
+      !(el.closest('[tabindex="-1"]') && !el.hasAttribute("data-enter-nav"))
   );
 }
 
@@ -51,6 +52,12 @@ export function useGlobalEnterNavigation() {
       if (target.tagName === "TEXTAREA") {
         if (!e.ctrlKey) return;
       }
+
+      // When a dropdown/combobox is open, let the element handle Enter itself
+      if (target.getAttribute("aria-expanded") === "true") return;
+
+      // Elements with data-enter-nav handle their own Enter key internally
+      if (target.hasAttribute("data-enter-nav")) return;
 
       e.preventDefault();
 

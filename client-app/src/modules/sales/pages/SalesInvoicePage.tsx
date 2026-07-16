@@ -593,9 +593,9 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     }
     if (e.key === "Tab" || e.key === "Enter") {
       e.preventDefault();
-      const nextCol = colIdx + 1;
-      if (nextCol < totalCols) {
-        cellRefs.current.get(`${rowIdx}-${nextCol}`)?.focus();
+      const nextKey = `${rowIdx}-${colIdx + 1}`;
+      if (cellRefs.current.has(nextKey)) {
+        cellRefs.current.get(nextKey)?.focus();
       } else {
         if (rowIdx + 1 < totalRows) {
           setSelectedLineIdx(rowIdx + 1);
@@ -610,8 +610,16 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     if (e.shiftKey && e.key === "Tab") {
       e.preventDefault();
       const prevCol = colIdx - 1;
-      if (prevCol >= 0) cellRefs.current.get(`${rowIdx}-${prevCol}`)?.focus();
-      else if (rowIdx > 0) cellRefs.current.get(`${rowIdx - 1}-${totalCols - 1}`)?.focus();
+      if (prevCol >= 0 && cellRefs.current.has(`${rowIdx}-${prevCol}`)) {
+        cellRefs.current.get(`${rowIdx}-${prevCol}`)?.focus();
+      } else if (rowIdx > 0) {
+        for (let c = totalCols; c >= 0; c--) {
+          if (cellRefs.current.has(`${rowIdx - 1}-${c}`)) {
+            cellRefs.current.get(`${rowIdx - 1}-${c}`)?.focus();
+            break;
+          }
+        }
+      }
       return;
     }
     if (e.ctrlKey && e.key === "Delete") {
@@ -1196,7 +1204,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                       onFocus={() => { if (!customerLocked && !customerId) setShowCustDrop(true); }}
                       onClick={() => { if (!customerLocked && customerId) clearCustomer(); }}
                       readOnly={!!(customerId || customerLocked)}
-                      data-no-desktop-field
+                      aria-expanded={showCustDrop ? "true" : "false"}
                       placeholder="ابحث عن عميل..."
                       className="classic-input flex-1 min-w-0"
                       style={{

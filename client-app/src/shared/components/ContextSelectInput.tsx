@@ -112,6 +112,7 @@ export default function ContextSelectInput({
       <div
         ref={wrapRef}
         className="relative flex-1 min-w-0"
+        data-enter-nav="true"
         style={{
           cursor: disabled ? "not-allowed" : "default",
           outline: focused && !menuVisible ? "2px solid #818cf8" : "none",
@@ -123,6 +124,22 @@ export default function ContextSelectInput({
         onContextMenu={handleContextMenu}
         onFocus={() => setFocused(true)}
         onBlur={() => { setFocused(false); }}
+        onKeyDown={(e) => {
+          if (disabled) return;
+          if (e.key === "Enter") {
+            e.preventDefault();
+            if (!menuVisible) {
+              const rect = wrapRef.current?.getBoundingClientRect();
+              if (rect) openMenu(rect.right, rect.bottom);
+            } else {
+              setMenuVisible(false);
+            }
+          }
+          if (e.key === "Escape" && menuVisible) {
+            e.preventDefault();
+            setMenuVisible(false);
+          }
+        }}
       >
         <input
           type="text"
