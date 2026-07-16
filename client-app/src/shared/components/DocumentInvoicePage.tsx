@@ -652,6 +652,8 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
             toast.info("لا يوجد سجل محفوظ للمطالعة");
           }
         }}
+        onUserActivity={() => toast.info("نشاط المستخدمين — قريباً")}
+        onSuspendPosting={() => toast.info("تعليق الترحيل — قريباً")}
         onClose={() => toast.info("إغلاق")}
         enableShortcuts
       />

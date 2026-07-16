@@ -3,8 +3,9 @@ import {
   RefreshCw, Copy, SendHorizonal, CheckCircle2, XCircle,
   ChevronRight, ChevronLeft, ChevronsRight, ChevronsLeft,
   X, LucideIcon, Undo2, Eye, Share2, RefreshCcw,
+  Wrench, Users, PauseCircle, ChevronDown,
 } from "lucide-react";
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type ERPAction =
@@ -47,6 +48,8 @@ export interface ERPToolbarProps {
   onLast?: () => void;
   onBrowse?: () => void;
   onClose?: () => void;
+  onUserActivity?: () => void;
+  onSuspendPosting?: () => void;
   enableShortcuts?: boolean;
   hideStatusBar?: boolean;
   saveDisabled?: boolean;
@@ -198,6 +201,113 @@ function TBtn({
   );
 }
 
+// ─── Tools Dropdown ───────────────────────────────────────────────────────────
+function ToolsDropdown({
+  onUserActivity,
+  onSuspendPosting,
+}: {
+  onUserActivity?: () => void;
+  onSuspendPosting?: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const menuItems: { label: string; icon: React.ReactNode; action?: () => void }[] = [
+    ...(onUserActivity    ? [{ label: "نشاط المستخدمين", icon: <Users size={13} />,       action: onUserActivity }]    : []),
+    ...(onSuspendPosting  ? [{ label: "تعليق الترحيل",   icon: <PauseCircle size={13} />, action: onSuspendPosting }]  : []),
+  ];
+
+  if (menuItems.length === 0) return null;
+
+  return (
+    <div ref={ref} style={{ position: "relative", flexShrink: 0 }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        title="أدوات"
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 2,
+          padding: "3px 8px",
+          minWidth: 44,
+          height: 40,
+          borderRadius: 4,
+          border: open ? `1px solid ${C.divider}` : "1px solid transparent",
+          background: open ? "#ECEAE4" : "transparent",
+          color: C.text,
+          cursor: "pointer",
+          transition: "background 0.12s, border-color 0.12s",
+          fontFamily: "'Cairo', 'Tahoma', sans-serif",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+          <Wrench size={15} strokeWidth={1.8} />
+          <ChevronDown size={10} strokeWidth={2} style={{ marginTop: 1 }} />
+        </div>
+        <span style={{ fontSize: 10, fontWeight: 600, lineHeight: 1, whiteSpace: "nowrap" }}>
+          أدوات
+        </span>
+      </button>
+
+      {open && (
+        <div
+          dir="rtl"
+          style={{
+            position: "absolute",
+            top: "calc(100% + 4px)",
+            right: 0,
+            minWidth: 170,
+            background: "#fff",
+            border: `1px solid ${C.border}`,
+            borderRadius: 6,
+            boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+            zIndex: 9999,
+            overflow: "hidden",
+            fontFamily: "'Cairo', 'Tahoma', sans-serif",
+          }}
+        >
+          {menuItems.map((item) => (
+            <button
+              key={item.label}
+              onClick={() => { setOpen(false); item.action?.(); }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                width: "100%",
+                padding: "9px 14px",
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                fontSize: 13,
+                color: C.text,
+                textAlign: "right",
+                transition: "background 0.1s",
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = "#F4F3EF")}
+              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+            >
+              <span style={{ color: C.muted }}>{item.icon}</span>
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── ERPToolbar ───────────────────────────────────────────────────────────────
 export default function ERPToolbar({
   buttons,
@@ -212,6 +322,8 @@ export default function ERPToolbar({
   onFirst, onPrev, onNext, onLast,
   onBrowse,
   onClose,
+  onUserActivity,
+  onSuspendPosting,
   enableShortcuts = true,
   hideStatusBar = false,
   saveDisabled = false,
@@ -294,22 +406,30 @@ export default function ERPToolbar({
         minHeight: 48,
       }}>
         {visibleButtons.map((btn, idx) => (
-          <div key={btn.id} style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
-            <TBtn
-              btn={btn.id === "new" && newLabel ? { ...btn, label: newLabel } : btn}
-              active={activeBtn === btn.id}
-              disabled={isDisabled(btn.id)}
-              onClick={() => handleClick(btn.id)}
-            />
-            {getShowDivider(btn, idx) && (
-              <div style={{
-                width: 1, height: 32,
-                background: C.divider,
-                margin: "0 4px",
-                flexShrink: 0,
-              }} />
+          <React.Fragment key={btn.id}>
+            <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+              <TBtn
+                btn={btn.id === "new" && newLabel ? { ...btn, label: newLabel } : btn}
+                active={activeBtn === btn.id}
+                disabled={isDisabled(btn.id)}
+                onClick={() => handleClick(btn.id)}
+              />
+              {getShowDivider(btn, idx) && (
+                <div style={{
+                  width: 1, height: 32,
+                  background: C.divider,
+                  margin: "0 4px",
+                  flexShrink: 0,
+                }} />
+              )}
+            </div>
+            {btn.id === "browse" && (onUserActivity || onSuspendPosting) && (
+              <ToolsDropdown
+                onUserActivity={onUserActivity}
+                onSuspendPosting={onSuspendPosting}
+              />
             )}
-          </div>
+          </React.Fragment>
         ))}
       </div>
 
