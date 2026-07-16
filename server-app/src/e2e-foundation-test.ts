@@ -111,16 +111,44 @@ async function applyFoundationToTestDb(
         resolved[k] = v;
       }
 
-      const brFk = record['_branchId_fk'] as string | null;
-      if (brFk != null) resolved['branchId'] = fkMap.get(brFk) ?? null;
-      const whFk = record['_warehouseId_fk'] as string | null;
-      if (whFk != null) resolved['warehouseId'] = fkMap.get(whFk) ?? null;
+      // ── سياسة صارمة: لا null صامت ────────────────────────────────────────
+      // كل _xxx_fk غير null يجب أن يُحَل — إذا فشل نرفض السجل بخطأ واضح
+      const unresolvedFkErrors: string[] = [];
+
+      const brFk = record['_branchId_fk'] as string | null | undefined;
+      if (brFk !== undefined) {
+        if (brFk === null) { resolved['branchId'] = null; }
+        else {
+          const id = fkMap.get(brFk);
+          if (id === undefined) unresolvedFkErrors.push(`branchId: "${brFk}" غير موجود`);
+          else resolved['branchId'] = id;
+        }
+      }
+
+      const whFk = record['_warehouseId_fk'] as string | null | undefined;
+      if (whFk !== undefined) {
+        if (whFk === null) { resolved['warehouseId'] = null; }
+        else {
+          const id = fkMap.get(whFk);
+          if (id === undefined) unresolvedFkErrors.push(`warehouseId: "${whFk}" غير موجود`);
+          else resolved['warehouseId'] = id;
+        }
+      }
+
       for (const af of ACCOUNT_FK_CAMEL) {
         const refKey = `_${af}_fk`;
-        if (refKey in record) {
-          const sk = record[refKey] as string | null;
-          resolved[af] = sk ? (acctMap.get(sk) ?? null) : null;
-        }
+        if (!(refKey in record)) continue;
+        const sk = record[refKey] as string | null;
+        if (sk === null) { resolved[af] = null; continue; }
+        const id = acctMap.get(sk);
+        if (id === undefined) unresolvedFkErrors.push(`${af}: "${sk}" غير موجود`);
+        else resolved[af] = id;
+      }
+
+      // رفض السجل صراحةً إذا كانت هناك FKs غير محلولة
+      if (unresolvedFkErrors.length > 0) {
+        errors.push(`${tbl}[${fKey}]: فشل حل FK — ${unresolvedFkErrors.join('; ')}`);
+        continue;
       }
 
       const SKIP_KEYS = new Set([
@@ -319,6 +347,52 @@ if (djWithAcct) {
   );
   if (djAcctRow?.sales_account_id) ok(`sales_account_id=${djAcctRow.sales_account_id} مُحَل من systemKey="${djWithAcct['_salesAccountId_fk']}" ✅`);
   else wrn(`sales_account_id=null للدفتر ${djWithAcct.foundationKey} (حساب غير موجود في الوجهة)`);
+}
+
+log('\n  ── إثبات الرفض الصارم للـ FK غير المحلول (لا null صامت):');
+// نُحاول تطبيق سجل اصطناعي يحتوي على _branchId_fk يُشير إلى foundationKey وهمي
+const SYNTHETIC_STRICT_FK_KEY = 'e2e.strict.fk.test';
+const syntheticBadData = {
+  documentJournals: [{
+    foundationKey:    SYNTHETIC_STRICT_FK_KEY,
+    docType:          'sales',
+    code:             'E2E-STRICT-FK',
+    name:             'دفتر اختبار FK صارم',
+    numberPrefix:     'TST',
+    firstNumber:      1,
+    lastNumber:       999999,
+    increment:        1,
+    numDigits:        6,
+    includeYear:      true,
+    currentSeq:       0,
+    isActive:         true,
+    sortOrder:        99,
+    recordPolicy:     'flexible',
+    includeInFoundation: false,
+    _branchId_fk:     'br.NONEXISTENT_FAKE_KEY_THAT_WILL_NEVER_RESOLVE',
+  }],
+  exportedAt: new Date().toISOString(),
+};
+const strictResult = await applyFoundationToTestDb(testOrgId, syntheticBadData as any);
+// السجل يجب أن يُرفض (errors > 0) وليس أن يُدرَج بـ branch_id=null
+if (strictResult.errors.length > 0 && strictResult.inserted === 0) {
+  ok(`الرفض الصارم: سجل ذو FK وهمي رُفض (error: "${strictResult.errors[0]?.slice(0, 60)}...") — لا null صامت ✅`);
+} else if (strictResult.inserted > 0) {
+  // تحقق: هل أُدرج بـ branch_id=null؟
+  const [badRow] = await q(
+    `SELECT branch_id FROM document_journals WHERE org_id=$1 AND foundation_key=$2`,
+    [testOrgId, SYNTHETIC_STRICT_FK_KEY]
+  );
+  if (badRow?.branch_id === null) {
+    err(`null صامت: سجل بـ FK وهمي أُدرج بـ branch_id=null بدل الرفض!`);
+  } else {
+    wrn(`سجل اصطناعي أُدرج بـ branch_id=${badRow?.branch_id} (غير متوقع)`);
+  }
+  // تنظيف السجل الاصطناعي
+  await q(`DELETE FROM document_journals WHERE org_id=$1 AND foundation_key=$2`,
+    [testOrgId, SYNTHETIC_STRICT_FK_KEY]);
+} else {
+  ok(`الرفض الصارم: سجل ذو FK وهمي تُجُوِّز (skipped=${strictResult.skipped}) ✅`);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

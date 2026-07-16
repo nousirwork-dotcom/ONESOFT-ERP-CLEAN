@@ -103,9 +103,10 @@ const ACCOUNT_FK_FIELDS = [
 // ─── بناء خرائط FK للتصدير ────────────────────────────────────────────────────
 
 async function buildExportFkMaps(orgId: number) {
-  const branchFkMap   = new Map<number, string>();
-  const warehouseFkMap = new Map<number, string>();
-  const accountSkMap  = new Map<number, string>();
+  const branchFkMap      = new Map<number, string>();
+  const warehouseFkMap   = new Map<number, string>();
+  const accountSkMap     = new Map<number, string>();
+  const documentTypeFkMap = new Map<number, string>(); // document_types.id → foundationKey
 
   const branchRows = await db.select({ id: branches.id, foundationKey: branches.foundationKey })
     .from(branches).where(eq(branches.orgId, orgId));
@@ -122,7 +123,12 @@ async function buildExportFkMaps(orgId: number) {
     ));
   for (const r of acctRows) if (r.systemKey) accountSkMap.set(r.id, r.systemKey);
 
-  return { branchFkMap, warehouseFkMap, accountSkMap };
+  // بناء خريطة أنواع المستندات — لفحص أي FK يُشير إلى document_types بدون foundationKey
+  const dtRows = await db.select({ id: documentTypes.id, foundationKey: documentTypes.foundationKey })
+    .from(documentTypes).where(eq(documentTypes.orgId, orgId));
+  for (const r of dtRows) if (r.foundationKey) documentTypeFkMap.set(r.id, r.foundationKey);
+
+  return { branchFkMap, warehouseFkMap, accountSkMap, documentTypeFkMap };
 }
 
 /**
@@ -131,17 +137,27 @@ async function buildExportFkMaps(orgId: number) {
 function enrichWithFkRefs(
   row: Record<string, unknown>,
   tableName: string,
-  fkMaps: { branchFkMap: Map<number, string>; warehouseFkMap: Map<number, string>; accountSkMap: Map<number, string> },
+  fkMaps: {
+    branchFkMap: Map<number, string>;
+    warehouseFkMap: Map<number, string>;
+    accountSkMap: Map<number, string>;
+    documentTypeFkMap: Map<number, string>;
+  },
 ): Record<string, unknown> {
   const enriched = { ...row };
-  const { branchFkMap, warehouseFkMap, accountSkMap } = fkMaps;
+  const { branchFkMap, warehouseFkMap, accountSkMap, documentTypeFkMap } = fkMaps;
 
   if (typeof row.branchId === 'number') {
     enriched['_branchId_fk'] = branchFkMap.get(row.branchId) ?? null;
   }
 
-  if (tableName === 'document_journals' && typeof row.warehouseId === 'number') {
+  if (typeof row.warehouseId === 'number') {
     enriched['_warehouseId_fk'] = warehouseFkMap.get(row.warehouseId) ?? null;
+  }
+
+  // إذا كان السجل يحتوي على FK صحيح لنوع المستند (integer) — نُضيف المرجع التوثيقي
+  if (typeof row.documentTypeId === 'number') {
+    enriched['_documentTypeId_fk'] = documentTypeFkMap.get(row.documentTypeId) ?? null;
   }
 
   // أضف refs للحسابات لأي جدول يحتوي على حقول account FK
@@ -182,10 +198,15 @@ const ACCOUNT_FK_LABELS: Record<string, string> = {
 function collectFkErrors(
   tableName: string,
   rows: Record<string, unknown>[],
-  fkMaps: { branchFkMap: Map<number, string>; warehouseFkMap: Map<number, string>; accountSkMap: Map<number, string> },
+  fkMaps: {
+    branchFkMap: Map<number, string>;
+    warehouseFkMap: Map<number, string>;
+    accountSkMap: Map<number, string>;
+    documentTypeFkMap: Map<number, string>;
+  },
 ): string[] {
   const errors: string[] = [];
-  const { branchFkMap, warehouseFkMap, accountSkMap } = fkMaps;
+  const { branchFkMap, warehouseFkMap, accountSkMap, documentTypeFkMap } = fkMaps;
 
   const TABLE_LABELS_AR: Record<string, string> = {
     document_journals:   'دفتر',
@@ -218,6 +239,14 @@ function collectFkErrors(
     if (whId && !warehouseFkMap.has(whId)) {
       errors.push(
         `${entityLabel} "${name}": المخزن (id=${whId}) لا يملك foundationKey — فعّل "إدراج في القالب" للمخزن أولاً`,
+      );
+    }
+
+    // فحص documentTypeId لأي جدول يحتوي على FK صحيح لـ document_types
+    const dtId = typeof row.documentTypeId === 'number' ? row.documentTypeId : null;
+    if (dtId && !documentTypeFkMap.has(dtId)) {
+      errors.push(
+        `${entityLabel} "${name}": نوع المستند (id=${dtId}) لا يملك foundationKey — فعّل "إدراج في القالب" لنوع المستند أولاً`,
       );
     }
 

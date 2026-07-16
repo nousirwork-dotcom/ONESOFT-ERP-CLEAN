@@ -42,8 +42,9 @@ import {
 // ─── حقول FK التي تشير إلى جداول التأسيس أو الحسابات ──────────────────────
 // المفتاح = اسم الحقل في السجل، القيمة = نوع التبعية
 const FK_FIELD_MAP: Record<string, { type: 'foundation'; tableKey: string } | { type: 'account' }> = {
-  warehouseId:         { type: 'foundation', tableKey: 'warehouses'  },
-  branchId:            { type: 'foundation', tableKey: 'branches'    },
+  warehouseId:         { type: 'foundation', tableKey: 'warehouses'      },
+  branchId:            { type: 'foundation', tableKey: 'branches'        },
+  documentTypeId:      { type: 'foundation', tableKey: 'documentTypes'   },
   salesAccountId:      { type: 'account' },
   cashAccountId:       { type: 'account' },
   creditAccountId:     { type: 'account' },
@@ -178,13 +179,19 @@ async function buildAccountSystemKeyMap(orgId: number): Promise<Map<string, numb
  * يحوّل سجلاً مُصدَّراً (يحتوي على حقول _xxx_fk) إلى كائن جاهز للإدراج
  * عبر حل المراجع إلى IDs حقيقية في المنظمة الهدف.
  * يحذف جميع حقول _xxx_fk من الكائن النهائي.
+ *
+ * سياسة FK الصارمة:
+ *  - إذا كانت قيمة _xxx_fk = null: يُعيَّن الحقل null (مشروع).
+ *  - إذا كانت قيمة _xxx_fk غير null ولم تُحَل: لا null صامت —
+ *    يُضاف خطأ إلى unresolvedFks ويُترك الإدراج للمُستدعي.
  */
 function resolveRecordFks(
   record: Record<string, unknown>,
   fkMap:  Map<string, number>,
   acctMap: Map<string, number>,
-): Record<string, unknown> {
+): { data: Record<string, unknown>; unresolvedFks: string[] } {
   const out: Record<string, unknown> = {};
+  const unresolvedFks: string[] = [];
 
   for (const [key, value] of Object.entries(record)) {
     if (key.startsWith('_') && key.endsWith('_fk')) continue; // نحذف حقول التوثيق
@@ -194,20 +201,39 @@ function resolveRecordFks(
   // نحل FK fields باستخدام المرجع المُضمَّن في _xxx_fk
   for (const [fkField, fkDef] of Object.entries(FK_FIELD_MAP)) {
     const refField = `_${fkField}_fk`;
+    if (!(refField in record)) continue; // الحقل غير موجود في هذا السجل — تجاهل
     const refValue = record[refField];
-    if (!refValue) continue;
 
+    if (refValue === null || refValue === undefined) {
+      // المصدر كان null — مشروع، نُعيَّن null
+      out[fkField] = null;
+      continue;
+    }
+
+    // refValue غير null — يجب أن يُحَل
     if (fkDef.type === 'foundation') {
       const id = fkMap.get(String(refValue));
-      out[fkField] = id ?? null;
+      if (id === undefined) {
+        unresolvedFks.push(
+          `${fkField}: "${refValue}" غير موجود في جداول التأسيس المُطبَّقة — تحقق من ترتيب التطبيق`,
+        );
+      } else {
+        out[fkField] = id;
+      }
     } else {
       // account — refValue = systemKey
       const id = acctMap.get(String(refValue));
-      out[fkField] = id ?? null;
+      if (id === undefined) {
+        unresolvedFks.push(
+          `${fkField}: الحساب ذو systemKey="${refValue}" غير موجود في الوجهة — أضف الحساب قبل تطبيق القالب`,
+        );
+      } else {
+        out[fkField] = id;
+      }
     }
   }
 
-  return out;
+  return { data: out, unresolvedFks };
 }
 
 // ─── محرك التطبيق المركزي ───────────────────────────────────────────────────
@@ -257,7 +283,16 @@ export async function applyFoundationRecords(
       if (existingKeys.has(fKey)) { skipped++; continue; }
 
       try {
-        const resolved = resolveRecordFks(record, fkMap, acctMap);
+        const { data: resolved, unresolvedFks } = resolveRecordFks(record, fkMap, acctMap);
+
+        // سياسة صارمة: لا null صامت — إذا كانت هناك FKs غير محلولة نتخطى السجل
+        if (unresolvedFks.length > 0) {
+          const msg = `${tableName}[${fKey}]: فشل حل FK — ${unresolvedFks.join('; ')}`;
+          errors.push(msg);
+          logger.warn('foundation-apply', msg);
+          continue;
+        }
+
         const templateVersion = (data as any).exportedAt
           ? String((data as any).exportedAt).slice(0, 10)
           : null;
