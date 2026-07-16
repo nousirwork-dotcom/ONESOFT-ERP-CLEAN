@@ -108,6 +108,10 @@ async function buildExportFkMaps(orgId: number) {
   const accountSkMap     = new Map<number, string>();
   const documentTypeFkMap = new Map<number, string>(); // document_types.id → foundationKey
 
+  // للتحقق من ربط docType (string) في document_journals بأنواع المستندات المُصدَّرة
+  const docTypeIncludedTypeIds = new Set<string>(); // typeId لأنواع المستندات مع includeInFoundation=true
+  const docTypeAllTypeIds      = new Set<string>(); // typeId لكل أنواع المستندات في المنظمة
+
   const branchRows = await db.select({ id: branches.id, foundationKey: branches.foundationKey })
     .from(branches).where(eq(branches.orgId, orgId));
   for (const r of branchRows) if (r.foundationKey) branchFkMap.set(r.id, r.foundationKey);
@@ -124,11 +128,23 @@ async function buildExportFkMaps(orgId: number) {
   for (const r of acctRows) if (r.systemKey) accountSkMap.set(r.id, r.systemKey);
 
   // بناء خريطة أنواع المستندات — لفحص أي FK يُشير إلى document_types بدون foundationKey
-  const dtRows = await db.select({ id: documentTypes.id, foundationKey: documentTypes.foundationKey })
-    .from(documentTypes).where(eq(documentTypes.orgId, orgId));
-  for (const r of dtRows) if (r.foundationKey) documentTypeFkMap.set(r.id, r.foundationKey);
+  // وبناء مجموعتَي typeId للتحقق من ربط docType في الدفاتر
+  const dtRows = await db.select({
+    id:                  documentTypes.id,
+    foundationKey:       documentTypes.foundationKey,
+    typeId:              documentTypes.typeId,
+    includeInFoundation: documentTypes.includeInFoundation,
+  }).from(documentTypes).where(eq(documentTypes.orgId, orgId));
 
-  return { branchFkMap, warehouseFkMap, accountSkMap, documentTypeFkMap };
+  for (const r of dtRows) {
+    if (r.foundationKey) documentTypeFkMap.set(r.id, r.foundationKey);
+    if (r.typeId) {
+      docTypeAllTypeIds.add(r.typeId);
+      if (r.includeInFoundation) docTypeIncludedTypeIds.add(r.typeId);
+    }
+  }
+
+  return { branchFkMap, warehouseFkMap, accountSkMap, documentTypeFkMap, docTypeIncludedTypeIds, docTypeAllTypeIds };
 }
 
 /**
@@ -142,6 +158,8 @@ function enrichWithFkRefs(
     warehouseFkMap: Map<number, string>;
     accountSkMap: Map<number, string>;
     documentTypeFkMap: Map<number, string>;
+    docTypeIncludedTypeIds: Set<string>;
+    docTypeAllTypeIds: Set<string>;
   },
 ): Record<string, unknown> {
   const enriched = { ...row };
@@ -203,10 +221,12 @@ function collectFkErrors(
     warehouseFkMap: Map<number, string>;
     accountSkMap: Map<number, string>;
     documentTypeFkMap: Map<number, string>;
+    docTypeIncludedTypeIds: Set<string>;
+    docTypeAllTypeIds: Set<string>;
   },
 ): string[] {
   const errors: string[] = [];
-  const { branchFkMap, warehouseFkMap, accountSkMap, documentTypeFkMap } = fkMaps;
+  const { branchFkMap, warehouseFkMap, accountSkMap, documentTypeFkMap, docTypeIncludedTypeIds, docTypeAllTypeIds } = fkMaps;
 
   const TABLE_LABELS_AR: Record<string, string> = {
     document_journals:   'دفتر',
@@ -242,12 +262,23 @@ function collectFkErrors(
       );
     }
 
-    // فحص documentTypeId لأي جدول يحتوي على FK صحيح لـ document_types
+    // فحص documentTypeId لأي جدول يحتوي على FK صحيح لـ document_types (integer FK)
     const dtId = typeof row.documentTypeId === 'number' ? row.documentTypeId : null;
     if (dtId && !documentTypeFkMap.has(dtId)) {
       errors.push(
         `${entityLabel} "${name}": نوع المستند (id=${dtId}) لا يملك foundationKey — فعّل "إدراج في القالب" لنوع المستند أولاً`,
       );
+    }
+
+    // فحص docType (string) في document_journals — ربط منطقي بـ document_types.typeId
+    // إذا كان docType يوجد في document_types للمنظمة لكنه غير مُدرَج في القالب → خطأ حاجب
+    if (tableName === 'document_journals') {
+      const dt = typeof row.docType === 'string' ? row.docType : null;
+      if (dt && docTypeAllTypeIds.has(dt) && !docTypeIncludedTypeIds.has(dt)) {
+        errors.push(
+          `${entityLabel} "${name}": نوع المستند "${dt}" موجود لكن غير مُدرَج في القالب — فعّل "إدراج في القالب" لنوع المستند "${dt}" أولاً`,
+        );
+      }
     }
 
     // فحص account FKs للجداول التي تحتوي عليها (document_journals, posting_definitions, document_types)

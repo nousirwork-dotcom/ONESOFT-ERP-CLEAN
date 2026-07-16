@@ -187,12 +187,32 @@ if (!djWithFk) {
   } else {
     log(`  دفتر: "${djRow.name}" (fk=${djRow.foundation_key})`);
     if (djWithFk['_branchId_fk']) {
-      if (djRow.branch_id !== null) ok(`branch_id=${djRow.branch_id} مُحَل من "${djWithFk['_branchId_fk']}" ✅`);
-      else err(`branch_id=null رغم وجود "${djWithFk['_branchId_fk']}" في القالب!`);
+      if (djRow.branch_id !== null) {
+        ok(`branch_id=${djRow.branch_id} مُحَل من "${djWithFk['_branchId_fk']}" ✅`);
+        // إثبات إعادة رسم IDs: معرّف الوجهة يجب أن يختلف عن معرّف المصدر
+        const srcBranchId = djWithFk['branchId'];
+        if (typeof srcBranchId === 'number' && djRow.branch_id === srcBranchId) {
+          err(`branch_id لم يُعَد رسمه: قيمة المصدر (${srcBranchId}) = قيمة الوجهة — FK لم يُحَل فعلياً!`);
+        } else if (typeof srcBranchId === 'number') {
+          ok(`branch_id مُعاد الرسم: المصدر id=${srcBranchId} → الوجهة id=${djRow.branch_id} ✅`);
+        }
+      } else {
+        err(`branch_id=null رغم وجود "${djWithFk['_branchId_fk']}" في القالب!`);
+      }
     }
     if (djWithFk['_warehouseId_fk']) {
-      if (djRow.warehouse_id !== null) ok(`warehouse_id=${djRow.warehouse_id} مُحَل من "${djWithFk['_warehouseId_fk']}" ✅`);
-      else err(`warehouse_id=null رغم وجود "${djWithFk['_warehouseId_fk']}" في القالب!`);
+      if (djRow.warehouse_id !== null) {
+        ok(`warehouse_id=${djRow.warehouse_id} مُحَل من "${djWithFk['_warehouseId_fk']}" ✅`);
+        // إثبات إعادة رسم IDs
+        const srcWhId = djWithFk['warehouseId'];
+        if (typeof srcWhId === 'number' && djRow.warehouse_id === srcWhId) {
+          err(`warehouse_id لم يُعَد رسمه: قيمة المصدر (${srcWhId}) = قيمة الوجهة — FK لم يُحَل فعلياً!`);
+        } else if (typeof srcWhId === 'number') {
+          ok(`warehouse_id مُعاد الرسم: المصدر id=${srcWhId} → الوجهة id=${djRow.warehouse_id} ✅`);
+        }
+      } else {
+        err(`warehouse_id=null رغم وجود "${djWithFk['_warehouseId_fk']}" في القالب!`);
+      }
     }
   }
 }
@@ -407,13 +427,11 @@ if (backupOk) {
     if (Number(cntAfterRestore) >= Number(cntBefore)) {
       ok(`الاستعادة نجحت: دفاتر TESTCO = ${cntAfterRestore} (= ${cntBefore} قبل الإفساد) ✅`);
     } else {
-      err(`الاستعادة جزئية: ${cntAfterRestore} < ${cntBefore}`);
+      err(`الاستعادة جزئية: ${cntAfterRestore} < ${cntBefore} — يُحتمَل أن psql restore لم يكتمل!`);
     }
   } else {
-    wrn(`psql restore تحذير: ${restore.stderr?.slice(0, 100)}`);
-    // بديل: إعادة تطبيق القالب (isFirstRun: true)
-    await applyFoundationRecords(testOrgId, foundationData, { isFirstRun: true });
-    wrn('أُعيد تطبيق القالب كبديل (psql restore غير متاح)');
+    // فشل حقيقي — لا fallback لأن ذلك يخفي مشاكل الاستعادة
+    err(`psql restore فشل (exit=${restore.status}): ${restore.stderr?.slice(0, 200)}`);
   }
 } else {
   wrn('pg_dump غير متاح — اختبار الاستعادة مُوثَّق لبيئات الإنتاج');

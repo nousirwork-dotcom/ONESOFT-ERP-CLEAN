@@ -15,7 +15,7 @@
       "currentSeq": 0,
       "warehouseId": 14,
       "branchId": 4,
-      "salesAccountId": null,
+      "salesAccountId": 401,
       "cashAccountId": null,
       "creditAccountId": null,
       "taxAccountId": null,
@@ -51,7 +51,8 @@
       "recordOrigin": "user",
       "foundationTemplateVersion": null,
       "_branchId_fk": "br.الفرع_الرئيسي",
-      "_warehouseId_fk": "wh.المخزن_الرئيسي"
+      "_warehouseId_fk": "wh.المخزن_الرئيسي",
+      "_salesAccountId_fk": "cert.sales.account"
     },
     {
       "docType": "sales",
@@ -2961,7 +2962,7 @@
   ],
   "warehouses": [
     {
-      "branchId": null,
+      "branchId": 4,
       "name": "المخزن الرئيسي",
       "address": null,
       "isActive": true,
@@ -2982,7 +2983,8 @@
       "foundationKey": "wh.المخزن_الرئيسي",
       "includeInFoundation": true,
       "recordOrigin": "user",
-      "foundationTemplateVersion": null
+      "foundationTemplateVersion": null,
+      "_branchId_fk": "br.الفرع_الرئيسي"
     }
   ],
   "units": [],
@@ -2992,6 +2994,6 @@
   "currencies": [],
   "documentTemplates": [],
   "postingDefinitions": [],
-  "exportedAt": "2026-07-16T04:33:53.567Z",
+  "exportedAt": "2026-07-16T04:48:32.771Z",
   "totalRecords": 21
 }
