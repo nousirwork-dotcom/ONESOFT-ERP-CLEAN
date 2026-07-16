@@ -1291,7 +1291,7 @@ function VoucherPrintModal({ data, docType, onClose }: {
           <X className="w-5 h-5" />
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto bg-gray-300 flex items-start justify-center py-6">
+      <div className="flex-1 overflow-y-auto bg-background flex items-start justify-center py-6">
         <iframe srcDoc={html} className="bg-white shadow-2xl"
           style={{ width: 900, minHeight: 700, border: "none", boxShadow: "0 4px 32px rgba(0,0,0,0.3)" }}
           title="معاينة السند" />

@@ -146,7 +146,7 @@ export default function PostingOperationsPage() {
     op === "post_purchases_inventory" ? "حساب المشتريات (دائن)" : "حساب المخزون (دائن)";
 
   return (
-    <div className="h-full flex flex-col bg-slate-50" dir="rtl">
+    <div className="h-full flex flex-col bg-background" dir="rtl">
       {/* رأس الشاشة */}
       <div className="bg-white border-b border-slate-200 px-4 py-2.5 flex items-center gap-3">
         <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center text-white text-base font-bold select-none">

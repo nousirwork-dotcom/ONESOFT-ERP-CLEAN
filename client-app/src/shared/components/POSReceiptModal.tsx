@@ -289,7 +289,7 @@ ${show.thankYou ? `${dash("=")}<div style="text-align:center;font-weight:bold;pa
       </div>
 
       {/* Preview */}
-      <div className="flex-1 overflow-y-auto bg-gray-400 flex items-start justify-center py-6">
+      <div className="flex-1 overflow-y-auto bg-background flex items-start justify-center py-6">
         {/* Receipt Paper */}
         <div
           className="bg-white shadow-2xl"

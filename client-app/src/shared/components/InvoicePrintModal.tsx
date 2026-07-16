@@ -121,7 +121,7 @@ export default function InvoicePrintModal({
       </div>
 
       {/* ── معاينة — iframe مطابق لمخرج الطباعة ── */}
-      <div className="flex-1 overflow-y-auto bg-gray-300 flex items-start justify-center py-6">
+      <div className="flex-1 overflow-y-auto bg-background flex items-start justify-center py-6">
         <iframe
           key={qrDataUrl}
           srcDoc={invoiceHtml}
