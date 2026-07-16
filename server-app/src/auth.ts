@@ -101,6 +101,11 @@ export async function loginHandler(req: Request, res: Response) {
 
     if (!user) return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
 
+    // ── فحص السماح بتسجيل الدخول (allowLogin) ────────────────────────────────
+    if (user.allowLogin === false) {
+      return res.status(403).json({ error: 'غير مسموح لهذا المستخدم بتسجيل الدخول. يرجى التواصل مع مدير النظام.' });
+    }
+
     // في وضع التطوير (ريبليت): الدخول بدون باسورد مسموح لـ admin/superadmin للسرعة والاختبار
     const isDev = ENV.nodeEnv !== 'production';
     const isAdminRole = user.role === 'admin' || user.role === 'superadmin';

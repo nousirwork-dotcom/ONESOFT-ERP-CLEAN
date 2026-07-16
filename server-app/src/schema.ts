@@ -46,6 +46,7 @@ export const users = pgTable('users', {
   extraPermissions: jsonb('extra_permissions').$type<Record<string, boolean>>(),
   categoryId: integer('category_id'),
   isActive: boolean('is_active').notNull().default(true),
+  allowLogin: boolean('allow_login').notNull().default(true),
   passwordStatus: varchar('password_status', { length: 20 }).notNull().default('set'),
   lastLoginAt: timestamp('last_login_at'),
   phoneVerifiedAt: timestamp('phone_verified_at'),
@@ -54,6 +55,10 @@ export const users = pgTable('users', {
   forcePasswordChange: boolean('force_password_change').notNull().default(false),
   recoveryEnabledPhone: boolean('recovery_enabled_phone').notNull().default(false),
   recoveryEnabledEmail: boolean('recovery_enabled_email').notNull().default(false),
+  userGroupId: integer('user_group_id'),
+  defaultBranchId: integer('default_branch_id'),
+  defaultWarehouseId: integer('default_warehouse_id'),
+  defaultLanguage: varchar('default_language', { length: 10 }),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

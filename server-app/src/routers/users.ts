@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { eq, and, sql, count, inArray } from 'drizzle-orm';
 import { router, adminProcedure, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { users, organizations, salesInvoices, vouchers, stockVouchers, userCategories, appSettings } from '../schema.js';
+import { users, organizations, salesInvoices, vouchers, stockVouchers, userCategories, appSettings, userGroups, branches, warehouses } from '../schema.js';
 import { hashPassword } from '../auth.js';
 import { TRPCError } from '@trpc/server';
 import { getLimit } from '../lib/license.js';
@@ -35,6 +35,28 @@ export const usersRouter = router({
     });
   }),
 
+  // قائمة مجموعات المستخدمين (للقوائم المنسدلة في نافذة المستخدم)
+  listUserGroups: adminProcedure.query(async ({ ctx }) => {
+    return db.select({ id: userGroups.id, name: userGroups.name })
+      .from(userGroups)
+      .where(and(eq(userGroups.orgId, ctx.user.orgId), eq(userGroups.isActive, true)))
+      .orderBy(userGroups.name);
+  }),
+
+  // تسجيل خروج المستخدم من جميع الأجهزة (إبطال الجلسات بتحديث updatedAt)
+  logoutAllSessions: adminProcedure
+    .input(z.object({ userId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const user = await db.query.users.findFirst({
+        where: and(eq(users.id, input.userId), eq(users.orgId, ctx.user.orgId)),
+        columns: { id: true },
+      });
+      if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: 'المستخدم غير موجود' });
+      await db.update(users).set({ updatedAt: new Date() })
+        .where(and(eq(users.id, input.userId), eq(users.orgId, ctx.user.orgId)));
+      return { success: true };
+    }),
+
   // إضافة مستخدم جديد
   create: adminProcedure
     .input(z.object({
@@ -46,6 +68,11 @@ export const usersRouter = router({
       phone: z.string().optional(),
       role: z.enum(['admin', 'cashier', 'accountant', 'warehouse_manager', 'viewer']),
       categoryId: z.number().int().positive().optional(),
+      userGroupId: z.number().int().positive().nullable().optional(),
+      defaultBranchId: z.number().int().positive().nullable().optional(),
+      defaultWarehouseId: z.number().int().positive().nullable().optional(),
+      defaultLanguage: z.string().max(10).nullable().optional(),
+      allowLogin: z.boolean().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       // ── License enforcement: max_users ──────────────────────────────────────
@@ -137,6 +164,11 @@ export const usersRouter = router({
         phone: input.phone,
         role: input.role,
         categoryId: input.categoryId,
+        userGroupId: input.userGroupId ?? null,
+        defaultBranchId: input.defaultBranchId ?? null,
+        defaultWarehouseId: input.defaultWarehouseId ?? null,
+        defaultLanguage: input.defaultLanguage ?? null,
+        allowLogin: input.allowLogin ?? true,
         isActive: true,
         passwordStatus: wantsPasswordless ? 'not_set' : 'set',
       }).returning({ id: users.id, code: users.code, name: users.name, username: users.username, role: users.role });
@@ -153,8 +185,14 @@ export const usersRouter = router({
       phone: z.string().optional(),
       role: z.enum(['admin', 'cashier', 'accountant', 'warehouse_manager', 'viewer']).optional(),
       isActive: z.boolean().optional(),
+      allowLogin: z.boolean().optional(),
       newPassword: z.string().min(6).optional(),
       clearPassword: z.boolean().optional(),
+      userGroupId: z.number().int().positive().nullable().optional(),
+      defaultBranchId: z.number().int().positive().nullable().optional(),
+      defaultWarehouseId: z.number().int().positive().nullable().optional(),
+      defaultLanguage: z.string().max(10).nullable().optional(),
+      forcePasswordChange: z.boolean().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const { id, newPassword, clearPassword, ...rest } = input;
@@ -267,6 +305,8 @@ export const usersRouter = router({
           'ai_ask_projects', 'ai_ask_tasks',
           'ai_draft_messages', 'ai_propose_tasks', 'ai_confirm_tasks',
           'ai_view_history', 'ai_delete_conversations', 'ai_manage_settings',
+          // إعدادات العمل
+          'can_work_cashier', 'can_work_accountant',
         ]),
         z.boolean(),
       ),

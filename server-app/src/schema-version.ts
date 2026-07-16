@@ -5,4 +5,4 @@
  * constant to match the new filename (without the .sql extension), then
  * run `pnpm migrate` so the live database is stamped with the new version.
  */
-export const REQUIRED_SCHEMA_VERSION = '0036_document_types_journal_cols';
+export const REQUIRED_SCHEMA_VERSION = '0037_user_extended_fields';
