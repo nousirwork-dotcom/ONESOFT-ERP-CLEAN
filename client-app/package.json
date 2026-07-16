@@ -5,6 +5,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/check-no-date-inputs.mjs",
     "build": "vite build",
     "start": "vite preview",
     "check": "tsc --noEmit",
