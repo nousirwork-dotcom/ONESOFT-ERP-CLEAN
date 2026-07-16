@@ -93,7 +93,7 @@ export async function checkSchema(pool: Pool): Promise<boolean> {
 
   try {
     // ── 1. Verify all expected tables exist ───────────────────────────────────
-    const tableResult = await client.query<{ table_name: string }>(
+    const tableResult = await client.query(
       `SELECT table_name
        FROM information_schema.tables
        WHERE table_schema = 'public'
@@ -115,7 +115,7 @@ export async function checkSchema(pool: Pool): Promise<boolean> {
     // `_schema_version` is written by `pnpm migrate` via scripts/stamp-migration.ts.
     // If it is absent, or its version does not match REQUIRED_SCHEMA_VERSION,
     // the database has not been fully migrated for this release.
-    const versionResult = await client.query<{ version: string }>(
+    const versionResult = await client.query(
       `SELECT version FROM _schema_version WHERE id = 1`
     );
 

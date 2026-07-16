@@ -11,11 +11,11 @@ Target DB: postgresql://postgres:***@helium/heliumdb_test?sslmode=disable
 【1/6】 تشغيل auto-migrate...
   تطبيق base_schema.sql...
   ✅ base_schema.sql طُبِّق بنجاح
-  ✅ auto-migrate اكتمل — migrations مُطبَّقة: 36 — version: 0035_foundation_products_customers_suppliers
+  ✅ auto-migrate اكتمل — migrations مُطبَّقة: 0 — version: 0035_foundation_products_customers_suppliers
 
 【2/6】 Bootstrap...
   ✅ منظمة الاختبار: id=1
-  ✅ Foundation applied: inserted=16 skipped=0 errors=0
+  ✅ Foundation applied: inserted=0 skipped=16 errors=0
 
 【3/6】 التحقق من الدفاتر...
   إجمالي الدفاتر: 16
@@ -31,7 +31,7 @@ Target DB: postgresql://postgres:***@helium/heliumdb_test?sslmode=disable
   ✅ تعديل العميل محفوظ — Foundation Update لم يُعدّله
 
 【6/6】 اختبار النسخة الاحتياطية...
-  ✅ pg_dump: /tmp/onesoft-backups/e2e_test_1784169247880.sql (362.4 KB)
+  ✅ pg_dump: /tmp/onesoft-backups/e2e_test_1784171059121.sql (362.4 KB)
 ```
 
 ## ملخص
@@ -45,4 +45,4 @@ Target DB: postgresql://postgres:***@helium/heliumdb_test?sslmode=disable
 | حماية تعديلات العميل | ✅ |
 | pg_dump نسخة احتياطية | ✅ |
 
-*تاريخ الاختبار: 2026-07-16T02:34:08.259Z*
+*تاريخ الاختبار: 2026-07-16T03:04:19.495Z*

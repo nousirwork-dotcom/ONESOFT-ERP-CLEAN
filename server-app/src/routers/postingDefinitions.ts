@@ -58,7 +58,7 @@ export const postingDefinitionsRouter = router({
         description:  postingDefinitionLines.description,
         accountId:    postingDefinitionLines.accountId,
         accountCode:  chartOfAccounts.code,
-        accountName:  chartOfAccounts.nameAr,
+        accountName:  chartOfAccounts.name,
         direction:    postingDefinitionLines.direction,
         amountSource: postingDefinitionLines.amountSource,
         sortOrder:    postingDefinitionLines.sortOrder,
