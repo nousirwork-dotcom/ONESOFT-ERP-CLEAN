@@ -25,7 +25,7 @@ function getVisible(): HTMLElement[] {
     (el) =>
       !isFullyExcluded(el) &&
       el.offsetParent !== null &&
-      !(el.closest('[tabindex="-1"]') && !el.hasAttribute("data-enter-nav"))
+      !(el.closest('[tabindex="-1"]') && !el.closest('[role="dialog"]') && !el.hasAttribute("data-enter-nav"))
   );
 }
 
