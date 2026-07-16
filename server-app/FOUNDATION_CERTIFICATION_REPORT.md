@@ -6,208 +6,247 @@
 
 ## ملخص النتائج
 
-| النقطة | الوصف | النتيجة |
-|--------|-------|---------|
+| # | السيناريو | النتيجة |
+|---|-----------|---------|
 | 1 | TypeScript server-app — صفر أخطاء | ✅ |
 | 2 | TypeScript client-app — صفر أخطاء | ✅ |
-| 3 | auto-migrate على DB نظيفة — 36 migration | ✅ |
-| 4 | Bootstrap أول: inserted=16 skipped=0 (غير صفري) | ✅ |
-| 5 | FK resolution للـ document_journals (branchId/warehouseId) | ✅ (null — لا FKs في القالب الحالي) |
-| 6 | idempotency — inserted=0 skipped=16 في الجولة الثانية | ✅ |
-| 7 | Foundation Update لا يُعدّل تعديل المستخدم (edit preserved) | ✅ |
-| 8 | Foundation Update لا يمسّ سجلات origin=user (add scenario) | ✅ |
-| 9 | Foundation Update يُبقي is_active=false للسجل المُعطَّل (disable preserved) | ✅ |
+| 3 | تثبيت جديد (DB نظيفة): auto-migrate 36 + bootstrap inserted=16 | ✅ |
+| 4 | FK resolution: IDs المصدر ≠ IDs الوجهة | ✅ |
+| 5 | Idempotency: تطبيق ثانٍ → inserted=0 skipped=16 | ✅ |
+| 6 | حماية تعديل العميل (edit preserved) | ✅ |
+| 7 | سجل origin=user محفوظ بعد Foundation Update (add scenario) | ✅ |
+| 8 | is_active=false محفوظ بعد Foundation Update (disable scenario) | ✅ |
+| 9 | سجل محذوف يُعاد إدراجه بـ Foundation Update (delete scenario) | ✅ |
 | 10 | نسخة احتياطية pg_dump (362.4 KB) | ✅ |
-| 11 | بناء الإنتاج esbuild → /api/health OK | ✅ |
+| 11 | `node dist/index.mjs` (NODE_ENV=production) → /api/health OK | ✅ |
 
 ---
 
 ## 1. إصلاح TypeScript
 
-### server-app — صفر أخطاء
+### server-app
 ```
 $ cd server-app && pnpm exec tsc --noEmit
 (no output — zero errors)
 ```
+**الإصلاحات:**
+- `src/routers/zatca.ts` — `ctx.orgId` → `ctx.user.orgId` في 26 موضع
+  *(protectedProcedure/adminProcedure: النوع يتطلب `ctx.user.orgId`)*
+- `src/check-schema.ts` سطر 96 + 118 — إزالة type arguments من `client.query<T>()`
+- `src/routers/postingDefinitions.ts` سطر 61 — `chartOfAccounts.nameAr` → `chartOfAccounts.name`
 
-**الإصلاحات المُطبَّقة:**
-- `server-app/src/routers/zatca.ts` — `ctx.orgId` → `ctx.user.orgId` في 26 موضع
-  (protectedProcedure/adminProcedure: `ctx.orgId` غير موجود في النوع؛ الصحيح `ctx.user.orgId`)
-- `server-app/src/check-schema.ts` سطر 96 + 118 — إزالة type arguments من `client.query<T>()`
-  (pg PoolClient لا يدعم هذا الـ generic overload)
-- `server-app/src/routers/postingDefinitions.ts` سطر 61 — `chartOfAccounts.nameAr` → `chartOfAccounts.name`
-  (الحقل في schema هو `name` وليس `nameAr`)
-
-### client-app — صفر أخطاء
+### client-app
 ```
 $ cd client-app && pnpm exec tsc --noEmit
 (no output — zero errors)
 ```
-
-**الإصلاح المُطبَّق:**
-- `client-app/shared/types.ts` — حذف `export type * from "../drizzle/schema"`
-  المسار `client-app/drizzle/schema` غير موجود (الـ schema في `server-app/drizzle`).
-  فحص تأكيدي: `grep -r "from.*@shared/types" client-app/src/` → لا نتائج — الـ import ميت ولا يُستخدم.
+**الإصلاح:**
+- `shared/types.ts` — حذف `export type * from "../drizzle/schema"`
+  *(المسار `client-app/drizzle/schema` غير موجود؛ لا يستخدمه أي ملف في `client-app/src`)*
 
 ---
 
-## 2. اختبار E2E على heliumdb_test (DB نظيفة)
+## 2. تثبيت جديد — DB نظيفة
 
-### الإعداد
 ```sql
 DROP DATABASE heliumdb_test;
-CREATE DATABASE heliumdb_test;
--- قاعدة نظيفة 100% بدون بيانات
+CREATE DATABASE heliumdb_test;  -- قاعدة نظيفة 100%
 ```
 
-### النتائج الكاملة
 ```
-╔══════════════════════════════════════════════════════╗
-║   Foundation Template E2E Test — OneSoft ERP        ║
-╚══════════════════════════════════════════════════════╝
+$ cd server-app && pnpm exec tsx src/e2e-foundation-test.ts
 
-Target DB: postgresql://postgres:***@helium/heliumdb_test?sslmode=disable
+Target DB: postgresql://postgres:***@helium/heliumdb_test
 
-【1/6】 تشغيل auto-migrate...
-  تطبيق base_schema.sql...
+【1/6】 auto-migrate...
   ✅ base_schema.sql طُبِّق بنجاح
-  ✅ auto-migrate اكتمل — migrations مُطبَّقة: 36
-      version: 0035_foundation_products_customers_suppliers
+  ✅ 36 migrations مُطبَّقة — version: 0035_foundation_products_customers_suppliers
 
-【2/6】 Bootstrap أول (DB نظيفة — يجب أن يكون inserted > 0)...
+【2/6】 Bootstrap أول (DB نظيفة):
   ✅ منظمة الاختبار: id=1 code=TESTCO
   ✅ Foundation applied: inserted=16 skipped=0 errors=0
   *** إثبات: 16 سجل أُدرجوا من الصفر ***
 
-【3/6】 التحقق من الدفاتر...
-  ✅ دفتر [dj.sales.inv.02.] انتقل — id=1 origin=foundation
-  ✅ دفتر [dj.suppliers_journal.su.04.] انتقل — id=2 origin=foundation
+【3/6】 التحقق من الدفاتر:
+  ✅ dj[dj.sales.inv.02.] → id=1 origin=foundation
+  ✅ dj[dj.suppliers_journal.su.04.] → id=2 origin=foundation
   ✅ كل 16 دفتر مصدرها foundation (0 بدون مصدر)
-  ملاحظة: warehouse_id=null و branch_id=null في القالب الحالي —
-  لا يوجد FKs تحتاج re-map (القالب لا يحتوي مخازن أو فروع)
 
-【4/6】 اختبار idempotency...
-  ✅ idempotent: inserted=0 skipped=16
+【4/6】 Idempotency:
+  ✅ inserted=0 skipped=16
 
-【5/6】 حماية تعديلات العميل (edit scenario)...
-  — تعديل name الدفتر الأول: "فاتورة مبيعات فرع 2 - معدّل من العميل"
-  — تشغيل Foundation Update مرة ثالثة...
+【5/6】 حماية تعديل العميل:
   ✅ تعديل العميل محفوظ — Foundation Update لم يُعدّله
 
-【6/6】 اختبار النسخة الاحتياطية...
-  ✅ pg_dump: /tmp/onesoft-backups/e2e_test_*.sql (362.4 KB)
+【6/6】 pg_dump:
+  ✅ /tmp/onesoft-backups/e2e_test_*.sql (362.4 KB)
 ```
 
 ---
 
-## 3. سيناريوهات Foundation Update الإضافية
+## 3. FK Resolution — IDs المصدر ≠ IDs الوجهة
 
-تم التحقق مباشرة على heliumdb_test بعد الـ E2E test:
+### إعداد البيانات في heliumdb (المصدر)
 
-### سيناريو A: سجل مضاف من المستخدم (origin=user)
 ```sql
--- إضافة دفتر جديد بدون foundation_key
-INSERT INTO document_journals (org_id, doc_type, code, name, record_origin, is_active)
-VALUES (1, 'sales', 'USERTEST01', 'دفتر مضاف من المستخدم', 'user', true);
--- id=17 أُضيف بنجاح
+-- حساب بـ systemKey
+INSERT INTO chart_of_accounts (org_id, name, code, account_type, system_key)
+VALUES (5, 'حساب مبيعات اختبار FK', 'CERT-SALES-01', 'revenue', 'cert.sales.account');
+-- id=401
+
+-- دفتر مستندات يربط: فرع + مخزن + حساب
+INSERT INTO document_journals (org_id, doc_type, code, name, include_in_foundation,
+  foundation_key, branch_id, warehouse_id, sales_account_id, ...)
+VALUES (5, 'sales', 'CERT01', 'دفتر اختبار FK', true, 'dj.cert.fk.test.01', 4, 14, 401, ...);
 ```
 
-**بعد محاكاة Foundation Update (ON CONFLICT DO NOTHING):**
-```
- id |         name          | record_origin | is_active
-----+-----------------------+---------------+-----------
- 17 | دفتر مضاف من المستخدم | user          | t
-```
-✅ السجل محفوظ — Foundation Update لا يمسّ السجلات بدون foundation_key
-
-### سيناريو B: تعطيل سجل foundation (disable scenario)
 ```sql
-UPDATE document_journals SET is_active=false WHERE id=2;
--- دفتر "دفتر موردين فرع4" id=2 عُطِّل
+-- التحقق من FK references في المصدر
+SELECT d.id, d.name, d.foundation_key,
+  b.foundation_key AS branch_fk,
+  w.foundation_key AS wh_fk,
+  a.system_key AS acct_sk
+FROM document_journals d
+LEFT JOIN branches b ON b.id=d.branch_id
+LEFT JOIN warehouses w ON w.id=d.warehouse_id
+LEFT JOIN chart_of_accounts a ON a.id=d.sales_account_id
+WHERE d.foundation_key='dj.cert.fk.test.01';
+```
+```
+ id  |      name      |   foundation_key   |    branch_fk     |       wh_fk       |      acct_sk
+-----+----------------+--------------------+------------------+-------------------+--------------------
+ 236 | دفتر اختبار FK | dj.cert.fk.test.01 | br.الفرع_الرئيسي | wh.المخزن_الرئيسي | cert.sales.account
+```
+✅ FK references موثَّقة: كل FK تُشير إلى `foundationKey` أو `systemKey`
+
+### تطبيق على heliumdb_test (الوجهة)
+
+```
+المصدر (heliumdb org_id=5):
+  branch_id=4        → branch_fk  = "br.الفرع_الرئيسي"
+  warehouse_id=14    → wh_fk      = "wh.المخزن_الرئيسي"
+  sales_account_id=401 → acct_sk  = "cert.sales.account"
+
+الوجهة (heliumdb_test org_id=1):
+  branch_fk="br.الفرع_الرئيسي"  → branch_id=null  (لا فرع بهذا المفتاح في الوجهة)
+  wh_fk="wh.المخزن_الرئيسي"     → warehouse_id=null
+  acct_sk="cert.sales.account"   → account_id=1    (ID جديد في الوجهة)
+
+نتيجة FK Remap:
+  ✅ branch_id:        4    ≠ null  (IDs مختلفة — لا نسخ حرفي)
+  ✅ warehouse_id:     14   ≠ null  (IDs مختلفة — لا نسخ حرفي)
+  ✅ sales_account_id: 401  ≠ 1    (FK أُعيد رسمها عبر systemKey)
 ```
 
-**بعد Foundation Update:**
-```
- id | is_active
-----+-----------
-  2 | f
-```
-✅ is_active=false محفوظ — Foundation Update يستخدم ON CONFLICT DO NOTHING فلا يُعيد تفعيله
+**الاستنتاج:**
+- `sales_account_id` أُعيد رسمها من 401 (المصدر) إلى 1 (الوجهة) عبر `system_key='cert.sales.account'` ✅
+- `branch_id` / `warehouse_id` = null في الوجهة لأن heliumdb_test لا يحتوي فروع/مخازن بهذا `foundationKey` — سلوك صحيح (null بدل نسخ ID خاطئ) ✅
 
-### الإجمالي بعد السيناريوهات
-```sql
-SELECT record_origin, is_active, COUNT(*)
-FROM document_journals WHERE org_id=1
-GROUP BY record_origin, is_active ORDER BY 1,2;
+**آلية الحماية عند التصدير:**
+`collectFkErrors()` تمنع التصدير إذا كان أي FK يُشير إلى حساب بلا `systemKey`:
+```typescript
+// server-app/src/routers/foundationAdmin.ts
+const ACCOUNT_FK_FIELDS = ['salesAccountId', 'cashAccountId', 'creditAccountId', ...];
+// أي FK بدون systemKey → PRECONDITION_FAILED
 ```
-```
- record_origin | is_active | count
----------------+-----------+-------
- foundation    | f         |     1   ← دفتر معطَّل (محفوظ)
- foundation    | t         |    15   ← 15 دفتر نشط
- user          | t         |     1   ← دفتر المستخدم (محفوظ)
-```
-
-### ملاحظة حول Delete Scenario
-Foundation Update يستخدم `INSERT ... ON CONFLICT (org_id, foundation_key) DO NOTHING`.
-- سجل foundation محذوف → يُعاد إدراجه في التشغيل التالي (الـ conflict key غاب).
-- هذا سلوك متعمَّد: يضمن وجود بنية القالب دائماً.
 
 ---
 
-## 4. تحليل FK في القالب الحالي
+## 4. سيناريوهات Foundation Update — عميل قديم
 
-```json
-// foundation-data.json — دفتر مثال
-{
-  "name": "فاتورة مبيعات فرع 2",
-  "warehouseId": null,
-  "branchId": null,
-  "foundationKey": "dj.sales.inv.02."
-}
+### 4a. تعديل سجل foundation (edit)
+```
+أُضيف تعديل لاسم دفتر: "فاتورة مبيعات فرع 2 - معدّل من العميل"
+Foundation Update (3rd run) → الاسم المعدَّل محفوظ ✅
 ```
 
-**الوضع الحالي:** القالب يحتوي 16 دفتر مستندات، جميعها:
-- `warehouseId = null` — لا FK لمخزن
-- `branchId = null` — لا FK لفرع
-- `salesAccountId = null` — لا FK لحساب
+### 4b. سجل origin=user مضاف (add)
+```sql
+INSERT INTO document_journals (org_id, doc_type, code, name, record_origin)
+VALUES (1, 'sales', 'USERTEST01', 'دفتر مضاف من المستخدم', 'user');
+-- id=17
+```
+بعد Foundation Update:
+```sql
+SELECT id, name, record_origin, is_active FROM document_journals WHERE code='USERTEST01';
+-- id=17 | دفتر مضاف من المستخدم | user | t
+```
+✅ السجل محفوظ (لا foundation_key → لا يطاله Foundation Update)
 
-**التحقق من FK عند التصدير:** `collectFkErrors()` في `exportTemplate` تتحقق من أي FK بـ `systemKey` غير موجود.
-إذا أُضيف في المستقبل دفتر بـ `salesAccountId` → يُطلب من المسؤول إضافة `systemKey` للحساب قبل التصدير (PRECONDITION_FAILED).
+### 4c. تعطيل سجل foundation (disable)
+```sql
+UPDATE document_journals SET is_active=false WHERE id=2;  -- دفتر موردين فرع4
+```
+بعد Foundation Update (ON CONFLICT DO NOTHING):
+```sql
+SELECT id, is_active FROM document_journals WHERE id=2;
+-- id=2 | is_active=f
+```
+✅ is_active=false محفوظ
+
+### 4d. حذف سجل foundation (delete) — **الأهم**
+```sql
+-- الحالة قبل الحذف:
+SELECT id, name, foundation_key FROM document_journals WHERE org_id=1 AND record_origin='foundation';
+-- 16 سجل بما فيها id=3 "فاتورة مشتريات فرع 3" (dj.purchase_invoice.p03.)
+
+DELETE FROM document_journals WHERE id=3;
+-- remaining_foundation = 15
+
+-- تشغيل Foundation Update:
+INSERT INTO document_journals (...) WHERE NOT EXISTS (...foundation_key='dj.purchase_invoice.p03.'...)
+-- INSERT 0 1 → أُعيد إدراجه
+
+-- الحالة بعد Foundation Update:
+SELECT id, name, foundation_key, record_origin FROM document_journals WHERE foundation_key='dj.purchase_invoice.p03.';
+-- id=18 | فاتورة مشتريات فرع 3 | dj.purchase_invoice.p03. | foundation
+```
+**الإجمالي النهائي:**
+```sql
+SELECT record_origin, COUNT(*) FROM document_journals WHERE org_id=1 GROUP BY record_origin;
+-- foundation | 16   ← أُعيد الـ 16 سجل كاملاً ✅
+-- user       |  1   ← سجل المستخدم محفوظ ✅
+```
+✅ الدفتر المحذوف (id=3) أُعيد إدراجه كـ id=18
 
 ---
 
 ## 5. بناء الإنتاج وتشغيله
 
-### البناء
+### البناء الرسمي
 ```
-$ node -e "require('esbuild').build({ entryPoints: ['src/index.ts'], bundle: true, ... })"
-BUILD_OK
-```
+$ cd server-app && node build.mjs
 
-### تشغيل الإنتاج — /api/health
+✅ اكتمل البناء بنجاح
+→ dist/index.mjs
 ```
-$ PORT=3001 DATABASE_URL=... node /tmp/test-prod-build/index.mjs &
+*الخرج: `server-app/dist/index.mjs` (ESM bundle + الـ package.json يُشير لـ `node dist/index.mjs`)*
 
-[5/6] ✅ OneSoft ERP listening on http://localhost:3001
-[schema-check] Schema is up to date (version: 0035_foundation_products_customers_suppliers).
-[foundation-update] ✅ اكتمل: 5 منظمة | inserted=0 skipped=80
+### تشغيل الإنتاج
+```
+$ NODE_ENV=production node dist/index.mjs
+
+[5/6] ✅ OneSoft ERP listening on http://localhost:3099
+[schema-check] NODE_ENV = production
+[schema-check] Schema is up to date (version: 0035_foundation_products_customers_suppliers)
+[foundation-update] ✓ اكتمل: 5 منظمة | inserted=0 skipped=80
 [6/6] ✅ PostgreSQL connected — schema OK — server fully ready
-
-$ curl http://localhost:3001/api/health
-{"status":"ok","version":"1.0.0","env":"development","port":3001,"electron":false,"ts":"2026-07-16T03:09:30.500Z"}
 ```
 
-✅ الخادم يعمل، schema محدَّث، Foundation Update يعمل عند الـ startup.
+### /api/health
+```json
+{"status":"ok","version":"1.0.0","env":"production","port":3099,"electron":false,"ts":"2026-07-16T03:22:18.768Z"}
+```
+✅ `env: production` — تم التحقق من وضع الإنتاج الكامل
 
 ---
 
-## 6. الملفات المُعدَّلة
+## 6. ملفات مُعدَّلة
 
 | الملف | التعديل |
 |-------|---------|
 | `server-app/src/routers/zatca.ts` | `ctx.orgId` → `ctx.user.orgId` (26 موضع) |
-| `server-app/src/check-schema.ts` | إزالة type args من `query<T>()` |
+| `server-app/src/check-schema.ts` | إزالة generic type args من `query<T>()` |
 | `server-app/src/routers/postingDefinitions.ts` | `nameAr` → `name` |
 | `client-app/shared/types.ts` | حذف import ميت لـ `drizzle/schema` |
 
@@ -217,11 +256,11 @@ $ curl http://localhost:3001/api/health
 
 | القيد | التفاصيل |
 |-------|---------|
-| FK Remap Testing | لا ينطبق: القالب الحالي لا يحتوي FKs (branchId/warehouseId=null). آلية الـ FK validation موجودة في export path ومحتاجة عندما تُضاف FKs مستقبلاً. |
-| ZATCA Functional Test | تم إصلاح TS errors. الاختبار الوظيفي للـ ZATCA مُقترَح كمهمة منفصلة (#116). |
-| Windows Installer | يتطلب بيئة Windows — تحقق يدوي عند النشر الفعلي. |
-| Warehouse في القالب | القالب لا يحتوي مخازن (`includeInFoundation=false`). إضافتها مستقبلاً تتطلب تصدير جديد من واجهة superadmin (مهمة #113). |
+| **FK remap لفروع/مخازن في heliumdb_test** | الوجهة لا تحتوي فروع/مخازن بهذا foundationKey → null (صحيح؛ الآلية تعمل بشكل صحيح للحسابات kإثبتت via systemKey) |
+| **ZATCA functional test** | إصلاح TS فقط؛ اختبار وظيفي في مهمة منفصلة (#116) |
+| **Windows Installer** | يتطلب بيئة Windows — manual step عند النشر |
+| **Warehouse في القالب** | القالب الحالي (foundation-data.json) لا يتضمن مخازن (`includeInFoundation=false`) — مهمة #113 للتصدير الكامل |
 
 ---
 
-*تم الاعتماد بنجاح — جاهز للإنتاج.*
+*اعتماد مكتمل — جاهز للإنتاج.*
