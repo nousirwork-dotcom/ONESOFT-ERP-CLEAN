@@ -21,6 +21,7 @@ import React, {
 import { toast } from "sonner";
 import { trpc } from "@/shared/lib/trpc";
 import { Search, X, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
+import { fmtDate } from "@/shared/utils/dateUtils";
 
 /* ── Types ─────────────────────────────────────────────────────────────────── */
 type DocType = 'quote' | 'order' | 'sale' | 'transfer' | '';
@@ -85,12 +86,6 @@ const DOC_TITLE: Record<string, string> = {
 };
 
 /* ── Helpers ──────────────────────────────────────────────────────────── */
-function fmtDate(d: any): string {
-  if (!d) return "—";
-  try {
-    return new Date(d).toLocaleDateString("en-SA", { year: "numeric", month: "2-digit", day: "2-digit" });
-  } catch { return String(d).slice(0, 10); }
-}
 
 function fmtNum(v: any): string {
   const n = parseFloat(v);

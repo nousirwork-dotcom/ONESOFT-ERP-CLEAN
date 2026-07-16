@@ -1348,11 +1348,6 @@ function SalesInvoicesReport() {
   // ── أدوات مشتركة ──
   const fmtNum = (n: number) =>
     n.toLocaleString("ar-EG", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const fmtDate = (d: string | Date) => {
-    const dt = new Date(d);
-    return `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}`;
-  };
-
   const TYPE_LABELS: Record<string, { label: string; color: string; bg: string }> = {
     sale:   { label: "فاتورة مبيعات", color: "#059669", bg: "#ECFDF5" },
     return: { label: "مردود مبيعات",  color: "#DC2626", bg: "#FEF2F2" },

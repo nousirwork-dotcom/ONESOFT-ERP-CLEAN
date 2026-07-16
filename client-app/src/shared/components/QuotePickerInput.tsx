@@ -7,6 +7,7 @@
  */
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { trpc } from "@/shared/lib/trpc";
+import { fmtDate } from "@/shared/utils/dateUtils";
 
 interface Props {
   value:       string;
@@ -316,7 +317,7 @@ export default function QuotePickerInput({
                           {q.invoiceNumber}
                         </td>
                         <td className="px-3 py-1.5 text-gray-500" style={{ whiteSpace: "nowrap" }}>
-                          {q.invoiceDate ? new Date(q.invoiceDate).toLocaleDateString("ar-SA") : "—"}
+                          {fmtDate(q.invoiceDate)}
                         </td>
                         <td className="px-3 py-1.5" style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {q.customerName ?? "—"}

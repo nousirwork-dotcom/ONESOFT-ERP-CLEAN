@@ -1198,9 +1198,7 @@ function buildVoucherHtml(v: {
   const partyLabel = isReceipt ? "استُلم من / Received From" : "صُرف لـ / Paid To";
   const amt       = parseFloat(String(v.amount) || "0");
   const fmtAmt    = amt.toLocaleString("ar-SA", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
-  const dateStr   = v.voucherDate instanceof Date
-    ? v.voucherDate.toLocaleDateString("ar-SA")
-    : String(v.voucherDate);
+  const dateStr   = fmtDate(v.voucherDate);
   const pmLabels: Record<string, string> = { cash: "نقدي / Cash", check: "شيك / Cheque", transfer: "تحويل / Transfer", card: "بطاقة / Card" };
   const pmLabel = pmLabels[v.paymentMethod] ?? v.paymentMethod;
 
