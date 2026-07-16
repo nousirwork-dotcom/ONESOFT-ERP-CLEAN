@@ -15,6 +15,7 @@ export async function createToken(payload: {
   orgId: number;
   username: string;
   role: string;
+  sessionVersion: number;
 }): Promise<string> {
   return new SignJWT(payload as any)
     .setProtectedHeader({ alg: 'HS256' })
@@ -27,7 +28,7 @@ export async function createToken(payload: {
 export async function verifyToken(token: string) {
   try {
     const { payload } = await jwtVerify(token, SECRET);
-    return payload as { userId: number; orgId: number; username: string; role: string };
+    return payload as { userId: number; orgId: number; username: string; role: string; sessionVersion?: number };
   } catch {
     return null;
   }
@@ -61,10 +62,16 @@ export async function getUserFromRequest(req: Request) {
 
   const user = await db.query.users.findFirst({
     where: and(eq(users.id, payload.userId), eq(users.isActive, true)),
-
   });
 
-  return user || null;
+  if (!user) return null;
+
+  // ── إبطال الجلسة إذا تغيّرت sessionVersion (تسجيل خروج كل الأجهزة) ──────────
+  if (payload.sessionVersion !== undefined && user.sessionVersion !== payload.sessionVersion) {
+    return null;
+  }
+
+  return user;
 }
 
 // ─── تسجيل الدخول ────────────────────────────────────────────────────────────
@@ -146,12 +153,13 @@ export async function loginHandler(req: Request, res: Response) {
       } catch { /* صامت */ }
     }
 
-    // إنشاء token
+    // إنشاء token (يتضمن sessionVersion لإبطال الجلسات عند الحاجة)
     const token = await createToken({
       userId: user.id,
       orgId: user.orgId,
       username: user.username,
       role: user.role,
+      sessionVersion: user.sessionVersion ?? 1,
     });
 
     res.cookie(ENV.cookieName, token, {

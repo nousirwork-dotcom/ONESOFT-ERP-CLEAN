@@ -84,7 +84,7 @@ app.post('/api/auth/auto-login', async (req, res) => {
       return res.status(403).json({ error: 'يجب تسجيل الدخول يدوياً' });
     }
 
-    const token = await createToken({ userId: user.id, orgId: user.orgId, username: user.username, role: user.role });
+    const token = await createToken({ userId: user.id, orgId: user.orgId, username: user.username, role: user.role, sessionVersion: user.sessionVersion ?? 1 });
     res.cookie(ENV.cookieName, token, { httpOnly: true, secure: false, sameSite: 'lax', maxAge: ENV.sessionExpiry });
     return res.json({ success: true, user: { id: user.id, name: user.name, username: user.username, role: user.role, orgId: user.orgId } });
   } catch (err) {

@@ -531,6 +531,7 @@ export default function Users() {
                 <TableHead className="text-right">رقم الجوال</TableHead>
                 <TableHead className="text-right">البريد الإلكتروني</TableHead>
                 <TableHead className="text-right">الدور</TableHead>
+                <TableHead className="text-right">المجموعة</TableHead>
                 <TableHead className="text-right">الحالة</TableHead>
                 <TableHead className="text-right w-20">إجراءات</TableHead>
               </TableRow>
@@ -538,11 +539,11 @@ export default function Users() {
             <TableBody>
               {isLoading ? (
                 Array.from({ length: 4 }).map((_, i) => (
-                  <TableRow key={i}>{Array.from({ length: 8 }).map((_, j) => (<TableCell key={j}><div className="h-4 bg-muted rounded animate-pulse" /></TableCell>))}</TableRow>
+                  <TableRow key={i}>{Array.from({ length: 9 }).map((_, j) => (<TableCell key={j}><div className="h-4 bg-muted rounded animate-pulse" /></TableCell>))}</TableRow>
                 ))
               ) : usersList?.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
                     <UsersIcon className="w-8 h-8 mx-auto mb-2 opacity-30" />
                     <p>لا يوجد مستخدمون</p>
                     <Button variant="outline" size="sm" className="mt-3" onClick={openCreate}>
@@ -584,6 +585,11 @@ export default function Users() {
                       <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${roleColors[u.role] ?? roleColors.user}`}>
                         {roleLabels[u.role] ?? u.role}
                       </span>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {u.userGroupId
+                        ? ((userGroups as any[]).find(g => g.id === u.userGroupId)?.name ?? <span className="text-xs opacity-40">—</span>)
+                        : <span className="text-xs opacity-40">—</span>}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">

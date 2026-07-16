@@ -47,13 +47,18 @@ export const usersRouter = router({
   logoutAllSessions: adminProcedure
     .input(z.object({ userId: z.number() }))
     .mutation(async ({ input, ctx }) => {
+      if (input.userId === ctx.user.id) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكنك تسجيل خروج حسابك الحالي من هنا — استخدم زر تسجيل الخروج العادي' });
+      }
       const user = await db.query.users.findFirst({
         where: and(eq(users.id, input.userId), eq(users.orgId, ctx.user.orgId)),
-        columns: { id: true },
+        columns: { id: true, sessionVersion: true },
       });
       if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: 'المستخدم غير موجود' });
-      await db.update(users).set({ updatedAt: new Date() })
-        .where(and(eq(users.id, input.userId), eq(users.orgId, ctx.user.orgId)));
+      await db.update(users).set({
+        sessionVersion: (user.sessionVersion ?? 1) + 1,
+        updatedAt: new Date(),
+      }).where(and(eq(users.id, input.userId), eq(users.orgId, ctx.user.orgId)));
       return { success: true };
     }),
 
