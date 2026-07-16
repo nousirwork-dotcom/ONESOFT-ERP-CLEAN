@@ -253,6 +253,13 @@
       "when": 1790400000000,
       "tag": "0035_foundation_products_customers_suppliers",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1790500000000,
+      "tag": "0036_document_types_journal_cols",
+      "breakpoints": true
     }
   ]
 }

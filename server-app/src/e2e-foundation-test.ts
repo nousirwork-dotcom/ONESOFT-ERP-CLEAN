@@ -1,7 +1,16 @@
 /**
  * e2e-foundation-test.ts — اختبار E2E شامل لقالب التأسيس (Task #118)
  *
- * يُشغَّل: pnpm tsx src/e2e-foundation-test.ts
+ * يستخدم مسار الإنتاج الحقيقي: applyFoundationRecords() من foundation-update.ts
+ *
+ * يُشغَّل:
+ *   TEST_URL="${DATABASE_URL/heliumdb/heliumdb_test}"
+ *   psql "$DATABASE_URL" -c "DROP DATABASE IF EXISTS heliumdb_test;"
+ *   psql "$DATABASE_URL" -c "CREATE DATABASE heliumdb_test;"
+ *   DATABASE_URL="$TEST_URL" pnpm tsx src/e2e-foundation-test.ts
+ *
+ * الكود يشترط أن يُشغَّل مع DATABASE_URL → heliumdb_test
+ * (لكي يستخدم db من foundation-update.ts قاعدة الاختبار)
  */
 
 import pg   from 'pg';
@@ -10,11 +19,17 @@ import fs   from 'fs';
 import { fileURLToPath } from 'url';
 import { spawnSync }     from 'child_process';
 
+import { applyFoundationRecords } from './foundation-update.js';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const BASE_URL = process.env['DATABASE_URL'] ?? '';
-if (!BASE_URL) { console.error('DATABASE_URL not set'); process.exit(1); }
-const TEST_DB_URL = BASE_URL.replace(/\/[^/?]*(\?.*)?$/, '/heliumdb_test$1');
+const DB_URL = process.env['DATABASE_URL'] ?? '';
+if (!DB_URL) { console.error('DATABASE_URL not set'); process.exit(1); }
+if (!DB_URL.includes('heliumdb_test')) {
+  console.error('❌ هذا الاختبار يجب أن يُشغَّل مع DATABASE_URL → heliumdb_test');
+  console.error('   استخدم: DATABASE_URL="${DATABASE_URL/heliumdb/heliumdb_test}" pnpm tsx src/e2e-foundation-test.ts');
+  process.exit(1);
+}
 
 const REPORT: string[] = [];
 let FAIL_COUNT = 0;
@@ -28,173 +43,16 @@ const hdr = (msg: string) => log(`\n${'═'.repeat(60)}\n  ${msg}\n${'═'.repea
 log('\n╔════════════════════════════════════════════════════════════╗');
 log('║  Foundation Template E2E — شامل (Task #118)                ║');
 log('╚════════════════════════════════════════════════════════════╝\n');
-log(`Target DB : ${TEST_DB_URL.replace(/:([^:@]+)@/, ':***@')}`);
+log(`Target DB : ${DB_URL.replace(/:([^:@]+)@/, ':***@')}`);
 log(`Timestamp : ${new Date().toISOString()}\n`);
 
 const jsonPath = path.resolve(process.cwd(), 'src', 'foundation-data.json');
 if (!fs.existsSync(jsonPath)) { console.error('❌ foundation-data.json غير موجود'); process.exit(1); }
-const foundationData: Record<string, unknown> = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+const foundationData = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
 
-const pool = new pg.Pool({ connectionString: TEST_DB_URL, max: 3 });
+// pool للاستعلامات المباشرة — يستخدم نفس DATABASE_URL (heliumdb_test)
+const pool = new pg.Pool({ connectionString: DB_URL, max: 3 });
 const q    = (sql: string, p: unknown[] = []) => pool.query(sql, p).then(r => r.rows);
-
-/** camelCase → snake_case (no digit underscores: fullName1 → full_name1) */
-function toSnakeCase(str: string): string {
-  return str.replace(/([A-Z])/g, '_$1').toLowerCase();
-}
-
-const ACCOUNT_FK_CAMEL = [
-  'salesAccountId','cashAccountId','creditAccountId','taxAccountId',
-  'discountAccountId','purchaseAccountId','supplierAccountId',
-  'inventoryAccountId','cogsAccountId','settlementAccountId',
-];
-
-/** Cache of target-table column sets — built lazily */
-const tableColCache = new Map<string, Set<string>>();
-async function getTableCols(tbl: string): Promise<Set<string>> {
-  if (tableColCache.has(tbl)) return tableColCache.get(tbl)!;
-  const rows = await q(
-    `SELECT column_name FROM information_schema.columns
-     WHERE table_schema='public' AND table_name=$1`, [tbl]
-  );
-  const cols = new Set<string>(rows.map((r: any) => r.column_name as string));
-  tableColCache.set(tbl, cols);
-  return cols;
-}
-
-async function applyFoundationToTestDb(
-  orgId: number,
-  data: Record<string, unknown>,
-): Promise<{ inserted: number; skipped: number; errors: string[] }> {
-  let inserted = 0, skipped = 0;
-  const errors: string[] = [];
-
-  const ORDER = [
-    { key: 'currencies',         tbl: 'currencies'          },
-    { key: 'branches',           tbl: 'branches'            },
-    { key: 'warehouses',         tbl: 'warehouses'          },
-    { key: 'units',              tbl: 'units'               },
-    { key: 'productGroups',      tbl: 'product_groups'      },
-    { key: 'paymentMethods',     tbl: 'payment_methods'     },
-    { key: 'costCenters',        tbl: 'cost_centers'        },
-    { key: 'documentTypes',      tbl: 'document_types'      },
-    { key: 'documentTemplates',  tbl: 'document_templates'  },
-    { key: 'documentJournals',   tbl: 'document_journals'   },
-    { key: 'postingDefinitions', tbl: 'posting_definitions' },
-  ];
-
-  const fkMap = new Map<string, number>();
-  const acctRows = await q(
-    `SELECT id, system_key FROM chart_of_accounts WHERE org_id=$1 AND system_key IS NOT NULL`, [orgId]
-  );
-  const acctMap = new Map<string, number>(acctRows.map((r: any) => [r.system_key as string, r.id as number]));
-
-  for (const { key, tbl } of ORDER) {
-    const records = (data[key] as Record<string, unknown>[]) ?? [];
-    if (!records.length) continue;
-
-    const validCols = await getTableCols(tbl);
-
-    const existing = (await q(
-      `SELECT foundation_key FROM ${tbl} WHERE org_id=$1 AND foundation_key IS NOT NULL`, [orgId]
-    )).map((r: any) => r.foundation_key as string);
-    const existingSet = new Set(existing);
-
-    for (const record of records) {
-      const fKey = record['foundationKey'] as string | undefined;
-      if (!fKey) { skipped++; continue; }
-      if (existingSet.has(fKey)) { skipped++; continue; }
-
-      const resolved: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(record)) {
-        if (k.startsWith('_') && k.endsWith('_fk')) continue;
-        resolved[k] = v;
-      }
-
-      // ── سياسة صارمة: لا null صامت ────────────────────────────────────────
-      // كل _xxx_fk غير null يجب أن يُحَل — إذا فشل نرفض السجل بخطأ واضح
-      const unresolvedFkErrors: string[] = [];
-
-      const brFk = record['_branchId_fk'] as string | null | undefined;
-      if (brFk !== undefined) {
-        if (brFk === null) { resolved['branchId'] = null; }
-        else {
-          const id = fkMap.get(brFk);
-          if (id === undefined) unresolvedFkErrors.push(`branchId: "${brFk}" غير موجود`);
-          else resolved['branchId'] = id;
-        }
-      }
-
-      const whFk = record['_warehouseId_fk'] as string | null | undefined;
-      if (whFk !== undefined) {
-        if (whFk === null) { resolved['warehouseId'] = null; }
-        else {
-          const id = fkMap.get(whFk);
-          if (id === undefined) unresolvedFkErrors.push(`warehouseId: "${whFk}" غير موجود`);
-          else resolved['warehouseId'] = id;
-        }
-      }
-
-      for (const af of ACCOUNT_FK_CAMEL) {
-        const refKey = `_${af}_fk`;
-        if (!(refKey in record)) continue;
-        const sk = record[refKey] as string | null;
-        if (sk === null) { resolved[af] = null; continue; }
-        const id = acctMap.get(sk);
-        if (id === undefined) unresolvedFkErrors.push(`${af}: "${sk}" غير موجود`);
-        else resolved[af] = id;
-      }
-
-      // رفض السجل صراحةً إذا كانت هناك FKs غير محلولة
-      if (unresolvedFkErrors.length > 0) {
-        errors.push(`${tbl}[${fKey}]: فشل حل FK — ${unresolvedFkErrors.join('; ')}`);
-        continue;
-      }
-
-      const SKIP_KEYS = new Set([
-        'id', 'orgId', 'createdAt', 'updatedAt', 'recordOrigin', 'foundationTemplateVersion',
-        'warehouseId', 'branchId', ...ACCOUNT_FK_CAMEL,
-      ]);
-
-      const filteredEntries: Array<[string, unknown]> = [];
-
-      for (const [camelKey, val] of Object.entries(resolved)) {
-        if (SKIP_KEYS.has(camelKey)) continue;
-        const dbCol = toSnakeCase(camelKey);
-        if (!validCols.has(dbCol)) continue; // skip columns that don't exist in target
-        filteredEntries.push([dbCol, val]);
-      }
-
-      // FK columns — only if they exist in target
-      if (validCols.has('branch_id'))    filteredEntries.push(['branch_id',    resolved['branchId'] ?? null]);
-      if (validCols.has('warehouse_id')) filteredEntries.push(['warehouse_id', resolved['warehouseId'] ?? null]);
-      for (const af of ACCOUNT_FK_CAMEL) {
-        const dbCol = toSnakeCase(af);
-        if (validCols.has(dbCol)) filteredEntries.push([dbCol, resolved[af] ?? null]);
-      }
-
-      filteredEntries.push(['org_id', orgId]);
-      filteredEntries.push(['record_origin', 'foundation']);
-      if (validCols.has('foundation_template_version')) {
-        filteredEntries.push(['foundation_template_version',
-          (data as any).exportedAt ? String((data as any).exportedAt).slice(0, 10) : null]);
-      }
-
-      try {
-        const dbCols = filteredEntries.map(([c]) => c);
-        const vals   = filteredEntries.map(([, v]) => v);
-        const sql    = `INSERT INTO ${tbl} (${dbCols.join(', ')}) VALUES (${vals.map((_,i)=>`$${i+1}`).join(', ')}) RETURNING id`;
-        const [ins]  = await q(sql, vals);
-        if (ins?.id) fkMap.set(fKey, ins.id as number);
-        inserted++;
-        existingSet.add(fKey);
-      } catch (e: any) {
-        errors.push(`${tbl}[${fKey}]: ${e.message.slice(0, 120)}`);
-      }
-    }
-  }
-  return { inserted, skipped, errors };
-}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 【1/10】 Auto-migrate
@@ -264,9 +122,9 @@ log('  ' + '─'.repeat(38));
 log(`  المجموع                     | ${totalTpl}`);
 log(`  exportedAt: ${foundationData['exportedAt']}`);
 
-const hasBranches   = ((foundationData['branches']       as unknown[]) ?? []).length > 0;
-const hasWarehouses = ((foundationData['warehouses']     as unknown[]) ?? []).length > 0;
-const hasDocTypes   = ((foundationData['documentTypes']  as unknown[]) ?? []).length > 0;
+const hasBranches   = ((foundationData['branches']         as unknown[]) ?? []).length > 0;
+const hasWarehouses = ((foundationData['warehouses']       as unknown[]) ?? []).length > 0;
+const hasDocTypes   = ((foundationData['documentTypes']    as unknown[]) ?? []).length > 0;
 const hasJournals   = ((foundationData['documentJournals'] as unknown[]) ?? []).length > 0;
 if (hasBranches)   ok('القالب يحتوي فروعاً'); else err('لا فروع في القالب!');
 if (hasWarehouses) ok('القالب يحتوي مخازن'); else err('لا مخازن في القالب!');
@@ -298,18 +156,18 @@ await q(`
 ok('حساب cert.sales.account مُضاف');
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 【4/10】 تثبيت جديد — تطبيق القالب
+// 【4/10】 تثبيت جديد — تطبيق القالب الكامل (مسار الإنتاج: applyFoundationRecords)
 // ══════════════════════════════════════════════════════════════════════════════
-hdr('【4/10】 تثبيت جديد — تطبيق القالب الكامل');
+hdr('【4/10】 تثبيت جديد — تطبيق القالب الكامل (مسار الإنتاج)');
 
-const ar1 = await applyFoundationToTestDb(testOrgId, foundationData);
+const ar1 = await applyFoundationRecords(testOrgId, foundationData, { isFirstRun: true });
 ok(`Foundation applied: inserted=${ar1.inserted} skipped=${ar1.skipped} errors=${ar1.errors.length}`);
 if (ar1.errors.length) ar1.errors.slice(0, 5).forEach(e => wrn(`  error: ${e}`));
 if (ar1.inserted === 0) err('لم يُدرَج أي سجل!');
-else ok(`${ar1.inserted} سجل أُدرج من الصفر ✅`);
+else ok(`${ar1.inserted} سجل أُدرج من الصفر (عبر applyFoundationRecords الإنتاجي) ✅`);
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 【5/10】 إثبات لا null FK — branch/warehouse/account مُحَلَّة
+// 【5/10】 إثبات لا null FK + الرفض الصارم
 // ══════════════════════════════════════════════════════════════════════════════
 hdr('【5/10】 إثبات لا null FK — branch/warehouse/account مُحَلَّة');
 
@@ -350,35 +208,34 @@ if (djWithAcct) {
 }
 
 log('\n  ── إثبات الرفض الصارم للـ FK غير المحلول (لا null صامت):');
-// نُحاول تطبيق سجل اصطناعي يحتوي على _branchId_fk يُشير إلى foundationKey وهمي
+// سجل اصطناعي بـ _branchId_fk وهمي — يجب أن يُرفض لا أن يُدرَج بـ null
 const SYNTHETIC_STRICT_FK_KEY = 'e2e.strict.fk.test';
 const syntheticBadData = {
   documentJournals: [{
-    foundationKey:    SYNTHETIC_STRICT_FK_KEY,
-    docType:          'sales',
-    code:             'E2E-STRICT-FK',
-    name:             'دفتر اختبار FK صارم',
-    numberPrefix:     'TST',
-    firstNumber:      1,
-    lastNumber:       999999,
-    increment:        1,
-    numDigits:        6,
-    includeYear:      true,
-    currentSeq:       0,
-    isActive:         true,
-    sortOrder:        99,
-    recordPolicy:     'flexible',
+    foundationKey:       SYNTHETIC_STRICT_FK_KEY,
+    docType:             'sales',
+    code:                'E2E-STRICT-FK',
+    name:                'دفتر اختبار FK صارم',
+    numberPrefix:        'TST',
+    firstNumber:         1,
+    lastNumber:          999999,
+    increment:           1,
+    numDigits:           6,
+    includeYear:         true,
+    currentSeq:          0,
+    isActive:            true,
+    sortOrder:           99,
+    recordPolicy:        'flexible',
     includeInFoundation: false,
-    _branchId_fk:     'br.NONEXISTENT_FAKE_KEY_THAT_WILL_NEVER_RESOLVE',
+    _branchId_fk:        'br.NONEXISTENT_FAKE_KEY_THAT_WILL_NEVER_RESOLVE',
   }],
   exportedAt: new Date().toISOString(),
 };
-const strictResult = await applyFoundationToTestDb(testOrgId, syntheticBadData as any);
-// السجل يجب أن يُرفض (errors > 0) وليس أن يُدرَج بـ branch_id=null
+// نستخدم isFirstRun: true حتى لا تُحجب بسياسة flexible قبل الوصول لفحص FK
+const strictResult = await applyFoundationRecords(testOrgId, syntheticBadData as any, { isFirstRun: true });
 if (strictResult.errors.length > 0 && strictResult.inserted === 0) {
   ok(`الرفض الصارم: سجل ذو FK وهمي رُفض (error: "${strictResult.errors[0]?.slice(0, 60)}...") — لا null صامت ✅`);
 } else if (strictResult.inserted > 0) {
-  // تحقق: هل أُدرج بـ branch_id=null؟
   const [badRow] = await q(
     `SELECT branch_id FROM document_journals WHERE org_id=$1 AND foundation_key=$2`,
     [testOrgId, SYNTHETIC_STRICT_FK_KEY]
@@ -388,7 +245,6 @@ if (strictResult.errors.length > 0 && strictResult.inserted === 0) {
   } else {
     wrn(`سجل اصطناعي أُدرج بـ branch_id=${badRow?.branch_id} (غير متوقع)`);
   }
-  // تنظيف السجل الاصطناعي
   await q(`DELETE FROM document_journals WHERE org_id=$1 AND foundation_key=$2`,
     [testOrgId, SYNTHETIC_STRICT_FK_KEY]);
 } else {
@@ -396,30 +252,32 @@ if (strictResult.errors.length > 0 && strictResult.inserted === 0) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 【6/10】 Idempotency
+// 【6/10】 Idempotency — تطبيق ثانٍ (وضع التحديث) لا يُكرّر
 // ══════════════════════════════════════════════════════════════════════════════
 hdr('【6/10】 Idempotency — تطبيق ثانٍ لا يُكرّر');
 
-const ar2 = await applyFoundationToTestDb(testOrgId, foundationData);
+// وضع التحديث (isFirstRun: false — القيمة الافتراضية)
+const ar2 = await applyFoundationRecords(testOrgId, foundationData);
 if (ar2.inserted === 0 && ar2.skipped > 0) ok(`idempotent: inserted=${ar2.inserted} skipped=${ar2.skipped} ✅`);
 else err(`تكرار غير متوقع: inserted=${ar2.inserted} skipped=${ar2.skipped}`);
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 【7/10】 سيناريو التحديث: تعديل + إضافة + تعطيل + حذف
+// 【7/10】 سيناريو التحديث: تعديل + إضافة + تعطيل + سياسة الحذف
 // ══════════════════════════════════════════════════════════════════════════════
-hdr('【7/10】 سيناريو التحديث: تعديل + إضافة + تعطيل + حذف');
+hdr('【7/10】 سيناريو التحديث: تعديل + إضافة + تعطيل + سياسة الحذف');
 
 const djRows = await q(
   `SELECT id, name, foundation_key FROM document_journals
    WHERE org_id=$1 AND record_origin='foundation' ORDER BY id`, [testOrgId]
 );
-const [firstDj, secondDj, thirdDj] = djRows;
+const [firstDj, secondDj] = djRows;
 
 log('\n  ── 7a. تعديل اسم دفتر foundation:');
 if (firstDj) {
   const editedName = `${firstDj.name} - معدّل من العميل`;
   await q('UPDATE document_journals SET name=$1 WHERE id=$2', [editedName, firstDj.id]);
-  await applyFoundationToTestDb(testOrgId, foundationData);
+  // وضع التحديث — لا يُعدّل الاسم الذي غيّره العميل
+  await applyFoundationRecords(testOrgId, foundationData);
   const [afterEdit] = await q('SELECT name FROM document_journals WHERE id=$1', [firstDj.id]);
   if (afterEdit?.name === editedName) ok('تعديل العميل محفوظ — Foundation Update لم يُعدّله ✅');
   else err(`الاسم تغيّر: "${afterEdit?.name}"`);
@@ -431,7 +289,7 @@ await q(`
   VALUES ($1,'sales','USER-E2E-01','دفتر مضاف من المستخدم E2E','user')
   ON CONFLICT DO NOTHING
 `, [testOrgId]);
-await applyFoundationToTestDb(testOrgId, foundationData);
+await applyFoundationRecords(testOrgId, foundationData);
 const [userDj] = await q(
   `SELECT id, record_origin FROM document_journals WHERE org_id=$1 AND code='USER-E2E-01'`, [testOrgId]
 );
@@ -441,23 +299,68 @@ else err('دفتر العميل لم يُحفَظ!');
 log('\n  ── 7c. تعطيل دفتر foundation:');
 if (secondDj) {
   await q('UPDATE document_journals SET is_active=false WHERE id=$1', [secondDj.id]);
-  await applyFoundationToTestDb(testOrgId, foundationData);
+  await applyFoundationRecords(testOrgId, foundationData);
   const [afterDisable] = await q('SELECT is_active FROM document_journals WHERE id=$1', [secondDj.id]);
   if (afterDisable?.is_active === false) ok(`is_active=false محفوظ (id=${secondDj.id}) ✅`);
   else err(`is_active تغيّر! القيمة: ${afterDisable?.is_active}`);
 }
 
-log('\n  ── 7d. حذف دفتر foundation ثم إعادة تطبيق:');
-if (thirdDj) {
-  const deletedFk = thirdDj.foundation_key as string;
-  await q('DELETE FROM document_journals WHERE id=$1', [thirdDj.id]);
-  await applyFoundationToTestDb(testOrgId, foundationData);
-  const [reinserted] = await q(
+log('\n  ── 7d. سياسة الحذف — flexible vs editable:');
+
+// نجد دفتراً flexible ودفتراً editable من بيانات القالب
+const flexTplRecord = (foundationData['documentJournals'] as any[]).find(
+  (dj: any) => dj['recordPolicy'] === 'flexible'
+);
+const editTplRecord = (foundationData['documentJournals'] as any[]).find(
+  (dj: any) => dj['recordPolicy'] === 'editable'
+);
+
+if (flexTplRecord) {
+  log('\n  ── 7d-flex. flexible: يُحترَم حذف المستخدم — لا إعادة إدراج:');
+  const [flexDbRow] = await q(
     `SELECT id FROM document_journals WHERE org_id=$1 AND foundation_key=$2`,
-    [testOrgId, deletedFk]
+    [testOrgId, flexTplRecord.foundationKey]
   );
-  if (reinserted) ok(`الدفتر المحذوف (fk=${deletedFk}) أُعيد إدراجه كـ id=${reinserted.id} ✅`);
-  else err(`الدفتر (fk=${deletedFk}) لم يُعَد إدراجه!`);
+  if (flexDbRow) {
+    const flexId = flexDbRow.id;
+    await q('DELETE FROM document_journals WHERE id=$1', [flexId]);
+    // وضع التحديث: flexible المحذوف لا يُعاد
+    await applyFoundationRecords(testOrgId, foundationData);
+    const [afterFlex] = await q(
+      `SELECT id FROM document_journals WHERE org_id=$1 AND foundation_key=$2`,
+      [testOrgId, flexTplRecord.foundationKey]
+    );
+    if (!afterFlex) ok(`الدفتر flexible (fk=${flexTplRecord.foundationKey}) لم يُعَد إدراجه — قرار المستخدم محفوظ ✅`);
+    else err(`الدفتر flexible أُعيد إدراجه رغم حذف المستخدم له! (id=${afterFlex.id})`);
+  } else {
+    wrn(`لم يُعثَر على الدفتر flexible في قاعدة الاختبار`);
+  }
+} else {
+  wrn('لا يوجد دفتر flexible في القالب');
+}
+
+if (editTplRecord) {
+  log('\n  ── 7d-edit. editable: يُعاد إدراجه إذا حُذف (Foundation Update يصحح):');
+  const [editDbRow] = await q(
+    `SELECT id FROM document_journals WHERE org_id=$1 AND foundation_key=$2`,
+    [testOrgId, editTplRecord.foundationKey]
+  );
+  if (editDbRow) {
+    const editId = editDbRow.id;
+    await q('DELETE FROM document_journals WHERE id=$1', [editId]);
+    // وضع التحديث: editable المحذوف يُعاد إدراجه
+    await applyFoundationRecords(testOrgId, foundationData);
+    const [afterEdit] = await q(
+      `SELECT id FROM document_journals WHERE org_id=$1 AND foundation_key=$2`,
+      [testOrgId, editTplRecord.foundationKey]
+    );
+    if (afterEdit) ok(`الدفتر editable (fk=${editTplRecord.foundationKey}) أُعيد إدراجه كـ id=${afterEdit.id} ✅`);
+    else err(`الدفتر editable لم يُعَد إدراجه بعد حذفه!`);
+  } else {
+    wrn(`لم يُعثَر على الدفتر editable في قاعدة الاختبار`);
+  }
+} else {
+  wrn('لا يوجد دفتر editable في القالب');
 }
 
 const finalCounts = await q(
@@ -479,7 +382,7 @@ const backupFile = `${backupDir}/e2e_task118_${Date.now()}.sql`;
 let backupOk = false;
 const pgDumpVer = spawnSync('pg_dump', ['--version'], { encoding: 'utf8' });
 if (pgDumpVer.status === 0) {
-  const dump = spawnSync('pg_dump', [TEST_DB_URL, '-f', backupFile], { timeout: 60000, encoding: 'utf8' });
+  const dump = spawnSync('pg_dump', [DB_URL, '-f', backupFile], { timeout: 60000, encoding: 'utf8' });
   if (dump.status === 0 && fs.existsSync(backupFile)) {
     const size = fs.statSync(backupFile).size;
     ok(`pg_dump: ${backupFile} (${(size / 1024).toFixed(1)} KB)`);
@@ -498,7 +401,7 @@ if (backupOk) {
   ok(`تم الإفساد: دفاتر TESTCO من ${cntBefore} → 0 ✅`);
 
   log('\n  ── الاستعادة من النسخة الاحتياطية...');
-  const restore = spawnSync('psql', [TEST_DB_URL, '-f', backupFile], { timeout: 120000, encoding: 'utf8' });
+  const restore = spawnSync('psql', [DB_URL, '-f', backupFile], { timeout: 120000, encoding: 'utf8' });
   if (restore.status === 0) {
     const cntAfterRestore = (await q('SELECT COUNT(*) AS cnt FROM document_journals WHERE org_id=$1', [testOrgId]))[0]?.cnt;
     if (Number(cntAfterRestore) >= Number(cntBefore)) {
@@ -508,7 +411,8 @@ if (backupOk) {
     }
   } else {
     wrn(`psql restore تحذير: ${restore.stderr?.slice(0, 100)}`);
-    await applyFoundationToTestDb(testOrgId, foundationData);
+    // بديل: إعادة تطبيق القالب (isFirstRun: true)
+    await applyFoundationRecords(testOrgId, foundationData, { isFirstRun: true });
     wrn('أُعيد تطبيق القالب كبديل (psql restore غير متاح)');
   }
 } else {
@@ -563,7 +467,8 @@ for (const { tbl, label } of FINAL_CHECKS) {
   else err(`${label}: لا سجلات foundation!`);
 }
 
-const arFinal = await applyFoundationToTestDb(testOrgId, foundationData);
+// idempotency نهائي — وضع التحديث
+const arFinal = await applyFoundationRecords(testOrgId, foundationData);
 if (arFinal.inserted === 0) ok(`idempotency نهائي: inserted=0 skipped=${arFinal.skipped} ✅`);
 else err(`idempotency نهائي فشل: inserted=${arFinal.inserted}`);
 

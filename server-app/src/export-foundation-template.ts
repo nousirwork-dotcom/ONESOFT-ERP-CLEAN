@@ -94,7 +94,8 @@ console.log(`\n  ✅ فحص FK اجتاز — لا مشاكل\n`);
 // ─── helper: تحويل قاموس DB (snake_case) إلى camelCase ──────────────────────
 
 function snakeToCamel(str: string): string {
-  return str.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+  // handle both _letter and _digit: print_template_2 → printTemplate2
+  return str.replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase());
 }
 
 function rowToCamel(row: Record<string, unknown>): Record<string, unknown> {

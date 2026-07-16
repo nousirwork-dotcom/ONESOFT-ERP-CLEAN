@@ -249,11 +249,18 @@ export interface ApplyResult {
  * - يتجاهل السجلات التي يوجد foundationKey مماثل لها مسبقاً.
  * - يحل FK بشكل تلقائي عبر الخرائط المبنية من السجلات المُدرَجة.
  * - يطبّق في ترتيب التبعيات الصحيح.
+ *
+ * opts.isFirstRun:
+ *  - true  (fresh install): تُدرَج كل السجلات بغض النظر عن السياسة.
+ *  - false (تحديث — القيمة الافتراضية): سجلات flexible المحذوفة لا تُعاد —
+ *    يُحترَم قرار المستخدم بالحذف. يُعاد إدراج سجلات protected/editable فقط.
  */
 export async function applyFoundationRecords(
   orgId: number,
   data:  Record<string, unknown[]>,
+  opts?: { isFirstRun?: boolean },
 ): Promise<ApplyResult> {
+  const isFirstRun = opts?.isFirstRun ?? false;
   let inserted = 0;
   let skipped  = 0;
   const errors: string[] = [];
@@ -281,6 +288,13 @@ export async function applyFoundationRecords(
       const fKey = record['foundationKey'] as string | undefined;
       if (!fKey) { skipped++; continue; }
       if (existingKeys.has(fKey)) { skipped++; continue; }
+
+      // سياسة التحديث: سجلات flexible المحذوفة لا تُعاد إلا في أول تثبيت.
+      // إذا وصلنا هنا فالسجل غير موجود (تم حذفه) — نحترم قرار المستخدم.
+      if (!isFirstRun) {
+        const policy = record['recordPolicy'] as string | undefined;
+        if (policy === 'flexible') { skipped++; continue; }
+      }
 
       try {
         const { data: resolved, unresolvedFks } = resolveRecordFks(record, fkMap, acctMap);
@@ -397,7 +411,7 @@ export async function seedFromFoundationTemplate(orgId: number): Promise<void> {
   }
 
   logger.info('foundation-seed', `تطبيق قالب التأسيس على org ${orgId} (من: ${resolvedPath})...`);
-  const result = await applyFoundationRecords(orgId, data);
+  const result = await applyFoundationRecords(orgId, data, { isFirstRun: true });
   logger.info('foundation-seed',
     `اكتمل: inserted=${result.inserted} skipped=${result.skipped} errors=${result.errors.length}`);
   if (result.errors.length) {
