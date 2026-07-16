@@ -32,6 +32,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/core/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/core/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/core/ui/tabs";
+import { Textarea } from "@/core/ui/textarea";
 import { toast } from "sonner";
 import { trpc } from "@/shared/lib/trpc";
 import { PrintEngine } from "@/shared/lib/print";
@@ -3104,7 +3105,7 @@ function ChartOfAccountsPage() {
                   <span className="text-[11px] font-bold text-slate-600 tracking-wide">ملاحظات</span>
                 </div>
                 <div className="p-3">
-                  <textarea
+                  <Textarea
                     value={form.notes}
                     onChange={e => setF("notes", e.target.value)}
                     className="w-full h-14 text-xs rounded-lg border-2 border-slate-200 px-3 py-2 resize-none bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300"

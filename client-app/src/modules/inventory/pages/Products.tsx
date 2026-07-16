@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/core/ui/dial
 import { createPortal } from "react-dom";
 import { Rnd } from "react-rnd";
 import { Input } from "@/core/ui/input";
+import { Textarea } from "@/core/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/core/ui/select";
 import { Switch } from "@/core/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/core/ui/table";
@@ -836,7 +837,7 @@ function ProductCard({
                   <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">الوصف</span>
                 </div>
                 <div className="p-2">
-                  <textarea
+                  <Textarea
                     value={form.description}
                     onChange={(e) => set("description", e.target.value)}
                     rows={2}

@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/core/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/core/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/core/ui/tabs";
+import { Textarea } from "@/core/ui/textarea";
 import { toast } from "sonner";
 import { trpc } from "@/shared/lib/trpc";
 
@@ -416,7 +417,7 @@ function SuppliersListPage() {
             <TabsContent value="extra" className="space-y-3 pt-3">
               <div>
                 <Label className="text-xs">ملاحظات</Label>
-                <textarea value={form.notes} onChange={e => setF("notes", e.target.value)}
+                <Textarea value={form.notes} onChange={e => setF("notes", e.target.value)}
                   className="w-full h-32 text-xs border border-border rounded p-2 bg-background resize-none" />
               </div>
             </TabsContent>
