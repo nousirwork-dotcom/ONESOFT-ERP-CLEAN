@@ -186,21 +186,11 @@ export default function PostingOperationsPage() {
             <div className="text-[11px] font-bold text-slate-700 border-b pb-1.5">نطاق التاريخ</div>
             <div className="flex flex-col gap-1">
               <Label className="text-[11px] text-slate-600">من تاريخ</Label>
-              <Input
-                type="date"
-                value={fromDate}
-                onChange={e => setFromDate(e.target.value)}
-                className="h-8 text-[12px]"
-              />
+              <DateSegmentInput value={fromDate} onChange={setFromDate} standalone className="h-8 text-[12px]" />
             </div>
             <div className="flex flex-col gap-1">
               <Label className="text-[11px] text-slate-600">إلى تاريخ</Label>
-              <Input
-                type="date"
-                value={toDate}
-                onChange={e => setToDate(e.target.value)}
-                className="h-8 text-[12px]"
-              />
+              <DateSegmentInput value={toDate} onChange={setToDate} standalone className="h-8 text-[12px]" />
             </div>
           </div>
 

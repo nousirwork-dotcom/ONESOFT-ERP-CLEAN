@@ -3,6 +3,7 @@
  * Simplified Trial Balance for Real Estate Developer
  */
 import { useState, useEffect, useMemo } from "react";
+import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import { trpc } from "@/shared/lib/trpc";
 import { toast } from "sonner";
 import {
@@ -249,8 +250,8 @@ export default function ReTrialBalanceFullPage() {
                 <label className="text-xs font-medium text-gray-600">{ar ? "تسمية الفترة" : "Period Label"}</label>
                 <input value={form.periodLabel} onChange={(e) => setForm({ ...form, periodLabel: e.target.value })} className="w-full text-xs border rounded px-2 py-1" style={{ borderColor: C.border }} />
                 <div className="grid grid-cols-2 gap-2">
-                  <div><label className="text-xs font-medium text-gray-600">{ar ? "من" : "From"}</label><input type="date" value={form.fromDate} onChange={(e) => setForm({ ...form, fromDate: e.target.value })} className="w-full text-xs border rounded px-2 py-1" style={{ borderColor: C.border }} /></div>
-                  <div><label className="text-xs font-medium text-gray-600">{ar ? "إلى" : "To"}</label><input type="date" value={form.toDate} onChange={(e) => setForm({ ...form, toDate: e.target.value })} className="w-full text-xs border rounded px-2 py-1" style={{ borderColor: C.border }} /></div>
+                  <div><label className="text-xs font-medium text-gray-600">{ar ? "من" : "From"}</label><DateSegmentInput value={form.fromDate} onChange={v => setForm({ ...form, fromDate: v })} standalone className="w-full text-xs" style={{ borderColor: C.border, borderRadius: 4, padding: "4px 8px" }} /></div>
+                  <div><label className="text-xs font-medium text-gray-600">{ar ? "إلى" : "To"}</label><DateSegmentInput value={form.toDate} onChange={v => setForm({ ...form, toDate: v })} standalone className="w-full text-xs" style={{ borderColor: C.border, borderRadius: 4, padding: "4px 8px" }} /></div>
                 </div>
                 <label className="text-xs font-medium text-gray-600">{ar ? "المدى" : "Scope"}</label>
                 <select value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value })} className="w-full text-xs border rounded px-2 py-1" style={{ borderColor: C.border }}>

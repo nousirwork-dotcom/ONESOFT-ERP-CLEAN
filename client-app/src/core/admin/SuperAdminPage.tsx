@@ -1,5 +1,6 @@
 import { fmtDate } from "@/shared/utils/dateUtils";
 import { useState } from 'react';
+import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import { trpc } from '@/shared/lib/trpc';
 import { toast } from 'sonner';
 import FoundationAdminTab from './FoundationAdminTab';
@@ -219,8 +220,8 @@ export default function SuperAdminPage() {
                 </div>
                 <div>
                   <label className="block text-sm text-slate-300 mb-1">تاريخ انتهاء الاشتراك</label>
-                  <input type="date" value={newOrg.subscriptionExpiry} onChange={e => setNewOrg(f => ({ ...f, subscriptionExpiry: e.target.value }))}
-                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+                  <DateSegmentInput value={newOrg.subscriptionExpiry} onChange={v => setNewOrg(f => ({ ...f, subscriptionExpiry: v }))} standalone
+                    style={{ width: "100%", borderColor: "#475569", borderRadius: 8, padding: "7px 12px", fontSize: 14, background: "#334155", color: "#f8fafc" }} />
                 </div>
                 <div>
                   <label className="block text-sm text-slate-300 mb-1">عدد المستخدمين المسموح</label>

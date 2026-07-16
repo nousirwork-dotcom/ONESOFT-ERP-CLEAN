@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import {
   Sparkles, Send, Loader2, Plus, Trash2, History, ShieldAlert,
   CheckCircle2, XCircle, ClipboardList, Settings2,
@@ -358,12 +359,10 @@ export default function AIAssistantPage() {
                               <div className="grid grid-cols-2 gap-2">
                                 <div>
                                   <Label className="text-[11px]">تاريخ الاستحقاق</Label>
-                                  <Input
-                                    type="date"
+                                  <DateSegmentInput
                                     value={m.proposal.dueDate}
-                                    onChange={(e) => updateProposal(m.id, { dueDate: e.target.value })}
-                                    className="h-8 text-xs mt-0.5"
-                                    data-testid="input-ai-proposal-due-date"
+                                    onChange={(v) => updateProposal(m.id, { dueDate: v })}
+                                    standalone className="h-8 text-xs mt-0.5"
                                   />
                                 </div>
                                 <div>

@@ -800,10 +800,10 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
               </select>
             </HF>
             <HF label="تاريخ التحرير">
-              <input type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className="classic-input w-full" />
+              <DateSegmentInput value={invoiceDate} onChange={setInvoiceDate} standalone className="classic-input w-full" />
             </HF>
             <HF label="تاريخ الاستحقاق">
-              <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="classic-input w-full" />
+              <DateSegmentInput value={dueDate} onChange={setDueDate} standalone className="classic-input w-full" />
             </HF>
             <HF label="المخزن">
               {(() => {

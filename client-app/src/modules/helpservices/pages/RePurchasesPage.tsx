@@ -4,6 +4,7 @@
  * استيراد Excel مع معاينة وتحقق وكشف تكرار
  */
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import { trpc } from "@/shared/lib/trpc";
 import { toast } from "sonner";
 import {
@@ -710,11 +711,11 @@ ${rows.map((r: any, i: number) => {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">{ar ? "من تاريخ" : "From Date"} *</label>
-                <input type="date" value={stmtForm.dateFrom} onChange={e => setStmtForm({ ...stmtForm, dateFrom: e.target.value })} className="w-full h-9 px-3 text-sm border rounded-md" style={{ borderColor: C.border }} />
+                <DateSegmentInput value={stmtForm.dateFrom} onChange={v => setStmtForm({ ...stmtForm, dateFrom: v })} standalone className="w-full h-9 text-sm" style={{ borderColor: C.border, borderRadius: 6 }} />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">{ar ? "إلى تاريخ" : "To Date"} *</label>
-                <input type="date" value={stmtForm.dateTo} onChange={e => setStmtForm({ ...stmtForm, dateTo: e.target.value })} className="w-full h-9 px-3 text-sm border rounded-md" style={{ borderColor: C.border }} />
+                <DateSegmentInput value={stmtForm.dateTo} onChange={v => setStmtForm({ ...stmtForm, dateTo: v })} standalone className="w-full h-9 text-sm" style={{ borderColor: C.border, borderRadius: 6 }} />
               </div>
             </div>
             <div>
@@ -850,7 +851,7 @@ ${rows.map((r: any, i: number) => {
                             <>
                               <td style={{ padding: "4px 6px" }}><input value={inlineForm.supplierName} onChange={e => invProps.onChangeSupplierName(e.target.value)} onKeyDown={invProps.onKeyDown} className="w-full h-7 px-2 text-xs border rounded" style={{ borderColor: C.border }} placeholder={ar ? "اسم..." : "Name..."} /></td>
                               <td style={{ padding: "4px 6px" }}><input value={inlineForm.supplierTaxId} onChange={e => invProps.onChangeTaxId(e.target.value)} onKeyDown={invProps.onKeyDown} className="w-full h-7 px-2 text-xs border rounded" style={{ borderColor: C.border }} placeholder={ar ? "الضريبي..." : "Tax..."} /></td>
-                              <td style={{ padding: "4px 6px" }}><input type="date" value={inlineForm.invoiceDate} onChange={e => invProps.onChangeDate(e.target.value)} onKeyDown={invProps.onKeyDown} className="w-full h-7 px-2 text-xs border rounded" style={{ borderColor: C.border }} /></td>
+                              <td style={{ padding: "4px 6px" }}><DateSegmentInput value={inlineForm.invoiceDate} onChange={v => invProps.onChangeDate(v)} standalone style={{ height: 28, fontSize: 12, borderColor: C.border, borderRadius: 4 }} /></td>
                               <td style={{ padding: "4px 6px" }}><input value={inlineForm.invoiceNumber} onChange={e => invProps.onChangeInvoiceNumber(e.target.value)} onKeyDown={invProps.onKeyDown} className="w-full h-7 px-2 text-xs border rounded" style={{ borderColor: C.border }} placeholder={ar ? "رقم..." : "#..."} /></td>
                               <td style={{ padding: "4px 6px" }}><NumInput value={inlineForm.totalValue} onChange={(e: any) => invProps.onChangeTotal(e.target.value)} onBlur={invProps.onBlurTotal} onKeyDown={invProps.onKeyDown} placeholder="0" className="w-full h-7" /></td>
                               <td style={{ padding: "4px 6px" }}><NumInput value={recalcFromTotal(inlineForm).preTax.toFixed(2)} readOnly className="w-full h-7" /></td>
@@ -895,7 +896,7 @@ ${rows.map((r: any, i: number) => {
                         <td style={{ padding: "6px 10px" }}><span style={{ fontFamily: "monospace", fontSize: 11, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: "#E0EAF4", color: C.primary }}>{rows.length + 1}</span></td>
                         <td style={{ padding: "4px 6px" }}><input value={inlineForm.supplierName} onChange={e => invProps.onChangeSupplierName(e.target.value)} onKeyDown={invProps.onKeyDown} className="w-full h-7 px-2 text-xs border rounded" style={{ borderColor: C.border }} placeholder={ar ? "اسم..." : "Name..."} autoFocus /></td>
                         <td style={{ padding: "4px 6px" }}><input value={inlineForm.supplierTaxId} onChange={e => invProps.onChangeTaxId(e.target.value)} onKeyDown={invProps.onKeyDown} className="w-full h-7 px-2 text-xs border rounded" style={{ borderColor: C.border }} placeholder={ar ? "الضريبي..." : "Tax..."} /></td>
-                        <td style={{ padding: "4px 6px" }}><input type="date" value={inlineForm.invoiceDate} onChange={e => invProps.onChangeDate(e.target.value)} onKeyDown={invProps.onKeyDown} className="w-full h-7 px-2 text-xs border rounded" style={{ borderColor: C.border }} /></td>
+                        <td style={{ padding: "4px 6px" }}><DateSegmentInput value={inlineForm.invoiceDate} onChange={v => invProps.onChangeDate(v)} standalone style={{ height: 28, fontSize: 12, borderColor: C.border, borderRadius: 4 }} /></td>
                         <td style={{ padding: "4px 6px" }}><input value={inlineForm.invoiceNumber} onChange={e => invProps.onChangeInvoiceNumber(e.target.value)} onKeyDown={invProps.onKeyDown} className="w-full h-7 px-2 text-xs border rounded" style={{ borderColor: C.border }} placeholder={ar ? "رقم..." : "#..."} /></td>
                         <td style={{ padding: "4px 6px" }}><NumInput value={inlineForm.totalValue} onChange={(e: any) => invProps.onChangeTotal(e.target.value)} onBlur={invProps.onBlurTotal} onKeyDown={invProps.onKeyDown} placeholder="0" className="w-full h-7" /></td>
                         <td style={{ padding: "4px 6px" }}><NumInput value={recalcFromTotal(inlineForm).preTax.toFixed(2)} readOnly className="w-full h-7" /></td>
@@ -977,7 +978,7 @@ ${rows.map((r: any, i: number) => {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">{ar ? "تاريخ الفاتورة" : "Date"} *</label>
-                    <input type="date" value={invDialogForm.invoiceDate} onChange={e => setInvDialogForm({ ...invDialogForm, invoiceDate: e.target.value })} className="w-full h-9 px-3 text-sm border rounded-md" style={{ borderColor: C.border }} />
+                    <DateSegmentInput value={invDialogForm.invoiceDate} onChange={v => setInvDialogForm({ ...invDialogForm, invoiceDate: v })} standalone className="w-full h-9 text-sm" style={{ borderColor: C.border, borderRadius: 6 }} />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">{ar ? "رقم الفاتورة" : "Invoice #"} *</label>
@@ -1146,9 +1147,9 @@ ${rows.map((r: any, i: number) => {
         </div>
         <div className="flex items-center gap-2">
           <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
-          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="h-8 px-2 text-sm border rounded" style={{ borderColor: C.border }} />
+          <DateSegmentInput value={dateFrom} onChange={setDateFrom} standalone className="h-8 text-sm" style={{ borderColor: C.border, borderRadius: 4 }} />
           <span className="text-muted-foreground text-xs">→</span>
-          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="h-8 px-2 text-sm border rounded" style={{ borderColor: C.border }} />
+          <DateSegmentInput value={dateTo} onChange={setDateTo} standalone className="h-8 text-sm" style={{ borderColor: C.border, borderRadius: 4 }} />
         </div>
       </div>
 

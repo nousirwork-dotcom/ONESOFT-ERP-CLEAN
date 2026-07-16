@@ -510,12 +510,12 @@ function QuotationForm({
           {/* التاريخ */}
           <div>
             <Label className="text-xs text-muted-foreground">تاريخ العرض</Label>
-            <Input type="date" value={quoteDate} onChange={e => setQuoteDate(e.target.value)} className="h-8 text-sm" />
+            <DateSegmentInput value={quoteDate} onChange={setQuoteDate} standalone className="h-8 text-sm" />
           </div>
           {/* صلاحية حتى */}
           <div>
             <Label className="text-xs text-muted-foreground">صالح حتى</Label>
-            <Input type="date" value={validUntil} onChange={e => setValidUntil(e.target.value)} className="h-8 text-sm" />
+            <DateSegmentInput value={validUntil} onChange={setValidUntil} standalone className="h-8 text-sm" />
           </div>
           {/* العملة */}
           <div>

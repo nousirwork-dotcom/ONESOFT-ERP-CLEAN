@@ -666,7 +666,7 @@ function PurchaseDocPage({ invoiceType }: { invoiceType: InvoiceType }) {
                     </div>
                     <div>
                       <Label className="text-xs">تاريخ التحرير</Label>
-                      <Input type="date" value={form.invoiceDate} onChange={e => setF("invoiceDate", e.target.value)} className="h-7 text-xs" />
+                      <DateSegmentInput value={form.invoiceDate} onChange={v => setF("invoiceDate", v)} standalone className="h-7 text-xs" />
                     </div>
                   </div>
                   <div className="grid grid-cols-4 gap-2 mb-2">

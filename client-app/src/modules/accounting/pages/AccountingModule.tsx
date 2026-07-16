@@ -4062,9 +4062,9 @@ function TrialBalancePage({
           ))}
           <span style={{ fontSize: 13, color: "#9CA3AF" }}>أو مخصص:</span>
           <span style={{ fontSize: 13, color: "#6B7280" }}>من</span>
-          <input type="date" value={fromDate} onChange={e => { setFromDate(e.target.value); setPeriod("custom"); }} style={{ padding: "3px 7px", border: `1px solid ${period === "custom" ? "#406B93" : "#D1D5DB"}`, borderRadius: 6, fontSize: 13, background: "#fff", color: "#111827" }} />
+          <DateSegmentInput value={fromDate} onChange={v => { setFromDate(v); setPeriod("custom"); }} standalone style={{ padding: "3px 7px", border: `1px solid ${period === "custom" ? "#406B93" : "#D1D5DB"}`, borderRadius: 6, fontSize: 13 }} />
           <span style={{ fontSize: 13, color: "#6B7280" }}>إلى</span>
-          <input type="date" value={toDate} onChange={e => { setToDate(e.target.value); setPeriod("custom"); }} style={{ padding: "3px 7px", border: `1px solid ${period === "custom" ? "#406B93" : "#D1D5DB"}`, borderRadius: 6, fontSize: 13, background: "#fff", color: "#111827" }} />
+          <DateSegmentInput value={toDate} onChange={v => { setToDate(v); setPeriod("custom"); }} standalone style={{ padding: "3px 7px", border: `1px solid ${period === "custom" ? "#406B93" : "#D1D5DB"}`, borderRadius: 6, fontSize: 13 }} />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <div style={{ position: "relative", flex: 1, minWidth: 180, maxWidth: 300 }}>

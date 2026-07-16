@@ -3,6 +3,7 @@
  * نافذة إضافة / تعديل العميل — متعددة التبويبات بأسلوب ERP الكلاسيكي
  */
 import React, { useState, useEffect, useRef } from "react";
+import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import { fmtDate } from "@/shared/utils/dateUtils";
 import { trpc } from "@/shared/lib/trpc";
 import { toast } from "sonner";
@@ -630,15 +631,12 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
                             <div style={{ fontSize: 10, color: DEAL_COLOR, fontWeight: 700, marginBottom: 4 }}>
                               📅 من تاريخ
                             </div>
-                            <input type="date"
+                            <DateSegmentInput
                               value={form.dealStartDate ?? ""}
-                              onChange={e => setForm(f => ({ ...f, dealStartDate: e.target.value || null }))}
-                              style={{
-                                width: "100%", height: 30, padding: "0 8px", fontSize: 12,
-                                border: `1px solid ${DEAL_COLOR}50`, borderRadius: 3,
-                                background: "white", color: "#333", outline: "none",
-                                direction: "ltr",
-                              }} />
+                              onChange={v => setForm(f => ({ ...f, dealStartDate: v || null }))}
+                              standalone
+                              style={{ width: "100%", height: 30, fontSize: 12, border: `1px solid ${DEAL_COLOR}50`, borderRadius: 3 }}
+                            />
                           </div>
                           {/* إلى تاريخ */}
                           <div>
@@ -648,16 +646,12 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
                                 (اتركه فارغاً = مفتوح النهاية)
                               </span>
                             </div>
-                            <input type="date"
+                            <DateSegmentInput
                               value={form.dealEndDate ?? ""}
-                              onChange={e => setForm(f => ({ ...f, dealEndDate: e.target.value || null }))}
-                              min={form.dealStartDate ?? undefined}
-                              style={{
-                                width: "100%", height: 30, padding: "0 8px", fontSize: 12,
-                                border: `1px solid #DC262650`, borderRadius: 3,
-                                background: "white", color: "#333", outline: "none",
-                                direction: "ltr",
-                              }} />
+                              onChange={v => setForm(f => ({ ...f, dealEndDate: v || null }))}
+                              standalone
+                              style={{ width: "100%", height: 30, fontSize: 12, border: `1px solid #DC262650`, borderRadius: 3 }}
+                            />
                           </div>
 
                           {/* ملخص الفترة */}

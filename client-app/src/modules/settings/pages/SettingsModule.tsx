@@ -3100,8 +3100,8 @@ function LoyaltyPromosPage() {
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-xs">اسم العرض (عربي)</Label><Input value={form.name} onChange={e => updForm("name", e.target.value)} className="h-8 text-sm mt-1" /></div>
               <div><Label className="text-xs">اسم العرض (إنجليزي)</Label><Input value={form.nameEn} onChange={e => updForm("nameEn", e.target.value)} className="h-8 text-sm mt-1" /></div>
-              <div><Label className="text-xs">تاريخ البداية</Label><Input type="date" value={form.startDate} onChange={e => updForm("startDate", e.target.value)} className="h-8 text-sm mt-1" /></div>
-              <div><Label className="text-xs">تاريخ الانتهاء</Label><Input type="date" value={form.endDate} onChange={e => updForm("endDate", e.target.value)} className="h-8 text-sm mt-1" /></div>
+              <div><Label className="text-xs">تاريخ البداية</Label><DateSegmentInput value={form.startDate} onChange={v => updForm("startDate", v)} standalone className="h-8 text-sm mt-1" /></div>
+              <div><Label className="text-xs">تاريخ الانتهاء</Label><DateSegmentInput value={form.endDate} onChange={v => updForm("endDate", v)} standalone className="h-8 text-sm mt-1" /></div>
               <div><Label className="text-xs">مضاعف النقاط</Label><Input type="number" value={form.multiplier} min="1" step="0.5" onChange={e => updForm("multiplier", parseFloat(e.target.value) || 1)} className="h-8 text-sm mt-1" /></div>
               <div>
                 <Label className="text-xs">نطاق التطبيق</Label>

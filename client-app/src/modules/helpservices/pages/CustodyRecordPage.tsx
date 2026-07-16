@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import { trpc } from "@/shared/lib/trpc";
 import { useTabManager } from "@/core/contexts/TabManagerContext";
 import { useTabPath } from "@/core/contexts/TabPathContext";
@@ -515,11 +516,11 @@ export default function CustodyRecordPage() {
                       <td className="border border-gray-200 text-center text-muted-foreground py-0.5 px-1 select-none">{idx + 1}</td>
 
                       <td className="border border-gray-200 p-0">
-                        <input
-                          ref={mkRef("entryDate")} type="date" value={row.entryDate} dir="ltr"
-                          className="w-full h-8 px-1 text-[11px] border-0 outline-none bg-transparent focus:bg-blue-50/60 focus:ring-1 focus:ring-blue-400 rounded"
-                          onChange={e => updateField(row._key, "entryDate", e.target.value)}
-                          {...kbNav("entryDate")}
+                        <DateSegmentInput
+                          value={row.entryDate}
+                          onChange={v => updateField(row._key, "entryDate", v)}
+                          standalone
+                          style={{ height: 32, border: "1px solid transparent", background: "transparent", fontSize: 11 }}
                         />
                       </td>
 

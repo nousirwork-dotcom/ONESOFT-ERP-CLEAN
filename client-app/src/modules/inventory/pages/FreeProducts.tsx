@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import { fmtDate } from "@/shared/utils/dateUtils";
 import { trpc } from "@/shared/lib/trpc";
 import { toast } from "sonner";
@@ -132,11 +133,11 @@ export default function FreeProducts() {
             </div>
             <div className="flex flex-col gap-0.5">
               <label className="text-xs font-medium text-slate-600 dark:text-slate-400">بداية العرض</label>
-              <CInput value={form.offerStart} onChange={v => set("offerStart", v)} type="date" />
+              <DateSegmentInput value={form.offerStart} onChange={v => set("offerStart", v)} standalone />
             </div>
             <div className="flex flex-col gap-0.5">
               <label className="text-xs font-medium text-slate-600 dark:text-slate-400">نهاية العرض</label>
-              <CInput value={form.offerEnd} onChange={v => set("offerEnd", v)} type="date" />
+              <DateSegmentInput value={form.offerEnd} onChange={v => set("offerEnd", v)} standalone />
             </div>
             <div className="flex flex-col gap-0.5 col-span-2 md:col-span-4">
               <label className="text-xs font-medium text-slate-600 dark:text-slate-400">ملاحظات</label>

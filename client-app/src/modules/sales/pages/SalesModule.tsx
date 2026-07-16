@@ -575,6 +575,7 @@ function SalesOverview({
 function SalesInvoicePage() {
   const [items, setItems] = useState<{ id: number; name: string; qty: number; price: number; discount: number }[]>([]);
   const [search, setSearch] = useState("");
+  const [invoiceFormDate, setInvoiceFormDate] = useState(new Date().toISOString().split("T")[0]);
   const { data: products } = trpc.products.list.useQuery({ search });
 
   const addItem = (p: any) => {
@@ -607,7 +608,7 @@ function SalesInvoicePage() {
               </div>
               <div>
                 <Label className="text-xs text-muted-foreground">التاريخ</Label>
-                <Input type="date" defaultValue={new Date().toISOString().split("T")[0]} className="h-8 text-sm" />
+                <DateSegmentInput value={invoiceFormDate} onChange={setInvoiceFormDate} standalone className="h-8 text-sm" />
               </div>
               <div>
                 <Label className="text-xs text-muted-foreground">العميل</Label>
@@ -1084,10 +1085,10 @@ function SalesTotalsReports() {
         {/* تاريخ يدوي */}
         <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
           <span style={{ fontSize: 11, color: "#9CA3AF" }}>من</span>
-          <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPreset("custom"); }}
+          <DateSegmentInput value={dateFrom} onChange={v => { setDateFrom(v); setPreset("custom"); }} standalone
             style={{ padding: "3px 7px", border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 11.5 }} />
           <span style={{ fontSize: 11, color: "#9CA3AF" }}>إلى</span>
-          <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPreset("custom"); }}
+          <DateSegmentInput value={dateTo} onChange={v => { setDateTo(v); setPreset("custom"); }} standalone
             style={{ padding: "3px 7px", border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 11.5 }} />
         </div>
 
@@ -1487,12 +1488,12 @@ function SalesInvoicesReport() {
           {/* من تاريخ */}
           <div style={{ display: "flex", flexDirection: "column" }}>
             <span style={labelStyle}>من تاريخ</span>
-            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ ...inputStyle, width: 140 }} />
+            <DateSegmentInput value={dateFrom} onChange={setDateFrom} standalone style={{ ...inputStyle, width: 140 }} />
           </div>
           {/* إلى تاريخ */}
           <div style={{ display: "flex", flexDirection: "column" }}>
             <span style={labelStyle}>إلى تاريخ</span>
-            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ ...inputStyle, width: 140 }} />
+            <DateSegmentInput value={dateTo} onChange={setDateTo} standalone style={{ ...inputStyle, width: 140 }} />
           </div>
 
           {/* المخزن */}
@@ -1857,6 +1858,7 @@ function DeliveryOrderPage() {
     { id: 3, name: "ماوس لاسلكي",            orderedQty: 20, deliveredQty: 20, unit: "قطعة" },
   ]);
   const [status, setStatus] = useState("pending");
+  const [doDate, setDoDate] = useState(new Date().toISOString().split("T")[0]);
 
   const statusOptions = [
     { value: "pending",   label: "معلق",        color: "bg-amber-100 text-amber-700" },
@@ -1917,7 +1919,7 @@ function DeliveryOrderPage() {
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">التاريخ</Label>
-              <Input type="date" defaultValue={new Date().toISOString().split("T")[0]} className="h-8 text-sm" />
+              <DateSegmentInput value={doDate} onChange={setDoDate} standalone className="h-8 text-sm" />
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">أمر البيع المرتبط</Label>
@@ -2168,11 +2170,11 @@ function SalesTransactionsView() {
         {/* فلتر التاريخ */}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ fontSize: 12, color: "#6B7280" }}>من</span>
-          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-            style={{ padding: "3px 8px", border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 12, background: "#fff", color: "#111827" }} />
+          <DateSegmentInput value={dateFrom} onChange={setDateFrom} standalone
+            style={{ padding: "3px 8px", border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 12 }} />
           <span style={{ fontSize: 12, color: "#6B7280" }}>إلى</span>
-          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-            style={{ padding: "3px 8px", border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 12, background: "#fff", color: "#111827" }} />
+          <DateSegmentInput value={dateTo} onChange={setDateTo} standalone
+            style={{ padding: "3px 8px", border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 12 }} />
         </div>
 
         {/* بحث */}
@@ -2476,25 +2478,11 @@ function SalesInvoiceListView() {
         {/* فلتر التاريخ — يدوي */}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ fontSize: 12, color: "#6B7280" }}>من</span>
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={e => { setDateFrom(e.target.value); setDatePeriod("custom"); }}
-            style={{
-              padding: "3px 8px", border: "1px solid #D1D5DB", borderRadius: 6,
-              fontSize: 12, background: "#fff", color: "#111827", cursor: "pointer",
-            }}
-          />
+          <DateSegmentInput value={dateFrom} onChange={v => { setDateFrom(v); setDatePeriod("custom"); }} standalone
+            style={{ padding: "3px 8px", border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 12 }} />
           <span style={{ fontSize: 12, color: "#6B7280" }}>إلى</span>
-          <input
-            type="date"
-            value={dateTo}
-            onChange={e => { setDateTo(e.target.value); setDatePeriod("custom"); }}
-            style={{
-              padding: "3px 8px", border: "1px solid #D1D5DB", borderRadius: 6,
-              fontSize: 12, background: "#fff", color: "#111827", cursor: "pointer",
-            }}
-          />
+          <DateSegmentInput value={dateTo} onChange={v => { setDateTo(v); setDatePeriod("custom"); }} standalone
+            style={{ padding: "3px 8px", border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 12 }} />
         </div>
 
         {/* بحث */}

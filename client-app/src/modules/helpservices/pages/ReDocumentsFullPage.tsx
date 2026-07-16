@@ -3,6 +3,7 @@
  * Projects → Project Detail → Documents + File Upload + Versions
  */
 import { useState, useRef, useMemo } from "react";
+import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import { trpc } from "@/shared/lib/trpc";
 import { toast } from "sonner";
 import {
@@ -531,11 +532,11 @@ export default function ReDocumentsFullPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">{ar ? 'تاريخ البداية' : 'Start Date'}</label>
-                <input type="date" value={projForm.startDate} onChange={e => setProjForm({...projForm, startDate: e.target.value})} className="w-full h-9 px-3 text-sm border rounded-md" style={{ borderColor: C.border }} />
+                <DateSegmentInput value={projForm.startDate} onChange={v => setProjForm({...projForm, startDate: v})} standalone className="w-full h-9 text-sm" style={{ borderColor: C.border, borderRadius: 6 }} />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">{ar ? 'تاريخ الانتهاء المتوقع' : 'Expected End'}</label>
-                <input type="date" value={projForm.expectedEndDate} onChange={e => setProjForm({...projForm, expectedEndDate: e.target.value})} className="w-full h-9 px-3 text-sm border rounded-md" style={{ borderColor: C.border }} />
+                <DateSegmentInput value={projForm.expectedEndDate} onChange={v => setProjForm({...projForm, expectedEndDate: v})} standalone className="w-full h-9 text-sm" style={{ borderColor: C.border, borderRadius: 6 }} />
               </div>
             </div>
             <div>
@@ -600,11 +601,11 @@ export default function ReDocumentsFullPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">{ar ? 'تاريخ الإصدار' : 'Issue Date'}</label>
-                <input type="date" value={docForm.issueDate} onChange={e => setDocForm({...docForm, issueDate: e.target.value})} className="w-full h-9 px-3 text-sm border rounded-md" style={{ borderColor: C.border }} />
+                <DateSegmentInput value={docForm.issueDate} onChange={v => setDocForm({...docForm, issueDate: v})} standalone className="w-full h-9 text-sm" style={{ borderColor: C.border, borderRadius: 6 }} />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">{ar ? 'تاريخ الانتهاء (اختياري)' : 'Expiry Date (optional)'}</label>
-                <input type="date" value={docForm.expiryDate} onChange={e => setDocForm({...docForm, expiryDate: e.target.value})} className="w-full h-9 px-3 text-sm border rounded-md" style={{ borderColor: C.border }} />
+                <DateSegmentInput value={docForm.expiryDate} onChange={v => setDocForm({...docForm, expiryDate: v})} standalone className="w-full h-9 text-sm" style={{ borderColor: C.border, borderRadius: 6 }} />
               </div>
             </div>
             <div className="flex items-center gap-3">
