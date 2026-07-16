@@ -1228,8 +1228,8 @@ export default function DocumentJournalsPage() {
               const thCls = "text-[10px] font-semibold text-slate-500 px-2 py-1.5 text-right bg-slate-50 border-b border-slate-200";
               const tdCls = "px-1.5 py-1 border-b border-slate-100";
               const cellInput = (val: string, onChange: (v: string) => void) => (
-                <input value={val} onChange={e => onChange(e.target.value)}
-                  className="w-full h-6 text-[11px] px-1.5 border border-slate-200 rounded bg-white focus:outline-none focus:border-indigo-400" />
+                <Input value={val} onChange={e => onChange(e.target.value)}
+                  className="w-full h-6 text-[11px] px-1.5 border-slate-200 rounded bg-white focus-visible:ring-0 focus-visible:ring-offset-0 focus:border-indigo-400" />
               );
               const addType = () => {
                 const newId = String(Date.now());
@@ -1308,8 +1308,8 @@ export default function DocumentJournalsPage() {
               const thCls = "text-[10px] font-semibold text-slate-500 px-2 py-1.5 text-right bg-slate-50 border-b border-slate-200";
               const tdCls = "px-1.5 py-1 border-b border-slate-100";
               const cellInput = (val: string, onChange: (v: string) => void) => (
-                <input value={val} onChange={e => onChange(e.target.value)}
-                  className="w-full h-6 text-[11px] px-1.5 border border-slate-200 rounded bg-white focus:outline-none focus:border-indigo-400" />
+                <Input value={val} onChange={e => onChange(e.target.value)}
+                  className="w-full h-6 text-[11px] px-1.5 border-slate-200 rounded bg-white focus-visible:ring-0 focus-visible:ring-offset-0 focus:border-indigo-400" />
               );
               const addLink = () => {
                 const newId = String(Date.now());
@@ -1669,11 +1669,11 @@ export default function DocumentJournalsPage() {
                             >
                               {/* الترتيب */}
                               <td className="px-2 py-1.5 border-b border-slate-100">
-                                <input
+                                <Input
                                   type="number" min="1" step="1"
                                   value={comp.sortOrder}
                                   onChange={e => updateComp({ sortOrder: parseInt(e.target.value) || 0 })}
-                                  className="w-12 h-7 text-center text-[11px] font-mono border border-slate-200 rounded px-1 focus:outline-none focus:border-[#406B93]"
+                                  className="w-12 h-7 text-center text-[11px] font-mono border-slate-200 rounded px-1 focus-visible:ring-0 focus-visible:ring-offset-0 focus:border-[#406B93]"
                                 />
                               </td>
                               {/* كود الحقل */}
@@ -1712,12 +1712,12 @@ export default function DocumentJournalsPage() {
                               </td>
                               {/* الاسم */}
                               <td className="px-2 py-1.5 border-b border-slate-100">
-                                <input
+                                <Input
                                   type="text"
                                   value={comp.nameAr}
                                   onChange={e => updateComp({ nameAr: e.target.value })}
                                   placeholder="اسم المكوّن"
-                                  className="w-full h-7 text-[11px] border border-slate-200 rounded px-2 focus:outline-none focus:border-[#406B93]"
+                                  className="w-full h-7 text-[11px] border-slate-200 rounded px-2 focus-visible:ring-0 focus-visible:ring-offset-0 focus:border-[#406B93]"
                                 />
                               </td>
                               {/* مستند */}
