@@ -11,9 +11,7 @@ Target DB: postgresql://postgres:***@helium/heliumdb_test?sslmode=disable
 【1/6】 تشغيل auto-migrate...
   تطبيق base_schema.sql...
   ✅ base_schema.sql طُبِّق بنجاح
-  ⚠️  migration 0029_re_trial_balance أُهمل: syntax error at or near "NOT"
-  ⚠️  migration 0030_add_settlement_account_id أُهمل: relation "re_trial_balances" does not exist
-  ✅ auto-migrate اكتمل — migrations مُطبَّقة: 34 — version: 0035_foundation_products_customers_suppliers
+  ✅ auto-migrate اكتمل — migrations مُطبَّقة: 36 — version: 0035_foundation_products_customers_suppliers
 
 【2/6】 Bootstrap...
   ✅ منظمة الاختبار: id=1
@@ -33,7 +31,7 @@ Target DB: postgresql://postgres:***@helium/heliumdb_test?sslmode=disable
   ✅ تعديل العميل محفوظ — Foundation Update لم يُعدّله
 
 【6/6】 اختبار النسخة الاحتياطية...
-  ✅ pg_dump: /tmp/onesoft-backups/e2e_test_1784166269765.sql (301.4 KB)
+  ✅ pg_dump: /tmp/onesoft-backups/e2e_test_1784169247880.sql (362.4 KB)
 ```
 
 ## ملخص
@@ -47,4 +45,4 @@ Target DB: postgresql://postgres:***@helium/heliumdb_test?sslmode=disable
 | حماية تعديلات العميل | ✅ |
 | pg_dump نسخة احتياطية | ✅ |
 
-*تاريخ الاختبار: 2026-07-16T01:44:30.090Z*
+*تاريخ الاختبار: 2026-07-16T02:34:08.259Z*

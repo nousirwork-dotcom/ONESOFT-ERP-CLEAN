@@ -38,9 +38,13 @@ CREATE TABLE IF NOT EXISTS "re_tb_accounts" (
 );
 
 -- Fix self-reference FK after both tables exist
-ALTER TABLE "re_trial_balances"
-  ADD CONSTRAINT IF NOT EXISTS "re_trial_balances_settlement_account_id_fkey"
-  FOREIGN KEY ("settlement_account_id") REFERENCES "re_tb_accounts"("id") ON DELETE SET NULL;
+-- NOTE: ADD CONSTRAINT IF NOT EXISTS not supported on PostgreSQL < 15
+-- Using DO/EXCEPTION pattern for compatibility with PostgreSQL 12-14
+DO $$ BEGIN
+  ALTER TABLE "re_trial_balances"
+    ADD CONSTRAINT "re_trial_balances_settlement_account_id_fkey"
+    FOREIGN KEY ("settlement_account_id") REFERENCES "re_tb_accounts"("id") ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE TABLE IF NOT EXISTS "re_tb_entries" (
   "id" serial PRIMARY KEY,

@@ -141,25 +141,6 @@ function toSnakeCase(str: string): string {
     .toLowerCase();
 }
 
-// ── قاموس تحويل اسم العمود في Drizzle → اسم العمود الفعلي في DB ──────────────────
-// يُستخدم لحالات خاصة حيث اسم Drizzle يختلف عن snake_case المتوقع
-const DRIZZLE_COL_OVERRIDES: Record<string, string> = {
-  // مثال: printTemplate2 → print_template_2 (رقم بعد حرف)
-  // التحويل القياسي يُنتج print_template_2 بسبب قاعدة الأرقام — لكن قد تختلف الحالات
-};
-
-// ── الحصول على أعمدة الجدول الفعلية من information_schema ─────────────────────────
-const tableColsCache = new Map<string, Set<string>>();
-async function getTableCols(tbl: string): Promise<Set<string>> {
-  if (tableColsCache.has(tbl)) return tableColsCache.get(tbl)!;
-  const rows = await q(`
-    SELECT column_name FROM information_schema.columns
-    WHERE table_schema='public' AND table_name=$1
-  `, [tbl]);
-  const cols = new Set(rows.map((r: any) => r.column_name as string));
-  tableColsCache.set(tbl, cols);
-  return cols;
-}
 
 // نستخدم pool الاختبار مباشرة للتطبيق
 async function applyFoundationToTestDb(orgId: number, data: Record<string, unknown[]>): Promise<{
@@ -188,9 +169,6 @@ async function applyFoundationToTestDb(orgId: number, data: Record<string, unkno
     const records = (data as any)[key] as Record<string, unknown>[] ?? [];
     if (!records.length) continue;
 
-    // أعمدة الجدول الفعلية في heliumdb_test
-    const validCols = await getTableCols(tbl);
-
     const existing = (await q(
       `SELECT foundation_key FROM ${tbl} WHERE org_id=$1 AND foundation_key IS NOT NULL`,
       [orgId]
@@ -218,8 +196,8 @@ async function applyFoundationToTestDb(orgId: number, data: Record<string, unkno
         if (`_${af}_fk` in record) resolved[af] = null;
       }
 
-      // تصفية الأعمدة — فقط ما يوجد فعلاً في الجدول
-      // نُضيف record_origin + foundation_template_version + FKs يدوياً → لا نأخذها من الـ JSON
+      // تحويل حقول الـ JSON إلى أعمدة DB (camelCase → snake_case)
+      // نُضيف record_origin + foundation_template_version يدوياً → لا نأخذها من الـ JSON
       const SKIP_KEYS = new Set(['id', 'orgId', 'createdAt', 'updatedAt',
                                   'recordOrigin', 'foundationTemplateVersion',
                                   // FKs تتولى حلّها أعلاه — لا نأخذ القيم الأصلية
@@ -228,24 +206,21 @@ async function applyFoundationToTestDb(orgId: number, data: Record<string, unkno
                                   'taxAccountId', 'discountAccountId', 'purchaseAccountId',
                                   'supplierAccountId', 'inventoryAccountId', 'cogsAccountId',
                                   'settlementAccountId']);
+      // تعديل يدوي لحالات يختلف فيها snake_case عن التحويل التلقائي
+      // name2 → 'name2' في DB (ليس name_2)
+      const COL_OVERRIDES: Record<string, string> = { name2: 'name2' };
       const filteredEntries: Array<[string, unknown]> = [];
       for (const [camelKey, val] of Object.entries(resolved)) {
         if (SKIP_KEYS.has(camelKey)) continue;
-        const override = DRIZZLE_COL_OVERRIDES[camelKey];
-        const dbCol   = override ?? toSnakeCase(camelKey);
-        if (validCols.has(dbCol)) {
-          filteredEntries.push([dbCol, val]);
-        }
-        // عمود غير موجود → نتجاهله بصمت
+        const dbCol = COL_OVERRIDES[camelKey] ?? toSnakeCase(camelKey);
+        filteredEntries.push([dbCol, val]);
       }
 
       // إضافة الأعمدة الإلزامية
       filteredEntries.push(['org_id', orgId]);
-      if (validCols.has('record_origin')) filteredEntries.push(['record_origin', 'foundation']);
-      if (validCols.has('foundation_template_version')) {
-        filteredEntries.push(['foundation_template_version',
-          (data as any).exportedAt ? String((data as any).exportedAt).slice(0, 10) : null]);
-      }
+      filteredEntries.push(['record_origin', 'foundation']);
+      filteredEntries.push(['foundation_template_version',
+        (data as any).exportedAt ? String((data as any).exportedAt).slice(0, 10) : null]);
 
       try {
         const dbCols = filteredEntries.map(([c]) => c);
