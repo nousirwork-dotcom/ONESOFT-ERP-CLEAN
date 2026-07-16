@@ -540,6 +540,7 @@ function QuotationForm({
               onBlur={() => setTimeout(() => setShowCustDropdown(false), 150)}
               placeholder="اسم العميل أو رمزه..."
               className="h-8 text-sm"
+              aria-expanded={showCustDropdown ? "true" : "false"}
               disableSelectOnFocus
             />
             {showCustDropdown && filteredCustomers.length > 0 && (
