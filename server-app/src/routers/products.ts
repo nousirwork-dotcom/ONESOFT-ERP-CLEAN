@@ -78,6 +78,9 @@ export const productsRouter = router({
       model: z.string().optional(),
       description: z.string().optional(),
       notes: z.string().optional(),
+      recordPolicy: z.enum(['flexible', 'locked', 'protected']).optional(),
+      foundationKey: z.string().optional(),
+      includeInFoundation: z.boolean().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const {
@@ -91,6 +94,7 @@ export const productsRouter = router({
         minStock, maxStock, reorderPoint,
         itemType, brand, model,
         description, notes,
+        recordPolicy, foundationKey, includeInFoundation,
       } = input;
 
       if (!name || !name.trim()) throw new Error("اسم الصنف مطلوب");
@@ -123,19 +127,22 @@ export const productsRouter = router({
 
       try {
         const [p] = await db.insert(products).values({
-          name:          name.trim(),
-          nameEn:        nameEn?.trim() || name2?.trim() || undefined,
-          code:          sku?.trim() || undefined,
-          barcode:       barcode?.trim() || undefined,
-          groupId:       resolvedGroupId,
-          unit:          unit?.trim() || "قطعة",
-          salePrice:     salePrice || "0",
-          purchasePrice: costPrice || purchasePrice || "0",
-          taxRate:       vatRate || taxRate || "0",
-          minStock:      minStock != null ? String(minStock) : "0",
-          isActive:      true,
-          notes:         notesStr,
-          orgId:         ctx.user.orgId,
+          name:               name.trim(),
+          nameEn:             nameEn?.trim() || name2?.trim() || undefined,
+          code:               sku?.trim() || undefined,
+          barcode:            barcode?.trim() || undefined,
+          groupId:            resolvedGroupId,
+          unit:               unit?.trim() || "قطعة",
+          salePrice:          salePrice || "0",
+          purchasePrice:      costPrice || purchasePrice || "0",
+          taxRate:            vatRate || taxRate || "0",
+          minStock:           minStock != null ? String(minStock) : "0",
+          isActive:           true,
+          notes:              notesStr,
+          orgId:              ctx.user.orgId,
+          recordPolicy:       recordPolicy ?? 'flexible',
+          foundationKey:      foundationKey ?? null,
+          includeInFoundation: includeInFoundation ?? false,
         }).returning();
         return p;
       } catch (err: any) {
@@ -215,12 +222,16 @@ export const productsRouter = router({
       description: z.string().optional(),
       isActive: z.boolean().optional(),
       notes: z.string().optional(),
+      recordPolicy: z.enum(['flexible', 'locked', 'protected']).optional(),
+      foundationKey: z.string().optional(),
+      includeInFoundation: z.boolean().optional(),
     }).passthrough())
     .mutation(async ({ ctx, input }) => {
       const { id, sku, name2, nameEn, categoryId, costPrice, vatRate, taxable, taxType,
         barcode2, barcode3, unit2, unit3, unitsJson, catsJson,
         salePrice2, salePrice3, salePrice4, salePrice5,
         wholesalePrice, maxStock, reorderPoint, itemType, brand, model, description,
+        recordPolicy, foundationKey, includeInFoundation,
         ...rest } = input as any;
 
       const extraData: Record<string, any> = {};
@@ -261,6 +272,9 @@ export const productsRouter = router({
       if (rest.minStock !== undefined)                       updateData.minStock      = String(rest.minStock);
       if (rest.isActive !== undefined)                       updateData.isActive      = rest.isActive;
       if (notesStr !== undefined)                            updateData.notes         = notesStr;
+      if (recordPolicy !== undefined)                        updateData.recordPolicy  = recordPolicy;
+      if (foundationKey !== undefined)                       updateData.foundationKey = foundationKey;
+      if (includeInFoundation !== undefined)                 updateData.includeInFoundation = includeInFoundation;
 
       await db.update(products).set(updateData as any)
         .where(and(eq(products.id, id), eq(products.orgId, ctx.user.orgId)));

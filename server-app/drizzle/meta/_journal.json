@@ -239,6 +239,20 @@
       "when": 1790200000000,
       "tag": "0033_foundation_policy_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1790300000000,
+      "tag": "0034_foundation_origin_version",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1790400000000,
+      "tag": "0035_foundation_products_customers_suppliers",
+      "breakpoints": true
     }
   ]
 }

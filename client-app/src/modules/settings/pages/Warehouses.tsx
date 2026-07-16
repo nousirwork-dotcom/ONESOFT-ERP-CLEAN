@@ -1,5 +1,7 @@
 import { Badge } from "@/core/ui/badge";
 import { Button } from "@/core/ui/button";
+import { FoundationPolicyPanel } from "@/shared/components/FoundationPolicyPanel";
+import type { RecordPolicy } from "@/shared/components/FoundationPolicyPanel";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/core/ui/dialog";
 import { Input } from "@/core/ui/input";
 import { Label } from "@/core/ui/label";
@@ -57,6 +59,9 @@ const EMPTY_FORM = {
   code: "", name: "", name2: "", fullName1: "", fullName2: "",
   branchId: "", description: "", allowedUserGroup: "",
   allowedUserId: "", copyFromWarehouseId: "",
+  recordPolicy: "flexible" as RecordPolicy,
+  foundationKey: "",
+  includeInFoundation: false,
 };
 type FormState = typeof EMPTY_FORM;
 
@@ -276,6 +281,9 @@ export default function Warehouses() {
       allowedUserGroup: w.allowedUserGroup ?? "",
       allowedUserId: w.allowedUserId ? String(w.allowedUserId) : "",
       copyFromWarehouseId: w.copyFromWarehouseId ? String(w.copyFromWarehouseId) : "",
+      recordPolicy: (w.recordPolicy as RecordPolicy) ?? "flexible",
+      foundationKey: w.foundationKey ?? "",
+      includeInFoundation: w.includeInFoundation ?? false,
     });
     setIsDirty(false); setView("form");
   };
@@ -291,6 +299,9 @@ export default function Warehouses() {
       allowedUserGroup: f(form.allowedUserGroup),
       allowedUserId: fNum(form.allowedUserId),
       copyFromWarehouseId: fNum(form.copyFromWarehouseId),
+      recordPolicy: form.recordPolicy,
+      includeInFoundation: form.includeInFoundation,
+      foundationKey: f(form.foundationKey),
     };
     try {
       let warehouseId: number;
@@ -451,6 +462,14 @@ export default function Warehouses() {
                 </HF>
               </div>
             </Section>
+
+            {/* ── سياسة التأسيس ── */}
+            <FoundationPolicyPanel
+              recordPolicy={form.recordPolicy}
+              foundationKey={form.foundationKey || null}
+              includeInFoundation={form.includeInFoundation}
+              onChange={(policy, include) => { setForm(p => ({ ...p, recordPolicy: policy, includeInFoundation: include })); setIsDirty(true); }}
+            />
 
           </>}
 

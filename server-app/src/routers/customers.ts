@@ -35,6 +35,9 @@ export const customersRouter = router({
       defaultSendMethod: z.enum(['whatsapp', 'telegram', 'email']).optional(),
       dealStartDate: z.string().optional().nullable(),
       dealEndDate:   z.string().optional().nullable(),
+      recordPolicy: z.enum(['flexible', 'locked', 'protected']).optional(),
+      foundationKey: z.string().optional(),
+      includeInFoundation: z.boolean().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const { dealStartDate, dealEndDate, ...rest } = input;
@@ -75,6 +78,9 @@ export const customersRouter = router({
       defaultSendMethod: z.enum(['whatsapp', 'telegram', 'email']).optional().nullable(),
       dealStartDate: z.string().optional().nullable(),
       dealEndDate:   z.string().optional().nullable(),
+      recordPolicy: z.enum(['flexible', 'locked', 'protected']).optional(),
+      foundationKey: z.string().optional(),
+      includeInFoundation: z.boolean().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const { id, dealStartDate, dealEndDate, ...rest } = input;

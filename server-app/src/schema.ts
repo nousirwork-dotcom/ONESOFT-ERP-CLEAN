@@ -106,6 +106,8 @@ export const branches = pgTable('branches', {
   recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
   foundationKey:        varchar('foundation_key', { length: 100 }),
   includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:                varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion:   varchar('foundation_template_version', { length: 20 }),
   createdAt:            timestamp('created_at').notNull().defaultNow(),
 });
 
@@ -133,6 +135,8 @@ export const warehouses = pgTable('warehouses', {
   recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
   foundationKey:        varchar('foundation_key', { length: 100 }),
   includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:                varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion:   varchar('foundation_template_version', { length: 20 }),
   createdAt:            timestamp('created_at').notNull().defaultNow(),
 });
 
@@ -154,6 +158,8 @@ export const units = pgTable('units', {
   recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
   foundationKey:        varchar('foundation_key', { length: 100 }),
   includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:                varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion:   varchar('foundation_template_version', { length: 20 }),
 });
 
 // ─── Product Groups ───────────────────────────────────────────────────────────
@@ -177,6 +183,8 @@ export const productGroups = pgTable('product_groups', {
   recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
   foundationKey:        varchar('foundation_key', { length: 100 }),
   includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:                varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion:   varchar('foundation_template_version', { length: 20 }),
 });
 
 // ─── Products ─────────────────────────────────────────────────────────────────
@@ -198,6 +206,11 @@ export const products = pgTable('products', {
   isActive: boolean('is_active').notNull().default(true),
   notes: text('notes'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
+  recordPolicy:              varchar('record_policy', { length: 20 }).notNull().default('flexible'),
+  foundationKey:             varchar('foundation_key', { length: 100 }),
+  includeInFoundation:       boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:              varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion: varchar('foundation_template_version', { length: 20 }),
 });
 
 // ─── Customers ────────────────────────────────────────────────────────────────
@@ -231,6 +244,11 @@ export const customers = pgTable('customers', {
   defaultSendMethod: varchar('default_send_method', { length: 20 }),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),
+  recordPolicy:              varchar('record_policy', { length: 20 }).notNull().default('flexible'),
+  foundationKey:             varchar('foundation_key', { length: 100 }),
+  includeInFoundation:       boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:              varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion: varchar('foundation_template_version', { length: 20 }),
 });
 
 // ─── Suppliers ────────────────────────────────────────────────────────────────
@@ -246,6 +264,11 @@ export const suppliers = pgTable('suppliers', {
   balance: decimal('balance', { precision: 18, scale: 4 }).default('0'),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),
+  recordPolicy:              varchar('record_policy', { length: 20 }).notNull().default('flexible'),
+  foundationKey:             varchar('foundation_key', { length: 100 }),
+  includeInFoundation:       boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:              varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion: varchar('foundation_template_version', { length: 20 }),
 });
 
 // ─── Chart of Accounts ────────────────────────────────────────────────────────
@@ -270,6 +293,8 @@ export const chartOfAccounts = pgTable('chart_of_accounts', {
   recordType: varchar('record_type', { length: 30 }).notNull().default('user'),
   systemKey:           varchar('system_key', { length: 100 }),
   includeInFoundation: boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:                varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion:   varchar('foundation_template_version', { length: 20 }),
   createdAt:           timestamp('created_at').notNull().defaultNow(),
 });
 
@@ -659,6 +684,8 @@ export const documentJournals = pgTable('document_journals', {
   recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
   foundationKey:        varchar('foundation_key', { length: 100 }),
   includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:                varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion:   varchar('foundation_template_version', { length: 20 }),
   isActive:             boolean('is_active').notNull().default(true),
   sortOrder:            integer('sort_order').notNull().default(0),
   createdAt:            timestamp('created_at').notNull().defaultNow(),
@@ -719,6 +746,8 @@ export const documentTypes = pgTable('document_types', {
   recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
   foundationKey:        varchar('foundation_key', { length: 100 }),
   includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:                varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion:   varchar('foundation_template_version', { length: 20 }),
   createdAt:            timestamp('created_at').notNull().defaultNow(),
   updatedAt:            timestamp('updated_at').notNull().defaultNow(),
 });
@@ -744,6 +773,8 @@ export const documentTemplates = pgTable('document_templates', {
   recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
   foundationKey:        varchar('foundation_key', { length: 100 }),
   includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:                varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion:   varchar('foundation_template_version', { length: 20 }),
   createdAt:            timestamp('created_at').notNull().defaultNow(),
   updatedAt:            timestamp('updated_at').notNull().defaultNow(),
 });
@@ -765,6 +796,8 @@ export const costCenters = pgTable('cost_centers', {
   recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
   foundationKey:        varchar('foundation_key', { length: 100 }),
   includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:                varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion:   varchar('foundation_template_version', { length: 20 }),
   createdAt:            timestamp('created_at').notNull().defaultNow(),
 });
 
@@ -879,6 +912,8 @@ export const currencies = pgTable('currencies', {
   recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
   foundationKey:        varchar('foundation_key', { length: 100 }),
   includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:                varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion:   varchar('foundation_template_version', { length: 20 }),
   createdAt:            timestamp('created_at').notNull().defaultNow(),
   updatedAt:            timestamp('updated_at').notNull().defaultNow(),
 });
@@ -895,6 +930,8 @@ export const postingDefinitions = pgTable('posting_definitions', {
   recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
   foundationKey:        varchar('foundation_key', { length: 100 }),
   includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:                varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion:   varchar('foundation_template_version', { length: 20 }),
   createdAt:            timestamp('created_at').notNull().defaultNow(),
   updatedAt:            timestamp('updated_at').notNull().defaultNow(),
 });
@@ -944,6 +981,8 @@ export const paymentMethods = pgTable('payment_methods', {
   recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
   foundationKey:        varchar('foundation_key', { length: 100 }),
   includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:                varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion:   varchar('foundation_template_version', { length: 20 }),
   createdAt:            timestamp('created_at').notNull().defaultNow(),
   updatedAt:            timestamp('updated_at').notNull().defaultNow(),
 });

@@ -3,6 +3,7 @@ import { eq, and, asc } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import { paymentMethods, fieldDictionary } from '../schema.js';
+import { assertCanUpdate, assertCanDelete } from '../lib/foundation-framework.js';
 
 const DEFAULT_METHODS = [
   { code: 'CASH',    nameAr: 'نقدي',                  nameEn: 'Cash',            icon: 'cash',    color: '#15803D', bgColor: '#F0FDF4', sortOrder: 1, isBuiltIn: true  },
@@ -76,7 +77,6 @@ export const paymentMethodsRouter = router({
         ...input,
         isBuiltIn: false,
       }).returning();
-      // مزامنة تلقائية مع قاموس الحقول حتى يظهر الكود في الروابط المحاسبية
       const existing = await db.select({ id: fieldDictionary.id })
         .from(fieldDictionary)
         .where(and(eq(fieldDictionary.orgId, orgId), eq(fieldDictionary.code, input.code)))
@@ -111,6 +111,11 @@ export const paymentMethodsRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
+      const current = await db.query.paymentMethods.findFirst({
+        where: and(eq(paymentMethods.id, id), eq(paymentMethods.orgId, ctx.user.orgId)),
+      });
+      if (!current) throw new Error('وسيلة الدفع غير موجودة');
+      assertCanUpdate(current.recordPolicy, current.nameAr, ctx.user.role === 'superadmin');
       const [row] = await db.update(paymentMethods)
         .set({ ...data, updatedAt: new Date() })
         .where(and(eq(paymentMethods.id, id), eq(paymentMethods.orgId, ctx.user.orgId)))
@@ -121,11 +126,12 @@ export const paymentMethodsRouter = router({
   delete: protectedProcedure
     .input(z.object({ id: z.number().int() }))
     .mutation(async ({ ctx, input }) => {
-      const [row] = await db.select({ isBuiltIn: paymentMethods.isBuiltIn })
-        .from(paymentMethods)
-        .where(and(eq(paymentMethods.id, input.id), eq(paymentMethods.orgId, ctx.user.orgId)))
-        .limit(1);
-      if (row?.isBuiltIn) throw new Error('لا يمكن حذف وسيلة الدفع المدمجة — يمكنك إخفاؤها فقط');
+      const current = await db.query.paymentMethods.findFirst({
+        where: and(eq(paymentMethods.id, input.id), eq(paymentMethods.orgId, ctx.user.orgId)),
+      });
+      if (!current) throw new Error('وسيلة الدفع غير موجودة');
+      if (current.isBuiltIn) throw new Error('لا يمكن حذف وسيلة الدفع المدمجة — يمكنك إخفاؤها فقط');
+      assertCanDelete(current.recordPolicy, current.nameAr, ctx.user.role === 'superadmin');
       await db.update(paymentMethods)
         .set({ isActive: false, isVisible: false, updatedAt: new Date() })
         .where(and(eq(paymentMethods.id, input.id), eq(paymentMethods.orgId, ctx.user.orgId)));

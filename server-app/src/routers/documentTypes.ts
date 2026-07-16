@@ -1,8 +1,10 @@
 import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
 import { eq, and, asc } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import { documentTypes } from '../schema.js';
+import { assertCanUpdate, assertCanDelete } from '../lib/foundation-framework.js';
 
 const inputShape = {
   typeId:               z.string(),
@@ -78,17 +80,27 @@ export const documentTypesRouter = router({
     .input(z.object({ id: z.number(), ...Object.fromEntries(Object.entries(inputShape).map(([k, v]) => [k, (v as any).optional()])) }))
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
+      const current = await db.query.documentTypes.findFirst({
+        where: and(eq(documentTypes.id, id), eq(documentTypes.orgId, ctx.user.orgId)),
+      });
+      if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'نوع المستند غير موجود' });
+      assertCanUpdate(current.recordPolicy, current.nameAr, ctx.user.role === 'superadmin');
       const [row] = await db.update(documentTypes)
         .set({ ...data, updatedAt: new Date() })
         .where(and(eq(documentTypes.id, id), eq(documentTypes.orgId, ctx.user.orgId)))
         .returning();
-      if (!row) throw new Error('نوع المستند غير موجود');
+      if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: 'نوع المستند غير موجود' });
       return row;
     }),
 
   delete: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
+      const current = await db.query.documentTypes.findFirst({
+        where: and(eq(documentTypes.id, input.id), eq(documentTypes.orgId, ctx.user.orgId)),
+      });
+      if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'نوع المستند غير موجود' });
+      assertCanDelete(current.recordPolicy, current.nameAr, ctx.user.role === 'superadmin');
       await db.update(documentTypes)
         .set({ isActive: false, updatedAt: new Date() })
         .where(and(eq(documentTypes.id, input.id), eq(documentTypes.orgId, ctx.user.orgId)));

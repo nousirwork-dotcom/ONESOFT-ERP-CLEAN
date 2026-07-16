@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, lazy, Suspense } from "react";
 import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
+import { FoundationPolicyPanel } from "@/shared/components/FoundationPolicyPanel";
+import type { RecordPolicy } from "@/shared/components/FoundationPolicyPanel";
 import { fmtDate, fmtDateTime } from "@/shared/utils/dateUtils";
 import { useTabManager } from "@/core/contexts/TabManagerContext";
 import { trpc } from "@/shared/lib/trpc";
@@ -369,12 +371,16 @@ type CurrencyRow = {
   isBase: boolean; isActive: boolean;
   mainUnitAr: string | null; subUnitAr: string | null;
   mainUnitEn: string | null; subUnitEn: string | null;
+  recordPolicy?: RecordPolicy | null; foundationKey?: string | null; includeInFoundation?: boolean | null;
 };
 
 const EMPTY_CURRENCY: Omit<CurrencyRow, "id"> = {
   code: "", nameAr: "", nameEn: "", symbol: "", symbolIntl: "",
   exchangeRate: "1", decimalPlaces: 2, isBase: false, isActive: true,
   mainUnitAr: "", subUnitAr: "", mainUnitEn: "", subUnitEn: "",
+  recordPolicy: "flexible" as RecordPolicy,
+  foundationKey: "",
+  includeInFoundation: false,
 };
 
 function CurrencyDialog({
@@ -415,6 +421,9 @@ function CurrencyDialog({
       subUnitAr: form.subUnitAr?.trim() || null,
       mainUnitEn: form.mainUnitEn?.trim() || null,
       subUnitEn: form.subUnitEn?.trim() || null,
+      recordPolicy: (form as any).recordPolicy ?? "flexible",
+      includeInFoundation: (form as any).includeInFoundation ?? false,
+      foundationKey: (form as any).foundationKey || undefined,
     };
     if (!payload.code || !payload.nameAr || !payload.nameEn || !payload.symbol) {
       toast.error("الكود واسم العملة والرمز مطلوبة"); return;
@@ -508,6 +517,12 @@ function CurrencyDialog({
             </div>
           </div>
         </div>
+        <FoundationPolicyPanel
+          recordPolicy={((form as any).recordPolicy as RecordPolicy) ?? "flexible"}
+          foundationKey={(form as any).foundationKey ?? null}
+          includeInFoundation={(form as any).includeInFoundation ?? false}
+          onChange={(policy, include) => setForm((f: any) => ({ ...f, recordPolicy: policy, includeInFoundation: include }))}
+        />
         <DialogFooter className="mt-2 gap-2">
           <Button variant="outline" onClick={onClose} className="h-8 text-xs">إلغاء</Button>
           <Button onClick={handleSave} disabled={saving} className="h-8 text-xs">
@@ -4711,11 +4726,13 @@ type PMRow = {
   icon?: string | null; color?: string | null; bgColor?: string | null;
   accountId?: number | null; isActive: boolean; isVisible: boolean;
   isBuiltIn: boolean; sortOrder: number;
+  recordPolicy?: RecordPolicy | null; foundationKey?: string | null; includeInFoundation?: boolean | null;
 };
 
 const EMPTY_PM: Omit<PMRow, "id" | "isBuiltIn"> = {
   code: "", nameAr: "", nameEn: "", icon: "other", color: "#406B93", bgColor: "#EFF6FF",
   accountId: null, isActive: true, isVisible: true, sortOrder: 0,
+  recordPolicy: "flexible", foundationKey: "", includeInFoundation: false,
 };
 
 function PaymentMethodDialog({
@@ -4744,14 +4761,21 @@ function PaymentMethodDialog({
   function handleSave() {
     if (!form.nameAr.trim()) return toast.error("الاسم العربي مطلوب");
     if (!isEdit && !form.code.trim()) return toast.error("الكود مطلوب");
+    const foundationFields = {
+      recordPolicy: form.recordPolicy ?? "flexible",
+      includeInFoundation: form.includeInFoundation ?? false,
+      foundationKey: form.foundationKey || undefined,
+    };
     if (isEdit && form.id) {
       updateMut.mutate({ id: form.id, nameAr: form.nameAr, nameEn: form.nameEn ?? undefined,
         icon: form.icon ?? undefined, color: form.color ?? undefined, bgColor: form.bgColor ?? undefined,
-        accountId: form.accountId ?? undefined, isActive: form.isActive, isVisible: form.isVisible, sortOrder: form.sortOrder });
+        accountId: form.accountId ?? undefined, isActive: form.isActive, isVisible: form.isVisible, sortOrder: form.sortOrder,
+        ...foundationFields });
     } else {
       createMut.mutate({ code: form.code, nameAr: form.nameAr, nameEn: form.nameEn ?? undefined,
         icon: form.icon ?? undefined, color: form.color ?? undefined, bgColor: form.bgColor ?? undefined,
-        accountId: form.accountId ?? undefined, isActive: form.isActive, isVisible: form.isVisible, sortOrder: form.sortOrder });
+        accountId: form.accountId ?? undefined, isActive: form.isActive, isVisible: form.isVisible, sortOrder: form.sortOrder,
+        ...foundationFields });
     }
   }
 
@@ -4833,6 +4857,12 @@ function PaymentMethodDialog({
               مرئية في نافذة الدفع
             </label>
           </div>
+          <FoundationPolicyPanel
+            recordPolicy={(form.recordPolicy as RecordPolicy) ?? "flexible"}
+            foundationKey={form.foundationKey ?? null}
+            includeInFoundation={form.includeInFoundation ?? false}
+            onChange={(policy, include) => { upd("recordPolicy", policy); upd("includeInFoundation", include); }}
+          />
         </div>
         <div className="flex justify-end gap-2 px-5 pb-4">
           <Button variant="outline" size="sm" className="h-8 text-xs" onClick={onClose} disabled={busy}>إلغاء</Button>

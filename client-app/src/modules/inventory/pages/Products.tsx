@@ -1,4 +1,6 @@
 import { fmtDate } from "@/shared/utils/dateUtils";
+import { FoundationPolicyPanel } from "@/shared/components/FoundationPolicyPanel";
+import type { RecordPolicy } from "@/shared/components/FoundationPolicyPanel";
 import { Badge } from "@/core/ui/badge";
 import { Button } from "@/core/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/core/ui/card";
@@ -114,6 +116,9 @@ type ProductForm = {
   lastSupplier1: string;
   lastSupplier2: string;
   defaultOrderQty: string;
+  recordPolicy: RecordPolicy;
+  foundationKey: string;
+  includeInFoundation: boolean;
 };
 
 const emptyForm: ProductForm = {
@@ -140,6 +145,7 @@ const emptyForm: ProductForm = {
   pricingPlan: "",
   stdCost: "0", defaultSupplier: "", lastSupplier1: "", lastSupplier2: "",
   defaultOrderQty: "0",
+  recordPolicy: "flexible", foundationKey: "", includeInFoundation: false,
 };
 
 // =============================================
@@ -803,6 +809,18 @@ function ProductCard({
               </div>
             </div>
 
+          </div>
+        )}
+
+        {/* ===== سياسة التأسيس (تظهر في جميع التبويبات) ===== */}
+        {activeTab === "main" && (
+          <div className="px-3 py-2 border-t border-slate-200 dark:border-slate-700">
+            <FoundationPolicyPanel
+              recordPolicy={form.recordPolicy}
+              foundationKey={form.foundationKey || null}
+              includeInFoundation={form.includeInFoundation}
+              onChange={(policy, include) => setForm(f => ({ ...f, recordPolicy: policy, includeInFoundation: include }))}
+            />
           </div>
         )}
 
@@ -1607,6 +1625,9 @@ export default function Products() {
       lastSupplier1: p.lastSupplier1 ?? "",
       lastSupplier2: p.lastSupplier2 ?? "",
       defaultOrderQty: p.defaultOrderQty ?? "0",
+      recordPolicy: p.recordPolicy ?? "flexible",
+      foundationKey: p.foundationKey ?? "",
+      includeInFoundation: p.includeInFoundation ?? false,
     });
     setIsOpen(true);
   };
@@ -1651,6 +1672,9 @@ export default function Products() {
       minStock:      Number(form.minStock) || 0,
       maxStock:      Number(form.maxStock) || 0,
       reorderPoint:  Number(form.reorderPoint) || 0,
+      recordPolicy:       form.recordPolicy,
+      includeInFoundation: form.includeInFoundation,
+      foundationKey:      form.foundationKey || undefined,
     };
 
     console.log("[handleSubmit] data:", data);

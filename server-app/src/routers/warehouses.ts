@@ -4,6 +4,7 @@ import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import { warehouses, inventory, stockVouchers, inventoryCounts, salesInvoices, warehouseAccountLinks, chartOfAccounts } from '../schema.js';
 import { eq, and, asc } from 'drizzle-orm';
+import { assertCanUpdate, assertCanDelete } from '../lib/foundation-framework.js';
 
 export const warehousesRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -60,6 +61,11 @@ export const warehousesRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const { id, description, ...rest } = input;
+      const current = await db.query.warehouses.findFirst({
+        where: and(eq(warehouses.id, id), eq(warehouses.orgId, ctx.user.orgId)),
+      });
+      if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'المخزن غير موجود' });
+      assertCanUpdate(current.recordPolicy, current.name, ctx.user.role === 'superadmin');
       await db.update(warehouses).set({ ...rest, address: description } as any)
         .where(and(eq(warehouses.id, id), eq(warehouses.orgId, ctx.user.orgId)));
       return { success: true };
@@ -68,6 +74,12 @@ export const warehousesRouter = router({
   delete: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
+      const current = await db.query.warehouses.findFirst({
+        where: and(eq(warehouses.id, input.id), eq(warehouses.orgId, ctx.user.orgId)),
+      });
+      if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'المخزن غير موجود' });
+      assertCanDelete(current.recordPolicy, current.name, ctx.user.role === 'superadmin');
+
       const [hasInventory, hasVouchers, hasInventoryCounts, hasSalesInvoices] = await Promise.all([
         db.select({ id: inventory.id }).from(inventory)
           .where(and(eq(inventory.warehouseId, input.id), eq(inventory.orgId, ctx.user.orgId))).limit(1),

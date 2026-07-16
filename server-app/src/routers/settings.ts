@@ -4,6 +4,7 @@ import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import { userGroups, userGroupMembers, userCategories, users, qrSettings, branches, units, freeProducts, warehouses, salesInvoices, inventoryCounts } from '../schema.js';
 import { eq, and, desc, asc } from 'drizzle-orm';
+import { assertCanUpdate, assertCanDelete } from '../lib/foundation-framework.js';
 
 export const userGroupsRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -290,6 +291,11 @@ export const branchesRouter = router({
     .input(z.object({ id: z.number(), name: z.string().min(1).optional(), address: z.string().optional(), phone: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
+      const current = await db.query.branches.findFirst({
+        where: and(eq(branches.id, id), eq(branches.orgId, ctx.user.orgId)),
+      });
+      if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'الفرع غير موجود' });
+      assertCanUpdate(current.recordPolicy, current.name, ctx.user.role === 'superadmin');
       await db.update(branches).set(data as any).where(and(eq(branches.id, id), eq(branches.orgId, ctx.user.orgId)));
       return { success: true };
     }),
@@ -297,6 +303,11 @@ export const branchesRouter = router({
   delete: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
+      const current = await db.query.branches.findFirst({
+        where: and(eq(branches.id, input.id), eq(branches.orgId, ctx.user.orgId)),
+      });
+      if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'الفرع غير موجود' });
+      assertCanDelete(current.recordPolicy, current.name, ctx.user.role === 'superadmin');
       const [hasWarehouses, hasInvoices, hasInventoryCounts] = await Promise.all([
         db.select({ id: warehouses.id }).from(warehouses)
           .where(and(eq(warehouses.branchId, input.id), eq(warehouses.orgId, ctx.user.orgId), eq(warehouses.isActive, true))).limit(1),
@@ -330,6 +341,11 @@ export const unitsRouter = router({
     .input(z.object({ id: z.number(), name: z.string().min(1).optional(), symbol: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
+      const current = await db.query.units.findFirst({
+        where: and(eq(units.id, id), eq(units.orgId, ctx.user.orgId)),
+      });
+      if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'وحدة القياس غير موجودة' });
+      assertCanUpdate(current.recordPolicy, current.name, ctx.user.role === 'superadmin');
       await db.update(units).set(data as any).where(and(eq(units.id, id), eq(units.orgId, ctx.user.orgId)));
       return { success: true };
     }),
@@ -337,6 +353,11 @@ export const unitsRouter = router({
   delete: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
+      const current = await db.query.units.findFirst({
+        where: and(eq(units.id, input.id), eq(units.orgId, ctx.user.orgId)),
+      });
+      if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'وحدة القياس غير موجودة' });
+      assertCanDelete(current.recordPolicy, current.name, ctx.user.role === 'superadmin');
       await db.delete(units).where(and(eq(units.id, input.id), eq(units.orgId, ctx.user.orgId)));
       return { success: true };
     }),

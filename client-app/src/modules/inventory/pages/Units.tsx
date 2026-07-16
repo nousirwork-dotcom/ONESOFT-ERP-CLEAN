@@ -8,6 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/core/ui/table";
 import { toast } from "sonner";
 import { Plus, Ruler, Edit, Trash2 } from "lucide-react";
+import { FoundationPolicyPanel } from "@/shared/components/FoundationPolicyPanel";
+import type { RecordPolicy } from "@/shared/components/FoundationPolicyPanel";
 
 export default function Units() {
   const utils = trpc.useUtils();
@@ -27,17 +29,40 @@ export default function Units() {
 
   const [showDialog, setShowDialog] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
-  const [form, setForm] = useState({ name: "", symbol: "" });
+  const [form, setForm] = useState({
+    name: "", symbol: "",
+    recordPolicy: "flexible" as RecordPolicy,
+    foundationKey: "",
+    includeInFoundation: false,
+  });
 
-  const openCreate = () => { setEditItem(null); setForm({ name: "", symbol: "" }); setShowDialog(true); };
-  const openEdit = (u: any) => { setEditItem(u); setForm({ name: u.name, symbol: u.symbol ?? "" }); setShowDialog(true); };
+  const openCreate = () => {
+    setEditItem(null);
+    setForm({ name: "", symbol: "", recordPolicy: "flexible", foundationKey: "", includeInFoundation: false });
+    setShowDialog(true);
+  };
+  const openEdit = (u: any) => {
+    setEditItem(u);
+    setForm({
+      name: u.name, symbol: u.symbol ?? "",
+      recordPolicy: (u.recordPolicy as RecordPolicy) ?? "flexible",
+      foundationKey: u.foundationKey ?? "",
+      includeInFoundation: u.includeInFoundation ?? false,
+    });
+    setShowDialog(true);
+  };
 
   const handleSubmit = () => {
     if (!form.name.trim()) return toast.error("اسم الوحدة مطلوب");
+    const foundationFields = {
+      recordPolicy: form.recordPolicy,
+      includeInFoundation: form.includeInFoundation,
+      foundationKey: form.foundationKey || undefined,
+    };
     if (editItem) {
-      updateMutation.mutate({ id: editItem.id, name: form.name, symbol: form.symbol || undefined });
+      updateMutation.mutate({ id: editItem.id, name: form.name, symbol: form.symbol || undefined, ...foundationFields });
     } else {
-      createMutation.mutate({ name: form.name, symbol: form.symbol || undefined });
+      createMutation.mutate({ name: form.name, symbol: form.symbol || undefined, ...foundationFields });
     }
   };
 
@@ -121,6 +146,12 @@ export default function Units() {
               <Label>الرمز</Label>
               <Input value={form.symbol} onChange={e => setForm(p => ({ ...p, symbol: e.target.value }))} placeholder="مثال: كغ" />
             </div>
+            <FoundationPolicyPanel
+              recordPolicy={form.recordPolicy}
+              foundationKey={form.foundationKey || null}
+              includeInFoundation={form.includeInFoundation}
+              onChange={(policy, include) => setForm(p => ({ ...p, recordPolicy: policy, includeInFoundation: include }))}
+            />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDialog(false)}>إلغاء</Button>

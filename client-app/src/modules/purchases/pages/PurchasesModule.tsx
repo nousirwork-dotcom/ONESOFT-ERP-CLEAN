@@ -1,4 +1,6 @@
 import { useState, useMemo } from "react";
+import { FoundationPolicyPanel } from "@/shared/components/FoundationPolicyPanel";
+import type { RecordPolicy } from "@/shared/components/FoundationPolicyPanel";
 import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import { fmtDate } from "@/shared/utils/dateUtils";
 import PurchaseInvoicePage from "./PurchaseInvoicePage";
@@ -184,6 +186,9 @@ function SuppliersListPage() {
     groupCode: "", accountCode: "", costCenterId: "",
     creditLimit: "", paymentTerms: "", defaultDiscount: "",
     notes: "",
+    recordPolicy: "flexible" as RecordPolicy,
+    foundationKey: "",
+    includeInFoundation: false,
   });
   const setF = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
 
@@ -198,6 +203,9 @@ function SuppliersListPage() {
       phone: form.phone || undefined,
       email: form.email || undefined,
       address: form.address || undefined,
+      recordPolicy: form.recordPolicy,
+      includeInFoundation: form.includeInFoundation,
+      foundationKey: form.foundationKey || undefined,
     });
   };
 
@@ -447,6 +455,12 @@ function SuppliersListPage() {
             </TabsContent>
           </Tabs>
 
+          <FoundationPolicyPanel
+            recordPolicy={form.recordPolicy}
+            foundationKey={form.foundationKey || null}
+            includeInFoundation={form.includeInFoundation}
+            onChange={(policy, include) => setForm(p => ({ ...p, recordPolicy: policy, includeInFoundation: include }))}
+          />
           <div className="flex justify-end gap-2 mt-3 border-t border-border pt-3">
             <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>إلغاء</Button>
             <Button size="sm" disabled={!form.name || createMutation.isPending} onClick={handleSave}>

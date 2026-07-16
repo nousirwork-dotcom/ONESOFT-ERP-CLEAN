@@ -6,6 +6,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { fmtDate } from "@/shared/utils/dateUtils";
 import { trpc } from "@/shared/lib/trpc";
 import { toast } from "sonner";
+import { FoundationPolicyPanel } from "@/shared/components/FoundationPolicyPanel";
+import type { RecordPolicy } from "@/shared/components/FoundationPolicyPanel";
 
 /* ═══════════════════════════ Types ═══════════════════════════ */
 interface CustomerData {
@@ -36,6 +38,9 @@ interface CustomerData {
   telegramId?: string;
   defaultSendMethod?: string;
   isActive?: boolean;
+  recordPolicy?: RecordPolicy;
+  foundationKey?: string;
+  includeInFoundation?: boolean;
 }
 
 interface Props {
@@ -68,6 +73,7 @@ const EMPTY: CustomerData = {
   priceLevel: 1, maxDiscountPct: "0", canSellOnCredit: true,
   dealStartDate: null, dealEndDate: null,
   whatsappPhone: "", telegramId: "", defaultSendMethod: "",
+  recordPolicy: "flexible", foundationKey: "", includeInFoundation: false,
 };
 
 /* مستويات الأسعار المتاحة — مرتبطة بحقل salePrice في كارت الصنف */
@@ -175,6 +181,9 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
         whatsappPhone:      editData.whatsappPhone      ?? "",
         telegramId:         editData.telegramId         ?? "",
         defaultSendMethod:  editData.defaultSendMethod  ?? "",
+        recordPolicy:       (editData.recordPolicy as RecordPolicy) ?? "flexible",
+        foundationKey:      editData.foundationKey      ?? "",
+        includeInFoundation: editData.includeInFoundation ?? false,
       });
     } else {
       setForm(EMPTY);
@@ -215,6 +224,9 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
       whatsappPhone:      form.whatsappPhone?.trim()      || undefined,
       telegramId:         form.telegramId?.trim()         || undefined,
       defaultSendMethod:  (form.defaultSendMethod as any) || undefined,
+      recordPolicy:       form.recordPolicy ?? "flexible",
+      includeInFoundation: form.includeInFoundation ?? false,
+      foundationKey:      form.foundationKey?.trim() || undefined,
     };
     if (editData?.id) update.mutate({ id: editData.id, ...payload });
     else              create.mutate(payload);
@@ -759,6 +771,16 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
             />
           )}
 
+        </div>
+
+        {/* ── سياسة التأسيس ── */}
+        <div style={{ padding: "4px 14px 4px", borderTop: "1px solid #D0D0D0", background: "#F8F8F8" }}>
+          <FoundationPolicyPanel
+            recordPolicy={form.recordPolicy ?? "flexible"}
+            foundationKey={form.foundationKey ?? null}
+            includeInFoundation={form.includeInFoundation ?? false}
+            onChange={(policy, include) => setForm(f => ({ ...f, recordPolicy: policy, includeInFoundation: include }))}
+          />
         </div>
 
         {/* ── Footer ── */}
