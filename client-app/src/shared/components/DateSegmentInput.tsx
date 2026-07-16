@@ -148,6 +148,7 @@ export function DateSegmentInput({
     <div
       dir="ltr"
       className={className}
+      data-global-keyboard="false"
       style={{
         display: "flex", alignItems: "center",
         border: "1px solid #d1d5db",
