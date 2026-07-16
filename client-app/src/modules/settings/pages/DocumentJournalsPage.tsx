@@ -11,7 +11,7 @@ import {
   Plus, Save, Trash2, ChevronFirst, ChevronLast, RefreshCw,
   ChevronLeft as CLeft, ChevronRight as CRight, ArrowLeft, FileText, Eye,
   BookText, PackageMinus, PackagePlus, Users, Truck, Copy,
-  ListFilter, Search, Printer,
+  ListFilter, Search, Printer, ArrowDownCircle, ArrowUpCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/core/hooks/useAuth";
@@ -356,6 +356,8 @@ const DOC_TYPES = [
   { id: "purchase_quote",      label: "عرض سعر مشتريات",    icon: <Tag className="w-3.5 h-3.5" /> },
   { id: "stock_transfer",      label: "سند تحويل مخزني",    icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
   { id: "journal_entry",       label: "سند قيد",             icon: <BookText className="w-3.5 h-3.5" /> },
+  { id: "receipt_voucher",     label: "سند قبض",             icon: <ArrowDownCircle className="w-3.5 h-3.5" /> },
+  { id: "payment_voucher",     label: "سند صرف",             icon: <ArrowUpCircle className="w-3.5 h-3.5" /> },
   { id: "stock_issue_items",   label: "سند صرف أصناف",       icon: <PackageMinus className="w-3.5 h-3.5" /> },
   { id: "stock_receipt_items", label: "سند توريد أصناف",     icon: <PackagePlus className="w-3.5 h-3.5" /> },
   { id: "customers_journal",   label: "دفتر العملاء",         icon: <Users className="w-3.5 h-3.5" /> },
