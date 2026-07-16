@@ -179,6 +179,7 @@ export function DateSegmentInput({
       dir="ltr"
       className={className}
       data-nav-internal="true"
+      data-no-desktop-field
       title={isError ? "تاريخ غير صحيح" : undefined}
       style={{
         display: "flex", alignItems: "center",
@@ -234,8 +235,8 @@ export function DateSegmentInput({
         tabIndex={tabIndex !== undefined ? -1 : undefined}
         style={{ ...seg, width: 34, order: 1 }}
       />
-      <span style={{ color: isError ? "#ef4444" : "#bbb", userSelect: "none", fontSize: 11, margin: "0 1px", order: 2 }}>-</span>
-      <span style={{ color: isError ? "#ef4444" : "#bbb", userSelect: "none", fontSize: 11, margin: "0 1px", order: 4 }}>-</span>
+      <span style={{ color: isError ? "#ef4444" : "inherit", userSelect: "none", fontSize: 11, margin: "0 1px", order: 2 }}>-</span>
+      <span style={{ color: isError ? "#ef4444" : "inherit", userSelect: "none", fontSize: 11, margin: "0 1px", order: 4 }}>-</span>
     </div>
   );
 }

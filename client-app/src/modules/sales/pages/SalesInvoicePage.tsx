@@ -1349,7 +1349,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             <div className="flex flex-1" style={{ height: 26 }}>
               <DateSegmentInput value={invoiceDate} onChange={setInvoiceDate} style={{ flex: 1, minWidth: 0, height: 26 }} />
               <button type="button" onClick={() => invoiceDatePickerRef.current?.showPicker()} className="flex items-center justify-center flex-shrink-0" style={{ height: 26, width: 26, background: "#f3f4f6", border: "1px solid #d1d5db", borderLeft: "none", borderRadius: "0 4px 4px 0", color: "#555", cursor: "pointer", fontSize: 12 }}>📅</button>
-              <input ref={invoiceDatePickerRef} type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} />
+              <input ref={invoiceDatePickerRef} type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} aria-hidden="true" />
             </div>
           </div>
 
@@ -1359,7 +1359,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             <div className="flex flex-1" style={{ height: 26 }}>
               <DateSegmentInput value={dueDate} onChange={setDueDate} style={{ flex: 1, minWidth: 0, height: 26 }} />
               <button type="button" onClick={() => dueDatePickerRef.current?.showPicker()} className="flex items-center justify-center flex-shrink-0" style={{ height: 26, width: 26, background: "#f3f4f6", border: "1px solid #d1d5db", borderLeft: "none", borderRadius: "0 4px 4px 0", color: "#555", cursor: "pointer", fontSize: 12 }}>📅</button>
-              <input ref={dueDatePickerRef} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} />
+              <input ref={dueDatePickerRef} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} aria-hidden="true" />
             </div>
           </div>
 

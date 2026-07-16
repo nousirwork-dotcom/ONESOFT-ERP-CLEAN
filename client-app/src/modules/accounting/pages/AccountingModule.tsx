@@ -234,103 +234,6 @@ const normalizeAr = (s: string) =>
 const typeLabel = (t: string | null) =>
   ({ assets:"أصول", liabilities:"خصوم", equity:"حقوق ملكية", revenue:"إيرادات", expenses:"مصروفات" }[t ?? ""] ?? "");
 
-// ── Date Mask Input (DD/MM/YYYY) ──────────────────────────────────────────────
-function DateMaskInput({
-  value, onChange, className, placeholder,
-}: {
-  value: string;
-  onChange: (val: string) => void;
-  className?: string;
-  placeholder?: string;
-}) {
-  const mask  = (v: string) => {
-    const d = v.replace(/[٠-٩]/g, c => String("٠١٢٣٤٥٦٧٨٩".indexOf(c))).replace(/\D/g, "").slice(0, 8);
-    if (d.length <= 2) return d;
-    if (d.length <= 4) return `${d.slice(0,2)}/${d.slice(2)}`;
-    return `${d.slice(0,2)}/${d.slice(2,4)}/${d.slice(4)}`;
-  };
-  const toISO = (v: string) => {
-    const n = v.replace(/\D/g, "");
-    if (n.length < 8) return "";
-    const dd = n.slice(0,2), mm = n.slice(2,4), yy = n.slice(4,8);
-    if (+dd<1||+dd>31||+mm<1||+mm>12||+yy<1000) return "";
-    return `${yy}-${mm}-${dd}`;
-  };
-  const fromISO = (v: string) => {
-    if (!v || v.length < 10) return "";
-    const [y, m, d] = v.split("-");
-    return `${d}/${m}/${y}`;
-  };
-
-  const ref = useRef<HTMLInputElement>(null);
-  const [disp, setDisp] = useState(() => fromISO(value));
-
-  useEffect(() => {
-    setDisp(prev => toISO(prev) === value ? prev : fromISO(value));
-  }, [value]);
-
-  const commit = (newDisp: string) => {
-    setDisp(newDisp);
-    onChange(toISO(newDisp));
-  };
-
-  return (
-    <Input
-      ref={ref}
-      type="text"
-      inputMode="numeric"
-      value={disp}
-      placeholder={placeholder ?? "DD/MM/YYYY"}
-      dir="ltr"
-      className={`text-left ${className ?? ""}`}
-      onKeyDown={e => {
-        const el = ref.current;
-        if (!el) return;
-        const pos = el.selectionStart ?? disp.length;
-
-        if (e.key === "Backspace") {
-          e.preventDefault();
-          const realPos = pos > 0 && disp[pos-1] === "/" ? pos - 1 : pos;
-          if (realPos === 0) { commit(""); return; }
-          const digits = (disp.slice(0, realPos-1) + disp.slice(realPos)).replace(/\D/g, "");
-          const nd = mask(digits);
-          commit(nd);
-          setTimeout(() => el.setSelectionRange(realPos-1, realPos-1), 0);
-          return;
-        }
-        if (e.key === "Delete") {
-          e.preventDefault();
-          const realPos = disp[pos] === "/" ? pos + 1 : pos;
-          if (realPos >= disp.length) return;
-          const digits = (disp.slice(0, realPos) + disp.slice(realPos+1)).replace(/\D/g, "");
-          commit(mask(digits));
-          setTimeout(() => el.setSelectionRange(pos, pos), 0);
-          return;
-        }
-        const key = e.key.replace(/[٠-٩]/g, c => String("٠١٢٣٤٥٦٧٨٩".indexOf(c)));
-        if (!/^\d$/.test(key)) {
-          if (!["Tab","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Home","End","Enter"].includes(e.key))
-            e.preventDefault();
-          return;
-        }
-        e.preventDefault();
-        const digPos = pos <= 2 ? pos : pos <= 5 ? pos-1 : pos-2;
-        const digits = disp.replace(/\D/g, "").padEnd(Math.max(digPos+1, disp.replace(/\D/g,"").length), "0");
-        const newDigs = digits.slice(0,digPos) + key + digits.slice(digPos+1);
-        const nd = mask(newDigs.slice(0,8));
-        commit(nd);
-        const ncp = digPos < 2 ? digPos+1 : digPos < 4 ? digPos+2 : digPos+3;
-        setTimeout(() => el.setSelectionRange(Math.min(ncp, nd.length), Math.min(ncp, nd.length)), 0);
-      }}
-      onChange={e => {
-        const nd = mask(e.target.value);
-        commit(nd);
-      }}
-      onFocus={e => e.target.select()}
-    />
-  );
-}
-
 // ── Full-screen Account Picker Dialog (F2 / Ctrl+K) ──────────────────────────
 function AccountPickerDialog({
   open, onClose, accounts, recentIds, onSelect,
@@ -1053,7 +956,7 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">تاريخ التحرير</Label>
-                  <DateMaskInput value={entryDate} onChange={setEntryDate} className="h-7 text-xs" disabled={entryType === "auto"} />
+                  <DateSegmentInput value={entryDate} onChange={setEntryDate} standalone className="h-7 text-xs" disabled={entryType === "auto"} />
                 </div>
               </div>
             );
@@ -1558,7 +1461,7 @@ function ReceiptVoucherPage() {
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <Label className="text-xs">التاريخ</Label>
-                <DateMaskInput value={form.voucherDate} onChange={v => setF("voucherDate", v)} className="h-8 text-xs" />
+                <DateSegmentInput value={form.voucherDate} onChange={v => setF("voucherDate", v)} standalone className="h-8 text-xs" />
               </div>
               <div>
                 <Label className="text-xs">المستلم من</Label>
@@ -1788,7 +1691,7 @@ function PaymentVoucherPage() {
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <Label className="text-xs">التاريخ</Label>
-                <DateMaskInput value={form.voucherDate} onChange={v => setF("voucherDate", v)} className="h-8 text-xs" />
+                <DateSegmentInput value={form.voucherDate} onChange={v => setF("voucherDate", v)} standalone className="h-8 text-xs" />
               </div>
               <div>
                 <Label className="text-xs">المدفوع لـ</Label>
@@ -3283,11 +3186,11 @@ function AccountLedgerPage({
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 32px", marginBottom: 6 }}>
               <div style={fieldRow}>
                 <span style={fieldLabel}>تاريخ أول الفترة</span>
-                <div style={{ flex: 1 }}><DateMaskInput value={fromDate} onChange={setFromDate} className="h-6 text-xs" /></div>
+                <div style={{ flex: 1 }}><DateSegmentInput value={fromDate} onChange={setFromDate} standalone className="h-6 text-xs" /></div>
               </div>
               <div style={fieldRow}>
                 <span style={fieldLabel}>تاريخ نهاية الفترة</span>
-                <div style={{ flex: 1 }}><DateMaskInput value={toDate} onChange={setToDate} className="h-6 text-xs" /></div>
+                <div style={{ flex: 1 }}><DateSegmentInput value={toDate} onChange={setToDate} standalone className="h-6 text-xs" /></div>
               </div>
             </div>
 
@@ -3619,7 +3522,7 @@ function CostAllocationPage() {
           <div className="grid grid-cols-3 gap-3">
             <div>
               <Label className="text-xs">تاريخ التوزيع</Label>
-              <DateMaskInput value={new Date().toISOString().split("T")[0]} onChange={() => {}} className="h-8 text-xs" />
+              <DateSegmentInput value={new Date().toISOString().split("T")[0]} onChange={() => {}} standalone className="h-8 text-xs" />
             </div>
             <div>
               <Label className="text-xs">الحساب الأصلي</Label>
@@ -3850,11 +3753,11 @@ function LedgerDialogBody({
             </div>
             <div>
               <Label className="text-xs">من تاريخ</Label>
-              <DateMaskInput value={fromDate} onChange={setFromDate} className="h-8 text-xs" />
+              <DateSegmentInput value={fromDate} onChange={setFromDate} standalone className="h-8 text-xs" />
             </div>
             <div>
               <Label className="text-xs">إلى تاريخ</Label>
-              <DateMaskInput value={toDate} onChange={setToDate} className="h-8 text-xs" />
+              <DateSegmentInput value={toDate} onChange={setToDate} standalone className="h-8 text-xs" />
             </div>
             <div className="flex items-end">
               <Button size="sm" className="h-8 text-xs w-full gap-1"
