@@ -66,8 +66,14 @@ export async function getUserFromRequest(req: Request) {
 
   if (!user) return null;
 
+  // ── فحص allowLogin (مقيّد الدخول) — يُوقف الجلسات النشطة فوراً ─────────────
+  if (user.allowLogin === false) return null;
+
   // ── إبطال الجلسة إذا تغيّرت sessionVersion (تسجيل خروج كل الأجهزة) ──────────
-  if (payload.sessionVersion !== undefined && user.sessionVersion !== payload.sessionVersion) {
+  // الرموز القديمة التي لا تحمل sessionVersion تُعامَل كـ version=0
+  // مما يجعل أي رفع للـ sessionVersion يُبطلها تلقائياً
+  const tokenVersion = payload.sessionVersion ?? 0;
+  if (user.sessionVersion !== tokenVersion) {
     return null;
   }
 
