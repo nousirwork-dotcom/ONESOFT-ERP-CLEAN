@@ -3,13 +3,14 @@
  *
  * Superadmin-only endpoints for:
  *  - setPolicy          — change record_policy / include_in_foundation on any supported table
- *  - getSummary         — count of foundation records per table
- *  - previewExport      — returns records that will be exported (without writing files)
- *  - exportTemplate     — dump all "include_in_foundation=true" records to foundation-data.ts + .json
- *                         with full FK resolution (_branchId_fk, _warehouseId_fk, _xxxAccountId_fk)
+ *  - getSourceOrg       — read the designated foundation source org (foundation.source_org_id)
+ *  - setSourceOrg       — set the designated foundation source org (superadmin only)
+ *  - getSummary         — count of foundation records in source org
+ *  - previewExport      — returns records that will be exported from source org (without writing files)
+ *  - exportTemplate     — dump all "include_in_foundation=true" records from source org
+ *                         Blocks if any FK points to a record without foundationKey
  *  - getTemplateInfo    — info about the current foundation-data.json on disk
- *  - applyTemplate      — import foundation-data.json into the current org (skip existing foundationKeys)
- *                         with full FK resolution in dependency order
+ *  - applyTemplate      — import foundation-data.json into the current org
  *  - backupAndApply     — create pg_dump backup then apply template (aborts on backup failure)
  */
 
@@ -31,6 +32,8 @@ import {
   documentTemplates,
   postingDefinitions,
   chartOfAccounts,
+  appSettings,
+  organizations,
 } from '../schema.js';
 import {
   deriveFoundationKey,
@@ -45,11 +48,25 @@ import path from 'node:path';
 
 const POLICY_VALUES = ['protected', 'editable', 'flexible'] as const;
 
+const FOUNDATION_SOURCE_KEY = 'foundation.source_org_id';
+
 // ─── requireSuperadmin guard ───────────────────────────────────────────────────
 function requireSuperadmin(role: string): void {
   if (role !== 'superadmin') {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'هذه العملية متاحة للمدير العام فقط' });
   }
+}
+
+// ─── قراءة foundation_source_org_id من إعدادات المستخدم الحالي ───────────────
+async function readSourceOrgId(userOrgId: number): Promise<number | null> {
+  const rows = await db
+    .select({ value: appSettings.value })
+    .from(appSettings)
+    .where(and(eq(appSettings.orgId, userOrgId), eq(appSettings.key, FOUNDATION_SOURCE_KEY)))
+    .limit(1);
+  if (!rows.length || rows[0]?.value == null) return null;
+  const parsed = parseInt(rows[0].value.replace(/"/g, ''), 10);
+  return isNaN(parsed) ? null : parsed;
 }
 
 // ─── table accessor helpers ────────────────────────────────────────────────────
@@ -86,10 +103,9 @@ const ACCOUNT_FK_FIELDS = [
 // ─── بناء خرائط FK للتصدير ────────────────────────────────────────────────────
 
 async function buildExportFkMaps(orgId: number) {
-  // خريطة id → foundationKey لكل الفروع والمخازن في هذه المنظمة
   const branchFkMap   = new Map<number, string>();
   const warehouseFkMap = new Map<number, string>();
-  const accountSkMap  = new Map<number, string>(); // id → systemKey
+  const accountSkMap  = new Map<number, string>();
 
   const branchRows = await db.select({ id: branches.id, foundationKey: branches.foundationKey })
     .from(branches).where(eq(branches.orgId, orgId));
@@ -111,8 +127,6 @@ async function buildExportFkMaps(orgId: number) {
 
 /**
  * يُضيف حقول FK التوثيقية إلى سجل مُصدَّر.
- * حقول مثل _branchId_fk = 'br.الرئيسي' تُضاف بجانب الحقول الأصلية.
- * يُستخدم هذا لاحقاً عند التطبيق لحل FKs بدلاً من IDs الخاطئة.
  */
 function enrichWithFkRefs(
   row: Record<string, unknown>,
@@ -122,17 +136,14 @@ function enrichWithFkRefs(
   const enriched = { ...row };
   const { branchFkMap, warehouseFkMap, accountSkMap } = fkMaps;
 
-  // branch FK (document_journals و warehouses)
   if (typeof row.branchId === 'number') {
     enriched['_branchId_fk'] = branchFkMap.get(row.branchId) ?? null;
   }
 
-  // warehouse FK (document_journals)
   if (tableName === 'document_journals' && typeof row.warehouseId === 'number') {
     enriched['_warehouseId_fk'] = warehouseFkMap.get(row.warehouseId) ?? null;
   }
 
-  // account FKs
   if (tableName === 'document_journals' || tableName === 'posting_definitions') {
     for (const field of ACCOUNT_FK_FIELDS) {
       const id = row[field];
@@ -143,6 +154,43 @@ function enrichWithFkRefs(
   }
 
   return enriched;
+}
+
+/**
+ * فحص مشاكل FK الحرجة التي تمنع التصدير.
+ * يُعيد قائمة بأخطاء FK — أي FK تُشير إلى سجل بلا foundationKey.
+ */
+function collectFkErrors(
+  tableName: string,
+  rows: Record<string, unknown>[],
+  fkMaps: { branchFkMap: Map<number, string>; warehouseFkMap: Map<number, string> },
+): string[] {
+  const errors: string[] = [];
+  const { branchFkMap, warehouseFkMap } = fkMaps;
+
+  for (const row of rows) {
+    const label = String(row.name ?? row.nameAr ?? row.code ?? row.id ?? '');
+
+    if (tableName === 'document_journals') {
+      const brId = row.branchId as number | null;
+      if (brId && !branchFkMap.has(brId)) {
+        errors.push(`دفتر "${label}": الفرع (id=${brId}) لا يملك foundationKey — فعّل "إدراج في القالب" للفرع أولاً`);
+      }
+      const whId = row.warehouseId as number | null;
+      if (whId && !warehouseFkMap.has(whId)) {
+        errors.push(`دفتر "${label}": المخزن (id=${whId}) لا يملك foundationKey — فعّل "إدراج في القالب" للمخزن أولاً`);
+      }
+    }
+
+    if (tableName === 'warehouses') {
+      const brId = row.branchId as number | null;
+      if (brId && !branchFkMap.has(brId)) {
+        errors.push(`مخزن "${label}": الفرع (id=${brId}) لا يملك foundationKey — فعّل "إدراج في القالب" للفرع أولاً`);
+      }
+    }
+  }
+
+  return errors;
 }
 
 // ─── قراءة foundation-data.json ───────────────────────────────────────────────
@@ -205,11 +253,74 @@ export const foundationAdminRouter = router({
     }),
 
   /**
-   * Return a count-per-table summary of foundation records in this org.
+   * قراءة مؤسسة قالب التأسيس المُعيَّنة.
+   * القيمة مخزّنة في app_settings بمفتاح 'foundation.source_org_id'
+   * في سياق org المشرف العام المسجّل.
+   */
+  getSourceOrg: protectedProcedure
+    .query(async ({ ctx }) => {
+      requireSuperadmin(ctx.user.role);
+
+      const sourceOrgId = await readSourceOrgId(ctx.user.orgId);
+      if (sourceOrgId == null) return { sourceOrgId: null, orgName: null, orgCode: null };
+
+      const [org] = await db
+        .select({ id: organizations.id, name: organizations.name, code: organizations.code })
+        .from(organizations)
+        .where(eq(organizations.id, sourceOrgId))
+        .limit(1);
+
+      if (!org) return { sourceOrgId, orgName: null, orgCode: null };
+      return { sourceOrgId, orgName: org.name, orgCode: org.code };
+    }),
+
+  /**
+   * تعيين مؤسسة قالب التأسيس.
+   * يتحقق من وجود المؤسسة قبل الحفظ.
+   */
+  setSourceOrg: protectedProcedure
+    .input(z.object({ sourceOrgId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      requireSuperadmin(ctx.user.role);
+
+      const [org] = await db
+        .select({ id: organizations.id, name: organizations.name })
+        .from(organizations)
+        .where(eq(organizations.id, input.sourceOrgId))
+        .limit(1);
+
+      if (!org) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: `المؤسسة رقم ${input.sourceOrgId} غير موجودة`,
+        });
+      }
+
+      const serialized = JSON.stringify(input.sourceOrgId);
+      await db.insert(appSettings)
+        .values({ orgId: ctx.user.orgId, key: FOUNDATION_SOURCE_KEY, value: serialized })
+        .onConflictDoUpdate({
+          target: [appSettings.orgId, appSettings.key],
+          set: { value: serialized, updatedAt: sql`now()` },
+        });
+
+      return { success: true, orgName: org.name };
+    }),
+
+  /**
+   * Return a count-per-table summary of foundation records in source org.
    */
   getSummary: protectedProcedure
     .query(async ({ ctx }) => {
       requireSuperadmin(ctx.user.role);
+
+      const sourceOrgId = await readSourceOrgId(ctx.user.orgId);
+      if (sourceOrgId == null) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'لم يتم تعيين مؤسسة قالب التأسيس — حدّد المؤسسة المصدر أولاً',
+        });
+      }
 
       const tables: SupportedTable[] = [
         'document_journals', 'document_types', 'branches', 'warehouses', 'units',
@@ -224,7 +335,7 @@ export const foundationAdminRouter = router({
         const rows = await (db.select({ id: (table as any).id }) as any)
           .from(table)
           .where(and(
-            eq((table as any).orgId, ctx.user.orgId),
+            eq((table as any).orgId, sourceOrgId),
             eq((table as any).includeInFoundation, true),
           ));
         counts[tableName] = rows.length;
@@ -234,12 +345,19 @@ export const foundationAdminRouter = router({
     }),
 
   /**
-   * معاينة ما سيُصدَّر — يُعيد السجلات فعلياً دون كتابة أي ملف.
-   * يُستخدم في الواجهة الإدارية لعرض قائمة السجلات قبل التصدير.
+   * معاينة ما سيُصدَّر من المؤسسة المصدر — يُعيد السجلات دون كتابة أي ملف.
    */
   previewExport: protectedProcedure
     .query(async ({ ctx }) => {
       requireSuperadmin(ctx.user.role);
+
+      const sourceOrgId = await readSourceOrgId(ctx.user.orgId);
+      if (sourceOrgId == null) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'لم يتم تعيين مؤسسة قالب التأسيس — حدّد المؤسسة المصدر أولاً',
+        });
+      }
 
       const tables: SupportedTable[] = [
         'document_journals', 'document_types', 'branches', 'warehouses', 'units',
@@ -247,7 +365,7 @@ export const foundationAdminRouter = router({
         'document_templates', 'posting_definitions',
       ];
 
-      const fkMaps = await buildExportFkMaps(ctx.user.orgId);
+      const fkMaps = await buildExportFkMaps(sourceOrgId);
       const preview: Record<string, { foundationKey: string; name: string; policy: string }[]> = {};
       let totalRecords = 0;
 
@@ -256,7 +374,7 @@ export const foundationAdminRouter = router({
         const rows = await (db.select() as any)
           .from(table)
           .where(and(
-            eq((table as any).orgId, ctx.user.orgId),
+            eq((table as any).orgId, sourceOrgId),
             eq((table as any).includeInFoundation, true),
           ));
 
@@ -268,12 +386,12 @@ export const foundationAdminRouter = router({
         totalRecords += rows.length;
       }
 
-      // فحص مشاكل FK
+      // فحص مشاكل FK (تحذيرية للمعاينة)
       const warnings: string[] = [];
       const djRows = (await (db.select() as any)
         .from(documentJournals)
         .where(and(
-          eq(documentJournals.orgId, ctx.user.orgId),
+          eq(documentJournals.orgId, sourceOrgId),
           eq(documentJournals.includeInFoundation, true),
         ))) as Array<Record<string, unknown>>;
 
@@ -288,16 +406,38 @@ export const foundationAdminRouter = router({
         }
       }
 
-      return { preview, totalRecords, warnings };
+      const whRows = (await (db.select() as any)
+        .from(warehouses)
+        .where(and(
+          eq(warehouses.orgId, sourceOrgId),
+          eq(warehouses.includeInFoundation, true),
+        ))) as Array<Record<string, unknown>>;
+
+      for (const wh of whRows) {
+        const brId = wh.branchId as number | null;
+        if (brId && !fkMaps.branchFkMap.has(brId)) {
+          warnings.push(`مخزن "${wh.name}": الفرع ${brId} غير مدرج في القالب (لا foundationKey)`);
+        }
+      }
+
+      return { preview, totalRecords, warnings, sourceOrgId };
     }),
 
   /**
-   * تصدير القالب — يكتب foundation-data.json و foundation-data.ts.
-   * يُضيف حقول _xxx_fk لحل FK عند التطبيق.
+   * تصدير القالب من المؤسسة المصدر — يكتب foundation-data.json و foundation-data.ts.
+   * يُحقق من FKs قبل التصدير — يُوقف التصدير إذا وُجدت FKs غير محلولة.
    */
   exportTemplate: protectedProcedure
     .mutation(async ({ ctx }) => {
       requireSuperadmin(ctx.user.role);
+
+      const sourceOrgId = await readSourceOrgId(ctx.user.orgId);
+      if (sourceOrgId == null) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'لم يتم تعيين مؤسسة قالب التأسيس — حدّد رقم المؤسسة المصدر في إعدادات القالب أولاً',
+        });
+      }
 
       const tables: SupportedTable[] = [
         'document_journals', 'document_types', 'branches', 'warehouses', 'units',
@@ -305,44 +445,48 @@ export const foundationAdminRouter = router({
         'document_templates', 'posting_definitions',
       ];
 
-      // نبني خرائط FK قبل التصدير
-      const fkMaps = await buildExportFkMaps(ctx.user.orgId);
+      const fkMaps = await buildExportFkMaps(sourceOrgId);
 
+      // ── فحص FK قبل التصدير (حاسم — يُوقف التصدير) ────────────────────────
+      const allFkErrors: string[] = [];
+      for (const tableName of ['document_journals', 'warehouses'] as SupportedTable[]) {
+        const table = getTableRef(tableName);
+        const rows = await (db.select() as any)
+          .from(table)
+          .where(and(
+            eq((table as any).orgId, sourceOrgId),
+            eq((table as any).includeInFoundation, true),
+          ));
+        const errs = collectFkErrors(tableName, rows, fkMaps);
+        allFkErrors.push(...errs);
+      }
+
+      if (allFkErrors.length > 0) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: `التصدير متوقف: يوجد ${allFkErrors.length} علاقة غير محلولة:\n${allFkErrors.join('\n')}`,
+        });
+      }
+
+      // ── التصدير الفعلي ──────────────────────────────────────────────────────
       const result: Record<string, unknown[]> = {};
       let totalRecords = 0;
-      const fkWarnings: string[] = [];
 
       for (const tableName of tables) {
         const table = getTableRef(tableName);
         const rows = await (db.select() as any)
           .from(table)
           .where(and(
-            eq((table as any).orgId, ctx.user.orgId),
+            eq((table as any).orgId, sourceOrgId),
             eq((table as any).includeInFoundation, true),
           ));
 
         result[tableName] = rows.map((row: Record<string, unknown>) => {
-          // نحذف الحقول الخاصة بالمنظمة
           const cleaned: Record<string, unknown> = {};
           for (const [k, v] of Object.entries(row)) {
             if (!STRIP_KEYS.has(k)) cleaned[k] = v;
           }
-          // نُضيف مراجع FK للحل لاحقاً
-          const enriched = enrichWithFkRefs(cleaned, tableName, fkMaps);
-
-          // نتحقق من FK المفقودة
-          if (tableName === 'document_journals') {
-            const brId = row.branchId as number | null;
-            if (brId && !fkMaps.branchFkMap.has(brId)) {
-              fkWarnings.push(`دفتر "${row.name}": الفرع ${brId} بلا foundationKey`);
-            }
-            const whId = row.warehouseId as number | null;
-            if (whId && !fkMaps.warehouseFkMap.has(whId)) {
-              fkWarnings.push(`دفتر "${row.name}": المخزن ${whId} بلا foundationKey`);
-            }
-          }
-
-          return enriched;
+          return enrichWithFkRefs(cleaned, tableName, fkMaps);
         });
         totalRecords += rows.length;
       }
@@ -374,7 +518,7 @@ export const foundationAdminRouter = router({
  * Foundation Template Data
  *
  * AUTO-GENERATED on ${exportedAt} by foundationAdmin.exportTemplate
- * Exported by: ${ctx.user.role} (org: ${ctx.user.orgId})
+ * Exported from org: ${sourceOrgId} (by user role: ${ctx.user.role})
  *
  * DO NOT EDIT MANUALLY — run "تصدير قالب التأسيس" from the superadmin panel.
  * Total records: ${totalRecords}
@@ -407,7 +551,7 @@ export const FOUNDATION_DATA: FoundationData = ${JSON.stringify(payload, null, 2
 `;
       fs.writeFileSync(tsPath, tsContent, 'utf8');
 
-      return { success: true, totalRecords, exportedAt, jsonPath, tsPath, fkWarnings };
+      return { success: true, totalRecords, exportedAt, jsonPath, tsPath, sourceOrgId };
     }),
 
   /**
@@ -441,8 +585,6 @@ export const FOUNDATION_DATA: FoundationData = ${JSON.stringify(payload, null, 2
 
   /**
    * Apply the current foundation-data.json to the requesting org.
-   * Uses the full FK-resolution engine from foundation-update.ts.
-   * Rules: only inserts new foundationKeys, never modifies existing records.
    */
   applyTemplate: protectedProcedure
     .mutation(async ({ ctx }) => {
@@ -474,7 +616,6 @@ export const FOUNDATION_DATA: FoundationData = ${JSON.stringify(payload, null, 2
         throw new TRPCError({ code: 'NOT_FOUND', message: 'ملف القالب غير موجود' });
       }
 
-      // نسخة احتياطية أولاً
       const backup = await backupDatabase(input.dbUrl);
       if (!backup.ok) {
         throw new TRPCError({

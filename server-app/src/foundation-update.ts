@@ -289,9 +289,39 @@ export async function applyFoundationRecords(
 
 // ─── الدوال العامة ───────────────────────────────────────────────────────────
 
+/**
+ * يحاول تحديد مسار foundation-data.json من عدة مواضع ممكنة:
+ *  1. FOUNDATION_DATA_PATH — متغيّر بيئة (يُمرَّر من Electron إلى الخادم)
+ *  2. RESOURCES_PATH env   — مسار resources في Electron: {RESOURCES_PATH}/app/server-app/src/foundation-data.json
+ *  3. __dirname/../src     — مجاور لملف index المُجمَّع (للإنتاج)
+ *  4. cwd/src              — المسار الافتراضي للتطوير
+ */
+function resolveFoundationJsonPath(): string | null {
+  const candidates: string[] = [];
+
+  if (process.env['FOUNDATION_DATA_PATH']) {
+    candidates.push(process.env['FOUNDATION_DATA_PATH']);
+  }
+  if (process.env['RESOURCES_PATH']) {
+    candidates.push(path.join(process.env['RESOURCES_PATH'], 'app', 'server-app', 'src', 'foundation-data.json'));
+  }
+  // مجاور للملف المُجمَّع: dist/index.mjs → dist/../src/foundation-data.json
+  try {
+    const dirname = path.dirname(new URL(import.meta.url).pathname);
+    candidates.push(path.join(dirname, '..', 'src', 'foundation-data.json'));
+  } catch { /* ESM import.meta.url قد لا يكون متاحاً */ }
+
+  candidates.push(path.resolve(process.cwd(), 'src', 'foundation-data.json'));
+
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
 function loadFoundationJson(): Record<string, unknown[]> | null {
-  const jsonPath = path.resolve(process.cwd(), 'src', 'foundation-data.json');
-  if (!fs.existsSync(jsonPath)) return null;
+  const jsonPath = resolveFoundationJsonPath();
+  if (!jsonPath) return null;
   try {
     return JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
   } catch {
@@ -351,12 +381,32 @@ export async function applyFoundationUpdate(
  * يُطبّق Foundation Update على جميع المنظمات النشطة.
  * يُستدعى من index.ts بعد نجاح checkSchema.
  * هذه الدالة صامتة — لا تُوقف الخادم في حالة الخطأ.
+ *
+ * سياسة النسخ الاحتياطي:
+ *  - إذا تم توفير dbUrl يُحاوَل إنشاء نسخة احتياطية pg_dump قبل البدء.
+ *  - فشل النسخة الاحتياطية = تحذير فقط (warn) ولا يُوقف التحديث.
+ *  - نجاح النسخة الاحتياطية مُسجَّل في info مع مسار الملف.
  */
 export async function runFoundationUpdateForAllOrgs(dbUrl?: string): Promise<void> {
   const data = loadFoundationJson();
   if (!data) {
-    // لا يوجد قالب — تجاهل بصمت
     return;
+  }
+
+  logger.info('foundation-update', '▶ بدء Foundation Update عند التشغيل...');
+
+  // ── محاولة نسخة احتياطية (اختيارية — warn فقط عند الفشل) ────────────────
+  if (dbUrl) {
+    logger.info('foundation-update', '📦 محاولة نسخة احتياطية pg_dump قبل التحديث...');
+    const backup = await backupDatabase(dbUrl);
+    if (backup.ok) {
+      logger.info('foundation-update', `✅ النسخة الاحتياطية محفوظة: ${backup.path}`);
+    } else {
+      logger.warn('foundation-update',
+        `⚠️ فشلت النسخة الاحتياطية (تابع التحديث بدونها): ${backup.error}`);
+    }
+  } else {
+    logger.info('foundation-update', 'ℹ️ dbUrl غير متاح — تخطّى النسخ الاحتياطي');
   }
 
   let orgs: { id: number; code: string }[] = [];
@@ -370,15 +420,27 @@ export async function runFoundationUpdateForAllOrgs(dbUrl?: string): Promise<voi
     return;
   }
 
+  let totalInserted = 0;
+  let totalSkipped  = 0;
+
   for (const org of orgs) {
     try {
       const result = await applyFoundationRecords(org.id, data);
+      totalInserted += result.inserted;
+      totalSkipped  += result.skipped;
       if (result.inserted > 0) {
         logger.info('foundation-update',
           `org ${org.code} (${org.id}): inserted=${result.inserted} skipped=${result.skipped}`);
+      }
+      if (result.errors.length) {
+        logger.warn('foundation-update',
+          `org ${org.code}: ${result.errors.length} أخطاء — ${result.errors.slice(0, 3).join(' | ')}`);
       }
     } catch (err: any) {
       logger.warn('foundation-update', `org ${org.code} فشل: ${err.message}`);
     }
   }
+
+  logger.info('foundation-update',
+    `✓ اكتمل: ${orgs.length} منظمة | inserted=${totalInserted} skipped=${totalSkipped}`);
 }

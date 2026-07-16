@@ -29,10 +29,15 @@ const POLICY_LABEL: Record<string, string> = {
 };
 
 export default function FoundationAdminTab() {
-  const [showPreview, setShowPreview]     = useState(false);
-  const [expandedTable, setExpandedTable] = useState<string | null>(null);
+  const [showPreview, setShowPreview]       = useState(false);
+  const [expandedTable, setExpandedTable]   = useState<string | null>(null);
+  const [sourceOrgInput, setSourceOrgInput] = useState('');
+  const [exportFkErrors, setExportFkErrors] = useState<string[]>([]);
 
   const templateInfoQ = trpc.foundationAdmin.getTemplateInfo.useQuery(undefined, {
+    refetchOnWindowFocus: false,
+  });
+  const sourceOrgQ = trpc.foundationAdmin.getSourceOrg.useQuery(undefined, {
     refetchOnWindowFocus: false,
   });
   const previewQ = trpc.foundationAdmin.previewExport.useQuery(undefined, {
@@ -40,35 +45,129 @@ export default function FoundationAdminTab() {
     refetchOnWindowFocus: false,
   });
 
+  const setSourceOrgMut = trpc.foundationAdmin.setSourceOrg.useMutation({
+    onSuccess: (d) => {
+      toast.success(`✅ تم تعيين مؤسسة قالب التأسيس: ${d.orgName}`);
+      setSourceOrgInput('');
+      sourceOrgQ.refetch();
+    },
+    onError: (e) => toast.error('فشل تعيين المؤسسة', { description: e.message }),
+  });
+
   const exportMut = trpc.foundationAdmin.exportTemplate.useMutation({
     onSuccess: (d) => {
-      toast.success(`✅ تم تصدير ${d.totalRecords} سجل`, {
-        description: d.fkWarnings?.length
-          ? `تحذيرات: ${d.fkWarnings.slice(0, 2).join(' | ')}`
-          : `ملف القالب: foundation-data.json`,
+      setExportFkErrors([]);
+      toast.success(`✅ تم تصدير ${d.totalRecords} سجل من المؤسسة ${d.sourceOrgId}`, {
+        description: 'ملف القالب: foundation-data.json',
         duration: 6000,
       });
       templateInfoQ.refetch();
     },
-    onError: (e) => toast.error('فشل التصدير', { description: e.message }),
+    onError: (e) => {
+      const lines = e.message.split('\n');
+      const isPrecondition = e.message.includes('علاقة غير محلولة') || lines.length > 1;
+      if (isPrecondition && lines.length > 1) {
+        setExportFkErrors(lines.slice(1).filter(Boolean));
+      } else {
+        setExportFkErrors([]);
+      }
+      toast.error('فشل التصدير', { description: lines[0] });
+    },
   });
 
   const applyMut = trpc.foundationAdmin.applyTemplate.useMutation({
     onSuccess: (d) => {
       toast.success(`✅ تم تطبيق القالب`, {
-        description: `مُدرَج: ${d.inserted} | محذوف: ${d.skipped} | أخطاء: ${d.errors.length}`,
+        description: `مُدرَج: ${d.inserted} | موجود مسبقاً: ${d.skipped} | أخطاء: ${d.errors.length}`,
         duration: 6000,
       });
     },
     onError: (e) => toast.error('فشل التطبيق', { description: e.message }),
   });
 
-  const info = templateInfoQ.data;
+  const info       = templateInfoQ.data;
+  const sourceOrg  = sourceOrgQ.data;
+  const hasSourceOrg = !!sourceOrg?.sourceOrgId;
 
   return (
     <div className="space-y-6" dir="rtl">
 
-      {/* ── إصدار القالب ───────────────────────────────────────── */}
+      {/* ── مؤسسة قالب التأسيس ─────────────────────────────────────── */}
+      <div className="bg-slate-800 rounded-xl border border-slate-700 p-5">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-xl">🏢</div>
+          <div>
+            <h3 className="font-semibold text-lg">مؤسسة قالب التأسيس</h3>
+            <p className="text-xs text-slate-400">التصدير يقرأ السجلات من هذه المؤسسة فقط</p>
+          </div>
+        </div>
+
+        {sourceOrgQ.isLoading ? (
+          <div className="text-slate-400 text-sm animate-pulse">جاري التحميل...</div>
+        ) : hasSourceOrg ? (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-green-400 text-lg">✅</span>
+              <div>
+                <p className="text-sm font-medium">
+                  {sourceOrg.orgName ?? `مؤسسة #${sourceOrg.sourceOrgId}`}
+                </p>
+                <p className="text-xs text-slate-400 font-mono">
+                  id={sourceOrg.sourceOrgId}
+                  {sourceOrg.orgCode ? ` · ${sourceOrg.orgCode}` : ''}
+                </p>
+              </div>
+            </div>
+            {sourceOrgInput === '' && (
+              <button
+                onClick={() => setSourceOrgInput(String(sourceOrg.sourceOrgId ?? ''))}
+                className="text-xs text-slate-400 hover:text-slate-200 underline transition"
+              >
+                تغيير
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-amber-300 text-sm mb-3">
+            ⚠️ لم يتم تعيين مؤسسة مصدر — التصدير والمعاينة معطّلان حتى يتم التعيين.
+          </div>
+        )}
+
+        {(!hasSourceOrg || sourceOrgInput !== '') && (
+          <div className="flex items-center gap-2 mt-3">
+            <input
+              type="number"
+              min={1}
+              value={sourceOrgInput}
+              onChange={(e) => setSourceOrgInput(e.target.value)}
+              placeholder="رقم المؤسسة (org id)"
+              className="flex-1 bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
+              dir="ltr"
+            />
+            <button
+              onClick={() => {
+                const id = parseInt(sourceOrgInput, 10);
+                if (!id || id < 1) { toast.error('أدخل رقماً صحيحاً أكبر من صفر'); return; }
+                setSourceOrgMut.mutate({ sourceOrgId: id });
+              }}
+              disabled={setSourceOrgMut.isPending || !sourceOrgInput}
+              className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition"
+            >
+              {setSourceOrgMut.isPending ? '⏳' : 'حفظ'}
+            </button>
+            {sourceOrgInput !== '' && hasSourceOrg && (
+              <button
+                onClick={() => setSourceOrgInput('')}
+                className="text-slate-400 hover:text-slate-200 text-sm px-2 py-2 transition"
+              >
+                إلغاء
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── إصدار القالب ───────────────────────────────────────────────── */}
       <div className="bg-slate-800 rounded-xl border border-slate-700 p-5">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
@@ -101,8 +200,6 @@ export default function FoundationAdminTab() {
                 </p>
               </div>
             </div>
-
-            {/* توزيع السجلات */}
             <div className="grid grid-cols-3 gap-2">
               {Object.entries(info.counts ?? {}).map(([k, v]) => (
                 v > 0 ? (
@@ -121,7 +218,7 @@ export default function FoundationAdminTab() {
         )}
       </div>
 
-      {/* ── إجراءات ──────────────────────────────────────────────── */}
+      {/* ── إجراءات ──────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-4">
         {/* معاينة */}
         <div className="bg-slate-800 rounded-xl border border-slate-700 p-5">
@@ -129,14 +226,18 @@ export default function FoundationAdminTab() {
             <span>🔍</span> معاينة ما سيُصدَّر
           </h4>
           <p className="text-xs text-slate-400 mb-4">
-            عرض قائمة السجلات المُحدَّدة للإدراج ضمن القالب، مع تحذيرات العلاقات المفقودة.
+            عرض سجلات المؤسسة المصدر المُحدَّدة للإدراج، مع تحذيرات العلاقات المفقودة.
           </p>
           <button
             onClick={() => setShowPreview(v => !v)}
-            className="w-full bg-slate-700 hover:bg-slate-600 text-white text-sm px-4 py-2.5 rounded-lg transition"
+            disabled={!hasSourceOrg}
+            className="w-full bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-white text-sm px-4 py-2.5 rounded-lg transition"
           >
             {showPreview ? 'إخفاء المعاينة' : 'عرض المعاينة'}
           </button>
+          {!hasSourceOrg && (
+            <p className="text-xs text-amber-400 mt-2">يجب تعيين المؤسسة المصدر أولاً</p>
+          )}
         </div>
 
         {/* تصدير */}
@@ -145,19 +246,23 @@ export default function FoundationAdminTab() {
             <span>📤</span> تصدير قالب التأسيس
           </h4>
           <p className="text-xs text-slate-400 mb-4">
-            يكتب foundation-data.json و foundation-data.ts مع حل علاقات الفروع والمخازن والحسابات تلقائياً.
+            يُصدِّر سجلات المؤسسة المصدر. يتوقف التصدير تلقائياً إذا وُجدت علاقات (FK) غير محلولة.
           </p>
           <button
             onClick={() => {
               if (confirm('هل تريد تصدير القالب الآن؟ سيُستبدل الملف الموجود.')) {
+                setExportFkErrors([]);
                 exportMut.mutate();
               }
             }}
-            disabled={exportMut.isPending}
+            disabled={exportMut.isPending || !hasSourceOrg}
             className="w-full bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm px-4 py-2.5 rounded-lg transition"
           >
             {exportMut.isPending ? '⏳ جاري التصدير...' : '📤 تصدير القالب'}
           </button>
+          {!hasSourceOrg && (
+            <p className="text-xs text-amber-400 mt-2">يجب تعيين المؤسسة المصدر أولاً</p>
+          )}
         </div>
 
         {/* تطبيق على هذه المنظمة */}
@@ -186,7 +291,7 @@ export default function FoundationAdminTab() {
           {applyMut.isSuccess && (
             <div className="mt-3 bg-green-500/10 border border-green-500/20 rounded-lg p-3 text-sm">
               <p className="text-green-300">
-                مُدرَج: {applyMut.data?.inserted} | محذوف (موجود): {applyMut.data?.skipped}
+                مُدرَج: {applyMut.data?.inserted} | موجود مسبقاً: {applyMut.data?.skipped}
               </p>
               {(applyMut.data?.errors ?? []).length > 0 && (
                 <div className="mt-2 text-red-300 text-xs space-y-1">
@@ -198,15 +303,47 @@ export default function FoundationAdminTab() {
         </div>
       </div>
 
+      {/* ── أخطاء FK من التصدير (حاسمة) ──────────────────────────────── */}
+      {exportFkErrors.length > 0 && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-red-400 text-lg">🚫</span>
+            <h4 className="font-semibold text-red-300">التصدير متوقف — علاقات غير محلولة</h4>
+          </div>
+          <p className="text-xs text-slate-400 mb-3">
+            السجلات التالية تُشير إلى سجلات بلا foundationKey. فعّل «إدراج في قالب التأسيس» على هذه السجلات أولاً:
+          </p>
+          <div className="space-y-1.5">
+            {exportFkErrors.map((err, i) => (
+              <div key={i} className="bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 text-sm text-red-300">
+                {err}
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={() => setExportFkErrors([])}
+            className="mt-3 text-xs text-slate-500 hover:text-slate-300 transition"
+          >
+            إخفاء
+          </button>
+        </div>
+      )}
+
       {/* ── معاينة السجلات ─────────────────────────────────────── */}
       {showPreview && (
         <div className="bg-slate-800 rounded-xl border border-slate-700 p-5">
-          <h4 className="font-semibold mb-4">📋 معاينة السجلات المُرشَّحة للتصدير</h4>
+          <h4 className="font-semibold mb-4">
+            📋 معاينة السجلات المُرشَّحة للتصدير
+            {previewQ.data?.sourceOrgId && (
+              <span className="text-sm text-slate-400 font-normal mr-2">
+                (من المؤسسة #{previewQ.data.sourceOrgId})
+              </span>
+            )}
+          </h4>
 
-          {/* تحذيرات FK */}
           {(previewQ.data?.warnings ?? []).length > 0 && (
             <div className="mb-4 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
-              <p className="text-amber-300 text-sm font-medium mb-2">⚠️ تحذيرات العلاقات:</p>
+              <p className="text-amber-300 text-sm font-medium mb-2">⚠️ تحذيرات العلاقات — ستمنع التصدير:</p>
               {previewQ.data?.warnings?.map((w, i) => (
                 <p key={i} className="text-amber-400 text-xs">{w}</p>
               ))}
@@ -215,6 +352,10 @@ export default function FoundationAdminTab() {
 
           {previewQ.isLoading ? (
             <div className="text-slate-400 text-sm animate-pulse">جاري المعاينة...</div>
+          ) : previewQ.isError ? (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-red-300 text-sm">
+              {previewQ.error?.message}
+            </div>
           ) : (
             <div className="space-y-3">
               {Object.entries(previewQ.data?.preview ?? {}).map(([tableName, records]) => {
@@ -256,7 +397,7 @@ export default function FoundationAdminTab() {
               })}
               {!previewQ.data?.totalRecords && (
                 <p className="text-slate-400 text-sm text-center py-4">
-                  لا توجد سجلات مُحدَّدة للتصدير — فعّل "إدراج ضمن قالب التأسيس" على السجلات المطلوبة.
+                  لا توجد سجلات مُحدَّدة للتصدير — فعّل «إدراج ضمن قالب التأسيس» على السجلات المطلوبة.
                 </p>
               )}
             </div>
