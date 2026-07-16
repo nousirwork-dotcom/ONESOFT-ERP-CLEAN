@@ -45,14 +45,20 @@ function build(dd: string, mm: string, yyyy: string): string {
 function focusNext(from: HTMLElement | null) {
   if (!from) return;
   const doc = from.ownerDocument ?? document;
+  const selector = [
+    'input:not([disabled]):not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="reset"])',
+    "select:not([disabled])",
+    "textarea:not([disabled])",
+    '[data-enter-nav="true"]:not([disabled])',
+  ].join(", ");
   const all = Array.from(
-    doc.querySelectorAll<HTMLElement>(
-      'input:not([disabled]):not([type="hidden"]):not([tabindex="-1"]),' +
-      'select:not([disabled]):not([tabindex="-1"]),' +
-      'textarea:not([disabled]):not([tabindex="-1"]),' +
-      'button:not([disabled]):not([tabindex="-1"])'
-    )
-  ).filter(el => el.offsetParent !== null);
+    doc.querySelectorAll<HTMLElement>(selector)
+  ).filter(el =>
+    el.offsetParent !== null &&
+    !el.getAttribute("data-global-keyboard") &&
+    !el.hasAttribute("data-no-desktop-field") &&
+    !(el.closest('[tabindex="-1"]') && !el.hasAttribute("data-enter-nav"))
+  );
   const i = all.indexOf(from);
   if (i >= 0 && i + 1 < all.length) all[i + 1].focus();
 }

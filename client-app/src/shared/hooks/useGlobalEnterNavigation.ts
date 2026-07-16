@@ -53,11 +53,8 @@ export function useGlobalEnterNavigation() {
         if (!e.ctrlKey) return;
       }
 
-      // When a dropdown/combobox is open, let the element handle Enter itself
+      // When a dropdown/combobox has its menu open, let the element handle Enter
       if (target.getAttribute("aria-expanded") === "true") return;
-
-      // Elements with data-enter-nav handle their own Enter key internally
-      if (target.hasAttribute("data-enter-nav")) return;
 
       e.preventDefault();
 

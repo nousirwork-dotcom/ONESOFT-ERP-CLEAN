@@ -122,19 +122,25 @@ export default function ContextSelectInput({
         tabIndex={disabled ? -1 : 0}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
+        aria-expanded={menuVisible ? "true" : "false"}
         onFocus={() => setFocused(true)}
         onBlur={() => { setFocused(false); }}
         onKeyDown={(e) => {
           if (disabled) return;
-          if (e.key === "Enter") {
+          // Space opens the menu (standard select-widget keyboard UX)
+          if (e.key === " " || e.code === "Space") {
             e.preventDefault();
             if (!menuVisible) {
               const rect = wrapRef.current?.getBoundingClientRect();
               if (rect) openMenu(rect.right, rect.bottom);
-            } else {
-              setMenuVisible(false);
             }
           }
+          // Enter when menu is open: close/dismiss (option selection is via mouse/click)
+          if (e.key === "Enter" && menuVisible) {
+            e.preventDefault();
+            setMenuVisible(false);
+          }
+          // Enter when menu is closed: do nothing — global hook handles navigation
           if (e.key === "Escape" && menuVisible) {
             e.preventDefault();
             setMenuVisible(false);

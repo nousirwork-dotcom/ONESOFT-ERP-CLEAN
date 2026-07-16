@@ -441,21 +441,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       setLines(prev => { const u = [...prev]; u.splice(rowIdx + 1, 0, { ...copiedLine, id: crypto.randomUUID() }); return u; });
       setTimeout(() => cellRefs.current.get(`${rowIdx + 1}-0`)?.focus(), 50); return;
     }
-    if (e.key === "Tab" || e.key === "Enter") {
-      e.preventDefault();
-      const nextKey = `${rowIdx}-${colIdx + 1}`;
-      if (cellRefs.current.has(nextKey)) {
-        cellRefs.current.get(nextKey)?.focus();
-      } else if (rowIdx + 1 < totalRows) {
-        setSelectedLineIdx(rowIdx + 1);
-        cellRefs.current.get(`${rowIdx + 1}-0`)?.focus();
-      } else {
-        addLine();
-        setTimeout(() => cellRefs.current.get(`${rowIdx + 1}-0`)?.focus(), 50);
-      }
-      return;
-    }
-    if (e.shiftKey && e.key === "Tab") {
+    if (e.key === "Tab" && e.shiftKey) {
       e.preventDefault();
       const prevCol = colIdx - 1;
       if (prevCol >= 0 && cellRefs.current.has(`${rowIdx}-${prevCol}`)) {
@@ -467,6 +453,20 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
             break;
           }
         }
+      }
+      return;
+    }
+    if ((e.key === "Tab" && !e.shiftKey) || e.key === "Enter") {
+      e.preventDefault();
+      const nextKey = `${rowIdx}-${colIdx + 1}`;
+      if (cellRefs.current.has(nextKey)) {
+        cellRefs.current.get(nextKey)?.focus();
+      } else if (rowIdx + 1 < totalRows) {
+        setSelectedLineIdx(rowIdx + 1);
+        cellRefs.current.get(`${rowIdx + 1}-0`)?.focus();
+      } else {
+        addLine();
+        setTimeout(() => cellRefs.current.get(`${rowIdx + 1}-0`)?.focus(), 50);
       }
       return;
     }

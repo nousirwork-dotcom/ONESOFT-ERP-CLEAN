@@ -591,7 +591,22 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       setTimeout(() => cellRefs.current.get(`${rowIdx + 1}-0`)?.focus(), 50);
       return;
     }
-    if (e.key === "Tab" || e.key === "Enter") {
+    if (e.key === "Tab" && e.shiftKey) {
+      e.preventDefault();
+      const prevCol = colIdx - 1;
+      if (prevCol >= 0 && cellRefs.current.has(`${rowIdx}-${prevCol}`)) {
+        cellRefs.current.get(`${rowIdx}-${prevCol}`)?.focus();
+      } else if (rowIdx > 0) {
+        for (let c = totalCols; c >= 0; c--) {
+          if (cellRefs.current.has(`${rowIdx - 1}-${c}`)) {
+            cellRefs.current.get(`${rowIdx - 1}-${c}`)?.focus();
+            break;
+          }
+        }
+      }
+      return;
+    }
+    if ((e.key === "Tab" && !e.shiftKey) || e.key === "Enter") {
       e.preventDefault();
       const nextKey = `${rowIdx}-${colIdx + 1}`;
       if (cellRefs.current.has(nextKey)) {
@@ -603,21 +618,6 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
         } else {
           addLine();
           setTimeout(() => cellRefs.current.get(`${rowIdx + 1}-0`)?.focus(), 50);
-        }
-      }
-      return;
-    }
-    if (e.shiftKey && e.key === "Tab") {
-      e.preventDefault();
-      const prevCol = colIdx - 1;
-      if (prevCol >= 0 && cellRefs.current.has(`${rowIdx}-${prevCol}`)) {
-        cellRefs.current.get(`${rowIdx}-${prevCol}`)?.focus();
-      } else if (rowIdx > 0) {
-        for (let c = totalCols; c >= 0; c--) {
-          if (cellRefs.current.has(`${rowIdx - 1}-${c}`)) {
-            cellRefs.current.get(`${rowIdx - 1}-${c}`)?.focus();
-            break;
-          }
         }
       }
       return;
