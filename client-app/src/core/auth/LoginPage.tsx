@@ -124,6 +124,7 @@ function ChangeOrgDialog({
               value={form.username}
               onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
               autoFocus
+              data-global-keyboard="false"
             />
           </div>
           <div>
@@ -137,6 +138,7 @@ function ChangeOrgDialog({
               value={form.password}
               onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
               onKeyDown={e => { if (e.key === 'Enter') verifyMut.mutate(form); }}
+              data-global-keyboard="false"
             />
           </div>
 
@@ -363,6 +365,7 @@ function LoginForm({
           required autoFocus autoComplete="username"
           value={username}
           onChange={e => setUsername(e.target.value)}
+          data-global-keyboard="false"
         />
       </div>
 
@@ -376,6 +379,7 @@ function LoginForm({
           autoComplete="current-password"
           value={password}
           onChange={e => setPassword(e.target.value)}
+          data-global-keyboard="false"
         />
       </div>
 

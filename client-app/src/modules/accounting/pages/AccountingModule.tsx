@@ -838,12 +838,12 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
   // ── F2 / Ctrl+K / Ctrl+S / Ctrl+D / Ctrl+P / F3 ──────────────────────────
   useEffect(() => {
     const handler = (e: globalThis.KeyboardEvent) => {
-      if (e.key === "F2" || (e.ctrlKey && e.key === "k")) {
+      if (e.key === "F2" || (e.ctrlKey && e.code === "KeyK")) {
         e.preventDefault(); setPickerTarget(selectedLineIdx); setShowPicker(true);
       }
-      if (e.ctrlKey && e.key === "s") { e.preventDefault(); handleSave(); }
-      if (e.ctrlKey && e.key === "d") { e.preventDefault(); handleDuplicate(); }
-      if (e.ctrlKey && e.key === "p") { e.preventDefault(); handlePrint(); }
+      if (e.ctrlKey && e.code === "KeyS") { e.preventDefault(); handleSave(); }
+      if (e.ctrlKey && e.code === "KeyD") { e.preventDefault(); handleDuplicate(); }
+      if (e.ctrlKey && e.code === "KeyP") { e.preventDefault(); handlePrint(); }
       if (e.key === "F3") { e.preventDefault(); confirmIfDirty(handleNew); }
     };
     document.addEventListener("keydown", handler);
@@ -860,10 +860,10 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
   // ── Cell keyboard navigation ───────────────────────────────────────────────
   const JCOLS = 4;
   const handleCellKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>, rowIdx: number, colIdx: number) => {
-    if (e.ctrlKey && e.key === "c") {
+    if (e.ctrlKey && e.code === "KeyC") {
       e.preventDefault(); setCopiedLine({ ...lines[rowIdx] }); toast.info(`نسخ السطر ${rowIdx + 1}`); return;
     }
-    if (e.ctrlKey && e.key === "v") {
+    if (e.ctrlKey && e.code === "KeyV") {
       e.preventDefault();
       if (!copiedLine) { toast.warning("لا يوجد سطر منسوخ"); return; }
       setLines(prev => { const u = [...prev]; u.splice(rowIdx + 1, 0, { ...copiedLine }); return u; });
@@ -1134,7 +1134,7 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
                 <TableHead className="w-8"></TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
+            <TableBody data-global-keyboard="false">
               {lines.map((line, i) => {
                 const hasDebit  = parseFloat(line.debit  || "0") > 0;
                 const hasCredit = parseFloat(line.credit || "0") > 0;

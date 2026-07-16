@@ -389,8 +389,8 @@ function QuotationForm({
     }
     if (e.key === "ArrowUp") { e.preventDefault(); focusCell(rowIdx - 1, colIdx); }
     if (e.key === "ArrowDown") { e.preventDefault(); focusCell(rowIdx + 1, colIdx); }
-    if (e.ctrlKey && e.key === "c") { setCopiedLine({ ...lines[rowIdx] }); toast.info("تم نسخ السطر"); }
-    if (e.ctrlKey && e.key === "v" && copiedLine) {
+    if (e.ctrlKey && e.code === "KeyC") { setCopiedLine({ ...lines[rowIdx] }); toast.info("تم نسخ السطر"); }
+    if (e.ctrlKey && e.code === "KeyV" && copiedLine) {
       setLines(prev => {
         const updated = [...prev];
         updated.splice(rowIdx + 1, 0, { ...copiedLine, id: crypto.randomUUID() });
@@ -618,7 +618,7 @@ function QuotationForm({
                 <th className="w-8"></th>
               </tr>
             </thead>
-            <tbody>
+            <tbody data-global-keyboard="false">
               {lines.map((line, rowIdx) => (
                 <tr
                   key={line.id}

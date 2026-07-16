@@ -574,13 +574,13 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     const totalCols = COL_FIELDS.length;
     const totalRows = lines.length;
 
-    if (e.ctrlKey && e.key === "c") {
+    if (e.ctrlKey && e.code === "KeyC") {
       e.preventDefault();
       setCopiedLine({ ...lines[rowIdx] });
       toast.info(`تم نسخ السطر ${rowIdx + 1}`);
       return;
     }
-    if (e.ctrlKey && e.key === "v") {
+    if (e.ctrlKey && e.code === "KeyV") {
       e.preventDefault();
       if (!copiedLine) { toast.warning("لا يوجد سطر منسوخ"); return; }
       setLines(prev => {
@@ -1503,7 +1503,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
               <th className="inv-th w-7"></th>
             </tr>
           </thead>
-          <tbody>
+          <tbody data-global-keyboard="false">
             {lines.map((line, rowIdx) => (
               <tr
                 key={line.id}

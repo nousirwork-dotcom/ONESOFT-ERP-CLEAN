@@ -277,6 +277,7 @@ export default function ChatWidget() {
                   placeholder="اكتب رسالة..."
                   className="flex-1 bg-muted rounded-full py-1.5 px-3 text-xs text-foreground placeholder:text-muted-foreground outline-none"
                   dir="rtl"
+                  data-global-keyboard="false"
                 />
               </div>
             </div>

@@ -432,10 +432,10 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   ) => {
     const totalCols = COL_FIELDS.length;
     const totalRows = lines.length;
-    if (e.ctrlKey && e.key === "c") {
+    if (e.ctrlKey && e.code === "KeyC") {
       e.preventDefault(); setCopiedLine({ ...lines[rowIdx] }); toast.info(`تم نسخ السطر ${rowIdx + 1}`); return;
     }
-    if (e.ctrlKey && e.key === "v") {
+    if (e.ctrlKey && e.code === "KeyV") {
       e.preventDefault();
       if (!copiedLine) { toast.warning("لا يوجد سطر منسوخ"); return; }
       setLines(prev => { const u = [...prev]; u.splice(rowIdx + 1, 0, { ...copiedLine, id: crypto.randomUUID() }); return u; });
@@ -921,7 +921,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
               <th className="inv-th w-7"></th>
             </tr>
           </thead>
-          <tbody>
+          <tbody data-global-keyboard="false">
             {lines.map((line, rowIdx) => (
               <tr key={line.id}
                 className={`border-b border-[#e8e4dc] ${selectedLineIdx === rowIdx ? "bg-[#EEF4FA]" : rowIdx % 2 === 0 ? "bg-white" : "bg-[#FAFAF8]"}`}
