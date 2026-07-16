@@ -157,7 +157,8 @@ function enrichWithFkRefs(
 }
 
 /**
- * فحص مشاكل FK الحرجة التي تمنع التصدير.
+ * فحص مشاكل FK الحرجة التي تمنع التصدير — عام لجميع الجداول.
+ * يفحص أي حقل branchId أو warehouseId في أي جدول تأسيسي.
  * يُعيد قائمة بأخطاء FK — أي FK تُشير إلى سجل بلا foundationKey.
  */
 function collectFkErrors(
@@ -168,25 +169,38 @@ function collectFkErrors(
   const errors: string[] = [];
   const { branchFkMap, warehouseFkMap } = fkMaps;
 
-  for (const row of rows) {
-    const label = String(row.name ?? row.nameAr ?? row.code ?? row.id ?? '');
+  const TABLE_LABELS_AR: Record<string, string> = {
+    document_journals:   'دفتر',
+    document_types:      'نوع مستند',
+    branches:            'فرع',
+    warehouses:          'مخزن',
+    units:               'وحدة قياس',
+    product_groups:      'مجموعة أصناف',
+    payment_methods:     'طريقة دفع',
+    cost_centers:        'مركز تكلفة',
+    currencies:          'عملة',
+    document_templates:  'نموذج طباعة',
+    posting_definitions: 'تعريف ترحيل',
+  };
+  const entityLabel = TABLE_LABELS_AR[tableName] ?? tableName;
 
-    if (tableName === 'document_journals') {
-      const brId = row.branchId as number | null;
-      if (brId && !branchFkMap.has(brId)) {
-        errors.push(`دفتر "${label}": الفرع (id=${brId}) لا يملك foundationKey — فعّل "إدراج في القالب" للفرع أولاً`);
-      }
-      const whId = row.warehouseId as number | null;
-      if (whId && !warehouseFkMap.has(whId)) {
-        errors.push(`دفتر "${label}": المخزن (id=${whId}) لا يملك foundationKey — فعّل "إدراج في القالب" للمخزن أولاً`);
-      }
+  for (const row of rows) {
+    const name = String(row.name ?? row.nameAr ?? row.code ?? row.typeId ?? row.id ?? '');
+
+    // فحص branchId لأي جدول يحتوي عليه
+    const brId = typeof row.branchId === 'number' ? row.branchId : null;
+    if (brId && !branchFkMap.has(brId)) {
+      errors.push(
+        `${entityLabel} "${name}": الفرع (id=${brId}) لا يملك foundationKey — فعّل "إدراج في القالب" للفرع أولاً`,
+      );
     }
 
-    if (tableName === 'warehouses') {
-      const brId = row.branchId as number | null;
-      if (brId && !branchFkMap.has(brId)) {
-        errors.push(`مخزن "${label}": الفرع (id=${brId}) لا يملك foundationKey — فعّل "إدراج في القالب" للفرع أولاً`);
-      }
+    // فحص warehouseId لأي جدول يحتوي عليه
+    const whId = typeof row.warehouseId === 'number' ? row.warehouseId : null;
+    if (whId && !warehouseFkMap.has(whId)) {
+      errors.push(
+        `${entityLabel} "${name}": المخزن (id=${whId}) لا يملك foundationKey — فعّل "إدراج في القالب" للمخزن أولاً`,
+      );
     }
   }
 
@@ -448,8 +462,9 @@ export const foundationAdminRouter = router({
       const fkMaps = await buildExportFkMaps(sourceOrgId);
 
       // ── فحص FK قبل التصدير (حاسم — يُوقف التصدير) ────────────────────────
+      // يفحص جميع الجداول المُصدَّرة (عام — يكتشف branchId/warehouseId تلقائياً)
       const allFkErrors: string[] = [];
-      for (const tableName of ['document_journals', 'warehouses'] as SupportedTable[]) {
+      for (const tableName of tables) {
         const table = getTableRef(tableName);
         const rows = await (db.select() as any)
           .from(table)

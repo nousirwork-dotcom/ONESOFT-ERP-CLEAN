@@ -291,26 +291,42 @@ export async function applyFoundationRecords(
 
 /**
  * يحاول تحديد مسار foundation-data.json من عدة مواضع ممكنة:
- *  1. FOUNDATION_DATA_PATH — متغيّر بيئة (يُمرَّر من Electron إلى الخادم)
- *  2. RESOURCES_PATH env   — مسار resources في Electron: {RESOURCES_PATH}/app/server-app/src/foundation-data.json
- *  3. __dirname/../src     — مجاور لملف index المُجمَّع (للإنتاج)
- *  4. cwd/src              — المسار الافتراضي للتطوير
+ *  1. FOUNDATION_DATA_PATH — متغيّر بيئة (مسار صريح، يسبق كل شيء)
+ *  2. process.resourcesPath — متاح مباشرةً في سياق Electron (main process / fork)
+ *  3. RESOURCES_PATH env   — يُمرَّر من Electron إلى الخادم كـ child_process.spawn
+ *  4. __dirname/../src     — مجاور لملف index المُجمَّع (للإنتاج)
+ *  5. cwd/src              — المسار الافتراضي للتطوير
  */
 function resolveFoundationJsonPath(): string | null {
   const candidates: string[] = [];
 
+  // 1. مسار صريح عبر متغيّر بيئة
   if (process.env['FOUNDATION_DATA_PATH']) {
     candidates.push(process.env['FOUNDATION_DATA_PATH']);
   }
-  if (process.env['RESOURCES_PATH']) {
-    candidates.push(path.join(process.env['RESOURCES_PATH'], 'app', 'server-app', 'src', 'foundation-data.json'));
+
+  // 2. process.resourcesPath — متاح مباشرةً في Electron main/fork contexts
+  const electronResourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+  if (electronResourcesPath) {
+    candidates.push(
+      path.join(electronResourcesPath, 'app', 'server-app', 'src', 'foundation-data.json'),
+    );
   }
-  // مجاور للملف المُجمَّع: dist/index.mjs → dist/../src/foundation-data.json
+
+  // 3. RESOURCES_PATH كـ env var (يُمرَّر من Electron main → spawn child)
+  if (process.env['RESOURCES_PATH']) {
+    candidates.push(
+      path.join(process.env['RESOURCES_PATH'], 'app', 'server-app', 'src', 'foundation-data.json'),
+    );
+  }
+
+  // 4. مجاور للملف المُجمَّع: dist/index.mjs → dist/../src/foundation-data.json
   try {
     const dirname = path.dirname(new URL(import.meta.url).pathname);
     candidates.push(path.join(dirname, '..', 'src', 'foundation-data.json'));
   } catch { /* ESM import.meta.url قد لا يكون متاحاً */ }
 
+  // 5. المسار الافتراضي للتطوير
   candidates.push(path.resolve(process.cwd(), 'src', 'foundation-data.json'));
 
   for (const p of candidates) {
@@ -332,16 +348,20 @@ function loadFoundationJson(): Record<string, unknown[]> | null {
 /**
  * يُستدعى من bootstrap.ts بعد seedFoundationAccounts.
  * يطبّق قالب التأسيس على منظمة جديدة.
+ * يبحث عن foundation-data.json في مسارات: process.resourcesPath → RESOURCES_PATH env → cwd/src.
  * إذا لم يكن ملف القالب موجوداً يتجاهل بصمت.
  */
 export async function seedFromFoundationTemplate(orgId: number): Promise<void> {
-  const data = loadFoundationJson();
+  const resolvedPath = resolveFoundationJsonPath();
+  const data = resolvedPath ? (() => {
+    try { return JSON.parse(fs.readFileSync(resolvedPath, 'utf8')); } catch { return null; }
+  })() : null;
   if (!data) {
-    logger.info('foundation-seed', 'foundation-data.json غير موجود — تجاهل (no-op)');
+    logger.info('foundation-seed', 'foundation-data.json غير موجود في أي من المسارات المتوقعة — تجاهل (no-op)');
     return;
   }
 
-  logger.info('foundation-seed', `تطبيق قالب التأسيس على org ${orgId}...`);
+  logger.info('foundation-seed', `تطبيق قالب التأسيس على org ${orgId} (من: ${resolvedPath})...`);
   const result = await applyFoundationRecords(orgId, data);
   logger.info('foundation-seed',
     `اكتمل: inserted=${result.inserted} skipped=${result.skipped} errors=${result.errors.length}`);
