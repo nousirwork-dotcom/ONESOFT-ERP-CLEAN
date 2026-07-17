@@ -83,7 +83,7 @@ export interface CustomerSummary {
   phone?: string | null;
   taxNumber?: string | null;
   balanceMinor?: number | null;
-  customerType?: 'individual' | 'company' | null;
+  customerType?: 'individual' | 'organization' | null;
 }
 
 export interface RestaurantArea {

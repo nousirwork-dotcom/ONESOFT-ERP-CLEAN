@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { trpc } from '@/shared/lib/trpc';
 import { useAuth } from '@/core/hooks/useAuth';
 import CustomerFormDialog from '@/shared/components/CustomerFormDialog';
@@ -14,7 +14,7 @@ import { LiveCustomerPanel } from './components/LiveCustomerPanel';
 import { Spinner } from './components/Modal';
 import type { PosConfig, CatalogPayload, Category, Product, CustomerSummary } from './types';
 
-// Singleton Phase-1 api (loadCatalog bypassed via externalCatalog)
+// Singleton Phase-1 api (loadCatalog bypassed via externalCatalog param in usePosEngine)
 const LIVE_API = createPhase1PosApi();
 
 // ─── Build POS catalog from tRPC data ────────────────────────────────────────
@@ -69,7 +69,8 @@ function buildCatalog(
   return { categories, products };
 }
 
-// ─── Map DB customer rows to POS CustomerSummary ──────────────────────────────
+// ─── Map DB customer row → POS CustomerSummary ────────────────────────────────
+// customerType in DB: 'individual' | 'organization'  (NOT 'company')
 function mapCustomer(c: any): CustomerSummary {
   return {
     id: String(c.id),
@@ -78,7 +79,7 @@ function mapCustomer(c: any): CustomerSummary {
     phone: c.phone ?? null,
     taxNumber: c.taxNumber ?? null,
     balanceMinor: Math.round(Number(c.balance ?? 0) * 100),
-    customerType: c.customerType ?? null,
+    customerType: (c.customerType === 'organization' ? 'organization' : 'individual') as CustomerSummary['customerType'],
   };
 }
 
@@ -100,13 +101,16 @@ function QueryErrorBadge({ label, onRetry }: { label: string; onRetry: () => voi
 
 function QueryLoadingBadge({ label }: { label: string }) {
   return (
-    <div className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2 py-1 text-xs text-white/70 animate-pulse">
+    <div className="flex animate-pulse items-center gap-1.5 rounded-lg bg-white/10 px-2 py-1 text-xs text-white/70">
       <span>⟳ {label}</span>
     </div>
   );
 }
 
 // ─── Invoice header bar ───────────────────────────────────────────────────────
+// NOTE: Branch is intentionally excluded from Phase 1.
+// SalesInvoicePage does not use branch either; the journal/warehouse are the
+// identity anchors. Branch can be added in Phase 2 from the user session context.
 interface HeaderProps {
   journals: any[];
   journalsLoading: boolean;
@@ -120,12 +124,6 @@ interface HeaderProps {
   onWarehousesRetry: () => void;
   selectedWarehouseId: number | null;
 
-  branches: any[];
-  branchesLoading: boolean;
-  branchesError: boolean;
-  onBranchesRetry: () => void;
-  selectedBranchId: number | null;
-
   previewNumber: string | null;
   previewLoading: boolean;
   invoiceDate: Date;
@@ -137,11 +135,10 @@ interface HeaderProps {
 }
 
 function InvoiceHeaderBar(props: HeaderProps) {
-  const branch = props.branches.find((b) => b.id === props.selectedBranchId);
-  const journal = props.journals.find((j) => j.id === props.selectedJournalId);
+  const journal   = props.journals.find((j) => j.id === props.selectedJournalId);
   const warehouse = props.warehouses.find((w) => w.id === props.selectedWarehouseId);
 
-  // Deterministic dd-mm-yyyy (Gregorian, hyphen-separated — no locale ambiguity)
+  // Deterministic Gregorian dd-mm-yyyy — no locale/calendar ambiguity
   const d = props.invoiceDate;
   const dateStr = [
     String(d.getDate()).padStart(2, '0'),
@@ -149,33 +146,20 @@ function InvoiceHeaderBar(props: HeaderProps) {
     d.getFullYear(),
   ].join('-');
 
-  const warehouseLabel = (w: any) =>
-    w.code ? `${w.code} — ${w.name}` : w.name;
+  // warehouse display: "code — name" when code exists
+  const warehouseLabel = (w: any) => (w.code ? `${w.code} — ${w.name}` : w.name);
 
-  const customerTypeLabel = (t: string | null | undefined) =>
-    t === 'company' ? 'شركة' : 'فرد';
+  // customerType DB values: 'individual' | 'organization'
+  const typeLabel = (t: CustomerSummary['customerType']) =>
+    t === 'organization' ? 'مؤسسة' : 'فرد';
+
+  const isOrg = props.customer?.customerType === 'organization';
 
   return (
     <div className="border-b border-[#1C4576]/30 bg-[#1C4576] px-3 py-2 text-white shadow-md">
       <div className="flex flex-wrap items-center gap-2">
 
-        {/* Branch */}
-        {props.branchesError ? (
-          <QueryErrorBadge label="خطأ في تحميل الفروع" onRetry={props.onBranchesRetry} />
-        ) : props.branchesLoading ? (
-          <QueryLoadingBadge label="جارٍ تحميل الفروع" />
-        ) : branch ? (
-          <div className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2 py-1 text-xs">
-            <span className="text-[#D8AE55]">🏢</span>
-            {/* branches table has no code column; show padded id as identifier */}
-            <span className="font-black text-[#D8AE55]">
-              FR-{String(branch.id).padStart(2, '0')}
-            </span>
-            <span className="font-bold">{branch.name}</span>
-          </div>
-        ) : null}
-
-        {/* Journal */}
+        {/* ── Journal (sales journals only — docTypes: sales_invoice, sales) ── */}
         {props.journalsError ? (
           <QueryErrorBadge label="خطأ في تحميل الدفاتر" onRetry={props.onJournalsRetry} />
         ) : props.journalsLoading ? (
@@ -197,7 +181,7 @@ function InvoiceHeaderBar(props: HeaderProps) {
           </label>
         )}
 
-        {/* Warehouse */}
+        {/* ── Warehouse: code — name ── */}
         {props.warehousesError ? (
           <QueryErrorBadge label="خطأ في تحميل المستودعات" onRetry={props.onWarehousesRetry} />
         ) : props.warehousesLoading ? (
@@ -219,29 +203,25 @@ function InvoiceHeaderBar(props: HeaderProps) {
           </label>
         ) : null}
 
-        {/* Advisory invoice number — visible text, not just tooltip */}
+        {/* ── Advisory number — visible text with caption ── */}
         <div className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2 py-1 text-xs">
           <span className="text-[#D8AE55]">#</span>
           <span className="font-semibold opacity-75">رقم استرشادي</span>
           <span className="font-black tabular-nums">
             {props.previewLoading
               ? '...'
-              : props.previewNumber
-              ? props.previewNumber
-              : props.selectedJournalId
-              ? '—'
-              : 'اختر دفتراً'}
+              : props.previewNumber ?? (props.selectedJournalId ? '—' : 'اختر دفتراً')}
           </span>
-          <span className="text-[9px] opacity-50">(يُعتمد عند الحفظ)</span>
+          <span className="text-[9px] opacity-50">— يُعتمد عند الحفظ</span>
         </div>
 
-        {/* Date */}
+        {/* ── Date dd-mm-yyyy ── */}
         <div className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2 py-1 text-xs">
           <span className="text-[#D8AE55]">📅</span>
           <span className="font-bold tabular-nums">{dateStr}</span>
         </div>
 
-        {/* Customer button — code + type + name + phone + taxNumber */}
+        {/* ── Customer: code · type (فرد/مؤسسة) · name · phone · tax# ── */}
         <button
           type="button"
           onClick={props.onOpenCustomer}
@@ -254,19 +234,20 @@ function InvoiceHeaderBar(props: HeaderProps) {
         >
           <span>👤</span>
           {props.customer ? (
-            <span className="flex flex-col items-start leading-none gap-0.5">
+            <span className="flex flex-col items-start gap-0.5 leading-none">
               <span className="flex items-center gap-1">
                 {props.customer.code ? (
-                  <span className="text-[#D8AE55] font-black">{props.customer.code}</span>
+                  <span className="font-black text-[#D8AE55]">{props.customer.code}</span>
                 ) : null}
                 <span className="max-w-[140px] truncate">{props.customer.name}</span>
-                <span className="text-[10px] opacity-60">
-                  {customerTypeLabel(props.customer.customerType)}
+                <span className="shrink-0 text-[10px] opacity-60">
+                  {typeLabel(props.customer.customerType)}
                 </span>
               </span>
               <span className="flex items-center gap-1.5 text-[10px] font-normal opacity-70">
                 {props.customer.phone ? <span>{props.customer.phone}</span> : null}
-                {props.customer.taxNumber ? (
+                {/* Tax number shown only for organizations */}
+                {isOrg && props.customer.taxNumber ? (
                   <span>• ض: {props.customer.taxNumber}</span>
                 ) : null}
               </span>
@@ -276,10 +257,10 @@ function InvoiceHeaderBar(props: HeaderProps) {
           )}
         </button>
 
-        {/* Status hints row */}
+        {/* ── Status hint ── */}
         <div className="ms-auto flex items-center gap-2 text-[10px] opacity-60">
           {props.selectedJournalId && !props.selectedWarehouseId ? (
-            <span className="text-[#D8AE55] opacity-100">⚠ اختر مستودعاً لمعرفة المخزون</span>
+            <span className="text-[#D8AE55] opacity-100">⚠ اختر مستودعاً لمعرفة الرصيد</span>
           ) : journal && warehouse ? (
             <span className="text-[#D8AE55] opacity-100">
               {journal.code} / {warehouseLabel(warehouse)}
@@ -291,7 +272,7 @@ function InvoiceHeaderBar(props: HeaderProps) {
   );
 }
 
-// ─── Full-page loading / error states ─────────────────────────────────────────
+// ─── Full-page loading / error ─────────────────────────────────────────────────
 function PageLoading() {
   return (
     <div className="grid h-full place-items-center text-[#1C4576]">
@@ -329,16 +310,15 @@ export function LivePOSPage() {
   const { user } = useAuth();
 
   // ─── Invoice header state ─────────────────────────────────────────────────
-  const [journalId, setJournalId] = useState<number | null>(null);
-  const [warehouseId, setWarehouseId] = useState<number | null>(null);
-  const [branchId, setBranchId] = useState<number | null>(null);
-  const [previewNumber, setPreviewNumber] = useState<string | null>(null);
+  const [journalId,      setJournalId]      = useState<number | null>(null);
+  const [warehouseId,    setWarehouseId]    = useState<number | null>(null);
+  const [previewNumber,  setPreviewNumber]  = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
-  const [invoiceDate] = useState<Date>(new Date());
+  const [invoiceDate]                       = useState<Date>(new Date());
 
   // ─── tRPC queries ─────────────────────────────────────────────────────────
-  const branchesQuery   = trpc.branches.list.useQuery();
   const warehousesQuery = trpc.warehouses.list.useQuery();
+  // Only sales journals: docTypes matches what SalesInvoicePage uses
   const journalsQuery   = trpc.documentJournals.list.useQuery({ docTypes: ['sales_invoice', 'sales'] });
   const productsQuery   = trpc.products.list.useQuery({});
   const groupsQuery     = trpc.productGroups.list.useQuery();
@@ -349,16 +329,8 @@ export function LivePOSPage() {
   const customersQuery  = trpc.customers.list.useQuery();
   const utils           = trpc.useUtils();
 
-  // ─── Auto-select first branch ──────────────────────────────────────────────
-  const didAutoSelectBranch = useRef(false);
-  useEffect(() => {
-    if (!didAutoSelectBranch.current && branchesQuery.data && branchesQuery.data.length > 0) {
-      didAutoSelectBranch.current = true;
-      setBranchId(branchesQuery.data[0].id);
-    }
-  }, [branchesQuery.data]);
-
-  // ─── Journal change: auto-fill warehouse + fetch advisory number ───────────
+  // ─── Journal change: same logic as SalesInvoicePage ──────────────────────
+  // Auto-assign journal.warehouseId; fetch advisory number (read-only — no sequence consumed)
   const handleJournalChange = useCallback(async (id: number) => {
     setJournalId(id);
     const found = (journalsQuery.data ?? []).find((j: any) => j.id === id);
@@ -375,7 +347,7 @@ export function LivePOSPage() {
     }
   }, [journalsQuery.data, utils]);
 
-  // ─── Catalog ──────────────────────────────────────────────────────────────
+  // ─── Catalog (products + categories + stock) ──────────────────────────────
   const catalog = useMemo<CatalogPayload>(
     () => buildCatalog(groupsQuery.data, productsQuery.data, stockQuery.data, warehouseId),
     [groupsQuery.data, productsQuery.data, stockQuery.data, warehouseId],
@@ -387,8 +359,7 @@ export function LivePOSPage() {
     [customersQuery.data],
   );
 
-  // ─── POS config ──────────────────────────────────────────────────────────
-  const selectedBranch  = (branchesQuery.data ?? []).find((b: any) => b.id === branchId);
+  // ─── POS config (no branch — Phase 1 follows SalesInvoicePage pattern) ───
   const selectedJournal = (journalsQuery.data ?? []).find((j: any) => j.id === journalId);
 
   const config = useMemo<PosConfig>(() => ({
@@ -398,24 +369,22 @@ export function LivePOSPage() {
     defaultView: 'mixed',
     taxInclusive: false,
     allowOfflineCheckout: false,
-    branchId: branchId != null ? String(branchId) : undefined,
     cashierName: (user as any)?.name ?? (user as any)?.username ?? 'المستخدم',
-    branchName: selectedBranch?.name,
     registerName: selectedJournal
       ? `${selectedJournal.code} — ${selectedJournal.name}`
       : 'اختر دفتر المبيعات',
-  }), [branchId, selectedBranch, selectedJournal, user]);
+  }), [selectedJournal, user]);
 
   // ─── Engine ───────────────────────────────────────────────────────────────
   const engine = usePosEngine(LIVE_API, config, catalog);
   const { state, totals, filteredProducts, dispatch } = engine;
 
   // ─── UI state ─────────────────────────────────────────────────────────────
-  const [overlay, setOverlay] = useState<Overlay>(null);
+  const [overlay,         setOverlay]         = useState<Overlay>(null);
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [modifierProduct, setModifierProduct] = useState<Product | null>(null);
-  const [online, setOnline] = useState(() => navigator.onLine);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [online,          setOnline]          = useState(() => navigator.onLine);
+  const [notice,          setNotice]          = useState<string | null>(null);
 
   useEffect(() => {
     const up = () => setOnline(true);
@@ -471,6 +440,7 @@ export function LivePOSPage() {
   }, [engine, handleProductClick]);
 
   // ─── Auto-select newly created customer ───────────────────────────────────
+  // After CustomerFormDialog.onSaved: refetch list → pick highest id (newest) → dispatch
   const handleCustomerSaved = useCallback(async () => {
     setShowAddCustomer(false);
     try {
@@ -486,7 +456,7 @@ export function LivePOSPage() {
 
   // ─── Critical loading / error guards ──────────────────────────────────────
   const isCriticalLoading = productsQuery.isLoading || groupsQuery.isLoading;
-  const criticalError = productsQuery.error ?? groupsQuery.error;
+  const criticalError     = productsQuery.error ?? groupsQuery.error;
 
   if (isCriticalLoading) {
     return (
@@ -523,12 +493,6 @@ export function LivePOSPage() {
         onWarehousesRetry={() => warehousesQuery.refetch()}
         selectedWarehouseId={warehouseId}
 
-        branches={branchesQuery.data ?? []}
-        branchesLoading={branchesQuery.isLoading}
-        branchesError={Boolean(branchesQuery.error)}
-        onBranchesRetry={() => branchesQuery.refetch()}
-        selectedBranchId={branchId}
-
         previewNumber={previewNumber}
         previewLoading={previewLoading}
         invoiceDate={invoiceDate}
@@ -557,27 +521,22 @@ export function LivePOSPage() {
         onOpenOrders={() => setOverlay('orders')}
       />
 
-      {/* Customers query error banner */}
+      {/* Non-critical error banners */}
       {customersQuery.error ? (
         <div className="flex items-center gap-2 border-b border-amber-300 bg-amber-50 px-3 py-1.5 text-xs text-amber-800">
           <span>⚠ تعذّر تحميل قائمة العملاء</span>
-          <button
-            type="button"
-            onClick={() => customersQuery.refetch()}
-            className="font-bold underline hover:no-underline"
-          >إعادة المحاولة</button>
+          <button type="button" onClick={() => customersQuery.refetch()} className="font-bold underline hover:no-underline">
+            إعادة المحاولة
+          </button>
         </div>
       ) : null}
 
-      {/* Stock query error banner (only relevant when warehouse is selected) */}
       {warehouseId != null && stockQuery.error ? (
         <div className="flex items-center gap-2 border-b border-amber-300 bg-amber-50 px-3 py-1.5 text-xs text-amber-800">
-          <span>⚠ تعذّر تحميل بيانات المخزون — تُعرض الأصناف بدون تحقق من الرصيد</span>
-          <button
-            type="button"
-            onClick={() => stockQuery.refetch()}
-            className="font-bold underline hover:no-underline"
-          >إعادة</button>
+          <span>⚠ تعذّر تحميل بيانات المخزون — الأصناف تُعرض بدون تحقق من الرصيد</span>
+          <button type="button" onClick={() => stockQuery.refetch()} className="font-bold underline hover:no-underline">
+            إعادة
+          </button>
         </div>
       ) : null}
 
@@ -610,7 +569,7 @@ export function LivePOSPage() {
         />
       </main>
 
-      {/* Toast notifications */}
+      {/* Toast */}
       {(state.error || notice) ? (
         <div className={`fixed bottom-4 start-1/2 z-[150] max-w-[90vw] -translate-x-1/2 rounded-xl px-4 py-3 text-sm font-bold shadow-xl ${
           state.error ? 'bg-rose-700 text-white' : 'bg-slate-950 text-white'
@@ -618,11 +577,9 @@ export function LivePOSPage() {
           <div className="flex items-center gap-3">
             <span>{state.error ?? notice}</span>
             {state.error ? (
-              <button
-                type="button"
-                onClick={() => dispatch({ type: 'error', message: null })}
-                className="rounded-md bg-white/15 px-2 py-1"
-              >إغلاق</button>
+              <button type="button" onClick={() => dispatch({ type: 'error', message: null })} className="rounded-md bg-white/15 px-2 py-1">
+                إغلاق
+              </button>
             ) : null}
           </div>
         </div>
