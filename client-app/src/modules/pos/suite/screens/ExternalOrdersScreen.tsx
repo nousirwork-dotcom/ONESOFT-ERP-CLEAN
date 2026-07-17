@@ -281,56 +281,46 @@ export function ExternalOrdersScreen() {
                   </div>
                 )}
 
-                <footer>
+                <footer style={{ flexWrap: 'wrap' }}>
                   {order.status === 'new' && (
-                    <>
-                      <button
-                        type="button"
-                        className="pos-button pos-button--primary"
-                        style={{ flex: 2 }}
-                        onClick={() => dispatch({ type: 'ACCEPT_EXTERNAL_ORDER', orderId: order.id })}
-                      >
-                        قبول وإرسال للمطبخ
-                      </button>
-                      <button
-                        type="button"
-                        className="pos-button pos-button--danger"
-                        onClick={() => setRejectOrder(order)}
-                      >
-                        رفض مع سبب
-                      </button>
-                    </>
+                    <button
+                      type="button"
+                      className="pos-button pos-button--primary"
+                      style={{ flex: 2, minWidth: 140 }}
+                      onClick={() => dispatch({ type: 'ACCEPT_EXTERNAL_ORDER', orderId: order.id })}
+                    >
+                      قبول وإرسال للمطبخ
+                    </button>
+                  )}
+
+                  {order.status === 'new' && (
+                    <button
+                      type="button"
+                      className="pos-button pos-button--danger"
+                      onClick={() => setRejectOrder(order)}
+                    >
+                      رفض مع سبب
+                    </button>
                   )}
 
                   {order.status === 'sync_failed' && (
-                    <>
-                      <button
-                        type="button"
-                        className="pos-button pos-button--primary"
-                        style={{ flex: 2 }}
-                        onClick={() => dispatch({ type: 'RETRY_EXTERNAL_ORDER_SYNC', orderId: order.id })}
-                      >
-                        ↺ إعادة المحاولة
-                      </button>
-                      <button
-                        type="button"
-                        className="pos-button pos-button--secondary"
-                        onClick={() => setDetailsOrder(order)}
-                      >
-                        التفاصيل
-                      </button>
-                    </>
-                  )}
-
-                  {order.status !== 'new' && order.status !== 'sync_failed' && (
                     <button
                       type="button"
-                      className="pos-button pos-button--secondary"
-                      onClick={() => setDetailsOrder(order)}
+                      className="pos-button pos-button--primary"
+                      style={{ flex: 2 }}
+                      onClick={() => dispatch({ type: 'RETRY_EXTERNAL_ORDER_SYNC', orderId: order.id })}
                     >
-                      عرض التفاصيل
+                      ↺ إعادة المحاولة
                     </button>
                   )}
+
+                  <button
+                    type="button"
+                    className="pos-button pos-button--secondary"
+                    onClick={() => setDetailsOrder(order)}
+                  >
+                    عرض التفاصيل
+                  </button>
                 </footer>
               </article>
             );

@@ -18,14 +18,9 @@ function formatSync(iso: string | null) {
   if (!iso) return 'لم تتزامن بعد';
   try {
     return new Intl.DateTimeFormat('ar-SA', {
-      hour: '2-digit',
-      minute: '2-digit',
-      day: 'numeric',
-      month: 'short',
+      hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short',
     }).format(new Date(iso));
-  } catch {
-    return '—';
-  }
+  } catch { return '—'; }
 }
 
 const STATUS_LABEL: Record<ConnectionStatus, string> = {
@@ -35,7 +30,6 @@ const STATUS_LABEL: Record<ConnectionStatus, string> = {
   pending: 'جارٍ الاتصال',
   paused: 'موقوف',
 };
-
 const STATUS_CLASS: Record<ConnectionStatus, string> = {
   connected: 'is-connected',
   disconnected: 'is-disconnected',
@@ -48,17 +42,20 @@ function StatusDot({ status }: { status: ConnectionStatus }) {
   return <span className={`pos-hub-status-dot ${STATUS_CLASS[status]}`} title={STATUS_LABEL[status]} />;
 }
 
-/** اتجاه الربط: من OneSoft → المنصة. نُخزّن الاسم الخارجي لكل صنف. */
-interface ProductMappingEntry {
-  productId: number;
-  productCode: string;
-  productName: string;
-  productPrice: number;
+/**
+ * صف ربط صنف خارجي بكتالوج OneSoft.
+ * الاتجاه الصحيح: صنف المنصة → صنف OneSoft.
+ */
+interface ExternalProductRow {
+  rowId: string;
+  externalCode: string;
   externalName: string;
+  externalPrice: number;
   available: boolean;
+  onesoftProductId: number | null;
 }
 
-type ManageTab = 'settings' | 'mapping';
+type ManageTab = 'mapping' | 'settings';
 
 interface ManageModalProps {
   connection: IntegrationConnection;
@@ -67,21 +64,16 @@ interface ManageModalProps {
 
 function ManageConnectionModal({ connection, onClose }: ManageModalProps) {
   const { products, warehouses, journals, customers } = usePOSCatalog();
+  const { updateConnection, updateConnectionSettings } = useIntegration();
+
   const [tab, setTab] = useState<ManageTab>('mapping');
 
-  const [mappings, setMappings] = useState<ProductMappingEntry[]>(() =>
-    products.map((p) => ({
-      productId: p.id,
-      productCode: p.code,
-      productName: p.name,
-      productPrice: p.salePrice,
-      externalName: '',
-      available: true,
-    })),
-  );
+  const [rows, setRows] = useState<ExternalProductRow[]>([]);
   const [mappingSearch, setMappingSearch] = useState('');
   const [mappingFilter, setMappingFilter] = useState<'all' | 'mapped' | 'unmapped'>('all');
-  const [editRow, setEditRow] = useState<number | null>(null);
+  const [newCode, setNewCode] = useState('');
+  const [newName, setNewName] = useState('');
+  const [newPrice, setNewPrice] = useState('');
 
   const [localSettings, setLocalSettings] = useState({ ...connection.settings });
 
@@ -90,31 +82,61 @@ function ManageConnectionModal({ connection, onClose }: ManageModalProps) {
   const logoColor = meta?.logoColor ?? '#1c4576';
   const logoInitial = meta?.logoInitial ?? connection.providerName.slice(0, 1);
 
-  const unmappedCount = mappings.filter((m) => m.externalName.trim() === '').length;
-  const filteredMappings = mappings.filter((m) => {
+  const mappedCount = rows.filter((r) => r.onesoftProductId !== null).length;
+  const unmappedCount = rows.length - mappedCount;
+
+  const filteredRows = rows.filter((r) => {
     const matchSearch =
       !mappingSearch ||
-      m.productName.toLowerCase().includes(mappingSearch.toLowerCase()) ||
-      m.productCode.toLowerCase().includes(mappingSearch.toLowerCase()) ||
-      m.externalName.toLowerCase().includes(mappingSearch.toLowerCase());
+      r.externalName.toLowerCase().includes(mappingSearch.toLowerCase()) ||
+      r.externalCode.toLowerCase().includes(mappingSearch.toLowerCase());
     const matchFilter =
       mappingFilter === 'all' ||
-      (mappingFilter === 'mapped' && m.externalName.trim() !== '') ||
-      (mappingFilter === 'unmapped' && m.externalName.trim() === '');
+      (mappingFilter === 'mapped' && r.onesoftProductId !== null) ||
+      (mappingFilter === 'unmapped' && r.onesoftProductId === null);
     return matchSearch && matchFilter;
   });
 
+  const handleAddRow = () => {
+    if (!newName.trim()) return;
+    setRows((prev) => [
+      ...prev,
+      {
+        rowId: `row-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
+        externalCode: newCode.trim(),
+        externalName: newName.trim(),
+        externalPrice: parseFloat(newPrice) || 0,
+        available: true,
+        onesoftProductId: null,
+      },
+    ]);
+    setNewCode('');
+    setNewName('');
+    setNewPrice('');
+  };
+
   const handleAutoMatch = () => {
-    setMappings((prev) =>
-      prev.map((m) => ({
-        ...m,
-        externalName: m.externalName.trim() === '' ? m.productName : m.externalName,
-      })),
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.onesoftProductId !== null) return r;
+        const match = products.find(
+          (p) =>
+            p.name.toLowerCase() === r.externalName.toLowerCase() ||
+            p.code.toLowerCase() === r.externalCode.toLowerCase(),
+        );
+        return match ? { ...r, onesoftProductId: match.id } : r;
+      }),
     );
   };
 
+  const handleSave = () => {
+    updateConnectionSettings(connection.id, localSettings);
+    updateConnection(connection.id, { unmappedProductCount: unmappedCount });
+    onClose();
+  };
+
   return (
-    <Modal open title={`إدارة الربط — ${connection.providerName}`} onClose={onClose} width={740}>
+    <Modal open title={`إدارة الربط — ${connection.providerName}`} onClose={onClose} width={760}>
       <div className="pos-wizard" style={{ gap: 14 }}>
         <div className="pos-wizard-provider-info">
           <div className="pos-hub-card__logo" style={{ background: logoColor, width: 40, height: 40, borderRadius: 12 }}>
@@ -144,152 +166,197 @@ function ManageConnectionModal({ connection, onClose }: ManageModalProps) {
           </button>
         </div>
 
-        {/* ─── تبويب: ربط الأصناف ─────────────────────────────────── */}
+        {/* ─── تبويب: ربط الأصناف ────────────────────────────────── */}
         {tab === 'mapping' && (
           <div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
               <p style={{ margin: 0, color: 'var(--pos-muted)', fontSize: 12, flex: 1 }}>
-                حدّد اسم كل صنف كما يظهر على منصة {connection.providerName} لمطابقة الطلبات الواردة تلقائياً.
+                أدخل أصناف {connection.providerName} ثم اربط كل صنف بمقابله في كتالوج OneSoft.
               </p>
+              {rows.length > 0 && (
+                <button
+                  type="button"
+                  className="pos-button pos-button--secondary"
+                  style={{ fontSize: 12, minHeight: 36, flexShrink: 0 }}
+                  onClick={handleAutoMatch}
+                >
+                  مطابقة تلقائية
+                </button>
+              )}
+            </div>
+
+            {/* نموذج إضافة صنف */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 2fr 1fr auto',
+                gap: 8,
+                marginBottom: 12,
+                padding: 12,
+                background: '#f8fafc',
+                borderRadius: 12,
+                border: '1px solid var(--pos-border)',
+              }}
+            >
+              <input
+                placeholder="كود الصنف"
+                value={newCode}
+                onChange={(e) => setNewCode(e.target.value)}
+                style={{ minHeight: 36, border: '1px solid var(--pos-border)', borderRadius: 8, padding: '0 10px', font: 'inherit', fontSize: 12 }}
+              />
+              <input
+                placeholder="اسم الصنف على المنصة *"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAddRow(); }}
+                style={{ minHeight: 36, border: '1px solid var(--pos-border)', borderRadius: 8, padding: '0 10px', font: 'inherit', fontSize: 12 }}
+              />
+              <input
+                placeholder="السعر (ر.س)"
+                type="number"
+                min="0"
+                step="0.01"
+                value={newPrice}
+                onChange={(e) => setNewPrice(e.target.value)}
+                style={{ minHeight: 36, border: '1px solid var(--pos-border)', borderRadius: 8, padding: '0 10px', font: 'inherit', fontSize: 12 }}
+              />
               <button
                 type="button"
-                className="pos-button pos-button--secondary"
-                style={{ minHeight: 36, fontSize: 12, flexShrink: 0 }}
-                onClick={handleAutoMatch}
-                disabled={products.length === 0}
+                className="pos-button pos-button--primary"
+                style={{ minHeight: 36 }}
+                onClick={handleAddRow}
+                disabled={!newName.trim()}
               >
-                مطابقة تلقائية
+                + إضافة
               </button>
             </div>
 
-            <div className="pos-mapping-toolbar">
-              <input
-                className="pos-mapping-search"
-                placeholder="بحث في الأصناف..."
-                value={mappingSearch}
-                onChange={(e) => setMappingSearch(e.target.value)}
-                disabled={products.length === 0}
-              />
-              <div className="pos-segmented" style={{ flexShrink: 0 }}>
-                {(['all', 'mapped', 'unmapped'] as const).map((f) => (
-                  <button
-                    key={f}
-                    type="button"
-                    className={mappingFilter === f ? 'is-active' : ''}
-                    onClick={() => setMappingFilter(f)}
-                  >
-                    {f === 'all' ? `الكل (${mappings.length})` : f === 'mapped' ? 'مربوط' : 'غير مربوط'}
-                  </button>
-                ))}
+            {rows.length > 0 && (
+              <div className="pos-mapping-toolbar">
+                <input
+                  className="pos-mapping-search"
+                  placeholder="بحث..."
+                  value={mappingSearch}
+                  onChange={(e) => setMappingSearch(e.target.value)}
+                />
+                <div className="pos-segmented" style={{ flexShrink: 0 }}>
+                  {(['all', 'mapped', 'unmapped'] as const).map((f) => (
+                    <button
+                      key={f}
+                      type="button"
+                      className={mappingFilter === f ? 'is-active' : ''}
+                      onClick={() => setMappingFilter(f)}
+                    >
+                      {f === 'all' ? `الكل (${rows.length})` : f === 'mapped' ? `مربوط (${mappedCount})` : `غير مربوط (${unmappedCount})`}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
-            {products.length === 0 ? (
-              <div className="pos-empty-state" style={{ minHeight: 140 }}>
-                <span style={{ fontSize: 32 }}>📦</span>
-                <strong>لا توجد أصناف في الكتالوج</strong>
-                <span style={{ fontSize: 12 }}>أضف أصناف في الكتالوج أولاً، ثم عُد للربط.</span>
+            {rows.length === 0 ? (
+              <div className="pos-empty-state" style={{ minHeight: 120 }}>
+                <span style={{ fontSize: 28 }}>📋</span>
+                <strong>لا توجد أصناف بعد</strong>
+                <span style={{ fontSize: 12 }}>أدخل أصناف المنصة من النموذج أعلاه.</span>
               </div>
-            ) : filteredMappings.length === 0 ? (
-              <div className="pos-empty-state" style={{ minHeight: 100 }}>
-                <strong>لا توجد نتائج</strong>
+            ) : filteredRows.length === 0 ? (
+              <div className="pos-empty-state" style={{ minHeight: 80 }}>
+                <strong>لا نتائج</strong>
               </div>
             ) : (
               <div className="pos-mapping-table-wrap">
                 <table className="pos-mapping-table">
                   <thead>
                     <tr>
-                      <th>كود OneSoft</th>
-                      <th>الاسم الداخلي</th>
+                      <th>كود المنصة</th>
+                      <th>الاسم الخارجي</th>
                       <th>السعر</th>
-                      <th>الاسم على {connection.providerName}</th>
+                      <th>صنف OneSoft</th>
                       <th>متاح</th>
                       <th></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredMappings.map((m) => (
-                      <tr key={m.productId} className={m.externalName.trim() === '' ? 'is-unmapped' : ''}>
-                        <td><code>{m.productCode}</code></td>
-                        <td style={{ fontWeight: 600 }}>{m.productName}</td>
-                        <td style={{ color: 'var(--pos-muted)', fontSize: 12 }}>{m.productPrice.toFixed(2)} ر.س</td>
-                        <td>
-                          {editRow === m.productId ? (
-                            <input
-                              autoFocus
-                              style={{ width: '100%', minHeight: 32, border: '1px solid var(--pos-blue)', borderRadius: 8, padding: '0 8px', font: 'inherit', fontSize: 12, outline: 'none' }}
-                              value={m.externalName}
-                              placeholder="اسم الصنف على المنصة..."
+                    {filteredRows.map((r) => {
+                      const linked = products.find((p) => p.id === r.onesoftProductId);
+                      return (
+                        <tr key={r.rowId} className={r.onesoftProductId === null ? 'is-unmapped' : ''}>
+                          <td><code style={{ fontSize: 11 }}>{r.externalCode || '—'}</code></td>
+                          <td style={{ fontWeight: 600 }}>{r.externalName}</td>
+                          <td style={{ color: 'var(--pos-muted)', fontSize: 12 }}>
+                            {r.externalPrice > 0 ? `${r.externalPrice.toFixed(2)} ر.س` : '—'}
+                          </td>
+                          <td>
+                            <select
+                              value={r.onesoftProductId ?? ''}
                               onChange={(e) =>
-                                setMappings((prev) =>
-                                  prev.map((x) => x.productId === m.productId ? { ...x, externalName: e.target.value } : x)
+                                setRows((prev) =>
+                                  prev.map((x) =>
+                                    x.rowId === r.rowId
+                                      ? { ...x, onesoftProductId: Number(e.target.value) || null }
+                                      : x,
+                                  ),
                                 )
                               }
-                              onBlur={() => setEditRow(null)}
-                              onKeyDown={(e) => { if (e.key === 'Enter') setEditRow(null); }}
-                            />
-                          ) : (
-                            <button
-                              type="button"
                               style={{
-                                background: 'none',
-                                border: m.externalName ? '1px solid var(--pos-border)' : '1px dashed #ccc',
-                                borderRadius: 8, padding: '4px 10px', width: '100%', textAlign: 'right',
-                                cursor: 'text', color: m.externalName ? 'var(--pos-text)' : 'var(--pos-muted)',
-                                fontSize: 12, minHeight: 32,
+                                width: '100%', minHeight: 32,
+                                border: `1px solid ${r.onesoftProductId ? 'var(--pos-border)' : '#f59e0b'}`,
+                                borderRadius: 8, padding: '0 8px', font: 'inherit', fontSize: 12,
                               }}
-                              onClick={() => setEditRow(m.productId)}
                             >
-                              {m.externalName || '— انقر للإدخال —'}
-                            </button>
-                          )}
-                        </td>
-                        <td>
-                          <label className="pos-toggle" style={{ minHeight: 32, padding: '0 8px', border: 'none', justifyContent: 'center' }}>
-                            <input
-                              type="checkbox"
-                              checked={m.available}
-                              onChange={(e) =>
-                                setMappings((prev) =>
-                                  prev.map((x) => x.productId === m.productId ? { ...x, available: e.target.checked } : x)
-                                )
-                              }
-                            />
-                            <i />
-                          </label>
-                        </td>
-                        <td>
-                          {m.externalName.trim() !== '' && (
+                              <option value="">— اختر صنف OneSoft —</option>
+                              {products.map((p) => (
+                                <option key={p.id} value={p.id}>{p.code} — {p.name}</option>
+                              ))}
+                            </select>
+                            {linked && (
+                              <small style={{ color: 'var(--pos-muted)', fontSize: 10 }}>✓ {linked.name}</small>
+                            )}
+                          </td>
+                          <td>
+                            <label className="pos-toggle" style={{ minHeight: 32, padding: '0 8px', border: 'none', justifyContent: 'center' }}>
+                              <input
+                                type="checkbox"
+                                checked={r.available}
+                                onChange={(e) =>
+                                  setRows((prev) =>
+                                    prev.map((x) =>
+                                      x.rowId === r.rowId ? { ...x, available: e.target.checked } : x,
+                                    )
+                                  )
+                                }
+                              />
+                              <i />
+                            </label>
+                          </td>
+                          <td>
                             <button
                               type="button"
                               className="pos-button pos-button--danger"
                               style={{ minHeight: 30, padding: '0 10px', fontSize: 11 }}
-                              onClick={() =>
-                                setMappings((prev) =>
-                                  prev.map((x) => x.productId === m.productId ? { ...x, externalName: '' } : x)
-                                )
-                              }
+                              onClick={() => setRows((prev) => prev.filter((x) => x.rowId !== r.rowId))}
                             >
-                              إزالة
+                              حذف
                             </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
             )}
 
-            {unmappedCount > 0 && products.length > 0 && (
+            {unmappedCount > 0 && rows.length > 0 && (
               <div className="pos-warning-box" style={{ margin: '10px 0 0' }}>
-                ⚠ {unmappedCount} أصناف لم يُحدَّد لها اسم على المنصة.
+                ⚠ {unmappedCount} أصناف لم تُربط بكتالوج OneSoft بعد.
               </div>
             )}
           </div>
         )}
 
-        {/* ─── تبويب: إعدادات التشغيل ─────────────────────────────── */}
+        {/* ─── تبويب: إعدادات التشغيل ──────────────────────────────── */}
         {tab === 'settings' && (
           <div>
             <div className="pos-form-grid">
@@ -357,8 +424,11 @@ function ManageConnectionModal({ connection, onClose }: ManageModalProps) {
         )}
 
         <div className="pos-wizard-footer">
-          <button type="button" className="pos-button pos-button--primary" onClick={onClose}>
-            حفظ وإغلاق
+          <button type="button" className="pos-button pos-button--secondary" onClick={onClose}>
+            إلغاء
+          </button>
+          <button type="button" className="pos-button pos-button--primary" onClick={handleSave}>
+            حفظ التعديلات
           </button>
         </div>
       </div>
@@ -377,13 +447,7 @@ interface ConnectionCardProps {
 }
 
 function ConnectionCard({
-  connection,
-  newOrdersCount,
-  onTest,
-  onToggle,
-  onRemove,
-  onManage,
-  testing,
+  connection, newOrdersCount, onTest, onToggle, onRemove, onManage, testing,
 }: ConnectionCardProps) {
   const adapter = providerRegistry.get(connection.providerId);
   const meta = adapter?.meta;
@@ -436,7 +500,7 @@ function ConnectionCard({
 
       {connection.unmappedProductCount > 0 && (
         <div className="pos-warning-box" style={{ margin: '0 0 10px' }}>
-          ⚠ {connection.unmappedProductCount} أصناف غير مربوطة — افتح "إدارة الربط" للمعالجة.
+          ⚠ {connection.unmappedProductCount} أصناف غير مربوطة.
         </div>
       )}
 

@@ -20,6 +20,7 @@ const labels: Record<string, string> = {
   completed: 'مكتمل',
   rejected: 'مرفوض',
   needs_review: 'يحتاج مراجعة',
+  sync_failed: 'فشلت المزامنة',
   open_shift: 'مفتوحة',
   pending_review: 'بانتظار المراجعة',
   closed: 'مغلقة',
