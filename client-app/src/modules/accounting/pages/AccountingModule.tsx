@@ -31,6 +31,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/core/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/core/ui/command";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/core/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/core/ui/dialog";
+import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/core/ui/tabs";
 import { Textarea } from "@/core/ui/textarea";
 import { toast } from "sonner";
@@ -4564,45 +4565,18 @@ export default function AccountingModule() {
       </div>
 
       {/* ── Unsaved Changes Dialog ── */}
-      <Dialog open={showDirtyDlg} onOpenChange={open => { if (!open) { setShowDirtyDlg(false); pendingActionRef.current = null; } }}>
-        <DialogContent className="max-w-sm" dir="rtl">
-          <DialogHeader>
-            <DialogTitle className="text-sm flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-500" />
-              تغييرات غير محفوظة
-            </DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground py-1">
-            يوجد تغييرات غير محفوظة، هل تريد حفظها؟
-          </p>
-          <div className="flex gap-2 justify-end pt-2">
-            <Button
-              size="sm" className="h-8 text-xs gap-1"
-              onClick={async () => {
-                if (saveFnRef.current) {
-                  const ok = await saveFnRef.current();
-                  if (!ok) return;
-                }
-                executePending();
-              }}
-            >
-              <Save className="w-3 h-3" /> نعم — احفظ وتابع
-            </Button>
-            <Button
-              size="sm" variant="outline" className="h-8 text-xs"
-              onClick={executePending}
-            >
-              لا — تجاهل التعديلات
-            </Button>
-            <Button
-              size="sm" variant="ghost" className="h-8 text-xs"
-              onClick={() => { setShowDirtyDlg(false); pendingActionRef.current = null; }}
-            >
-              إلغاء
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <UnsavedChangesDialog
+        open={showDirtyDlg}
+        onSave={async () => {
+          if (saveFnRef.current) {
+            const ok = await saveFnRef.current();
+            if (!ok) throw new Error("save failed");
+          }
+          executePending();
+        }}
+        onDiscard={executePending}
+        onCancel={() => { setShowDirtyDlg(false); pendingActionRef.current = null; }}
+      />
     </DirtyCtx.Provider>
   );
 }
