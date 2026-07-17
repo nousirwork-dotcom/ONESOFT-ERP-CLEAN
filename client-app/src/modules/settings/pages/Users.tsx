@@ -849,17 +849,6 @@ export default function Users() {
                         <Button variant="ghost" size="icon" className="h-7 w-7" title="تغيير كلمة المرور" onClick={() => setPasswordUser(u)}>
                           <KeyRound className="w-3.5 h-3.5" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" title="إخراج من الأجهزة"
-                          disabled={logoutAllSessions.isPending}
-                          onClick={() => logoutAllSessions.mutate({ userId: u.id })}>
-                          <LogOut className="w-3.5 h-3.5" />
-                        </Button>
-                        {u.role !== "admin" && u.role !== "superadmin" && (
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" title="حذف"
-                            onClick={() => { setSelectedUser(u); setMode("edit"); setShowDeleteConfirm(true); }}>
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        )}
                       </div>
                     </TableCell>
                   </TableRow>

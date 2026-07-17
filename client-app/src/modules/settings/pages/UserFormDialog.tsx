@@ -101,21 +101,21 @@ export function UserFormDialog({
     setConfirmOpen(true);
   };
 
-  const save = async (): Promise<boolean> => {
+  const save = async () => {
     if (!value.fullName.trim()) {
       toast.error("الاسم الكامل مطلوب");
       setActiveTab("basic");
-      return false;
+      return;
     }
     if (!value.loginName.trim()) {
       toast.error("اسم الدخول مطلوب");
       setActiveTab("basic");
-      return false;
+      return;
     }
     if (value.mobile && !PHONE_REGEX.test(value.mobile.replace(/\s/g, ""))) {
       setMobileError("رقم الجوال غير صحيح (8–15 رقمًا، + اختيارية)");
       setActiveTab("contact");
-      return false;
+      return;
     }
     setMobileError(null);
     setIsSaving(true);
@@ -126,23 +126,19 @@ export function UserFormDialog({
         email: value.email?.trim() || undefined,
         password: value.password || undefined,
       });
-      return true;
     } catch (e: any) {
       if (e?.switchTab) {
         setActiveTab(e.switchTab as UserFormTab);
       }
-      return false;
     } finally {
       setIsSaving(false);
     }
   };
 
   const saveAndClose = async () => {
-    const success = await save();
-    if (success) {
-      setConfirmOpen(false);
-      onOpenChange(false);
-    }
+    await save();
+    setConfirmOpen(false);
+    onOpenChange(false);
   };
 
   return (
@@ -392,16 +388,12 @@ export function UserFormDialog({
 
                 {/* ── إعدادات العمل ───────────────────────────────────────────── */}
                 <TabsContent value="work" className="m-0 space-y-4">
-                  {workTabContent ?? (
-                    <p className="text-sm text-muted-foreground text-center py-8">لا يوجد محتوى</p>
-                  )}
+                  {workTabContent}
                 </TabsContent>
 
                 {/* ── الصلاحيات ───────────────────────────────────────────────── */}
                 <TabsContent value="permissions" className="m-0 space-y-4">
-                  {permissionsTabContent ?? (
-                    <p className="text-sm text-muted-foreground text-center py-8">لا يوجد محتوى</p>
-                  )}
+                  {permissionsTabContent}
                 </TabsContent>
 
               </div>
