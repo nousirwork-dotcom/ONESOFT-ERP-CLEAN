@@ -295,6 +295,59 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .pos-payment__note { color: var(--pos-muted); background: #fff8e8; border-radius: 10px; padding: 10px; margin-bottom: 14px; }
 .pos-toast { position: fixed; z-index: 12000; bottom: 24px; left: 24px; max-width: 420px; background: #173b66; color: #fff; padding: 14px 18px; border-radius: 13px; box-shadow: var(--pos-shadow); }
 
+/* ─── Payment enhancements ───────────────────────────────────────────────── */
+.pos-payment__methods button.is-selected { border-color: var(--pos-blue); background: #eef3f8; color: var(--pos-blue); font-weight: 800; box-shadow: 0 0 0 2px rgba(28,69,118,.2); }
+.pos-payment__detail { margin: 0 0 14px; display: grid; gap: 10px; }
+.pos-payment__detail > label { display: grid; gap: 6px; color: var(--pos-muted); font-size: 13px; font-weight: 700; }
+.pos-payment__detail input { width: 100%; min-height: 58px; border: 2px solid var(--pos-border); border-radius: 12px; padding: 10px 16px; font-size: 24px; font-weight: 800; color: var(--pos-blue); outline: 0; text-align: center; }
+.pos-payment__detail input:focus { border-color: var(--pos-blue); }
+.pos-payment__change { display: flex; gap: 20px; padding: 14px 18px; background: #edf3f8; border-radius: 12px; }
+.pos-payment__change > div { flex: 1; }
+.pos-payment__change small { display: block; color: var(--pos-muted); font-size: 11px; }
+.pos-payment__change strong { display: block; font-size: 22px; font-weight: 900; margin-top: 6px; }
+.pos-payment__mixed { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.pos-payment__mixed label { display: grid; gap: 6px; color: var(--pos-muted); font-size: 12px; font-weight: 700; }
+.pos-payment__mixed input { width: 100%; min-height: 52px; border: 1px solid var(--pos-border); border-radius: 10px; padding: 8px; font-size: 16px; font-weight: 700; color: var(--pos-blue); text-align: center; outline: 0; }
+.is-positive { color: var(--pos-green); }
+
+/* ─── Modifier Dialog ────────────────────────────────────────────────────── */
+.pos-modifier-dialog { display: grid; gap: 0; }
+.pos-modifier-summary { display: flex; gap: 20px; padding: 14px 18px; background: #edf3f8; border-radius: 14px; margin-bottom: 20px; }
+.pos-modifier-summary > div { flex: 1; }
+.pos-modifier-summary > div small { display: block; color: var(--pos-muted); font-size: 11px; }
+.pos-modifier-summary > div strong { display: block; font-size: 20px; font-weight: 900; margin-top: 6px; }
+.pos-modifier-group { margin-bottom: 18px; }
+.pos-modifier-group__title { font-weight: 800; margin-bottom: 10px; font-size: 14px; color: var(--pos-text); }
+.pos-modifier-group__title small { font-weight: 400; color: var(--pos-muted); font-size: 12px; margin-right: 8px; }
+.pos-modifier-choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.pos-modifier-choice { min-height: 40px; padding: 0 16px; border: 2px solid var(--pos-border); background: #fff; border-radius: 10px; font-size: 13px; color: var(--pos-text); transition: border-color .15s, background .15s; }
+.pos-modifier-choice:hover { border-color: #b0c4d8; }
+.pos-modifier-choice.is-selected { border-color: var(--pos-blue); background: #eef3f8; color: var(--pos-blue); font-weight: 700; }
+.pos-modifier-choice.is-selected.is-remove { border-color: var(--pos-red); background: #fef2f2; color: var(--pos-red); }
+.pos-modifier-delta { font-size: 11px; margin-right: 5px; font-weight: 700; }
+.pos-modifier-delta.is-plus { color: var(--pos-green); }
+.pos-modifier-delta.is-minus { color: var(--pos-red); }
+.pos-modifier-notes { width: 100%; min-height: 80px; border: 1px solid var(--pos-border); border-radius: 12px; padding: 10px 14px; resize: vertical; font: inherit; font-size: 14px; outline: 0; }
+.pos-modifier-notes:focus { border-color: var(--pos-blue); }
+.pos-modifier-actions { display: flex; gap: 10px; }
+.pos-modifier-actions > * { flex: 1; min-height: 52px; }
+
+/* ─── Open Orders Dialog ─────────────────────────────────────────────────── */
+.pos-open-orders { display: grid; gap: 10px; }
+.pos-open-order-row { border: 1px solid var(--pos-border); border-radius: 14px; padding: 16px; background: #fff; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.pos-order-meta { display: grid; gap: 5px; }
+.pos-order-meta strong { font-size: 16px; }
+.pos-order-meta span { color: var(--pos-muted); font-size: 12px; }
+.pos-order-amount { font-size: 20px; font-weight: 900; color: var(--pos-blue); text-align: center; }
+
+/* ─── Product card overlay (hover) ──────────────────────────────────────── */
+.pos-product-card { position: relative; cursor: pointer; }
+.pos-product-card__overlay { display: none; position: absolute; inset: 0; border-radius: calc(var(--pos-radius) - 1px); background: rgba(28,69,118,.07); flex-direction: column; justify-content: flex-end; padding: 8px; gap: 4px; }
+.pos-product-card:hover .pos-product-card__overlay { display: flex; }
+.pos-product-card__btn { min-height: 36px; border: 0; border-radius: 9px; font-size: 12px; font-weight: 700; }
+.pos-product-card__btn--add { background: var(--pos-blue); color: #fff; }
+.pos-product-card__btn--custom { background: rgba(255,255,255,.95); color: var(--pos-blue); border: 1px solid var(--pos-blue); }
+
 @media (max-width: 1180px) {
   .onesoft-pos-suite { grid-template-columns: 82px minmax(0, 1fr); }
   .pos-brand > div:last-child, .pos-nav__item > span:last-child, .pos-sidebar__footer span:last-child { display: none; }

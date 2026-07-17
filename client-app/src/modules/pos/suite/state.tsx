@@ -12,6 +12,7 @@ import type {
   Product,
   RestaurantTable,
   ShiftSummary,
+  SuspendedOrder,
 } from './types';
 
 interface RuntimeState extends POSState {
@@ -19,13 +20,16 @@ interface RuntimeState extends POSState {
   tables: RestaurantTable[];
   kitchenTickets: KitchenTicket[];
   externalOrders: ExternalOrder[];
+  suspendedOrders: SuspendedOrder[];
   notice: string | null;
+  suspendCounter: number;
 }
 
 type Action =
   | { type: 'SET_SECTION'; section: POSSection }
   | { type: 'SET_MODE'; mode: POSMode }
   | { type: 'ADD_PRODUCT'; product: Product }
+  | { type: 'ADD_LINE'; line: CartLine }
   | { type: 'CHANGE_QTY'; lineId: string; delta: number }
   | { type: 'REMOVE_LINE'; lineId: string }
   | { type: 'SET_CUSTOMER'; customer: CustomerSummary | null }
@@ -41,7 +45,9 @@ type Action =
   | { type: 'ACCEPT_EXTERNAL_ORDER'; orderId: string }
   | { type: 'REJECT_EXTERNAL_ORDER'; orderId: string }
   | { type: 'SET_NOTICE'; notice: string | null }
-  | { type: 'NEW_ORDER' };
+  | { type: 'NEW_ORDER' }
+  | { type: 'SUSPEND_ORDER' }
+  | { type: 'RESTORE_ORDER'; orderId: string };
 
 const defaultSettings: POSSettings = {
   mode: 'restaurant',
@@ -83,7 +89,9 @@ const initialState: RuntimeState = {
   tables: [],
   kitchenTickets: [],
   externalOrders: [],
+  suspendedOrders: [],
   notice: null,
+  suspendCounter: 0,
 };
 
 function lineTotal(line: CartLine): number {
@@ -208,6 +216,8 @@ function reducer(state: RuntimeState, action: Action): RuntimeState {
           order.id === action.orderId ? { ...order, status: 'rejected' } : order,
         ),
       };
+    case 'ADD_LINE':
+      return { ...state, cart: [...state.cart, action.line] };
     case 'SET_NOTICE':
       return { ...state, notice: action.notice };
     case 'NEW_ORDER':
@@ -220,6 +230,48 @@ function reducer(state: RuntimeState, action: Action): RuntimeState {
         orderStatus: 'open',
         notice: 'تم فتح طلب جديد.',
       };
+    case 'SUSPEND_ORDER': {
+      if (state.cart.length === 0) return { ...state, notice: 'السلة فارغة — لا يوجد طلب للتعليق.' };
+      const counter = state.suspendCounter + 1;
+      const total = state.cart.reduce((sum, line) => sum + lineTotal(line), 0);
+      const suspended: SuspendedOrder = {
+        id: `susp-${Date.now()}`,
+        orderNumber: `S-${String(counter).padStart(3, '0')}`,
+        customer: state.customer,
+        tableId: state.selectedTableId,
+        tableName: state.selectedTableId ? `طاولة ${state.selectedTableId}` : null,
+        orderType: state.orderType,
+        openedAt: new Date().toISOString(),
+        total,
+        itemCount: state.cart.reduce((s, l) => s + l.quantity, 0),
+        cart: state.cart,
+      };
+      return {
+        ...state,
+        suspendedOrders: [...state.suspendedOrders, suspended],
+        suspendCounter: counter,
+        cart: [],
+        customer: state.cashCustomer ?? null,
+        selectedTableId: null,
+        guestCount: 1,
+        orderStatus: 'open',
+        notice: `تم تعليق الطلب ${suspended.orderNumber} — ${suspended.itemCount} أصناف`,
+      };
+    }
+    case 'RESTORE_ORDER': {
+      const found = state.suspendedOrders.find((o) => o.id === action.orderId);
+      if (!found) return state;
+      return {
+        ...state,
+        suspendedOrders: state.suspendedOrders.filter((o) => o.id !== action.orderId),
+        cart: found.cart,
+        customer: found.customer,
+        selectedTableId: found.tableId,
+        orderType: found.orderType,
+        orderStatus: 'open',
+        notice: `تم استرجاع الطلب ${found.orderNumber}`,
+      };
+    }
     default:
       return state;
   }

@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { usePOS } from '../state';
 import { usePOSCatalog } from '../catalog-context';
+import { ModifierDialog } from './ModifierDialog';
+import type { Product } from '../types';
 
 export function ProductCatalog() {
   const { state, addProduct } = usePOS();
@@ -10,6 +12,7 @@ export function ProductCatalog() {
   const [view, setView] = useState<'groups' | 'products' | 'list'>(
     state.mode === 'restaurant' ? 'groups' : 'list',
   );
+  const [modifierProduct, setModifierProduct] = useState<Product | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -53,6 +56,14 @@ export function ProductCatalog() {
     }
   };
 
+  const handleProductClick = (product: Product) => {
+    if (product.hasModifiers || state.mode === 'restaurant') {
+      setModifierProduct(product);
+    } else {
+      addProduct(product);
+    }
+  };
+
   if (products.length === 0) {
     return (
       <section className="pos-catalog">
@@ -65,177 +76,215 @@ export function ProductCatalog() {
   }
 
   return (
-    <section className="pos-catalog">
-      <div className="pos-catalog__toolbar">
-        <div className="pos-search">
-          <span>⌕</span>
-          <input
-            ref={searchRef}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') handleBarcodeEnter();
-            }}
-            placeholder={
-              state.mode === 'store'
-                ? 'امسح الباركود أو ابحث بالاسم والكود — F2'
-                : 'ابحث عن صنف أو باركود — F2'
-            }
-          />
-          {query ? (
-            <button type="button" onClick={() => setQuery('')}>
-              ×
-            </button>
-          ) : null}
-        </div>
-        <div className="pos-view-switch">
-          <button
-            type="button"
-            className={view === 'groups' ? 'is-active' : ''}
-            onClick={() => { setView('groups'); setSelectedGroupId(null); }}
-          >
-            المجموعات
-          </button>
-          <button
-            type="button"
-            className={view === 'products' ? 'is-active' : ''}
-            onClick={() => setView('products')}
-          >
-            الصور
-          </button>
-          <button
-            type="button"
-            className={view === 'list' ? 'is-active' : ''}
-            onClick={() => setView('list')}
-          >
-            القائمة
-          </button>
-        </div>
-      </div>
-
-      {selectedGroupId != null ? (
-        <div className="pos-catalog__breadcrumb">
-          <button
-            type="button"
-            onClick={() => { setSelectedGroupId(null); setView('groups'); }}
-          >
-            ← كل المجموعات
-          </button>
-          <strong>
-            {productGroups.find((group) => group.id === selectedGroupId)?.name}
-          </strong>
-        </div>
-      ) : null}
-
-      <div className="pos-catalog__body">
-        {view === 'groups' && selectedGroupId == null ? (
-          <div className="pos-group-grid">
-            {productGroups.map((group) => {
-              const count = products.filter((p) => p.groupId === group.id).length;
-              return (
-                <button
-                  type="button"
-                  key={group.id}
-                  className="pos-group-card"
-                  style={{ background: group.color ?? undefined }}
-                  onClick={() => { setSelectedGroupId(group.id); setView('products'); }}
-                >
-                  <span className="pos-group-card__image">
-                    {group.name.slice(0, 1)}
-                  </span>
-                  <strong>{group.name}</strong>
-                  <small>{count} أصناف</small>
-                </button>
-              );
-            })}
-          </div>
-        ) : view === 'list' ? (
-          <div className="pos-product-table-wrap">
-            <table className="pos-product-table">
-              <thead>
-                <tr>
-                  <th>الكود</th>
-                  <th>الصنف</th>
-                  <th>الوحدة</th>
-                  <th>السعر</th>
-                  <th>الرصيد</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {filteredProducts.map((product) => (
-                  <tr key={product.id} onDoubleClick={() => addProduct(product)}>
-                    <td>{product.code}</td>
-                    <td>
-                      <strong>{product.name}</strong>
-                      <small>{product.barcode ?? 'بدون باركود'}</small>
-                    </td>
-                    <td>{product.unitName}</td>
-                    <td>{product.salePrice.toFixed(2)}</td>
-                    <td>
-                      {product.itemType === 'service'
-                        ? 'خدمة'
-                        : product.stockQuantity?.toFixed(2) ?? '—'}
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        className="pos-add-button"
-                        onClick={() => addProduct(product)}
-                      >
-                        +
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="pos-product-grid">
-            {filteredProducts.map((product) => (
-              <button
-                type="button"
-                key={product.id}
-                className="pos-product-card"
-                onClick={() => addProduct(product)}
-              >
-                <span className="pos-product-card__image">
-                  {product.imageUrl ? (
-                    <img src={product.imageUrl} alt="" />
-                  ) : (
-                    product.name.slice(0, 1)
-                  )}
-                </span>
-                <strong>{product.name}</strong>
-                <small>
-                  {product.code} • {product.unitName}
-                </small>
-                <div>
-                  <b>{product.salePrice.toFixed(2)} ر.س</b>
-                  {state.settings.showStock ? (
-                    <em>
-                      {product.itemType === 'service'
-                        ? 'خدمة'
-                        : `متاح ${product.stockQuantity ?? 0}`}
-                    </em>
-                  ) : null}
-                </div>
-                {product.hasModifiers ? (
-                  <span className="pos-product-card__modifier">خيارات</span>
-                ) : null}
+    <>
+      <section className="pos-catalog">
+        <div className="pos-catalog__toolbar">
+          <div className="pos-search">
+            <span>⌕</span>
+            <input
+              ref={searchRef}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') handleBarcodeEnter();
+              }}
+              placeholder={
+                state.mode === 'store'
+                  ? 'امسح الباركود أو ابحث بالاسم والكود — F2'
+                  : 'ابحث عن صنف أو باركود — F2'
+              }
+            />
+            {query ? (
+              <button type="button" onClick={() => setQuery('')}>
+                ×
               </button>
-            ))}
+            ) : null}
           </div>
-        )}
+          <div className="pos-view-switch">
+            <button
+              type="button"
+              className={view === 'groups' ? 'is-active' : ''}
+              onClick={() => { setView('groups'); setSelectedGroupId(null); }}
+            >
+              المجموعات
+            </button>
+            <button
+              type="button"
+              className={view === 'products' ? 'is-active' : ''}
+              onClick={() => setView('products')}
+            >
+              الصور
+            </button>
+            <button
+              type="button"
+              className={view === 'list' ? 'is-active' : ''}
+              onClick={() => setView('list')}
+            >
+              القائمة
+            </button>
+          </div>
+        </div>
 
-        {filteredProducts.length === 0 && !(view === 'groups' && selectedGroupId == null) ? (
-          <div className="pos-empty-state">
-            <strong>لا توجد أصناف مطابقة</strong>
-            <span>جرّب تغيير البحث أو اختيار مجموعة أخرى.</span>
+        {selectedGroupId != null ? (
+          <div className="pos-catalog__breadcrumb">
+            <button
+              type="button"
+              onClick={() => { setSelectedGroupId(null); setView('groups'); }}
+            >
+              ← كل المجموعات
+            </button>
+            <strong>
+              {productGroups.find((group) => group.id === selectedGroupId)?.name}
+            </strong>
           </div>
         ) : null}
-      </div>
-    </section>
+
+        <div className="pos-catalog__body">
+          {view === 'groups' && selectedGroupId == null ? (
+            <div className="pos-group-grid">
+              {productGroups.map((group) => {
+                const count = products.filter((p) => p.groupId === group.id).length;
+                return (
+                  <button
+                    type="button"
+                    key={group.id}
+                    className="pos-group-card"
+                    style={{ background: group.color ?? undefined }}
+                    onClick={() => { setSelectedGroupId(group.id); setView('products'); }}
+                  >
+                    <span className="pos-group-card__image">
+                      {group.name.slice(0, 1)}
+                    </span>
+                    <strong>{group.name}</strong>
+                    <small>{count} أصناف</small>
+                  </button>
+                );
+              })}
+            </div>
+          ) : view === 'list' ? (
+            <div className="pos-product-table-wrap">
+              <table className="pos-product-table">
+                <thead>
+                  <tr>
+                    <th>الكود</th>
+                    <th>الصنف</th>
+                    <th>الوحدة</th>
+                    <th>السعر</th>
+                    <th>الرصيد</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredProducts.map((product) => (
+                    <tr key={product.id} onDoubleClick={() => addProduct(product)}>
+                      <td>{product.code}</td>
+                      <td>
+                        <strong>{product.name}</strong>
+                        <small>{product.barcode ?? 'بدون باركود'}</small>
+                      </td>
+                      <td>{product.unitName}</td>
+                      <td>{product.salePrice.toFixed(2)}</td>
+                      <td>
+                        {product.itemType === 'service'
+                          ? 'خدمة'
+                          : product.stockQuantity?.toFixed(2) ?? '—'}
+                      </td>
+                      <td style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          type="button"
+                          className="pos-add-button"
+                          title="إضافة مباشرة"
+                          onClick={() => addProduct(product)}
+                        >
+                          +
+                        </button>
+                        {state.mode === 'restaurant' || product.hasModifiers ? (
+                          <button
+                            type="button"
+                            className="pos-add-button"
+                            title="إضافة مع تخصيص"
+                            style={{ background: 'var(--pos-gold)', color: '#3e3115' }}
+                            onClick={() => setModifierProduct(product)}
+                          >
+                            ✎
+                          </button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="pos-product-grid">
+              {filteredProducts.map((product) => (
+                <div
+                  key={product.id}
+                  className="pos-product-card"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => handleProductClick(product)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleProductClick(product); }}
+                >
+                  <span className="pos-product-card__image">
+                    {product.imageUrl ? (
+                      <img src={product.imageUrl} alt="" />
+                    ) : (
+                      product.name.slice(0, 1)
+                    )}
+                  </span>
+                  <strong>{product.name}</strong>
+                  <small>
+                    {product.code} • {product.unitName}
+                  </small>
+                  <div>
+                    <b>{product.salePrice.toFixed(2)} ر.س</b>
+                    {state.settings.showStock ? (
+                      <em>
+                        {product.itemType === 'service'
+                          ? 'خدمة'
+                          : `متاح ${product.stockQuantity ?? 0}`}
+                      </em>
+                    ) : null}
+                  </div>
+                  {product.hasModifiers || state.mode === 'restaurant' ? (
+                    <span className="pos-product-card__modifier">خيارات ✎</span>
+                  ) : null}
+                  <div className="pos-product-card__overlay">
+                    <button
+                      type="button"
+                      className="pos-product-card__btn pos-product-card__btn--add"
+                      onClick={(e) => { e.stopPropagation(); addProduct(product); }}
+                    >
+                      + إضافة مباشرة
+                    </button>
+                    <button
+                      type="button"
+                      className="pos-product-card__btn pos-product-card__btn--custom"
+                      onClick={(e) => { e.stopPropagation(); setModifierProduct(product); }}
+                    >
+                      ✎ تخصيص
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {filteredProducts.length === 0 && !(view === 'groups' && selectedGroupId == null) ? (
+            <div className="pos-empty-state">
+              <strong>لا توجد أصناف مطابقة</strong>
+              <span>جرّب تغيير البحث أو اختيار مجموعة أخرى.</span>
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      <ModifierDialog
+        product={modifierProduct}
+        open={modifierProduct !== null}
+        onClose={() => setModifierProduct(null)}
+      />
+    </>
   );
 }

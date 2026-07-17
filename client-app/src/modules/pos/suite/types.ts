@@ -183,6 +183,19 @@ export interface POSSettings {
   };
 }
 
+export interface SuspendedOrder {
+  id: string;
+  orderNumber: string;
+  customer: CustomerSummary | null;
+  tableId: number | null;
+  tableName: string | null;
+  orderType: OrderType;
+  openedAt: string;
+  total: number;
+  itemCount: number;
+  cart: CartLine[];
+}
+
 export interface POSState {
   mode: POSMode;
   activeSection: POSSection;
