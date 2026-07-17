@@ -151,6 +151,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .pos-kpi-grid article.is-highlight { border-color: rgba(31,138,91,.35); background: #edf9f3; }
 .pos-kpi-grid article.is-warning { border-color: rgba(212,129,44,.45); background: #fff6e9; }
 .pos-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
+.pos-grid-2--reports { margin-bottom: 16px; }
 .pos-card { background: #fff; border: 1px solid var(--pos-border); border-radius: var(--pos-radius); padding: 18px; box-shadow: 0 6px 22px rgba(29,54,84,.05); margin-bottom: 16px; }
 .pos-card > header { min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .pos-card h2 { margin: 0; font-size: 18px; }
