@@ -190,7 +190,7 @@ function isValidStoredDraft(value: unknown): value is PosDraft {
   return typeof draft.clientDraftId === 'string' && Array.isArray(draft.lines) && typeof draft.mode === 'string';
 }
 
-export function usePosEngine(api: PosApi, config: PosConfig) {
+export function usePosEngine(api: PosApi, config: PosConfig, externalCatalog?: CatalogPayload) {
   const preferenceKey = `onesoft-pos-preferences:${config.branchId ?? 'default'}:${config.registerId ?? 'default'}`;
   const draftKey = `onesoft-pos-draft:${config.branchId ?? 'default'}:${config.registerId ?? 'default'}`;
 
@@ -217,6 +217,10 @@ export function usePosEngine(api: PosApi, config: PosConfig) {
   }));
 
   useEffect(() => {
+    if (externalCatalog !== undefined) {
+      dispatch({ type: 'catalogLoaded', payload: externalCatalog });
+      return;
+    }
     let active = true;
     dispatch({ type: 'catalogLoading' });
     api.loadCatalog()
@@ -227,7 +231,7 @@ export function usePosEngine(api: PosApi, config: PosConfig) {
         if (active) dispatch({ type: 'error', message: error instanceof Error ? error.message : 'تعذر تحميل الأصناف' });
       });
     return () => { active = false; };
-  }, [api]);
+  }, [api, externalCatalog]);
 
   useEffect(() => {
     try {
