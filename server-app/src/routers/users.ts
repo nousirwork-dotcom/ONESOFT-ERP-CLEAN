@@ -189,7 +189,7 @@ export const usersRouter = router({
       role: z.enum(['admin', 'cashier', 'accountant', 'warehouse_manager', 'viewer']).optional(),
       isActive: z.boolean().optional(),
       allowLogin: z.boolean().optional(),
-      newPassword: z.string().min(6).optional(),
+      newPassword: z.string().min(1).optional(),
       clearPassword: z.boolean().optional(),
       userGroupId: z.number().int().positive().nullable().optional(),
       defaultBranchId: z.number().int().positive().nullable().optional(),
@@ -448,7 +448,7 @@ export const usersRouter = router({
   changeMyPassword: protectedProcedure
     .input(z.object({
       currentPassword: z.string(),
-      newPassword: z.string().min(6),
+      newPassword: z.string().min(1),
     }))
     .mutation(async ({ input, ctx }) => {
       const user = await db.query.users.findFirst({ where: eq(users.id, ctx.user.id) });
