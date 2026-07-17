@@ -78,10 +78,12 @@ export interface CartLine {
 
 export interface CustomerSummary {
   id: string;
+  code?: string | null;
   name: string;
   phone?: string | null;
   taxNumber?: string | null;
   balanceMinor?: number | null;
+  customerType?: 'individual' | 'company' | null;
 }
 
 export interface RestaurantArea {

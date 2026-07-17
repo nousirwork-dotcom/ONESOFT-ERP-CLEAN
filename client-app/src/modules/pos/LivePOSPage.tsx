@@ -1,7 +1,8 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { trpc } from '@/shared/lib/trpc';
 import { useAuth } from '@/core/hooks/useAuth';
 import CustomerFormDialog from '@/shared/components/CustomerFormDialog';
+import { createPhase1PosApi } from './api';
 import { usePosEngine } from './usePosEngine';
 import { TopBar } from './components/TopBar';
 import { ProductBrowser } from './components/ProductBrowser';
@@ -10,20 +11,11 @@ import { ModifierDialog } from './components/ModifierDialog';
 import { TableMapDialog } from './components/TableMapDialog';
 import { OpenOrdersDialog } from './components/OpenOrdersDialog';
 import { LiveCustomerPanel } from './components/LiveCustomerPanel';
-import type { PosApi } from './api';
-import type { PosConfig, CatalogPayload, Category, Product, CustomerSummary } from './types';
 import { Spinner } from './components/Modal';
+import type { PosConfig, CatalogPayload, Category, Product, CustomerSummary } from './types';
 
-// ─── Stub API (Phase 1: read-only — save/checkout not yet active) ─────────────
-const STUB_API: PosApi = {
-  loadCatalog: async () => ({ categories: [], products: [] }),
-  searchCustomers: async () => [],
-  loadTables: async () => ({ areas: [], tables: [] }),
-  listOpenOrders: async () => [],
-  saveDraft: async () => { throw new Error('غير مفعّل — سيتم تفعيله في المرحلة القادمة'); },
-  sendToKitchen: async () => { throw new Error('غير مفعّل — سيتم تفعيله في المرحلة القادمة'); },
-  checkout: async () => { throw new Error('غير مفعّل — سيتم تفعيله في المرحلة القادمة'); },
-};
+// Singleton Phase-1 api (loadCatalog bypassed via externalCatalog)
+const LIVE_API = createPhase1PosApi();
 
 // ─── Build POS catalog from tRPC data ────────────────────────────────────────
 function buildCatalog(
@@ -81,129 +73,158 @@ function buildCatalog(
 function mapCustomer(c: any): CustomerSummary {
   return {
     id: String(c.id),
+    code: c.code ?? null,
     name: c.name,
     phone: c.phone ?? null,
     taxNumber: c.taxNumber ?? null,
     balanceMinor: Math.round(Number(c.balance ?? 0) * 100),
+    customerType: c.customerType ?? null,
   };
 }
 
-function mapCustomers(rows: any[]): CustomerSummary[] {
-  return rows.map(mapCustomer);
-}
-
-// ─── Error banner with retry ──────────────────────────────────────────────────
-function QueryError({ label, onRetry }: { label: string; onRetry: () => void }) {
+// ─── Small reusable pieces ────────────────────────────────────────────────────
+function QueryErrorBadge({ label, onRetry }: { label: string; onRetry: () => void }) {
   return (
-    <div className="flex items-center gap-2 rounded-lg bg-rose-700/80 px-2 py-1 text-xs text-white">
+    <div className="flex items-center gap-1.5 rounded-lg bg-rose-700/80 px-2 py-1 text-xs text-white">
       <span>⚠ {label}</span>
       <button
         type="button"
         onClick={onRetry}
-        className="rounded bg-white/20 px-2 py-0.5 font-bold hover:bg-white/30"
+        className="rounded bg-white/20 px-1.5 py-0.5 font-bold hover:bg-white/30"
       >
-        إعادة المحاولة
+        إعادة
       </button>
     </div>
   );
 }
 
+function QueryLoadingBadge({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2 py-1 text-xs text-white/70 animate-pulse">
+      <span>⟳ {label}</span>
+    </div>
+  );
+}
+
 // ─── Invoice header bar ───────────────────────────────────────────────────────
-interface InvoiceHeaderBarProps {
+interface HeaderProps {
   journals: any[];
   journalsLoading: boolean;
   journalsError: boolean;
   onJournalsRetry: () => void;
   selectedJournalId: number | null;
+
   warehouses: any[];
   warehousesLoading: boolean;
+  warehousesError: boolean;
+  onWarehousesRetry: () => void;
   selectedWarehouseId: number | null;
+
   branches: any[];
+  branchesLoading: boolean;
+  branchesError: boolean;
+  onBranchesRetry: () => void;
   selectedBranchId: number | null;
+
   previewNumber: string | null;
   previewLoading: boolean;
   invoiceDate: Date;
   customer: CustomerSummary | null | undefined;
-  onJournalChange: (journalId: number) => void;
-  onWarehouseChange: (warehouseId: number) => void;
+
+  onJournalChange: (id: number) => void;
+  onWarehouseChange: (id: number) => void;
   onOpenCustomer: () => void;
 }
 
-function InvoiceHeaderBar(props: InvoiceHeaderBarProps) {
-  const selectedBranch = props.branches.find((b) => b.id === props.selectedBranchId);
-  const selectedJournal = props.journals.find((j) => j.id === props.selectedJournalId);
-  const selectedWarehouse = props.warehouses.find((w) => w.id === props.selectedWarehouseId);
+function InvoiceHeaderBar(props: HeaderProps) {
+  const branch = props.branches.find((b) => b.id === props.selectedBranchId);
+  const journal = props.journals.find((j) => j.id === props.selectedJournalId);
+  const warehouse = props.warehouses.find((w) => w.id === props.selectedWarehouseId);
+
   const dateStr = props.invoiceDate.toLocaleDateString('ar-SA-u-nu-latn', {
     day: '2-digit', month: '2-digit', year: 'numeric',
   });
 
+  const warehouseLabel = (w: any) =>
+    w.code ? `${w.code} — ${w.name}` : w.name;
+
+  const customerTypeLabel = (t: string | null | undefined) =>
+    t === 'company' ? 'شركة' : 'فرد';
+
   return (
     <div className="border-b border-[#1C4576]/30 bg-[#1C4576] px-3 py-2 text-white shadow-md">
       <div className="flex flex-wrap items-center gap-2">
+
         {/* Branch */}
-        {selectedBranch ? (
+        {props.branchesError ? (
+          <QueryErrorBadge label="خطأ في تحميل الفروع" onRetry={props.onBranchesRetry} />
+        ) : props.branchesLoading ? (
+          <QueryLoadingBadge label="جارٍ تحميل الفروع" />
+        ) : branch ? (
           <div className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2 py-1 text-xs">
             <span className="text-[#D8AE55]">🏢</span>
-            <span className="font-bold">{selectedBranch.name}</span>
+            <span className="font-bold">{branch.name}</span>
           </div>
         ) : null}
 
-        {/* Journal selector */}
+        {/* Journal */}
         {props.journalsError ? (
-          <QueryError label="خطأ في تحميل الدفاتر" onRetry={props.onJournalsRetry} />
+          <QueryErrorBadge label="خطأ في تحميل الدفاتر" onRetry={props.onJournalsRetry} />
+        ) : props.journalsLoading ? (
+          <QueryLoadingBadge label="جارٍ تحميل الدفاتر" />
         ) : (
           <label className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2 py-1 text-xs transition hover:bg-white/20">
             <span className="text-[#D8AE55]">📋</span>
-            <span className="font-semibold opacity-80">الدفتر</span>
-            {props.journalsLoading ? (
-              <span className="animate-pulse text-[10px]">جارٍ التحميل...</span>
-            ) : (
-              <select
-                value={props.selectedJournalId ?? ''}
-                onChange={(e) => { const v = Number(e.target.value); if (v) props.onJournalChange(v); }}
-                className="max-w-[200px] truncate bg-transparent text-xs font-bold outline-none"
-              >
-                <option value="">— اختر دفتر المبيعات —</option>
-                {props.journals.map((j) => (
-                  <option key={j.id} value={j.id}>{j.code} — {j.name}</option>
-                ))}
-              </select>
-            )}
+            <span className="font-semibold opacity-75">الدفتر</span>
+            <select
+              value={props.selectedJournalId ?? ''}
+              onChange={(e) => { const v = Number(e.target.value); if (v) props.onJournalChange(v); }}
+              className="max-w-[200px] truncate bg-transparent text-xs font-bold outline-none"
+            >
+              <option value="">— اختر دفتر المبيعات —</option>
+              {props.journals.map((j) => (
+                <option key={j.id} value={j.id}>{j.code} — {j.name}</option>
+              ))}
+            </select>
           </label>
         )}
 
-        {/* Warehouse selector */}
-        {props.warehouses.length > 0 || props.warehousesLoading ? (
+        {/* Warehouse */}
+        {props.warehousesError ? (
+          <QueryErrorBadge label="خطأ في تحميل المستودعات" onRetry={props.onWarehousesRetry} />
+        ) : props.warehousesLoading ? (
+          <QueryLoadingBadge label="جارٍ تحميل المستودعات" />
+        ) : props.warehouses.length > 0 ? (
           <label className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2 py-1 text-xs transition hover:bg-white/20">
             <span className="text-[#D8AE55]">🏪</span>
-            <span className="font-semibold opacity-80">المستودع</span>
-            {props.warehousesLoading ? (
-              <span className="animate-pulse text-[10px]">جارٍ التحميل...</span>
-            ) : (
-              <select
-                value={props.selectedWarehouseId ?? ''}
-                onChange={(e) => { const v = Number(e.target.value); if (v) props.onWarehouseChange(v); }}
-                className="max-w-[160px] truncate bg-transparent text-xs font-bold outline-none"
-              >
-                <option value="">— اختر مستودع —</option>
-                {props.warehouses.map((w) => (
-                  <option key={w.id} value={w.id}>{w.name}</option>
-                ))}
-              </select>
-            )}
+            <span className="font-semibold opacity-75">المستودع</span>
+            <select
+              value={props.selectedWarehouseId ?? ''}
+              onChange={(e) => { const v = Number(e.target.value); if (v) props.onWarehouseChange(v); }}
+              className="max-w-[180px] truncate bg-transparent text-xs font-bold outline-none"
+            >
+              <option value="">— اختر مستودع —</option>
+              {props.warehouses.map((w) => (
+                <option key={w.id} value={w.id}>{warehouseLabel(w)}</option>
+              ))}
+            </select>
           </label>
         ) : null}
 
-        {/* Preview number */}
-        <div
-          className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2 py-1 text-xs"
-          title="رقم استرشادي — يُعتمد ويتسلسل فقط عند حفظ الفاتورة"
-        >
+        {/* Advisory invoice number — visible text, not just tooltip */}
+        <div className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2 py-1 text-xs">
           <span className="text-[#D8AE55]">#</span>
-          <span className="font-semibold opacity-80">رقم استرشادي</span>
+          <span className="font-semibold opacity-75">رقم استرشادي</span>
           <span className="font-black tabular-nums">
-            {props.previewLoading ? '...' : (props.previewNumber ?? '—')}
+            {props.previewLoading
+              ? '...'
+              : props.previewNumber
+              ? props.previewNumber
+              : props.selectedJournalId
+              ? '—'
+              : 'اختر دفتراً'}
           </span>
+          <span className="text-[9px] opacity-50">(يُعتمد عند الحفظ)</span>
         </div>
 
         {/* Date */}
@@ -212,7 +233,7 @@ function InvoiceHeaderBar(props: InvoiceHeaderBarProps) {
           <span className="font-bold tabular-nums">{dateStr}</span>
         </div>
 
-        {/* Customer button */}
+        {/* Customer button — code + type + name + phone + taxNumber */}
         <button
           type="button"
           onClick={props.onOpenCustomer}
@@ -224,25 +245,36 @@ function InvoiceHeaderBar(props: InvoiceHeaderBarProps) {
           title="F4 — اختيار عميل"
         >
           <span>👤</span>
-          <span className="max-w-[160px] truncate">
-            {props.customer?.name ?? 'عميل نقدي'}
-          </span>
-          {props.customer?.taxNumber ? (
-            <span className="text-[10px] opacity-70">• {props.customer.taxNumber}</span>
-          ) : null}
+          {props.customer ? (
+            <span className="flex flex-col items-start leading-none gap-0.5">
+              <span className="flex items-center gap-1">
+                {props.customer.code ? (
+                  <span className="text-[#D8AE55] font-black">{props.customer.code}</span>
+                ) : null}
+                <span className="max-w-[140px] truncate">{props.customer.name}</span>
+                <span className="text-[10px] opacity-60">
+                  {customerTypeLabel(props.customer.customerType)}
+                </span>
+              </span>
+              <span className="flex items-center gap-1.5 text-[10px] font-normal opacity-70">
+                {props.customer.phone ? <span>{props.customer.phone}</span> : null}
+                {props.customer.taxNumber ? (
+                  <span>• ض: {props.customer.taxNumber}</span>
+                ) : null}
+              </span>
+            </span>
+          ) : (
+            <span>عميل نقدي</span>
+          )}
         </button>
 
-        {/* Status hints */}
+        {/* Status hints row */}
         <div className="ms-auto flex items-center gap-2 text-[10px] opacity-60">
-          {!props.selectedJournalId && !props.journalsLoading && !props.journalsError ? (
-            <span>اختر الدفتر لعرض الرقم الاسترشادي</span>
-          ) : null}
           {props.selectedJournalId && !props.selectedWarehouseId ? (
-            <span>• اختر المستودع لعرض المخزون</span>
-          ) : null}
-          {selectedJournal && selectedWarehouse ? (
+            <span className="text-[#D8AE55] opacity-100">⚠ اختر مستودعاً لمعرفة المخزون</span>
+          ) : journal && warehouse ? (
             <span className="text-[#D8AE55] opacity-100">
-              {selectedJournal.code} / {selectedWarehouse.name}
+              {journal.code} / {warehouseLabel(warehouse)}
             </span>
           ) : null}
         </div>
@@ -251,7 +283,7 @@ function InvoiceHeaderBar(props: InvoiceHeaderBarProps) {
   );
 }
 
-// ─── Full-page loading/error states ──────────────────────────────────────────
+// ─── Full-page loading / error states ─────────────────────────────────────────
 function PageLoading() {
   return (
     <div className="grid h-full place-items-center text-[#1C4576]">
@@ -266,7 +298,7 @@ function PageLoading() {
 function PageError({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <div className="grid h-full place-items-center">
-      <div className="max-w-sm rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center">
+      <div className="max-w-sm rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center shadow-lg">
         <div className="text-4xl">⚠</div>
         <div className="mt-3 font-extrabold text-rose-800">تعذّر تحميل بيانات نقطة البيع</div>
         <div className="mt-1 text-sm text-rose-700">{message}</div>
@@ -288,7 +320,7 @@ type Overlay = 'customer' | 'tables' | 'orders' | null;
 export function LivePOSPage() {
   const { user } = useAuth();
 
-  // ─── Invoice header state ───────────────────────────────────────────────────
+  // ─── Invoice header state ─────────────────────────────────────────────────
   const [journalId, setJournalId] = useState<number | null>(null);
   const [warehouseId, setWarehouseId] = useState<number | null>(null);
   const [branchId, setBranchId] = useState<number | null>(null);
@@ -296,33 +328,33 @@ export function LivePOSPage() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [invoiceDate] = useState<Date>(new Date());
 
-  // ─── tRPC queries ───────────────────────────────────────────────────────────
-  const branchesQuery = trpc.branches.list.useQuery();
+  // ─── tRPC queries ─────────────────────────────────────────────────────────
+  const branchesQuery   = trpc.branches.list.useQuery();
   const warehousesQuery = trpc.warehouses.list.useQuery();
-  const journalsQuery = trpc.documentJournals.list.useQuery({ docTypes: ['sales_invoice', 'sales'] });
-  const productsQuery = trpc.products.list.useQuery({});
-  const groupsQuery = trpc.productGroups.list.useQuery();
-  const stockQuery = trpc.reports.stockByWarehouse.useQuery(
+  const journalsQuery   = trpc.documentJournals.list.useQuery({ docTypes: ['sales_invoice', 'sales'] });
+  const productsQuery   = trpc.products.list.useQuery({});
+  const groupsQuery     = trpc.productGroups.list.useQuery();
+  const stockQuery      = trpc.reports.stockByWarehouse.useQuery(
     { warehouseId: warehouseId! },
     { enabled: warehouseId != null },
   );
-  const customersQuery = trpc.customers.list.useQuery();
-  const utils = trpc.useUtils();
+  const customersQuery  = trpc.customers.list.useQuery();
+  const utils           = trpc.useUtils();
 
-  // ─── Auto-select first branch ───────────────────────────────────────────────
+  // ─── Auto-select first branch ──────────────────────────────────────────────
+  const didAutoSelectBranch = useRef(false);
   useEffect(() => {
-    if (branchesQuery.data && branchesQuery.data.length > 0 && branchId === null) {
+    if (!didAutoSelectBranch.current && branchesQuery.data && branchesQuery.data.length > 0) {
+      didAutoSelectBranch.current = true;
       setBranchId(branchesQuery.data[0].id);
     }
-  }, [branchesQuery.data, branchId]);
+  }, [branchesQuery.data]);
 
-  // ─── Journal selection: auto-fill warehouse + fetch preview number ──────────
+  // ─── Journal change: auto-fill warehouse + fetch advisory number ───────────
   const handleJournalChange = useCallback(async (id: number) => {
     setJournalId(id);
-    const journal = (journalsQuery.data ?? []).find((j: any) => j.id === id);
-    if (journal?.warehouseId) {
-      setWarehouseId(journal.warehouseId);
-    }
+    const found = (journalsQuery.data ?? []).find((j: any) => j.id === id);
+    if (found?.warehouseId) setWarehouseId(found.warehouseId);
     setPreviewLoading(true);
     setPreviewNumber(null);
     try {
@@ -335,20 +367,20 @@ export function LivePOSPage() {
     }
   }, [journalsQuery.data, utils]);
 
-  // ─── Build catalog ─────────────────────────────────────────────────────────
+  // ─── Catalog ──────────────────────────────────────────────────────────────
   const catalog = useMemo<CatalogPayload>(
     () => buildCatalog(groupsQuery.data, productsQuery.data, stockQuery.data, warehouseId),
     [groupsQuery.data, productsQuery.data, stockQuery.data, warehouseId],
   );
 
-  // ─── Map customers ─────────────────────────────────────────────────────────
+  // ─── Customers ────────────────────────────────────────────────────────────
   const mappedCustomers = useMemo(
-    () => mapCustomers(customersQuery.data ?? []),
+    () => (customersQuery.data ?? []).map(mapCustomer),
     [customersQuery.data],
   );
 
-  // ─── POS config ────────────────────────────────────────────────────────────
-  const selectedBranch = (branchesQuery.data ?? []).find((b: any) => b.id === branchId);
+  // ─── POS config ──────────────────────────────────────────────────────────
+  const selectedBranch  = (branchesQuery.data ?? []).find((b: any) => b.id === branchId);
   const selectedJournal = (journalsQuery.data ?? []).find((j: any) => j.id === journalId);
 
   const config = useMemo<PosConfig>(() => ({
@@ -366,11 +398,11 @@ export function LivePOSPage() {
       : 'اختر دفتر المبيعات',
   }), [branchId, selectedBranch, selectedJournal, user]);
 
-  // ─── Engine: cart management with real catalog ─────────────────────────────
-  const engine = usePosEngine(STUB_API, config, catalog);
+  // ─── Engine ───────────────────────────────────────────────────────────────
+  const engine = usePosEngine(LIVE_API, config, catalog);
   const { state, totals, filteredProducts, dispatch } = engine;
 
-  // ─── UI state ──────────────────────────────────────────────────────────────
+  // ─── UI state ─────────────────────────────────────────────────────────────
   const [overlay, setOverlay] = useState<Overlay>(null);
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [modifierProduct, setModifierProduct] = useState<Product | null>(null);
@@ -378,33 +410,30 @@ export function LivePOSPage() {
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    const onOnline = () => setOnline(true);
-    const onOffline = () => setOnline(false);
-    window.addEventListener('online', onOnline);
-    window.addEventListener('offline', onOffline);
-    return () => {
-      window.removeEventListener('online', onOnline);
-      window.removeEventListener('offline', onOffline);
-    };
+    const up = () => setOnline(true);
+    const dn = () => setOnline(false);
+    window.addEventListener('online', up);
+    window.addEventListener('offline', dn);
+    return () => { window.removeEventListener('online', up); window.removeEventListener('offline', dn); };
   }, []);
 
   useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'F2') { event.preventDefault(); document.getElementById('pos-search')?.focus(); return; }
-      if (event.key === 'F4') { event.preventDefault(); setOverlay('customer'); return; }
-      if (event.key === 'Escape') {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'F2') { e.preventDefault(); document.getElementById('pos-search')?.focus(); return; }
+      if (e.key === 'F4') { e.preventDefault(); setOverlay('customer'); return; }
+      if (e.key === 'Escape') {
         if (modifierProduct) setModifierProduct(null);
         else setOverlay(null);
       }
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
   }, [modifierProduct]);
 
   useEffect(() => {
     if (!notice) return;
-    const timer = window.setTimeout(() => setNotice(null), 4200);
-    return () => window.clearTimeout(timer);
+    const t = window.setTimeout(() => setNotice(null), 4200);
+    return () => window.clearTimeout(t);
   }, [notice]);
 
   const favoriteProducts = useMemo(
@@ -412,7 +441,7 @@ export function LivePOSPage() {
     [state.catalog.products],
   );
 
-  // ─── Handlers ──────────────────────────────────────────────────────────────
+  // ─── Handlers ─────────────────────────────────────────────────────────────
   const handleProductClick = useCallback((product: Product) => {
     if (!product.isAvailable) return;
     const activeGroups = product.modifierGroups?.filter((g) => g.options.some((o) => o.isActive)) ?? [];
@@ -433,8 +462,9 @@ export function LivePOSPage() {
     else if (value.trim()) setNotice('لم يتم العثور على باركود مطابق أو الصنف غير متاح');
   }, [engine, handleProductClick]);
 
-  // ─── Customer: add new → auto-select after save ────────────────────────────
+  // ─── Auto-select newly created customer ───────────────────────────────────
   const handleCustomerSaved = useCallback(async () => {
+    setShowAddCustomer(false);
     try {
       const freshList = await utils.customers.list.fetch();
       if (freshList && freshList.length > 0) {
@@ -442,13 +472,11 @@ export function LivePOSPage() {
         dispatch({ type: 'setCustomer', customer: mapCustomer(newest) });
       }
     } catch {
-      // If fetch fails, just invalidate so the panel shows updated list
       utils.customers.list.invalidate();
     }
-    setShowAddCustomer(false);
   }, [utils, dispatch]);
 
-  // ─── Loading / error guards ────────────────────────────────────────────────
+  // ─── Critical loading / error guards ──────────────────────────────────────
   const isCriticalLoading = productsQuery.isLoading || groupsQuery.isLoading;
   const criticalError = productsQuery.error ?? groupsQuery.error;
 
@@ -465,16 +493,13 @@ export function LivePOSPage() {
       <div dir="rtl" className="flex h-full min-h-[640px] flex-col overflow-hidden bg-slate-100 font-sans text-slate-900">
         <PageError
           message={criticalError.message ?? 'تعذّر تحميل بيانات الأصناف'}
-          onRetry={() => {
-            productsQuery.refetch();
-            groupsQuery.refetch();
-          }}
+          onRetry={() => { productsQuery.refetch(); groupsQuery.refetch(); }}
         />
       </div>
     );
   }
 
-  // ─── Render ────────────────────────────────────────────────────────────────
+  // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div dir="rtl" className="flex h-full min-h-[640px] flex-col overflow-hidden bg-slate-100 font-sans text-slate-900">
       <InvoiceHeaderBar
@@ -483,11 +508,19 @@ export function LivePOSPage() {
         journalsError={Boolean(journalsQuery.error)}
         onJournalsRetry={() => journalsQuery.refetch()}
         selectedJournalId={journalId}
+
         warehouses={warehousesQuery.data ?? []}
         warehousesLoading={warehousesQuery.isLoading}
+        warehousesError={Boolean(warehousesQuery.error)}
+        onWarehousesRetry={() => warehousesQuery.refetch()}
         selectedWarehouseId={warehouseId}
+
         branches={branchesQuery.data ?? []}
+        branchesLoading={branchesQuery.isLoading}
+        branchesError={Boolean(branchesQuery.error)}
+        onBranchesRetry={() => branchesQuery.refetch()}
         selectedBranchId={branchId}
+
         previewNumber={previewNumber}
         previewLoading={previewLoading}
         invoiceDate={invoiceDate}
@@ -515,6 +548,30 @@ export function LivePOSPage() {
         onOpenTables={() => setOverlay('tables')}
         onOpenOrders={() => setOverlay('orders')}
       />
+
+      {/* Customers query error banner */}
+      {customersQuery.error ? (
+        <div className="flex items-center gap-2 border-b border-amber-300 bg-amber-50 px-3 py-1.5 text-xs text-amber-800">
+          <span>⚠ تعذّر تحميل قائمة العملاء</span>
+          <button
+            type="button"
+            onClick={() => customersQuery.refetch()}
+            className="font-bold underline hover:no-underline"
+          >إعادة المحاولة</button>
+        </div>
+      ) : null}
+
+      {/* Stock query error banner (only relevant when warehouse is selected) */}
+      {warehouseId != null && stockQuery.error ? (
+        <div className="flex items-center gap-2 border-b border-amber-300 bg-amber-50 px-3 py-1.5 text-xs text-amber-800">
+          <span>⚠ تعذّر تحميل بيانات المخزون — تُعرض الأصناف بدون تحقق من الرصيد</span>
+          <button
+            type="button"
+            onClick={() => stockQuery.refetch()}
+            className="font-bold underline hover:no-underline"
+          >إعادة</button>
+        </div>
+      ) : null}
 
       <main className="flex min-h-0 flex-1 overflow-hidden">
         <ProductBrowser
@@ -545,6 +602,7 @@ export function LivePOSPage() {
         />
       </main>
 
+      {/* Toast notifications */}
       {(state.error || notice) ? (
         <div className={`fixed bottom-4 start-1/2 z-[150] max-w-[90vw] -translate-x-1/2 rounded-xl px-4 py-3 text-sm font-bold shadow-xl ${
           state.error ? 'bg-rose-700 text-white' : 'bg-slate-950 text-white'
@@ -556,9 +614,7 @@ export function LivePOSPage() {
                 type="button"
                 onClick={() => dispatch({ type: 'error', message: null })}
                 className="rounded-md bg-white/15 px-2 py-1"
-              >
-                إغلاق
-              </button>
+              >إغلاق</button>
             ) : null}
           </div>
         </div>
@@ -569,10 +625,7 @@ export function LivePOSPage() {
           product={modifierProduct}
           config={config}
           onClose={() => setModifierProduct(null)}
-          onConfirm={(modifiers) => {
-            engine.addProduct(modifierProduct, modifiers);
-            setModifierProduct(null);
-          }}
+          onConfirm={(modifiers) => { engine.addProduct(modifierProduct, modifiers); setModifierProduct(null); }}
         />
       ) : null}
 
@@ -590,7 +643,7 @@ export function LivePOSPage() {
 
       {overlay === 'tables' ? (
         <TableMapDialog
-          api={STUB_API}
+          api={LIVE_API}
           config={config}
           selectedTable={state.draft.table}
           onClose={() => setOverlay(null)}
@@ -600,7 +653,7 @@ export function LivePOSPage() {
 
       {overlay === 'orders' ? (
         <OpenOrdersDialog
-          api={STUB_API}
+          api={LIVE_API}
           config={config}
           onClose={() => setOverlay(null)}
         />
