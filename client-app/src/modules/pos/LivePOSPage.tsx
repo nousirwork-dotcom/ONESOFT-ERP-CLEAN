@@ -141,9 +141,13 @@ function InvoiceHeaderBar(props: HeaderProps) {
   const journal = props.journals.find((j) => j.id === props.selectedJournalId);
   const warehouse = props.warehouses.find((w) => w.id === props.selectedWarehouseId);
 
-  const dateStr = props.invoiceDate.toLocaleDateString('ar-SA-u-nu-latn', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-  });
+  // Deterministic dd-mm-yyyy (Gregorian, hyphen-separated — no locale ambiguity)
+  const d = props.invoiceDate;
+  const dateStr = [
+    String(d.getDate()).padStart(2, '0'),
+    String(d.getMonth() + 1).padStart(2, '0'),
+    d.getFullYear(),
+  ].join('-');
 
   const warehouseLabel = (w: any) =>
     w.code ? `${w.code} — ${w.name}` : w.name;
@@ -163,6 +167,10 @@ function InvoiceHeaderBar(props: HeaderProps) {
         ) : branch ? (
           <div className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2 py-1 text-xs">
             <span className="text-[#D8AE55]">🏢</span>
+            {/* branches table has no code column; show padded id as identifier */}
+            <span className="font-black text-[#D8AE55]">
+              FR-{String(branch.id).padStart(2, '0')}
+            </span>
             <span className="font-bold">{branch.name}</span>
           </div>
         ) : null}

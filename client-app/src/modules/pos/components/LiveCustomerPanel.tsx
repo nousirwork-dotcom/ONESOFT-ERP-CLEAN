@@ -29,6 +29,7 @@ export function LiveCustomerPanel({
         const q = query.toLowerCase();
         return (
           c.name.toLowerCase().includes(q) ||
+          (c.code ?? '').toLowerCase().includes(q) ||
           (c.phone ?? '').includes(q) ||
           (c.taxNumber ?? '').toLowerCase().includes(q)
         );
@@ -40,7 +41,7 @@ export function LiveCustomerPanel({
       <input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="الاسم أو الجوال أو الرقم الضريبي"
+        placeholder="الاسم أو الرمز أو الجوال أو الرقم الضريبي"
         className="h-12 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none focus:border-[#1C4576] focus:ring-2 focus:ring-[#1C4576]/10"
         autoFocus
       />
@@ -89,10 +90,18 @@ export function LiveCustomerPanel({
               }`}
             >
               <div className="min-w-0">
-                <div className="truncate font-extrabold text-slate-900">{c.name}</div>
+                <div className="flex items-center gap-1.5 truncate">
+                  {c.code ? (
+                    <span className="shrink-0 rounded bg-slate-200 px-1 py-0.5 text-[10px] font-black text-slate-600">{c.code}</span>
+                  ) : null}
+                  <span className="truncate font-extrabold text-slate-900">{c.name}</span>
+                  <span className="shrink-0 text-[10px] text-slate-400">
+                    {c.customerType === 'company' ? 'شركة' : 'فرد'}
+                  </span>
+                </div>
                 <div className="mt-1 text-xs text-slate-500">
                   {c.phone ?? 'بدون جوال'}
-                  {c.taxNumber ? ` • ${c.taxNumber}` : ''}
+                  {c.taxNumber ? ` • ض: ${c.taxNumber}` : ''}
                 </div>
               </div>
               {c.balanceMinor ? (
