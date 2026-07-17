@@ -1,5 +1,3 @@
-import { useUnsavedChangesGuard } from "@/core/hooks/useUnsavedChangesGuard";
-import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import { fmtDate } from "@/shared/utils/dateUtils";
 import { Badge } from "@/core/ui/badge";
 import { Button } from "@/core/ui/button";
@@ -7,42 +5,39 @@ import { Card, CardContent } from "@/core/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/core/ui/dialog";
 import { Input } from "@/core/ui/input";
 import { Label } from "@/core/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/core/ui/select";
 import { Switch } from "@/core/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/core/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/core/ui/tabs";
 import { trpc } from "@/shared/lib/trpc";
 import {
-  CheckCircle2, Eye, EyeOff, KeyRound, LifeBuoy, Loader2, Lock,
-  LogOut, Mail, Pencil, Phone, Plus, Send, Shield, Sparkles,
-  Trash2, Users as UsersIcon, XCircle
+  CheckCircle2, Eye, EyeOff, KeyRound, LifeBuoy, Loader2,
+  LogOut, Pencil, Plus, Send, Sparkles, Trash2, Users as UsersIcon, XCircle,
 } from "lucide-react";
 import { useState } from "react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/core/ui/tooltip";
 import { toast } from "sonner";
 import { HS_MODULE_PERM } from "@/shared/lib/hsPermissions";
 import { AI_MODULE_PERM, AI_PERM_DEFS } from "@/shared/lib/aiPermissions";
+import { UserFormDialog, UserFormValue } from "./UserFormDialog";
 
 // ── صلاحيات وحدة «المساعدة والخدمات» (extra_permissions) ─────────────────────
 const HS_PERM_DEFS: Array<{ key: string; label: string; isModule?: boolean }> = [
-  { key: HS_MODULE_PERM,    label: "عرض وحدة المساعدة والخدمات", isModule: true },
-  { key: "hs_rentals",       label: "الإيجارات والعقود" },
-  { key: "hs_custody",       label: "العهد والمصروفات" },
-  { key: "hs_customers",     label: "متابعة العملاء" },
-  { key: "hs_tasks",         label: "المهام والتذكيرات" },
-  { key: "hs_gov_links",     label: "الروابط والخدمات الحكومية" },
-  { key: "hs_notes",         label: "الملاحظات" },
-  { key: "hs_internal_comm", label: "التواصل الداخلي" },
-  { key: "hs_support",       label: "طلب الدعم الفني" },
-  { key: "hs_real_estate",   label: "المطور العقاري" },
-  { key: "hs_re_purchases",  label: "المطور العقاري — البيان التفصيلي للمشتريات" },
-  { key: "hs_re_documents",  label: "المطور العقاري — أوراق المشروع" },
+  { key: HS_MODULE_PERM,       label: "عرض وحدة المساعدة والخدمات", isModule: true },
+  { key: "hs_rentals",          label: "الإيجارات والعقود" },
+  { key: "hs_custody",          label: "العهد والمصروفات" },
+  { key: "hs_customers",        label: "متابعة العملاء" },
+  { key: "hs_tasks",            label: "المهام والتذكيرات" },
+  { key: "hs_gov_links",        label: "الروابط والخدمات الحكومية" },
+  { key: "hs_notes",            label: "الملاحظات" },
+  { key: "hs_internal_comm",    label: "التواصل الداخلي" },
+  { key: "hs_support",          label: "طلب الدعم الفني" },
+  { key: "hs_real_estate",      label: "المطور العقاري" },
+  { key: "hs_re_purchases",     label: "المطور العقاري — البيان التفصيلي للمشتريات" },
+  { key: "hs_re_documents",     label: "المطور العقاري — أوراق المشروع" },
   { key: "hs_re_trial_balance", label: "المطور العقاري — ميزان المراجعة المبسط" },
 ];
 
 const WORK_PERM_DEFS: Array<{ key: string; label: string; desc: string }> = [
-  { key: "can_work_cashier",    label: "السماح بالعمل ككاشير",   desc: "يستطيع إنشاء فواتير المبيعات ونقاط البيع" },
-  { key: "can_work_accountant", label: "السماح بالعمل كمحاسب",   desc: "يستطيع الوصول إلى القيود المحاسبية والتقارير المالية" },
+  { key: "can_work_cashier",    label: "السماح بالعمل ككاشير",  desc: "يستطيع إنشاء فواتير المبيعات ونقاط البيع" },
+  { key: "can_work_accountant", label: "السماح بالعمل كمحاسب", desc: "يستطيع الوصول إلى القيود المحاسبية والتقارير المالية" },
 ];
 
 const roleLabels: Record<string, string> = {
@@ -58,28 +53,6 @@ const roleColors: Record<string, string> = {
   user: "bg-gray-100 text-gray-700 border-gray-200",
 };
 
-const PHONE_REGEX = /^\+?[0-9]{8,15}$/;
-function validatePhone(v: string) {
-  if (!v) return null;
-  if (!PHONE_REGEX.test(v.replace(/\s/g, "")))
-    return "رقم الجوال غير صحيح (8–15 رقمًا، + اختيارية)";
-  return null;
-}
-
-type Mode = "create" | "edit";
-interface FormState {
-  code: string; name: string; phone: string; email: string;
-  username: string; password: string; newPassword: string; role: string;
-  userGroupId: string; defaultBranchId: string; defaultWarehouseId: string;
-  defaultLanguage: string; allowLogin: boolean;
-}
-const emptyForm = (): FormState => ({
-  code: "", name: "", phone: "", email: "",
-  username: "", password: "", newPassword: "", role: "cashier",
-  userGroupId: "", defaultBranchId: "", defaultWarehouseId: "",
-  defaultLanguage: "", allowLogin: true,
-});
-
 // ─── VerifyBadge ──────────────────────────────────────────────────────────────
 function VerifyBadge({ verified, label }: { verified: boolean; label: string }) {
   return verified ? (
@@ -93,7 +66,7 @@ function VerifyBadge({ verified, label }: { verified: boolean; label: string }) 
   );
 }
 
-// ─── VerifyOtpDialog ─────────────────────────────────────────────────────────
+// ─── VerifyOtpDialog ──────────────────────────────────────────────────────────
 function VerifyOtpDialog({
   open, onClose, userId, channel, devOtp, onSuccess,
 }: {
@@ -149,7 +122,7 @@ function VerifyOtpDialog({
   );
 }
 
-// ─── ChangeUserPasswordDialog ────────────────────────────────────────────────
+// ─── ChangeUserPasswordDialog ─────────────────────────────────────────────────
 function ChangeUserPasswordDialog({
   user, onClose, allowPasswordless,
 }: {
@@ -172,10 +145,7 @@ function ChangeUserPasswordDialog({
 
   const handleSubmit = () => {
     setError("");
-    if (noPassword) {
-      updateUser.mutate({ id: user.id, clearPassword: true });
-      return;
-    }
+    if (noPassword) { updateUser.mutate({ id: user.id, clearPassword: true }); return; }
     if (next !== confirm) { setError("كلمتا المرور غير متطابقتين"); return; }
     updateUser.mutate({ id: user.id, newPassword: next });
   };
@@ -239,25 +209,21 @@ function ChangeUserPasswordDialog({
 // ─── Users ────────────────────────────────────────────────────────────────────
 export default function Users() {
   const [isOpen, setIsOpen] = useState(false);
-  const [isDirty, setIsDirty] = useState(false);
-  const [mode, setMode] = useState<Mode>("create");
+  const [mode, setMode] = useState<"create" | "edit">("create");
   const [selectedUser, setSelectedUser] = useState<any>(null);
-  const [form, setForm] = useState<FormState>(emptyForm());
-  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [initialValue, setInitialValue] = useState<UserFormValue>({ fullName: "", loginName: "", userType: "cashier", allowLogin: true });
+
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [passwordUser, setPasswordUser] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState("basic");
-
   const [verifyDialog, setVerifyDialog] = useState<{ open: boolean; channel: "phone" | "email"; devOtp?: string } | null>(null);
 
+  // ── إعدادات الأمان والعمل والصلاحيات (وضع التعديل فقط) ──────────────────
   const [recoveryEnabledPhone, setRecoveryEnabledPhone] = useState(false);
   const [recoveryEnabledEmail, setRecoveryEnabledEmail] = useState(false);
   const [forcePasswordChange, setForcePasswordChange] = useState(false);
   const [recoveryDirty, setRecoveryDirty] = useState(false);
-
   const [extraPerms, setExtraPerms] = useState<Record<string, boolean>>({});
   const [permsDirty, setPermsDirty] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
   const utils = trpc.useUtils();
 
@@ -283,7 +249,11 @@ export default function Users() {
     onError: (e) => toast.error(e.message),
   });
   const updateUser = trpc.users.update.useMutation({
-    onSuccess: () => { utils.users.list.invalidate(); toast.success("تم حفظ التعديلات"); setIsDirty(false); setIsOpen(false); },
+    onSuccess: () => {
+      utils.users.list.invalidate();
+      toast.success("تم حفظ التعديلات");
+      setIsOpen(false);
+    },
     onError: (e) => toast.error(e.message),
   });
   const toggleActive = trpc.users.update.useMutation({
@@ -308,7 +278,6 @@ export default function Users() {
     onSuccess: () => toast.success("تم تسجيل خروج المستخدم من جميع الأجهزة"),
     onError: (e) => toast.error(e.message),
   });
-
   const sendVerification = trpc.recovery.sendVerification.useMutation({
     onSuccess: (data, vars) => {
       toast.success(`تم إرسال كود التحقق للـ${vars.channel === "phone" ? "جوال" : "بريد"}`);
@@ -316,12 +285,14 @@ export default function Users() {
     },
     onError: (e) => toast.error(e.message),
   });
-
   const setRecoveryOptions = trpc.recovery.setRecoveryOptions.useMutation({
-    onSuccess: () => { utils.users.list.invalidate(); toast.success("تم حفظ إعدادات الأمان"); setRecoveryDirty(false); },
+    onSuccess: () => {
+      utils.users.list.invalidate();
+      toast.success("تم حفظ إعدادات الأمان");
+      setRecoveryDirty(false);
+    },
     onError: (e) => toast.error(e.message),
   });
-
   const setExtraPermissions = trpc.users.setExtraPermissions.useMutation({
     onSuccess: () => {
       utils.users.list.invalidate();
@@ -332,48 +303,41 @@ export default function Users() {
     onError: (e) => toast.error(e.message),
   });
 
+  // ── فتح النافذة ──────────────────────────────────────────────────────────
   const openCreate = () => {
     setMode("create");
     setSelectedUser(null);
-    setForm(emptyForm());
-    setPhoneError(null);
-    setActiveTab("basic");
-    setIsDirty(false);
+    setInitialValue({ fullName: "", loginName: "", userType: "cashier", allowLogin: true });
     setIsOpen(true);
   };
 
   const openEdit = (u: any) => {
     setMode("edit");
     setSelectedUser(u);
-    setForm({
-      code: u.code ?? "",
-      name: u.name ?? "",
-      phone: u.phone ?? "",
-      email: u.email ?? "",
-      username: u.username ?? "",
-      password: "",
-      newPassword: "",
-      role: u.role ?? "cashier",
-      userGroupId: u.userGroupId ? String(u.userGroupId) : "",
-      defaultBranchId: u.defaultBranchId ? String(u.defaultBranchId) : "",
-      defaultWarehouseId: u.defaultWarehouseId ? String(u.defaultWarehouseId) : "",
-      defaultLanguage: u.defaultLanguage ?? "",
+    setInitialValue({
+      code: u.code ?? undefined,
+      fullName: u.name ?? "",
+      loginName: u.username ?? "",
+      userType: u.role ?? "cashier",
+      groupId: u.userGroupId ? String(u.userGroupId) : undefined,
+      branchId: u.defaultBranchId ? String(u.defaultBranchId) : undefined,
+      warehouseId: u.defaultWarehouseId ? String(u.defaultWarehouseId) : undefined,
+      language: u.defaultLanguage ?? undefined,
+      mobile: u.phone ?? undefined,
+      email: u.email ?? undefined,
       allowLogin: u.allowLogin !== false,
     });
-    setPhoneError(null);
     setRecoveryEnabledPhone(u.recoveryEnabledPhone ?? false);
     setRecoveryEnabledEmail(u.recoveryEnabledEmail ?? false);
     setForcePasswordChange(u.forcePasswordChange ?? false);
     setRecoveryDirty(false);
     setExtraPerms({ ...(u.extraPermissions ?? {}) });
     setPermsDirty(false);
-    setActiveTab("basic");
-    setIsDirty(false);
     setIsOpen(true);
   };
 
   const togglePerm = (key: string, v: boolean) => {
-    setExtraPerms(p => ({ ...p, [key]: v }));
+    setExtraPerms((p) => ({ ...p, [key]: v }));
     setPermsDirty(true);
   };
 
@@ -385,83 +349,6 @@ export default function Users() {
     setExtraPermissions.mutate({ userId: selectedUser.id, permissions: permissions as any });
   };
 
-  const setField = (k: keyof FormState, v: string | boolean) => {
-    setForm((f) => ({ ...f, [k]: v }));
-    if (k === "phone") setPhoneError(validatePhone(v as string));
-    setIsDirty(true);
-  };
-
-  const phoneChanged = mode === "edit" && form.phone !== (selectedUser?.phone ?? "");
-  const emailChanged = mode === "edit" && form.email !== (selectedUser?.email ?? "");
-
-  const handleSubmit = async (): Promise<void> => {
-    const err = validatePhone(form.phone);
-    if (err) { setPhoneError(err); setActiveTab("contact"); throw new Error("validation"); }
-    if (mode === "create") {
-      if (!form.name.trim()) { toast.error("الاسم الكامل مطلوب"); setActiveTab("basic"); throw new Error("validation"); }
-      if (!form.username.trim()) { toast.error("اسم المستخدم مطلوب"); setActiveTab("basic"); throw new Error("validation"); }
-      if (!form.password && (!allowPasswordless || form.role === "admin")) {
-        toast.error(form.role === "admin" ? "حسابات مدير النظام يجب أن تكون محمية بكلمة مرور" : "كلمة المرور مطلوبة");
-        setActiveTab("login");
-        throw new Error("validation");
-      }
-      const newUser = await createUser.mutateAsync({
-        code: form.code || undefined,
-        name: form.name,
-        phone: form.phone || undefined,
-        email: form.email || undefined,
-        username: form.username,
-        password: form.password,
-        role: form.role as any,
-        userGroupId: form.userGroupId ? Number(form.userGroupId) : null,
-        defaultBranchId: form.defaultBranchId ? Number(form.defaultBranchId) : null,
-        defaultWarehouseId: form.defaultWarehouseId ? Number(form.defaultWarehouseId) : null,
-        defaultLanguage: form.defaultLanguage || null,
-        allowLogin: form.allowLogin,
-      });
-      toast.success("تم إنشاء المستخدم بنجاح — يمكنك الآن تعديل إعدادات العمل والصلاحيات");
-      const fullUser = {
-        id: newUser.id, code: newUser.code, name: form.name,
-        phone: form.phone || null, email: form.email || null,
-        username: form.username, role: form.role,
-        userGroupId: form.userGroupId ? Number(form.userGroupId) : null,
-        defaultBranchId: form.defaultBranchId ? Number(form.defaultBranchId) : null,
-        defaultWarehouseId: form.defaultWarehouseId ? Number(form.defaultWarehouseId) : null,
-        defaultLanguage: form.defaultLanguage || null,
-        allowLogin: form.allowLogin, isActive: true, forcePasswordChange: false,
-        phoneVerifiedAt: null, emailVerifiedAt: null,
-        recoveryEnabledPhone: false, recoveryEnabledEmail: false,
-        extraPermissions: {}, lastLoginAt: null,
-      };
-      setMode("edit");
-      setSelectedUser(fullUser);
-      setForm(f => ({ ...f, password: "", newPassword: "" }));
-      setForcePasswordChange(false);
-      setRecoveryEnabledPhone(false);
-      setRecoveryEnabledEmail(false);
-      setExtraPerms({});
-      setPermsDirty(false);
-      setRecoveryDirty(false);
-      setIsDirty(false);
-      setShowPassword(false);
-    } else {
-      await updateUser.mutateAsync({
-        id: selectedUser.id,
-        name: form.name || undefined,
-        phone: form.phone || undefined,
-        email: form.email || undefined,
-        role: form.role as any,
-        newPassword: form.newPassword || undefined,
-        userGroupId: form.userGroupId ? Number(form.userGroupId) : null,
-        defaultBranchId: form.defaultBranchId ? Number(form.defaultBranchId) : null,
-        defaultWarehouseId: form.defaultWarehouseId ? Number(form.defaultWarehouseId) : null,
-        defaultLanguage: form.defaultLanguage || null,
-        allowLogin: form.allowLogin,
-        forcePasswordChange,
-      });
-    }
-  };
-
   const handleSaveRecovery = () => {
     setRecoveryOptions.mutate({
       userId: selectedUser.id,
@@ -469,10 +356,324 @@ export default function Users() {
     });
   };
 
-  const isPending = createUser.isPending || updateUser.isPending;
+  // ── handleDialogSubmit ────────────────────────────────────────────────────
+  const handleDialogSubmit = async (value: UserFormValue): Promise<void> => {
+    if (mode === "create") {
+      if (!value.password && (!allowPasswordless || value.userType === "admin")) {
+        toast.error(
+          value.userType === "admin"
+            ? "حسابات مدير النظام يجب أن تكون محمية بكلمة مرور"
+            : "كلمة المرور مطلوبة",
+        );
+        const err = Object.assign(new Error("validation"), { switchTab: "login" as const });
+        throw err;
+      }
+      const newUser = await createUser.mutateAsync({
+        code: value.code || undefined,
+        name: value.fullName,
+        phone: value.mobile || undefined,
+        email: value.email || undefined,
+        username: value.loginName,
+        password: value.password,
+        role: value.userType as any,
+        userGroupId: value.groupId ? Number(value.groupId) : null,
+        defaultBranchId: value.branchId ? Number(value.branchId) : null,
+        defaultWarehouseId: value.warehouseId ? Number(value.warehouseId) : null,
+        defaultLanguage: value.language || null,
+        allowLogin: value.allowLogin,
+      });
+      toast.success("تم إنشاء المستخدم بنجاح — يمكنك الآن تعديل إعدادات العمل والصلاحيات");
+      const fullUser = {
+        id: newUser.id, code: newUser.code,
+        name: value.fullName,
+        phone: value.mobile || null,
+        email: value.email || null,
+        username: value.loginName,
+        role: value.userType,
+        userGroupId: value.groupId ? Number(value.groupId) : null,
+        defaultBranchId: value.branchId ? Number(value.branchId) : null,
+        defaultWarehouseId: value.warehouseId ? Number(value.warehouseId) : null,
+        defaultLanguage: value.language || null,
+        allowLogin: value.allowLogin, isActive: true, forcePasswordChange: false,
+        phoneVerifiedAt: null, emailVerifiedAt: null,
+        recoveryEnabledPhone: false, recoveryEnabledEmail: false,
+        extraPermissions: {}, lastLoginAt: null,
+      };
+      setMode("edit");
+      setSelectedUser(fullUser);
+      setInitialValue({
+        code: newUser.code ?? undefined,
+        fullName: value.fullName,
+        loginName: value.loginName,
+        userType: value.userType,
+        groupId: value.groupId,
+        branchId: value.branchId,
+        warehouseId: value.warehouseId,
+        language: value.language,
+        mobile: value.mobile,
+        email: value.email,
+        allowLogin: value.allowLogin,
+      });
+      setForcePasswordChange(false);
+      setRecoveryEnabledPhone(false);
+      setRecoveryEnabledEmail(false);
+      setExtraPerms({});
+      setPermsDirty(false);
+      setRecoveryDirty(false);
+    } else {
+      await updateUser.mutateAsync({
+        id: selectedUser.id,
+        name: value.fullName || undefined,
+        phone: value.mobile || undefined,
+        email: value.email || undefined,
+        role: value.userType as any,
+        newPassword: value.password || undefined,
+        userGroupId: value.groupId ? Number(value.groupId) : null,
+        defaultBranchId: value.branchId ? Number(value.branchId) : null,
+        defaultWarehouseId: value.warehouseId ? Number(value.warehouseId) : null,
+        defaultLanguage: value.language || null,
+        allowLogin: value.allowLogin,
+        forcePasswordChange,
+      });
+    }
+  };
 
-  const { confirmOpen, requestClose, confirmSave, confirmDiscard, confirmCancel } = useUnsavedChangesGuard({ isDirty });
-  const handleClose = () => requestClose(() => { setIsDirty(false); setIsOpen(false); });
+  // ── محتوى تبويب الدخول (الامتداد) ────────────────────────────────────────
+  const loginTabExtension = mode === "edit" && selectedUser ? (
+    <>
+      {/* إجبار تغيير كلمة المرور */}
+      <div className="rounded-2xl border bg-muted/20 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-medium">إجبار تغيير كلمة المرور</p>
+            <p className="text-xs text-muted-foreground">يُجبر المستخدم على تغيير كلمته عند أول دخول</p>
+          </div>
+          <Switch
+            checked={forcePasswordChange}
+            onCheckedChange={(v) => { setForcePasswordChange(v); setRecoveryDirty(true); }}
+          />
+        </div>
+        {recoveryDirty && (
+          <Button size="sm" variant="outline" onClick={handleSaveRecovery}
+            disabled={setRecoveryOptions.isPending} className="gap-1 mt-3">
+            {setRecoveryOptions.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+            حفظ إعدادات الأمان
+          </Button>
+        )}
+      </div>
+      {/* جلسات الدخول */}
+      <div className="rounded-2xl border bg-muted/20 p-4">
+        <p className="font-semibold mb-3">جلسات الدخول</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">آخر تسجيل دخول</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {selectedUser?.lastLoginAt ? fmtDate(selectedUser.lastLoginAt) : "لم يُسجَّل دخول بعد"}
+            </p>
+          </div>
+          <Button variant="outline" size="sm" className="gap-1.5 shrink-0"
+            disabled={logoutAllSessions.isPending}
+            onClick={() => logoutAllSessions.mutate({ userId: selectedUser.id })}>
+            {logoutAllSessions.isPending
+              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              : <LogOut className="w-3.5 h-3.5" />}
+            إخراج من الأجهزة
+          </Button>
+        </div>
+      </div>
+    </>
+  ) : null;
+
+  // ── محتوى تبويب إعدادات العمل ────────────────────────────────────────────
+  const workTabContent = mode === "edit" && selectedUser ? (
+    <>
+      {/* صلاحيات العمل */}
+      {(selectedUser?.role === "admin" || selectedUser?.role === "superadmin") ? (
+        <p className="text-xs text-muted-foreground bg-muted/40 border rounded-xl px-3 py-2.5">
+          مدير النظام يملك جميع صلاحيات العمل دائماً — لا حاجة لتفعيل صلاحيات إضافية.
+        </p>
+      ) : (
+        <div className="rounded-2xl border bg-muted/20 p-4 space-y-3">
+          <p className="font-semibold">صلاحيات العمل</p>
+          {WORK_PERM_DEFS.map((d, i) => (
+            <div key={d.key} className={`flex items-center justify-between ${i > 0 ? "border-t pt-3" : ""}`}>
+              <div>
+                <p className="text-sm font-medium">{d.label}</p>
+                <p className="text-xs text-muted-foreground">{d.desc}</p>
+              </div>
+              <Switch
+                checked={extraPerms[d.key] === true}
+                onCheckedChange={(v) => togglePerm(d.key, v)}
+              />
+            </div>
+          ))}
+          {permsDirty && (
+            <Button size="sm" variant="outline" onClick={handleSavePerms}
+              disabled={setExtraPermissions.isPending} className="gap-1 mt-2">
+              {setExtraPermissions.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+              حفظ إعدادات العمل
+            </Button>
+          )}
+        </div>
+      )}
+
+      {/* إعدادات استعادة كلمة المرور */}
+      <div className="rounded-2xl border bg-muted/20 p-4 space-y-3">
+        <p className="font-semibold">إعدادات استعادة كلمة المرور</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">استعادة عبر الجوال</p>
+            <p className="text-xs text-muted-foreground">
+              {selectedUser?.phoneVerifiedAt ? "الجوال محقق ✓" : "يتطلب تحقق الجوال أولاً"}
+            </p>
+          </div>
+          <Switch
+            checked={recoveryEnabledPhone}
+            disabled={!selectedUser?.phoneVerifiedAt}
+            onCheckedChange={(v) => { setRecoveryEnabledPhone(v); setRecoveryDirty(true); }}
+          />
+        </div>
+        <div className="border-t pt-3 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">استعادة عبر البريد</p>
+            <p className="text-xs text-muted-foreground">
+              {selectedUser?.emailVerifiedAt ? "البريد محقق ✓" : "يتطلب تحقق البريد أولاً"}
+            </p>
+          </div>
+          <Switch
+            checked={recoveryEnabledEmail}
+            disabled={!selectedUser?.emailVerifiedAt}
+            onCheckedChange={(v) => { setRecoveryEnabledEmail(v); setRecoveryDirty(true); }}
+          />
+        </div>
+        {/* التحقق من الجوال والبريد */}
+        <div className="border-t pt-3 space-y-2">
+          <p className="text-xs font-medium text-muted-foreground">إرسال رمز التحقق</p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <VerifyBadge verified={!!selectedUser?.phoneVerifiedAt} label="الجوال" />
+            </div>
+            {selectedUser?.phone && (
+              <Button variant="ghost" size="sm" className="h-6 text-xs gap-1 px-2"
+                disabled={sendVerification.isPending}
+                onClick={() => sendVerification.mutate({ userId: selectedUser.id, channel: "phone" })}>
+                {sendVerification.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                إرسال رمز
+              </Button>
+            )}
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <VerifyBadge verified={!!selectedUser?.emailVerifiedAt} label="البريد" />
+            </div>
+            {selectedUser?.email && (
+              <Button variant="ghost" size="sm" className="h-6 text-xs gap-1 px-2"
+                disabled={sendVerification.isPending}
+                onClick={() => sendVerification.mutate({ userId: selectedUser.id, channel: "email" })}>
+                {sendVerification.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                إرسال رمز
+              </Button>
+            )}
+          </div>
+        </div>
+        {recoveryDirty && (
+          <Button size="sm" variant="outline" onClick={handleSaveRecovery}
+            disabled={setRecoveryOptions.isPending} className="gap-1">
+            {setRecoveryOptions.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+            حفظ إعدادات الاستعادة
+          </Button>
+        )}
+      </div>
+    </>
+  ) : null;
+
+  // ── محتوى تبويب الصلاحيات ────────────────────────────────────────────────
+  const permissionsTabContent = mode === "edit" && selectedUser ? (
+    <>
+      {/* صلاحيات المساعدة والخدمات */}
+      <section className="rounded-2xl border bg-muted/20 p-4 space-y-3">
+        <p className="font-semibold flex items-center gap-1.5">
+          <LifeBuoy className="w-4 h-4 text-muted-foreground" />
+          صلاحيات وحدة المساعدة والخدمات
+        </p>
+        {(selectedUser?.role === "admin" || selectedUser?.role === "superadmin") ? (
+          <p className="text-xs text-muted-foreground bg-background border rounded-lg px-3 py-2.5">
+            مدير النظام يرى وحدة المساعدة والخدمات وجميع شاشاتها دائمًا.
+          </p>
+        ) : (
+          <>
+            {HS_PERM_DEFS.map((d, i) => (
+              <div key={d.key} className={`flex items-center justify-between ${i > 0 ? "border-t pt-3" : ""}`}>
+                <div>
+                  <p className={`text-sm ${d.isModule ? "font-semibold" : "font-medium"}`}>{d.label}</p>
+                  {d.isModule && (
+                    <p className="text-xs text-muted-foreground">بدونها لا تظهر الوحدة إطلاقًا</p>
+                  )}
+                </div>
+                <Switch
+                  checked={extraPerms[d.key] === true}
+                  disabled={!d.isModule && extraPerms[HS_MODULE_PERM] !== true}
+                  onCheckedChange={(v) => togglePerm(d.key, v)}
+                  data-testid={`switch-perm-${d.key}`}
+                />
+              </div>
+            ))}
+            {extraPerms[HS_MODULE_PERM] !== true && (
+              <p className="text-xs text-amber-600 border-t pt-2">
+                ⚠ فعّل صلاحية الوحدة أولًا لتتمكن من تفعيل صلاحيات الشاشات.
+              </p>
+            )}
+          </>
+        )}
+      </section>
+
+      {/* صلاحيات المساعد الذكي */}
+      <section className="rounded-2xl border bg-muted/20 p-4 space-y-3">
+        <p className="font-semibold flex items-center gap-1.5">
+          <Sparkles className="w-4 h-4 text-muted-foreground" />
+          صلاحيات المساعد الذكي
+        </p>
+        {(selectedUser?.role === "admin" || selectedUser?.role === "superadmin") ? (
+          <p className="text-xs text-muted-foreground bg-background border rounded-lg px-3 py-2.5">
+            مدير النظام يملك جميع صلاحيات المساعد الذكي دائمًا.
+          </p>
+        ) : (
+          <>
+            {AI_PERM_DEFS.map((d, i) => (
+              <div key={d.key} className={`flex items-center justify-between ${i > 0 ? "border-t pt-3" : ""}`}>
+                <div>
+                  <p className={`text-sm ${d.isModule ? "font-semibold" : "font-medium"}`}>{d.label}</p>
+                  {d.isModule && (
+                    <p className="text-xs text-muted-foreground">بدونها لا يستطيع المستخدم فتح المساعد الذكي</p>
+                  )}
+                </div>
+                <Switch
+                  checked={extraPerms[d.key] === true}
+                  disabled={!d.isModule && extraPerms[AI_MODULE_PERM] !== true}
+                  onCheckedChange={(v) => togglePerm(d.key, v)}
+                  data-testid={`switch-perm-${d.key}`}
+                />
+              </div>
+            ))}
+            {extraPerms[AI_MODULE_PERM] !== true && (
+              <p className="text-xs text-amber-600 border-t pt-2">
+                ⚠ فعّل صلاحية «استخدام المساعد الذكي» أولًا لتتمكن من تفعيل بقية الصلاحيات.
+              </p>
+            )}
+          </>
+        )}
+      </section>
+
+      {permsDirty && (
+        <Button size="sm" variant="outline" onClick={handleSavePerms}
+          disabled={setExtraPermissions.isPending} className="gap-1"
+          data-testid="button-save-perms">
+          {setExtraPermissions.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+          حفظ الصلاحيات
+        </Button>
+      )}
+    </>
+  ) : null;
 
   return (
     <div className="space-y-5">
@@ -506,7 +707,7 @@ export default function Users() {
         />
       </div>
 
-      {/* كارت عدد المستخدمين */}
+      {/* ── كارت عدد المستخدمين ── */}
       {countInfo && (
         <div className="grid grid-cols-3 gap-4">
           <Card className="shadow-none border">
@@ -516,7 +717,9 @@ export default function Users() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">المستخدمون الحاليون</p>
-                <p className="text-xl font-bold leading-tight">{countInfo.current} <span className="text-sm font-normal text-muted-foreground">/ {countInfo.max}</span></p>
+                <p className="text-xl font-bold leading-tight">
+                  {countInfo.current} <span className="text-sm font-normal text-muted-foreground">/ {countInfo.max}</span>
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -528,9 +731,7 @@ export default function Users() {
               <div>
                 <p className="text-xs text-muted-foreground">المقاعد المتبقية</p>
                 <p className={`text-xl font-bold leading-tight ${countInfo.remaining === 0 ? "text-destructive" : ""}`}>{countInfo.remaining}</p>
-                {countInfo.remaining === 0 && (
-                  <p className="text-[10px] text-destructive leading-tight">تجاوز الحد المسموح</p>
-                )}
+                {countInfo.remaining === 0 && <p className="text-[10px] text-destructive leading-tight">تجاوز الحد المسموح</p>}
               </div>
             </CardContent>
           </Card>
@@ -555,6 +756,7 @@ export default function Users() {
         </div>
       )}
 
+      {/* ── جدول المستخدمين ── */}
       <Card className="border-0 shadow-sm">
         <CardContent className="p-0">
           <Table>
@@ -574,7 +776,11 @@ export default function Users() {
             <TableBody>
               {isLoading ? (
                 Array.from({ length: 4 }).map((_, i) => (
-                  <TableRow key={i}>{Array.from({ length: 9 }).map((_, j) => (<TableCell key={j}><div className="h-4 bg-muted rounded animate-pulse" /></TableCell>))}</TableRow>
+                  <TableRow key={i}>
+                    {Array.from({ length: 9 }).map((_, j) => (
+                      <TableCell key={j}><div className="h-4 bg-muted rounded animate-pulse" /></TableCell>
+                    ))}
+                  </TableRow>
                 ))
               ) : usersList?.length === 0 ? (
                 <TableRow>
@@ -592,12 +798,8 @@ export default function Users() {
                     <TableCell className="text-xs text-muted-foreground font-mono">{u.code ?? "—"}</TableCell>
                     <TableCell>
                       <div className="font-medium">{u.name}</div>
-                      {u.forcePasswordChange && (
-                        <div className="text-xs text-amber-600">يجب تغيير كلمة المرور</div>
-                      )}
-                      {u.allowLogin === false && (
-                        <div className="text-xs text-red-500">مقيّد الدخول</div>
-                      )}
+                      {u.forcePasswordChange && <div className="text-xs text-amber-600">يجب تغيير كلمة المرور</div>}
+                      {u.allowLogin === false && <div className="text-xs text-red-500">مقيّد الدخول</div>}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">{u.username}</TableCell>
                     <TableCell>
@@ -623,7 +825,7 @@ export default function Users() {
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {u.userGroupId
-                        ? ((userGroups as any[]).find(g => g.id === u.userGroupId)?.name ?? <span className="text-xs opacity-40">—</span>)
+                        ? ((userGroups as any[]).find((g) => g.id === u.userGroupId)?.name ?? <span className="text-xs opacity-40">—</span>)
                         : <span className="text-xs opacity-40">—</span>}
                     </TableCell>
                     <TableCell>
@@ -657,488 +859,45 @@ export default function Users() {
         </CardContent>
       </Card>
 
-      {/* ─── نافذة إضافة / تعديل ───────────────────────────────────────────── */}
-      <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
-        <DialogContent className="w-[760px] max-w-[calc(100vw-2rem)] h-[640px] max-h-[calc(100vh-60px)] flex flex-col p-0 overflow-hidden" dir="rtl">
-          <DialogHeader className="shrink-0 px-6 pt-5 pb-4 border-b">
-            <DialogTitle className="flex items-center gap-2">
-              <Shield className="w-4 h-4" />
-              {mode === "create" ? "إضافة مستخدم جديد" : `تعديل: ${selectedUser?.name}`}
-            </DialogTitle>
-          </DialogHeader>
-
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0 overflow-hidden">
-            <TabsList className="shrink-0 grid w-full grid-cols-5 text-xs h-9 rounded-none border-b bg-transparent p-0">
-              <TabsTrigger value="basic" className="text-xs rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none h-full">البيانات الأساسية</TabsTrigger>
-              <TabsTrigger value="contact" className="text-xs rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none h-full">التواصل</TabsTrigger>
-              <TabsTrigger value="login" className="text-xs rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none h-full">الدخول والحالة</TabsTrigger>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className={`inline-flex h-full flex-1 ${mode === "create" ? "cursor-not-allowed" : ""}`}>
-                    <TabsTrigger value="work" className="text-xs rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none h-full w-full data-[disabled]:opacity-50 data-[disabled]:pointer-events-none" disabled={mode === "create"}>
-                      <span className="flex items-center gap-1">
-                        {mode === "create" && <Lock className="w-3 h-3" />}
-                        إعدادات العمل
-                      </span>
-                    </TabsTrigger>
-                  </span>
-                </TooltipTrigger>
-                {mode === "create" && <TooltipContent side="bottom">يتاح بعد إنشاء المستخدم</TooltipContent>}
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className={`inline-flex h-full flex-1 ${mode === "create" ? "cursor-not-allowed" : ""}`}>
-                    <TabsTrigger value="perms" className="text-xs rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none h-full w-full data-[disabled]:opacity-50 data-[disabled]:pointer-events-none" disabled={mode === "create"}>
-                      <span className="flex items-center gap-1">
-                        {mode === "create" && <Lock className="w-3 h-3" />}
-                        الصلاحيات
-                      </span>
-                    </TabsTrigger>
-                  </span>
-                </TooltipTrigger>
-                {mode === "create" && <TooltipContent side="bottom">يتاح بعد إنشاء المستخدم</TooltipContent>}
-              </Tooltip>
-            </TabsList>
-
-            {/* ── تبويب: البيانات الأساسية ── */}
-            <TabsContent value="basic" className="flex-1 overflow-y-auto mt-0 px-6 pt-5 pb-4 space-y-4">
-              {/* صف 1: الاسم الكامل (يمين) + الكود (يسار) */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>الاسم الكامل <span className="text-red-500">*</span></Label>
-                  <Input className="mt-1" placeholder="الاسم الكامل" value={form.name}
-                    onChange={(e) => setField("name", e.target.value)} />
-                </div>
-                <div>
-                  <Label>الكود <span className="text-muted-foreground text-xs">(اختياري)</span></Label>
-                  <Input className="mt-1" placeholder="USR001" value={form.code} dir="ltr"
-                    onChange={(e) => setField("code", e.target.value)} disabled={mode === "edit"} />
-                </div>
-              </div>
-              {/* صف 2: اسم الدخول (يمين) + نوع المستخدم (يسار) */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>اسم الدخول {mode === "create" && <span className="text-red-500">*</span>}</Label>
-                  <Input className="mt-1" placeholder="login_name" value={form.username}
-                    onChange={(e) => setField("username", e.target.value)}
-                    disabled={mode === "edit"} dir="ltr" />
-                  {mode === "edit" && <p className="text-xs text-muted-foreground mt-0.5">لا يمكن تغيير اسم الدخول</p>}
-                </div>
-                <div>
-                  <Label>نوع المستخدم (الدور) <span className="text-red-500">*</span></Label>
-                  <Select value={form.role} onValueChange={(v) => setField("role", v)}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent position="popper">
-                      <SelectItem value="admin">مدير النظام</SelectItem>
-                      <SelectItem value="accountant">محاسب</SelectItem>
-                      <SelectItem value="cashier">كاشير</SelectItem>
-                      <SelectItem value="warehouse_manager">مدير مخزن</SelectItem>
-                      <SelectItem value="viewer">مشاهد</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              {/* صف 3: مجموعة المستخدمين (يمين) + الفرع الافتراضي (يسار) */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>مجموعة المستخدمين <span className="text-muted-foreground text-xs">(اختياري)</span></Label>
-                  <Select value={form.userGroupId || "_none"} onValueChange={(v) => setField("userGroupId", v === "_none" ? "" : v)}>
-                    <SelectTrigger className="mt-1"><SelectValue placeholder="— بدون مجموعة —" /></SelectTrigger>
-                    <SelectContent position="popper">
-                      <SelectItem value="_none">— بدون مجموعة —</SelectItem>
-                      {(userGroups as any[]).map((g) => (
-                        <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>الفرع الافتراضي <span className="text-muted-foreground text-xs">(اختياري)</span></Label>
-                  <Select value={form.defaultBranchId || "_none"} onValueChange={(v) => setField("defaultBranchId", v === "_none" ? "" : v)}>
-                    <SelectTrigger className="mt-1"><SelectValue placeholder="— بدون تحديد —" /></SelectTrigger>
-                    <SelectContent position="popper">
-                      <SelectItem value="_none">— بدون تحديد —</SelectItem>
-                      {(branchesList as any[]).map((b) => (
-                        <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              {/* صف 4: المخزن الافتراضي (يمين) + اللغة الافتراضية (يسار) */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>المخزن الافتراضي <span className="text-muted-foreground text-xs">(اختياري)</span></Label>
-                  <Select value={form.defaultWarehouseId || "_none"} onValueChange={(v) => setField("defaultWarehouseId", v === "_none" ? "" : v)}>
-                    <SelectTrigger className="mt-1"><SelectValue placeholder="— بدون تحديد —" /></SelectTrigger>
-                    <SelectContent position="popper">
-                      <SelectItem value="_none">— بدون تحديد —</SelectItem>
-                      {(warehousesList as any[]).map((w) => (
-                        <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>اللغة الافتراضية <span className="text-muted-foreground text-xs">(اختياري)</span></Label>
-                  <Select value={form.defaultLanguage || "_none"} onValueChange={(v) => setField("defaultLanguage", v === "_none" ? "" : v)}>
-                    <SelectTrigger className="mt-1"><SelectValue placeholder="— حسب النظام —" /></SelectTrigger>
-                    <SelectContent position="popper">
-                      <SelectItem value="_none">— حسب إعداد النظام —</SelectItem>
-                      <SelectItem value="ar">العربية</SelectItem>
-                      <SelectItem value="en">الإنجليزية</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </TabsContent>
-
-            {/* ── تبويب: التواصل ── */}
-            <TabsContent value="contact" className="flex-1 overflow-y-auto mt-0 px-6 pt-5 pb-4 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                {/* رقم الجوال */}
-                <div>
-                  <div className="flex items-center justify-between mb-1 min-h-[1.5rem]">
-                    <Label>رقم الجوال <span className="text-muted-foreground text-xs">(اختياري)</span></Label>
-                    {mode === "edit" && selectedUser?.phone && !phoneChanged && (
-                      <div className="flex items-center gap-1">
-                        <VerifyBadge verified={!!selectedUser?.phoneVerifiedAt} label="الجوال" />
-                        <Button variant="ghost" size="sm" className="h-5 text-xs gap-1 px-1.5"
-                          disabled={sendVerification.isPending}
-                          onClick={() => sendVerification.mutate({ userId: selectedUser.id, channel: "phone" })}>
-                          {sendVerification.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <Phone className="absolute start-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
-                    <Input className={`ps-6 ${phoneError ? "border-red-400" : ""}`}
-                      placeholder="+9665xxxxxxxx أو 05xxxxxxxx"
-                      value={form.phone} onChange={(e) => setField("phone", e.target.value)}
-                      dir="ltr" type="tel" />
-                  </div>
-                  {phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}
-                  {phoneChanged && selectedUser?.phoneVerifiedAt && (
-                    <p className="text-amber-600 text-xs mt-1">⚠ تغيير الجوال سيلغي التحقق.</p>
-                  )}
-                  {!form.phone && (
-                    <p className="text-amber-600 text-xs mt-1">⚠ يُفضَّل إدخال الجوال لاستعادة كلمة المرور.</p>
-                  )}
-                </div>
-                {/* البريد الإلكتروني */}
-                <div>
-                  <div className="flex items-center justify-between mb-1 min-h-[1.5rem]">
-                    <Label>البريد الإلكتروني <span className="text-muted-foreground text-xs">(اختياري)</span></Label>
-                    {mode === "edit" && selectedUser?.email && !emailChanged && (
-                      <div className="flex items-center gap-1">
-                        <VerifyBadge verified={!!selectedUser?.emailVerifiedAt} label="البريد" />
-                        <Button variant="ghost" size="sm" className="h-5 text-xs gap-1 px-1.5"
-                          disabled={sendVerification.isPending}
-                          onClick={() => sendVerification.mutate({ userId: selectedUser.id, channel: "email" })}>
-                          {sendVerification.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <Mail className="absolute start-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
-                    <Input className="ps-6"
-                      placeholder="example@company.com"
-                      type="email" value={form.email}
-                      onChange={(e) => setField("email", e.target.value)} dir="ltr" />
-                  </div>
-                  {emailChanged && selectedUser?.emailVerifiedAt && (
-                    <p className="text-amber-600 text-xs mt-1">⚠ تغيير البريد سيلغي التحقق.</p>
-                  )}
-                </div>
-              </div>
-
-              {/* إعدادات الاستعادة — في وضع التعديل فقط */}
-              {mode === "edit" && (
-                <div className="space-y-3 rounded-lg border p-3">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">إعدادات استعادة كلمة المرور</p>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium">استعادة عبر الجوال</p>
-                      <p className="text-xs text-muted-foreground">
-                        {selectedUser?.phoneVerifiedAt ? "الجوال محقق ✓" : "يتطلب تحقق الجوال أولاً"}
-                      </p>
-                    </div>
-                    <Switch checked={recoveryEnabledPhone} disabled={!selectedUser?.phoneVerifiedAt}
-                      onCheckedChange={(v) => { setRecoveryEnabledPhone(v); setRecoveryDirty(true); }} />
-                  </div>
-                  <div className="flex items-center justify-between border-t pt-3">
-                    <div>
-                      <p className="text-sm font-medium">استعادة عبر البريد</p>
-                      <p className="text-xs text-muted-foreground">
-                        {selectedUser?.emailVerifiedAt ? "البريد محقق ✓" : "يتطلب تحقق البريد أولاً"}
-                      </p>
-                    </div>
-                    <Switch checked={recoveryEnabledEmail} disabled={!selectedUser?.emailVerifiedAt}
-                      onCheckedChange={(v) => { setRecoveryEnabledEmail(v); setRecoveryDirty(true); }} />
-                  </div>
-                  {recoveryDirty && (
-                    <Button size="sm" variant="outline" onClick={handleSaveRecovery}
-                      disabled={setRecoveryOptions.isPending} className="gap-1 mt-1">
-                      {setRecoveryOptions.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                      حفظ إعدادات الاستعادة
-                    </Button>
-                  )}
-                </div>
-              )}
-            </TabsContent>
-
-            {/* ── تبويب: الدخول والحالة ── */}
-            <TabsContent value="login" className="flex-1 overflow-y-auto mt-0 px-6 pt-5 pb-4 space-y-4">
-              {/* بطاقة: حالة الدخول */}
-              <div className="rounded-lg border divide-y">
-                <div className="flex items-center justify-between px-4 py-3">
-                  <div>
-                    <p className="text-sm font-medium">السماح بتسجيل الدخول</p>
-                    <p className="text-xs text-muted-foreground">تعطيله يمنع الدخول بغض النظر عن كلمة المرور</p>
-                  </div>
-                  <Switch checked={form.allowLogin} onCheckedChange={(v) => setField("allowLogin", v)} />
-                </div>
-                {mode === "edit" && (
-                  <div className="flex items-center justify-between px-4 py-3">
-                    <div>
-                      <p className="text-sm font-medium">إجبار تغيير كلمة المرور</p>
-                      <p className="text-xs text-muted-foreground">يُجبر المستخدم على تغيير كلمته عند أول دخول</p>
-                    </div>
-                    <Switch checked={forcePasswordChange}
-                      onCheckedChange={(v) => { setForcePasswordChange(v); setRecoveryDirty(true); }} />
-                  </div>
-                )}
-              </div>
-
-              {/* بطاقة: كلمة المرور */}
-              <div className="rounded-lg border px-4 py-3 space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  {mode === "create" ? "كلمة المرور" : "تغيير كلمة المرور"}
-                </p>
-                <div>
-                  <Label className="text-sm">
-                    {mode === "create"
-                      ? <>{allowPasswordless && form.role !== "admin" ? <span className="text-muted-foreground text-xs">(اختياري)</span> : <span className="text-red-500">*</span>}</>
-                      : <span className="text-muted-foreground text-xs">(اتركها فارغة لإبقاء الحالية)</span>}
-                  </Label>
-                  <div className="relative mt-1">
-                    <Input
-                      type={showPassword ? "text" : "password"}
-                      placeholder={mode === "create" && allowPasswordless && form.role !== "admin" ? "اتركها فارغة للدخول بدون كلمة مرور" : "كلمة المرور"}
-                      value={mode === "create" ? form.password : form.newPassword}
-                      onChange={(e) => setField(mode === "create" ? "password" : "newPassword", e.target.value)}
-                      dir="ltr" className="pe-9" />
-                    <button type="button" tabIndex={-1}
-                      className="absolute end-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                      onClick={() => setShowPassword(p => !p)}>
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* بطاقة: جلسات الدخول (وضع التعديل فقط) */}
-              {mode === "edit" && (
-                <div className="rounded-lg border divide-y">
-                  <div className="px-4 py-3">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">جلسات الدخول</p>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium">آخر تسجيل دخول</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {selectedUser?.lastLoginAt ? fmtDate(selectedUser.lastLoginAt) : "لم يُسجَّل دخول بعد"}
-                        </p>
-                      </div>
-                      <Button variant="outline" size="sm" className="gap-1.5 shrink-0"
-                        disabled={logoutAllSessions.isPending}
-                        onClick={() => logoutAllSessions.mutate({ userId: selectedUser.id })}>
-                        {logoutAllSessions.isPending
-                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          : <LogOut className="w-3.5 h-3.5" />}
-                        إخراج من الأجهزة
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </TabsContent>
-
-            {/* ── تبويب: إعدادات العمل ── */}
-            <TabsContent value="work" className="flex-1 overflow-y-auto mt-0 px-6 pt-5 pb-4 space-y-3">
-              {(
-                <>
-                  {(selectedUser?.role === "admin" || selectedUser?.role === "superadmin") ? (
-                    <p className="text-xs text-muted-foreground bg-muted/40 border rounded-lg px-3 py-2.5">
-                      مدير النظام يملك جميع صلاحيات العمل دائماً — لا حاجة لتفعيل صلاحيات إضافية.
-                    </p>
-                  ) : (
-                    <>
-                      <div className="space-y-3 rounded-lg border p-3">
-                        {WORK_PERM_DEFS.map((d, i) => (
-                          <div key={d.key} className={`flex items-center justify-between ${i > 0 ? "border-t pt-3" : ""}`}>
-                            <div>
-                              <p className="text-sm font-medium">{d.label}</p>
-                              <p className="text-xs text-muted-foreground">{d.desc}</p>
-                            </div>
-                            <Switch
-                              checked={extraPerms[d.key] === true}
-                              onCheckedChange={(v) => togglePerm(d.key, v)}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                      {permsDirty && (
-                        <Button size="sm" variant="outline" onClick={handleSavePerms}
-                          disabled={setExtraPermissions.isPending} className="gap-1">
-                          {setExtraPermissions.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                          حفظ إعدادات العمل
-                        </Button>
-                      )}
-                    </>
-                  )}
-                </>
-              )}
-            </TabsContent>
-
-            {/* ── تبويب: الصلاحيات ── */}
-            <TabsContent value="perms" className="flex-1 overflow-y-auto mt-0 px-6 pt-4 space-y-4">
-              {mode === "edit" && (
-                <>
-                  {/* صلاحيات المساعدة والخدمات */}
-                  <section className="space-y-3">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                      <LifeBuoy className="w-3.5 h-3.5" />
-                      صلاحيات وحدة المساعدة والخدمات
-                    </p>
-                    {(selectedUser?.role === "admin" || selectedUser?.role === "superadmin") ? (
-                      <p className="text-xs text-muted-foreground bg-muted/40 border rounded-lg px-3 py-2.5">
-                        مدير النظام يرى وحدة المساعدة والخدمات وجميع شاشاتها دائمًا.
-                      </p>
-                    ) : (
-                      <>
-                        <div className="space-y-3 rounded-lg border p-3">
-                          {HS_PERM_DEFS.map((d, i) => (
-                            <div key={d.key} className={`flex items-center justify-between ${i > 0 ? "border-t pt-3" : ""}`}>
-                              <div>
-                                <p className={`text-sm ${d.isModule ? "font-semibold" : "font-medium"}`}>{d.label}</p>
-                                {d.isModule && (
-                                  <p className="text-xs text-muted-foreground">بدونها لا تظهر الوحدة إطلاقًا</p>
-                                )}
-                              </div>
-                              <Switch checked={extraPerms[d.key] === true}
-                                disabled={!d.isModule && extraPerms[HS_MODULE_PERM] !== true}
-                                onCheckedChange={(v) => togglePerm(d.key, v)}
-                                data-testid={`switch-perm-${d.key}`} />
-                            </div>
-                          ))}
-                        </div>
-                        {extraPerms[HS_MODULE_PERM] !== true && (
-                          <p className="text-xs text-amber-600">⚠ فعّل صلاحية الوحدة أولًا لتتمكن من تفعيل صلاحيات الشاشات.</p>
-                        )}
-                      </>
-                    )}
-                  </section>
-
-                  {/* صلاحيات المساعد الذكي */}
-                  <section className="space-y-3 border-t pt-4">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5" />
-                      صلاحيات المساعد الذكي
-                    </p>
-                    {(selectedUser?.role === "admin" || selectedUser?.role === "superadmin") ? (
-                      <p className="text-xs text-muted-foreground bg-muted/40 border rounded-lg px-3 py-2.5">
-                        مدير النظام يملك جميع صلاحيات المساعد الذكي دائمًا.
-                      </p>
-                    ) : (
-                      <>
-                        <div className="space-y-3 rounded-lg border p-3">
-                          {AI_PERM_DEFS.map((d, i) => (
-                            <div key={d.key} className={`flex items-center justify-between ${i > 0 ? "border-t pt-3" : ""}`}>
-                              <div>
-                                <p className={`text-sm ${d.isModule ? "font-semibold" : "font-medium"}`}>{d.label}</p>
-                                {d.isModule && (
-                                  <p className="text-xs text-muted-foreground">بدونها لا يستطيع المستخدم فتح المساعد الذكي</p>
-                                )}
-                              </div>
-                              <Switch checked={extraPerms[d.key] === true}
-                                disabled={!d.isModule && extraPerms[AI_MODULE_PERM] !== true}
-                                onCheckedChange={(v) => togglePerm(d.key, v)}
-                                data-testid={`switch-perm-${d.key}`} />
-                            </div>
-                          ))}
-                        </div>
-                        {extraPerms[AI_MODULE_PERM] !== true && (
-                          <p className="text-xs text-amber-600">⚠ فعّل صلاحية «استخدام المساعد الذكي» أولًا لتتمكن من تفعيل بقية الصلاحيات.</p>
-                        )}
-                      </>
-                    )}
-                  </section>
-
-                  {permsDirty && (
-                    <Button size="sm" variant="outline" onClick={handleSavePerms}
-                      disabled={setExtraPermissions.isPending} className="gap-1"
-                      data-testid="button-save-perms">
-                      {setExtraPermissions.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                      حفظ الصلاحيات
-                    </Button>
-                  )}
-                </>
-              )}
-            </TabsContent>
-          </Tabs>
-
-          <DialogFooter className="shrink-0 px-6 py-3.5 border-t">
-            <div className="flex w-full items-center justify-between gap-3">
-              <div className="flex-1">
-                {mode === "edit" && (
-                  <Button variant="destructive" onClick={() => setShowDeleteConfirm(true)} className="gap-1">
-                    <Trash2 className="w-4 h-4" />حذف
-                  </Button>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={handleClose}>إلغاء</Button>
-                {activeTab !== "perms" && (
-                  <Button onClick={() => handleSubmit().catch(() => {})} disabled={isPending || !!phoneError}>
-                    {isPending ? <><Loader2 className="w-3.5 h-3.5 animate-spin me-1" />جاري الحفظ...</> : mode === "create" ? "إنشاء المستخدم" : "حفظ التعديلات"}
-                  </Button>
-                )}
-              </div>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <UnsavedChangesDialog
-        open={confirmOpen}
-        onSave={() => confirmSave(handleSubmit)}
-        onDiscard={confirmDiscard}
-        onCancel={confirmCancel}
-        isSaving={isPending}
+      {/* ─── نافذة إضافة / تعديل (التصميم الجديد) ─────────────────────────── */}
+      <UserFormDialog
+        open={isOpen}
+        mode={mode}
+        initialValue={initialValue}
+        onOpenChange={setIsOpen}
+        onSubmit={handleDialogSubmit}
+        groups={userGroups as any[]}
+        branches={branchesList as any[]}
+        warehouses={warehousesList as any[]}
+        loginTabExtension={loginTabExtension}
+        workTabContent={workTabContent}
+        permissionsTabContent={permissionsTabContent}
       />
 
-      {/* ─── نافذة حذف ─────────────────────────────────────────────────────── */}
-      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>تأكيد الحذف</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground py-2">
-            هل أنت متأكد من حذف المستخدم "<span className="font-medium text-foreground">{selectedUser?.name}</span>"؟
-          </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>إلغاء</Button>
-            <Button variant="destructive" onClick={() => deleteUser.mutate({ id: selectedUser.id })} disabled={deleteUser.isPending}>
-              {deleteUser.isPending ? "جاري الحذف..." : "حذف"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* ─── نافذة الحذف ─────────────────────────────────────────────────── */}
+      {mode === "edit" && selectedUser && (
+        <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader><DialogTitle>تأكيد الحذف</DialogTitle></DialogHeader>
+            <p className="text-sm text-muted-foreground py-2">
+              هل أنت متأكد من حذف المستخدم "<span className="font-medium text-foreground">{selectedUser?.name}</span>"؟
+            </p>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>إلغاء</Button>
+              <Button variant="destructive" onClick={() => deleteUser.mutate({ id: selectedUser.id })} disabled={deleteUser.isPending}>
+                {deleteUser.isPending ? "جاري الحذف..." : "حذف"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
+      {/* ─── نافذة تغيير كلمة المرور ────────────────────────────────────── */}
       {passwordUser && (
         <ChangeUserPasswordDialog user={passwordUser} onClose={() => setPasswordUser(null)} allowPasswordless={allowPasswordless} />
       )}
 
+      {/* ─── نافذة تأكيد OTP ─────────────────────────────────────────────── */}
       {verifyDialog && selectedUser && (
         <VerifyOtpDialog
           open={verifyDialog.open}
