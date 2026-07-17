@@ -20,10 +20,14 @@ export function useUnsavedChangesGuard({ isDirty }: Options) {
     [isDirty]
   );
 
-  const confirmSave = useCallback((onSave: () => void) => {
-    setConfirmOpen(false);
-    afterCloseRef.current = null;
-    onSave();
+  const confirmSave = useCallback(async (onSave: () => Promise<void> | void) => {
+    try {
+      await onSave();
+      afterCloseRef.current = null;
+      setConfirmOpen(false);
+    } catch {
+      // save failed — keep guard dialog open so user can retry or discard
+    }
   }, []);
 
   const confirmDiscard = useCallback(() => {

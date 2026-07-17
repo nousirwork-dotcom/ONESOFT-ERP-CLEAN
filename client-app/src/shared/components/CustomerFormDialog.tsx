@@ -209,7 +209,7 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
 
   const set = (k: keyof CustomerData, v: string) => setForm(f => ({ ...f, [k]: v }));
 
-  const handleSave = () => {
+  const handleSave = async (): Promise<void> => {
     if (!form.name?.trim()) { toast.error("اسم العميل مطلوب"); setTab("main"); return; }
     if (form.customerType === "organization" && !form.taxNumber?.trim()) {
       toast.error("الرقم الضريبي مطلوب للمؤسسات"); setTab("main"); return;
@@ -241,8 +241,8 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
       includeInFoundation: form.includeInFoundation ?? false,
       foundationKey:      form.foundationKey?.trim() || undefined,
     };
-    if (editData?.id) update.mutate({ id: editData.id, ...payload });
-    else              create.mutate(payload);
+    if (editData?.id) await update.mutateAsync({ id: editData.id, ...payload });
+    else              await create.mutateAsync(payload);
   };
 
   const { confirmOpen, requestClose, confirmSave, confirmDiscard, confirmCancel } = useUnsavedChangesGuard({ isDirty });
@@ -824,6 +824,14 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
         </div>
 
       </div>
+
+      <UnsavedChangesDialog
+        open={confirmOpen}
+        onSave={() => confirmSave(handleSave)}
+        onDiscard={confirmDiscard}
+        onCancel={confirmCancel}
+        isSaving={isPending}
+      />
     </div>
   );
 }
@@ -1373,13 +1381,6 @@ function CustomerBalancesTab({
       )}
 
     </div>
-    <UnsavedChangesDialog
-      open={confirmOpen}
-      onSave={() => confirmSave(handleSave)}
-      onDiscard={confirmDiscard}
-      onCancel={confirmCancel}
-      isSaving={isPending}
-    />
   );
 }
 

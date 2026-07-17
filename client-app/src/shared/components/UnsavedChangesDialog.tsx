@@ -4,7 +4,7 @@ import { AlertTriangle } from "lucide-react";
 
 interface UnsavedChangesDialogProps {
   open: boolean;
-  onSave: () => void;
+  onSave: () => void | Promise<void>;
   onDiscard: () => void;
   onCancel: () => void;
   isSaving?: boolean;
