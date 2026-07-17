@@ -1,12 +1,12 @@
 import { fmtDate } from "@/shared/utils/dateUtils";
 import { useTabManager } from "@/core/contexts/TabManagerContext";
-import { LayoutDashboard, Store } from "lucide-react";
+import { Store } from "lucide-react";
 import { useState, useEffect } from "react";
 
 export const TASKBAR_H = 40;
 
 export default function WindowTaskbar() {
-  const { tabs, activeTabId, activateTab, minimizeWindow, toggleDashboard, dashboardVisible, showDashboard } = useTabManager();
+  const { tabs, activeTabId, activateTab, minimizeWindow, toggleDashboard, dashboardVisible, showDashboard, isPosWorkspaceActive } = useTabManager();
   const [clock, setClock] = useState(() => fmtTime());
 
   useEffect(() => {
@@ -14,7 +14,9 @@ export default function WindowTaskbar() {
     return () => clearInterval(id);
   }, []);
 
-  const visibleTabs = tabs; // show all (minimized too)
+  if (isPosWorkspaceActive) return null;
+
+  const visibleTabs = tabs;
 
   return (
     <div

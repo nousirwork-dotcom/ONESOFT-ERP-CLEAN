@@ -24,6 +24,8 @@ type TabManagerContextType = {
   tabs: AppTab[];
   activeTabId: string | null;
   dashboardVisible: boolean;
+  isPosWorkspaceActive: boolean;
+  setIsPosWorkspaceActive: (v: boolean) => void;
   openTab: (path: string, label: string, Icon: React.ElementType, pinned?: boolean) => void;
   closeTab: (id: string) => void;
   activateTab: (id: string) => void;
@@ -170,6 +172,7 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
   const [dashboardVisible, setDashboardVisible] = useState<boolean>(
     restoredTabs.length === 0
   );
+  const [isPosWorkspaceActive, setIsPosWorkspaceActive] = useState<boolean>(false);
 
   const toggleDashboard = useCallback(() => setDashboardVisible(v => !v), []);
   const showDashboard   = useCallback(() => setDashboardVisible(true),    []);
@@ -281,6 +284,7 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
   return (
     <TabManagerContext.Provider value={{
       tabs, activeTabId, dashboardVisible,
+      isPosWorkspaceActive, setIsPosWorkspaceActive,
       openTab, closeTab, activateTab,
       setDashboardVisible, toggleDashboard, showDashboard,
       minimizeWindow, toggleMaximize, bringToFront,

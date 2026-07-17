@@ -15,4 +15,5 @@ contextBridge.exposeInMainWorld('erpAPI', {
   getServerStatus:()    => ipcRenderer.invoke('get-server-status'),
   getLogs:        (n)   => ipcRenderer.invoke('get-logs', n),
   onServerStatus: (cb)  => ipcRenderer.on('server-status', (_e, s) => cb(s)),
+  setFullScreen:  (v)   => ipcRenderer.invoke('pos:setFullScreen', v),
 });

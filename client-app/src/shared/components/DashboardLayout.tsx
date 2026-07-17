@@ -351,7 +351,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [showChangePassword, setShowChangePassword] = useState(false);
   const { loading, user, logout } = useAuth();
   const isMobile = useIsMobile();
-  const { openTab, showDashboard } = useTabManager();
+  const { openTab, showDashboard, isPosWorkspaceActive } = useTabManager();
   const { lang, toggleLang, dir, isAr } = useLang();
   const isResizing = useRef(false);
   const startX = useRef(0);
@@ -513,7 +513,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <>
       <div className="flex flex-col h-screen overflow-hidden bg-background" style={{ paddingTop: "var(--titlebar-h, 0px)" }}>
         {/* Top Bar */}
-        <header className="sticky top-0 z-20 border-b border-[#D4CDC1] dark:border-slate-700 bg-[#DDD4C4] dark:bg-slate-900">
+        <header className="sticky top-0 z-20 border-b border-[#D4CDC1] dark:border-slate-700 bg-[#DDD4C4] dark:bg-slate-900" style={{ display: isPosWorkspaceActive ? 'none' : undefined }}>
           <div className="flex items-center gap-3 px-4 h-10" dir={dir}>
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-primary/20 flex items-center justify-center">
@@ -546,7 +546,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <main
             ref={setWorkspaceEl as any}
             className="flex-1 overflow-hidden"
-            style={{ position: "relative", paddingBottom: 40 }}
+            style={{ position: "relative", paddingBottom: isPosWorkspaceActive ? 0 : 40 }}
           >
             {children}
           </main>
@@ -554,7 +554,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
       <WindowTaskbar />
       <ChatWidget />
-      <ElectronTitleBar />
+      {!isPosWorkspaceActive && <ElectronTitleBar />}
       <ChangeMyPasswordDialog open={showChangePassword} onClose={() => setShowChangePassword(false)} />
       </>
     );
@@ -568,7 +568,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <>
       <div className="flex flex-col h-screen overflow-hidden bg-background" style={{ paddingTop: "var(--titlebar-h, 0px)" }}>
         {/* Top Bar */}
-        <header className="sticky top-0 z-20 border-b border-[#D4CDC1] dark:border-slate-700 bg-[#DDD4C4] dark:bg-slate-900">
+        <header className="sticky top-0 z-20 border-b border-[#D4CDC1] dark:border-slate-700 bg-[#DDD4C4] dark:bg-slate-900" style={{ display: isPosWorkspaceActive ? 'none' : undefined }}>
           {/* Row 1: Logo + User */}
           <div className="flex items-center gap-3 px-4 h-10 border-b border-[#C8C1B8] dark:border-slate-700" dir={dir}>
             <div className="flex items-center gap-2">
@@ -598,7 +598,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <main
             ref={setWorkspaceEl as any}
             className="flex-1 overflow-hidden"
-            style={{ position: "relative", paddingBottom: 40 }}
+            style={{ position: "relative", paddingBottom: isPosWorkspaceActive ? 0 : 40 }}
           >
             {children}
           </main>
@@ -606,7 +606,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
       <WindowTaskbar />
       <ChatWidget />
-      <ElectronTitleBar />
+      {!isPosWorkspaceActive && <ElectronTitleBar />}
       <ChangeMyPasswordDialog open={showChangePassword} onClose={() => setShowChangePassword(false)} />
       </>
     );
@@ -698,7 +698,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       <SidebarInset className="flex flex-col h-screen overflow-hidden" style={{ paddingTop: "var(--titlebar-h, 0px)" }}>
         {/* Top Bar */}
-        <header className="sticky top-0 z-10 flex items-center gap-3 px-4 h-10 border-b border-[#D4CDC1] bg-[#DDD4C4] dark:bg-slate-900 dark:border-slate-700" dir={dir}>
+        <header className="sticky top-0 z-10 flex items-center gap-3 px-4 h-10 border-b border-[#D4CDC1] bg-[#DDD4C4] dark:bg-slate-900 dark:border-slate-700" dir={dir} style={{ display: isPosWorkspaceActive ? 'none' : undefined }}>
           <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
           <div className="flex-1" />
           <div className="flex items-center gap-2">
@@ -716,7 +716,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <main
             ref={setWorkspaceEl as any}
             className="flex-1 overflow-hidden"
-            style={{ position: "relative", paddingBottom: 40 }}
+            style={{ position: "relative", paddingBottom: isPosWorkspaceActive ? 0 : 40 }}
           >
             {children}
           </main>
@@ -725,7 +725,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     </SidebarProvider>
     <WindowTaskbar />
     <ChatWidget />
-    <ElectronTitleBar />
+    {!isPosWorkspaceActive && <ElectronTitleBar />}
     <ChangeMyPasswordDialog open={showChangePassword} onClose={() => setShowChangePassword(false)} />
     </>
   );

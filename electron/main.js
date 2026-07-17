@@ -458,6 +458,11 @@ ipcMain.handle('restart-server',   ()  => {
   setTimeout(() => { startServer(); waitForServer(20000).catch(() => {}); }, 1000);
   return { ok: true };
 });
+ipcMain.handle('pos:setFullScreen', (_e, v) => {
+  const win = BrowserWindow.getFocusedWindow();
+  if (win) win.setFullScreen(Boolean(v));
+  return { ok: true };
+});
 ipcMain.handle('get-logs', (_e, n = 100) => {
   try {
     const today   = new Date().toISOString().slice(0, 10);

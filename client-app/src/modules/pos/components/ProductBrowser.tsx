@@ -59,7 +59,7 @@ export function ProductBrowser(props: ProductBrowserProps) {
   }
 
   return (
-    <section className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_132px] gap-2 overflow-hidden p-2">
+    <section className="grid min-h-0 flex-1 gap-2 overflow-hidden p-2" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(90px,10%)' }}>
       <div className="min-h-0 overflow-auto rounded-2xl border border-slate-200 bg-slate-50/80 p-2">
         {props.view === 'mixed' && props.favoriteProducts.length > 0 ? (
           <div className="mb-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-2">
@@ -67,7 +67,7 @@ export function ProductBrowser(props: ProductBrowserProps) {
               <h3 className="text-xs font-extrabold text-amber-900">الأكثر استخدامًا والمفضلة</h3>
               <span className="text-[10px] text-amber-700">وصول سريع</span>
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6">
+            <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))' }}>
               {props.favoriteProducts.slice(0, 6).map((product) => (
                 <ProductCard key={`fav-${product.id}`} product={product} config={props.config} onClick={() => props.onProductClick(product)} compact />
               ))}
@@ -96,7 +96,7 @@ export function ProductBrowser(props: ProductBrowserProps) {
             ))}
           </div>
         ) : props.view === 'grouped' && !props.selectedCategoryId ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))' }}>
             {activeCategories.map((category) => {
               const count = props.products.filter((product) => product.categoryId === category.id).length;
               return (
@@ -114,7 +114,7 @@ export function ProductBrowser(props: ProductBrowserProps) {
             })}
           </div>
         ) : props.products.length > 0 ? (
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+          <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))' }}>
             {props.products.map((product) => (
               <ProductCard key={product.id} product={product} config={props.config} onClick={() => props.onProductClick(product)} />
             ))}

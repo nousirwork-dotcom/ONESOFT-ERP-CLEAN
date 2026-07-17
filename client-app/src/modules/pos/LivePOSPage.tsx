@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { trpc } from '@/shared/lib/trpc';
 import { useAuth } from '@/core/hooks/useAuth';
+import { useTabManager } from '@/core/contexts/TabManagerContext';
 import CustomerFormDialog from '@/shared/components/CustomerFormDialog';
 import { createPhase1PosApi } from './api';
 import { usePosEngine } from './usePosEngine';
@@ -128,6 +129,9 @@ interface HeaderProps {
   previewLoading: boolean;
   invoiceDate: Date;
   customer: CustomerSummary | null | undefined;
+
+  isFullscreen: boolean;
+  onToggleFullscreen: () => void;
 
   onJournalChange: (id: number) => void;
   onWarehouseChange: (id: number) => void;
@@ -267,6 +271,27 @@ function InvoiceHeaderBar(props: HeaderProps) {
             </span>
           ) : null}
         </div>
+
+        {/* ── Fullscreen toggle button ── */}
+        <button
+          type="button"
+          onClick={props.onToggleFullscreen}
+          title={props.isFullscreen ? 'خروج من ملء الشاشة (F11)' : 'ملء الشاشة (F11)'}
+          className="flex shrink-0 items-center justify-center rounded-lg bg-white/10 p-1.5 transition hover:bg-white/25"
+          style={{ touchAction: 'manipulation', minWidth: 32, minHeight: 32 }}
+        >
+          {props.isFullscreen ? (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/>
+              <line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/>
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+              <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+            </svg>
+          )}
+        </button>
       </div>
     </div>
   );
@@ -308,6 +333,33 @@ type Overlay = 'customer' | 'tables' | 'orders' | null;
 
 export function LivePOSPage() {
   const { user } = useAuth();
+  const { setIsPosWorkspaceActive } = useTabManager();
+
+  // ─── POS workspace mode: hide shell chrome while POS is mounted ───────────
+  useEffect(() => {
+    setIsPosWorkspaceActive(true);
+    return () => setIsPosWorkspaceActive(false);
+  }, [setIsPosWorkspaceActive]);
+
+  // ─── Fullscreen state ─────────────────────────────────────────────────────
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const onFsChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
+
+  const handleToggleFullscreen = useCallback(async () => {
+    const erpAPI = (window as any).erpAPI;
+    if (erpAPI?.setFullScreen) {
+      await erpAPI.setFullScreen(!isFullscreen);
+    } else if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.();
+    } else {
+      document.exitFullscreen?.();
+    }
+  }, [isFullscreen]);
 
   // ─── Invoice header state ─────────────────────────────────────────────────
   const [journalId,      setJournalId]      = useState<number | null>(null);
@@ -398,14 +450,16 @@ export function LivePOSPage() {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'F2') { e.preventDefault(); document.getElementById('pos-search')?.focus(); return; }
       if (e.key === 'F4') { e.preventDefault(); setOverlay('customer'); return; }
+      if (e.key === 'F11') { e.preventDefault(); handleToggleFullscreen(); return; }
       if (e.key === 'Escape') {
+        if (document.fullscreenElement) { document.exitFullscreen?.(); return; }
         if (modifierProduct) setModifierProduct(null);
         else setOverlay(null);
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [modifierProduct]);
+  }, [modifierProduct, handleToggleFullscreen]);
 
   useEffect(() => {
     if (!notice) return;
@@ -479,7 +533,11 @@ export function LivePOSPage() {
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div dir="rtl" className="flex h-full min-h-[640px] flex-col overflow-hidden bg-slate-100 font-sans text-slate-900">
+    <div
+      dir="rtl"
+      className="flex flex-col overflow-hidden bg-slate-100 font-sans text-slate-900"
+      style={{ width: '100%', height: '100%', minHeight: 0 }}
+    >
       <InvoiceHeaderBar
         journals={journalsQuery.data ?? []}
         journalsLoading={journalsQuery.isLoading}
@@ -497,6 +555,8 @@ export function LivePOSPage() {
         previewLoading={previewLoading}
         invoiceDate={invoiceDate}
         customer={state.draft.customer}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={handleToggleFullscreen}
         onJournalChange={handleJournalChange}
         onWarehouseChange={(id) => setWarehouseId(id)}
         onOpenCustomer={() => setOverlay('customer')}

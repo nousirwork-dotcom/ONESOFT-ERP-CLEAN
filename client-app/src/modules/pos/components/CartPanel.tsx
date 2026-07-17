@@ -72,7 +72,7 @@ function TotalRow({ label, value, strong, config }: { label: string; value: numb
 export function CartPanel(props: CartPanelProps) {
   const isEmpty = props.draft.lines.length === 0;
   return (
-    <aside className="flex min-h-0 w-[390px] min-w-[340px] max-w-[42vw] flex-col border-s border-slate-200 bg-white">
+    <aside className="flex min-h-0 flex-col border-s border-slate-200 bg-white" style={{ flex: '0 0 28%', minWidth: '280px', maxWidth: '400px' }}>
       <div className="border-b border-slate-200 p-3">
         <div className="flex items-center justify-between gap-2">
           <div>
