@@ -10,7 +10,9 @@ import { ModifierDialog } from './components/ModifierDialog';
 import { TableMapDialog } from './components/TableMapDialog';
 import { OpenOrdersDialog } from './components/OpenOrdersDialog';
 import { LiveCustomerPanel } from './components/LiveCustomerPanel';
-import type { PosApi, PosConfig, CatalogPayload, Category, Product, CustomerSummary } from './types';
+import type { PosApi } from './api';
+import type { PosConfig, CatalogPayload, Category, Product, CustomerSummary } from './types';
+import { Spinner } from './components/Modal';
 
 // ─── Stub API (Phase 1: read-only — save/checkout not yet active) ─────────────
 const STUB_API: PosApi = {
@@ -76,21 +78,45 @@ function buildCatalog(
 }
 
 // ─── Map DB customer rows to POS CustomerSummary ──────────────────────────────
-function mapCustomers(rows: any[]): CustomerSummary[] {
-  return rows.map((c) => ({
+function mapCustomer(c: any): CustomerSummary {
+  return {
     id: String(c.id),
     name: c.name,
     phone: c.phone ?? null,
     taxNumber: c.taxNumber ?? null,
     balanceMinor: Math.round(Number(c.balance ?? 0) * 100),
-  }));
+  };
+}
+
+function mapCustomers(rows: any[]): CustomerSummary[] {
+  return rows.map(mapCustomer);
+}
+
+// ─── Error banner with retry ──────────────────────────────────────────────────
+function QueryError({ label, onRetry }: { label: string; onRetry: () => void }) {
+  return (
+    <div className="flex items-center gap-2 rounded-lg bg-rose-700/80 px-2 py-1 text-xs text-white">
+      <span>⚠ {label}</span>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="rounded bg-white/20 px-2 py-0.5 font-bold hover:bg-white/30"
+      >
+        إعادة المحاولة
+      </button>
+    </div>
+  );
 }
 
 // ─── Invoice header bar ───────────────────────────────────────────────────────
 interface InvoiceHeaderBarProps {
   journals: any[];
+  journalsLoading: boolean;
+  journalsError: boolean;
+  onJournalsRetry: () => void;
   selectedJournalId: number | null;
   warehouses: any[];
+  warehousesLoading: boolean;
   selectedWarehouseId: number | null;
   branches: any[];
   selectedBranchId: number | null;
@@ -105,6 +131,8 @@ interface InvoiceHeaderBarProps {
 
 function InvoiceHeaderBar(props: InvoiceHeaderBarProps) {
   const selectedBranch = props.branches.find((b) => b.id === props.selectedBranchId);
+  const selectedJournal = props.journals.find((j) => j.id === props.selectedJournalId);
+  const selectedWarehouse = props.warehouses.find((w) => w.id === props.selectedWarehouseId);
   const dateStr = props.invoiceDate.toLocaleDateString('ar-SA-u-nu-latn', {
     day: '2-digit', month: '2-digit', year: 'numeric',
   });
@@ -112,6 +140,7 @@ function InvoiceHeaderBar(props: InvoiceHeaderBarProps) {
   return (
     <div className="border-b border-[#1C4576]/30 bg-[#1C4576] px-3 py-2 text-white shadow-md">
       <div className="flex flex-wrap items-center gap-2">
+        {/* Branch */}
         {selectedBranch ? (
           <div className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2 py-1 text-xs">
             <span className="text-[#D8AE55]">🏢</span>
@@ -119,39 +148,57 @@ function InvoiceHeaderBar(props: InvoiceHeaderBarProps) {
           </div>
         ) : null}
 
-        <label className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2 py-1 text-xs transition hover:bg-white/20">
-          <span className="text-[#D8AE55]">📋</span>
-          <span className="font-semibold opacity-80">الدفتر</span>
-          <select
-            value={props.selectedJournalId ?? ''}
-            onChange={(e) => { const v = Number(e.target.value); if (v) props.onJournalChange(v); }}
-            className="max-w-[180px] truncate bg-transparent text-xs font-bold outline-none"
-          >
-            <option value="">— اختر دفتر المبيعات —</option>
-            {props.journals.map((j) => (
-              <option key={j.id} value={j.id}>{j.name}</option>
-            ))}
-          </select>
-        </label>
+        {/* Journal selector */}
+        {props.journalsError ? (
+          <QueryError label="خطأ في تحميل الدفاتر" onRetry={props.onJournalsRetry} />
+        ) : (
+          <label className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2 py-1 text-xs transition hover:bg-white/20">
+            <span className="text-[#D8AE55]">📋</span>
+            <span className="font-semibold opacity-80">الدفتر</span>
+            {props.journalsLoading ? (
+              <span className="animate-pulse text-[10px]">جارٍ التحميل...</span>
+            ) : (
+              <select
+                value={props.selectedJournalId ?? ''}
+                onChange={(e) => { const v = Number(e.target.value); if (v) props.onJournalChange(v); }}
+                className="max-w-[200px] truncate bg-transparent text-xs font-bold outline-none"
+              >
+                <option value="">— اختر دفتر المبيعات —</option>
+                {props.journals.map((j) => (
+                  <option key={j.id} value={j.id}>{j.code} — {j.name}</option>
+                ))}
+              </select>
+            )}
+          </label>
+        )}
 
-        {props.warehouses.length > 0 ? (
+        {/* Warehouse selector */}
+        {props.warehouses.length > 0 || props.warehousesLoading ? (
           <label className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2 py-1 text-xs transition hover:bg-white/20">
             <span className="text-[#D8AE55]">🏪</span>
             <span className="font-semibold opacity-80">المستودع</span>
-            <select
-              value={props.selectedWarehouseId ?? ''}
-              onChange={(e) => { const v = Number(e.target.value); if (v) props.onWarehouseChange(v); }}
-              className="max-w-[160px] truncate bg-transparent text-xs font-bold outline-none"
-            >
-              <option value="">— اختر مستودع —</option>
-              {props.warehouses.map((w) => (
-                <option key={w.id} value={w.id}>{w.name}</option>
-              ))}
-            </select>
+            {props.warehousesLoading ? (
+              <span className="animate-pulse text-[10px]">جارٍ التحميل...</span>
+            ) : (
+              <select
+                value={props.selectedWarehouseId ?? ''}
+                onChange={(e) => { const v = Number(e.target.value); if (v) props.onWarehouseChange(v); }}
+                className="max-w-[160px] truncate bg-transparent text-xs font-bold outline-none"
+              >
+                <option value="">— اختر مستودع —</option>
+                {props.warehouses.map((w) => (
+                  <option key={w.id} value={w.id}>{w.name}</option>
+                ))}
+              </select>
+            )}
           </label>
         ) : null}
 
-        <div className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2 py-1 text-xs" title="رقم استرشادي — يعتمد عند الحفظ">
+        {/* Preview number */}
+        <div
+          className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2 py-1 text-xs"
+          title="رقم استرشادي — يُعتمد ويتسلسل فقط عند حفظ الفاتورة"
+        >
           <span className="text-[#D8AE55]">#</span>
           <span className="font-semibold opacity-80">رقم استرشادي</span>
           <span className="font-black tabular-nums">
@@ -159,11 +206,13 @@ function InvoiceHeaderBar(props: InvoiceHeaderBarProps) {
           </span>
         </div>
 
+        {/* Date */}
         <div className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2 py-1 text-xs">
           <span className="text-[#D8AE55]">📅</span>
           <span className="font-bold tabular-nums">{dateStr}</span>
         </div>
 
+        {/* Customer button */}
         <button
           type="button"
           onClick={props.onOpenCustomer}
@@ -175,16 +224,59 @@ function InvoiceHeaderBar(props: InvoiceHeaderBarProps) {
           title="F4 — اختيار عميل"
         >
           <span>👤</span>
-          <span className="max-w-[140px] truncate">{props.customer?.name ?? 'عميل نقدي'}</span>
+          <span className="max-w-[160px] truncate">
+            {props.customer?.name ?? 'عميل نقدي'}
+          </span>
           {props.customer?.taxNumber ? (
             <span className="text-[10px] opacity-70">• {props.customer.taxNumber}</span>
           ) : null}
         </button>
 
-        <div className="ms-auto text-[10px] opacity-60">
-          {!props.selectedJournalId ? 'اختر الدفتر لعرض الرقم الاسترشادي' : null}
-          {props.selectedJournalId && !props.selectedWarehouseId ? '• اختر المستودع لعرض المخزون' : null}
+        {/* Status hints */}
+        <div className="ms-auto flex items-center gap-2 text-[10px] opacity-60">
+          {!props.selectedJournalId && !props.journalsLoading && !props.journalsError ? (
+            <span>اختر الدفتر لعرض الرقم الاسترشادي</span>
+          ) : null}
+          {props.selectedJournalId && !props.selectedWarehouseId ? (
+            <span>• اختر المستودع لعرض المخزون</span>
+          ) : null}
+          {selectedJournal && selectedWarehouse ? (
+            <span className="text-[#D8AE55] opacity-100">
+              {selectedJournal.code} / {selectedWarehouse.name}
+            </span>
+          ) : null}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Full-page loading/error states ──────────────────────────────────────────
+function PageLoading() {
+  return (
+    <div className="grid h-full place-items-center text-[#1C4576]">
+      <div className="text-center">
+        <Spinner label="جارٍ تحميل بيانات نقطة البيع" />
+        <div className="mt-2 text-xs text-slate-500">الأصناف، الدفاتر، المستودعات...</div>
+      </div>
+    </div>
+  );
+}
+
+function PageError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="grid h-full place-items-center">
+      <div className="max-w-sm rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center">
+        <div className="text-4xl">⚠</div>
+        <div className="mt-3 font-extrabold text-rose-800">تعذّر تحميل بيانات نقطة البيع</div>
+        <div className="mt-1 text-sm text-rose-700">{message}</div>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-4 rounded-xl bg-[#1C4576] px-5 py-2 text-sm font-bold text-white hover:bg-[#1C4576]/90"
+        >
+          إعادة المحاولة
+        </button>
       </div>
     </div>
   );
@@ -341,19 +433,58 @@ export function LivePOSPage() {
     else if (value.trim()) setNotice('لم يتم العثور على باركود مطابق أو الصنف غير متاح');
   }, [engine, handleProductClick]);
 
-  const handleCustomerSaved = useCallback(() => {
-    utils.customers.list.invalidate();
+  // ─── Customer: add new → auto-select after save ────────────────────────────
+  const handleCustomerSaved = useCallback(async () => {
+    try {
+      const freshList = await utils.customers.list.fetch();
+      if (freshList && freshList.length > 0) {
+        const newest = freshList.reduce((a: any, b: any) => (a.id > b.id ? a : b));
+        dispatch({ type: 'setCustomer', customer: mapCustomer(newest) });
+      }
+    } catch {
+      // If fetch fails, just invalidate so the panel shows updated list
+      utils.customers.list.invalidate();
+    }
     setShowAddCustomer(false);
-    setOverlay('customer');
-  }, [utils]);
+  }, [utils, dispatch]);
+
+  // ─── Loading / error guards ────────────────────────────────────────────────
+  const isCriticalLoading = productsQuery.isLoading || groupsQuery.isLoading;
+  const criticalError = productsQuery.error ?? groupsQuery.error;
+
+  if (isCriticalLoading) {
+    return (
+      <div dir="rtl" className="flex h-full min-h-[640px] flex-col overflow-hidden bg-slate-100 font-sans text-slate-900">
+        <PageLoading />
+      </div>
+    );
+  }
+
+  if (criticalError) {
+    return (
+      <div dir="rtl" className="flex h-full min-h-[640px] flex-col overflow-hidden bg-slate-100 font-sans text-slate-900">
+        <PageError
+          message={criticalError.message ?? 'تعذّر تحميل بيانات الأصناف'}
+          onRetry={() => {
+            productsQuery.refetch();
+            groupsQuery.refetch();
+          }}
+        />
+      </div>
+    );
+  }
 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <div dir="rtl" className="flex h-full min-h-[640px] flex-col overflow-hidden bg-slate-100 font-sans text-slate-900">
       <InvoiceHeaderBar
         journals={journalsQuery.data ?? []}
+        journalsLoading={journalsQuery.isLoading}
+        journalsError={Boolean(journalsQuery.error)}
+        onJournalsRetry={() => journalsQuery.refetch()}
         selectedJournalId={journalId}
         warehouses={warehousesQuery.data ?? []}
+        warehousesLoading={warehousesQuery.isLoading}
         selectedWarehouseId={warehouseId}
         branches={branchesQuery.data ?? []}
         selectedBranchId={branchId}
