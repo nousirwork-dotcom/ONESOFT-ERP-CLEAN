@@ -121,8 +121,6 @@ export const usersRouter = router({
             message: 'سياسة المؤسسة لا تسمح بإنشاء مستخدمين بدون كلمة مرور — فعّل الخيار من إعدادات المستخدمين أو عيّن كلمة مرور',
           });
         }
-      } else if (input.password.length < 6) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' });
       }
 
       if (input.phone) {
