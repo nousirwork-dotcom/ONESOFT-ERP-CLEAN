@@ -677,11 +677,6 @@ export default function Users() {
 
   return (
     <div className="space-y-5">
-      {import.meta.env.DEV && (
-        <div className="bg-yellow-400 text-black text-xs font-mono font-bold px-3 py-1 rounded">
-          Users UI: NEW-DIALOG-V1
-        </div>
-      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">إدارة المستخدمين</h1>
