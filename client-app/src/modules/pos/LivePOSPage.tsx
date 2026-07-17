@@ -1,6 +1,7 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { trpc } from '@/shared/lib/trpc';
 import { useAuth } from '@/core/hooks/useAuth';
+import { useTabManager } from '@/core/contexts/TabManagerContext';
 import CustomerFormDialog from '@/shared/components/CustomerFormDialog';
 import { createPhase1PosApi } from './api';
 import { usePosEngine } from './usePosEngine';
@@ -332,12 +333,30 @@ type Overlay = 'customer' | 'tables' | 'orders' | null;
 
 export function LivePOSPage() {
   const { user } = useAuth();
-  // isPosWorkspaceActive is now derived automatically in TabManagerContext
-  // from the active tab state — no manual setter needed here.
+  const { isPosWorkspaceActive } = useTabManager();
 
   // ─── Fullscreen state ─────────────────────────────────────────────────────
   const [isFullscreen, setIsFullscreen] = useState(false);
   const isElectron = Boolean((window as any).erpAPI?.setFullScreen);
+
+  // ─── Auto-exit fullscreen when POS loses active-workspace status ──────────
+  // Covers: switch tab, open dashboard, minimize POS window, close POS tab.
+  // Uses prevRef so it only fires on a true→false TRANSITION, never on
+  // ordinary re-renders or when POS is already the active workspace.
+  const prevIsActiveRef = useRef(isPosWorkspaceActive);
+  useEffect(() => {
+    const wasActive = prevIsActiveRef.current;
+    prevIsActiveRef.current = isPosWorkspaceActive;
+
+    if (wasActive && !isPosWorkspaceActive && isFullscreen) {
+      const erpAPI = (window as any).erpAPI;
+      if (erpAPI?.setFullScreen) {
+        erpAPI.setFullScreen(false);          // Electron BrowserWindow
+      } else if (document.fullscreenElement) {
+        document.exitFullscreen?.();           // Browser DOM fullscreen
+      }
+    }
+  }, [isPosWorkspaceActive, isFullscreen]);
 
   useEffect(() => {
     // DOM Fullscreen API (browser mode)
