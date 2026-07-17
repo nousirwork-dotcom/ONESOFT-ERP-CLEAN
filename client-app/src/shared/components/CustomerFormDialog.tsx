@@ -3,6 +3,8 @@
  * نافذة إضافة / تعديل العميل — متعددة التبويبات بأسلوب ERP الكلاسيكي
  */
 import React, { useState, useEffect, useRef } from "react";
+import { useUnsavedChangesGuard } from "@/core/hooks/useUnsavedChangesGuard";
+import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import { fmtDate } from "@/shared/utils/dateUtils";
 import { trpc } from "@/shared/lib/trpc";
@@ -112,6 +114,8 @@ function dateRange(year: number | null, month: number | null): { from?: string; 
 export default function CustomerFormDialog({ open, editData, onClose, onSaved }: Props) {
   const [tab, setTab]   = useState<TabId>("main");
   const [form, setForm] = useState<CustomerData>(EMPTY);
+  const [isDirty, setIsDirty] = useState(false);
+  const skipFormRef     = useRef(true);
   const nameRef         = useRef<HTMLInputElement>(null);
   const utils           = trpc.useUtils();
 
@@ -156,6 +160,8 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
   useEffect(() => {
     if (!open) return;
     setTab("main");
+    setIsDirty(false);
+    skipFormRef.current = true;
     if (editData) {
       setForm({
         ...EMPTY,
@@ -190,6 +196,12 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
       setForm(EMPTY);
     }
   }, [open, editData]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (skipFormRef.current) { skipFormRef.current = false; return; }
+    setIsDirty(true);
+  }, [form, open]);
 
   useEffect(() => {
     if (open) setTimeout(() => nameRef.current?.focus(), 80);
@@ -233,6 +245,9 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
     else              create.mutate(payload);
   };
 
+  const { confirmOpen, requestClose, confirmSave, confirmDiscard, confirmCancel } = useUnsavedChangesGuard({ isDirty });
+  const handleClose = () => requestClose(onClose);
+
   if (!open) return null;
 
   const isOrg     = form.customerType === "organization";
@@ -244,7 +259,6 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
       style={{ position: "fixed", inset: 0, zIndex: 1200,
                background: "rgba(0,0,0,0.45)", display: "flex",
                alignItems: "center", justifyContent: "center" }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div dir="rtl" style={{
         width: 760, maxWidth: "98vw",
@@ -266,7 +280,7 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
             <span style={{ fontSize: 16 }}>👤</span>
             <span style={{ color: "white", fontWeight: 700, fontSize: 13 }}>{title}</span>
           </div>
-          <button onClick={onClose} style={{
+          <button onClick={handleClose} style={{
             width: 18, height: 18, background: "#C75050", border: "1px solid #9a3030",
             color: "white", fontSize: 10, fontWeight: 700, cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 2,
@@ -793,7 +807,7 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
           </span>
 
           <div style={{ display: "flex", gap: 6 }}>
-            <button onClick={onClose} disabled={isPending} style={{
+            <button onClick={handleClose} disabled={isPending} style={{
               padding: "5px 14px", fontSize: 12, fontWeight: 600, borderRadius: 3,
               background: "#E0E0E0", color: "#333", border: "1px solid #A0A0A0",
               cursor: "pointer",
@@ -1359,6 +1373,13 @@ function CustomerBalancesTab({
       )}
 
     </div>
+    <UnsavedChangesDialog
+      open={confirmOpen}
+      onSave={() => confirmSave(handleSave)}
+      onDiscard={confirmDiscard}
+      onCancel={confirmCancel}
+      isSaving={isPending}
+    />
   );
 }
 

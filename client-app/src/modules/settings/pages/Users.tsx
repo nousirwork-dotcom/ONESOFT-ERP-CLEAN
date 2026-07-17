@@ -1,3 +1,5 @@
+import { useUnsavedChangesGuard } from "@/core/hooks/useUnsavedChangesGuard";
+import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import { fmtDate } from "@/shared/utils/dateUtils";
 import { Badge } from "@/core/ui/badge";
 import { Button } from "@/core/ui/button";
@@ -172,7 +174,6 @@ function ChangeUserPasswordDialog({
       updateUser.mutate({ id: user.id, clearPassword: true });
       return;
     }
-    if (next.length < 6) { setError("كلمة المرور يجب أن تكون 6 أحرف على الأقل"); return; }
     if (next !== confirm) { setError("كلمتا المرور غير متطابقتين"); return; }
     updateUser.mutate({ id: user.id, newPassword: next });
   };
@@ -236,6 +237,7 @@ function ChangeUserPasswordDialog({
 // ─── Users ────────────────────────────────────────────────────────────────────
 export default function Users() {
   const [isOpen, setIsOpen] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
   const [mode, setMode] = useState<Mode>("create");
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
@@ -274,11 +276,11 @@ export default function Users() {
   });
 
   const createUser = trpc.users.create.useMutation({
-    onSuccess: () => { utils.users.list.invalidate(); utils.users.getUserCountInfo.invalidate(); toast.success("تم إنشاء المستخدم بنجاح"); setIsOpen(false); },
+    onSuccess: () => { utils.users.list.invalidate(); utils.users.getUserCountInfo.invalidate(); toast.success("تم إنشاء المستخدم بنجاح"); setIsDirty(false); setIsOpen(false); },
     onError: (e) => toast.error(e.message),
   });
   const updateUser = trpc.users.update.useMutation({
-    onSuccess: () => { utils.users.list.invalidate(); toast.success("تم حفظ التعديلات"); setIsOpen(false); },
+    onSuccess: () => { utils.users.list.invalidate(); toast.success("تم حفظ التعديلات"); setIsDirty(false); setIsOpen(false); },
     onError: (e) => toast.error(e.message),
   });
   const toggleActive = trpc.users.update.useMutation({
@@ -333,6 +335,7 @@ export default function Users() {
     setForm(emptyForm());
     setPhoneError(null);
     setActiveTab("basic");
+    setIsDirty(false);
     setIsOpen(true);
   };
 
@@ -362,6 +365,7 @@ export default function Users() {
     setExtraPerms({ ...(u.extraPermissions ?? {}) });
     setPermsDirty(false);
     setActiveTab("basic");
+    setIsDirty(false);
     setIsOpen(true);
   };
 
@@ -381,6 +385,7 @@ export default function Users() {
   const setField = (k: keyof FormState, v: string | boolean) => {
     setForm((f) => ({ ...f, [k]: v }));
     if (k === "phone") setPhoneError(validatePhone(v as string));
+    setIsDirty(true);
   };
 
   const phoneChanged = mode === "edit" && form.phone !== (selectedUser?.phone ?? "");
@@ -397,7 +402,6 @@ export default function Users() {
         setActiveTab("login");
         return;
       }
-      if (form.password && form.password.length < 6) { toast.error("كلمة المرور يجب أن تكون 6 أحرف على الأقل"); setActiveTab("login"); return; }
       createUser.mutate({
         code: form.code || undefined,
         name: form.name,
@@ -438,6 +442,9 @@ export default function Users() {
   };
 
   const isPending = createUser.isPending || updateUser.isPending;
+
+  const { confirmOpen, requestClose, confirmSave, confirmDiscard, confirmCancel } = useUnsavedChangesGuard({ isDirty });
+  const handleClose = () => requestClose(() => { setIsDirty(false); setIsOpen(false); });
 
   return (
     <div className="space-y-5">
@@ -623,17 +630,17 @@ export default function Users() {
       </Card>
 
       {/* ─── نافذة إضافة / تعديل ───────────────────────────────────────────── */}
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
-          <DialogHeader className="shrink-0">
+      <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
+        <DialogContent className="w-[740px] max-w-[calc(100vw-2rem)] h-[600px] flex flex-col p-0 overflow-hidden">
+          <DialogHeader className="shrink-0 px-6 pt-5 pb-4 border-b">
             <DialogTitle className="flex items-center gap-2">
               <Shield className="w-4 h-4" />
               {mode === "create" ? "إضافة مستخدم جديد" : `تعديل: ${selectedUser?.name}`}
             </DialogTitle>
           </DialogHeader>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
-            <TabsList className="shrink-0 grid w-full grid-cols-5 text-xs h-9">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            <TabsList className="shrink-0 grid w-full grid-cols-5 text-xs h-9 rounded-none border-b">
               <TabsTrigger value="basic" className="text-xs">البيانات الأساسية</TabsTrigger>
               <TabsTrigger value="contact" className="text-xs">التواصل</TabsTrigger>
               <TabsTrigger value="login" className="text-xs">الدخول والحالة</TabsTrigger>
@@ -642,7 +649,7 @@ export default function Users() {
             </TabsList>
 
             {/* ── تبويب: البيانات الأساسية ── */}
-            <TabsContent value="basic" className="flex-1 overflow-y-auto mt-0 pt-4 space-y-3">
+            <TabsContent value="basic" className="flex-1 overflow-y-auto mt-0 px-6 pt-4 space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>الكود <span className="text-muted-foreground text-xs">(اختياري)</span></Label>
@@ -729,7 +736,7 @@ export default function Users() {
             </TabsContent>
 
             {/* ── تبويب: التواصل ── */}
-            <TabsContent value="contact" className="flex-1 overflow-y-auto mt-0 pt-4 space-y-4">
+            <TabsContent value="contact" className="flex-1 overflow-y-auto mt-0 px-6 pt-4 space-y-4">
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <Label>رقم الجوال <span className="text-muted-foreground text-xs">(اختياري)</span></Label>
@@ -824,7 +831,7 @@ export default function Users() {
             </TabsContent>
 
             {/* ── تبويب: الدخول والحالة ── */}
-            <TabsContent value="login" className="flex-1 overflow-y-auto mt-0 pt-4 space-y-3">
+            <TabsContent value="login" className="flex-1 overflow-y-auto mt-0 px-6 pt-4 space-y-3">
               <div className="space-y-3 rounded-lg border p-3">
                 <div className="flex items-center justify-between">
                   <div>
@@ -885,7 +892,7 @@ export default function Users() {
             </TabsContent>
 
             {/* ── تبويب: إعدادات العمل ── */}
-            <TabsContent value="work" className="flex-1 overflow-y-auto mt-0 pt-4 space-y-3">
+            <TabsContent value="work" className="flex-1 overflow-y-auto mt-0 px-6 pt-4 space-y-3">
               {mode === "create" ? (
                 <p className="text-sm text-muted-foreground bg-muted/40 border rounded-lg px-3 py-3">
                   يمكن تعديل إعدادات العمل بعد إنشاء المستخدم من خيار التعديل.
@@ -926,7 +933,7 @@ export default function Users() {
             </TabsContent>
 
             {/* ── تبويب: الصلاحيات ── */}
-            <TabsContent value="perms" className="flex-1 overflow-y-auto mt-0 pt-4 space-y-4">
+            <TabsContent value="perms" className="flex-1 overflow-y-auto mt-0 px-6 pt-4 space-y-4">
               {mode === "edit" && (
                 <>
                   {/* صلاحيات المساعدة والخدمات */}
@@ -1012,14 +1019,14 @@ export default function Users() {
             </TabsContent>
           </Tabs>
 
-          <DialogFooter className="shrink-0 flex-row-reverse sm:flex-row gap-2 pt-2 border-t mt-2">
+          <DialogFooter className="shrink-0 px-6 py-4 border-t flex-row-reverse sm:flex-row gap-2">
             {mode === "edit" && (
               <Button variant="destructive" onClick={() => setShowDeleteConfirm(true)} className="mr-auto gap-1">
                 <Trash2 className="w-4 h-4" />حذف
               </Button>
             )}
             <div className="flex gap-2 ms-auto">
-              <Button variant="outline" onClick={() => setIsOpen(false)}>إلغاء</Button>
+              <Button variant="outline" onClick={handleClose}>إلغاء</Button>
               {activeTab !== "perms" && (
                 <Button onClick={handleSubmit} disabled={isPending || !!phoneError}>
                   {isPending ? <><Loader2 className="w-3.5 h-3.5 animate-spin me-1" />جاري الحفظ...</> : mode === "create" ? "إنشاء المستخدم" : "حفظ التعديلات"}
@@ -1029,6 +1036,14 @@ export default function Users() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <UnsavedChangesDialog
+        open={confirmOpen}
+        onSave={() => confirmSave(handleSubmit)}
+        onDiscard={confirmDiscard}
+        onCancel={confirmCancel}
+        isSaving={isPending}
+      />
 
       {/* ─── نافذة حذف ─────────────────────────────────────────────────────── */}
       <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>

@@ -11,6 +11,8 @@ import React, { useState, useRef, useCallback, useEffect, KeyboardEvent } from "
 import { Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/shared/lib/trpc";
+import { useUnsavedChangesGuard } from "@/core/hooks/useUnsavedChangesGuard";
+import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import ERPToolbar, { ERPMode } from "@/shared/components/ERPToolbar";
 import PostingPreviewModal from "@/shared/components/PostingPreviewModal";
 import InvoicePrintModal from "@/shared/components/InvoicePrintModal";
@@ -147,6 +149,10 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
   // ── ERP mode ──────────────────────────────────────────────────────────────
   const [erpMode, setErpMode] = useState<ERPMode>("new");
 
+  // ── Dirty guard ───────────────────────────────────────────────────────────
+  const [isDirty, setIsDirty] = useState(false);
+  const skipLinesRef = useRef(false);
+
   // ── ZATCA tab ──────────────────────────────────────────────────────────────
   const [activeMainTab, setActiveMainTab] = useState<"invoice" | "zatca">("invoice");
 
@@ -225,6 +231,23 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     { type: basedOnType as 'sale' | 'quote' | 'order' | 'transfer', number: basedOnTrigger },
     { enabled: !!basedOnType && !!basedOnTrigger }
   );
+
+  // ── Dirty guard hook ──────────────────────────────────────────────────────
+  const { confirmOpen: dirtyConfirmOpen, requestClose: dirtyRequestClose,
+          confirmSave: dirtyConfirmSave, confirmDiscard: dirtyConfirmDiscard,
+          confirmCancel: dirtyConfirmCancel } = useUnsavedChangesGuard({ isDirty });
+
+  // reset dirty when entering view; skip lines effect on mode change
+  useEffect(() => {
+    if (erpMode === "view") { setIsDirty(false); return; }
+    skipLinesRef.current = true;
+  }, [erpMode]);
+
+  // mark dirty when lines change (skip first run after mode change)
+  useEffect(() => {
+    if (skipLinesRef.current) { skipLinesRef.current = false; return; }
+    if (erpMode === "new" || erpMode === "edit") setIsDirty(true);
+  }, [lines]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // إغلاق dropdown العميل عند الضغط خارجه
   useEffect(() => {
@@ -1870,7 +1893,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           setShowPostingPreview(true);
         }}
         onApprove={() => toast.success("تم الاعتماد")}
-        onCancel={() => { setErpMode("view"); toast.info("تم الإلغاء"); }}
+        onCancel={() => dirtyRequestClose(() => { setErpMode("view"); toast.info("تم الإلغاء"); })}
         onPrint={() => setShowPrintModal(true)}
         onSend={() => {
           if (!savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً قبل الإرسال"); return; }
@@ -2293,6 +2316,14 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           </div>
         </>
       )}
+
+      <UnsavedChangesDialog
+        open={dirtyConfirmOpen}
+        onSave={() => dirtyConfirmSave(handleSave)}
+        onDiscard={dirtyConfirmDiscard}
+        onCancel={dirtyConfirmCancel}
+        isSaving={createMutation.isPending}
+      />
     </div>
   );
 }
