@@ -45,6 +45,11 @@
 :root {
   --radius: 0.125rem;
 
+  /* ── Active element border (sidebar, tabs, table rows) ── */
+  --color-border-active: #8A5A2B;
+  --border-active-width: 1.5px;
+  --border-active-radius: 10px;
+
   /* ── Branding/Theme Defaults (overridden at runtime by BrandingContext) ── */
   --brand-login-bg:       linear-gradient(145deg, #E8E0D4 0%, #D4CCC0 40%, #C8C0B4 100%);
   --brand-primary-rgb:    64 107 147;
@@ -366,6 +371,18 @@ html.view-wide .erp-table-cell   { font-size: 14px; }
 @keyframes shimmer {
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
+
+/* ─── Active element highlight border ───────────────────────────────────────
+   Change --color-border-active in :root to restyle all active highlights.  */
+.active-ring {
+  outline: var(--border-active-width) solid var(--color-border-active) !important;
+  border-radius: var(--border-active-radius) !important;
+}
+
+/* Table rows: inset box-shadow because outline-radius is unreliable on <tr>  */
+[data-slot="table-row"][data-state="selected"] {
+  box-shadow: inset 0 0 0 var(--border-active-width) var(--color-border-active) !important;
 }
 
 /* ─── Electron custom titlebar: reserve a dedicated 32px strip ─────────────── */

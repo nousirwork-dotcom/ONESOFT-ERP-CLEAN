@@ -89,14 +89,14 @@ export default function WindowTaskbar() {
                 gap: 6,
                 paddingRight: 8,
                 paddingLeft: 8,
-                borderRadius: 5,
+                borderRadius: isActive ? 10 : 5,
                 background: isActive
                   ? "rgba(59,130,246,0.30)"
                   : isMinimized
                   ? "rgba(255,255,255,0.06)"
                   : "rgba(255,255,255,0.10)",
                 border: isActive
-                  ? "1px solid rgba(59,130,246,0.55)"
+                  ? "1.5px solid var(--color-border-active)"
                   : "1px solid rgba(255,255,255,0.08)",
                 cursor: "pointer",
                 color: isActive ? "#fff" : "rgba(255,255,255,0.72)",
