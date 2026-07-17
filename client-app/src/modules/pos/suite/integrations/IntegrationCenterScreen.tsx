@@ -229,6 +229,7 @@ function ManageConnectionModal({ connection, onClose }: ManageModalProps) {
                       <th>كود المنصة</th>
                       <th>الاسم الخارجي</th>
                       <th>السعر</th>
+                      <th>الإضافات</th>
                       <th>صنف OneSoft</th>
                       <th>كود OneSoft</th>
                       <th>الحالة</th>
@@ -242,6 +243,14 @@ function ManageConnectionModal({ connection, onClose }: ManageModalProps) {
                         <td><code style={{ fontSize: 11 }}>{r.externalProductCode || '—'}</code></td>
                         <td style={{ fontWeight: 600 }}>{r.externalProductName}</td>
                         <td style={{ color: 'var(--pos-muted)', fontSize: 12 }}>{r.externalPrice > 0 ? `${r.externalPrice.toFixed(2)} ر.س` : '—'}</td>
+                        <td>
+                          <input
+                            style={{ width: '100%', minHeight: 30, border: '1px solid var(--pos-border)', borderRadius: 6, padding: '0 8px', font: 'inherit', fontSize: 11 }}
+                            placeholder="وصف الإضافات..."
+                            value={r.addons ?? ''}
+                            onChange={(e) => setRows((prev) => prev.map((x) => x.rowId === r.rowId ? { ...x, addons: e.target.value } : x))}
+                          />
+                        </td>
                         <td>
                           <select
                             value={r.onesoftProductId ?? ''}

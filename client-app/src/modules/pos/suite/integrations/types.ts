@@ -65,6 +65,8 @@ export interface ProductMapping {
   externalProductCode: string;
   externalProductName: string;
   externalPrice: number;
+  /** إضافات/مُعدِّلات الصنف كما تُعرضها المنصة، مفصولة بفواصل */
+  addons?: string;
   available: boolean;
   onesoftProductId: number | null;
   onesoftProductCode?: string;
