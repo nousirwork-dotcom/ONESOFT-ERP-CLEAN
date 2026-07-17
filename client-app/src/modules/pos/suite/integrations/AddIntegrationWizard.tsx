@@ -6,6 +6,7 @@ import type {
   IntegrationConnection,
   IntegrationConnectionSettings,
   IntegrationProviderMeta,
+  ProductMapping,
 } from './types';
 
 const STEPS = ['بيانات التطبيق', 'الاتصال', 'إعداد الطلبات', 'ربط الأصناف'] as const;
@@ -33,20 +34,19 @@ const CUSTOM_META: IntegrationProviderMeta = {
   ],
 };
 
-/**
- * ربط الأصناف — الاتجاه الصحيح: خارجي → OneSoft
- *
- * المستخدم يُدخل أصناف المنصة الخارجية (الكود، الاسم، السعر)
- * ثم يربط كل صنف بالصنف المقابل من كتالوج OneSoft.
- * عند وصول طلب، يبحث النظام عن externalProductId/externalCode ليجد الصنف الداخلي.
- */
-interface ExternalProductRow {
-  rowId: string;
-  externalCode: string;
-  externalName: string;
-  externalPrice: number;
-  available: boolean;
-  onesoftProductId: number | null;
+function newRow(overrides: Partial<ProductMapping> = {}): ProductMapping {
+  return {
+    rowId: `row-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
+    externalProductId: overrides.externalProductCode ?? `ext-${Date.now()}`,
+    externalProductCode: '',
+    externalProductName: '',
+    externalPrice: 0,
+    available: true,
+    onesoftProductId: null,
+    onesoftProductCode: undefined,
+    onesoftProductName: undefined,
+    ...overrides,
+  };
 }
 
 interface Props {
@@ -86,16 +86,12 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
-  const [rows, setRows] = useState<ExternalProductRow[]>([]);
+  const [rows, setRows] = useState<ProductMapping[]>([]);
   const [mappingSearch, setMappingSearch] = useState('');
   const [mappingFilter, setMappingFilter] = useState<'all' | 'mapped' | 'unmapped'>('all');
-
   const [newCode, setNewCode] = useState('');
   const [newName, setNewName] = useState('');
   const [newPrice, setNewPrice] = useState('');
-
-  const registeredMetas = providerRegistry.listMeta();
-  const allProviderOptions = [...registeredMetas, CUSTOM_META];
 
   const activeMeta = selectedMeta;
   const isCustom = activeMeta?.id === 'custom';
@@ -103,33 +99,36 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
   const adminFields = credentialFields.filter((f) => f.adminOnly);
   const publicFields = credentialFields.filter((f) => !f.adminOnly);
 
+  const allProviderOptions = [...providerRegistry.listMeta(), CUSTOM_META];
+
   const mappedCount = rows.filter((r) => r.onesoftProductId !== null).length;
   const unmappedCount = rows.length - mappedCount;
 
   const filteredRows = rows.filter((r) => {
-    const matchesSearch =
-      !mappingSearch ||
-      r.externalName.toLowerCase().includes(mappingSearch.toLowerCase()) ||
-      r.externalCode.toLowerCase().includes(mappingSearch.toLowerCase());
-    const matchesFilter =
+    const q = mappingSearch.toLowerCase();
+    const matchSearch =
+      !q ||
+      r.externalProductName.toLowerCase().includes(q) ||
+      r.externalProductCode.toLowerCase().includes(q) ||
+      (r.onesoftProductName ?? '').toLowerCase().includes(q);
+    const matchFilter =
       mappingFilter === 'all' ||
       (mappingFilter === 'mapped' && r.onesoftProductId !== null) ||
       (mappingFilter === 'unmapped' && r.onesoftProductId === null);
-    return matchesSearch && matchesFilter;
+    return matchSearch && matchFilter;
   });
 
   const handleAddRow = () => {
     if (!newName.trim()) return;
+    const code = newCode.trim();
     setRows((prev) => [
       ...prev,
-      {
-        rowId: `row-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
-        externalCode: newCode.trim(),
-        externalName: newName.trim(),
+      newRow({
+        externalProductId: code || `ext-${Date.now()}`,
+        externalProductCode: code,
+        externalProductName: newName.trim(),
         externalPrice: parseFloat(newPrice) || 0,
-        available: true,
-        onesoftProductId: null,
-      },
+      }),
     ]);
     setNewCode('');
     setNewName('');
@@ -142,15 +141,46 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
         if (r.onesoftProductId !== null) return r;
         const match = products.find(
           (p) =>
-            p.name.toLowerCase() === r.externalName.toLowerCase() ||
-            p.code.toLowerCase() === r.externalCode.toLowerCase(),
+            p.name.toLowerCase() === r.externalProductName.toLowerCase() ||
+            p.code.toLowerCase() === r.externalProductCode.toLowerCase(),
         );
-        return match ? { ...r, onesoftProductId: match.id } : r;
+        return match
+          ? { ...r, onesoftProductId: match.id, onesoftProductCode: match.code, onesoftProductName: match.name }
+          : r;
       }),
     );
   };
 
-  const handleRemoveRow = (rowId: string) => {
+  const handleLinkProduct = (rowId: string | undefined, productId: number | null) => {
+    if (!rowId) return;
+    const linked = productId ? products.find((p) => p.id === productId) : null;
+    setRows((prev) =>
+      prev.map((r) =>
+        r.rowId === rowId
+          ? {
+              ...r,
+              onesoftProductId: productId,
+              onesoftProductCode: linked?.code,
+              onesoftProductName: linked?.name,
+            }
+          : r,
+      ),
+    );
+  };
+
+  const handleUnlink = (rowId: string | undefined) => {
+    if (!rowId) return;
+    setRows((prev) =>
+      prev.map((r) =>
+        r.rowId === rowId
+          ? { ...r, onesoftProductId: null, onesoftProductCode: undefined, onesoftProductName: undefined }
+          : r,
+      ),
+    );
+  };
+
+  const handleDeleteRow = (rowId: string | undefined) => {
+    if (!rowId) return;
     setRows((prev) => prev.filter((r) => r.rowId !== rowId));
   };
 
@@ -187,10 +217,7 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
     setNewPrice('');
   };
 
-  const handleClose = () => {
-    handleReset();
-    onClose();
-  };
+  const handleClose = () => { handleReset(); onClose(); };
 
   const handleTest = async () => {
     if (!activeMeta) return;
@@ -198,13 +225,9 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
     setTestResult(null);
     try {
       const adapter = providerRegistry.get(activeMeta.id);
-      let result: { success: boolean; message: string };
-      if (adapter) {
-        result = await adapter.testConnection(credentials);
-      } else {
-        await new Promise((r) => setTimeout(r, 600));
-        result = { success: true, message: 'تم إضافة التكامل المخصص. يتطلب تنفيذ Adapter من المطور.' };
-      }
+      const result = adapter
+        ? await adapter.testConnection(credentials)
+        : await (async () => { await new Promise((r) => setTimeout(r, 600)); return { success: true, message: 'تم إضافة التكامل المخصص.' }; })();
       setTestResult(result);
     } catch (err: unknown) {
       setTestResult({ success: false, message: err instanceof Error ? err.message : 'خطأ غير متوقع' });
@@ -226,6 +249,7 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
       lastSyncStatus: testResult?.success ? 'success' : 'never',
       credentials,
       settings,
+      productMappings: rows,
       unmappedProductCount: unmappedCount,
       createdAt: new Date().toISOString(),
     };
@@ -237,25 +261,22 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
   const logoColor = activeMeta?.logoColor ?? '#6b7a8d';
 
   return (
-    <Modal open={open} title="إضافة تكامل جديد" onClose={handleClose} width={740}>
+    <Modal open={open} title="إضافة تكامل جديد" onClose={handleClose} width={820}>
       <div className="pos-wizard">
         <div className="pos-wizard-progress">
           {STEPS.map((label, index) => (
-            <div
-              key={label}
-              className={`pos-wizard-step ${index === step ? 'is-active' : ''} ${index < step ? 'is-done' : ''}`}
-            >
+            <div key={label} className={`pos-wizard-step ${index === step ? 'is-active' : ''} ${index < step ? 'is-done' : ''}`}>
               <span>{index < step ? '✓' : index + 1}</span>
               <small>{label}</small>
             </div>
           ))}
         </div>
 
-        {/* ─── Step 0: بيانات التطبيق ──────────────────────────────────── */}
+        {/* ─── Step 0: بيانات التطبيق ─────────────────────────────────── */}
         {step === 0 && (
           <div>
             <p style={{ color: 'var(--pos-muted)', marginTop: 0, marginBottom: 16, fontSize: 13 }}>
-              اختر مزوداً جاهزاً، أو أضف مزوداً مخصصاً باستخدام Adapter مستقل.
+              اختر مزوداً جاهزاً، أو أضف مزوداً مخصصاً.
             </p>
             <div className="pos-provider-picker">
               {allProviderOptions.map((meta) => (
@@ -264,14 +285,9 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
                   type="button"
                   className={`pos-provider-option${selectedMeta?.id === meta.id ? ' is-selected' : ''}`}
                   style={{ borderTopColor: meta.accentColor }}
-                  onClick={() => {
-                    setSelectedMeta(meta);
-                    if (meta.id !== 'custom') setStep(1);
-                  }}
+                  onClick={() => { setSelectedMeta(meta); if (meta.id !== 'custom') setStep(1); }}
                 >
-                  <div className="pos-provider-option__logo" style={{ background: meta.logoColor }}>
-                    {meta.logoInitial}
-                  </div>
+                  <div className="pos-provider-option__logo" style={{ background: meta.logoColor }}>{meta.logoInitial}</div>
                   <div>
                     <strong>{meta.name}</strong>
                     {meta.nameEn && <em>{meta.nameEn}</em>}
@@ -281,39 +297,20 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
                 </button>
               ))}
             </div>
-
             {selectedMeta?.id === 'custom' && (
               <div style={{ marginTop: 20, padding: 16, background: '#f8fafc', borderRadius: 12, border: '1px solid var(--pos-border)' }}>
-                <p style={{ margin: '0 0 14px', fontSize: 13, fontWeight: 700, color: 'var(--pos-text)' }}>بيانات المزود المخصص</p>
                 <div className="pos-form-grid">
-                  <label>
-                    <span>اسم التطبيق</span>
-                    <input value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder="مثال: طلبات داخلية" />
-                  </label>
-                  <label>
-                    <span>الاسم المختصر</span>
-                    <input value={customShortName} onChange={(e) => setCustomShortName(e.target.value)} placeholder="مثال: INT-01" />
-                  </label>
-                  <label>
-                    <span>رمز الشعار (حرف أو رمز)</span>
-                    <input value={customInitial} maxLength={2} onChange={(e) => setCustomInitial(e.target.value)} placeholder="م" />
-                  </label>
-                  <label>
-                    <span>وصف مختصر</span>
-                    <input value={customDesc} onChange={(e) => setCustomDesc(e.target.value)} placeholder="وصف المزود" />
-                  </label>
+                  <label><span>اسم التطبيق</span><input value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder="طلبات داخلية" /></label>
+                  <label><span>الاسم المختصر</span><input value={customShortName} onChange={(e) => setCustomShortName(e.target.value)} placeholder="INT-01" /></label>
+                  <label><span>رمز الشعار</span><input value={customInitial} maxLength={2} onChange={(e) => setCustomInitial(e.target.value)} placeholder="م" /></label>
+                  <label><span>وصف</span><input value={customDesc} onChange={(e) => setCustomDesc(e.target.value)} placeholder="وصف المزود" /></label>
                 </div>
-                <div style={{ marginTop: 12 }}>
-                  <label className="pos-toggle">
-                    <input type="checkbox" checked={customActive} onChange={(e) => setCustomActive(e.target.checked)} />
-                    <i />
-                    <span>تفعيل التكامل فور الإضافة</span>
-                  </label>
-                </div>
+                <label className="pos-toggle" style={{ marginTop: 12 }}>
+                  <input type="checkbox" checked={customActive} onChange={(e) => setCustomActive(e.target.checked)} />
+                  <i /><span>تفعيل التكامل فور الإضافة</span>
+                </label>
                 <div className="pos-wizard-footer" style={{ marginTop: 12 }}>
-                  <button type="button" className="pos-button pos-button--primary" onClick={() => setStep(1)} disabled={!customName.trim()}>
-                    التالي →
-                  </button>
+                  <button type="button" className="pos-button pos-button--primary" onClick={() => setStep(1)} disabled={!customName.trim()}>التالي →</button>
                 </div>
               </div>
             )}
@@ -324,80 +321,45 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
         {step === 1 && activeMeta && (
           <div>
             <div className="pos-wizard-provider-info">
-              <div className="pos-hub-card__logo" style={{ background: logoColor, width: 48, height: 48, borderRadius: 14 }}>
-                {logoInitial}
-              </div>
-              <div>
-                <strong>{isCustom && customName ? customName : activeMeta.name}</strong>
-                <span style={{ color: 'var(--pos-muted)', fontSize: 12 }}>إعدادات الاتصال</span>
-              </div>
+              <div className="pos-hub-card__logo" style={{ background: logoColor, width: 48, height: 48, borderRadius: 14 }}>{logoInitial}</div>
+              <div><strong>{isCustom && customName ? customName : activeMeta.name}</strong><span style={{ color: 'var(--pos-muted)', fontSize: 12 }}>إعدادات الاتصال</span></div>
               <div className="pos-hub-card__status" style={{ marginRight: 'auto' }}>
                 <span className={`pos-hub-status-dot ${testResult ? (testResult.success ? 'is-connected' : 'is-error') : 'is-disconnected'}`} />
-                <span style={{ fontSize: 12 }}>
-                  {testResult ? (testResult.success ? 'متصل' : 'فشل الاتصال') : 'لم يُختبر بعد'}
-                </span>
+                <span style={{ fontSize: 12 }}>{testResult ? (testResult.success ? 'متصل' : 'فشل الاتصال') : 'لم يُختبر بعد'}</span>
               </div>
             </div>
-
             {publicFields.length > 0 && (
               <div className="pos-form-grid" style={{ marginBottom: 14 }}>
                 {publicFields.map((field) => (
                   <label key={field.key}>
                     <span>{field.label}{field.required && <strong style={{ color: 'var(--pos-red)', marginRight: 4 }}>*</strong>}</span>
-                    {field.type === 'select' ? (
-                      <select value={credentials[field.key] ?? ''} onChange={(e) => setCredentials((c) => ({ ...c, [field.key]: e.target.value }))}>
-                        <option value="">— اختر —</option>
-                        {(field.options ?? []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                      </select>
-                    ) : (
-                      <input type={field.type} value={credentials[field.key] ?? ''} onChange={(e) => setCredentials((c) => ({ ...c, [field.key]: e.target.value }))} placeholder={field.placeholder} />
-                    )}
+                    <input type={field.type} value={credentials[field.key] ?? ''} onChange={(e) => setCredentials((c) => ({ ...c, [field.key]: e.target.value }))} placeholder={field.placeholder} />
                     {field.helpText && <small style={{ color: 'var(--pos-muted)' }}>{field.helpText}</small>}
                   </label>
                 ))}
               </div>
             )}
-
-            <button
-              type="button"
-              className="pos-button pos-button--secondary"
-              style={{ width: '100%', marginBottom: 12 }}
-              onClick={handleTest}
-              disabled={testing}
-            >
-              {testing ? '⏳ جارٍ اختبار الاتصال...' : '⚡ اختبار الاتصال'}
+            <button type="button" className="pos-button pos-button--secondary" style={{ width: '100%', marginBottom: 12 }} onClick={handleTest} disabled={testing}>
+              {testing ? '⏳ جارٍ اختبار...' : '⚡ اختبار الاتصال'}
             </button>
-
             {testResult && (
               <div className={testResult.success ? 'pos-success-box' : 'pos-warning-box'} style={{ marginBottom: 14 }}>
                 {testResult.success ? '✓ ' : '⚠ '}{testResult.message}
               </div>
             )}
-
             {adminFields.length > 0 && (
               <div className="pos-collapsible">
                 <button type="button" className="pos-collapsible__trigger" onClick={() => setAdvancedOpen((v) => !v)}>
-                  <span>🔒 إعدادات متقدمة (صلاحية المدير)</span>
-                  <span>{advancedOpen ? '▲' : '▼'}</span>
+                  <span>🔒 إعدادات متقدمة (المدير)</span><span>{advancedOpen ? '▲' : '▼'}</span>
                 </button>
                 {advancedOpen && (
                   <div className="pos-collapsible__body">
-                    <div className="pos-wizard-admin-notice">هذه الحقول تتطلب صلاحية مدير النظام — لا تشاركها مع موظفي الكاشير.</div>
+                    <div className="pos-wizard-admin-notice">هذه الحقول تتطلب صلاحية مدير النظام.</div>
                     <div className="pos-form-grid">
                       {adminFields.map((field) => (
                         <label key={field.key}>
-                          <span>
-                            {field.label}
-                            {field.required && <strong style={{ color: 'var(--pos-red)', marginRight: 4 }}>*</strong>}
-                            <em style={{ color: 'var(--pos-muted)', fontSize: 10, marginRight: 6 }}>(مدير)</em>
-                          </span>
-                          <input
-                            type={field.type === 'select' ? 'text' : field.type}
-                            value={credentials[field.key] ?? ''}
-                            onChange={(e) => setCredentials((c) => ({ ...c, [field.key]: e.target.value }))}
-                            placeholder={field.placeholder}
-                          />
-                          {field.helpText && <small style={{ color: 'var(--pos-muted)' }}>{field.helpText}</small>}
+                          <span>{field.label}<em style={{ color: 'var(--pos-muted)', fontSize: 10, marginRight: 6 }}>(مدير)</em></span>
+                          <input type={field.type === 'select' ? 'text' : field.type} value={credentials[field.key] ?? ''} onChange={(e) => setCredentials((c) => ({ ...c, [field.key]: e.target.value }))} placeholder={field.placeholder} />
                         </label>
                       ))}
                     </div>
@@ -405,7 +367,6 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
                 )}
               </div>
             )}
-
             <div className="pos-wizard-footer">
               <button type="button" className="pos-button pos-button--secondary" onClick={() => setStep(0)}>← رجوع</button>
               <button type="button" className="pos-button pos-button--primary" onClick={() => setStep(2)}>التالي →</button>
@@ -418,44 +379,34 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
           <div>
             <div className="pos-wizard-provider-info">
               <div className="pos-hub-card__logo" style={{ background: logoColor, width: 40, height: 40, borderRadius: 12 }}>{logoInitial}</div>
-              <div>
-                <strong>{isCustom && customName ? customName : activeMeta.name}</strong>
-                <span style={{ color: 'var(--pos-muted)', fontSize: 12 }}>إعدادات الطلبات التشغيلية</span>
-              </div>
+              <div><strong>{isCustom && customName ? customName : activeMeta.name}</strong><span style={{ color: 'var(--pos-muted)', fontSize: 12 }}>إعدادات الطلبات</span></div>
             </div>
-
             <div className="pos-form-grid">
-              <label>
-                <span>اسم الفرع</span>
-                <input value={settings.branchName ?? ''} onChange={(e) => setSettings((s) => ({ ...s, branchName: e.target.value }))} placeholder="مثال: فرع الرياض" />
-              </label>
-              <label>
-                <span>نقطة البيع</span>
-                <input value={settings.posName ?? ''} onChange={(e) => setSettings((s) => ({ ...s, posName: e.target.value }))} placeholder="مثال: كاشير 1" />
-              </label>
+              <label><span>اسم الفرع</span><input value={settings.branchName ?? ''} onChange={(e) => setSettings((s) => ({ ...s, branchName: e.target.value }))} placeholder="فرع الرياض" /></label>
+              <label><span>نقطة البيع</span><input value={settings.posName ?? ''} onChange={(e) => setSettings((s) => ({ ...s, posName: e.target.value }))} placeholder="كاشير 1" /></label>
               <label>
                 <span>المستودع</span>
                 <select value={settings.warehouseId ?? ''} onChange={(e) => setSettings((s) => ({ ...s, warehouseId: Number(e.target.value) || null }))}>
-                  <option value="">— اختر مستودع —</option>
+                  <option value="">— اختر —</option>
                   {warehouses.map((w) => <option key={w.id} value={w.id}>{w.code} — {w.name}</option>)}
                 </select>
               </label>
               <label>
                 <span>دفتر المبيعات</span>
                 <select value={settings.journalId ?? ''} onChange={(e) => setSettings((s) => ({ ...s, journalId: Number(e.target.value) || null }))}>
-                  <option value="">— اختر دفتر مبيعات —</option>
+                  <option value="">— اختر —</option>
                   {journals.map((j) => <option key={j.id} value={j.id}>{j.code} — {j.name}</option>)}
                 </select>
               </label>
               <label>
                 <span>العميل الافتراضي</span>
                 <select value={settings.defaultCustomerId ?? ''} onChange={(e) => setSettings((s) => ({ ...s, defaultCustomerId: Number(e.target.value) || null }))}>
-                  <option value="">— اختر عميل افتراضي —</option>
+                  <option value="">— اختر —</option>
                   {customers.map((c) => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
                 </select>
               </label>
               <label>
-                <span>طريقة السداد الافتراضية</span>
+                <span>طريقة السداد</span>
                 <select value={settings.defaultPaymentMethod ?? ''} onChange={(e) => setSettings((s) => ({ ...s, defaultPaymentMethod: e.target.value }))}>
                   {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
                 </select>
@@ -467,26 +418,19 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
                 </select>
               </label>
             </div>
-
             <div className="pos-toggle-list" style={{ marginTop: 14 }}>
-              <label className="pos-toggle">
-                <input type="checkbox" checked={settings.autoAccept} onChange={(e) => setSettings((s) => ({ ...s, autoAccept: e.target.checked }))} />
-                <i /><span>قبول تلقائي للطلبات</span>
-              </label>
-              <label className="pos-toggle">
-                <input type="checkbox" checked={settings.autoSendToKitchen} onChange={(e) => setSettings((s) => ({ ...s, autoSendToKitchen: e.target.checked }))} />
-                <i /><span>إرسال تلقائي للمطبخ بعد القبول</span>
-              </label>
-              <label className="pos-toggle">
-                <input type="checkbox" checked={settings.soundAlert ?? true} onChange={(e) => setSettings((s) => ({ ...s, soundAlert: e.target.checked }))} />
-                <i /><span>تنبيه صوتي عند وصول طلب جديد</span>
-              </label>
-              <label className="pos-toggle">
-                <input type="checkbox" checked={settings.arrivalNotification ?? true} onChange={(e) => setSettings((s) => ({ ...s, arrivalNotification: e.target.checked }))} />
-                <i /><span>إظهار إشعار عند وصول طلب جديد</span>
-              </label>
+              {([
+                ['autoAccept', 'قبول تلقائي للطلبات'],
+                ['autoSendToKitchen', 'إرسال تلقائي للمطبخ بعد القبول'],
+                ['soundAlert', 'تنبيه صوتي عند وصول طلب جديد'],
+                ['arrivalNotification', 'إشعار عند وصول طلب جديد'],
+              ] as [keyof IntegrationConnectionSettings, string][]).map(([key, label]) => (
+                <label key={key} className="pos-toggle">
+                  <input type="checkbox" checked={!!(settings[key])} onChange={(e) => setSettings((s) => ({ ...s, [key]: e.target.checked }))} />
+                  <i /><span>{label}</span>
+                </label>
+              ))}
             </div>
-
             <div className="pos-wizard-footer">
               <button type="button" className="pos-button pos-button--secondary" onClick={() => setStep(1)}>← رجوع</button>
               <button type="button" className="pos-button pos-button--primary" onClick={() => setStep(3)}>التالي →</button>
@@ -500,47 +444,20 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
             <div className="pos-wizard-provider-info">
               <div className="pos-hub-card__logo" style={{ background: logoColor, width: 40, height: 40, borderRadius: 12 }}>{logoInitial}</div>
               <div style={{ flex: 1 }}>
-                <strong>{isCustom && customName ? customName : activeMeta.name} — ربط الأصناف</strong>
-                <span style={{ color: 'var(--pos-muted)', fontSize: 12 }}>
-                  أدخل أصناف المنصة وارتبط بكل صنف بمقابله في كتالوج OneSoft
-                </span>
+                <strong>ربط أصناف {isCustom && customName ? customName : activeMeta.name}</strong>
+                <span style={{ color: 'var(--pos-muted)', fontSize: 12 }}>أدخل أصناف المنصة وارتبط بكل منها بصنف OneSoft المقابل</span>
               </div>
               {rows.length > 0 && (
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-                  {unmappedCount > 0 && (
-                    <span className="pos-badge pos-badge--warning">{unmappedCount} غير مربوط</span>
-                  )}
-                  <button
-                    type="button"
-                    className="pos-button pos-button--secondary"
-                    style={{ fontSize: 12, minHeight: 36 }}
-                    onClick={handleAutoMatch}
-                  >
-                    مطابقة تلقائية
-                  </button>
+                  {unmappedCount > 0 && <span className="pos-badge pos-badge--warning">{unmappedCount} غير مربوط</span>}
+                  <button type="button" className="pos-button pos-button--secondary" style={{ fontSize: 12, minHeight: 36 }} onClick={handleAutoMatch}>مطابقة تلقائية</button>
                 </div>
               )}
             </div>
 
             {/* نموذج إضافة صنف خارجي */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 2fr 1fr auto',
-                gap: 8,
-                marginBottom: 12,
-                padding: 12,
-                background: '#f8fafc',
-                borderRadius: 12,
-                border: '1px solid var(--pos-border)',
-              }}
-            >
-              <input
-                placeholder="كود الصنف"
-                value={newCode}
-                onChange={(e) => setNewCode(e.target.value)}
-                style={{ minHeight: 38, border: '1px solid var(--pos-border)', borderRadius: 8, padding: '0 10px', font: 'inherit', fontSize: 12 }}
-              />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr auto', gap: 8, marginBottom: 12, padding: 12, background: '#f8fafc', borderRadius: 12, border: '1px solid var(--pos-border)' }}>
+              <input placeholder="كود المنصة" value={newCode} onChange={(e) => setNewCode(e.target.value)} style={{ minHeight: 38, border: '1px solid var(--pos-border)', borderRadius: 8, padding: '0 10px', font: 'inherit', fontSize: 12 }} />
               <input
                 placeholder="اسم الصنف على المنصة *"
                 value={newName}
@@ -548,42 +465,16 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
                 onKeyDown={(e) => { if (e.key === 'Enter') handleAddRow(); }}
                 style={{ minHeight: 38, border: '1px solid var(--pos-border)', borderRadius: 8, padding: '0 10px', font: 'inherit', fontSize: 12 }}
               />
-              <input
-                placeholder="السعر (ر.س)"
-                type="number"
-                min="0"
-                step="0.01"
-                value={newPrice}
-                onChange={(e) => setNewPrice(e.target.value)}
-                style={{ minHeight: 38, border: '1px solid var(--pos-border)', borderRadius: 8, padding: '0 10px', font: 'inherit', fontSize: 12 }}
-              />
-              <button
-                type="button"
-                className="pos-button pos-button--primary"
-                style={{ minHeight: 38 }}
-                onClick={handleAddRow}
-                disabled={!newName.trim()}
-              >
-                + إضافة
-              </button>
+              <input placeholder="السعر (ر.س)" type="number" min="0" step="0.01" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} style={{ minHeight: 38, border: '1px solid var(--pos-border)', borderRadius: 8, padding: '0 10px', font: 'inherit', fontSize: 12 }} />
+              <button type="button" className="pos-button pos-button--primary" style={{ minHeight: 38 }} onClick={handleAddRow} disabled={!newName.trim()}>+ إضافة</button>
             </div>
 
             {rows.length > 0 && (
               <div className="pos-mapping-toolbar">
-                <input
-                  className="pos-mapping-search"
-                  placeholder="بحث..."
-                  value={mappingSearch}
-                  onChange={(e) => setMappingSearch(e.target.value)}
-                />
+                <input className="pos-mapping-search" placeholder="بحث..." value={mappingSearch} onChange={(e) => setMappingSearch(e.target.value)} />
                 <div className="pos-segmented" style={{ flexShrink: 0 }}>
                   {(['all', 'mapped', 'unmapped'] as const).map((f) => (
-                    <button
-                      key={f}
-                      type="button"
-                      className={mappingFilter === f ? 'is-active' : ''}
-                      onClick={() => setMappingFilter(f)}
-                    >
+                    <button key={f} type="button" className={mappingFilter === f ? 'is-active' : ''} onClick={() => setMappingFilter(f)}>
                       {f === 'all' ? `الكل (${rows.length})` : f === 'mapped' ? `مربوط (${mappedCount})` : `غير مربوط (${unmappedCount})`}
                     </button>
                   ))}
@@ -595,12 +486,10 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
               <div className="pos-empty-state" style={{ minHeight: 120 }}>
                 <span style={{ fontSize: 28 }}>📋</span>
                 <strong>لا توجد أصناف بعد</strong>
-                <span style={{ fontSize: 12 }}>أدخل أصناف المنصة من النموذج أعلاه لربطها بكتالوج OneSoft.</span>
+                <span style={{ fontSize: 12 }}>أدخل أصناف المنصة من النموذج أعلاه.</span>
               </div>
             ) : filteredRows.length === 0 ? (
-              <div className="pos-empty-state" style={{ minHeight: 80 }}>
-                <strong>لا نتائج</strong>
-              </div>
+              <div className="pos-empty-state" style={{ minHeight: 80 }}><strong>لا نتائج</strong></div>
             ) : (
               <div className="pos-mapping-table-wrap">
                 <table className="pos-mapping-table">
@@ -610,72 +499,54 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
                       <th>اسم الصنف (خارجي)</th>
                       <th>السعر</th>
                       <th>صنف OneSoft</th>
+                      <th>كود OneSoft</th>
+                      <th>الحالة</th>
                       <th>متاح</th>
-                      <th></th>
+                      <th>إجراءات</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredRows.map((r) => {
-                      const linked = products.find((p) => p.id === r.onesoftProductId);
-                      return (
-                        <tr key={r.rowId} className={r.onesoftProductId === null ? 'is-unmapped' : ''}>
-                          <td><code style={{ fontSize: 11 }}>{r.externalCode || '—'}</code></td>
-                          <td style={{ fontWeight: 600 }}>{r.externalName}</td>
-                          <td style={{ color: 'var(--pos-muted)', fontSize: 12 }}>{r.externalPrice > 0 ? `${r.externalPrice.toFixed(2)} ر.س` : '—'}</td>
-                          <td>
-                            <select
-                              value={r.onesoftProductId ?? ''}
-                              onChange={(e) =>
-                                setRows((prev) =>
-                                  prev.map((x) =>
-                                    x.rowId === r.rowId
-                                      ? { ...x, onesoftProductId: Number(e.target.value) || null }
-                                      : x,
-                                  ),
-                                )
-                              }
-                              style={{ width: '100%', minHeight: 32, border: `1px solid ${r.onesoftProductId ? 'var(--pos-border)' : '#f59e0b'}`, borderRadius: 8, padding: '0 8px', font: 'inherit', fontSize: 12 }}
-                            >
-                              <option value="">— اختر صنف OneSoft —</option>
-                              {products.map((p) => (
-                                <option key={p.id} value={p.id}>
-                                  {p.code} — {p.name}
-                                </option>
-                              ))}
-                            </select>
-                            {linked && (
-                              <small style={{ color: 'var(--pos-muted)', fontSize: 10 }}>✓ {linked.name}</small>
-                            )}
-                          </td>
-                          <td>
-                            <label className="pos-toggle" style={{ minHeight: 32, padding: '0 8px', border: 'none', justifyContent: 'center' }}>
-                              <input
-                                type="checkbox"
-                                checked={r.available}
-                                onChange={(e) =>
-                                  setRows((prev) =>
-                                    prev.map((x) =>
-                                      x.rowId === r.rowId ? { ...x, available: e.target.checked } : x,
-                                    ),
-                                  )
-                                }
-                              />
-                              <i />
-                            </label>
-                          </td>
-                          <td>
-                            <button
-                              type="button"
-                              className="pos-button pos-button--danger"
-                              style={{ minHeight: 30, padding: '0 10px', fontSize: 11 }}
-                              onClick={() => handleRemoveRow(r.rowId)}
-                            >
-                              حذف
+                    {filteredRows.map((r) => (
+                      <tr key={r.rowId} className={r.onesoftProductId === null ? 'is-unmapped' : ''}>
+                        <td><code style={{ fontSize: 11 }}>{r.externalProductCode || '—'}</code></td>
+                        <td style={{ fontWeight: 600 }}>{r.externalProductName}</td>
+                        <td style={{ color: 'var(--pos-muted)', fontSize: 12 }}>{r.externalPrice > 0 ? `${r.externalPrice.toFixed(2)} ر.س` : '—'}</td>
+                        <td>
+                          <select
+                            value={r.onesoftProductId ?? ''}
+                            onChange={(e) => handleLinkProduct(r.rowId, Number(e.target.value) || null)}
+                            style={{ width: '100%', minHeight: 32, border: `1px solid ${r.onesoftProductId ? 'var(--pos-border)' : '#f59e0b'}`, borderRadius: 8, padding: '0 8px', font: 'inherit', fontSize: 12 }}
+                          >
+                            <option value="">— اختر صنف OneSoft —</option>
+                            {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                          </select>
+                        </td>
+                        <td>
+                          <code style={{ fontSize: 11, color: 'var(--pos-muted)' }}>{r.onesoftProductCode ?? '—'}</code>
+                        </td>
+                        <td>
+                          {r.onesoftProductId !== null
+                            ? <span className="pos-badge pos-badge--success" style={{ fontSize: 11 }}>مربوط</span>
+                            : <span className="pos-badge pos-badge--warning" style={{ fontSize: 11 }}>غير مربوط</span>}
+                        </td>
+                        <td>
+                          <label className="pos-toggle" style={{ minHeight: 32, padding: '0 8px', border: 'none', justifyContent: 'center' }}>
+                            <input type="checkbox" checked={r.available} onChange={(e) => setRows((prev) => prev.map((x) => x.rowId === r.rowId ? { ...x, available: e.target.checked } : x))} />
+                            <i />
+                          </label>
+                        </td>
+                        <td style={{ display: 'flex', gap: 4 }}>
+                          {r.onesoftProductId !== null && (
+                            <button type="button" className="pos-button pos-button--secondary" style={{ minHeight: 30, padding: '0 8px', fontSize: 11 }} onClick={() => handleUnlink(r.rowId)}>
+                              إلغاء الربط
                             </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                          )}
+                          <button type="button" className="pos-button pos-button--danger" style={{ minHeight: 30, padding: '0 8px', fontSize: 11 }} onClick={() => handleDeleteRow(r.rowId)}>
+                            حذف
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -683,18 +554,14 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
 
             {unmappedCount > 0 && rows.length > 0 && (
               <div className="pos-warning-box" style={{ margin: '10px 0 0' }}>
-                ⚠ {unmappedCount} أصناف لم تُربط بعد بكتالوج OneSoft — طلبات المنصة التي تحتويها ستُصنَّف "يحتاج مراجعة".
+                ⚠ {unmappedCount} أصناف لم تُربط بكتالوج OneSoft — طلبات المنصة التي تحتويها ستُصنَّف "يحتاج مراجعة".
               </div>
             )}
 
             <div className="pos-wizard-footer">
               <button type="button" className="pos-button pos-button--secondary" onClick={() => setStep(2)}>← رجوع</button>
               <button type="button" className="pos-button pos-button--primary" onClick={handleConfirm}>
-                {rows.length === 0
-                  ? 'تخطي والحفظ'
-                  : unmappedCount > 0
-                  ? `حفظ مع تجاوز التحذير (${unmappedCount} غير مربوط)`
-                  : 'تأكيد الربط ✓'}
+                {rows.length === 0 ? 'تخطي والحفظ' : unmappedCount > 0 ? `حفظ مع تجاوز التحذير (${unmappedCount} غير مربوط)` : 'تأكيد الربط ✓'}
               </button>
             </div>
           </div>

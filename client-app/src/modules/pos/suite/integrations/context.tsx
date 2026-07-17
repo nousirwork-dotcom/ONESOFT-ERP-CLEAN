@@ -1,11 +1,12 @@
 import React, { createContext, useCallback, useContext, useMemo, useReducer } from 'react';
-import type { ConnectionTestResult, IntegrationConnection, IntegrationConnectionSettings } from './types';
+import type { ConnectionTestResult, IntegrationConnection, IntegrationConnectionSettings, ProductMapping } from './types';
 
 type IntegrationAction =
   | { type: 'ADD_CONNECTION'; connection: IntegrationConnection }
   | { type: 'REMOVE_CONNECTION'; id: string }
   | { type: 'UPDATE_CONNECTION'; id: string; patch: Partial<IntegrationConnection> }
   | { type: 'UPDATE_CONN_SETTINGS'; id: string; settings: Partial<IntegrationConnectionSettings> }
+  | { type: 'UPDATE_CONN_MAPPINGS'; id: string; mappings: ProductMapping[] }
   | { type: 'SET_ENABLED'; id: string; enabled: boolean }
   | { type: 'RECORD_SYNC'; id: string; result: ConnectionTestResult };
 
@@ -37,6 +38,20 @@ function reducer(state: IntegrationState, action: IntegrationAction): Integratio
         connections: state.connections.map((c) =>
           c.id === action.id
             ? { ...c, settings: { ...c.settings, ...action.settings } }
+            : c,
+        ),
+      };
+
+    case 'UPDATE_CONN_MAPPINGS':
+      return {
+        ...state,
+        connections: state.connections.map((c) =>
+          c.id === action.id
+            ? {
+                ...c,
+                productMappings: action.mappings,
+                unmappedProductCount: action.mappings.filter((m) => m.onesoftProductId === null).length,
+              }
             : c,
         ),
       };
@@ -84,6 +99,7 @@ interface IntegrationContextValue {
   removeConnection: (id: string) => void;
   updateConnection: (id: string, patch: Partial<IntegrationConnection>) => void;
   updateConnectionSettings: (id: string, settings: Partial<IntegrationConnectionSettings>) => void;
+  updateConnectionMappings: (id: string, mappings: ProductMapping[]) => void;
   setEnabled: (id: string, enabled: boolean) => void;
   recordSync: (id: string, result: ConnectionTestResult) => void;
 }
@@ -115,6 +131,12 @@ export function IntegrationProvider({ children }: { children: React.ReactNode })
     [],
   );
 
+  const updateConnectionMappings = useCallback(
+    (id: string, mappings: ProductMapping[]) =>
+      dispatch({ type: 'UPDATE_CONN_MAPPINGS', id, mappings }),
+    [],
+  );
+
   const setEnabled = useCallback(
     (id: string, enabled: boolean) => dispatch({ type: 'SET_ENABLED', id, enabled }),
     [],
@@ -132,6 +154,7 @@ export function IntegrationProvider({ children }: { children: React.ReactNode })
       removeConnection,
       updateConnection,
       updateConnectionSettings,
+      updateConnectionMappings,
       setEnabled,
       recordSync,
     }),
@@ -141,6 +164,7 @@ export function IntegrationProvider({ children }: { children: React.ReactNode })
       removeConnection,
       updateConnection,
       updateConnectionSettings,
+      updateConnectionMappings,
       setEnabled,
       recordSync,
     ],

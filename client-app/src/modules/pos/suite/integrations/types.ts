@@ -37,6 +37,8 @@ export interface IntegrationConnection {
   lastSyncError?: string;
   credentials: Record<string, string>;
   settings: IntegrationConnectionSettings;
+  /** صفوف ربط أصناف المنصة الخارجية بكتالوج OneSoft — محفوظة في نموذج الاتصال */
+  productMappings: ProductMapping[];
   unmappedProductCount: number;
   createdAt: string;
 }
@@ -57,6 +59,8 @@ export interface IntegrationConnectionSettings {
 }
 
 export interface ProductMapping {
+  /** معرف محلي للتتبع في الواجهة — لا يُرسل للخادم */
+  rowId?: string;
   externalProductId: string;
   externalProductCode: string;
   externalProductName: string;
