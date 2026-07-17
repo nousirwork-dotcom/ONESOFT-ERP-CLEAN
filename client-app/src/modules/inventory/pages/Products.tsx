@@ -2251,7 +2251,7 @@ export default function Products() {
           {/* طبقة الخلفية — داخل منطقة العمل فقط */}
           <div
             style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.38)", zIndex: 9998 }}
-            onClick={() => setIsOpen(false)}
+            onClick={() => requestClose(() => setIsOpen(false))}
           />
 
           <Rnd
@@ -2508,7 +2508,7 @@ export default function Products() {
                       : <Maximize2 style={{ width: 13, height: 13, pointerEvents: "none" }} />}
                   </button>
                   <button
-                    onClick={() => setIsOpen(false)}
+                    onClick={() => requestClose(() => setIsOpen(false))}
                     title="إغلاق"
                     style={{
                       display: "flex", alignItems: "center", gap: 5,
