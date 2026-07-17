@@ -659,7 +659,7 @@ export default function Users() {
 
       {/* ─── نافذة إضافة / تعديل ───────────────────────────────────────────── */}
       <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
-        <DialogContent className="w-[760px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-60px)] flex flex-col p-0 overflow-hidden" dir="rtl">
+        <DialogContent className="w-[760px] max-w-[calc(100vw-2rem)] h-[640px] max-h-[calc(100vh-60px)] flex flex-col p-0 overflow-hidden" dir="rtl">
           <DialogHeader className="shrink-0 px-6 pt-5 pb-4 border-b">
             <DialogTitle className="flex items-center gap-2">
               <Shield className="w-4 h-4" />
