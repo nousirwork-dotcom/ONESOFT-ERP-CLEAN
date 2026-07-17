@@ -151,7 +151,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
   // ── Dirty guard ───────────────────────────────────────────────────────────
   const [isDirty, setIsDirty] = useState(false);
-  const skipLinesRef = useRef(false);
+  const skipLinesRef  = useRef(false);
+  const skipHeaderRef = useRef(false);
 
   // ── ZATCA tab ──────────────────────────────────────────────────────────────
   const [activeMainTab, setActiveMainTab] = useState<"invoice" | "zatca">("invoice");
@@ -237,10 +238,11 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           confirmSave: dirtyConfirmSave, confirmDiscard: dirtyConfirmDiscard,
           confirmCancel: dirtyConfirmCancel } = useUnsavedChangesGuard({ isDirty });
 
-  // reset dirty when entering view; skip lines effect on mode change
+  // reset dirty when entering view; skip first lines/header effect after mode change
   useEffect(() => {
     if (erpMode === "view") { setIsDirty(false); return; }
-    skipLinesRef.current = true;
+    skipLinesRef.current  = true;
+    skipHeaderRef.current = true;
   }, [erpMode]);
 
   // mark dirty when lines change (skip first run after mode change)
@@ -248,6 +250,14 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     if (skipLinesRef.current) { skipLinesRef.current = false; return; }
     if (erpMode === "new" || erpMode === "edit") setIsDirty(true);
   }, [lines]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // mark dirty when any header field changes (skip first run after mode change)
+  useEffect(() => {
+    if (skipHeaderRef.current) { skipHeaderRef.current = false; return; }
+    if (erpMode === "new" || erpMode === "edit") setIsDirty(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerId, notes, invoiceDate, dueDate, journalId, warehouseId, docTypeId,
+      currency, salesperson, paymentType, paidAmountOverride, customerTaxNumber, customerType]);
 
   // إغلاق dropdown العميل عند الضغط خارجه
   useEffect(() => {

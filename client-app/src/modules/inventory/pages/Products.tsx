@@ -29,7 +29,9 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useUnsavedChangesGuard } from "@/core/hooks/useUnsavedChangesGuard";
+import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import { useWorkspaceEl } from "@/core/contexts/WorkspaceContext";
 import { toast } from "sonner";
 
@@ -1285,6 +1287,8 @@ export default function Products() {
   const [isOpen, setIsOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState<ProductForm>(emptyForm);
+  const [isDirty, setIsDirty] = useState(false);
+  const skipFormRef = useRef(false);
   const [sortField, setSortField] = useState<string>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [viewTab, setViewTab] = useState<"products" | "categories">("products");
@@ -1470,24 +1474,37 @@ export default function Products() {
     onError: (e) => toast.error(e.message),
   });
 
-  const openCreate = () => {
+  const openCreate = useCallback(() => {
+    skipFormRef.current = true;
+    setIsDirty(false);
     setEditId(null);
     setForm(emptyForm);
     setIsOpen(true);
-  };
+  }, []);
+
+  const { confirmOpen, requestClose, confirmSave, confirmDiscard, confirmCancel } =
+    useUnsavedChangesGuard({ isDirty });
+
+  // Track dirty when user edits form fields (skip right after load/navigate)
+  useEffect(() => {
+    if (skipFormRef.current) { skipFormRef.current = false; return; }
+    if (isOpen) setIsDirty(true);
+  }, [form]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // F1 shortcut for add product
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "F1") { e.preventDefault(); openCreate(); }
+      if (e.key === "F1") { e.preventDefault(); requestClose(openCreate); }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, []);
+  }, [requestClose]);
 
   // ─── التنقل بين الأصناف ──────────────────────────────────────────────────────
-  const navigateTo = (p: any) => {
+  const navigateTo = useCallback((p: any) => {
     if (!p) return;
+    skipFormRef.current = true;
+    setIsDirty(false);
     setEditId(p.id);
     setForm({
       name: p.name ?? "",
@@ -1553,9 +1570,11 @@ export default function Products() {
       lastSupplier2: p.lastSupplier2 ?? "",
       defaultOrderQty: p.defaultOrderQty ?? "0",
     });
-  };
+  }, []);
 
-  const openEdit = (p: any) => {
+  const openEdit = useCallback((p: any) => {
+    skipFormRef.current = true;
+    setIsDirty(false);
     setEditId(p.id);
     setForm({
       name: p.name ?? "",
@@ -1631,12 +1650,12 @@ export default function Products() {
       includeInFoundation: p.includeInFoundation ?? false,
     });
     setIsOpen(true);
-  };
+  }, []);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!form.name.trim()) {
       toast.error("اسم الصنف (إسم 1) مطلوب");
-      return;
+      throw new Error("validation");
     }
 
     const data = {
@@ -1681,10 +1700,11 @@ export default function Products() {
     console.log("[handleSubmit] data:", data);
 
     if (editId) {
-      updateProduct.mutate({ id: editId, ...data });
+      await updateProduct.mutateAsync({ id: editId, ...data });
     } else {
-      createProduct.mutate(data);
+      await createProduct.mutateAsync(data);
     }
+    setIsDirty(false);
   };
 
   const formatCurrency = (val: string | number | null) =>
@@ -1715,10 +1735,10 @@ export default function Products() {
   }, [products, groupFilter, sortField, sortDir]);
 
   const currentNavIdx = editId ? sortedProducts.findIndex((p: any) => p.id === editId) : -1;
-  const navFirst  = () => { if (sortedProducts.length) navigateTo(sortedProducts[0]); };
-  const navLast   = () => { if (sortedProducts.length) navigateTo(sortedProducts[sortedProducts.length - 1]); };
-  const navPrev   = () => { if (currentNavIdx > 0) navigateTo(sortedProducts[currentNavIdx - 1]); };
-  const navNext   = () => { if (currentNavIdx < sortedProducts.length - 1) navigateTo(sortedProducts[currentNavIdx + 1]); };
+  const navFirst  = () => requestClose(() => { if (sortedProducts.length) navigateTo(sortedProducts[0]); });
+  const navLast   = () => requestClose(() => { if (sortedProducts.length) navigateTo(sortedProducts[sortedProducts.length - 1]); });
+  const navPrev   = () => requestClose(() => { if (currentNavIdx > 0) navigateTo(sortedProducts[currentNavIdx - 1]); });
+  const navNext   = () => requestClose(() => { if (currentNavIdx < sortedProducts.length - 1) navigateTo(sortedProducts[currentNavIdx + 1]); });
 
   return (
     <div className="space-y-4" dir="rtl">
@@ -2048,13 +2068,13 @@ export default function Products() {
                   <TableRow key={p.id} className="hover:bg-muted/30">
                     <TableCell
                       className="font-mono text-xs text-blue-600 dark:text-blue-400 cursor-pointer hover:underline"
-                      onClick={() => openEdit(p)}
+                      onClick={() => requestClose(() => openEdit(p))}
                     >
                       {p.code ?? p.sku ?? "—"}
                     </TableCell>
                     <TableCell
                       className="font-medium cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
-                      onClick={() => openEdit(p)}
+                      onClick={() => requestClose(() => openEdit(p))}
                     >
                       <div>
                         <p>{p.name}</p>
@@ -2083,7 +2103,7 @@ export default function Products() {
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7"
-                          onClick={() => openEdit(p)}
+                          onClick={() => requestClose(() => openEdit(p))}
                           title="تعديل"
                         >
                           <Edit className="w-3.5 h-3.5" />
@@ -2193,7 +2213,7 @@ export default function Products() {
                       </TableRow>
                     ) : (
                       (selectedCatId === null ? products : catProducts)?.map((p: any) => (
-                        <TableRow key={p.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => openEdit(p)}>
+                        <TableRow key={p.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => requestClose(() => openEdit(p))}>
                           <TableCell className="font-mono text-xs text-blue-600 dark:text-blue-400">{p.sku ?? "—"}</TableCell>
                           <TableCell className="font-medium">
                             <div>
@@ -2326,7 +2346,7 @@ export default function Products() {
                     icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>}
                     label="حفظ" variant="primary"
                     disabled={createProduct.isPending || updateProduct.isPending}
-                    onClick={handleSubmit}
+                    onClick={() => handleSubmit().catch(() => {})}
                   />
                   <BotDivider />
                   <BotBtn
@@ -2343,7 +2363,7 @@ export default function Products() {
                   <BotBtn
                     icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>}
                     label="جديد"
-                    onClick={() => { setEditId(null); setForm(emptyForm); }}
+                    onClick={() => requestClose(openCreate)}
                   />
                   <BotDivider />
                   {/* أدوات */}
@@ -2532,6 +2552,13 @@ export default function Products() {
         </>,
         workspaceEl
       )}
+
+      <UnsavedChangesDialog
+        open={confirmOpen}
+        onSave={() => confirmSave(handleSubmit)}
+        onDiscard={confirmDiscard}
+        onCancel={confirmCancel}
+      />
     </div>
   );
 }

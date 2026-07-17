@@ -391,18 +391,18 @@ export default function Users() {
   const phoneChanged = mode === "edit" && form.phone !== (selectedUser?.phone ?? "");
   const emailChanged = mode === "edit" && form.email !== (selectedUser?.email ?? "");
 
-  const handleSubmit = () => {
+  const handleSubmit = async (): Promise<void> => {
     const err = validatePhone(form.phone);
-    if (err) { setPhoneError(err); setActiveTab("contact"); return; }
+    if (err) { setPhoneError(err); setActiveTab("contact"); throw new Error("validation"); }
     if (mode === "create") {
-      if (!form.name.trim()) { toast.error("الاسم الكامل مطلوب"); setActiveTab("basic"); return; }
-      if (!form.username.trim()) { toast.error("اسم المستخدم مطلوب"); setActiveTab("basic"); return; }
+      if (!form.name.trim()) { toast.error("الاسم الكامل مطلوب"); setActiveTab("basic"); throw new Error("validation"); }
+      if (!form.username.trim()) { toast.error("اسم المستخدم مطلوب"); setActiveTab("basic"); throw new Error("validation"); }
       if (!form.password && (!allowPasswordless || form.role === "admin")) {
         toast.error(form.role === "admin" ? "حسابات مدير النظام يجب أن تكون محمية بكلمة مرور" : "كلمة المرور مطلوبة");
         setActiveTab("login");
-        return;
+        throw new Error("validation");
       }
-      createUser.mutate({
+      await createUser.mutateAsync({
         code: form.code || undefined,
         name: form.name,
         phone: form.phone || undefined,
@@ -417,7 +417,7 @@ export default function Users() {
         allowLogin: form.allowLogin,
       });
     } else {
-      updateUser.mutate({
+      await updateUser.mutateAsync({
         id: selectedUser.id,
         name: form.name || undefined,
         phone: form.phone || undefined,
@@ -1028,7 +1028,7 @@ export default function Users() {
             <div className="flex gap-2 ms-auto">
               <Button variant="outline" onClick={handleClose}>إلغاء</Button>
               {activeTab !== "perms" && (
-                <Button onClick={handleSubmit} disabled={isPending || !!phoneError}>
+                <Button onClick={() => handleSubmit().catch(() => {})} disabled={isPending || !!phoneError}>
                   {isPending ? <><Loader2 className="w-3.5 h-3.5 animate-spin me-1" />جاري الحفظ...</> : mode === "create" ? "إنشاء المستخدم" : "حفظ التعديلات"}
                 </Button>
               )}

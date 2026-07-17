@@ -206,9 +206,9 @@ function SuppliersListPage() {
     !search || s.name?.includes(search) || s.phone?.includes(search)
   ) ?? [];
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async (): Promise<void> => {
     if (!form.name) { toast.error("أدخل اسم المورد"); throw new Error("validation"); }
-    createMutation.mutate({
+    await createMutation.mutateAsync({
       name: form.name,
       phone: form.phone || undefined,
       email: form.email || undefined,
@@ -473,7 +473,7 @@ function SuppliersListPage() {
           />
           <div className="flex justify-end gap-2 mt-3 border-t border-border pt-3">
             <Button variant="outline" size="sm" onClick={() => requestClose(closeForm)}>إلغاء</Button>
-            <Button size="sm" disabled={!form.name || createMutation.isPending} onClick={() => handleSave()}>
+            <Button size="sm" disabled={!form.name || createMutation.isPending} onClick={() => handleSave().catch(() => {})}>
               <Check className="w-3 h-3 ml-1" /> حفظ
             </Button>
           </div>
