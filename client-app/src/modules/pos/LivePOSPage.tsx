@@ -333,7 +333,14 @@ type Overlay = 'customer' | 'tables' | 'orders' | null;
 
 export function LivePOSPage() {
   const { user } = useAuth();
-  const { isPosWorkspaceActive } = useTabManager();
+  const { isPosWorkspaceActive, setIsPosWorkspaceActive } = useTabManager();
+
+  // Register lifecycle intent with TabManagerContext (decorative in MDI — derived
+  // tab state is the authoritative value, but mount/unmount signal is preserved).
+  useEffect(() => {
+    setIsPosWorkspaceActive(true);
+    return () => setIsPosWorkspaceActive(false);
+  }, [setIsPosWorkspaceActive]);
 
   // ─── Fullscreen state ─────────────────────────────────────────────────────
   const [isFullscreen, setIsFullscreen] = useState(false);

@@ -60,7 +60,7 @@ export function ProductBrowser(props: ProductBrowserProps) {
   }
 
   return (
-    <section className="grid min-h-0 flex-1 gap-2 overflow-hidden p-2" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(90px,10%)' }}>
+    <section className="grid min-h-0 flex-1 gap-2 overflow-hidden p-2" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(100px,14%)' }}>
       <div className="min-h-0 overflow-auto rounded-2xl border border-slate-200 bg-slate-50/80 p-2">
         {props.view === 'mixed' && props.favoriteProducts.length > 0 ? (
           <div className="mb-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-2">

@@ -44,17 +44,17 @@ function CartLineRow({ line, config, onQuantityChange, onLineNoteChange, onRemov
 
       <div className="mt-2 flex items-center gap-2">
         <div className="flex items-center overflow-hidden rounded-lg border border-slate-300 bg-white">
-          <button type="button" onClick={() => onQuantityChange(line.quantity - 1)} className="grid h-9 w-9 place-items-center text-lg font-bold hover:bg-slate-100">−</button>
-          <span className="grid h-9 min-w-10 place-items-center border-x border-slate-200 text-sm font-black">{line.quantity}</span>
-          <button type="button" onClick={() => onQuantityChange(line.quantity + 1)} className="grid h-9 w-9 place-items-center text-lg font-bold hover:bg-slate-100">+</button>
+          <button type="button" onClick={() => onQuantityChange(line.quantity - 1)} className="grid h-12 w-12 place-items-center text-lg font-bold hover:bg-slate-100" style={{ touchAction: 'manipulation' }}>−</button>
+          <span className="grid h-12 min-w-10 place-items-center border-x border-slate-200 text-sm font-black">{line.quantity}</span>
+          <button type="button" onClick={() => onQuantityChange(line.quantity + 1)} className="grid h-12 w-12 place-items-center text-lg font-bold hover:bg-slate-100" style={{ touchAction: 'manipulation' }}>+</button>
         </div>
         <input
           value={line.note}
           onChange={(event) => onLineNoteChange(event.target.value)}
           placeholder="ملاحظة للمطبخ"
-          className="h-9 min-w-0 flex-1 rounded-lg border border-slate-200 px-2 text-xs outline-none focus:border-[#1C4576]"
+          className="min-h-12 min-w-0 flex-1 rounded-lg border border-slate-200 px-2 text-xs outline-none focus:border-[#1C4576]"
         />
-        <button type="button" onClick={onRemove} className="grid h-9 w-9 place-items-center rounded-lg text-rose-600 hover:bg-rose-50" aria-label="حذف الصنف">🗑</button>
+        <button type="button" onClick={onRemove} className="grid h-12 w-12 place-items-center rounded-lg text-rose-600 hover:bg-rose-50" aria-label="حذف الصنف" style={{ touchAction: 'manipulation' }}>🗑</button>
       </div>
     </article>
   );
@@ -86,7 +86,8 @@ export function CartPanel(props: CartPanelProps) {
             type="button"
             onClick={props.onNew}
             disabled={isEmpty}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+            className="min-h-12 rounded-lg border border-slate-300 px-3 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+          style={{ touchAction: 'manipulation' }}
           >
             طلب جديد
           </button>
@@ -131,7 +132,8 @@ export function CartPanel(props: CartPanelProps) {
             type="button"
             disabled={isEmpty || props.busyAction !== null}
             onClick={props.onSave}
-            className="min-h-11 rounded-xl border border-[#1C4576] bg-white px-3 text-xs font-extrabold text-[#1C4576] hover:bg-blue-50 disabled:opacity-50"
+            className="min-h-12 rounded-xl border border-[#1C4576] bg-white px-3 text-xs font-extrabold text-[#1C4576] hover:bg-blue-50 disabled:opacity-50"
+            style={{ touchAction: 'manipulation' }}
           >
             {props.busyAction === 'save' ? <Spinner label="حفظ" /> : 'تعليق / حفظ'}
           </button>
@@ -140,7 +142,8 @@ export function CartPanel(props: CartPanelProps) {
               type="button"
               disabled={isEmpty || props.busyAction !== null}
               onClick={props.onKitchen}
-              className="min-h-11 rounded-xl border border-amber-500 bg-amber-50 px-3 text-xs font-extrabold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+              className="min-h-12 rounded-xl border border-amber-500 bg-amber-50 px-3 text-xs font-extrabold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+            style={{ touchAction: 'manipulation' }}
             >
               {props.busyAction === 'kitchen' ? <Spinner label="إرسال" /> : 'إرسال للمطبخ'}
             </button>
@@ -149,7 +152,8 @@ export function CartPanel(props: CartPanelProps) {
               type="button"
               disabled={isEmpty || props.busyAction !== null}
               onClick={props.onSave}
-              className="min-h-11 rounded-xl border border-slate-300 bg-slate-100 px-3 text-xs font-extrabold text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+              className="min-h-12 rounded-xl border border-slate-300 bg-slate-100 px-3 text-xs font-extrabold text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+            style={{ touchAction: 'manipulation' }}
             >
               حفظ الفاتورة
             </button>

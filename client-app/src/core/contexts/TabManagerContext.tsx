@@ -25,6 +25,7 @@ type TabManagerContextType = {
   activeTabId: string | null;
   dashboardVisible: boolean;
   isPosWorkspaceActive: boolean;
+  setIsPosWorkspaceActive: (v: boolean) => void;
   openTab: (path: string, label: string, Icon: React.ElementType, pinned?: boolean) => void;
   closeTab: (id: string) => void;
   activateTab: (id: string) => void;
@@ -171,8 +172,14 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
   const [dashboardVisible, setDashboardVisible] = useState<boolean>(
     restoredTabs.length === 0
   );
-  /* Derived: POS workspace is active when the active (non-minimized) tab is the POS
-     and the dashboard is hidden. No setter needed — purely reactive to tab state. */
+  /* POS workspace flag.
+     Truth source is the derived tab state (handles switch/minimize/close correctly
+     in the MDI model where LivePOSPage stays mounted).  A parallel intent state is
+     exposed via setIsPosWorkspaceActive so callers can register their lifecycle
+     intent explicitly — the derived memo is the authoritative value. */
+  const [, _setPosIntent] = useState(false);
+  const setIsPosWorkspaceActive = useCallback((v: boolean) => _setPosIntent(v), []);
+
   const isPosWorkspaceActive = useMemo(() => {
     if (dashboardVisible) return false;
     const activeTab = tabs.find(t => t.id === activeTabId);
@@ -292,7 +299,7 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
   return (
     <TabManagerContext.Provider value={{
       tabs, activeTabId, dashboardVisible,
-      isPosWorkspaceActive,
+      isPosWorkspaceActive, setIsPosWorkspaceActive,
       openTab, closeTab, activateTab,
       setDashboardVisible, toggleDashboard, showDashboard,
       minimizeWindow, toggleMaximize, bringToFront,
