@@ -21,7 +21,8 @@ export type OrderStatus =
   | 'cancelled';
 export type KitchenItemStatus = 'new' | 'sent' | 'preparing' | 'ready' | 'served' | 'cancelled';
 export type TableStatus = 'available' | 'occupied' | 'kitchen' | 'ready' | 'reserved';
-export type ExternalProvider = 'hungerstation' | 'mrsool';
+/** قابل للتمديد — أي provider id مسجّل في providerRegistry مقبول */
+export type ExternalProvider = string;
 export type ExternalOrderStatus =
   | 'new'
   | 'accepted'

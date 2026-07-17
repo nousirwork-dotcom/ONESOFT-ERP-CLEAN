@@ -1,13 +1,10 @@
 import React, { useState } from 'react';
 import { usePOS } from '../state';
 import { usePOSCatalog } from '../catalog-context';
-import { Modal } from '../components/Modal';
-import type { ExternalProvider, POSMode } from '../types';
-
-const providerNames: Record<ExternalProvider, string> = {
-  hungerstation: 'هنقرستيشن',
-  mrsool: 'مرسول',
-};
+import { useIntegration } from '../integrations/context';
+import { providerRegistry } from '../integrations/registry';
+import { IntegrationCenterScreen } from '../integrations/IntegrationCenterScreen';
+import type { POSMode } from '../types';
 
 function Toggle({
   label,
@@ -25,7 +22,6 @@ function Toggle({
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
       />
-      {/* eslint-disable-next-line jsx-a11y/no-interactive-element-to-noninteractive-role */}
       <i />
       <span>{label}</span>
     </label>
@@ -43,15 +39,19 @@ export function SettingsScreen() {
     onJournalChange,
     onWarehouseChange,
   } = usePOSCatalog();
-  const [integration, setIntegration] = useState<ExternalProvider | null>(null);
-  const [connected, setConnected] = useState<Record<ExternalProvider, boolean>>({
-    hungerstation: false,
-    mrsool: false,
-  });
-  const [step, setStep] = useState(1);
+  const { connections } = useIntegration();
+  const [view, setView] = useState<'main' | 'integrations'>('main');
 
   const changeMode = (mode: POSMode) => dispatch({ type: 'SET_MODE', mode });
-  const closeIntegration = () => { setIntegration(null); setStep(1); };
+
+  if (view === 'integrations') {
+    return <IntegrationCenterScreen onBack={() => setView('main')} />;
+  }
+
+  const connectedCount = connections.length;
+  const errorCount = connections.filter((c) => c.status === 'error').length;
+  const unmappedTotal = connections.reduce((s, c) => s + c.unmappedProductCount, 0);
+  const registeredTotal = providerRegistry.list().length;
 
   return (
     <section className="pos-page">
@@ -335,84 +335,76 @@ export function SettingsScreen() {
           </article>
         )}
 
-        <article className="pos-card">
+        {/* ─── Integration Center card ──────────────────────────────────── */}
+        <article className="pos-card pos-settings-integration-card">
           <header>
-            <h2>التكاملات الخارجية</h2>
-            <span>طلبات هنقرستيشن ومرسول</span>
+            <div>
+              <h2>مركز التكاملات</h2>
+              <span>ربط منصات التوصيل والتجارة الإلكترونية</span>
+            </div>
+            <button
+              type="button"
+              className="pos-button pos-button--primary"
+              onClick={() => setView('integrations')}
+            >
+              فتح مركز التكاملات ←
+            </button>
           </header>
-          <div className="pos-integration-cards">
-            {(['hungerstation', 'mrsool'] as ExternalProvider[]).map((provider) => (
-              <div key={provider} className={`pos-integration-card ${connected[provider] ? 'is-connected' : ''}`}>
-                <div />
-                <div>
-                  <strong>{providerNames[provider]}</strong>
-                  <span>{connected[provider] ? 'متصل' : 'غير متصل'}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => { setIntegration(provider); setStep(1); }}
-                >
-                  {connected[provider] ? 'إعدادات الاتصال' : 'ربط المنصة'}
-                </button>
-              </div>
-            ))}
+
+          <div className="pos-integration-summary">
+            <div className="pos-integration-summary__stat">
+              <strong>{connectedCount}</strong>
+              <small>تكامل مفعّل</small>
+            </div>
+            <div className="pos-integration-summary__stat">
+              <strong style={{ color: errorCount > 0 ? 'var(--pos-red)' : 'inherit' }}>
+                {errorCount}
+              </strong>
+              <small>خطأ في الاتصال</small>
+            </div>
+            <div className="pos-integration-summary__stat">
+              <strong style={{ color: unmappedTotal > 0 ? 'var(--pos-gold)' : 'inherit' }}>
+                {unmappedTotal}
+              </strong>
+              <small>أصناف غير مربوطة</small>
+            </div>
+            <div className="pos-integration-summary__stat">
+              <strong>{registeredTotal}</strong>
+              <small>مزود جاهز</small>
+            </div>
           </div>
+
+          {connectedCount === 0 ? (
+            <div className="pos-integration-summary__empty">
+              <span>🔌</span>
+              لا توجد تكاملات مفعّلة — افتح مركز التكاملات للبدء.
+            </div>
+          ) : (
+            <div className="pos-integration-pills">
+              {connections.map((conn) => {
+                const meta = providerRegistry.get(conn.providerId)?.meta;
+                return (
+                  <span
+                    key={conn.id}
+                    className={`pos-integration-pill ${conn.status === 'connected' ? 'is-connected' : conn.status === 'error' ? 'is-error' : 'is-paused'}`}
+                    style={{ borderColor: meta?.accentColor ?? 'var(--pos-border)' }}
+                  >
+                    <span
+                      className="pos-hub-status-dot"
+                      style={{
+                        background:
+                          conn.status === 'connected' ? 'var(--pos-green)' :
+                          conn.status === 'error' ? 'var(--pos-red)' : '#aaa',
+                      }}
+                    />
+                    {conn.providerName}
+                  </span>
+                );
+              })}
+            </div>
+          )}
         </article>
       </div>
-
-      {integration ? (
-        <Modal
-          open
-          title={`ربط ${providerNames[integration]}`}
-          onClose={closeIntegration}
-          width={520}
-        >
-          <div style={{ padding: '8px 0' }}>
-            {step === 1 ? (
-              <>
-                <p style={{ marginBottom: 16, color: 'var(--pos-muted)' }}>
-                  هذه الميزة ستتيح استقبال طلبات {providerNames[integration]} مباشرة داخل OneSoft POS
-                  وربطها بفاتورة المبيعات وإرسالها للمطبخ تلقائيًا.
-                </p>
-                <div className="pos-form-grid">
-                  <label><span>مفتاح API</span><input type="password" placeholder="أدخل المفتاح" /></label>
-                  <label><span>معرّف الفرع</span><input placeholder="أدخل معرّف الفرع" /></label>
-                </div>
-                <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'flex-end' }}>
-                  <button type="button" className="pos-button" onClick={closeIntegration}>إلغاء</button>
-                  <button
-                    type="button"
-                    className="pos-button pos-button--primary"
-                    onClick={() => setStep(2)}
-                  >
-                    اختبار الاتصال
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <p style={{ color: 'var(--pos-green)', fontWeight: 700, marginBottom: 16 }}>
-                  ✓ تم الاتصال بنجاح (نموذج تجريبي)
-                </p>
-                <button
-                  type="button"
-                  className="pos-button pos-button--primary"
-                  onClick={() => {
-                    setConnected((prev) => ({ ...prev, [integration!]: true }));
-                    closeIntegration();
-                    dispatch({
-                      type: 'SET_NOTICE',
-                      notice: `تم ربط ${providerNames[integration!]} في نموذج الواجهة.`,
-                    });
-                  }}
-                >
-                  حفظ التكامل
-                </button>
-              </>
-            )}
-          </div>
-        </Modal>
-      ) : null}
     </section>
   );
 }

@@ -9,7 +9,14 @@ import { KitchenScreen } from './screens/KitchenScreen';
 import { ExternalOrdersScreen } from './screens/ExternalOrdersScreen';
 import { ReportsScreen } from './screens/ReportsScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
+import { IntegrationProvider } from './integrations/context';
+import { providerRegistry } from './integrations/registry';
+import { HungerStationAdapter } from './integrations/adapters/hungerstation';
+import { MrsoolAdapter } from './integrations/adapters/mrsool';
 import './theme.css';
+
+providerRegistry.register(new HungerStationAdapter());
+providerRegistry.register(new MrsoolAdapter());
 
 function POSWorkspace() {
   const { state, dispatch } = usePOS();
@@ -82,7 +89,9 @@ function POSWorkspace() {
 export function OneSoftPOSSuite() {
   return (
     <POSProvider>
-      <POSWorkspace />
+      <IntegrationProvider>
+        <POSWorkspace />
+      </IntegrationProvider>
     </POSProvider>
   );
 }

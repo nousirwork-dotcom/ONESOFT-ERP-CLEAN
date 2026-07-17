@@ -348,6 +348,88 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .pos-product-card__btn--add { background: var(--pos-blue); color: #fff; }
 .pos-product-card__btn--custom { background: rgba(255,255,255,.95); color: var(--pos-blue); border: 1px solid var(--pos-blue); }
 
+/* ─── Integration Hub ────────────────────────────────────────────────────── */
+.pos-integration-hub { padding: 0 4px; display: grid; gap: 20px; }
+.pos-integration-hub__topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.pos-integration-hub__section { }
+.pos-integration-hub__section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.pos-integration-hub__section-header h2 { margin: 0; font-size: 16px; }
+.pos-integration-hub__section-header span { color: var(--pos-muted); font-size: 12px; }
+.pos-hub-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.pos-hub-card { border: 1px solid var(--pos-border); border-top: 4px solid var(--pos-blue); border-radius: var(--pos-radius); background: #fff; padding: 16px; display: grid; gap: 12px; transition: opacity .2s; }
+.pos-hub-card.is-disabled { opacity: .6; }
+.pos-hub-card__header { display: flex; align-items: center; gap: 12px; }
+.pos-hub-card__logo { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 900; font-size: 18px; flex-shrink: 0; }
+.pos-hub-card__title { flex: 1; }
+.pos-hub-card__title strong { display: block; font-size: 15px; }
+.pos-hub-category-tag { display: inline-block; background: #edf3f8; color: var(--pos-blue); border-radius: 6px; padding: 2px 7px; font-size: 10px; font-weight: 700; margin-top: 4px; }
+.pos-hub-card__status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--pos-muted); }
+.pos-hub-card__meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; font-size: 12px; background: #f8fafc; border-radius: 10px; padding: 10px 12px; margin: 0; }
+.pos-hub-card__meta div { display: grid; }
+.pos-hub-card__meta dt { color: var(--pos-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .03em; }
+.pos-hub-card__meta dd { font-weight: 700; margin: 0; }
+.pos-hub-card__actions { display: flex; gap: 8px; align-items: center; }
+.pos-hub-status-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.pos-hub-status-dot.is-connected { background: var(--pos-green); box-shadow: 0 0 0 3px rgba(39,174,96,.2); }
+.pos-hub-status-dot.is-error { background: var(--pos-red); box-shadow: 0 0 0 3px rgba(220,53,69,.2); }
+.pos-hub-status-dot.is-pending { background: var(--pos-gold); animation: pos-pulse 1.2s infinite; }
+.pos-hub-status-dot.is-paused { background: #aaa; }
+.pos-hub-status-dot.is-disconnected { background: #ccc; }
+@keyframes pos-pulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
+.pos-hub-toggle { min-height: 38px; padding: 0 14px; border: 2px solid var(--pos-border); border-radius: 20px; background: #f5f5f5; color: var(--pos-muted); font-size: 12px; font-weight: 700; transition: all .15s; }
+.pos-hub-toggle.is-on { border-color: var(--pos-green); background: #edfaf0; color: var(--pos-green); }
+.pos-hub-available-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.pos-hub-available-card { border: 1px solid var(--pos-border); border-top: 3px solid var(--pos-blue); border-radius: var(--pos-radius); background: #fff; padding: 14px; display: grid; grid-template-columns: 40px 1fr auto; align-items: center; gap: 10px; text-align: right; transition: box-shadow .15s, border-color .15s; }
+.pos-hub-available-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.09); border-top-width: 4px; }
+.pos-hub-available-card--custom { border-top-color: #6b7a8d; }
+.pos-hub-available-card div strong { display: block; font-size: 13px; margin-bottom: 4px; }
+.pos-hub-available-card div span { display: block; color: var(--pos-muted); font-size: 11px; }
+.pos-hub-connect-hint { color: var(--pos-blue); font-size: 12px; font-weight: 700; white-space: nowrap; }
+
+/* ─── Integration summary card (in SettingsScreen) ───────────────────────── */
+.pos-settings-integration-card header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.pos-settings-integration-card header > div { flex: 1; }
+.pos-integration-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border: 1px solid var(--pos-border); border-radius: 12px; overflow: hidden; margin: 14px 0; }
+.pos-integration-summary__stat { padding: 12px; text-align: center; border-left: 1px solid var(--pos-border); }
+.pos-integration-summary__stat:last-child { border-left: 0; }
+.pos-integration-summary__stat strong { display: block; font-size: 22px; font-weight: 900; color: var(--pos-blue); }
+.pos-integration-summary__stat small { display: block; color: var(--pos-muted); font-size: 10px; margin-top: 4px; }
+.pos-integration-summary__empty { color: var(--pos-muted); font-size: 13px; background: #f8fafc; border-radius: 10px; padding: 12px; display: flex; align-items: center; gap: 10px; }
+.pos-integration-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.pos-integration-pill { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border: 1.5px solid var(--pos-border); border-radius: 20px; font-size: 12px; font-weight: 700; }
+
+/* ─── AddIntegrationWizard ──────────────────────────────────────────────── */
+.pos-wizard { display: grid; gap: 16px; }
+.pos-wizard-progress { display: flex; justify-content: center; gap: 0; margin-bottom: 4px; counter-reset: step; }
+.pos-wizard-step { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; position: relative; }
+.pos-wizard-step::before { content: ''; position: absolute; top: 14px; right: 50%; width: 100%; height: 2px; background: var(--pos-border); z-index: 0; }
+.pos-wizard-step:first-child::before { display: none; }
+.pos-wizard-step span { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--pos-border); background: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; z-index: 1; color: var(--pos-muted); }
+.pos-wizard-step small { font-size: 10px; color: var(--pos-muted); text-align: center; }
+.pos-wizard-step.is-active span { border-color: var(--pos-blue); background: var(--pos-blue); color: #fff; }
+.pos-wizard-step.is-active small { color: var(--pos-blue); font-weight: 700; }
+.pos-wizard-step.is-done span { border-color: var(--pos-green); background: var(--pos-green); color: #fff; }
+.pos-wizard-step.is-done::before { background: var(--pos-green); }
+.pos-wizard-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; border-top: 1px solid var(--pos-border); padding-top: 14px; }
+.pos-wizard-footer > * { min-height: 44px; }
+.pos-wizard-provider-info { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding: 12px; background: #edf3f8; border-radius: 12px; }
+.pos-wizard-admin-notice { background: #fff8e8; border: 1px solid #f0cc82; border-radius: 10px; padding: 12px 14px; font-size: 13px; color: #7a5e1a; margin-bottom: 16px; }
+.pos-wizard-summary { text-align: center; }
+.pos-provider-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.pos-provider-option { border: 1.5px solid var(--pos-border); border-top: 4px solid var(--pos-blue); border-radius: var(--pos-radius); background: #fff; padding: 14px; display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 10px; text-align: right; transition: box-shadow .15s, border-top-color .15s; }
+.pos-provider-option:hover { box-shadow: 0 4px 18px rgba(0,0,0,.1); }
+.pos-provider-option__logo { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 900; font-size: 20px; }
+.pos-provider-option div strong { display: block; font-size: 14px; margin-bottom: 2px; }
+.pos-provider-option div em { display: block; font-size: 11px; color: var(--pos-muted); font-style: normal; margin-bottom: 4px; }
+.pos-provider-option div span { display: block; font-size: 11px; color: var(--pos-muted); }
+.pos-provider-option__badge { background: #e8f5e9; color: var(--pos-green); font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 20px; white-space: nowrap; }
+.pos-success-box { background: #edfaf0; border: 1px solid #a3d9b1; border-radius: 10px; padding: 12px 14px; color: #1a6b38; font-size: 13px; font-weight: 600; margin-bottom: 12px; }
+.pos-link-button { border: 0; background: 0; color: var(--pos-blue); font-size: 13px; font-weight: 700; padding: 0; cursor: pointer; text-decoration: underline; }
+.pos-details-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; font-size: 13px; background: #f8fafc; border-radius: 12px; padding: 14px; text-align: right; }
+.pos-details-list div { display: grid; }
+.pos-details-list dt { color: var(--pos-muted); font-size: 10px; text-transform: uppercase; }
+.pos-details-list dd { font-weight: 700; margin: 0; }
+
 @media (max-width: 1180px) {
   .onesoft-pos-suite { grid-template-columns: 82px minmax(0, 1fr); }
   .pos-brand > div:last-child, .pos-nav__item > span:last-child, .pos-sidebar__footer span:last-child { display: none; }

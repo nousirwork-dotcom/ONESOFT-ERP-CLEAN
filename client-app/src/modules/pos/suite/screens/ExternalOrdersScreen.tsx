@@ -1,28 +1,34 @@
 import React, { useMemo, useState } from 'react';
 import { usePOS } from '../state';
+import { useIntegration } from '../integrations/context';
+import { providerRegistry } from '../integrations/registry';
 import { StatusBadge } from '../components/StatusBadge';
-import type { ExternalProvider } from '../types';
 
-const providerLabel: Record<ExternalProvider, string> = {
-  hungerstation: 'هنقرستيشن',
-  mrsool: 'مرسول',
-};
+function money(v: number) {
+  return new Intl.NumberFormat('ar-SA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
+}
 
 export function ExternalOrdersScreen() {
   const { state, dispatch } = usePOS();
-  const [provider, setProvider] = useState<'all' | ExternalProvider>('all');
+  const { connections } = useIntegration();
+  const [filterProvider, setFilterProvider] = useState<'all' | string>('all');
+
+  const enabledConnections = connections.filter((c) => c.enabled);
 
   const visibleOrders = useMemo(
-    () => state.externalOrders.filter((order) => provider === 'all' || order.provider === provider),
-    [state.externalOrders, provider],
+    () =>
+      state.externalOrders.filter(
+        (order) => filterProvider === 'all' || order.provider === filterProvider,
+      ),
+    [state.externalOrders, filterProvider],
   );
 
-  const newCount = state.externalOrders.filter((order) => order.status === 'new').length;
-  const reviewCount = state.externalOrders.filter((order) => order.status === 'needs_review').length;
-  const preparingCount = state.externalOrders.filter((order) => order.status === 'preparing').length;
+  const newCount = state.externalOrders.filter((o) => o.status === 'new').length;
+  const reviewCount = state.externalOrders.filter((o) => o.status === 'needs_review').length;
+  const preparingCount = state.externalOrders.filter((o) => o.status === 'preparing').length;
   const todaySales = state.externalOrders
-    .filter((order) => order.status !== 'rejected' && order.status !== 'cancelled')
-    .reduce((sum, order) => sum + order.total, 0);
+    .filter((o) => o.status !== 'rejected' && o.status !== 'cancelled')
+    .reduce((sum, o) => sum + o.total, 0);
 
   return (
     <section className="pos-page">
@@ -31,31 +37,41 @@ export function ExternalOrdersScreen() {
           <small>Delivery Integration Hub</small>
           <h1>مركز الطلبات الخارجية</h1>
           <p>
-            استقبال طلبات هنقرستيشن ومرسول، قبولها، ثم إدخالها في نفس مسار المطعم والمطبخ.
+            استقبال طلبات جميع منصات التوصيل المربوطة، قبولها، ثم إدخالها في مسار المطعم والمطبخ.
           </p>
         </div>
+
         <div className="pos-segmented">
           <button
             type="button"
-            className={provider === 'all' ? 'is-active' : ''}
-            onClick={() => setProvider('all')}
+            className={filterProvider === 'all' ? 'is-active' : ''}
+            onClick={() => setFilterProvider('all')}
           >
             الكل
+            {state.externalOrders.length > 0 && (
+              <span style={{ marginRight: 6, fontSize: 11 }}>({state.externalOrders.length})</span>
+            )}
           </button>
-          <button
-            type="button"
-            className={provider === 'hungerstation' ? 'is-active' : ''}
-            onClick={() => setProvider('hungerstation')}
-          >
-            هنقرستيشن
-          </button>
-          <button
-            type="button"
-            className={provider === 'mrsool' ? 'is-active' : ''}
-            onClick={() => setProvider('mrsool')}
-          >
-            مرسول
-          </button>
+          {enabledConnections.map((conn) => {
+            const meta = providerRegistry.get(conn.providerId)?.meta;
+            const count = state.externalOrders.filter((o) => o.provider === conn.providerId).length;
+            return (
+              <button
+                key={conn.id}
+                type="button"
+                className={filterProvider === conn.providerId ? 'is-active' : ''}
+                onClick={() => setFilterProvider(conn.providerId)}
+                style={
+                  filterProvider === conn.providerId && meta?.accentColor
+                    ? { borderColor: meta.accentColor, color: meta.accentColor }
+                    : undefined
+                }
+              >
+                {conn.providerName}
+                {count > 0 && <span style={{ marginRight: 6, fontSize: 11 }}>({count})</span>}
+              </button>
+            );
+          })}
         </div>
       </header>
 
@@ -68,70 +84,90 @@ export function ExternalOrdersScreen() {
         </article>
         <article>
           <small>مبيعات المنصات (الجلسة)</small>
-          <strong>
-            {new Intl.NumberFormat('ar-SA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(todaySales)} ر.س
-          </strong>
+          <strong>{money(todaySales)} ر.س</strong>
         </article>
       </div>
 
-      {visibleOrders.length === 0 ? (
+      {enabledConnections.length === 0 ? (
+        <div className="pos-empty-state" style={{ minHeight: 200 }}>
+          <span style={{ fontSize: 36 }}>🔌</span>
+          <strong>لا توجد تكاملات مفعّلة</strong>
+          <span>
+            افتح الإعدادات → مركز التكاملات لربط منصات التوصيل.
+            هنقرستيشن ومرسول وأي منصة أخرى ستظهر هنا تلقائياً بعد الربط.
+          </span>
+        </div>
+      ) : visibleOrders.length === 0 ? (
         <div className="pos-empty-state" style={{ minHeight: 200 }}>
           <strong>لا توجد طلبات خارجية</strong>
-          <span>
-            ستظهر هنا طلبات هنقرستيشن ومرسول فور ربط المنصات من شاشة الإعدادات.
-          </span>
+          <span>ستظهر هنا طلبات المنصات المربوطة فور ورودها.</span>
         </div>
       ) : (
         <div className="pos-external-orders">
-          {visibleOrders.map((order) => (
-            <article className={`pos-external-card provider-${order.provider}`} key={order.id}>
-              <header>
-                <div className="pos-provider-logo">
-                  {order.provider === 'hungerstation' ? 'H' : 'M'}
-                </div>
-                <div>
-                  <small>{providerLabel[order.provider]}</small>
-                  <strong>{order.externalOrderNumber}</strong>
-                </div>
-                <StatusBadge status={order.status} />
-              </header>
-              <dl>
-                <div><dt>وقت الوصول</dt><dd>{order.receivedAt}</dd></div>
-                <div><dt>العميل</dt><dd>{order.customerName}</dd></div>
-                <div><dt>عدد البنود</dt><dd>{order.itemCount}</dd></div>
-                <div><dt>الدفع</dt><dd>{order.paymentLabel}</dd></div>
-                <div className="is-total">
-                  <dt>الإجمالي</dt>
-                  <dd>{order.total.toFixed(2)} ر.س</dd>
-                </div>
-              </dl>
-              {order.issue ? <div className="pos-warning-box">{order.issue}</div> : null}
-              <footer>
-                {order.status === 'new' ? (
-                  <>
-                    <button
-                      type="button"
-                      className="pos-button pos-button--primary"
-                      onClick={() => dispatch({ type: 'ACCEPT_EXTERNAL_ORDER', orderId: order.id })}
-                    >
-                      قبول وإرسال للمطبخ
+          {visibleOrders.map((order) => {
+            const conn = enabledConnections.find((c) => c.providerId === order.provider);
+            const meta = providerRegistry.get(order.provider)?.meta;
+            const logoColor = meta?.logoColor ?? '#1c4576';
+            const logoInitial = meta?.logoInitial ?? order.provider.slice(0, 1).toUpperCase();
+            const providerName = conn?.providerName ?? meta?.name ?? order.provider;
+
+            return (
+              <article
+                className={`pos-external-card provider-${order.provider}`}
+                key={order.id}
+                style={meta?.accentColor ? { borderTopColor: meta.accentColor } : undefined}
+              >
+                <header>
+                  <div
+                    className="pos-provider-logo"
+                    style={{ background: logoColor, color: '#fff', fontWeight: 800, fontSize: 18 }}
+                  >
+                    {logoInitial}
+                  </div>
+                  <div>
+                    <small>{providerName}</small>
+                    <strong>{order.externalOrderNumber}</strong>
+                  </div>
+                  <StatusBadge status={order.status} />
+                </header>
+                <dl>
+                  <div><dt>وقت الوصول</dt><dd>{order.receivedAt}</dd></div>
+                  <div><dt>العميل</dt><dd>{order.customerName}</dd></div>
+                  <div><dt>عدد البنود</dt><dd>{order.itemCount}</dd></div>
+                  <div><dt>الدفع</dt><dd>{order.paymentLabel}</dd></div>
+                  <div className="is-total">
+                    <dt>الإجمالي</dt>
+                    <dd>{order.total.toFixed(2)} ر.س</dd>
+                  </div>
+                </dl>
+                {order.issue ? <div className="pos-warning-box">{order.issue}</div> : null}
+                <footer>
+                  {order.status === 'new' ? (
+                    <>
+                      <button
+                        type="button"
+                        className="pos-button pos-button--primary"
+                        onClick={() => dispatch({ type: 'ACCEPT_EXTERNAL_ORDER', orderId: order.id })}
+                      >
+                        قبول وإرسال للمطبخ
+                      </button>
+                      <button
+                        type="button"
+                        className="pos-button pos-button--danger"
+                        onClick={() => dispatch({ type: 'REJECT_EXTERNAL_ORDER', orderId: order.id })}
+                      >
+                        رفض
+                      </button>
+                    </>
+                  ) : (
+                    <button type="button" className="pos-button pos-button--secondary">
+                      عرض التفاصيل
                     </button>
-                    <button
-                      type="button"
-                      className="pos-button pos-button--danger"
-                      onClick={() => dispatch({ type: 'REJECT_EXTERNAL_ORDER', orderId: order.id })}
-                    >
-                      رفض
-                    </button>
-                  </>
-                ) : (
-                  <button type="button" className="pos-button pos-button--secondary">
-                    عرض التفاصيل
-                  </button>
-                )}
-              </footer>
-            </article>
-          ))}
+                  )}
+                </footer>
+              </article>
+            );
+          })}
         </div>
       )}
     </section>
