@@ -6,7 +6,6 @@ import type {
   IntegrationConnection,
   IntegrationConnectionSettings,
   IntegrationProviderMeta,
-  ProductMapping,
 } from './types';
 
 const STEPS = ['بيانات التطبيق', 'الاتصال', 'إعداد الطلبات', 'ربط الأصناف'] as const;
@@ -33,6 +32,21 @@ const CUSTOM_META: IntegrationProviderMeta = {
     { key: 'notes', label: 'ملاحظات للمطور', type: 'text', required: false, placeholder: 'مثال: راجع docs/my-adapter.md' },
   ],
 };
+
+/**
+ * ربط الأصناف يعمل بالاتجاه الداخلي → خارجي:
+ * يُعرض كتالوج OneSoft، ويُدخل المستخدم اسم الصنف كما ظهر على منصة التوصيل.
+ * عند وصول طلب، يبحث النظام عن externalName ليجد الصنف المقابل.
+ */
+interface ProductMappingEntry {
+  productId: number;
+  productCode: string;
+  productName: string;
+  productPrice: number;
+  externalName: string;
+  externalCode: string;
+  available: boolean;
+}
 
 interface Props {
   open: boolean;
@@ -73,8 +87,8 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
 
   const [mappingSearch, setMappingSearch] = useState('');
   const [mappingFilter, setMappingFilter] = useState<'all' | 'mapped' | 'unmapped'>('all');
-  const [productMappings, setProductMappings] = useState<ProductMapping[]>([]);
-  const [mappingRow, setMappingRow] = useState<string | null>(null);
+  const [mappings, setMappings] = useState<ProductMappingEntry[]>([]);
+  const [editRow, setEditRow] = useState<number | null>(null);
 
   const registeredMetas = providerRegistry.listMeta();
   const allProviderOptions = [...registeredMetas, CUSTOM_META];
@@ -85,19 +99,56 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
   const adminFields = credentialFields.filter((f) => f.adminOnly);
   const publicFields = credentialFields.filter((f) => !f.adminOnly);
 
-  const unmappedCount = productMappings.filter((m) => m.onesoftProductId === null).length;
+  const unmappedCount = mappings.filter((m) => m.externalName.trim() === '').length;
 
-  const filteredMappings = productMappings.filter((m) => {
+  const filteredMappings = mappings.filter((m) => {
     const matchesSearch =
       !mappingSearch ||
-      m.externalProductName.includes(mappingSearch) ||
-      m.externalProductCode.includes(mappingSearch);
+      m.productName.toLowerCase().includes(mappingSearch.toLowerCase()) ||
+      m.productCode.toLowerCase().includes(mappingSearch.toLowerCase()) ||
+      m.externalName.toLowerCase().includes(mappingSearch.toLowerCase());
     const matchesFilter =
       mappingFilter === 'all' ||
-      (mappingFilter === 'mapped' && m.onesoftProductId !== null) ||
-      (mappingFilter === 'unmapped' && m.onesoftProductId === null);
+      (mappingFilter === 'mapped' && m.externalName.trim() !== '') ||
+      (mappingFilter === 'unmapped' && m.externalName.trim() === '');
     return matchesSearch && matchesFilter;
   });
+
+  const handleEnterMappingStep = () => {
+    setMappings(
+      products.map((p) => ({
+        productId: p.id,
+        productCode: p.code,
+        productName: p.name,
+        productPrice: p.salePrice,
+        externalName: '',
+        externalCode: '',
+        available: true,
+      })),
+    );
+    setMappingSearch('');
+    setMappingFilter('all');
+    setEditRow(null);
+    setStep(3);
+  };
+
+  const handleAutoMatch = () => {
+    setMappings((prev) =>
+      prev.map((m) => ({
+        ...m,
+        externalName: m.externalName.trim() === '' ? m.productName : m.externalName,
+        externalCode: m.externalCode.trim() === '' ? m.productCode : m.externalCode,
+      })),
+    );
+  };
+
+  const handleRemoveMapping = (productId: number) => {
+    setMappings((prev) =>
+      prev.map((m) =>
+        m.productId === productId ? { ...m, externalName: '', externalCode: '' } : m,
+      ),
+    );
+  };
 
   const handleReset = () => {
     setStep(0);
@@ -124,10 +175,10 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
     setAdvancedOpen(false);
     setTesting(false);
     setTestResult(null);
-    setProductMappings([]);
+    setMappings([]);
     setMappingSearch('');
     setMappingFilter('all');
-    setMappingRow(null);
+    setEditRow(null);
   };
 
   const handleClose = () => {
@@ -156,46 +207,10 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
     }
   };
 
-  const handleAutoMatch = () => {
-    setProductMappings((prev) =>
-      prev.map((m) => {
-        if (m.onesoftProductId !== null) return m;
-        const match = products.find(
-          (p) =>
-            p.name.toLowerCase().includes(m.externalProductName.toLowerCase()) ||
-            p.code.toLowerCase() === m.externalProductCode.toLowerCase(),
-        );
-        if (!match) return m;
-        return {
-          ...m,
-          onesoftProductId: match.id,
-          onesoftProductCode: match.code,
-          onesoftProductName: match.name,
-        };
-      }),
-    );
-  };
-
-  const handleSetMapping = (externalId: string, productId: number | null) => {
-    const p = productId !== null ? products.find((x) => x.id === productId) : null;
-    setProductMappings((prev) =>
-      prev.map((m) =>
-        m.externalProductId === externalId
-          ? {
-              ...m,
-              onesoftProductId: productId,
-              onesoftProductCode: p?.code,
-              onesoftProductName: p?.name,
-            }
-          : m,
-      ),
-    );
-    setMappingRow(null);
-  };
-
   const handleConfirm = () => {
     if (!activeMeta) return;
     const providerName = isCustom && customName ? customName : activeMeta.name;
+    const mapped = mappings.filter((m) => m.externalName.trim() !== '').length;
     const conn: IntegrationConnection = {
       id: `conn-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
       providerId: isCustom ? `custom-${Date.now()}` : activeMeta.id,
@@ -206,7 +221,7 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
       lastSyncStatus: testResult?.success ? 'success' : 'never',
       credentials,
       settings,
-      unmappedProductCount: unmappedCount,
+      unmappedProductCount: mappings.length - mapped,
       createdAt: new Date().toISOString(),
     };
     onConnected(conn);
@@ -475,7 +490,7 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
 
             <div className="pos-wizard-footer">
               <button type="button" className="pos-button pos-button--secondary" onClick={() => setStep(1)}>← رجوع</button>
-              <button type="button" className="pos-button pos-button--primary" onClick={() => setStep(3)}>التالي →</button>
+              <button type="button" className="pos-button pos-button--primary" onClick={handleEnterMappingStep}>التالي →</button>
             </div>
           </div>
         )}
@@ -487,13 +502,19 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
               <div className="pos-hub-card__logo" style={{ background: logoColor, width: 40, height: 40, borderRadius: 12 }}>{logoInitial}</div>
               <div style={{ flex: 1 }}>
                 <strong>{isCustom && customName ? customName : activeMeta.name}</strong>
-                <span style={{ color: 'var(--pos-muted)', fontSize: 12 }}>ربط أصناف المنصة بأصناف OneSoft</span>
+                <span style={{ color: 'var(--pos-muted)', fontSize: 12 }}>حدّد اسم كل صنف كما يظهر على منصة التوصيل</span>
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 {unmappedCount > 0 && (
                   <span className="pos-badge pos-badge--warning">{unmappedCount} غير مربوط</span>
                 )}
-                <button type="button" className="pos-button pos-button--secondary" style={{ minHeight: 36, fontSize: 12 }} onClick={handleAutoMatch} disabled={productMappings.length === 0}>
+                <button
+                  type="button"
+                  className="pos-button pos-button--secondary"
+                  style={{ minHeight: 36, fontSize: 12 }}
+                  onClick={handleAutoMatch}
+                  disabled={mappings.length === 0}
+                >
                   مطابقة تلقائية
                 </button>
               </div>
@@ -502,10 +523,9 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
             <div className="pos-mapping-toolbar">
               <input
                 className="pos-mapping-search"
-                placeholder="بحث في أصناف المنصة..."
+                placeholder="بحث في الأصناف..."
                 value={mappingSearch}
                 onChange={(e) => setMappingSearch(e.target.value)}
-                disabled={productMappings.length === 0}
               />
               <div className="pos-segmented" style={{ flexShrink: 0 }}>
                 {(['all', 'mapped', 'unmapped'] as const).map((f) => (
@@ -515,23 +535,20 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
                     className={mappingFilter === f ? 'is-active' : ''}
                     onClick={() => setMappingFilter(f)}
                   >
-                    {f === 'all' ? 'الكل' : f === 'mapped' ? 'مربوط' : 'غير مربوط'}
+                    {f === 'all' ? `الكل (${mappings.length})` : f === 'mapped' ? 'مربوط' : 'غير مربوط'}
                   </button>
                 ))}
               </div>
             </div>
 
-            {productMappings.length === 0 ? (
-              <div className="pos-empty-state" style={{ minHeight: 160 }}>
-                <span style={{ fontSize: 32 }}>🔗</span>
-                <strong>لا توجد أصناف للمطابقة</strong>
-                <span style={{ fontSize: 12, maxWidth: 360 }}>
-                  ستظهر أصناف المنصة هنا بعد تفعيل التكامل ومزامنة الكتالوج الأولى.
-                  يمكنك تخطي هذه الخطوة الآن وإتمام الربط لاحقاً من "إدارة الربط".
-                </span>
+            {products.length === 0 ? (
+              <div className="pos-empty-state" style={{ minHeight: 140 }}>
+                <span style={{ fontSize: 32 }}>📦</span>
+                <strong>لا توجد أصناف في الكتالوج</strong>
+                <span style={{ fontSize: 12 }}>أضف أصناف في الكتالوج أولاً، ثم عُد للربط.</span>
               </div>
             ) : filteredMappings.length === 0 ? (
-              <div className="pos-empty-state" style={{ minHeight: 120 }}>
+              <div className="pos-empty-state" style={{ minHeight: 100 }}>
                 <strong>لا توجد نتائج</strong>
                 <span>جرّب تغيير الفلتر أو كلمة البحث.</span>
               </div>
@@ -540,64 +557,76 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
                 <table className="pos-mapping-table">
                   <thead>
                     <tr>
-                      <th>كود المنصة</th>
-                      <th>اسم الصنف</th>
-                      <th>سعر المنصة</th>
-                      <th>صنف OneSoft</th>
-                      <th>حالة التوفر</th>
-                      <th>الربط</th>
+                      <th>كود OneSoft</th>
+                      <th>اسم الصنف (داخلي)</th>
+                      <th>السعر</th>
+                      <th>الاسم على المنصة</th>
+                      <th>توفر</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredMappings.map((m) => (
-                      <tr key={m.externalProductId} className={m.onesoftProductId === null ? 'is-unmapped' : ''}>
-                        <td><code>{m.externalProductCode}</code></td>
-                        <td>{m.externalProductName}</td>
-                        <td>{m.externalPrice.toFixed(2)} ر.س</td>
+                      <tr key={m.productId} className={m.externalName.trim() === '' ? 'is-unmapped' : ''}>
+                        <td><code>{m.productCode}</code></td>
+                        <td style={{ fontWeight: 600 }}>{m.productName}</td>
+                        <td style={{ color: 'var(--pos-muted)', fontSize: 12 }}>{m.productPrice.toFixed(2)} ر.س</td>
                         <td>
-                          {mappingRow === m.externalProductId ? (
-                            <select
+                          {editRow === m.productId ? (
+                            <input
                               autoFocus
-                              value={m.onesoftProductId ?? ''}
-                              onChange={(e) => handleSetMapping(m.externalProductId, Number(e.target.value) || null)}
-                              onBlur={() => setMappingRow(null)}
-                              style={{ width: '100%', minHeight: 36, border: '1px solid var(--pos-border)', borderRadius: 8, padding: '0 8px' }}
-                            >
-                              <option value="">— اختر صنف —</option>
-                              {products.map((p) => <option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}
-                            </select>
+                              style={{ width: '100%', minHeight: 34, border: '1px solid var(--pos-blue)', borderRadius: 8, padding: '0 8px', font: 'inherit', fontSize: 12, outline: 'none' }}
+                              value={m.externalName}
+                              placeholder="اسم الصنف على المنصة..."
+                              onChange={(e) =>
+                                setMappings((prev) =>
+                                  prev.map((x) =>
+                                    x.productId === m.productId ? { ...x, externalName: e.target.value } : x,
+                                  ),
+                                )
+                              }
+                              onBlur={() => setEditRow(null)}
+                              onKeyDown={(e) => { if (e.key === 'Enter') setEditRow(null); }}
+                            />
                           ) : (
-                            <span style={{ color: m.onesoftProductId ? 'var(--pos-text)' : 'var(--pos-muted)', fontSize: 12 }}>
-                              {m.onesoftProductName ?? '—'}
-                            </span>
+                            <button
+                              type="button"
+                              style={{
+                                background: 'none', border: m.externalName ? '1px solid var(--pos-border)' : '1px dashed #ccc',
+                                borderRadius: 8, padding: '4px 10px', width: '100%', textAlign: 'right', cursor: 'text',
+                                color: m.externalName ? 'var(--pos-text)' : 'var(--pos-muted)', fontSize: 12, minHeight: 32
+                              }}
+                              onClick={() => setEditRow(m.productId)}
+                            >
+                              {m.externalName || '— انقر للإدخال —'}
+                            </button>
                           )}
                         </td>
                         <td>
-                          <span className={`pos-status pos-status--${m.available ? 'ready' : 'cancelled'}`}>
-                            {m.available ? 'متاح' : 'غير متاح'}
-                          </span>
+                          <label className="pos-toggle" style={{ minHeight: 32, padding: '0 8px', border: 'none', justifyContent: 'center' }}>
+                            <input
+                              type="checkbox"
+                              checked={m.available}
+                              onChange={(e) =>
+                                setMappings((prev) =>
+                                  prev.map((x) => x.productId === m.productId ? { ...x, available: e.target.checked } : x)
+                                )
+                              }
+                            />
+                            <i />
+                          </label>
                         </td>
                         <td>
-                          <div style={{ display: 'flex', gap: 4 }}>
+                          {m.externalName.trim() !== '' && (
                             <button
                               type="button"
-                              className="pos-button pos-button--secondary"
-                              style={{ minHeight: 32, padding: '0 10px', fontSize: 11 }}
-                              onClick={() => setMappingRow(m.externalProductId)}
+                              className="pos-button pos-button--danger"
+                              style={{ minHeight: 30, padding: '0 10px', fontSize: 11 }}
+                              onClick={() => handleRemoveMapping(m.productId)}
                             >
-                              ربط
+                              إزالة
                             </button>
-                            {m.onesoftProductId !== null && (
-                              <button
-                                type="button"
-                                className="pos-button pos-button--danger"
-                                style={{ minHeight: 32, padding: '0 10px', fontSize: 11 }}
-                                onClick={() => handleSetMapping(m.externalProductId, null)}
-                              >
-                                إزالة
-                              </button>
-                            )}
-                          </div>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -606,20 +635,21 @@ export function AddIntegrationWizard({ open, onClose, onConnected }: Props) {
               </div>
             )}
 
-            {unmappedCount > 0 && productMappings.length > 0 && (
+            {unmappedCount > 0 && products.length > 0 && (
               <div className="pos-warning-box" style={{ margin: '12px 0 0' }}>
-                ⚠ {unmappedCount} أصناف غير مربوطة — الطلبات التي تحتوي على هذه الأصناف ستُصنَّف "يحتاج مراجعة".
+                ⚠ {unmappedCount} أصناف لم يُحدَّد لها اسم على المنصة — الطلبات التي تحتويها ستُصنَّف "يحتاج مراجعة".
               </div>
             )}
 
             <div className="pos-wizard-footer">
               <button type="button" className="pos-button pos-button--secondary" onClick={() => setStep(2)}>← رجوع</button>
-              <button type="button" className="pos-button pos-button--secondary" onClick={handleConfirm}>
-                {productMappings.length === 0 ? 'تخطي والحفظ' : unmappedCount > 0 ? 'حفظ مع تجاوز التحذير' : 'تأكيد الربط ✓'}
-              </button>
-              {testResult?.success && (
+              {unmappedCount > 0 && products.length > 0 ? (
+                <button type="button" className="pos-button pos-button--secondary" onClick={handleConfirm}>
+                  حفظ مع تجاوز التحذير ({unmappedCount} غير مربوط)
+                </button>
+              ) : (
                 <button type="button" className="pos-button pos-button--primary" onClick={handleConfirm}>
-                  تأكيد الربط ✓
+                  {products.length === 0 ? 'تخطي والحفظ' : 'تأكيد الربط ✓'}
                 </button>
               )}
             </div>
