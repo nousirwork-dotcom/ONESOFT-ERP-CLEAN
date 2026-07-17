@@ -210,9 +210,9 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
   const set = (k: keyof CustomerData, v: string) => setForm(f => ({ ...f, [k]: v }));
 
   const handleSave = async (): Promise<void> => {
-    if (!form.name?.trim()) { toast.error("اسم العميل مطلوب"); setTab("main"); return; }
+    if (!form.name?.trim()) { toast.error("اسم العميل مطلوب"); setTab("main"); throw new Error("validation"); }
     if (form.customerType === "organization" && !form.taxNumber?.trim()) {
-      toast.error("الرقم الضريبي مطلوب للمؤسسات"); setTab("main"); return;
+      toast.error("الرقم الضريبي مطلوب للمؤسسات"); setTab("main"); throw new Error("validation");
     }
     const payload = {
       code:               form.code?.trim()              || undefined,
@@ -812,7 +812,7 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
               background: "#E0E0E0", color: "#333", border: "1px solid #A0A0A0",
               cursor: "pointer",
             }}>إلغاء</button>
-            <button onClick={handleSave} disabled={isPending} style={{
+            <button onClick={() => handleSave().catch(() => {})} disabled={isPending} style={{
               padding: "5px 18px", fontSize: 12, fontWeight: 700, borderRadius: 3,
               background: isPending ? "#A0A0A0" : PRIMARY, color: "white",
               border: `1px solid ${isPending ? "#888" : "#2e5070"}`,

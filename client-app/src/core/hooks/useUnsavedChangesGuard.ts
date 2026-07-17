@@ -23,8 +23,10 @@ export function useUnsavedChangesGuard({ isDirty }: Options) {
   const confirmSave = useCallback(async (onSave: () => Promise<void> | void) => {
     try {
       await onSave();
+      const fn = afterCloseRef.current;
       afterCloseRef.current = null;
       setConfirmOpen(false);
+      fn?.(); // execute deferred exit action after successful save
     } catch {
       // save failed — keep guard dialog open so user can retry or discard
     }

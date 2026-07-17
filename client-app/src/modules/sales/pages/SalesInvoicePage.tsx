@@ -653,41 +653,41 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
   // ── Validation & Save ─────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
-    // Validation
+    // Validation — throw on failure so the unsaved-changes guard stays open
     if (!journalId) {
       toast.error("يجب اختيار نوع السند قبل الحفظ");
-      return;
+      throw new Error("validation");
     }
     if (!invoiceNumber.trim()) {
       toast.error("رقم الفاتورة مطلوب");
-      return;
+      throw new Error("validation");
     }
     const validLines = lines.filter(l => l.productName.trim() !== "");
     if (validLines.length === 0) {
       toast.error("يجب إضافة صنف واحد على الأقل في الفاتورة");
-      return;
+      throw new Error("validation");
     }
     // تحقق من أن جميع الأصناف مسجلة في النظام
     for (const l of validLines) {
       if (!l.productId) {
         const nameOrCode = l.productCode || l.productName;
         toast.error(`الصنف "${nameOrCode}" غير موجود — يرجى اختيار صنف مسجل أو إنشاء صنف جديد`);
-        return;
+        throw new Error("validation");
       }
     }
     // تحقق من الرقم الضريبي للمؤسسات
     if (customerType === 'organization' && !customerTaxNumber.trim()) {
       toast.error("الرقم الضريبي مطلوب للعملاء من نوع مؤسسة");
-      return;
+      throw new Error("validation");
     }
     for (const l of validLines) {
       if (!l.unitPrice || parseFloat(l.unitPrice) === 0) {
         toast.error(`سعر الصنف "${l.productName}" يجب أن يكون أكبر من صفر`);
-        return;
+        throw new Error("validation");
       }
       if (!l.quantity || parseFloat(l.quantity) === 0) {
         toast.error(`كمية الصنف "${l.productName}" يجب أن تكون أكبر من صفر`);
-        return;
+        throw new Error("validation");
       }
     }
 
@@ -698,15 +698,15 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     if (selectedDocType) {
       if (selectedDocType.requireNote && !notes.trim()) {
         toast.error("يجب إدخال ملاحظة للمستند (مطلوب في نوع المستند المختار)");
-        return;
+        throw new Error("validation");
       }
       if (selectedDocType.requireCustomerCode && !customerId) {
         toast.error("يجب اختيار العميل (مطلوب في نوع المستند المختار)");
-        return;
+        throw new Error("validation");
       }
       if (selectedDocType.requireEmployeeCode && !salesperson.trim()) {
         toast.error("يجب إدخال كود الموظف (مطلوب في نوع المستند المختار)");
-        return;
+        throw new Error("validation");
       }
       if (selectedDocType.noStockDispatch && warehouseId) {
         const stockData = stockQuery.data ?? [];
@@ -719,7 +719,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             toast.error(
               `⛔ لا يوجد رصيد كافٍ للصنف "${line.productName}"\nالمتاح: ${available.toFixed(3)} — المطلوب: ${requested.toFixed(3)}`
             );
-            return;
+            throw new Error("validation");
           }
         }
       }
@@ -733,7 +733,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
         setInvoiceNumber(finalInvoiceNumber);
       } catch {
         toast.error("تعذّر حجز رقم الفاتورة من الدفتر");
-        return;
+        throw new Error("journal_number");
       }
     }
 

@@ -1,4 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
+import { useUnsavedChangesGuard } from "@/core/hooks/useUnsavedChangesGuard";
+import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import { FoundationPolicyPanel } from "@/shared/components/FoundationPolicyPanel";
 import type { RecordPolicy } from "@/shared/components/FoundationPolicyPanel";
 import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
@@ -172,12 +174,19 @@ function PurchasesOverview({ onSelect }: { onSelect: (id: MenuId) => void }) {
 // ─── Suppliers List (دليل الموردين) ───────────────────────────────────────────
 function SuppliersListPage() {
   const listQuery = trpc.suppliers.list.useQuery({});
+
+  const [showForm, setShowForm] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const { confirmOpen, requestClose, confirmSave, confirmDiscard, confirmCancel } =
+    useUnsavedChangesGuard({ isDirty });
+
+  const closeForm = useCallback(() => { setShowForm(false); setIsDirty(false); }, []);
+
   const createMutation = trpc.suppliers.create.useMutation({
-    onSuccess: () => { toast.success("تم إضافة المورد"); listQuery.refetch(); setShowForm(false); },
+    onSuccess: () => { toast.success("تم إضافة المورد"); listQuery.refetch(); closeForm(); },
     onError: (e) => toast.error(e.message),
   });
 
-  const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState("");
   const [form, setForm] = useState({
     name: "", name2: "", phone: "", phone2: "", email: "",
@@ -191,14 +200,14 @@ function SuppliersListPage() {
     foundationKey: "",
     includeInFoundation: false,
   });
-  const setF = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
+  const setF = (k: string, v: string) => { setIsDirty(true); setForm(p => ({ ...p, [k]: v })); };
 
   const filtered = listQuery.data?.filter(s =>
     !search || s.name?.includes(search) || s.phone?.includes(search)
   ) ?? [];
 
-  const handleSave = () => {
-    if (!form.name) return toast.error("أدخل اسم المورد");
+  const handleSave = useCallback(() => {
+    if (!form.name) { toast.error("أدخل اسم المورد"); throw new Error("validation"); }
     createMutation.mutate({
       name: form.name,
       phone: form.phone || undefined,
@@ -208,7 +217,7 @@ function SuppliersListPage() {
       includeInFoundation: form.includeInFoundation,
       foundationKey: form.foundationKey || undefined,
     });
-  };
+  }, [form, createMutation]);
 
   return (
     <div className="space-y-3">
@@ -221,7 +230,7 @@ function SuppliersListPage() {
             <Search className="absolute right-2 top-1.5 w-3 h-3 text-muted-foreground" />
             <Input value={search} onChange={e => setSearch(e.target.value)} className="h-7 text-xs pr-7 w-48" placeholder="بحث..." />
           </div>
-          <Button size="sm" className="h-7 text-xs gap-1" onClick={() => setShowForm(true)}>
+          <Button size="sm" className="h-7 text-xs gap-1" onClick={() => { setIsDirty(false); setShowForm(true); }}>
             <Plus className="w-3 h-3" /> إضافة مورد
           </Button>
         </div>
@@ -251,7 +260,7 @@ function SuppliersListPage() {
                 <TableCell className="text-xs">{s.email ?? "-"}</TableCell>
                 <TableCell className="text-xs">{s.address ?? "-"}</TableCell>
                 <TableCell>
-                  <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setShowForm(true)}>
+                  <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => { setIsDirty(false); setShowForm(true); }}>
                     <Edit2 className="w-3 h-3" />
                   </Button>
                 </TableCell>
@@ -262,7 +271,7 @@ function SuppliersListPage() {
       </Card>
 
       {/* نموذج إضافة مورد - مطابق للصورة المرجعية */}
-      <Dialog open={showForm} onOpenChange={setShowForm}>
+      <Dialog open={showForm} onOpenChange={v => { if (!v) requestClose(closeForm); else setShowForm(true); }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" dir="rtl">
           <DialogHeader>
             <DialogTitle className="text-sm flex items-center gap-2">
@@ -463,13 +472,21 @@ function SuppliersListPage() {
             onChange={(policy, include) => setForm(p => ({ ...p, recordPolicy: policy, includeInFoundation: include }))}
           />
           <div className="flex justify-end gap-2 mt-3 border-t border-border pt-3">
-            <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>إلغاء</Button>
-            <Button size="sm" disabled={!form.name || createMutation.isPending} onClick={handleSave}>
+            <Button variant="outline" size="sm" onClick={() => requestClose(closeForm)}>إلغاء</Button>
+            <Button size="sm" disabled={!form.name || createMutation.isPending} onClick={() => handleSave()}>
               <Check className="w-3 h-3 ml-1" /> حفظ
             </Button>
           </div>
         </DialogContent>
       </Dialog>
+
+      <UnsavedChangesDialog
+        open={confirmOpen}
+        onSave={() => confirmSave(handleSave)}
+        onDiscard={confirmDiscard}
+        onCancel={confirmCancel}
+        isSaving={createMutation.isPending}
+      />
     </div>
   );
 }
