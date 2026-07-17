@@ -25,7 +25,6 @@ type TabManagerContextType = {
   activeTabId: string | null;
   dashboardVisible: boolean;
   isPosWorkspaceActive: boolean;
-  setIsPosWorkspaceActive: (v: boolean) => void;
   openTab: (path: string, label: string, Icon: React.ElementType, pinned?: boolean) => void;
   closeTab: (id: string) => void;
   activateTab: (id: string) => void;
@@ -172,14 +171,20 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
   const [dashboardVisible, setDashboardVisible] = useState<boolean>(
     restoredTabs.length === 0
   );
-  /* POS workspace flag.
-     Truth source is the derived tab state (handles switch/minimize/close correctly
-     in the MDI model where LivePOSPage stays mounted).  A parallel intent state is
-     exposed via setIsPosWorkspaceActive so callers can register their lifecycle
-     intent explicitly — the derived memo is the authoritative value. */
-  const [, _setPosIntent] = useState(false);
-  const setIsPosWorkspaceActive = useCallback((v: boolean) => _setPosIntent(v), []);
+  /* Idempotent helper — exits fullscreen (Electron or browser DOM) without
+     throwing if fullscreen is not active. Called from closeTab before the
+     POS tab is removed so the exit fires before any component unmounts. */
+  function exitPosFullscreen() {
+    const erpAPI = (window as any).erpAPI;
+    if (erpAPI?.setFullScreen) {
+      erpAPI.setFullScreen(false);
+    } else if (document.fullscreenElement) {
+      document.exitFullscreen?.();
+    }
+  }
 
+  /* POS workspace flag — pure derived state. No setter: truth comes from
+     activeTabId + tab path + windowState + dashboardVisible. */
   const isPosWorkspaceActive = useMemo(() => {
     if (dashboardVisible) return false;
     const activeTab = tabs.find(t => t.id === activeTabId);
@@ -238,6 +243,14 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
     setTabs(prev => {
       const tab = prev.find(t => t.id === id);
       if (!tab || tab.pinned) return prev;
+
+      // Exit fullscreen BEFORE removing the POS tab so the exit fires
+      // while LivePOSPage is still mounted. exitPosFullscreen is idempotent
+      // (safe if called in React StrictMode's double-invocation).
+      if (tab.path === '/sales/pos' && activeTabId === id) {
+        exitPosFullscreen();
+      }
+
       const next = prev.filter(t => t.id !== id);
       if (next.length === 0) {
         setActiveTabId(null);
@@ -299,7 +312,7 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
   return (
     <TabManagerContext.Provider value={{
       tabs, activeTabId, dashboardVisible,
-      isPosWorkspaceActive, setIsPosWorkspaceActive,
+      isPosWorkspaceActive,
       openTab, closeTab, activateTab,
       setDashboardVisible, toggleDashboard, showDashboard,
       minimizeWindow, toggleMaximize, bringToFront,
