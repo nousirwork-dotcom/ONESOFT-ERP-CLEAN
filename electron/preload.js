@@ -15,5 +15,10 @@ contextBridge.exposeInMainWorld('erpAPI', {
   getServerStatus:()    => ipcRenderer.invoke('get-server-status'),
   getLogs:        (n)   => ipcRenderer.invoke('get-logs', n),
   onServerStatus: (cb)  => ipcRenderer.on('server-status', (_e, s) => cb(s)),
-  setFullScreen:  (v)   => ipcRenderer.invoke('pos:setFullScreen', v),
+  setFullScreen:       (v)  => ipcRenderer.invoke('pos:setFullScreen', v),
+  onFullScreenChange:  (cb) => {
+    const listener = (_e, v) => cb(v);
+    ipcRenderer.on('pos:fullscreenChanged', listener);
+    return () => ipcRenderer.removeListener('pos:fullscreenChanged', listener);
+  },
 });

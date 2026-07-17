@@ -31,6 +31,7 @@ function ProductCard({ product, config, onClick, compact = false }: {
           ? 'border-slate-200 bg-white shadow-sm hover:-translate-y-0.5 hover:border-[#1C4576]/50 hover:shadow-md'
           : 'cursor-not-allowed border-slate-200 bg-slate-100 opacity-60'
       } ${compact ? 'min-h-20 p-3' : 'min-h-36 p-3'}`}
+      style={{ touchAction: 'manipulation', userSelect: 'none' }}
     >
       {product.isFavorite ? <span className="absolute start-2 top-2 text-amber-500">★</span> : null}
       {!product.isAvailable ? <span className="absolute inset-x-2 top-2 rounded-md bg-rose-600 px-2 py-1 text-center text-[10px] font-bold text-white">غير متاح</span> : null}

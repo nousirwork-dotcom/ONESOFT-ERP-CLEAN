@@ -324,6 +324,14 @@ function createMainWindow() {
 
   mainWin = new BrowserWindow(winOpts);
 
+  // POS fullscreen sync: notify renderer of Electron fullscreen state changes
+  mainWin.on('enter-full-screen', () => {
+    if (!mainWin.isDestroyed()) mainWin.webContents.send('pos:fullscreenChanged', true);
+  });
+  mainWin.on('leave-full-screen', () => {
+    if (!mainWin.isDestroyed()) mainWin.webContents.send('pos:fullscreenChanged', false);
+  });
+
   mainWin.once('ready-to-show', () => {
     // fullscreen_on_start: تكبير النافذة لملء الشاشة
     if (fullscreen || (rememberSize && winState?.isMaximized)) {

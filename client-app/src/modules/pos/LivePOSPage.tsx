@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { trpc } from '@/shared/lib/trpc';
 import { useAuth } from '@/core/hooks/useAuth';
-import { useTabManager } from '@/core/contexts/TabManagerContext';
 import CustomerFormDialog from '@/shared/components/CustomerFormDialog';
 import { createPhase1PosApi } from './api';
 import { usePosEngine } from './usePosEngine';
@@ -278,7 +277,7 @@ function InvoiceHeaderBar(props: HeaderProps) {
           onClick={props.onToggleFullscreen}
           title={props.isFullscreen ? 'خروج من ملء الشاشة (F11)' : 'ملء الشاشة (F11)'}
           className="flex shrink-0 items-center justify-center rounded-lg bg-white/10 p-1.5 transition hover:bg-white/25"
-          style={{ touchAction: 'manipulation', minWidth: 32, minHeight: 32 }}
+          style={{ touchAction: 'manipulation', minWidth: 48, minHeight: 48 }}
         >
           {props.isFullscreen ? (
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -333,26 +332,35 @@ type Overlay = 'customer' | 'tables' | 'orders' | null;
 
 export function LivePOSPage() {
   const { user } = useAuth();
-  const { setIsPosWorkspaceActive } = useTabManager();
-
-  // ─── POS workspace mode: hide shell chrome while POS is mounted ───────────
-  useEffect(() => {
-    setIsPosWorkspaceActive(true);
-    return () => setIsPosWorkspaceActive(false);
-  }, [setIsPosWorkspaceActive]);
+  // isPosWorkspaceActive is now derived automatically in TabManagerContext
+  // from the active tab state — no manual setter needed here.
 
   // ─── Fullscreen state ─────────────────────────────────────────────────────
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const isElectron = Boolean((window as any).erpAPI?.setFullScreen);
 
   useEffect(() => {
+    // DOM Fullscreen API (browser mode)
     const onFsChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
     document.addEventListener('fullscreenchange', onFsChange);
-    return () => document.removeEventListener('fullscreenchange', onFsChange);
+
+    // Electron fullscreen change events (IPC)
+    const erpAPI = (window as any).erpAPI;
+    let cleanup: (() => void) | undefined;
+    if (erpAPI?.onFullScreenChange) {
+      cleanup = erpAPI.onFullScreenChange((v: boolean) => setIsFullscreen(v));
+    }
+
+    return () => {
+      document.removeEventListener('fullscreenchange', onFsChange);
+      cleanup?.();
+    };
   }, []);
 
   const handleToggleFullscreen = useCallback(async () => {
     const erpAPI = (window as any).erpAPI;
     if (erpAPI?.setFullScreen) {
+      // Electron path
       await erpAPI.setFullScreen(!isFullscreen);
     } else if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen?.();
@@ -452,6 +460,7 @@ export function LivePOSPage() {
       if (e.key === 'F4') { e.preventDefault(); setOverlay('customer'); return; }
       if (e.key === 'F11') { e.preventDefault(); handleToggleFullscreen(); return; }
       if (e.key === 'Escape') {
+        if (isElectron && isFullscreen) { handleToggleFullscreen(); return; }
         if (document.fullscreenElement) { document.exitFullscreen?.(); return; }
         if (modifierProduct) setModifierProduct(null);
         else setOverlay(null);
@@ -459,7 +468,7 @@ export function LivePOSPage() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [modifierProduct, handleToggleFullscreen]);
+  }, [modifierProduct, handleToggleFullscreen, isElectron, isFullscreen]);
 
   useEffect(() => {
     if (!notice) return;

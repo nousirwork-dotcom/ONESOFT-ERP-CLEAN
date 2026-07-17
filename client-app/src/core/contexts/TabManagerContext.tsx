@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode, useCallback, useRef, useEffect } from "react";
+import { createContext, useContext, useState, useMemo, ReactNode, useCallback, useRef, useEffect } from "react";
 import {
   TrendingUp, ShoppingBag, Boxes, Factory, Calculator,
   UserCheck, Wrench, Settings, LayoutGrid, LifeBuoy,
@@ -25,7 +25,6 @@ type TabManagerContextType = {
   activeTabId: string | null;
   dashboardVisible: boolean;
   isPosWorkspaceActive: boolean;
-  setIsPosWorkspaceActive: (v: boolean) => void;
   openTab: (path: string, label: string, Icon: React.ElementType, pinned?: boolean) => void;
   closeTab: (id: string) => void;
   activateTab: (id: string) => void;
@@ -172,7 +171,16 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
   const [dashboardVisible, setDashboardVisible] = useState<boolean>(
     restoredTabs.length === 0
   );
-  const [isPosWorkspaceActive, setIsPosWorkspaceActive] = useState<boolean>(false);
+  /* Derived: POS workspace is active when the active (non-minimized) tab is the POS
+     and the dashboard is hidden. No setter needed — purely reactive to tab state. */
+  const isPosWorkspaceActive = useMemo(() => {
+    if (dashboardVisible) return false;
+    const activeTab = tabs.find(t => t.id === activeTabId);
+    return (
+      activeTab?.path === '/sales/pos' &&
+      activeTab?.windowState !== 'minimized'
+    );
+  }, [tabs, activeTabId, dashboardVisible]);
 
   const toggleDashboard = useCallback(() => setDashboardVisible(v => !v), []);
   const showDashboard   = useCallback(() => setDashboardVisible(true),    []);
@@ -284,7 +292,7 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
   return (
     <TabManagerContext.Provider value={{
       tabs, activeTabId, dashboardVisible,
-      isPosWorkspaceActive, setIsPosWorkspaceActive,
+      isPosWorkspaceActive,
       openTab, closeTab, activateTab,
       setDashboardVisible, toggleDashboard, showDashboard,
       minimizeWindow, toggleMaximize, bringToFront,
