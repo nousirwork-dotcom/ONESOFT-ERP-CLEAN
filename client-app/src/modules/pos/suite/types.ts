@@ -33,6 +33,7 @@ export type ExternalOrderStatus =
   | 'completed'
   | 'rejected'
   | 'cancelled'
+  | 'sync_failed'
   | 'needs_review';
 
 export interface ProductGroup {
@@ -157,6 +158,8 @@ export interface ExternalOrder {
   status: ExternalOrderStatus;
   itemCount: number;
   issue?: string;
+  syncError?: string;
+  rejectionReason?: string;
 }
 
 export interface POSSettings {

@@ -1,4 +1,4 @@
-export type ProviderCategory = 'delivery' | 'payment' | 'ecommerce' | 'custom';
+export type ProviderCategory = 'delivery' | 'custom';
 export type ConnectionStatus = 'connected' | 'disconnected' | 'error' | 'pending' | 'paused';
 
 export interface IntegrationProviderMeta {
@@ -51,6 +51,20 @@ export interface IntegrationConnectionSettings {
   defaultPaymentMethod?: string;
   autoAccept: boolean;
   autoSendToKitchen: boolean;
+  cancelHandling?: 'auto_cancel' | 'notify_only' | 'manual';
+  soundAlert?: boolean;
+  arrivalNotification?: boolean;
+}
+
+export interface ProductMapping {
+  externalProductId: string;
+  externalProductCode: string;
+  externalProductName: string;
+  externalPrice: number;
+  available: boolean;
+  onesoftProductId: number | null;
+  onesoftProductCode?: string;
+  onesoftProductName?: string;
 }
 
 export interface ConnectionTestResult {

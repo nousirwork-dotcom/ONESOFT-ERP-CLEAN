@@ -44,6 +44,8 @@ type Action =
   | { type: 'UPDATE_RESTAURANT_SETTINGS'; settings: Partial<POSSettings['restaurant']> }
   | { type: 'ACCEPT_EXTERNAL_ORDER'; orderId: string }
   | { type: 'REJECT_EXTERNAL_ORDER'; orderId: string }
+  | { type: 'REJECT_EXTERNAL_ORDER_WITH_REASON'; orderId: string; reason: string }
+  | { type: 'RETRY_EXTERNAL_ORDER_SYNC'; orderId: string }
   | { type: 'SET_NOTICE'; notice: string | null }
   | { type: 'NEW_ORDER' }
   | { type: 'SUSPEND_ORDER' }
@@ -214,6 +216,24 @@ function reducer(state: RuntimeState, action: Action): RuntimeState {
         ...state,
         externalOrders: state.externalOrders.map((order) =>
           order.id === action.orderId ? { ...order, status: 'rejected' } : order,
+        ),
+      };
+    case 'REJECT_EXTERNAL_ORDER_WITH_REASON':
+      return {
+        ...state,
+        externalOrders: state.externalOrders.map((order) =>
+          order.id === action.orderId
+            ? { ...order, status: 'rejected', rejectionReason: action.reason }
+            : order,
+        ),
+      };
+    case 'RETRY_EXTERNAL_ORDER_SYNC':
+      return {
+        ...state,
+        externalOrders: state.externalOrders.map((order) =>
+          order.id === action.orderId
+            ? { ...order, status: 'new', syncError: undefined }
+            : order,
         ),
       };
     case 'ADD_LINE':
