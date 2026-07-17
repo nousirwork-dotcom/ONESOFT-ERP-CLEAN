@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { DemoPOSPage } from "@/modules/pos/DemoPOSPage";
 import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import { fmtDate } from "@/shared/utils/dateUtils";
 import CustomerFormDialog from "@/shared/components/CustomerFormDialog";
@@ -56,7 +57,7 @@ export const menuSections = [
     label: "نقطة بيع",
     icon: ShoppingCart,
     children: [
-      { id: "pos-screen",      label: "شاشة البيع",   icon: ShoppingCart, path: "/sales/pos" },
+      { id: "pos-screen",      label: "نقطة البيع",   icon: ShoppingCart, path: "/sales/pos" },
       { id: "shifts",          label: "الورديات",      icon: Clock,        path: "/sales/shifts" },
       { id: "payment-methods", label: "طرق السداد",    icon: Wallet,       path: "/sales/payment-methods" },
       { id: "pos-settings",    label: "إعدادات POS",   icon: Star,         path: "/sales/pos-settings" },
@@ -2781,7 +2782,7 @@ function SalesContent({ activeId, onSelect, settings, onSettingsChange }: {
     case "quotation":             return <SalesQuotation />;
     case "sales-order":           return <ComingSoon title="أمر بيع" />;
     case "delivery-order":        return <DeliveryOrderPage />;
-    case "pos-screen":            return <ComingSoon title="شاشة البيع" />;
+    case "pos-screen":            return <DemoPOSPage />;
     case "shifts":                return <ShiftsPage />;
     case "payment-methods":       return <PaymentMethodsPage />;
     case "pos-settings":          return <ComingSoon title="إعدادات POS" />;
@@ -2808,7 +2809,7 @@ export function SalesCreditNoteTab()    { return <div className="h-full overflow
 export function SalesQuotationTab()     { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesQuotePage /></div>; }
 export function SalesOrderTab()         { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesOrderPage /></div>; }
 export function SalesDeliveryTab()      { return <div className="h-full overflow-auto p-5" dir="rtl"><DeliveryOrderPage /></div>; }
-export function SalesPosTab()           { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="شاشة البيع" /></div>; }
+export function SalesPosTab()           { return <div className="h-full flex flex-col overflow-hidden"><DemoPOSPage /></div>; }
 export function SalesShiftsTab()        { return <div className="h-full overflow-auto p-5" dir="rtl"><ShiftsPage /></div>; }
 export function SalesPaymentMethodsTab(){ return <div className="h-full overflow-auto p-5" dir="rtl"><PaymentMethodsPage /></div>; }
 export function SalesPosSettingsTab()   { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="إعدادات POS" /></div>; }
@@ -2836,10 +2837,12 @@ export default function SalesModule() {
     });
   };
 
+  const isPosScreen = activeId === "pos-screen";
+
   return (
     <div className="flex h-full" dir="rtl">
       <SalesMenu activeId={activeId} onSelect={setActiveId} />
-      <div className="flex-1 overflow-auto p-5">
+      <div className={`flex-1 ${isPosScreen ? "overflow-hidden flex flex-col" : "overflow-auto p-5"}`}>
         <SalesContent
           activeId={activeId}
           onSelect={setActiveId}
