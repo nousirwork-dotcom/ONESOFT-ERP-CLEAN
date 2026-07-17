@@ -659,7 +659,7 @@ export default function Users() {
 
       {/* ─── نافذة إضافة / تعديل ───────────────────────────────────────────── */}
       <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
-        <DialogContent className="w-[760px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-60px)] flex flex-col p-0 overflow-hidden">
+        <DialogContent className="w-[760px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-60px)] flex flex-col p-0 overflow-hidden" dir="rtl">
           <DialogHeader className="shrink-0 px-6 pt-5 pb-4 border-b">
             <DialogTitle className="flex items-center gap-2">
               <Shield className="w-4 h-4" />
@@ -674,25 +674,29 @@ export default function Users() {
               <TabsTrigger value="login" className="text-xs rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none h-full">الدخول والحالة</TabsTrigger>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <TabsTrigger value="work" className="text-xs rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none h-full data-[disabled]:opacity-50 data-[disabled]:cursor-not-allowed" disabled={mode === "create"}>
-                    <span className="flex items-center gap-1">
-                      {mode === "create" && <Lock className="w-3 h-3" />}
-                      إعدادات العمل
-                    </span>
-                  </TabsTrigger>
+                  <span className={`inline-flex h-full flex-1 ${mode === "create" ? "cursor-not-allowed" : ""}`}>
+                    <TabsTrigger value="work" className="text-xs rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none h-full w-full data-[disabled]:opacity-50 data-[disabled]:pointer-events-none" disabled={mode === "create"}>
+                      <span className="flex items-center gap-1">
+                        {mode === "create" && <Lock className="w-3 h-3" />}
+                        إعدادات العمل
+                      </span>
+                    </TabsTrigger>
+                  </span>
                 </TooltipTrigger>
-                {mode === "create" && <TooltipContent>يتاح بعد إنشاء المستخدم</TooltipContent>}
+                {mode === "create" && <TooltipContent side="bottom">يتاح بعد إنشاء المستخدم</TooltipContent>}
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <TabsTrigger value="perms" className="text-xs rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none h-full data-[disabled]:opacity-50 data-[disabled]:cursor-not-allowed" disabled={mode === "create"}>
-                    <span className="flex items-center gap-1">
-                      {mode === "create" && <Lock className="w-3 h-3" />}
-                      الصلاحيات
-                    </span>
-                  </TabsTrigger>
+                  <span className={`inline-flex h-full flex-1 ${mode === "create" ? "cursor-not-allowed" : ""}`}>
+                    <TabsTrigger value="perms" className="text-xs rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none h-full w-full data-[disabled]:opacity-50 data-[disabled]:pointer-events-none" disabled={mode === "create"}>
+                      <span className="flex items-center gap-1">
+                        {mode === "create" && <Lock className="w-3 h-3" />}
+                        الصلاحيات
+                      </span>
+                    </TabsTrigger>
+                  </span>
                 </TooltipTrigger>
-                {mode === "create" && <TooltipContent>يتاح بعد إنشاء المستخدم</TooltipContent>}
+                {mode === "create" && <TooltipContent side="bottom">يتاح بعد إنشاء المستخدم</TooltipContent>}
               </Tooltip>
             </TabsList>
 
