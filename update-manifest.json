@@ -1,34 +1,30 @@
 {
-  "latestVersion": "1.0.21",
+  "latestVersion": "1.0.23",
   "minSupportedVersion": "1.0.0",
   "mandatory": false,
-  "messageAr": "يوجد تحديث جديد (v1.0.21): المساعد الذكي لمساعدتك في العمليات اليومية، مصمّم نماذج الطباعة، تحسينات شاشة التطبيقات والواجهة.",
-  "messageEn": "New update (v1.0.21): AI Assistant for daily operations, print template designer, apps home screen polish and UI improvements.",
+  "messageAr": "يوجد تحديث جديد (v1.0.23): تحسينات في واجهة قائمة المبيعات وتبسيط تجربة المستخدم.",
+  "messageEn": "New update (v1.0.23): Sales sidebar improvements and user experience polish.",
   "releaseNotes": [
-    "المساعد الذكي (المرحلة الأولى): محادثة ذكية تساعد في العمليات اليومية مع اقتراح مهام تلقائي",
-    "صفحة إعدادات المساعد الذكي: دعم OpenAI وOpenRouter وDeepSeek وGroq",
-    "مصمّم نماذج الطباعة: دعم أوامر الشراء والمصروفات",
-    "تحسينات شاشة التطبيقات الرئيسية والقائمة الجانبية",
-    "إضافة وحدة المساعدة والخدمات بسبع بطاقات وصلاحيات مفصّلة",
+    "تبسيط قائمة المبيعات الجانبية: حذف الشاشات غير المستخدمة",
     "تحسينات عامة في الأداء والواجهة"
   ],
-  "downloadUrl": "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.21/OneSoftSetup-1.0.21-x64.exe",
-  "fileSizeBytes": 81452138,
-  "sha512": "GutL0k8HFRq3+fL0lax2SgiHCAayzi/rxnFAkn9IB29kpHRbBx28T/7qz7G0SY9+KoEHWNC+oB+xslwq5kK7mg==",
-  "publishedAt": "2026-07-13T05:50:12.183Z",
+  "downloadUrl": "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.23/OneSoftSetup-1.0.23-x64.exe",
+  "fileSizeBytes": 81522854,
+  "sha512": "a3P9Lpam5PuKJe8ilDRVCPI13n8ZafeVvpFSr4cwmdE40aj0XmSf//1Qc2HYLThrFl09FxoQBRe3U8a1GskkdA==",
+  "publishedAt": "2026-07-18T20:34:00Z",
   "_notes": {
     "MANIFEST_URL": "استضِف هذا الملف على CDN عام أو GitHub Pages بدون توثيق (Public URL).",
     "ONESOFT_UPDATE_URL": "يمكن تجاوز الرابط الافتراضي عبر متغير البيئة ONESOFT_UPDATE_URL.",
     "ONESOFT_UPDATE_ENV": "'development' | 'staging' | 'production' (افتراضي: production).",
     "minSupportedVersion": "إذا كان الإصدار الحالي أقل من هذا الرقم → تحديث إجباري (يُمنع الدخول للنظام).",
     "mandatory": "true = إجباري بغض النظر عن minSupportedVersion.",
-    "sha512": "Hash الملف بصيغة hex (128 حرف) أو base64. اتركه فارغاً لتخطي التحقق (غير موصى به). أضفه بعد اكتمال البناء من ملف latest.yml في GitHub Release.",
+    "sha512": "Hash الملف بصيغة base64 من ملف latest.yml في GitHub Release.",
     "publishedAt": "تاريخ نشر الإصدار بصيغة ISO 8601.",
     "skip_policy": "التحديث الاختياري يُعرض مرة واحدة ثم يُؤجّل 24 ساعة إذا ضغط المستخدم 'لاحقاً'.",
     "mandatory_block": "التحديث الإجباري يمنع الدخول لجميع صفحات النظام (login / dashboard / إلخ) حتى إتمام التحديث.",
-    "generate_sha512": "لحساب sha512 للملف على Windows: certutil -hashfile OneSoftSetup-1.0.21-x64.exe SHA512",
-    "generate_sha512_linux": "sha512sum OneSoftSetup-1.0.21-x64.exe | awk '{print $1}'"
+    "generate_sha512": "لحساب sha512 للملف على Windows: certutil -hashfile OneSoftSetup-1.0.23-x64.exe SHA512",
+    "generate_sha512_linux": "sha512sum OneSoftSetup-1.0.23-x64.exe | awk '{print $1}'"
   },
-  "version": "1.0.21",
-  "notes": "v1.0.21 — المساعد الذكي + مصمّم نماذج الطباعة + تحسينات الواجهة"
+  "version": "1.0.23",
+  "notes": "v1.0.23 — تحسينات قائمة المبيعات"
 }
