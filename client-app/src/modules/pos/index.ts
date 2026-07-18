@@ -1,0 +1,1 @@
+export { LivePOSPage } from './LivePOSPage';

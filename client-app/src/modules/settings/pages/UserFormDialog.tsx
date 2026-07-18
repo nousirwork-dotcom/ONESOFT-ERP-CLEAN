@@ -1,0 +1,527 @@
+import * as React from "react";
+import { Eye, EyeOff, LockKeyhole, UserRoundPlus } from "lucide-react";
+import { Button } from "@/core/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/core/ui/dialog";
+import { Input } from "@/core/ui/input";
+import { Label } from "@/core/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/core/ui/select";
+import { Switch } from "@/core/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/core/ui/tabs";
+import { cn } from "@/shared/lib/utils";
+import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
+import { useModalAttention } from "./useModalAttention";
+import { toast } from "sonner";
+
+export type UserFormTab = "basic" | "contact" | "login" | "work" | "permissions";
+
+export interface UserFormValue {
+  code?: string;
+  fullName: string;
+  loginName: string;
+  userType: string;
+  groupId?: string;
+  branchId?: string;
+  warehouseId?: string;
+  language?: string;
+  mobile?: string;
+  email?: string;
+  allowLogin: boolean;
+  password?: string;
+}
+
+interface UserFormDialogProps {
+  open: boolean;
+  mode: "create" | "edit";
+  initialValue: UserFormValue;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (value: UserFormValue) => Promise<void>;
+  groups: Array<{ id: number; name: string }>;
+  branches: Array<{ id: number; name: string }>;
+  warehouses: Array<{ id: number; name: string }>;
+  loginTabExtension?: React.ReactNode;
+  workTabContent?: React.ReactNode;
+  permissionsTabContent?: React.ReactNode;
+}
+
+const PHONE_REGEX = /^\+?[0-9]{8,15}$/;
+
+export function UserFormDialog({
+  open,
+  mode,
+  initialValue,
+  onOpenChange,
+  onSubmit,
+  groups,
+  branches,
+  warehouses,
+  loginTabExtension,
+  workTabContent,
+  permissionsTabContent,
+}: UserFormDialogProps) {
+  const [activeTab, setActiveTab] = React.useState<UserFormTab>("basic");
+  const [value, setValue] = React.useState<UserFormValue>(initialValue);
+  const [showPassword, setShowPassword] = React.useState(false);
+  const [mobileError, setMobileError] = React.useState<string | null>(null);
+  const [isSaving, setIsSaving] = React.useState(false);
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
+  const { contentRef, attractAttention } = useModalAttention();
+
+  React.useEffect(() => {
+    if (!open) return;
+    setValue(initialValue);
+    setActiveTab("basic");
+    setShowPassword(false);
+    setMobileError(null);
+    setIsSaving(false);
+  }, [initialValue, open]);
+
+  const isDirty = React.useMemo(
+    () => JSON.stringify(value) !== JSON.stringify(initialValue),
+    [initialValue, value],
+  );
+
+  const update = <K extends keyof UserFormValue>(key: K, next: UserFormValue[K]) => {
+    setValue((cur) => ({ ...cur, [key]: next }));
+    if (key === "mobile") {
+      const v = next as string | undefined;
+      if (v) {
+        setMobileError(
+          PHONE_REGEX.test((v ?? "").replace(/\s/g, ""))
+            ? null
+            : "رقم الجوال غير صحيح (8–15 رقمًا، + اختيارية)",
+        );
+      } else {
+        setMobileError(null);
+      }
+    }
+  };
+
+  const requestClose = () => {
+    if (!isDirty) { onOpenChange(false); return; }
+    setConfirmOpen(true);
+  };
+
+  const save = async () => {
+    if (!value.fullName.trim()) {
+      toast.error("الاسم الكامل مطلوب");
+      setActiveTab("basic");
+      return;
+    }
+    if (!value.loginName.trim()) {
+      toast.error("اسم الدخول مطلوب");
+      setActiveTab("basic");
+      return;
+    }
+    if (value.mobile && !PHONE_REGEX.test(value.mobile.replace(/\s/g, ""))) {
+      setMobileError("رقم الجوال غير صحيح (8–15 رقمًا، + اختيارية)");
+      setActiveTab("contact");
+      return;
+    }
+    setMobileError(null);
+    setIsSaving(true);
+    try {
+      await onSubmit({
+        ...value,
+        mobile: value.mobile?.trim() || undefined,
+        email: value.email?.trim() || undefined,
+        password: value.password || undefined,
+      });
+    } catch (e: any) {
+      if (e?.switchTab) {
+        setActiveTab(e.switchTab as UserFormTab);
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const saveAndClose = async () => {
+    await save();
+    setConfirmOpen(false);
+    onOpenChange(false);
+  };
+
+  return (
+    <>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (next) onOpenChange(true);
+          else requestClose();
+        }}
+      >
+        <DialogContent
+          dir="rtl"
+          showCloseButton={false}
+          onEscapeKeyDown={(e) => { e.preventDefault(); requestClose(); }}
+          onPointerDownOutside={(e) => { e.preventDefault(); attractAttention(); }}
+          onInteractOutside={(e) => e.preventDefault()}
+          className="h-[640px] max-h-[calc(100vh-32px)] w-[920px] max-w-[calc(100vw-32px)] overflow-hidden rounded-2xl border-border bg-card p-0 shadow-2xl"
+        >
+          <div
+            ref={contentRef}
+            data-attention="false"
+            className={cn(
+              "flex h-full min-h-0 flex-col",
+              "data-[attention=true]:animate-[modal-attention_320ms_ease-in-out]",
+              "data-[attention=true]:ring-2 data-[attention=true]:ring-primary/50",
+            )}
+          >
+            {/* ─── الرأس ──────────────────────────────────────────────────────── */}
+            <DialogHeader className="shrink-0 border-b px-6 py-4 text-right">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <UserRoundPlus className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <DialogTitle className="text-xl">
+                      {mode === "create" ? "إضافة مستخدم جديد" : "تعديل بيانات المستخدم"}
+                    </DialogTitle>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      بيانات الحساب ونطاق العمل والصلاحيات.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={requestClose}
+                  aria-label="إغلاق"
+                  className="shrink-0 text-muted-foreground hover:text-foreground"
+                >
+                  <span className="text-lg leading-none">×</span>
+                </Button>
+              </div>
+            </DialogHeader>
+
+            {/* ─── التبويبات ──────────────────────────────────────────────────── */}
+            <Tabs
+              dir="rtl"
+              value={activeTab}
+              onValueChange={(tab) => setActiveTab(tab as UserFormTab)}
+              className="flex min-h-0 flex-1 flex-col"
+            >
+              <TabsList className="grid h-12 shrink-0 w-full grid-cols-5 rounded-none border-b bg-muted/30 p-1">
+                <TabsTrigger value="basic">البيانات الأساسية</TabsTrigger>
+                <TabsTrigger value="contact">التواصل</TabsTrigger>
+                <TabsTrigger value="login">الدخول والحالة</TabsTrigger>
+                <TabsTrigger value="work" disabled={mode === "create"}>
+                  {mode === "create" && <LockKeyhole className="ms-1 h-3.5 w-3.5" />}
+                  إعدادات العمل
+                </TabsTrigger>
+                <TabsTrigger value="permissions" disabled={mode === "create"}>
+                  {mode === "create" && <LockKeyhole className="ms-1 h-3.5 w-3.5" />}
+                  الصلاحيات
+                </TabsTrigger>
+              </TabsList>
+
+              <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+
+                {/* ── البيانات الأساسية ───────────────────────────────────────── */}
+                <TabsContent value="basic" className="m-0 space-y-4">
+                  <FormSection title="هوية المستخدم" hint="البيانات المطلوبة لإنشاء الحساب">
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField label="الاسم الكامل" required>
+                        <Input
+                          value={value.fullName}
+                          onChange={(e) => update("fullName", e.target.value)}
+                          placeholder="الاسم الكامل"
+                        />
+                      </FormField>
+                      <FormField label="الكود">
+                        <Input
+                          dir="ltr"
+                          className="text-left"
+                          value={value.code ?? ""}
+                          onChange={(e) => update("code", e.target.value || undefined)}
+                          placeholder="USR001"
+                          disabled={mode === "edit"}
+                        />
+                      </FormField>
+                      <FormField label="اسم الدخول" required>
+                        <Input
+                          dir="ltr"
+                          className="text-left"
+                          value={value.loginName}
+                          onChange={(e) => update("loginName", e.target.value)}
+                          placeholder="login_name"
+                          disabled={mode === "edit"}
+                        />
+                        {mode === "edit" && (
+                          <p className="text-xs text-muted-foreground mt-0.5">لا يمكن تغيير اسم الدخول</p>
+                        )}
+                      </FormField>
+                      <FormField label="نوع المستخدم" required>
+                        <DlgSelect
+                          value={value.userType}
+                          onChange={(v) => update("userType", v)}
+                          options={[
+                            { value: "admin", label: "مدير النظام" },
+                            { value: "accountant", label: "محاسب" },
+                            { value: "cashier", label: "كاشير" },
+                            { value: "warehouse_manager", label: "مدير مخزن" },
+                            { value: "viewer", label: "مشاهد" },
+                          ]}
+                        />
+                      </FormField>
+                    </div>
+                  </FormSection>
+
+                  <FormSection title="نطاق العمل الافتراضي" hint="يمكن تعديله لاحقاً">
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField label="مجموعة المستخدمين">
+                        <DlgSelect
+                          value={value.groupId ?? "_none"}
+                          onChange={(v) => update("groupId", v === "_none" ? undefined : v)}
+                          options={[
+                            { value: "_none", label: "— بدون مجموعة —" },
+                            ...groups.map((g) => ({ value: String(g.id), label: g.name })),
+                          ]}
+                        />
+                      </FormField>
+                      <FormField label="الفرع الافتراضي">
+                        <DlgSelect
+                          value={value.branchId ?? "_none"}
+                          onChange={(v) => update("branchId", v === "_none" ? undefined : v)}
+                          options={[
+                            { value: "_none", label: "— بدون تحديد —" },
+                            ...branches.map((b) => ({ value: String(b.id), label: b.name })),
+                          ]}
+                        />
+                      </FormField>
+                      <FormField label="المخزن الافتراضي">
+                        <DlgSelect
+                          value={value.warehouseId ?? "_none"}
+                          onChange={(v) => update("warehouseId", v === "_none" ? undefined : v)}
+                          options={[
+                            { value: "_none", label: "— بدون تحديد —" },
+                            ...warehouses.map((w) => ({ value: String(w.id), label: w.name })),
+                          ]}
+                        />
+                      </FormField>
+                      <FormField label="اللغة الافتراضية">
+                        <DlgSelect
+                          value={value.language ?? "_none"}
+                          onChange={(v) => update("language", v === "_none" ? undefined : v)}
+                          options={[
+                            { value: "_none", label: "— حسب إعداد النظام —" },
+                            { value: "ar", label: "العربية" },
+                            { value: "en", label: "الإنجليزية" },
+                          ]}
+                        />
+                      </FormField>
+                    </div>
+                  </FormSection>
+                </TabsContent>
+
+                {/* ── التواصل ─────────────────────────────────────────────────── */}
+                <TabsContent value="contact" className="m-0 space-y-4">
+                  <FormSection title="بيانات التواصل" hint="حقول اختيارية">
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField label="رقم الجوال">
+                        <Input
+                          dir="ltr"
+                          className={cn("text-left", mobileError && "border-destructive")}
+                          value={value.mobile ?? ""}
+                          onChange={(e) => update("mobile", e.target.value || undefined)}
+                          placeholder="+9665xxxxxxxx أو 05xxxxxxxx"
+                          type="tel"
+                        />
+                        {mobileError && (
+                          <p className="text-destructive text-xs mt-1">{mobileError}</p>
+                        )}
+                      </FormField>
+                      <FormField label="البريد الإلكتروني">
+                        <Input
+                          dir="ltr"
+                          className="text-left"
+                          value={value.email ?? ""}
+                          onChange={(e) => update("email", e.target.value || undefined)}
+                          placeholder="name@company.com"
+                          type="email"
+                        />
+                      </FormField>
+                    </div>
+                  </FormSection>
+                </TabsContent>
+
+                {/* ── الدخول والحالة ──────────────────────────────────────────── */}
+                <TabsContent value="login" className="m-0 space-y-4">
+                  <FormSection title="حالة الدخول">
+                    <SwitchCard
+                      title="السماح بتسجيل الدخول"
+                      description="تعطيله يمنع الدخول بغض النظر عن كلمة المرور"
+                      checked={value.allowLogin}
+                      onCheckedChange={(v) => update("allowLogin", v)}
+                    />
+                  </FormSection>
+                  <FormSection
+                    title={mode === "create" ? "كلمة المرور" : "تغيير كلمة المرور"}
+                    hint="لا توجد شروط للطول أو التعقيد"
+                  >
+                    <div className="relative">
+                      <Input
+                        dir="ltr"
+                        className="pe-10 text-left"
+                        type={showPassword ? "text" : "password"}
+                        value={value.password ?? ""}
+                        onChange={(e) => update("password", e.target.value || undefined)}
+                        placeholder={
+                          mode === "edit"
+                            ? "اتركها فارغة للاحتفاظ بالكلمة الحالية"
+                            : "يمكن تركها فارغة حسب سياسة النظام"
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={() => setShowPassword((p) => !p)}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </FormSection>
+                  {loginTabExtension}
+                </TabsContent>
+
+                {/* ── إعدادات العمل ───────────────────────────────────────────── */}
+                <TabsContent value="work" className="m-0 space-y-4">
+                  {workTabContent}
+                </TabsContent>
+
+                {/* ── الصلاحيات ───────────────────────────────────────────────── */}
+                <TabsContent value="permissions" className="m-0 space-y-4">
+                  {permissionsTabContent}
+                </TabsContent>
+
+              </div>
+            </Tabs>
+
+            {/* ─── تذييل ──────────────────────────────────────────────────────── */}
+            <footer className="flex shrink-0 items-center justify-between border-t bg-muted/20 px-6 py-3">
+              <div className="flex gap-2">
+                <Button
+                  disabled={isSaving || !!mobileError}
+                  onClick={() => void save()}
+                >
+                  {isSaving
+                    ? "جارٍ الحفظ..."
+                    : mode === "create"
+                    ? "إنشاء المستخدم"
+                    : "حفظ التعديلات"}
+                </Button>
+                <Button variant="outline" onClick={requestClose} disabled={isSaving}>
+                  إلغاء
+                </Button>
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {isDirty ? "توجد تغييرات غير محفوظة" : "جميع البيانات محفوظة"}
+              </span>
+            </footer>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <UnsavedChangesDialog
+        open={confirmOpen}
+        isSaving={isSaving}
+        onSave={saveAndClose}
+        onDiscard={() => { setConfirmOpen(false); onOpenChange(false); }}
+        onCancel={() => setConfirmOpen(false)}
+      />
+    </>
+  );
+}
+
+// ─── Sub-components ────────────────────────────────────────────────────────────
+
+function FormSection({
+  title,
+  hint,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl border bg-muted/20 p-4">
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <h3 className="font-semibold">{title}</h3>
+        {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function FormField({
+  label,
+  required,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label>
+        {label}
+        {required && <span className="me-1 text-destructive">*</span>}
+      </Label>
+      {children}
+    </div>
+  );
+}
+
+function DlgSelect({
+  value,
+  onChange,
+  options,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<{ value: string; label: string }>;
+}) {
+  return (
+    <Select dir="rtl" value={value} onValueChange={onChange}>
+      <SelectTrigger className="w-full">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent position="popper" sideOffset={6} className="z-[12000]">
+        {options.map((o) => (
+          <SelectItem key={o.value} value={o.value}>
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function SwitchCard({
+  title,
+  description,
+  checked,
+  onCheckedChange,
+}: {
+  title: string;
+  description?: string;
+  checked: boolean;
+  onCheckedChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between rounded-xl border bg-background p-4">
+      <div>
+        <p className="font-medium">{title}</p>
+        {description && (
+          <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+        )}
+      </div>
+      <Switch checked={checked} onCheckedChange={onCheckedChange} />
+    </div>
+  );
+}
