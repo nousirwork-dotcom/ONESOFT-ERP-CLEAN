@@ -1,5 +1,7 @@
 import { Toaster } from "@/core/ui/sonner";
 import { useSmartCopy } from "@/shared/hooks/useSmartCopy";
+import { useGlobalDesktopFields } from "@/shared/hooks/useGlobalDesktopFields";
+import { useGlobalEnterNavigation } from "@/shared/hooks/useGlobalEnterNavigation";
 import { TooltipProvider } from "@/core/ui/tooltip";
 import NotFound from "@/shared/components/NotFound";
 import { Route, Switch, useLocation } from "wouter";
@@ -21,8 +23,7 @@ import PurchasesModule, {
 import SalesModule, {
   SalesTransactionsTab,
   SalesInvoiceTab, SalesReturnTab, SalesCreditNoteTab, SalesQuotationTab,
-  SalesOrderTab, SalesDeliveryTab, SalesPosTab, SalesShiftsTab,
-  SalesPaymentMethodsTab, SalesPosSettingsTab, SalesPosReportsTab,
+  SalesOrderTab, SalesDeliveryTab, SalesPosTab,
   SalesCustomersTab, SalesCustomerGroupsTab, SalesCustomerBalancesTab,
   SalesCustomerStatementTab, SalesCustomerReportsTab,
   SalesTotalsReportsTab, SalesInvoicesReportTab, SalesItemsReportsTab,
@@ -85,9 +86,18 @@ import LoginPage from "@/core/auth/LoginPage";
 import BrandingSettingsPage from "@/modules/settings/pages/BrandingSettingsPage";
 import {
   HsRentalsPage, HsCustodyPage, HsCustomersPage, HsTasksPage,
-  HsGovLinksPage, HsNotesPage, HsInternalCommPage,
+  HsNotesPage, HsInternalCommPage,
 } from "@/modules/helpservices/pages/HsPages";
+import LinksServicesPage from "@/modules/helpservices/pages/LinksServicesPage";
 import AIAssistantPage from "@/modules/helpservices/pages/AIAssistantPage";
+import SupportRequestPage from "@/modules/helpservices/pages/SupportRequestPage";
+import CustodyTrackingPage from "@/modules/helpservices/pages/CustodyTrackingPage";
+import CustodyRecordPage from "@/modules/helpservices/pages/CustodyRecordPage";
+import RealEstatePage from "@/modules/helpservices/pages/RealEstatePage";
+import RePurchasesPage from "@/modules/helpservices/pages/RePurchasesPage";
+import { ReDocumentsPage, ReTrialBalancePage } from "@/modules/helpservices/pages/ReSubPages";
+import ReUnitsPage from "@/modules/helpservices/pages/ReUnitsPage";
+import { TabPathContext } from "@/core/contexts/TabPathContext";
 import LicenseActivationPage from "@/modules/license/pages/LicenseActivationPage";
 import SuperAdminPage from "@/core/admin/SuperAdminPage";
 import SourceCodeViewerPage from "@/core/dev/SourceCodeViewerPage";
@@ -99,6 +109,7 @@ import { trpc } from "@/shared/lib/trpc";
 import { Settings } from "lucide-react";
 import AppWindow from "@/shared/components/AppWindow";
 import UpdateDialog from "@/shared/components/UpdateDialog";
+import UpdateProgressBadge from "@/shared/components/UpdateProgressBadge";
 import { useIsMandatoryBlocked } from "@/shared/lib/update-store";
 
 // ─── Dev-only previews ────────────────────────────────────────────────────────
@@ -126,13 +137,21 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/help-services-module": HelpServicesModule,
   // المساعدة والخدمات
   "/hs/rentals":       HsRentalsPage,
-  "/hs/custody":       HsCustodyPage,
+  "/hs/custody":          HsCustodyPage,
+  "/hs/custody-tracking": CustodyTrackingPage,
   "/hs/customers":     HsCustomersPage,
   "/hs/tasks":         HsTasksPage,
-  "/hs/gov-links":     HsGovLinksPage,
+  "/hs/gov-links":     LinksServicesPage,
   "/hs/notes":         HsNotesPage,
   "/hs/internal-comm": HsInternalCommPage,
   "/hs/ai-assistant":  AIAssistantPage,
+  "/hs/support":       SupportRequestPage,
+  // المطور العقاري
+  "/hs/real-estate":   RealEstatePage,
+  "/hs/re-purchases":  RePurchasesPage,
+  "/hs/re-documents":  ReDocumentsPage,
+  "/hs/re-trial-balance": ReTrialBalancePage,
+  "/hs/re-units":      ReUnitsPage,
   "/purchases/suppliers":         PurchaseSuppliersPage,
   "/purchases/supplier-groups":  PurchaseSupplierGroupsPage,
   "/purchases/orders":           PurchaseOrdersPage,
@@ -148,10 +167,6 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/sales/order":             SalesOrderTab,
   "/sales/delivery":          SalesDeliveryTab,
   "/sales/pos":               SalesPosTab,
-  "/sales/shifts":            SalesShiftsTab,
-  "/sales/payment-methods":   SalesPaymentMethodsTab,
-  "/sales/pos-settings":      SalesPosSettingsTab,
-  "/sales/pos-reports":       SalesPosReportsTab,
   "/sales/customers":         SalesCustomersTab,
   "/sales/customer-groups":   SalesCustomerGroupsTab,
   "/sales/customer-balances": SalesCustomerBalancesTab,
@@ -395,11 +410,14 @@ function TabContent() {
         </div>
       )}
       {tabs.map(tab => {
-        const Component = PAGE_MAP[tab.path];
+        const Component = PAGE_MAP[tab.path]
+          ?? (tab.path.startsWith("/hs/custody-record/") ? CustodyRecordPage : null);
         return (
           <AppWindow key={tab.id} tab={tab}>
             <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }} dir="rtl">
-              {Component ? <Component /> : <NotFound />}
+              <TabPathContext.Provider value={tab.path}>
+                {Component ? <Component /> : <NotFound />}
+              </TabPathContext.Provider>
             </div>
           </AppWindow>
         );
@@ -434,6 +452,8 @@ function AppRoutes() {
 // ─── App Root ─────────────────────────────────────────────────────────────
 function App() {
   useSmartCopy();
+  useGlobalDesktopFields();
+  useGlobalEnterNavigation();
   const mandatoryUpdateActive = useIsMandatoryBlocked();
 
   return (
@@ -450,6 +470,7 @@ function App() {
               في حالة التحديث الإجباري تحجب الشاشة بالكامل وتمنع أي تفاعل.
             */}
             <UpdateDialog />
+            <UpdateProgressBadge />
 
             {/*
               حجب جميع المسارات عند وجود تحديث إجباري:

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { LivePOSPage } from "@/modules/pos/LivePOSPage";
 import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import { fmtDate } from "@/shared/utils/dateUtils";
 import CustomerFormDialog from "@/shared/components/CustomerFormDialog";
@@ -7,14 +8,13 @@ import SalesQuotation from "./SalesQuotation";
 import SalesReturnPage from "./SalesReturnPage";
 import SalesQuotePage from "./SalesQuotePage";
 import SalesOrderPage from "./SalesOrderPage";
-import DocumentJournalsPage from "@/modules/settings/pages/DocumentJournalsPage";
 import { useTabManager } from "@/core/contexts/TabManagerContext";
 import {
   ChevronDown, ChevronRight, TrendingUp, FileText, RotateCcw,
   BarChart3, Settings, Users, ClipboardList, ShoppingCart, Tag,
-  DollarSign, Receipt, Clock, Wallet, Star, Plus, Search,
+  DollarSign, Receipt, Plus, Search,
   Printer, CheckCircle, RefreshCw, ArrowRight, Filter,
-  Bell, Activity, X, BookOpen, Hash,
+  Bell, Activity, X,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/core/ui/card";
 import { Button } from "@/core/ui/button";
@@ -56,11 +56,7 @@ export const menuSections = [
     label: "نقطة بيع",
     icon: ShoppingCart,
     children: [
-      { id: "pos-screen",      label: "شاشة البيع",   icon: ShoppingCart, path: "/sales/pos" },
-      { id: "shifts",          label: "الورديات",      icon: Clock,        path: "/sales/shifts" },
-      { id: "payment-methods", label: "طرق السداد",    icon: Wallet,       path: "/sales/payment-methods" },
-      { id: "pos-settings",    label: "إعدادات POS",   icon: Star,         path: "/sales/pos-settings" },
-      { id: "pos-reports",     label: "تقارير POS",    icon: BarChart3,    path: "/sales/pos-reports" },
+      { id: "pos-screen", label: "نقطة البيع", icon: ShoppingCart, path: "/sales/pos" },
     ],
   },
   {
@@ -83,15 +79,6 @@ export const menuSections = [
       { id: "sales-totals-reports",      label: "تقارير إجماليات المبيعات",                   icon: TrendingUp, path: "/sales/totals-reports" },
       { id: "sales-invoices-report",     label: "تقرير فواتير ومردودات المبيعات خلال فترة",   icon: FileText,   path: "/sales/invoices-report" },
       { id: "sales-items-reports",       label: "تقارير أصناف المبيعات",                      icon: BarChart3,  path: "/sales/items-reports" },
-    ],
-  },
-  {
-    id: "settings",
-    label: "الإعدادات",
-    icon: Settings,
-    children: [
-      { id: "sales-journals",  label: "دفاتر المبيعات",  icon: BookOpen, path: "/sales/journals" },
-      { id: "sales-coding",    label: "تكويد المبيعات",  icon: Hash,     path: "/sales/coding"   },
     ],
   },
 ];
@@ -575,6 +562,7 @@ function SalesOverview({
 function SalesInvoicePage() {
   const [items, setItems] = useState<{ id: number; name: string; qty: number; price: number; discount: number }[]>([]);
   const [search, setSearch] = useState("");
+  const [invoiceFormDate, setInvoiceFormDate] = useState(new Date().toISOString().split("T")[0]);
   const { data: products } = trpc.products.list.useQuery({ search });
 
   const addItem = (p: any) => {
@@ -607,7 +595,7 @@ function SalesInvoicePage() {
               </div>
               <div>
                 <Label className="text-xs text-muted-foreground">التاريخ</Label>
-                <Input type="date" defaultValue={new Date().toISOString().split("T")[0]} className="h-8 text-sm" />
+                <DateSegmentInput value={invoiceFormDate} onChange={setInvoiceFormDate} standalone className="h-8 text-sm" />
               </div>
               <div>
                 <Label className="text-xs text-muted-foreground">العميل</Label>
@@ -860,89 +848,6 @@ function CustomersPage() {
   );
 }
 
-// ─── Shifts Page ───────────────────────────────────────────────────────────────
-
-function ShiftsPage() {
-  const shifts = [
-    { id: 1, name: "الوردية الصباحية", start: "08:00", end: "16:00", cashier: "أحمد محمد", status: "مغلقة", sales: 12500 },
-    { id: 2, name: "الوردية المسائية", start: "16:00", end: "00:00", cashier: "محمد علي", status: "مفتوحة", sales: 8300 },
-  ];
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h3 className="font-semibold text-sm">إدارة الورديات</h3>
-        <Button className="h-8 text-sm" onClick={() => toast.success("تم فتح وردية جديدة")}>
-          <Plus className="w-4 h-4 ml-1" /> فتح وردية
-        </Button>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {shifts.map(s => (
-          <Card key={s.id} className="border-border/50">
-            <CardContent className="p-4">
-              <div className="flex justify-between items-start mb-3">
-                <div>
-                  <p className="font-semibold text-sm">{s.name}</p>
-                  <p className="text-muted-foreground text-xs">{s.cashier}</p>
-                </div>
-                <Badge variant={s.status === "مفتوحة" ? "default" : "secondary"}>{s.status}</Badge>
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-center">
-                {[["البداية", s.start], ["النهاية", s.end], ["المبيعات", s.sales.toLocaleString()]].map(([l, v]) => (
-                  <div key={l} className="bg-muted/30 rounded p-2">
-                    <p className="text-muted-foreground text-xs">{l}</p>
-                    <p className="font-semibold text-sm">{v}</p>
-                  </div>
-                ))}
-              </div>
-              {s.status === "مفتوحة" && (
-                <Button variant="destructive" className="w-full mt-3 h-8 text-sm" onClick={() => toast.success("تم إغلاق الوردية")}>
-                  إغلاق الوردية
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── Payment Methods ───────────────────────────────────────────────────────────
-
-function PaymentMethodsPage() {
-  const [methods, setMethods] = useState([
-    { name: "نقدي",          icon: "💵", active: true  },
-    { name: "بطاقة ائتمان",  icon: "💳", active: true  },
-    { name: "تحويل بنكي",    icon: "🏦", active: true  },
-    { name: "آجل",           icon: "📋", active: true  },
-    { name: "شيك",           icon: "📄", active: false },
-  ]);
-  const toggle = (name: string) => setMethods(prev => prev.map(m => m.name === name ? { ...m, active: !m.active } : m));
-  return (
-    <div className="space-y-4">
-      <h3 className="font-semibold text-sm">طرق السداد المتاحة</h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {methods.map(m => (
-          <Card key={m.name} className={`border-border/50 ${!m.active ? "opacity-60" : ""}`}>
-            <CardContent className="p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">{m.icon}</span>
-                <p className="font-medium text-sm">{m.name}</p>
-              </div>
-              <button
-                onClick={() => toggle(m.name)}
-                className={`w-10 h-5 rounded-full transition-colors relative ${m.active ? "bg-primary" : "bg-muted"}`}
-              >
-                <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all ${m.active ? "right-0.5" : "left-0.5"}`} />
-              </button>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ─── Sales Totals Report ───────────────────────────────────────────────────────
 
 const ARABIC_MONTHS = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
@@ -1084,10 +989,10 @@ function SalesTotalsReports() {
         {/* تاريخ يدوي */}
         <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
           <span style={{ fontSize: 11, color: "#9CA3AF" }}>من</span>
-          <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPreset("custom"); }}
+          <DateSegmentInput value={dateFrom} onChange={v => { setDateFrom(v); setPreset("custom"); }} standalone
             style={{ padding: "3px 7px", border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 11.5 }} />
           <span style={{ fontSize: 11, color: "#9CA3AF" }}>إلى</span>
-          <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPreset("custom"); }}
+          <DateSegmentInput value={dateTo} onChange={v => { setDateTo(v); setPreset("custom"); }} standalone
             style={{ padding: "3px 7px", border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 11.5 }} />
         </div>
 
@@ -1347,11 +1252,6 @@ function SalesInvoicesReport() {
   // ── أدوات مشتركة ──
   const fmtNum = (n: number) =>
     n.toLocaleString("ar-EG", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const fmtDate = (d: string | Date) => {
-    const dt = new Date(d);
-    return `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}`;
-  };
-
   const TYPE_LABELS: Record<string, { label: string; color: string; bg: string }> = {
     sale:   { label: "فاتورة مبيعات", color: "#059669", bg: "#ECFDF5" },
     return: { label: "مردود مبيعات",  color: "#DC2626", bg: "#FEF2F2" },
@@ -1487,12 +1387,12 @@ function SalesInvoicesReport() {
           {/* من تاريخ */}
           <div style={{ display: "flex", flexDirection: "column" }}>
             <span style={labelStyle}>من تاريخ</span>
-            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ ...inputStyle, width: 140 }} />
+            <DateSegmentInput value={dateFrom} onChange={setDateFrom} standalone style={{ ...inputStyle, width: 140 }} />
           </div>
           {/* إلى تاريخ */}
           <div style={{ display: "flex", flexDirection: "column" }}>
             <span style={labelStyle}>إلى تاريخ</span>
-            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ ...inputStyle, width: 140 }} />
+            <DateSegmentInput value={dateTo} onChange={setDateTo} standalone style={{ ...inputStyle, width: 140 }} />
           </div>
 
           {/* المخزن */}
@@ -1857,6 +1757,7 @@ function DeliveryOrderPage() {
     { id: 3, name: "ماوس لاسلكي",            orderedQty: 20, deliveredQty: 20, unit: "قطعة" },
   ]);
   const [status, setStatus] = useState("pending");
+  const [doDate, setDoDate] = useState(new Date().toISOString().split("T")[0]);
 
   const statusOptions = [
     { value: "pending",   label: "معلق",        color: "bg-amber-100 text-amber-700" },
@@ -1917,7 +1818,7 @@ function DeliveryOrderPage() {
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">التاريخ</Label>
-              <Input type="date" defaultValue={new Date().toISOString().split("T")[0]} className="h-8 text-sm" />
+              <DateSegmentInput value={doDate} onChange={setDoDate} standalone className="h-8 text-sm" />
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">أمر البيع المرتبط</Label>
@@ -2168,11 +2069,11 @@ function SalesTransactionsView() {
         {/* فلتر التاريخ */}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ fontSize: 12, color: "#6B7280" }}>من</span>
-          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-            style={{ padding: "3px 8px", border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 12, background: "#fff", color: "#111827" }} />
+          <DateSegmentInput value={dateFrom} onChange={setDateFrom} standalone
+            style={{ padding: "3px 8px", border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 12 }} />
           <span style={{ fontSize: 12, color: "#6B7280" }}>إلى</span>
-          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-            style={{ padding: "3px 8px", border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 12, background: "#fff", color: "#111827" }} />
+          <DateSegmentInput value={dateTo} onChange={setDateTo} standalone
+            style={{ padding: "3px 8px", border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 12 }} />
         </div>
 
         {/* بحث */}
@@ -2476,25 +2377,11 @@ function SalesInvoiceListView() {
         {/* فلتر التاريخ — يدوي */}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ fontSize: 12, color: "#6B7280" }}>من</span>
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={e => { setDateFrom(e.target.value); setDatePeriod("custom"); }}
-            style={{
-              padding: "3px 8px", border: "1px solid #D1D5DB", borderRadius: 6,
-              fontSize: 12, background: "#fff", color: "#111827", cursor: "pointer",
-            }}
-          />
+          <DateSegmentInput value={dateFrom} onChange={v => { setDateFrom(v); setDatePeriod("custom"); }} standalone
+            style={{ padding: "3px 8px", border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 12 }} />
           <span style={{ fontSize: 12, color: "#6B7280" }}>إلى</span>
-          <input
-            type="date"
-            value={dateTo}
-            onChange={e => { setDateTo(e.target.value); setDatePeriod("custom"); }}
-            style={{
-              padding: "3px 8px", border: "1px solid #D1D5DB", borderRadius: 6,
-              fontSize: 12, background: "#fff", color: "#111827", cursor: "pointer",
-            }}
-          />
+          <DateSegmentInput value={dateTo} onChange={v => { setDateTo(v); setDatePeriod("custom"); }} standalone
+            style={{ padding: "3px 8px", border: "1px solid #D1D5DB", borderRadius: 6, fontSize: 12 }} />
         </div>
 
         {/* بحث */}
@@ -2678,110 +2565,6 @@ function SalesInvoiceListView() {
 
 // ─── Content Router ────────────────────────────────────────────────────────────
 
-// ── دفاتر المبيعات — يعرض DocumentJournalsPage مباشرة داخل وحدة المبيعات ──────
-function SalesJournalsView() {
-  return (
-    <div dir="rtl" style={{ height: "100%", overflow: "auto" }}>
-      <DocumentJournalsPage />
-    </div>
-  );
-}
-
-// ── تكويد المبيعات — يعرض تكويد الدفاتر (الأرقام والبادئات) ───────────────────
-function SalesCodingView() {
-  const { data: journals = [], isLoading } = trpc.documentJournals.list.useQuery(
-    { docType: "sales_invoice" } as any
-  );
-  const { data: returnJournals = [] } = trpc.documentJournals.list.useQuery(
-    { docType: "sales_return" } as any
-  );
-  const { data: orderJournals = [] } = trpc.documentJournals.list.useQuery(
-    { docType: "sales_order" } as any
-  );
-  const { data: quoteJournals = [] } = trpc.documentJournals.list.useQuery(
-    { docType: "sales_quote" } as any
-  );
-
-  const allJournals = [
-    ...journals.map((j: any)       => ({ ...j, typeName: "فاتورة مبيعات" })),
-    ...returnJournals.map((j: any) => ({ ...j, typeName: "مردود مبيعات" })),
-    ...orderJournals.map((j: any)  => ({ ...j, typeName: "أمر بيع" })),
-    ...quoteJournals.map((j: any)  => ({ ...j, typeName: "عرض سعر" })),
-  ];
-
-  return (
-    <div dir="rtl" style={{ padding: "16px 20px", fontFamily: "'Cairo', Tahoma, sans-serif" }}>
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 16, fontWeight: 800, color: "#1E344F" }}>📋 تكويد المبيعات</div>
-        <div style={{ fontSize: 12, color: "#6B7280", marginTop: 4 }}>
-          بادئات الترقيم المستخدمة في دفاتر المبيعات — لتعديلها اذهب إلى <b>دفاتر المبيعات</b>
-        </div>
-      </div>
-
-      {isLoading ? (
-        <div style={{ color: "#9CA3AF", fontSize: 13 }}>جارٍ التحميل...</div>
-      ) : allJournals.length === 0 ? (
-        <div style={{
-          padding: "32px 20px", textAlign: "center", borderRadius: 10,
-          border: "2px dashed #E5E7EB", color: "#9CA3AF", fontSize: 13,
-        }}>
-          <BookOpen style={{ width: 32, height: 32, color: "#D1D5DB", marginBottom: 8 }} />
-          <div style={{ fontWeight: 600, marginBottom: 6 }}>لا توجد دفاتر مبيعات محددة</div>
-          <div style={{ fontSize: 12 }}>انتقل إلى <b>دفاتر المبيعات</b> لإضافة دفاتر وتحديد بادئات الترقيم</div>
-        </div>
-      ) : (
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-          <thead>
-            <tr style={{ background: "#F3F4F6" }}>
-              {["نوع المستند", "اسم الدفتر", "البادئة (Prefix)", "الرقم الحالي", "الوصف"].map(h => (
-                <th key={h} style={{
-                  padding: "8px 12px", textAlign: "right",
-                  color: "#6B7280", fontWeight: 600, fontSize: 12,
-                  borderBottom: "1px solid #E5E7EB", whiteSpace: "nowrap",
-                }}>
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {allJournals.map((j: any) => (
-              <tr key={j.id} style={{ borderBottom: "1px solid #F3F4F6" }}
-                onMouseEnter={e => (e.currentTarget.style.background = "#F9FAFB")}
-                onMouseLeave={e => (e.currentTarget.style.background = "")}
-              >
-                <td style={{ padding: "8px 12px" }}>
-                  <span style={{
-                    padding: "2px 8px", borderRadius: 10, fontSize: 11,
-                    background: "#EFF6FF", color: "#2563EB", fontWeight: 600,
-                  }}>
-                    {j.typeName}
-                  </span>
-                </td>
-                <td style={{ padding: "8px 12px", fontWeight: 600, color: "#111827" }}>{j.name}</td>
-                <td style={{ padding: "8px 12px" }}>
-                  <span style={{
-                    fontFamily: "monospace", fontSize: 13, fontWeight: 700,
-                    color: "#7C3AED", background: "#F5F3FF",
-                    padding: "2px 8px", borderRadius: 6,
-                  }}>
-                    {j.numberPrefix || "—"}
-                  </span>
-                </td>
-                <td style={{ padding: "8px 12px", color: "#374151", fontFamily: "monospace" }}>
-                  {j.currentNumber ?? "1"}
-                </td>
-                <td style={{ padding: "8px 12px", color: "#6B7280", fontSize: 12 }}>
-                  {j.description || "—"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </div>
-  );
-}
 
 function SalesContent({ activeId, onSelect, settings, onSettingsChange }: {
   activeId: MenuId;
@@ -2798,11 +2581,7 @@ function SalesContent({ activeId, onSelect, settings, onSettingsChange }: {
     case "quotation":             return <SalesQuotation />;
     case "sales-order":           return <ComingSoon title="أمر بيع" />;
     case "delivery-order":        return <DeliveryOrderPage />;
-    case "pos-screen":            return <ComingSoon title="شاشة البيع" />;
-    case "shifts":                return <ShiftsPage />;
-    case "payment-methods":       return <PaymentMethodsPage />;
-    case "pos-settings":          return <ComingSoon title="إعدادات POS" />;
-    case "pos-reports":           return <ComingSoon title="تقارير POS" />;
+    case "pos-screen":            return <LivePOSPage />;
     case "add-customer":
     case "customer-groups":
     case "customer-balances":
@@ -2811,8 +2590,6 @@ function SalesContent({ activeId, onSelect, settings, onSettingsChange }: {
     case "sales-totals-reports":   return <SalesTotalsReports />;
     case "sales-invoices-report":  return <SalesInvoicesReport />;
     case "sales-items-reports":    return <ComingSoon title="تقارير أصناف المبيعات" />;
-    case "sales-journals":         return <SalesJournalsView />;
-    case "sales-coding":           return <SalesCodingView />;
     default:                      return <SalesOverview onSelect={onSelect} />;
   }
 }
@@ -2825,11 +2602,7 @@ export function SalesCreditNoteTab()    { return <div className="h-full overflow
 export function SalesQuotationTab()     { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesQuotePage /></div>; }
 export function SalesOrderTab()         { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesOrderPage /></div>; }
 export function SalesDeliveryTab()      { return <div className="h-full overflow-auto p-5" dir="rtl"><DeliveryOrderPage /></div>; }
-export function SalesPosTab()           { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="شاشة البيع" /></div>; }
-export function SalesShiftsTab()        { return <div className="h-full overflow-auto p-5" dir="rtl"><ShiftsPage /></div>; }
-export function SalesPaymentMethodsTab(){ return <div className="h-full overflow-auto p-5" dir="rtl"><PaymentMethodsPage /></div>; }
-export function SalesPosSettingsTab()   { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="إعدادات POS" /></div>; }
-export function SalesPosReportsTab()    { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="تقارير POS" /></div>; }
+export function SalesPosTab()           { return <div className="h-full flex flex-col overflow-hidden"><LivePOSPage /></div>; }
 export function SalesCustomersTab()     { return <div className="h-full overflow-auto p-5" dir="rtl"><CustomersPage /></div>; }
 export function SalesCustomerGroupsTab()    { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="مجموعات العملاء" /></div>; }
 export function SalesCustomerBalancesTab()  { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="أرصدة العملاء" /></div>; }
@@ -2853,10 +2626,12 @@ export default function SalesModule() {
     });
   };
 
+  const isPosScreen = activeId === "pos-screen";
+
   return (
     <div className="flex h-full" dir="rtl">
       <SalesMenu activeId={activeId} onSelect={setActiveId} />
-      <div className="flex-1 overflow-auto p-5">
+      <div className={`flex-1 ${isPosScreen ? "overflow-hidden flex flex-col" : "overflow-auto p-5"}`}>
         <SalesContent
           activeId={activeId}
           onSelect={setActiveId}

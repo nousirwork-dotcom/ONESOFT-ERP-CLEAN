@@ -4,7 +4,7 @@ artifactName: OneSoftSetup-${version}-${arch}.${ext}
 copyright: Copyright © 2026 OneSoft
 
 extraMetadata:
-  version: "1.0.22"
+  version: "1.0.23"
 
 directories:
   output: release
@@ -42,6 +42,11 @@ extraResources:
     to: app/server-app/drizzle
     filter:
       - "**/*"
+  # نسخ قالب التأسيس — foundation-data.json مُدرَج دائماً مع المثبّت
+  # المسار في وقت التشغيل: {resourcesPath}/app/server-app/src/foundation-data.json
+  # ملاحظة: الملف مطلوب — تأكد من تصديره قبل بناء الإصدار
+  - from: ../server-app/src/foundation-data.json
+    to: app/server-app/src/foundation-data.json
   - from: resources/icon.ico
     to: icon.ico
   - from: resources/icon.png
