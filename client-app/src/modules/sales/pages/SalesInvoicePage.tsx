@@ -1328,7 +1328,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
           {/* col 4: العملة — تحت نوع السند */}
           <div className="flex items-center" style={{ gap: 6 }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>العملة</label>
+            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", flexShrink: 0, whiteSpace: "nowrap" }}>العملة</label>
             <ContextSelectInput
               value={currency}
               onChange={v => setCurrency(v || "SAR")}
@@ -1393,7 +1393,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
           {/* col 4: البائع — تحت العملة */}
           <div className="flex items-center" style={{ gap: 6 }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>البائع</label>
+            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", flexShrink: 0, whiteSpace: "nowrap" }}>البائع</label>
             <input value={salesperson} onChange={e => setSalesperson(e.target.value)} className="classic-input flex-1" style={{ height: 26 }} />
           </div>
 
