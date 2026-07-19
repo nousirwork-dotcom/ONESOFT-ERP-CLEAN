@@ -1095,7 +1095,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                       onKeyDown={e => { if (e.key === "F4" || (e.key === "ArrowDown" && e.altKey)) { e.preventDefault(); setJournalOpen(o => !o); } }}
                       className="flex items-center gap-1 classic-input"
                       style={{
-                        height: 26, width: 150, paddingInline: "6px 4px",
+                        height: 26, width: 175, paddingInline: "6px 4px",
                         background: selected ? "#eff6ff" : "#fafafa",
                         border: `1px solid ${selected ? "#3b82f6" : "#c9c4bb"}`,
                         borderRadius: "4px 0 0 4px", borderInlineEnd: "none",
@@ -1166,7 +1166,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   <input
                     value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)}
                     className="classic-input text-center font-bold"
-                    style={{ width: 120, height: 26, background: selected ? "#eff6ff" : "#FFFDE7", borderColor: selected ? "#3b82f6" : "#F59E0B", borderRadius: "4px", color: "#1a1a1a", fontSize: "13px", fontWeight: 700 }}
+                    style={{ width: 140, height: 26, background: selected ? "#eff6ff" : "#FFFDE7", borderColor: selected ? "#3b82f6" : "#F59E0B", borderRadius: "4px", color: "#1a1a1a", fontSize: "13px", fontWeight: 700 }}
                     readOnly={!!journalId}
                     title={isAr ? "رقم الفاتورة التسلسلي" : "Invoice serial number"}
                   />
