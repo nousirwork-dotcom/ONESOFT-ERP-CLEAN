@@ -1153,7 +1153,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                         <div className="px-3 py-1.5 flex items-center justify-between" style={{ background: "#f8fafc", borderTop: "1px solid #e2e8f0" }}>
                           <span className="text-[9px] text-slate-400">{isAr ? "كليك يمين أو F4 لفتح القائمة" : "Right-click or F4 to open"}</span>
                           {journalId && (
-                            <button onClick={() => { setJournalId(null); setJournalOpen(false); }} className="text-[9px] text-red-400 hover:text-red-600">
+                            <button onClick={() => { setJournalId(null); setJournalOpen(false); setWarehouseId(null); setJournalWarehouseId(null); }} className="text-[9px] text-red-400 hover:text-red-600">
                               {isAr ? "إلغاء الاختيار" : "Clear"}
                             </button>
                           )}
@@ -1355,21 +1355,19 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           <div className="flex items-center" style={{ gap: 6 }}>
             <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>المـ ـ ـخزن</label>
             {(() => {
-              const lockedWh = journalWarehouseId ?? docTypeWarehouseId;
-              const whTitle = journalWarehouseId ? "المخزن محدد من الدفتر" : docTypeWarehouseId ? "المخزن محدد من نوع السند" : undefined;
-              const whOptions = (lockedWh
-                ? warehousesQuery.data?.filter(w => w.id === lockedWh)
-                : warehousesQuery.data
-              )?.map(w => ({ value: String(w.id), label: w.name })) ?? [];
+              const activeWh = journalWarehouseId ?? docTypeWarehouseId;
+              const whOptions = activeWh
+                ? (warehousesQuery.data?.filter(w => w.id === activeWh) ?? []).map(w => ({ value: String(w.id), label: w.name }))
+                : [];
               return (
                 <ContextSelectInput
                   value={warehouseId ? String(warehouseId) : ""}
-                  onChange={v => !lockedWh && setWarehouseId(parseInt(v) || null)}
+                  onChange={() => {}}
                   options={whOptions}
-                  menuTitle="اختر المخزن"
-                  placeholder="المخزن ⊞"
-                  disabled={!!lockedWh}
-                  title={whTitle}
+                  menuTitle="المخزن"
+                  placeholder="يُحدَّد من الفرع"
+                  disabled={true}
+                  title={activeWh ? "المخزن محدد من الفرع" : "اختر الفرع أولاً"}
                   style={{ height: 26 }}
                 />
               );
