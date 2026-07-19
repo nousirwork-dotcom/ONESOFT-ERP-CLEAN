@@ -1085,7 +1085,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
                 {/* ── الفرع ── */}
                 <label style={{ fontSize: 10, fontWeight: 700, color: "#555", flexShrink: 0, whiteSpace: "nowrap" }}>
-                  {isAr ? "الـ ـ ـ ـفرع" : "Branch"}
+                  {isAr ? "الـ ـفرع" : "Branch"}
                 </label>
                 <div className="flex relative" style={{ height: 26 }}>
                   <button
@@ -1388,7 +1388,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
           {/* col 1: المخزن */}
           <div className="flex items-center" style={{ gap: 6 }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>المـ ـخزن</label>
+            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>المـ ـ ـخزن</label>
             {(() => {
               const lockedWh = journalWarehouseId ?? docTypeWarehouseId;
               const whTitle = journalWarehouseId ? "المخزن محدد من الدفتر" : docTypeWarehouseId ? "المخزن محدد من نوع السند" : undefined;
