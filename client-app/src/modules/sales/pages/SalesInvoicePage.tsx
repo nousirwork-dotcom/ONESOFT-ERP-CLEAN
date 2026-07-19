@@ -1080,12 +1080,6 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             const journals = journalsQuery.data ?? [];
             const selected = journals.find((j: any) => j.id === journalId);
             const jName = (j: any): string => isAr ? (j.name ?? "") : (j.name2 || (j.name ?? ""));
-            const previewNum = (j: any): string => {
-              const seq = (j.currentSeq ?? 0) === 0 ? (j.firstNumber ?? 1) : (j.currentSeq ?? 0) + (j.increment ?? 1);
-              const padded = String(seq).padStart(j.numDigits ?? 6, "0");
-              const year = j.includeYear ? `-${new Date().getFullYear()}` : "";
-              return `${j.numberPrefix}${year}-${padded}`;
-            };
             return (
               <div className="flex items-center flex-shrink-0 relative" style={{ gap: 6 }}>
 
@@ -1145,7 +1139,6 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                                   <div className="text-[12px] font-semibold truncate" style={{ color: isSel ? "#1d4ed8" : "#1e293b" }}>{jName(j)}</div>
                                   {j.description && <div className="text-[10px] text-slate-400 truncate">{j.description}</div>}
                                 </div>
-                                <div className="font-mono text-[11px] font-bold px-2 py-0.5 rounded shrink-0" style={{ background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0" }}>{previewNum(j)}</div>
                               </button>
                             );
                           })}
