@@ -1079,7 +1079,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           {(() => {
             const journals = journalsQuery.data ?? [];
             const selected = journals.find((j: any) => j.id === journalId);
-            const jName = (j: any): string => isAr ? (j.name ?? "") : (j.name2 || j.name ?? "");
+            const jName = (j: any): string => isAr ? (j.name ?? "") : (j.name2 || (j.name ?? ""));
             const previewNum = (j: any): string => {
               const seq = (j.currentSeq ?? 0) === 0 ? (j.firstNumber ?? 1) : (j.currentSeq ?? 0) + (j.increment ?? 1);
               const padded = String(seq).padStart(j.numDigits ?? 6, "0");
