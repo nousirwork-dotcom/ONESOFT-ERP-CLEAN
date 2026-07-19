@@ -1166,7 +1166,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   <input
                     value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)}
                     className="classic-input text-center font-bold"
-                    style={{ width: 140, height: 26, background: selected ? "#eff6ff" : "#FFFDE7", borderColor: selected ? "#3b82f6" : "#F59E0B", borderRadius: "4px", color: "#1a1a1a", fontSize: "13px", fontWeight: 700 }}
+                    style={{ width: 150, height: 26, background: selected ? "#eff6ff" : "#FFFDE7", borderColor: selected ? "#3b82f6" : "#F59E0B", borderRadius: "4px", color: "#1a1a1a", fontSize: "13px", fontWeight: 700 }}
                     readOnly={!!journalId}
                     title={isAr ? "رقم الفاتورة التسلسلي" : "Invoice serial number"}
                   />
