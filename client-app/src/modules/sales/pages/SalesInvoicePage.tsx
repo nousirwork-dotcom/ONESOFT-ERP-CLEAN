@@ -11,6 +11,7 @@ import React, { useState, useRef, useCallback, useEffect, KeyboardEvent } from "
 import { Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/shared/lib/trpc";
+import { useLang } from "@/core/contexts/LanguageContext";
 import { useUnsavedChangesGuard } from "@/core/hooks/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import ERPToolbar, { ERPMode } from "@/shared/components/ERPToolbar";
@@ -97,6 +98,7 @@ function toIsoDate(display: string) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: { initialInvoiceId?: number; onDocTypeChange?: (name: string) => void } = {}) {
+  const { isAr } = useLang();
   // ── Header state ─────────────────────────────────────────────────────────
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().split("T")[0]);
@@ -1073,10 +1075,11 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
           {/* ══ صف 1: رقم الفاتورة │ بناءً على │ نوع السند ══ */}
 
-          {/* col 1: رقم الفاتورة */}
+          {/* col 1: الفرع + رقم الفاتورة */}
           {(() => {
             const journals = journalsQuery.data ?? [];
             const selected = journals.find((j: any) => j.id === journalId);
+            const jName = (j: any): string => isAr ? (j.name ?? "") : (j.name2 || j.name ?? "");
             const previewNum = (j: any): string => {
               const seq = (j.currentSeq ?? 0) === 0 ? (j.firstNumber ?? 1) : (j.currentSeq ?? 0) + (j.increment ?? 1);
               const padded = String(seq).padStart(j.numDigits ?? 6, "0");
@@ -1085,55 +1088,94 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             };
             return (
               <div className="flex items-center flex-shrink-0 relative" style={{ gap: 6 }}>
-                <label style={{ fontSize: 10, fontWeight: 700, color: "#D19C05", flexShrink: 0, whiteSpace: "nowrap" }}>رقم الفاتورة</label>
-                {selected && (
-                  <span className="text-[9px] px-1 rounded cursor-pointer" style={{ background: "#dbeafe", color: "#1d4ed8", lineHeight: "16px" }} onClick={() => setJournalId(null)} title="إلغاء الدفتر">
-                    {selected.name} ✕
-                  </span>
-                )}
+
+                {/* ── الفرع ── */}
+                <label style={{ fontSize: 10, fontWeight: 700, color: "#555", flexShrink: 0, whiteSpace: "nowrap" }}>
+                  {isAr ? "الفرع" : "Branch"}
+                </label>
+                <div className="flex relative" style={{ height: 26 }}>
+                  <button
+                    onClick={() => setJournalOpen(o => !o)}
+                    onContextMenu={e => { e.preventDefault(); setJournalOpen(o => !o); }}
+                    onKeyDown={e => { if (e.key === "F4" || (e.key === "ArrowDown" && e.altKey)) { e.preventDefault(); setJournalOpen(o => !o); } }}
+                    className="flex items-center gap-1 classic-input"
+                    style={{
+                      height: 26, minWidth: 110, maxWidth: 160, paddingInline: "6px 4px",
+                      background: selected ? "#eff6ff" : "#fafafa",
+                      border: `1px solid ${selected ? "#3b82f6" : "#c9c4bb"}`,
+                      borderRadius: "4px 0 0 4px", borderInlineEnd: "none",
+                      color: selected ? "#1d4ed8" : "#888", fontSize: 11, fontWeight: selected ? 700 : 400,
+                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                    }}
+                    title={isAr ? "اختر الفرع (F4)" : "Select Branch (F4)"}
+                  >
+                    <span className="flex-1 truncate text-start">
+                      {selected ? jName(selected) : (isAr ? "— اختر الفرع —" : "— Select Branch —")}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => setJournalOpen(o => !o)}
+                    className="flex items-center justify-center flex-shrink-0"
+                    style={{ width: 18, height: 26, borderRadius: "0 4px 4px 0", background: selected ? "#3b82f6" : "#e5e0d8", border: `1px solid ${selected ? "#2563eb" : "#c9c4bb"}`, color: selected ? "white" : "#666", fontSize: "9px" }}
+                  >▼</button>
+
+                  {/* dropdown */}
+                  {journalOpen && (<>
+                    <div className="fixed inset-0 z-[9998]" onClick={() => setJournalOpen(false)} />
+                    <div className="absolute top-full z-[9999] mt-1 bg-white rounded-lg overflow-hidden" style={{ insetInlineStart: 0, minWidth: 300, boxShadow: "0 8px 32px rgba(0,0,0,0.18)", border: "1px solid #e2e8f0" }} dir={isAr ? "rtl" : "ltr"}>
+                      <div className="flex items-center justify-between px-3 py-2" style={{ background: "#1e40af" }}>
+                        <span className="text-white text-[11px] font-bold">
+                          {isAr ? "دفاتر فاتورة المبيعات" : "Sales Invoice Journals"}
+                        </span>
+                        <button onClick={() => setJournalOpen(false)} style={{ color: "rgba(255,255,255,0.7)", fontSize: "11px" }}>✕</button>
+                      </div>
+                      {journals.length === 0 ? (
+                        <div className="px-4 py-5 text-center">
+                          <div className="text-[20px] mb-1">📒</div>
+                          <div className="text-[11px] text-slate-500">{isAr ? "لا توجد دفاتر مُعرَّفة" : "No journals defined"}</div>
+                        </div>
+                      ) : (
+                        <div className="overflow-y-auto" style={{ maxHeight: 240 }}>
+                          {journals.map((j: any, idx: number) => {
+                            const isSel = j.id === journalId;
+                            return (
+                              <button key={j.id} onClick={() => handleJournalSelect(j.id)} className="w-full flex items-center gap-0 transition-colors" style={{ textAlign: isAr ? "right" : "left", background: isSel ? "#eff6ff" : idx % 2 === 0 ? "#fafafa" : "white", borderBottom: "1px solid #f1f5f9", padding: "6px 12px" }}>
+                                <span style={{ width: 16, color: isSel ? "#3b82f6" : "transparent", fontSize: "11px", flexShrink: 0 }}>✓</span>
+                                <div className="flex-1 min-w-0 mx-2">
+                                  <div className="text-[12px] font-semibold truncate" style={{ color: isSel ? "#1d4ed8" : "#1e293b" }}>{jName(j)}</div>
+                                  {j.description && <div className="text-[10px] text-slate-400 truncate">{j.description}</div>}
+                                </div>
+                                <div className="font-mono text-[11px] font-bold px-2 py-0.5 rounded shrink-0" style={{ background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0" }}>{previewNum(j)}</div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <div className="px-3 py-1.5 flex items-center justify-between" style={{ background: "#f8fafc", borderTop: "1px solid #e2e8f0" }}>
+                        <span className="text-[9px] text-slate-400">{isAr ? "كليك يمين أو F4 لفتح القائمة" : "Right-click or F4 to open"}</span>
+                        {journalId && (
+                          <button onClick={() => { setJournalId(null); setJournalOpen(false); }} className="text-[9px] text-red-400 hover:text-red-600">
+                            {isAr ? "إلغاء الاختيار" : "Clear"}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </>)}
+                </div>
+
+                {/* ── رقم الفاتورة ── */}
+                <label style={{ fontSize: 10, fontWeight: 700, color: "#D19C05", flexShrink: 0, whiteSpace: "nowrap" }}>
+                  {isAr ? "رقم الفاتورة" : "Invoice No."}
+                </label>
                 <div className="flex" style={{ height: 26 }}>
                   <input
                     value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)}
-                    onContextMenu={e => { e.preventDefault(); setJournalOpen(o => !o); }}
-                    onKeyDown={e => { if (e.key === "F4" || (e.key === "ArrowDown" && e.altKey)) { e.preventDefault(); setJournalOpen(o => !o); } }}
                     className="classic-input text-center font-bold"
-                    style={{ width: 100, height: 26, background: selected ? "#eff6ff" : "#FFFDE7", borderColor: selected ? "#3b82f6" : "#F59E0B", borderRadius: "4px 0 0 4px", borderLeft: "none", color: "#1a1a1a", fontSize: "13px", fontWeight: 700 }}
-                    title="كليك يمين أو F4 لاختيار الدفتر"
+                    style={{ width: 100, height: 26, background: selected ? "#eff6ff" : "#FFFDE7", borderColor: selected ? "#3b82f6" : "#F59E0B", borderRadius: "4px", color: "#1a1a1a", fontSize: "13px", fontWeight: 700 }}
+                    readOnly={!!journalId}
+                    title={isAr ? "رقم الفاتورة التسلسلي" : "Invoice serial number"}
                   />
-                  <button onClick={() => setJournalOpen(o => !o)} className="flex items-center justify-center" style={{ width: 20, height: 26, borderRadius: "0 4px 4px 0", background: selected ? "#3b82f6" : "#F59E0B", border: `1px solid ${selected ? "#2563eb" : "#d97706"}`, color: "white", fontSize: "9px" }}>▼</button>
                 </div>
-                {journalOpen && (<>
-                  <div className="fixed inset-0 z-[9998]" onClick={() => setJournalOpen(false)} />
-                  <div className="absolute top-full right-0 z-[9999] mt-1 bg-white rounded-lg overflow-hidden" style={{ minWidth: 320, boxShadow: "0 8px 32px rgba(0,0,0,0.18)", border: "1px solid #e2e8f0" }} dir="rtl">
-                    <div className="flex items-center justify-between px-3 py-2" style={{ background: "#1e40af" }}>
-                      <span className="text-white text-[11px] font-bold">دفاتر فاتورة المبيعات</span>
-                      <button onClick={() => setJournalOpen(false)} style={{ color: "rgba(255,255,255,0.7)", fontSize: "11px" }}>✕</button>
-                    </div>
-                    {journals.length === 0 ? (
-                      <div className="px-4 py-5 text-center"><div className="text-[20px] mb-1">📒</div><div className="text-[11px] text-slate-500">لا توجد دفاتر مُعرَّفة</div></div>
-                    ) : (
-                      <div className="overflow-y-auto" style={{ maxHeight: 240 }}>
-                        {journals.map((j: any, idx: number) => {
-                          const isSelected = j.id === journalId;
-                          return (
-                            <button key={j.id} onClick={() => handleJournalSelect(j.id)} className="w-full flex items-center gap-0 text-right transition-colors" style={{ background: isSelected ? "#eff6ff" : idx % 2 === 0 ? "#fafafa" : "white", borderBottom: "1px solid #f1f5f9", padding: "6px 12px" }}>
-                              <span style={{ width: 16, color: isSelected ? "#3b82f6" : "transparent", fontSize: "11px", flexShrink: 0 }}>✓</span>
-                              <div className="flex-1 min-w-0 mx-2">
-                                <div className="text-[12px] font-semibold truncate" style={{ color: isSelected ? "#1d4ed8" : "#1e293b" }}>فاتورة مبيعات – {j.name}</div>
-                                {j.description && <div className="text-[10px] text-slate-400 truncate">{j.description}</div>}
-                              </div>
-                              <div className="font-mono text-[11px] font-bold px-2 py-0.5 rounded shrink-0" style={{ background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0" }}>{previewNum(j)}</div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                    <div className="px-3 py-1.5 flex items-center justify-between" style={{ background: "#f8fafc", borderTop: "1px solid #e2e8f0" }}>
-                      <span className="text-[9px] text-slate-400">كليك يمين أو F4 لفتح القائمة</span>
-                      {journalId && <button onClick={() => { setJournalId(null); setJournalOpen(false); }} className="text-[9px] text-red-400 hover:text-red-600">إلغاء اختيار الدفتر</button>}
-                    </div>
-                  </div>
-                </>)}
               </div>
             );
           })()}
