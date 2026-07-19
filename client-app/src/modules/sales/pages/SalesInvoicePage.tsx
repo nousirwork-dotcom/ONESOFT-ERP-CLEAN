@@ -1175,8 +1175,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             );
           })()}
 
-          {/* col 2-3: بناءً على */}
-          <div className="flex items-center" style={{ gap: 6, gridColumn: "2/4" }}>
+          {/* col 3-4: بناءً على */}
+          <div className="flex items-center" style={{ gap: 6, gridColumn: "3/5" }}>
             <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>بناءً على</label>
             <div className="flex flex-1 min-w-0" style={{ gap: 4 }}>
               <div style={{ flexShrink: 0, width: 110, display: "flex" }}>
