@@ -1085,7 +1085,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
                 {/* ── مجموعة الفرع: label + dropdown (gap 5px بينهما) ── */}
                 <div className="flex items-center flex-shrink-0 relative" style={{ gap: 5 }}>
-                  <label style={{ fontSize: 10, fontWeight: 700, color: "#555", flexShrink: 0, whiteSpace: "nowrap" }}>
+                  <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>
                     {isAr ? "الـ ـفرع" : "Branch"}
                   </label>
                   <div className="flex relative flex-shrink-0" style={{ height: 26 }}>
@@ -1095,7 +1095,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                       onKeyDown={e => { if (e.key === "F4" || (e.key === "ArrowDown" && e.altKey)) { e.preventDefault(); setJournalOpen(o => !o); } }}
                       className="flex items-center gap-1 classic-input"
                       style={{
-                        height: 26, width: 120, paddingInline: "6px 4px",
+                        height: 26, width: 150, paddingInline: "6px 4px",
                         background: selected ? "#eff6ff" : "#fafafa",
                         border: `1px solid ${selected ? "#3b82f6" : "#c9c4bb"}`,
                         borderRadius: "4px 0 0 4px", borderInlineEnd: "none",
@@ -1166,7 +1166,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   <input
                     value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)}
                     className="classic-input text-center font-bold"
-                    style={{ width: 100, height: 26, background: selected ? "#eff6ff" : "#FFFDE7", borderColor: selected ? "#3b82f6" : "#F59E0B", borderRadius: "4px", color: "#1a1a1a", fontSize: "13px", fontWeight: 700 }}
+                    style={{ width: 120, height: 26, background: selected ? "#eff6ff" : "#FFFDE7", borderColor: selected ? "#3b82f6" : "#F59E0B", borderRadius: "4px", color: "#1a1a1a", fontSize: "13px", fontWeight: 700 }}
                     readOnly={!!journalId}
                     title={isAr ? "رقم الفاتورة التسلسلي" : "Invoice serial number"}
                   />
@@ -1209,48 +1209,6 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             </div>
           </div>
 
-          {/* col 4: نوع السند */}
-          <div className="flex items-center" style={{ gap: 6 }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>نوع السند</label>
-            {(() => {
-              const allDocTypes = docTypesQuery.data ?? [];
-              const filteredDocTypes = journalId ? allDocTypes.filter((dt: any) => dt.journal === String(journalId)) : allDocTypes;
-              const selectedDT = docTypeId ? allDocTypes.find((dt: any) => String(dt.id) === docTypeId) : null;
-              if (allDocTypes.length > 0) {
-                return (
-                  <ContextSelectInput
-                    value={docTypeId}
-                    onChange={v => handleDocTypeSelect(v)}
-                    options={filteredDocTypes.map((dt: any) => ({
-                      value: String(dt.id),
-                      label: dt.codeAr ? `${dt.codeAr} — ${dt.nameAr}` : dt.nameAr,
-                    }))}
-                    menuTitle="نوع السند"
-                    placeholder="نوع السند ⊞"
-                    style={{ height: 26, fontWeight: 600, color: "#1e40af" }}
-                  />
-                );
-              }
-              return (
-                <ContextSelectInput
-                  value={paymentType}
-                  onChange={v => { setPaymentType((v || "cash") as PaymentType); setPaidAmountOverride(""); }}
-                  options={[
-                    { value: "cash",    label: "نقدًا", color: "#15803D" },
-                    { value: "partial", label: "جزئي",  color: "#1D4ED8" },
-                    { value: "credit",  label: "آجل",   color: "#B45309" },
-                  ]}
-                  menuTitle="نوع الدفع"
-                  style={{
-                    height: 26, fontWeight: 700,
-                    background:   paymentType === "cash" ? "#F0FDF4" : paymentType === "partial" ? "#EFF6FF" : "#FFF7ED",
-                    borderColor:  paymentType === "cash" ? "#16A34A" : paymentType === "partial" ? "#2563EB" : "#D97706",
-                    color:        paymentType === "cash" ? "#15803D" : paymentType === "partial" ? "#1D4ED8" : "#B45309",
-                  }}
-                />
-              );
-            })()}
-          </div>
 
           {/* ══ صف 2: العميل (col 1-3) │ العملة (col 4) ══ */}
 
