@@ -1340,7 +1340,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
               ]}
               menuTitle="اختر العملة"
               placeholder="العملة ⊞"
-              style={{ height: 26 }}
+              style={{ height: 26, flex: 1, minWidth: 0 }}
             />
           </div>
 
