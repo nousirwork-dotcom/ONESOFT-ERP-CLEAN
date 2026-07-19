@@ -969,15 +969,20 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     setIsPosted(false);
     setPaymentBreakdown({});
     setShowPostingPreview(false);
-    // إذا كان هناك دفتر محدد، اعرض الرقم المتوقع — وإلا يبقى الحقل فارغاً
+    // إذا كان هناك دفتر محدد، أعد تطبيق مخزنه وعرض الرقم المتوقع
     if (journalId) {
+      const j = (journalsQuery.data ?? []).find((x: any) => x.id === journalId);
+      if (j?.warehouseId) {
+        setWarehouseId(j.warehouseId);
+        setJournalWarehouseId(j.warehouseId);
+      }
       utils.documentJournals.previewNextNumber.fetch({ journalId }).then(preview => {
         if (preview) setInvoiceNumber(preview);
       }).catch(() => setInvoiceNumber(""));
     } else {
       setInvoiceNumber("");
     }
-  }, [journalId, utils]);
+  }, [journalId, journalsQuery.data, utils]);
 
   /* ── تحميل PDF الفاتورة (تُستخدم في SendDocumentPanel) ── */
   const handleDownloadPdf = useCallback(async () => {
