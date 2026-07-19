@@ -1085,7 +1085,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
                 {/* ── الفرع ── */}
                 <label style={{ fontSize: 10, fontWeight: 700, color: "#555", flexShrink: 0, whiteSpace: "nowrap" }}>
-                  {isAr ? "الفرع" : "Branch"}
+                  {isAr ? "الـ ـ ـ ـفرع" : "Branch"}
                 </label>
                 <div className="flex relative" style={{ height: 26 }}>
                   <button
@@ -1254,7 +1254,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
           {/* col 1-3: العميل */}
           <div className="flex items-center" ref={custDropRef} style={{ gap: 6, gridColumn: "1/4", position: "relative" }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>العميل</label>
+            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>العـ ـ ـميل</label>
             <div className="flex flex-1 min-w-0" style={{ gap: 4, position: "relative" }}>
               {/* حقل البحث / اسم العميل */}
               {(() => {
@@ -1388,7 +1388,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
           {/* col 1: المخزن */}
           <div className="flex items-center" style={{ gap: 6 }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>المخزن</label>
+            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>المـ ـخزن</label>
             {(() => {
               const lockedWh = journalWarehouseId ?? docTypeWarehouseId;
               const whTitle = journalWarehouseId ? "المخزن محدد من الدفتر" : docTypeWarehouseId ? "المخزن محدد من نوع السند" : undefined;
@@ -1439,7 +1439,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
           {/* ══ صف 4: ملحوظة ══ */}
           <div className="flex items-center" style={{ gap: 6, gridColumn: "1/-1" }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>ملحوظة</label>
+            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>ملاحـ ـ ـظة</label>
             <input value={notes} onChange={e => setNotes(e.target.value)} className="classic-input flex-1" style={{ height: 26 }} />
           </div>
 
