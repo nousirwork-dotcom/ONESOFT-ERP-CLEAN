@@ -4,9 +4,9 @@ import { router, adminProcedure, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import {
   users, organizations, salesInvoices, purchaseInvoices, journalEntries,
-  vouchers, receiptVouchers, paymentVouchers, stockVouchers,
+  vouchers, receiptVouchers, paymentVouchers, stockVouchers, inventoryCounts,
   userCategories, appSettings, userGroups, warehouses,
-  userWarehouseAssignments,
+  userWarehouseAssignments, userGroupMembers,
 } from '../schema.js';
 import { hashPassword } from '../auth.js';
 import { TRPCError } from '@trpc/server';
@@ -492,7 +492,7 @@ export const usersRouter = router({
       }
 
       // ── عدّ الحركات والمستندات المرتبطة بالمستخدم ────────────────────────
-      const [[siRow], [piRow], [jeRow], [voRow], [rvRow], [pvRow], [svRow]] = await Promise.all([
+      const [[siRow], [piRow], [jeRow], [voRow], [rvRow], [pvRow], [svRow], [icRow]] = await Promise.all([
         db.select({ cnt: count() }).from(salesInvoices).where(
           and(eq(salesInvoices.orgId, orgId), or(eq(salesInvoices.userId, input.id), eq(salesInvoices.sellerUserId, input.id))),
         ),
@@ -514,10 +514,13 @@ export const usersRouter = router({
         db.select({ cnt: count() }).from(stockVouchers).where(
           and(eq(stockVouchers.orgId, orgId), eq(stockVouchers.userId, input.id)),
         ),
+        db.select({ cnt: count() }).from(inventoryCounts).where(
+          and(eq(inventoryCounts.orgId, orgId), eq(inventoryCounts.userId, input.id)),
+        ),
       ]);
 
       const linkedCount = Number(siRow.cnt) + Number(piRow.cnt) + Number(jeRow.cnt) +
-        Number(voRow.cnt) + Number(rvRow.cnt) + Number(pvRow.cnt) + Number(svRow.cnt);
+        Number(voRow.cnt) + Number(rvRow.cnt) + Number(pvRow.cnt) + Number(svRow.cnt) + Number(icRow.cnt);
 
       if (linkedCount > 0) {
         return {
@@ -565,7 +568,7 @@ export const usersRouter = router({
       }
 
       // ── إعادة فحص الحركات وقت الحذف الفعلي (منع race condition) ──────────
-      const [[siRow], [piRow], [jeRow], [voRow], [rvRow], [pvRow], [svRow]] = await Promise.all([
+      const [[siRow], [piRow], [jeRow], [voRow], [rvRow], [pvRow], [svRow], [icRow]] = await Promise.all([
         db.select({ cnt: count() }).from(salesInvoices).where(
           and(eq(salesInvoices.orgId, orgId), or(eq(salesInvoices.userId, input.id), eq(salesInvoices.sellerUserId, input.id))),
         ),
@@ -587,10 +590,13 @@ export const usersRouter = router({
         db.select({ cnt: count() }).from(stockVouchers).where(
           and(eq(stockVouchers.orgId, orgId), eq(stockVouchers.userId, input.id)),
         ),
+        db.select({ cnt: count() }).from(inventoryCounts).where(
+          and(eq(inventoryCounts.orgId, orgId), eq(inventoryCounts.userId, input.id)),
+        ),
       ]);
 
       const linkedCount = Number(siRow.cnt) + Number(piRow.cnt) + Number(jeRow.cnt) +
-        Number(voRow.cnt) + Number(rvRow.cnt) + Number(pvRow.cnt) + Number(svRow.cnt);
+        Number(voRow.cnt) + Number(rvRow.cnt) + Number(pvRow.cnt) + Number(svRow.cnt) + Number(icRow.cnt);
 
       if (linkedCount > 0) {
         throw new TRPCError({
@@ -599,10 +605,22 @@ export const usersRouter = router({
         });
       }
 
-      // ── حذف نهائي داخل transaction ────────────────────────────────────────
-      // userGroupMembers لا تحتوي على FK مباشر للمستخدم (تستخدم memberCode) لذا تُحذف تلقائياً عند cascade
+      // ── حذف نهائي داخل transaction واحدة ─────────────────────────────────
+      // الترتيب مهم: نظّف العلاقات التي لا تملك CASCADE قبل حذف المستخدم
       await db.transaction(async (tx) => {
+        // 1. إسنادات المخازن (cascade موجود لكن نحذفها صراحةً للتوضيح)
         await tx.delete(userWarehouseAssignments).where(eq(userWarehouseAssignments.userId, input.id));
+        // 2. عضوية مجموعات المستخدمين (تُخزَّن بـ memberCode وليس userId — لا FK مباشر)
+        if (targetUser.code) {
+          await tx.delete(userGroupMembers).where(
+            and(
+              eq(userGroupMembers.orgId, orgId),
+              eq(userGroupMembers.memberType, 'user'),
+              eq(userGroupMembers.memberCode, targetUser.code),
+            ),
+          );
+        }
+        // 3. حذف سجل المستخدم (بقية العلاقات onDelete:cascade تُحذف تلقائياً)
         await tx.delete(users).where(and(eq(users.id, input.id), eq(users.orgId, orgId)));
       });
 
