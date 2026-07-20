@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Eye, EyeOff, LockKeyhole, UserRoundPlus } from "lucide-react";
+import { Eye, EyeOff, Loader2, LockKeyhole, UserRoundPlus } from "lucide-react";
 import { Button } from "@/core/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/core/ui/dialog";
 import { Input } from "@/core/ui/input";
@@ -11,6 +11,7 @@ import { cn } from "@/shared/lib/utils";
 import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import { useModalAttention } from "./useModalAttention";
 import { toast } from "sonner";
+import { trpc } from "@/shared/lib/trpc";
 
 export type UserFormTab = "basic" | "contact" | "login" | "work" | "permissions";
 
@@ -19,10 +20,7 @@ export interface UserFormValue {
   fullName: string;
   loginName: string;
   userType: string;
-  groupId?: string;
-  branchId?: string;
-  warehouseId?: string;
-  language?: string;
+  categoryId?: string;
   mobile?: string;
   email?: string;
   allowLogin: boolean;
@@ -35,9 +33,7 @@ interface UserFormDialogProps {
   initialValue: UserFormValue;
   onOpenChange: (open: boolean) => void;
   onSubmit: (value: UserFormValue) => Promise<void>;
-  groups: Array<{ id: number; name: string }>;
-  branches: Array<{ id: number; name: string }>;
-  warehouses: Array<{ id: number; name: string }>;
+  categories: Array<{ id: number; name: string; autoNumbering: boolean }>;
   loginTabExtension?: React.ReactNode;
   workTabContent?: React.ReactNode;
   permissionsTabContent?: React.ReactNode;
@@ -51,9 +47,7 @@ export function UserFormDialog({
   initialValue,
   onOpenChange,
   onSubmit,
-  groups,
-  branches,
-  warehouses,
+  categories,
   loginTabExtension,
   workTabContent,
   permissionsTabContent,
@@ -64,7 +58,33 @@ export function UserFormDialog({
   const [mobileError, setMobileError] = React.useState<string | null>(null);
   const [isSaving, setIsSaving] = React.useState(false);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
+  const [codeAutoFilled, setCodeAutoFilled] = React.useState(false);
   const { contentRef, attractAttention } = useModalAttention();
+
+  const selectedCategory = categories.find(c => String(c.id) === value.categoryId);
+  const isAutoNumbering = mode === "create" && !!selectedCategory?.autoNumbering;
+
+  const nextCodeQuery = trpc.userCategories.nextCode.useQuery(
+    { categoryId: Number(value.categoryId) },
+    {
+      enabled: mode === "create" && !!value.categoryId && isAutoNumbering,
+      staleTime: 0,
+      refetchOnWindowFocus: false,
+    },
+  );
+
+  React.useEffect(() => {
+    if (mode !== "create" || !isAutoNumbering) return;
+    if (nextCodeQuery.isFetching) return;
+    if (nextCodeQuery.data?.code) {
+      setValue(cur => ({ ...cur, code: nextCodeQuery.data!.code }));
+      setCodeAutoFilled(true);
+    } else if (nextCodeQuery.data === null) {
+      setValue(cur => ({ ...cur, code: "" }));
+      setCodeAutoFilled(false);
+      toast.warning("تجاوز النظام آخر رقم مسموح به في هذه الفئة");
+    }
+  }, [nextCodeQuery.data, nextCodeQuery.isFetching, isAutoNumbering, mode]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -73,6 +93,7 @@ export function UserFormDialog({
     setShowPassword(false);
     setMobileError(null);
     setIsSaving(false);
+    setCodeAutoFilled(false);
   }, [initialValue, open]);
 
   const isDirty = React.useMemo(
@@ -94,6 +115,17 @@ export function UserFormDialog({
         setMobileError(null);
       }
     }
+  };
+
+  const handleCategoryChange = (v: string) => {
+    const newCatId = v === "_none" ? undefined : v;
+    const newCat = categories.find(c => String(c.id) === newCatId);
+    setValue(cur => ({
+      ...cur,
+      categoryId: newCatId,
+      code: newCatId && newCat?.autoNumbering ? "" : cur.code,
+    }));
+    setCodeAutoFilled(false);
   };
 
   const requestClose = () => {
@@ -140,6 +172,8 @@ export function UserFormDialog({
     setConfirmOpen(false);
     onOpenChange(false);
   };
+
+  const isCodeLoading = isAutoNumbering && nextCodeQuery.isFetching;
 
   return (
     <>
@@ -223,6 +257,7 @@ export function UserFormDialog({
                 <TabsContent value="basic" className="m-0 space-y-4">
                   <FormSection title="هوية المستخدم" hint="البيانات المطلوبة لإنشاء الحساب">
                     <div className="grid grid-cols-2 gap-4">
+
                       <FormField label="الاسم الكامل" required>
                         <Input
                           value={value.fullName}
@@ -230,16 +265,38 @@ export function UserFormDialog({
                           placeholder="الاسم الكامل"
                         />
                       </FormField>
-                      <FormField label="الكود">
-                        <Input
-                          dir="ltr"
-                          className="text-left"
-                          value={value.code ?? ""}
-                          onChange={(e) => update("code", e.target.value || undefined)}
-                          placeholder="USR001"
-                          disabled={mode === "edit"}
-                        />
+
+                      <FormField label="كود المستخدم">
+                        <div className="relative">
+                          <Input
+                            dir="ltr"
+                            className={cn(
+                              "text-left",
+                              isAutoNumbering && "pe-16 bg-muted/40",
+                            )}
+                            value={value.code ?? ""}
+                            onChange={(e) => {
+                              update("code", e.target.value || undefined);
+                              setCodeAutoFilled(false);
+                            }}
+                            placeholder={isCodeLoading ? "جاري التوليد…" : "USR001"}
+                            disabled={mode === "edit"}
+                            readOnly={isCodeLoading}
+                          />
+                          {isCodeLoading && (
+                            <Loader2 className="absolute end-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-muted-foreground pointer-events-none" />
+                          )}
+                          {codeAutoFilled && !isCodeLoading && mode === "create" && (
+                            <span className="absolute end-2 top-1/2 -translate-y-1/2 text-[10px] text-primary font-semibold bg-primary/10 rounded px-1.5 py-0.5 pointer-events-none">
+                              تلقائي
+                            </span>
+                          )}
+                        </div>
+                        {isAutoNumbering && nextCodeQuery.data === null && !nextCodeQuery.isFetching && (
+                          <p className="text-xs text-destructive mt-0.5">تم استنفاد جميع أرقام هذه الفئة</p>
+                        )}
                       </FormField>
+
                       <FormField label="اسم الدخول" required>
                         <Input
                           dir="ltr"
@@ -253,65 +310,27 @@ export function UserFormDialog({
                           <p className="text-xs text-muted-foreground mt-0.5">لا يمكن تغيير اسم الدخول</p>
                         )}
                       </FormField>
-                      <FormField label="نوع المستخدم" required>
-                        <DlgSelect
-                          value={value.userType}
-                          onChange={(v) => update("userType", v)}
-                          options={[
-                            { value: "admin", label: "مدير النظام" },
-                            { value: "accountant", label: "محاسب" },
-                            { value: "cashier", label: "كاشير" },
-                            { value: "warehouse_manager", label: "مدير مخزن" },
-                            { value: "viewer", label: "مشاهد" },
-                          ]}
-                        />
-                      </FormField>
-                    </div>
-                  </FormSection>
 
-                  <FormSection title="نطاق العمل الافتراضي" hint="يمكن تعديله لاحقاً">
-                    <div className="grid grid-cols-2 gap-4">
-                      <FormField label="مجموعة المستخدمين">
+                      <FormField label="فئة المستخدم">
                         <DlgSelect
-                          value={value.groupId ?? "_none"}
-                          onChange={(v) => update("groupId", v === "_none" ? undefined : v)}
+                          value={value.categoryId ?? "_none"}
+                          onChange={handleCategoryChange}
+                          disabled={mode === "edit"}
                           options={[
-                            { value: "_none", label: "— بدون مجموعة —" },
-                            ...groups.map((g) => ({ value: String(g.id), label: g.name })),
+                            { value: "_none", label: "— بدون فئة —" },
+                            ...categories.map((c) => ({ value: String(c.id), label: c.name })),
                           ]}
                         />
+                        {mode === "create" && selectedCategory && !selectedCategory.autoNumbering && (
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            هذه الفئة لا تستخدم الترقيم التلقائي — أدخل الكود يدوياً
+                          </p>
+                        )}
+                        {mode === "edit" && (
+                          <p className="text-xs text-muted-foreground mt-0.5">لا يمكن تغيير الفئة بعد الإنشاء</p>
+                        )}
                       </FormField>
-                      <FormField label="الفرع الافتراضي">
-                        <DlgSelect
-                          value={value.branchId ?? "_none"}
-                          onChange={(v) => update("branchId", v === "_none" ? undefined : v)}
-                          options={[
-                            { value: "_none", label: "— بدون تحديد —" },
-                            ...branches.map((b) => ({ value: String(b.id), label: b.name })),
-                          ]}
-                        />
-                      </FormField>
-                      <FormField label="المخزن الافتراضي">
-                        <DlgSelect
-                          value={value.warehouseId ?? "_none"}
-                          onChange={(v) => update("warehouseId", v === "_none" ? undefined : v)}
-                          options={[
-                            { value: "_none", label: "— بدون تحديد —" },
-                            ...warehouses.map((w) => ({ value: String(w.id), label: w.name })),
-                          ]}
-                        />
-                      </FormField>
-                      <FormField label="اللغة الافتراضية">
-                        <DlgSelect
-                          value={value.language ?? "_none"}
-                          onChange={(v) => update("language", v === "_none" ? undefined : v)}
-                          options={[
-                            { value: "_none", label: "— حسب إعداد النظام —" },
-                            { value: "ar", label: "العربية" },
-                            { value: "en", label: "الإنجليزية" },
-                          ]}
-                        />
-                      </FormField>
+
                     </div>
                   </FormSection>
                 </TabsContent>
@@ -349,6 +368,22 @@ export function UserFormDialog({
 
                 {/* ── الدخول والحالة ──────────────────────────────────────────── */}
                 <TabsContent value="login" className="m-0 space-y-4">
+                  <FormSection title="نوع المستخدم ودوره">
+                    <FormField label="نوع المستخدم" required>
+                      <DlgSelect
+                        value={value.userType}
+                        onChange={(v) => update("userType", v)}
+                        options={[
+                          { value: "admin",             label: "مدير النظام" },
+                          { value: "accountant",        label: "محاسب" },
+                          { value: "cashier",           label: "كاشير" },
+                          { value: "warehouse_manager", label: "مدير مخزن" },
+                          { value: "viewer",            label: "مشاهد" },
+                        ]}
+                      />
+                    </FormField>
+                  </FormSection>
+
                   <FormSection title="حالة الدخول">
                     <SwitchCard
                       title="السماح بتسجيل الدخول"
@@ -357,6 +392,7 @@ export function UserFormDialog({
                       onCheckedChange={(v) => update("allowLogin", v)}
                     />
                   </FormSection>
+
                   <FormSection
                     title={mode === "create" ? "كلمة المرور" : "تغيير كلمة المرور"}
                     hint="لا توجد شروط للطول أو التعقيد"
@@ -383,6 +419,7 @@ export function UserFormDialog({
                       </button>
                     </div>
                   </FormSection>
+
                   {loginTabExtension}
                 </TabsContent>
 
@@ -481,13 +518,15 @@ function DlgSelect({
   value,
   onChange,
   options,
+  disabled,
 }: {
   value: string;
   onChange: (value: string) => void;
   options: Array<{ value: string; label: string }>;
+  disabled?: boolean;
 }) {
   return (
-    <Select dir="rtl" value={value} onValueChange={onChange}>
+    <Select dir="rtl" value={value} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger className="w-full">
         <SelectValue />
       </SelectTrigger>

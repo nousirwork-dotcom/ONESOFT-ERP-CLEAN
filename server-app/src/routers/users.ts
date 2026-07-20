@@ -218,6 +218,17 @@ export const usersRouter = router({
         if (phoneExists) throw new TRPCError({ code: 'CONFLICT', message: 'رقم الجوال مستخدم لمستخدم آخر في هذه المؤسسة' });
       }
 
+      // منع تكرار كود المستخدم على مستوى المنشأة
+      if (input.code) {
+        const codeConflict = await db.query.users.findFirst({
+          where: and(eq(users.orgId, ctx.user.orgId), eq(users.code, input.code)),
+          columns: { id: true },
+        });
+        if (codeConflict) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'كود المستخدم مستخدم من قبل' });
+        }
+      }
+
       // if category has autoNumbering and no code provided, generate next code
       let finalCode = input.code;
       if (!finalCode && input.categoryId) {

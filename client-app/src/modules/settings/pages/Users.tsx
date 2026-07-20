@@ -301,6 +301,8 @@ export default function Users() {
   const [mode, setMode] = useState<"create" | "edit">("create");
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [initialValue, setInitialValue] = useState<UserFormValue>({ fullName: "", loginName: "", userType: "cashier", allowLogin: true });
+  const [workDefaultWarehouseId, setWorkDefaultWarehouseId] = useState<number | null>(null);
+  const [workDefaultLanguage, setWorkDefaultLanguage] = useState<string | null>(null);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [passwordUser, setPasswordUser] = useState<any>(null);
@@ -319,8 +321,8 @@ export default function Users() {
   const { data: usersList, isLoading } = trpc.users.list.useQuery();
   const { data: countInfo } = trpc.users.getUserCountInfo.useQuery();
   const { data: userGroups = [] } = trpc.users.listUserGroups.useQuery();
-  const { data: branchesList = [] } = trpc.branches.list.useQuery();
   const { data: warehousesList = [] } = trpc.warehouses.list.useQuery();
+  const { data: categoriesList = [] } = trpc.userCategories.list.useQuery();
 
   const PASSWORDLESS_KEY = "security.allow_passwordless_users";
   const { data: passwordlessPolicy } = trpc.appSettings.get.useQuery({ key: PASSWORDLESS_KEY });
@@ -397,6 +399,8 @@ export default function Users() {
     setMode("create");
     setSelectedUser(null);
     setInitialValue({ fullName: "", loginName: "", userType: "cashier", allowLogin: true });
+    setWorkDefaultWarehouseId(null);
+    setWorkDefaultLanguage(null);
     setIsOpen(true);
   };
 
@@ -408,14 +412,13 @@ export default function Users() {
       fullName: u.name ?? "",
       loginName: u.username ?? "",
       userType: u.role ?? "cashier",
-      groupId: u.userGroupId ? String(u.userGroupId) : undefined,
-      branchId: u.defaultBranchId ? String(u.defaultBranchId) : undefined,
-      warehouseId: u.defaultWarehouseId ? String(u.defaultWarehouseId) : undefined,
-      language: u.defaultLanguage ?? undefined,
+      categoryId: u.categoryId ? String(u.categoryId) : undefined,
       mobile: u.phone ?? undefined,
       email: u.email ?? undefined,
       allowLogin: u.allowLogin !== false,
     });
+    setWorkDefaultWarehouseId(u.defaultWarehouseId ?? null);
+    setWorkDefaultLanguage(u.defaultLanguage ?? null);
     setRecoveryEnabledPhone(u.recoveryEnabledPhone ?? false);
     setRecoveryEnabledEmail(u.recoveryEnabledEmail ?? false);
     setForcePasswordChange(u.forcePasswordChange ?? false);
@@ -465,10 +468,7 @@ export default function Users() {
         username: value.loginName,
         password: value.password,
         role: value.userType as any,
-        userGroupId: value.groupId ? Number(value.groupId) : null,
-        defaultBranchId: value.branchId ? Number(value.branchId) : null,
-        defaultWarehouseId: value.warehouseId ? Number(value.warehouseId) : null,
-        defaultLanguage: value.language || null,
+        categoryId: value.categoryId ? Number(value.categoryId) : undefined,
         allowLogin: value.allowLogin,
       });
       toast.success("تم إنشاء المستخدم بنجاح — يمكنك الآن تعديل إعدادات العمل والصلاحيات");
@@ -479,10 +479,9 @@ export default function Users() {
         email: value.email || null,
         username: value.loginName,
         role: value.userType,
-        userGroupId: value.groupId ? Number(value.groupId) : null,
-        defaultBranchId: value.branchId ? Number(value.branchId) : null,
-        defaultWarehouseId: value.warehouseId ? Number(value.warehouseId) : null,
-        defaultLanguage: value.language || null,
+        categoryId: value.categoryId ? Number(value.categoryId) : null,
+        defaultWarehouseId: null,
+        defaultLanguage: null,
         allowLogin: value.allowLogin, isActive: true, forcePasswordChange: false,
         phoneVerifiedAt: null, emailVerifiedAt: null,
         recoveryEnabledPhone: false, recoveryEnabledEmail: false,
@@ -490,15 +489,14 @@ export default function Users() {
       };
       setMode("edit");
       setSelectedUser(fullUser);
+      setWorkDefaultWarehouseId(null);
+      setWorkDefaultLanguage(null);
       setInitialValue({
         code: newUser.code ?? undefined,
         fullName: value.fullName,
         loginName: value.loginName,
         userType: value.userType,
-        groupId: value.groupId,
-        branchId: value.branchId,
-        warehouseId: value.warehouseId,
-        language: value.language,
+        categoryId: value.categoryId,
         mobile: value.mobile,
         email: value.email,
         allowLogin: value.allowLogin,
@@ -517,10 +515,6 @@ export default function Users() {
         email: value.email || undefined,
         role: value.userType as any,
         newPassword: value.password || undefined,
-        userGroupId: value.groupId ? Number(value.groupId) : null,
-        defaultBranchId: value.branchId ? Number(value.branchId) : null,
-        defaultWarehouseId: value.warehouseId ? Number(value.warehouseId) : null,
-        defaultLanguage: value.language || null,
         allowLogin: value.allowLogin,
         forcePasswordChange,
       });
@@ -595,6 +589,48 @@ export default function Users() {
 
       {/* الفروع المُسندة */}
       <UserWarehouseAssignmentsPanel userId={selectedUser.id} orgId={selectedUser.orgId} />
+
+      {/* المخزن/الفرع الافتراضي واللغة الافتراضية */}
+      <div className="rounded-2xl border bg-muted/20 p-4 space-y-4">
+        <p className="font-semibold">الإعدادات الافتراضية</p>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">المخزن/الفرع الافتراضي</label>
+            <select
+              className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+              value={workDefaultWarehouseId ?? ""}
+              onChange={(e) => {
+                const val = e.target.value ? Number(e.target.value) : null;
+                setWorkDefaultWarehouseId(val);
+                updateUser.mutate({ id: selectedUser.id, defaultWarehouseId: val });
+              }}
+              disabled={updateUser.isPending}
+            >
+              <option value="">— بدون تحديد —</option>
+              {(warehousesList as any[]).map((w) => (
+                <option key={w.id} value={w.id}>{w.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">اللغة الافتراضية</label>
+            <select
+              className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+              value={workDefaultLanguage ?? ""}
+              onChange={(e) => {
+                const val = e.target.value || null;
+                setWorkDefaultLanguage(val);
+                updateUser.mutate({ id: selectedUser.id, defaultLanguage: val });
+              }}
+              disabled={updateUser.isPending}
+            >
+              <option value="">— حسب إعداد النظام —</option>
+              <option value="ar">العربية</option>
+              <option value="en">الإنجليزية</option>
+            </select>
+          </div>
+        </div>
+      </div>
 
       {/* صلاحيات العمل */}
       {(selectedUser?.role === "admin" || selectedUser?.role === "superadmin") ? (
@@ -975,9 +1011,11 @@ export default function Users() {
         initialValue={initialValue}
         onOpenChange={setIsOpen}
         onSubmit={handleDialogSubmit}
-        groups={userGroups as any[]}
-        branches={branchesList as any[]}
-        warehouses={warehousesList as any[]}
+        categories={(categoriesList as any[]).map(c => ({
+          id: c.id,
+          name: c.name,
+          autoNumbering: c.autoNumbering ?? false,
+        }))}
         loginTabExtension={loginTabExtension}
         workTabContent={workTabContent}
         permissionsTabContent={permissionsTabContent}
