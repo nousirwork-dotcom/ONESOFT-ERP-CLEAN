@@ -162,7 +162,13 @@ export default function BasedOnDocInput({
   /* ── Fetch existing docs ─────────────────────────────────────────────── */
   const isSales = docType === 'sale' || docType === 'quote' || docType === 'order';
   const salesQ  = trpc.salesInvoices.list.useQuery(
-    { invoiceType: docType as 'sale' | 'quote' | 'order', ...(warehouseId ? { warehouseId } : {}), limit: 500 },
+    {
+      invoiceType: docType as 'sale' | 'quote' | 'order',
+      ...(warehouseId ? { warehouseId } : {}),
+      limit: 500,
+      // للأوامر: استثنِ الملغاة والمحوَّلة بالكامل من قائمة الاختيار
+      ...(docType === 'order' ? { excludeCancelled: true, excludeFullyConverted: true } : {}),
+    },
     { enabled: isSales && !!docType, staleTime: 60_000 }
   );
   const stockQ = trpc.stockVouchers.list.useQuery(

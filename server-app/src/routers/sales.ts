@@ -22,6 +22,7 @@ export const salesRouter = router({
       excludeReturns: z.boolean().optional(),// استثناء المردودات
       numberPrefix: z.string().optional(),   // فلتر دفتر المستند (بادئة الرقم)
       excludeCancelled: z.boolean().optional(), // استثناء الملغاة
+      excludeFullyConverted: z.boolean().optional(), // استثناء أوامر البيع المحوّلة بالكامل
     }).optional())
     .query(async ({ ctx, input }) => {
       const orgId = ctx.user.orgId;
@@ -38,6 +39,59 @@ export const salesRouter = router({
       }
       if (input?.excludeCancelled) {
         filtered = filtered.filter(r => r.status !== 'cancelled');
+      }
+
+      // ── استثناء أوامر البيع المحوّلة بالكامل ──────────────────────────────
+      if (input?.excludeFullyConverted && input?.invoiceType === 'order' && filtered.length > 0) {
+        // اجمع كل أوامر البيع المستندة إليها من الفواتير
+        const referencingInvoices = await db.query.salesInvoices.findMany({
+          where: and(
+            eq(salesInvoices.orgId, orgId),
+            eq(salesInvoices.basedOnType, 'order'),
+          ),
+        });
+        // مجموعة أرقام الأوامر التي لها فاتورة مستندة
+        const referencedNums = new Set(referencingInvoices.map(r => r.basedOnNumber).filter(Boolean) as string[]);
+
+        if (referencedNums.size > 0) {
+          const ordersToCheck = filtered.filter(o => referencedNums.has(o.invoiceNumber!));
+          const fullyConvertedIds = new Set<number>();
+
+          for (const order of ordersToCheck) {
+            // أصناف الأمر
+            const orderItems = await db.query.salesInvoiceItems.findMany({
+              where: eq(salesInvoiceItems.invoiceId, order.id),
+            });
+            if (orderItems.length === 0) continue;
+
+            // كميات المُحوَّل من الفواتير المستندة لهذا الأمر
+            const refInvs = referencingInvoices.filter(r => r.basedOnNumber === order.invoiceNumber);
+            const usedQty = new Map<number, number>();
+            for (const inv of refInvs) {
+              const invItems = await db.query.salesInvoiceItems.findMany({
+                where: eq(salesInvoiceItems.invoiceId, inv.id),
+              });
+              for (const it of invItems) {
+                if (it.productId) {
+                  usedQty.set(it.productId, (usedQty.get(it.productId) ?? 0) + parseFloat(it.quantity as string));
+                }
+              }
+            }
+
+            // إذا جميع الأصناف تمت تغطيتها → الأمر مكتمل التحويل
+            const allCovered = orderItems.every(i => {
+              if (!i.productId) return false;
+              const ordered = parseFloat(i.quantity as string);
+              const used = usedQty.get(i.productId) ?? 0;
+              return used >= ordered - 0.001;
+            });
+            if (allCovered) fullyConvertedIds.add(order.id);
+          }
+
+          if (fullyConvertedIds.size > 0) {
+            filtered = filtered.filter(o => !fullyConvertedIds.has(o.id));
+          }
+        }
       }
       if (input?.status) {
         filtered = filtered.filter(r => r.status === input.status);
@@ -447,6 +501,52 @@ export const salesRouter = router({
           total: i.total,
         })),
       };
+    }),
+
+  // تحديث الدفع (PaymentModal)
+  updatePayment: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      paymentBreakdown: z.record(z.string(), z.number()).optional().nullable(),
+      paidAmount: z.string(),
+      remainingAmount: z.string(),
+      status: z.enum(['paid', 'confirmed', 'draft']).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { id, paymentBreakdown, paidAmount, remainingAmount, status } = input;
+      const orgId = ctx.user.orgId;
+
+      // تحديث الفاتورة
+      await db.update(salesInvoices).set({
+        paidAmount,
+        remainingAmount,
+        ...(status ? { status } : {}),
+        updatedAt: new Date(),
+      }).where(and(eq(salesInvoices.id, id), eq(salesInvoices.orgId, orgId)));
+
+      // تحديث سجلات الدفع
+      if (paymentBreakdown != null) {
+        await db.delete(salesInvoicePayments).where(
+          and(eq(salesInvoicePayments.invoiceId, id), eq(salesInvoicePayments.orgId, orgId))
+        );
+        const pmEntries = Object.entries(paymentBreakdown).filter(([, v]) => v > 0);
+        if (pmEntries.length > 0) {
+          const pms = await db.query.paymentMethods.findMany({
+            where: eq(paymentMethods.orgId, orgId),
+          });
+          const pmMap = new Map(pms.map(p => [p.code, p.nameAr]));
+          await db.insert(salesInvoicePayments).values(
+            pmEntries.map(([code, amount]) => ({
+              orgId,
+              invoiceId: id,
+              paymentMethodCode: code,
+              paymentMethodName: pmMap.get(code) ?? code,
+              amount: amount.toFixed(4),
+            }))
+          );
+        }
+      }
+      return { success: true };
     }),
 
   // حذف مستند
