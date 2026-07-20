@@ -126,6 +126,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
   const [basedOnType, setBasedOnType] = useState<'sale' | 'quote' | 'order' | 'transfer' | ''>('');
   const [basedOnNum, setBasedOnNum]   = useState("");
   const [basedOnTrigger, setBasedOnTrigger] = useState(""); // يُحرِّك جلب البيانات
+  const [pendingSourceDoc, setPendingSourceDoc] = useState<any | null>(null); // مستند معلّق بانتظار تأكيد تغيير العميل
   const [notes, setNotes] = useState("");
   const [paidAmountOverride, setPaidAmountOverride] = useState<string>("");
   const [paymentBreakdown, setPaymentBreakdown]     = useState<Record<string, number>>({});
@@ -272,10 +273,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // عند ورود بيانات المستند المصدر: ملء حقول الفاتورة
-  useEffect(() => {
-    const src = basedOnQuery.data;
-    if (!src) return;
+  // تطبيق بيانات مستند مصدر (داخلي — يُستدعى بعد التأكيد إن لزم)
+  const applySourceDoc = (src: NonNullable<typeof basedOnQuery.data>) => {
     if (src.customerName) setCustomerName(src.customerName);
     if (src.customerId)   setCustomerId(src.customerId);
     if (src.warehouseId && !journalWarehouseId) setWarehouseId(src.warehouseId);
@@ -298,7 +297,23 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       })));
     }
     toast.success(`✓ تم استيراد بيانات المستند ${src.number}`);
-  }, [basedOnQuery.data]);
+  };
+
+  // عند ورود بيانات المستند المصدر: تحقق من تعارض العميل ثم طبّق
+  useEffect(() => {
+    const src = basedOnQuery.data;
+    if (!src) return;
+    // إذا كان هناك عميل حالي مختلف عن عميل المستند → انتظر التأكيد
+    const hasCurrentCustomer = !!customerId || !!customerName.trim();
+    const hasNewCustomer     = !!src.customerId || !!src.customerName;
+    const customerConflict   = hasCurrentCustomer && hasNewCustomer &&
+                               (src.customerId !== customerId || src.customerName !== customerName);
+    if (customerConflict) {
+      setPendingSourceDoc(src);
+      return;
+    }
+    applySourceDoc(src);
+  }, [basedOnQuery.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── فتح فاتورة موجودة بالـ ID (من القائمة أو التنقل) ────────────────────
   const navInvoiceQuery = trpc.salesInvoices.get.useQuery(
@@ -777,6 +792,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       status: status as any,
       notes: notes || undefined,
       docTypeId: docTypeId ? parseInt(docTypeId) : undefined,
+      basedOnType: basedOnType || undefined,
+      basedOnNumber: basedOnTrigger || undefined,
       items: validLines.map((l, idx) => ({
         productId: l.productId,
         productCode: l.productCode || undefined,
@@ -884,6 +901,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
         status: status as any,
         notes: notes || undefined,
         docTypeId: docTypeId ? parseInt(docTypeId) : undefined,
+        basedOnType: basedOnType || undefined,
+        basedOnNumber: basedOnTrigger || undefined,
         items: validLines.map((l, idx) => ({
           productId: l.productId,
           productCode: l.productCode || undefined,
@@ -2332,6 +2351,119 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
         onCancel={dirtyConfirmCancel}
         isSaving={createMutation.isPending}
       />
+
+      {/* ── نافذة تأكيد تغيير العميل (بناءً على مستند من عميل مختلف) ── */}
+      {pendingSourceDoc && (
+        <div
+          style={{
+            position: "fixed", inset: 0,
+            background: "rgba(15,23,42,0.55)",
+            zIndex: 99999,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+        >
+          <div style={{
+            background: "#fff",
+            borderRadius: 10,
+            boxShadow: "0 24px 60px rgba(0,0,0,0.35)",
+            width: "min(460px,92vw)",
+            direction: "rtl",
+            overflow: "hidden",
+          }}>
+            {/* Header */}
+            <div style={{
+              padding: "12px 18px",
+              background: "linear-gradient(135deg,#b45309,#92400e)",
+              color: "#fff", fontWeight: 700, fontSize: 13,
+              display: "flex", alignItems: "center", gap: 8,
+            }}>
+              <span style={{ fontSize: 16 }}>⚠️</span>
+              تغيير العميل
+            </div>
+            {/* Body */}
+            <div style={{ padding: "18px 20px", fontSize: 13, color: "#374151", lineHeight: 1.7 }}>
+              <p>
+                المستند <strong style={{ fontFamily: "monospace", color: "#1a3f6f" }}>{pendingSourceDoc.number}</strong> يخصّ العميل:
+              </p>
+              <p style={{
+                background: "#fef3c7", border: "1px solid #f59e0b",
+                borderRadius: 6, padding: "6px 12px", margin: "8px 0",
+                fontWeight: 700, color: "#92400e",
+              }}>
+                {pendingSourceDoc.customerName ?? "—"}
+              </p>
+              <p>
+                بينما الفاتورة الحالية تحتوي على العميل:
+                <strong style={{ color: "#374151", marginRight: 4 }}>{customerName}</strong>
+              </p>
+              <p style={{ marginTop: 10, color: "#6b7280", fontSize: 12 }}>
+                هل تريد تغيير العميل في الفاتورة إلى عميل المستند المصدر؟
+              </p>
+            </div>
+            {/* Footer */}
+            <div style={{
+              padding: "10px 20px 14px",
+              display: "flex", gap: 8, justifyContent: "flex-start",
+            }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const src = pendingSourceDoc;
+                  setPendingSourceDoc(null);
+                  applySourceDoc(src);
+                }}
+                style={{
+                  padding: "6px 20px",
+                  background: "linear-gradient(135deg,#b45309,#92400e)",
+                  color: "#fff", border: "none",
+                  borderRadius: 6, fontSize: 12, fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                نعم، غيّر العميل
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  // تطبيق المستند بدون تغيير العميل
+                  const src = pendingSourceDoc;
+                  setPendingSourceDoc(null);
+                  // نستبعد بيانات العميل من التطبيق
+                  const srcWithoutCustomer = { ...src, customerId: customerId, customerName: customerName };
+                  applySourceDoc(srcWithoutCustomer);
+                }}
+                style={{
+                  padding: "6px 20px",
+                  background: "#e5e7eb",
+                  color: "#374151", border: "1px solid #d1d5db",
+                  borderRadius: 6, fontSize: 12, fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                لا، احتفظ بالعميل الحالي
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPendingSourceDoc(null);
+                  setBasedOnNum("");
+                  setBasedOnTrigger("");
+                }}
+                style={{
+                  padding: "6px 16px",
+                  background: "#f3f4f6",
+                  color: "#6b7280", border: "1px solid #e5e7eb",
+                  borderRadius: 6, fontSize: 12,
+                  cursor: "pointer",
+                  marginRight: "auto",
+                }}
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

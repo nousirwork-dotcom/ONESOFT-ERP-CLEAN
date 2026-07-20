@@ -274,6 +274,13 @@
       "when": 1790700000000,
       "tag": "0038_user_session_version",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1790800000000,
+      "tag": "0039_sales_invoice_based_on",
+      "breakpoints": true
     }
   ]
 }

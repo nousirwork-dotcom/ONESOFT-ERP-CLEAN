@@ -352,6 +352,8 @@ export const salesInvoices = pgTable('sales_invoices', {
   zatcaSubmittedAt: timestamp('zatca_submitted_at'),
   zatcaAttemptCount: integer('zatca_attempt_count').notNull().default(0),
   zatcaRejectionReason: text('zatca_rejection_reason'),
+  basedOnType: varchar('based_on_type', { length: 20 }),
+  basedOnNumber: varchar('based_on_number', { length: 50 }),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

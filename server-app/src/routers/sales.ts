@@ -13,7 +13,7 @@ export const salesRouter = router({
       limit: z.number().default(200),
       search: z.string().optional(),
       status: z.string().optional(),
-      invoiceType: z.enum(['sale', 'return', 'quote']).optional(),
+      invoiceType: z.enum(['sale', 'return', 'quote', 'order']).optional(),
       dateFrom: z.string().optional(),      // YYYY-MM-DD
       dateTo: z.string().optional(),        // YYYY-MM-DD
       warehouseId: z.number().optional(),    // فلتر المخزن
@@ -21,6 +21,7 @@ export const salesRouter = router({
       customerId: z.number().optional(),     // فلتر بـ ID العميل
       excludeReturns: z.boolean().optional(),// استثناء المردودات
       numberPrefix: z.string().optional(),   // فلتر دفتر المستند (بادئة الرقم)
+      excludeCancelled: z.boolean().optional(), // استثناء الملغاة
     }).optional())
     .query(async ({ ctx, input }) => {
       const orgId = ctx.user.orgId;
@@ -34,6 +35,9 @@ export const salesRouter = router({
       }
       if (input?.excludeReturns) {
         filtered = filtered.filter(r => r.invoiceType !== 'return');
+      }
+      if (input?.excludeCancelled) {
+        filtered = filtered.filter(r => r.status !== 'cancelled');
       }
       if (input?.status) {
         filtered = filtered.filter(r => r.status === input.status);
@@ -140,6 +144,8 @@ export const salesRouter = router({
       status: z.enum(['draft', 'confirmed', 'cancelled', 'paid']).default('confirmed'),
       notes: z.string().optional(),
       docTypeId: z.number().optional(),
+      basedOnType: z.string().optional(),
+      basedOnNumber: z.string().optional(),
       items: z.array(z.object({
         productId: z.number().optional(),
         productCode: z.string().optional(),
@@ -221,6 +227,8 @@ export const salesRouter = router({
       paymentBreakdown: z.record(z.string(), z.number()).optional().nullable(),
       status: z.enum(['draft', 'confirmed', 'cancelled', 'paid']).optional(),
       notes: z.string().optional(),
+      basedOnType: z.string().optional(),
+      basedOnNumber: z.string().optional(),
       items: z.array(z.object({
         productId: z.number().optional(),
         productCode: z.string().optional(),
@@ -284,67 +292,7 @@ export const salesRouter = router({
       return { payments, breakdown };
     }),
 
-  // تحديث بيانات السداد فقط (من شاشة الدفع)
-  updatePayment: protectedProcedure
-    .input(z.object({
-      id: z.number(),
-      paymentBreakdown: z.record(z.string(), z.number()),
-      paidAmount: z.string(),
-      remainingAmount: z.string(),
-      status: z.enum(['draft', 'confirmed', 'paid']).optional(),
-    }))
-    .mutation(async ({ ctx, input }) => {
-      const orgId = ctx.user.orgId;
-      const { id, paymentBreakdown, paidAmount, remainingAmount } = input;
-      const existing = await db.query.salesInvoices.findFirst({
-        where: and(eq(salesInvoices.id, id), eq(salesInvoices.orgId, orgId)),
-      });
-      if (!existing) throw new Error('الفاتورة غير موجودة');
-
-      // حساب حالة السداد تلقائياً
-      const invoiceTotal = parseFloat(existing.total as string);
-      const paid = parseFloat(paidAmount);
-      const autoStatus = paid <= 0 ? 'confirmed'
-        : paid >= invoiceTotal - 0.005 ? 'paid'
-        : 'confirmed';
-
-      // تحديث بيانات الفاتورة
-      await db.update(salesInvoices)
-        .set({
-          paymentBreakdown,
-          paidAmount,
-          remainingAmount,
-          status: autoStatus,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(salesInvoices.id, id), eq(salesInvoices.orgId, orgId)));
-
-      // حذف حركات السداد القديمة وإعادة إدخالها
-      await db.delete(salesInvoicePayments)
-        .where(and(
-          eq(salesInvoicePayments.invoiceId, id),
-          eq(salesInvoicePayments.orgId, orgId),
-        ));
-
-      for (const [code, amount] of Object.entries(paymentBreakdown)) {
-        if (amount > 0.001) {
-          const method = await db.query.paymentMethods.findFirst({
-            where: and(eq(paymentMethods.orgId, orgId), eq(paymentMethods.code, code)),
-          });
-          await db.insert(salesInvoicePayments).values({
-            orgId,
-            invoiceId: id,
-            paymentMethodCode: code,
-            paymentMethodName: method?.nameAr ?? code,
-            amount: amount.toFixed(4),
-          });
-        }
-      }
-
-      return { success: true, status: autoStatus };
-    }),
-
-  // بحث عن مستند مصدر (بناءً على)
+  // جلب مستند مصدر بالرقم (بناءً على)
   getByNumber: protectedProcedure
     .input(z.object({
       type: z.enum(['sale', 'quote', 'order', 'transfer']),
@@ -370,6 +318,8 @@ export const salesRouter = router({
           customerId: null as number | null,
           customerName: null as string | null,
           warehouseId: voucher.warehouseId,
+          journalId: null as number | null,
+          status: null as string | null,
           currency: 'SAR',
           notes: voucher.notes,
           items: items.map(i => ({
@@ -387,9 +337,11 @@ export const salesRouter = router({
           })),
         };
       }
+
       const typeFilter = input.type === 'order' ? 'order'
         : input.type === 'quote' ? 'quote'
         : 'sale';
+
       const invoice = await db.query.salesInvoices.findFirst({
         where: and(
           eq(salesInvoices.orgId, ctx.user.orgId),
@@ -398,16 +350,87 @@ export const salesRouter = router({
         ),
       });
       if (!invoice) return null;
+
+      // ── قواعد أمر البيع: رفض الملغاة ──────────────────────────────────────
+      if (input.type === 'order' && invoice.status === 'cancelled') return null;
+
       const items = await db.query.salesInvoiceItems.findMany({
         where: eq(salesInvoiceItems.invoiceId, invoice.id),
         orderBy: (i, { asc }) => [asc(i.sortOrder)],
       });
+
+      // ── حساب الكميات المتبقية لأوامر البيع ────────────────────────────────
+      if (input.type === 'order') {
+        // اجمع الكميات المُحوَّلة من الفواتير التي تستند إلى هذا الأمر
+        const referencingInvoices = await db.query.salesInvoices.findMany({
+          where: and(
+            eq(salesInvoices.orgId, ctx.user.orgId),
+            eq(salesInvoices.basedOnType, 'order'),
+            eq(salesInvoices.basedOnNumber, invoice.invoiceNumber),
+          ),
+        });
+
+        if (referencingInvoices.length > 0) {
+          // اجمع كميات كل صنف من الفواتير المستندة
+          const usedQtyByProduct = new Map<number, number>();
+          for (const inv of referencingInvoices) {
+            const invItems = await db.query.salesInvoiceItems.findMany({
+              where: eq(salesInvoiceItems.invoiceId, inv.id),
+            });
+            for (const it of invItems) {
+              if (it.productId) {
+                const cur = usedQtyByProduct.get(it.productId) ?? 0;
+                usedQtyByProduct.set(it.productId, cur + parseFloat(it.quantity as string));
+              }
+            }
+          }
+
+          // احسب الكميات المتبقية
+          const remainingItems = items.map(i => {
+            const ordered = parseFloat(i.quantity as string);
+            const used = i.productId ? (usedQtyByProduct.get(i.productId) ?? 0) : 0;
+            const remaining = Math.max(0, ordered - used);
+            return { ...i, remainingQty: remaining };
+          }).filter(i => i.remainingQty > 0);
+
+          // محوَّل بالكامل
+          if (remainingItems.length === 0) return null;
+
+          return {
+            sourceType: 'order' as const,
+            number: invoice.invoiceNumber,
+            customerId: invoice.customerId,
+            customerName: invoice.customerName,
+            warehouseId: invoice.warehouseId,
+            journalId: invoice.journalId,
+            status: invoice.status,
+            currency: invoice.currency ?? 'SAR',
+            notes: invoice.notes,
+            items: remainingItems.map(i => ({
+              productId: i.productId,
+              productCode: i.productCode ?? '',
+              productName: i.productName,
+              unit: i.unit ?? '',
+              quantity: String(i.remainingQty),
+              unitPrice: i.unitPrice,
+              discountPct: i.discountPercent ?? '0',
+              discountAmt: i.discountAmount ?? '0',
+              taxPct: i.taxPercent ?? '0',
+              taxAmt: i.taxAmount ?? '0',
+              total: i.total,
+            })),
+          };
+        }
+      }
+
       return {
         sourceType: input.type,
         number: invoice.invoiceNumber,
         customerId: invoice.customerId,
         customerName: invoice.customerName,
         warehouseId: invoice.warehouseId,
+        journalId: invoice.journalId,
+        status: invoice.status,
         currency: invoice.currency ?? 'SAR',
         notes: invoice.notes,
         items: items.map(i => ({
