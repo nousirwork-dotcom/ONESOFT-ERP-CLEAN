@@ -41,13 +41,14 @@ export const salesRouter = router({
         filtered = filtered.filter(r => r.status !== 'cancelled');
       }
 
-      // ── استثناء أوامر البيع المحوّلة بالكامل ──────────────────────────────
-      if (input?.excludeFullyConverted && input?.invoiceType === 'order' && filtered.length > 0) {
-        // اجمع كل أوامر البيع المستندة إليها من الفواتير
+      // ── استثناء المستندات المحوّلة بالكامل (أوامر البيع وعروض الأسعار) ────────
+      if (input?.excludeFullyConverted && (input?.invoiceType === 'order' || input?.invoiceType === 'quote') && filtered.length > 0) {
+        const sourceType = input.invoiceType; // 'order' | 'quote'
+        // اجمع الفواتير التي تستند إلى هذا النوع من المستندات
         const referencingInvoices = await db.query.salesInvoices.findMany({
           where: and(
             eq(salesInvoices.orgId, orgId),
-            eq(salesInvoices.basedOnType, 'order'),
+            eq(salesInvoices.basedOnType, sourceType),
           ),
         });
         // مجموعة أرقام الأوامر التي لها فاتورة مستندة

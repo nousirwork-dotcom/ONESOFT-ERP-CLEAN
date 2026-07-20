@@ -276,23 +276,32 @@ console.log(`[OneSoft] clientBuildPath  = ${clientBuildPath}`);
 console.log(`[OneSoft] index.html found = ${clientFilesExist}`);
 
 if (clientFilesExist) {
-  // الملفات الثابتة (JS/CSS مع hash): تُخزَّن في الكاش بشكل دائم
+  const NO_CACHE_HEADERS = {
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'Surrogate-Control': 'no-store',
+  };
+
   app.use(express.static(clientBuildPath, {
-    index: false,
+    index: false, // نتعامل مع index.html يدوياً
     setHeaders: (res, filePath) => {
-      if (/\.(js|css|woff2?|ttf|eot|svg|png|ico)$/.test(filePath)) {
+      const basename = path.basename(filePath);
+      // sw.js و manifest.json: لا كاش أبداً
+      if (basename === 'sw.js' || basename === 'manifest.json') {
+        Object.entries(NO_CACHE_HEADERS).forEach(([k, v]) => res.setHeader(k, v));
+        return;
+      }
+      // أصول مع hash في اسم الملف (assets/name.HASH.js): كاش دائم
+      if (filePath.includes(`${path.sep}assets${path.sep}`) && /\.[a-f0-9]{8,}\.(js|css|woff2?|ttf|eot|svg|png|webp|ico)$/i.test(basename)) {
         res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
       }
     },
   }));
+
   // index.html: لا يُخزَّن في الكاش أبداً — يجب دائماً تحميل أحدث نسخة
   app.get('*', (_req, res) => {
-    res.set({
-      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0',
-      'Surrogate-Control': 'no-store',
-    });
+    Object.entries(NO_CACHE_HEADERS).forEach(([k, v]) => res.set(k, v));
     res.sendFile(clientIndexPath);
   });
 } else {

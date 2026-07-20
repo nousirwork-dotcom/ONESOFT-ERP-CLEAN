@@ -26,27 +26,25 @@ function getAppVersion(): string {
   } catch { return '1.0.0'; }
 }
 
-// ── Build ID ديناميكي يُحسب عند بدء تشغيل الخادم ────────────────────────────
-import { execSync } from 'child_process';
-
-function computeBuildDate(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-function computeBuildNumber(): string {
+// ── Build Info — يُقرأ من dist/build-info.json الذي يُكتب وقت البناء ─────────
+// لا يتغيّر بإعادة تشغيل الخادم — يعكس آخر `node build.mjs` فعلياً
+// في بيئة التطوير (tsx watch) يُعرض 'dev' إذا لم يُنفَّذ build بعد
+function readBuildInfo(): { buildDate: string; buildCommit: string } {
   try {
-    return execSync('git rev-parse --short HEAD', { encoding: 'utf8', timeout: 3000 }).trim();
+    const infoPath = path.join(__dirname, '..', 'build-info.json');
+    const raw = fs.readFileSync(infoPath, 'utf-8');
+    const info = JSON.parse(raw);
+    return {
+      buildDate:   info.buildDate   ?? 'dev',
+      buildCommit: info.buildCommit ?? 'dev',
+    };
   } catch {
-    return Date.now().toString(36).toUpperCase().slice(-6);
+    // dev mode — build.mjs لم يُشغَّل بعد
+    return { buildDate: new Date().toISOString().slice(0, 10) + ' (dev)', buildCommit: 'dev' };
   }
 }
 
-const BUILD_DATE   = computeBuildDate();
-const BUILD_NUMBER = computeBuildNumber();
+const { buildDate: BUILD_DATE, buildCommit: BUILD_NUMBER } = readBuildInfo();
 
 // ── إصدار PostgreSQL ──────────────────────────────────────────────────────────
 async function getPgVersion(): Promise<string> {
