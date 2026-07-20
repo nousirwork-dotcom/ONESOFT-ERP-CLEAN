@@ -122,7 +122,14 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
   const [docTypeId, setDocTypeId] = useState<string>("");
   const [currency, setCurrency] = useState("SAR");
   const [exchangeRate, setExchangeRate] = useState("1.000");
-  const [salesperson, setSalesperson] = useState("");
+  // ── Branch (اختيار الفرع أولاً — إلزامي) ─────────────────────────────────
+  const [branchId, setBranchId] = useState<number | null>(null);
+  const [branchOpen, setBranchOpen] = useState(false);
+  const [pendingBranchId, setPendingBranchId] = useState<number | null>(null);
+  const [showBranchChangeConfirm, setShowBranchChangeConfirm] = useState(false);
+  // ── Seller (بائع من جدول المستخدمين) ──────────────────────────────────────
+  const [sellerUserId, setSellerUserId] = useState<number | null>(null);
+  const [sellerOpen, setSellerOpen] = useState(false);
   const [basedOnType, setBasedOnType] = useState<'sale' | 'quote' | 'order' | 'transfer' | ''>('');
   const [basedOnNum, setBasedOnNum]   = useState("");
   const [basedOnTrigger, setBasedOnTrigger] = useState(""); // يُحرِّك جلب البيانات
@@ -188,6 +195,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
   const warehousesQuery  = trpc.warehouses.list.useQuery();
   const productsQuery    = trpc.products.list.useQuery({});
   const journalsQuery    = trpc.documentJournals.list.useQuery({ docTypes: ["sales"] });
+  const branchesQuery    = trpc.branches.list.useQuery();
+  const salespersonsQuery = trpc.users.listSalespersons.useQuery({ branchId: branchId ?? undefined });
   const nextNumberQuery  = trpc.salesInvoices.nextNumber.useQuery({ prefix: "INV" });
   const docTypesQuery    = trpc.documentTypes.list.useQuery({ typeId: "sales" });
   const allInvoicesQuery = trpc.salesInvoices.list.useQuery({});
@@ -260,7 +269,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     if (erpMode === "new" || erpMode === "edit") setIsDirty(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerId, notes, invoiceDate, dueDate, journalId, warehouseId, docTypeId,
-      currency, salesperson, paymentType, paidAmountOverride, customerTaxNumber, customerType]);
+      currency, sellerUserId, paymentType, paidAmountOverride, customerTaxNumber, customerType, branchId]);
 
   // إغلاق dropdown العميل عند الضغط خارجه
   useEffect(() => {
@@ -338,6 +347,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     setCurrency(inv.currency ?? "SAR");
     setExchangeRate(inv.exchangeRate ?? "1.000");
     setPaymentType((inv.paymentMethod ?? "cash") as PaymentType);
+    setBranchId((inv as any).branchId ?? null);
+    setSellerUserId((inv as any).sellerUserId ?? null);
     setNotes(inv.notes ?? "");
     setPaidAmountOverride(inv.paidAmount ?? "");
     setSavedInvoiceId(inv.id);
@@ -481,6 +492,52 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       toast.error("تعذّر جلب رقم الفاتورة من الدفتر");
     }
   }, [journalsQuery.data, docTypesQuery.data, utils]);
+
+  // تفعيل الفرع المختار: مسح جميع البيانات التابعة وتحميل بيانات الفرع الجديد
+  const doSelectBranch = useCallback(async (id: number) => {
+    setBranchId(id);
+    setBranchOpen(false);
+    // مسح البيانات التابعة للفرع القديم
+    setJournalId(null);
+    setWarehouseId(null);
+    setJournalWarehouseId(null);
+    setDocTypeWarehouseId(null);
+    setDocTypeId("");
+    setCustomerId(null);
+    setCustomerName("");
+    setCustSearch("");
+    setCustomerType('individual');
+    setCustomerTaxNumber("");
+    setBasedOnType('');
+    setBasedOnNum('');
+    setBasedOnTrigger('');
+    setLines([EMPTY_LINE()]);
+    setSellerUserId(null);
+    setPaidAmountOverride("");
+    setPaymentBreakdown({});
+    setInvoiceNumber("");
+    // انتخاب الدفتر تلقائياً إذا كان هناك دفتر واحد للفرع
+    const branchJournals = (journalsQuery.data ?? []).filter((j: any) => j.branchId === id);
+    if (branchJournals.length === 1) {
+      await handleJournalSelect(branchJournals[0].id);
+    }
+  }, [journalsQuery.data, handleJournalSelect]);
+
+  // اختيار الفرع مع تأكيد عند وجود بيانات مدخلة
+  const handleBranchSelect = useCallback((id: number) => {
+    if (id === branchId) { setBranchOpen(false); return; }
+    const hasDependentData = !!(
+      customerId || customerName.trim() || basedOnTrigger ||
+      sellerUserId || lines.some(l => l.productName.trim())
+    );
+    if (hasDependentData) {
+      setPendingBranchId(id);
+      setShowBranchChangeConfirm(true);
+      setBranchOpen(false);
+    } else {
+      void doSelectBranch(id);
+    }
+  }, [customerId, customerName, basedOnTrigger, sellerUserId, lines, branchId, doSelectBranch]);
 
   // عند اختيار نوع السند
   const handleDocTypeSelect = useCallback(async (id: string) => {
@@ -731,8 +788,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
         toast.error("يجب اختيار العميل (مطلوب في نوع المستند المختار)");
         throw new Error("validation");
       }
-      if (selectedDocType.requireEmployeeCode && !salesperson.trim()) {
-        toast.error("يجب إدخال كود الموظف (مطلوب في نوع المستند المختار)");
+      if (selectedDocType.requireEmployeeCode && !sellerUserId) {
+        toast.error("يجب اختيار البائع (مطلوب في نوع المستند المختار)");
         throw new Error("validation");
       }
       if (selectedDocType.noStockDispatch && warehouseId) {
@@ -769,11 +826,14 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     const payMethod = paymentType === "cash" ? "cash" : "credit";
     const status = paymentType === "cash" ? "paid" : (remainingAmount <= 0 ? "paid" : "confirmed");
 
+    if (!branchId) { toast.error("يجب اختيار الفرع أولاً"); throw new Error("validation"); }
     createMutation.mutate({
       invoiceNumber: finalInvoiceNumber,
       invoiceType: "sale",
       invoiceDate,
       dueDate: dueDate || undefined,
+      branchId: branchId ?? undefined,
+      sellerUserId: sellerUserId ?? undefined,
       customerId: customerId ?? undefined,
       customerName: customerName || undefined,
       customerType,
@@ -811,11 +871,12 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     });
   }, [
     invoiceNumber, invoiceDate, dueDate, customerId, customerName,
+    branchId, sellerUserId,
     customerType, customerTaxNumber,
     warehouseId, currency, exchangeRate, paymentType, paidAmount,
     remainingAmount, notes, lines, subtotal, totalDiscount, totalTax,
     netTotal, createMutation, journalId, nextJournalNumberMutation,
-    docTypeId, docTypesQuery.data, salesperson, stockQuery.data,
+    docTypeId, docTypesQuery.data, stockQuery.data,
   ]);
 
   // ── Save For Payment (حفظ الفاتورة من شاشة الدفع) ────────────────────────
@@ -848,7 +909,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     if (selectedDocType) {
       if (selectedDocType.requireNote && !notes.trim()) { toast.error("يجب إدخال ملاحظة للمستند"); return null; }
       if (selectedDocType.requireCustomerCode && !customerId) { toast.error("يجب اختيار العميل"); return null; }
-      if (selectedDocType.requireEmployeeCode && !salesperson.trim()) { toast.error("يجب إدخال كود الموظف"); return null; }
+      if (selectedDocType.requireEmployeeCode && !sellerUserId) { toast.error("يجب اختيار البائع"); return null; }
       if (selectedDocType.noStockDispatch && warehouseId) {
         const stockData = stockQuery.data ?? [];
         for (const line of validLines) {
@@ -883,6 +944,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
         invoiceType: "sale",
         invoiceDate,
         dueDate: dueDate || undefined,
+        branchId: branchId ?? undefined,
+        sellerUserId: sellerUserId ?? undefined,
         customerId: customerId ?? undefined,
         customerName: customerName || undefined,
         customerType,
@@ -929,7 +992,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     warehouseId, currency, exchangeRate, paymentType, paidAmount,
     remainingAmount, notes, lines, subtotal, totalDiscount, totalTax,
     netTotal, createMutation, journalId, nextJournalNumberMutation,
-    docTypeId, docTypesQuery.data, salesperson, stockQuery.data,
+    docTypeId, docTypesQuery.data, branchId, sellerUserId, stockQuery.data,
   ]);
 
   // ── New Invoice ───────────────────────────────────────────────────────────
@@ -978,7 +1041,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     setBasedOnTrigger('');
     setNotes("");
     setDueDate(new Date().toISOString().split("T")[0]);
-    setSalesperson("");
+    setSellerUserId(null);
     setPaidAmountOverride("");
     setExchangeRate("1.000");
     setErpMode("new");
@@ -1040,7 +1103,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           customerCity: (customersQuery.data ?? []).find(c => c.id === customerId)?.city || undefined,
           customerPostalCode: (customersQuery.data ?? []).find(c => c.id === customerId)?.postalCode || undefined,
           customerAdditionalNo: (customersQuery.data ?? []).find(c => c.id === customerId)?.shortAddress || undefined,
-          salesperson: salesperson || undefined,
+          salesperson: sellerUserId ? ((salespersonsQuery.data ?? []).find(u => u.id === sellerUserId)?.name ?? undefined) : undefined,
           paymentType,
           currency,
           notes: notes || undefined,
@@ -1077,7 +1140,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     } catch (e: any) {
       toast.error("تعذّر توليد PDF");
     }
-  }, [invoiceNumber, invoiceDate, customerName, customerCode, customerTaxNumber, salesperson,
+  }, [invoiceNumber, invoiceDate, customerName, customerCode, customerTaxNumber, sellerUserId, salespersonsQuery.data,
       paymentType, currency, notes, lines, subtotal, totalDiscount, totalTax, netTotal,
       paidAmount, remainingAmount, orgQuery.data, qrSettingsQuery.data, templateConfig]);
 
@@ -1095,70 +1158,137 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       {/* ── Header Form ─────────────────────────────────────────────────── */}
       <div className="border-b border-[#b0a89a] px-3 pt-2 pb-2" style={{ background: "#F7F5EE", boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }}>
         {/* ثوابت مشتركة لجميع الحقول — ارتفاع موحد 26px + عرض label موحد */}
+        {/* ─── تنبيه: اختر الفرع أولاً ───────────────────────────────────── */}
+        {!branchId && erpMode !== "view" && (
+          <div style={{ background: "#fef3c7", border: "1px solid #f59e0b", borderRadius: 6, padding: "5px 12px", marginBottom: 6, display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#92400e", fontWeight: 600 }}>
+            <span style={{ fontSize: 15 }}>⚠</span>
+            اختر الفرع أولاً لاستكمال بيانات الفاتورة — جميع الحقول مُعطَّلة حتى اختيار الفرع
+          </div>
+        )}
+
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", columnGap: 10, rowGap: 5, alignItems: "center" }}>
 
           {/* ══ صف 1: رقم الفاتورة │ بناءً على │ نوع السند ══ */}
 
-          {/* col 1: الفرع + رقم الفاتورة */}
+          {/* ══ col 1: الفرع — أول حقل إلزامي ══ */}
           {(() => {
-            const journals = journalsQuery.data ?? [];
-            const selected = journals.find((j: any) => j.id === journalId);
+            const branches = branchesQuery.data ?? [];
+            const selBranch = branches.find((b: any) => b.id === branchId);
+            const bName = (b: any): string => isAr ? (b.name ?? b.nameEn ?? "") : (b.nameEn || (b.name ?? ""));
+            return (
+              <div className="flex items-center flex-shrink-0 relative" style={{ gap: 5 }}>
+                <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 56, flexShrink: 0, whiteSpace: "nowrap" }}>
+                  {isAr ? "الـ ـفرع" : "Branch"}
+                </label>
+                <div className="flex relative flex-shrink-0" style={{ height: 26 }}>
+                  <button
+                    onClick={() => { if (erpMode !== "view") setBranchOpen(o => !o); }}
+                    disabled={erpMode === "view"}
+                    className="flex items-center gap-1 classic-input"
+                    style={{
+                      height: 26, width: 160, paddingInline: "6px 4px",
+                      background: selBranch ? "#f0fff4" : "#fff8e1",
+                      border: `2px solid ${selBranch ? "#22c55e" : "#f59e0b"}`,
+                      borderRadius: "4px 0 0 4px", borderInlineEnd: "none",
+                      color: selBranch ? "#15803d" : "#b45309", fontSize: 11, fontWeight: 700,
+                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                    }}
+                    title="اختر الفرع (مطلوب)"
+                  >
+                    <span className="flex-1 truncate text-start">
+                      {selBranch ? bName(selBranch) : "⚠ اختر الفرع أولاً"}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => { if (erpMode !== "view") setBranchOpen(o => !o); }}
+                    disabled={erpMode === "view"}
+                    className="flex items-center justify-center flex-shrink-0"
+                    style={{ width: 18, height: 26, borderRadius: "0 4px 4px 0", background: selBranch ? "#22c55e" : "#f59e0b", border: `2px solid ${selBranch ? "#16a34a" : "#d97706"}`, borderInlineStart: "none", color: "white", fontSize: "9px" }}
+                  >▼</button>
+
+                  {branchOpen && (<>
+                    <div className="fixed inset-0 z-[9998]" onClick={() => setBranchOpen(false)} />
+                    <div className="absolute top-full z-[9999] mt-1 bg-white rounded-lg overflow-hidden" style={{ insetInlineStart: 0, minWidth: 240, boxShadow: "0 8px 32px rgba(0,0,0,0.18)", border: "1px solid #e2e8f0" }} dir={isAr ? "rtl" : "ltr"}>
+                      <div className="flex items-center justify-between px-3 py-2" style={{ background: "#166534" }}>
+                        <span className="text-white text-[11px] font-bold">اختر الفرع</span>
+                        <button onClick={() => setBranchOpen(false)} style={{ color: "rgba(255,255,255,0.7)", fontSize: "11px" }}>✕</button>
+                      </div>
+                      {branches.length === 0 ? (
+                        <div className="px-4 py-5 text-center text-[11px] text-slate-500">لا توجد فروع مُعرَّفة</div>
+                      ) : (
+                        <div className="overflow-y-auto" style={{ maxHeight: 220 }}>
+                          {branches.map((b: any, idx: number) => {
+                            const isSel = b.id === branchId;
+                            return (
+                              <button key={b.id} onClick={() => handleBranchSelect(b.id)} className="w-full flex items-center transition-colors" style={{ textAlign: isAr ? "right" : "left", background: isSel ? "#f0fff4" : idx % 2 === 0 ? "#fafafa" : "white", borderBottom: "1px solid #f1f5f9", padding: "7px 12px" }}>
+                                <span style={{ width: 16, color: isSel ? "#22c55e" : "transparent", fontSize: "11px", flexShrink: 0 }}>✓</span>
+                                <div className="flex-1 min-w-0 mx-2">
+                                  <div className="text-[12px] font-semibold truncate" style={{ color: isSel ? "#15803d" : "#1e293b" }}>{bName(b)}</div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </>)}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ══ col 2: الدفتر + رقم الفاتورة ══ */}
+          {(() => {
+            const allJournals = journalsQuery.data ?? [];
+            const branchJournals = branchId ? allJournals.filter((j: any) => j.branchId === branchId) : allJournals;
+            const selected = allJournals.find((j: any) => j.id === journalId);
             const jName = (j: any): string => isAr ? (j.name ?? "") : (j.name2 || (j.name ?? ""));
             return (
-              <div className="flex items-center flex-shrink-0 relative" style={{ gap: 10 }}>
-
-                {/* ── مجموعة الفرع: label + dropdown (gap 5px بينهما) ── */}
-                <div className="flex items-center flex-shrink-0 relative" style={{ gap: 5 }}>
-                  <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>
-                    {isAr ? "الـ ـفرع" : "Branch"}
-                  </label>
+              <div className="flex items-center flex-shrink-0 relative" style={{ gap: 8 }}>
+                {/* الدفتر */}
+                <div className="flex items-center flex-shrink-0 relative" style={{ gap: 4 }}>
+                  <label style={{ fontSize: 10, fontWeight: 700, color: "#555", flexShrink: 0, whiteSpace: "nowrap" }}>الدفتر</label>
                   <div className="flex relative flex-shrink-0" style={{ height: 26 }}>
                     <button
-                      onClick={() => setJournalOpen(o => !o)}
-                      onContextMenu={e => { e.preventDefault(); setJournalOpen(o => !o); }}
-                      onKeyDown={e => { if (e.key === "F4" || (e.key === "ArrowDown" && e.altKey)) { e.preventDefault(); setJournalOpen(o => !o); } }}
+                      onClick={() => { if (branchId && erpMode !== "view") setJournalOpen(o => !o); }}
+                      disabled={!branchId || erpMode === "view"}
                       className="flex items-center gap-1 classic-input"
                       style={{
-                        height: 26, width: 175, paddingInline: "6px 4px",
-                        background: selected ? "#eff6ff" : "#fafafa",
+                        height: 26, width: 138, paddingInline: "6px 4px",
+                        background: selected ? "#eff6ff" : !branchId ? "#f3f4f6" : "#fafafa",
                         border: `1px solid ${selected ? "#3b82f6" : "#c9c4bb"}`,
                         borderRadius: "4px 0 0 4px", borderInlineEnd: "none",
-                        color: selected ? "#1d4ed8" : "#888", fontSize: 11, fontWeight: selected ? 700 : 400,
-                        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                        color: selected ? "#1d4ed8" : !branchId ? "#9ca3af" : "#888", fontSize: 11, fontWeight: selected ? 700 : 400,
+                        cursor: !branchId || erpMode === "view" ? "not-allowed" : "pointer",
                       }}
-                      title={isAr ? "اختر الفرع (F4)" : "Select Branch (F4)"}
+                      title={!branchId ? "اختر الفرع أولاً" : "اختر الدفتر"}
                     >
                       <span className="flex-1 truncate text-start">
-                        {selected ? jName(selected) : (isAr ? "— اختر —" : "— Select —")}
+                        {selected ? jName(selected) : !branchId ? "—" : "— اختر —"}
                       </span>
                     </button>
                     <button
-                      onClick={() => setJournalOpen(o => !o)}
+                      onClick={() => { if (branchId && erpMode !== "view") setJournalOpen(o => !o); }}
+                      disabled={!branchId || erpMode === "view"}
                       className="flex items-center justify-center flex-shrink-0"
                       style={{ width: 18, height: 26, borderRadius: "0 4px 4px 0", background: selected ? "#3b82f6" : "#e5e0d8", border: `1px solid ${selected ? "#2563eb" : "#c9c4bb"}`, color: selected ? "white" : "#666", fontSize: "9px" }}
                     >▼</button>
 
-                    {/* dropdown */}
-                    {journalOpen && (<>
+                    {journalOpen && branchId && (<>
                       <div className="fixed inset-0 z-[9998]" onClick={() => setJournalOpen(false)} />
-                      <div className="absolute top-full z-[9999] mt-1 bg-white rounded-lg overflow-hidden" style={{ insetInlineStart: 0, minWidth: 300, boxShadow: "0 8px 32px rgba(0,0,0,0.18)", border: "1px solid #e2e8f0" }} dir={isAr ? "rtl" : "ltr"}>
+                      <div className="absolute top-full z-[9999] mt-1 bg-white rounded-lg overflow-hidden" style={{ insetInlineStart: 0, minWidth: 270, boxShadow: "0 8px 32px rgba(0,0,0,0.18)", border: "1px solid #e2e8f0" }} dir={isAr ? "rtl" : "ltr"}>
                         <div className="flex items-center justify-between px-3 py-2" style={{ background: "#1e40af" }}>
-                          <span className="text-white text-[11px] font-bold">
-                            {isAr ? "دفاتر فاتورة المبيعات" : "Sales Invoice Journals"}
-                          </span>
+                          <span className="text-white text-[11px] font-bold">دفاتر المبيعات — {(branchesQuery.data ?? []).find((b: any) => b.id === branchId)?.name ?? ""}</span>
                           <button onClick={() => setJournalOpen(false)} style={{ color: "rgba(255,255,255,0.7)", fontSize: "11px" }}>✕</button>
                         </div>
-                        {journals.length === 0 ? (
-                          <div className="px-4 py-5 text-center">
-                            <div className="text-[20px] mb-1">📒</div>
-                            <div className="text-[11px] text-slate-500">{isAr ? "لا توجد دفاتر مُعرَّفة" : "No journals defined"}</div>
-                          </div>
+                        {branchJournals.length === 0 ? (
+                          <div className="px-4 py-5 text-center text-[11px] text-slate-500">لا توجد دفاتر مُعرَّفة لهذا الفرع</div>
                         ) : (
-                          <div className="overflow-y-auto" style={{ maxHeight: 240 }}>
-                            {journals.map((j: any, idx: number) => {
+                          <div className="overflow-y-auto" style={{ maxHeight: 230 }}>
+                            {branchJournals.map((j: any, idx: number) => {
                               const isSel = j.id === journalId;
                               return (
-                                <button key={j.id} onClick={() => handleJournalSelect(j.id)} className="w-full flex items-center gap-0 transition-colors" style={{ textAlign: isAr ? "right" : "left", background: isSel ? "#eff6ff" : idx % 2 === 0 ? "#fafafa" : "white", borderBottom: "1px solid #f1f5f9", padding: "6px 12px" }}>
+                                <button key={j.id} onClick={() => handleJournalSelect(j.id)} className="w-full flex items-center transition-colors" style={{ textAlign: isAr ? "right" : "left", background: isSel ? "#eff6ff" : idx % 2 === 0 ? "#fafafa" : "white", borderBottom: "1px solid #f1f5f9", padding: "6px 12px" }}>
                                   <span style={{ width: 16, color: isSel ? "#3b82f6" : "transparent", fontSize: "11px", flexShrink: 0 }}>✓</span>
                                   <div className="flex-1 min-w-0 mx-2">
                                     <div className="text-[12px] font-semibold truncate" style={{ color: isSel ? "#1d4ed8" : "#1e293b" }}>{jName(j)}</div>
@@ -1169,11 +1299,10 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                             })}
                           </div>
                         )}
-                        <div className="px-3 py-1.5 flex items-center justify-between" style={{ background: "#f8fafc", borderTop: "1px solid #e2e8f0" }}>
-                          <span className="text-[9px] text-slate-400">{isAr ? "كليك يمين أو F4 لفتح القائمة" : "Right-click or F4 to open"}</span>
+                        <div className="px-3 py-1.5 flex items-center justify-end" style={{ background: "#f8fafc", borderTop: "1px solid #e2e8f0" }}>
                           {journalId && (
-                            <button onClick={() => { setJournalId(null); setJournalOpen(false); setWarehouseId(null); setJournalWarehouseId(null); }} className="text-[9px] text-red-400 hover:text-red-600">
-                              {isAr ? "إلغاء الاختيار" : "Clear"}
+                            <button onClick={() => { setJournalId(null); setJournalOpen(false); setWarehouseId(null); setJournalWarehouseId(null); setInvoiceNumber(""); }} className="text-[9px] text-red-400 hover:text-red-600">
+                              إلغاء الاختيار
                             </button>
                           )}
                         </div>
@@ -1182,17 +1311,17 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   </div>
                 </div>
 
-                {/* ── مجموعة رقم الفاتورة: label + input (gap 5px بينهما، فاصل 10px من الفرع) ── */}
-                <div className="flex items-center flex-shrink-0" style={{ gap: 5 }}>
+                {/* رقم الفاتورة */}
+                <div className="flex items-center flex-shrink-0" style={{ gap: 4 }}>
                   <label style={{ fontSize: 10, fontWeight: 700, color: "#D19C05", flexShrink: 0, whiteSpace: "nowrap" }}>
                     {isAr ? "رقم الفاتورة" : "Invoice No."}
                   </label>
                   <input
                     value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)}
                     className="classic-input text-center font-bold"
-                    style={{ width: 150, height: 26, background: selected ? "#eff6ff" : "#FFFDE7", borderColor: selected ? "#3b82f6" : "#F59E0B", borderRadius: "4px", color: "#1a1a1a", fontSize: "13px", fontWeight: 700 }}
-                    readOnly={!!journalId}
-                    title={isAr ? "رقم الفاتورة التسلسلي" : "Invoice serial number"}
+                    style={{ width: 128, height: 26, background: selected ? "#eff6ff" : !branchId ? "#f3f4f6" : "#FFFDE7", borderColor: selected ? "#3b82f6" : "#F59E0B", borderRadius: "4px", color: !branchId ? "#9ca3af" : "#1a1a1a", fontSize: "13px", fontWeight: 700 }}
+                    readOnly={!!journalId || !branchId}
+                    title={!branchId ? "اختر الفرع أولاً" : "رقم الفاتورة التسلسلي"}
                   />
                 </div>
               </div>
@@ -1206,7 +1335,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
               <div style={{ flexShrink: 0, width: 110, display: "flex" }}>
                 <ContextSelectInput
                   value={basedOnType}
-                  onChange={v => { setBasedOnType(v as any); setBasedOnNum(''); setBasedOnTrigger(''); }}
+                  onChange={v => { if (!branchId) { return; } setBasedOnType(v as any); setBasedOnNum(''); setBasedOnTrigger(''); }}
                   options={[
                     { value: "order",    label: "أمر بيع" },
                     { value: "quote",    label: "عرض أسعار" },
@@ -1214,7 +1343,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                     { value: "sale",     label: "فاتورة مبيعات" },
                   ]}
                   menuTitle="نوع المستند المصدر"
-                  placeholder="النوع ⊞"
+                  placeholder={!branchId ? "— —" : "النوع ⊞"}
+                  disabled={!branchId || erpMode === "view"}
                   style={{ height: 26 }}
                 />
               </div>
@@ -1224,11 +1354,13 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                 onChange={v => { setBasedOnNum(v); setBasedOnTrigger(""); }}
                 onPick={num => { setBasedOnNum(num); setBasedOnTrigger(num); }}
                 warehouseId={warehouseId}
+                branchId={branchId}
                 isFetching={basedOnQuery.isFetching}
                 trigger={basedOnTrigger}
                 isFound={basedOnTrigger && !basedOnQuery.isFetching
                   ? basedOnQuery.data != null
                   : null}
+                disabled={!branchId || erpMode === "view"}
               />
             </div>
           </div>
@@ -1413,11 +1545,75 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             </div>
           </div>
 
-          {/* col 4: البائع — تحت العملة */}
-          <div className="flex items-center" style={{ gap: 6 }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", flexShrink: 0, whiteSpace: "nowrap" }}>البائع</label>
-            <input value={salesperson} onChange={e => setSalesperson(e.target.value)} className="classic-input flex-1" style={{ height: 26 }} />
-          </div>
+          {/* col 4: البائع — dropdown من المستخدمين المؤهلين للبيع في الفرع */}
+          {(() => {
+            const sellers = salespersonsQuery.data ?? [];
+            const sellerObj = sellers.find(s => s.id === sellerUserId);
+            return (
+              <div className="flex items-center relative" style={{ gap: 6 }}>
+                <label style={{ fontSize: 10, fontWeight: 700, color: "#555", flexShrink: 0, whiteSpace: "nowrap" }}>البائع</label>
+                <div className="flex relative flex-1" style={{ height: 26 }}>
+                  <button
+                    onClick={() => { if (branchId && erpMode !== "view") setSellerOpen(o => !o); }}
+                    disabled={!branchId || erpMode === "view"}
+                    className="flex items-center gap-1 classic-input flex-1"
+                    style={{
+                      height: 26, paddingInline: "6px 4px",
+                      background: sellerObj ? "#faf5ff" : !branchId ? "#f3f4f6" : "#fafafa",
+                      border: `1px solid ${sellerObj ? "#7c3aed" : "#c9c4bb"}`,
+                      borderRadius: "4px 0 0 4px", borderInlineEnd: "none",
+                      color: sellerObj ? "#5b21b6" : !branchId ? "#9ca3af" : "#888",
+                      fontSize: 11, fontWeight: sellerObj ? 700 : 400,
+                      cursor: !branchId || erpMode === "view" ? "not-allowed" : "pointer",
+                    }}
+                    title={!branchId ? "اختر الفرع أولاً" : "اختر البائع"}
+                  >
+                    <span className="flex-1 truncate text-start">
+                      {sellerObj ? (sellerObj.name || sellerObj.username) : !branchId ? "—" : "— اختر البائع —"}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => { if (branchId && erpMode !== "view") setSellerOpen(o => !o); }}
+                    disabled={!branchId || erpMode === "view"}
+                    className="flex items-center justify-center flex-shrink-0"
+                    style={{ width: 18, height: 26, borderRadius: "0 4px 4px 0", background: sellerObj ? "#7c3aed" : "#e5e0d8", border: `1px solid ${sellerObj ? "#6d28d9" : "#c9c4bb"}`, color: sellerObj ? "white" : "#666", fontSize: "9px" }}
+                  >▼</button>
+
+                  {sellerOpen && branchId && (<>
+                    <div className="fixed inset-0 z-[9998]" onClick={() => setSellerOpen(false)} />
+                    <div className="absolute top-full z-[9999] mt-1 bg-white rounded-lg overflow-hidden" style={{ insetInlineStart: 0, minWidth: 220, boxShadow: "0 8px 32px rgba(0,0,0,0.18)", border: "1px solid #e2e8f0" }} dir={isAr ? "rtl" : "ltr"}>
+                      <div className="px-3 py-2" style={{ background: "#4c1d95" }}>
+                        <span className="text-white text-[11px] font-bold">اختر البائع</span>
+                      </div>
+                      {sellers.length === 0 ? (
+                        <div className="px-4 py-4 text-center text-[11px] text-slate-500">لا يوجد بائعون مؤهلون لهذا الفرع</div>
+                      ) : (
+                        <div className="overflow-y-auto" style={{ maxHeight: 200 }}>
+                          {sellers.map((s, idx) => {
+                            const isSel = s.id === sellerUserId;
+                            return (
+                              <button key={s.id} onClick={() => { setSellerUserId(s.id); setSellerOpen(false); }} className="w-full flex items-center transition-colors" style={{ textAlign: isAr ? "right" : "left", background: isSel ? "#f5f3ff" : idx % 2 === 0 ? "#fafafa" : "white", borderBottom: "1px solid #f1f5f9", padding: "6px 12px" }}>
+                                <span style={{ width: 16, color: isSel ? "#7c3aed" : "transparent", fontSize: "11px", flexShrink: 0 }}>✓</span>
+                                <div className="flex-1 min-w-0 mx-2">
+                                  <div className="text-[12px] font-semibold truncate" style={{ color: isSel ? "#5b21b6" : "#1e293b" }}>{s.name || s.username}</div>
+                                  {(s as any).code && <div className="text-[10px] text-slate-400">كود: {(s as any).code}</div>}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {sellerUserId && (
+                        <div className="px-3 py-1.5" style={{ background: "#f8fafc", borderTop: "1px solid #e2e8f0" }}>
+                          <button onClick={() => { setSellerUserId(null); setSellerOpen(false); }} className="text-[9px] text-red-400 hover:text-red-600">إلغاء الاختيار</button>
+                        </div>
+                      )}
+                    </div>
+                  </>)}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* ══ صف 4: ملحوظة ══ */}
           <div className="flex items-center" style={{ gap: 6, gridColumn: "1/-1" }}>
@@ -2109,7 +2305,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             customerCity: (customersQuery.data ?? []).find(c => c.id === customerId)?.city || undefined,
             customerPostalCode: (customersQuery.data ?? []).find(c => c.id === customerId)?.postalCode || undefined,
             customerAdditionalNo: (customersQuery.data ?? []).find(c => c.id === customerId)?.shortAddress || undefined,
-            salesperson: salesperson || undefined,
+            salesperson: sellerUserId ? ((salespersonsQuery.data ?? []).find(u => u.id === sellerUserId)?.name ?? undefined) : undefined,
             paymentType,
             currency,
             notes: notes || undefined,
@@ -2439,6 +2635,37 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                 }}
               >
                 لا، إلغاء التحميل
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── نافذة تأكيد تغيير الفرع ────────────────────────────────────────── */}
+      {showBranchChangeConfirm && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center" style={{ background: "rgba(0,0,0,0.45)" }}>
+          <div style={{ background: "white", borderRadius: 12, padding: 28, maxWidth: 420, width: "90%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)", direction: "rtl" }}>
+            <div style={{ fontSize: 20, marginBottom: 10 }}>🔄</div>
+            <p style={{ fontWeight: 800, fontSize: 15, marginBottom: 8, color: "#1e293b" }}>تغيير الفرع</p>
+            <p style={{ color: "#64748b", fontSize: 13, marginBottom: 22, lineHeight: 1.6 }}>
+              تغيير الفرع سيؤدي إلى مسح المستند المصدر والمخزن والبائع وبنود الفاتورة والدفتر المؤقت. هل تريد المتابعة؟
+            </p>
+            <div className="flex gap-3 justify-start">
+              <button
+                onClick={() => {
+                  if (pendingBranchId) void doSelectBranch(pendingBranchId);
+                  setShowBranchChangeConfirm(false);
+                  setPendingBranchId(null);
+                }}
+                style={{ height: 36, padding: "0 20px", background: "#dc2626", color: "white", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+              >
+                نعم، غيّر الفرع
+              </button>
+              <button
+                onClick={() => { setShowBranchChangeConfirm(false); setPendingBranchId(null); }}
+                style={{ height: 36, padding: "0 20px", background: "#f1f5f9", color: "#334155", border: "1px solid #e2e8f0", borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: "pointer" }}
+              >
+                إلغاء
               </button>
             </div>
           </div>

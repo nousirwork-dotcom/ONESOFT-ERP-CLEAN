@@ -29,9 +29,11 @@ interface Props {
   onChange:    (v: string) => void;
   onPick:      (num: string) => void;
   warehouseId?: number | null;
+  branchId?:   number | null;
   isFetching:  boolean;
   trigger:     string;
   isFound:     boolean | null;
+  disabled?:   boolean;
 }
 
 /* ── Mapping basedOnType → journal docType ──────────────────────────────── */
@@ -98,7 +100,7 @@ function fmtNum(v: any): string {
 /* ═══════════════════════════════════════════════════════════════════════════ */
 export default function BasedOnDocInput({
   docType, value, onChange, onPick,
-  warehouseId, isFetching, trigger, isFound,
+  warehouseId, branchId, isFetching, trigger, isFound, disabled,
 }: Props) {
 
   /* ── Context menu state ── */
@@ -165,6 +167,7 @@ export default function BasedOnDocInput({
     {
       invoiceType: docType as 'sale' | 'quote' | 'order',
       ...(warehouseId ? { warehouseId } : {}),
+      ...(branchId ? { branchId } : {}),
       limit: 500,
       // للأوامر: استثنِ الملغاة والمحوَّلة بالكامل من قائمة الاختيار
       ...(docType === 'order' ? { excludeCancelled: true, excludeFullyConverted: true } : {}),
@@ -446,7 +449,7 @@ export default function BasedOnDocInput({
           ref={inputRef}
           type="text"
           value={suffixDisplay}
-          disabled={!docType}
+          disabled={!docType || !!disabled}
           onChange={e => {
             const newSuffix = e.target.value;
             if (selPrefix) {

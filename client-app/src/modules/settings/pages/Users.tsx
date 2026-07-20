@@ -487,6 +487,23 @@ export default function Users() {
   // ── محتوى تبويب إعدادات العمل ────────────────────────────────────────────
   const workTabContent = mode === "edit" && selectedUser ? (
     <>
+      {/* يظهر كبائع في فواتير المبيعات */}
+      <div className="rounded-2xl border bg-muted/20 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-medium">يظهر كبائع في فواتير المبيعات</p>
+            <p className="text-xs text-muted-foreground">يسمح لهذا المستخدم بالظهور كبائع في شاشة إنشاء فاتورة المبيعات</p>
+          </div>
+          <Switch
+            checked={!!(selectedUser?.canBeSalesperson)}
+            onCheckedChange={(v) => {
+              updateUser.mutate({ id: selectedUser.id, canBeSalesperson: v });
+            }}
+            disabled={updateUser.isPending}
+          />
+        </div>
+      </div>
+
       {/* صلاحيات العمل */}
       {(selectedUser?.role === "admin" || selectedUser?.role === "superadmin") ? (
         <p className="text-xs text-muted-foreground bg-muted/40 border rounded-xl px-3 py-2.5">
