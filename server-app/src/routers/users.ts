@@ -427,7 +427,6 @@ export const usersRouter = router({
     .input(z.object({
       userId: z.number(),
       role: z.enum(['admin', 'cashier', 'accountant', 'warehouse_manager', 'viewer']),
-      branchId: z.number().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const user = await db.query.users.findFirst({

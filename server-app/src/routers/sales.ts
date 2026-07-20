@@ -322,6 +322,16 @@ export const salesRouter = router({
       });
       if (existing?.isPosted)
         throw new Error('لا يمكن تعديل مستند مرحّل — يجب فك الترحيل أولاً');
+
+      // تحقق سياق المخزن عند تغيير المستند المصدر
+      if (rest.sourceDocumentId !== undefined) {
+        await validateSalesInvoiceWarehouseContext({
+          warehouseId: existing?.warehouseId ?? undefined,
+          sourceDocumentId: rest.sourceDocumentId,
+          orgId: ctx.user.orgId,
+        });
+      }
+
       await db.update(salesInvoices).set({
         ...rest,
         ...(invoiceDate ? { invoiceDate: new Date(invoiceDate) } : {}),

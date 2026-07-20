@@ -29,7 +29,6 @@ interface Props {
   onChange:    (v: string) => void;
   onPick:      (num: string) => void;
   warehouseId?: number | null;
-  branchId?:   number | null;
   isFetching:  boolean;
   trigger:     string;
   isFound:     boolean | null;
@@ -100,7 +99,7 @@ function fmtNum(v: any): string {
 /* ═══════════════════════════════════════════════════════════════════════════ */
 export default function BasedOnDocInput({
   docType, value, onChange, onPick,
-  warehouseId, branchId, isFetching, trigger, isFound, disabled,
+  warehouseId, isFetching, trigger, isFound, disabled,
 }: Props) {
 
   /* ── Context menu state ── */
@@ -167,7 +166,6 @@ export default function BasedOnDocInput({
     {
       invoiceType: docType as 'sale' | 'quote' | 'order',
       ...(warehouseId ? { warehouseId } : {}),
-      ...(branchId ? { branchId } : {}),
       limit: 500,
       // للأوامر: استثنِ الملغاة والمحوَّلة بالكامل من قائمة الاختيار
       ...(docType === 'order' ? { excludeCancelled: true, excludeFullyConverted: true } : {}),
