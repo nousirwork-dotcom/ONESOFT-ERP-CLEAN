@@ -2425,12 +2425,10 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
               <button
                 type="button"
                 onClick={() => {
-                  // تطبيق المستند بدون تغيير العميل
-                  const src = pendingSourceDoc;
+                  // رفض التحميل — إلغاء كامل للمستند المصدر
                   setPendingSourceDoc(null);
-                  // نستبعد بيانات العميل من التطبيق
-                  const srcWithoutCustomer = { ...src, customerId: customerId, customerName: customerName };
-                  applySourceDoc(srcWithoutCustomer);
+                  setBasedOnNum("");
+                  setBasedOnTrigger("");
                 }}
                 style={{
                   padding: "6px 20px",
@@ -2440,25 +2438,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   cursor: "pointer",
                 }}
               >
-                لا، احتفظ بالعميل الحالي
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setPendingSourceDoc(null);
-                  setBasedOnNum("");
-                  setBasedOnTrigger("");
-                }}
-                style={{
-                  padding: "6px 16px",
-                  background: "#f3f4f6",
-                  color: "#6b7280", border: "1px solid #e5e7eb",
-                  borderRadius: 6, fontSize: 12,
-                  cursor: "pointer",
-                  marginRight: "auto",
-                }}
-              >
-                إلغاء
+                لا، إلغاء التحميل
               </button>
             </div>
           </div>
