@@ -8,6 +8,7 @@
  * - بحث الأصناف بالاسم أو الكود
  */
 import React, { useState, useRef, useCallback, useEffect, KeyboardEvent } from "react";
+import { clearBranchDependentFields } from "@/lib/invoiceBranchLogic";
 import { Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/shared/lib/trpc";
@@ -497,7 +498,19 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
   const doSelectBranch = useCallback(async (id: number) => {
     setBranchId(id);
     setBranchOpen(false);
-    // مسح البيانات التابعة للفرع القديم
+    // مسح الحقول التابعة للفرع باستخدام clearBranchDependentFields (القيم مُعرَّفة في invoiceBranchLogic)
+    const cleared = clearBranchDependentFields({
+      basedOnType:   basedOnType,
+      basedOnNumber: basedOnNum,
+      sellerUserId:  sellerUserId,
+      lines:         lines,
+    });
+    setBasedOnType(cleared.basedOnType as typeof basedOnType);
+    setBasedOnNum(cleared.basedOnNumber);
+    setBasedOnTrigger('');
+    setSellerUserId(cleared.sellerUserId);
+    setLines(cleared.lines as typeof lines);
+    // باقي الحقول المرتبطة بالفرع
     setJournalId(null);
     setWarehouseId(null);
     setJournalWarehouseId(null);
@@ -508,11 +521,6 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     setCustSearch("");
     setCustomerType('individual');
     setCustomerTaxNumber("");
-    setBasedOnType('');
-    setBasedOnNum('');
-    setBasedOnTrigger('');
-    setLines([EMPTY_LINE()]);
-    setSellerUserId(null);
     setPaidAmountOverride("");
     setPaymentBreakdown({});
     setInvoiceNumber("");
@@ -521,7 +529,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     if (branchJournals.length === 1) {
       await handleJournalSelect(branchJournals[0].id);
     }
-  }, [journalsQuery.data, handleJournalSelect]);
+  }, [journalsQuery.data, handleJournalSelect, basedOnType, basedOnNum, sellerUserId, lines]);
 
   // اختيار الفرع مع تأكيد عند وجود بيانات مدخلة
   const handleBranchSelect = useCallback((id: number) => {
