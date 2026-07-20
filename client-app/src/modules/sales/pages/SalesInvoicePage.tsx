@@ -854,6 +854,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       docTypeId: docTypeId ? parseInt(docTypeId) : undefined,
       basedOnType: basedOnType || undefined,
       basedOnNumber: basedOnTrigger || undefined,
+      sourceDocumentId: basedOnQuery.data && basedOnQuery.data.sourceType !== 'transfer' ? (basedOnQuery.data as any).id ?? undefined : undefined,
       items: validLines.map((l, idx) => ({
         productId: l.productId,
         productCode: l.productCode || undefined,
@@ -876,7 +877,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     warehouseId, currency, exchangeRate, paymentType, paidAmount,
     remainingAmount, notes, lines, subtotal, totalDiscount, totalTax,
     netTotal, createMutation, journalId, nextJournalNumberMutation,
-    docTypeId, docTypesQuery.data, stockQuery.data,
+    docTypeId, docTypesQuery.data, stockQuery.data, basedOnQuery.data,
   ]);
 
   // ── Save For Payment (حفظ الفاتورة من شاشة الدفع) ────────────────────────
@@ -966,6 +967,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
         docTypeId: docTypeId ? parseInt(docTypeId) : undefined,
         basedOnType: basedOnType || undefined,
         basedOnNumber: basedOnTrigger || undefined,
+        sourceDocumentId: basedOnQuery.data && basedOnQuery.data.sourceType !== 'transfer' ? (basedOnQuery.data as any).id ?? undefined : undefined,
         items: validLines.map((l, idx) => ({
           productId: l.productId,
           productCode: l.productCode || undefined,
@@ -992,7 +994,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     warehouseId, currency, exchangeRate, paymentType, paidAmount,
     remainingAmount, notes, lines, subtotal, totalDiscount, totalTax,
     netTotal, createMutation, journalId, nextJournalNumberMutation,
-    docTypeId, docTypesQuery.data, branchId, sellerUserId, stockQuery.data,
+    docTypeId, docTypesQuery.data, branchId, sellerUserId, stockQuery.data, basedOnQuery.data,
   ]);
 
   // ── New Invoice ───────────────────────────────────────────────────────────

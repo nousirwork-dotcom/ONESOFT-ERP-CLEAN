@@ -288,6 +288,20 @@
       "when": 1790900000000,
       "tag": "0040_branch_seller",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1791000000000,
+      "tag": "0041_user_branch_assignments",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1791100000000,
+      "tag": "0042_source_document_id_shared_journal",
+      "breakpoints": true
     }
   ]
 }

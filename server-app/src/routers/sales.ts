@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { eq, and, desc, like, or } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { salesInvoices, salesInvoiceItems, salesInvoicePayments, paymentMethods, products, customers, stockVouchers, stockVoucherItems, documentJournals, warehouses, users } from '../schema.js';
+import { salesInvoices, salesInvoiceItems, salesInvoicePayments, paymentMethods, products, customers, stockVouchers, stockVoucherItems, documentJournals, warehouses, users, userBranchAssignments } from '../schema.js';
 import { autoPostSalesInvoice } from './posting.js';
 import { TRPCError } from '@trpc/server';
 
@@ -205,6 +205,7 @@ export const salesRouter = router({
       docTypeId: z.number().optional(),
       basedOnType: z.string().optional(),
       basedOnNumber: z.string().optional(),
+      sourceDocumentId: z.number().optional(),
       items: z.array(z.object({
         productId: z.number().optional(),
         productCode: z.string().optional(),
@@ -229,14 +230,35 @@ export const salesRouter = router({
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'يجب اختيار الفرع قبل حفظ الفاتورة' });
       }
 
-      // ── تحقق: دفتر المستند تابع للفرع المختار ──────────────────────────────
+      // ── تحقق: دفتر المستند تابع للفرع المختار (ما لم يكن دفتراً مشتركاً) ──
       if (invoiceData.journalId) {
         const journal = await db.query.documentJournals.findFirst({
           where: eq(documentJournals.id, invoiceData.journalId),
-          columns: { branchId: true },
+          columns: { branchId: true, isSharedJournal: true },
         });
-        if (journal?.branchId && journal.branchId !== invoiceData.branchId) {
+        if (!journal?.isSharedJournal && journal?.branchId && journal.branchId !== invoiceData.branchId) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'دفتر المستند لا ينتمي للفرع المختار — تحقق من إعداد الدفتر' });
+        }
+        // دفتر بدون فرع محدد ولا مشترك: نرفض (يجب أن يكون الدفتر مرتبطاً بفرع أو مشتركاً)
+        if (!journal?.isSharedJournal && !journal?.branchId) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'دفتر المستند غير مرتبط بفرع — عيّن الفرع على الدفتر أو فعّل خيار «دفتر مشترك»' });
+        }
+      }
+
+      // ── تحقق: المستند المصدر (based-on) ينتمي لنفس الفرع ──────────────────
+      if (invoiceData.sourceDocumentId) {
+        const srcDoc = await db.query.salesInvoices.findFirst({
+          where: and(
+            eq(salesInvoices.id, invoiceData.sourceDocumentId),
+            eq(salesInvoices.orgId, orgId),
+          ),
+          columns: { branchId: true, invoiceNumber: true },
+        });
+        if (!srcDoc) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'المستند المصدر غير موجود' });
+        }
+        if (srcDoc.branchId && srcDoc.branchId !== invoiceData.branchId) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: `المستند المصدر (${srcDoc.invoiceNumber}) ينتمي لفرع مختلف — لا يمكن إنشاء فاتورة بيع بفرع مغاير لمصدرها` });
         }
       }
 
@@ -251,14 +273,29 @@ export const salesRouter = router({
         }
       }
 
-      // ── تحقق: البائع نشط ومسموح له بالعمل كبائع ────────────────────────────
+      // ── تحقق: البائع نشط + مسموح كبائع + مُسنَد للفرع المختار ─────────────
       if (invoiceData.sellerUserId) {
         const seller = await db.query.users.findFirst({
           where: and(eq(users.id, invoiceData.sellerUserId), eq(users.orgId, orgId), eq(users.isActive, true)),
-          columns: { canBeSalesperson: true },
+          columns: { canBeSalesperson: true, defaultBranchId: true },
         });
         if (!seller?.canBeSalesperson) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'المستخدم المختار غير مؤهل للعمل كبائع — فعّل الخيار من إعدادات المستخدم أولاً' });
+        }
+        // تحقق الفرع: defaultBranchId يطابق، أو مُسنَد عبر user_branch_assignments
+        const sellerBranchId = seller.defaultBranchId;
+        if (sellerBranchId !== invoiceData.branchId) {
+          const assignment = await db.query.userBranchAssignments.findFirst({
+            where: and(
+              eq(userBranchAssignments.userId, invoiceData.sellerUserId),
+              eq(userBranchAssignments.branchId, invoiceData.branchId!),
+              eq(userBranchAssignments.orgId, orgId),
+            ),
+            columns: { id: true },
+          });
+          if (!assignment) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'البائع غير مُسنَد للفرع المختار — أسنده أولاً من إعدادات المستخدمين' });
+          }
         }
       }
 
@@ -327,6 +364,7 @@ export const salesRouter = router({
       notes: z.string().optional(),
       basedOnType: z.string().optional(),
       basedOnNumber: z.string().optional(),
+      sourceDocumentId: z.number().optional(),
       items: z.array(z.object({
         productId: z.number().optional(),
         productCode: z.string().optional(),

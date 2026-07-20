@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { eq, and, sql, count, inArray } from 'drizzle-orm';
 import { router, adminProcedure, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { users, organizations, salesInvoices, vouchers, stockVouchers, userCategories, appSettings, userGroups, branches, warehouses } from '../schema.js';
+import { users, organizations, salesInvoices, vouchers, stockVouchers, userCategories, appSettings, userGroups, branches, warehouses, userBranchAssignments } from '../schema.js';
 import { hashPassword } from '../auth.js';
 import { TRPCError } from '@trpc/server';
 import { getLimit } from '../lib/license.js';
@@ -26,11 +26,13 @@ export const usersRouter = router({
       .where(and(eq(users.orgId, ctx.user.orgId), eq(users.isActive, true)));
   }),
 
-  // قائمة البائعين المفعَّل فيهم خيار «يظهر كبائع» — مفلترة بالفرع اختيارياً
+  // قائمة البائعين — مفلترة بالفرع عبر user_branch_assignments (fallback: defaultBranchId)
   listSalespersons: protectedProcedure
     .input(z.object({ branchId: z.number().optional() }))
     .query(async ({ ctx, input }) => {
-      return db.select({
+      const orgId = ctx.user.orgId;
+      // جلب جميع البائعين المؤهلين والنشطين أولاً
+      const allSalespersons = await db.select({
         id: users.id,
         name: users.name,
         username: users.username,
@@ -39,11 +41,78 @@ export const usersRouter = router({
       })
         .from(users)
         .where(and(
-          eq(users.orgId, ctx.user.orgId),
+          eq(users.orgId, orgId),
           eq(users.isActive, true),
           eq(users.canBeSalesperson, true),
-          ...(input.branchId ? [eq(users.defaultBranchId, input.branchId)] : []),
         ));
+
+      if (!input.branchId || allSalespersons.length === 0) return allSalespersons;
+
+      // جلب assignment IDs للفرع المطلوب
+      const assignedUserIds = new Set(
+        (await db.select({ userId: userBranchAssignments.userId })
+          .from(userBranchAssignments)
+          .where(and(
+            eq(userBranchAssignments.orgId, orgId),
+            eq(userBranchAssignments.branchId, input.branchId),
+          ))
+        ).map(r => r.userId)
+      );
+
+      // فلترة: مُسنَد للفرع عبر assignments OR defaultBranchId يطابق الفرع
+      return allSalespersons.filter(u =>
+        assignedUserIds.has(u.id) || u.defaultBranchId === input.branchId
+      );
+    }),
+
+  // جلب فروع مستخدم محدد
+  listUserBranchAssignments: adminProcedure
+    .input(z.object({ userId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      return db.select({
+        id: userBranchAssignments.id,
+        branchId: userBranchAssignments.branchId,
+        branchName: branches.name,
+        createdAt: userBranchAssignments.createdAt,
+      })
+        .from(userBranchAssignments)
+        .innerJoin(branches, eq(branches.id, userBranchAssignments.branchId))
+        .where(and(
+          eq(userBranchAssignments.orgId, ctx.user.orgId),
+          eq(userBranchAssignments.userId, input.userId),
+        ))
+        .orderBy(branches.name);
+    }),
+
+  // إسناد مستخدم لفرع
+  addUserBranchAssignment: adminProcedure
+    .input(z.object({ userId: z.number(), branchId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const orgId = ctx.user.orgId;
+      // تحقق أن المستخدم والفرع ينتميان للمؤسسة
+      const [userRow, branchRow] = await Promise.all([
+        db.query.users.findFirst({ where: and(eq(users.id, input.userId), eq(users.orgId, orgId)), columns: { id: true } }),
+        db.query.branches.findFirst({ where: and(eq(branches.id, input.branchId), eq(branches.orgId, orgId)), columns: { id: true } }),
+      ]);
+      if (!userRow) throw new TRPCError({ code: 'NOT_FOUND', message: 'المستخدم غير موجود' });
+      if (!branchRow) throw new TRPCError({ code: 'NOT_FOUND', message: 'الفرع غير موجود' });
+      const [row] = await db.insert(userBranchAssignments)
+        .values({ orgId, userId: input.userId, branchId: input.branchId })
+        .onConflictDoNothing()
+        .returning();
+      return row ?? { userId: input.userId, branchId: input.branchId };
+    }),
+
+  // إزالة إسناد مستخدم من فرع
+  removeUserBranchAssignment: adminProcedure
+    .input(z.object({ assignmentId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      await db.delete(userBranchAssignments)
+        .where(and(
+          eq(userBranchAssignments.id, input.assignmentId),
+          eq(userBranchAssignments.orgId, ctx.user.orgId),
+        ));
+      return { ok: true };
     }),
 
   // قائمة مستخدمي المؤسسة (للمديرين فقط) — تشمل الموقوفين حتى يمكن إعادة تفعيلهم

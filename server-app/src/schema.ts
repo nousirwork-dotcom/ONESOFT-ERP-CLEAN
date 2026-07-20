@@ -65,6 +65,15 @@ export const users = pgTable('users', {
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
+// ─── User Branch Assignments ───────────────────────────────────────────────────
+export const userBranchAssignments = pgTable('user_branch_assignments', {
+  id:        serial('id').primaryKey(),
+  orgId:     integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  userId:    integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  branchId:  integer('branch_id').notNull().references(() => branches.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
 // ─── User Groups ──────────────────────────────────────────────────────────────
 export const userGroups = pgTable('user_groups', {
   id: serial('id').primaryKey(),
@@ -355,6 +364,7 @@ export const salesInvoices = pgTable('sales_invoices', {
   zatcaRejectionReason: text('zatca_rejection_reason'),
   basedOnType: varchar('based_on_type', { length: 20 }),
   basedOnNumber: varchar('based_on_number', { length: 50 }),
+  sourceDocumentId: integer('source_document_id'), // FK للفاتورة المصدر — يُتحقق منه لأمان الفرع
   sellerUserId: integer('seller_user_id').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
@@ -684,6 +694,7 @@ export const documentJournals = pgTable('document_journals', {
   printOnSave:      boolean('print_on_save').notNull().default(false),
   customersJournal: varchar('customers_journal', { length: 50 }),
   suppliersJournal: varchar('suppliers_journal', { length: 50 }),
+  isSharedJournal:  boolean('is_shared_journal').notNull().default(false), // دفتر عام — يعمل مع أي فرع
   postingMode:      varchar('posting_mode', { length: 20 }).default('manual'),
   allowUnpost:      boolean('allow_unpost').notNull().default(true),
   allowEditAfterPost: boolean('allow_edit_after_post').notNull().default(false),
