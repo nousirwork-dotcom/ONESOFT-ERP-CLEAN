@@ -282,6 +282,10 @@ export const salesRouter = router({
   update: protectedProcedure
     .input(z.object({
       id: z.number(),
+      // حقول السياق — اختيارية عند التعديل، الموجود يُستخدم كقيمة افتراضية
+      warehouseId:     z.number().optional(),
+      journalId:       z.number().optional(),
+      sellerUserId:    z.number().optional(),
       invoiceDate: z.string().optional(),
       customerId: z.number().optional(),
       customerName: z.string().optional(),
@@ -323,14 +327,21 @@ export const salesRouter = router({
       if (existing?.isPosted)
         throw new Error('لا يمكن تعديل مستند مرحّل — يجب فك الترحيل أولاً');
 
-      // تحقق سياق المخزن عند تغيير المستند المصدر
-      if (rest.sourceDocumentId !== undefined) {
-        await validateSalesInvoiceWarehouseContext({
-          warehouseId: existing?.warehouseId ?? undefined,
-          sourceDocumentId: rest.sourceDocumentId,
-          orgId: ctx.user.orgId,
-        });
-      }
+      // ── الحالة النهائية الكاملة: دمج القيم الموجودة مع المدخلات الجديدة ─────
+      const finalWarehouseId  = rest.warehouseId  ?? existing?.warehouseId  ?? undefined;
+      const finalJournalId    = rest.journalId    ?? existing?.journalId    ?? undefined;
+      const finalSellerUserId = rest.sellerUserId ?? existing?.sellerUserId ?? undefined;
+      const finalSourceDocId  = rest.sourceDocumentId !== undefined
+        ? rest.sourceDocumentId
+        : existing?.sourceDocumentId ?? undefined;
+
+      await validateSalesInvoiceWarehouseContext({
+        warehouseId:      finalWarehouseId,
+        journalId:        finalJournalId,
+        sellerUserId:     finalSellerUserId,
+        sourceDocumentId: finalSourceDocId,
+        orgId: ctx.user.orgId,
+      });
 
       await db.update(salesInvoices).set({
         ...rest,
