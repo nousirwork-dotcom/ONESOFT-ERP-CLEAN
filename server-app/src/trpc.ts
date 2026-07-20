@@ -75,3 +75,5 @@ export const protectedProcedure  = t.procedure.use(requireAuth);
 export const adminProcedure       = t.procedure.use(requireAdmin);
 export const superAdminProcedure  = t.procedure.use(requireSuperAdmin);
 export const ownerOnlyProcedure   = t.procedure.use(requireOwner);
+
+export const createCallerFactory  = t.createCallerFactory;
