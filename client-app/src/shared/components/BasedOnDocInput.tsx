@@ -202,8 +202,14 @@ export default function BasedOnDocInput({
     return docs;
   }, [allDocs, searchQ, sortCol, sortDir]);
 
-  /* ── Reset on type change ───────────────────────────────────────────── */
-  useEffect(() => { setSelPrefix(""); setSelPadLen(6); }, [docType]);
+  /* ── Reset on type change + auto-open search when type selected ─────── */
+  useEffect(() => {
+    setSelPrefix("");
+    setSelPadLen(6);
+    if (docType && !value) {
+      setSearchOpen(true);
+    }
+  }, [docType]);
 
   /* ── Focus & reset when dialog opens ───────────────────────────────── */
   useEffect(() => {
