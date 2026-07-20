@@ -1990,6 +1990,27 @@ export const reHousingUnits = pgTable('re_housing_units', {
   updatedAt:     timestamp('updated_at').notNull().defaultNow(),
 });
 
+// ─── User Audit Log (0044) ────────────────────────────────────────────────────
+// لا تحتوي على FK cascade إلى users — السجل يبقى حتى بعد حذف المستخدم المستهدف
+export const userAuditLogs = pgTable('user_audit_logs', {
+  id:             serial('id').primaryKey(),
+  orgId:          integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  actorUserId:    integer('actor_user_id').notNull(),      // بدون CASCADE — المنفذ قد يُحذف لاحقاً
+  actorUsername:  varchar('actor_username', { length: 100 }).notNull(),
+  targetUserId:   integer('target_user_id').notNull(),     // بدون CASCADE — المستهدف يُحذف في هذه العملية
+  targetCode:     varchar('target_code', { length: 50 }),
+  targetName:     varchar('target_name', { length: 255 }).notNull(),
+  targetUsername: varchar('target_username', { length: 100 }).notNull(),
+  action:         varchar('action', { length: 30 }).notNull(),  // DELETE_USER | DEACTIVATE_USER
+  reason:         text('reason'),
+  ipAddress:      varchar('ip_address', { length: 100 }),
+  deviceInfo:     varchar('device_info', { length: 255 }),
+  result:         varchar('result', { length: 20 }).notNull().default('success'), // success | rejected
+  resultReason:   text('result_reason'),
+  createdAt:      timestamp('created_at').notNull().defaultNow(),
+});
+export type UserAuditLog = typeof userAuditLogs.$inferSelect;
+
 // Real Estate Trial Balance Types
 export type ReTrialBalance           = typeof reTrialBalances.$inferSelect;
 export type ReTbAccount              = typeof reTbAccounts.$inferSelect;

@@ -6,7 +6,7 @@ import {
   users, organizations, salesInvoices, purchaseInvoices, journalEntries,
   vouchers, receiptVouchers, paymentVouchers, stockVouchers, inventoryCounts,
   userCategories, appSettings, userGroups, warehouses,
-  userWarehouseAssignments, userGroupMembers,
+  userWarehouseAssignments, userGroupMembers, userAuditLogs,
 } from '../schema.js';
 import { hashPassword } from '../auth.js';
 import { TRPCError } from '@trpc/server';
@@ -21,6 +21,55 @@ async function isPasswordlessAllowed(orgId: number): Promise<boolean> {
     .limit(1);
   if (!rows.length) return false; // الافتراضي: غير مسموح
   try { return JSON.parse(rows[0].value ?? 'false') === true; } catch { return false; }
+}
+
+// ── فحص شامل لجميع مراجع المستخدم التاريخية (كل FKs غير cascade) ─────────────
+// استعلام UNION واحد يغطي كل الجداول دفعةً واحدة بدلاً من ~35 استعلام منفصل
+async function countAllLinkedRefs(orgId: number, userId: number): Promise<number> {
+  const result = await db.execute(sql`
+    SELECT COALESCE(SUM(c), 0)::bigint AS total FROM (
+      SELECT COUNT(*) AS c FROM sales_invoices          WHERE org_id = ${orgId} AND (user_id = ${userId} OR seller_user_id = ${userId})
+      UNION ALL SELECT COUNT(*) FROM purchase_invoices   WHERE org_id = ${orgId} AND user_id = ${userId}
+      UNION ALL SELECT COUNT(*) FROM journal_entries     WHERE org_id = ${orgId} AND user_id = ${userId}
+      UNION ALL SELECT COUNT(*) FROM vouchers            WHERE org_id = ${orgId} AND user_id = ${userId}
+      UNION ALL SELECT COUNT(*) FROM receipt_vouchers    WHERE org_id = ${orgId} AND user_id = ${userId}
+      UNION ALL SELECT COUNT(*) FROM payment_vouchers    WHERE org_id = ${orgId} AND user_id = ${userId}
+      UNION ALL SELECT COUNT(*) FROM stock_vouchers      WHERE org_id = ${orgId} AND user_id = ${userId}
+      UNION ALL SELECT COUNT(*) FROM inventory_counts    WHERE org_id = ${orgId} AND user_id = ${userId}
+      UNION ALL SELECT COUNT(*) FROM document_send_logs  WHERE org_id = ${orgId} AND sent_by_user_id = ${userId}
+      UNION ALL SELECT COUNT(*) FROM messages            WHERE org_id = ${orgId} AND (sender_id = ${userId} OR receiver_id = ${userId})
+      UNION ALL SELECT COUNT(*) FROM security_events     WHERE org_id = ${orgId} AND user_id = ${userId}
+      UNION ALL SELECT COUNT(*) FROM re_documents        WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM re_housing_units    WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM re_projects         WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM re_purchase_statements WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM re_purchases        WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM re_tb_audit_log     WHERE org_id = ${orgId} AND user_id = ${userId}
+      UNION ALL SELECT COUNT(*) FROM re_tb_entries       WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM re_tb_settlements   WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM re_tb_tax_returns   WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM re_trial_balances   WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM zatca_api_history   WHERE org_id = ${orgId} AND (user_id = ${userId} OR created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM zatca_certificates  WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM zatca_csid          WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM zatca_csr_requests  WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM zatca_devices       WHERE org_id = ${orgId} AND (user_id = ${userId} OR created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM zatca_environments  WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM zatca_error_log     WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM zatca_invoice_transactions WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM zatca_keys          WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM zatca_logs          WHERE org_id = ${orgId} AND user_id = ${userId}
+      UNION ALL SELECT COUNT(*) FROM zatca_qr_codes      WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM zatca_request_log   WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM zatca_response_log  WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM zatca_settings      WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM zatca_xml_documents WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM hs_link_sections    WHERE org_id = ${orgId} AND created_by = ${userId}
+      UNION ALL SELECT COUNT(*) FROM hs_links            WHERE org_id = ${orgId} AND created_by = ${userId}
+    ) t
+  `);
+  const row = (result as any).rows?.[0] ?? (result as any)[0] ?? {};
+  return Number(row.total ?? 0);
 }
 
 export const usersRouter = router({
@@ -491,36 +540,8 @@ export const usersRouter = router({
         }
       }
 
-      // ── عدّ الحركات والمستندات المرتبطة بالمستخدم ────────────────────────
-      const [[siRow], [piRow], [jeRow], [voRow], [rvRow], [pvRow], [svRow], [icRow]] = await Promise.all([
-        db.select({ cnt: count() }).from(salesInvoices).where(
-          and(eq(salesInvoices.orgId, orgId), or(eq(salesInvoices.userId, input.id), eq(salesInvoices.sellerUserId, input.id))),
-        ),
-        db.select({ cnt: count() }).from(purchaseInvoices).where(
-          and(eq(purchaseInvoices.orgId, orgId), eq(purchaseInvoices.userId, input.id)),
-        ),
-        db.select({ cnt: count() }).from(journalEntries).where(
-          and(eq(journalEntries.orgId, orgId), eq(journalEntries.userId, input.id)),
-        ),
-        db.select({ cnt: count() }).from(vouchers).where(
-          and(eq(vouchers.orgId, orgId), eq(vouchers.userId, input.id)),
-        ),
-        db.select({ cnt: count() }).from(receiptVouchers).where(
-          and(eq(receiptVouchers.orgId, orgId), eq(receiptVouchers.userId, input.id)),
-        ),
-        db.select({ cnt: count() }).from(paymentVouchers).where(
-          and(eq(paymentVouchers.orgId, orgId), eq(paymentVouchers.userId, input.id)),
-        ),
-        db.select({ cnt: count() }).from(stockVouchers).where(
-          and(eq(stockVouchers.orgId, orgId), eq(stockVouchers.userId, input.id)),
-        ),
-        db.select({ cnt: count() }).from(inventoryCounts).where(
-          and(eq(inventoryCounts.orgId, orgId), eq(inventoryCounts.userId, input.id)),
-        ),
-      ]);
-
-      const linkedCount = Number(siRow.cnt) + Number(piRow.cnt) + Number(jeRow.cnt) +
-        Number(voRow.cnt) + Number(rvRow.cnt) + Number(pvRow.cnt) + Number(svRow.cnt) + Number(icRow.cnt);
+      // ── فحص شامل لجميع المراجع التاريخية عبر استعلام UNION واحد ─────────
+      const linkedCount = await countAllLinkedRefs(orgId, input.id);
 
       if (linkedCount > 0) {
         return {
@@ -567,36 +588,8 @@ export const usersRouter = router({
         }
       }
 
-      // ── إعادة فحص الحركات وقت الحذف الفعلي (منع race condition) ──────────
-      const [[siRow], [piRow], [jeRow], [voRow], [rvRow], [pvRow], [svRow], [icRow]] = await Promise.all([
-        db.select({ cnt: count() }).from(salesInvoices).where(
-          and(eq(salesInvoices.orgId, orgId), or(eq(salesInvoices.userId, input.id), eq(salesInvoices.sellerUserId, input.id))),
-        ),
-        db.select({ cnt: count() }).from(purchaseInvoices).where(
-          and(eq(purchaseInvoices.orgId, orgId), eq(purchaseInvoices.userId, input.id)),
-        ),
-        db.select({ cnt: count() }).from(journalEntries).where(
-          and(eq(journalEntries.orgId, orgId), eq(journalEntries.userId, input.id)),
-        ),
-        db.select({ cnt: count() }).from(vouchers).where(
-          and(eq(vouchers.orgId, orgId), eq(vouchers.userId, input.id)),
-        ),
-        db.select({ cnt: count() }).from(receiptVouchers).where(
-          and(eq(receiptVouchers.orgId, orgId), eq(receiptVouchers.userId, input.id)),
-        ),
-        db.select({ cnt: count() }).from(paymentVouchers).where(
-          and(eq(paymentVouchers.orgId, orgId), eq(paymentVouchers.userId, input.id)),
-        ),
-        db.select({ cnt: count() }).from(stockVouchers).where(
-          and(eq(stockVouchers.orgId, orgId), eq(stockVouchers.userId, input.id)),
-        ),
-        db.select({ cnt: count() }).from(inventoryCounts).where(
-          and(eq(inventoryCounts.orgId, orgId), eq(inventoryCounts.userId, input.id)),
-        ),
-      ]);
-
-      const linkedCount = Number(siRow.cnt) + Number(piRow.cnt) + Number(jeRow.cnt) +
-        Number(voRow.cnt) + Number(rvRow.cnt) + Number(pvRow.cnt) + Number(svRow.cnt) + Number(icRow.cnt);
+      // ── إعادة فحص شامل وقت الحذف الفعلي (منع race condition) ─────────────
+      const linkedCount = await countAllLinkedRefs(orgId, input.id);
 
       if (linkedCount > 0) {
         throw new TRPCError({
@@ -605,12 +598,27 @@ export const usersRouter = router({
         });
       }
 
-      // ── حذف نهائي داخل transaction واحدة ─────────────────────────────────
-      // الترتيب مهم: نظّف العلاقات التي لا تملك CASCADE قبل حذف المستخدم
+      const ipAddress = (ctx.req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim()
+        ?? ctx.req.socket?.remoteAddress ?? null;
+
+      // ── حذف نهائي + سجل تدقيق داخل transaction واحدة ────────────────────
       await db.transaction(async (tx) => {
-        // 1. إسنادات المخازن (cascade موجود لكن نحذفها صراحةً للتوضيح)
+        // 1. سجل التدقيق أولاً (قبل الحذف حتى لا تضيع البيانات)
+        await tx.insert(userAuditLogs).values({
+          orgId,
+          actorUserId:   ctx.user.id,
+          actorUsername: ctx.user.username,
+          targetUserId:  input.id,
+          targetCode:    targetUser.code ?? null,
+          targetName:    targetUser.name,
+          targetUsername: targetUser.username,
+          action:        'DELETE_USER',
+          ipAddress:     ipAddress ?? null,
+          result:        'success',
+        });
+        // 2. إسنادات المخازن (لا FK cascade — يجب حذفها صراحةً)
         await tx.delete(userWarehouseAssignments).where(eq(userWarehouseAssignments.userId, input.id));
-        // 2. عضوية مجموعات المستخدمين (تُخزَّن بـ memberCode وليس userId — لا FK مباشر)
+        // 3. عضوية مجموعات المستخدمين (تُخزَّن بـ memberCode — لا FK مباشر)
         if (targetUser.code) {
           await tx.delete(userGroupMembers).where(
             and(
@@ -620,7 +628,7 @@ export const usersRouter = router({
             ),
           );
         }
-        // 3. حذف سجل المستخدم (بقية العلاقات onDelete:cascade تُحذف تلقائياً)
+        // 4. حذف سجل المستخدم (بقية علاقات onDelete:cascade تُحذف تلقائياً)
         await tx.delete(users).where(and(eq(users.id, input.id), eq(users.orgId, orgId)));
       });
 
@@ -660,11 +668,32 @@ export const usersRouter = router({
         }
       }
 
-      await db.update(users).set({
-        isActive: false,
-        allowLogin: false,
-        updatedAt: new Date(),
-      }).where(and(eq(users.id, input.id), eq(users.orgId, orgId)));
+      const ipAddress = (ctx.req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim()
+        ?? ctx.req.socket?.remoteAddress ?? null;
+
+      // ── إيقاف + إبطال الجلسات + سجل تدقيق داخل transaction واحدة ─────────
+      await db.transaction(async (tx) => {
+        // 1. إيقاف المستخدم ورفع sessionVersion (يُبطل جميع JWT tokens فوراً)
+        await tx.update(users).set({
+          isActive:       false,
+          allowLogin:     false,
+          sessionVersion: sql`session_version + 1`,
+          updatedAt:      new Date(),
+        }).where(and(eq(users.id, input.id), eq(users.orgId, orgId)));
+        // 2. سجل التدقيق
+        await tx.insert(userAuditLogs).values({
+          orgId,
+          actorUserId:   ctx.user.id,
+          actorUsername: ctx.user.username,
+          targetUserId:  input.id,
+          targetCode:    targetUser.code ?? null,
+          targetName:    targetUser.name,
+          targetUsername: targetUser.username,
+          action:        'DEACTIVATE_USER',
+          ipAddress:     ipAddress ?? null,
+          result:        'success',
+        });
+      });
 
       return { success: true };
     }),

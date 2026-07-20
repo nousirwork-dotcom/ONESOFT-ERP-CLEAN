@@ -309,6 +309,13 @@
       "when": 1791200000000,
       "tag": "0043_warehouse_as_branch_unification",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1791300000000,
+      "tag": "0044_user_audit_log",
+      "breakpoints": true
     }
   ]
 }
