@@ -47,6 +47,9 @@ function formatUptime(secs: number): string {
   return `${h}س ${m}د ${s}ث`;
 }
 
+const FRONTEND_BUILD_DATE = __VITE_BUILD_DATE__;
+const FRONTEND_BUILD_ID   = `Build ${__VITE_BUILD_DATE_ID__}`;
+
 export default function SystemInfoPage() {
   const infoQ = trpc.setup.systemInfo.useQuery(undefined, { refetchInterval: 30_000 });
   const d = infoQ.data;
@@ -97,11 +100,11 @@ export default function SystemInfoPage() {
       <div className="grid grid-cols-2 gap-4">
         {/* معلومات التطبيق */}
         <SectionCard title="معلومات البرنامج" icon={Package}>
-          <InfoRow label="الاسم"           value={d.app.name} />
-          <InfoRow label="الإصدار"         value={d.app.version} badge={`v${d.app.version}`} badgeColor="default" />
-          <InfoRow label="Build Number"    value={d.app.buildNumber} />
-          <InfoRow label="تاريخ البناء"    value={d.app.buildDate} />
-          <InfoRow label="إصدار Schema"   value={d.app.schemaVersion} />
+          <InfoRow label="الاسم"              value={d.app.name} />
+          <InfoRow label="الإصدار"            value={d.app.version} badge={`v${d.app.version}`} badgeColor="default" />
+          <InfoRow label="Build ID (Backend)" value={`${d.app.buildNumber} — ${d.app.buildDate}`} />
+          <InfoRow label="Build ID (Frontend)" value={`${FRONTEND_BUILD_ID} — ${FRONTEND_BUILD_DATE}`} />
+          <InfoRow label="إصدار Schema"       value={d.app.schemaVersion} />
           <InfoRow label="البيئة"         value={d.app.environment}
             badge={d.app.environment === "production" ? "إنتاج" : "تطوير"}
             badgeColor={d.app.environment === "production" ? "default" : "secondary"} />

@@ -276,8 +276,23 @@ console.log(`[OneSoft] clientBuildPath  = ${clientBuildPath}`);
 console.log(`[OneSoft] index.html found = ${clientFilesExist}`);
 
 if (clientFilesExist) {
-  app.use(express.static(clientBuildPath));
+  // الملفات الثابتة (JS/CSS مع hash): تُخزَّن في الكاش بشكل دائم
+  app.use(express.static(clientBuildPath, {
+    index: false,
+    setHeaders: (res, filePath) => {
+      if (/\.(js|css|woff2?|ttf|eot|svg|png|ico)$/.test(filePath)) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    },
+  }));
+  // index.html: لا يُخزَّن في الكاش أبداً — يجب دائماً تحميل أحدث نسخة
   app.get('*', (_req, res) => {
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Surrogate-Control': 'no-store',
+    });
     res.sendFile(clientIndexPath);
   });
 } else {

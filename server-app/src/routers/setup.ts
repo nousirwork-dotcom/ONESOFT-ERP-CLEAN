@@ -26,6 +26,28 @@ function getAppVersion(): string {
   } catch { return '1.0.0'; }
 }
 
+// ── Build ID ديناميكي يُحسب عند بدء تشغيل الخادم ────────────────────────────
+import { execSync } from 'child_process';
+
+function computeBuildDate(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function computeBuildNumber(): string {
+  try {
+    return execSync('git rev-parse --short HEAD', { encoding: 'utf8', timeout: 3000 }).trim();
+  } catch {
+    return Date.now().toString(36).toUpperCase().slice(-6);
+  }
+}
+
+const BUILD_DATE   = computeBuildDate();
+const BUILD_NUMBER = computeBuildNumber();
+
 // ── إصدار PostgreSQL ──────────────────────────────────────────────────────────
 async function getPgVersion(): Promise<string> {
   try {
@@ -96,8 +118,8 @@ export const setupRouter = router({
       app: {
         name:        'OneSoft ERP',
         version:     getAppVersion(),
-        buildDate:   '2026-06-29',
-        buildNumber: '888aa8f',
+        buildDate:   BUILD_DATE,
+        buildNumber: BUILD_NUMBER,
         schemaVersion,
         environment: ENV.nodeEnv,
         isElectron:  ENV.isElectron,
