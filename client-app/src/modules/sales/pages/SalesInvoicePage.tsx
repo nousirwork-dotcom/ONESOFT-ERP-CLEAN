@@ -123,11 +123,10 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
   const [docTypeId, setDocTypeId] = useState<string>("");
   const [currency, setCurrency] = useState("SAR");
   const [exchangeRate, setExchangeRate] = useState("1.000");
-  // ── Branch (اختيار الفرع أولاً — إلزامي) ─────────────────────────────────
-  const [branchId, setBranchId] = useState<number | null>(null);
+  // ── Warehouse / Branch (اختيار المخزن/الفرع أولاً — إلزامي) ────────────────
   const [branchOpen, setBranchOpen] = useState(false);
-  const [pendingBranchId, setPendingBranchId] = useState<number | null>(null);
-  const [showBranchChangeConfirm, setShowBranchChangeConfirm] = useState(false);
+  const [pendingWarehouseId, setPendingWarehouseId] = useState<number | null>(null);
+  const [showWarehouseChangeConfirm, setShowWarehouseChangeConfirm] = useState(false);
   // ── Seller (بائع من جدول المستخدمين) ──────────────────────────────────────
   const [sellerUserId, setSellerUserId] = useState<number | null>(null);
   const [sellerOpen, setSellerOpen] = useState(false);
@@ -196,8 +195,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
   const warehousesQuery  = trpc.warehouses.list.useQuery();
   const productsQuery    = trpc.products.list.useQuery({});
   const journalsQuery    = trpc.documentJournals.list.useQuery({ docTypes: ["sales"] });
-  const branchesQuery    = trpc.branches.list.useQuery();
-  const salespersonsQuery = trpc.users.listSalespersons.useQuery({ branchId: branchId ?? undefined });
+  const salespersonsQuery = trpc.users.listSalespersons.useQuery({ warehouseId: warehouseId ?? undefined });
   const nextNumberQuery  = trpc.salesInvoices.nextNumber.useQuery({ prefix: "INV" });
   const docTypesQuery    = trpc.documentTypes.list.useQuery({ typeId: "sales" });
   const allInvoicesQuery = trpc.salesInvoices.list.useQuery({});
@@ -270,7 +268,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     if (erpMode === "new" || erpMode === "edit") setIsDirty(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerId, notes, invoiceDate, dueDate, journalId, warehouseId, docTypeId,
-      currency, sellerUserId, paymentType, paidAmountOverride, customerTaxNumber, customerType, branchId]);
+      currency, sellerUserId, paymentType, paidAmountOverride, customerTaxNumber, customerType]);
 
   // إغلاق dropdown العميل عند الضغط خارجه
   useEffect(() => {
@@ -348,7 +346,6 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     setCurrency(inv.currency ?? "SAR");
     setExchangeRate(inv.exchangeRate ?? "1.000");
     setPaymentType((inv.paymentMethod ?? "cash") as PaymentType);
-    setBranchId((inv as any).branchId ?? null);
     setSellerUserId((inv as any).sellerUserId ?? null);
     setNotes(inv.notes ?? "");
     setPaidAmountOverride(inv.paidAmount ?? "");
@@ -494,11 +491,11 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     }
   }, [journalsQuery.data, docTypesQuery.data, utils]);
 
-  // تفعيل الفرع المختار: مسح جميع البيانات التابعة وتحميل بيانات الفرع الجديد
-  const doSelectBranch = useCallback(async (id: number) => {
-    setBranchId(id);
+  // تفعيل المخزن/الفرع المختار: مسح جميع البيانات التابعة
+  const doSelectWarehouse = useCallback(async (id: number) => {
+    setWarehouseId(id);
     setBranchOpen(false);
-    // مسح الحقول التابعة للفرع باستخدام clearBranchDependentFields (القيم مُعرَّفة في invoiceBranchLogic)
+    // مسح الحقول التابعة للمخزن/الفرع
     const cleared = clearBranchDependentFields({
       basedOnType:   basedOnType,
       basedOnNumber: basedOnNum,
@@ -510,9 +507,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     setBasedOnTrigger('');
     setSellerUserId(cleared.sellerUserId);
     setLines(cleared.lines as typeof lines);
-    // باقي الحقول المرتبطة بالفرع
     setJournalId(null);
-    setWarehouseId(null);
     setJournalWarehouseId(null);
     setDocTypeWarehouseId(null);
     setDocTypeId("");
@@ -524,28 +519,28 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     setPaidAmountOverride("");
     setPaymentBreakdown({});
     setInvoiceNumber("");
-    // انتخاب الدفتر تلقائياً إذا كان هناك دفتر واحد للفرع
-    const branchJournals = (journalsQuery.data ?? []).filter((j: any) => j.branchId === id);
-    if (branchJournals.length === 1) {
-      await handleJournalSelect(branchJournals[0].id);
+    // انتخاب الدفتر تلقائياً إذا كان هناك دفتر واحد للمخزن
+    const warehouseJournals = (journalsQuery.data ?? []).filter((j: any) => j.warehouseId === id);
+    if (warehouseJournals.length === 1) {
+      await handleJournalSelect(warehouseJournals[0].id);
     }
   }, [journalsQuery.data, handleJournalSelect, basedOnType, basedOnNum, sellerUserId, lines]);
 
-  // اختيار الفرع مع تأكيد عند وجود بيانات مدخلة
-  const handleBranchSelect = useCallback((id: number) => {
-    if (id === branchId) { setBranchOpen(false); return; }
+  // اختيار المخزن/الفرع مع تأكيد عند وجود بيانات مدخلة
+  const handleWarehouseSelect = useCallback((id: number) => {
+    if (id === warehouseId) { setBranchOpen(false); return; }
     const hasDependentData = !!(
       customerId || customerName.trim() || basedOnTrigger ||
       sellerUserId || lines.some(l => l.productName.trim())
     );
     if (hasDependentData) {
-      setPendingBranchId(id);
-      setShowBranchChangeConfirm(true);
+      setPendingWarehouseId(id);
+      setShowWarehouseChangeConfirm(true);
       setBranchOpen(false);
     } else {
-      void doSelectBranch(id);
+      void doSelectWarehouse(id);
     }
-  }, [customerId, customerName, basedOnTrigger, sellerUserId, lines, branchId, doSelectBranch]);
+  }, [customerId, customerName, basedOnTrigger, sellerUserId, lines, warehouseId, doSelectWarehouse]);
 
   // عند اختيار نوع السند
   const handleDocTypeSelect = useCallback(async (id: string) => {
@@ -834,13 +829,12 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     const payMethod = paymentType === "cash" ? "cash" : "credit";
     const status = paymentType === "cash" ? "paid" : (remainingAmount <= 0 ? "paid" : "confirmed");
 
-    if (!branchId) { toast.error("يجب اختيار الفرع أولاً"); throw new Error("validation"); }
+    if (!warehouseId) { toast.error("يجب اختيار الفرع / المخزن أولاً"); throw new Error("validation"); }
     createMutation.mutate({
       invoiceNumber: finalInvoiceNumber,
       invoiceType: "sale",
       invoiceDate,
       dueDate: dueDate || undefined,
-      branchId: branchId ?? undefined,
       sellerUserId: sellerUserId ?? undefined,
       customerId: customerId ?? undefined,
       customerName: customerName || undefined,
@@ -880,7 +874,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     });
   }, [
     invoiceNumber, invoiceDate, dueDate, customerId, customerName,
-    branchId, sellerUserId,
+    sellerUserId,
     customerType, customerTaxNumber,
     warehouseId, currency, exchangeRate, paymentType, paidAmount,
     remainingAmount, notes, lines, subtotal, totalDiscount, totalTax,
@@ -953,7 +947,6 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
         invoiceType: "sale",
         invoiceDate,
         dueDate: dueDate || undefined,
-        branchId: branchId ?? undefined,
         sellerUserId: sellerUserId ?? undefined,
         customerId: customerId ?? undefined,
         customerName: customerName || undefined,
@@ -1002,7 +995,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     warehouseId, currency, exchangeRate, paymentType, paidAmount,
     remainingAmount, notes, lines, subtotal, totalDiscount, totalTax,
     netTotal, createMutation, journalId, nextJournalNumberMutation,
-    docTypeId, docTypesQuery.data, branchId, sellerUserId, stockQuery.data, basedOnQuery.data,
+    docTypeId, docTypesQuery.data, sellerUserId, stockQuery.data, basedOnQuery.data,
   ]);
 
   // ── New Invoice ───────────────────────────────────────────────────────────
@@ -1169,10 +1162,10 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       <div className="border-b border-[#b0a89a] px-3 pt-2 pb-2" style={{ background: "#F7F5EE", boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }}>
         {/* ثوابت مشتركة لجميع الحقول — ارتفاع موحد 26px + عرض label موحد */}
         {/* ─── تنبيه: اختر الفرع أولاً ───────────────────────────────────── */}
-        {!branchId && erpMode !== "view" && (
+        {!warehouseId && erpMode !== "view" && (
           <div style={{ background: "#fef3c7", border: "1px solid #f59e0b", borderRadius: 6, padding: "5px 12px", marginBottom: 6, display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#92400e", fontWeight: 600 }}>
             <span style={{ fontSize: 15 }}>⚠</span>
-            اختر الفرع أولاً لاستكمال بيانات الفاتورة — جميع الحقول مُعطَّلة حتى اختيار الفرع
+            اختر الفرع / المخزن أولاً لاستكمال بيانات الفاتورة — جميع الحقول مُعطَّلة حتى اختيار الفرع/المخزن
           </div>
         )}
 
@@ -1180,15 +1173,15 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
           {/* ══ صف 1: رقم الفاتورة │ بناءً على │ نوع السند ══ */}
 
-          {/* ══ col 1: الفرع — أول حقل إلزامي ══ */}
+          {/* ══ col 1: الفرع / المخزن — أول حقل إلزامي ══ */}
           {(() => {
-            const branches = branchesQuery.data ?? [];
-            const selBranch = branches.find((b: any) => b.id === branchId);
-            const bName = (b: any): string => isAr ? (b.name ?? b.nameEn ?? "") : (b.nameEn || (b.name ?? ""));
+            const whs = warehousesQuery.data ?? [];
+            const selWh = whs.find((w: any) => w.id === warehouseId);
+            const wName = (w: any): string => isAr ? (w.name ?? w.nameEn ?? "") : (w.nameEn || (w.name ?? ""));
             return (
               <div className="flex items-center flex-shrink-0 relative" style={{ gap: 5 }}>
                 <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 56, flexShrink: 0, whiteSpace: "nowrap" }}>
-                  {isAr ? "الـ ـفرع" : "Branch"}
+                  {isAr ? "الفرع/المخزن" : "Branch/WH"}
                 </label>
                 <div className="flex relative flex-shrink-0" style={{ height: 26 }}>
                   <button
@@ -1197,43 +1190,43 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                     className="flex items-center gap-1 classic-input"
                     style={{
                       height: 26, width: 160, paddingInline: "6px 4px",
-                      background: selBranch ? "#f0fff4" : "#fff8e1",
-                      border: `2px solid ${selBranch ? "#22c55e" : "#f59e0b"}`,
+                      background: selWh ? "#f0fff4" : "#fff8e1",
+                      border: `2px solid ${selWh ? "#22c55e" : "#f59e0b"}`,
                       borderRadius: "4px 0 0 4px", borderInlineEnd: "none",
-                      color: selBranch ? "#15803d" : "#b45309", fontSize: 11, fontWeight: 700,
+                      color: selWh ? "#15803d" : "#b45309", fontSize: 11, fontWeight: 700,
                       whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                     }}
-                    title="اختر الفرع (مطلوب)"
+                    title="اختر الفرع / المخزن (مطلوب)"
                   >
                     <span className="flex-1 truncate text-start">
-                      {selBranch ? bName(selBranch) : "⚠ اختر الفرع أولاً"}
+                      {selWh ? wName(selWh) : "⚠ اختر الفرع/المخزن"}
                     </span>
                   </button>
                   <button
                     onClick={() => { if (erpMode !== "view") setBranchOpen(o => !o); }}
                     disabled={erpMode === "view"}
                     className="flex items-center justify-center flex-shrink-0"
-                    style={{ width: 18, height: 26, borderRadius: "0 4px 4px 0", background: selBranch ? "#22c55e" : "#f59e0b", border: `2px solid ${selBranch ? "#16a34a" : "#d97706"}`, borderInlineStart: "none", color: "white", fontSize: "9px" }}
+                    style={{ width: 18, height: 26, borderRadius: "0 4px 4px 0", background: selWh ? "#22c55e" : "#f59e0b", border: `2px solid ${selWh ? "#16a34a" : "#d97706"}`, borderInlineStart: "none", color: "white", fontSize: "9px" }}
                   >▼</button>
 
                   {branchOpen && (<>
                     <div className="fixed inset-0 z-[9998]" onClick={() => setBranchOpen(false)} />
                     <div className="absolute top-full z-[9999] mt-1 bg-white rounded-lg overflow-hidden" style={{ insetInlineStart: 0, minWidth: 240, boxShadow: "0 8px 32px rgba(0,0,0,0.18)", border: "1px solid #e2e8f0" }} dir={isAr ? "rtl" : "ltr"}>
                       <div className="flex items-center justify-between px-3 py-2" style={{ background: "#166534" }}>
-                        <span className="text-white text-[11px] font-bold">اختر الفرع</span>
+                        <span className="text-white text-[11px] font-bold">اختر الفرع / المخزن</span>
                         <button onClick={() => setBranchOpen(false)} style={{ color: "rgba(255,255,255,0.7)", fontSize: "11px" }}>✕</button>
                       </div>
-                      {branches.length === 0 ? (
-                        <div className="px-4 py-5 text-center text-[11px] text-slate-500">لا توجد فروع مُعرَّفة</div>
+                      {whs.length === 0 ? (
+                        <div className="px-4 py-5 text-center text-[11px] text-slate-500">لا توجد مخازن/فروع مُعرَّفة</div>
                       ) : (
                         <div className="overflow-y-auto" style={{ maxHeight: 220 }}>
-                          {branches.map((b: any, idx: number) => {
-                            const isSel = b.id === branchId;
+                          {whs.map((w: any, idx: number) => {
+                            const isSel = w.id === warehouseId;
                             return (
-                              <button key={b.id} onClick={() => handleBranchSelect(b.id)} className="w-full flex items-center transition-colors" style={{ textAlign: isAr ? "right" : "left", background: isSel ? "#f0fff4" : idx % 2 === 0 ? "#fafafa" : "white", borderBottom: "1px solid #f1f5f9", padding: "7px 12px" }}>
+                              <button key={w.id} onClick={() => handleWarehouseSelect(w.id)} className="w-full flex items-center transition-colors" style={{ textAlign: isAr ? "right" : "left", background: isSel ? "#f0fff4" : idx % 2 === 0 ? "#fafafa" : "white", borderBottom: "1px solid #f1f5f9", padding: "7px 12px" }}>
                                 <span style={{ width: 16, color: isSel ? "#22c55e" : "transparent", fontSize: "11px", flexShrink: 0 }}>✓</span>
                                 <div className="flex-1 min-w-0 mx-2">
-                                  <div className="text-[12px] font-semibold truncate" style={{ color: isSel ? "#15803d" : "#1e293b" }}>{bName(b)}</div>
+                                  <div className="text-[12px] font-semibold truncate" style={{ color: isSel ? "#15803d" : "#1e293b" }}>{wName(w)}</div>
                                 </div>
                               </button>
                             );
@@ -1250,7 +1243,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           {/* ══ col 2: الدفتر + رقم الفاتورة ══ */}
           {(() => {
             const allJournals = journalsQuery.data ?? [];
-            const branchJournals = branchId ? allJournals.filter((j: any) => j.branchId === branchId) : allJournals;
+            const branchJournals = warehouseId ? allJournals.filter((j: any) => j.warehouseId === warehouseId) : allJournals;
             const selected = allJournals.find((j: any) => j.id === journalId);
             const jName = (j: any): string => isAr ? (j.name ?? "") : (j.name2 || (j.name ?? ""));
             return (
@@ -1260,35 +1253,35 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   <label style={{ fontSize: 10, fontWeight: 700, color: "#555", flexShrink: 0, whiteSpace: "nowrap" }}>الدفتر</label>
                   <div className="flex relative flex-shrink-0" style={{ height: 26 }}>
                     <button
-                      onClick={() => { if (branchId && erpMode !== "view") setJournalOpen(o => !o); }}
-                      disabled={!branchId || erpMode === "view"}
+                      onClick={() => { if (warehouseId && erpMode !== "view") setJournalOpen(o => !o); }}
+                      disabled={!warehouseId || erpMode === "view"}
                       className="flex items-center gap-1 classic-input"
                       style={{
                         height: 26, width: 138, paddingInline: "6px 4px",
-                        background: selected ? "#eff6ff" : !branchId ? "#f3f4f6" : "#fafafa",
+                        background: selected ? "#eff6ff" : !warehouseId ? "#f3f4f6" : "#fafafa",
                         border: `1px solid ${selected ? "#3b82f6" : "#c9c4bb"}`,
                         borderRadius: "4px 0 0 4px", borderInlineEnd: "none",
-                        color: selected ? "#1d4ed8" : !branchId ? "#9ca3af" : "#888", fontSize: 11, fontWeight: selected ? 700 : 400,
-                        cursor: !branchId || erpMode === "view" ? "not-allowed" : "pointer",
+                        color: selected ? "#1d4ed8" : !warehouseId ? "#9ca3af" : "#888", fontSize: 11, fontWeight: selected ? 700 : 400,
+                        cursor: !warehouseId || erpMode === "view" ? "not-allowed" : "pointer",
                       }}
-                      title={!branchId ? "اختر الفرع أولاً" : "اختر الدفتر"}
+                      title={!warehouseId ? "اختر الفرع/المخزن أولاً" : "اختر الدفتر"}
                     >
                       <span className="flex-1 truncate text-start">
-                        {selected ? jName(selected) : !branchId ? "—" : "— اختر —"}
+                        {selected ? jName(selected) : !warehouseId ? "—" : "— اختر —"}
                       </span>
                     </button>
                     <button
-                      onClick={() => { if (branchId && erpMode !== "view") setJournalOpen(o => !o); }}
-                      disabled={!branchId || erpMode === "view"}
+                      onClick={() => { if (warehouseId && erpMode !== "view") setJournalOpen(o => !o); }}
+                      disabled={!warehouseId || erpMode === "view"}
                       className="flex items-center justify-center flex-shrink-0"
                       style={{ width: 18, height: 26, borderRadius: "0 4px 4px 0", background: selected ? "#3b82f6" : "#e5e0d8", border: `1px solid ${selected ? "#2563eb" : "#c9c4bb"}`, color: selected ? "white" : "#666", fontSize: "9px" }}
                     >▼</button>
 
-                    {journalOpen && branchId && (<>
+                    {journalOpen && warehouseId && (<>
                       <div className="fixed inset-0 z-[9998]" onClick={() => setJournalOpen(false)} />
                       <div className="absolute top-full z-[9999] mt-1 bg-white rounded-lg overflow-hidden" style={{ insetInlineStart: 0, minWidth: 270, boxShadow: "0 8px 32px rgba(0,0,0,0.18)", border: "1px solid #e2e8f0" }} dir={isAr ? "rtl" : "ltr"}>
                         <div className="flex items-center justify-between px-3 py-2" style={{ background: "#1e40af" }}>
-                          <span className="text-white text-[11px] font-bold">دفاتر المبيعات — {(branchesQuery.data ?? []).find((b: any) => b.id === branchId)?.name ?? ""}</span>
+                          <span className="text-white text-[11px] font-bold">دفاتر المبيعات — {(warehousesQuery.data ?? []).find((w: any) => w.id === warehouseId)?.name ?? ""}</span>
                           <button onClick={() => setJournalOpen(false)} style={{ color: "rgba(255,255,255,0.7)", fontSize: "11px" }}>✕</button>
                         </div>
                         {branchJournals.length === 0 ? (
@@ -1329,9 +1322,9 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   <input
                     value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)}
                     className="classic-input text-center font-bold"
-                    style={{ width: 128, height: 26, background: selected ? "#eff6ff" : !branchId ? "#f3f4f6" : "#FFFDE7", borderColor: selected ? "#3b82f6" : "#F59E0B", borderRadius: "4px", color: !branchId ? "#9ca3af" : "#1a1a1a", fontSize: "13px", fontWeight: 700 }}
-                    readOnly={!!journalId || !branchId}
-                    title={!branchId ? "اختر الفرع أولاً" : "رقم الفاتورة التسلسلي"}
+                    style={{ width: 128, height: 26, background: selected ? "#eff6ff" : !warehouseId ? "#f3f4f6" : "#FFFDE7", borderColor: selected ? "#3b82f6" : "#F59E0B", borderRadius: "4px", color: !warehouseId ? "#9ca3af" : "#1a1a1a", fontSize: "13px", fontWeight: 700 }}
+                    readOnly={!!journalId || !warehouseId}
+                    title={!warehouseId ? "اختر الفرع/المخزن أولاً" : "رقم الفاتورة التسلسلي"}
                   />
                 </div>
               </div>
@@ -1345,7 +1338,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
               <div style={{ flexShrink: 0, width: 110, display: "flex" }}>
                 <ContextSelectInput
                   value={basedOnType}
-                  onChange={v => { if (!branchId) { return; } setBasedOnType(v as any); setBasedOnNum(''); setBasedOnTrigger(''); }}
+                  onChange={v => { if (!warehouseId) { return; } setBasedOnType(v as any); setBasedOnNum(''); setBasedOnTrigger(''); }}
                   options={[
                     { value: "order",    label: "أمر بيع" },
                     { value: "quote",    label: "عرض أسعار" },
@@ -1353,8 +1346,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                     { value: "sale",     label: "فاتورة مبيعات" },
                   ]}
                   menuTitle="نوع المستند المصدر"
-                  placeholder={!branchId ? "— —" : "النوع ⊞"}
-                  disabled={!branchId || erpMode === "view"}
+                  placeholder={!warehouseId ? "— —" : "النوع ⊞"}
+                  disabled={!warehouseId || erpMode === "view"}
                   style={{ height: 26 }}
                 />
               </div>
@@ -1364,13 +1357,12 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                 onChange={v => { setBasedOnNum(v); setBasedOnTrigger(""); }}
                 onPick={num => { setBasedOnNum(num); setBasedOnTrigger(num); }}
                 warehouseId={warehouseId}
-                branchId={branchId}
                 isFetching={basedOnQuery.isFetching}
                 trigger={basedOnTrigger}
                 isFound={basedOnTrigger && !basedOnQuery.isFetching
                   ? basedOnQuery.data != null
                   : null}
-                disabled={!branchId || erpMode === "view"}
+                disabled={!warehouseId || erpMode === "view"}
               />
             </div>
           </div>
@@ -1564,39 +1556,39 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                 <label style={{ fontSize: 10, fontWeight: 700, color: "#555", flexShrink: 0, whiteSpace: "nowrap" }}>البائع</label>
                 <div className="flex relative flex-1" style={{ height: 26 }}>
                   <button
-                    onClick={() => { if (branchId && erpMode !== "view") setSellerOpen(o => !o); }}
-                    disabled={!branchId || erpMode === "view"}
+                    onClick={() => { if (warehouseId && erpMode !== "view") setSellerOpen(o => !o); }}
+                    disabled={!warehouseId || erpMode === "view"}
                     className="flex items-center gap-1 classic-input flex-1"
                     style={{
                       height: 26, paddingInline: "6px 4px",
-                      background: sellerObj ? "#faf5ff" : !branchId ? "#f3f4f6" : "#fafafa",
+                      background: sellerObj ? "#faf5ff" : !warehouseId ? "#f3f4f6" : "#fafafa",
                       border: `1px solid ${sellerObj ? "#7c3aed" : "#c9c4bb"}`,
                       borderRadius: "4px 0 0 4px", borderInlineEnd: "none",
-                      color: sellerObj ? "#5b21b6" : !branchId ? "#9ca3af" : "#888",
+                      color: sellerObj ? "#5b21b6" : !warehouseId ? "#9ca3af" : "#888",
                       fontSize: 11, fontWeight: sellerObj ? 700 : 400,
-                      cursor: !branchId || erpMode === "view" ? "not-allowed" : "pointer",
+                      cursor: !warehouseId || erpMode === "view" ? "not-allowed" : "pointer",
                     }}
-                    title={!branchId ? "اختر الفرع أولاً" : "اختر البائع"}
+                    title={!warehouseId ? "اختر الفرع/المخزن أولاً" : "اختر البائع"}
                   >
                     <span className="flex-1 truncate text-start">
-                      {sellerObj ? (sellerObj.name || sellerObj.username) : !branchId ? "—" : "— اختر البائع —"}
+                      {sellerObj ? (sellerObj.name || sellerObj.username) : !warehouseId ? "—" : "— اختر البائع —"}
                     </span>
                   </button>
                   <button
-                    onClick={() => { if (branchId && erpMode !== "view") setSellerOpen(o => !o); }}
-                    disabled={!branchId || erpMode === "view"}
+                    onClick={() => { if (warehouseId && erpMode !== "view") setSellerOpen(o => !o); }}
+                    disabled={!warehouseId || erpMode === "view"}
                     className="flex items-center justify-center flex-shrink-0"
                     style={{ width: 18, height: 26, borderRadius: "0 4px 4px 0", background: sellerObj ? "#7c3aed" : "#e5e0d8", border: `1px solid ${sellerObj ? "#6d28d9" : "#c9c4bb"}`, color: sellerObj ? "white" : "#666", fontSize: "9px" }}
                   >▼</button>
 
-                  {sellerOpen && branchId && (<>
+                  {sellerOpen && warehouseId && (<>
                     <div className="fixed inset-0 z-[9998]" onClick={() => setSellerOpen(false)} />
                     <div className="absolute top-full z-[9999] mt-1 bg-white rounded-lg overflow-hidden" style={{ insetInlineStart: 0, minWidth: 220, boxShadow: "0 8px 32px rgba(0,0,0,0.18)", border: "1px solid #e2e8f0" }} dir={isAr ? "rtl" : "ltr"}>
                       <div className="px-3 py-2" style={{ background: "#4c1d95" }}>
                         <span className="text-white text-[11px] font-bold">اختر البائع</span>
                       </div>
                       {sellers.length === 0 ? (
-                        <div className="px-4 py-4 text-center text-[11px] text-slate-500">لا يوجد بائعون مؤهلون لهذا الفرع</div>
+                        <div className="px-4 py-4 text-center text-[11px] text-slate-500">لا يوجد بائعون مؤهلون لهذا الفرع/المخزن</div>
                       ) : (
                         <div className="overflow-y-auto" style={{ maxHeight: 200 }}>
                           {sellers.map((s, idx) => {
@@ -2652,27 +2644,27 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       )}
 
       {/* ── نافذة تأكيد تغيير الفرع ────────────────────────────────────────── */}
-      {showBranchChangeConfirm && (
+      {showWarehouseChangeConfirm && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center" style={{ background: "rgba(0,0,0,0.45)" }}>
           <div style={{ background: "white", borderRadius: 12, padding: 28, maxWidth: 420, width: "90%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)", direction: "rtl" }}>
             <div style={{ fontSize: 20, marginBottom: 10 }}>🔄</div>
-            <p style={{ fontWeight: 800, fontSize: 15, marginBottom: 8, color: "#1e293b" }}>تغيير الفرع</p>
+            <p style={{ fontWeight: 800, fontSize: 15, marginBottom: 8, color: "#1e293b" }}>تغيير الفرع / المخزن</p>
             <p style={{ color: "#64748b", fontSize: 13, marginBottom: 22, lineHeight: 1.6 }}>
-              تغيير الفرع سيؤدي إلى مسح المستند المصدر والمخزن والبائع وبنود الفاتورة والدفتر المؤقت. هل تريد المتابعة؟
+              تغيير الفرع/المخزن سيؤدي إلى مسح المستند المصدر والبائع وبنود الفاتورة والدفتر المؤقت. هل تريد المتابعة؟
             </p>
             <div className="flex gap-3 justify-start">
               <button
                 onClick={() => {
-                  if (pendingBranchId) void doSelectBranch(pendingBranchId);
-                  setShowBranchChangeConfirm(false);
-                  setPendingBranchId(null);
+                  if (pendingWarehouseId) void doSelectWarehouse(pendingWarehouseId);
+                  setShowWarehouseChangeConfirm(false);
+                  setPendingWarehouseId(null);
                 }}
                 style={{ height: 36, padding: "0 20px", background: "#dc2626", color: "white", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer" }}
               >
-                نعم، غيّر الفرع
+                نعم، غيّر الفرع/المخزن
               </button>
               <button
-                onClick={() => { setShowBranchChangeConfirm(false); setPendingBranchId(null); }}
+                onClick={() => { setShowWarehouseChangeConfirm(false); setPendingWarehouseId(null); }}
                 style={{ height: 36, padding: "0 20px", background: "#f1f5f9", color: "#334155", border: "1px solid #e2e8f0", borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: "pointer" }}
               >
                 إلغاء

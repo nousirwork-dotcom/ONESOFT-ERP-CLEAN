@@ -65,15 +65,15 @@ export const users = pgTable('users', {
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
-// ─── User Branch Assignments ───────────────────────────────────────────────────
-export const userBranchAssignments = pgTable('user_branch_assignments', {
-  id:        serial('id').primaryKey(),
-  orgId:     integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
-  userId:    integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  branchId:  integer('branch_id').notNull().references(() => branches.id, { onDelete: 'cascade' }),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
+// ─── User Warehouse Assignments (المخزن = الفرع في مسار المستندات) ──────────────
+export const userWarehouseAssignments = pgTable('user_warehouse_assignments', {
+  id:          serial('id').primaryKey(),
+  orgId:       integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  userId:      integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  warehouseId: integer('warehouse_id').notNull().references(() => warehouses.id, { onDelete: 'cascade' }),
+  createdAt:   timestamp('created_at').notNull().defaultNow(),
 }, (t) => ({
-  userBranchUnique: uniqueIndex('user_branch_assignments_user_branch_unique').on(t.userId, t.branchId),
+  uwaOrgUserWarehouseUnique: uniqueIndex('uwa_org_user_warehouse_unique').on(t.orgId, t.userId, t.warehouseId),
 }));
 
 // ─── User Groups ──────────────────────────────────────────────────────────────
@@ -329,7 +329,6 @@ export const salesInvoices = pgTable('sales_invoices', {
   customerType: varchar('customer_type', { length: 20 }).default('individual'),
   customerTaxNumber: varchar('customer_tax_number', { length: 100 }),
   warehouseId: integer('warehouse_id').references(() => warehouses.id, { onDelete: 'set null' }),
-  branchId: integer('branch_id').references(() => branches.id, { onDelete: 'set null' }),
   userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
   currency: varchar('currency', { length: 10 }).default('SAR'),
   exchangeRate: decimal('exchange_rate', { precision: 10, scale: 4 }).default('1'),
@@ -669,9 +668,8 @@ export const documentJournals = pgTable('document_journals', {
   numDigits:     integer('num_digits').notNull().default(6),
   includeYear:   boolean('include_year').notNull().default(true),
   currentSeq:    integer('current_seq').notNull().default(0), // آخر رقم مستخدم
-  // ── الربط بالكيانات ───────────────────────────────────────────────────────
+  // ── الربط بالكيان (المخزن = الفرع في مسار المستندات) ─────────────────────────
   warehouseId:   integer('warehouse_id').references(() => warehouses.id, { onDelete: 'set null' }),
-  branchId:      integer('branch_id').references(() => branches.id, { onDelete: 'set null' }),
   // ── الحسابات الافتراضية ───────────────────────────────────────────────────
   salesAccountId:   integer('sales_account_id').references(() => chartOfAccounts.id, { onDelete: 'set null' }),
   cashAccountId:    integer('cash_account_id').references(() => chartOfAccounts.id, { onDelete: 'set null' }),
@@ -696,7 +694,6 @@ export const documentJournals = pgTable('document_journals', {
   printOnSave:      boolean('print_on_save').notNull().default(false),
   customersJournal: varchar('customers_journal', { length: 50 }),
   suppliersJournal: varchar('suppliers_journal', { length: 50 }),
-  isSharedJournal:  boolean('is_shared_journal').notNull().default(false), // دفتر عام — يعمل مع أي فرع
   postingMode:      varchar('posting_mode', { length: 20 }).default('manual'),
   allowUnpost:      boolean('allow_unpost').notNull().default(true),
   allowEditAfterPost: boolean('allow_edit_after_post').notNull().default(false),

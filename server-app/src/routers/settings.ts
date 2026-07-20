@@ -308,16 +308,13 @@ export const branchesRouter = router({
       });
       if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'الفرع غير موجود' });
       assertCanDelete(current.recordPolicy, current.name, ctx.user.role === 'superadmin');
-      const [hasWarehouses, hasInvoices, hasInventoryCounts] = await Promise.all([
+      const [hasWarehouses, hasInventoryCounts] = await Promise.all([
         db.select({ id: warehouses.id }).from(warehouses)
           .where(and(eq(warehouses.branchId, input.id), eq(warehouses.orgId, ctx.user.orgId), eq(warehouses.isActive, true))).limit(1),
-        db.select({ id: salesInvoices.id }).from(salesInvoices)
-          .where(and(eq(salesInvoices.branchId, input.id), eq(salesInvoices.orgId, ctx.user.orgId))).limit(1),
         db.select({ id: inventoryCounts.id }).from(inventoryCounts)
           .where(and(eq(inventoryCounts.branchId, input.id), eq(inventoryCounts.orgId, ctx.user.orgId))).limit(1),
       ]);
       if (hasWarehouses.length > 0)     throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن حذف الفرع لأنه مرتبط بمخازن' });
-      if (hasInvoices.length > 0)       throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن حذف الفرع لأنه مرتبط بفواتير مبيعات' });
       if (hasInventoryCounts.length > 0)throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن حذف الفرع لأنه مرتبط بعمليات جرد مخزني' });
       await db.update(branches).set({ isActive: false })
         .where(and(eq(branches.id, input.id), eq(branches.orgId, ctx.user.orgId)));

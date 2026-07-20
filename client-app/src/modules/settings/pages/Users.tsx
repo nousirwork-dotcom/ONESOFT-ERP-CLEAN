@@ -206,45 +206,45 @@ function ChangeUserPasswordDialog({
   );
 }
 
-// ─── لوحة إسناد الفروع للمستخدم ───────────────────────────────────────────────
-function UserBranchAssignmentsPanel({ userId, orgId }: { userId: number; orgId: number }) {
+// ─── لوحة إسناد المخازن/الفروع للمستخدم ─────────────────────────────────────
+function UserWarehouseAssignmentsPanel({ userId, orgId }: { userId: number; orgId: number }) {
   const utils = trpc.useUtils();
   const [addOpen, setAddOpen] = useState(false);
-  const [selectedBranchId, setSelectedBranchId] = useState<number | "">("");
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<number | "">("");
 
-  const assignmentsQ = trpc.users.listUserBranchAssignments.useQuery({ userId });
-  const branchesQ    = trpc.branches.list.useQuery();
-  const addMut       = trpc.users.addUserBranchAssignment.useMutation({
+  const assignmentsQ  = trpc.users.listUserWarehouseAssignments.useQuery({ userId });
+  const warehousesQ   = trpc.warehouses.list.useQuery();
+  const addMut        = trpc.users.addUserWarehouseAssignment.useMutation({
     onSuccess: () => {
-      void utils.users.listUserBranchAssignments.invalidate({ userId });
+      void utils.users.listUserWarehouseAssignments.invalidate({ userId });
       setAddOpen(false);
-      setSelectedBranchId("");
-      toast.success("تم إسناد الفرع بنجاح");
+      setSelectedWarehouseId("");
+      toast.success("تم إسناد الفرع/المخزن بنجاح");
     },
     onError: (e) => toast.error(e.message),
   });
-  const removeMut = trpc.users.removeUserBranchAssignment.useMutation({
+  const removeMut = trpc.users.removeUserWarehouseAssignment.useMutation({
     onSuccess: () => {
-      void utils.users.listUserBranchAssignments.invalidate({ userId });
-      toast.success("تم إلغاء إسناد الفرع");
+      void utils.users.listUserWarehouseAssignments.invalidate({ userId });
+      toast.success("تم إلغاء إسناد الفرع/المخزن");
     },
     onError: (e) => toast.error(e.message),
   });
 
   const assignments = assignmentsQ.data ?? [];
-  const assignedBranchIds = new Set(assignments.map(a => a.branchId));
-  const availableBranches = (branchesQ.data ?? []).filter((b: any) => !assignedBranchIds.has(b.id));
+  const assignedWarehouseIds = new Set(assignments.map(a => a.warehouseId));
+  const availableWarehouses = (warehousesQ.data ?? []).filter((w: any) => !assignedWarehouseIds.has(w.id));
 
   return (
     <div className="rounded-2xl border bg-muted/20 p-4 space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Building2 className="w-4 h-4 text-primary" />
-          <p className="font-medium">الفروع المُسندة</p>
+          <p className="font-medium">الفروع / المخازن المُسندة</p>
         </div>
         <Button size="sm" variant="outline" className="gap-1 h-7 text-xs"
-          onClick={() => setAddOpen(o => !o)} disabled={availableBranches.length === 0}>
-          <Plus className="w-3 h-3" /> إسناد فرع
+          onClick={() => setAddOpen(o => !o)} disabled={availableWarehouses.length === 0}>
+          <Plus className="w-3 h-3" /> إسناد فرع/مخزن
         </Button>
       </div>
 
@@ -252,19 +252,19 @@ function UserBranchAssignmentsPanel({ userId, orgId }: { userId: number; orgId: 
         <div className="flex gap-2 items-center">
           <select
             className="flex-1 border rounded-md px-2 py-1 text-sm bg-background"
-            value={selectedBranchId}
-            onChange={e => setSelectedBranchId(e.target.value ? Number(e.target.value) : "")}
+            value={selectedWarehouseId}
+            onChange={e => setSelectedWarehouseId(e.target.value ? Number(e.target.value) : "")}
           >
-            <option value="">اختر فرعاً…</option>
-            {availableBranches.map((b: any) => (
-              <option key={b.id} value={b.id}>{b.name}</option>
+            <option value="">اختر مخزناً/فرعاً…</option>
+            {availableWarehouses.map((w: any) => (
+              <option key={w.id} value={w.id}>{w.name}</option>
             ))}
           </select>
-          <Button size="sm" disabled={!selectedBranchId || addMut.isPending}
-            onClick={() => selectedBranchId && addMut.mutate({ userId, branchId: Number(selectedBranchId) })}>
+          <Button size="sm" disabled={!selectedWarehouseId || addMut.isPending}
+            onClick={() => selectedWarehouseId && addMut.mutate({ userId, warehouseId: Number(selectedWarehouseId) })}>
             {addMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "إسناد"}
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => { setAddOpen(false); setSelectedBranchId(""); }}>
+          <Button size="sm" variant="ghost" onClick={() => { setAddOpen(false); setSelectedWarehouseId(""); }}>
             <X className="w-3 h-3" />
           </Button>
         </div>
@@ -273,14 +273,14 @@ function UserBranchAssignmentsPanel({ userId, orgId }: { userId: number; orgId: 
       {assignmentsQ.isLoading ? (
         <p className="text-xs text-muted-foreground flex gap-1 items-center"><Loader2 className="w-3 h-3 animate-spin" /> جاري التحميل…</p>
       ) : assignments.length === 0 ? (
-        <p className="text-xs text-muted-foreground">لا توجد فروع مُسندة — البائع سيظهر في جميع الفروع إذا كان مؤهلاً.</p>
+        <p className="text-xs text-muted-foreground">لا توجد فروع/مخازن مُسندة — البائع سيظهر في جميع الفروع إذا كان مؤهلاً.</p>
       ) : (
         <div className="space-y-1.5">
           {assignments.map(a => (
             <div key={a.id} className="flex items-center justify-between bg-background border rounded-lg px-3 py-1.5">
               <div className="flex items-center gap-2">
                 <Building2 className="w-3 h-3 text-muted-foreground" />
-                <span className="text-sm font-medium">{a.branchName}</span>
+                <span className="text-sm font-medium">{a.warehouseName}</span>
               </div>
               <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-destructive hover:text-destructive"
                 disabled={removeMut.isPending}
@@ -594,7 +594,7 @@ export default function Users() {
       </div>
 
       {/* الفروع المُسندة */}
-      <UserBranchAssignmentsPanel userId={selectedUser.id} orgId={selectedUser.orgId} />
+      <UserWarehouseAssignmentsPanel userId={selectedUser.id} orgId={selectedUser.orgId} />
 
       {/* صلاحيات العمل */}
       {(selectedUser?.role === "admin" || selectedUser?.role === "superadmin") ? (

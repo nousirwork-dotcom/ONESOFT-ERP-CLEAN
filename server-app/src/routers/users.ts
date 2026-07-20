@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { eq, and, sql, count, inArray } from 'drizzle-orm';
 import { router, adminProcedure, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { users, organizations, salesInvoices, vouchers, stockVouchers, userCategories, appSettings, userGroups, branches, warehouses, userBranchAssignments } from '../schema.js';
+import { users, organizations, salesInvoices, vouchers, stockVouchers, userCategories, appSettings, userGroups, warehouses, userWarehouseAssignments } from '../schema.js';
 import { hashPassword } from '../auth.js';
 import { TRPCError } from '@trpc/server';
 import { getLimit } from '../lib/license.js';
@@ -26,18 +26,17 @@ export const usersRouter = router({
       .where(and(eq(users.orgId, ctx.user.orgId), eq(users.isActive, true)));
   }),
 
-  // قائمة البائعين — مفلترة بالفرع عبر user_branch_assignments (fallback: defaultBranchId)
+  // قائمة البائعين — مفلترة بالمخزن/الفرع عبر user_warehouse_assignments (fallback: defaultWarehouseId)
   listSalespersons: protectedProcedure
-    .input(z.object({ branchId: z.number().optional() }))
+    .input(z.object({ warehouseId: z.number().optional() }))
     .query(async ({ ctx, input }) => {
       const orgId = ctx.user.orgId;
-      // جلب جميع البائعين المؤهلين والنشطين أولاً
       const allSalespersons = await db.select({
         id: users.id,
         name: users.name,
         username: users.username,
         code: users.code,
-        defaultBranchId: users.defaultBranchId,
+        defaultWarehouseId: users.defaultWarehouseId,
       })
         .from(users)
         .where(and(
@@ -46,71 +45,71 @@ export const usersRouter = router({
           eq(users.canBeSalesperson, true),
         ));
 
-      if (!input.branchId || allSalespersons.length === 0) return allSalespersons;
+      if (!input.warehouseId || allSalespersons.length === 0) return allSalespersons;
 
-      // جلب assignment IDs للفرع المطلوب
+      // جلب assignment IDs للمخزن المطلوب
       const assignedUserIds = new Set(
-        (await db.select({ userId: userBranchAssignments.userId })
-          .from(userBranchAssignments)
+        (await db.select({ userId: userWarehouseAssignments.userId })
+          .from(userWarehouseAssignments)
           .where(and(
-            eq(userBranchAssignments.orgId, orgId),
-            eq(userBranchAssignments.branchId, input.branchId),
+            eq(userWarehouseAssignments.orgId, orgId),
+            eq(userWarehouseAssignments.warehouseId, input.warehouseId),
           ))
         ).map(r => r.userId)
       );
 
-      // فلترة: مُسنَد للفرع عبر assignments OR defaultBranchId يطابق الفرع
+      // فلترة: مُسنَد للمخزن عبر assignments OR defaultWarehouseId يطابق المخزن
       return allSalespersons.filter(u =>
-        assignedUserIds.has(u.id) || u.defaultBranchId === input.branchId
+        assignedUserIds.has(u.id) || u.defaultWarehouseId === input.warehouseId
       );
     }),
 
-  // جلب فروع مستخدم محدد
-  listUserBranchAssignments: adminProcedure
+  // جلب مخازن مستخدم محدد
+  listUserWarehouseAssignments: adminProcedure
     .input(z.object({ userId: z.number() }))
     .query(async ({ ctx, input }) => {
       return db.select({
-        id: userBranchAssignments.id,
-        branchId: userBranchAssignments.branchId,
-        branchName: branches.name,
-        createdAt: userBranchAssignments.createdAt,
+        id: userWarehouseAssignments.id,
+        warehouseId: userWarehouseAssignments.warehouseId,
+        warehouseName: warehouses.name,
+        createdAt: userWarehouseAssignments.createdAt,
       })
-        .from(userBranchAssignments)
-        .innerJoin(branches, eq(branches.id, userBranchAssignments.branchId))
+        .from(userWarehouseAssignments)
+        .innerJoin(warehouses, eq(warehouses.id, userWarehouseAssignments.warehouseId))
         .where(and(
-          eq(userBranchAssignments.orgId, ctx.user.orgId),
-          eq(userBranchAssignments.userId, input.userId),
+          eq(userWarehouseAssignments.orgId, ctx.user.orgId),
+          eq(userWarehouseAssignments.userId, input.userId),
         ))
-        .orderBy(branches.name);
+        .orderBy(warehouses.name);
     }),
 
-  // إسناد مستخدم لفرع
-  addUserBranchAssignment: adminProcedure
-    .input(z.object({ userId: z.number(), branchId: z.number() }))
+  // إسناد مستخدم لمخزن/فرع
+  addUserWarehouseAssignment: adminProcedure
+    .input(z.object({ userId: z.number(), warehouseId: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const orgId = ctx.user.orgId;
-      // تحقق أن المستخدم والفرع ينتميان للمؤسسة
-      const [userRow, branchRow] = await Promise.all([
+      // تحقق أن المستخدم والمخزن ينتميان لنفس المنشأة (حماية Cross-Org على مستوى DB)
+      const [userRow, warehouseRow] = await Promise.all([
         db.query.users.findFirst({ where: and(eq(users.id, input.userId), eq(users.orgId, orgId)), columns: { id: true } }),
-        db.query.branches.findFirst({ where: and(eq(branches.id, input.branchId), eq(branches.orgId, orgId)), columns: { id: true } }),
+        db.query.warehouses.findFirst({ where: and(eq(warehouses.id, input.warehouseId), eq(warehouses.orgId, orgId)), columns: { id: true } }),
       ]);
       if (!userRow) throw new TRPCError({ code: 'NOT_FOUND', message: 'المستخدم غير موجود' });
-      if (!branchRow) throw new TRPCError({ code: 'NOT_FOUND', message: 'الفرع غير موجود' });
-      const [row] = await db.insert(userBranchAssignments)
-        .values({ orgId, userId: input.userId, branchId: input.branchId })
+      if (!warehouseRow) throw new TRPCError({ code: 'NOT_FOUND', message: 'المخزن/الفرع غير موجود' });
+      const [row] = await db.insert(userWarehouseAssignments)
+        .values({ orgId, userId: input.userId, warehouseId: input.warehouseId })
         .onConflictDoNothing()
         .returning();
-      return row ?? { userId: input.userId, branchId: input.branchId };
+      return row ?? { userId: input.userId, warehouseId: input.warehouseId };
     }),
 
-  // إزالة إسناد مستخدم من فرع
-  removeUserBranchAssignment: adminProcedure
+  // إزالة إسناد مستخدم من مخزن/فرع
+  removeUserWarehouseAssignment: adminProcedure
     .input(z.object({ assignmentId: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      await db.delete(userBranchAssignments)
+      await db.delete(userWarehouseAssignments)
         .where(and(
-          eq(userBranchAssignments.id, input.assignmentId),
-          eq(userBranchAssignments.orgId, ctx.user.orgId),
+          eq(userWarehouseAssignments.id, input.assignmentId),
+          eq(userWarehouseAssignments.orgId, ctx.user.orgId),
         ));
       return { ok: true };
     }),

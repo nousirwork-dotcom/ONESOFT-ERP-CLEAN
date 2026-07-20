@@ -69,6 +69,8 @@ const EXPECTED_TABLES = [
   // Real Estate Purchases (0025 + 0026 + 0027)
   're_purchases',
   're_purchase_statements',
+  // Warehouse-as-Branch unification (0043)
+  'user_warehouse_assignments',
 ];
 
 export async function checkSchema(pool: Pool): Promise<boolean> {

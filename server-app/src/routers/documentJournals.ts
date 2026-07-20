@@ -36,7 +36,6 @@ const journalInputShape = {
   numDigits:        z.number().default(6),
   includeYear:      z.boolean().default(false),
   warehouseId:      z.number().nullable().optional(),
-  branchId:         z.number().nullable().optional(),
   salesAccountId:   z.number().nullable().optional(),
   cashAccountId:    z.number().nullable().optional(),
   creditAccountId:  z.number().nullable().optional(),
