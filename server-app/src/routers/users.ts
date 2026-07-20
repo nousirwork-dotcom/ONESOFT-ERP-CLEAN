@@ -1,8 +1,13 @@
 import { z } from 'zod';
-import { eq, and, sql, count, inArray } from 'drizzle-orm';
+import { eq, and, sql, count, inArray, or } from 'drizzle-orm';
 import { router, adminProcedure, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { users, organizations, salesInvoices, vouchers, stockVouchers, userCategories, appSettings, userGroups, warehouses, userWarehouseAssignments } from '../schema.js';
+import {
+  users, organizations, salesInvoices, purchaseInvoices, journalEntries,
+  vouchers, receiptVouchers, paymentVouchers, stockVouchers,
+  userCategories, appSettings, userGroups, warehouses,
+  userWarehouseAssignments,
+} from '../schema.js';
 import { hashPassword } from '../auth.js';
 import { TRPCError } from '@trpc/server';
 import { getLimit } from '../lib/license.js';
@@ -453,22 +458,96 @@ export const usersRouter = router({
       return { success: true };
     }),
 
-  // حذف مستخدم (تعطيل)
-  delete: adminProcedure
+  // ── فحص إمكانية حذف مستخدم ───────────────────────────────────────────────
+  checkDeleteEligibility: adminProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input, ctx }) => {
+    .query(async ({ input, ctx }) => {
+      const orgId = ctx.user.orgId;
+
+      const targetUser = await db.query.users.findFirst({
+        where: and(eq(users.id, input.id), eq(users.orgId, orgId)),
+      });
+      if (!targetUser) throw new TRPCError({ code: 'NOT_FOUND', message: 'المستخدم غير موجود' });
+
       if (input.id === ctx.user.id) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكنك حذف حسابك الخاص' });
+        return { canDelete: false, canDeactivate: false, linkedCount: 0, reason: 'لا يمكنك حذف حسابك الخاص' };
       }
 
-      const user = await db.query.users.findFirst({
-        where: and(eq(users.id, input.id), eq(users.orgId, ctx.user.orgId)),
-      });
-      if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: 'المستخدم غير موجود' });
-
-      // ── حماية المدير الأساسي (أول مستخدم في المؤسسة) ───────────────────────
       const firstUser = await db.query.users.findFirst({
-        where: eq(users.orgId, ctx.user.orgId),
+        where: eq(users.orgId, orgId),
+        orderBy: (u, { asc }) => [asc(u.id)],
+        columns: { id: true },
+      });
+      if (firstUser?.id === input.id) {
+        return { canDelete: false, canDeactivate: false, linkedCount: 0, reason: 'لا يمكن حذف أو إيقاف المدير الأساسي للنظام' };
+      }
+
+      if (targetUser.isActive && (targetUser.role === 'admin' || targetUser.role === 'superadmin')) {
+        const [adminRow] = await db.select({ cnt: count() }).from(users).where(
+          and(eq(users.orgId, orgId), eq(users.isActive, true), inArray(users.role, ['admin', 'superadmin'])),
+        );
+        if (Number(adminRow.cnt) <= 1) {
+          return { canDelete: false, canDeactivate: false, linkedCount: 0, reason: 'لا يمكن حذف أو إيقاف آخر مدير نظام نشط في المؤسسة' };
+        }
+      }
+
+      // ── عدّ الحركات والمستندات المرتبطة بالمستخدم ────────────────────────
+      const [[siRow], [piRow], [jeRow], [voRow], [rvRow], [pvRow], [svRow]] = await Promise.all([
+        db.select({ cnt: count() }).from(salesInvoices).where(
+          and(eq(salesInvoices.orgId, orgId), or(eq(salesInvoices.userId, input.id), eq(salesInvoices.sellerUserId, input.id))),
+        ),
+        db.select({ cnt: count() }).from(purchaseInvoices).where(
+          and(eq(purchaseInvoices.orgId, orgId), eq(purchaseInvoices.userId, input.id)),
+        ),
+        db.select({ cnt: count() }).from(journalEntries).where(
+          and(eq(journalEntries.orgId, orgId), eq(journalEntries.userId, input.id)),
+        ),
+        db.select({ cnt: count() }).from(vouchers).where(
+          and(eq(vouchers.orgId, orgId), eq(vouchers.userId, input.id)),
+        ),
+        db.select({ cnt: count() }).from(receiptVouchers).where(
+          and(eq(receiptVouchers.orgId, orgId), eq(receiptVouchers.userId, input.id)),
+        ),
+        db.select({ cnt: count() }).from(paymentVouchers).where(
+          and(eq(paymentVouchers.orgId, orgId), eq(paymentVouchers.userId, input.id)),
+        ),
+        db.select({ cnt: count() }).from(stockVouchers).where(
+          and(eq(stockVouchers.orgId, orgId), eq(stockVouchers.userId, input.id)),
+        ),
+      ]);
+
+      const linkedCount = Number(siRow.cnt) + Number(piRow.cnt) + Number(jeRow.cnt) +
+        Number(voRow.cnt) + Number(rvRow.cnt) + Number(pvRow.cnt) + Number(svRow.cnt);
+
+      if (linkedCount > 0) {
+        return {
+          canDelete: false,
+          canDeactivate: targetUser.isActive,
+          linkedCount,
+          reason: 'لا يمكن حذف المستخدم لأنه مرتبط بحركات أو مستندات مسجلة. يمكنك إيقاف المستخدم بدلًا من حذفه.',
+        };
+      }
+
+      return { canDelete: true, canDeactivate: true, linkedCount: 0, reason: undefined };
+    }),
+
+  // ── حذف مستخدم نهائياً (لا يمكن التراجع) ────────────────────────────────
+  deleteUser: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const orgId = ctx.user.orgId;
+
+      if (input.id === ctx.user.id) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك حذف حسابك الخاص' });
+      }
+
+      const targetUser = await db.query.users.findFirst({
+        where: and(eq(users.id, input.id), eq(users.orgId, orgId)),
+      });
+      if (!targetUser) throw new TRPCError({ code: 'NOT_FOUND', message: 'المستخدم غير موجود' });
+
+      const firstUser = await db.query.users.findFirst({
+        where: eq(users.orgId, orgId),
         orderBy: (u, { asc }) => [asc(u.id)],
         columns: { id: true },
       });
@@ -476,70 +555,99 @@ export const usersRouter = router({
         throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكن حذف المدير الأساسي للنظام' });
       }
 
-      // ── حماية آخر مدير نشط ────────────────────────────────────────────────
-      if (user.isActive && (user.role === 'admin' || user.role === 'superadmin')) {
-        const [adminRow] = await db.select({ cnt: count() }).from(users)
-          .where(and(
-            eq(users.orgId, ctx.user.orgId),
-            eq(users.isActive, true),
-            inArray(users.role, ['admin', 'superadmin']),
-          ));
+      if (targetUser.isActive && (targetUser.role === 'admin' || targetUser.role === 'superadmin')) {
+        const [adminRow] = await db.select({ cnt: count() }).from(users).where(
+          and(eq(users.orgId, orgId), eq(users.isActive, true), inArray(users.role, ['admin', 'superadmin'])),
+        );
         if (Number(adminRow.cnt) <= 1) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'لا يمكن حذف آخر مدير نظام نشط في المؤسسة',
-          });
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكن حذف آخر مدير نظام نشط في المؤسسة' });
         }
       }
 
-      const hasDraftInvoices = await db
-        .select({ id: salesInvoices.id })
-        .from(salesInvoices)
-        .where(
-          and(
-            eq(salesInvoices.userId, input.id),
-            eq(salesInvoices.orgId, ctx.user.orgId),
-            sql`${salesInvoices.status} = 'draft'`
-          )
-        )
-        .limit(1);
-      if (hasDraftInvoices.length > 0) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن حذف المستخدم لأنه مرتبط بفواتير مبيعات مفتوحة' });
+      // ── إعادة فحص الحركات وقت الحذف الفعلي (منع race condition) ──────────
+      const [[siRow], [piRow], [jeRow], [voRow], [rvRow], [pvRow], [svRow]] = await Promise.all([
+        db.select({ cnt: count() }).from(salesInvoices).where(
+          and(eq(salesInvoices.orgId, orgId), or(eq(salesInvoices.userId, input.id), eq(salesInvoices.sellerUserId, input.id))),
+        ),
+        db.select({ cnt: count() }).from(purchaseInvoices).where(
+          and(eq(purchaseInvoices.orgId, orgId), eq(purchaseInvoices.userId, input.id)),
+        ),
+        db.select({ cnt: count() }).from(journalEntries).where(
+          and(eq(journalEntries.orgId, orgId), eq(journalEntries.userId, input.id)),
+        ),
+        db.select({ cnt: count() }).from(vouchers).where(
+          and(eq(vouchers.orgId, orgId), eq(vouchers.userId, input.id)),
+        ),
+        db.select({ cnt: count() }).from(receiptVouchers).where(
+          and(eq(receiptVouchers.orgId, orgId), eq(receiptVouchers.userId, input.id)),
+        ),
+        db.select({ cnt: count() }).from(paymentVouchers).where(
+          and(eq(paymentVouchers.orgId, orgId), eq(paymentVouchers.userId, input.id)),
+        ),
+        db.select({ cnt: count() }).from(stockVouchers).where(
+          and(eq(stockVouchers.orgId, orgId), eq(stockVouchers.userId, input.id)),
+        ),
+      ]);
+
+      const linkedCount = Number(siRow.cnt) + Number(piRow.cnt) + Number(jeRow.cnt) +
+        Number(voRow.cnt) + Number(rvRow.cnt) + Number(pvRow.cnt) + Number(svRow.cnt);
+
+      if (linkedCount > 0) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'لا يمكن حذف المستخدم لأنه مرتبط بحركات أو مستندات مسجلة. يمكنك إيقاف المستخدم بدلًا من حذفه.',
+        });
       }
 
-      const hasDraftVouchers = await db
-        .select({ id: vouchers.id })
-        .from(vouchers)
-        .where(
-          and(
-            eq(vouchers.userId, input.id),
-            eq(vouchers.orgId, ctx.user.orgId),
-            sql`${vouchers.status} = 'draft'`
-          )
-        )
-        .limit(1);
-      if (hasDraftVouchers.length > 0) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن حذف المستخدم لأنه مرتبط بسندات مالية مفتوحة' });
+      // ── حذف نهائي داخل transaction ────────────────────────────────────────
+      // userGroupMembers لا تحتوي على FK مباشر للمستخدم (تستخدم memberCode) لذا تُحذف تلقائياً عند cascade
+      await db.transaction(async (tx) => {
+        await tx.delete(userWarehouseAssignments).where(eq(userWarehouseAssignments.userId, input.id));
+        await tx.delete(users).where(and(eq(users.id, input.id), eq(users.orgId, orgId)));
+      });
+
+      return { success: true, deletedId: input.id };
+    }),
+
+  // ── إيقاف مستخدم (يحتفظ بالبيانات التاريخية) ────────────────────────────
+  deactivateUser: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const orgId = ctx.user.orgId;
+
+      if (input.id === ctx.user.id) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكنك إيقاف حسابك الخاص' });
       }
 
-      const hasDraftStockVouchers = await db
-        .select({ id: stockVouchers.id })
-        .from(stockVouchers)
-        .where(
-          and(
-            eq(stockVouchers.userId, input.id),
-            eq(stockVouchers.orgId, ctx.user.orgId),
-            sql`${stockVouchers.status} = 'draft'`
-          )
-        )
-        .limit(1);
-      if (hasDraftStockVouchers.length > 0) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن حذف المستخدم لأنه مرتبط بحركات مخزنية مفتوحة' });
+      const targetUser = await db.query.users.findFirst({
+        where: and(eq(users.id, input.id), eq(users.orgId, orgId)),
+      });
+      if (!targetUser) throw new TRPCError({ code: 'NOT_FOUND', message: 'المستخدم غير موجود' });
+
+      const firstUser = await db.query.users.findFirst({
+        where: eq(users.orgId, orgId),
+        orderBy: (u, { asc }) => [asc(u.id)],
+        columns: { id: true },
+      });
+      if (firstUser?.id === input.id) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكن إيقاف المدير الأساسي للنظام' });
       }
 
-      await db.update(users).set({ isActive: false }).where(
-        and(eq(users.id, input.id), eq(users.orgId, ctx.user.orgId))
-      );
+      if (targetUser.isActive && (targetUser.role === 'admin' || targetUser.role === 'superadmin')) {
+        const [adminRow] = await db.select({ cnt: count() }).from(users).where(
+          and(eq(users.orgId, orgId), eq(users.isActive, true), inArray(users.role, ['admin', 'superadmin'])),
+        );
+        if (Number(adminRow.cnt) <= 1) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن إيقاف آخر مدير نظام نشط في المؤسسة' });
+        }
+      }
+
+      await db.update(users).set({
+        isActive: false,
+        allowLogin: false,
+        updatedAt: new Date(),
+      }).where(and(eq(users.id, input.id), eq(users.orgId, orgId)));
+
       return { success: true };
     }),
 

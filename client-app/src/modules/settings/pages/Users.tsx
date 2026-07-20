@@ -295,6 +295,138 @@ function UserWarehouseAssignmentsPanel({ userId, orgId }: { userId: number; orgI
   );
 }
 
+// ─── UserDeleteDialog ─────────────────────────────────────────────────────────
+function UserDeleteDialog({
+  user,
+  onClose,
+  onDeleted,
+  onDeactivated,
+}: {
+  user: { id: number; name: string; code?: string; username: string; role: string } | null;
+  onClose: () => void;
+  onDeleted: () => void;
+  onDeactivated: () => void;
+}) {
+  const eligibilityQuery = trpc.users.checkDeleteEligibility.useQuery(
+    { id: user?.id ?? 0 },
+    { enabled: !!user, retry: false },
+  );
+
+  const deleteMut = trpc.users.deleteUser.useMutation({
+    onSuccess: () => { toast.success("تم حذف المستخدم نهائياً"); onDeleted(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const deactivateMut = trpc.users.deactivateUser.useMutation({
+    onSuccess: () => { toast.success("تم إيقاف المستخدم"); onDeactivated(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const e = eligibilityQuery.data;
+  const busy = deleteMut.isPending || deactivateMut.isPending;
+
+  return (
+    <Dialog open={!!user} onOpenChange={(v) => { if (!v && !busy) onClose(); }}>
+      <DialogContent className="max-w-md" dir="rtl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-destructive">
+            <Trash2 className="w-4 h-4" />
+            حذف المستخدم
+          </DialogTitle>
+        </DialogHeader>
+
+        {user && (
+          <div className="space-y-3 py-1">
+            {/* بيانات المستخدم */}
+            <div className="rounded-lg border bg-muted/30 p-3 space-y-1.5 text-sm">
+              <div className="flex gap-2">
+                <span className="text-muted-foreground w-20">الاسم:</span>
+                <span className="font-medium">{user.name}</span>
+              </div>
+              {user.code && (
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground w-20">الكود:</span>
+                  <span className="font-mono">{user.code}</span>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <span className="text-muted-foreground w-20">اسم الدخول:</span>
+                <span className="font-mono" dir="ltr">{user.username}</span>
+              </div>
+            </div>
+
+            {/* جاري الفحص */}
+            {eligibilityQuery.isLoading && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                جاري فحص إمكانية الحذف…
+              </div>
+            )}
+
+            {/* خطأ في الفحص */}
+            {eligibilityQuery.isError && (
+              <div className="rounded-lg bg-destructive/10 border border-destructive/30 p-3 text-sm text-destructive">
+                تعذّر فحص الإمكانية: {eligibilityQuery.error.message}
+              </div>
+            )}
+
+            {/* لا يمكن الحذف ولا الإيقاف */}
+            {e && !e.canDelete && !e.canDeactivate && (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+                🚫 {e.reason}
+              </div>
+            )}
+
+            {/* مرتبط بحركات — يمكن الإيقاف */}
+            {e && !e.canDelete && e.canDeactivate && (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800 space-y-1">
+                <p className="font-medium">لا يمكن الحذف النهائي</p>
+                <p>{e.reason}</p>
+                {e.linkedCount > 0 && (
+                  <p className="text-xs text-amber-600">
+                    عدد الحركات المرتبطة: {e.linkedCount}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* يمكن الحذف النهائي */}
+            {e?.canDelete && (
+              <div className="rounded-lg bg-destructive/10 border border-destructive/30 p-3 text-sm text-destructive">
+                ⚠ تحذير: هذا الإجراء لا يمكن التراجع عنه. سيتم حذف المستخدم وجميع بياناته المرتبطة نهائياً.
+              </div>
+            )}
+          </div>
+        )}
+
+        <DialogFooter className="gap-2 flex-wrap">
+          <Button variant="outline" onClick={onClose} disabled={busy}>إلغاء</Button>
+          {e && !e.canDelete && e.canDeactivate && (
+            <Button
+              variant="outline"
+              className="border-amber-400 text-amber-700 hover:bg-amber-50"
+              onClick={() => deactivateMut.mutate({ id: user!.id })}
+              disabled={busy}
+            >
+              {deactivateMut.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin ms-1" />}
+              إيقاف المستخدم
+            </Button>
+          )}
+          {e?.canDelete && (
+            <Button
+              variant="destructive"
+              onClick={() => deleteMut.mutate({ id: user!.id })}
+              disabled={busy}
+            >
+              {deleteMut.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin ms-1" />}
+              حذف نهائي
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Users ────────────────────────────────────────────────────────────────────
 export default function Users() {
   const [isOpen, setIsOpen] = useState(false);
@@ -304,7 +436,7 @@ export default function Users() {
   const [workDefaultWarehouseId, setWorkDefaultWarehouseId] = useState<number | null>(null);
   const [workDefaultLanguage, setWorkDefaultLanguage] = useState<string | null>(null);
 
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteTargetUser, setDeleteTargetUser] = useState<any>(null);
   const [passwordUser, setPasswordUser] = useState<any>(null);
   const [verifyDialog, setVerifyDialog] = useState<{ open: boolean; channel: "phone" | "email"; devOtp?: string } | null>(null);
 
@@ -352,16 +484,6 @@ export default function Users() {
       utils.users.list.invalidate();
       utils.users.getUserCountInfo.invalidate();
       toast.success(vars.isActive ? "تم تفعيل المستخدم" : "تم إيقاف المستخدم");
-    },
-    onError: (e) => toast.error(e.message),
-  });
-  const deleteUser = trpc.users.delete.useMutation({
-    onSuccess: () => {
-      utils.users.list.invalidate();
-      utils.users.getUserCountInfo.invalidate();
-      toast.success("تم حذف المستخدم");
-      setShowDeleteConfirm(false);
-      setIsOpen(false);
     },
     onError: (e) => toast.error(e.message),
   });
@@ -994,6 +1116,9 @@ export default function Users() {
                         <Button variant="ghost" size="icon" className="h-7 w-7" title="تغيير كلمة المرور" onClick={() => setPasswordUser(u)}>
                           <KeyRound className="w-3.5 h-3.5" />
                         </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" title="حذف المستخدم" onClick={() => setDeleteTargetUser(u)}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -1021,23 +1146,21 @@ export default function Users() {
         permissionsTabContent={permissionsTabContent}
       />
 
-      {/* ─── نافذة الحذف ─────────────────────────────────────────────────── */}
-      {mode === "edit" && selectedUser && (
-        <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-          <DialogContent className="max-w-sm">
-            <DialogHeader><DialogTitle>تأكيد الحذف</DialogTitle></DialogHeader>
-            <p className="text-sm text-muted-foreground py-2">
-              هل أنت متأكد من حذف المستخدم "<span className="font-medium text-foreground">{selectedUser?.name}</span>"؟
-            </p>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>إلغاء</Button>
-              <Button variant="destructive" onClick={() => deleteUser.mutate({ id: selectedUser.id })} disabled={deleteUser.isPending}>
-                {deleteUser.isPending ? "جاري الحذف..." : "حذف"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
+      {/* ─── نافذة حذف المستخدم الآمنة ──────────────────────────────────── */}
+      <UserDeleteDialog
+        user={deleteTargetUser}
+        onClose={() => setDeleteTargetUser(null)}
+        onDeleted={() => {
+          setDeleteTargetUser(null);
+          utils.users.list.invalidate();
+          utils.users.getUserCountInfo.invalidate();
+        }}
+        onDeactivated={() => {
+          setDeleteTargetUser(null);
+          utils.users.list.invalidate();
+          utils.users.getUserCountInfo.invalidate();
+        }}
+      />
 
       {/* ─── نافذة تغيير كلمة المرور ────────────────────────────────────── */}
       {passwordUser && (
