@@ -281,6 +281,13 @@
       "when": 1790800000000,
       "tag": "0039_sales_invoice_based_on",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1790900000000,
+      "tag": "0040_branch_seller",
+      "breakpoints": true
     }
   ]
 }

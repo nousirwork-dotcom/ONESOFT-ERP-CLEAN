@@ -60,6 +60,7 @@ export const users = pgTable('users', {
   defaultWarehouseId: integer('default_warehouse_id'),
   defaultLanguage: varchar('default_language', { length: 10 }),
   sessionVersion: integer('session_version').notNull().default(1),
+  canBeSalesperson: boolean('can_be_salesperson').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -354,6 +355,7 @@ export const salesInvoices = pgTable('sales_invoices', {
   zatcaRejectionReason: text('zatca_rejection_reason'),
   basedOnType: varchar('based_on_type', { length: 20 }),
   basedOnNumber: varchar('based_on_number', { length: 50 }),
+  sellerUserId: integer('seller_user_id').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

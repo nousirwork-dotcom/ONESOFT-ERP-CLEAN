@@ -26,6 +26,26 @@ export const usersRouter = router({
       .where(and(eq(users.orgId, ctx.user.orgId), eq(users.isActive, true)));
   }),
 
+  // قائمة البائعين المفعَّل فيهم خيار «يظهر كبائع» — مفلترة بالفرع اختيارياً
+  listSalespersons: protectedProcedure
+    .input(z.object({ branchId: z.number().optional() }))
+    .query(async ({ ctx, input }) => {
+      return db.select({
+        id: users.id,
+        name: users.name,
+        username: users.username,
+        code: users.code,
+        defaultBranchId: users.defaultBranchId,
+      })
+        .from(users)
+        .where(and(
+          eq(users.orgId, ctx.user.orgId),
+          eq(users.isActive, true),
+          eq(users.canBeSalesperson, true),
+          ...(input.branchId ? [eq(users.defaultBranchId, input.branchId)] : []),
+        ));
+    }),
+
   // قائمة مستخدمي المؤسسة (للمديرين فقط) — تشمل الموقوفين حتى يمكن إعادة تفعيلهم
   list: adminProcedure.query(async ({ ctx }) => {
     return db.query.users.findMany({
@@ -196,6 +216,7 @@ export const usersRouter = router({
       defaultWarehouseId: z.number().int().positive().nullable().optional(),
       defaultLanguage: z.string().max(10).nullable().optional(),
       forcePasswordChange: z.boolean().optional(),
+      canBeSalesperson: z.boolean().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const { id, newPassword, clearPassword, ...rest } = input;
