@@ -72,7 +72,9 @@ export const userBranchAssignments = pgTable('user_branch_assignments', {
   userId:    integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   branchId:  integer('branch_id').notNull().references(() => branches.id, { onDelete: 'cascade' }),
   createdAt: timestamp('created_at').notNull().defaultNow(),
-});
+}, (t) => ({
+  userBranchUnique: uniqueIndex('user_branch_assignments_user_branch_unique').on(t.userId, t.branchId),
+}));
 
 // ─── User Groups ──────────────────────────────────────────────────────────────
 export const userGroups = pgTable('user_groups', {
