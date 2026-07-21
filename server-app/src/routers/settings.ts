@@ -111,6 +111,81 @@ export const userGroupsRouter = router({
       return { success: true };
     }),
 
+  saveAll: protectedProcedure
+    .input(z.object({
+      id:          z.number().nullable(),
+      code:        z.string().trim().min(1, 'يرجى إدخال كود مجموعة المستخدمين'),
+      name:        z.string().trim().min(1, 'يرجى إدخال اسم المجموعة'),
+      description: z.string().optional(),
+      addMembers:  z.array(z.union([
+        z.object({ memberType: z.literal('user'),  memberUserId:  z.number() }),
+        z.object({ memberType: z.literal('group'), memberGroupId: z.number() }),
+      ])),
+      removeIds:   z.array(z.number()),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const orgId  = ctx.user.orgId;
+      const userId = ctx.user.id;
+      const code   = input.code.trim();
+      const name   = input.name.trim();
+
+      return await db.transaction(async (tx) => {
+        let groupId = input.id;
+
+        if (groupId === null) {
+          const dup = await tx.select({ id: userGroups.id }).from(userGroups)
+            .where(and(eq(userGroups.orgId, orgId), eq(userGroups.code, code), eq(userGroups.isActive, true))).limit(1);
+          if (dup.length) throw new TRPCError({ code: 'CONFLICT', message: 'كود مجموعة المستخدمين مستخدم من قبل' });
+          const [g] = await tx.insert(userGroups).values({ orgId, code, name, description: input.description }).returning({ id: userGroups.id });
+          groupId = g.id;
+        } else {
+          const dup = await tx.select({ id: userGroups.id }).from(userGroups)
+            .where(and(eq(userGroups.orgId, orgId), eq(userGroups.code, code), eq(userGroups.isActive, true), ne(userGroups.id, groupId))).limit(1);
+          if (dup.length) throw new TRPCError({ code: 'CONFLICT', message: 'كود مجموعة المستخدمين مستخدم من قبل' });
+          try {
+            await tx.update(userGroups)
+              .set({ code, name, description: input.description })
+              .where(and(eq(userGroups.id, groupId), eq(userGroups.orgId, orgId)));
+          } catch (err: any) {
+            if (err?.code === '23505') throw new TRPCError({ code: 'CONFLICT', message: 'كود مجموعة المستخدمين مستخدم من قبل' });
+            throw err;
+          }
+        }
+
+        if (input.removeIds.length > 0) {
+          await tx.delete(userGroupMembers).where(
+            and(eq(userGroupMembers.groupId, groupId), eq(userGroupMembers.orgId, orgId), inArray(userGroupMembers.id, input.removeIds))
+          );
+        }
+
+        for (const m of input.addMembers) {
+          if (m.memberType === 'user') {
+            const user = await tx.select({ id: users.id, name: users.name, code: users.code })
+              .from(users).where(and(eq(users.id, m.memberUserId), eq(users.orgId, orgId))).limit(1);
+            if (!user.length) continue;
+            const exists = await tx.select({ id: userGroupMembers.id }).from(userGroupMembers)
+              .where(and(eq(userGroupMembers.groupId, groupId), eq(userGroupMembers.orgId, orgId), eq(userGroupMembers.memberUserId, m.memberUserId))).limit(1);
+            if (!exists.length) {
+              await tx.insert(userGroupMembers).values({ groupId, orgId, memberType: 'user', memberUserId: m.memberUserId, memberCode: user[0].code, memberName: user[0].name }).onConflictDoNothing();
+            }
+          } else {
+            if (m.memberGroupId === groupId) continue;
+            if (await wouldCreateCycle(groupId, m.memberGroupId, orgId)) continue;
+            const grp = await tx.select({ id: userGroups.id, name: userGroups.name, code: userGroups.code })
+              .from(userGroups).where(and(eq(userGroups.id, m.memberGroupId), eq(userGroups.orgId, orgId), eq(userGroups.isActive, true))).limit(1);
+            if (!grp.length) continue;
+            const exists = await tx.select({ id: userGroupMembers.id }).from(userGroupMembers)
+              .where(and(eq(userGroupMembers.groupId, groupId), eq(userGroupMembers.orgId, orgId), eq(userGroupMembers.memberGroupId, m.memberGroupId))).limit(1);
+            if (!exists.length) {
+              await tx.insert(userGroupMembers).values({ groupId, orgId, memberType: 'group', memberGroupId: m.memberGroupId, memberCode: grp[0].code, memberName: grp[0].name }).onConflictDoNothing();
+            }
+          }
+        }
+
+        return { groupId };
+      });
+    }),
+
   // ── Membership procedures accessible under userGroups.* namespace ──────────
 
   validateNestedGroup: protectedProcedure

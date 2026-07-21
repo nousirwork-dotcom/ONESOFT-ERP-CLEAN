@@ -37,6 +37,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/core/ui/textarea";
 import { Switch } from "@/core/ui/switch";
 import { toast } from "sonner";
+import ERPToolbar from "@/shared/components/ERPToolbar";
 
 type MenuId = string;
 
@@ -1023,19 +1024,29 @@ function UserCategoriesPage() {
 // ─── Group Members — Search Input ─────────────────────────────────────────────
 
 type ResolvedMember = { id: number; name: string; code: string | null; type: 'user' | 'group' };
+type PendingMember  = {
+  tempId: string;
+  memberType: 'user' | 'group';
+  memberUserId?:  number;
+  memberGroupId?: number;
+  memberName: string;
+  memberCode: string | null;
+};
 
 // ─── SelectUsersDialog ─────────────────────────────────────────────────────────
 
 function SelectUsersDialog({
-  open, onOpenChange, groupId, onAdded,
+  open, onOpenChange, groupId, onAdded, onConfirm, pendingUserIds,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   groupId: number;
-  onAdded: () => void;
+  onAdded?: () => void;
+  onConfirm?: (users: Array<{ id: number; name: string; code: string | null }>) => void;
+  pendingUserIds?: Set<number>;
 }) {
-  const [search, setSearch]           = useState('');
-  const [selected, setSelected]       = useState<Set<number>>(new Set());
+  const [search, setSearch]             = useState('');
+  const [selected, setSelected]         = useState<Set<number>>(new Set());
   const [showInactive, setShowInactive] = useState(false);
 
   const { data: usersData = [], isLoading } = trpc.groupMembers.listUsersForDialog.useQuery(
@@ -1043,17 +1054,7 @@ function SelectUsersDialog({
     { enabled: open }
   );
 
-  const addBulk = trpc.groupMembers.addBulk.useMutation({
-    onSuccess: (result) => {
-      toast.success(`تم إضافة ${result.added} ${result.added === 1 ? 'عضو' : 'أعضاء'}${result.skipped.length ? ` — تجاهل ${result.skipped.length}` : ''}`);
-      setSelected(new Set());
-      onOpenChange(false);
-      onAdded();
-    },
-    onError: (e) => toast.error(e.message),
-  });
-
-  const selectableIds = usersData.filter(u => !u.alreadyAdded).map(u => u.id);
+  const selectableIds = usersData.filter(u => !u.alreadyAdded && !pendingUserIds?.has(u.id)).map(u => u.id);
   const allSelected   = selectableIds.length > 0 && selectableIds.every(id => selected.has(id));
 
   function toggleAll() {
@@ -1065,7 +1066,14 @@ function SelectUsersDialog({
     setSelected(next);
   }
   function handleAdd() {
-    addBulk.mutate({ groupId, members: [...selected].map(id => ({ memberType: 'user' as const, memberUserId: id })) });
+    if (onConfirm) {
+      const selectedUsers = usersData
+        .filter(u => selected.has(u.id))
+        .map(u => ({ id: u.id, name: u.name, code: u.code ?? null }));
+      onConfirm(selectedUsers);
+      setSelected(new Set());
+      onOpenChange(false);
+    }
   }
 
   useEffect(() => { if (!open) { setSearch(''); setSelected(new Set()); setShowInactive(false); } }, [open]);
@@ -1116,15 +1124,18 @@ function SelectUsersDialog({
                 <tr><td colSpan={6} className="text-center py-10 text-muted-foreground">جارٍ التحميل...</td></tr>
               ) : usersData.length === 0 ? (
                 <tr><td colSpan={6} className="text-center py-10 text-muted-foreground">لا توجد نتائج مطابقة</td></tr>
-              ) : usersData.map(u => (
+              ) : usersData.map(u => {
+                const isPending  = pendingUserIds?.has(u.id) ?? false;
+                const isDisabled = u.alreadyAdded || isPending;
+                return (
                 <tr key={u.id}
-                  onClick={() => !u.alreadyAdded && toggle(u.id)}
-                  className={`border-t border-border/20 transition-colors ${u.alreadyAdded ? 'opacity-50 bg-muted/10' : selected.has(u.id) ? 'bg-primary/5' : 'hover:bg-accent/40 cursor-pointer'}`}>
+                  onClick={() => !isDisabled && toggle(u.id)}
+                  className={`border-t border-border/20 transition-colors ${isDisabled ? 'opacity-50 bg-muted/10' : selected.has(u.id) ? 'bg-primary/5' : 'hover:bg-accent/40 cursor-pointer'}`}>
                   <td className="w-8 px-2 py-2 text-center">
                     <Checkbox
-                      checked={selected.has(u.id) || u.alreadyAdded}
-                      onCheckedChange={() => !u.alreadyAdded && toggle(u.id)}
-                      disabled={u.alreadyAdded}
+                      checked={selected.has(u.id) || isDisabled}
+                      onCheckedChange={() => !isDisabled && toggle(u.id)}
+                      disabled={isDisabled}
                       className="h-3.5 w-3.5"
                       onClick={e => e.stopPropagation()}
                     />
@@ -1135,6 +1146,7 @@ function SelectUsersDialog({
                   <td className="px-2 py-1.5 font-medium">
                     {u.name}
                     {u.alreadyAdded && <Badge variant="outline" className="mr-2 text-[9px] h-4 px-1 border-green-300 text-green-700">مضاف</Badge>}
+                    {isPending && <Badge variant="outline" className="mr-2 text-[9px] h-4 px-1 border-amber-300 text-amber-700">في الانتظار</Badge>}
                   </td>
                   <td className="px-2 py-1.5 text-muted-foreground font-mono text-[11px]">{u.username}</td>
                   <td className="px-2 py-1.5 text-muted-foreground">{u.categoryName ?? '—'}</td>
@@ -1144,7 +1156,8 @@ function SelectUsersDialog({
                       : <span className="text-[10px] text-orange-700 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded">موقوف</span>}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -1155,8 +1168,8 @@ function SelectUsersDialog({
           </span>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" className="text-xs h-8" onClick={() => onOpenChange(false)}>إلغاء</Button>
-            <Button size="sm" className="text-xs h-8 gap-1.5" disabled={selected.size === 0 || addBulk.isPending} onClick={handleAdd}>
-              {addBulk.isPending ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+            <Button size="sm" className="text-xs h-8 gap-1.5" disabled={selected.size === 0} onClick={handleAdd}>
+              <Plus className="w-3 h-3" />
               إضافة المحددين{selected.size > 0 ? ` (${selected.size})` : ''}
             </Button>
           </div>
@@ -1169,12 +1182,14 @@ function SelectUsersDialog({
 // ─── SelectGroupsDialog ────────────────────────────────────────────────────────
 
 function SelectGroupsDialog({
-  open, onOpenChange, groupId, onAdded,
+  open, onOpenChange, groupId, onAdded, onConfirm, pendingGroupIds,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   groupId: number;
-  onAdded: () => void;
+  onAdded?: () => void;
+  onConfirm?: (groups: Array<{ id: number; name: string; code: string | null }>) => void;
+  pendingGroupIds?: Set<number>;
 }) {
   const [search, setSearch]     = useState('');
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -1184,17 +1199,7 @@ function SelectGroupsDialog({
     { enabled: open }
   );
 
-  const addBulk = trpc.groupMembers.addBulk.useMutation({
-    onSuccess: (result) => {
-      toast.success(`تم إضافة ${result.added} ${result.added === 1 ? 'مجموعة' : 'مجموعات'}${result.skipped.length ? ` — تجاهل ${result.skipped.length}` : ''}`);
-      setSelected(new Set());
-      onOpenChange(false);
-      onAdded();
-    },
-    onError: (e) => toast.error(e.message),
-  });
-
-  const selectableIds = groupsData.filter(g => !g.alreadyAdded && !g.cycleRisk).map(g => g.id);
+  const selectableIds = groupsData.filter(g => !g.alreadyAdded && !g.cycleRisk && !pendingGroupIds?.has(g.id)).map(g => g.id);
   const allSelected   = selectableIds.length > 0 && selectableIds.every(id => selected.has(id));
 
   function toggleAll() {
@@ -1206,7 +1211,14 @@ function SelectGroupsDialog({
     setSelected(next);
   }
   function handleAdd() {
-    addBulk.mutate({ groupId, members: [...selected].map(id => ({ memberType: 'group' as const, memberGroupId: id })) });
+    if (onConfirm) {
+      const selectedGroups = groupsData
+        .filter(g => selected.has(g.id))
+        .map(g => ({ id: g.id, name: g.name, code: g.code ?? null }));
+      onConfirm(selectedGroups);
+      setSelected(new Set());
+      onOpenChange(false);
+    }
   }
 
   useEffect(() => { if (!open) { setSearch(''); setSelected(new Set()); } }, [open]);
@@ -1252,14 +1264,15 @@ function SelectGroupsDialog({
               ) : groupsData.length === 0 ? (
                 <tr><td colSpan={6} className="text-center py-10 text-muted-foreground">لا توجد مجموعات</td></tr>
               ) : groupsData.map(g => {
-                const isDisabled = g.alreadyAdded || g.cycleRisk;
+                const isPending  = pendingGroupIds?.has(g.id) ?? false;
+                const isDisabled = g.alreadyAdded || g.cycleRisk || isPending;
                 return (
                   <tr key={g.id}
                     onClick={() => !isDisabled && toggle(g.id)}
                     className={`border-t border-border/20 transition-colors ${isDisabled ? 'opacity-50 bg-muted/10' : selected.has(g.id) ? 'bg-primary/5' : 'hover:bg-accent/40 cursor-pointer'}`}>
                     <td className="w-8 px-2 py-2 text-center">
                       <Checkbox
-                        checked={selected.has(g.id) || g.alreadyAdded}
+                        checked={selected.has(g.id) || isDisabled}
                         onCheckedChange={() => !isDisabled && toggle(g.id)}
                         disabled={isDisabled}
                         className="h-3.5 w-3.5"
@@ -1269,12 +1282,17 @@ function SelectGroupsDialog({
                     <td className="px-2 py-1.5">
                       {g.code ? <code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">{g.code}</code> : <span className="text-muted-foreground">—</span>}
                     </td>
-                    <td className="px-2 py-1.5 font-medium">{g.name}</td>
+                    <td className="px-2 py-1.5 font-medium">
+                      {g.name}
+                      {isPending && <Badge variant="outline" className="mr-2 text-[9px] h-4 px-1 border-amber-300 text-amber-700">في الانتظار</Badge>}
+                    </td>
                     <td className="px-2 py-1.5 text-center text-muted-foreground">{g.directMemberCount}</td>
                     <td className="px-2 py-1.5 text-center text-muted-foreground">{g.effectiveMemberCount}</td>
                     <td className="px-2 py-1.5">
                       {g.alreadyAdded ? (
                         <Badge variant="outline" className="text-[9px] h-4 px-1 border-green-300 text-green-700">مضافة</Badge>
+                      ) : isPending ? (
+                        <Badge variant="outline" className="text-[9px] h-4 px-1 border-amber-300 text-amber-700">في الانتظار</Badge>
                       ) : g.cycleRisk ? (
                         <span className="text-[10px] text-destructive" title={g.cycleReason ?? ''}>⚠ دورة دائرية</span>
                       ) : (
@@ -1294,8 +1312,8 @@ function SelectGroupsDialog({
           </span>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" className="text-xs h-8" onClick={() => onOpenChange(false)}>إلغاء</Button>
-            <Button size="sm" className="text-xs h-8 gap-1.5" disabled={selected.size === 0 || addBulk.isPending} onClick={handleAdd}>
-              {addBulk.isPending ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+            <Button size="sm" className="text-xs h-8 gap-1.5" disabled={selected.size === 0} onClick={handleAdd}>
+              <Plus className="w-3 h-3" />
               إضافة المحددين{selected.size > 0 ? ` (${selected.size})` : ''}
             </Button>
           </div>
@@ -1426,7 +1444,7 @@ function MemberAddToolbar({ groupId, onAdded }: { groupId: number; onAdded?: () 
 // ─── User Groups ───────────────────────────────────────────────────────────────
 
 // QuickCodeEntry: inline quick-add by code, used in the members table toolbar
-function QuickCodeEntry({ groupId, onAdded }: { groupId: number; onAdded?: () => void }) {
+function QuickCodeEntry({ groupId, onAdded, onAdd }: { groupId: number; onAdded?: () => void; onAdd?: (member: ResolvedMember) => void }) {
   const utils = trpc.useUtils();
   const [memberType, setMemberType] = useState<'user' | 'group'>('user');
   const [code, setCode]             = useState('');
@@ -1457,8 +1475,13 @@ function QuickCodeEntry({ groupId, onAdded }: { groupId: number; onAdded?: () =>
 
   function handleQuickAdd() {
     if (!resolved || resolved === 'not_found') return;
-    if (resolved.type === 'user') addMember.mutate({ groupId, memberType: 'user', memberUserId: resolved.id });
-    else addMember.mutate({ groupId, memberType: 'group', memberGroupId: resolved.id });
+    if (onAdd) {
+      onAdd(resolved);
+      setCode(''); setResolved(null);
+    } else {
+      if (resolved.type === 'user') addMember.mutate({ groupId, memberType: 'user', memberUserId: resolved.id });
+      else addMember.mutate({ groupId, memberType: 'group', memberGroupId: resolved.id });
+    }
   }
 
   return (
@@ -1486,7 +1509,7 @@ function QuickCodeEntry({ groupId, onAdded }: { groupId: number; onAdded?: () =>
         <div className="flex items-center gap-1.5 shrink-0">
           <Check className="w-3 h-3 text-green-500 shrink-0" />
           <span className="text-xs text-foreground max-w-[100px] truncate">{resolved.name}</span>
-          <Button size="sm" className="h-6 text-xs gap-1 px-2 shrink-0" onClick={handleQuickAdd} disabled={addMember.isPending}>
+          <Button size="sm" className="h-6 text-xs gap-1 px-2 shrink-0" onClick={handleQuickAdd} disabled={!onAdd && addMember.isPending}>
             <Plus className="w-3 h-3" />إضافة
           </Button>
         </div>
@@ -1497,6 +1520,46 @@ function QuickCodeEntry({ groupId, onAdded }: { groupId: number; onAdded?: () =>
         </span>
       )}
     </div>
+  );
+}
+
+// ─── UnsavedChangesDialog ──────────────────────────────────────────────────────
+
+function UnsavedChangesDialog({
+  open, onSave, onDiscard, onCancel, isSaving,
+}: {
+  open: boolean;
+  onSave: () => void;
+  onDiscard: () => void;
+  onCancel: () => void;
+  isSaving: boolean;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!v) onCancel(); }}>
+      <DialogContent className="max-w-sm" dir="rtl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-500" />
+            تعديلات غير محفوظة
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          لديك تعديلات غير محفوظة في هذه المجموعة. هل تريد حفظها قبل الانتقال؟
+        </p>
+        <DialogFooter className="flex-row gap-2 justify-end mt-2">
+          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={onCancel}>
+            البقاء هنا
+          </Button>
+          <Button variant="destructive" size="sm" className="h-8 text-xs" onClick={onDiscard}>
+            تجاهل التغييرات
+          </Button>
+          <Button size="sm" className="h-8 text-xs gap-1.5" onClick={onSave} disabled={isSaving}>
+            {isSaving ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+            حفظ والمتابعة
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1562,51 +1625,68 @@ function ExpandedSubRows({ memberGroupId, groupName, depth = 1 }: {
 
 function UserGroupsPage() {
   const utils = trpc.useUtils();
+  const tabManager = useTabManager();
   const { data: groups = [], isLoading } = trpc.userGroups.list.useQuery();
 
+  // ── Mutations ─────────────────────────────────────────────────────────────────
+  const saveAllMut = trpc.userGroups.saveAll.useMutation({
+    onSuccess: ({ groupId }) => {
+      utils.userGroups.list.invalidate();
+      utils.groupMembers.list.invalidate({ groupId });
+      utils.groupMembers.effectiveMembers.invalidate({ groupId });
+      resetDirtyState();
+      setSelectedId(groupId);
+      toast.success('تم حفظ مجموعة المستخدمين بنجاح');
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const createGroup = trpc.userGroups.create.useMutation({
     onSuccess: (g) => {
       utils.userGroups.list.invalidate();
-      setShowNew(false); setNewCode(""); setNewName(""); setNewDesc("");
+      setShowNew(false); setNewCode(''); setNewName(''); setNewDesc('');
       setSelectedId(g.id);
-      toast.success("تم إنشاء المجموعة");
+      toast.success('تم إنشاء المجموعة');
     },
-    onError: (e) => toast.error(e.message),
-  });
-  const updateGroup = trpc.userGroups.update.useMutation({
-    onSuccess: () => { utils.userGroups.list.invalidate(); setEditing(false); toast.success("تم حفظ التغييرات"); },
     onError: (e) => toast.error(e.message),
   });
   const deleteGroup = trpc.userGroups.delete.useMutation({
-    onSuccess: () => { utils.userGroups.list.invalidate(); setSelectedId(null); toast.success("تم حذف المجموعة"); },
-    onError: (e) => toast.error(e.message),
-  });
-  const removeMember = trpc.groupMembers.remove.useMutation({
     onSuccess: () => {
-      if (selectedId !== null) {
-        utils.groupMembers.list.invalidate({ groupId: selectedId });
-        utils.groupMembers.effectiveMembers.invalidate({ groupId: selectedId });
-        utils.userGroups.list.invalidate();
-      }
+      utils.userGroups.list.invalidate();
+      setSelectedId(null);
+      resetDirtyState();
+      toast.success('تم حذف المجموعة');
     },
     onError: (e) => toast.error(e.message),
   });
-
-  const [selectedId, setSelectedId]           = useState<number | null>(null);
-  const [showNew, setShowNew]                 = useState(false);
-  const [newCode, setNewCode]                 = useState("");
-  const [newName, setNewName]                 = useState("");
-  const [newDesc, setNewDesc]                 = useState("");
-  const [editing, setEditing]                 = useState(false);
-  const [editCode, setEditCode]               = useState("");
-  const [editName, setEditName]               = useState("");
-  const [editDesc, setEditDesc]               = useState("");
+  // ── State ─────────────────────────────────────────────────────────────────────
+  const [selectedId, setSelectedId]             = useState<number | null>(null);
+  const [showNew, setShowNew]                   = useState(false);
+  const [newCode, setNewCode]                   = useState('');
+  const [newName, setNewName]                   = useState('');
+  const [newDesc, setNewDesc]                   = useState('');
+  const [editing, setEditing]                   = useState(false);
+  const [editCode, setEditCode]                 = useState('');
+  const [editName, setEditName]                 = useState('');
+  const [editDesc, setEditDesc]                 = useState('');
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<number>>(new Set());
-  const [showEffective, setShowEffective]     = useState(false);
-  const [showUsersDialog, setShowUsersDialog] = useState(false);
+  const [showEffective, setShowEffective]       = useState(false);
+  const [showUsersDialog, setShowUsersDialog]   = useState(false);
   const [showGroupsDialog, setShowGroupsDialog] = useState(false);
 
-  const selectedGroup = (groups as any[]).find((g: any) => g.id === selectedId) ?? null;
+  // Batch pending state
+  const [pendingAdditions, setPendingAdditions] = useState<PendingMember[]>([]);
+  const [pendingRemovals, setPendingRemovals]   = useState<Set<number>>(new Set());
+  const [dirtyCode, setDirtyCode]               = useState<string | null>(null);
+  const [dirtyName, setDirtyName]               = useState<string | null>(null);
+  const [dirtyDesc, setDirtyDesc]               = useState<string | null>(null);
+
+  // Unsaved changes guard
+  const [showUnsaved, setShowUnsaved]           = useState(false);
+  const [pendingNavAction, setPendingNavAction] = useState<(() => void) | null>(null);
+
+  const selectedGroup     = (groups as any[]).find((g: any) => g.id === selectedId) ?? null;
+  const currentGroupIndex = (groups as any[]).findIndex((g: any) => g.id === selectedId);
+  const totalGroups       = (groups as any[]).length;
 
   const { data: members = [] } = trpc.groupMembers.list.useQuery(
     { groupId: selectedId! },
@@ -1617,22 +1697,66 @@ function UserGroupsPage() {
     { enabled: selectedId !== null }
   );
 
-  const directUsers  = (members as any[]).filter((m: any) => m.memberType === 'user');
-  const directGroups = (members as any[]).filter((m: any) => m.memberType === 'group');
+  const directUsers   = (members as any[]).filter((m: any) => m.memberType === 'user');
+  const directGroups  = (members as any[]).filter((m: any) => m.memberType === 'group');
   const inheritedOnly = (effectiveMembers as any[]).filter((e: any) => e.source === 'inherited');
+
+  // Computed dirty flags
+  const isGroupInfoDirty = dirtyCode !== null || dirtyName !== null || dirtyDesc !== null;
+  const isEditFormDirty  = editing && (
+    editCode.trim() !== (selectedGroup?.code ?? '') ||
+    editName.trim() !== (selectedGroup?.name ?? '') ||
+    editDesc.trim() !== (selectedGroup?.description ?? '')
+  );
+  const isDirty = isGroupInfoDirty || pendingAdditions.length > 0 || pendingRemovals.size > 0 || isEditFormDirty;
+
+  const displayName = dirtyName ?? selectedGroup?.name ?? '';
+  const displayCode = dirtyCode ?? selectedGroup?.code ?? '';
+  const displayDesc = dirtyDesc ?? selectedGroup?.description ?? '';
+
+  const pendingUserIds  = new Set(pendingAdditions.filter(p => p.memberType === 'user').map(p => p.memberUserId!));
+  const pendingGroupIds = new Set(pendingAdditions.filter(p => p.memberType === 'group').map(p => p.memberGroupId!));
+
+  // ── Helpers ───────────────────────────────────────────────────────────────────
+  function resetDirtyState() {
+    setPendingAdditions([]);
+    setPendingRemovals(new Set());
+    setDirtyCode(null); setDirtyName(null); setDirtyDesc(null);
+  }
+
+  function selectGroup(id: number | null) {
+    setSelectedId(id); setEditing(false);
+    setExpandedGroupIds(new Set()); setShowEffective(false);
+    resetDirtyState();
+    if (id !== null) {
+      const g = (groups as any[]).find((gg: any) => gg.id === id);
+      setEditCode(g?.code ?? ''); setEditName(g?.name ?? ''); setEditDesc(g?.description ?? '');
+    }
+  }
+
+  function safeNavigate(action: () => void) {
+    if (isDirty) { setPendingNavAction(() => action); setShowUnsaved(true); }
+    else action();
+  }
 
   function startEdit() {
     if (!selectedGroup) return;
-    setEditCode(selectedGroup.code ?? "");
-    setEditName(selectedGroup.name ?? "");
-    setEditDesc(selectedGroup.description ?? "");
+    setEditCode((dirtyCode ?? selectedGroup.code) ?? '');
+    setEditName((dirtyName ?? selectedGroup.name) ?? '');
+    setEditDesc((dirtyDesc ?? selectedGroup.description) ?? '');
     setEditing(true);
   }
 
-  function handleRemoveMember(id: number, name: string) {
-    if (confirm(`هل أنت متأكد من إزالة "${name}" من هذه المجموعة؟`)) {
-      removeMember.mutate({ id });
-    }
+  function applyEditLocally() {
+    const c = editCode.trim(); const n = editName.trim();
+    if (!c) { toast.error('يرجى إدخال كود مجموعة المستخدمين'); return; }
+    if (!n) { toast.error('يرجى إدخال اسم المجموعة'); return; }
+    const codeDup = (groups as any[]).some((g: any) => g.code === c && g.id !== selectedGroup?.id);
+    if (codeDup) { toast.error('كود مجموعة المستخدمين مستخدم من قبل'); return; }
+    setDirtyCode(c !== (selectedGroup?.code ?? '') ? c : null);
+    setDirtyName(n !== (selectedGroup?.name ?? '') ? n : null);
+    setDirtyDesc(editDesc.trim() !== (selectedGroup?.description ?? '') ? (editDesc.trim() || null) : null);
+    setEditing(false);
   }
 
   function toggleGroupExpand(memberGroupId: number) {
@@ -1643,16 +1767,166 @@ function UserGroupsPage() {
     });
   }
 
-  function handleMembersAdded() {
-    if (selectedId !== null) {
-      utils.groupMembers.list.invalidate({ groupId: selectedId });
-      utils.groupMembers.effectiveMembers.invalidate({ groupId: selectedId });
-      utils.userGroups.list.invalidate();
+  function handleToggleRemoval(id: number) {
+    setPendingRemovals(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function handleCancelPending(tempId: string) {
+    setPendingAdditions(prev => prev.filter(p => p.tempId !== tempId));
+  }
+
+  function handleUsersConfirm(users: Array<{ id: number; name: string; code: string | null }>) {
+    const existingIds = new Set([
+      ...(members as any[]).filter((m: any) => m.memberType === 'user').map((m: any) => m.memberUserId as number),
+      ...pendingAdditions.filter(p => p.memberType === 'user').map(p => p.memberUserId!),
+    ]);
+    const toAdd: PendingMember[] = users.filter(u => !existingIds.has(u.id))
+      .map(u => ({ tempId: crypto.randomUUID(), memberType: 'user' as const, memberUserId: u.id, memberName: u.name, memberCode: u.code }));
+    if (toAdd.length < users.length) toast.info(`تم تجاهل ${users.length - toAdd.length} مستخدم مضاف مسبقًا`);
+    if (toAdd.length > 0) setPendingAdditions(prev => [...prev, ...toAdd]);
+  }
+
+  function handleGroupsConfirm(grps: Array<{ id: number; name: string; code: string | null }>) {
+    const existingIds = new Set([
+      ...(members as any[]).filter((m: any) => m.memberType === 'group').map((m: any) => m.memberGroupId as number),
+      ...pendingAdditions.filter(p => p.memberType === 'group').map(p => p.memberGroupId!),
+    ]);
+    const toAdd: PendingMember[] = grps.filter(g => !existingIds.has(g.id))
+      .map(g => ({ tempId: crypto.randomUUID(), memberType: 'group' as const, memberGroupId: g.id, memberName: g.name, memberCode: g.code }));
+    if (toAdd.length < grps.length) toast.info(`تم تجاهل ${grps.length - toAdd.length} مجموعة مضافة مسبقًا`);
+    if (toAdd.length > 0) setPendingAdditions(prev => [...prev, ...toAdd]);
+  }
+
+  function handleQuickAddMember(member: ResolvedMember) {
+    if (member.type === 'user') {
+      const exists = (members as any[]).some((m: any) => m.memberType === 'user' && m.memberUserId === member.id)
+        || pendingAdditions.some(p => p.memberType === 'user' && p.memberUserId === member.id);
+      if (exists) { toast.error('المستخدم موجود بالفعل في هذه المجموعة'); return; }
+    } else {
+      const exists = (members as any[]).some((m: any) => m.memberType === 'group' && m.memberGroupId === member.id)
+        || pendingAdditions.some(p => p.memberType === 'group' && p.memberGroupId === member.id);
+      if (exists) { toast.error('المجموعة موجودة بالفعل في هذه المجموعة'); return; }
+    }
+    setPendingAdditions(prev => [...prev, {
+      tempId: crypto.randomUUID(),
+      memberType: member.type,
+      memberUserId:  member.type === 'user'  ? member.id : undefined,
+      memberGroupId: member.type === 'group' ? member.id : undefined,
+      memberName: member.name,
+      memberCode: member.code,
+    }]);
+    toast.success(`تمت إضافة "${member.name}" في انتظار الحفظ`);
+  }
+
+  // ── Toolbar actions ───────────────────────────────────────────────────────────
+  function handleSave() {
+    if (!selectedGroup) return;
+    if (editing) { toast.error('طبّق التغييرات أولاً ثم احفظ'); return; }
+    const code = (dirtyCode ?? selectedGroup.code ?? '').trim();
+    const name = (dirtyName ?? selectedGroup.name ?? '').trim();
+    const desc = (dirtyDesc ?? selectedGroup.description ?? '').trim();
+    if (!code) { toast.error('يرجى إدخال كود مجموعة المستخدمين'); return; }
+    if (!name) { toast.error('يرجى إدخال اسم المجموعة'); return; }
+    saveAllMut.mutate({
+      id: selectedGroup.id, code, name,
+      description: desc || undefined,
+      addMembers: pendingAdditions.map(p =>
+        p.memberType === 'user'
+          ? { memberType: 'user' as const, memberUserId: p.memberUserId! }
+          : { memberType: 'group' as const, memberGroupId: p.memberGroupId! }
+      ),
+      removeIds: [...pendingRemovals],
+    });
+  }
+
+  function handleNew() {
+    safeNavigate(() => {
+      setShowNew(true); setSelectedId(null);
+      setNewCode(''); setNewName(''); setNewDesc('');
+      resetDirtyState(); setEditing(false);
+    });
+  }
+
+  function handleDelete() {
+    if (!selectedGroup) return;
+    if (confirm(`هل أنت متأكد من حذف مجموعة "${selectedGroup.name}"؟\nلن يتم حذف المستخدمين الموجودين في المجموعة.`)) {
+      deleteGroup.mutate({ id: selectedGroup.id });
     }
   }
 
+  function handleNav(dir: 'first' | 'prev' | 'next' | 'last') {
+    if (totalGroups === 0) return;
+    const newIdx = dir === 'first' ? 0 : dir === 'last' ? totalGroups - 1
+      : dir === 'prev' ? Math.max(0, currentGroupIndex - 1)
+      : Math.min(totalGroups - 1, currentGroupIndex + 1);
+    const g = (groups as any[])[newIdx];
+    if (g && g.id !== selectedId) safeNavigate(() => selectGroup(g.id));
+  }
+
+  function handleClose() { safeNavigate(() => tabManager.closeTab('user-groups')); }
+
+  // Keyboard shortcuts via ref to avoid stale closures
+  const handlersRef = useRef({ handleSave, handleNew, handleDelete, handleNav, handleClose });
+  useEffect(() => { handlersRef.current = { handleSave, handleNew, handleDelete, handleNav, handleClose }; });
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      const inInput = ['INPUT', 'SELECT', 'TEXTAREA'].includes(tag);
+      const h = handlersRef.current;
+      if (e.key === 'F2')                   { e.preventDefault(); h.handleSave(); }
+      if (e.key === 'F3' && !inInput)       { e.preventDefault(); h.handleNew(); }
+      if (e.key === 'Delete' && e.ctrlKey)  { e.preventDefault(); h.handleDelete(); }
+      if (e.key === 'Home'   && e.ctrlKey)  { e.preventDefault(); h.handleNav('first'); }
+      if (e.key === 'End'    && e.ctrlKey)  { e.preventDefault(); h.handleNav('last'); }
+      if (e.key === 'PageUp'   && !inInput) { e.preventDefault(); h.handleNav('prev'); }
+      if (e.key === 'PageDown' && !inInput) { e.preventDefault(); h.handleNav('next'); }
+      if (e.key === 'Escape'   && !inInput) { e.preventDefault(); h.handleClose(); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  // Unsaved changes save+navigate
+  function handleUnsavedSave() {
+    if (!selectedGroup) return;
+    const code = (dirtyCode ?? selectedGroup.code ?? '').trim();
+    const name = (dirtyName ?? selectedGroup.name ?? '').trim();
+    const desc = (dirtyDesc ?? selectedGroup.description ?? '').trim();
+    saveAllMut.mutate({
+      id: selectedGroup.id, code, name,
+      description: desc || undefined,
+      addMembers: pendingAdditions.map(p =>
+        p.memberType === 'user'
+          ? { memberType: 'user' as const, memberUserId: p.memberUserId! }
+          : { memberType: 'group' as const, memberGroupId: p.memberGroupId! }
+      ),
+      removeIds: [...pendingRemovals],
+    }, {
+      onSuccess: () => {
+        const action = pendingNavAction;
+        setShowUnsaved(false); setPendingNavAction(null);
+        action?.();
+      },
+      onError: () => setShowUnsaved(false),
+    });
+  }
+
+  function handleUnsavedDiscard() {
+    const action = pendingNavAction;
+    setShowUnsaved(false); setPendingNavAction(null);
+    resetDirtyState(); setEditing(false);
+    action?.();
+  }
+
   return (
-    <div className="flex h-full min-h-[520px] overflow-hidden" dir="rtl">
+    <div className="flex flex-col h-full overflow-hidden" dir="rtl">
+
+      {/* ── Main flex row: sidebar + content ──────────────────────────────────── */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
 
       {/* ── Right sidebar: Groups list ───────────────────────────────────────── */}
       <div className="w-72 border-l border-border/50 flex flex-col shrink-0 bg-muted/30">
@@ -1661,10 +1935,6 @@ function UserGroupsPage() {
             <Shield className="w-3.5 h-3.5 text-purple-500" />
             <span className="text-xs font-semibold">مجموعات المستخدمين</span>
           </div>
-          <Button size="sm" variant="outline" className="h-7 text-xs gap-1 px-2"
-            onClick={() => { setShowNew(v => !v); setSelectedId(null); setEditing(false); }}>
-            <Plus className="w-3 h-3" />جديد
-          </Button>
         </div>
 
         {showNew && (() => {
@@ -1712,33 +1982,35 @@ function UserGroupsPage() {
             <div className="text-center py-8 px-3 text-muted-foreground">
               <Shield className="w-7 h-7 mx-auto mb-2 opacity-20" />
               <p className="text-xs">لا توجد مجموعات</p>
-              <p className="text-[10px] mt-1 opacity-70">اضغط «جديد» لإضافة مجموعة</p>
+              <p className="text-[10px] mt-1 opacity-70">اضغط «جديد» في الشريط السفلي</p>
             </div>
           )}
           {(groups as any[]).map((g: any) => {
-            const isSelected = g.id === selectedId;
+            const isSelected     = g.id === selectedId;
+            const isCurrentDirty = isSelected && isDirty;
             return (
               <button key={g.id} type="button"
                 className={`w-full text-right px-3 py-2.5 flex items-center gap-2 transition-colors border-b border-border/15 last:border-0
-                  ${isSelected
-                    ? "bg-primary text-primary-foreground"
-                    : "hover:bg-accent/70 text-foreground"}`}
-                onClick={() => { setSelectedId(g.id); setShowNew(false); setEditing(false); setExpandedGroupIds(new Set()); setShowEffective(false); }}>
+                  ${isSelected ? "bg-primary text-primary-foreground" : "hover:bg-accent/70 text-foreground"}`}
+                onClick={() => {
+                  if (g.id !== selectedId) safeNavigate(() => { selectGroup(g.id); setShowNew(false); });
+                }}>
                 <Shield className={`w-3.5 h-3.5 shrink-0 ${isSelected ? "text-white/80" : "text-purple-400"}`} />
                 <div className="flex-1 min-w-0">
                   <p className={`text-xs font-medium truncate ${isSelected ? "text-white" : ""}`}>{g.name}</p>
                   {g.code && (
-                    <p className={`text-[10px] font-mono ${isSelected ? "text-white/60" : "text-muted-foreground"}`}>
-                      {g.code}
-                    </p>
+                    <p className={`text-[10px] font-mono ${isSelected ? "text-white/60" : "text-muted-foreground"}`}>{g.code}</p>
                   )}
                 </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {isCurrentDirty && <span className="text-[8px] text-amber-300 font-bold">●</span>}
                 {g.directMemberCount > 0 && (
-                  <span className={`text-[9px] min-w-[18px] text-center px-1.5 py-0.5 rounded-full font-semibold shrink-0
+                  <span className={`text-[9px] min-w-[18px] text-center px-1.5 py-0.5 rounded-full font-semibold
                     ${isSelected ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}`}>
                     {g.directMemberCount}
                   </span>
                 )}
+                </div>
               </button>
             );
           })}
@@ -1818,13 +2090,14 @@ function UserGroupsPage() {
                         onChange={e => setEditDesc(e.target.value)} />
                       <div className="flex gap-2">
                         <Button size="sm" className="h-7 text-xs"
-                          disabled={!editName.trim() || editCodeEmpty || editCodeDup || updateGroup.isPending}
-                          onClick={() => updateGroup.mutate({ id: selectedGroup.id, name: editName.trim(), code: editCode.trim(), description: editDesc || undefined })}>
-                          <Save className="w-3 h-3 ml-1" />
-                          {updateGroup.isPending ? "جارٍ الحفظ..." : "حفظ التغييرات"}
+                          disabled={!editName.trim() || editCodeEmpty || editCodeDup}
+                          onClick={applyEditLocally}>
+                          <Check className="w-3 h-3 ml-1" />
+                          تطبيق (في انتظار الحفظ)
                         </Button>
                         <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditing(false)}>إلغاء</Button>
                       </div>
+                      <p className="text-[10px] text-amber-600 font-medium">● التغييرات معلّقة حتى الضغط على حفظ في الشريط السفلي</p>
                     </div>
                   );
                 })() : (
@@ -1834,26 +2107,33 @@ function UserGroupsPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h2 className="text-base font-bold text-foreground leading-tight">{selectedGroup.name}</h2>
-                        {selectedGroup.code && (
-                          <code className="text-[11px] font-mono bg-purple-50 text-purple-600 border border-purple-200 px-2 py-0.5 rounded-md">
-                            {selectedGroup.code}
+                        <h2 className="text-base font-bold text-foreground leading-tight">{displayName || selectedGroup.name}</h2>
+                        {(displayCode || selectedGroup.code) && (
+                          <code className={`text-[11px] font-mono border px-2 py-0.5 rounded-md ${isGroupInfoDirty ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-purple-50 text-purple-600 border-purple-200'}`}>
+                            {displayCode || selectedGroup.code}
                           </code>
                         )}
+                        {isDirty && (
+                          <span className="text-[10px] font-semibold text-amber-600 flex items-center gap-1">● تعديلات غير محفوظة</span>
+                        )}
                       </div>
-                      {selectedGroup.description && (
-                        <p className="text-xs text-muted-foreground mt-0.5">{selectedGroup.description}</p>
+                      {(displayDesc || selectedGroup.description) && (
+                        <p className="text-xs text-muted-foreground mt-0.5">{displayDesc || selectedGroup.description}</p>
                       )}
                       <div className="flex items-center gap-4 mt-2">
                         <div className="flex items-center gap-1 text-xs text-muted-foreground">
                           <Users className="w-3.5 h-3.5 text-blue-400" />
-                          <span className="font-semibold text-foreground">{directUsers.length}</span>
+                          <span className="font-semibold text-foreground">
+                            {directUsers.length + pendingAdditions.filter(p => p.memberType === 'user').length}
+                          </span>
                           <span>مستخدم مباشر</span>
                         </div>
                         <div className="w-px h-3 bg-border" />
                         <div className="flex items-center gap-1 text-xs text-muted-foreground">
                           <Shield className="w-3.5 h-3.5 text-purple-400" />
-                          <span className="font-semibold text-foreground">{directGroups.length}</span>
+                          <span className="font-semibold text-foreground">
+                            {directGroups.length + pendingAdditions.filter(p => p.memberType === 'group').length}
+                          </span>
                           <span>مجموعة فرعية</span>
                         </div>
                         <div className="w-px h-3 bg-border" />
@@ -1869,15 +2149,6 @@ function UserGroupsPage() {
                         className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
                         onClick={startEdit}>
                         <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button type="button" title="حذف المجموعة"
-                        className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                        onClick={() => {
-                          if (confirm(`هل أنت متأكد من حذف مجموعة "${selectedGroup.name}"؟`)) {
-                            deleteGroup.mutate({ id: selectedGroup.id });
-                          }
-                        }}>
-                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
@@ -1900,10 +2171,19 @@ function UserGroupsPage() {
                     إضافة مجموعات
                   </Button>
                   <div className="h-5 w-px bg-border/50 mx-0.5" />
-                  {/* Quick code entry */}
-                  <QuickCodeEntry groupId={selectedGroup.id} onAdded={handleMembersAdded} />
-                  <SelectUsersDialog  open={showUsersDialog}  onOpenChange={setShowUsersDialog}  groupId={selectedGroup.id} onAdded={handleMembersAdded} />
-                  <SelectGroupsDialog open={showGroupsDialog} onOpenChange={setShowGroupsDialog} groupId={selectedGroup.id} onAdded={handleMembersAdded} />
+                  <QuickCodeEntry groupId={selectedGroup.id} onAdd={handleQuickAddMember} />
+                  <SelectUsersDialog
+                    open={showUsersDialog} onOpenChange={setShowUsersDialog}
+                    groupId={selectedGroup.id}
+                    pendingUserIds={pendingUserIds}
+                    onConfirm={handleUsersConfirm}
+                  />
+                  <SelectGroupsDialog
+                    open={showGroupsDialog} onOpenChange={setShowGroupsDialog}
+                    groupId={selectedGroup.id}
+                    pendingGroupIds={pendingGroupIds}
+                    onConfirm={handleGroupsConfirm}
+                  />
                 </div>
               )}
 
@@ -1922,7 +2202,7 @@ function UserGroupsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {(members as any[]).length === 0 ? (
+                      {(members as any[]).length === 0 && pendingAdditions.length === 0 ? (
                         <tr>
                           <td colSpan={6} className="py-14 text-center text-muted-foreground">
                             <div className="flex flex-col items-center gap-2">
@@ -1933,20 +2213,81 @@ function UserGroupsPage() {
                           </td>
                         </tr>
                       ) : (
-                        (members as any[]).map((m: any, idx: number) => {
-                          const isGroup   = m.memberType === 'group';
-                          const isExpanded = isGroup && m.memberGroupId != null && expandedGroupIds.has(m.memberGroupId);
-                          const rowBg     = idx % 2 === 0 ? 'bg-white' : 'bg-muted/25';
-                          return (
-                            <React.Fragment key={m.id}>{ /* eslint-disable-line */}
-                              <tr className={`${rowBg} border-b border-border/20 hover:bg-primary/5 transition-colors group`}>
-                                {/* # */}
-                                <td className="px-3 py-2.5 text-center text-muted-foreground font-mono tabular-nums">
-                                  {idx + 1}
-                                </td>
-                                {/* نوع العضو */}
+                        <>
+                          {/* Committed members */}
+                          {(members as any[]).map((m: any, idx: number) => {
+                            const isGroup    = m.memberType === 'group';
+                            const isExpanded = isGroup && m.memberGroupId != null && expandedGroupIds.has(m.memberGroupId);
+                            const isRemoving = pendingRemovals.has(m.id);
+                            const rowBg      = isRemoving ? 'bg-red-50/60'
+                              : idx % 2 === 0 ? 'bg-white' : 'bg-muted/25';
+                            return (
+                              <React.Fragment key={m.id}>
+                                <tr className={`${rowBg} border-b border-border/20 hover:bg-primary/5 transition-colors group ${isRemoving ? 'opacity-60' : ''}`}>
+                                  <td className="px-3 py-2.5 text-center text-muted-foreground font-mono tabular-nums">
+                                    {isRemoving ? <Trash2 className="w-3 h-3 text-destructive mx-auto" /> : idx + 1}
+                                  </td>
+                                  <td className={`px-3 py-2.5 ${isRemoving ? 'line-through' : ''}`}>
+                                    {isGroup ? (
+                                      <span className="flex items-center gap-1.5 text-[10px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-1 rounded-full w-fit">
+                                        <Shield className="w-3 h-3 shrink-0" />مجموعة
+                                      </span>
+                                    ) : (
+                                      <span className="flex items-center gap-1.5 text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-1 rounded-full w-fit">
+                                        <Users className="w-3 h-3 shrink-0" />مستخدم
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className={`px-3 py-2.5 ${isRemoving ? 'line-through' : ''}`}>
+                                    {m.memberCode
+                                      ? <code className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded">{m.memberCode}</code>
+                                      : <span className="text-muted-foreground">—</span>}
+                                  </td>
+                                  <td className={`px-3 py-2.5 font-medium text-foreground ${isRemoving ? 'line-through text-destructive/70' : ''}`}>
+                                    {m.memberName ?? '—'}
+                                  </td>
+                                  <td className="px-3 py-2.5 text-center">
+                                    {isRemoving ? (
+                                      <span className="text-[9px] font-semibold text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">سيُحذف</span>
+                                    ) : (
+                                      <span className="text-[9px] font-semibold text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">مباشر</span>
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2.5 text-center">
+                                    <div className="flex items-center justify-center gap-1">
+                                      {isGroup && m.memberGroupId != null && !isRemoving && (
+                                        <button type="button"
+                                          title={isExpanded ? 'إخفاء الأعضاء' : 'عرض أعضاء المجموعة'}
+                                          className="h-6 w-6 flex items-center justify-center rounded hover:bg-purple-100 text-purple-500 transition-colors"
+                                          onClick={() => toggleGroupExpand(m.memberGroupId)}>
+                                          {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
+                                        </button>
+                                      )}
+                                      <button type="button"
+                                        title={isRemoving ? 'التراجع عن الحذف' : 'إزالة من المجموعة'}
+                                        className={`h-6 w-6 flex items-center justify-center rounded transition-colors opacity-0 group-hover:opacity-100 ${isRemoving ? 'hover:bg-green-100 text-green-600' : 'hover:bg-destructive/10 text-muted-foreground hover:text-destructive'}`}
+                                        onClick={() => handleToggleRemoval(m.id)}>
+                                        {isRemoving ? <Check className="w-3 h-3" /> : <Trash2 className="w-3 h-3" />}
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                                {isExpanded && m.memberGroupId != null && !isRemoving && (
+                                  <ExpandedSubRows memberGroupId={m.memberGroupId} groupName={m.memberName ?? '—'} />
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+
+                          {/* Pending additions */}
+                          {pendingAdditions.map((p, idx) => {
+                            const baseIdx = (members as any[]).length + idx;
+                            const rowBg   = baseIdx % 2 === 0 ? 'bg-amber-50/40' : 'bg-amber-50/60';
+                            return (
+                              <tr key={`pending-${p.tempId}`} className={`${rowBg} border-b border-amber-100/60 group`}>
+                                <td className="px-3 py-2.5 text-center text-muted-foreground font-mono tabular-nums">{baseIdx + 1}</td>
                                 <td className="px-3 py-2.5">
-                                  {isGroup ? (
+                                  {p.memberType === 'group' ? (
                                     <span className="flex items-center gap-1.5 text-[10px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-1 rounded-full w-fit">
                                       <Shield className="w-3 h-3 shrink-0" />مجموعة
                                     </span>
@@ -1956,50 +2297,26 @@ function UserGroupsPage() {
                                     </span>
                                   )}
                                 </td>
-                                {/* كود العضو */}
                                 <td className="px-3 py-2.5">
-                                  {m.memberCode
-                                    ? <code className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded">{m.memberCode}</code>
+                                  {p.memberCode
+                                    ? <code className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded">{p.memberCode}</code>
                                     : <span className="text-muted-foreground">—</span>}
                                 </td>
-                                {/* اسم العضو */}
-                                <td className="px-3 py-2.5 font-medium text-foreground">{m.memberName ?? '—'}</td>
-                                {/* نوع العضوية */}
+                                <td className="px-3 py-2.5 font-medium text-foreground">{p.memberName ?? '—'}</td>
                                 <td className="px-3 py-2.5 text-center">
-                                  <span className="text-[9px] font-semibold text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
-                                    مباشر
-                                  </span>
+                                  <span className="text-[9px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">جديد ●</span>
                                 </td>
-                                {/* الإجراءات */}
                                 <td className="px-3 py-2.5 text-center">
-                                  <div className="flex items-center justify-center gap-1">
-                                    {isGroup && m.memberGroupId != null && (
-                                      <button type="button"
-                                        title={isExpanded ? 'إخفاء الأعضاء' : 'عرض أعضاء المجموعة'}
-                                        className="h-6 w-6 flex items-center justify-center rounded hover:bg-purple-100 text-purple-500 transition-colors"
-                                        onClick={() => toggleGroupExpand(m.memberGroupId)}>
-                                        {isExpanded
-                                          ? <ChevronDown className="w-3.5 h-3.5" />
-                                          : <ChevronLeft className="w-3.5 h-3.5" />}
-                                      </button>
-                                    )}
-                                    <button type="button" title="إزالة من المجموعة"
-                                      className="h-6 w-6 flex items-center justify-center rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
-                                      onClick={() => handleRemoveMember(m.id, m.memberName ?? '—')}>
-                                      <Trash2 className="w-3 h-3" />
-                                    </button>
-                                  </div>
+                                  <button type="button" title="إلغاء الإضافة"
+                                    className="h-6 w-6 flex items-center justify-center rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
+                                    onClick={() => handleCancelPending(p.tempId)}>
+                                    <X className="w-3 h-3" />
+                                  </button>
                                 </td>
                               </tr>
-                              {isExpanded && m.memberGroupId != null && (
-                                <ExpandedSubRows
-                                  memberGroupId={m.memberGroupId}
-                                  groupName={m.memberName ?? '—'}
-                                />
-                              )}
-                            </React.Fragment>
-                          );
-                        })
+                            );
+                          })}
+                        </>
                       )}
 
                       {/* Inherited-only rows (when showEffective is on) */}
@@ -2031,14 +2348,14 @@ function UserGroupsPage() {
                     </tbody>
                   </table>
 
-                  {/* Show effective toggle footer */}
-                  {(members as any[]).length > 0 && (
+                  {/* Footer */}
+                  {((members as any[]).length > 0 || pendingAdditions.length > 0) && (
                     <div className="px-4 py-2.5 border-t border-border/20 bg-muted/10 flex items-center justify-between">
                       <span className="text-[11px] text-muted-foreground">
-                        {(members as any[]).length} عضو مباشر
-                        {(effectiveMembers as any[]).length > (members as any[]).length && (
-                          <> · {inheritedOnly.length} موروث من المجموعات الفرعية</>
-                        )}
+                        {(members as any[]).length - pendingRemovals.size} عضو محفوظ
+                        {pendingAdditions.length > 0 && <> · <span className="text-amber-600 font-semibold">{pendingAdditions.length} في الانتظار</span></>}
+                        {pendingRemovals.size > 0 && <> · <span className="text-red-600 font-semibold">{pendingRemovals.size} سيُحذف</span></>}
+                        {inheritedOnly.length > 0 && <> · {inheritedOnly.length} موروث</>}
                       </span>
                       {inheritedOnly.length > 0 && (
                         <button type="button"
@@ -2057,6 +2374,37 @@ function UserGroupsPage() {
           )}
         </div>
       </div>
+
+      </div>{/* end flex-1 min-h-0 flex row */}
+
+      {/* ── ERPToolbar ─────────────────────────────────────────────────────────── */}
+      <ERPToolbar
+        buttons={['save', 'new', 'delete', 'first', 'prev', 'next', 'last', 'close']}
+        enableShortcuts={false}
+        mode={selectedGroup ? (isDirty ? 'edit' : 'view') : 'new'}
+        record={currentGroupIndex >= 0 ? currentGroupIndex + 1 : undefined}
+        total={totalGroups > 0 ? totalGroups : undefined}
+        pageTitle="مجموعات المستخدمين"
+        saveDisabled={!isDirty || saveAllMut.isPending}
+        onSave={handleSave}
+        onNew={handleNew}
+        onDelete={selectedGroup ? handleDelete : undefined}
+        onFirst={() => handleNav('first')}
+        onPrev={() => handleNav('prev')}
+        onNext={() => handleNav('next')}
+        onLast={() => handleNav('last')}
+        onClose={handleClose}
+        isSaved={!!selectedGroup}
+      />
+
+      {/* ── Unsaved Changes Dialog ──────────────────────────────────────────────── */}
+      <UnsavedChangesDialog
+        open={showUnsaved}
+        onSave={handleUnsavedSave}
+        onDiscard={handleUnsavedDiscard}
+        onCancel={() => { setShowUnsaved(false); setPendingNavAction(null); }}
+        isSaving={saveAllMut.isPending}
+      />
     </div>
   );
 }
