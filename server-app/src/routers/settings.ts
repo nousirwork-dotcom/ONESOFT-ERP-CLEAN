@@ -3,7 +3,7 @@ import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import { userGroups, userGroupMembers, userCategories, users, qrSettings, branches, units, freeProducts, warehouses, salesInvoices, inventoryCounts } from '../schema.js';
-import { eq, and, desc, asc, ilike, or, ne, isNotNull, inArray } from 'drizzle-orm';
+import { eq, and, desc, asc, ilike, or, ne, isNotNull, inArray, sql } from 'drizzle-orm';
 import { assertCanUpdate, assertCanDelete } from '../lib/foundation-framework.js';
 
 // ─── Circular dependency guard for nested groups ───────────────────────────────
@@ -28,15 +28,27 @@ async function wouldCreateCycle(targetGroupId: number, candidateGroupId: number,
 
 export const userGroupsRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
-    return db.select().from(userGroups)
-      .where(and(eq(userGroups.orgId, ctx.user.orgId), eq(userGroups.isActive, true)))
-      .orderBy(userGroups.name);
+    const orgId = ctx.user.orgId;
+    const [groupsRaw, memberCounts] = await Promise.all([
+      db.select().from(userGroups)
+        .where(and(eq(userGroups.orgId, orgId), eq(userGroups.isActive, true)))
+        .orderBy(userGroups.name),
+      db.select({
+        groupId: userGroupMembers.groupId,
+        cnt:     sql<number>`count(*)::int`,
+      })
+        .from(userGroupMembers)
+        .where(eq(userGroupMembers.orgId, orgId))
+        .groupBy(userGroupMembers.groupId),
+    ]);
+    const countMap = new Map(memberCounts.map(r => [r.groupId, r.cnt]));
+    return groupsRaw.map(g => ({ ...g, directMemberCount: countMap.get(g.id) ?? 0 }));
   }),
 
   create: protectedProcedure
     .input(z.object({
-      code: z.string().min(1, 'يرجى إدخال كود مجموعة المستخدمين'),
-      name: z.string().min(1),
+      code: z.string().trim().min(1, 'يرجى إدخال كود مجموعة المستخدمين'),
+      name: z.string().trim().min(1),
       description: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -59,9 +71,9 @@ export const userGroupsRouter = router({
 
   update: protectedProcedure
     .input(z.object({
-      id: z.number(),
-      code: z.string().min(1, 'يرجى إدخال كود مجموعة المستخدمين').optional(),
-      name: z.string().optional(),
+      id:          z.number(),
+      code:        z.string().trim().min(1, 'يرجى إدخال كود مجموعة المستخدمين').optional(),
+      name:        z.string().trim().optional(),
       description: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {

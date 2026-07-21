@@ -1662,6 +1662,12 @@ function UserGroupsPage() {
                     </p>
                   )}
                 </div>
+                {g.directMemberCount > 0 && (
+                  <span className={`text-[9px] min-w-[18px] text-center px-1.5 py-0.5 rounded-full font-semibold shrink-0
+                    ${isSelected ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}`}>
+                    {g.directMemberCount}
+                  </span>
+                )}
               </button>
             );
           })}
