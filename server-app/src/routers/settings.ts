@@ -58,6 +58,146 @@ export const userGroupsRouter = router({
         .where(and(eq(userGroups.id, input.id), eq(userGroups.orgId, ctx.user.orgId)));
       return { success: true };
     }),
+
+  // ── Membership procedures accessible under userGroups.* namespace ──────────
+
+  validateNestedGroup: protectedProcedure
+    .input(z.object({ groupId: z.number(), candidateGroupId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      if (input.candidateGroupId === input.groupId) {
+        return { valid: false, reason: 'لا يمكن إضافة المجموعة إلى نفسها' };
+      }
+      const cycle = await wouldCreateCycle(input.groupId, input.candidateGroupId, ctx.user.orgId);
+      if (cycle) return { valid: false, reason: 'ستؤدي هذه الإضافة إلى تبعية دائرية' };
+      return { valid: true, reason: null };
+    }),
+
+  searchMembers: protectedProcedure
+    .input(z.object({
+      groupId:    z.number(),
+      query:      z.string().min(1),
+      memberType: z.enum(['user', 'group']).optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const orgId = ctx.user.orgId;
+      const q = `%${input.query}%`;
+
+      const existingMembers = await db
+        .select({ memberUserId: userGroupMembers.memberUserId, memberGroupId: userGroupMembers.memberGroupId })
+        .from(userGroupMembers)
+        .where(and(eq(userGroupMembers.groupId, input.groupId), eq(userGroupMembers.orgId, orgId)));
+      const existingUserIds  = new Set(existingMembers.flatMap(m => m.memberUserId  != null ? [m.memberUserId]  : []));
+      const existingGroupIds = new Set(existingMembers.flatMap(m => m.memberGroupId != null ? [m.memberGroupId] : []));
+
+      const results: { id: number; name: string; code: string | null; type: 'user' | 'group' }[] = [];
+
+      if (!input.memberType || input.memberType === 'user') {
+        const allUsers = await db
+          .select({ id: users.id, name: users.name, code: users.code })
+          .from(users)
+          .where(and(eq(users.orgId, orgId), eq(users.isActive, true), or(ilike(users.name, q), ilike(users.code, q))))
+          .orderBy(asc(users.name)).limit(20);
+        results.push(...allUsers.filter(u => !existingUserIds.has(u.id)).slice(0, 12).map(u => ({ ...u, type: 'user' as const })));
+      }
+
+      if (!input.memberType || input.memberType === 'group') {
+        const allGroups = await db
+          .select({ id: userGroups.id, name: userGroups.name, code: userGroups.code })
+          .from(userGroups)
+          .where(and(eq(userGroups.orgId, orgId), eq(userGroups.isActive, true), ne(userGroups.id, input.groupId), or(ilike(userGroups.name, q), ilike(userGroups.code, q))))
+          .orderBy(asc(userGroups.name)).limit(10);
+        results.push(...allGroups.filter(g => !existingGroupIds.has(g.id)).slice(0, 6).map(g => ({ ...g, type: 'group' as const })));
+      }
+
+      return results;
+    }),
+
+  addMember: protectedProcedure
+    .input(z.object({
+      groupId:       z.number(),
+      memberType:    z.enum(['user', 'group']),
+      memberUserId:  z.number().optional(),
+      memberGroupId: z.number().optional(),
+      memberCode:    z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      let resolvedName: string | undefined;
+      let resolvedCode: string | null | undefined;
+      let resolvedUserId:  number | undefined;
+      let resolvedGroupId: number | undefined;
+
+      if (input.memberType === 'user') {
+        if (!input.memberUserId && !input.memberCode) throw new TRPCError({ code: 'BAD_REQUEST', message: 'يجب تحديد مستخدم' });
+        const found = input.memberUserId
+          ? await db.select({ id: users.id, name: users.name, code: users.code }).from(users).where(and(eq(users.id, input.memberUserId), eq(users.orgId, ctx.user.orgId))).limit(1)
+          : await db.select({ id: users.id, name: users.name, code: users.code }).from(users).where(and(eq(users.orgId, ctx.user.orgId), eq(users.code, input.memberCode!))).limit(1);
+        if (!found.length) throw new TRPCError({ code: 'BAD_REQUEST', message: 'المستخدم غير موجود في النظام' });
+        resolvedUserId = found[0].id; resolvedName = found[0].name; resolvedCode = found[0].code;
+        const ex = await db.select({ id: userGroupMembers.id }).from(userGroupMembers).where(and(eq(userGroupMembers.groupId, input.groupId), eq(userGroupMembers.orgId, ctx.user.orgId), eq(userGroupMembers.memberUserId, resolvedUserId))).limit(1);
+        if (ex.length) throw new TRPCError({ code: 'BAD_REQUEST', message: 'المستخدم موجود بالفعل في هذه المجموعة' });
+      } else {
+        if (!input.memberGroupId && !input.memberCode) throw new TRPCError({ code: 'BAD_REQUEST', message: 'يجب تحديد مجموعة' });
+        const found = input.memberGroupId
+          ? await db.select({ id: userGroups.id, name: userGroups.name, code: userGroups.code }).from(userGroups).where(and(eq(userGroups.id, input.memberGroupId), eq(userGroups.orgId, ctx.user.orgId), eq(userGroups.isActive, true))).limit(1)
+          : await db.select({ id: userGroups.id, name: userGroups.name, code: userGroups.code }).from(userGroups).where(and(eq(userGroups.orgId, ctx.user.orgId), eq(userGroups.code, input.memberCode!), eq(userGroups.isActive, true))).limit(1);
+        if (!found.length) throw new TRPCError({ code: 'BAD_REQUEST', message: 'المجموعة غير موجودة في النظام' });
+        resolvedGroupId = found[0].id; resolvedName = found[0].name; resolvedCode = found[0].code;
+        if (resolvedGroupId === input.groupId) throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن إضافة المجموعة إلى نفسها' });
+        if (await wouldCreateCycle(input.groupId, resolvedGroupId, ctx.user.orgId)) throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن إضافة هذه المجموعة — ستؤدي إلى تبعية دائرية' });
+        const ex = await db.select({ id: userGroupMembers.id }).from(userGroupMembers).where(and(eq(userGroupMembers.groupId, input.groupId), eq(userGroupMembers.orgId, ctx.user.orgId), eq(userGroupMembers.memberGroupId, resolvedGroupId))).limit(1);
+        if (ex.length) throw new TRPCError({ code: 'BAD_REQUEST', message: 'المجموعة موجودة بالفعل في هذه المجموعة' });
+      }
+
+      try {
+        const [m] = await db.insert(userGroupMembers).values({
+          groupId: input.groupId, orgId: ctx.user.orgId, memberType: input.memberType,
+          memberUserId: resolvedUserId, memberGroupId: resolvedGroupId, memberCode: resolvedCode, memberName: resolvedName,
+        }).returning();
+        return m;
+      } catch (err: any) {
+        if (err?.code === '23505') throw new TRPCError({ code: 'BAD_REQUEST', message: 'العضو موجود بالفعل في هذه المجموعة' });
+        throw err;
+      }
+    }),
+
+  removeMember: protectedProcedure
+    .input(z.object({ memberId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      await db.delete(userGroupMembers)
+        .where(and(eq(userGroupMembers.id, input.memberId), eq(userGroupMembers.orgId, ctx.user.orgId)));
+      return { success: true };
+    }),
+
+  getEffectiveMembers: protectedProcedure
+    .input(z.object({ groupId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const orgId = ctx.user.orgId;
+      const visitedGroups = new Set<number>();
+      const returnedUserIds = new Set<number>();
+      const results: Array<{
+        id: number; name: string; code: string | null;
+        source: 'direct' | 'inherited'; inheritedFrom: string | null;
+      }> = [];
+      const queue: Array<{ gId: number; inheritedFrom: string | null }> = [{ gId: input.groupId, inheritedFrom: null }];
+
+      while (queue.length) {
+        const item = queue.shift()!;
+        if (visitedGroups.has(item.gId)) continue;
+        visitedGroups.add(item.gId);
+        const members = await db.select().from(userGroupMembers)
+          .where(and(eq(userGroupMembers.groupId, item.gId), eq(userGroupMembers.orgId, orgId)));
+        for (const m of members) {
+          if (m.memberType === 'user' && m.memberUserId && !returnedUserIds.has(m.memberUserId)) {
+            returnedUserIds.add(m.memberUserId);
+            results.push({ id: m.memberUserId, name: m.memberName ?? '—', code: m.memberCode ?? null,
+              source: item.gId === input.groupId ? 'direct' : 'inherited', inheritedFrom: item.inheritedFrom });
+          } else if (m.memberType === 'group' && m.memberGroupId && !visitedGroups.has(m.memberGroupId)) {
+            queue.push({ gId: m.memberGroupId, inheritedFrom: m.memberName ?? String(m.memberGroupId) });
+          }
+        }
+      }
+      return results;
+    }),
 });
 
 export const userCategoriesRouter = router({
@@ -222,16 +362,23 @@ export const groupMembersRouter = router({
         if (existing.length) throw new TRPCError({ code: 'BAD_REQUEST', message: 'المجموعة موجودة بالفعل في هذه المجموعة' });
       }
 
-      const [m] = await db.insert(userGroupMembers).values({
-        groupId:       input.groupId,
-        orgId:         ctx.user.orgId,
-        memberType:    input.memberType,
-        memberUserId:  resolvedUserId,
-        memberGroupId: resolvedGroupId,
-        memberCode:    resolvedCode,
-        memberName:    resolvedName,
-      }).returning();
-      return m;
+      try {
+        const [m] = await db.insert(userGroupMembers).values({
+          groupId:       input.groupId,
+          orgId:         ctx.user.orgId,
+          memberType:    input.memberType,
+          memberUserId:  resolvedUserId,
+          memberGroupId: resolvedGroupId,
+          memberCode:    resolvedCode,
+          memberName:    resolvedName,
+        }).returning();
+        return m;
+      } catch (err: any) {
+        if (err?.code === '23505') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'العضو موجود بالفعل في هذه المجموعة' });
+        }
+        throw err;
+      }
     }),
 
   remove: protectedProcedure
