@@ -1513,7 +1513,8 @@ function UserGroupsPage() {
                     className={`h-7 text-xs ${newCodeDup ? "border-destructive focus-visible:ring-destructive" : ""}`}
                     placeholder="الكود *" value={newCode}
                     onChange={e => setNewCode(e.target.value)} />
-                  {newCodeDup && <p className="text-[10px] text-destructive mt-0.5">الكود مستخدم من قبل</p>}
+                  {newCodeEmpty && <p className="text-[10px] text-destructive mt-0.5">يرجى إدخال كود مجموعة المستخدمين</p>}
+                  {!newCodeEmpty && newCodeDup && <p className="text-[10px] text-destructive mt-0.5">كود مجموعة المستخدمين مستخدم من قبل</p>}
                 </div>
                 <Input className="h-7 text-xs" placeholder="الوصف" value={newDesc}
                   onChange={e => setNewDesc(e.target.value)} />
@@ -1600,8 +1601,8 @@ function UserGroupsPage() {
                         className={`h-7 text-xs mt-0.5 ${editCodeDup ? "border-destructive focus-visible:ring-destructive" : ""}`}
                         value={editCode}
                         onChange={e => setEditCode(e.target.value)} />
-                      {editCodeDup && <p className="text-[10px] text-destructive mt-0.5">الكود مستخدم من قبل</p>}
-                      {editCodeEmpty && <p className="text-[10px] text-destructive mt-0.5">الكود مطلوب</p>}
+                      {editCodeEmpty && <p className="text-[10px] text-destructive mt-0.5">يرجى إدخال كود مجموعة المستخدمين</p>}
+                      {!editCodeEmpty && editCodeDup && <p className="text-[10px] text-destructive mt-0.5">كود مجموعة المستخدمين مستخدم من قبل</p>}
                     </div>
                   </div>
                   <Input className="h-7 text-xs" placeholder="الوصف" value={editDesc}

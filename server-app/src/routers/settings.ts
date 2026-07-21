@@ -46,10 +46,15 @@ export const userGroupsRouter = router({
         .where(and(eq(userGroups.orgId, ctx.user.orgId), eq(userGroups.code, code), eq(userGroups.isActive, true)))
         .limit(1);
       if (existing.length) throw new TRPCError({ code: 'CONFLICT', message: 'كود مجموعة المستخدمين مستخدم من قبل' });
-      const [g] = await db.insert(userGroups).values({
-        orgId: ctx.user.orgId, code, name: input.name.trim(), description: input.description,
-      }).returning();
-      return g;
+      try {
+        const [g] = await db.insert(userGroups).values({
+          orgId: ctx.user.orgId, code, name: input.name.trim(), description: input.description,
+        }).returning();
+        return g;
+      } catch (err: any) {
+        if (err?.code === '23505') throw new TRPCError({ code: 'CONFLICT', message: 'كود مجموعة المستخدمين مستخدم من قبل' });
+        throw err;
+      }
     }),
 
   update: protectedProcedure
@@ -76,8 +81,13 @@ export const userGroupsRouter = router({
         updates.code = code;
       }
       if (rest.name !== undefined) updates.name = rest.name.trim();
-      await db.update(userGroups).set(updates as any)
-        .where(and(eq(userGroups.id, id), eq(userGroups.orgId, ctx.user.orgId)));
+      try {
+        await db.update(userGroups).set(updates as any)
+          .where(and(eq(userGroups.id, id), eq(userGroups.orgId, ctx.user.orgId)));
+      } catch (err: any) {
+        if (err?.code === '23505') throw new TRPCError({ code: 'CONFLICT', message: 'كود مجموعة المستخدمين مستخدم من قبل' });
+        throw err;
+      }
       return { success: true };
     }),
 

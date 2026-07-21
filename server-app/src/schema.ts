@@ -1,5 +1,5 @@
-import { pgTable, serial, varchar, text, integer, boolean, decimal, timestamp, pgEnum, uniqueIndex, jsonb, uuid } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { pgTable, serial, varchar, text, integer, boolean, decimal, timestamp, pgEnum, uniqueIndex, jsonb, uuid, index } from 'drizzle-orm/pg-core';
+import { relations, sql } from 'drizzle-orm';
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 export const userRoleEnum = pgEnum('user_role', ['superadmin', 'admin', 'cashier', 'accountant', 'warehouse_manager', 'viewer']);
@@ -86,7 +86,7 @@ export const userGroups = pgTable('user_groups', {
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 }, (t) => ({
-  orgCodeActiveUidx: uniqueIndex('ug_org_code_active_uidx').on(t.orgId, t.code),
+  orgCodeActiveUidx: uniqueIndex('ug_org_code_active_uidx').on(t.orgId, t.code).where(sql`${t.isActive} = true`),
 }));
 
 // ─── User Categories ──────────────────────────────────────────────────────────
