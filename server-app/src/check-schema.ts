@@ -71,6 +71,8 @@ const EXPECTED_TABLES = [
   're_purchase_statements',
   // Warehouse-as-Branch unification (0043)
   'user_warehouse_assignments',
+  // User Audit Log (0044)
+  'user_audit_logs',
 ];
 
 export async function checkSchema(pool: Pool): Promise<boolean> {
