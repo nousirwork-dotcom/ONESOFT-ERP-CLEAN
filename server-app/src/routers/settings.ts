@@ -34,19 +34,49 @@ export const userGroupsRouter = router({
   }),
 
   create: protectedProcedure
-    .input(z.object({ code: z.string().optional(), name: z.string().min(1), description: z.string().optional() }))
+    .input(z.object({
+      code: z.string().min(1, 'يرجى إدخال كود مجموعة المستخدمين'),
+      name: z.string().min(1),
+      description: z.string().optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
+      const code = input.code.trim();
+      if (!code) throw new TRPCError({ code: 'BAD_REQUEST', message: 'يرجى إدخال كود مجموعة المستخدمين' });
+      const existing = await db.select({ id: userGroups.id }).from(userGroups)
+        .where(and(eq(userGroups.orgId, ctx.user.orgId), eq(userGroups.code, code), eq(userGroups.isActive, true)))
+        .limit(1);
+      if (existing.length) throw new TRPCError({ code: 'CONFLICT', message: 'كود مجموعة المستخدمين مستخدم من قبل' });
       const [g] = await db.insert(userGroups).values({
-        orgId: ctx.user.orgId, code: input.code, name: input.name, description: input.description,
+        orgId: ctx.user.orgId, code, name: input.name.trim(), description: input.description,
       }).returning();
       return g;
     }),
 
   update: protectedProcedure
-    .input(z.object({ id: z.number(), code: z.string().optional(), name: z.string().optional(), description: z.string().optional() }))
+    .input(z.object({
+      id: z.number(),
+      code: z.string().min(1, 'يرجى إدخال كود مجموعة المستخدمين').optional(),
+      name: z.string().optional(),
+      description: z.string().optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
       const { id, ...rest } = input;
-      await db.update(userGroups).set(rest)
+      const updates: Record<string, unknown> = { ...rest };
+      if (rest.code !== undefined) {
+        const code = rest.code.trim();
+        if (!code) throw new TRPCError({ code: 'BAD_REQUEST', message: 'يرجى إدخال كود مجموعة المستخدمين' });
+        const existing = await db.select({ id: userGroups.id }).from(userGroups)
+          .where(and(
+            eq(userGroups.orgId, ctx.user.orgId),
+            eq(userGroups.code, code),
+            eq(userGroups.isActive, true),
+            ne(userGroups.id, id),
+          )).limit(1);
+        if (existing.length) throw new TRPCError({ code: 'CONFLICT', message: 'كود مجموعة المستخدمين مستخدم من قبل' });
+        updates.code = code;
+      }
+      if (rest.name !== undefined) updates.name = rest.name.trim();
+      await db.update(userGroups).set(updates as any)
         .where(and(eq(userGroups.id, id), eq(userGroups.orgId, ctx.user.orgId)));
       return { success: true };
     }),

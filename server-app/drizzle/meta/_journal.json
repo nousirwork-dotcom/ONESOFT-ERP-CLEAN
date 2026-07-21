@@ -323,6 +323,13 @@
       "when": 1791400000000,
       "tag": "0045_user_group_members_fk_upgrade",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1753056000000,
+      "tag": "0046_user_groups_code_required_unique",
+      "breakpoints": true
     }
   ]
 }

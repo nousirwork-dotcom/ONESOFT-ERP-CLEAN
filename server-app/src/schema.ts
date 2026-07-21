@@ -80,12 +80,14 @@ export const userWarehouseAssignments = pgTable('user_warehouse_assignments', {
 export const userGroups = pgTable('user_groups', {
   id: serial('id').primaryKey(),
   orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
-  code: varchar('code', { length: 50 }),
+  code: varchar('code', { length: 50 }).notNull(),
   name: varchar('name', { length: 255 }).notNull(),
   description: text('description'),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),
-});
+}, (t) => ({
+  orgCodeActiveUidx: uniqueIndex('ug_org_code_active_uidx').on(t.orgId, t.code),
+}));
 
 // ─── User Categories ──────────────────────────────────────────────────────────
 export const userCategories = pgTable('user_categories', {

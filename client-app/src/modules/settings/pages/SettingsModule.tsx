@@ -1499,30 +1499,39 @@ function UserGroupsPage() {
           </Button>
         </div>
 
-        {showNew && (
-          <div className="p-3 border-b border-border/40 bg-primary/5 space-y-2">
-            <p className="text-[10px] font-semibold text-primary">مجموعة جديدة</p>
-            <Input className="h-7 text-xs" placeholder="اسم المجموعة *" value={newName}
-              onChange={e => setNewName(e.target.value)} autoFocus />
-            <div className="grid grid-cols-2 gap-1.5">
-              <Input className="h-7 text-xs" placeholder="الكود" value={newCode}
-                onChange={e => setNewCode(e.target.value)} />
-              <Input className="h-7 text-xs" placeholder="الوصف" value={newDesc}
-                onChange={e => setNewDesc(e.target.value)} />
+        {showNew && (() => {
+          const newCodeDup = !!newCode.trim() && (groups as any[]).some((g: any) => g.code === newCode.trim());
+          const newCodeEmpty = showNew && !newCode.trim();
+          return (
+            <div className="p-3 border-b border-border/40 bg-primary/5 space-y-2">
+              <p className="text-[10px] font-semibold text-primary">مجموعة جديدة</p>
+              <Input className="h-7 text-xs" placeholder="اسم المجموعة *" value={newName}
+                onChange={e => setNewName(e.target.value)} autoFocus />
+              <div className="grid grid-cols-2 gap-1.5">
+                <div>
+                  <Input
+                    className={`h-7 text-xs ${newCodeDup ? "border-destructive focus-visible:ring-destructive" : ""}`}
+                    placeholder="الكود *" value={newCode}
+                    onChange={e => setNewCode(e.target.value)} />
+                  {newCodeDup && <p className="text-[10px] text-destructive mt-0.5">الكود مستخدم من قبل</p>}
+                </div>
+                <Input className="h-7 text-xs" placeholder="الوصف" value={newDesc}
+                  onChange={e => setNewDesc(e.target.value)} />
+              </div>
+              <div className="flex gap-1.5">
+                <Button size="sm" className="h-6 text-[10px] flex-1"
+                  disabled={!newName.trim() || newCodeEmpty || newCodeDup || createGroup.isPending}
+                  onClick={() => createGroup.mutate({ code: newCode.trim(), name: newName.trim(), description: newDesc || undefined })}>
+                  {createGroup.isPending ? "..." : "حفظ"}
+                </Button>
+                <Button size="sm" variant="outline" className="h-6 text-[10px]"
+                  onClick={() => { setShowNew(false); setNewCode(""); setNewName(""); setNewDesc(""); }}>
+                  إلغاء
+                </Button>
+              </div>
             </div>
-            <div className="flex gap-1.5">
-              <Button size="sm" className="h-6 text-[10px] flex-1"
-                disabled={!newName.trim() || createGroup.isPending}
-                onClick={() => createGroup.mutate({ name: newName.trim(), code: newCode || undefined, description: newDesc || undefined })}>
-                {createGroup.isPending ? "..." : "حفظ"}
-              </Button>
-              <Button size="sm" variant="outline" className="h-6 text-[10px]"
-                onClick={() => { setShowNew(false); setNewCode(""); setNewName(""); setNewDesc(""); }}>
-                إلغاء
-              </Button>
-            </div>
-          </div>
-        )}
+          );
+        })()}
 
         <div className="flex-1 overflow-y-auto py-1">
           {isLoading && <p className="text-xs text-muted-foreground text-center py-6">جارٍ التحميل...</p>}
@@ -1567,8 +1576,18 @@ function UserGroupsPage() {
 
             {/* Header */}
             <div className="px-4 py-3 border-b border-border/40 flex items-start gap-3 bg-card/10">
-              {editing ? (
+              {editing ? (() => {
+                const editCodeDup = !!editCode.trim() && (groups as any[]).some((g: any) => g.code === editCode.trim() && g.id !== selectedGroup.id);
+                const editCodeEmpty = !editCode.trim();
+                const editCodeChanged = editCode.trim() !== (selectedGroup.code ?? '');
+                return (
                 <div className="flex-1 space-y-2">
+                  {editCodeChanged && (
+                    <div className="flex items-start gap-1.5 rounded-md bg-amber-50 border border-amber-200 px-2 py-1.5 text-[10px] text-amber-700">
+                      <span className="shrink-0 mt-0.5">⚠</span>
+                      <span>تغيير الكود قد يؤثر على ارتباطات المجموعة الحالية</span>
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <Label className="text-[10px] text-muted-foreground">الاسم *</Label>
@@ -1576,23 +1595,28 @@ function UserGroupsPage() {
                         onChange={e => setEditName(e.target.value)} autoFocus />
                     </div>
                     <div>
-                      <Label className="text-[10px] text-muted-foreground">الكود</Label>
-                      <Input className="h-7 text-xs mt-0.5" value={editCode}
+                      <Label className="text-[10px] text-muted-foreground">الكود *</Label>
+                      <Input
+                        className={`h-7 text-xs mt-0.5 ${editCodeDup ? "border-destructive focus-visible:ring-destructive" : ""}`}
+                        value={editCode}
                         onChange={e => setEditCode(e.target.value)} />
+                      {editCodeDup && <p className="text-[10px] text-destructive mt-0.5">الكود مستخدم من قبل</p>}
+                      {editCodeEmpty && <p className="text-[10px] text-destructive mt-0.5">الكود مطلوب</p>}
                     </div>
                   </div>
                   <Input className="h-7 text-xs" placeholder="الوصف" value={editDesc}
                     onChange={e => setEditDesc(e.target.value)} />
                   <div className="flex gap-2">
                     <Button size="sm" className="h-6 text-xs"
-                      disabled={!editName.trim() || updateGroup.isPending}
-                      onClick={() => updateGroup.mutate({ id: selectedGroup.id, name: editName.trim(), code: editCode || undefined, description: editDesc || undefined })}>
+                      disabled={!editName.trim() || editCodeEmpty || editCodeDup || updateGroup.isPending}
+                      onClick={() => updateGroup.mutate({ id: selectedGroup.id, name: editName.trim(), code: editCode.trim(), description: editDesc || undefined })}>
                       {updateGroup.isPending ? "..." : "حفظ"}
                     </Button>
                     <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => setEditing(false)}>إلغاء</Button>
                   </div>
                 </div>
-              ) : (
+                );
+              })() : (
                 <>
                   <div className="flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
