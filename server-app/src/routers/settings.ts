@@ -494,6 +494,169 @@ export const groupMembersRouter = router({
         groups: allGroups.filter(g => !existingGroupIds.has(g.id)).slice(0, 6) .map(g => ({ ...g, type: 'group' as const })),
       };
     }),
+
+  // ── Dialog-facing full list procedures ────────────────────────────────────
+
+  listUsersForDialog: protectedProcedure
+    .input(z.object({
+      groupId:      z.number(),
+      query:        z.string().optional(),
+      showInactive: z.boolean().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const orgId = ctx.user.orgId;
+
+      const existingMembers = await db
+        .select({ memberUserId: userGroupMembers.memberUserId })
+        .from(userGroupMembers)
+        .where(and(eq(userGroupMembers.groupId, input.groupId), eq(userGroupMembers.orgId, orgId), isNotNull(userGroupMembers.memberUserId)));
+      const existingUserIds = new Set(existingMembers.flatMap(m => m.memberUserId != null ? [m.memberUserId] : []));
+
+      const q = input.query?.trim() ? `%${input.query.trim()}%` : null;
+      const baseConditions = [eq(users.orgId, orgId)];
+      if (!input.showInactive) baseConditions.push(eq(users.isActive, true));
+      if (q) baseConditions.push(or(ilike(users.name, q), ilike(users.code, q), ilike(users.username, q)) as any);
+
+      const allUsers = await db
+        .select({ id: users.id, name: users.name, code: users.code, username: users.username, isActive: users.isActive, categoryId: users.categoryId })
+        .from(users)
+        .where(and(...baseConditions))
+        .orderBy(asc(users.name))
+        .limit(300);
+
+      const catIds = [...new Set(allUsers.flatMap(u => u.categoryId != null ? [u.categoryId] : []))];
+      const catMap: Record<number, string> = {};
+      if (catIds.length) {
+        const cats = await db.select({ id: userCategories.id, name: userCategories.name })
+          .from(userCategories).where(eq(userCategories.orgId, orgId));
+        cats.forEach(c => { catMap[c.id] = c.name; });
+      }
+
+      return allUsers.map(u => ({
+        id: u.id, name: u.name, code: u.code, username: u.username,
+        isActive: u.isActive,
+        categoryName: u.categoryId ? (catMap[u.categoryId] ?? null) : null,
+        alreadyAdded: existingUserIds.has(u.id),
+      }));
+    }),
+
+  listGroupsForDialog: protectedProcedure
+    .input(z.object({
+      groupId: z.number(),
+      query:   z.string().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const orgId = ctx.user.orgId;
+
+      const existingMembers = await db
+        .select({ memberGroupId: userGroupMembers.memberGroupId })
+        .from(userGroupMembers)
+        .where(and(eq(userGroupMembers.groupId, input.groupId), eq(userGroupMembers.orgId, orgId), isNotNull(userGroupMembers.memberGroupId)));
+      const existingGroupIds = new Set(existingMembers.flatMap(m => m.memberGroupId != null ? [m.memberGroupId] : []));
+
+      const q = input.query?.trim() ? `%${input.query.trim()}%` : null;
+      const groupConditions: any[] = [eq(userGroups.orgId, orgId), eq(userGroups.isActive, true), ne(userGroups.id, input.groupId)];
+      if (q) groupConditions.push(or(ilike(userGroups.name, q), ilike(userGroups.code, q)));
+
+      const allGroups = await db
+        .select({ id: userGroups.id, name: userGroups.name, code: userGroups.code })
+        .from(userGroups)
+        .where(and(...groupConditions))
+        .orderBy(asc(userGroups.name))
+        .limit(300);
+
+      // Count direct members per group (one query for all)
+      const allMemberships = await db
+        .select({ groupId: userGroupMembers.groupId, memberGroupId: userGroupMembers.memberGroupId })
+        .from(userGroupMembers)
+        .where(eq(userGroupMembers.orgId, orgId));
+
+      const directCountMap: Record<number, number> = {};
+      for (const m of allMemberships) {
+        directCountMap[m.groupId] = (directCountMap[m.groupId] ?? 0) + 1;
+      }
+
+      // Compute cycle-risk groups efficiently via reverse-BFS from targetGroup
+      const reverseGraph = new Map<number, number[]>();
+      for (const m of allMemberships) {
+        if (m.memberGroupId == null) continue;
+        if (!reverseGraph.has(m.memberGroupId)) reverseGraph.set(m.memberGroupId, []);
+        reverseGraph.get(m.memberGroupId)!.push(m.groupId);
+      }
+      const cycleRiskIds = new Set<number>();
+      const bfsQ = [input.groupId];
+      const bfsVisited = new Set<number>();
+      while (bfsQ.length) {
+        const cur = bfsQ.shift()!;
+        if (bfsVisited.has(cur)) continue;
+        bfsVisited.add(cur);
+        for (const parent of (reverseGraph.get(cur) ?? [])) {
+          cycleRiskIds.add(parent);
+          bfsQ.push(parent);
+        }
+      }
+
+      return allGroups.map(g => ({
+        id: g.id, name: g.name, code: g.code,
+        directMemberCount: directCountMap[g.id] ?? 0,
+        alreadyAdded:      existingGroupIds.has(g.id),
+        cycleRisk:         cycleRiskIds.has(g.id),
+        cycleReason:       cycleRiskIds.has(g.id) ? 'لا يمكن اختيار هذه المجموعة لأنها ستُنشئ علاقة دائرية' : null,
+      }));
+    }),
+
+  addBulk: protectedProcedure
+    .input(z.object({
+      groupId: z.number(),
+      members: z.array(z.object({
+        memberType:    z.enum(['user', 'group']),
+        memberUserId:  z.number().optional(),
+        memberGroupId: z.number().optional(),
+      })).min(1).max(200),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const orgId = ctx.user.orgId;
+      let added = 0;
+      const skipped: string[] = [];
+
+      for (const m of input.members) {
+        try {
+          if (m.memberType === 'user' && m.memberUserId) {
+            const [u] = await db
+              .select({ id: users.id, name: users.name, code: users.code })
+              .from(users).where(and(eq(users.id, m.memberUserId), eq(users.orgId, orgId))).limit(1);
+            if (!u) { skipped.push(`مستخدم #${m.memberUserId} غير موجود`); continue; }
+            const ex = await db.select({ id: userGroupMembers.id }).from(userGroupMembers)
+              .where(and(eq(userGroupMembers.groupId, input.groupId), eq(userGroupMembers.orgId, orgId), eq(userGroupMembers.memberUserId, u.id))).limit(1);
+            if (ex.length) { skipped.push(`${u.name} مضاف بالفعل`); continue; }
+            await db.insert(userGroupMembers).values({
+              groupId: input.groupId, orgId, memberType: 'user',
+              memberUserId: u.id, memberCode: u.code, memberName: u.name,
+            }).onConflictDoNothing();
+            added++;
+          } else if (m.memberType === 'group' && m.memberGroupId) {
+            const [g] = await db
+              .select({ id: userGroups.id, name: userGroups.name, code: userGroups.code })
+              .from(userGroups).where(and(eq(userGroups.id, m.memberGroupId), eq(userGroups.orgId, orgId), eq(userGroups.isActive, true))).limit(1);
+            if (!g) { skipped.push(`مجموعة #${m.memberGroupId} غير موجودة`); continue; }
+            if (g.id === input.groupId) { skipped.push(`${g.name}: لا يمكن إضافة المجموعة إلى نفسها`); continue; }
+            if (await wouldCreateCycle(input.groupId, g.id, orgId)) { skipped.push(`${g.name}: دورة مرجعية`); continue; }
+            const ex = await db.select({ id: userGroupMembers.id }).from(userGroupMembers)
+              .where(and(eq(userGroupMembers.groupId, input.groupId), eq(userGroupMembers.orgId, orgId), eq(userGroupMembers.memberGroupId, g.id))).limit(1);
+            if (ex.length) { skipped.push(`${g.name} مضافة بالفعل`); continue; }
+            await db.insert(userGroupMembers).values({
+              groupId: input.groupId, orgId, memberType: 'group',
+              memberGroupId: g.id, memberCode: g.code, memberName: g.name,
+            }).onConflictDoNothing();
+            added++;
+          }
+        } catch (err: any) {
+          if (err?.code !== '23505') throw err;
+        }
+      }
+
+      return { added, skipped };
+    }),
 });
 
 export const qrSettingsRouter = router({

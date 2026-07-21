@@ -1022,41 +1022,305 @@ function UserCategoriesPage() {
 
 // ─── Group Members — Search Input ─────────────────────────────────────────────
 
-type MemberCandidate = { id: number; name: string; code: string | null; type: 'user' | 'group' };
-
 type ResolvedMember = { id: number; name: string; code: string | null; type: 'user' | 'group' };
 
-function MemberSearchInput({
-  groupId, onAdded,
-}: {
-  groupId: number;
-  onAdded?: () => void;
-}) {
-  const utils = trpc.useUtils();
+// ─── SelectUsersDialog ─────────────────────────────────────────────────────────
 
-  // ── Code-based lookup state ────────────────────────────────────────────────
+function SelectUsersDialog({
+  open, onOpenChange, groupId, onAdded,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  groupId: number;
+  onAdded: () => void;
+}) {
+  const [search, setSearch]           = useState('');
+  const [selected, setSelected]       = useState<Set<number>>(new Set());
+  const [showInactive, setShowInactive] = useState(false);
+
+  const { data: usersData = [], isLoading } = trpc.groupMembers.listUsersForDialog.useQuery(
+    { groupId, query: search || undefined, showInactive },
+    { enabled: open }
+  );
+
+  const addBulk = trpc.groupMembers.addBulk.useMutation({
+    onSuccess: (result) => {
+      toast.success(`تم إضافة ${result.added} ${result.added === 1 ? 'عضو' : 'أعضاء'}${result.skipped.length ? ` — تجاهل ${result.skipped.length}` : ''}`);
+      setSelected(new Set());
+      onOpenChange(false);
+      onAdded();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const selectableIds = usersData.filter(u => !u.alreadyAdded).map(u => u.id);
+  const allSelected   = selectableIds.length > 0 && selectableIds.every(id => selected.has(id));
+
+  function toggleAll() {
+    setSelected(allSelected ? new Set() : new Set(selectableIds));
+  }
+  function toggle(id: number) {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelected(next);
+  }
+  function handleAdd() {
+    addBulk.mutate({ groupId, members: [...selected].map(id => ({ memberType: 'user' as const, memberUserId: id })) });
+  }
+
+  useEffect(() => { if (!open) { setSearch(''); setSelected(new Set()); setShowInactive(false); } }, [open]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col" dir="rtl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <Users className="w-4 h-4 text-blue-500" />
+            اختيار المستخدمين
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="relative flex-1">
+            <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            <input
+              className="w-full h-8 text-xs border border-border rounded pr-8 pl-3 bg-background focus:outline-none focus:ring-1 focus:ring-primary/40"
+              placeholder="بحث بالاسم أو الكود أو اسم الدخول..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              autoFocus
+            />
+          </div>
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer shrink-0 select-none">
+            <Checkbox checked={showInactive} onCheckedChange={v => setShowInactive(!!v)} className="h-3.5 w-3.5" />
+            إظهار الموقوفين
+          </label>
+        </div>
+
+        <div className="border border-border/50 rounded-md overflow-hidden flex-1 overflow-y-auto min-h-0">
+          <table className="w-full text-xs">
+            <thead className="sticky top-0 bg-muted/90 backdrop-blur-sm z-10">
+              <tr>
+                <th className="w-8 px-2 py-2 text-center">
+                  <Checkbox checked={allSelected} onCheckedChange={toggleAll} disabled={selectableIds.length === 0} className="h-3.5 w-3.5" />
+                </th>
+                <th className="text-right px-2 py-2 font-medium text-muted-foreground">الكود</th>
+                <th className="text-right px-2 py-2 font-medium text-muted-foreground">الاسم الكامل</th>
+                <th className="text-right px-2 py-2 font-medium text-muted-foreground">اسم الدخول</th>
+                <th className="text-right px-2 py-2 font-medium text-muted-foreground">الفئة</th>
+                <th className="text-right px-2 py-2 font-medium text-muted-foreground">الحالة</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading ? (
+                <tr><td colSpan={6} className="text-center py-10 text-muted-foreground">جارٍ التحميل...</td></tr>
+              ) : usersData.length === 0 ? (
+                <tr><td colSpan={6} className="text-center py-10 text-muted-foreground">لا توجد نتائج مطابقة</td></tr>
+              ) : usersData.map(u => (
+                <tr key={u.id}
+                  onClick={() => !u.alreadyAdded && toggle(u.id)}
+                  className={`border-t border-border/20 transition-colors ${u.alreadyAdded ? 'opacity-50 bg-muted/10' : selected.has(u.id) ? 'bg-primary/5' : 'hover:bg-accent/40 cursor-pointer'}`}>
+                  <td className="w-8 px-2 py-2 text-center">
+                    <Checkbox
+                      checked={selected.has(u.id) || u.alreadyAdded}
+                      onCheckedChange={() => !u.alreadyAdded && toggle(u.id)}
+                      disabled={u.alreadyAdded}
+                      className="h-3.5 w-3.5"
+                      onClick={e => e.stopPropagation()}
+                    />
+                  </td>
+                  <td className="px-2 py-1.5">
+                    {u.code ? <code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">{u.code}</code> : <span className="text-muted-foreground">—</span>}
+                  </td>
+                  <td className="px-2 py-1.5 font-medium">
+                    {u.name}
+                    {u.alreadyAdded && <Badge variant="outline" className="mr-2 text-[9px] h-4 px-1 border-green-300 text-green-700">مضاف</Badge>}
+                  </td>
+                  <td className="px-2 py-1.5 text-muted-foreground font-mono text-[11px]">{u.username}</td>
+                  <td className="px-2 py-1.5 text-muted-foreground">{u.categoryName ?? '—'}</td>
+                  <td className="px-2 py-1.5">
+                    {u.isActive
+                      ? <span className="text-[10px] text-green-700 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded">نشط</span>
+                      : <span className="text-[10px] text-orange-700 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded">موقوف</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <DialogFooter className="flex-row items-center justify-between gap-2 shrink-0">
+          <span className="text-xs text-muted-foreground">
+            {selected.size > 0 ? `تم تحديد ${selected.size} مستخدم` : 'لم يُحدَّد أحد'}
+          </span>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="text-xs h-8" onClick={() => onOpenChange(false)}>إلغاء</Button>
+            <Button size="sm" className="text-xs h-8 gap-1.5" disabled={selected.size === 0 || addBulk.isPending} onClick={handleAdd}>
+              {addBulk.isPending ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+              إضافة المحددين{selected.size > 0 ? ` (${selected.size})` : ''}
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── SelectGroupsDialog ────────────────────────────────────────────────────────
+
+function SelectGroupsDialog({
+  open, onOpenChange, groupId, onAdded,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  groupId: number;
+  onAdded: () => void;
+}) {
+  const [search, setSearch]     = useState('');
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+
+  const { data: groupsData = [], isLoading } = trpc.groupMembers.listGroupsForDialog.useQuery(
+    { groupId, query: search || undefined },
+    { enabled: open }
+  );
+
+  const addBulk = trpc.groupMembers.addBulk.useMutation({
+    onSuccess: (result) => {
+      toast.success(`تم إضافة ${result.added} ${result.added === 1 ? 'مجموعة' : 'مجموعات'}${result.skipped.length ? ` — تجاهل ${result.skipped.length}` : ''}`);
+      setSelected(new Set());
+      onOpenChange(false);
+      onAdded();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const selectableIds = groupsData.filter(g => !g.alreadyAdded && !g.cycleRisk).map(g => g.id);
+  const allSelected   = selectableIds.length > 0 && selectableIds.every(id => selected.has(id));
+
+  function toggleAll() {
+    setSelected(allSelected ? new Set() : new Set(selectableIds));
+  }
+  function toggle(id: number) {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelected(next);
+  }
+  function handleAdd() {
+    addBulk.mutate({ groupId, members: [...selected].map(id => ({ memberType: 'group' as const, memberGroupId: id })) });
+  }
+
+  useEffect(() => { if (!open) { setSearch(''); setSelected(new Set()); } }, [open]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col" dir="rtl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <Shield className="w-4 h-4 text-purple-500" />
+            اختيار مجموعات المستخدمين
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="relative shrink-0">
+          <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+          <input
+            className="w-full h-8 text-xs border border-border rounded pr-8 pl-3 bg-background focus:outline-none focus:ring-1 focus:ring-primary/40"
+            placeholder="بحث بالاسم أو الكود..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            autoFocus
+          />
+        </div>
+
+        <div className="border border-border/50 rounded-md overflow-hidden flex-1 overflow-y-auto min-h-0">
+          <table className="w-full text-xs">
+            <thead className="sticky top-0 bg-muted/90 backdrop-blur-sm z-10">
+              <tr>
+                <th className="w-8 px-2 py-2 text-center">
+                  <Checkbox checked={allSelected} onCheckedChange={toggleAll} disabled={selectableIds.length === 0} className="h-3.5 w-3.5" />
+                </th>
+                <th className="text-right px-2 py-2 font-medium text-muted-foreground">الكود</th>
+                <th className="text-right px-2 py-2 font-medium text-muted-foreground">اسم المجموعة</th>
+                <th className="text-center px-2 py-2 font-medium text-muted-foreground">الأعضاء المباشرون</th>
+                <th className="text-right px-2 py-2 font-medium text-muted-foreground">الحالة</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading ? (
+                <tr><td colSpan={5} className="text-center py-10 text-muted-foreground">جارٍ التحميل...</td></tr>
+              ) : groupsData.length === 0 ? (
+                <tr><td colSpan={5} className="text-center py-10 text-muted-foreground">لا توجد مجموعات</td></tr>
+              ) : groupsData.map(g => {
+                const isDisabled = g.alreadyAdded || g.cycleRisk;
+                return (
+                  <tr key={g.id}
+                    onClick={() => !isDisabled && toggle(g.id)}
+                    className={`border-t border-border/20 transition-colors ${isDisabled ? 'opacity-50 bg-muted/10' : selected.has(g.id) ? 'bg-primary/5' : 'hover:bg-accent/40 cursor-pointer'}`}>
+                    <td className="w-8 px-2 py-2 text-center">
+                      <Checkbox
+                        checked={selected.has(g.id) || g.alreadyAdded}
+                        onCheckedChange={() => !isDisabled && toggle(g.id)}
+                        disabled={isDisabled}
+                        className="h-3.5 w-3.5"
+                        onClick={e => e.stopPropagation()}
+                      />
+                    </td>
+                    <td className="px-2 py-1.5">
+                      {g.code ? <code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">{g.code}</code> : <span className="text-muted-foreground">—</span>}
+                    </td>
+                    <td className="px-2 py-1.5 font-medium">{g.name}</td>
+                    <td className="px-2 py-1.5 text-center text-muted-foreground">{g.directMemberCount}</td>
+                    <td className="px-2 py-1.5">
+                      {g.alreadyAdded ? (
+                        <Badge variant="outline" className="text-[9px] h-4 px-1 border-green-300 text-green-700">مضافة</Badge>
+                      ) : g.cycleRisk ? (
+                        <span className="text-[10px] text-destructive" title={g.cycleReason ?? ''}>⚠ دورة دائرية</span>
+                      ) : (
+                        <span className="text-[10px] text-green-700">متاحة</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <DialogFooter className="flex-row items-center justify-between gap-2 shrink-0">
+          <span className="text-xs text-muted-foreground">
+            {selected.size > 0 ? `تم تحديد ${selected.size} مجموعة` : 'لم تُحدَّد أي مجموعة'}
+          </span>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="text-xs h-8" onClick={() => onOpenChange(false)}>إلغاء</Button>
+            <Button size="sm" className="text-xs h-8 gap-1.5" disabled={selected.size === 0 || addBulk.isPending} onClick={handleAdd}>
+              {addBulk.isPending ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+              إضافة المحددين{selected.size > 0 ? ` (${selected.size})` : ''}
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── MemberAddToolbar — replaces the old MemberSearchInput ────────────────────
+
+function MemberAddToolbar({ groupId, onAdded }: { groupId: number; onAdded?: () => void }) {
+  const utils = trpc.useUtils();
+  const [showUsers,  setShowUsers]  = useState(false);
+  const [showGroups, setShowGroups] = useState(false);
+
+  // Quick code-entry
   const [memberType, setMemberType] = useState<'user' | 'group'>('user');
   const [code, setCode]             = useState('');
   const [isLooking, setIsLooking]   = useState(false);
   const [resolved, setResolved]     = useState<ResolvedMember | null | 'not_found'>(null);
-
-  // ── Live-search state ──────────────────────────────────────────────────────
-  const [searchQuery, setSearchQuery]   = useState('');
-  const [showSearch, setShowSearch]     = useState(false);
-  const [searchFocusIdx, setSearchFocusIdx] = useState(-1);
-  const searchRef = useRef<HTMLDivElement>(null);
-
-  const { data: candidates } = trpc.groupMembers.searchCandidates.useQuery(
-    { query: searchQuery, groupId },
-    { enabled: searchQuery.trim().length >= 1 }
-  );
 
   const addMember = trpc.groupMembers.add.useMutation({
     onSuccess: () => {
       utils.groupMembers.list.invalidate({ groupId });
       utils.groupMembers.effectiveMembers.invalidate({ groupId });
       setCode(''); setResolved(null);
-      setSearchQuery(''); setShowSearch(false);
       onAdded?.();
       toast.success('تم إضافة العضو');
     },
@@ -1066,189 +1330,96 @@ function MemberSearchInput({
   async function handleLookup() {
     const trimmed = code.trim();
     if (!trimmed) return;
-    setIsLooking(true);
-    setResolved(null);
+    setIsLooking(true); setResolved(null);
     try {
       const result = await utils.groupMembers.resolveMember.fetch({ memberType, memberCode: trimmed, groupId });
       setResolved(result ?? 'not_found');
-    } catch {
-      setResolved('not_found');
-    } finally {
-      setIsLooking(false);
-    }
+    } catch { setResolved('not_found'); }
+    finally { setIsLooking(false); }
   }
 
-  function handleAdd() {
+  function handleQuickAdd() {
     if (!resolved || resolved === 'not_found') return;
-    if (resolved.type === 'user') {
-      addMember.mutate({ groupId, memberType: 'user', memberUserId: resolved.id });
-    } else {
-      addMember.mutate({ groupId, memberType: 'group', memberGroupId: resolved.id });
-    }
+    if (resolved.type === 'user') addMember.mutate({ groupId, memberType: 'user', memberUserId: resolved.id });
+    else addMember.mutate({ groupId, memberType: 'group', memberGroupId: resolved.id });
   }
 
-  function handleSearchSelect(item: MemberCandidate) {
-    if (item.type === 'user') {
-      addMember.mutate({ groupId, memberType: 'user', memberUserId: item.id });
-    } else {
-      addMember.mutate({ groupId, memberType: 'group', memberGroupId: item.id });
-    }
+  function handleAdded() {
+    utils.groupMembers.list.invalidate({ groupId });
+    utils.groupMembers.effectiveMembers.invalidate({ groupId });
+    onAdded?.();
   }
-
-  const allCandidates: MemberCandidate[] = [
-    ...(candidates?.users  ?? []),
-    ...(candidates?.groups ?? []),
-  ];
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) setShowSearch(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  const usersResults  = candidates?.users  ?? [];
-  const groupsResults = candidates?.groups ?? [];
 
   return (
-    <div className="border-b border-border/30 space-y-0">
-      {/* ── Row 1: type selector + code + lookup button ─────────────────────── */}
-      <div className="flex items-center gap-1.5 px-3 py-2">
+    <div className="border-b border-border/30 p-3 space-y-2" dir="rtl">
+      {/* Primary action buttons */}
+      <div className="flex gap-2">
+        <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5 flex-1 justify-center"
+          onClick={() => setShowUsers(true)}>
+          <Users className="w-3.5 h-3.5 text-blue-500" />
+          اختيار مستخدمين
+        </Button>
+        <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5 flex-1 justify-center"
+          onClick={() => setShowGroups(true)}>
+          <Shield className="w-3.5 h-3.5 text-purple-500" />
+          اختيار مجموعات
+        </Button>
+      </div>
+
+      {/* Quick code-entry */}
+      <div className="flex items-center gap-1.5">
+        <span className="text-[10px] text-muted-foreground shrink-0 w-16">الكود السريع:</span>
         <select
           value={memberType}
           onChange={e => { setMemberType(e.target.value as 'user' | 'group'); setResolved(null); setCode(''); }}
-          className="h-8 text-xs border border-border rounded px-2 bg-background shrink-0 focus:outline-none focus:ring-1 focus:ring-primary/40"
+          className="h-7 text-[11px] border border-border/60 rounded px-1.5 bg-background shrink-0 focus:outline-none"
           style={{ direction: 'rtl' }}
         >
           <option value="user">مستخدم</option>
           <option value="group">مجموعة</option>
         </select>
-
         <input
-          className="flex-1 h-8 text-xs border border-border rounded px-2.5 bg-background font-mono placeholder:font-sans placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
-          placeholder={memberType === 'user' ? 'كود المستخدم...' : 'كود المجموعة...'}
+          className="flex-1 h-7 text-xs border border-border/60 rounded px-2 bg-background font-mono placeholder:font-sans placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/40 min-w-0"
+          placeholder="أدخل الكود ثم Enter..."
           value={code}
           onChange={e => { setCode(e.target.value); setResolved(null); }}
           onKeyDown={e => e.key === 'Enter' && handleLookup()}
           disabled={isLooking || addMember.isPending}
           dir="ltr"
         />
-
-        <Button size="sm" variant="outline" className="h-8 text-xs gap-1 px-2.5 shrink-0"
-          onClick={handleLookup}
-          disabled={!code.trim() || isLooking || addMember.isPending}>
-          {isLooking
-            ? <RefreshCw className="w-3 h-3 animate-spin" />
-            : <Search className="w-3 h-3" />}
-          بحث
-        </Button>
+        {isLooking && <RefreshCw className="w-3 h-3 animate-spin text-muted-foreground shrink-0" />}
       </div>
 
-      {/* ── Row 2: resolved result / not-found ──────────────────────────────── */}
+      {/* Code lookup result */}
       {resolved !== null && (
-        <div className="flex items-center gap-2 px-4 pb-2">
+        <div className="flex items-center gap-2 px-1">
           {resolved === 'not_found' ? (
             <p className="text-xs text-destructive flex items-center gap-1.5">
-              <X className="w-3.5 h-3.5 shrink-0" />
+              <X className="w-3 h-3 shrink-0" />
               لم يُعثر على {memberType === 'user' ? 'مستخدم' : 'مجموعة'} بهذا الكود
             </p>
           ) : (
             <>
-              <Check className="w-3.5 h-3.5 text-green-500 shrink-0" />
+              <Check className="w-3 h-3 text-green-500 shrink-0" />
               <span className="text-xs flex-1 truncate">
                 <span className="font-medium">{resolved.name}</span>
-                {resolved.code && (
-                  <code className="text-[10px] text-muted-foreground font-mono mr-2">{resolved.code}</code>
-                )}
+                {resolved.code && <code className="text-[10px] text-muted-foreground font-mono mr-2">{resolved.code}</code>}
               </span>
-              <Button size="sm" className="h-6 text-xs gap-1 px-2.5 shrink-0"
-                onClick={handleAdd}
-                disabled={addMember.isPending}>
-                <Plus className="w-3 h-3" />
-                إضافة
+              <Button size="sm" className="h-6 text-xs gap-1 px-2 shrink-0" onClick={handleQuickAdd} disabled={addMember.isPending}>
+                <Plus className="w-3 h-3" />إضافة
               </Button>
             </>
           )}
         </div>
       )}
 
-      {/* ── Row 3: search-by-name fallback ──────────────────────────────────── */}
-      <div className="relative" ref={searchRef}>
-        <div className="flex items-center gap-1.5 px-3 pb-2">
-          <span className="text-[10px] text-muted-foreground shrink-0">أو ابحث بالاسم:</span>
-          <input
-            className="flex-1 h-7 text-xs border border-border/60 rounded px-2.5 bg-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
-            placeholder="اسم المستخدم أو المجموعة..."
-            value={searchQuery}
-            onChange={e => { setSearchQuery(e.target.value); setShowSearch(true); setSearchFocusIdx(-1); }}
-            onFocus={() => searchQuery.trim() && setShowSearch(true)}
-            onKeyDown={e => {
-              if (!showSearch || !allCandidates.length) { if (e.key === 'ArrowDown') { setShowSearch(true); setSearchFocusIdx(0); e.preventDefault(); } return; }
-              if (e.key === 'ArrowDown')  { setSearchFocusIdx(i => Math.min(i + 1, allCandidates.length - 1)); e.preventDefault(); }
-              else if (e.key === 'ArrowUp')    { setSearchFocusIdx(i => Math.max(i - 1, 0)); e.preventDefault(); }
-              else if (e.key === 'Enter' && searchFocusIdx >= 0 && allCandidates[searchFocusIdx]) { handleSearchSelect(allCandidates[searchFocusIdx]); e.preventDefault(); }
-              else if (e.key === 'Escape') { setShowSearch(false); setSearchFocusIdx(-1); }
-            }}
-            disabled={addMember.isPending}
-          />
-        </div>
-
-        {showSearch && searchQuery.trim() && (
-          <div className="absolute z-50 bottom-full right-0 left-0 mx-3 mb-0.5 bg-popover border border-border rounded-md shadow-xl max-h-56 overflow-y-auto" dir="rtl">
-            {allCandidates.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-4">لا توجد نتائج</p>
-            ) : (
-              <>
-                {usersResults.length > 0 && (
-                  <div className="px-3 py-1 bg-muted/40 border-b border-border/30 sticky top-0">
-                    <span className="text-[10px] text-muted-foreground font-semibold">المستخدمون</span>
-                  </div>
-                )}
-                {usersResults.map((u, i) => (
-                  <button key={`u-${u.id}`} type="button"
-                    className={`w-full text-right px-3 py-2 text-xs flex items-center gap-2 border-b border-border/20 last:border-0 transition-colors
-                      ${searchFocusIdx === i ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}`}
-                    onPointerDown={e => e.preventDefault()}
-                    onMouseEnter={() => setSearchFocusIdx(i)}
-                    onClick={() => handleSearchSelect(u)}>
-                    <Users className={`w-3.5 h-3.5 shrink-0 ${searchFocusIdx === i ? 'text-white' : 'text-blue-500'}`} />
-                    <span className="flex-1 truncate">{u.name}</span>
-                    {u.code && <code className={`font-mono text-[10px] px-1.5 py-0.5 rounded shrink-0 ${searchFocusIdx === i ? 'bg-white/20 text-white' : 'bg-primary/10 text-primary'}`}>{u.code}</code>}
-                  </button>
-                ))}
-                {groupsResults.length > 0 && (
-                  <div className="px-3 py-1 bg-muted/40 border-b border-border/30 sticky top-0">
-                    <span className="text-[10px] text-muted-foreground font-semibold">المجموعات</span>
-                  </div>
-                )}
-                {groupsResults.map((g, i) => {
-                  const idx = usersResults.length + i;
-                  return (
-                    <button key={`g-${g.id}`} type="button"
-                      className={`w-full text-right px-3 py-2 text-xs flex items-center gap-2 border-b border-border/20 last:border-0 transition-colors
-                        ${searchFocusIdx === idx ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}`}
-                      onPointerDown={e => e.preventDefault()}
-                      onMouseEnter={() => setSearchFocusIdx(idx)}
-                      onClick={() => handleSearchSelect(g)}>
-                      <Shield className={`w-3.5 h-3.5 shrink-0 ${searchFocusIdx === idx ? 'text-white' : 'text-purple-500'}`} />
-                      <span className="flex-1 truncate">{g.name}</span>
-                      {g.code && <code className={`font-mono text-[10px] px-1.5 py-0.5 rounded shrink-0 ${searchFocusIdx === idx ? 'bg-white/20 text-white' : 'bg-primary/10 text-primary'}`}>{g.code}</code>}
-                    </button>
-                  );
-                })}
-              </>
-            )}
-          </div>
-        )}
-      </div>
+      <SelectUsersDialog  open={showUsers}  onOpenChange={setShowUsers}  groupId={groupId} onAdded={handleAdded} />
+      <SelectGroupsDialog open={showGroups} onOpenChange={setShowGroups} groupId={groupId} onAdded={handleAdded} />
     </div>
   );
 }
 
-// ─── Placeholder to satisfy TS (MemberRow removed) ────────────────────────────
-// The old MemberRow / SavedMembersTable / AddMemberToGroup are replaced by
-// MemberSearchInput + the redesigned UserGroupsPage below.
+// ─── end of member-add components ─────────────────────────────────────────────
 
 // ─── User Groups ───────────────────────────────────────────────────────────────
 
@@ -1454,10 +1625,8 @@ function UserGroupsPage() {
               )}
             </div>
 
-            {/* Add member search */}
-            <div className="bg-muted/10">
-              <MemberSearchInput groupId={selectedGroup.id} />
-            </div>
+            {/* Add member toolbar */}
+            <MemberAddToolbar groupId={selectedGroup.id} />
 
             {/* Direct members */}
             <div className="p-3 space-y-2">
@@ -1471,34 +1640,52 @@ function UserGroupsPage() {
               {(members as any[]).length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground border border-dashed border-border/40 rounded-lg">
                   <Users className="w-6 h-6 mx-auto mb-1.5 opacity-20" />
-                  <p className="text-xs">لا يوجد أعضاء — ابحث أعلاه لإضافة أعضاء</p>
+                  <p className="text-xs">لا يوجد أعضاء — اختر مستخدمين أو مجموعات بالأزرار أعلاه</p>
                 </div>
               ) : (
-                <div className="space-y-1">
-                  {(members as any[]).map((m: any) => (
-                    <div key={m.id}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-card border border-border/40 hover:border-border/70 transition-colors group">
-                      {m.memberType === 'user'
-                        ? <Users className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                        : <Shield className="w-3.5 h-3.5 text-purple-500 shrink-0" />}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium truncate">{m.memberName ?? '—'}</p>
-                        {m.memberCode && <p className="text-[10px] font-mono text-muted-foreground">{m.memberCode}</p>}
-                      </div>
-                      <Badge variant="outline" className="text-[9px] h-4 px-1 shrink-0">
-                        {m.memberType === 'user' ? 'مستخدم' : 'مجموعة'}
-                      </Badge>
-                      <button type="button" title="إزالة"
-                        className="opacity-0 group-hover:opacity-100 text-destructive hover:bg-destructive/10 rounded p-0.5 transition-all"
-                        onClick={() => {
-                          if (confirm(`هل أنت متأكد من إزالة "${m.memberName ?? '—'}" من هذه المجموعة؟`)) {
-                            removeMember.mutate({ id: m.id });
-                          }
-                        }}>
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))}
+                <div className="border border-border/40 rounded-lg overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead className="bg-muted/40">
+                      <tr>
+                        <th className="text-right px-3 py-2 font-medium text-muted-foreground">النوع</th>
+                        <th className="text-right px-3 py-2 font-medium text-muted-foreground">الكود</th>
+                        <th className="text-right px-3 py-2 font-medium text-muted-foreground">الاسم</th>
+                        <th className="text-right px-3 py-2 font-medium text-muted-foreground">العضوية</th>
+                        <th className="w-8 px-2 py-2"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(members as any[]).map((m: any) => (
+                        <tr key={m.id} className="border-t border-border/20 hover:bg-accent/30 transition-colors group">
+                          <td className="px-3 py-2">
+                            {m.memberType === 'user'
+                              ? <span className="flex items-center gap-1.5 text-blue-600"><Users className="w-3 h-3" />مستخدم</span>
+                              : <span className="flex items-center gap-1.5 text-purple-600"><Shield className="w-3 h-3" />مجموعة</span>}
+                          </td>
+                          <td className="px-3 py-2">
+                            {m.memberCode
+                              ? <code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">{m.memberCode}</code>
+                              : <span className="text-muted-foreground">—</span>}
+                          </td>
+                          <td className="px-3 py-2 font-medium">{m.memberName ?? '—'}</td>
+                          <td className="px-3 py-2">
+                            <span className="text-[9px] text-green-700 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded">مباشر</span>
+                          </td>
+                          <td className="px-2 py-2 text-center">
+                            <button type="button" title="إزالة"
+                              className="opacity-0 group-hover:opacity-100 text-destructive hover:bg-destructive/10 rounded p-0.5 transition-all"
+                              onClick={() => {
+                                if (confirm(`هل أنت متأكد من إزالة "${m.memberName ?? '—'}" من هذه المجموعة؟`)) {
+                                  removeMember.mutate({ id: m.id });
+                                }
+                              }}>
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
 
