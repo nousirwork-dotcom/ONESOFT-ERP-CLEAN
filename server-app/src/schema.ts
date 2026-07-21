@@ -110,6 +110,20 @@ export const userGroupMembers = pgTable('user_group_members', {
   memberType: varchar('member_type', { length: 10 }).notNull(),
   memberCode: varchar('member_code', { length: 50 }),
   memberName: varchar('member_name', { length: 255 }),
+  memberUserId: integer('member_user_id').references(() => users.id, { onDelete: 'cascade' }),
+  memberGroupId: integer('member_group_id').references(() => userGroups.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+// ─── User Group Migration Log ─────────────────────────────────────────────────
+export const userGroupMigrationLog = pgTable('user_group_migration_log', {
+  id: serial('id').primaryKey(),
+  originalMemberId: integer('original_member_id'),
+  groupId: integer('group_id'),
+  memberType: varchar('member_type', { length: 10 }),
+  memberCode: varchar('member_code', { length: 50 }),
+  memberName: varchar('member_name', { length: 255 }),
+  reason: text('reason'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 

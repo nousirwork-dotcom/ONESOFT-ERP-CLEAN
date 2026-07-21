@@ -73,6 +73,8 @@ const EXPECTED_TABLES = [
   'user_warehouse_assignments',
   // User Audit Log (0044)
   'user_audit_logs',
+  // User Group Members FK upgrade (0045)
+  'user_group_migration_log',
 ];
 
 export async function checkSchema(pool: Pool): Promise<boolean> {
