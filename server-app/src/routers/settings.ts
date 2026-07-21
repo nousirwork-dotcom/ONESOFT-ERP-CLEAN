@@ -3,7 +3,7 @@ import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import { userGroups, userGroupMembers, userCategories, users, qrSettings, branches, units, freeProducts, warehouses, salesInvoices, inventoryCounts } from '../schema.js';
-import { eq, and, desc, asc, ilike, or, ne, isNotNull } from 'drizzle-orm';
+import { eq, and, desc, asc, ilike, or, ne, isNotNull, inArray } from 'drizzle-orm';
 import { assertCanUpdate, assertCanDelete } from '../lib/foundation-framework.js';
 
 // ─── Circular dependency guard for nested groups ───────────────────────────────
@@ -513,9 +513,27 @@ export const groupMembersRouter = router({
       const existingUserIds = new Set(existingMembers.flatMap(m => m.memberUserId != null ? [m.memberUserId] : []));
 
       const q = input.query?.trim() ? `%${input.query.trim()}%` : null;
-      const baseConditions = [eq(users.orgId, orgId)];
+
+      // Pre-fetch all categories for this org (used for both name search and display)
+      const allCategories = await db
+        .select({ id: userCategories.id, name: userCategories.name })
+        .from(userCategories)
+        .where(eq(userCategories.orgId, orgId));
+      const catMap: Record<number, string> = {};
+      allCategories.forEach(c => { catMap[c.id] = c.name; });
+
+      // Category IDs matching the search query (for filtering by category name)
+      const matchingCatIds = q
+        ? allCategories.filter(c => c.name.toLowerCase().includes(input.query!.trim().toLowerCase())).map(c => c.id)
+        : [];
+
+      const baseConditions: any[] = [eq(users.orgId, orgId)];
       if (!input.showInactive) baseConditions.push(eq(users.isActive, true));
-      if (q) baseConditions.push(or(ilike(users.name, q), ilike(users.code, q), ilike(users.username, q)) as any);
+      if (q) {
+        const nameCodeCondition = or(ilike(users.name, q), ilike(users.code, q), ilike(users.username, q));
+        const catCondition = matchingCatIds.length ? inArray(users.categoryId, matchingCatIds) : undefined;
+        baseConditions.push(catCondition ? or(nameCodeCondition, catCondition) : nameCodeCondition);
+      }
 
       const allUsers = await db
         .select({ id: users.id, name: users.name, code: users.code, username: users.username, isActive: users.isActive, categoryId: users.categoryId })
@@ -523,14 +541,6 @@ export const groupMembersRouter = router({
         .where(and(...baseConditions))
         .orderBy(asc(users.name))
         .limit(300);
-
-      const catIds = [...new Set(allUsers.flatMap(u => u.categoryId != null ? [u.categoryId] : []))];
-      const catMap: Record<number, string> = {};
-      if (catIds.length) {
-        const cats = await db.select({ id: userCategories.id, name: userCategories.name })
-          .from(userCategories).where(eq(userCategories.orgId, orgId));
-        cats.forEach(c => { catMap[c.id] = c.name; });
-      }
 
       return allUsers.map(u => ({
         id: u.id, name: u.name, code: u.code, username: u.username,
@@ -565,18 +575,53 @@ export const groupMembersRouter = router({
         .orderBy(asc(userGroups.name))
         .limit(300);
 
-      // Count direct members per group (one query for all)
+      // Load all org memberships once (type + memberUserId + memberGroupId) for counts + cycle analysis
       const allMemberships = await db
-        .select({ groupId: userGroupMembers.groupId, memberGroupId: userGroupMembers.memberGroupId })
+        .select({
+          groupId:       userGroupMembers.groupId,
+          memberType:    userGroupMembers.memberType,
+          memberUserId:  userGroupMembers.memberUserId,
+          memberGroupId: userGroupMembers.memberGroupId,
+        })
         .from(userGroupMembers)
         .where(eq(userGroupMembers.orgId, orgId));
 
+      // Direct member count per group
       const directCountMap: Record<number, number> = {};
       for (const m of allMemberships) {
         directCountMap[m.groupId] = (directCountMap[m.groupId] ?? 0) + 1;
       }
 
-      // Compute cycle-risk groups efficiently via reverse-BFS from targetGroup
+      // Forward adjacency: groupId → set of member group IDs (for effective-user BFS)
+      const forwardGraph = new Map<number, number[]>();
+      // Per-group direct user sets
+      const directUserMap = new Map<number, Set<number>>();
+      for (const m of allMemberships) {
+        if (m.memberType === 'user' && m.memberUserId != null) {
+          if (!directUserMap.has(m.groupId)) directUserMap.set(m.groupId, new Set());
+          directUserMap.get(m.groupId)!.add(m.memberUserId);
+        }
+        if (m.memberType === 'group' && m.memberGroupId != null) {
+          if (!forwardGraph.has(m.groupId)) forwardGraph.set(m.groupId, []);
+          forwardGraph.get(m.groupId)!.push(m.memberGroupId);
+        }
+      }
+
+      function computeEffectiveCount(gId: number): number {
+        const visitedG = new Set<number>();
+        const userIds  = new Set<number>();
+        const q2 = [gId];
+        while (q2.length) {
+          const cur = q2.shift()!;
+          if (visitedG.has(cur)) continue;
+          visitedG.add(cur);
+          for (const uid of (directUserMap.get(cur) ?? [])) userIds.add(uid);
+          for (const child of (forwardGraph.get(cur) ?? [])) if (!visitedG.has(child)) q2.push(child);
+        }
+        return userIds.size;
+      }
+
+      // Reverse-BFS from targetGroup to compute cycle risks
       const reverseGraph = new Map<number, number[]>();
       for (const m of allMemberships) {
         if (m.memberGroupId == null) continue;
@@ -598,10 +643,11 @@ export const groupMembersRouter = router({
 
       return allGroups.map(g => ({
         id: g.id, name: g.name, code: g.code,
-        directMemberCount: directCountMap[g.id] ?? 0,
-        alreadyAdded:      existingGroupIds.has(g.id),
-        cycleRisk:         cycleRiskIds.has(g.id),
-        cycleReason:       cycleRiskIds.has(g.id) ? 'لا يمكن اختيار هذه المجموعة لأنها ستُنشئ علاقة دائرية' : null,
+        directMemberCount:    directCountMap[g.id] ?? 0,
+        effectiveMemberCount: computeEffectiveCount(g.id),
+        alreadyAdded:         existingGroupIds.has(g.id),
+        cycleRisk:            cycleRiskIds.has(g.id),
+        cycleReason:          cycleRiskIds.has(g.id) ? 'لا يمكن اختيار هذه المجموعة لأنها ستُنشئ علاقة دائرية' : null,
       }));
     }),
 

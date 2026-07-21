@@ -1241,15 +1241,16 @@ function SelectGroupsDialog({
                 </th>
                 <th className="text-right px-2 py-2 font-medium text-muted-foreground">الكود</th>
                 <th className="text-right px-2 py-2 font-medium text-muted-foreground">اسم المجموعة</th>
-                <th className="text-center px-2 py-2 font-medium text-muted-foreground">الأعضاء المباشرون</th>
+                <th className="text-center px-2 py-2 font-medium text-muted-foreground">مباشر</th>
+                <th className="text-center px-2 py-2 font-medium text-muted-foreground">فعلي</th>
                 <th className="text-right px-2 py-2 font-medium text-muted-foreground">الحالة</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={5} className="text-center py-10 text-muted-foreground">جارٍ التحميل...</td></tr>
+                <tr><td colSpan={6} className="text-center py-10 text-muted-foreground">جارٍ التحميل...</td></tr>
               ) : groupsData.length === 0 ? (
-                <tr><td colSpan={5} className="text-center py-10 text-muted-foreground">لا توجد مجموعات</td></tr>
+                <tr><td colSpan={6} className="text-center py-10 text-muted-foreground">لا توجد مجموعات</td></tr>
               ) : groupsData.map(g => {
                 const isDisabled = g.alreadyAdded || g.cycleRisk;
                 return (
@@ -1270,6 +1271,7 @@ function SelectGroupsDialog({
                     </td>
                     <td className="px-2 py-1.5 font-medium">{g.name}</td>
                     <td className="px-2 py-1.5 text-center text-muted-foreground">{g.directMemberCount}</td>
+                    <td className="px-2 py-1.5 text-center text-muted-foreground">{g.effectiveMemberCount}</td>
                     <td className="px-2 py-1.5">
                       {g.alreadyAdded ? (
                         <Badge variant="outline" className="text-[9px] h-4 px-1 border-green-300 text-green-700">مضافة</Badge>
