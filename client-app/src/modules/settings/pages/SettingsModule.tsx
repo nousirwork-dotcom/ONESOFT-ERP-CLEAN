@@ -17,7 +17,7 @@ import ZatcaCenterPage from "./ZatcaCenterPage";
 import AISettingsPage from "./AISettingsPage";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/core/ui/dialog";
 import {
-  ChevronDown, ChevronRight, Settings, Building2, DollarSign,
+  ChevronDown, ChevronRight, ChevronLeft, Settings, Building2, DollarSign,
   Calendar, Users, Shield, Database, FileText, History,
   Warehouse, Tag, BookOpen, Layout, Download, Bell,
   ArrowRight, Save, Plus, Trash2, Edit2, Clock, GitBranch,
@@ -1425,6 +1425,85 @@ function MemberAddToolbar({ groupId, onAdded }: { groupId: number; onAdded?: () 
 
 // ─── User Groups ───────────────────────────────────────────────────────────────
 
+function SubGroupAccordionRow({ member, depth = 0, removeMemberFn, groupId }: {
+  member: any;
+  depth?: number;
+  removeMemberFn?: (id: number, name: string) => void;
+  groupId?: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const { data: subMembers = [], isLoading } = trpc.groupMembers.list.useQuery(
+    { groupId: member.memberGroupId! },
+    { enabled: open && member.memberGroupId != null }
+  );
+  const subUsers  = (subMembers as any[]).filter((m: any) => m.memberType === 'user');
+  const subGroups = (subMembers as any[]).filter((m: any) => m.memberType === 'group');
+
+  return (
+    <div className={depth > 0 ? "border-r-2 border-purple-200 mr-3 pr-2" : ""}>
+      {/* Group row header */}
+      <div className="flex items-center gap-2 py-2 px-2 rounded-md hover:bg-purple-50/60 group/row transition-colors">
+        <button type="button"
+          className="shrink-0 w-5 h-5 flex items-center justify-center text-purple-400 hover:text-purple-700 transition-colors"
+          onClick={() => setOpen(v => !v)}>
+          {open
+            ? <ChevronDown className="w-3.5 h-3.5" />
+            : <ChevronLeft className="w-3.5 h-3.5" />}
+        </button>
+        <Shield className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+        <span className="text-sm font-medium flex-1 truncate">{member.memberName ?? '—'}</span>
+        {member.memberCode && (
+          <code className="text-[10px] font-mono bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded border border-purple-200">
+            {member.memberCode}
+          </code>
+        )}
+        {open && (subMembers as any[]).length > 0 && (
+          <span className="text-[9px] text-purple-500 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded shrink-0">
+            {(subMembers as any[]).length} عضو
+          </span>
+        )}
+        {removeMemberFn && depth === 0 && (
+          <button type="button" title="إزالة المجموعة"
+            className="opacity-0 group-hover/row:opacity-100 text-destructive hover:bg-destructive/10 rounded p-0.5 transition-all shrink-0"
+            onClick={() => removeMemberFn(member.id, member.memberName ?? '—')}>
+            <Trash2 className="w-3 h-3" />
+          </button>
+        )}
+      </div>
+
+      {/* Expanded content */}
+      {open && (
+        <div className="mt-0.5 mb-1 space-y-0.5 mr-5">
+          {isLoading && (
+            <div className="flex items-center gap-1.5 px-2 py-2 text-xs text-muted-foreground">
+              <RefreshCw className="w-3 h-3 animate-spin" /> جارٍ التحميل...
+            </div>
+          )}
+          {!isLoading && (subMembers as any[]).length === 0 && (
+            <p className="text-xs text-muted-foreground italic px-2 py-1.5">لا يوجد أعضاء في هذه المجموعة</p>
+          )}
+          {subUsers.map((m: any) => (
+            <div key={m.id}
+              className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-blue-50/50 border border-blue-100/80">
+              <Users className="w-3 h-3 text-blue-500 shrink-0" />
+              <span className="text-xs flex-1 truncate">{m.memberName ?? '—'}</span>
+              {m.memberCode && (
+                <code className="text-[9px] font-mono text-muted-foreground">{m.memberCode}</code>
+              )}
+              <span className="text-[9px] text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded shrink-0">
+                موروث
+              </span>
+            </div>
+          ))}
+          {subGroups.map((m: any) => (
+            <SubGroupAccordionRow key={m.id} member={m} depth={depth + 1} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function UserGroupsPage() {
   const utils = trpc.useUtils();
   const { data: groups = [], isLoading } = trpc.userGroups.list.useQuery();
@@ -1465,7 +1544,7 @@ function UserGroupsPage() {
   const [editCode, setEditCode]       = useState("");
   const [editName, setEditName]       = useState("");
   const [editDesc, setEditDesc]       = useState("");
-  const [showEffective, setShowEffective] = useState(false);
+  const [activeTab, setActiveTab]     = useState<'direct' | 'subgroups' | 'effective'>('direct');
 
   const selectedGroup = (groups as any[]).find((g: any) => g.id === selectedId) ?? null;
 
@@ -1475,8 +1554,11 @@ function UserGroupsPage() {
   );
   const { data: effectiveMembers = [] } = trpc.groupMembers.effectiveMembers.useQuery(
     { groupId: selectedId! },
-    { enabled: selectedId !== null && showEffective }
+    { enabled: selectedId !== null && activeTab === 'effective' }
   );
+
+  const directUsers  = (members as any[]).filter((m: any) => m.memberType === 'user');
+  const directGroups = (members as any[]).filter((m: any) => m.memberType === 'group');
 
   function startEdit() {
     if (!selectedGroup) return;
@@ -1486,13 +1568,28 @@ function UserGroupsPage() {
     setEditing(true);
   }
 
+  function handleRemoveMember(id: number, name: string) {
+    if (confirm(`هل أنت متأكد من إزالة "${name}" من هذه المجموعة؟`)) {
+      removeMember.mutate({ id });
+    }
+  }
+
+  const tabs = [
+    { key: 'direct'    as const, label: 'الأعضاء المباشرون', count: directUsers.length },
+    { key: 'subgroups' as const, label: 'المجموعات الفرعية',  count: directGroups.length },
+    { key: 'effective' as const, label: 'الأعضاء الفعليون',   count: null },
+  ];
+
   return (
     <div className="flex h-full min-h-[520px] overflow-hidden" dir="rtl">
 
-      {/* ── Right panel: Groups list ─────────────────────────────────────────── */}
-      <div className="w-72 border-l border-border/50 flex flex-col shrink-0 bg-card/20">
-        <div className="flex items-center justify-between px-3 py-2.5 border-b border-border/40">
-          <span className="text-xs font-semibold text-muted-foreground">المجموعات</span>
+      {/* ── Right sidebar: Groups list ───────────────────────────────────────── */}
+      <div className="w-72 border-l border-border/50 flex flex-col shrink-0 bg-muted/30">
+        <div className="flex items-center justify-between px-3 py-2.5 border-b border-border/40 bg-background">
+          <div className="flex items-center gap-1.5">
+            <Shield className="w-3.5 h-3.5 text-purple-500" />
+            <span className="text-xs font-semibold">مجموعات المستخدمين</span>
+          </div>
           <Button size="sm" variant="outline" className="h-7 text-xs gap-1 px-2"
             onClick={() => { setShowNew(v => !v); setSelectedId(null); setEditing(false); }}>
             <Plus className="w-3 h-3" />جديد
@@ -1500,8 +1597,8 @@ function UserGroupsPage() {
         </div>
 
         {showNew && (() => {
-          const newCodeDup = !!newCode.trim() && (groups as any[]).some((g: any) => g.code === newCode.trim());
-          const newCodeEmpty = showNew && !newCode.trim();
+          const newCodeDup   = !!newCode.trim() && (groups as any[]).some((g: any) => g.code === newCode.trim());
+          const newCodeEmpty = !newCode.trim();
           return (
             <div className="p-3 border-b border-border/40 bg-primary/5 space-y-2">
               <p className="text-[10px] font-semibold text-primary">مجموعة جديدة</p>
@@ -1513,8 +1610,12 @@ function UserGroupsPage() {
                     className={`h-7 text-xs ${newCodeDup ? "border-destructive focus-visible:ring-destructive" : ""}`}
                     placeholder="الكود *" value={newCode}
                     onChange={e => setNewCode(e.target.value)} />
-                  {newCodeEmpty && <p className="text-[10px] text-destructive mt-0.5">يرجى إدخال كود مجموعة المستخدمين</p>}
-                  {!newCodeEmpty && newCodeDup && <p className="text-[10px] text-destructive mt-0.5">كود مجموعة المستخدمين مستخدم من قبل</p>}
+                  {newCodeEmpty && showNew && newName.trim() && (
+                    <p className="text-[10px] text-destructive mt-0.5">يرجى إدخال كود مجموعة المستخدمين</p>
+                  )}
+                  {!newCodeEmpty && newCodeDup && (
+                    <p className="text-[10px] text-destructive mt-0.5">كود مجموعة المستخدمين مستخدم من قبل</p>
+                  )}
                 </div>
                 <Input className="h-7 text-xs" placeholder="الوصف" value={newDesc}
                   onChange={e => setNewDesc(e.target.value)} />
@@ -1534,233 +1635,324 @@ function UserGroupsPage() {
           );
         })()}
 
-        <div className="flex-1 overflow-y-auto py-1">
-          {isLoading && <p className="text-xs text-muted-foreground text-center py-6">جارٍ التحميل...</p>}
+        <div className="flex-1 overflow-y-auto">
+          {isLoading && <p className="text-xs text-muted-foreground text-center py-8">جارٍ التحميل...</p>}
           {!isLoading && (groups as any[]).length === 0 && (
-            <p className="text-xs text-muted-foreground text-center py-6">لا توجد مجموعات</p>
+            <div className="text-center py-8 px-3 text-muted-foreground">
+              <Shield className="w-7 h-7 mx-auto mb-2 opacity-20" />
+              <p className="text-xs">لا توجد مجموعات</p>
+              <p className="text-[10px] mt-1 opacity-70">اضغط «جديد» لإضافة مجموعة</p>
+            </div>
           )}
           {(groups as any[]).map((g: any) => {
             const isSelected = g.id === selectedId;
             return (
               <button key={g.id} type="button"
-                className={`w-full text-right px-3 py-2.5 flex items-center gap-2 transition-colors border-b border-border/20 last:border-0
-                  ${isSelected ? "bg-primary text-primary-foreground" : "hover:bg-accent/60 text-foreground"}`}
-                onClick={() => { setSelectedId(g.id); setShowNew(false); setEditing(false); setShowEffective(false); }}>
-                <Shield className={`w-3.5 h-3.5 shrink-0 ${isSelected ? "text-white/80" : "text-purple-500"}`} />
+                className={`w-full text-right px-3 py-2.5 flex items-center gap-2 transition-colors border-b border-border/15 last:border-0
+                  ${isSelected
+                    ? "bg-primary text-primary-foreground"
+                    : "hover:bg-accent/70 text-foreground"}`}
+                onClick={() => { setSelectedId(g.id); setShowNew(false); setEditing(false); setActiveTab('direct'); }}>
+                <Shield className={`w-3.5 h-3.5 shrink-0 ${isSelected ? "text-white/80" : "text-purple-400"}`} />
                 <div className="flex-1 min-w-0">
                   <p className={`text-xs font-medium truncate ${isSelected ? "text-white" : ""}`}>{g.name}</p>
-                  {g.code && <p className={`text-[10px] font-mono ${isSelected ? "text-white/60" : "text-muted-foreground"}`}>{g.code}</p>}
+                  {g.code && (
+                    <p className={`text-[10px] font-mono ${isSelected ? "text-white/60" : "text-muted-foreground"}`}>
+                      {g.code}
+                    </p>
+                  )}
                 </div>
-                {isSelected && g.id === selectedId && (members as any[]).length > 0 && (
-                  <Badge variant="secondary" className="text-[9px] h-4 px-1 shrink-0 bg-white/20 text-white border-0">
-                    {(members as any[]).length}
-                  </Badge>
-                )}
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* ── Left panel: Group detail ─────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {!selectedGroup ? (
-          <div className="flex-1 flex items-center justify-center text-center">
-            <div className="space-y-2 text-muted-foreground">
-              <Shield className="w-10 h-10 mx-auto opacity-10" />
-              <p className="text-sm">اختر مجموعة من القائمة لعرض تفاصيلها وإدارة أعضائها</p>
-              <p className="text-xs opacity-70">أو أنشئ مجموعة جديدة بالضغط على زر «جديد»</p>
-            </div>
-          </div>
-        ) : (
-          <div className="flex-1 overflow-y-auto">
+      {/* ── Main content panel: white card ───────────────────────────────────── */}
+      <div className="flex-1 flex flex-col overflow-hidden p-4">
+        <div className="flex-1 flex flex-col bg-white border border-border/50 rounded-xl shadow-sm overflow-hidden">
 
-            {/* Header */}
-            <div className="px-4 py-3 border-b border-border/40 flex items-start gap-3 bg-card/10">
-              {editing ? (() => {
-                const editCodeDup = !!editCode.trim() && (groups as any[]).some((g: any) => g.code === editCode.trim() && g.id !== selectedGroup.id);
-                const editCodeEmpty = !editCode.trim();
-                const editCodeChanged = editCode.trim() !== (selectedGroup.code ?? '');
-                return (
-                <div className="flex-1 space-y-2">
-                  {editCodeChanged && (
-                    <div className="flex items-start gap-1.5 rounded-md bg-amber-50 border border-amber-200 px-2 py-1.5 text-[10px] text-amber-700">
-                      <span className="shrink-0 mt-0.5">⚠</span>
-                      <span>تغيير الكود قد يؤثر على ارتباطات المجموعة الحالية</span>
-                    </div>
-                  )}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label className="text-[10px] text-muted-foreground">الاسم *</Label>
-                      <Input className="h-7 text-xs mt-0.5" value={editName}
-                        onChange={e => setEditName(e.target.value)} autoFocus />
-                    </div>
-                    <div>
-                      <Label className="text-[10px] text-muted-foreground">الكود *</Label>
-                      <Input
-                        className={`h-7 text-xs mt-0.5 ${editCodeDup ? "border-destructive focus-visible:ring-destructive" : ""}`}
-                        value={editCode}
-                        onChange={e => setEditCode(e.target.value)} />
-                      {editCodeEmpty && <p className="text-[10px] text-destructive mt-0.5">يرجى إدخال كود مجموعة المستخدمين</p>}
-                      {!editCodeEmpty && editCodeDup && <p className="text-[10px] text-destructive mt-0.5">كود مجموعة المستخدمين مستخدم من قبل</p>}
-                    </div>
-                  </div>
-                  <Input className="h-7 text-xs" placeholder="الوصف" value={editDesc}
-                    onChange={e => setEditDesc(e.target.value)} />
-                  <div className="flex gap-2">
-                    <Button size="sm" className="h-6 text-xs"
-                      disabled={!editName.trim() || editCodeEmpty || editCodeDup || updateGroup.isPending}
-                      onClick={() => updateGroup.mutate({ id: selectedGroup.id, name: editName.trim(), code: editCode.trim(), description: editDesc || undefined })}>
-                      {updateGroup.isPending ? "..." : "حفظ"}
-                    </Button>
-                    <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => setEditing(false)}>إلغاء</Button>
-                  </div>
+          {/* ── Empty state ─────────────────────────────────────────────────── */}
+          {!selectedGroup && (
+            <div className="flex-1 flex flex-col items-center justify-center text-center px-6 py-12">
+              <div className="w-16 h-16 rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center mb-4">
+                <Shield className="w-8 h-8 text-purple-300" />
+              </div>
+              <h3 className="text-sm font-semibold text-foreground mb-1">اختر مجموعة لعرض تفاصيلها</h3>
+              <p className="text-xs text-muted-foreground max-w-xs">
+                اختر مجموعة من القائمة على اليمين لعرض أعضائها وتفاصيلها، أو أنشئ مجموعة جديدة بالضغط على «جديد».
+              </p>
+              {!isLoading && (groups as any[]).length > 0 && (
+                <div className="mt-6 flex flex-wrap gap-2 justify-center max-w-xs">
+                  {(groups as any[]).slice(0, 4).map((g: any) => (
+                    <button key={g.id} type="button"
+                      className="flex items-center gap-1.5 text-xs border border-border/50 rounded-lg px-3 py-1.5 hover:bg-accent/50 transition-colors"
+                      onClick={() => { setSelectedId(g.id); setActiveTab('direct'); }}>
+                      <Shield className="w-3 h-3 text-purple-400" />
+                      {g.name}
+                    </button>
+                  ))}
                 </div>
-                );
-              })() : (
-                <>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-semibold text-sm">{selectedGroup.name}</h3>
-                      {selectedGroup.code && (
-                        <code className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
-                          {selectedGroup.code}
-                        </code>
-                      )}
-                    </div>
-                    {selectedGroup.description && (
-                      <p className="text-xs text-muted-foreground mt-0.5">{selectedGroup.description}</p>
-                    )}
-                  </div>
-                  <div className="flex gap-1 shrink-0">
-                    <button type="button" title="تعديل"
-                      className="h-7 w-7 flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-                      onClick={startEdit}>
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button type="button" title="حذف المجموعة"
-                      className="h-7 w-7 flex items-center justify-center rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                      onClick={() => {
-                        if (confirm(`هل أنت متأكد من حذف مجموعة "${selectedGroup.name}"؟`)) {
-                          deleteGroup.mutate({ id: selectedGroup.id });
-                        }
-                      }}>
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </>
               )}
             </div>
+          )}
 
-            {/* Add member toolbar */}
-            <MemberAddToolbar groupId={selectedGroup.id} />
+          {/* ── Group detail ─────────────────────────────────────────────────── */}
+          {selectedGroup && (
+            <div className="flex-1 flex flex-col overflow-hidden">
 
-            {/* Direct members */}
-            <div className="p-3 space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-muted-foreground">الأعضاء المباشرون</span>
-                {(members as any[]).length > 0 && (
-                  <Badge variant="outline" className="text-[9px] h-4 px-1">{(members as any[]).length}</Badge>
+              {/* Group info header */}
+              <div className="px-5 py-4 border-b border-border/30 bg-gradient-to-b from-purple-50/60 to-white shrink-0">
+                {editing ? (() => {
+                  const editCodeDup     = !!editCode.trim() && (groups as any[]).some((g: any) => g.code === editCode.trim() && g.id !== selectedGroup.id);
+                  const editCodeEmpty   = !editCode.trim();
+                  const editCodeChanged = editCode.trim() !== (selectedGroup.code ?? '');
+                  return (
+                    <div className="space-y-2.5">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="w-8 h-8 rounded-lg bg-purple-100 border border-purple-200 flex items-center justify-center shrink-0">
+                          <Edit2 className="w-3.5 h-3.5 text-purple-500" />
+                        </div>
+                        <span className="text-sm font-semibold text-foreground">تعديل المجموعة</span>
+                      </div>
+                      {editCodeChanged && (
+                        <div className="flex items-start gap-1.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
+                          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                          <span>تغيير الكود قد يؤثر على ارتباطات المجموعة الحالية</span>
+                        </div>
+                      )}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-[10px] text-muted-foreground">الاسم *</Label>
+                          <Input className="h-8 text-xs mt-0.5" value={editName}
+                            onChange={e => setEditName(e.target.value)} autoFocus />
+                        </div>
+                        <div>
+                          <Label className="text-[10px] text-muted-foreground">الكود *</Label>
+                          <Input
+                            className={`h-8 text-xs mt-0.5 ${editCodeDup ? "border-destructive focus-visible:ring-destructive" : ""}`}
+                            value={editCode}
+                            onChange={e => setEditCode(e.target.value)} />
+                          {editCodeEmpty && <p className="text-[10px] text-destructive mt-0.5">يرجى إدخال كود مجموعة المستخدمين</p>}
+                          {!editCodeEmpty && editCodeDup && <p className="text-[10px] text-destructive mt-0.5">كود مجموعة المستخدمين مستخدم من قبل</p>}
+                        </div>
+                      </div>
+                      <Input className="h-8 text-xs" placeholder="الوصف" value={editDesc}
+                        onChange={e => setEditDesc(e.target.value)} />
+                      <div className="flex gap-2">
+                        <Button size="sm" className="h-7 text-xs"
+                          disabled={!editName.trim() || editCodeEmpty || editCodeDup || updateGroup.isPending}
+                          onClick={() => updateGroup.mutate({ id: selectedGroup.id, name: editName.trim(), code: editCode.trim(), description: editDesc || undefined })}>
+                          <Save className="w-3 h-3 ml-1" />
+                          {updateGroup.isPending ? "جارٍ الحفظ..." : "حفظ التغييرات"}
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditing(false)}>إلغاء</Button>
+                      </div>
+                    </div>
+                  );
+                })() : (
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-purple-100 border border-purple-200 flex items-center justify-center shrink-0">
+                      <Shield className="w-5 h-5 text-purple-500" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h2 className="text-base font-bold text-foreground leading-tight">{selectedGroup.name}</h2>
+                        {selectedGroup.code && (
+                          <code className="text-[11px] font-mono bg-purple-50 text-purple-600 border border-purple-200 px-2 py-0.5 rounded-md">
+                            {selectedGroup.code}
+                          </code>
+                        )}
+                      </div>
+                      {selectedGroup.description && (
+                        <p className="text-xs text-muted-foreground mt-0.5">{selectedGroup.description}</p>
+                      )}
+                      {/* Stats row */}
+                      <div className="flex items-center gap-4 mt-2.5">
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Users className="w-3.5 h-3.5 text-blue-400" />
+                          <span className="font-semibold text-foreground">{directUsers.length}</span>
+                          <span>مستخدم مباشر</span>
+                        </div>
+                        <div className="w-px h-3 bg-border" />
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Shield className="w-3.5 h-3.5 text-purple-400" />
+                          <span className="font-semibold text-foreground">{directGroups.length}</span>
+                          <span>مجموعة فرعية</span>
+                        </div>
+                        <div className="w-px h-3 bg-border" />
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <GitBranch className="w-3.5 h-3.5 text-green-400" />
+                          <span>{(members as any[]).length} عضو إجمالي</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <button type="button" title="تعديل"
+                        className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={startEdit}>
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button type="button" title="حذف المجموعة"
+                        className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                        onClick={() => {
+                          if (confirm(`هل أنت متأكد من حذف مجموعة "${selectedGroup.name}"؟`)) {
+                            deleteGroup.mutate({ id: selectedGroup.id });
+                          }
+                        }}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
 
-              {(members as any[]).length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground border border-dashed border-border/40 rounded-lg">
-                  <Users className="w-6 h-6 mx-auto mb-1.5 opacity-20" />
-                  <p className="text-xs">لا يوجد أعضاء — اختر مستخدمين أو مجموعات بالأزرار أعلاه</p>
-                </div>
-              ) : (
-                <div className="border border-border/40 rounded-lg overflow-hidden">
-                  <table className="w-full text-xs">
-                    <thead className="bg-muted/40">
-                      <tr>
-                        <th className="text-right px-3 py-2 font-medium text-muted-foreground">النوع</th>
-                        <th className="text-right px-3 py-2 font-medium text-muted-foreground">الكود</th>
-                        <th className="text-right px-3 py-2 font-medium text-muted-foreground">الاسم</th>
-                        <th className="text-right px-3 py-2 font-medium text-muted-foreground">العضوية</th>
-                        <th className="w-8 px-2 py-2"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(members as any[]).map((m: any) => (
-                        <tr key={m.id} className="border-t border-border/20 hover:bg-accent/30 transition-colors group">
-                          <td className="px-3 py-2">
-                            {m.memberType === 'user'
-                              ? <span className="flex items-center gap-1.5 text-blue-600"><Users className="w-3 h-3" />مستخدم</span>
-                              : <span className="flex items-center gap-1.5 text-purple-600"><Shield className="w-3 h-3" />مجموعة</span>}
-                          </td>
-                          <td className="px-3 py-2">
-                            {m.memberCode
-                              ? <code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">{m.memberCode}</code>
-                              : <span className="text-muted-foreground">—</span>}
-                          </td>
-                          <td className="px-3 py-2 font-medium">{m.memberName ?? '—'}</td>
-                          <td className="px-3 py-2">
-                            <span className="text-[9px] text-green-700 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded">مباشر</span>
-                          </td>
-                          <td className="px-2 py-2 text-center">
-                            <button type="button" title="إزالة"
-                              className="opacity-0 group-hover:opacity-100 text-destructive hover:bg-destructive/10 rounded p-0.5 transition-all"
-                              onClick={() => {
-                                if (confirm(`هل أنت متأكد من إزالة "${m.memberName ?? '—'}" من هذه المجموعة؟`)) {
-                                  removeMember.mutate({ id: m.id });
-                                }
-                              }}>
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              {/* Add member toolbar */}
+              {!editing && <MemberAddToolbar groupId={selectedGroup.id} />}
+
+              {/* Tab bar */}
+              {!editing && (
+                <div className="flex border-b border-border/30 bg-white shrink-0 px-4">
+                  {tabs.map(tab => (
+                    <button key={tab.key} type="button"
+                      className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px
+                        ${activeTab === tab.key
+                          ? "border-primary text-primary"
+                          : "border-transparent text-muted-foreground hover:text-foreground"}`}
+                      onClick={() => setActiveTab(tab.key)}>
+                      {tab.label}
+                      {tab.count !== null && tab.count > 0 && (
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold
+                          ${activeTab === tab.key ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+                          {tab.count}
+                        </span>
+                      )}
+                    </button>
+                  ))}
                 </div>
               )}
 
-              {/* Effective members toggle */}
-              <div className="pt-3 mt-1 border-t border-border/30">
-                <button type="button"
-                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  onClick={() => setShowEffective(v => !v)}>
-                  {showEffective
-                    ? <ChevronDown className="w-3.5 h-3.5" />
-                    : <ChevronRight className="w-3.5 h-3.5" />}
-                  <span className="font-medium">الأعضاء الفعليون (شاملاً المجموعات المتداخلة)</span>
-                  {!showEffective && (
-                    <span className="text-[9px] text-muted-foreground/60">انقر للعرض</span>
-                  )}
-                </button>
+              {/* Tab content */}
+              {!editing && (
+                <div className="flex-1 overflow-y-auto p-4">
 
-                {showEffective && (
-                  <div className="mt-2 space-y-1">
-                    {(effectiveMembers as any[]).length === 0 ? (
-                      <p className="text-xs text-muted-foreground text-center py-3 border border-dashed border-border/30 rounded-md">
-                        لا يوجد أعضاء فعليون
-                      </p>
-                    ) : (
-                      (effectiveMembers as any[]).map((m: any) => (
-                        <div key={m.id}
-                          className="flex items-center gap-2.5 px-3 py-1.5 rounded-md bg-muted/20 border border-border/20">
-                          <Users className="w-3 h-3 text-blue-400 shrink-0" />
-                          <span className="text-xs flex-1 truncate">{m.name}</span>
-                          {m.code && <code className="text-[9px] font-mono text-muted-foreground">{m.code}</code>}
-                          {m.source === 'direct' ? (
-                            <span className="text-[9px] text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded shrink-0">
+                  {/* Tab: Direct Users ─────────────────────────────────────── */}
+                  {activeTab === 'direct' && (
+                    <div className="space-y-1">
+                      {directUsers.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-10 text-muted-foreground border border-dashed border-border/40 rounded-xl">
+                          <Users className="w-8 h-8 mb-2 opacity-20" />
+                          <p className="text-sm font-medium">لا يوجد مستخدمون مباشرون</p>
+                          <p className="text-xs mt-1 opacity-70">أضف مستخدمين باستخدام شريط الإضافة أعلاه</p>
+                        </div>
+                      ) : (
+                        directUsers.map((m: any) => (
+                          <div key={m.id}
+                            className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-blue-50/50 border border-blue-100/80 group hover:bg-blue-50 transition-colors">
+                            <div className="w-7 h-7 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center shrink-0">
+                              <Users className="w-3.5 h-3.5 text-blue-500" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{m.memberName ?? '—'}</p>
+                              {m.memberCode && (
+                                <code className="text-[10px] font-mono text-muted-foreground">{m.memberCode}</code>
+                              )}
+                            </div>
+                            <span className="text-[9px] text-green-700 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded shrink-0">
                               مباشر
                             </span>
-                          ) : m.inheritedFrom ? (
-                            <span className="text-[9px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
-                              عبر: {m.inheritedFrom}
-                            </span>
-                          ) : null}
+                            <button type="button" title="إزالة"
+                              className="opacity-0 group-hover:opacity-100 text-destructive hover:bg-destructive/10 rounded p-1 transition-all shrink-0"
+                              onClick={() => handleRemoveMember(m.id, m.memberName ?? '—')}>
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+
+                  {/* Tab: Subgroups (Tree/Accordion) ───────────────────────── */}
+                  {activeTab === 'subgroups' && (
+                    <div className="space-y-1">
+                      {directGroups.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-10 text-muted-foreground border border-dashed border-border/40 rounded-xl">
+                          <Shield className="w-8 h-8 mb-2 opacity-20" />
+                          <p className="text-sm font-medium">لا توجد مجموعات فرعية</p>
+                          <p className="text-xs mt-1 opacity-70">أضف مجموعة فرعية باستخدام «اختيار مجموعات» أعلاه</p>
                         </div>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-1.5 px-1 pb-2 mb-1 border-b border-border/20">
+                            <GitBranch className="w-3.5 h-3.5 text-muted-foreground" />
+                            <span className="text-[10px] text-muted-foreground">اضغط على السهم لعرض أعضاء المجموعة الفرعية</span>
+                          </div>
+                          {directGroups.map((m: any) => (
+                            <SubGroupAccordionRow
+                              key={m.id}
+                              member={m}
+                              depth={0}
+                              removeMemberFn={handleRemoveMember}
+                              groupId={selectedGroup.id}
+                            />
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Tab: Effective Members ─────────────────────────────────── */}
+                  {activeTab === 'effective' && (
+                    <div className="space-y-1">
+                      {(effectiveMembers as any[]).length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-10 text-muted-foreground border border-dashed border-border/40 rounded-xl">
+                          <Users className="w-8 h-8 mb-2 opacity-20" />
+                          <p className="text-sm font-medium">لا يوجد أعضاء فعليون</p>
+                          <p className="text-xs mt-1 opacity-70">الأعضاء الفعليون يشمل المستخدمين المباشرين والموروثين من المجموعات الفرعية</p>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-1.5 px-1 pb-2 mb-1 border-b border-border/20">
+                            <Users className="w-3.5 h-3.5 text-muted-foreground" />
+                            <span className="text-[10px] text-muted-foreground">
+                              {(effectiveMembers as any[]).length} مستخدم إجمالي (مباشرون + موروثون من المجموعات الفرعية)
+                            </span>
+                          </div>
+                          {(effectiveMembers as any[]).map((m: any) => (
+                            <div key={m.id}
+                              className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-border/30 hover:bg-accent/30 transition-colors">
+                              <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0
+                                ${m.source === 'direct' ? 'bg-blue-100 border border-blue-200' : 'bg-amber-50 border border-amber-200'}`}>
+                                <Users className={`w-3.5 h-3.5 ${m.source === 'direct' ? 'text-blue-500' : 'text-amber-500'}`} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{m.name}</p>
+                                {m.code && <code className="text-[10px] font-mono text-muted-foreground">{m.code}</code>}
+                              </div>
+                              {m.source === 'direct' ? (
+                                <span className="text-[9px] text-green-700 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded shrink-0">
+                                  مباشر
+                                </span>
+                              ) : m.inheritedFrom ? (
+                                <span className="text-[9px] text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded shrink-0 max-w-[120px] truncate">
+                                  عبر: {m.inheritedFrom}
+                                </span>
+                              ) : (
+                                <span className="text-[9px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
+                                  موروث
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
