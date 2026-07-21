@@ -22,7 +22,7 @@ import {
   Warehouse, Tag, BookOpen, Layout, Download, Bell,
   ArrowRight, Save, Plus, Trash2, Edit2, Clock, GitBranch,
   AlertTriangle, CheckCircle, XCircle, BarChart2, Lock, List, QrCode,
-  MessageSquare, Send, Bot, Mail, Eye, RefreshCw, Search,
+  MessageSquare, Send, Bot, Mail, Eye, RefreshCw, Search, Check, X,
 } from "lucide-react";
 import QRCodeDisplay from "@/shared/components/QRCodeDisplay";
 import { generateQrContent, QR_SYSTEMS, CUSTOM_TEMPLATE_HELP, type QrSystem } from "@/shared/lib/qrUtils";
@@ -1024,6 +1024,8 @@ function UserCategoriesPage() {
 
 type MemberCandidate = { id: number; name: string; code: string | null; type: 'user' | 'group' };
 
+type ResolvedMember = { id: number; name: string; code: string | null; type: 'user' | 'group' };
+
 function MemberSearchInput({
   groupId, onAdded,
 }: {
@@ -1031,34 +1033,61 @@ function MemberSearchInput({
   onAdded?: () => void;
 }) {
   const utils = trpc.useUtils();
-  const [query, setQuery] = useState("");
-  const [showPicker, setShowPicker] = useState(false);
-  const [focusIdx, setFocusIdx] = useState(-1);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const pickerRef = useRef<HTMLDivElement>(null);
+
+  // ── Code-based lookup state ────────────────────────────────────────────────
+  const [memberType, setMemberType] = useState<'user' | 'group'>('user');
+  const [code, setCode]             = useState('');
+  const [isLooking, setIsLooking]   = useState(false);
+  const [resolved, setResolved]     = useState<ResolvedMember | null | 'not_found'>(null);
+
+  // ── Live-search state ──────────────────────────────────────────────────────
+  const [searchQuery, setSearchQuery]   = useState('');
+  const [showSearch, setShowSearch]     = useState(false);
+  const [searchFocusIdx, setSearchFocusIdx] = useState(-1);
+  const searchRef = useRef<HTMLDivElement>(null);
 
   const { data: candidates } = trpc.groupMembers.searchCandidates.useQuery(
-    { query, groupId },
-    { enabled: query.trim().length >= 1 }
+    { query: searchQuery, groupId },
+    { enabled: searchQuery.trim().length >= 1 }
   );
 
   const addMember = trpc.groupMembers.add.useMutation({
     onSuccess: () => {
       utils.groupMembers.list.invalidate({ groupId });
       utils.groupMembers.effectiveMembers.invalidate({ groupId });
-      setQuery(""); setShowPicker(false); setFocusIdx(-1);
+      setCode(''); setResolved(null);
+      setSearchQuery(''); setShowSearch(false);
       onAdded?.();
-      toast.success("تم إضافة العضو");
+      toast.success('تم إضافة العضو');
     },
     onError: (e) => toast.error(e.message),
   });
 
-  const allCandidates: MemberCandidate[] = [
-    ...(candidates?.users ?? []),
-    ...(candidates?.groups ?? []),
-  ];
+  async function handleLookup() {
+    const trimmed = code.trim();
+    if (!trimmed) return;
+    setIsLooking(true);
+    setResolved(null);
+    try {
+      const result = await utils.groupMembers.resolveMember.fetch({ memberType, memberCode: trimmed, groupId });
+      setResolved(result ?? 'not_found');
+    } catch {
+      setResolved('not_found');
+    } finally {
+      setIsLooking(false);
+    }
+  }
 
-  function selectItem(item: MemberCandidate) {
+  function handleAdd() {
+    if (!resolved || resolved === 'not_found') return;
+    if (resolved.type === 'user') {
+      addMember.mutate({ groupId, memberType: 'user', memberUserId: resolved.id });
+    } else {
+      addMember.mutate({ groupId, memberType: 'group', memberGroupId: resolved.id });
+    }
+  }
+
+  function handleSearchSelect(item: MemberCandidate) {
     if (item.type === 'user') {
       addMember.mutate({ groupId, memberType: 'user', memberUserId: item.id });
     } else {
@@ -1066,99 +1095,153 @@ function MemberSearchInput({
     }
   }
 
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (!showPicker || !allCandidates.length) {
-      if (e.key === 'ArrowDown') { setShowPicker(true); setFocusIdx(0); e.preventDefault(); }
-      return;
-    }
-    if (e.key === 'ArrowDown') { setFocusIdx(i => Math.min(i + 1, allCandidates.length - 1)); e.preventDefault(); }
-    else if (e.key === 'ArrowUp') { setFocusIdx(i => Math.max(i - 1, 0)); e.preventDefault(); }
-    else if (e.key === 'Enter' && focusIdx >= 0 && allCandidates[focusIdx]) { selectItem(allCandidates[focusIdx]); e.preventDefault(); }
-    else if (e.key === 'Escape') { setShowPicker(false); setFocusIdx(-1); }
-  }
+  const allCandidates: MemberCandidate[] = [
+    ...(candidates?.users  ?? []),
+    ...(candidates?.groups ?? []),
+  ];
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setShowPicker(false);
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) setShowSearch(false);
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, []);
 
   const usersResults  = candidates?.users  ?? [];
   const groupsResults = candidates?.groups ?? [];
 
   return (
-    <div className="relative" ref={pickerRef}>
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-border/30">
-        <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+    <div className="border-b border-border/30 space-y-0">
+      {/* ── Row 1: type selector + code + lookup button ─────────────────────── */}
+      <div className="flex items-center gap-1.5 px-3 py-2">
+        <select
+          value={memberType}
+          onChange={e => { setMemberType(e.target.value as 'user' | 'group'); setResolved(null); setCode(''); }}
+          className="h-8 text-xs border border-border rounded px-2 bg-background shrink-0 focus:outline-none focus:ring-1 focus:ring-primary/40"
+          style={{ direction: 'rtl' }}
+        >
+          <option value="user">مستخدم</option>
+          <option value="group">مجموعة</option>
+        </select>
+
         <input
-          ref={inputRef}
-          className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
-          placeholder="ابحث عن مستخدم أو مجموعة للإضافة..."
-          value={query}
-          onChange={e => { setQuery(e.target.value); setShowPicker(true); setFocusIdx(-1); }}
-          onFocus={() => query.trim() && setShowPicker(true)}
-          onKeyDown={handleKeyDown}
-          disabled={addMember.isPending}
+          className="flex-1 h-8 text-xs border border-border rounded px-2.5 bg-background font-mono placeholder:font-sans placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+          placeholder={memberType === 'user' ? 'كود المستخدم...' : 'كود المجموعة...'}
+          value={code}
+          onChange={e => { setCode(e.target.value); setResolved(null); }}
+          onKeyDown={e => e.key === 'Enter' && handleLookup()}
+          disabled={isLooking || addMember.isPending}
+          dir="ltr"
         />
-        {addMember.isPending && <RefreshCw className="w-3.5 h-3.5 animate-spin text-muted-foreground shrink-0" />}
+
+        <Button size="sm" variant="outline" className="h-8 text-xs gap-1 px-2.5 shrink-0"
+          onClick={handleLookup}
+          disabled={!code.trim() || isLooking || addMember.isPending}>
+          {isLooking
+            ? <RefreshCw className="w-3 h-3 animate-spin" />
+            : <Search className="w-3 h-3" />}
+          بحث
+        </Button>
       </div>
-      {showPicker && query.trim() && (
-        <div className="absolute z-50 top-full right-0 left-0 bg-popover border border-border rounded-b-md shadow-xl max-h-64 overflow-y-auto" dir="rtl">
-          {allCandidates.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-4">لا توجد نتائج مطابقة</p>
+
+      {/* ── Row 2: resolved result / not-found ──────────────────────────────── */}
+      {resolved !== null && (
+        <div className="flex items-center gap-2 px-4 pb-2">
+          {resolved === 'not_found' ? (
+            <p className="text-xs text-destructive flex items-center gap-1.5">
+              <X className="w-3.5 h-3.5 shrink-0" />
+              لم يُعثر على {memberType === 'user' ? 'مستخدم' : 'مجموعة'} بهذا الكود
+            </p>
           ) : (
             <>
-              {usersResults.length > 0 && (
-                <div className="px-3 py-1 bg-muted/40 border-b border-border/30 sticky top-0">
-                  <span className="text-[10px] text-muted-foreground font-semibold">المستخدمون</span>
-                </div>
-              )}
-              {usersResults.map((u, i) => (
-                <button key={`u-${u.id}`} type="button"
-                  className={`w-full text-right px-3 py-2 text-xs flex items-center gap-2 border-b border-border/20 last:border-0 transition-colors
-                    ${focusIdx === i ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`}
-                  onPointerDown={e => e.preventDefault()}
-                  onMouseEnter={() => setFocusIdx(i)}
-                  onClick={() => selectItem(u)}>
-                  <Users className={`w-3.5 h-3.5 shrink-0 ${focusIdx === i ? "text-white" : "text-blue-500"}`} />
-                  <span className="flex-1 truncate">{u.name}</span>
-                  {u.code && (
-                    <code className={`font-mono text-[10px] px-1.5 py-0.5 rounded shrink-0 ${focusIdx === i ? "bg-white/20 text-white" : "bg-primary/10 text-primary"}`}>
-                      {u.code}
-                    </code>
-                  )}
-                </button>
-              ))}
-              {groupsResults.length > 0 && (
-                <div className="px-3 py-1 bg-muted/40 border-b border-border/30 sticky top-0">
-                  <span className="text-[10px] text-muted-foreground font-semibold">المجموعات</span>
-                </div>
-              )}
-              {groupsResults.map((g, i) => {
-                const idx = usersResults.length + i;
-                return (
-                  <button key={`g-${g.id}`} type="button"
-                    className={`w-full text-right px-3 py-2 text-xs flex items-center gap-2 border-b border-border/20 last:border-0 transition-colors
-                      ${focusIdx === idx ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`}
-                    onPointerDown={e => e.preventDefault()}
-                    onMouseEnter={() => setFocusIdx(idx)}
-                    onClick={() => selectItem(g)}>
-                    <Shield className={`w-3.5 h-3.5 shrink-0 ${focusIdx === idx ? "text-white" : "text-purple-500"}`} />
-                    <span className="flex-1 truncate">{g.name}</span>
-                    {g.code && (
-                      <code className={`font-mono text-[10px] px-1.5 py-0.5 rounded shrink-0 ${focusIdx === idx ? "bg-white/20 text-white" : "bg-primary/10 text-primary"}`}>
-                        {g.code}
-                      </code>
-                    )}
-                  </button>
-                );
-              })}
+              <Check className="w-3.5 h-3.5 text-green-500 shrink-0" />
+              <span className="text-xs flex-1 truncate">
+                <span className="font-medium">{resolved.name}</span>
+                {resolved.code && (
+                  <code className="text-[10px] text-muted-foreground font-mono mr-2">{resolved.code}</code>
+                )}
+              </span>
+              <Button size="sm" className="h-6 text-xs gap-1 px-2.5 shrink-0"
+                onClick={handleAdd}
+                disabled={addMember.isPending}>
+                <Plus className="w-3 h-3" />
+                إضافة
+              </Button>
             </>
           )}
         </div>
       )}
+
+      {/* ── Row 3: search-by-name fallback ──────────────────────────────────── */}
+      <div className="relative" ref={searchRef}>
+        <div className="flex items-center gap-1.5 px-3 pb-2">
+          <span className="text-[10px] text-muted-foreground shrink-0">أو ابحث بالاسم:</span>
+          <input
+            className="flex-1 h-7 text-xs border border-border/60 rounded px-2.5 bg-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+            placeholder="اسم المستخدم أو المجموعة..."
+            value={searchQuery}
+            onChange={e => { setSearchQuery(e.target.value); setShowSearch(true); setSearchFocusIdx(-1); }}
+            onFocus={() => searchQuery.trim() && setShowSearch(true)}
+            onKeyDown={e => {
+              if (!showSearch || !allCandidates.length) { if (e.key === 'ArrowDown') { setShowSearch(true); setSearchFocusIdx(0); e.preventDefault(); } return; }
+              if (e.key === 'ArrowDown')  { setSearchFocusIdx(i => Math.min(i + 1, allCandidates.length - 1)); e.preventDefault(); }
+              else if (e.key === 'ArrowUp')    { setSearchFocusIdx(i => Math.max(i - 1, 0)); e.preventDefault(); }
+              else if (e.key === 'Enter' && searchFocusIdx >= 0 && allCandidates[searchFocusIdx]) { handleSearchSelect(allCandidates[searchFocusIdx]); e.preventDefault(); }
+              else if (e.key === 'Escape') { setShowSearch(false); setSearchFocusIdx(-1); }
+            }}
+            disabled={addMember.isPending}
+          />
+        </div>
+
+        {showSearch && searchQuery.trim() && (
+          <div className="absolute z-50 bottom-full right-0 left-0 mx-3 mb-0.5 bg-popover border border-border rounded-md shadow-xl max-h-56 overflow-y-auto" dir="rtl">
+            {allCandidates.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-4">لا توجد نتائج</p>
+            ) : (
+              <>
+                {usersResults.length > 0 && (
+                  <div className="px-3 py-1 bg-muted/40 border-b border-border/30 sticky top-0">
+                    <span className="text-[10px] text-muted-foreground font-semibold">المستخدمون</span>
+                  </div>
+                )}
+                {usersResults.map((u, i) => (
+                  <button key={`u-${u.id}`} type="button"
+                    className={`w-full text-right px-3 py-2 text-xs flex items-center gap-2 border-b border-border/20 last:border-0 transition-colors
+                      ${searchFocusIdx === i ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}`}
+                    onPointerDown={e => e.preventDefault()}
+                    onMouseEnter={() => setSearchFocusIdx(i)}
+                    onClick={() => handleSearchSelect(u)}>
+                    <Users className={`w-3.5 h-3.5 shrink-0 ${searchFocusIdx === i ? 'text-white' : 'text-blue-500'}`} />
+                    <span className="flex-1 truncate">{u.name}</span>
+                    {u.code && <code className={`font-mono text-[10px] px-1.5 py-0.5 rounded shrink-0 ${searchFocusIdx === i ? 'bg-white/20 text-white' : 'bg-primary/10 text-primary'}`}>{u.code}</code>}
+                  </button>
+                ))}
+                {groupsResults.length > 0 && (
+                  <div className="px-3 py-1 bg-muted/40 border-b border-border/30 sticky top-0">
+                    <span className="text-[10px] text-muted-foreground font-semibold">المجموعات</span>
+                  </div>
+                )}
+                {groupsResults.map((g, i) => {
+                  const idx = usersResults.length + i;
+                  return (
+                    <button key={`g-${g.id}`} type="button"
+                      className={`w-full text-right px-3 py-2 text-xs flex items-center gap-2 border-b border-border/20 last:border-0 transition-colors
+                        ${searchFocusIdx === idx ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}`}
+                      onPointerDown={e => e.preventDefault()}
+                      onMouseEnter={() => setSearchFocusIdx(idx)}
+                      onClick={() => handleSearchSelect(g)}>
+                      <Shield className={`w-3.5 h-3.5 shrink-0 ${searchFocusIdx === idx ? 'text-white' : 'text-purple-500'}`} />
+                      <span className="flex-1 truncate">{g.name}</span>
+                      {g.code && <code className={`font-mono text-[10px] px-1.5 py-0.5 rounded shrink-0 ${searchFocusIdx === idx ? 'bg-white/20 text-white' : 'bg-primary/10 text-primary'}`}>{g.code}</code>}
+                    </button>
+                  );
+                })}
+              </>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1407,7 +1490,11 @@ function UserGroupsPage() {
                       </Badge>
                       <button type="button" title="إزالة"
                         className="opacity-0 group-hover:opacity-100 text-destructive hover:bg-destructive/10 rounded p-0.5 transition-all"
-                        onClick={() => removeMember.mutate({ id: m.id })}>
+                        onClick={() => {
+                          if (confirm(`هل أنت متأكد من إزالة "${m.memberName ?? '—'}" من هذه المجموعة؟`)) {
+                            removeMember.mutate({ id: m.id });
+                          }
+                        }}>
                         <Trash2 className="w-3 h-3" />
                       </button>
                     </div>
@@ -1442,11 +1529,15 @@ function UserGroupsPage() {
                           <Users className="w-3 h-3 text-blue-400 shrink-0" />
                           <span className="text-xs flex-1 truncate">{m.name}</span>
                           {m.code && <code className="text-[9px] font-mono text-muted-foreground">{m.code}</code>}
-                          {m.viaGroup && (
-                            <span className="text-[9px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
-                              عبر: {m.viaGroup}
+                          {m.source === 'direct' ? (
+                            <span className="text-[9px] text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded shrink-0">
+                              مباشر
                             </span>
-                          )}
+                          ) : m.inheritedFrom ? (
+                            <span className="text-[9px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
+                              عبر: {m.inheritedFrom}
+                            </span>
+                          ) : null}
                         </div>
                       ))
                     )}

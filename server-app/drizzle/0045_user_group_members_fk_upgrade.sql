@@ -1,6 +1,6 @@
 -- 0045: user_group_members FK upgrade
 -- Adds member_user_id / member_group_id FK columns, migrates legacy code-based data,
--- logs unmatched records, and creates partial unique indexes.
+-- logs unmatched records, deduplicates before unique indexes, and creates partial unique indexes.
 
 -- 1. Migration log table for unmatched legacy records
 CREATE TABLE IF NOT EXISTS user_group_migration_log (
@@ -53,7 +53,23 @@ SELECT id, group_id, member_type, member_code, member_name, 'group_not_found_by_
 FROM user_group_members
 WHERE member_type = 'group' AND member_group_id IS NULL AND member_code IS NOT NULL;
 
--- 7. Partial unique indexes (nulls are naturally excluded)
+-- 7a. Deduplicate user members (keep oldest row per group + user pair)
+DELETE FROM user_group_members a
+USING user_group_members b
+WHERE a.member_user_id IS NOT NULL
+  AND a.group_id       = b.group_id
+  AND a.member_user_id = b.member_user_id
+  AND a.id             > b.id;
+
+-- 7b. Deduplicate group members (keep oldest row per group + sub-group pair)
+DELETE FROM user_group_members a
+USING user_group_members b
+WHERE a.member_group_id IS NOT NULL
+  AND a.group_id        = b.group_id
+  AND a.member_group_id = b.member_group_id
+  AND a.id              > b.id;
+
+-- 8. Partial unique indexes (nulls are naturally excluded)
 CREATE UNIQUE INDEX IF NOT EXISTS ugm_user_unique_idx
   ON user_group_members (group_id, member_user_id)
   WHERE member_user_id IS NOT NULL;

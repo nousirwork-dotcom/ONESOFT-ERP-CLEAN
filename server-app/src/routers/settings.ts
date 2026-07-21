@@ -247,8 +247,12 @@ export const groupMembersRouter = router({
     .query(async ({ ctx, input }) => {
       const orgId = ctx.user.orgId;
       const visitedGroups = new Set<number>();
-      const effectiveUsers = new Map<number, { id: number; name: string; code: string | null; viaGroup?: string }>();
-      const queue: Array<{ gId: number; viaGroup?: string }> = [{ gId: input.groupId }];
+      const returnedUserIds = new Set<number>();
+      const results: Array<{
+        id: number; name: string; code: string | null;
+        source: 'direct' | 'inherited'; inheritedFrom: string | null;
+      }> = [];
+      const queue: Array<{ gId: number; inheritedFrom: string | null }> = [{ gId: input.groupId, inheritedFrom: null }];
 
       while (queue.length) {
         const item = queue.shift()!;
@@ -260,21 +264,54 @@ export const groupMembersRouter = router({
 
         for (const m of members) {
           if (m.memberType === 'user' && m.memberUserId) {
-            if (!effectiveUsers.has(m.memberUserId)) {
-              effectiveUsers.set(m.memberUserId, {
-                id:       m.memberUserId,
-                name:     m.memberName ?? '—',
-                code:     m.memberCode ?? null,
-                viaGroup: item.gId !== input.groupId ? item.viaGroup : undefined,
+            if (!returnedUserIds.has(m.memberUserId)) {
+              returnedUserIds.add(m.memberUserId);
+              results.push({
+                id:           m.memberUserId,
+                name:         m.memberName ?? '—',
+                code:         m.memberCode ?? null,
+                source:       item.gId === input.groupId ? 'direct' : 'inherited',
+                inheritedFrom: item.inheritedFrom,
               });
             }
           } else if (m.memberType === 'group' && m.memberGroupId && !visitedGroups.has(m.memberGroupId)) {
-            queue.push({ gId: m.memberGroupId, viaGroup: m.memberName ?? String(m.memberGroupId) });
+            queue.push({ gId: m.memberGroupId, inheritedFrom: m.memberName ?? String(m.memberGroupId) });
           }
         }
       }
 
-      return Array.from(effectiveUsers.values());
+      return results;
+    }),
+
+  resolveMember: protectedProcedure
+    .input(z.object({
+      memberType: z.enum(['user', 'group']),
+      memberCode: z.string(),
+      groupId:    z.number(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const code = input.memberCode.trim();
+      if (!code) return null;
+      if (input.memberType === 'user') {
+        const [u] = await db
+          .select({ id: users.id, name: users.name, code: users.code })
+          .from(users)
+          .where(and(eq(users.orgId, ctx.user.orgId), eq(users.isActive, true), eq(users.code, code)))
+          .limit(1);
+        return u ? { id: u.id, name: u.name, code: u.code, type: 'user' as const } : null;
+      } else {
+        const [g] = await db
+          .select({ id: userGroups.id, name: userGroups.name, code: userGroups.code })
+          .from(userGroups)
+          .where(and(
+            eq(userGroups.orgId, ctx.user.orgId),
+            eq(userGroups.isActive, true),
+            ne(userGroups.id, input.groupId),
+            eq(userGroups.code, code),
+          ))
+          .limit(1);
+        return g ? { id: g.id, name: g.name, code: g.code, type: 'group' as const } : null;
+      }
     }),
 
   searchCandidates: protectedProcedure
@@ -283,31 +320,31 @@ export const groupMembersRouter = router({
       groupId: z.number(),
     }))
     .query(async ({ ctx, input }) => {
+      const orgId = ctx.user.orgId;
       const q = `%${input.query}%`;
-      const [foundUsers, foundGroups] = await Promise.all([
+
+      const [existingMembers, allUsers, allGroups] = await Promise.all([
+        db.select({ memberUserId: userGroupMembers.memberUserId, memberGroupId: userGroupMembers.memberGroupId })
+          .from(userGroupMembers)
+          .where(and(eq(userGroupMembers.groupId, input.groupId), eq(userGroupMembers.orgId, orgId))),
         db.select({ id: users.id, name: users.name, code: users.code })
           .from(users)
-          .where(and(
-            eq(users.orgId, ctx.user.orgId),
-            eq(users.isActive, true),
-            or(ilike(users.name, q), ilike(users.code, q)),
-          ))
+          .where(and(eq(users.orgId, orgId), eq(users.isActive, true), or(ilike(users.name, q), ilike(users.code, q))))
           .orderBy(asc(users.name))
-          .limit(12),
+          .limit(20),
         db.select({ id: userGroups.id, name: userGroups.name, code: userGroups.code })
           .from(userGroups)
-          .where(and(
-            eq(userGroups.orgId, ctx.user.orgId),
-            eq(userGroups.isActive, true),
-            ne(userGroups.id, input.groupId),
-            or(ilike(userGroups.name, q), ilike(userGroups.code, q)),
-          ))
+          .where(and(eq(userGroups.orgId, orgId), eq(userGroups.isActive, true), ne(userGroups.id, input.groupId), or(ilike(userGroups.name, q), ilike(userGroups.code, q))))
           .orderBy(asc(userGroups.name))
-          .limit(6),
+          .limit(10),
       ]);
+
+      const existingUserIds  = new Set(existingMembers.flatMap(m => m.memberUserId  != null ? [m.memberUserId]  : []));
+      const existingGroupIds = new Set(existingMembers.flatMap(m => m.memberGroupId != null ? [m.memberGroupId] : []));
+
       return {
-        users:  foundUsers.map(u => ({ ...u, type: 'user'  as const })),
-        groups: foundGroups.map(g => ({ ...g, type: 'group' as const })),
+        users:  allUsers .filter(u => !existingUserIds .has(u.id)).slice(0, 12).map(u => ({ ...u, type: 'user'  as const })),
+        groups: allGroups.filter(g => !existingGroupIds.has(g.id)).slice(0, 6) .map(g => ({ ...g, type: 'group' as const })),
       };
     }),
 });
