@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import ERPToolbar from "@/shared/components/ERPToolbar";
 import { Input } from "@/core/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/core/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/core/ui/dialog";
@@ -867,22 +868,6 @@ export default function DocumentJournalsPage() {
 
   /* ── Toolbar ── */
   const isBusy = createMut.isPending || updateMut.isPending || deleteMut.isPending;
-  const toolbar = [
-    { label: "حفظ",          icon: <Save className="w-3.5 h-3.5" />,         action: handleSave,        primary: true,  disabled: isBusy },
-    { label: "جديد",         icon: <Plus className="w-3.5 h-3.5" />,         action: () => safeNavigate(openCreate) },
-    { label: "نسخة مماثلة",  icon: <Copy className="w-3.5 h-3.5" />,         action: handleDuplicate,   disabled: !editId },
-    { label: "حذف",          icon: <Trash2 className="w-3.5 h-3.5" />,       action: () => editId && setShowDelete(true), danger: true, disabled: !editId },
-    { label: "sep1", sep: true },
-    { label: "الأول",        icon: <ChevronFirst className="w-3.5 h-3.5" />, action: () => typeJournals[0] && safeNavigate(() => openEdit(typeJournals[0])) },
-    { label: "السابق",       icon: <CRight className="w-3.5 h-3.5" />,       action: () => currentIndex > 0 && safeNavigate(() => openEdit(typeJournals[currentIndex - 1])) },
-    { label: "التالي",       icon: <CLeft className="w-3.5 h-3.5" />,        action: () => currentIndex < typeJournals.length - 1 && safeNavigate(() => openEdit(typeJournals[currentIndex + 1])) },
-    { label: "الأخير",       icon: <ChevronLast className="w-3.5 h-3.5" />,  action: () => typeJournals.at(-1) && safeNavigate(() => openEdit(typeJournals.at(-1)!)) },
-    { label: "sep2", sep: true },
-    { label: "مطالعة",       icon: <Eye className="w-3.5 h-3.5" />,          action: handleMutalaah },
-    { label: "طباعة",        icon: <Printer className="w-3.5 h-3.5" />,      action: handlePrint },
-    { label: "sep3", sep: true },
-    { label: "خروج",         icon: <ArrowLeft className="w-3.5 h-3.5" />,    action: () => safeNavigate(() => { setView("list"); setEditId(null); }) },
-  ];
 
   /* ──────────────── RENDER ──────────────── */
   return (
@@ -1805,29 +1790,26 @@ export default function DocumentJournalsPage() {
             </ActiveFieldCtx.Provider>
             {/* end Tab Content */}
 
-            {/* ══ Sticky Toolbar ══ */}
-            <div className="shrink-0 flex items-center gap-0.5 px-2"
-              style={{ borderTop: "1px solid #C8CDD6", background: "#E8EBF0", boxShadow: "0 -2px 8px rgba(0,0,0,0.07)", height: 42 }}>
-              {toolbar.map((item: any) => {
-                if (item.sep) return (
-                  <div key={item.label} className="w-px h-5 bg-slate-300 mx-1 shrink-0" />
-                );
-                const { label, icon, action, primary, danger, disabled: dis } = item;
-                return (
-                  <button key={label} onClick={action} disabled={dis || isBusy}
-                    className={[
-                      "flex items-center gap-1 px-2.5 h-7 rounded-md text-[11px] font-medium transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed shrink-0",
-                      primary ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm"
-                        : danger ? "text-red-500 hover:bg-red-50 border border-red-200"
-                          : "text-slate-600 hover:bg-slate-100 border border-slate-200",
-                    ].join(" ")}>
-                    <span className="w-3.5 h-3.5 flex shrink-0">{icon}</span>
-                    <span>{label}</span>
-                  </button>
-                );
-              })}
-              {isDirty && <span className="text-[10px] text-amber-600 mr-auto flex items-center gap-1 shrink-0">● تعديلات غير محفوظة</span>}
-            </div>
+            {/* ══ ERPToolbar ══ */}
+            <ERPToolbar
+              onSave={handleSave}
+              onNew={() => safeNavigate(openCreate)}
+              onCopy={editId ? handleDuplicate : undefined}
+              onDelete={editId ? () => setShowDelete(true) : undefined}
+              onFirst={() => { const f = typeJournals[0]; if (f) safeNavigate(() => openEdit(f)); }}
+              onPrev={currentIndex > 0 ? () => safeNavigate(() => openEdit(typeJournals[currentIndex - 1])) : undefined}
+              onNext={currentIndex < typeJournals.length - 1 ? () => safeNavigate(() => openEdit(typeJournals[currentIndex + 1])) : undefined}
+              onLast={() => { const l = typeJournals.at(-1); if (l) safeNavigate(() => openEdit(l)); }}
+              onPreview={handleMutalaah}
+              onPrint={handlePrint}
+              onExit={() => safeNavigate(() => { setView("list"); setEditId(null); })}
+              saveDisabled={isBusy}
+              record={editId && currentIndex >= 0 ? currentIndex + 1 : undefined}
+              total={editId ? typeJournals.length : undefined}
+              mode={editId ? "view" : "new"}
+              pageTitle={currentType?.label}
+              hideStatusBar={false}
+            />
           </div>
         )}
       </div>

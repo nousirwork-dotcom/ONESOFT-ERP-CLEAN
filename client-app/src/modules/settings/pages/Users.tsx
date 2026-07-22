@@ -18,6 +18,7 @@ import { HS_MODULE_PERM } from "@/shared/lib/hsPermissions";
 import { AI_MODULE_PERM, AI_PERM_DEFS } from "@/shared/lib/aiPermissions";
 import { UserFormDialog, UserFormValue, UserLoginMethod } from "./UserFormDialog";
 import { useModalAttention } from "./useModalAttention";
+import ERPToolbar from "@/shared/components/ERPToolbar";
 
 // ── صلاحيات وحدة «المساعدة والخدمات» (extra_permissions) ─────────────────────
 const HS_PERM_DEFS: Array<{ key: string; label: string; isModule?: boolean }> = [
@@ -987,14 +988,16 @@ export default function Users() {
 
   return (
     <div className="space-y-5">
+      <ERPToolbar
+        onNew={countInfo?.atLimit ? undefined : openCreate}
+        hideStatusBar
+        enableShortcuts={false}
+      />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">إدارة المستخدمين</h1>
           <p className="text-muted-foreground text-sm mt-0.5">إدارة المستخدمين وصلاحياتهم وخيارات الأمان</p>
         </div>
-        <Button onClick={openCreate} disabled={countInfo?.atLimit} className="gap-2">
-          <Plus className="w-4 h-4" />إضافة مستخدم
-        </Button>
       </div>
 
       {/* ── سياسة كلمات المرور ── */}

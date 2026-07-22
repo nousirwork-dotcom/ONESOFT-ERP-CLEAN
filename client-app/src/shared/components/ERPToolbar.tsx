@@ -1,216 +1,254 @@
 import {
-  FilePlus, Save, Pencil, Trash2, Search, Printer,
-  RefreshCw, Copy, SendHorizonal, CheckCircle2, XCircle,
-  ChevronRight, ChevronLeft, ChevronsRight, ChevronsLeft,
-  X, LucideIcon, Undo2, Eye, Share2, RefreshCcw,
-  Wrench, Users, PauseCircle, ChevronDown,
+  Save, FilePlus, Copy, Pencil, Trash2,
+  ChevronsRight, ChevronRight, ChevronLeft, ChevronsLeft,
+  CheckCircle2, XCircle, Eye, Share2, Printer, LogOut,
+  Wrench, ChevronDown,
+  RotateCcw, SendHorizonal, PauseCircle, Link2, Users, Paperclip,
+  FileText,
 } from "lucide-react";
 import React, { useState, useEffect, useCallback, useRef } from "react";
+// Note: useRef retained for ToolsDropdown click-outside handler
+import { useLang } from "@/core/contexts/LanguageContext";
+import { t, TranslationKey } from "@/shared/lib/translations";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
 export type ERPAction =
-  | "new" | "save" | "edit" | "delete"
-  | "search" | "refresh" | "copy"
-  | "post" | "unpost" | "repost" | "preview-journal" | "approve" | "cancel"
-  | "print" | "send"
+  | "save" | "draft" | "new" | "copy" | "edit" | "delete"
   | "first" | "prev" | "next" | "last"
-  | "browse"
-  | "close";
+  | "approve" | "cancel"
+  | "preview" | "send" | "print" | "exit"
+  | "post" | "unpost" | "reverse" | "suspend-posting" | "related-docs" | "user-activity" | "attach"
+  | "search" | "refresh" | "browse" | "repost" | "preview-journal" | "close";
 
 export type ERPMode = "view" | "new" | "edit" | "search";
-
 export type PostingStatus = "unposted" | "posted" | "cancelled" | null;
 
 export interface ERPToolbarProps {
+  /** Optional allowlist — only these button IDs will render (in spec order) */
   buttons?: ERPAction[];
   mode?: ERPMode;
   record?: number;
   total?: number;
   pageTitle?: string;
-  onNew?: () => void;
+  // ── Main toolbar callbacks ────────────────────────────────────────────────
   onSave?: () => void;
+  onDraft?: () => void;
+  onNew?: () => void;
+  onCopy?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
-  onSearch?: () => void;
-  onRefresh?: () => void;
-  onCopy?: () => void;
-  onPost?: () => void;
-  onUnpost?: () => void;
-  onRepost?: () => void;
-  onPreviewJournal?: () => void;
-  onApprove?: () => void;
-  onCancel?: () => void;
-  onPrint?: () => void;
-  onSend?: () => void;
   onFirst?: () => void;
   onPrev?: () => void;
   onNext?: () => void;
   onLast?: () => void;
-  onBrowse?: () => void;
-  onClose?: () => void;
-  onUserActivity?: () => void;
+  onApprove?: () => void;
+  onCancel?: () => void;
+  onPreview?: () => void;
+  onSend?: () => void;
+  onPrint?: () => void;
+  onExit?: () => void;
+  // ── Tools dropdown callbacks ──────────────────────────────────────────────
+  onReverse?: () => void;
+  onPost?: () => void;
+  onUnpost?: () => void;
   onSuspendPosting?: () => void;
+  onRelatedDocs?: () => void;
+  onUserActivity?: () => void;
+  onAttach?: () => void;
+  // ── Legacy backward-compat aliases ───────────────────────────────────────
+  onClose?: () => void;          // alias → onExit
+  onBrowse?: () => void;         // alias → onPreview (when onPreview absent)
+  onSearch?: () => void;
+  onRefresh?: () => void;
+  onRepost?: () => void;
+  onPreviewJournal?: () => void; // alias → onPreview (when onPreview absent)
+  // ── Flags ─────────────────────────────────────────────────────────────────
   enableShortcuts?: boolean;
   hideStatusBar?: boolean;
   saveDisabled?: boolean;
   newLabel?: string;
-  /** حالة الترحيل — تُظهر badge في شريط الحالة */
   postingStatus?: PostingStatus;
-  /** هل المستند محفوظ (له ID في قاعدة البيانات) */
   isSaved?: boolean;
-  /** هل المستند مرحَّل */
   isPosted?: boolean;
 }
 
-// ─── Button definition ────────────────────────────────────────────────────────
-type BtnDef = {
+// ─── Color palette ─────────────────────────────────────────────────────────────
+
+const C = {
+  toolbarBg:  "#E8EBF0",
+  statusBg:   "#ECEEF2",
+  border:     "#C8CDD6",
+  divider:    "#B8BDC8",
+  text:       "#2B2B2B",
+  muted:      "#6B7280",
+  primary:    "#2563EB",   // حفظ — blue
+  success:    "#16A34A",   // اعتماد — green
+  danger:     "#DC2626",   // حذف / إلغاء — red
+  default:    "#E8EBF0",   // default button bg
+  defaultHov: "#D8DBE4",
+  primaryHov: "#1D4ED8",
+  successHov: "#15803D",
+  dangerHov:  "#B91C1C",
+};
+
+// ─── 3D shadow helper ──────────────────────────────────────────────────────────
+
+function btn3DShadow(pressed: boolean): string {
+  if (pressed) {
+    return "inset 0 2px 4px rgba(0,0,0,0.22), 0 0 0 transparent";
+  }
+  return "inset 0 1px 0 rgba(255,255,255,0.55), inset 0 -1px 0 rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.09)";
+}
+
+// ─── Button spec ───────────────────────────────────────────────────────────────
+
+type BtnVariant = "primary" | "success" | "danger" | "default";
+
+type BtnSpec = {
   id: ERPAction;
-  label: string;
-  icon: LucideIcon;
+  labelKey: TranslationKey;
+  icon: React.ElementType;
   shortcut?: string;
-  variant?: "primary" | "danger" | "gold" | "ghost" | "default";
+  variant: BtnVariant;
   dividerAfter?: boolean;
 };
 
-const ALL_BUTTONS: BtnDef[] = [
-  { id: "new",             label: "جديد",           icon: FilePlus,      shortcut: "F1", variant: "primary" },
-  { id: "save",            label: "حفظ",             icon: Save,          shortcut: "F2", variant: "primary" },
-  { id: "edit",            label: "تعديل",           icon: Pencil,        shortcut: "F4" },
-  { id: "delete",          label: "حذف",             icon: Trash2,        shortcut: "Del", variant: "danger", dividerAfter: true },
-  { id: "search",          label: "بحث",             icon: Search,        shortcut: "F3" },
-  { id: "refresh",         label: "تحديث",           icon: RefreshCw },
-  { id: "copy",            label: "نسخة مماثلة",     icon: Copy,          dividerAfter: true },
-  { id: "post",            label: "ترحيل",           icon: SendHorizonal, variant: "gold" },
-  { id: "unpost",          label: "إلغاء الترحيل",  icon: Undo2,         variant: "danger" },
-  { id: "repost",          label: "إعادة الترحيل",  icon: RefreshCcw,    variant: "gold" },
-  { id: "preview-journal", label: "معاينة القيد",    icon: Eye },
-  { id: "approve",         label: "اعتماد",          icon: CheckCircle2,  variant: "gold" },
-  { id: "cancel",          label: "إلغاء",           icon: XCircle,       variant: "danger", dividerAfter: true },
-  { id: "print",           label: "طباعة",           icon: Printer },
-  { id: "send",            label: "إرسال",           icon: Share2,        dividerAfter: true, variant: "default" as any },
-  { id: "first",           label: "أول",             icon: ChevronsRight },
-  { id: "prev",            label: "السابق",          icon: ChevronRight },
-  { id: "next",            label: "التالي",          icon: ChevronLeft },
-  { id: "last",            label: "آخر",             icon: ChevronsLeft },
-  { id: "browse",          label: "مطالعة",          icon: Eye,           dividerAfter: true },
-  { id: "close",           label: "إغلاق",           icon: X,             variant: "ghost" },
+const MAIN_SPECS: BtnSpec[] = [
+  { id: "save",    labelKey: "tbSave",    icon: Save,          shortcut: "F2",       variant: "primary"  },
+  { id: "draft",   labelKey: "tbDraft",   icon: FileText,      shortcut: "Ctrl+D",   variant: "default"  },
+  { id: "new",     labelKey: "tbNew",     icon: FilePlus,      shortcut: "F3",       variant: "default"  },
+  { id: "copy",    labelKey: "tbCopy",    icon: Copy,          shortcut: "Ctrl⇧C",   variant: "default"  },
+  // ← tools dropdown slot is inserted here in render
+  { id: "edit",    labelKey: "tbEdit",    icon: Pencil,        shortcut: "F4",       variant: "default"  },
+  { id: "delete",  labelKey: "tbDelete",  icon: Trash2,        shortcut: "Ctrl+Del", variant: "danger",  dividerAfter: true },
+  { id: "first",   labelKey: "tbFirst",   icon: ChevronsRight,  shortcut: "Ctrl↖",   variant: "default"  },
+  { id: "prev",    labelKey: "tbPrev",    icon: ChevronRight,   shortcut: "PgUp",    variant: "default"  },
+  { id: "next",    labelKey: "tbNext",    icon: ChevronLeft,    shortcut: "PgDn",    variant: "default"  },
+  { id: "last",    labelKey: "tbLast",    icon: ChevronsLeft,   shortcut: "Ctrl↘",   variant: "default",  dividerAfter: true },
+  { id: "approve", labelKey: "tbApprove", icon: CheckCircle2,  shortcut: "Ctrl↵",    variant: "success"  },
+  { id: "cancel",  labelKey: "tbCancel",  icon: XCircle,       shortcut: "Ctrl⇧↵",   variant: "danger",  dividerAfter: true },
+  { id: "preview", labelKey: "tbPreview", icon: Eye,                                 variant: "default"  },
+  { id: "send",    labelKey: "tbSend",    icon: Share2,                               variant: "default"  },
+  { id: "print",   labelKey: "tbPrint",   icon: Printer,       shortcut: "Ctrl+P",   variant: "default"  },
+  { id: "exit",    labelKey: "tbExit",    icon: LogOut,        shortcut: "Esc",      variant: "default"  },
 ];
 
-const MODE_LABELS: Record<ERPMode, string> = {
-  view: "عرض",
-  new: "إدخال",
-  edit: "تعديل",
-  search: "بحث",
-};
+// ─── Single Button ──────────────────────────────────────────────────────────────
 
-const POSTING_BADGE: Record<NonNullable<PostingStatus>, { label: string; bg: string; color: string }> = {
-  unposted:  { label: "غير مرحَّل",  bg: "#EFF6FF", color: "#1D4ED8" },
-  posted:    { label: "✓ مرحَّل",    bg: "#F0FDF4", color: "#15803D" },
-  cancelled: { label: "✕ ملغي",     bg: "#FEF2F2", color: "#DC2626" },
-};
-
-// ─── Colors ─────────────────────────────────────────────────────────────────
-const C = {
-  bg:      "#E8EBF0",
-  border:  "#C8CDD6",
-  text:    "#2B2B2B",
-  muted:   "#6B7280",
-  primary: "#406B93",
-  gold:    "#B89B5E",
-  danger:  "#C0392B",
-  divider: "#C8CDD6",
-};
-
-// ─── Single Toolbar Button ─────────────────────────────────────────────────────
 function TBtn({
-  btn, active, disabled, onClick,
+  spec, label, disabled, onClick,
 }: {
-  btn: BtnDef;
-  active: boolean;
+  spec: BtnSpec;
+  label: string;
   disabled?: boolean;
   onClick: () => void;
 }) {
-  const [hovered, setHovered] = useState(false);
+  const [hovered, setHovered]  = useState(false);
+  const [pressed, setPressed]  = useState(false);
 
   const getBg = () => {
-    if (disabled) return "transparent";
-    if (btn.variant === "primary") return hovered ? "#365E80" : C.primary;
-    if (btn.variant === "danger")  return hovered ? "#A93226" : C.danger;
-    if (btn.variant === "gold")    return hovered ? "#A8894E" : C.gold;
-    if (btn.variant === "ghost")   return hovered ? "#F0EDE8" : "transparent";
-    return hovered ? "#ECEAE4" : "transparent";
+    if (disabled) return C.default;
+    const h = hovered || pressed;
+    if (spec.variant === "primary") return h ? C.primaryHov : C.primary;
+    if (spec.variant === "success") return h ? C.successHov : C.success;
+    if (spec.variant === "danger")  return h ? C.dangerHov  : C.danger;
+    return h ? C.defaultHov : C.default;
   };
 
   const getColor = () => {
-    if (disabled) return "#aaa";
-    if (["primary", "danger", "gold"].includes(btn.variant ?? "")) return "#fff";
+    if (disabled) return "#a0a5af";
+    if (spec.variant !== "default") return "#fff";
     return C.text;
-  };
-
-  const getBorder = () => {
-    if (["primary", "danger", "gold"].includes(btn.variant ?? "")) return "transparent";
-    return hovered && !disabled ? C.divider : "transparent";
   };
 
   return (
     <button
+      disabled={disabled}
       onClick={disabled ? undefined : onClick}
       onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      title={btn.shortcut ? `${btn.label} (${btn.shortcut})` : btn.label}
-      disabled={disabled}
+      onMouseLeave={() => { setHovered(false); setPressed(false); }}
+      onMouseDown={() => setPressed(true)}
+      onMouseUp={() => setPressed(false)}
+      title={spec.shortcut ? `${label} (${spec.shortcut})` : label}
       style={{
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
         gap: 2,
-        padding: "3px 8px",
-        minWidth: 44,
-        height: 40,
-        borderRadius: 4,
-        border: `1px solid ${getBorder()}`,
+        padding: "3px 9px",
+        minWidth: 46,
+        height: 42,
+        borderRadius: 5,
+        border: `1px solid ${spec.variant === "default" ? (hovered && !disabled ? C.border : "transparent") : "transparent"}`,
         background: getBg(),
         color: getColor(),
         cursor: disabled ? "not-allowed" : "pointer",
-        transition: "background 0.12s, border-color 0.12s",
+        transition: "background 0.1s, border-color 0.1s",
         flexShrink: 0,
-        outline: active ? `2px solid ${C.primary}` : "none",
-        outlineOffset: 1,
         fontFamily: "'Cairo', 'Tahoma', sans-serif",
-        opacity: disabled ? 0.5 : 1,
+        opacity: disabled ? 0.45 : 1,
+        boxShadow: disabled ? "none" : btn3DShadow(pressed),
+        transform: pressed && !disabled ? "translateY(1px)" : "none",
+        outline: "none",
       }}
     >
-      <btn.icon size={15} strokeWidth={1.8} />
-      <span style={{ fontSize: 10, fontWeight: 600, lineHeight: 1, whiteSpace: "nowrap" }}>
-        {btn.label}
+      <spec.icon size={15} strokeWidth={1.8} />
+      <span style={{ fontSize: 10.5, fontWeight: 600, lineHeight: 1, whiteSpace: "nowrap" }}>
+        {label}
       </span>
-      {btn.shortcut && (
+      {spec.shortcut && (
         <span style={{
-          fontSize: 8.5,
+          fontSize: 8,
           lineHeight: 1,
-          color: ["primary", "danger", "gold"].includes(btn.variant ?? "")
-            ? "rgba(255,255,255,0.7)"
-            : C.muted,
+          color: spec.variant !== "default" ? "rgba(255,255,255,0.7)" : C.muted,
           fontFamily: "monospace",
+          letterSpacing: 0,
         }}>
-          {btn.shortcut}
+          {spec.shortcut}
         </span>
       )}
     </button>
   );
 }
 
-// ─── Tools Dropdown ───────────────────────────────────────────────────────────
+// ─── Divider ────────────────────────────────────────────────────────────────────
+
+function Divider() {
+  return (
+    <div style={{
+      width: 1, height: 32,
+      background: C.divider,
+      margin: "0 4px",
+      flexShrink: 0,
+      borderRadius: 1,
+    }} />
+  );
+}
+
+// ─── Tools Dropdown ─────────────────────────────────────────────────────────────
+
+type ToolEntry = {
+  labelKey: TranslationKey;
+  icon: React.ElementType;
+  action?: () => void;
+};
+
 function ToolsDropdown({
-  onUserActivity,
-  onSuspendPosting,
+  lang, isAr,
+  onReverse, onPost, onUnpost, onSuspendPosting,
+  onRelatedDocs, onUserActivity, onAttach,
 }: {
-  onUserActivity?: () => void;
-  onSuspendPosting?: () => void;
+  lang: "ar" | "en"; isAr: boolean;
+  onReverse?: () => void; onPost?: () => void; onUnpost?: () => void;
+  onSuspendPosting?: () => void; onRelatedDocs?: () => void;
+  onUserActivity?: () => void; onAttach?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const [pressed, setPressed] = useState(false);
+  const [hovered, setHovered] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -221,109 +259,161 @@ function ToolsDropdown({
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  const menuItems: { label: string; icon: React.ReactNode; action?: () => void }[] = [
-    ...(onUserActivity    ? [{ label: "نشاط المستخدمين", icon: <Users size={13} />,       action: onUserActivity }]    : []),
-    ...(onSuspendPosting  ? [{ label: "تعليق الترحيل",   icon: <PauseCircle size={13} />, action: onSuspendPosting }]  : []),
+  const ALL_TOOLS: ToolEntry[] = [
+    { labelKey: "tbReverse",        icon: RotateCcw,    action: onReverse },
+    { labelKey: "tbPost",           icon: SendHorizonal, action: onPost },
+    { labelKey: "tbUnpost",         icon: ChevronDown,   action: onUnpost },
+    { labelKey: "tbSuspendPosting", icon: PauseCircle,  action: onSuspendPosting },
+    { labelKey: "tbRelatedDocs",    icon: Link2,         action: onRelatedDocs },
+    { labelKey: "tbUserActivity",   icon: Users,         action: onUserActivity },
+    { labelKey: "tbAttach",         icon: Paperclip,    action: onAttach },
   ];
 
-  if (menuItems.length === 0) return null;
+  const visibleTools = ALL_TOOLS.filter(ti => ti.action !== undefined);
+  if (visibleTools.length === 0) return null;
+
+  const toolLabel = t(lang, "tbTools");
 
   return (
     <div ref={ref} style={{ position: "relative", flexShrink: 0 }}>
       <button
         onClick={() => setOpen(v => !v)}
-        title="أدوات"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => { setHovered(false); setPressed(false); }}
+        onMouseDown={() => setPressed(true)}
+        onMouseUp={() => setPressed(false)}
+        title={toolLabel}
         style={{
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
           gap: 2,
-          padding: "3px 8px",
-          minWidth: 44,
-          height: 40,
-          borderRadius: 4,
-          border: open ? `1px solid ${C.divider}` : "1px solid transparent",
-          background: open ? "#ECEAE4" : "transparent",
+          padding: "3px 9px",
+          minWidth: 46,
+          height: 42,
+          borderRadius: 5,
+          border: `1px solid ${(hovered || open) ? C.border : "transparent"}`,
+          background: open ? C.defaultHov : (hovered ? C.defaultHov : C.default),
           color: C.text,
           cursor: "pointer",
-          transition: "background 0.12s, border-color 0.12s",
+          transition: "background 0.1s, border-color 0.1s",
           fontFamily: "'Cairo', 'Tahoma', sans-serif",
+          boxShadow: btn3DShadow(pressed),
+          transform: pressed ? "translateY(1px)" : "none",
+          outline: "none",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-          <Wrench size={15} strokeWidth={1.8} />
-          <ChevronDown size={10} strokeWidth={2} style={{ marginTop: 1 }} />
+          <Wrench size={14} strokeWidth={1.8} />
+          <ChevronDown size={9} strokeWidth={2.5} style={{ marginTop: 1, opacity: 0.7 }} />
         </div>
-        <span style={{ fontSize: 10, fontWeight: 600, lineHeight: 1, whiteSpace: "nowrap" }}>
-          أدوات
+        <span style={{ fontSize: 10.5, fontWeight: 600, lineHeight: 1, whiteSpace: "nowrap" }}>
+          {toolLabel}
         </span>
       </button>
 
       {open && (
         <div
-          dir="rtl"
+          dir={isAr ? "rtl" : "ltr"}
           style={{
             position: "absolute",
-            top: "calc(100% + 4px)",
+            bottom: "calc(100% + 6px)",
             right: 0,
-            minWidth: 170,
+            minWidth: 190,
             background: "#fff",
             border: `1px solid ${C.border}`,
-            borderRadius: 6,
-            boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+            borderRadius: 8,
+            boxShadow: "0 -4px 20px rgba(0,0,0,0.13), 0 2px 8px rgba(0,0,0,0.06)",
             zIndex: 9999,
             overflow: "hidden",
             fontFamily: "'Cairo', 'Tahoma', sans-serif",
           }}
         >
-          {menuItems.map((item) => (
-            <button
-              key={item.label}
-              onClick={() => { setOpen(false); item.action?.(); }}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                width: "100%",
-                padding: "9px 14px",
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                fontSize: 13,
-                color: C.text,
-                textAlign: "right",
-                transition: "background 0.1s",
-              }}
-              onMouseEnter={e => (e.currentTarget.style.background = "#F4F3EF")}
-              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-            >
-              <span style={{ color: C.muted }}>{item.icon}</span>
-              <span>{item.label}</span>
-            </button>
-          ))}
+          {/* arrow tip pointing down */}
+          <div style={{
+            position: "absolute",
+            bottom: -5,
+            right: 18,
+            width: 10,
+            height: 10,
+            background: "#fff",
+            border: `1px solid ${C.border}`,
+            borderTop: "none",
+            borderLeft: "none",
+            transform: "rotate(45deg)",
+            zIndex: 1,
+          }} />
+          <div style={{ position: "relative", zIndex: 2 }}>
+            {visibleTools.map((item, i) => (
+              <ToolMenuItem key={item.labelKey} item={item} lang={lang} isLast={i === visibleTools.length - 1}
+                onClose={() => setOpen(false)} />
+            ))}
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-// ─── ERPToolbar ───────────────────────────────────────────────────────────────
+function ToolMenuItem({
+  item, lang, isLast, onClose,
+}: {
+  item: ToolEntry; lang: "ar" | "en"; isLast: boolean; onClose: () => void;
+}) {
+  const [hov, setHov] = useState(false);
+  const Icon = item.icon;
+  return (
+    <button
+      onClick={() => { onClose(); item.action?.(); }}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 9,
+        width: "100%",
+        padding: "9px 14px",
+        background: hov ? "#F0F4F9" : "transparent",
+        border: "none",
+        borderBottom: isLast ? "none" : "1px solid #f0f0f0",
+        cursor: "pointer",
+        fontSize: 12.5,
+        color: "#2B2B2B",
+        textAlign: lang === "ar" ? "right" : "left",
+        transition: "background 0.1s",
+        fontFamily: "'Cairo', 'Tahoma', sans-serif",
+      }}
+    >
+      <Icon size={13} strokeWidth={1.8} color="#6B7280" />
+      <span>{t(lang, item.labelKey)}</span>
+    </button>
+  );
+}
+
+// ─── Posting badge config ────────────────────────────────────────────────────────
+
+const POSTING_BADGE_KEYS: Record<NonNullable<PostingStatus>, { key: TranslationKey; bg: string; color: string }> = {
+  unposted:  { key: "tbUnpostedBadge",  bg: "#EFF6FF", color: "#1D4ED8" },
+  posted:    { key: "tbPostedBadge",    bg: "#F0FDF4", color: "#15803D" },
+  cancelled: { key: "tbCancelledBadge", bg: "#FEF2F2", color: "#DC2626" },
+};
+
+// ─── ERPToolbar — main export ─────────────────────────────────────────────────
+
 export default function ERPToolbar({
   buttons,
   mode = "view",
   record,
   total,
   pageTitle,
-  onNew, onSave, onEdit, onDelete,
-  onSearch, onRefresh, onCopy,
-  onPost, onUnpost, onRepost, onPreviewJournal, onApprove, onCancel,
-  onPrint, onSend,
+  onSave, onDraft, onNew, onCopy, onEdit, onDelete,
   onFirst, onPrev, onNext, onLast,
-  onBrowse,
-  onClose,
-  onUserActivity,
-  onSuspendPosting,
+  onApprove, onCancel,
+  onPreview, onSend, onPrint, onExit,
+  onReverse, onPost, onUnpost, onSuspendPosting,
+  onRelatedDocs, onUserActivity, onAttach,
+  onClose, onBrowse, onSearch, onRefresh, onRepost, onPreviewJournal,
   enableShortcuts = true,
   hideStatusBar = false,
   saveDisabled = false,
@@ -332,144 +422,227 @@ export default function ERPToolbar({
   isSaved = false,
   isPosted = false,
 }: ERPToolbarProps) {
-  const [activeBtn, setActiveBtn] = useState<ERPAction | "">("");
+  const { lang, isAr } = useLang();
+  const [activeId, setActiveId] = useState<ERPAction | "">("");
 
-  const callbacks: Partial<Record<ERPAction, (() => void) | undefined>> = {
-    new: onNew, save: onSave, edit: onEdit, delete: onDelete,
-    search: onSearch, refresh: onRefresh, copy: onCopy,
-    post: onPost, unpost: onUnpost, repost: onRepost, "preview-journal": onPreviewJournal,
-    approve: onApprove, cancel: onCancel,
-    print: onPrint,
-    send:  onSend,
-    first: onFirst, prev: onPrev, next: onNext, last: onLast,
-    browse: onBrowse,
-    close: onClose,
+  // ── resolve aliases ────────────────────────────────────────────────────────
+  const resolvedExit    = onExit    ?? onClose;
+  const resolvedPreview = onPreview ?? onBrowse ?? onPreviewJournal;
+
+  // ── callbacks map ──────────────────────────────────────────────────────────
+  const CB: Partial<Record<ERPAction, (() => void) | undefined>> = {
+    save:    saveDisabled ? undefined : onSave,
+    draft:   onDraft,
+    new:     onNew,
+    copy:    onCopy,
+    edit:    onEdit,
+    delete:  onDelete,
+    first:   onFirst,
+    prev:    onPrev,
+    next:    onNext,
+    last:    onLast,
+    approve: onApprove,
+    cancel:  onCancel,
+    preview: resolvedPreview,
+    send:    onSend,
+    print:   onPrint,
+    exit:    resolvedExit,
+    // legacy (kept for buttons prop compat but not auto-shown)
+    search:  onSearch,
+    refresh: onRefresh,
+    repost:  onRepost,
+    close:   onClose,
+    browse:  onBrowse,
+    "preview-journal": onPreviewJournal,
   };
 
-  const handleClick = useCallback((id: ERPAction) => {
-    setActiveBtn(id);
-    setTimeout(() => setActiveBtn(""), 250);
-    callbacks[id]?.();
-  }, [callbacks]);
+  const flash = useCallback((id: ERPAction) => {
+    setActiveId(id);
+    setTimeout(() => setActiveId(""), 200);
+  }, []);
 
-  // Keyboard shortcuts
+  const fire = useCallback((id: ERPAction) => {
+    flash(id);
+    CB[id]?.();
+  }, [CB, flash]);
+
+  // ── keyboard shortcuts ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!enableShortcuts) return;
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName;
-      const isInput = ["INPUT", "SELECT", "TEXTAREA"].includes(tag);
-      if (e.key === "F1")  { e.preventDefault(); handleClick("new"); }
-      if (e.key === "F2")  { e.preventDefault(); handleClick("save"); }
-      if (e.key === "F3")  { e.preventDefault(); handleClick("search"); }
-      if (e.key === "F4")  { e.preventDefault(); handleClick("edit"); }
-      if (e.key === "Delete" && !isInput) handleClick("delete");
+      const inInput = ["INPUT", "TEXTAREA", "SELECT"].includes(tag);
+      const ctrl  = e.ctrlKey || e.metaKey;
+      const shift = e.shiftKey;
+
+      if (e.key === "F2") { e.preventDefault(); fire("save"); return; }
+      if (e.key === "F3") { e.preventDefault(); fire("new"); return; }
+      if (e.key === "F4") { e.preventDefault(); fire("edit"); return; }
+
+      if (ctrl && e.key === "d" && !shift) { e.preventDefault(); fire("draft"); return; }
+      if (ctrl && e.key === "c" && shift)  { e.preventDefault(); fire("copy"); return; }
+      if (ctrl && e.key === "p")           { e.preventDefault(); fire("print"); return; }
+      if (ctrl && e.key === "Enter" && !shift) { e.preventDefault(); fire("approve"); return; }
+      if (ctrl && e.key === "Enter" && shift)  { e.preventDefault(); fire("cancel"); return; }
+
+      if (ctrl && e.key === "Delete" && !inInput) { e.preventDefault(); fire("delete"); return; }
+      if (ctrl && e.key === "Home")  { e.preventDefault(); fire("first"); return; }
+      if (ctrl && e.key === "End")   { e.preventDefault(); fire("last"); return; }
+      if (!ctrl && !shift && e.key === "PageUp"   && !inInput) fire("prev");
+      if (!ctrl && !shift && e.key === "PageDown" && !inInput) fire("next");
+
+      if (e.key === "Escape" && !inInput) { e.preventDefault(); fire("exit"); return; }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [enableShortcuts, handleClick]);
+  }, [enableShortcuts, fire]);
 
-  const visibleButtons = buttons
-    ? ALL_BUTTONS.filter(b => buttons.includes(b.id))
-    : ALL_BUTTONS.filter(b => callbacks[b.id] !== undefined);
+  // ── determine visible buttons ──────────────────────────────────────────────
+  const visibleSpecs: BtnSpec[] = MAIN_SPECS.filter(spec => {
+    if (buttons) return buttons.includes(spec.id);
+    return CB[spec.id] !== undefined;
+  });
 
-  const getShowDivider = (btn: BtnDef, idx: number) => {
-    if (!btn.dividerAfter) return false;
-    return idx < visibleButtons.length - 1;
-  };
+  // ── tools dropdown — show if any tool handler exists ──────────────────────
+  const hasTools = !!(onReverse || onPost || onUnpost || onSuspendPosting ||
+    onRelatedDocs || onUserActivity || onAttach);
 
-  // حالة تعطيل أزرار الترحيل
-  const isDisabled = (id: ERPAction) => {
-    if (id === "save")   return saveDisabled;
-    if (id === "post")   return !isSaved || isPosted;
-    if (id === "unpost") return !isPosted;
-    if (id === "repost") return !isSaved || !isPosted;
-    if (id === "preview-journal") return !isSaved;
-    return false;
-  };
+  // ── button groups with dividers ────────────────────────────────────────────
+  // dividerAfter is defined on delete, last, cancel, exit in MAIN_SPECS
+  // We render dividers between visible buttons that have dividerAfter=true
+  // PLUS tools dropdown is inserted after "copy" (before edit in spec order)
 
-  const badge = postingStatus ? POSTING_BADGE[postingStatus] : null;
+  // ── status bar ────────────────────────────────────────────────────────────
+  const modeLabel = ((): string => {
+    const map: Record<ERPMode, TranslationKey> = {
+      view: "tbModeView", new: "tbModeNew", edit: "tbModeEdit", search: "tbModeSearch",
+    };
+    return t(lang, map[mode]);
+  })();
+
+  const badge = postingStatus ? POSTING_BADGE_KEYS[postingStatus] : null;
+
+  // ── render ─────────────────────────────────────────────────────────────────
+  // Pre-compute where tools dropdown is inserted (after "copy" if visible)
+  const copyIdx = visibleSpecs.findIndex(s => s.id === "copy");
+  const toolsAfterIdx = hasTools ? (copyIdx >= 0 ? copyIdx : visibleSpecs.length - 1) : -1;
 
   return (
-    <div dir="rtl" style={{ display: "flex", flexDirection: "column", flexShrink: 0 }}>
-      {/* ── Toolbar row ─────────────────────────────────────────────── */}
+    <div dir={isAr ? "rtl" : "ltr"} style={{ display: "flex", flexDirection: "column", flexShrink: 0 }}>
+      {/* ── Toolbar row ─────────────────────────────────────────────────── */}
       <div style={{
         display: "flex",
         alignItems: "center",
         gap: 2,
-        padding: "4px 8px",
-        background: C.bg,
+        padding: "3px 8px",
+        background: C.toolbarBg,
         borderBottom: `1px solid ${C.border}`,
         overflowX: "auto",
-        overflowY: "hidden",
+        overflowY: "visible",
         flexShrink: 0,
         boxShadow: "0 2px 6px rgba(0,0,0,0.07)",
-        minHeight: 48,
+        minHeight: 50,
+        position: "relative",
       }}>
-        {visibleButtons.map((btn, idx) => (
-          <React.Fragment key={btn.id}>
-            <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
-              <TBtn
-                btn={btn.id === "new" && newLabel ? { ...btn, label: newLabel } : btn}
-                active={activeBtn === btn.id}
-                disabled={isDisabled(btn.id)}
-                onClick={() => handleClick(btn.id)}
-              />
-              {getShowDivider(btn, idx) && (
-                <div style={{
-                  width: 1, height: 32,
-                  background: C.divider,
-                  margin: "0 4px",
-                  flexShrink: 0,
-                }} />
+        {visibleSpecs.map((spec, idx) => {
+          const needsDivider = spec.dividerAfter && idx < visibleSpecs.length - 1;
+          const showToolsAfter = toolsAfterIdx === idx;
+
+          const effectiveLabel = (spec.id === "new" && newLabel)
+            ? newLabel
+            : t(lang, spec.labelKey);
+
+          const isActive = activeId === spec.id;
+
+          return (
+            <React.Fragment key={spec.id}>
+              <div style={{ display: "flex", alignItems: "center", flexShrink: 0, position: "relative" }}>
+                <TBtn
+                  spec={spec}
+                  label={effectiveLabel}
+                  disabled={spec.id === "save" ? saveDisabled : false}
+                  onClick={() => fire(spec.id)}
+                />
+                {isActive && (
+                  <div style={{
+                    position: "absolute",
+                    inset: 0,
+                    borderRadius: 5,
+                    background: "rgba(255,255,255,0.25)",
+                    pointerEvents: "none",
+                  }} />
+                )}
+              </div>
+              {showToolsAfter && (
+                <ToolsDropdown
+                  lang={lang} isAr={isAr}
+                  onReverse={onReverse} onPost={onPost} onUnpost={onUnpost}
+                  onSuspendPosting={onSuspendPosting} onRelatedDocs={onRelatedDocs}
+                  onUserActivity={onUserActivity} onAttach={onAttach}
+                />
               )}
-            </div>
-            {btn.id === "browse" && (onUserActivity || onSuspendPosting) && (
-              <ToolsDropdown
-                onUserActivity={onUserActivity}
-                onSuspendPosting={onSuspendPosting}
-              />
-            )}
-          </React.Fragment>
-        ))}
+              {needsDivider && <Divider />}
+            </React.Fragment>
+          );
+        })}
+
+        {/* tools slot at end if no copy button in visible set */}
+        {toolsAfterIdx === visibleSpecs.length - 1 && copyIdx === -1 && hasTools && (
+          <ToolsDropdown
+            lang={lang} isAr={isAr}
+            onReverse={onReverse} onPost={onPost} onUnpost={onUnpost}
+            onSuspendPosting={onSuspendPosting} onRelatedDocs={onRelatedDocs}
+            onUserActivity={onUserActivity} onAttach={onAttach}
+          />
+        )}
       </div>
 
-      {/* ── Status bar ──────────────────────────────────────────────── */}
+      {/* ── Status bar ──────────────────────────────────────────────────── */}
       {!hideStatusBar && (
         <div style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "2px 12px",
-          background: "#ECEEF2",
+          padding: "2px 14px",
+          background: C.statusBg,
           borderBottom: `1px solid ${C.border}`,
-          fontSize: 11,
+          fontSize: 10.5,
           color: C.muted,
           flexShrink: 0,
           fontFamily: "'Cairo', 'Tahoma', sans-serif",
+          minHeight: 22,
         }}>
-          <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-            {pageTitle && <span style={{ fontWeight: 600, color: C.text }}>{pageTitle}</span>}
-            <span>الوضع: <strong style={{ color: C.primary }}>{MODE_LABELS[mode]}</strong></span>
+          <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+            {pageTitle && (
+              <span style={{ fontWeight: 700, color: C.text, fontSize: 11 }}>{pageTitle}</span>
+            )}
+            <span>
+              {t(lang, "tbMode")}:{" "}
+              <strong style={{ color: C.primary }}>{modeLabel}</strong>
+            </span>
             {record !== undefined && total !== undefined && (
-              <span>السجل: <strong style={{ color: C.text }}>{record} / {total}</strong></span>
+              <span>
+                {t(lang, "tbRecord")}:{" "}
+                <strong style={{ color: C.text }}>{record} / {total}</strong>
+              </span>
             )}
             {badge && (
               <span style={{
-                padding: "1px 8px",
+                padding: "1px 9px",
                 borderRadius: 10,
                 background: badge.bg,
                 color: badge.color,
                 fontWeight: 700,
-                fontSize: 10.5,
+                fontSize: 10,
                 border: `1px solid ${badge.color}33`,
-                letterSpacing: 0.3,
+                letterSpacing: 0.2,
               }}>
-                {badge.label}
+                {t(lang, badge.key)}
               </span>
             )}
           </div>
-          <span style={{ fontSize: 10.5, opacity: 0.8 }}>
-            F1=جديد · F2=حفظ · F3=بحث · F4=تعديل
+          <span style={{ fontSize: 9.5, opacity: 0.7, fontFamily: "monospace" }}>
+            {t(lang, "tbShortcuts")}
           </span>
         </div>
       )}

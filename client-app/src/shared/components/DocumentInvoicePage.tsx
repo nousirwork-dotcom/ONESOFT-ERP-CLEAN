@@ -632,11 +632,6 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
         onSave={() => handleSave()}
         onEdit={() => { setErpMode("edit"); toast.info("وضع التعديل"); }}
         onDelete={() => toast.info("حذف المستند...")}
-        onSearch={() => { setErpMode("search"); toast.info("بحث..."); }}
-        onRefresh={() => {
-          if (config.docCategory === "sales") salesNextNumberQuery.refetch();
-          else purchaseNextNumberQuery.refetch();
-        }}
         onCopy={handleDuplicate}
         onPost={config.canPost !== false && config.docCategory === "sales" ? () => {
           if (!savedInvoiceId) { toast.warning("يجب حفظ المستند أولاً"); return; }
@@ -646,10 +641,6 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
           if (!savedInvoiceId) return;
           if (window.confirm("هل أنت متأكد من إلغاء ترحيل هذا المستند؟"))
             unpostMutation.mutate({ invoiceId: savedInvoiceId! });
-        } : undefined}
-        onPreviewJournal={config.canPost !== false && config.docCategory === "sales" ? () => {
-          if (!savedInvoiceId) { toast.warning("يجب حفظ المستند أولاً"); return; }
-          setShowPostingPreview(true);
         } : undefined}
         onApprove={() => toast.success("تم الاعتماد")}
         onCancel={() => { setErpMode("view"); toast.info("تم الإلغاء"); }}
@@ -661,7 +652,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
           }
         }}
         onFirst={() => {}} onPrev={() => {}} onNext={() => {}} onLast={() => {}}
-        onBrowse={() => {
+        onPreview={() => {
           if (savedInvoiceId) {
             setErpMode("view");
           } else {
@@ -670,7 +661,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
         }}
         onUserActivity={() => toast.info("نشاط المستخدمين — قريباً")}
         onSuspendPosting={() => toast.info("تعليق الترحيل — قريباً")}
-        onClose={() => toast.info("إغلاق")}
+        onExit={() => toast.info("خروج")}
         enableShortcuts
       />
 
