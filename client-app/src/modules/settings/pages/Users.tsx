@@ -1022,7 +1022,12 @@ export default function Users() {
   return (
     <div className="space-y-5">
       <ERPToolbar
-        buttons={["new", "copy", "edit", "delete", "first", "prev", "next", "last"]}
+        buttons={["save", "new", "copy", "edit", "delete", "first", "prev", "next", "last", "exit"]}
+        onSave={isOpen && (recoveryDirty || permsDirty) ? () => {
+          if (recoveryDirty) handleSaveRecovery();
+          if (permsDirty) handleSavePerms();
+        } : undefined}
+        saveDisabled={!isOpen || (!recoveryDirty && !permsDirty)}
         onNew={countInfo?.atLimit ? undefined : openCreate}
         onCopy={selectedUser ? handleCopy : undefined}
         onEdit={selectedUser ? () => safeNav(() => openEdit(selectedUser)) : undefined}
@@ -1031,6 +1036,7 @@ export default function Users() {
         onPrev={currentIdx > 0 ? () => safeNav(() => openEdit(users[currentIdx - 1])) : undefined}
         onNext={currentIdx >= 0 && currentIdx < users.length - 1 ? () => safeNav(() => openEdit(users[currentIdx + 1])) : undefined}
         onLast={users.length > 0 ? () => safeNav(() => openEdit(users[users.length - 1])) : undefined}
+        onExit={() => safeNav(() => setIsOpen(false))}
         record={currentIdx >= 0 ? currentIdx + 1 : undefined}
         total={users.length > 0 ? users.length : undefined}
         hideStatusBar

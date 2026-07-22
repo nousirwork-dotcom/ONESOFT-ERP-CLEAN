@@ -306,6 +306,8 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   }, [basedOnQuery.data]);
 
   // ── Mutations ──────────────────────────────────────────────────────────────
+  const pendingNavRef = useRef<(() => void) | null>(null);
+
   const salesCreateMutation = trpc.salesInvoices.create.useMutation({
     onSuccess: (data) => {
       const autoPosted = (data as any).isPosted === true;
@@ -318,8 +320,10 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       setSavedInvoiceId(data.id);
       setIsPosted(autoPosted);
       setErpMode("view");
+      pendingNavRef.current?.();
+      pendingNavRef.current = null;
     },
-    onError: (e) => toast.error(`خطأ في الحفظ: ${e.message}`),
+    onError: (e) => { toast.error(`خطأ في الحفظ: ${e.message}`); pendingNavRef.current = null; },
   });
 
   const purchaseCreateMutation = trpc.purchases.create.useMutation({
@@ -331,8 +335,10 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       setSavedInvoiceId(data.id);
       setIsPosted(false);
       setErpMode("view");
+      pendingNavRef.current?.();
+      pendingNavRef.current = null;
     },
-    onError: (e) => toast.error(`خطأ في الحفظ: ${e.message}`),
+    onError: (e) => { toast.error(`خطأ في الحفظ: ${e.message}`); pendingNavRef.current = null; },
   });
 
   const isSaving = config.docCategory === "sales"
@@ -679,11 +685,11 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       <UnsavedChangesDialog
         open={showUnsaved}
         isSaving={isSaving}
-        onSave={async () => {
-          await handleSave();
+        onSave={() => {
+          pendingNavRef.current = pendingNav;
           setShowUnsaved(false);
-          pendingNav?.();
           setPendingNav(null);
+          handleSave();
         }}
         onDiscard={() => {
           setShowUnsaved(false);

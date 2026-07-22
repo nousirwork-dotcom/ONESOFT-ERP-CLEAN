@@ -24,6 +24,12 @@ export type ERPAction =
 export type ERPMode = "view" | "new" | "edit" | "search";
 export type PostingStatus = "unposted" | "posted" | "cancelled" | null;
 
+/** Per-item override for a tools-dropdown entry */
+export interface ToolItemConfig {
+  disabled?: boolean;
+  disabledReason?: string;
+}
+
 export interface ERPToolbarProps {
   /** Optional allowlist — only these button IDs will render (in spec order) */
   buttons?: ERPAction[];
@@ -56,6 +62,16 @@ export interface ERPToolbarProps {
   onRelatedDocs?: () => void;
   onUserActivity?: () => void;
   onAttach?: () => void;
+  /** Per-item explicit disabled + reason for the 7 tools-dropdown entries */
+  toolsConfig?: {
+    reverse?:         ToolItemConfig;
+    post?:            ToolItemConfig;
+    unpost?:          ToolItemConfig;
+    suspendPosting?:  ToolItemConfig;
+    relatedDocs?:     ToolItemConfig;
+    userActivity?:    ToolItemConfig;
+    attach?:          ToolItemConfig;
+  };
   // ── Legacy backward-compat aliases ───────────────────────────────────────
   onClose?: () => void;          // alias → onExit
   onBrowse?: () => void;         // alias → onPreview (when onPreview absent)
@@ -233,17 +249,23 @@ type ToolEntry = {
   labelKey: TranslationKey;
   icon: React.ElementType;
   action?: () => void;
+  /** Explicit disabled flag (overrides action-based inference) */
+  disabled?: boolean;
+  /** Translated reason shown as tooltip when disabled */
+  disabledReason?: string;
 };
 
 function ToolsDropdown({
   lang, isAr,
   onReverse, onPost, onUnpost, onSuspendPosting,
   onRelatedDocs, onUserActivity, onAttach,
+  toolsConfig,
 }: {
   lang: "ar" | "en"; isAr: boolean;
   onReverse?: () => void; onPost?: () => void; onUnpost?: () => void;
   onSuspendPosting?: () => void; onRelatedDocs?: () => void;
   onUserActivity?: () => void; onAttach?: () => void;
+  toolsConfig?: ERPToolbarProps["toolsConfig"];
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -259,15 +281,15 @@ function ToolsDropdown({
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  // All 7 items always shown; those without handlers are disabled
+  // All 7 items always shown; disabled when no handler OR explicit disabled flag
   const ALL_TOOLS: ToolEntry[] = [
-    { labelKey: "tbReverse",        icon: RotateCcw,     action: onReverse },
-    { labelKey: "tbPost",           icon: SendHorizonal,  action: onPost },
-    { labelKey: "tbUnpost",         icon: ChevronDown,    action: onUnpost },
-    { labelKey: "tbSuspendPosting", icon: PauseCircle,   action: onSuspendPosting },
-    { labelKey: "tbRelatedDocs",    icon: Link2,          action: onRelatedDocs },
-    { labelKey: "tbUserActivity",   icon: Users,          action: onUserActivity },
-    { labelKey: "tbAttach",         icon: Paperclip,     action: onAttach },
+    { labelKey: "tbReverse",        icon: RotateCcw,      action: onReverse,        ...toolsConfig?.reverse },
+    { labelKey: "tbPost",           icon: SendHorizonal,   action: onPost,           ...toolsConfig?.post },
+    { labelKey: "tbUnpost",         icon: ChevronDown,     action: onUnpost,         ...toolsConfig?.unpost },
+    { labelKey: "tbSuspendPosting", icon: PauseCircle,     action: onSuspendPosting, ...toolsConfig?.suspendPosting },
+    { labelKey: "tbRelatedDocs",    icon: Link2,           action: onRelatedDocs,    ...toolsConfig?.relatedDocs },
+    { labelKey: "tbUserActivity",   icon: Users,           action: onUserActivity,   ...toolsConfig?.userActivity },
+    { labelKey: "tbAttach",         icon: Paperclip,       action: onAttach,         ...toolsConfig?.attach },
   ];
 
   // Show the dropdown button only if at least one tool is provided
@@ -365,14 +387,15 @@ function ToolMenuItem({
 }) {
   const [hov, setHov] = useState(false);
   const Icon = item.icon;
-  const isDisabled = !item.action;
+  const isDisabled = item.disabled === true || !item.action;
+  const disabledTitle = item.disabledReason ?? t(lang, "tbToolsNotAvailable");
   return (
     <button
       disabled={isDisabled}
       onClick={isDisabled ? undefined : () => { onClose(); item.action!(); }}
       onMouseEnter={() => !isDisabled && setHov(true)}
       onMouseLeave={() => setHov(false)}
-      title={isDisabled ? (lang === "ar" ? "غير متاح لهذا المستند" : "Not available") : undefined}
+      title={isDisabled ? disabledTitle : undefined}
       style={{
         display: "flex",
         alignItems: "center",
@@ -419,6 +442,7 @@ export default function ERPToolbar({
   onPreview, onSend, onPrint, onExit,
   onReverse, onPost, onUnpost, onSuspendPosting,
   onRelatedDocs, onUserActivity, onAttach,
+  toolsConfig,
   onClose, onBrowse, onSearch, onRefresh, onRepost, onPreviewJournal,
   enableShortcuts = true,
   hideStatusBar = false,
@@ -585,6 +609,7 @@ export default function ERPToolbar({
                   onReverse={onReverse} onPost={onPost} onUnpost={onUnpost}
                   onSuspendPosting={onSuspendPosting} onRelatedDocs={onRelatedDocs}
                   onUserActivity={onUserActivity} onAttach={onAttach}
+                  toolsConfig={toolsConfig}
                 />
               )}
               {needsDivider && <Divider />}
@@ -599,6 +624,7 @@ export default function ERPToolbar({
             onReverse={onReverse} onPost={onPost} onUnpost={onUnpost}
             onSuspendPosting={onSuspendPosting} onRelatedDocs={onRelatedDocs}
             onUserActivity={onUserActivity} onAttach={onAttach}
+            toolsConfig={toolsConfig}
           />
         )}
       </div>
