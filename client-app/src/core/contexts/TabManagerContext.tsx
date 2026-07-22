@@ -194,8 +194,20 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
     );
   }, [tabs, activeTabId, dashboardVisible]);
 
-  const toggleDashboard = useCallback(() => setDashboardVisible(v => !v), []);
-  const showDashboard   = useCallback(() => setDashboardVisible(true),    []);
+  // ─── DEBUG LOGGING ────────────────────────────────────────────────────────
+  const _setDashboardVisible = (v: boolean) => {
+    console.log('[debug:setDashboardVisible]', v, new Error().stack?.split('\n').slice(1, 5).join(' | '));
+    setDashboardVisible(v);
+  };
+
+  const toggleDashboard = useCallback(() => {
+    setDashboardVisible(v => {
+      const next = !v;
+      console.log('[debug:setDashboardVisible:toggle]', next, new Error().stack?.split('\n').slice(1, 5).join(' | '));
+      return next;
+    });
+  }, []);
+  const showDashboard = useCallback(() => _setDashboardVisible(true), []);
 
   // Persist tabs to localStorage whenever they change
   useEffect(() => {
@@ -210,6 +222,7 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const openTab = useCallback((path: string, label: string, Icon: React.ElementType, pinned = false) => {
+    console.log('[debug:openTab]', path, new Error().stack?.split('\n').slice(1, 4).join(' | '));
     setDashboardVisible(false);
     setTabs(prev => {
       const existing = prev.find(t => t.path === path);
@@ -240,6 +253,7 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const closeTab = useCallback((id: string) => {
+    console.log('[debug:closeTab]', id, new Error().stack?.split('\n').slice(1, 4).join(' | '));
     setTabs(prev => {
       const tab = prev.find(t => t.id === id);
       if (!tab || tab.pinned) return prev;
@@ -254,7 +268,7 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
       const next = prev.filter(t => t.id !== id);
       if (next.length === 0) {
         setActiveTabId(null);
-        setDashboardVisible(true);
+        _setDashboardVisible(true);
       } else if (activeTabId === id) {
         const topTab = [...next].sort((a, b) => b.zIndex - a.zIndex)[0];
         setActiveTabId(topTab.id);
@@ -275,6 +289,7 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const minimizeWindow = useCallback((id: string) => {
+    console.log('[debug:minimizeWindow]', id, new Error().stack?.split('\n').slice(1, 4).join(' | '));
     setTabs(prev => prev.map(t => t.id === id ? { ...t, windowState: "minimized" } : t));
     setTabs(prev => {
       const visible = prev.filter(t => t.id !== id && t.windowState !== "minimized");
@@ -283,7 +298,7 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
         setActiveTabId(top.id);
       } else {
         setActiveTabId(null);
-        setDashboardVisible(true);
+        _setDashboardVisible(true);
       }
       return prev;
     });
@@ -314,7 +329,7 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
       tabs, activeTabId, dashboardVisible,
       isPosWorkspaceActive,
       openTab, closeTab, activateTab,
-      setDashboardVisible, toggleDashboard, showDashboard,
+      setDashboardVisible: _setDashboardVisible, toggleDashboard, showDashboard,
       minimizeWindow, toggleMaximize, bringToFront,
       moveWindow, resizeWindow,
     }}>

@@ -440,6 +440,11 @@ function TabContent() {
   const { layoutMode } = useUiPrefs();
   const showDashboard = dashboardVisible || tabs.length === 0;
 
+  // DEBUG LOGGING
+  useEffect(() => {
+    console.log('[debug:TabContent] dashboardVisible=', dashboardVisible, 'tabs=', tabs.length, 'showDashboard=', showDashboard);
+  }, [dashboardVisible, tabs.length, showDashboard]);
+
   return (
     <>
       {showDashboard && (
