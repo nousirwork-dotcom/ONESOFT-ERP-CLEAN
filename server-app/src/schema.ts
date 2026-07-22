@@ -61,6 +61,7 @@ export const users = pgTable('users', {
   defaultLanguage: varchar('default_language', { length: 10 }),
   sessionVersion: integer('session_version').notNull().default(1),
   canBeSalesperson: boolean('can_be_salesperson').notNull().default(false),
+  allowEmailLogin: boolean('allow_email_login').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

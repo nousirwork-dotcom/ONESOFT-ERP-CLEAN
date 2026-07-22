@@ -142,6 +142,7 @@ export async function loginHandler(req: Request, res: Response) {
     let user = await db.query.users.findFirst({ where: conditions });
 
     // محاولة البحث بالبريد الإلكتروني إذا فشل البحث بالاسم وكانت السياسة تسمح
+    // يشترط أيضاً أن يكون allowEmailLogin مفعَّلاً للمستخدم نفسه
     let foundByEmail = false;
     if (!user && loginMethod !== 'username' && username.includes('@')) {
       const emailVal = username.toLowerCase().trim();
@@ -149,7 +150,17 @@ export async function loginHandler(req: Request, res: Response) {
         ? and(eq(sql`lower(trim(${users.email}))`, emailVal), eq(users.orgId, orgId), eq(users.isActive, true))
         : and(eq(sql`lower(trim(${users.email}))`, emailVal), eq(users.isActive, true));
       const emailUser = await db.query.users.findFirst({ where: emailCond });
-      if (emailUser) { user = emailUser; foundByEmail = true; }
+      // ── فحص allowEmailLogin الخاص بالمستخدم ──────────────────────────────
+      // سياسة المنشأة تسمح بالبريد، لكن يجب أن يكون المستخدم قد فعَّل الخيار أيضاً
+      if (emailUser && emailUser.allowEmailLogin) {
+        user = emailUser;
+        foundByEmail = true;
+      }
+    }
+
+    // إذا كانت سياسة المنشأة "email فقط" فالمستخدم يجب أن يكون لديه allowEmailLogin=true
+    if (loginMethod === 'email' && !foundByEmail) {
+      return res.status(401).json({ error: loginErrorMsg });
     }
 
     if (!user) return res.status(401).json({ error: loginErrorMsg });
