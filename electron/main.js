@@ -101,6 +101,11 @@ function writeLog(level, msg) {
 // يضمن أن إغلاق التطبيق وإعادة فتحه يُلغي جلسة المتصفح
 // حتى لو ظلت Cookie صالحة.
 const LAUNCH_ID = require('crypto').randomUUID();
+// طباعة Launch ID في DEV فقط — لإثبات تغيّره بين كل تشغيل
+// ممنوع طباعته في الإنتاج (app.isPackaged = true في Production)
+if (!app.isPackaged) {
+  console.log('[auth] Electron Launch ID:', LAUNCH_ID);
+}
 
 // ── حالة عامة ─────────────────────────────────────────────────────────────────
 let splashWin        = null;

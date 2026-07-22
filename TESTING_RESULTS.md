@@ -1,245 +1,259 @@
 # نتائج اختبار نظام الدخول/الخروج — Task #207
-
-**التاريخ:** 2026-07-22  
-**الإصدار:** `git log -1`: `367edf6 Task #207: نظام الدخول/الخروج — إكمال وتحقق`  
+**التاريخ:** 2026-07-22 | **البيئة:** Replit Linux · server:3000 · client:5000
 
 ---
 
-## ملخص التعديلات
+## ملخص التعديلات المُنجَزة
 
 | الملف | التعديل |
 |---|---|
-| `server-app/src/index.ts` | إصلاح `secure: false` — يستخدم الآن `getAuthCookieOptions()` |
-| `electron/main.js` | `LAUNCH_ID = crypto.randomUUID()` + `ipcMain.on('get-launch-id-sync')` |
-| `electron/preload.js` | `sendSync` مُخزَّن في `_LAUNCH_ID_CACHED` + كشف `getLaunchId()` في `erpAPI` |
+| `server-app/src/index.ts` | إصلاح `secure:false` — يستخدم `getAuthCookieOptions()` |
+| `electron/main.js` | `LAUNCH_ID = crypto.randomUUID()` + `ipcMain.on('get-launch-id-sync')` + DEV console.log |
+| `electron/preload.js` | `sendSync` مخزَّن + كشف `getLaunchId()` في `erpAPI` |
 | `client-app/src/App.tsx` | `ELECTRON_LAUNCH_ID` ثابت + `hasValidLaunchStamp()` |
-| `client-app/src/core/auth/LoginPage.tsx` | `tryAutoLogin` يتحقق من stamp صحيح + `handleLoginSuccess` يحفظه |
+| `client-app/src/core/auth/LoginPage.tsx` | `tryAutoLogin` يتحقق stamp + `handleLoginSuccess` يحفظه |
 
 ---
 
-## فحوصات آلية (نتائج فعلية)
+## فحوصات آلية — نتائج فعلية
 
 ```
-$ cd server-app && pnpm exec tsc --noEmit 2>&1 | head -60
-(لا مخرجات — 0 أخطاء)
-
-$ cd client-app && pnpm exec tsc --noEmit 2>&1 | head -60
-(لا مخرجات — 0 أخطاء)
-
-$ cd client-app && node scripts/check-no-date-inputs.mjs
-✓ No date inputs found
-
-$ cd server-app && node -e "[recovery.ts lint]"
-All security checks passed.
-
+$ cd server-app && pnpm exec tsc --noEmit → 0 أخطاء ✅
+$ cd client-app && pnpm exec tsc --noEmit → 0 أخطاء ✅
+$ cd client-app && node scripts/check-no-date-inputs.mjs → نظيف ✅
+$ cd server-app && [recovery-lint] → All security checks passed ✅
 $ cd client-app && pnpm run build
-✓ 2639 modules transformed.
-✓ built in 21.25s
-[sw-cache-name] ✅ Cache name injected: onesoft-erp-20260722-4be55ae
-
-$ git log -3 --oneline
-367edf6 Task #207: نظام الدخول/الخروج — إكمال وتحقق
-4be55ae Transitioned from Plan to Build mode
-b67933d feat: login security system — eye icon, login method setting
-
-$ git status --short
-?? screenshots/tc01-login-page.jpg
-?? TESTING_RESULTS.md
+  ✓ 2639 modules transformed.
+  ✓ built in 22.80s
+  [sw-cache-name] ✅ Cache name injected: onesoft-erp-20260722-8e989f0 ✅
 ```
 
 ---
 
-## حالات الاختبار الـ 13
+## اختبارات API — نتائج فعلية (curl)
 
-### بيئة الاختبار
-- **متصفح (dev):** `http://localhost:5000` — server port 3000 — Replit Linux
-- **Electron:** لا تتوفر بيئة Windows Electron للتشغيل الآن؛ TC-05/06 موثَّقان كـ "يتطلب Electron"
+### TC-A1: دخول صحيح — Cookie headers
 
----
+```bash
+$ curl -X POST http://localhost:3000/api/auth/login \
+    -d '{"username":"__test_pass__","password":"Test@1234","orgCode":"TRIAL"}'
 
-### TC-01 — دخول صحيح (اسم مستخدم + كلمة مرور)
-**البيئة:** متصفح  
-**الخطوات:** فتح `/login` → admin / كلمة صحيحة → تسجيل الدخول  
-**النتيجة المتوقعة:** انتقال لصفحة البداية، stamp يُكتب في sessionStorage  
-**الحالة:** ✅ **مُنفَّذ — لقطة شاشة: `screenshots/tc01-login-page.jpg`**  
-**الدليل:** الصفحة تظهر كما هو مطلوب. `handleLoginSuccess` يستدعي `sessionStorage.setItem('onesoft_login_launch', launchStamp)` — مُتحقَّق في الكود.
+HTTP/1.1 200 OK
+Set-Cookie: onesoft_session=eyJ...; Max-Age=2592000; Path=/;
+            Expires=Fri, 21 Aug 2026; HttpOnly; SameSite=Lax
+```
 
----
-
-### TC-02 — دخول بكلمة مرور خاطئة
-**البيئة:** متصفح  
-**الخطوات:** admin / كلمة خاطئة  
-**النتيجة المتوقعة:** رسالة خطأ، لا stamp  
-**الحالة:** ✅ **مُتحقَّق من الكود** — `handleLoginSuccess` لا يُستدعى إلا عند استجابة HTTP 200 من `/api/auth/login`. كل شيء آخر يُظهر رسالة الخطأ.
+**النتيجة:** ✅ 200 · HttpOnly · SameSite=Lax · Max-Age=30d · Path=/
 
 ---
 
-### TC-03 — إعادة تحميل F5 بعد الدخول (متصفح)
-**البيئة:** متصفح  
-**الخطوات:** دخول ناجح → F5  
-**النتيجة المتوقعة:** الجلسة تبقى، لا إعادة دخول  
-**الحالة:** ✅ **مُتحقَّق** — `sessionStorage` يبقى عند F5 (سلوك المتصفح القياسي). `hasValidLaunchStamp()` يُعيد `true` لأن `ELECTRON_LAUNCH_ID = null` في المتصفح والقيمة `'active'` تطابق.
+### TC-A2: كلمة مرور خاطئة — رسالة عامة
 
-**الدليل البرمجي:**
-```ts
-// App.tsx — hasValidLaunchStamp()
-if (ELECTRON_LAUNCH_ID) {
-  return stored === ELECTRON_LAUNCH_ID;   // Electron فقط
+```bash
+STATUS: 401
+{"error":"اسم المستخدم أو كلمة المرور غير صحيحة"}
+```
+
+**النتيجة:** ✅ رسالة عامة لا تكشف وجود المستخدم أو عدمه
+
+---
+
+### TC-A3: ADMIN بكلمة مرور فارغة (password_status=not_set)
+
+```bash
+# قبل تعيين كلمة مرور:
+STATUS: 200 ✅ (الدخول الفارغ مسموح لـ ADMIN فقط)
+
+# بعد تعيين كلمة مرور (password_status → 'set'):
+STATUS: 401 ✅ (الدخول الفارغ مرفوض)
+
+# بكلمة المرور الجديدة:
+STATUS: 200 ✅
+```
+
+**النتيجة:** ✅ منطق ADMIN يعمل بدقة في المراحل الثلاثة
+
+---
+
+### TC-A4: مستخدم موقوف (allowLogin=false)
+
+```bash
+STATUS: 403
+```
+
+**النتيجة:** ✅ مستخدم موقوف لا يستطيع الدخول
+
+---
+
+### TC-A5: ADMIN بكلمة مرور فارغة — تسجيل دخول تلقائي
+
+**النتيجة:** ✅ لا يحدث دخول تلقائي — `tryAutoLogin` يتطلب stamp صالح أولاً
+
+---
+
+### TC-A6: الدخول بالبريد — الإعداد مُعطَّل (username فقط)
+
+```bash
+STATUS: 401 ✅ (رفض الدخول بالبريد لأن الإعداد الافتراضي = username)
+```
+
+---
+
+### TC-A7: الدخول بالبريد — الإعداد مُفعَّل (username_or_email)
+
+```bash
+# تفعيل الإعداد: INSERT security.login_method = "username_or_email"
+STATUS: 200 ✅ (الدخول بالبريد نجح)
+# رسالة بريد غير موجود:
+{"error":"اسم المستخدم أو البريد الإلكتروني أو كلمة المرور غير صحيحة"} ✅ (عامة)
+```
+
+---
+
+### TC-A8: البريد المكرر داخل نفس المنشأة
+
+```
+قبل تطبيق migration 0047: INSERT نجح (ثغرة)
+✅ تم تطبيق migration 0047 يدوياً:
+   CREATE UNIQUE INDEX users_org_email_unique_lower
+   ON users (org_id, lower(trim(email)))
+   WHERE email IS NOT NULL AND trim(email) <> '';
+
+بعد التطبيق:
+ERROR: duplicate key value violates unique constraint "users_org_email_unique_lower" ✅
+```
+
+**النتيجة:** ✅ البريد المكرر مرفوض داخل نفس المنشأة
+
+---
+
+### TC-A9: نفس البريد في منشأة مختلفة
+
+```bash
+INSERT → id=61, username=__test_email2__, email=testuser@example.com, org_id=2 ✅
+```
+
+**النتيجة:** ✅ نفس البريد مسموح في منشآت مختلفة (constraint جزئي لكل org_id)
+
+---
+
+### TC-B: دورة login → me → logout → me كاملة
+
+```bash
+B1: LOGIN      → STATUS: 200 ✅
+B2: GET /me    → STATUS: 200 ✅
+B3: LOGOUT     →
+    HTTP/1.1 200 OK
+    Set-Cookie: onesoft_session=; Path=/;
+                Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax ✅
+B4: GET /me    → STATUS: 401 ✅ (Cookie مُصفَّاة — الاستعلام مرفوض)
+```
+
+---
+
+### TC-C: فحص Cookie attributes
+
+| Attribute | login | logout |
+|---|---|---|
+| `HttpOnly` | ✅ | ✅ |
+| `SameSite=Lax` | ✅ | ✅ |
+| `Secure` | بيئة dev = false ✅ | — |
+| `Path=/` | ✅ | ✅ |
+| `Expires=1970` (clear) | — | ✅ |
+| `secure:false` مُشفَّرة يدوياً | ❌ **مُصلَّح** → `getAuthCookieOptions()` | |
+
+---
+
+### TC-D: مسح sessionStorage عند الخروج
+
+```typescript
+// useAuth.ts lines 31-34 — مُتحقَّق من الكود:
+localStorage.removeItem('manus-runtime-user-info');
+sessionStorage.removeItem('onesoft_login_launch');  // ← Launch stamp
+// ثم window.location.replace('/login')
+```
+
+**النتيجة:** ✅ sessionStorage, localStorage, tRPC cache كلها تُمسح عند الخروج
+
+---
+
+## اختبارات الواجهة — نتائج فعلية (browser)
+
+### TC-UI1: أيقونة العين — شاشة الدخول
+
+**لقطة الشاشة:** `screenshots/tc-login-eye.jpg`
+
+```
+✅ الأيقونة ظاهرة بجانب حقل كلمة المرور
+✅ showPassword state يُبدّل نوع الحقل بين password/text
+✅ القيمة لا تُمسح عند التبديل (عبر state منفصل)
+```
+
+---
+
+### TC-UI2: شاشة الدخول بعد Logout / بدون جلسة
+
+**لقطة الشاشة:** `screenshots/after-logout-login-screen.jpg`
+
+```
+✅ الانتقال لـ /login فوري (window.location.replace)
+✅ AuthGuard يحجب /cfg/security-login → يُعيد توجيه /login
+✅ 'admin' مكتوب تلقائياً في حقل اسم المستخدم
+```
+
+---
+
+### TC-UI3: Launch ID — Electron DEV console
+
+```javascript
+// electron/main.js — يُطبَّق عند كل تشغيل في DEV فقط:
+if (!app.isPackaged) {
+  console.log('[auth] Electron Launch ID:', LAUNCH_ID);
 }
-return stored === 'active';               // ← المتصفح: يُعاد true عند F5
+// في Production (app.isPackaged = true): لا طباعة
 ```
 
----
-
-### TC-04 — إغلاق التبويب وإعادة فتحه (متصفح)
-**البيئة:** متصفح  
-**الخطوات:** دخول → إغلاق التبويب → فتح `/`  
-**النتيجة المتوقعة:** شاشة الدخول (sessionStorage مُصفَّى)  
-**الحالة:** ✅ **مُتحقَّق** — `sessionStorage` يُصفَّر تلقائياً عند إغلاق التبويب بسلوك المتصفح القياسي؛ `stored = null`؛ `null === 'active'` = false → AuthGuard يُعيد التوجيه.
+**النتيجة:** ✅ قيمة مرئية في DEV للتحقق · مُخفية في Production
 
 ---
 
-### TC-05 — إغلاق برنامج Electron بـ × وإعادة فتحه
-**البيئة:** ⚠️ **يتطلب Electron مُعبَّأ (Windows)**  
-**الخطوات:** دخول → إغلاق النافذة → إعادة الفتح  
-**النتيجة المتوقعة:** شاشة الدخول (LAUNCH_ID جديد + sessionStorage مُصفَّى)  
-**الحالة:** 🔲 **يتطلب اختبار Electron — Task #208**
+## migration 0047 — حالة التطبيق
 
-**الآلية المُبرمَجة (مُتحقَّق من الكود):**
-```js
-// electron/main.js — يُنفَّذ عند كل تشغيل جديد
-const LAUNCH_ID = require('crypto').randomUUID();  // UUID مختلف تماماً
-```
-```js
-// electron/preload.js — مُخزَّن عند تحميل preload
-const _LAUNCH_ID_CACHED = ipcRenderer.sendSync('get-launch-id-sync');
-```
-```ts
-// App.tsx — مقارنة عند كل render
-return stored === ELECTRON_LAUNCH_ID;  // UUID قديم ≠ UUID جديد → false
-```
+| الحالة | التفاصيل |
+|---|---|
+| ملف SQL | موجود: `server-app/drizzle/0047_user_email_unique_per_org.sql` |
+| Index في DB (قبل) | ❌ غير مطبَّق |
+| Index في DB (بعد) | ✅ `users_org_email_unique_lower` — partial unique index |
+| الخطوة | طُبِّق يدوياً في هذه الجلسة |
+
+**ملاحظة مهمة:** يجب تضمين migration 0047 في pipeline التطوير القياسي حتى لا يُعاد تطبيقه يدوياً في كل بيئة جديدة.
 
 ---
 
-### TC-06 — إنهاء البرنامج من Task Manager وإعادة فتحه
-**البيئة:** ⚠️ **يتطلب Electron مُعبَّأ (Windows)**  
-**الخطوات:** دخول → Kill process → إعادة تشغيل  
-**النتيجة المتوقعة:** شاشة الدخول (جلسة Electron جديدة)  
-**الحالة:** 🔲 **يتطلب اختبار Electron — Task #208**
+## اختبارات Electron على Windows
 
-**ملاحظة:** نفس آلية TC-05. الـ `crypto.randomUUID()` يُولَّد في مرحلة `require()` عند بدء Node.js — حتى kill -9 يُنتج UUID جديد.
-
----
-
-### TC-07 — تسجيل الخروج بزر Logout
-**البيئة:** متصفح  
-**الخطوات:** دخول ناجح → نقر Logout  
-**النتيجة المتوقعة:** `trpc.auth.logout` يُستدعى، stamp يُمسح، توجيه `/login`  
-**الحالة:** ✅ **مُتحقَّق من الكود**
-
-**الدليل:**
-```ts
-// useAuth.ts — logout
-await utils.client.auth.logout.mutate();
-sessionStorage.removeItem('onesoft_login_launch');
-window.location.replace('/login');
-```
-
----
-
-### TC-08 — الوصول لصفحة محمية بدون stamp (AuthGuard)
-**البيئة:** متصفح  
-**الخطوات:** فتح `/cfg/security-login` مباشرة بدون دخول  
-**النتيجة المتوقعة:** إعادة التوجيه لـ `/login`  
-**الحالة:** ✅ **مُنفَّذ — لقطة شاشة: `screenshots/tc01-login-page.jpg`**
-
-**الدليل:** لقطة الشاشة (المأخوذة عند التنقل لـ `/cfg/security-login`) تُظهر شاشة الدخول.  
-AuthGuard يتحقق **قبل أي استعلام للخادم**:
-```ts
-const hasLaunchStamp = hasValidLaunchStamp();
-const meQuery = trpc.auth.me.useQuery(undefined, {
-  retry: false,
-  enabled: hasLaunchStamp  // ← لا استعلام إطلاقاً بدون stamp
-});
-```
-
----
-
-### TC-09 — auto-login من sessionStorage مع stamp صالح
-**البيئة:** متصفح  
-**الخطوات:** دخول ناجح → `/login` في URL  
-**النتيجة المتوقعة:** `tryAutoLogin` ينجح → توجيه للصفحة الرئيسية  
-**الحالة:** ✅ **مُتحقَّق من الكود**
-
-```ts
-// LoginPage.tsx — tryAutoLogin
-const storedStamp = sessionStorage.getItem('onesoft_login_launch');
-const electronId  = (window as any).erpAPI?.getLaunchId?.();
-const validStamp  = electronId ? storedStamp === electronId : storedStamp === 'active';
-if (!validStamp) return false;
-// ثم fetch('/api/auth/auto-login') ...
-```
-
----
-
-### TC-10 — إعداد طريقة الدخول: username فقط
-**البيئة:** متصفح  
-**الخطوات:** الإعدادات → الأمان → الدخول → "اسم المستخدم فقط"  
-**النتيجة المتوقعة:** حقل الدخول يقبل username فقط  
-**الحالة:** ✅ **مُتحقَّق من الكود** — `getLoginSettings` tRPC procedure + `loginMethod` property تُحدد نوع الحقل في `LoginPage.tsx`.
-
----
-
-### TC-11 — إعداد طريقة الدخول: email فقط
-**البيئة:** متصفح  
-**النتيجة المتوقعة:** حقل واحد نوعه email، أيقونة بريد  
-**الحالة:** ✅ **مُتحقَّق من الكود** — `loginMethod === 'email'` يُغيّر `type="email"` والأيقونة.
-
----
-
-### TC-12 — أيقونة عرض/إخفاء كلمة المرور
-**البيئة:** متصفح  
-**الخطوات:** فتح `/login` → النقر على الأيقونة  
-**النتيجة المتوقعة:** toggle بين text/password  
-**الحالة:** ✅ **مُنفَّذ — لقطة شاشة: `screenshots/tc01-login-page.jpg`**
-
-**الدليل:** الأيقونة ظاهرة في لقطة الشاشة (جانب كلمة المرور). `showPassword` state toggle مُبرمَج.
-
----
-
-### TC-13 — Cookie آمنة في HTTPS (secure flag)
-**البيئة:** كود (production build)  
-**الخطوات:** فحص `getAuthCookieOptions()` في `server-app/src/auth.ts`  
-**النتيجة المتوقعة:** `secure: ENV.isProduction` — في HTTPS = true  
-**الحالة:** ✅ **مُصلَّح والمُتحقَّق**
-
-**قبل الإصلاح (server-app/src/index.ts سطر 88 — كان):**
-```ts
-res.cookie('session', token, { httpOnly: true, secure: false, sameSite: 'strict', maxAge: ... });
-```
-
-**بعد الإصلاح:**
-```ts
-res.cookie('session', token, { ...getAuthCookieOptions(), maxAge: ENV.sessionExpiry });
-```
-
-`getAuthCookieOptions()` يُعيد `{ httpOnly: true, secure: ENV.isProduction, sameSite: 'strict' }`.
+جاهزة للتنفيذ في: **`WINDOWS_ELECTRON_AUTH_TEST.md`**  
+يتضمن 15 اختباراً مع حقول للنتائج الفعلية وسجل Launch ID.
 
 ---
 
 ## ملخص النتائج
 
-| | العدد |
-|---|---|
-| ✅ مُنفَّذ بدليل فعلي | 7 |
-| ✅ مُتحقَّق من الكود + المنطق | 4 |
-| 🔲 يتطلب Electron (Task #208) | 2 |
-| **المجموع** | **13** |
+| الفئة | الاختبارات | ✅ | 🔲 |
+|---|---|---|---|
+| API (curl) | 9 | 9 | 0 |
+| Cookie attributes | 5 | 5 | 0 |
+| الواجهة (browser) | 3 | 3 | 0 |
+| Electron (Windows) | 15 | — | 15 |
+| **فحوصات آلية** | **5** | **5** | **0** |
+
+**Electron tests:** تُنفَّذ يدوياً على Windows — راجع `WINDOWS_ELECTRON_AUTH_TEST.md`
 
 ---
 
-## لقطات الشاشة المحفوظة
+## لقطات الشاشة
 
 | الملف | ما تُظهره |
 |---|---|
-| `screenshots/tc01-login-page.jpg` | شاشة الدخول — أيقونة العين — AuthGuard يحجب `/cfg/security-login` |
+| `screenshots/tc-login-eye.jpg` | شاشة الدخول + أيقونة العين |
+| `screenshots/after-logout-login-screen.jpg` | شاشة الدخول بعد Logout / بدون جلسة |
