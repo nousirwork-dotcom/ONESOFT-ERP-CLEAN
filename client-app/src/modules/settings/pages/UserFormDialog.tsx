@@ -546,6 +546,7 @@ export function UserFormDialog({
                 saveDisabled={isSaving || !isDirty || !!mobileError}
                 onNew={onToolbarNew ? () => guardedToolbarAction(onToolbarNew!) : undefined}
                 onCopy={onToolbarCopy ? () => guardedToolbarAction(onToolbarCopy!) : undefined}
+                onEdit={mode === "edit" ? () => {} : undefined}
                 onDelete={onToolbarDelete}
                 onFirst={onToolbarFirst ? () => guardedToolbarAction(onToolbarFirst!) : undefined}
                 onPrev={onToolbarPrev ? () => guardedToolbarAction(onToolbarPrev!) : undefined}

@@ -565,6 +565,7 @@ export default function Users() {
       fullName: selectedUser.name ? `نسخة - ${selectedUser.name}` : "",
       loginName: "",
       userType: selectedUser.role ?? "cashier",
+      categoryId: selectedUser.categoryId ? String(selectedUser.categoryId) : undefined,
       allowLogin: selectedUser.allowLogin !== false,
       loginMethod: (selectedUser.loginMethod as UserLoginMethod) ?? 'username',
     });
