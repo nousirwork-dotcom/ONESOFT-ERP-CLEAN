@@ -476,6 +476,9 @@ export default function LoginPage() {
   const doNavigate = useCallback((p: string) => navigate(p), [navigate]);
 
   const tryAutoLogin = async () => {
+    // لا تجربة auto-login إذا لم تكن هناك علامة جلسة من هذا التشغيل.
+    // sessionStorage تُمسح عند إغلاق البرنامج أو التبويب — تشغيل جديد = لا stamp.
+    if (sessionStorage.getItem('onesoft_login_launch') !== 'active') return false;
     try {
       const res = await fetch('/api/auth/auto-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include' });
       if (res.ok) { await utils.auth.me.invalidate(); doNavigate(getStartupPath(settings.startup_page)); return true; }
@@ -503,6 +506,8 @@ export default function LoginPage() {
   }, [phase]);
 
   const handleLoginSuccess = useCallback(async (_role: string) => {
+    // تعيين علامة الجلسة — تبقى حتى إغلاق البرنامج/التبويب أو تسجيل الخروج
+    sessionStorage.setItem('onesoft_login_launch', 'active');
     const transition = settings.opening_transition ?? 'none';
     const targetPath = getStartupPath(settings.startup_page);
     if (transition === 'none') { doNavigate(targetPath); return; }

@@ -336,11 +336,22 @@ const LICENSE_BLOCKING_ERRORS = new Set([
 ]);
 // ملاحظة: trial_active و license_not_found ليسا في القائمة — يُسمح بالوصول الكامل
 
+// ─── مفتاح علامة الجلسة ───────────────────────────────────────────────────────
+// sessionStorage يُصفَّر تلقائياً عند إغلاق البرنامج (Electron) أو التبويب.
+// لا يُصفَّر عند إعادة التحميل (F5) في نفس الجلسة — الجلسة تستمر.
+const LAUNCH_STAMP_KEY = 'onesoft_login_launch';
+
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const [location, navigate] = useLocation();
-  const meQuery    = trpc.auth.me.useQuery(undefined, { retry: false });
-  const firstRunQ  = trpc.setup.isFirstRun.useQuery(undefined, { retry: false, enabled: !!meQuery.data });
-  const licenseQ   = trpc.license.getStatus.useQuery(undefined, {
+
+  // ── Launch Guard ──────────────────────────────────────────────────────────────
+  // تُقرأ من sessionStorage مرة واحدة عند كل render — قيمة متزامنة (sync).
+  const hasLaunchStamp = sessionStorage.getItem(LAUNCH_STAMP_KEY) === 'active';
+
+  // لا نستعلم الخادم أصلاً إذا لم يوجد stamp — لا حاجة لأي round-trip
+  const meQuery   = trpc.auth.me.useQuery(undefined, { retry: false, enabled: hasLaunchStamp });
+  const firstRunQ = trpc.setup.isFirstRun.useQuery(undefined, { retry: false, enabled: !!meQuery.data });
+  const licenseQ  = trpc.license.getStatus.useQuery(undefined, {
     retry:              false,
     enabled:            !!meQuery.data,
     staleTime:          60_000,
@@ -348,16 +359,22 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   });
   const [wizardDone, setWizardDone] = useState(false);
 
+  // إعادة توجيه فورية إذا لا توجد علامة جلسة (تشغيل جديد / بعد خروج)
   useEffect(() => {
+    if (!hasLaunchStamp) navigate('/login');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasLaunchStamp]);
+
+  // التحقق من الجلسة النشطة (يعمل فقط عند وجود stamp)
+  useEffect(() => {
+    if (!hasLaunchStamp) return;
     if (meQuery.isLoading) return;
     if (!meQuery.data) {
       if (location !== "/login") navigate("/login");
     } else {
-      if (location === "/login") {
-        navigate("/");
-      }
+      if (location === "/login") navigate("/");
     }
-  }, [meQuery.data, meQuery.isLoading, location]);
+  }, [hasLaunchStamp, meQuery.data, meQuery.isLoading, location]);
 
   // توجيه تلقائي عند انتهاء صلاحية الترخيص أو تلفه
   // لا يُوجَّه في حالة license_not_found (وضع التطوير — لا قيود)
@@ -370,7 +387,8 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     }
   }, [licenseQ.data, licenseQ.isLoading, meQuery.data, location]);
 
-  if (meQuery.isLoading) {
+  // شاشة تحميل حتى اكتمال التحقق — تمنع أي flash للوحة التحكم
+  if (!hasLaunchStamp || meQuery.isLoading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">

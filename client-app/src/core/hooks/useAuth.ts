@@ -28,8 +28,10 @@ export function useAuth(options?: UseAuthOptions) {
         console.warn('[logout] mutation error (continuing cleanup):', error);
       }
     } finally {
-      // مسح بيانات المستخدم من localStorage
+      // مسح بيانات المستخدم من localStorage و sessionStorage
       localStorage.removeItem('manus-runtime-user-info');
+      // مسح علامة الجلسة — يمنع tryAutoLogin من تجاوز شاشة الدخول
+      sessionStorage.removeItem('onesoft_login_launch');
       // إعادة توجيه كاملة (replace) لمنع زر Back من إظهار الصفحات المحمية
       // كذلك تمسح كل React state و cache تلقائياً بإعادة تحميل الصفحة
       window.location.replace('/login');
