@@ -87,6 +87,9 @@ function pathToIcon(path: string): React.ElementType {
 const TABS_KEY        = 'onesoft_open_tabs';
 const FLAG_KEY        = 'onesoft_cfg_remember_tabs';
 const STARTUP_PAGE_KEY = 'onesoft_cfg_startup_page';
+/** تُخزَّن التبويبات المفتوحة في sessionStorage لاستعادتها إذا أُعيد mount المزوّد
+ *  خلال نفس الجلسة (مثلاً بسبب تحقق من الجلسة أو إعادة توجيه مؤقتة). */
+const SESSION_TABS_KEY = 'onesoft_session_tabs';
 
 function isRememberEnabled(): boolean {
   try { return localStorage.getItem(FLAG_KEY) === 'true'; } catch { return false; }
@@ -94,8 +97,44 @@ function isRememberEnabled(): boolean {
 
 type SavedTab = { path: string; label: string };
 
+/** يحفظ التبويبات في sessionStorage فوراً (مستقل عن إعداد "تذكر التبويبات"). */
+export function persistSessionTabs(tabs: AppTab[]): void {
+  try {
+    const toSave: SavedTab[] = tabs.map(t => ({ path: t.path, label: t.label }));
+    sessionStorage.setItem(SESSION_TABS_KEY, JSON.stringify(toSave));
+  } catch { /* ignore */ }
+}
+
+/** يمسح بيانات التبويبات من sessionStorage — يُستدعى عند تسجيل الخروج. */
+export function clearSessionTabs(): void {
+  try { sessionStorage.removeItem(SESSION_TABS_KEY); } catch { /* ignore */ }
+}
+
 function loadSavedTabs(): AppTab[] {
   try {
+    // أولاً: حاول استعادة التبويبات من sessionStorage (حفظ داخل الجلسة الحالية)
+    // هذا يحمي من أي remount للمزوّد ناتج عن تحقق المصادقة أو إعادة توجيه مؤقتة.
+    const sessionRaw = sessionStorage.getItem(SESSION_TABS_KEY);
+    if (sessionRaw) {
+      const parsed = JSON.parse(sessionRaw) as SavedTab[];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map((t, i) => ({
+          id:          `session-${i}-${t.path.replace(/\//g, '_')}`,
+          path:        t.path,
+          label:       t.label,
+          Icon:        pathToIcon(t.path),
+          pinned:      false,
+          pos:         { x: 40 + i * 8, y: 40 + i * 8 },
+          size:        { w: 1200, h: 760 },
+          prevPos:     { x: 40, y: 40 },
+          prevSize:    { w: 1200, h: 760 },
+          windowState: 'maximized' as WindowState,
+          zIndex:      100 + i,
+        }));
+      }
+    }
+
+    // ثانياً: الاستعادة من localStorage (إعداد "تذكر التبويبات")
     if (!isRememberEnabled()) return [];
     // القاعدة: التبويبات تُستعاد فقط عندما startup_page = 'last_opened'
     // إذا كان startup_page = dashboard/sales/etc. → يفتح الصفحة المحددة فقط ولا تعارض
@@ -164,6 +203,11 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
   const restoredRef  = useRef<AppTab[]>(loadSavedTabs());
   const restoredTabs = restoredRef.current;
 
+  useEffect(() => {
+    console.log('[debug:TabManagerProvider] MOUNTED restoredTabs=', restoredRef.current.length);
+    return () => { console.log('[debug:TabManagerProvider] UNMOUNTED'); };
+  }, []);
+
   const [tabs,           setTabs]           = useState<AppTab[]>(restoredTabs);
   const [activeTabId,    setActiveTabId]    = useState<string | null>(
     restoredTabs.length > 0 ? restoredTabs[restoredTabs.length - 1].id : null
@@ -171,6 +215,15 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
   const [dashboardVisible, setDashboardVisible] = useState<boolean>(
     restoredTabs.length === 0
   );
+
+  useEffect(() => {
+    console.log('[debug:tabs-state]', tabs.length, tabs.map(t => t.id + ':' + t.path), new Error().stack?.split('\n').slice(1, 4).join(' | '));
+  }, [tabs]);
+
+  // حفظ فوري في sessionStorage عند كل تغيير في التبويبات
+  useEffect(() => {
+    persistSessionTabs(tabs);
+  }, [tabs]);
   /* Idempotent helper — exits fullscreen (Electron or browser DOM) without
      throwing if fullscreen is not active. Called from closeTab before the
      POS tab is removed so the exit fires before any component unmounts. */

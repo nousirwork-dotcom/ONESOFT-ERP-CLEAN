@@ -1,6 +1,7 @@
 import { trpc } from "@/shared/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
 import { useCallback, useEffect, useMemo } from "react";
+import { clearSessionTabs } from "@/core/contexts/TabManagerContext";
 
 type UseAuthOptions = {
   redirectOnUnauthenticated?: boolean;
@@ -30,6 +31,8 @@ export function useAuth(options?: UseAuthOptions) {
     } finally {
       // مسح بيانات المستخدم من localStorage و sessionStorage
       localStorage.removeItem('manus-runtime-user-info');
+      // مسح التبويبات المحفوظة في sessionStorage
+      clearSessionTabs();
       // مسح علامة الجلسة — يمنع tryAutoLogin من تجاوز شاشة الدخول
       sessionStorage.removeItem('onesoft_login_launch');
       // إعادة توجيه كاملة (replace) لمنع زر Back من إظهار الصفحات المحمية
