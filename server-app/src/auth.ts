@@ -9,6 +9,19 @@ import { saveDevicePrefs } from './lib/devicePrefs.js';
 
 const SECRET = new TextEncoder().encode(ENV.jwtSecret);
 
+// ─── خيارات Cookie المشتركة بين login وlogout ─────────────────────────────────
+// يجب أن يكون clearCookie له نفس خيارات set بالضبط وإلا لن يُمسح في بعض البيئات.
+export function getAuthCookieOptions(): {
+  httpOnly: boolean; secure: boolean; sameSite: 'lax'; path: string;
+} {
+  return {
+    httpOnly: true,
+    secure:   ENV.nodeEnv === 'production',
+    sameSite: 'lax',
+    path:     '/',
+  };
+}
+
 // ─── إنشاء JWT token ──────────────────────────────────────────────────────────
 export async function createToken(payload: {
   userId: number;
@@ -119,13 +132,14 @@ export async function loginHandler(req: Request, res: Response) {
       return res.status(403).json({ error: 'غير مسموح لهذا المستخدم بتسجيل الدخول. يرجى التواصل مع مدير النظام.' });
     }
 
-    // في وضع التطوير (ريبليت): الدخول بدون باسورد مسموح لـ admin/superadmin للسرعة والاختبار
-    const isDev = ENV.nodeEnv !== 'production';
-    const isAdminRole = user.role === 'admin' || user.role === 'superadmin';
-    const skipPassword = isDev && isAdminRole && safePassword === '';
+    // ── منطق التخطي عن كلمة المرور ─────────────────────────────────────────────
+    // يُسمح بالدخول بكلمة مرور فارغة فقط إذا لم تُعيَّن كلمة مرور لهذا الحساب
+    // (passwordStatus = 'not_set'). هذا يشمل حساب ADMIN الأول عند أول تشغيل.
+    // بمجرد تعيين كلمة مرور (passwordStatus → 'set') لا يُسمح بالفراغ مطلقاً.
+    const skipPassword = user.passwordStatus === 'not_set' && safePassword === '';
 
     if (!skipPassword) {
-      const valid = await verifyPassword(safePassword, user.passwordHash);
+      const valid = await verifyPassword(safePassword, user.passwordHash ?? '');
       if (!valid) return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
     }
 
@@ -169,9 +183,7 @@ export async function loginHandler(req: Request, res: Response) {
     });
 
     res.cookie(ENV.cookieName, token, {
-      httpOnly: true,
-      secure: false,
-      sameSite: 'lax',
+      ...getAuthCookieOptions(),
       maxAge: ENV.sessionExpiry,
     });
 
@@ -193,11 +205,7 @@ export async function loginHandler(req: Request, res: Response) {
 
 // ─── تسجيل الخروج ────────────────────────────────────────────────────────────
 export function logoutHandler(req: Request, res: Response) {
-  res.clearCookie(ENV.cookieName, {
-    httpOnly: true,
-    secure: false,
-    sameSite: 'lax',
-  });
+  res.clearCookie(ENV.cookieName, getAuthCookieOptions());
   if (req.method === 'GET') {
     return res.redirect('/');
   }

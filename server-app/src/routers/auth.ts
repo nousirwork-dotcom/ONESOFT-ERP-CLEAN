@@ -4,7 +4,7 @@ import { TRPCError } from '@trpc/server';
 import { db } from '../db.js';
 import { users, organizations } from '../schema.js';
 import { and, eq } from 'drizzle-orm';
-import { verifyPassword } from '../auth.js';
+import { verifyPassword, getAuthCookieOptions } from '../auth.js';
 import { ENV } from '../env.js';
 
 export const authRouter = router({
@@ -48,11 +48,7 @@ export const authRouter = router({
 
   // ── تسجيل الخروج ─────────────────────────────────────────────────────────────
   logout: publicProcedure.mutation(({ ctx }) => {
-    ctx.res.clearCookie(ENV.cookieName, {
-      httpOnly: true,
-      secure: false,
-      sameSite: 'lax',
-    });
+    ctx.res.clearCookie(ENV.cookieName, getAuthCookieOptions());
     return { success: true };
   }),
 

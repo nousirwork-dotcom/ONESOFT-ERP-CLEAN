@@ -17,28 +17,24 @@ export function useAuth(options?: UseAuthOptions) {
     refetchOnWindowFocus: false,
   });
 
-  const logoutMutation = trpc.auth.logout.useMutation({
-    onSuccess: () => {
-      utils.auth.me.setData(undefined, null);
-    },
-  });
+  const logoutMutation = trpc.auth.logout.useMutation();
 
   const logout = useCallback(async () => {
     try {
       await logoutMutation.mutateAsync();
     } catch (error: unknown) {
-      if (
-        error instanceof TRPCClientError &&
-        error.data?.code === "UNAUTHORIZED"
-      ) {
-        return;
+      // إذا كانت الجلسة منتهية بالفعل أو أي خطأ آخر — نكمل التنظيف على أي حال
+      if (!(error instanceof TRPCClientError && error.data?.code === "UNAUTHORIZED")) {
+        console.warn('[logout] mutation error (continuing cleanup):', error);
       }
-      throw error;
     } finally {
-      utils.auth.me.setData(undefined, null);
-      await utils.auth.me.invalidate();
+      // مسح بيانات المستخدم من localStorage
+      localStorage.removeItem('manus-runtime-user-info');
+      // إعادة توجيه كاملة (replace) لمنع زر Back من إظهار الصفحات المحمية
+      // كذلك تمسح كل React state و cache تلقائياً بإعادة تحميل الصفحة
+      window.location.replace('/login');
     }
-  }, [logoutMutation, utils]);
+  }, [logoutMutation]);
 
   const state = useMemo(() => {
     localStorage.setItem(
