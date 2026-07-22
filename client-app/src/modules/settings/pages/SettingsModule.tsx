@@ -2120,29 +2120,6 @@ function UserGroupsPage() {
                       {(displayDesc || selectedGroup.description) && (
                         <p className="text-xs text-muted-foreground mt-0.5">{displayDesc || selectedGroup.description}</p>
                       )}
-                      <div className="flex items-center gap-4 mt-2">
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Users className="w-3.5 h-3.5 text-blue-400" />
-                          <span className="font-semibold text-foreground">
-                            {directUsers.length + pendingAdditions.filter(p => p.memberType === 'user').length}
-                          </span>
-                          <span>مستخدم مباشر</span>
-                        </div>
-                        <div className="w-px h-3 bg-border" />
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Shield className="w-3.5 h-3.5 text-purple-400" />
-                          <span className="font-semibold text-foreground">
-                            {directGroups.length + pendingAdditions.filter(p => p.memberType === 'group').length}
-                          </span>
-                          <span>مجموعة فرعية</span>
-                        </div>
-                        <div className="w-px h-3 bg-border" />
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <GitBranch className="w-3.5 h-3.5 text-green-400" />
-                          <span className="font-semibold text-foreground">{(effectiveMembers as any[]).length}</span>
-                          <span>عضو فعلي</span>
-                        </div>
-                      </div>
                     </div>
                     <div className="flex gap-1 shrink-0">
                       <button type="button" title="تعديل"
@@ -2193,18 +2170,15 @@ function UserGroupsPage() {
                   <table className="w-full text-xs border-collapse">
                     <thead className="sticky top-0 z-10">
                       <tr className="bg-[#1C4576] text-white">
-                        <th className="px-3 py-2.5 text-center font-semibold w-10">#</th>
-                        <th className="px-3 py-2.5 text-right font-semibold">نوع العضو</th>
-                        <th className="px-3 py-2.5 text-right font-semibold">كود العضو</th>
+                        <th className="px-3 py-2.5 text-right font-semibold w-28">نوع العضو</th>
+                        <th className="px-3 py-2.5 text-right font-semibold w-36">كود العضو</th>
                         <th className="px-3 py-2.5 text-right font-semibold">اسم العضو</th>
-                        <th className="px-3 py-2.5 text-center font-semibold">نوع العضوية</th>
-                        <th className="px-3 py-2.5 text-center font-semibold w-20">الإجراءات</th>
                       </tr>
                     </thead>
                     <tbody>
                       {(members as any[]).length === 0 && pendingAdditions.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="py-14 text-center text-muted-foreground">
+                          <td colSpan={3} className="py-14 text-center text-muted-foreground">
                             <div className="flex flex-col items-center gap-2">
                               <Users className="w-8 h-8 opacity-20" />
                               <p className="text-sm font-medium">لا يوجد أعضاء في هذه المجموعة</p>
@@ -2221,16 +2195,19 @@ function UserGroupsPage() {
                             const isRemoving = pendingRemovals.has(m.id);
                             const rowBg      = isRemoving ? 'bg-red-50/60'
                               : idx % 2 === 0 ? 'bg-white' : 'bg-muted/25';
+                            const clickable  = isGroup && m.memberGroupId != null && !isRemoving;
                             return (
                               <React.Fragment key={m.id}>
-                                <tr className={`${rowBg} border-b border-border/20 hover:bg-primary/5 transition-colors group ${isRemoving ? 'opacity-60' : ''}`}>
-                                  <td className="px-3 py-2.5 text-center text-muted-foreground font-mono tabular-nums">
-                                    {isRemoving ? <Trash2 className="w-3 h-3 text-destructive mx-auto" /> : idx + 1}
-                                  </td>
-                                  <td className={`px-3 py-2.5 ${isRemoving ? 'line-through' : ''}`}>
+                                <tr
+                                  className={`${rowBg} border-b border-border/20 transition-colors group ${isRemoving ? 'opacity-60' : ''} ${clickable ? 'cursor-pointer hover:bg-purple-50/60' : 'hover:bg-primary/5'}`}
+                                  onClick={clickable ? () => toggleGroupExpand(m.memberGroupId) : undefined}
+                                >
+                                  {/* نوع العضو */}
+                                  <td className="px-3 py-2.5">
                                     {isGroup ? (
                                       <span className="flex items-center gap-1.5 text-[10px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-1 rounded-full w-fit">
-                                        <Shield className="w-3 h-3 shrink-0" />مجموعة
+                                        {isExpanded ? <ChevronDown className="w-3 h-3 shrink-0" /> : <Shield className="w-3 h-3 shrink-0" />}
+                                        مجموعة
                                       </span>
                                     ) : (
                                       <span className="flex items-center gap-1.5 text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-1 rounded-full w-fit">
@@ -2238,37 +2215,32 @@ function UserGroupsPage() {
                                       </span>
                                     )}
                                   </td>
+                                  {/* كود العضو */}
                                   <td className={`px-3 py-2.5 ${isRemoving ? 'line-through' : ''}`}>
                                     {m.memberCode
                                       ? <code className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded">{m.memberCode}</code>
                                       : <span className="text-muted-foreground">—</span>}
                                   </td>
-                                  <td className={`px-3 py-2.5 font-medium text-foreground ${isRemoving ? 'line-through text-destructive/70' : ''}`}>
-                                    {m.memberName ?? '—'}
-                                  </td>
-                                  <td className="px-3 py-2.5 text-center">
-                                    {isRemoving ? (
-                                      <span className="text-[9px] font-semibold text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">سيُحذف</span>
-                                    ) : (
-                                      <span className="text-[9px] font-semibold text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">مباشر</span>
-                                    )}
-                                  </td>
-                                  <td className="px-3 py-2.5 text-center">
-                                    <div className="flex items-center justify-center gap-1">
-                                      {isGroup && m.memberGroupId != null && !isRemoving && (
-                                        <button type="button"
-                                          title={isExpanded ? 'إخفاء الأعضاء' : 'عرض أعضاء المجموعة'}
-                                          className="h-6 w-6 flex items-center justify-center rounded hover:bg-purple-100 text-purple-500 transition-colors"
-                                          onClick={() => toggleGroupExpand(m.memberGroupId)}>
-                                          {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
+                                  {/* اسم العضو + actions inline */}
+                                  <td className={`px-3 py-2.5 font-medium ${isRemoving ? 'line-through text-destructive/70' : 'text-foreground'}`}>
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span>{m.memberName ?? '—'}</span>
+                                      {isRemoving ? (
+                                        <div className="flex items-center gap-1 shrink-0">
+                                          <span className="text-[9px] font-semibold text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">سيُحذف</span>
+                                          <button type="button" title="التراجع عن الحذف"
+                                            className="h-5 w-5 flex items-center justify-center rounded hover:bg-green-100 text-green-600 transition-colors"
+                                            onClick={e => { e.stopPropagation(); handleToggleRemoval(m.id); }}>
+                                            <Check className="w-3 h-3" />
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <button type="button" title="إزالة من المجموعة"
+                                          className="h-5 w-5 flex items-center justify-center rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+                                          onClick={e => { e.stopPropagation(); handleToggleRemoval(m.id); }}>
+                                          <Trash2 className="w-3 h-3" />
                                         </button>
                                       )}
-                                      <button type="button"
-                                        title={isRemoving ? 'التراجع عن الحذف' : 'إزالة من المجموعة'}
-                                        className={`h-6 w-6 flex items-center justify-center rounded transition-colors opacity-0 group-hover:opacity-100 ${isRemoving ? 'hover:bg-green-100 text-green-600' : 'hover:bg-destructive/10 text-muted-foreground hover:text-destructive'}`}
-                                        onClick={() => handleToggleRemoval(m.id)}>
-                                        {isRemoving ? <Check className="w-3 h-3" /> : <Trash2 className="w-3 h-3" />}
-                                      </button>
                                     </div>
                                   </td>
                                 </tr>
@@ -2285,7 +2257,6 @@ function UserGroupsPage() {
                             const rowBg   = baseIdx % 2 === 0 ? 'bg-amber-50/40' : 'bg-amber-50/60';
                             return (
                               <tr key={`pending-${p.tempId}`} className={`${rowBg} border-b border-amber-100/60 group`}>
-                                <td className="px-3 py-2.5 text-center text-muted-foreground font-mono tabular-nums">{baseIdx + 1}</td>
                                 <td className="px-3 py-2.5">
                                   {p.memberType === 'group' ? (
                                     <span className="flex items-center gap-1.5 text-[10px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-1 rounded-full w-fit">
@@ -2302,70 +2273,35 @@ function UserGroupsPage() {
                                     ? <code className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded">{p.memberCode}</code>
                                     : <span className="text-muted-foreground">—</span>}
                                 </td>
-                                <td className="px-3 py-2.5 font-medium text-foreground">{p.memberName ?? '—'}</td>
-                                <td className="px-3 py-2.5 text-center">
-                                  <span className="text-[9px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">جديد ●</span>
-                                </td>
-                                <td className="px-3 py-2.5 text-center">
-                                  <button type="button" title="إلغاء الإضافة"
-                                    className="h-6 w-6 flex items-center justify-center rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
-                                    onClick={() => handleCancelPending(p.tempId)}>
-                                    <X className="w-3 h-3" />
-                                  </button>
+                                <td className="px-3 py-2.5 font-medium text-foreground">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="flex items-center gap-1.5">
+                                      {p.memberName ?? '—'}
+                                      <span className="text-[9px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">جديد</span>
+                                    </span>
+                                    <button type="button" title="إلغاء الإضافة"
+                                      className="h-5 w-5 flex items-center justify-center rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+                                      onClick={() => handleCancelPending(p.tempId)}>
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             );
                           })}
                         </>
                       )}
-
-                      {/* Inherited-only rows (when showEffective is on) */}
-                      {showEffective && inheritedOnly.map((e: any, idx2: number) => (
-                        <tr key={`eff-${e.id}`}
-                          className={`border-b border-border/15 ${(((members as any[]).length + idx2) % 2 === 0) ? 'bg-amber-50/30' : 'bg-amber-50/50'}`}>
-                          <td className="px-3 py-2 text-center text-muted-foreground font-mono tabular-nums">
-                            {(members as any[]).length + idx2 + 1}
-                          </td>
-                          <td className="px-3 py-2">
-                            <span className="flex items-center gap-1.5 text-[10px] font-semibold text-blue-600 bg-blue-50 border border-blue-100 px-2 py-1 rounded-full w-fit">
-                              <Users className="w-3 h-3 shrink-0" />مستخدم
-                            </span>
-                          </td>
-                          <td className="px-3 py-2">
-                            {e.code
-                              ? <code className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded">{e.code}</code>
-                              : <span className="text-muted-foreground">—</span>}
-                          </td>
-                          <td className="px-3 py-2 font-medium text-foreground">{e.name ?? '—'}</td>
-                          <td className="px-3 py-2 text-center">
-                            <span className="text-[9px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full whitespace-nowrap">
-                              {e.inheritedFrom ? `موروث من: ${e.inheritedFrom}` : 'موروث'}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2" />
-                        </tr>
-                      ))}
                     </tbody>
                   </table>
 
                   {/* Footer */}
                   {((members as any[]).length > 0 || pendingAdditions.length > 0) && (
-                    <div className="px-4 py-2.5 border-t border-border/20 bg-muted/10 flex items-center justify-between">
+                    <div className="px-4 py-2.5 border-t border-border/20 bg-muted/10 flex items-center gap-4">
                       <span className="text-[11px] text-muted-foreground">
-                        {(members as any[]).length - pendingRemovals.size} عضو محفوظ
+                        {(members as any[]).length - pendingRemovals.size} عضو
                         {pendingAdditions.length > 0 && <> · <span className="text-amber-600 font-semibold">{pendingAdditions.length} في الانتظار</span></>}
                         {pendingRemovals.size > 0 && <> · <span className="text-red-600 font-semibold">{pendingRemovals.size} سيُحذف</span></>}
-                        {inheritedOnly.length > 0 && <> · {inheritedOnly.length} موروث</>}
                       </span>
-                      {inheritedOnly.length > 0 && (
-                        <button type="button"
-                          className="flex items-center gap-1.5 text-[11px] text-primary hover:underline transition-colors"
-                          onClick={() => setShowEffective(v => !v)}>
-                          {showEffective
-                            ? (<><ChevronDown className="w-3 h-3" />إخفاء الأعضاء الموروثين</>)
-                            : (<><ChevronLeft className="w-3 h-3" />عرض جميع الأعضاء الفعليين ({(effectiveMembers as any[]).length})</>)}
-                        </button>
-                      )}
                     </div>
                   )}
                 </div>
