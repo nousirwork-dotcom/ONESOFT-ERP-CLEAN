@@ -15,6 +15,8 @@ import { trpc } from "@/shared/lib/trpc";
 
 export type UserFormTab = "basic" | "contact" | "login" | "work" | "permissions";
 
+export type UserLoginMethod = 'username' | 'username_or_email' | 'email';
+
 export interface UserFormValue {
   code?: string;
   fullName: string;
@@ -24,6 +26,7 @@ export interface UserFormValue {
   mobile?: string;
   email?: string;
   allowLogin: boolean;
+  loginMethod: UserLoginMethod;
   password?: string;
 }
 
@@ -146,6 +149,12 @@ export function UserFormDialog({
     }
     if (value.mobile && !PHONE_REGEX.test(value.mobile.replace(/\s/g, ""))) {
       setMobileError("رقم الجوال غير صحيح (8–15 رقمًا، + اختيارية)");
+      setActiveTab("contact");
+      return;
+    }
+    // ── التحقق من البريد عند طرق الدخول التي تستوجبه ──────────────────────────
+    if (value.loginMethod === 'email' && !value.email?.trim()) {
+      toast.error("طريقة «البريد الإلكتروني فقط» تستوجب إدخال بريد صحيح من تبويب التواصل");
       setActiveTab("contact");
       return;
     }
@@ -330,6 +339,41 @@ export function UserFormDialog({
                           <p className="text-xs text-muted-foreground mt-0.5">لا يمكن تغيير الفئة بعد الإنشاء</p>
                         )}
                       </FormField>
+
+                      {/* طريقة تسجيل الدخول — تمتد عبر العمودين */}
+                      <div className="col-span-2">
+                        <FormField label="طريقة تسجيل الدخول" required>
+                          <DlgSelect
+                            value={value.loginMethod}
+                            onChange={(v) => update("loginMethod", v as UserLoginMethod)}
+                            options={[
+                              { value: "username",           label: "اسم المستخدم فقط" },
+                              { value: "username_or_email",  label: "اسم المستخدم أو البريد الإلكتروني" },
+                              { value: "email",              label: "البريد الإلكتروني فقط" },
+                            ]}
+                          />
+                          {value.loginMethod === 'username' && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              يدخل المستخدم باسم الدخول فقط — البريد اختياري للتواصل واستعادة كلمة المرور
+                            </p>
+                          )}
+                          {value.loginMethod === 'username_or_email' && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              يستطيع الدخول باسم الدخول أو بالبريد الإلكتروني — يجب إدخال بريد صحيح غير مكرر
+                            </p>
+                          )}
+                          {value.loginMethod === 'email' && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              البريد إجباري — لا يُستخدم اسم الدخول في تسجيل الدخول (يبقى معرفاً داخلياً)
+                            </p>
+                          )}
+                          {(value.loginMethod === 'username_or_email' || value.loginMethod === 'email') && !value.email?.trim() && (
+                            <p className="text-xs text-amber-600 mt-1">
+                              يجب إدخال البريد الإلكتروني من تبويب التواصل لإتاحة الدخول بالبريد
+                            </p>
+                          )}
+                        </FormField>
+                      </div>
 
                     </div>
                   </FormSection>

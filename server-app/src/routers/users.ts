@@ -221,6 +221,7 @@ export const usersRouter = router({
       defaultLanguage: z.string().max(10).nullable().optional(),
       allowLogin: z.boolean().optional(),
       allowEmailLogin: z.boolean().optional(),
+      loginMethod: z.enum(['username', 'username_or_email', 'email']).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       // ── License enforcement: max_users ──────────────────────────────────────
@@ -327,6 +328,7 @@ export const usersRouter = router({
         defaultLanguage: input.defaultLanguage ?? null,
         allowLogin: input.allowLogin ?? true,
         allowEmailLogin: input.allowEmailLogin ?? false,
+        loginMethod: input.loginMethod ?? 'username',
         isActive: true,
         passwordStatus: wantsPasswordless ? 'not_set' : 'set',
       }).returning({ id: users.id, code: users.code, name: users.name, username: users.username, role: users.role });
@@ -353,6 +355,7 @@ export const usersRouter = router({
       forcePasswordChange: z.boolean().optional(),
       canBeSalesperson: z.boolean().optional(),
       allowEmailLogin: z.boolean().optional(),
+      loginMethod: z.enum(['username', 'username_or_email', 'email']).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const { id, newPassword, clearPassword, ...rest } = input;

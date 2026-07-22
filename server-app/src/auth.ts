@@ -118,49 +118,35 @@ export async function loginHandler(req: Request, res: Response) {
       orgRecord = org;
     }
 
-    // ── قراءة طريقة تسجيل الدخول من إعدادات المؤسسة ─────────────────────────────
-    let loginMethod = 'username';
-    if (orgId) {
-      try {
-        const methodRow = await db.query.appSettings.findFirst({
-          where: and(eq(appSettings.orgId, orgId), eq(appSettings.key, 'security.login_method')),
-        });
-        if (methodRow?.value) loginMethod = JSON.parse(methodRow.value);
-      } catch { /* الافتراضي: username */ }
-    }
+    // ── رسالة الخطأ العامة (لا تكشف سبب الرفض لأسباب أمنية) ───────────────────
+    const loginErrorMsg = 'اسم المستخدم أو البريد الإلكتروني أو كلمة المرور غير صحيحة';
 
-    const loginErrorMsg =
-      loginMethod === 'email'            ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة' :
-      loginMethod === 'username_or_email' ? 'اسم المستخدم أو البريد الإلكتروني أو كلمة المرور غير صحيحة' :
-                                           'اسم المستخدم أو كلمة المرور غير صحيحة';
-
-    // البحث عن المستخدم — بالاسم أولاً
-    const conditions = orgId
-      ? and(eq(users.username, username), eq(users.orgId, orgId), eq(users.isActive, true))
-      : and(eq(users.username, username), eq(users.isActive, true));
-
-    let user = await db.query.users.findFirst({ where: conditions });
-
-    // محاولة البحث بالبريد الإلكتروني إذا فشل البحث بالاسم وكانت السياسة تسمح
-    // يشترط أيضاً أن يكون allowEmailLogin مفعَّلاً للمستخدم نفسه
+    // ── البحث عن المستخدم حسب نوع المدخل ────────────────────────────────────────
+    // كل مستخدم يملك loginMethod خاصاً به: 'username' | 'username_or_email' | 'email'
+    const isEmailInput = username.includes('@');
+    let user: typeof import('./schema.js').users.$inferSelect | undefined;
     let foundByEmail = false;
-    if (!user && loginMethod !== 'username' && username.includes('@')) {
+
+    if (isEmailInput) {
+      // ── البحث بالبريد: نقبل فقط من loginMethod يسمح بالبريد ──────────────
       const emailVal = username.toLowerCase().trim();
       const emailCond = orgId
         ? and(eq(sql`lower(trim(${users.email}))`, emailVal), eq(users.orgId, orgId), eq(users.isActive, true))
         : and(eq(sql`lower(trim(${users.email}))`, emailVal), eq(users.isActive, true));
       const emailUser = await db.query.users.findFirst({ where: emailCond });
-      // ── فحص allowEmailLogin الخاص بالمستخدم ──────────────────────────────
-      // سياسة المنشأة تسمح بالبريد، لكن يجب أن يكون المستخدم قد فعَّل الخيار أيضاً
-      if (emailUser && emailUser.allowEmailLogin) {
+      if (emailUser && emailUser.loginMethod !== 'username') {
         user = emailUser;
         foundByEmail = true;
       }
-    }
-
-    // إذا كانت سياسة المنشأة "email فقط" فالمستخدم يجب أن يكون لديه allowEmailLogin=true
-    if (loginMethod === 'email' && !foundByEmail) {
-      return res.status(401).json({ error: loginErrorMsg });
+    } else {
+      // ── البحث باسم المستخدم: نقبل فقط من loginMethod يسمح باسم المستخدم ──
+      const userCond = orgId
+        ? and(eq(users.username, username), eq(users.orgId, orgId), eq(users.isActive, true))
+        : and(eq(users.username, username), eq(users.isActive, true));
+      const usernameUser = await db.query.users.findFirst({ where: userCond });
+      if (usernameUser && usernameUser.loginMethod !== 'email') {
+        user = usernameUser;
+      }
     }
 
     if (!user) return res.status(401).json({ error: loginErrorMsg });

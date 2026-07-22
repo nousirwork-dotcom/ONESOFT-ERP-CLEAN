@@ -16,7 +16,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { HS_MODULE_PERM } from "@/shared/lib/hsPermissions";
 import { AI_MODULE_PERM, AI_PERM_DEFS } from "@/shared/lib/aiPermissions";
-import { UserFormDialog, UserFormValue } from "./UserFormDialog";
+import { UserFormDialog, UserFormValue, UserLoginMethod } from "./UserFormDialog";
 
 // ── صلاحيات وحدة «المساعدة والخدمات» (extra_permissions) ─────────────────────
 const HS_PERM_DEFS: Array<{ key: string; label: string; isModule?: boolean }> = [
@@ -432,7 +432,7 @@ export default function Users() {
   const [isOpen, setIsOpen] = useState(false);
   const [mode, setMode] = useState<"create" | "edit">("create");
   const [selectedUser, setSelectedUser] = useState<any>(null);
-  const [initialValue, setInitialValue] = useState<UserFormValue>({ fullName: "", loginName: "", userType: "cashier", allowLogin: true });
+  const [initialValue, setInitialValue] = useState<UserFormValue>({ fullName: "", loginName: "", userType: "cashier", allowLogin: true, loginMethod: 'username' });
   const [workDefaultWarehouseId, setWorkDefaultWarehouseId] = useState<number | null>(null);
   const [workDefaultLanguage, setWorkDefaultLanguage] = useState<string | null>(null);
 
@@ -444,7 +444,6 @@ export default function Users() {
   const [recoveryEnabledPhone, setRecoveryEnabledPhone] = useState(false);
   const [recoveryEnabledEmail, setRecoveryEnabledEmail] = useState(false);
   const [forcePasswordChange, setForcePasswordChange] = useState(false);
-  const [allowEmailLogin, setAllowEmailLogin] = useState(false);
   const [recoveryDirty, setRecoveryDirty] = useState(false);
   const [extraPerms, setExtraPerms] = useState<Record<string, boolean>>({});
   const [permsDirty, setPermsDirty] = useState(false);
@@ -523,10 +522,9 @@ export default function Users() {
   const openCreate = () => {
     setMode("create");
     setSelectedUser(null);
-    setInitialValue({ fullName: "", loginName: "", userType: "cashier", allowLogin: true });
+    setInitialValue({ fullName: "", loginName: "", userType: "cashier", allowLogin: true, loginMethod: (orgLoginMethod as UserLoginMethod) ?? 'username' });
     setWorkDefaultWarehouseId(null);
     setWorkDefaultLanguage(null);
-    setAllowEmailLogin(false);
     setIsOpen(true);
   };
 
@@ -542,13 +540,13 @@ export default function Users() {
       mobile: u.phone ?? undefined,
       email: u.email ?? undefined,
       allowLogin: u.allowLogin !== false,
+      loginMethod: (u.loginMethod as UserLoginMethod) ?? 'username',
     });
     setWorkDefaultWarehouseId(u.defaultWarehouseId ?? null);
     setWorkDefaultLanguage(u.defaultLanguage ?? null);
     setRecoveryEnabledPhone(u.recoveryEnabledPhone ?? false);
     setRecoveryEnabledEmail(u.recoveryEnabledEmail ?? false);
     setForcePasswordChange(u.forcePasswordChange ?? false);
-    setAllowEmailLogin(u.allowEmailLogin ?? false);
     setRecoveryDirty(false);
     setExtraPerms({ ...(u.extraPermissions ?? {}) });
     setPermsDirty(false);
@@ -597,7 +595,7 @@ export default function Users() {
         role: value.userType as any,
         categoryId: value.categoryId ? Number(value.categoryId) : undefined,
         allowLogin: value.allowLogin,
-        allowEmailLogin: orgLoginMethod === 'email' ? true : false,
+        loginMethod: value.loginMethod,
       });
       toast.success("تم إنشاء المستخدم بنجاح — يمكنك الآن تعديل إعدادات العمل والصلاحيات");
       const fullUser = {
@@ -610,7 +608,8 @@ export default function Users() {
         categoryId: value.categoryId ? Number(value.categoryId) : null,
         defaultWarehouseId: null,
         defaultLanguage: null,
-        allowLogin: value.allowLogin, allowEmailLogin: orgLoginMethod === 'email' ? true : false,
+        allowLogin: value.allowLogin,
+        loginMethod: value.loginMethod,
         isActive: true, forcePasswordChange: false,
         phoneVerifiedAt: null, emailVerifiedAt: null,
         recoveryEnabledPhone: false, recoveryEnabledEmail: false,
@@ -629,6 +628,7 @@ export default function Users() {
         mobile: value.mobile,
         email: value.email,
         allowLogin: value.allowLogin,
+        loginMethod: value.loginMethod,
       });
       setForcePasswordChange(false);
       setRecoveryEnabledPhone(false);
@@ -645,7 +645,7 @@ export default function Users() {
         role: value.userType as any,
         newPassword: value.password || undefined,
         allowLogin: value.allowLogin,
-        allowEmailLogin,
+        loginMethod: value.loginMethod,
         forcePasswordChange,
       });
     }
@@ -654,51 +654,6 @@ export default function Users() {
   // ── محتوى تبويب الدخول (الامتداد) ────────────────────────────────────────
   const loginTabExtension = mode === "edit" && selectedUser ? (
     <>
-      {/* السماح بتسجيل الدخول بالبريد الإلكتروني */}
-      {(() => {
-        const emailOnlyPolicy  = orgLoginMethod === 'email';
-        const usernameOnly     = orgLoginMethod === 'username';
-        const hasEmail         = !!(selectedUser?.email?.trim());
-        const isForced         = emailOnlyPolicy;
-        const isDisabled       = usernameOnly || isForced;
-        const effectiveChecked = isForced ? true : allowEmailLogin;
-
-        return (
-          <div className="rounded-2xl border bg-muted/20 p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex-1 min-w-0 me-3">
-                <p className="font-medium">السماح بتسجيل الدخول بالبريد الإلكتروني</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  يسمح للمستخدم باستخدام بريده الإلكتروني بدلًا من اسم الدخول وفق سياسة المنشأة
-                </p>
-                {usernameOnly && (
-                  <p className="text-xs text-amber-600 mt-1">
-                    طريقة تسجيل الدخول الحالية لا تسمح باستخدام البريد الإلكتروني
-                  </p>
-                )}
-                {isForced && (
-                  <p className="text-xs text-blue-600 mt-1">
-                    مفعّل إجباريًا — سياسة المنشأة تستوجب الدخول بالبريد فقط
-                  </p>
-                )}
-                {!usernameOnly && !isForced && effectiveChecked && !hasEmail && (
-                  <p className="text-xs text-destructive mt-1">
-                    يجب إدخال البريد الإلكتروني أولًا للسماح بالدخول به
-                  </p>
-                )}
-              </div>
-              <Switch
-                checked={effectiveChecked}
-                disabled={isDisabled || updateUser.isPending}
-                onCheckedChange={(v) => {
-                  setAllowEmailLogin(v);
-                  updateUser.mutate({ id: selectedUser.id, allowEmailLogin: v });
-                }}
-              />
-            </div>
-          </div>
-        );
-      })()}
       {/* إجبار تغيير كلمة المرور */}
       <div className="rounded-2xl border bg-muted/20 p-4">
         <div className="flex items-center justify-between">
@@ -1135,10 +1090,12 @@ export default function Users() {
                         <div>
                           <div className="text-xs text-muted-foreground">{u.email}</div>
                           <VerifyBadge verified={!!u.emailVerifiedAt} label="البريد" />
-                          {u.allowEmailLogin
-                            ? <div className="text-xs text-emerald-600 mt-0.5">دخول بالبريد: مسموح</div>
-                            : <div className="text-xs text-muted-foreground/50 mt-0.5">دخول بالبريد: غير مسموح</div>
-                          }
+                          {u.loginMethod === 'email' && (
+                            <div className="text-xs text-blue-600 mt-0.5">بريد إلكتروني فقط</div>
+                          )}
+                          {u.loginMethod === 'username_or_email' && (
+                            <div className="text-xs text-emerald-600 mt-0.5">اسم مستخدم أو بريد</div>
+                          )}
                         </div>
                       ) : <span className="text-muted-foreground/40 text-xs">—</span>}
                     </TableCell>

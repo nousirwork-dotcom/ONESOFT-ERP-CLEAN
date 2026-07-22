@@ -5,4 +5,4 @@
  * constant to match the new filename (without the .sql extension), then
  * run `pnpm migrate` so the live database is stamped with the new version.
  */
-export const REQUIRED_SCHEMA_VERSION = '0048_user_allow_email_login';
+export const REQUIRED_SCHEMA_VERSION = '0049_user_login_method';
