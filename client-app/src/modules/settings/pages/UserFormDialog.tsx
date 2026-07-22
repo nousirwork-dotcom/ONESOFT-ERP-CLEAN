@@ -340,41 +340,6 @@ export function UserFormDialog({
                         )}
                       </FormField>
 
-                      {/* طريقة تسجيل الدخول — تمتد عبر العمودين */}
-                      <div className="col-span-2">
-                        <FormField label="طريقة تسجيل الدخول" required>
-                          <DlgSelect
-                            value={value.loginMethod}
-                            onChange={(v) => update("loginMethod", v as UserLoginMethod)}
-                            options={[
-                              { value: "username",           label: "اسم المستخدم فقط" },
-                              { value: "username_or_email",  label: "اسم المستخدم أو البريد الإلكتروني" },
-                              { value: "email",              label: "البريد الإلكتروني فقط" },
-                            ]}
-                          />
-                          {value.loginMethod === 'username' && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              يدخل المستخدم باسم الدخول فقط — البريد اختياري للتواصل واستعادة كلمة المرور
-                            </p>
-                          )}
-                          {value.loginMethod === 'username_or_email' && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              يستطيع الدخول باسم الدخول أو بالبريد الإلكتروني — يجب إدخال بريد صحيح غير مكرر
-                            </p>
-                          )}
-                          {value.loginMethod === 'email' && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              البريد إجباري — لا يُستخدم اسم الدخول في تسجيل الدخول (يبقى معرفاً داخلياً)
-                            </p>
-                          )}
-                          {(value.loginMethod === 'username_or_email' || value.loginMethod === 'email') && !value.email?.trim() && (
-                            <p className="text-xs text-amber-600 mt-1">
-                              يجب إدخال البريد الإلكتروني من تبويب التواصل لإتاحة الدخول بالبريد
-                            </p>
-                          )}
-                        </FormField>
-                      </div>
-
                     </div>
                   </FormSection>
                 </TabsContent>
@@ -425,6 +390,40 @@ export function UserFormDialog({
                           { value: "viewer",            label: "مشاهد" },
                         ]}
                       />
+                    </FormField>
+                  </FormSection>
+
+                  <FormSection title="طريقة تسجيل الدخول">
+                    <FormField label="طريقة تسجيل الدخول" required>
+                      <DlgSelect
+                        value={value.loginMethod}
+                        onChange={(v) => update("loginMethod", v as UserLoginMethod)}
+                        options={[
+                          { value: "username",          label: "اسم المستخدم فقط" },
+                          { value: "username_or_email", label: "اسم المستخدم أو البريد الإلكتروني" },
+                          { value: "email",             label: "البريد الإلكتروني فقط" },
+                        ]}
+                      />
+                      {value.loginMethod === 'username' && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          يدخل المستخدم باسم الدخول فقط — البريد اختياري للتواصل واستعادة كلمة المرور
+                        </p>
+                      )}
+                      {value.loginMethod === 'username_or_email' && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          يستطيع الدخول باسم الدخول أو بالبريد الإلكتروني — يجب إدخال بريد صحيح غير مكرر
+                        </p>
+                      )}
+                      {value.loginMethod === 'email' && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          البريد إجباري — لا يُستخدم اسم الدخول في تسجيل الدخول (يبقى معرفاً داخلياً)
+                        </p>
+                      )}
+                      {(value.loginMethod === 'username_or_email' || value.loginMethod === 'email') && !value.email?.trim() && (
+                        <p className="text-xs text-amber-600 mt-1">
+                          يجب إدخال البريد الإلكتروني من تبويب التواصل لإتاحة الدخول بالبريد
+                        </p>
+                      )}
                     </FormField>
                   </FormSection>
 
