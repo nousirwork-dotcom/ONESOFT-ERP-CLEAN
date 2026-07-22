@@ -230,7 +230,6 @@ function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id:
     "hr-settings": false,
   });
   const toggle = (id: string) => setExpanded(p => ({ ...p, [id]: !p[id] }));
-  const { openTab } = useTabManager();
 
   return (
     <nav className="w-64 shrink-0 border-l border-border bg-[#1a1a2e] overflow-y-auto flex flex-col">
@@ -255,7 +254,7 @@ function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id:
             {expanded[section.id] && (
               <div className="mb-1">
                 {section.children.map(child => (
-                  <button key={child.id} onClick={() => { onSelect(child.id); openTab(child.path, child.label, Settings); }}
+                  <button key={child.id} onClick={() => onSelect(child.id)}
                     className={`w-full flex items-center gap-2 px-4 py-1.5 text-xs transition-colors ${
                       activeId === child.id
                         ? "bg-[#a855f7]/15 text-white font-semibold"
