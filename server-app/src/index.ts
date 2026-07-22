@@ -12,7 +12,7 @@ import { ENV } from './env.js';
 import { logger } from './logger.js';
 import { createContext } from './trpc.js';
 import { appRouter } from './routers/index.js';
-import { loginHandler, logoutHandler, meHandler } from './auth.js';
+import { loginHandler, logoutHandler, meHandler, getAuthCookieOptions } from './auth.js';
 import { pool } from './db.js';
 import { checkSchema } from './check-schema.js';
 
@@ -85,7 +85,7 @@ app.post('/api/auth/auto-login', async (req, res) => {
     }
 
     const token = await createToken({ userId: user.id, orgId: user.orgId, username: user.username, role: user.role, sessionVersion: user.sessionVersion ?? 1 });
-    res.cookie(ENV.cookieName, token, { httpOnly: true, secure: false, sameSite: 'lax', maxAge: ENV.sessionExpiry });
+    res.cookie(ENV.cookieName, token, { ...getAuthCookieOptions(), maxAge: ENV.sessionExpiry });
     return res.json({ success: true, user: { id: user.id, name: user.name, username: user.username, role: user.role, orgId: user.orgId } });
   } catch (err) {
     console.error('[AutoLogin]', err);

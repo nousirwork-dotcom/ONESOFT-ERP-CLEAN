@@ -8,7 +8,14 @@ contextBridge.exposeInMainWorld('splashAPI', {
 });
 
 // ── App control API ────────────────────────────────────────────────────────────
+// Launch ID: يُقرأ بشكل متزامن مرة واحدة عند تحميل preload
+// ثم يُعاد كقيمة ثابتة — بدون round-trip لكل استدعاء.
+const _LAUNCH_ID_CACHED = ipcRenderer.sendSync('get-launch-id-sync');
+
 contextBridge.exposeInMainWorld('erpAPI', {
+  // يُعيد Launch ID الحالي للتطبيق (ثابت لنفس الجلسة، يتغير مع كل تشغيل)
+  getLaunchId:    ()    => _LAUNCH_ID_CACHED,
+
   getConfig:      ()    => ipcRenderer.invoke('get-config'),
   openBrowser:    ()    => ipcRenderer.invoke('open-browser'),
   restartServer:  ()    => ipcRenderer.invoke('restart-server'),

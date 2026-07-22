@@ -96,6 +96,12 @@ function writeLog(level, msg) {
   } catch {}
 }
 
+// ── Launch ID — يتغيّر عند كل تشغيل للتطبيق ─────────────────────────────────
+// يُولَّد مرة واحدة عند بدء التشغيل ويُمرَّر عبر preload للواجهة.
+// يضمن أن إغلاق التطبيق وإعادة فتحه يُلغي جلسة المتصفح
+// حتى لو ظلت Cookie صالحة.
+const LAUNCH_ID = require('crypto').randomUUID();
+
 // ── حالة عامة ─────────────────────────────────────────────────────────────────
 let splashWin        = null;
 let mainWin          = null;
@@ -458,6 +464,9 @@ function updateTrayMenu() {
 }
 
 // ── IPC Handlers ──────────────────────────────────────────────────────────────
+// Launch ID — يُقرأ بشكل متزامن من preload عبر sendSync
+ipcMain.on('get-launch-id-sync', (event) => { event.returnValue = LAUNCH_ID; });
+
 ipcMain.handle('get-config',       ()  => cfg);
 ipcMain.handle('open-browser',     ()  => shell.openExternal(SERVER_URL));
 ipcMain.handle('get-server-status',()  => ({ running: !!serverProc, ready: serverReady, url: SERVER_URL }));

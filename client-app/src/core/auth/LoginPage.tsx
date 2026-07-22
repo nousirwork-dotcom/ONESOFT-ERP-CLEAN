@@ -535,9 +535,12 @@ export default function LoginPage() {
   const doNavigate = useCallback((p: string) => navigate(p), [navigate]);
 
   const tryAutoLogin = async () => {
-    // لا تجربة auto-login إذا لم تكن هناك علامة جلسة من هذا التشغيل.
-    // sessionStorage تُمسح عند إغلاق البرنامج أو التبويب — تشغيل جديد = لا stamp.
-    if (sessionStorage.getItem('onesoft_login_launch') !== 'active') return false;
+    // لا تجربة auto-login إذا لم تكن هناك علامة جلسة صالحة من هذا التشغيل.
+    // في Electron: يجب أن تطابق Launch ID الحالي. في المتصفح: 'active'.
+    const storedStamp  = sessionStorage.getItem('onesoft_login_launch');
+    const electronId   = (window as any).erpAPI?.getLaunchId?.() as string | undefined;
+    const validStamp   = electronId ? storedStamp === electronId : storedStamp === 'active';
+    if (!validStamp) return false;
     try {
       const res = await fetch('/api/auth/auto-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include' });
       if (res.ok) { await utils.auth.me.invalidate(); doNavigate(getStartupPath(settings.startup_page)); return true; }
@@ -566,7 +569,10 @@ export default function LoginPage() {
 
   const handleLoginSuccess = useCallback(async (_role: string) => {
     // تعيين علامة الجلسة — تبقى حتى إغلاق البرنامج/التبويب أو تسجيل الخروج
-    sessionStorage.setItem('onesoft_login_launch', 'active');
+    // في Electron: نحفظ Launch ID الفعلي (UUID من main.js) بدلاً من 'active'
+    // حتى يتعذّر استخدام جلسة قديمة إذا أُعيد تشغيل التطبيق
+    const launchStamp = (window as any).erpAPI?.getLaunchId?.() ?? 'active';
+    sessionStorage.setItem('onesoft_login_launch', launchStamp);
     const transition = settings.opening_transition ?? 'none';
     const targetPath = getStartupPath(settings.startup_page);
     if (transition === 'none') { doNavigate(targetPath); return; }

@@ -343,12 +343,35 @@ const LICENSE_BLOCKING_ERRORS = new Set([
 // لا يُصفَّر عند إعادة التحميل (F5) في نفس الجلسة — الجلسة تستمر.
 const LAUNCH_STAMP_KEY = 'onesoft_login_launch';
 
+// ── Electron Launch ID ────────────────────────────────────────────────────────
+// في Electron: يُولَّد UUID جديد في main.js عند كل تشغيل ويُمرَّر عبر preload.
+// القراءة متزامنة (صُفِّرت في preload عبر ipcRenderer.sendSync).
+// في المتصفح العادي: لا يوجد electronAPI — نعود لقيمة null ونستخدم 'active'.
+const ELECTRON_LAUNCH_ID: string | null = (() => {
+  try {
+    const api = (window as any).erpAPI;
+    if (typeof api?.getLaunchId === 'function') return api.getLaunchId() as string;
+  } catch { /* browser or preload not loaded */ }
+  return null;
+})();
+
+/** هل علامة الجلسة في sessionStorage صالحة للتشغيل الحالي؟ */
+function hasValidLaunchStamp(): boolean {
+  const stored = sessionStorage.getItem(LAUNCH_STAMP_KEY);
+  if (ELECTRON_LAUNCH_ID) {
+    // Electron: يجب أن تطابق قيمة مُعيَّنة بعد آخر دخول ناجح في هذا التشغيل
+    return stored === ELECTRON_LAUNCH_ID;
+  }
+  // Browser: نكتفي بالتحقق أن القيمة 'active' (تُمسح عند إغلاق التبويب)
+  return stored === 'active';
+}
+
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const [location, navigate] = useLocation();
 
   // ── Launch Guard ──────────────────────────────────────────────────────────────
   // تُقرأ من sessionStorage مرة واحدة عند كل render — قيمة متزامنة (sync).
-  const hasLaunchStamp = sessionStorage.getItem(LAUNCH_STAMP_KEY) === 'active';
+  const hasLaunchStamp = hasValidLaunchStamp();
 
   // لا نستعلم الخادم أصلاً إذا لم يوجد stamp — لا حاجة لأي round-trip
   const meQuery   = trpc.auth.me.useQuery(undefined, { retry: false, enabled: hasLaunchStamp });
