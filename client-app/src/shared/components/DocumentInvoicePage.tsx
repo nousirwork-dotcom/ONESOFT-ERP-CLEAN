@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { trpc } from "@/shared/lib/trpc";
 import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import ERPToolbar, { ERPMode } from "@/shared/components/ERPToolbar";
+import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import PostingPreviewModal from "@/shared/components/PostingPreviewModal";
 import InvoicePrintModal, { type DocTemplateConfig } from "@/shared/components/InvoicePrintModal";
 
@@ -220,6 +221,8 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
 
   const [erpMode, setErpMode] = useState<ERPMode>("new");
   const [showPrintModal, setShowPrintModal] = useState(false);
+  const [showUnsaved, setShowUnsaved] = useState(false);
+  const [pendingNav, setPendingNav] = useState<(() => void) | null>(null);
 
   const cellRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
@@ -628,7 +631,11 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
         isSaved={savedInvoiceId !== null}
         isPosted={isPosted}
         postingStatus={savedInvoiceId !== null ? (isPosted ? "posted" : "unposted") : null}
-        onNew={() => { handleNew(); setErpMode("new"); }}
+        onNew={() => {
+          const doNew = () => { handleNew(); setErpMode("new"); };
+          const isDirty = erpMode === "new" || erpMode === "edit";
+          if (isDirty) { setPendingNav(() => doNew); setShowUnsaved(true); } else { doNew(); }
+        }}
         onSave={() => handleSave()}
         onEdit={() => { setErpMode("edit"); toast.info("وضع التعديل"); }}
         onDelete={() => toast.info("حذف المستند...")}
@@ -661,8 +668,29 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
         }}
         onUserActivity={() => toast.info("نشاط المستخدمين — قريباً")}
         onSuspendPosting={() => toast.info("تعليق الترحيل — قريباً")}
-        onExit={() => toast.info("خروج")}
+        onExit={() => {
+          const doExit = () => toast.info("خروج");
+          const isDirty = erpMode === "new" || erpMode === "edit";
+          if (isDirty) { setPendingNav(() => doExit); setShowUnsaved(true); } else { doExit(); }
+        }}
         enableShortcuts
+      />
+      {/* ── Unsaved Changes Guard ──────────────────────────────────────────────── */}
+      <UnsavedChangesDialog
+        open={showUnsaved}
+        isSaving={isSaving}
+        onSave={async () => {
+          await handleSave();
+          setShowUnsaved(false);
+          pendingNav?.();
+          setPendingNav(null);
+        }}
+        onDiscard={() => {
+          setShowUnsaved(false);
+          pendingNav?.();
+          setPendingNav(null);
+        }}
+        onCancel={() => { setShowUnsaved(false); setPendingNav(null); }}
       />
 
       {/* ── Header Form ───────────────────────────────────────────────────── */}

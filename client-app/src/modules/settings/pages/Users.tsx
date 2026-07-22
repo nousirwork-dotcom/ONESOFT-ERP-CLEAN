@@ -19,6 +19,7 @@ import { AI_MODULE_PERM, AI_PERM_DEFS } from "@/shared/lib/aiPermissions";
 import { UserFormDialog, UserFormValue, UserLoginMethod } from "./UserFormDialog";
 import { useModalAttention } from "./useModalAttention";
 import ERPToolbar from "@/shared/components/ERPToolbar";
+import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 
 // ── صلاحيات وحدة «المساعدة والخدمات» (extra_permissions) ─────────────────────
 const HS_PERM_DEFS: Array<{ key: string; label: string; isModule?: boolean }> = [
@@ -475,6 +476,8 @@ export default function Users() {
   const [deleteTargetUser, setDeleteTargetUser] = useState<any>(null);
   const [passwordUser, setPasswordUser] = useState<any>(null);
   const [verifyDialog, setVerifyDialog] = useState<{ open: boolean; channel: "phone" | "email"; devOtp?: string } | null>(null);
+  const [showUnsavedNav, setShowUnsavedNav] = useState(false);
+  const [pendingNavAction, setPendingNavAction] = useState<(() => void) | null>(null);
 
   // ── إعدادات الأمان والعمل والصلاحيات (وضع التعديل فقط) ──────────────────
   const [recoveryEnabledPhone, setRecoveryEnabledPhone] = useState(false);
@@ -553,6 +556,36 @@ export default function Users() {
     },
     onError: (e) => toast.error(e.message),
   });
+
+  // ── متغيرات المستخدم الحالي للشريط ────────────────────────────────────────
+  const users: any[] = usersList ?? [];
+  const currentIdx = selectedUser ? users.findIndex((u: any) => u.id === selectedUser.id) : -1;
+
+  const safeNav = (action: () => void) => {
+    if (isOpen && (recoveryDirty || permsDirty)) {
+      setPendingNavAction(() => action);
+      setShowUnsavedNav(true);
+    } else {
+      setIsOpen(false);
+      action();
+    }
+  };
+
+  const handleCopy = () => {
+    if (!selectedUser) return;
+    setMode("create");
+    setSelectedUser(null);
+    setInitialValue({
+      fullName: selectedUser.name ? `نسخة - ${selectedUser.name}` : "",
+      loginName: "",
+      userType: selectedUser.role ?? "cashier",
+      allowLogin: selectedUser.allowLogin !== false,
+      loginMethod: (selectedUser.loginMethod as UserLoginMethod) ?? 'username',
+    });
+    setWorkDefaultWarehouseId(null);
+    setWorkDefaultLanguage(null);
+    setIsOpen(true);
+  };
 
   // ── فتح النافذة ──────────────────────────────────────────────────────────
   const openCreate = () => {
@@ -989,7 +1022,17 @@ export default function Users() {
   return (
     <div className="space-y-5">
       <ERPToolbar
+        buttons={["new", "copy", "edit", "delete", "first", "prev", "next", "last"]}
         onNew={countInfo?.atLimit ? undefined : openCreate}
+        onCopy={selectedUser ? handleCopy : undefined}
+        onEdit={selectedUser ? () => safeNav(() => openEdit(selectedUser)) : undefined}
+        onDelete={selectedUser ? () => setDeleteTargetUser(selectedUser) : undefined}
+        onFirst={users.length > 0 ? () => safeNav(() => openEdit(users[0])) : undefined}
+        onPrev={currentIdx > 0 ? () => safeNav(() => openEdit(users[currentIdx - 1])) : undefined}
+        onNext={currentIdx >= 0 && currentIdx < users.length - 1 ? () => safeNav(() => openEdit(users[currentIdx + 1])) : undefined}
+        onLast={users.length > 0 ? () => safeNav(() => openEdit(users[users.length - 1])) : undefined}
+        record={currentIdx >= 0 ? currentIdx + 1 : undefined}
+        total={users.length > 0 ? users.length : undefined}
         hideStatusBar
         enableShortcuts={false}
       />
@@ -1230,6 +1273,26 @@ export default function Users() {
           onSuccess={() => { utils.users.list.invalidate(); }}
         />
       )}
+
+      {/* ─── حارس التنقل — تعديلات غير محفوظة ──────────────────────────── */}
+      <UnsavedChangesDialog
+        open={showUnsavedNav}
+        onSave={() => {
+          handleSaveRecovery();
+          setShowUnsavedNav(false);
+          pendingNavAction?.();
+          setPendingNavAction(null);
+        }}
+        onDiscard={() => {
+          setShowUnsavedNav(false);
+          pendingNavAction?.();
+          setPendingNavAction(null);
+        }}
+        onCancel={() => {
+          setShowUnsavedNav(false);
+          setPendingNavAction(null);
+        }}
+      />
     </div>
   );
 }

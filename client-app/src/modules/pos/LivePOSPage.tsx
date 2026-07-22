@@ -5,6 +5,7 @@ import { useTabManager } from '@/core/contexts/TabManagerContext';
 import CustomerFormDialog from '@/shared/components/CustomerFormDialog';
 import { OneSoftPOSSuite } from './suite/POSRoot';
 import { POSCatalogProvider } from './suite/catalog-context';
+import ERPToolbar from '@/shared/components/ERPToolbar';
 import type { Product, ProductGroup, CustomerSummary, JournalSummary, WarehouseSummary } from './suite/types';
 
 // ─── Data mappers ─────────────────────────────────────────────────────────────
@@ -309,6 +310,16 @@ export function LivePOSPage() {
   // ─── Render ───────────────────────────────────────────────────────────────────
   return (
     <>
+      <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+        <ERPToolbar
+          buttons={["new", "print", "exit"]}
+          onNew={() => { (window as any).__pos_new?.(); }}
+          onPrint={() => window.print()}
+          onExit={() => window.history.back()}
+          hideStatusBar
+          enableShortcuts={false}
+        />
+        <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
       <POSCatalogProvider
         value={{
           products: suiteProducts,
@@ -331,6 +342,8 @@ export function LivePOSPage() {
       >
         <OneSoftPOSSuite />
       </POSCatalogProvider>
+        </div>
+      </div>
 
       {showAddCustomer ? (
         <CustomerFormDialog

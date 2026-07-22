@@ -259,18 +259,20 @@ function ToolsDropdown({
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
+  // All 7 items always shown; those without handlers are disabled
   const ALL_TOOLS: ToolEntry[] = [
-    { labelKey: "tbReverse",        icon: RotateCcw,    action: onReverse },
-    { labelKey: "tbPost",           icon: SendHorizonal, action: onPost },
-    { labelKey: "tbUnpost",         icon: ChevronDown,   action: onUnpost },
-    { labelKey: "tbSuspendPosting", icon: PauseCircle,  action: onSuspendPosting },
-    { labelKey: "tbRelatedDocs",    icon: Link2,         action: onRelatedDocs },
-    { labelKey: "tbUserActivity",   icon: Users,         action: onUserActivity },
-    { labelKey: "tbAttach",         icon: Paperclip,    action: onAttach },
+    { labelKey: "tbReverse",        icon: RotateCcw,     action: onReverse },
+    { labelKey: "tbPost",           icon: SendHorizonal,  action: onPost },
+    { labelKey: "tbUnpost",         icon: ChevronDown,    action: onUnpost },
+    { labelKey: "tbSuspendPosting", icon: PauseCircle,   action: onSuspendPosting },
+    { labelKey: "tbRelatedDocs",    icon: Link2,          action: onRelatedDocs },
+    { labelKey: "tbUserActivity",   icon: Users,          action: onUserActivity },
+    { labelKey: "tbAttach",         icon: Paperclip,     action: onAttach },
   ];
 
-  const visibleTools = ALL_TOOLS.filter(ti => ti.action !== undefined);
-  if (visibleTools.length === 0) return null;
+  // Show the dropdown button only if at least one tool is provided
+  const hasAny = ALL_TOOLS.some(ti => ti.action !== undefined);
+  if (!hasAny) return null;
 
   const toolLabel = t(lang, "tbTools");
 
@@ -345,8 +347,8 @@ function ToolsDropdown({
             zIndex: 1,
           }} />
           <div style={{ position: "relative", zIndex: 2 }}>
-            {visibleTools.map((item, i) => (
-              <ToolMenuItem key={item.labelKey} item={item} lang={lang} isLast={i === visibleTools.length - 1}
+            {ALL_TOOLS.map((item, i) => (
+              <ToolMenuItem key={item.labelKey} item={item} lang={lang} isLast={i === ALL_TOOLS.length - 1}
                 onClose={() => setOpen(false)} />
             ))}
           </div>
@@ -363,11 +365,14 @@ function ToolMenuItem({
 }) {
   const [hov, setHov] = useState(false);
   const Icon = item.icon;
+  const isDisabled = !item.action;
   return (
     <button
-      onClick={() => { onClose(); item.action?.(); }}
-      onMouseEnter={() => setHov(true)}
+      disabled={isDisabled}
+      onClick={isDisabled ? undefined : () => { onClose(); item.action!(); }}
+      onMouseEnter={() => !isDisabled && setHov(true)}
       onMouseLeave={() => setHov(false)}
+      title={isDisabled ? (lang === "ar" ? "غير متاح لهذا المستند" : "Not available") : undefined}
       style={{
         display: "flex",
         alignItems: "center",
@@ -377,15 +382,16 @@ function ToolMenuItem({
         background: hov ? "#F0F4F9" : "transparent",
         border: "none",
         borderBottom: isLast ? "none" : "1px solid #f0f0f0",
-        cursor: "pointer",
+        cursor: isDisabled ? "not-allowed" : "pointer",
         fontSize: 12.5,
-        color: "#2B2B2B",
+        color: isDisabled ? "#adb5bd" : "#2B2B2B",
         textAlign: lang === "ar" ? "right" : "left",
         transition: "background 0.1s",
         fontFamily: "'Cairo', 'Tahoma', sans-serif",
+        opacity: isDisabled ? 0.55 : 1,
       }}
     >
-      <Icon size={13} strokeWidth={1.8} color="#6B7280" />
+      <Icon size={13} strokeWidth={1.8} color={isDisabled ? "#adb5bd" : "#6B7280"} />
       <span>{t(lang, item.labelKey)}</span>
     </button>
   );
@@ -479,15 +485,15 @@ export default function ERPToolbar({
       if (e.key === "F3") { e.preventDefault(); fire("new"); return; }
       if (e.key === "F4") { e.preventDefault(); fire("edit"); return; }
 
-      if (ctrl && e.key === "d" && !shift) { e.preventDefault(); fire("draft"); return; }
-      if (ctrl && e.key === "c" && shift)  { e.preventDefault(); fire("copy"); return; }
-      if (ctrl && e.key === "p")           { e.preventDefault(); fire("print"); return; }
-      if (ctrl && e.key === "Enter" && !shift) { e.preventDefault(); fire("approve"); return; }
-      if (ctrl && e.key === "Enter" && shift)  { e.preventDefault(); fire("cancel"); return; }
+      if (ctrl && e.key === "d" && !shift && !inInput) { e.preventDefault(); fire("draft"); return; }
+      if (ctrl && e.key === "c" && shift  && !inInput) { e.preventDefault(); fire("copy"); return; }
+      if (ctrl && e.key === "p" && !inInput)           { e.preventDefault(); fire("print"); return; }
+      if (ctrl && e.key === "Enter" && !shift && !inInput) { e.preventDefault(); fire("approve"); return; }
+      if (ctrl && e.key === "Enter" && shift  && !inInput) { e.preventDefault(); fire("cancel"); return; }
 
       if (ctrl && e.key === "Delete" && !inInput) { e.preventDefault(); fire("delete"); return; }
-      if (ctrl && e.key === "Home")  { e.preventDefault(); fire("first"); return; }
-      if (ctrl && e.key === "End")   { e.preventDefault(); fire("last"); return; }
+      if (ctrl && e.key === "Home"   && !inInput) { e.preventDefault(); fire("first"); return; }
+      if (ctrl && e.key === "End"    && !inInput) { e.preventDefault(); fire("last"); return; }
       if (!ctrl && !shift && e.key === "PageUp"   && !inInput) fire("prev");
       if (!ctrl && !shift && e.key === "PageDown" && !inInput) fire("next");
 
