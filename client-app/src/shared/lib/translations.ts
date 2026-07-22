@@ -92,6 +92,7 @@ const AR = {
   unsavedTitle:   "تعديلات غير محفوظة",
   unsavedMessage: "يوجد تعديلات غير محفوظة. هل تريد الحفظ أولاً؟",
   unsavedSave:    "حفظ",
+  unsavedSaving:  "جاري الحفظ...",
   unsavedDiscard: "تجاهل",
   unsavedCancel:  "إلغاء",
 } as const;
@@ -163,6 +164,7 @@ const EN: Record<keyof typeof AR, string> = {
   unsavedTitle:   "Unsaved Changes",
   unsavedMessage: "You have unsaved changes. Save first?",
   unsavedSave:    "Save",
+  unsavedSaving:  "Saving...",
   unsavedDiscard: "Discard",
   unsavedCancel:  "Cancel",
 };

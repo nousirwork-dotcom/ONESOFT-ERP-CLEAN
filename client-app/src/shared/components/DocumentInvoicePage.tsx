@@ -664,7 +664,6 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
             toast.info("جاري الطباعة...");
           }
         }}
-        onFirst={() => {}} onPrev={() => {}} onNext={() => {}} onLast={() => {}}
         onPreview={() => {
           if (savedInvoiceId) {
             setErpMode("view");

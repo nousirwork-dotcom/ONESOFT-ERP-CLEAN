@@ -505,9 +505,9 @@ export default function ERPToolbar({
       const ctrl  = e.ctrlKey || e.metaKey;
       const shift = e.shiftKey;
 
-      if (e.key === "F2") { e.preventDefault(); fire("save"); return; }
-      if (e.key === "F3") { e.preventDefault(); fire("new"); return; }
-      if (e.key === "F4") { e.preventDefault(); fire("edit"); return; }
+      if (e.key === "F2" && !inInput) { e.preventDefault(); fire("save"); return; }
+      if (e.key === "F3" && !inInput) { e.preventDefault(); fire("new"); return; }
+      if (e.key === "F4" && !inInput) { e.preventDefault(); fire("edit"); return; }
 
       if (ctrl && e.key === "d" && !shift && !inInput) { e.preventDefault(); fire("draft"); return; }
       if (ctrl && e.key === "c" && shift  && !inInput) { e.preventDefault(); fire("copy"); return; }
