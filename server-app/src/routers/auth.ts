@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { router, publicProcedure, protectedProcedure } from '../trpc.js';
 import { TRPCError } from '@trpc/server';
 import { db } from '../db.js';
-import { users, organizations } from '../schema.js';
+import { users, organizations, appSettings } from '../schema.js';
 import { and, eq } from 'drizzle-orm';
 import { verifyPassword, getAuthCookieOptions } from '../auth.js';
 import { ENV } from '../env.js';
@@ -51,6 +51,28 @@ export const authRouter = router({
     ctx.res.clearCookie(ENV.cookieName, getAuthCookieOptions());
     return { success: true };
   }),
+
+  // ── إعدادات تسجيل الدخول (عامة — لشاشة الدخول) ─────────────────────────────
+  getLoginSettings: publicProcedure
+    .input(z.object({ orgCode: z.string().optional() }))
+    .query(async ({ input }) => {
+      const dflt = 'username' as const;
+      if (!input.orgCode) return { loginMethod: dflt };
+      try {
+        const org = await db.query.organizations.findFirst({
+          where: eq(organizations.code, input.orgCode.toUpperCase()),
+          columns: { id: true },
+        });
+        if (!org) return { loginMethod: dflt };
+        const row = await db.query.appSettings.findFirst({
+          where: and(eq(appSettings.orgId, org.id), eq(appSettings.key, 'security.login_method')),
+        });
+        if (!row?.value) return { loginMethod: dflt };
+        return { loginMethod: JSON.parse(row.value) as 'username' | 'username_or_email' | 'email' };
+      } catch {
+        return { loginMethod: dflt };
+      }
+    }),
 
   // ── التحقق من صلاحية المسؤول (بدون إنشاء جلسة) ────────────────────────────
   // يُستخدم لحماية زر "تغيير المؤسسة" في شاشة الدخول

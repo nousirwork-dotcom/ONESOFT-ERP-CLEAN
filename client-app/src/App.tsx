@@ -79,6 +79,7 @@ import SettingsModule, {
   CfgSystemInfoTab,
   CfgServiceManagementTab,
   CfgUpdatesTab,
+  CfgSecurityLoginTab,
 } from "@/modules/settings/pages/SettingsModule";
 import PostingSettingsPage from "@/modules/accounting/pages/PostingSettingsPage";
 import PostingOperationsPage from "@/modules/accounting/pages/PostingOperationsPage";
@@ -316,6 +317,7 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/cfg/system-info":            CfgSystemInfoTab,
   "/cfg/service-management":     CfgServiceManagementTab,
   "/cfg/updates":                CfgUpdatesTab,
+  "/cfg/security-login":         CfgSecurityLoginTab,
   "/dev/source-code":            SourceCodeViewerPage,
   "/cfg/branding":               BrandingSettingsPage,
   "/cfg/license":                LicenseActivationPage,

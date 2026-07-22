@@ -77,10 +77,11 @@ export const menuSections = [
     color: "#406B93",
     emoji: "👥",
     children: [
-      { id: "user-categories", label: "فئات المستخدمين",     status: "done",    path: "/cfg/user-categories" },
-      { id: "users-list",      label: "المستخدمين",          status: "missing", path: "/cfg/users"           },
-      { id: "user-groups",     label: "مجموعات المستخدمين",  status: "missing", path: "/cfg/user-groups"     },
-      { id: "permissions",     label: "صلاحيات المستخدمين",  status: "missing", path: "/cfg/permissions"     },
+      { id: "user-categories", label: "فئات المستخدمين",          status: "done",    path: "/cfg/user-categories" },
+      { id: "users-list",      label: "المستخدمين",               status: "missing", path: "/cfg/users"           },
+      { id: "user-groups",     label: "مجموعات المستخدمين",       status: "missing", path: "/cfg/user-groups"     },
+      { id: "permissions",     label: "صلاحيات المستخدمين",       status: "missing", path: "/cfg/permissions"     },
+      { id: "security-login",  label: "طريقة تسجيل الدخول",       status: "done",    path: "/cfg/security-login"  },
     ],
   },
   {
@@ -5677,6 +5678,7 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
     case "users-list":           return <UsersListPage />;
     case "user-groups":          return <UserGroupsPage />;
     case "permissions":          return <PermissionsPage />;
+    case "security-login":       return <SecurityLoginSettingsPage />;
     // سير الموافقات
     case "approve-invoice":      return <ApprovalsPage title="طلب اعتماد فاتورة" docType="فاتورة" />;
     case "approve-purchase":     return <ApprovalsPage title="اعتماد أمر شراء" docType="أمر شراء" />;
@@ -5758,6 +5760,66 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
     case "email-pdf":            return <EmailPdfSettingsPage />;
     default:                     return <SettingsOverview onSelect={onSelect} />;
   }
+}
+
+// ─── صفحة إعدادات طريقة تسجيل الدخول ──────────────────────────────────────────
+function SecurityLoginSettingsPage() {
+  const getQ   = trpc.appSettings.get.useQuery({ key: 'security.login_method' }, { staleTime: 30_000 });
+  const setMut = trpc.appSettings.set.useMutation({
+    onSuccess: () => toast.success('تم حفظ إعداد طريقة الدخول'),
+  });
+  const current = (typeof getQ.data === 'string' ? getQ.data : null) ?? 'username';
+  const options = [
+    { value: 'username',           label: 'اسم المستخدم فقط',               desc: 'الوضع الافتراضي — الدخول باسم المستخدم فقط' },
+    { value: 'username_or_email',  label: 'اسم المستخدم أو البريد الإلكتروني', desc: 'يمكن للمستخدم كتابة اسم الدخول أو بريده في نفس الحقل' },
+    { value: 'email',              label: 'البريد الإلكتروني فقط',           desc: 'الدخول بالبريد فقط — يجب أن يكون لكل مستخدم بريد فريد' },
+  ] as const;
+  return (
+    <div dir="rtl" className="max-w-xl space-y-5">
+      <div>
+        <h2 className="text-sm font-bold text-foreground mb-1 flex items-center gap-2">
+          <Lock className="w-4 h-4" /> طريقة تسجيل الدخول
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          حدد كيف يمكن للمستخدمين تسجيل الدخول إلى النظام
+        </p>
+      </div>
+      <Card>
+        <CardContent className="pt-4 pb-2 space-y-1">
+          {options.map(opt => (
+            <label
+              key={opt.value}
+              className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-colors select-none ${
+                current === opt.value
+                  ? 'bg-primary/10 border border-primary/25'
+                  : 'hover:bg-muted/60 border border-transparent'
+              }`}
+            >
+              <input
+                type="radio"
+                name="loginMethod"
+                value={opt.value}
+                checked={current === opt.value}
+                onChange={() => setMut.mutate({ key: 'security.login_method', value: opt.value })}
+                disabled={setMut.isPending}
+                className="mt-0.5 accent-primary"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-foreground">{opt.label}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">{opt.desc}</div>
+              </div>
+              {current === opt.value && <Check className="w-4 h-4 text-primary mt-0.5 shrink-0" />}
+            </label>
+          ))}
+        </CardContent>
+      </Card>
+      {setMut.isPending && (
+        <p className="text-xs text-muted-foreground flex items-center gap-1">
+          <RefreshCw className="w-3 h-3 animate-spin" /> جارٍ الحفظ...
+        </p>
+      )}
+    </div>
+  );
 }
 
 // ─── Root ──────────────────────────────────────────────────────────────────────
@@ -5844,3 +5906,4 @@ export function CfgGaztTab()             { return <CfgSubPage activeId="gazt-con
 export function CfgSystemInfoTab()         { return <CfgSubPage activeId="system-info" />; }
 export function CfgServiceManagementTab() { return <CfgSubPage activeId="service-management" />; }
 export function CfgUpdatesTab()           { return <CfgSubPage activeId="updates" />; }
+export function CfgSecurityLoginTab()     { return <CfgSubPage activeId="security-login" />; }

@@ -330,6 +330,13 @@
       "when": 1753056000000,
       "tag": "0046_user_groups_code_required_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1753142400000,
+      "tag": "0047_user_email_unique_per_org",
+      "breakpoints": true
     }
   ]
 }

@@ -1,8 +1,8 @@
 import { SignJWT, jwtVerify } from 'jose';
 import bcrypt from 'bcryptjs';
 import { db } from './db.js';
-import { users, organizations } from './schema.js';
-import { eq, and } from 'drizzle-orm';
+import { users, organizations, appSettings } from './schema.js';
+import { eq, and, sql } from 'drizzle-orm';
 import { ENV } from './env.js';
 import type { Request, Response } from 'express';
 import { saveDevicePrefs } from './lib/devicePrefs.js';
@@ -118,14 +118,41 @@ export async function loginHandler(req: Request, res: Response) {
       orgRecord = org;
     }
 
-    // البحث عن المستخدم
+    // ── قراءة طريقة تسجيل الدخول من إعدادات المؤسسة ─────────────────────────────
+    let loginMethod = 'username';
+    if (orgId) {
+      try {
+        const methodRow = await db.query.appSettings.findFirst({
+          where: and(eq(appSettings.orgId, orgId), eq(appSettings.key, 'security.login_method')),
+        });
+        if (methodRow?.value) loginMethod = JSON.parse(methodRow.value);
+      } catch { /* الافتراضي: username */ }
+    }
+
+    const loginErrorMsg =
+      loginMethod === 'email'            ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة' :
+      loginMethod === 'username_or_email' ? 'اسم المستخدم أو البريد الإلكتروني أو كلمة المرور غير صحيحة' :
+                                           'اسم المستخدم أو كلمة المرور غير صحيحة';
+
+    // البحث عن المستخدم — بالاسم أولاً
     const conditions = orgId
       ? and(eq(users.username, username), eq(users.orgId, orgId), eq(users.isActive, true))
       : and(eq(users.username, username), eq(users.isActive, true));
 
-    const user = await db.query.users.findFirst({ where: conditions });
+    let user = await db.query.users.findFirst({ where: conditions });
 
-    if (!user) return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
+    // محاولة البحث بالبريد الإلكتروني إذا فشل البحث بالاسم وكانت السياسة تسمح
+    let foundByEmail = false;
+    if (!user && loginMethod !== 'username' && username.includes('@')) {
+      const emailVal = username.toLowerCase().trim();
+      const emailCond = orgId
+        ? and(eq(sql`lower(trim(${users.email}))`, emailVal), eq(users.orgId, orgId), eq(users.isActive, true))
+        : and(eq(sql`lower(trim(${users.email}))`, emailVal), eq(users.isActive, true));
+      const emailUser = await db.query.users.findFirst({ where: emailCond });
+      if (emailUser) { user = emailUser; foundByEmail = true; }
+    }
+
+    if (!user) return res.status(401).json({ error: loginErrorMsg });
 
     // ── فحص السماح بتسجيل الدخول (allowLogin) ────────────────────────────────
     if (user.allowLogin === false) {
@@ -134,13 +161,13 @@ export async function loginHandler(req: Request, res: Response) {
 
     // ── منطق التخطي عن كلمة المرور ─────────────────────────────────────────────
     // يُسمح بالدخول بكلمة مرور فارغة فقط إذا لم تُعيَّن كلمة مرور لهذا الحساب
-    // (passwordStatus = 'not_set'). هذا يشمل حساب ADMIN الأول عند أول تشغيل.
-    // بمجرد تعيين كلمة مرور (passwordStatus → 'set') لا يُسمح بالفراغ مطلقاً.
-    const skipPassword = user.passwordStatus === 'not_set' && safePassword === '';
+    // (passwordStatus = 'not_set') وكان الدخول باسم المستخدم (لا بالبريد).
+    // بمجرد تعيين كلمة مرور (passwordStatus → 'set') أو الدخول بالبريد → كلمة مرور إجبارية.
+    const skipPassword = user.passwordStatus === 'not_set' && safePassword === '' && !foundByEmail;
 
     if (!skipPassword) {
       const valid = await verifyPassword(safePassword, user.passwordHash ?? '');
-      if (!valid) return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
+      if (!valid) return res.status(401).json({ error: loginErrorMsg });
     }
 
     // ── أمان: حساب افتراضي بكلمة مرور غير مُعيَّنة (ADMIN أول تشغيل) ──────────

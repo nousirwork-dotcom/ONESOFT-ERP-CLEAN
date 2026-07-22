@@ -44,6 +44,27 @@ function TransitionStyles() {
   `}</style>;
 }
 
+function EyeSvg() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>
+  );
+}
+function EyeOffSvg() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+      <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/>
+      <line x1="1" y1="1" x2="23" y2="23"/>
+    </svg>
+  );
+}
+
 function Spinner({ size = 32 }: { size?: number }) {
   return <div style={{
     width: size, height: size,
@@ -280,6 +301,7 @@ function LoginForm({
   isTrial,
   onRequestChangeOrg,
   onForgotPassword,
+  loginMethod,
 }: {
   onSuccess:          (role: string) => void;
   utils:              ReturnType<typeof trpc.useUtils>;
@@ -289,11 +311,28 @@ function LoginForm({
   isTrial:            boolean;
   onRequestChangeOrg: () => void;
   onForgotPassword:   () => void;
+  loginMethod?:       'username' | 'username_or_email' | 'email';
 }) {
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('');
-  const [error, setError]       = useState('');
-  const [loading, setLoading]   = useState(false);
+  const [username, setUsername]       = useState('admin');
+  const [password, setPassword]       = useState('');
+  const [error, setError]             = useState('');
+  const [loading, setLoading]         = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => { if (error) setShowPassword(false); }, [error]);
+
+  const fieldLabel =
+    loginMethod === 'email'             ? 'البريد الإلكتروني' :
+    loginMethod === 'username_or_email' ? 'اسم المستخدم أو البريد الإلكتروني' :
+                                          'اسم المستخدم';
+  const fieldPlaceholder =
+    loginMethod === 'email'             ? 'أدخل البريد الإلكتروني' :
+    loginMethod === 'username_or_email' ? 'اسم المستخدم أو البريد الإلكتروني' :
+                                          'أدخل اسم المستخدم';
+  const fieldAutoComplete =
+    loginMethod === 'email'             ? 'email' :
+    loginMethod === 'username_or_email' ? 'username email' :
+                                          'username';
 
   const inp: React.CSSProperties = {
     width: '100%', boxSizing: 'border-box',
@@ -358,11 +397,11 @@ function LoginForm({
 
       <div>
         <label style={{ display: 'block', fontSize: 11, color: 'var(--muted-foreground)', marginBottom: 5, textAlign: 'right' }}>
-          اسم المستخدم
+          {fieldLabel}
         </label>
         <input
-          style={inp} placeholder="أدخل اسم المستخدم"
-          required autoFocus autoComplete="username"
+          style={inp} placeholder={fieldPlaceholder}
+          required autoFocus autoComplete={fieldAutoComplete}
           value={username}
           onChange={e => setUsername(e.target.value)}
           data-global-keyboard="false"
@@ -373,14 +412,30 @@ function LoginForm({
         <label style={{ display: 'block', fontSize: 11, color: 'var(--muted-foreground)', marginBottom: 5, textAlign: 'right' }}>
           كلمة المرور
         </label>
-        <input
-          type="password" style={inp}
-          placeholder="أدخل كلمة المرور"
-          autoComplete="current-password"
-          value={password}
-          onChange={e => setPassword(e.target.value)}
-          data-global-keyboard="false"
-        />
+        <div style={{ position: 'relative' }}>
+          <input
+            type={showPassword ? 'text' : 'password'}
+            style={{ ...inp, paddingLeft: 36 }}
+            placeholder="أدخل كلمة المرور"
+            autoComplete="current-password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            data-global-keyboard="false"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(v => !v)}
+            aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+            title={showPassword ? 'إخفاء' : 'إظهار'}
+            style={{
+              position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)',
+              background: 'none', border: 'none', cursor: 'pointer', padding: 3,
+              color: 'var(--muted-foreground)', display: 'flex', alignItems: 'center',
+            }}
+          >
+            {showPassword ? <EyeOffSvg /> : <EyeSvg />}
+          </button>
+        </div>
       </div>
 
       <button
@@ -462,6 +517,10 @@ export default function LoginPage() {
     refetchInterval: (query) => (query.state.data?.initializing ? 1000 : false),
   });
   const licCtxQ     = trpc.license.getLoginContext.useQuery(undefined, { staleTime: 30_000, retry: 1 });
+  const loginSettingsQ = trpc.auth.getLoginSettings.useQuery(
+    { orgCode: licCtxQ.data?.orgCode ?? undefined },
+    { staleTime: 60_000, retry: 1, enabled: !!licCtxQ.data?.orgCode },
+  );
   const clearOrgMut = trpc.license.clearSavedOrgCode.useMutation({
     onSuccess: () => licCtxQ.refetch(),
   });
@@ -647,6 +706,7 @@ export default function LoginPage() {
                     isTrial={licCtxQ.data?.isTrial ?? false}
                     onRequestChangeOrg={() => setShowChangeOrgDialog(true)}
                     onForgotPassword={() => setShowForgotPassword(true)}
+                    loginMethod={loginSettingsQ.data?.loginMethod}
                   />
                 )}
               </div>
