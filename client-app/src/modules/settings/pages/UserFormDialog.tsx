@@ -62,7 +62,7 @@ export function UserFormDialog({
   const [isSaving, setIsSaving] = React.useState(false);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const [codeAutoFilled, setCodeAutoFilled] = React.useState(false);
-  const { contentRef, attractAttention } = useModalAttention();
+  const { contentRef, attractAttention, attentionMessage } = useModalAttention();
 
   const selectedCategory = categories.find(c => String(c.id) === value.categoryId);
   const isAutoNumbering = mode === "create" && !!selectedCategory?.autoNumbering;
@@ -478,6 +478,13 @@ export function UserFormDialog({
 
               </div>
             </Tabs>
+
+            {/* ─── رسالة التنبيه ────────────────────────────────────────────── */}
+            {attentionMessage && (
+              <div className="mx-6 mb-1 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs text-amber-800 text-center animate-in fade-in duration-150">
+                {attentionMessage}
+              </div>
+            )}
 
             {/* ─── تذييل ──────────────────────────────────────────────────────── */}
             <footer className="flex shrink-0 items-center justify-between border-t bg-muted/20 px-6 py-3">

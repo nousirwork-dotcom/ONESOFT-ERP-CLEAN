@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/core/ui/card';
-import { Check, LayoutPanelLeft } from 'lucide-react';
+import { Check, LayoutPanelLeft, Volume2 } from 'lucide-react';
+import { Switch } from '@/core/ui/switch';
 import { useAuth } from '@/core/hooks/useAuth';
 import { useUiPrefs, type LayoutMode } from '@/core/contexts/UiPrefsContext';
 
@@ -53,7 +54,8 @@ function ModeThumb({ mode }: { mode: LayoutMode }) {
 
 export default function ViewModeSettings() {
   const { user } = useAuth();
-  const { layoutMode, setLayoutMode, orgDefaultLayoutMode, setOrgDefaultLayoutMode } = useUiPrefs();
+  const { layoutMode, setLayoutMode, orgDefaultLayoutMode, setOrgDefaultLayoutMode,
+          modalAlertSound, setModalAlertSound } = useUiPrefs();
   const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
 
   return (
@@ -93,6 +95,26 @@ export default function ViewModeSettings() {
               </button>
             );
           })}
+        </div>
+
+        {/* ── إعداد أصوات التنبيه ───────────────────────────────────────────── */}
+        <div className="border-t border-border pt-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Volume2 className="w-4 h-4 text-primary shrink-0" />
+              <div>
+                <p className="text-xs font-semibold">تشغيل أصوات التنبيه في النوافذ المنبثقة</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  نغمة خفيفة عند الضغط خارج النافذة المفتوحة — الحركة والرسالة تعمل دائماً
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={modalAlertSound}
+              onCheckedChange={setModalAlertSound}
+              aria-label="تفعيل أصوات التنبيه"
+            />
+          </div>
         </div>
 
         {isAdmin && (

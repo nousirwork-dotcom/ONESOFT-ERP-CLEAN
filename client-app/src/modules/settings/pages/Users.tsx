@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { HS_MODULE_PERM } from "@/shared/lib/hsPermissions";
 import { AI_MODULE_PERM, AI_PERM_DEFS } from "@/shared/lib/aiPermissions";
 import { UserFormDialog, UserFormValue, UserLoginMethod } from "./UserFormDialog";
+import { useModalAttention } from "./useModalAttention";
 
 // ── صلاحيات وحدة «المساعدة والخدمات» (extra_permissions) ─────────────────────
 const HS_PERM_DEFS: Array<{ key: string; label: string; isModule?: boolean }> = [
@@ -133,6 +134,7 @@ function ChangeUserPasswordDialog({
   const [noPassword, setNoPassword] = useState(false);
   const [error, setError] = useState("");
   const utils = trpc.useUtils();
+  const { contentRef, attractAttention, attentionMessage } = useModalAttention();
 
   const updateUser = trpc.users.update.useMutation({
     onSuccess: () => {
@@ -152,7 +154,17 @@ function ChangeUserPasswordDialog({
 
   return (
     <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-sm" dir="rtl">
+      <DialogContent
+        className="max-w-sm"
+        dir="rtl"
+        onPointerDownOutside={(e) => { e.preventDefault(); attractAttention(); }}
+        onInteractOutside={(e) => e.preventDefault()}
+      >
+        <div
+          ref={contentRef}
+          data-attention="false"
+          className="data-[attention=true]:animate-[modal-attention_320ms_ease-in-out] data-[attention=true]:ring-2 data-[attention=true]:ring-primary/50 rounded-[inherit]"
+        >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <KeyRound className="w-4 h-4" />
@@ -195,12 +207,18 @@ function ChangeUserPasswordDialog({
             <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">{error}</p>
           )}
         </div>
+        {attentionMessage && (
+          <p className="text-xs text-center text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-1.5 animate-in fade-in duration-150">
+            {attentionMessage}
+          </p>
+        )}
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={updateUser.isPending}>إلغاء</Button>
           <Button onClick={handleSubmit} disabled={updateUser.isPending || (!noPassword && (!next || !confirm))}>
             {updateUser.isPending ? <><Loader2 className="w-3.5 h-3.5 animate-spin me-1" />جاري الحفظ...</> : "حفظ"}
           </Button>
         </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -323,10 +341,21 @@ function UserDeleteDialog({
 
   const e = eligibilityQuery.data;
   const busy = deleteMut.isPending || deactivateMut.isPending;
+  const { contentRef, attractAttention, attentionMessage } = useModalAttention();
 
   return (
     <Dialog open={!!user} onOpenChange={(v) => { if (!v && !busy) onClose(); }}>
-      <DialogContent className="max-w-md" dir="rtl">
+      <DialogContent
+        className="max-w-md"
+        dir="rtl"
+        onPointerDownOutside={(ev) => { ev.preventDefault(); attractAttention(); }}
+        onInteractOutside={(ev) => ev.preventDefault()}
+      >
+        <div
+          ref={contentRef}
+          data-attention="false"
+          className="data-[attention=true]:animate-[modal-attention_320ms_ease-in-out] data-[attention=true]:ring-2 data-[attention=true]:ring-primary/50 rounded-[inherit]"
+        >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-destructive">
             <Trash2 className="w-4 h-4" />
@@ -398,6 +427,11 @@ function UserDeleteDialog({
           </div>
         )}
 
+        {attentionMessage && (
+          <p className="text-xs text-center text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-1.5 animate-in fade-in duration-150">
+            {attentionMessage}
+          </p>
+        )}
         <DialogFooter className="gap-2 flex-wrap">
           <Button variant="outline" onClick={onClose} disabled={busy}>إلغاء</Button>
           {e && !e.canDelete && e.canDeactivate && (
@@ -422,6 +456,7 @@ function UserDeleteDialog({
             </Button>
           )}
         </DialogFooter>
+        </div>{/* /attention-wrapper */}
       </DialogContent>
     </Dialog>
   );

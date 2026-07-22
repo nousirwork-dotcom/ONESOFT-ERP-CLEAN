@@ -44,6 +44,8 @@ type UiPrefsContextType = {
   recents: RecentItem[];
   orgDefaultLayoutMode: LayoutMode | null;
   setOrgDefaultLayoutMode: (m: LayoutMode) => void;
+  modalAlertSound: boolean;
+  setModalAlertSound: (v: boolean) => void;
 };
 
 const UiPrefsContext = createContext<UiPrefsContextType | null>(null);
@@ -60,6 +62,7 @@ export function UiPrefsProvider({ children }: { children: ReactNode }) {
   const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
   const [recents, setRecents] = useState<RecentItem[]>([]);
   const [orgDefault, setOrgDefault] = useState<LayoutMode | null>(null);
+  const [modalAlertSound, setModalAlertSoundState] = useState<boolean>(true);
 
   const { tabs } = useTabManager();
   const meQuery = trpc.auth.me.useQuery(undefined, { retry: false });
@@ -70,6 +73,7 @@ export function UiPrefsProvider({ children }: { children: ReactNode }) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSave = useRef<Partial<{
     layoutMode: LayoutMode; favorites: FavoriteItem[]; recents: RecentItem[];
+    modalAlertSound: boolean;
   }> | null>(null);
   const knownTabIds = useRef<Set<string>>(new Set());
 
@@ -133,11 +137,15 @@ export function UiPrefsProvider({ children }: { children: ReactNode }) {
         return out;
       });
     }
+    if (prefs.modalAlertSound !== undefined) {
+      setModalAlertSoundState(prefs.modalAlertSound);
+    }
   }, [prefsQuery.data, userId]);
 
   // ── حفظ مؤجَّل إلى الخادم ────────────────────────────────────────────────
   const scheduleSave = useCallback((payload: Partial<{
     layoutMode: LayoutMode; favorites: FavoriteItem[]; recents: RecentItem[];
+    modalAlertSound: boolean;
   }>) => {
     pendingSave.current = { ...(pendingSave.current ?? {}), ...payload };
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -197,6 +205,11 @@ export function UiPrefsProvider({ children }: { children: ReactNode }) {
     orgDefaultMutation.mutate({ layoutMode: m });
   }, [orgDefaultMutation]);
 
+  const setModalAlertSound = useCallback((v: boolean) => {
+    setModalAlertSoundState(v);
+    scheduleSave({ modalAlertSound: v });
+  }, [scheduleSave]);
+
   return (
     <UiPrefsContext.Provider value={{
       layoutMode, setLayoutMode,
@@ -204,6 +217,8 @@ export function UiPrefsProvider({ children }: { children: ReactNode }) {
       recents,
       orgDefaultLayoutMode: orgDefault,
       setOrgDefaultLayoutMode,
+      modalAlertSound,
+      setModalAlertSound,
     }}>
       {children}
     </UiPrefsContext.Provider>
