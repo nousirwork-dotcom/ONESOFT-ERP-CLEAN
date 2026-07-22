@@ -254,7 +254,7 @@ function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id:
             {expanded[section.id] && (
               <div className="mb-1">
                 {section.children.map(child => (
-                  <button key={child.id} onClick={(e) => { e.stopPropagation(); console.log('[debug:sidebar-click]', child.id); onSelect(child.id); }}
+                  <button key={child.id} onClick={(e) => { e.stopPropagation(); onSelect(child.id); }}
                     className={`w-full flex items-center gap-2 px-4 py-1.5 text-xs transition-colors ${
                       activeId === child.id
                         ? "bg-[#a855f7]/15 text-white font-semibold"

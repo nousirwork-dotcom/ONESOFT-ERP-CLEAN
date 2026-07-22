@@ -32,11 +32,6 @@ export default function AppWindow({ tab, children }: AppWindowProps) {
     };
   }, [workspaceEl]);
 
-  // DEBUG LOGGING
-  useEffect(() => {
-    console.log(`[debug:AppWindow path=${tab.path}] wsRect=`, wsRect ? 'set' : 'NULL', 'windowState=', tab.windowState);
-  }, [wsRect, tab.windowState, tab.path]);
-
   const isActive = tab.id === activeTabId;
   const isMin    = tab.windowState === "minimized";
   const isMax    = tab.windowState === "maximized";

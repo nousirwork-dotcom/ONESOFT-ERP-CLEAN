@@ -75,7 +75,6 @@ export default function WindowTaskbar() {
             <button
               key={tab.id}
               onClick={() => {
-                console.log('[debug:taskbar-click]', tab.path, 'isMinimized=', isMinimized, 'isActive=', isActive);
                 if (isMinimized || !isActive) {
                   activateTab(tab.id);
                 } else {

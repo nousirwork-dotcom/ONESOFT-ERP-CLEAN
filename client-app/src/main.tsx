@@ -22,7 +22,6 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
 
   if (!isUnauthorized) return;
 
-  console.log('[debug:main] UNAUTH → window.location.replace(/login) error=', error.message);
   window.location.replace('/login');
 };
 

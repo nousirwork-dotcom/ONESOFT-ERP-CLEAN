@@ -393,7 +393,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     if (!hasLaunchStamp) return;
     if (meQuery.isLoading) return;
     if (!meQuery.data) {
-      console.log('[debug:AuthGuard] meQuery.data=null → navigate(/login) location=', location);
       if (location !== "/login") navigate("/login");
     } else {
       if (location === "/login") navigate("/");
@@ -413,7 +412,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
   // شاشة تحميل حتى اكتمال التحقق — تمنع أي flash للوحة التحكم
   if (!hasLaunchStamp || meQuery.isLoading) {
-    console.log('[debug:AuthGuard] LOADING-SCREEN hasLaunchStamp=', hasLaunchStamp, 'meQuery.isLoading=', meQuery.isLoading);
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -441,11 +439,6 @@ function TabContent() {
   const { tabs, dashboardVisible } = useTabManager();
   const { layoutMode } = useUiPrefs();
   const showDashboard = dashboardVisible || tabs.length === 0;
-
-  // DEBUG LOGGING
-  useEffect(() => {
-    console.log('[debug:TabContent] dashboardVisible=', dashboardVisible, 'tabs=', tabs.length, 'showDashboard=', showDashboard);
-  }, [dashboardVisible, tabs.length, showDashboard]);
 
   return (
     <>
