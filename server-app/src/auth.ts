@@ -157,10 +157,15 @@ export async function loginHandler(req: Request, res: Response) {
     }
 
     // ── منطق التخطي عن كلمة المرور ─────────────────────────────────────────────
-    // يُسمح بالدخول بكلمة مرور فارغة فقط إذا لم تُعيَّن كلمة مرور لهذا الحساب
-    // (passwordStatus = 'not_set') وكان الدخول باسم المستخدم (لا بالبريد).
-    // بمجرد تعيين كلمة مرور (passwordStatus → 'set') أو الدخول بالبريد → كلمة مرور إجبارية.
-    const skipPassword = user.passwordStatus === 'not_set' && safePassword === '' && !foundByEmail;
+    // يُسمح بالدخول بكلمة مرور فارغة حصراً لحساب ADMIN الذي لم تُعيَّن له كلمة مرور بعد
+    // (أول تشغيل)، شرط أن يكون الدخول باسم المستخدم لا بالبريد.
+    // أي مستخدم آخر (accountant, cashier …) لا يُسمح له بالدخول بدون كلمة مرور حتى لو
+    // كان passwordStatus='not_set'.
+    const skipPassword =
+      user.passwordStatus === 'not_set' &&
+      safePassword === ''               &&
+      !foundByEmail                     &&
+      user.role === 'admin';
 
     if (!skipPassword) {
       const valid = await verifyPassword(safePassword, user.passwordHash ?? '');
