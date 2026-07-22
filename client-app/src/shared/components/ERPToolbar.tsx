@@ -87,6 +87,8 @@ export interface ERPToolbarProps {
   postingStatus?: PostingStatus;
   isSaved?: boolean;
   isPosted?: boolean;
+  /** Force the Tools dropdown to render even in restricted (buttons) mode with no tool handlers */
+  showTools?: boolean;
 }
 
 // ─── Color palette ─────────────────────────────────────────────────────────────
@@ -447,6 +449,7 @@ export default function ERPToolbar({
   postingStatus,
   isSaved = false,
   isPosted = false,
+  showTools = false,
 }: ERPToolbarProps) {
   const { lang, isAr } = useLang();
   const [activeId, setActiveId] = useState<ERPAction | "">("");
@@ -533,7 +536,7 @@ export default function ERPToolbar({
   // In auto mode (no buttons allowlist): always show Tools with all 7 items
   // (disabled when no handler).  In restricted mode (buttons prop): only show
   // when at least one tool handler is provided (caller opted-in).
-  const hasTools = !buttons || !!(onReverse || onPost || onUnpost || onSuspendPosting ||
+  const hasTools = showTools || !buttons || !!(onReverse || onPost || onUnpost || onSuspendPosting ||
     onRelatedDocs || onUserActivity || onAttach);
 
   // ── button groups with dividers ────────────────────────────────────────────
@@ -589,7 +592,11 @@ export default function ERPToolbar({
                 <TBtn
                   spec={spec}
                   label={effectiveLabel}
-                  disabled={spec.id === "save" ? saveDisabled : false}
+                  disabled={
+                    spec.id === "save"
+                      ? saveDisabled
+                      : (buttons !== undefined && CB[spec.id] === undefined)
+                  }
                   onClick={() => fire(spec.id)}
                 />
                 {isActive && (

@@ -1,6 +1,5 @@
 import * as React from "react";
 import { Eye, EyeOff, Loader2, LockKeyhole, UserRoundPlus } from "lucide-react";
-import { Button } from "@/core/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/core/ui/dialog";
 import { Input } from "@/core/ui/input";
 import { Label } from "@/core/ui/label";
@@ -12,6 +11,7 @@ import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import { useModalAttention } from "./useModalAttention";
 import { toast } from "sonner";
 import { trpc } from "@/shared/lib/trpc";
+import ERPToolbar from "@/shared/components/ERPToolbar";
 
 export type UserFormTab = "basic" | "contact" | "login" | "work" | "permissions";
 
@@ -40,6 +40,16 @@ interface UserFormDialogProps {
   loginTabExtension?: React.ReactNode;
   workTabContent?: React.ReactNode;
   permissionsTabContent?: React.ReactNode;
+  // ── Toolbar callbacks ───────────────────────────────────────────────────────
+  onToolbarNew?: () => void;
+  onToolbarCopy?: () => void;
+  onToolbarDelete?: () => void;
+  onToolbarFirst?: () => void;
+  onToolbarPrev?: () => void;
+  onToolbarNext?: () => void;
+  onToolbarLast?: () => void;
+  toolbarRecord?: number;
+  toolbarTotal?: number;
 }
 
 const PHONE_REGEX = /^\+?[0-9]{8,15}$/;
@@ -54,6 +64,15 @@ export function UserFormDialog({
   loginTabExtension,
   workTabContent,
   permissionsTabContent,
+  onToolbarNew,
+  onToolbarCopy,
+  onToolbarDelete,
+  onToolbarFirst,
+  onToolbarPrev,
+  onToolbarNext,
+  onToolbarLast,
+  toolbarRecord,
+  toolbarTotal,
 }: UserFormDialogProps) {
   const [activeTab, setActiveTab] = React.useState<UserFormTab>("basic");
   const [value, setValue] = React.useState<UserFormValue>(initialValue);
@@ -62,6 +81,7 @@ export function UserFormDialog({
   const [isSaving, setIsSaving] = React.useState(false);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const [codeAutoFilled, setCodeAutoFilled] = React.useState(false);
+  const [pendingToolbarAction, setPendingToolbarAction] = React.useState<(() => void) | null>(null);
   const { contentRef, attractAttention, attentionMessage } = useModalAttention();
 
   const selectedCategory = categories.find(c => String(c.id) === value.categoryId);
@@ -176,10 +196,36 @@ export function UserFormDialog({
     }
   };
 
-  const saveAndClose = async () => {
+  const guardedToolbarAction = (action: () => void) => {
+    if (isDirty) {
+      setPendingToolbarAction(() => action);
+      setConfirmOpen(true);
+    } else {
+      action();
+    }
+  };
+
+  const saveAndContinue = async () => {
     await save();
     setConfirmOpen(false);
-    onOpenChange(false);
+    const next = pendingToolbarAction;
+    setPendingToolbarAction(null);
+    if (next) {
+      next();
+    } else {
+      onOpenChange(false);
+    }
+  };
+
+  const discardAndContinue = () => {
+    setConfirmOpen(false);
+    const next = pendingToolbarAction;
+    setPendingToolbarAction(null);
+    if (next) {
+      next();
+    } else {
+      onOpenChange(false);
+    }
   };
 
   const isCodeLoading = isAutoNumbering && nextCodeQuery.isFetching;
@@ -486,27 +532,28 @@ export function UserFormDialog({
               </div>
             )}
 
-            {/* ─── تذييل ──────────────────────────────────────────────────────── */}
-            <footer className="flex shrink-0 items-center justify-between border-t bg-muted/20 px-6 py-3">
-              <div className="flex gap-2">
-                <Button
-                  disabled={isSaving || !!mobileError}
-                  onClick={() => void save()}
-                >
-                  {isSaving
-                    ? "جارٍ الحفظ..."
-                    : mode === "create"
-                    ? "إنشاء المستخدم"
-                    : "حفظ التعديلات"}
-                </Button>
-                <Button variant="outline" onClick={requestClose} disabled={isSaving}>
-                  إلغاء
-                </Button>
-              </div>
-              <span className="text-xs text-muted-foreground">
-                {isDirty ? "توجد تغييرات غير محفوظة" : "جميع البيانات محفوظة"}
-              </span>
-            </footer>
+            {/* ─── شريط الحركات ───────────────────────────────────────────────── */}
+            <div className="shrink-0">
+              <ERPToolbar
+                buttons={["save","draft","new","copy","edit","delete","first","prev","next","last","approve","cancel","preview","send","print","exit"]}
+                showTools
+                mode={mode === "create" ? "new" : "edit"}
+                record={toolbarRecord}
+                total={toolbarTotal}
+                hideStatusBar
+                enableShortcuts={false}
+                onSave={() => void save()}
+                saveDisabled={isSaving || !isDirty || !!mobileError}
+                onNew={onToolbarNew ? () => guardedToolbarAction(onToolbarNew!) : undefined}
+                onCopy={onToolbarCopy ? () => guardedToolbarAction(onToolbarCopy!) : undefined}
+                onDelete={onToolbarDelete}
+                onFirst={onToolbarFirst ? () => guardedToolbarAction(onToolbarFirst!) : undefined}
+                onPrev={onToolbarPrev ? () => guardedToolbarAction(onToolbarPrev!) : undefined}
+                onNext={onToolbarNext ? () => guardedToolbarAction(onToolbarNext!) : undefined}
+                onLast={onToolbarLast ? () => guardedToolbarAction(onToolbarLast!) : undefined}
+                onExit={requestClose}
+              />
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -514,9 +561,9 @@ export function UserFormDialog({
       <UnsavedChangesDialog
         open={confirmOpen}
         isSaving={isSaving}
-        onSave={saveAndClose}
-        onDiscard={() => { setConfirmOpen(false); onOpenChange(false); }}
-        onCancel={() => setConfirmOpen(false)}
+        onSave={() => void saveAndContinue()}
+        onDiscard={discardAndContinue}
+        onCancel={() => { setConfirmOpen(false); setPendingToolbarAction(null); }}
       />
     </>
   );

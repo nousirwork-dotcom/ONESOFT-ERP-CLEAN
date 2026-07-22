@@ -18,8 +18,6 @@ import { HS_MODULE_PERM } from "@/shared/lib/hsPermissions";
 import { AI_MODULE_PERM, AI_PERM_DEFS } from "@/shared/lib/aiPermissions";
 import { UserFormDialog, UserFormValue, UserLoginMethod } from "./UserFormDialog";
 import { useModalAttention } from "./useModalAttention";
-import ERPToolbar from "@/shared/components/ERPToolbar";
-import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 
 // ── صلاحيات وحدة «المساعدة والخدمات» (extra_permissions) ─────────────────────
 const HS_PERM_DEFS: Array<{ key: string; label: string; isModule?: boolean }> = [
@@ -476,8 +474,6 @@ export default function Users() {
   const [deleteTargetUser, setDeleteTargetUser] = useState<any>(null);
   const [passwordUser, setPasswordUser] = useState<any>(null);
   const [verifyDialog, setVerifyDialog] = useState<{ open: boolean; channel: "phone" | "email"; devOtp?: string } | null>(null);
-  const [showUnsavedNav, setShowUnsavedNav] = useState(false);
-  const [pendingNavAction, setPendingNavAction] = useState<(() => void) | null>(null);
 
   // ── إعدادات الأمان والعمل والصلاحيات (وضع التعديل فقط) ──────────────────
   const [recoveryEnabledPhone, setRecoveryEnabledPhone] = useState(false);
@@ -539,31 +535,13 @@ export default function Users() {
     },
     onError: (e) => toast.error(e.message),
   });
-  // Refs for nav-after-save (both mutations must confirm before navigating)
-  const pendingNavRef = useRef<(() => void) | null>(null);
-  const pendingSavesCountRef = useRef(0);
-
-  const _firePendingNavIfDone = () => {
-    pendingSavesCountRef.current = Math.max(0, pendingSavesCountRef.current - 1);
-    if (pendingSavesCountRef.current === 0 && pendingNavRef.current) {
-      const fn = pendingNavRef.current;
-      pendingNavRef.current = null;
-      fn();
-    }
-  };
-  const _clearPendingNav = () => {
-    pendingNavRef.current = null;
-    pendingSavesCountRef.current = 0;
-  };
-
   const setRecoveryOptions = trpc.recovery.setRecoveryOptions.useMutation({
     onSuccess: () => {
       utils.users.list.invalidate();
       toast.success("تم حفظ إعدادات الأمان");
       setRecoveryDirty(false);
-      _firePendingNavIfDone();
     },
-    onError: (e) => { toast.error(e.message); _clearPendingNav(); },
+    onError: (e) => toast.error(e.message),
   });
   const setExtraPermissions = trpc.users.setExtraPermissions.useMutation({
     onSuccess: () => {
@@ -571,24 +549,13 @@ export default function Users() {
       utils.auth.me.invalidate();
       toast.success("تم حفظ الصلاحيات");
       setPermsDirty(false);
-      _firePendingNavIfDone();
     },
-    onError: (e) => { toast.error(e.message); _clearPendingNav(); },
+    onError: (e) => toast.error(e.message),
   });
 
   // ── متغيرات المستخدم الحالي للشريط ────────────────────────────────────────
   const users: any[] = usersList ?? [];
   const currentIdx = selectedUser ? users.findIndex((u: any) => u.id === selectedUser.id) : -1;
-
-  const safeNav = (action: () => void) => {
-    if (isOpen && (recoveryDirty || permsDirty)) {
-      setPendingNavAction(() => action);
-      setShowUnsavedNav(true);
-    } else {
-      setIsOpen(false);
-      action();
-    }
-  };
 
   const handleCopy = () => {
     if (!selectedUser) return;
@@ -1040,27 +1007,6 @@ export default function Users() {
 
   return (
     <div className="space-y-5">
-      <ERPToolbar
-        buttons={["save", "new", "copy", "edit", "delete", "first", "prev", "next", "last", "exit"]}
-        onSave={isOpen && (recoveryDirty || permsDirty) ? () => {
-          if (recoveryDirty) handleSaveRecovery();
-          if (permsDirty) handleSavePerms();
-        } : undefined}
-        saveDisabled={!isOpen || (!recoveryDirty && !permsDirty)}
-        onNew={countInfo?.atLimit ? undefined : openCreate}
-        onCopy={selectedUser ? handleCopy : undefined}
-        onEdit={selectedUser ? () => safeNav(() => openEdit(selectedUser)) : undefined}
-        onDelete={selectedUser ? () => setDeleteTargetUser(selectedUser) : undefined}
-        onFirst={users.length > 0 ? () => safeNav(() => openEdit(users[0])) : undefined}
-        onPrev={currentIdx > 0 ? () => safeNav(() => openEdit(users[currentIdx - 1])) : undefined}
-        onNext={currentIdx >= 0 && currentIdx < users.length - 1 ? () => safeNav(() => openEdit(users[currentIdx + 1])) : undefined}
-        onLast={users.length > 0 ? () => safeNav(() => openEdit(users[users.length - 1])) : undefined}
-        onExit={() => safeNav(() => setIsOpen(false))}
-        record={currentIdx >= 0 ? currentIdx + 1 : undefined}
-        total={users.length > 0 ? users.length : undefined}
-        hideStatusBar
-        enableShortcuts={false}
-      />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">إدارة المستخدمين</h1>
@@ -1264,6 +1210,15 @@ export default function Users() {
         loginTabExtension={loginTabExtension}
         workTabContent={workTabContent}
         permissionsTabContent={permissionsTabContent}
+        onToolbarNew={countInfo?.atLimit ? undefined : openCreate}
+        onToolbarCopy={selectedUser ? handleCopy : undefined}
+        onToolbarDelete={selectedUser ? () => setDeleteTargetUser(selectedUser) : undefined}
+        onToolbarFirst={users.length > 0 ? () => openEdit(users[0]) : undefined}
+        onToolbarPrev={currentIdx > 0 ? () => openEdit(users[currentIdx - 1]) : undefined}
+        onToolbarNext={currentIdx >= 0 && currentIdx < users.length - 1 ? () => openEdit(users[currentIdx + 1]) : undefined}
+        onToolbarLast={users.length > 0 ? () => openEdit(users[users.length - 1]) : undefined}
+        toolbarRecord={currentIdx >= 0 ? currentIdx + 1 : undefined}
+        toolbarTotal={users.length > 0 ? users.length : undefined}
       />
 
       {/* ─── نافذة حذف المستخدم الآمنة ──────────────────────────────────── */}
@@ -1299,38 +1254,6 @@ export default function Users() {
         />
       )}
 
-      {/* ─── حارس التنقل — تعديلات غير محفوظة ──────────────────────────── */}
-      <UnsavedChangesDialog
-        open={showUnsavedNav}
-        isSaving={setRecoveryOptions.isPending || setExtraPermissions.isPending}
-        onSave={() => {
-          // Store pending nav; count which mutations will be fired; fire them
-          pendingNavRef.current = pendingNavAction ?? null;
-          let savesCount = 0;
-          if (recoveryDirty) savesCount++;
-          if (permsDirty) savesCount++;
-          pendingSavesCountRef.current = savesCount > 0 ? savesCount : 0;
-          setShowUnsavedNav(false);
-          setPendingNavAction(null);
-          if (recoveryDirty) handleSaveRecovery();
-          if (permsDirty) handleSavePerms();
-          // If nothing was dirty (edge case), navigate immediately
-          if (savesCount === 0) {
-            const fn = pendingNavRef.current;
-            pendingNavRef.current = null;
-            fn?.();
-          }
-        }}
-        onDiscard={() => {
-          setShowUnsavedNav(false);
-          pendingNavAction?.();
-          setPendingNavAction(null);
-        }}
-        onCancel={() => {
-          setShowUnsavedNav(false);
-          setPendingNavAction(null);
-        }}
-      />
     </div>
   );
 }
