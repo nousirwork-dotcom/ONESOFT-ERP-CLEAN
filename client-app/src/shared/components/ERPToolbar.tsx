@@ -292,10 +292,6 @@ function ToolsDropdown({
     { labelKey: "tbAttach",         icon: Paperclip,       action: onAttach,         ...toolsConfig?.attach },
   ];
 
-  // Show the dropdown button only if at least one tool is provided
-  const hasAny = ALL_TOOLS.some(ti => ti.action !== undefined);
-  if (!hasAny) return null;
-
   const toolLabel = t(lang, "tbTools");
 
   return (
@@ -461,7 +457,7 @@ export default function ERPToolbar({
 
   // ── callbacks map ──────────────────────────────────────────────────────────
   const CB: Partial<Record<ERPAction, (() => void) | undefined>> = {
-    save:    saveDisabled ? undefined : onSave,
+    save:    onSave,   // visibility; disabled state handled separately via saveDisabled
     draft:   onDraft,
     new:     onNew,
     copy:    onCopy,
@@ -533,8 +529,11 @@ export default function ERPToolbar({
     return CB[spec.id] !== undefined;
   });
 
-  // ── tools dropdown — show if any tool handler exists ──────────────────────
-  const hasTools = !!(onReverse || onPost || onUnpost || onSuspendPosting ||
+  // ── tools dropdown ─────────────────────────────────────────────────────────
+  // In auto mode (no buttons allowlist): always show Tools with all 7 items
+  // (disabled when no handler).  In restricted mode (buttons prop): only show
+  // when at least one tool handler is provided (caller opted-in).
+  const hasTools = !buttons || !!(onReverse || onPost || onUnpost || onSuspendPosting ||
     onRelatedDocs || onUserActivity || onAttach);
 
   // ── button groups with dividers ────────────────────────────────────────────
