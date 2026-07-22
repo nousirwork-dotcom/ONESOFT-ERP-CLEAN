@@ -199,7 +199,7 @@ export function UserFormDialog({
           onEscapeKeyDown={(e) => { e.preventDefault(); requestClose(); }}
           onPointerDownOutside={(e) => { e.preventDefault(); attractAttention(); }}
           onInteractOutside={(e) => e.preventDefault()}
-          className="h-[640px] max-h-[calc(100vh-32px)] w-[920px] max-w-[calc(100vw-32px)] overflow-hidden rounded-2xl border-border bg-card p-0 shadow-2xl"
+          className="h-[640px] max-h-[calc(100vh-32px)] w-[920px] max-w-[calc(100vw-32px)] overflow-hidden rounded-2xl border-[#0f2a45] bg-[#1C4576] p-0 shadow-2xl"
         >
           <div
             ref={contentRef}
@@ -211,17 +211,17 @@ export function UserFormDialog({
             )}
           >
             {/* ─── الرأس ──────────────────────────────────────────────────────── */}
-            <DialogHeader className="shrink-0 border-b px-6 py-4 text-right">
+            <DialogHeader className="shrink-0 border-b border-white/10 px-6 py-4 text-right">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 text-white">
                     <UserRoundPlus className="h-5 w-5" />
                   </div>
                   <div>
-                    <DialogTitle className="text-xl">
+                    <DialogTitle className="text-xl text-white">
                       {mode === "create" ? "إضافة مستخدم جديد" : "تعديل بيانات المستخدم"}
                     </DialogTitle>
-                    <p className="mt-1 text-xs text-muted-foreground">
+                    <p className="mt-1 text-xs text-white/60">
                       بيانات الحساب ونطاق العمل والصلاحيات.
                     </p>
                   </div>
@@ -232,7 +232,7 @@ export function UserFormDialog({
                   size="icon"
                   onClick={requestClose}
                   aria-label="إغلاق"
-                  className="shrink-0 text-muted-foreground hover:text-foreground"
+                  className="shrink-0 text-white/70 hover:text-white hover:bg-white/10"
                 >
                   <span className="text-lg leading-none">×</span>
                 </Button>
@@ -246,7 +246,7 @@ export function UserFormDialog({
               onValueChange={(tab) => setActiveTab(tab as UserFormTab)}
               className="flex min-h-0 flex-1 flex-col"
             >
-              <TabsList className="grid h-12 shrink-0 w-full grid-cols-5 rounded-none border-b bg-muted/30 p-1">
+              <TabsList className="grid h-11 shrink-0 w-full grid-cols-5 rounded-none border-b border-white/10 bg-[#163a66] p-1 [&>button]:text-white/65 [&>button[data-state=active]]:bg-white [&>button[data-state=active]]:text-[#1C4576] [&>button[data-state=active]]:font-semibold [&>button:hover:not([data-state=active])]:bg-white/10 [&>button:hover:not([data-state=active])]:text-white">
                 <TabsTrigger value="basic">البيانات الأساسية</TabsTrigger>
                 <TabsTrigger value="contact">التواصل</TabsTrigger>
                 <TabsTrigger value="login">الدخول والحالة</TabsTrigger>
@@ -260,7 +260,7 @@ export function UserFormDialog({
                 </TabsTrigger>
               </TabsList>
 
-              <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+              <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5 bg-[#1a3f6e]/40">
 
                 {/* ── البيانات الأساسية ───────────────────────────────────────── */}
                 <TabsContent value="basic" className="m-0 space-y-4">
@@ -480,11 +480,12 @@ export function UserFormDialog({
             </Tabs>
 
             {/* ─── تذييل ──────────────────────────────────────────────────────── */}
-            <footer className="flex shrink-0 items-center justify-between border-t bg-muted/20 px-6 py-3">
+            <footer className="flex shrink-0 items-center justify-between border-t border-white/10 bg-[#163a66] px-6 py-3">
               <div className="flex gap-2">
                 <Button
                   disabled={isSaving || !!mobileError}
                   onClick={() => void save()}
+                  className="bg-white text-[#1C4576] hover:bg-white/90 font-semibold"
                 >
                   {isSaving
                     ? "جارٍ الحفظ..."
@@ -492,11 +493,16 @@ export function UserFormDialog({
                     ? "إنشاء المستخدم"
                     : "حفظ التعديلات"}
                 </Button>
-                <Button variant="outline" onClick={requestClose} disabled={isSaving}>
+                <Button
+                  variant="outline"
+                  onClick={requestClose}
+                  disabled={isSaving}
+                  className="border-white/30 text-white hover:bg-white/10 hover:text-white"
+                >
                   إلغاء
                 </Button>
               </div>
-              <span className="text-xs text-muted-foreground">
+              <span className={cn("text-xs", isDirty ? "text-amber-300" : "text-white/50")}>
                 {isDirty ? "توجد تغييرات غير محفوظة" : "جميع البيانات محفوظة"}
               </span>
             </footer>
@@ -527,9 +533,9 @@ function FormSection({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border bg-muted/20 p-4">
+    <section className="rounded-2xl border border-white/10 bg-background p-4 shadow-sm">
       <div className="mb-4 flex items-center justify-between gap-4">
-        <h3 className="font-semibold">{title}</h3>
+        <h3 className="font-semibold text-foreground">{title}</h3>
         {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
       </div>
       {children}
@@ -596,7 +602,7 @@ function SwitchCard({
   onCheckedChange: (v: boolean) => void;
 }) {
   return (
-    <div className="flex items-center justify-between rounded-xl border bg-background p-4">
+    <div className="flex items-center justify-between rounded-xl border border-border bg-background p-4">
       <div>
         <p className="font-medium">{title}</p>
         {description && (
