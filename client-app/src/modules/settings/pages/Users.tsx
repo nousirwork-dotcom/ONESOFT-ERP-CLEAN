@@ -539,13 +539,31 @@ export default function Users() {
     },
     onError: (e) => toast.error(e.message),
   });
+  // Refs for nav-after-save (both mutations must confirm before navigating)
+  const pendingNavRef = useRef<(() => void) | null>(null);
+  const pendingSavesCountRef = useRef(0);
+
+  const _firePendingNavIfDone = () => {
+    pendingSavesCountRef.current = Math.max(0, pendingSavesCountRef.current - 1);
+    if (pendingSavesCountRef.current === 0 && pendingNavRef.current) {
+      const fn = pendingNavRef.current;
+      pendingNavRef.current = null;
+      fn();
+    }
+  };
+  const _clearPendingNav = () => {
+    pendingNavRef.current = null;
+    pendingSavesCountRef.current = 0;
+  };
+
   const setRecoveryOptions = trpc.recovery.setRecoveryOptions.useMutation({
     onSuccess: () => {
       utils.users.list.invalidate();
       toast.success("تم حفظ إعدادات الأمان");
       setRecoveryDirty(false);
+      _firePendingNavIfDone();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => { toast.error(e.message); _clearPendingNav(); },
   });
   const setExtraPermissions = trpc.users.setExtraPermissions.useMutation({
     onSuccess: () => {
@@ -553,8 +571,9 @@ export default function Users() {
       utils.auth.me.invalidate();
       toast.success("تم حفظ الصلاحيات");
       setPermsDirty(false);
+      _firePendingNavIfDone();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => { toast.error(e.message); _clearPendingNav(); },
   });
 
   // ── متغيرات المستخدم الحالي للشريط ────────────────────────────────────────
@@ -1283,11 +1302,24 @@ export default function Users() {
       {/* ─── حارس التنقل — تعديلات غير محفوظة ──────────────────────────── */}
       <UnsavedChangesDialog
         open={showUnsavedNav}
+        isSaving={setRecoveryOptions.isPending || setExtraPermissions.isPending}
         onSave={() => {
-          handleSaveRecovery();
+          // Store pending nav; count which mutations will be fired; fire them
+          pendingNavRef.current = pendingNavAction ?? null;
+          let savesCount = 0;
+          if (recoveryDirty) savesCount++;
+          if (permsDirty) savesCount++;
+          pendingSavesCountRef.current = savesCount > 0 ? savesCount : 0;
           setShowUnsavedNav(false);
-          pendingNavAction?.();
           setPendingNavAction(null);
+          if (recoveryDirty) handleSaveRecovery();
+          if (permsDirty) handleSavePerms();
+          // If nothing was dirty (edge case), navigate immediately
+          if (savesCount === 0) {
+            const fn = pendingNavRef.current;
+            pendingNavRef.current = null;
+            fn?.();
+          }
         }}
         onDiscard={() => {
           setShowUnsavedNav(false);
