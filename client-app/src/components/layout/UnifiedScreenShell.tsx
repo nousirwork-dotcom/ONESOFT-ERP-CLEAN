@@ -31,13 +31,14 @@ export function UnifiedScreenShell({
   const contextState = useToolbarState();
   const wwCtx = useWorkWindowSafe();
 
-  /** نخفي شريط الأدوات الخلفي عندما تكون نافذة عمل داخلية مفتوحة */
   const isWorkWindowOpen = wwCtx?.isOpen ?? false;
-  const shouldShowToolbar = showToolbar && !isWorkWindowOpen;
-
   const actions = toolbarActions ?? contextState.actions;
   const tools = toolbarTools ?? contextState.tools;
   const active = activeToolbarAction ?? contextState.activeAction;
+
+  /** نخفي شريط الأدوات الخلفي عندما تكون نافذة عمل داخلية مفتوحة أو لا توجد أوامر مسجلة */
+  const hasActions = Object.keys(actions).length > 0;
+  const shouldShowToolbar = showToolbar && !isWorkWindowOpen && hasActions;
 
   return (
     <section

@@ -334,6 +334,21 @@ export const NO_TOOLBAR_PATHS = new Set<string>([
   "/manufacturing-module",// قسم التصنيع
   "/help-services-module",// قسم المساعدة والخدمات
   "/pos",                 // شاشة اختيار الكاشير (ليست LivePOSPage)
+
+  // ─── تقارير المبيعات ───────────────────────────────────────────────
+  "/sales/items-reports",
+  "/sales/invoices-report",
+  "/sales/totals-reports",
+
+  // ─── تقارير المخزون ─────────────────────────────────────────────────
+  "/inv/stock-reports",
+  "/inv/voucher-reports",
+
+  // ─── تقارير الأصول ──────────────────────────────────────────────────
+  "/assets/depreciation-report",
+
+  // ─── أدوات تطوير ────────────────────────────────────────────────────
+  "/dev/source-code",
 ]);
 
 // ─── Auth Guard ───────────────────────────────────────────────────────────
