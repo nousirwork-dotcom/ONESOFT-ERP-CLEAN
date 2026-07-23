@@ -295,7 +295,7 @@ export default function UpdateDialog() {
         style={{ backgroundColor: "#FAF7F0" }}
       >
         {/* شريط تحذير إجباري */}
-        {isMandatory && state !== "downloaded" && (
+        {isMandatory && (state as string) !== "downloaded" && (
           <div className="flex items-center gap-2 px-5 py-3" style={{ backgroundColor: "#C9A84C", color: "#fff" }}>
             <ShieldAlert size={17} strokeWidth={2.5} />
             <div>

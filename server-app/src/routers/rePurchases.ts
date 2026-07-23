@@ -282,17 +282,18 @@ export const rePurchasesRouter = router({
 
   createInvoice: protectedProcedure.input(z.object({ statementId:z.number(), data:invoiceInputSchema, allowDuplicate:z.boolean().default(false) })).mutation(async ({ ctx, input }) => {
     assertAddPerm(ctx.user); const { data, allowDuplicate } = input;
+    const d = data as Required<typeof data>;
     const [stmt]=await db.select().from(rePurchaseStatements).where(and(eq(rePurchaseStatements.id,input.statementId),eq(rePurchaseStatements.orgId,ctx.user.orgId)));
     if(!stmt) throw new TRPCError({ code:'NOT_FOUND', message:'البيان غير موجود' });
-    if(data.supplierTaxId && !allowDuplicate){ const dup=await findDuplicate(data.supplierTaxId,data.invoiceNumber); if(dup) throw new TRPCError({ code:'CONFLICT', message:'تنبيه: توجد فاتورة مسجلة سابقاً لنفس المورد بنفس رقم الفاتورة.' }); }
+    if(d.supplierTaxId && !allowDuplicate){ const dup=await findDuplicate(d.supplierTaxId,d.invoiceNumber); if(dup) throw new TRPCError({ code:'CONFLICT', message:'تنبيه: توجد فاتورة مسجلة سابقاً لنفس المورد بنفس رقم الفاتورة.' }); }
     const taxRate = Number(stmt.defaultTaxRate ?? 15);
-    const calc = calcFromTotal(data.totalValue, taxRate);
+    const calc = calcFromTotal(d.totalValue ?? 0, taxRate);
     const seq = await getNextSequence(input.statementId);
     const [row]=await db.insert(rePurchases).values({
       orgId:ctx.user.orgId, statementId:input.statementId, sequence:seq,
-      supplierName:data.supplierName, supplierTaxId:data.supplierTaxId??null, invoiceDate:new Date(data.invoiceDate), invoiceNumber:data.invoiceNumber,
+      supplierName:d.supplierName!, supplierTaxId:d.supplierTaxId??null, invoiceDate:new Date(d.invoiceDate!), invoiceNumber:d.invoiceNumber!,
       preTaxValue:String(calc.preTax), taxRate:String(taxRate), taxAmount:String(calc.tax), totalValue:String(calc.total),
-      notes:data.notes??null, attachmentUrl:data.attachmentUrl??null, createdBy:ctx.user.id, updatedBy:ctx.user.id,
+      notes:d.notes??null, attachmentUrl:d.attachmentUrl??null, createdBy:ctx.user.id, updatedBy:ctx.user.id,
     }).returning();
     return row;
   }),
@@ -303,36 +304,38 @@ export const rePurchasesRouter = router({
     if(!stmt) throw new TRPCError({ code:'NOT_FOUND', message:'البيان غير موجود' });
     const taxRate = Number(stmt.defaultTaxRate ?? 15);
     const results:any[]=[]; const errors:string[]=[];
-    for(const inv of input.invoices){
+    for(const invRaw of input.invoices){
+      const inv = invRaw as Required<typeof invRaw>;
       try{
-        if(inv.supplierTaxId && !inv.allowDuplicate){ const dup=await findDuplicate(inv.supplierTaxId,inv.invoiceNumber); if(dup){ errors.push(`فاتورة مكررة: ${inv.invoiceNumber}`); continue; } }
-        const calc = calcFromTotal(inv.totalValue, taxRate);
+        if(inv.supplierTaxId && !inv.allowDuplicate){ const dup=await findDuplicate(inv.supplierTaxId,inv.invoiceNumber!); if(dup){ errors.push(`فاتورة مكررة: ${inv.invoiceNumber}`); continue; } }
+        const calc = calcFromTotal(inv.totalValue ?? 0, taxRate);
         const seq=await getNextSequence(input.statementId);
         const [row]=await db.insert(rePurchases).values({
           orgId:ctx.user.orgId, statementId:input.statementId, sequence:seq,
-          supplierName:inv.supplierName, supplierTaxId:inv.supplierTaxId??null, invoiceDate:new Date(inv.invoiceDate), invoiceNumber:inv.invoiceNumber,
+          supplierName:inv.supplierName!, supplierTaxId:inv.supplierTaxId??null, invoiceDate:new Date(inv.invoiceDate!), invoiceNumber:inv.invoiceNumber!,
           preTaxValue:String(calc.preTax), taxRate:String(taxRate), taxAmount:String(calc.tax), totalValue:String(calc.total),
           notes:inv.notes??null, attachmentUrl:inv.attachmentUrl??null, createdBy:ctx.user.id, updatedBy:ctx.user.id,
         }).returning();
         results.push(row);
-      }catch(e:any){ errors.push(inv.invoiceNumber+': '+(e.message??'خطأ')); }
+      }catch(e:any){ errors.push((inv.invoiceNumber??'')+': '+(e.message??'خطأ')); }
     }
     return { results, errors, successCount:results.length, errorCount:errors.length };
   }),
 
   updateInvoice: protectedProcedure.input(z.object({ id:z.number(), data:invoiceInputSchema, allowDuplicate:z.boolean().default(false) })).mutation(async ({ ctx, input }) => {
     assertEditPerm(ctx.user); const { data, allowDuplicate } = input;
+    const d = data as Required<typeof data>;
     const [existing]=await db.select().from(rePurchases).where(and(eq(rePurchases.id,input.id),eq(rePurchases.orgId,ctx.user.orgId)));
     if(!existing) throw new TRPCError({ code:'NOT_FOUND', message:'الفاتورة غير موجودة' });
-    if(data.supplierTaxId && !allowDuplicate){ const dup=await findDuplicate(data.supplierTaxId,data.invoiceNumber,input.id); if(dup) throw new TRPCError({ code:'CONFLICT', message:'تنبيه: توجد فاتورة مسجلة سابقاً.' }); }
+    if(d.supplierTaxId && !allowDuplicate){ const dup=await findDuplicate(d.supplierTaxId,d.invoiceNumber!,input.id); if(dup) throw new TRPCError({ code:'CONFLICT', message:'تنبيه: توجد فاتورة مسجلة سابقاً.' }); }
     // Phase 3c: tax rate comes from the statement, only total is editable
     const [stmt]=await db.select({ defaultTaxRate: rePurchaseStatements.defaultTaxRate }).from(rePurchaseStatements).where(eq(rePurchaseStatements.id, existing.statementId));
     const taxRate = Number(stmt?.defaultTaxRate ?? 15);
-    const calc = calcFromTotal(data.totalValue, taxRate);
+    const calc = calcFromTotal(d.totalValue ?? 0, taxRate);
     const [row]=await db.update(rePurchases).set({
-      supplierName:data.supplierName, supplierTaxId:data.supplierTaxId??null, invoiceDate:new Date(data.invoiceDate), invoiceNumber:data.invoiceNumber,
+      supplierName:d.supplierName!, supplierTaxId:d.supplierTaxId??null, invoiceDate:new Date(d.invoiceDate!), invoiceNumber:d.invoiceNumber!,
       preTaxValue:String(calc.preTax), taxRate:String(taxRate), taxAmount:String(calc.tax), totalValue:String(calc.total),
-      notes:data.notes??null, attachmentUrl:data.attachmentUrl??null, updatedBy:ctx.user.id, updatedAt:new Date(),
+      notes:d.notes??null, attachmentUrl:d.attachmentUrl??null, updatedBy:ctx.user.id, updatedAt:new Date(),
     }).where(eq(rePurchases.id,input.id)).returning();
     return row;
   }),

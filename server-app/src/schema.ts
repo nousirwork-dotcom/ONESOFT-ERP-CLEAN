@@ -1,4 +1,4 @@
-import { pgTable, serial, varchar, text, integer, boolean, decimal, timestamp, pgEnum, uniqueIndex, jsonb, uuid, index } from 'drizzle-orm/pg-core';
+import { pgTable, serial, varchar, text, integer, boolean, decimal, timestamp, pgEnum, uniqueIndex, jsonb, uuid, index, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
@@ -1884,7 +1884,7 @@ export const reTrialBalances = pgTable('re_trial_balances', {
   toDate:        timestamp('to_date'),
   projectId:     integer('project_id').references(() => reProjects.id, { onDelete: 'set null' }),
   scope:         varchar('scope',   { length: 20 }).notNull().default('org'), // 'org' | 'project'
-  settlementAccountId: integer('settlement_account_id').references(() => reTbAccounts.id, { onDelete: 'set null' }),
+  settlementAccountId: integer('settlement_account_id').references((): AnyPgColumn => reTbAccounts.id, { onDelete: 'set null' }),
   notes:         text('notes'),
   status:        varchar('status',  { length: 20 }).notNull().default('draft'), // 'draft' | 'balanced' | 'unbalanced' | 'reviewed'
   createdBy:     integer('created_by').references(() => users.id, { onDelete: 'set null' }),
@@ -1896,8 +1896,8 @@ export const reTrialBalances = pgTable('re_trial_balances', {
 export const reTbAccounts = pgTable('re_tb_accounts', {
   id:            serial('id').primaryKey(),
   orgId:         integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
-  trialBalanceId: integer('trial_balance_id').notNull().references(() => reTrialBalances.id, { onDelete: 'cascade' }),
-  parentId:      integer('parent_id').references(() => reTbAccounts.id, { onDelete: 'cascade' }),
+  trialBalanceId: integer('trial_balance_id').notNull().references((): AnyPgColumn => reTrialBalances.id, { onDelete: 'cascade' }),
+  parentId:      integer('parent_id').references((): AnyPgColumn => reTbAccounts.id, { onDelete: 'cascade' }),
   code:          varchar('code',    { length: 50 }).notNull(),
   name:          varchar('name',    { length: 255 }).notNull(),
   category:      varchar('category',{ length: 50 }).notNull(), // 'assets' | 'liabilities' | 'equity' | 'revenue' | 'expenses'

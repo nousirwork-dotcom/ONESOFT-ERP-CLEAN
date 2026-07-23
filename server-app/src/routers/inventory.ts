@@ -177,9 +177,9 @@ export const inventoryCountRouter = router({
           where: and(eq(inventory.orgId, ctx.user.orgId), eq(inventory.productId, item.productId), eq(inventory.warehouseId, count.warehouseId)),
         });
         if (existing) {
-          await db.update(inventory).set({ quantity: item.actualQuantity, updatedAt: new Date() }).where(eq(inventory.id, existing.id));
+          await db.update(inventory).set({ quantity: item.actualQuantity ?? '0', updatedAt: new Date() }).where(eq(inventory.id, existing.id));
         } else {
-          await db.insert(inventory).values({ orgId: ctx.user.orgId, productId: item.productId, warehouseId: count.warehouseId, quantity: item.actualQuantity });
+          await db.insert(inventory).values({ orgId: ctx.user.orgId, productId: item.productId, warehouseId: count.warehouseId, quantity: item.actualQuantity ?? '0' });
         }
       }
       await db.update(inventoryCounts).set({ status: 'confirmed', confirmedAt: new Date() }).where(eq(inventoryCounts.id, input.id));

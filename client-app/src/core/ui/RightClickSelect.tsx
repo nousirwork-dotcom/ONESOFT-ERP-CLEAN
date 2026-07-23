@@ -72,7 +72,7 @@ export default function RightClickSelect({
             >
               <SelectValue placeholder={placeholder ?? ""} />
             </SelectTrigger>
-            <SelectContent onInteractOutside={() => setOpen(false)}>
+            <SelectContent onPointerDownOutside={() => setOpen(false)}>
               {children}
             </SelectContent>
           </Select>

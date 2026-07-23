@@ -776,7 +776,7 @@ export async function getJournalForDoc(
   orgId: number,
 ): Promise<typeof documentJournals.$inferSelect | null> {
   if (!journalId) return null;
-  return db.query.documentJournals.findFirst({
+  return (await db.query.documentJournals.findFirst({
     where: and(eq(documentJournals.id, journalId), eq(documentJournals.orgId, orgId)),
-  }) ?? null;
+  })) ?? null;
 }

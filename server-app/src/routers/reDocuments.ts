@@ -330,7 +330,7 @@ export const reDocumentsRouter = router({
       const orderFn = sortDir === 'desc' ? desc(orderCol) : asc(orderCol);
 
       const rows = await db.select().from(reDocuments)
-        .where(and(...conds)).orderBy(orderFn);
+        .where(and(...(conds as any[]))).orderBy(orderFn);
 
       const typeMap = new Map<number, string>();
       const allTypes = await db.select().from(reDocumentTypes).where(eq(reDocumentTypes.orgId, ctx.user.orgId));

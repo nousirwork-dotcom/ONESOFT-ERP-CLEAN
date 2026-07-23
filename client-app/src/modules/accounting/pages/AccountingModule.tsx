@@ -1756,7 +1756,7 @@ function PaymentVoucherPage() {
 
 // ─── Journal List (دفتر اليومية) ──────────────────────────────────────────────
 function JournalListPage({ onOpenEntry }: { onOpenEntry?: (id: number) => void }) {
-  const listQuery = trpc.journal.list.useQuery({});
+  const listQuery = trpc.journal.list.useQuery(undefined);
   const [search, setSearch] = useState("");
   const filtered = listQuery.data?.filter(e =>
     !search || e.entryNumber?.includes(search) || e.description?.includes(search)
@@ -1801,7 +1801,7 @@ function JournalListPage({ onOpenEntry }: { onOpenEntry?: (id: number) => void }
                 <TableCell className="text-xs">{fmtDate(e.entryDate)}</TableCell>
                 <TableCell className="text-xs">
                   <Badge variant="outline" className="text-xs">
-                    {e.voucherType === "journal" ? "قيد يومي" : e.voucherType === "receipt" ? "سند قبض" : e.voucherType === "payment" ? "سند صرف" : e.voucherType === "opening" ? "قيد افتتاحي" : e.voucherType}
+                    {e.entryType === "journal" ? "قيد يومي" : e.entryType === "receipt" ? "سند قبض" : e.entryType === "payment" ? "سند صرف" : e.entryType === "opening" ? "قيد افتتاحي" : e.entryType}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-xs">{e.description ?? "-"}</TableCell>

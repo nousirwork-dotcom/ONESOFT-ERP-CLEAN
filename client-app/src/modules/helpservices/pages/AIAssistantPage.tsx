@@ -70,13 +70,13 @@ export default function AIAssistantPage() {
   const ask = trpc.ai.ask.useMutation({
     onSuccess: (res) => {
       setConversationId(res.conversationId ?? null);
-      setMessages((prev) => [
+      setMessages((prev): ChatMsg[] => [
         ...prev,
         {
           id: nextId(),
           role: "assistant",
           content: res.answer,
-          sources: res.sources ?? [],
+          sources: (res.sources ?? []) as ChatMsg["sources"],
           proposal: res.proposal
             ? {
                 id: res.proposal.id,
@@ -93,7 +93,7 @@ export default function AIAssistantPage() {
                   : "normal") as ProposalState["priority"],
               }
             : null,
-        },
+        } as ChatMsg,
       ]);
       if (canHistory) utils.ai.listConversations.invalidate();
     },

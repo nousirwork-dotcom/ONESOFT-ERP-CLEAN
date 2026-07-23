@@ -103,19 +103,21 @@ export default function CustodyRecordPage() {
     {
       enabled: !!custodyId && !isNaN(custodyId),
       refetchOnWindowFocus: false,
-      onSuccess: (data: any) => {
-        if (!loaded) {
-          setCustodyName(data.record.custodyName  ?? data.record.custody_name  ?? "");
-          setEmail(data.record.email ?? "");
-          setAutoSend(data.record.autoSendEmail   ?? data.record.auto_send_email ?? false);
-          setRecordNumber(data.record.recordNumber ?? data.record.record_number ?? null);
-          const mapped = (data.entries as any[]).map((e, i) => fromServer(e, i));
-          setEntries(mapped.length > 0 ? mapped : [emptyEntry(0)]);
-          setLoaded(true);
-        }
-      },
     }
   );
+
+  useEffect(() => {
+    const data = recordQ.data as any;
+    if (data && !loaded) {
+      setCustodyName(data.record.custodyName  ?? data.record.custody_name  ?? "");
+      setEmail(data.record.email ?? "");
+      setAutoSend(data.record.autoSendEmail   ?? data.record.auto_send_email ?? false);
+      setRecordNumber(data.record.recordNumber ?? data.record.record_number ?? null);
+      const mapped = (data.entries as any[]).map((e, i) => fromServer(e, i));
+      setEntries(mapped.length > 0 ? mapped : [emptyEntry(0)]);
+      setLoaded(true);
+    }
+  }, [recordQ.data, loaded]);
 
   const createM     = trpc.custodyTracking.createRecord.useMutation();
   const updateM     = trpc.custodyTracking.updateRecord.useMutation();
@@ -166,10 +168,10 @@ export default function CustodyRecordPage() {
     "expenseDue", "amountPaid", "expenseRemaining", "expenseNote",
   ];
 
-  function focusCell(rowKey: string, col: string) {
+  function focusCell(rowKey: string, col: keyof Entry) {
     cellRefs.current.get(`${rowKey}__${col}`)?.focus();
   }
-  function nextCell(rowKey: string, col: string) {
+  function nextCell(rowKey: string, col: keyof Entry) {
     const ci = COLS.indexOf(col);
     const ri = entries.findIndex(e => e._key === rowKey);
     if (ci < COLS.length - 1) {
@@ -186,7 +188,7 @@ export default function CustodyRecordPage() {
       }, 60);
     }
   }
-  function prevCell(rowKey: string, col: string) {
+  function prevCell(rowKey: string, col: keyof Entry) {
     const ci = COLS.indexOf(col);
     const ri = entries.findIndex(e => e._key === rowKey);
     if (ci > 0) focusCell(rowKey, COLS[ci - 1]);
@@ -349,7 +351,7 @@ export default function CustodyRecordPage() {
       <div className="shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-border/60 bg-muted/20 flex-wrap">
         <button
           className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          onClick={() => openTab("/hs/custody-tracking", "متابعة العهد")}
+          onClick={() => openTab("/hs/custody-tracking", "متابعة العهد", ArrowRight)}
         >
           <ArrowRight className="w-4 h-4" />
           <span className="text-xs">متابعة العهد</span>
@@ -376,7 +378,7 @@ export default function CustodyRecordPage() {
 
         <Button
           size="sm" variant="outline" className="h-8 gap-1.5 text-xs"
-          onClick={() => openTab("/hs/custody-tracking", "متابعة العهد")}
+          onClick={() => openTab("/hs/custody-tracking", "متابعة العهد", ArrowRight)}
         >
           إلغاء والعودة
         </Button>
@@ -495,12 +497,12 @@ export default function CustodyRecordPage() {
               </thead>
               <tbody>
                 {entries.map((row, idx) => {
-                  const mkRef = (col: string) => (el: HTMLInputElement | null) => {
+                  const mkRef = (col: keyof Entry) => (el: HTMLInputElement | null) => {
                     const k = `${row._key}__${col}`;
                     if (el) cellRefs.current.set(k, el);
                     else cellRefs.current.delete(k);
                   };
-                  const kbNav = (col: string) => ({
+                  const kbNav = (col: keyof Entry) => ({
                     onKeyDown: (e: React.KeyboardEvent) => {
                       if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); nextCell(row._key, col); }
                       else if (e.key === "Tab" && e.shiftKey) { e.preventDefault(); prevCell(row._key, col); }

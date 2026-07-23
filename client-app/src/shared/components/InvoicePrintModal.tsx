@@ -54,7 +54,7 @@ export default function InvoicePrintModal({
       buyerTaxNumber:  data.customerTaxNumber,
     };
 
-    QRCodeService.resolveForInvoice(qrSettings, invoiceData, docType)
+    QRCodeService.resolveForInvoice(qrSettings, invoiceData, docType as "sales_invoice" | "purchase_invoice" | "receipt_voucher" | undefined)
       .then(result => setQrDataUrl(result.dataUrl))
       .catch(() => setQrDataUrl(""));
   }, [open, data, qrSettings, docType]);

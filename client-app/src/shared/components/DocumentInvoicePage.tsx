@@ -227,8 +227,8 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   const cellRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
   // ── Queries ────────────────────────────────────────────────────────────────
-  const customersQuery  = trpc.customers.list.useQuery({}, { enabled: config.docCategory === "sales" });
-  const suppliersQuery  = trpc.suppliers.list.useQuery({}, { enabled: config.docCategory === "purchase" });
+  const customersQuery  = trpc.customers.list.useQuery(undefined, { enabled: config.docCategory === "sales" });
+  const suppliersQuery  = trpc.suppliers.list.useQuery(undefined, { enabled: config.docCategory === "purchase" });
   const parties = config.docCategory === "sales"
     ? (customersQuery.data ?? [])
     : (suppliersQuery.data ?? []);
@@ -418,12 +418,12 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     updateLine(idx, "productCode", code);
     if (!code) return;
     const found = (productsQuery.data ?? []).find(p =>
-      p.sku === code || p.barcode === code || String(p.id) === code);
+      (p as any).sku === code || p.barcode === code || String(p.id) === code);
     if (found) {
       setLines(prev => {
         const u = [...prev];
         const l = { ...u[idx] };
-        l.productCode = found.sku ?? found.barcode ?? code;
+        l.productCode = (found as any).sku ?? found.barcode ?? code;
         l.productName = found.name;
         l.productId   = found.id;
         l.unit        = found.unit ?? "";

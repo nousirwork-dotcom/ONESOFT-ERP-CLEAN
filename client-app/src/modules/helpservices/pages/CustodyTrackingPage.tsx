@@ -106,7 +106,7 @@ export default function CustodyTrackingPage() {
       <div className="shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-border/60 bg-muted/20 flex-wrap">
         <button
           className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          onClick={() => openTab("/help-services-module", "المساعدة والخدمات")}
+          onClick={() => openTab("/help-services-module", "المساعدة والخدمات", ArrowRight)}
         >
           <ArrowRight className="w-4 h-4" />
           <span className="text-xs">المساعدة والخدمات</span>

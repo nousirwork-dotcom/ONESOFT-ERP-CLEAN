@@ -15,7 +15,7 @@ export default function Units() {
   const utils = trpc.useUtils();
   const { data: units = [], isLoading } = trpc.units.list.useQuery();
   const createMutation = trpc.units.create.useMutation({
-    onSuccess: () => { utils.units.list.invalidate(); toast.success("تم إضافة الوحدة"); setShowDialog(false); setForm({ name: "", symbol: "" }); },
+    onSuccess: () => { utils.units.list.invalidate(); toast.success("تم إضافة الوحدة"); setShowDialog(false); setForm({ name: "", symbol: "", recordPolicy: "flexible", foundationKey: "", includeInFoundation: false }); },
     onError: (e) => toast.error(e.message),
   });
   const updateMutation = trpc.units.update.useMutation({

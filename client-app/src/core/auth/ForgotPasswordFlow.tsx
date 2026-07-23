@@ -144,8 +144,8 @@ export default function ForgotPasswordFlow({ onBack, orgCode, orgName }: ForgotP
   const requestReset = trpc.recovery.requestPasswordReset.useMutation({
     onSuccess: (data) => {
       setError('');
-      setResetToken(data.resetToken ?? '');
-      if (data.devOtp) setDevOtp(data.devOtp);
+      setResetToken(('resetToken' in data ? data.resetToken : '') ?? '');
+      if ('devOtp' in data && data.devOtp) setDevOtp(data.devOtp);
       setStep('reset');
     },
     onError: (e) => setError(e.message),

@@ -62,13 +62,13 @@ export default function ReDocumentsFullPage() {
 
   // Queries
   const projectsQ = trpc.reDocuments.listProjects.useQuery(undefined, { enabled: view === 'projects' || view === 'projectDetail' });
-  const projectQ = trpc.reDocuments.getProject.useQuery(selProjectId ?? 0, { enabled: !!selProjectId });
+  const projectQ = trpc.reDocuments.getProject.useQuery({ id: selProjectId ?? 0 }, { enabled: !!selProjectId });
   const typesQ = trpc.reDocuments.listDocumentTypes.useQuery(undefined, { enabled: true });
   const docsQ = trpc.reDocuments.listDocuments.useQuery(
     { projectId: selProjectId ?? 0, search: docFilter.issuer ? undefined : undefined, documentTypeId: docFilter.typeId, issuer: docFilter.issuer, status: docFilter.status as any, sortBy: docSort.by as any, sortDir: docSort.dir },
     { enabled: !!selProjectId && view === 'projectDetail' }
   );
-  const statsQ = trpc.reDocuments.getProjectStats.useQuery(selProjectId ?? 0, { enabled: !!selProjectId });
+  const statsQ = trpc.reDocuments.getProjectStats.useQuery({ projectId: selProjectId ?? 0 }, { enabled: !!selProjectId });
   const alertsQ = trpc.reDocuments.getAlerts.useQuery(undefined, { enabled: true });
 
   // Mutations

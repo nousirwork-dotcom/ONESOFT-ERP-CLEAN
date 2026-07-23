@@ -12,7 +12,7 @@ import type { DocumentBuilder, PrintJob } from "@/shared/lib/print/types";
 const InvoiceBuilder: DocumentBuilder = {
   buildHtml(job: PrintJob): string {
     const cfg = job.templateConfig ?? DEFAULT_TEMPLATE_CONFIG;
-    return buildInvoiceHtml(job.data, cfg, job.qrDataUrl, job.qrLabel, job.qrSize);
+    return buildInvoiceHtml(job.data as Parameters<typeof buildInvoiceHtml>[0], cfg, job.qrDataUrl, job.qrLabel, job.qrSize);
   },
 };
 
