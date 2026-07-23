@@ -61,9 +61,9 @@ export function WorkWindowTitleBar({
         flexShrink:      0,
         userSelect:      "none",
         cursor:          isMaximized ? "default" : "move",
-        background:      "linear-gradient(135deg, #1e3a5f 0%, #2d5986 60%, #3b6fa0 100%)",
+        background:      "#2F5F8F",
         borderBottom:    "1px solid #D2C9BC",
-        borderRadius:    "6px 6px 0 0", /* 8px إطار خارجي - 2px حافة = 6px داخلي */
+        borderRadius:    "2px 2px 0 0", /* 8px إطار خارجي - 6px حافة = 2px داخلي */
       }}
     >
       {/* Title */}
