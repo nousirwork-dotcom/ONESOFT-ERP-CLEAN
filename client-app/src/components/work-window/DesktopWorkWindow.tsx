@@ -1,11 +1,15 @@
 /**
  * DesktopWorkWindow — نافذة العمل الداخلية.
  *
- * مكوّن يُصيَّر مباشرةً داخل شاشة القائمة (inline) فوق محتواها.
+ * عند وجود WorkWindowPortalHost في WorkWindowContext (مُسجَّل بواسطة
+ * AppWindow)، يُصيَّر المحتوى عبر createPortal داخل جذر إطار AppWindow،
+ * فتغطي طبقة الحجب شريط العنوان الأزرق والمحتوى معاً.
+ * عند غياب Portal Host (توافق للخلف) يُصيَّر inline كالمعتاد.
+ *
  * يوفر:
- *  - طبقة حجب رصاصية فاتحة مع "اهتزاز الاهتمام" عند النقر خارج النافذة
+ *  - طبقة حجب كريمية مع "اهتزاز الاهتمام" عند النقر خارج النافذة
  *  - موضع افتراضي أعلى اليمين (top-right) قابل للتعديل عبر placement
- *  - شريط عنوان قابل للسحب مع حدّ داخل الحاوية
+ *  - شريط عنوان قابل للسحب مع حدّ داخل الحاوية (إطار AppWindow كاملاً)
  *  - حصر التركيز (focus trap) داخل النافذة مع إعادته عند الإغلاق
  *  - ToolbarActionsProvider منعزل لشريط الأدوات الداخلي
  *  - WorkWindowToolbarFooter في قاع النافذة
@@ -13,6 +17,7 @@
  * المسؤولية: كل شاشة تستدعي onClose وتتعامل مع dirty-check بنفسها.
  */
 import { useEffect, useState, useCallback, useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { WorkWindowTitleBar } from "./WorkWindowTitleBar";
 import { useWorkWindowSafe } from "./WorkWindowContext";
 import { ToolbarActionsProvider } from "@/components/unified-toolbar/ToolbarActionsContext";
@@ -25,7 +30,7 @@ export interface DesktopWorkWindowProps {
   preset:     WorkWindowPreset;
   /**
    * موضع فتح النافذة الافتراضي.
-   * "top-right" (افتراضي) — أعلى اليمين بمسافة 18px.
+   * "top-right" (افتراضي) — أعلى اليمين.
    * "center"             — منتصف مساحة العمل.
    */
   placement?: WorkWindowPlacement;
@@ -45,6 +50,9 @@ const FOCUSABLE_SEL = [
 ].join(",");
 
 const TITLE_BAR_H = 42; // px — ارتفاع شريط العنوان
+/** يجب أن تتطابق مع top/right في CSS لحساب حدود السحب */
+const CSS_TOP   = 6;
+const CSS_RIGHT = 14;
 
 export function DesktopWorkWindow({
   title,
@@ -112,14 +120,14 @@ export function DesktopWorkWindow({
     const layer = layerRef.current;
     const win   = windowRef.current;
     if (!layer || !win) return;
-    // النافذة مثبّتة في CSS عند top:18px right:18px؛
+    // النافذة مثبّتة في CSS عند top:CSS_TOP right:CSS_RIGHT؛
     // نحسب الإزاحة اللازمة لتوسيطها داخل الحاوية.
     const cw = layer.offsetWidth;
     const ch = layer.offsetHeight;
     const ww = win.offsetWidth;
     const wh = win.offsetHeight;
-    const dx = -(cw / 2) + ww / 2 + 18; // تحريك لليسار حتى المنتصف
-    const dy = (ch - wh) / 2 - 18;       // تحريك للأسفل حتى المنتصف
+    const dx = -(cw / 2) + ww / 2 + CSS_RIGHT;
+    const dy = (ch - wh) / 2 - CSS_TOP;
     setDragOffset({ x: dx, y: dy });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // يعمل مرة واحدة بعد الوصل
@@ -142,7 +150,7 @@ export function DesktopWorkWindow({
     setDragOffset(null);
   }, []);
 
-  /* ─── السحب مع حدّ داخل الحاوية ─── */
+  /* ─── السحب مع حدّ داخل الحاوية (إطار AppWindow كاملاً عبر layerRef) ─── */
   const handleDragOffset = useCallback(
     (raw: { x: number; y: number } | null) => {
       if (!raw || isMaximized) { setDragOffset(raw); return; }
@@ -156,16 +164,16 @@ export function DesktopWorkWindow({
       const ww = win.offsetWidth;
 
       // ─── حدود أفقية ───
-      // النافذة مثبّتة عند right:18px؛ الحافة اليسرى للنافذة = cw - 18 - ww + dx
+      // النافذة مثبّتة عند right:CSS_RIGHT؛ الحافة اليسرى = cw - CSS_RIGHT - ww + dx
       // نضمن بقاء 60px على الأقل ظاهراً
       const MARGIN = 60;
-      const dxMin = -(cw - 18 - MARGIN);          // أقصى تحرك للاتجاه الأيسر
-      const dxMax =  18;                           // أقصى تحرك للاتجاه الأيمن (يبقى ضمن الحاوية)
+      const dxMin = -(cw - CSS_RIGHT - MARGIN);
+      const dxMax =  CSS_RIGHT;
 
       // ─── حدود رأسية ───
-      // top = 18 + dy؛ يجب أن يظل شريط العنوان ضمن الحاوية
-      const dyMin = -18;                           // لا يرتفع فوق حافة الحاوية
-      const dyMax = ch - 18 - TITLE_BAR_H;        // شريط العنوان لا يخرج من الأسفل
+      // top = CSS_TOP + dy؛ يجب أن يظل شريط العنوان ضمن الحاوية
+      const dyMin = -CSS_TOP;
+      const dyMax = ch - CSS_TOP - TITLE_BAR_H;
 
       setDragOffset({
         x: Math.max(dxMin, Math.min(dxMax, raw.x)),
@@ -184,11 +192,11 @@ export function DesktopWorkWindow({
     shaking      ? styles.shaking  : "",
   ].filter(Boolean).join(" ");
 
-  return (
-    /* ─── طبقة الحاوية الكاملة ─── */
+  /* ─── JSX طبقة النافذة ─── */
+  const layerJSX = (
     <div ref={layerRef} className={styles.layer}>
 
-      {/* ── طبقة الحجب الرصاصية — تمتص الأحداث وتشغّل الاهتزاز ── */}
+      {/* ── طبقة الحجب الكريمية — تمتص الأحداث وتشغّل الاهتزاز ── */}
       <div
         className={styles.backdrop}
         onMouseDown={handleBackdropMouseDown}
@@ -229,4 +237,8 @@ export function DesktopWorkWindow({
       </div>
     </div>
   );
+
+  /* ─── Portal إلى جذر AppWindow إذا كان متاحاً، وإلا inline ─── */
+  const portalHost = ctx?.portalHost ?? null;
+  return portalHost ? createPortal(layerJSX, portalHost) : layerJSX;
 }

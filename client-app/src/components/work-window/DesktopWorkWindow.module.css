@@ -2,10 +2,10 @@
    طبقة الحاوية الكاملة — تملأ مساحة AppWindow بالكامل
    ───────────────────────────────────────────────────────────── */
 .layer {
-  position: absolute;
-  inset:    0;
-  z-index:  2000;
-  /* لا توسيط بالـ flex — النافذة مثبّتة بـ CSS position */
+  position:       absolute;
+  inset:          0;
+  z-index:        2000;
+  pointer-events: auto; /* يُلغي pointer-events:none الموروثة من portal host */
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -30,8 +30,8 @@
    ───────────────────────────────────────────────────────────── */
 .window {
   position:       absolute;
-  top:            7px;
-  right:          15px;
+  top:            6px;
+  right:          14px;
 
   display:        flex;
   flex-direction: column;

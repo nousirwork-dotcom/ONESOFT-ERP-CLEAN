@@ -6,6 +6,7 @@ import { TASKBAR_H } from "@/shared/components/WindowTaskbar";
 import { ToolbarActionsProvider } from "@/components/unified-toolbar/ToolbarActionsContext";
 import { UnifiedScreenShell } from "@/components/layout/UnifiedScreenShell";
 import { WorkWindowProvider } from "@/components/work-window/WorkWindowContext";
+import { WorkWindowPortalHost } from "@/components/work-window";
 
 interface AppWindowProps {
   tab: AppTab;
@@ -112,96 +113,105 @@ export default function AppWindow({ tab, children, showToolbar = true }: AppWind
       onMouseDown={() => bringToFront(tab.id)}
       onTouchStart={() => bringToFront(tab.id)}
     >
-      {/* Window frame */}
-      <div style={{
-        flex: 1,
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        border: isPosFullMode ? "none" : isActive
-          ? "1px solid rgba(99,132,199,0.55)"
-          : "1px solid rgba(0,0,0,0.18)",
-        boxShadow: isPosFullMode ? "none" : isActive
-          ? "0 8px 32px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.16)"
-          : "0 4px 16px rgba(0,0,0,0.18)",
-        background: "var(--background)",
-        transition: isPosFullMode ? "none" : "box-shadow 0.15s",
-      }}>
+      {/*
+        WorkWindowProvider يلف الإطار كاملاً (شريط العنوان + المحتوى)
+        حتى يستطيع WorkWindowPortalHost الوصول إلى الـ context ويُسجِّل
+        العنصر الذي يُصيَّر فيه Portal نافذة العمل.
+      */}
+      <WorkWindowProvider>
+        {/* Window frame — position:relative ضروري لـ portal host المُطلَق */}
+        <div style={{
+          flex: 1,
+          position: "relative",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          border: isPosFullMode ? "none" : isActive
+            ? "1px solid rgba(99,132,199,0.55)"
+            : "1px solid rgba(0,0,0,0.18)",
+          boxShadow: isPosFullMode ? "none" : isActive
+            ? "0 8px 32px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.16)"
+            : "0 4px 16px rgba(0,0,0,0.18)",
+          background: "var(--background)",
+          transition: isPosFullMode ? "none" : "box-shadow 0.15s",
+        }}>
 
-        {/* ── Title bar — hidden in POS full mode ── */}
-        {!isPosFullMode && (
-          <div
-            onDoubleClick={onTitleDblClick}
-            onTouchEnd={onTitleTouchEnd}
-            style={{
-              height: 36,
-              display: "flex",
-              alignItems: "center",
-              paddingRight: 10,
-              paddingLeft: 0,
-              flexShrink: 0,
-              userSelect: "none",
-              cursor: "default",
-              background: isActive
-                ? "linear-gradient(135deg, #1e3a5f 0%, #2d5986 60%, #3b6fa0 100%)"
-                : "linear-gradient(135deg, #3a3a3a 0%, #555 100%)",
-              transition: "background 0.2s",
-            }}
-            dir="rtl"
-          >
-            {/* Icon + label */}
-            <div style={{ display: "flex", alignItems: "center", gap: 7, flex: 1, minWidth: 0, paddingRight: 10 }}>
-              <tab.Icon style={{ width: 14, height: 14, color: "rgba(255,255,255,0.85)", flexShrink: 0 }} />
-              <span style={{
-                fontSize: 12,
-                fontWeight: 600,
-                color: isActive ? "#fff" : "rgba(255,255,255,0.7)",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                fontFamily: "'Cairo', Tahoma, sans-serif",
-                letterSpacing: "0.01em",
-              }}>
-                {tab.label}
-              </span>
+          {/* ── Title bar — hidden in POS full mode ── */}
+          {!isPosFullMode && (
+            <div
+              onDoubleClick={onTitleDblClick}
+              onTouchEnd={onTitleTouchEnd}
+              style={{
+                height: 36,
+                display: "flex",
+                alignItems: "center",
+                paddingRight: 10,
+                paddingLeft: 0,
+                flexShrink: 0,
+                userSelect: "none",
+                cursor: "default",
+                background: isActive
+                  ? "linear-gradient(135deg, #1e3a5f 0%, #2d5986 60%, #3b6fa0 100%)"
+                  : "linear-gradient(135deg, #3a3a3a 0%, #555 100%)",
+                transition: "background 0.2s",
+              }}
+              dir="rtl"
+            >
+              {/* Icon + label */}
+              <div style={{ display: "flex", alignItems: "center", gap: 7, flex: 1, minWidth: 0, paddingRight: 10 }}>
+                <tab.Icon style={{ width: 14, height: 14, color: "rgba(255,255,255,0.85)", flexShrink: 0 }} />
+                <span style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: isActive ? "#fff" : "rgba(255,255,255,0.7)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  fontFamily: "'Cairo', Tahoma, sans-serif",
+                  letterSpacing: "0.01em",
+                }}>
+                  {tab.label}
+                </span>
+              </div>
+
+              {/* Window controls */}
+              <div style={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
+                <WinBtn
+                  onClick={e => { e.stopPropagation(); minimizeWindow(tab.id); }}
+                  hoverBg="rgba(255,255,255,0.15)"
+                  title="تصغير"
+                >
+                  <Minus style={{ width: 11, height: 11 }} />
+                </WinBtn>
+                <WinBtn
+                  onClick={e => { e.stopPropagation(); toggleMaximize(tab.id); }}
+                  hoverBg="rgba(255,255,255,0.15)"
+                  title={isMax ? "استعادة" : "تكبير"}
+                >
+                  {isMax ? <RestoreIcon /> : <Square style={{ width: 10, height: 10 }} />}
+                </WinBtn>
+                <WinBtn
+                  onClick={e => { e.stopPropagation(); closeTab(tab.id); }}
+                  hoverBg="#c42b1c"
+                  title="إغلاق"
+                >
+                  <X style={{ width: 11, height: 11 }} />
+                </WinBtn>
+              </div>
             </div>
+          )}
 
-            {/* Window controls */}
-            <div style={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
-              <WinBtn
-                onClick={e => { e.stopPropagation(); minimizeWindow(tab.id); }}
-                hoverBg="rgba(255,255,255,0.15)"
-                title="تصغير"
-              >
-                <Minus style={{ width: 11, height: 11 }} />
-              </WinBtn>
-              <WinBtn
-                onClick={e => { e.stopPropagation(); toggleMaximize(tab.id); }}
-                hoverBg="rgba(255,255,255,0.15)"
-                title={isMax ? "استعادة" : "تكبير"}
-              >
-                {isMax ? <RestoreIcon /> : <Square style={{ width: 10, height: 10 }} />}
-              </WinBtn>
-              <WinBtn
-                onClick={e => { e.stopPropagation(); closeTab(tab.id); }}
-                hoverBg="#c42b1c"
-                title="إغلاق"
-              >
-                <X style={{ width: 11, height: 11 }} />
-              </WinBtn>
-            </div>
-          </div>
-        )}
-
-        {/* ── Content ── */}
-        <WorkWindowProvider>
+          {/* ── Content ── */}
           <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
             <ToolbarActionsProvider>
               <UnifiedScreenShell showToolbar={showToolbar}>{children}</UnifiedScreenShell>
             </ToolbarActionsProvider>
           </div>
-        </WorkWindowProvider>
-      </div>
+
+          {/* ── Portal host — يغطي شريط العنوان والمحتوى عبر position:absolute inset:0 z-index:3000 ── */}
+          <WorkWindowPortalHost />
+        </div>
+      </WorkWindowProvider>
     </div>
   );
 }

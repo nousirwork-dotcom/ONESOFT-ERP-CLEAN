@@ -1,27 +1,36 @@
 /**
- * WorkWindowContext — الغرض الوحيد: تتبع ما إذا كانت نافذة عمل مفتوحة الآن أم لا.
- * تستخدم UnifiedScreenShell هذه المعلومة لإخفاء شريط الأدوات الخلفي.
- * كل شاشة تُصيَّر DesktopWorkWindow مباشرةً وتتحكم في محتواه بنفسها.
+ * WorkWindowContext — يتتبع حالة نوافذ العمل المفتوحة،
+ * ويوفر مرجع portalHost الذي يُسجِّله WorkWindowPortalHost
+ * عند جذر AppWindow؛ يستخدمه DesktopWorkWindow لـ createPortal.
  */
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
 
 interface WorkWindowContextValue {
   isOpen: boolean;
-  reportWindowOpen:  () => void;
+  reportWindowOpen:   () => void;
   reportWindowClosed: () => void;
+  /** العنصر الذي يُصيَّر فيه Portal نافذة العمل (جذر إطار AppWindow) */
+  portalHost: HTMLDivElement | null;
+  setPortalHost: (el: HTMLDivElement | null) => void;
 }
 
 const WorkWindowContext = createContext<WorkWindowContextValue | null>(null);
 
 export function WorkWindowProvider({ children }: { children: ReactNode }) {
-  // استخدم عداداً لدعم نوافذ متعددة محتملة في المستقبل
-  const [openCount, setOpenCount] = useState(0);
+  const [openCount,  setOpenCount]  = useState(0);
+  const [portalHost, setPortalHost] = useState<HTMLDivElement | null>(null);
 
   const reportWindowOpen   = useCallback(() => setOpenCount(n => n + 1), []);
   const reportWindowClosed = useCallback(() => setOpenCount(n => Math.max(0, n - 1)), []);
 
   return (
-    <WorkWindowContext.Provider value={{ isOpen: openCount > 0, reportWindowOpen, reportWindowClosed }}>
+    <WorkWindowContext.Provider value={{
+      isOpen: openCount > 0,
+      reportWindowOpen,
+      reportWindowClosed,
+      portalHost,
+      setPortalHost,
+    }}>
       {children}
     </WorkWindowContext.Provider>
   );
