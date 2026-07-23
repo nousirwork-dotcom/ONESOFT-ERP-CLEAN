@@ -107,7 +107,7 @@
   background:   #2F5F8F; /* يطابق لون شريط العنوان — يمنع ظهور الكريمي */
 }
 
-/* ─── الشريط السفلي ─── */
+/* ─── الشريط السفلي — أزرار منخفضة نحو القاع ─── */
 .footer {
   flex-shrink:     0;
   width:           100%;
@@ -115,7 +115,7 @@
   flex-direction:  column;
   align-items:     center;
   overflow:        visible;
-  padding:         7px 0;
+  padding:         7px 0 1px 0;   /* 7px أعلى فقط — يدفع الشريط لأسفل */
   border-top:      1px solid #E5E7EB;
   background:      #F8F5EF;
 }
