@@ -151,8 +151,7 @@ export function UnifiedBottomToolbar({
       className={`${styles.toolbarOuter} ${className}`}
       aria-label="شريط أوامر الشاشة"
     >
-      <div className={styles.toolbarScroller}>
-        <div className={styles.toolbarGroups}>
+      <div className={styles.toolbarGroups}>
           {TOOLBAR_GROUPS.map((group) => (
             <div
               key={group.id}
@@ -204,7 +203,6 @@ export function UnifiedBottomToolbar({
               })}
             </div>
           ))}
-        </div>
       </div>
 
       {toolsOpen &&

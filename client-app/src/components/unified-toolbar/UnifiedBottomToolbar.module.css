@@ -1,43 +1,35 @@
-/* ─── Outer container — fills footer width, ظل خفيف للوضوح ────────── */
+/* ─── Outer container — يضع مجموعة الأزرار ناحية اليمين ──────────── */
 .toolbarOuter {
-  container-type: inline-size;
+  width:           100%;
+  display:         flex;
+  justify-content: flex-end;
+  padding:         6px 14px 8px 6px;
+  box-sizing:      border-box;
 
-  width:         100%;
-  min-width:     0;
-  margin:        0;
-  padding:       0;
-
-  background:    #F8F5EF; /* matches .footer background */
-
-  /* ظل ناعم وخفيف — يبرز مجموعة الأزرار دون جعلها عائمة فوق المحتوى */
-  box-shadow:    0 2px 8px rgba(0, 0, 0, 0.18);
+  background:      #F8F5EF;   /* يندمج مع الـ Footer */
+  box-shadow:      none;       /* الظل على مجموعة الأزرار وليس الخارج */
 }
 
-/* ─── Horizontal scroller (narrow windows) ───────────────────────── */
-.toolbarScroller {
-  width:          100%;
-  max-width:      100%;
-  overflow-x:     auto;
-  overflow-y:     visible;
-
-  scrollbar-width: thin;
-  scrollbar-color: #aaa196 transparent;
-}
-
-/* ─── Row of groups — centred ────────────────────────────────────── */
+/* ─── مجموعة الأزرار — الحاوية المرئية ذات الظل والحواف الدائرية ── */
 .toolbarGroups {
-  display:        flex;
-  align-items:    stretch;
-  gap:            0;   /* الفواصل بين المجموعات عبر CSS التالي */
+  display:         flex;
+  align-items:     stretch;
+  gap:             0;
 
-  width:          max-content;
-  margin:         0;        /* إلغاء التوسيط — سنستخدم right للإزاحة */
-  padding:        4px;      /* مسافة داخلية صغيرة */
-  direction:      rtl;
+  width:           fit-content;
+  max-width:       calc(100% - 24px);
+  direction:       rtl;
 
-  /* إزاحة نحو اليمين بمقدار 45px */
-  position:       relative;
-  right:          -45px;
+  /* المظهر البارز — صندوق واحد فاتح */
+  background:      #F7F4EE;
+  border:          1px solid #C9BFAF;
+  border-radius:   10px;
+  box-shadow:      0 3px 10px rgba(0, 0, 0, 0.22);
+
+  overflow-x:      auto;
+  overflow-y:      hidden;
+
+  padding:         4px;
 }
 
 /* ─── Individual group — لا خلفية ولا حدود ───────────────────────── */
@@ -108,7 +100,7 @@
   color:      #68635d;
   background: transparent;
   cursor:     not-allowed;
-  opacity:    1; /* أزرار معطّلة واضحة — ممنوع opacity منخفض */
+  opacity:    1;
 }
 
 .toolbarButton:disabled .toolbarShortcut {
@@ -154,17 +146,6 @@
   text-align:    center;
   white-space:   nowrap;
   text-overflow: ellipsis;
-}
-
-/* ─── تقليل المسافات عند النوافذ الضيقة (قبل ظهور التمرير) ──────── */
-@container (max-width: 520px) {
-  .toolbarGroups {
-    padding: 4px 2px;
-  }
-  .toolbarGroup + .toolbarGroup {
-    margin-inline-start: 1px;
-    padding-inline-start: 1px;
-  }
 }
 
 /* ─── Tools drop-down menu ────────────────────────────────────────── */
