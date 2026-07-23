@@ -43,7 +43,6 @@ import { accountsRouter, costCentersRouter }                     from './account
 import { journalRouter }            from './journal.js';
 import { warehousesRouter }         from './warehouses.js';
 import { stockVouchersRouter, inventoryCountRouter }             from './inventory.js';
-import { transfersRouter }              from './transfers.js';
 import { dashboardRouter }          from './dashboard.js';
 import { reportsRouter }            from './reports.js';
 import { vouchersRouter, receiptVouchersRouter, paymentVouchersRouter } from './vouchers.js';
@@ -126,7 +125,6 @@ const baseConfig = {
   reDocuments:           reDocumentsRouter,
   reTrialBalance:        reTrialBalanceRouter,
   reUnits:               reUnitsRouter,
-  transfers:             transfersRouter,
   foundationAdmin:       foundationAdminRouter,
 };
 

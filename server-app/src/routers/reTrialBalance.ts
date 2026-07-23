@@ -244,8 +244,8 @@ export const reTrialBalanceRouter = router({
       const q = input?.q?.trim();
       if (q) conditions.push(or(
         ilike(reTrialBalances.name, `%${q}%`),
-        ilike(reTrialBalances.periodLabel ?? '', `%${q}%`),
-        ilike(reTrialBalances.notes ?? '', `%${q}%`),
+        ilike(sql`COALESCE(${reTrialBalances.periodLabel}, '')`, `%${q}%`),
+        ilike(sql`COALESCE(${reTrialBalances.notes}, '')`, `%${q}%`),
       ));
       if (input?.scope) conditions.push(eq(reTrialBalances.scope, input.scope));
       if (input?.status) conditions.push(eq(reTrialBalances.status, input.status));
