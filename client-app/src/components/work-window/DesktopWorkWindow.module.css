@@ -1,58 +1,90 @@
-/* ─── Overlay ─── */
-.overlay {
-  position:   absolute;
-  inset:      0;
-  z-index:    2000;
-  background: rgba(40, 36, 30, 0.08);
-  display:    flex;
-  align-items: center;
-  justify-content: center;
+/* ─────────────────────────────────────────────────────────────
+   طبقة الحاوية الكاملة — تملأ مساحة AppWindow بالكامل
+   ───────────────────────────────────────────────────────────── */
+.layer {
+  position: absolute;
+  inset:    0;
+  z-index:  2000;
+  /* لا توسيط بالـ flex — النافذة مثبّتة بـ CSS position */
 }
 
-/* ─── Window frame ─── */
+/* ─────────────────────────────────────────────────────────────
+   طبقة الحجب الرصاصية الفاتحة
+   - تمتص النقر (pointer-events: auto) وتُشغّل اهتزاز النافذة
+   - لا تُغلق النافذة عند النقر عليها
+   - الضبابية الخفيفة تُقلّل إزعاج الشاشة خلف النافذة
+   ───────────────────────────────────────────────────────────── */
+.backdrop {
+  position:        absolute;
+  inset:           0;
+  background:      rgba(210, 213, 216, 0.82);
+  backdrop-filter: blur(1.5px) saturate(0.55);
+  /* fallback: إذا كان backdrop-filter غير مدعوم يكفي اللون وحده */
+  pointer-events:  auto;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   إطار النافذة
+   - position: absolute مع top/right لموضع أعلى اليمين الافتراضي
+   - السحب يُطبَّق عبر transform translate
+   ───────────────────────────────────────────────────────────── */
 .window {
+  position:       absolute;
+  top:            18px;
+  right:          18px;
+
   display:        flex;
   flex-direction: column;
+
   background:     #F8F5EF;
-  border:         1px solid #BEB4A6;
-  border-radius:  12px;
+  border:         2px solid #C7C7C7;
+  border-radius:  8px;
   box-shadow:
-    0 14px 36px rgba(0, 0, 0, 0.24),
-    0  2px  8px rgba(0, 0, 0, 0.12);
+    0 12px 30px rgba(0, 0, 0, 0.20),
+    0  3px  9px rgba(0, 0, 0, 0.10),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.70);
+
   overflow:       hidden;
   transition:     width 0.18s ease, height 0.18s ease, border-radius 0.18s ease;
   will-change:    transform;
-  max-width:      100%;
-  max-height:     100%;
 }
 
-/* ─── Preset sizes ─── */
+/* ─── موضع المنتصف (center placement) ───
+   تُحسب الإزاحة في JS ليتوافق مع منطق السحب. */
+.window[data-placement="center"] {
+  /* الإزاحة الأولية تُطبَّق بـ JS في useEffect */
+}
+
+/* ─── أحجام مسبقة الإعداد ─── */
 .window[data-preset="compact"] {
-  width:  min(760px, calc(100% - 40px));
-  height: min(520px, calc(100% - 80px));
+  width:  min(760px, calc(100% - 36px));
+  height: min(520px, calc(100% - 36px));
 }
 .window[data-preset="standard"] {
-  width:  min(980px, calc(100% - 40px));
-  height: min(620px, calc(100% - 80px));
+  width:  min(980px, calc(100% - 36px));
+  height: min(620px, calc(100% - 36px));
 }
 .window[data-preset="wide"] {
-  width:  min(1180px, calc(100% - 40px));
-  height: min(650px, calc(100% - 80px));
+  width:  min(1180px, calc(100% - 36px));
+  height: min(650px, calc(100% - 36px));
 }
 .window[data-preset="fullscreen"] {
   width:         calc(100% - 12px);
   height:        calc(100% - 12px);
-  border-radius: 6px;
+  border-radius: 5px;
 }
 
-/* Maximized overrides preset */
+/* ─── وضع التكبير — يُلغي الحجم والموضع والـ transform ─── */
 .window.maximized {
+  top:           6px  !important;
+  right:         6px  !important;
   width:         calc(100% - 12px) !important;
   height:        calc(100% - 12px) !important;
-  border-radius: 6px;
+  border-radius: 5px  !important;
+  transform:     none !important;
 }
 
-/* ─── Content area ─── */
+/* ─── منطقة المحتوى ─── */
 .content {
   flex:           1;
   overflow-y:     auto;
@@ -62,14 +94,14 @@
   min-height:     0;
 }
 
-/* ─── Footer / toolbar strip ─── */
+/* ─── الشريط السفلي ─── */
 .footer {
   flex-shrink: 0;
   border-top:  1px solid #E5E7EB;
   background:  #F8F5EF;
 }
 
-/* ─── Attention shake (used when clicking outside the window) ─── */
+/* ─── اهتزاز الاهتمام عند النقر خارج النافذة ─── */
 @keyframes ww-shake {
   0%   { transform: translateX(var(--tx, 0)) translateY(var(--ty, 0)); }
   15%  { transform: translateX(calc(var(--tx, 0) - 7px)) translateY(var(--ty, 0)); }

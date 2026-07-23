@@ -3,6 +3,13 @@ import type { ReactNode } from "react";
 /** أحجام النوافذ المسبقة الإعداد */
 export type WorkWindowPreset = "compact" | "standard" | "wide" | "fullscreen";
 
+/**
+ * موضع فتح نافذة العمل الافتراضي.
+ * "top-right" — أعلى اليمين بمسافة 18px (الافتراضي لجميع الشاشات الأربع).
+ * "center"    — منتصف مساحة العمل (للنوافذ الصغيرة مستقبلاً).
+ */
+export type WorkWindowPlacement = "top-right" | "center";
+
 /** طريقة عرض الشاشة في نظام التسجيل المركزي */
 export type ScreenPresentation = "module-home" | "list" | "work-window" | "workspace" | "fullscreen";
 
