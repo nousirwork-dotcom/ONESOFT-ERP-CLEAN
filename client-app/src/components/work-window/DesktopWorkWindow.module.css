@@ -99,6 +99,14 @@
   background:     #F8F5EF; /* يغطي مساحة المحتوى — يمنع ظهـور #E6DED2 داخله */
 }
 
+/* ─── حاوية شريط العنوان — تمتد على كامل العرض (تلغي 10px padding) ─ */
+.titleBarWrapper {
+  margin-left:  -10px;
+  margin-right: -10px;
+  flex-shrink:  0;
+  background:   #2F5F8F; /* يطابق لون شريط العنوان — يمنع ظهور الكريمي */
+}
+
 /* ─── الشريط السفلي ─── */
 .footer {
   flex-shrink:     0;

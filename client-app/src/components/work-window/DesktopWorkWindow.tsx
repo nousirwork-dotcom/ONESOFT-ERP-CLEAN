@@ -215,15 +215,17 @@ export function DesktopWorkWindow({
         } as React.CSSProperties}
         onMouseDown={e => e.stopPropagation()}
       >
-        {/* ── شريط العنوان ── */}
-        <WorkWindowTitleBar
-          title={title}
-          isMaximized={isMaximized}
-          onClose={onClose}
-          onToggleMax={handleToggleMax}
-          onDragOffset={handleDragOffset}
-          currentOffset={dragOffset}
-        />
+        {/* ── شريط العنوان — يغطي العرض بالكامل (دون تأثر بـ padding) ── */}
+        <div className={styles.titleBarWrapper}>
+          <WorkWindowTitleBar
+            title={title}
+            isMaximized={isMaximized}
+            onClose={onClose}
+            onToggleMax={handleToggleMax}
+            onDragOffset={handleDragOffset}
+            currentOffset={dragOffset}
+          />
+        </div>
 
         {/* ── المحتوى + شريط الأدوات منعزلان ── */}
         <ToolbarActionsProvider>
