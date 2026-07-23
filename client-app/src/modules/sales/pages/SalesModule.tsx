@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { DesktopWorkWindow } from "@/components/work-window";
 import { LivePOSPage } from "@/modules/pos/LivePOSPage";
 import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import { fmtDate } from "@/shared/utils/dateUtils";
@@ -2288,41 +2289,6 @@ function SalesInvoiceListView() {
     cancelled: { label: "ملغاة",    color: "#DC2626" },
   };
 
-  if (mode === "form" || mode === "view") {
-    const isView = mode === "view";
-    return (
-      <div className="h-full flex flex-col" dir="rtl">
-        {/* شريط الرجوع */}
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8,
-          padding: "6px 12px", borderBottom: "1px solid #E5E7EB",
-          background: "#F9FAFB",
-        }}>
-          <button
-            onClick={() => { setMode("list"); setSelectedInvoiceId(null); setInvoiceTypeName(""); refetch(); }}
-            style={{
-              display: "flex", alignItems: "center", gap: 5, padding: "4px 10px",
-              border: "1px solid #D1D5DB", borderRadius: 6,
-              background: "#fff", cursor: "pointer", fontSize: 12,
-              color: "#374151", fontFamily: "'Cairo', Tahoma, sans-serif",
-            }}
-            onMouseEnter={e => (e.currentTarget.style.background = "#F3F4F6")}
-            onMouseLeave={e => (e.currentTarget.style.background = "#fff")}
-          >
-            <ArrowRight style={{ width: 13, height: 13 }} />
-            العودة إلى القائمة
-          </button>
-          <span style={{ fontSize: 12, color: "#9CA3AF", fontFamily: "'Cairo', Tahoma, sans-serif" }}>
-            {invoiceTypeName ? `إنشاء ${invoiceTypeName}` : isView ? "عرض / تعديل فاتورة مبيعات" : "إنشاء فاتورة مبيعات جديدة"}
-          </span>
-        </div>
-        <div className="flex-1 overflow-auto">
-          <SalesInvoicePageNew initialInvoiceId={isView ? selectedInvoiceId! : undefined} onDocTypeChange={setInvoiceTypeName} />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div dir="rtl" style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "'Cairo', Tahoma, sans-serif" }}>
 
@@ -2558,6 +2524,24 @@ function SalesInvoiceListView() {
             الإجمالي الكلي: {totalAmount.toLocaleString("ar-EG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </span>
         </div>
+      )}
+
+      {/* ── نافذة العمل: إضافة / عرض فاتورة مبيعات ── */}
+      {(mode === "form" || mode === "view") && (
+        <DesktopWorkWindow
+          title={mode === "view"
+            ? "عرض / تعديل فاتورة مبيعات"
+            : (invoiceTypeName ? `إنشاء ${invoiceTypeName}` : "فاتورة مبيعات جديدة")}
+          preset="wide"
+          onClose={() => { setMode("list"); setSelectedInvoiceId(null); setInvoiceTypeName(""); refetch(); }}
+        >
+          <div className="h-full overflow-auto">
+            <SalesInvoicePageNew
+              initialInvoiceId={mode === "view" ? selectedInvoiceId! : undefined}
+              onDocTypeChange={setInvoiceTypeName}
+            />
+          </div>
+        </DesktopWorkWindow>
       )}
     </div>
   );

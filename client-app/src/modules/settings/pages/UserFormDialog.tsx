@@ -13,6 +13,7 @@ import { useModalAttention } from "./useModalAttention";
 import { toast } from "sonner";
 import { trpc } from "@/shared/lib/trpc";
 import { UnifiedBottomToolbar } from "@/components/unified-toolbar/UnifiedBottomToolbar";
+import { useToolbarActions } from "@/components/unified-toolbar/ToolbarActionsContext";
 import { DEFAULT_USER_TOOLS } from "@/components/unified-toolbar/toolbar.constants";
 import type { ToolbarActionMap, ToolbarToolItem } from "@/components/unified-toolbar/toolbar.types";
 
@@ -53,6 +54,17 @@ interface UserFormDialogProps {
   onToolbarLast?: () => void;
   toolbarRecord?: number;
   toolbarTotal?: number;
+  /**
+   * "dialog"   (افتراضي) — يُعرض داخل Radix Dialog
+   * "embedded" — يُعرض داخل نافذة عمل DesktopWorkWindow، بدون Dialog wrapper
+   */
+  renderMode?: "dialog" | "embedded";
+  /**
+   * في وضع embedded، يمرّر المكوّن الأب مرجعاً (ref) هنا.
+   * يحتفظ UserFormDialog بمؤشر دائمًا حديث لدالة requestClose الداخلية،
+   * مما يُمكّن زر × في نافذة العمل من تشغيل فحص dirty-state قبل الإغلاق.
+   */
+  requestCloseRef?: React.MutableRefObject<(() => void) | null>;
 }
 
 const PHONE_REGEX = /^\+?[0-9]{8,15}$/;
@@ -76,6 +88,8 @@ export function UserFormDialog({
   onToolbarLast,
   toolbarRecord,
   toolbarTotal,
+  renderMode = "dialog",
+  requestCloseRef,
 }: UserFormDialogProps) {
   const [activeTab, setActiveTab] = React.useState<UserFormTab>("basic");
   const [value, setValue] = React.useState<UserFormValue>(initialValue);
@@ -158,6 +172,16 @@ export function UserFormDialog({
     if (!isDirty) { onOpenChange(false); return; }
     setConfirmOpen(true);
   };
+
+  /* ── حافظ على مرجع requestClose دائمًا حديثاً (لوضع embedded) ── */
+  React.useEffect(() => {
+    if (requestCloseRef) {
+      requestCloseRef.current = requestClose;
+    }
+    return () => {
+      if (requestCloseRef) requestCloseRef.current = null;
+    };
+  }); // بدون deps — يعمل بعد كل تصيير لضمان الحداثة
 
   const save = async () => {
     if (!value.fullName.trim()) {
@@ -336,6 +360,12 @@ export function UserFormDialog({
     },
   ];
 
+  /* ── في وضع embedded: سجّل الإجراءات في ToolbarActionsProvider الداخلي لنافذة العمل ── */
+  useToolbarActions(
+    renderMode === "embedded" ? toolbarActions : {},
+    renderMode === "embedded" ? toolbarTools  : [],
+  );
+
   const saveAndContinue = async () => {
     await save();
     setConfirmOpen(false);
@@ -361,32 +391,17 @@ export function UserFormDialog({
 
   const isCodeLoading = isAutoNumbering && nextCodeQuery.isFetching;
 
-  return (
-    <>
-      <Dialog
-        open={open}
-        onOpenChange={(next) => {
-          if (next) onOpenChange(true);
-          else requestClose();
-        }}
-      >
-        <DialogContent
-          dir="rtl"
-          showCloseButton={false}
-          onEscapeKeyDown={(e) => { e.preventDefault(); requestClose(); }}
-          onPointerDownOutside={(e) => { e.preventDefault(); attractAttention(); }}
-          onInteractOutside={(e) => e.preventDefault()}
-          className="h-[640px] max-h-[calc(100vh-32px)] w-[920px] max-w-[calc(100vw-32px)] overflow-hidden rounded-2xl border-border bg-card p-0 shadow-2xl"
-        >
-          <div
-            ref={contentRef}
-            data-attention="false"
-            className={cn(
-              "flex h-full min-h-0 flex-col",
-              "data-[attention=true]:animate-[modal-attention_320ms_ease-in-out]",
-              "data-[attention=true]:ring-2 data-[attention=true]:ring-primary/50",
-            )}
-          >
+  /* ── المحتوى الداخلي — مشترك بين وضعَي العرض ── */
+  const formBodyInner = (
+    <div
+      ref={contentRef}
+      data-attention="false"
+      className={cn(
+        "flex h-full min-h-0 flex-col",
+        "data-[attention=true]:animate-[modal-attention_320ms_ease-in-out]",
+        "data-[attention=true]:ring-2 data-[attention=true]:ring-primary/50",
+      )}
+    >
             {/* ─── الرأس ──────────────────────────────────────────────────────── */}
             <DialogHeader className="shrink-0 border-b px-6 py-4 text-right">
               <div className="flex items-center justify-between gap-4">
@@ -663,18 +678,43 @@ export function UserFormDialog({
               </div>
             )}
 
-            {/* ─── شريط الحركات الموحد ───────────────────────────────────────── */}
-            <div className="relative h-[78px] shrink-0">
-              <UnifiedBottomToolbar
-                actions={toolbarActions}
-                tools={toolbarTools}
-                activeAction={isSaving ? "save" : undefined}
-              />
-            </div>
+            {/* شريط الأدوات: مباشرة في Dialog / في قاع نافذة العمل عند embedded */}
+            {renderMode === "dialog" && (
+              <div className="relative h-[78px] shrink-0">
+                <UnifiedBottomToolbar
+                  actions={toolbarActions}
+                  tools={toolbarTools}
+                  activeAction={isSaving ? "save" : undefined}
+                />
+              </div>
+            )}
           </div>
-        </DialogContent>
-      </Dialog>
+        );
 
+  return (
+    <>
+      {renderMode === "dialog" ? (
+        <Dialog
+          open={open}
+          onOpenChange={(next) => {
+            if (next) onOpenChange(true);
+            else requestClose();
+          }}
+        >
+          <DialogContent
+            dir="rtl"
+            showCloseButton={false}
+            onEscapeKeyDown={(e) => { e.preventDefault(); requestClose(); }}
+            onPointerDownOutside={(e) => { e.preventDefault(); attractAttention(); }}
+            onInteractOutside={(e) => e.preventDefault()}
+            className="h-[640px] max-h-[calc(100vh-32px)] w-[920px] max-w-[calc(100vw-32px)] overflow-hidden rounded-2xl border-border bg-card p-0 shadow-2xl"
+          >
+            {formBodyInner}
+          </DialogContent>
+        </Dialog>
+      ) : (
+        formBodyInner
+      )}
       <UnsavedChangesDialog
         open={confirmOpen}
         isSaving={isSaving}

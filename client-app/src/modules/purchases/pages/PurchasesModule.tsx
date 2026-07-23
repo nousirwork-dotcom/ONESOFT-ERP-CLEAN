@@ -22,6 +22,7 @@ import { Badge } from "@/core/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/core/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/core/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/core/ui/dialog";
+import { DesktopWorkWindow } from "@/components/work-window";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/core/ui/tabs";
 import { Textarea } from "@/core/ui/textarea";
 import { toast } from "sonner";
@@ -648,16 +649,14 @@ function PurchaseDocPage({ invoiceType }: { invoiceType: InvoiceType }) {
         </Table>
       </Card>
 
-      {/* نموذج المستند - Dialog كبير مطابق للصورة */}
-      <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-5xl max-h-[92vh] overflow-hidden flex flex-col" dir="rtl">
-          <DialogHeader className="shrink-0">
-            <DialogTitle className="text-sm flex items-center gap-2">
-              <FileText className={`w-4 h-4 ${typeColors[invoiceType]}`} />
-              إضافة {typeLabels[invoiceType]}
-            </DialogTitle>
-          </DialogHeader>
-
+      {/* نافذة العمل: إضافة مستند */}
+      {showForm && (
+        <DesktopWorkWindow
+          title={`إضافة ${typeLabels[invoiceType]}`}
+          preset="wide"
+          onClose={() => setShowForm(false)}
+        >
+          <div className="flex flex-col h-full overflow-hidden" dir="rtl">
           <Tabs defaultValue="main" className="flex-1 flex flex-col overflow-hidden">
             <TabsList className="w-full grid grid-cols-2 shrink-0">
               <TabsTrigger value="main"    className="text-xs">نافذة رئيسية</TabsTrigger>
@@ -848,15 +847,16 @@ function PurchaseDocPage({ invoiceType }: { invoiceType: InvoiceType }) {
             </TabsContent>
           </Tabs>
 
-          <div className="flex justify-end gap-2 border-t border-border pt-3 shrink-0">
+          <div className="flex justify-end gap-2 border-t border-border pt-3 px-3 pb-3 shrink-0">
             <Button variant="outline" size="sm" className="h-7 text-xs gap-1"><Printer className="w-3 h-3" /> طباعة</Button>
             <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowForm(false)}>إلغاء</Button>
             <Button size="sm" className="h-7 text-xs gap-1" disabled={createMutation.isPending} onClick={handleSave}>
               <Check className="w-3 h-3" /> حفظ
             </Button>
           </div>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </DesktopWorkWindow>
+      )}
     </div>
   );
 }

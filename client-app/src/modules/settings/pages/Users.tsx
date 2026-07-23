@@ -12,12 +12,13 @@ import {
   Building2, CheckCircle2, Eye, EyeOff, KeyRound, LifeBuoy, Loader2,
   LogOut, Pencil, Plus, Send, Sparkles, Trash2, Users as UsersIcon, X, XCircle,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { toast } from "sonner";
 import { HS_MODULE_PERM } from "@/shared/lib/hsPermissions";
 import { AI_MODULE_PERM, AI_PERM_DEFS } from "@/shared/lib/aiPermissions";
 import { UserFormDialog, UserFormValue, UserLoginMethod } from "./UserFormDialog";
 import { useModalAttention } from "./useModalAttention";
+import { DesktopWorkWindow } from "@/components/work-window";
 
 // ── صلاحيات وحدة «المساعدة والخدمات» (extra_permissions) ─────────────────────
 const HS_PERM_DEFS: Array<{ key: string; label: string; isModule?: boolean }> = [
@@ -467,6 +468,8 @@ export default function Users() {
   const [isOpen, setIsOpen] = useState(false);
   const [mode, setMode] = useState<"create" | "edit">("create");
   const [selectedUser, setSelectedUser] = useState<any>(null);
+  /** مرجع لـ requestClose الداخلي في UserFormDialog — لتشغيل فحص dirty من زر × نافذة العمل */
+  const formCloseRef = useRef<(() => void) | null>(null);
   const [initialValue, setInitialValue] = useState<UserFormValue>({ fullName: "", loginName: "", userType: "cashier", allowLogin: true, loginMethod: 'username' });
   const [workDefaultWarehouseId, setWorkDefaultWarehouseId] = useState<number | null>(null);
   const [workDefaultLanguage, setWorkDefaultLanguage] = useState<string | null>(null);
@@ -1196,31 +1199,48 @@ export default function Users() {
         </CardContent>
       </Card>
 
-      {/* ─── نافذة إضافة / تعديل (التصميم الجديد) ─────────────────────────── */}
-      <UserFormDialog
-        open={isOpen}
-        mode={mode}
-        initialValue={initialValue}
-        onOpenChange={setIsOpen}
-        onSubmit={handleDialogSubmit}
-        categories={(categoriesList as any[]).map(c => ({
-          id: c.id,
-          name: c.name,
-          autoNumbering: c.autoNumbering ?? false,
-        }))}
-        loginTabExtension={loginTabExtension}
-        workTabContent={workTabContent}
-        permissionsTabContent={permissionsTabContent}
-        onToolbarNew={countInfo?.atLimit ? undefined : openCreate}
-        onToolbarCopy={selectedUser ? handleCopy : undefined}
-        onToolbarDelete={selectedUser ? () => setDeleteTargetUser(selectedUser) : undefined}
-        onToolbarFirst={users.length > 0 ? () => openEdit(users[0]) : undefined}
-        onToolbarPrev={currentIdx > 0 ? () => openEdit(users[currentIdx - 1]) : undefined}
-        onToolbarNext={currentIdx >= 0 && currentIdx < users.length - 1 ? () => openEdit(users[currentIdx + 1]) : undefined}
-        onToolbarLast={users.length > 0 ? () => openEdit(users[users.length - 1]) : undefined}
-        toolbarRecord={currentIdx >= 0 ? currentIdx + 1 : undefined}
-        toolbarTotal={users.length > 0 ? users.length : undefined}
-      />
+      {/* ─── نافذة العمل: إضافة / تعديل مستخدم ─────────────────────────────── */}
+      {isOpen && (
+        <DesktopWorkWindow
+          title={mode === "create" ? "مستخدم جديد" : `تعديل: ${selectedUser?.name ?? ""}`}
+          preset="standard"
+          onClose={() => {
+            // شغّل requestClose الداخلي ليفحص dirty-state أولاً
+            if (formCloseRef.current) {
+              formCloseRef.current();
+            } else {
+              setIsOpen(false);
+            }
+          }}
+        >
+          <UserFormDialog
+            open={isOpen}
+            renderMode="embedded"
+            requestCloseRef={formCloseRef}
+            mode={mode}
+            initialValue={initialValue}
+            onOpenChange={setIsOpen}
+            onSubmit={handleDialogSubmit}
+            categories={(categoriesList as any[]).map(c => ({
+              id: c.id,
+              name: c.name,
+              autoNumbering: c.autoNumbering ?? false,
+            }))}
+            loginTabExtension={loginTabExtension}
+            workTabContent={workTabContent}
+            permissionsTabContent={permissionsTabContent}
+            onToolbarNew={countInfo?.atLimit ? undefined : openCreate}
+            onToolbarCopy={selectedUser ? handleCopy : undefined}
+            onToolbarDelete={selectedUser ? () => setDeleteTargetUser(selectedUser) : undefined}
+            onToolbarFirst={users.length > 0 ? () => openEdit(users[0]) : undefined}
+            onToolbarPrev={currentIdx > 0 ? () => openEdit(users[currentIdx - 1]) : undefined}
+            onToolbarNext={currentIdx >= 0 && currentIdx < users.length - 1 ? () => openEdit(users[currentIdx + 1]) : undefined}
+            onToolbarLast={users.length > 0 ? () => openEdit(users[users.length - 1]) : undefined}
+            toolbarRecord={currentIdx >= 0 ? currentIdx + 1 : undefined}
+            toolbarTotal={users.length > 0 ? users.length : undefined}
+          />
+        </DesktopWorkWindow>
+      )}
 
       {/* ─── نافذة حذف المستخدم الآمنة ──────────────────────────────────── */}
       <UserDeleteDialog

@@ -8,6 +8,7 @@ import type {
 } from "@/components/unified-toolbar/toolbar.types";
 
 import { useToolbarState } from "@/components/unified-toolbar/ToolbarActionsContext";
+import { useWorkWindowSafe } from "@/components/work-window/WorkWindowContext";
 
 interface UnifiedScreenShellProps {
   children: ReactNode;
@@ -28,6 +29,11 @@ export function UnifiedScreenShell({
   showToolbar = true,
 }: UnifiedScreenShellProps) {
   const contextState = useToolbarState();
+  const wwCtx = useWorkWindowSafe();
+
+  /** نخفي شريط الأدوات الخلفي عندما تكون نافذة عمل داخلية مفتوحة */
+  const isWorkWindowOpen = wwCtx?.isOpen ?? false;
+  const shouldShowToolbar = showToolbar && !isWorkWindowOpen;
 
   const actions = toolbarActions ?? contextState.actions;
   const tools = toolbarTools ?? contextState.tools;
@@ -38,11 +44,11 @@ export function UnifiedScreenShell({
       dir="rtl"
       className={`relative flex h-full min-h-0 flex-col overflow-hidden ${className}`}
     >
-      <div className={`min-h-0 flex-1 overflow-auto px-3 pt-3 ${showToolbar ? "pb-[82px]" : "pb-3"}`}>
+      <div className={`min-h-0 flex-1 overflow-auto px-3 pt-3 ${shouldShowToolbar ? "pb-[82px]" : "pb-3"}`}>
         {children}
       </div>
 
-      {showToolbar && (
+      {shouldShowToolbar && (
         <UnifiedBottomToolbar
           actions={actions}
           tools={tools}

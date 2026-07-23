@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useToolbarActions } from "@/components/unified-toolbar/ToolbarActionsContext";
+import { DesktopWorkWindow } from "@/components/work-window";
 import { Input } from "@/core/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/core/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/core/ui/dialog";
@@ -895,7 +896,9 @@ export default function DocumentJournalsPage() {
       exit: { supported: true as const, allowed: true, stateEnabled: inForm, disabledReason: "أنت في قائمة الدفاتر بالفعل", onClick: () => { const s = _djpRef.current; s.safeNavigate(() => { s.setView("list"); s.setEditId(null); }); } },
     };
   }, [view, editId, isBusy, typeJournals, currentIndex]);
-  useToolbarActions(toolbarActions);
+  // في وضع القائمة: سجّل الإجراءات في السياق الخارجي
+  // في وضع النموذج: فرّغ السياق الخارجي — الإجراءات تُسجَّل داخل نافذة العمل عبر DJPFormToolbarRegistrar
+  useToolbarActions(view === "list" ? toolbarActions : {} as Parameters<typeof useToolbarActions>[0]);
 
   /* ──────────────── RENDER ──────────────── */
   return (
@@ -938,8 +941,7 @@ export default function DocumentJournalsPage() {
       {/* ══ Main Area ══ */}
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden bg-background">
 
-        {view === "list" ? (
-          /* ─────────────── List View ─────────────── */
+        {/* ─────────────── List View (دائمًا مرئية) ─────────────── */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -1004,8 +1006,15 @@ export default function DocumentJournalsPage() {
             )}
           </div>
 
-        ) : (
-          /* ─────────────── Form View ─────────────── */
+          {/* ─────────────── Form View in Work Window ─────────────── */}
+          {view === "form" && (
+            <DesktopWorkWindow
+              title={editId ? (form.nameAr || `دفتر ${currentType?.label}`) : `دفتر جديد — ${currentType?.label}`}
+              preset="standard"
+              onClose={() => safeNavigate(() => { setView("list"); setEditId(null); })}
+            >
+              {/* يُسجّل إجراءات النموذج في ToolbarActionsProvider الداخلي لنافذة العمل */}
+              <DJPFormToolbarRegistrar actions={toolbarActions} />
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* Form header */}
             <div className="flex items-center gap-2 px-4 py-2 shrink-0"
@@ -1819,7 +1828,8 @@ export default function DocumentJournalsPage() {
             {/* end Tab Content */}
 
           </div>
-        )}
+            </DesktopWorkWindow>
+          )}
       </div>
 
       {/* ══ Unsaved dialog ══ */}
@@ -1892,4 +1902,13 @@ export default function DocumentJournalsPage() {
 
     </div>
   );
+}
+
+/**
+ * مكوّن خفيف يُسجّل إجراءات نموذج دفاتر المستندات في ToolbarActionsProvider الداخلي
+ * لنافذة العمل (DesktopWorkWindow)، فيظهر الشريط في تذييل النافذة بدلاً من الشريط الخارجي.
+ */
+function DJPFormToolbarRegistrar({ actions }: { actions: Parameters<typeof useToolbarActions>[0] }) {
+  useToolbarActions(actions);
+  return null;
 }

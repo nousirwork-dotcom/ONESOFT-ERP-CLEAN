@@ -1,0 +1,86 @@
+/* ─── Overlay ─── */
+.overlay {
+  position:   absolute;
+  inset:      0;
+  z-index:    2000;
+  background: rgba(40, 36, 30, 0.08);
+  display:    flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ─── Window frame ─── */
+.window {
+  display:        flex;
+  flex-direction: column;
+  background:     #F8F5EF;
+  border:         1px solid #BEB4A6;
+  border-radius:  12px;
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, 0.24),
+    0  2px  8px rgba(0, 0, 0, 0.12);
+  overflow:       hidden;
+  transition:     width 0.18s ease, height 0.18s ease, border-radius 0.18s ease;
+  will-change:    transform;
+  max-width:      100%;
+  max-height:     100%;
+}
+
+/* ─── Preset sizes ─── */
+.window[data-preset="compact"] {
+  width:  min(760px, calc(100% - 40px));
+  height: min(520px, calc(100% - 80px));
+}
+.window[data-preset="standard"] {
+  width:  min(980px, calc(100% - 40px));
+  height: min(620px, calc(100% - 80px));
+}
+.window[data-preset="wide"] {
+  width:  min(1180px, calc(100% - 40px));
+  height: min(650px, calc(100% - 80px));
+}
+.window[data-preset="fullscreen"] {
+  width:         calc(100% - 12px);
+  height:        calc(100% - 12px);
+  border-radius: 6px;
+}
+
+/* Maximized overrides preset */
+.window.maximized {
+  width:         calc(100% - 12px) !important;
+  height:        calc(100% - 12px) !important;
+  border-radius: 6px;
+}
+
+/* ─── Content area ─── */
+.content {
+  flex:           1;
+  overflow-y:     auto;
+  overflow-x:     hidden;
+  display:        flex;
+  flex-direction: column;
+  min-height:     0;
+}
+
+/* ─── Footer / toolbar strip ─── */
+.footer {
+  flex-shrink: 0;
+  border-top:  1px solid #E5E7EB;
+  background:  #F8F5EF;
+}
+
+/* ─── Attention shake (used when clicking outside the window) ─── */
+@keyframes ww-shake {
+  0%   { transform: translateX(var(--tx, 0)) translateY(var(--ty, 0)); }
+  15%  { transform: translateX(calc(var(--tx, 0) - 7px)) translateY(var(--ty, 0)); }
+  30%  { transform: translateX(calc(var(--tx, 0) + 7px)) translateY(var(--ty, 0)); }
+  45%  { transform: translateX(calc(var(--tx, 0) - 5px)) translateY(var(--ty, 0)); }
+  60%  { transform: translateX(calc(var(--tx, 0) + 5px)) translateY(var(--ty, 0)); }
+  75%  { transform: translateX(calc(var(--tx, 0) - 3px)) translateY(var(--ty, 0)); }
+  90%  { transform: translateX(calc(var(--tx, 0) + 2px)) translateY(var(--ty, 0)); }
+  100% { transform: translateX(var(--tx, 0)) translateY(var(--ty, 0)); }
+}
+
+.window.shaking {
+  animation: ww-shake 0.36s ease-in-out;
+}

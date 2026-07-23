@@ -5,6 +5,7 @@ import { useWorkspaceEl } from "@/core/contexts/WorkspaceContext";
 import { TASKBAR_H } from "@/shared/components/WindowTaskbar";
 import { ToolbarActionsProvider } from "@/components/unified-toolbar/ToolbarActionsContext";
 import { UnifiedScreenShell } from "@/components/layout/UnifiedScreenShell";
+import { WorkWindowProvider } from "@/components/work-window/WorkWindowContext";
 
 interface AppWindowProps {
   tab: AppTab;
@@ -193,11 +194,13 @@ export default function AppWindow({ tab, children, showToolbar = true }: AppWind
         )}
 
         {/* ── Content ── */}
-        <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-          <ToolbarActionsProvider>
-            <UnifiedScreenShell showToolbar={showToolbar}>{children}</UnifiedScreenShell>
-          </ToolbarActionsProvider>
-        </div>
+        <WorkWindowProvider>
+          <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+            <ToolbarActionsProvider>
+              <UnifiedScreenShell showToolbar={showToolbar}>{children}</UnifiedScreenShell>
+            </ToolbarActionsProvider>
+          </div>
+        </WorkWindowProvider>
       </div>
     </div>
   );
