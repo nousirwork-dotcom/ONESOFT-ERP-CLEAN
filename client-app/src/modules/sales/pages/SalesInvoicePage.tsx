@@ -1222,17 +1222,17 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             const selWh = whs.find((w: any) => w.id === warehouseId);
             const wName = (w: any): string => isAr ? (w.name ?? w.nameEn ?? "") : (w.nameEn || (w.name ?? ""));
             return (
-              <div className="flex items-center flex-shrink-0 relative" style={{ gap: 5 }}>
+              <div className="flex items-center w-full min-w-0 relative" style={{ gap: 5 }}>
                 <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 56, flexShrink: 0, whiteSpace: "nowrap" }}>
                   {isAr ? "الفرع/المخزن" : "Branch/WH"}
                 </label>
-                <div className="flex relative flex-shrink-0" style={{ height: 26 }}>
+                <div className="flex relative flex-1 min-w-0" style={{ height: 26 }}>
                   <button
                     onClick={() => { if (erpMode !== "view") setBranchOpen(o => !o); }}
                     disabled={erpMode === "view"}
                     className="flex items-center gap-1 classic-input"
                     style={{
-                      height: 26, width: 160, paddingInline: "6px 4px",
+                      height: 26, flex: 1, minWidth: 120, paddingInline: "6px 4px",
                       background: selWh ? "#f0fff4" : "#fff8e1",
                       border: `2px solid ${selWh ? "#22c55e" : "#f59e0b"}`,
                       borderRadius: "4px 0 0 4px", borderInlineEnd: "none",
@@ -1290,17 +1290,17 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             const selected = allJournals.find((j: any) => j.id === journalId);
             const jName = (j: any): string => isAr ? (j.name ?? "") : (j.name2 || (j.name ?? ""));
             return (
-              <div className="flex items-center flex-shrink-0 relative" style={{ gap: 8 }}>
+              <div className="flex items-center w-full min-w-0 relative" style={{ gap: 8 }}>
                 {/* الدفتر */}
-                <div className="flex items-center flex-shrink-0 relative" style={{ gap: 4 }}>
+                <div className="flex items-center flex-1 min-w-0 relative" style={{ gap: 4 }}>
                   <label style={{ fontSize: 10, fontWeight: 700, color: "#555", flexShrink: 0, whiteSpace: "nowrap" }}>الدفتر</label>
-                  <div className="flex relative flex-shrink-0" style={{ height: 26 }}>
+                  <div className="flex relative flex-1 min-w-0" style={{ height: 26 }}>
                     <button
                       onClick={() => { if (warehouseId && erpMode !== "view") setJournalOpen(o => !o); }}
                       disabled={!warehouseId || erpMode === "view"}
                       className="flex items-center gap-1 classic-input"
                       style={{
-                        height: 26, width: 138, paddingInline: "6px 4px",
+                        height: 26, flex: 1, minWidth: 100, paddingInline: "6px 4px",
                         background: selected ? "#eff6ff" : !warehouseId ? "#f3f4f6" : "#fafafa",
                         border: `1px solid ${selected ? "#3b82f6" : "#c9c4bb"}`,
                         borderRadius: "4px 0 0 4px", borderInlineEnd: "none",
@@ -1548,7 +1548,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           {/* ══ صف 3: المخزن │ تاريخ التحرير │ تاريخ الدفع │ البائع ══ */}
 
           {/* col 1: المخزن */}
-          <div className="flex items-center" style={{ gap: 6 }}>
+          <div className="flex items-center w-full min-w-0" style={{ gap: 6 }}>
             <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>المـ ـ ـخزن</label>
             {(() => {
               const activeWh = journalWarehouseId ?? docTypeWarehouseId;
@@ -1564,7 +1564,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   placeholder="يُحدَّد من الفرع"
                   disabled={true}
                   title={activeWh ? "المخزن محدد من الفرع" : "اختر الفرع أولاً"}
-                  style={{ height: 26 }}
+                  style={{ height: 26, flex: 1, minWidth: 0 }}
                 />
               );
             })()}
@@ -1787,19 +1787,33 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       {/* جدول السطور (يمين) */}
       <div className="flex-1 overflow-auto bg-white">
         <table className="w-full border-collapse" style={{ fontSize: "12px" }}>
+          {/* Proportional column widths — all flexible cols share extra space via colgroup */}
+          <colgroup>
+            <col style={{ width: 30, minWidth: 30 }} />     {/* # */}
+            <col style={{ width: "11%", minWidth: 70 }} />  {/* رقم الصنف */}
+            <col style={{ width: "24%", minWidth: 100 }} /> {/* اسم الصنف */}
+            <col style={{ width: "9%",  minWidth: 60 }} />  {/* الكمية */}
+            <col style={{ width: "9%",  minWidth: 60 }} />  {/* الوحدة */}
+            <col style={{ width: "11%", minWidth: 70 }} />  {/* السعر */}
+            <col style={{ width: "8%",  minWidth: 50 }} />  {/* خصم% */}
+            <col style={{ width: "8%",  minWidth: 60 }} />  {/* الخصم ﷼ */}
+            <col style={{ width: "7%",  minWidth: 50 }} />  {/* ض% */}
+            <col style={{ width: "12%", minWidth: 75 }} />  {/* الإجمالي */}
+            <col style={{ width: 28,    minWidth: 28 }} />  {/* حذف */}
+          </colgroup>
           <thead className="sticky top-0 z-10">
             <tr style={{ background: "#DAD271", color: "#4A3800" }}>
-              <th className="inv-th w-8 text-center">#</th>
-              <th className="inv-th w-24">رقم الصنف</th>
+              <th className="inv-th text-center">#</th>
+              <th className="inv-th">رقم الصنف</th>
               <th className="inv-th">اسم الصنف</th>
-              <th className="inv-th w-20 text-center">الكمية</th>
-              <th className="inv-th w-20 text-center">الوحدة</th>
-              <th className="inv-th w-24 text-center">السعر</th>
-              <th className="inv-th w-14 text-center">خصم%</th>
-              <th className="inv-th w-24 text-center">الخصم ﷼</th>
-              <th className="inv-th w-14 text-center">ض%</th>
-              <th className="inv-th w-24 text-center font-bold">الإجمالي</th>
-              <th className="inv-th w-7"></th>
+              <th className="inv-th text-center">الكمية</th>
+              <th className="inv-th text-center">الوحدة</th>
+              <th className="inv-th text-center">السعر</th>
+              <th className="inv-th text-center">خصم%</th>
+              <th className="inv-th text-center">الخصم ﷼</th>
+              <th className="inv-th text-center">ض%</th>
+              <th className="inv-th text-center font-bold">الإجمالي</th>
+              <th className="inv-th"></th>
             </tr>
           </thead>
           <tbody data-nav-internal="true">
