@@ -1,11 +1,7 @@
 /* ─── Outer container — centered, compact ───────────────────────────────── */
 .toolbarOuter {
-  position: absolute;
-  right: 50%;
-  bottom: 8px;
-  left: auto;
-  transform: translateX(50%);
-  z-index: 500;
+  position: relative;
+  margin: 8px auto;
 
   width: fit-content;
   max-width: calc(100% - 16px);
