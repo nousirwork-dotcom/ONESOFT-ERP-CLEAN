@@ -1,4 +1,4 @@
-/* ─── Outer container — fills footer width, flat integrated ───────── */
+/* ─── Outer container — fills footer width, ظل خفيف للوضوح ────────── */
 .toolbarOuter {
   container-type: inline-size;
 
@@ -9,7 +9,8 @@
 
   background:    #F8F5EF; /* matches .footer background */
 
-  /* ممنوع — عائم: لا box-shadow, لا border-radius, لا border خارجي */
+  /* ظل ناعم وخفيف — يبرز مجموعة الأزرار دون جعلها عائمة فوق المحتوى */
+  box-shadow:    0 2px 8px rgba(0, 0, 0, 0.18);
 }
 
 /* ─── Horizontal scroller (narrow windows) ───────────────────────── */
@@ -30,9 +31,13 @@
   gap:            0;   /* الفواصل بين المجموعات عبر CSS التالي */
 
   width:          max-content;
-  margin:         0 auto;   /* توسيط أفقي داخل الـ scroller */
+  margin:         0;        /* إلغاء التوسيط — سنستخدم right للإزاحة */
   padding:        4px;      /* مسافة داخلية صغيرة */
   direction:      rtl;
+
+  /* إزاحة نحو اليمين بمقدار 45px */
+  position:       relative;
+  right:          -45px;
 }
 
 /* ─── Individual group — لا خلفية ولا حدود ───────────────────────── */
