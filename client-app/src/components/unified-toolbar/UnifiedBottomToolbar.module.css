@@ -1,0 +1,226 @@
+.toolbarOuter {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  left: 8px;
+  z-index: 500;
+
+  min-width: 0;
+  padding: 4px;
+
+  background: #f7f3eb;
+  border: 1px solid #cfc6b8;
+  border-radius: 11px;
+
+  box-shadow:
+    0 3px 11px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.toolbarScroller {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+
+  scrollbar-width: thin;
+  scrollbar-color: #aaa196 transparent;
+}
+
+.toolbarGrid {
+  display: grid;
+  grid-template-columns: repeat(17, minmax(54px, 1fr));
+
+  min-width: 930px;
+  height: 62px;
+
+  direction: rtl;
+}
+
+.toolbarButton {
+  position: relative;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 54px;
+  height: 62px;
+  padding: 3px 4px;
+
+  color: #181818;
+  background: transparent;
+
+  border: 0;
+  border-inline-end: 1px solid #d8d0c4;
+
+  cursor: pointer;
+
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.toolbarButton:first-child {
+  border-start-start-radius: 7px;
+  border-end-start-radius: 7px;
+}
+
+.toolbarButton:last-child {
+  border-inline-end: 0;
+  border-start-end-radius: 7px;
+  border-end-end-radius: 7px;
+}
+
+.toolbarButton:hover:not(:disabled) {
+  background: #ece7dd;
+}
+
+.toolbarButton:focus-visible {
+  z-index: 2;
+
+  outline: none;
+  border-radius: 7px;
+
+  box-shadow: inset 0 0 0 1.5px #8a5a2b;
+}
+
+.toolbarButton[data-active="true"] {
+  z-index: 1;
+
+  background: #dedbd1;
+  border: 1px solid #8f8679;
+  border-radius: 7px;
+
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.toolbarButton[data-tone="primary"] {
+  color: #155f9d;
+}
+
+.toolbarButton[data-tone="danger"] {
+  color: #d82424;
+}
+
+.toolbarButton:disabled {
+  color: #77716a;
+  background: #f2eee7;
+
+  cursor: not-allowed;
+
+  /* مهم: لا نستخدم شفافية منخفضة؛ النص والأيقونة يجب أن يظلا واضحين. */
+  opacity: 1;
+}
+
+.toolbarButton:disabled .toolbarShortcut {
+  color: #8a847c;
+}
+
+.toolbarIcon {
+  flex: 0 0 auto;
+  margin-bottom: 1px;
+}
+
+.toolbarLabel {
+  display: block;
+
+  max-width: 100%;
+  overflow: hidden;
+
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 15px;
+
+  text-align: center;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.toolbarShortcut {
+  display: block;
+
+  max-width: 100%;
+  overflow: hidden;
+
+  color: #5b5751;
+
+  font-size: 8px;
+  font-weight: 600;
+  line-height: 10px;
+
+  text-align: center;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.toolsMenu {
+  overflow: hidden;
+
+  padding: 5px 0;
+
+  background: #ffffff;
+  border: 1px solid #c9c0b4;
+  border-radius: 8px;
+
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.26);
+}
+
+.toolsMenuItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  width: 100%;
+  min-height: 37px;
+  padding: 7px 14px;
+
+  color: #202020;
+  background: transparent;
+  border: 0;
+
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+
+  text-align: right;
+
+  cursor: pointer;
+}
+
+.toolsMenuItem:hover:not(:disabled),
+.toolsMenuItem:focus-visible {
+  background: #eee9df;
+  outline: none;
+}
+
+.toolsMenuItem:disabled {
+  color: #817b73;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.toolsSeparator {
+  height: 1px;
+  margin: 4px 0;
+
+  background: #ddd6cd;
+}
+
+@media (max-width: 1100px) {
+  .toolbarGrid {
+    grid-template-columns: repeat(17, 52px);
+
+    min-width: 884px;
+  }
+
+  .toolbarLabel {
+    font-size: 11px;
+  }
+
+  .toolbarShortcut {
+    font-size: 7px;
+  }
+}

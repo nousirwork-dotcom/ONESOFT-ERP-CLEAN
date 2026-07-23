@@ -12,7 +12,9 @@ import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import { useModalAttention } from "./useModalAttention";
 import { toast } from "sonner";
 import { trpc } from "@/shared/lib/trpc";
-import ERPToolbar from "@/shared/components/ERPToolbar";
+import { UnifiedBottomToolbar } from "@/components/unified-toolbar/UnifiedBottomToolbar";
+import { DEFAULT_USER_TOOLS } from "@/components/unified-toolbar/toolbar.constants";
+import type { ToolbarActionMap, ToolbarToolItem } from "@/components/unified-toolbar/toolbar.types";
 
 export type UserFormTab = "basic" | "contact" | "login" | "work" | "permissions";
 
@@ -205,6 +207,134 @@ export function UserFormDialog({
       action();
     }
   };
+
+  const toolbarActions: ToolbarActionMap = {
+    save: {
+      supported: true,
+      allowed: true,
+      stateEnabled: !isSaving && isDirty && !mobileError,
+      disabledReason: !isDirty
+        ? "لا توجد تغييرات للحفظ"
+        : mobileError
+          ? "أصلح خطأ الجوال أولًا"
+          : "أكمل البيانات المطلوبة أولًا",
+      loading: isSaving,
+      onClick: () => void save(),
+    },
+    draft: {
+      supported: false,
+      disabledReason: "المسودة غير مستخدمة في شاشة المستخدمين",
+    },
+    new: {
+      supported: !!onToolbarNew,
+      allowed: true,
+      stateEnabled: true,
+      disabledReason: "ليس لديك صلاحية إضافة مستخدم أو تم تجاوز العدد المسموح",
+      onClick: onToolbarNew ? () => guardedToolbarAction(onToolbarNew) : undefined,
+    },
+    duplicate: {
+      supported: !!onToolbarCopy,
+      allowed: true,
+      stateEnabled: mode === "edit",
+      disabledReason: "اختر مستخدمًا محفوظًا أولًا",
+      onClick: onToolbarCopy ? () => guardedToolbarAction(onToolbarCopy) : undefined,
+    },
+    tools: {
+      supported: true,
+      allowed: true,
+      stateEnabled: true,
+      onClick: () => {},
+    },
+    edit: {
+      supported: false,
+      disabledReason: "التعديل يتم مباشرة من خلال فتح المستخدم",
+    },
+    delete: {
+      supported: !!onToolbarDelete,
+      allowed: true,
+      stateEnabled: mode === "edit",
+      disabledReason: "اختر مستخدمًا محفوظًا أولًا",
+      onClick: onToolbarDelete ? () => guardedToolbarAction(onToolbarDelete) : undefined,
+    },
+    first: {
+      supported: !!onToolbarFirst,
+      allowed: true,
+      stateEnabled: !!toolbarTotal && toolbarTotal > 0,
+      onClick: onToolbarFirst ? () => guardedToolbarAction(onToolbarFirst) : undefined,
+    },
+    previous: {
+      supported: !!onToolbarPrev,
+      allowed: true,
+      stateEnabled: !!toolbarRecord && toolbarRecord > 1,
+      onClick: onToolbarPrev ? () => guardedToolbarAction(onToolbarPrev) : undefined,
+    },
+    next: {
+      supported: !!onToolbarNext,
+      allowed: true,
+      stateEnabled: !!toolbarRecord && !!toolbarTotal && toolbarRecord < toolbarTotal,
+      onClick: onToolbarNext ? () => guardedToolbarAction(onToolbarNext) : undefined,
+    },
+    last: {
+      supported: !!onToolbarLast,
+      allowed: true,
+      stateEnabled: !!toolbarTotal && toolbarTotal > 0,
+      onClick: onToolbarLast ? () => guardedToolbarAction(onToolbarLast) : undefined,
+    },
+    approve: {
+      supported: false,
+      disabledReason: "الاعتماد غير مستخدم في شاشة المستخدمين",
+    },
+    unapprove: {
+      supported: false,
+      disabledReason: "إلغاء الاعتماد غير مستخدم في شاشة المستخدمين",
+    },
+    preview: {
+      supported: false,
+      disabledReason: "المعاينة غير مستخدمة في شاشة المستخدمين",
+    },
+    send: {
+      supported: false,
+      disabledReason: "الإرسال غير مستخدم في شاشة المستخدمين",
+    },
+    print: {
+      supported: false,
+      disabledReason: "الطباعة غير مستخدمة في شاشة المستخدمين",
+    },
+    exit: {
+      supported: true,
+      allowed: true,
+      stateEnabled: true,
+      onClick: requestClose,
+    },
+  };
+
+  const toolbarTools: ToolbarToolItem[] = [
+    {
+      id: "change-password",
+      label: "تغيير كلمة المرور",
+      enabled: false,
+      disabledReason: "استخدم زر القفل بجانب المستخدم في القائمة",
+    },
+    {
+      id: "activity",
+      label: "نشاط المستخدم",
+      enabled: false,
+      disabledReason: "غير مربوط بعد",
+    },
+    {
+      id: "related",
+      label: "المستندات المرتبطة",
+      separatorBefore: true,
+      enabled: false,
+      disabledReason: "غير مربوط بعد",
+    },
+    {
+      id: "attachments",
+      label: "إرفاق مستندات",
+      enabled: false,
+      disabledReason: "غير مربوط بعد",
+    },
+  ];
 
   const saveAndContinue = async () => {
     await save();
@@ -533,27 +663,12 @@ export function UserFormDialog({
               </div>
             )}
 
-            {/* ─── شريط الحركات ───────────────────────────────────────────────── */}
-            <div className="shrink-0">
-              <ERPToolbar
-                buttons={["save","draft","new","copy","edit","delete","first","prev","next","last","approve","cancel","preview","send","print","exit"]}
-                showTools
-                mode={mode === "create" ? "new" : "edit"}
-                record={toolbarRecord}
-                total={toolbarTotal}
-                hideStatusBar
-                enableShortcuts={false}
-                onSave={() => void save()}
-                saveDisabled={isSaving || !isDirty || !!mobileError}
-                onNew={onToolbarNew ? () => guardedToolbarAction(onToolbarNew!) : undefined}
-                onCopy={onToolbarCopy ? () => guardedToolbarAction(onToolbarCopy!) : undefined}
-                onEdit={mode === "edit" ? () => {} : undefined}
-                onDelete={onToolbarDelete}
-                onFirst={onToolbarFirst ? () => guardedToolbarAction(onToolbarFirst!) : undefined}
-                onPrev={onToolbarPrev ? () => guardedToolbarAction(onToolbarPrev!) : undefined}
-                onNext={onToolbarNext ? () => guardedToolbarAction(onToolbarNext!) : undefined}
-                onLast={onToolbarLast ? () => guardedToolbarAction(onToolbarLast!) : undefined}
-                onExit={requestClose}
+            {/* ─── شريط الحركات الموحد ───────────────────────────────────────── */}
+            <div className="relative h-[78px] shrink-0">
+              <UnifiedBottomToolbar
+                actions={toolbarActions}
+                tools={toolbarTools}
+                activeAction={isSaving ? "save" : undefined}
               />
             </div>
           </div>

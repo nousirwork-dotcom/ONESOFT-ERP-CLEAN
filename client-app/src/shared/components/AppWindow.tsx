@@ -3,6 +3,8 @@ import { Minus, Square, X } from "lucide-react";
 import { useTabManager, AppTab } from "@/core/contexts/TabManagerContext";
 import { useWorkspaceEl } from "@/core/contexts/WorkspaceContext";
 import { TASKBAR_H } from "@/shared/components/WindowTaskbar";
+import { ToolbarActionsProvider } from "@/components/unified-toolbar/ToolbarActionsContext";
+import { UnifiedScreenShell } from "@/components/layout/UnifiedScreenShell";
 
 interface AppWindowProps {
   tab: AppTab;
@@ -190,7 +192,13 @@ export default function AppWindow({ tab, children }: AppWindowProps) {
 
         {/* ── Content ── */}
         <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-          {children}
+          {isPosFullMode ? (
+            children
+          ) : (
+            <ToolbarActionsProvider>
+              <UnifiedScreenShell>{children}</UnifiedScreenShell>
+            </ToolbarActionsProvider>
+          )}
         </div>
       </div>
     </div>
