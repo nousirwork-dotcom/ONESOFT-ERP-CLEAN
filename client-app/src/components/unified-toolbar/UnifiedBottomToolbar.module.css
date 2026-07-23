@@ -3,7 +3,7 @@
   width:           100%;
   display:         flex;
   justify-content: flex-end;
-  padding:         6px 14px 8px 6px;
+  padding:         6px 12px;
   box-sizing:      border-box;
 
   background:      #F8F5EF;   /* يندمج مع الـ Footer */
@@ -17,7 +17,8 @@
   gap:             0;
 
   width:           fit-content;
-  max-width:       calc(100% - 24px);
+  max-width:       100%;
+  margin:          0;
   direction:       rtl;
 
   /* المظهر البارز — صندوق واحد فاتح */
