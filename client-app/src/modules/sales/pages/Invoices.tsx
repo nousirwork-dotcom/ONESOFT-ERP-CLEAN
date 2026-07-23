@@ -1,13 +1,13 @@
 import { fmtDate } from "@/shared/utils/dateUtils";
 import { Badge } from "@/core/ui/badge";
-import { Button } from "@/core/ui/button";
 import { Card, CardContent } from "@/core/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/core/ui/table";
 import { trpc } from "@/shared/lib/trpc";
 import { ClipboardCheck } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
-import ERPToolbar from "@/shared/components/ERPToolbar";
+import { useToolbarActions } from "@/components/unified-toolbar/ToolbarActionsContext";
+import { useMemo } from "react";
 
 const paymentLabels: Record<string, string> = { cash: "نقدي", card: "بطاقة", transfer: "تحويل", credit: "آجل" };
 
@@ -18,6 +18,28 @@ export default function Invoices() {
   const formatCurrency = (val: string | number) =>
     new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(Number(val));
 
+  const toolbarActions = useMemo(() => ({
+    save:      { supported: false as const, disabledReason: "القائمة للعرض فقط — افتح فاتورة للحفظ" },
+    draft:     { supported: false as const, disabledReason: "غير مستخدم في قائمة الفواتير" },
+    new:       { supported: true as const, allowed: true, stateEnabled: true, onClick: () => navigate("/pos") },
+    duplicate: { supported: false as const, disabledReason: "افتح فاتورة أولًا لنسخها" },
+    tools:     { supported: false as const, disabledReason: "لا توجد أدوات متاحة في قائمة الفواتير" },
+    edit:      { supported: false as const, disabledReason: "اضغط مرتين على فاتورة لفتحها" },
+    delete:    { supported: false as const, disabledReason: "افتح فاتورة أولًا لحذفها" },
+    first:     { supported: false as const, disabledReason: "التنقل يتم داخل نافذة الفاتورة" },
+    previous:  { supported: false as const, disabledReason: "التنقل يتم داخل نافذة الفاتورة" },
+    next:      { supported: false as const, disabledReason: "التنقل يتم داخل نافذة الفاتورة" },
+    last:      { supported: false as const, disabledReason: "التنقل يتم داخل نافذة الفاتورة" },
+    approve:   { supported: false as const, disabledReason: "غير مستخدم في قائمة الفواتير" },
+    unapprove: { supported: false as const, disabledReason: "غير مستخدم في قائمة الفواتير" },
+    preview:   { supported: false as const, disabledReason: "اضغط مرتين على فاتورة لمطالعتها" },
+    send:      { supported: false as const, disabledReason: "افتح فاتورة أولًا للإرسال" },
+    print:     { supported: true as const, allowed: true, stateEnabled: true, onClick: () => { toast.info("طباعة القائمة..."); } },
+    exit:      { supported: false as const, disabledReason: "أغلق التبويب من شريط التبويبات العلوي" },
+  }), [navigate]);
+
+  useToolbarActions(toolbarActions, []);
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -26,17 +48,6 @@ export default function Invoices() {
           <p className="text-muted-foreground text-sm mt-0.5">سجل جميع فواتير المبيعات</p>
         </div>
       </div>
-
-      {/* ERP Toolbar */}
-      <ERPToolbar
-        pageTitle="قائمة الفواتير"
-        hideStatusBar
-        onNew={() => navigate("/pos")}
-        onSearch={() => toast.info("بحث في الفواتير...")}
-        onRefresh={() => window.location.reload()}
-        onPrint={() => toast.info("طباعة القائمة...")}
-        onBrowse={() => toast.info("حدّد فاتورة من القائمة لمطالعتها")}
-      />
 
       <Card className="border-0 shadow-sm">
         <CardContent className="p-0">

@@ -2,12 +2,14 @@
  * DocumentInvoicePage.tsx — صفحة مستندات متعددة الأغراض
  * تعمل مع: فاتورة مبيعات/مشتريات، مردود، عرض سعر، أمر بيع/شراء
  */
-import React, { useState, useRef, useCallback, useEffect, KeyboardEvent } from "react";
+import React, { useState, useRef, useCallback, useEffect, useMemo, KeyboardEvent } from "react";
 import { Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/shared/lib/trpc";
 import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
-import ERPToolbar, { ERPMode } from "@/shared/components/ERPToolbar";
+import { useToolbarActions } from "@/components/unified-toolbar/ToolbarActionsContext";
+import type { ToolbarActionMap } from "@/components/unified-toolbar/toolbar.types";
+type ERPMode = "view" | "new" | "edit" | "search";
 import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import PostingPreviewModal from "@/shared/components/PostingPreviewModal";
 import InvoicePrintModal, { type DocTemplateConfig } from "@/shared/components/InvoicePrintModal";
@@ -622,6 +624,46 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     } else setInvoiceNumber("");
   }, [journalId, utils]);
 
+  // ── Unified Toolbar ──────────────────────────────────────────────────────────
+  const _tbRef = useRef<any>({});
+  _tbRef.current = { erpMode, isSaving, savedInvoiceId, isPosted, isPrintEnabled, config, handleSave, handleNew, handleDuplicate, setErpMode, setPendingNav, setShowUnsaved, setShowPrintModal, setShowPostingPreview, unpostMutation };
+  const toolbarActions = useMemo(() => {
+    const canPost = config.canPost !== false && config.docCategory === "sales";
+    const hasSaved = savedInvoiceId !== null;
+    const isDirtyMode = erpMode === "new" || erpMode === "edit";
+    return ({
+      save: { supported: true as const, allowed: true, loading: isSaving, stateEnabled: !isSaving && isDirtyMode, disabledReason: isDirtyMode ? undefined : "وضع العرض — اضغط تعديل أولًا", onClick: () => { _tbRef.current.handleSave(); } },
+      new: { supported: true as const, allowed: true, stateEnabled: true, onClick: () => { const s = _tbRef.current; const dirty = s.erpMode === "new" || s.erpMode === "edit"; const doNew = () => { s.handleNew(); s.setErpMode("new"); }; if (dirty) { s.setPendingNav(() => doNew); s.setShowUnsaved(true); } else doNew(); } },
+      duplicate: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "احفظ المستند أولًا لنسخه", onClick: () => _tbRef.current.handleDuplicate() },
+      edit: { supported: true as const, allowed: true, stateEnabled: erpMode === "view", disabledReason: erpMode !== "view" ? "المستند في وضع التعديل بالفعل" : undefined, onClick: () => { _tbRef.current.setErpMode("edit"); toast.info("وضع التعديل"); } },
+      delete: { supported: false as const, disabledReason: "حذف المستند غير متاح في هذه الشاشة" },
+      draft: { supported: false as const, disabledReason: "المسودة غير مستخدمة" },
+      first:    { supported: false as const, disabledReason: "التنقل يتم داخل شاشة الفاتورة الكاملة" },
+      previous: { supported: false as const, disabledReason: "التنقل يتم داخل شاشة الفاتورة الكاملة" },
+      next:     { supported: false as const, disabledReason: "التنقل يتم داخل شاشة الفاتورة الكاملة" },
+      last:     { supported: false as const, disabledReason: "التنقل يتم داخل شاشة الفاتورة الكاملة" },
+      approve: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "احفظ المستند أولًا للاعتماد", onClick: () => toast.success("تم الاعتماد") },
+      unapprove: { supported: canPost, allowed: true, stateEnabled: hasSaved && isPosted, disabledReason: !hasSaved ? "احفظ المستند أولًا" : !isPosted ? "المستند غير مرحّل" : undefined, onClick: () => { const s = _tbRef.current; if (!s.savedInvoiceId) return; if (window.confirm("هل أنت متأكد من إلغاء ترحيل هذا المستند؟")) s.unpostMutation.mutate({ invoiceId: s.savedInvoiceId! }); } },
+      preview: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "احفظ المستند أولًا للمطالعة", onClick: () => { const s = _tbRef.current; if (s.savedInvoiceId) s.setErpMode("view"); else toast.info("لا يوجد سجل محفوظ للمطالعة"); } },
+      tools: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "احفظ المستند أولًا" },
+      send: { supported: false as const, disabledReason: "الإرسال غير متاح في هذه الشاشة" },
+      print: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "احفظ المستند أولًا للطباعة", onClick: () => { const s = _tbRef.current; if (s.isPrintEnabled) s.setShowPrintModal(true); else toast.info("جاري الطباعة..."); } },
+      exit: { supported: true as const, allowed: true, stateEnabled: true, onClick: () => { const s = _tbRef.current; const dirty = s.erpMode === "new" || s.erpMode === "edit"; const doExit = () => toast.info("أغلق التبويب لإغلاق الشاشة"); if (dirty) { s.setPendingNav(() => doExit); s.setShowUnsaved(true); } else doExit(); } },
+    }) as unknown as ToolbarActionMap;
+  }, [erpMode, isSaving, savedInvoiceId, isPosted, isPrintEnabled, config]);
+  const toolbarTools = useMemo(() => {
+    const canPost = config.canPost !== false && config.docCategory === "sales";
+    const hasSaved = savedInvoiceId !== null;
+    return [
+      { id: "post", label: "ترحيل المستند", enabled: canPost && hasSaved && !isPosted, disabledReason: !canPost ? "الترحيل غير متاح لهذا النوع" : !hasSaved ? "احفظ المستند أولًا" : isPosted ? "المستند مرحّل بالفعل" : undefined, onClick: () => { if (!_tbRef.current.savedInvoiceId) { toast.warning("يجب حفظ المستند أولاً"); return; } _tbRef.current.setShowPostingPreview(true); } },
+      { id: "unpost", label: "إلغاء ترحيل المستند", enabled: canPost && hasSaved && isPosted, disabledReason: !canPost ? "غير متاح" : !isPosted ? "المستند غير مرحّل" : undefined, onClick: () => { const s = _tbRef.current; if (!s.savedInvoiceId) return; if (window.confirm("هل أنت متأكد من إلغاء ترحيل هذا المستند؟")) s.unpostMutation.mutate({ invoiceId: s.savedInvoiceId! }); } },
+      { id: "suspend", label: "تعليق الترحيل", enabled: false, disabledReason: "قريباً" },
+      { id: "activity", label: "نشاط المستخدمين", separatorBefore: true as const, enabled: false, disabledReason: "قريباً" },
+      { id: "attachments", label: "إرفاق المستندات", enabled: false, disabledReason: "قريباً" },
+    ];
+  }, [config, savedInvoiceId, isPosted]);
+  useToolbarActions(toolbarActions, toolbarTools);
+
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <div
@@ -629,57 +671,6 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       style={{ fontFamily: "'Cairo', Tahoma, Arial, sans-serif", fontSize: "12px", background: "var(--background)" }}
       dir="rtl"
     >
-      {/* ── ERP Toolbar ───────────────────────────────────────────────────── */}
-      <ERPToolbar
-        pageTitle={config.pageTitle}
-        mode={erpMode}
-        saveDisabled={isSaving || erpMode === "view"}
-        isSaved={savedInvoiceId !== null}
-        isPosted={isPosted}
-        postingStatus={savedInvoiceId !== null ? (isPosted ? "posted" : "unposted") : null}
-        onNew={() => {
-          const doNew = () => { handleNew(); setErpMode("new"); };
-          const isDirty = erpMode === "new" || erpMode === "edit";
-          if (isDirty) { setPendingNav(() => doNew); setShowUnsaved(true); } else { doNew(); }
-        }}
-        onSave={() => handleSave()}
-        onEdit={() => { setErpMode("edit"); toast.info("وضع التعديل"); }}
-        onDelete={() => toast.info("حذف المستند...")}
-        onCopy={handleDuplicate}
-        onPost={config.canPost !== false && config.docCategory === "sales" ? () => {
-          if (!savedInvoiceId) { toast.warning("يجب حفظ المستند أولاً"); return; }
-          setShowPostingPreview(true);
-        } : undefined}
-        onUnpost={config.canPost !== false && config.docCategory === "sales" ? () => {
-          if (!savedInvoiceId) return;
-          if (window.confirm("هل أنت متأكد من إلغاء ترحيل هذا المستند؟"))
-            unpostMutation.mutate({ invoiceId: savedInvoiceId! });
-        } : undefined}
-        onApprove={() => toast.success("تم الاعتماد")}
-        onCancel={() => { setErpMode("view"); toast.info("تم الإلغاء"); }}
-        onPrint={() => {
-          if (isPrintEnabled) {
-            setShowPrintModal(true);
-          } else {
-            toast.info("جاري الطباعة...");
-          }
-        }}
-        onPreview={() => {
-          if (savedInvoiceId) {
-            setErpMode("view");
-          } else {
-            toast.info("لا يوجد سجل محفوظ للمطالعة");
-          }
-        }}
-        onUserActivity={() => toast.info("نشاط المستخدمين — قريباً")}
-        onSuspendPosting={() => toast.info("تعليق الترحيل — قريباً")}
-        onExit={() => {
-          const doExit = () => toast.info("خروج");
-          const isDirty = erpMode === "new" || erpMode === "edit";
-          if (isDirty) { setPendingNav(() => doExit); setShowUnsaved(true); } else { doExit(); }
-        }}
-        enableShortcuts
-      />
       {/* ── Unsaved Changes Guard ──────────────────────────────────────────────── */}
       <UnsavedChangesDialog
         open={showUnsaved}

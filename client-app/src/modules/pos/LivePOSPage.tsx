@@ -1,11 +1,11 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { trpc } from '@/shared/lib/trpc';
 import { useAuth } from '@/core/hooks/useAuth';
+import { useToolbarActions } from '@/components/unified-toolbar/ToolbarActionsContext';
 import { useTabManager } from '@/core/contexts/TabManagerContext';
 import CustomerFormDialog from '@/shared/components/CustomerFormDialog';
 import { OneSoftPOSSuite } from './suite/POSRoot';
 import { POSCatalogProvider } from './suite/catalog-context';
-import ERPToolbar from '@/shared/components/ERPToolbar';
 import type { Product, ProductGroup, CustomerSummary, JournalSummary, WarehouseSummary } from './suite/types';
 
 // ─── Data mappers ─────────────────────────────────────────────────────────────
@@ -307,19 +307,32 @@ export function LivePOSPage() {
     );
   }
 
+  // ── Unified Toolbar (POS mode) ────────────────────────────────────────────────
+  const posToolbarActions = useMemo(() => ({
+    save:      { supported: false as const, disabledReason: "الحفظ يتم تلقائيًا في نقطة البيع" },
+    draft:     { supported: false as const, disabledReason: "المسودة غير مستخدمة في نقطة البيع" },
+    new:       { supported: true as const, allowed: true, stateEnabled: true, onClick: () => { (window as any).__pos_new?.(); } },
+    duplicate: { supported: false as const, disabledReason: "غير متاح في نقطة البيع" },
+    tools:     { supported: false as const, disabledReason: "غير متاح في نقطة البيع" },
+    edit:      { supported: false as const, disabledReason: "غير متاح في نقطة البيع" },
+    delete:    { supported: false as const, disabledReason: "غير متاح في نقطة البيع" },
+    first:     { supported: false as const, disabledReason: "غير متاح في نقطة البيع" },
+    previous:  { supported: false as const, disabledReason: "غير متاح في نقطة البيع" },
+    next:      { supported: false as const, disabledReason: "غير متاح في نقطة البيع" },
+    last:      { supported: false as const, disabledReason: "غير متاح في نقطة البيع" },
+    approve:   { supported: false as const, disabledReason: "غير متاح في نقطة البيع" },
+    unapprove: { supported: false as const, disabledReason: "غير متاح في نقطة البيع" },
+    preview:   { supported: false as const, disabledReason: "غير متاح في نقطة البيع" },
+    send:      { supported: false as const, disabledReason: "غير متاح في نقطة البيع" },
+    print:     { supported: true as const, allowed: true, stateEnabled: true, onClick: () => { window.print(); } },
+    exit:      { supported: true as const, allowed: true, stateEnabled: true, onClick: () => { window.history.back(); } },
+  }), []);
+  useToolbarActions(posToolbarActions);
+
   // ─── Render ───────────────────────────────────────────────────────────────────
   return (
     <>
-      <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-        <ERPToolbar
-          buttons={["new", "print", "exit"]}
-          onNew={() => { (window as any).__pos_new?.(); }}
-          onPrint={() => window.print()}
-          onExit={() => window.history.back()}
-          hideStatusBar
-          enableShortcuts={false}
-        />
-        <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+      <div style={{ height: "100%", minHeight: 0, overflow: "hidden" }}>
       <POSCatalogProvider
         value={{
           products: suiteProducts,
@@ -342,7 +355,6 @@ export function LivePOSPage() {
       >
         <OneSoftPOSSuite />
       </POSCatalogProvider>
-        </div>
       </div>
 
       {showAddCustomer ? (

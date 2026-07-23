@@ -1,11 +1,11 @@
 /**
  * Customers.tsx — صفحة إدارة العملاء مع نافذة الإضافة/التعديل الشاملة
  */
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { trpc } from "@/shared/lib/trpc";
 import { toast } from "sonner";
 import { Search, Users } from "lucide-react";
-import ERPToolbar from "@/shared/components/ERPToolbar";
+import { useToolbarActions } from "@/components/unified-toolbar/ToolbarActionsContext";
 import CustomerFormDialog from "@/shared/components/CustomerFormDialog";
 
 export default function Customers() {
@@ -29,21 +29,30 @@ export default function Customers() {
       )
     : (customers ?? []);
 
+  const toolbarActions = useMemo(() => ({
+    save:      { supported: false as const, disabledReason: "القائمة للعرض فقط — افتح سجل عميل للحفظ" },
+    draft:     { supported: false as const, disabledReason: "غير مستخدم في قائمة العملاء" },
+    new:       { supported: true as const, allowed: true, stateEnabled: true, onClick: openCreate },
+    duplicate: { supported: false as const, disabledReason: "افتح سجل عميل أولًا لنسخه" },
+    tools:     { supported: false as const, disabledReason: "لا توجد أدوات متاحة في قائمة العملاء" },
+    edit:      { supported: false as const, disabledReason: "اضغط مرتين على عميل لتعديله" },
+    delete:    { supported: false as const, disabledReason: "اضغط مرتين على عميل ثم احذفه من النافذة" },
+    first:     { supported: false as const, disabledReason: "التنقل يتم داخل نافذة العميل" },
+    previous:  { supported: false as const, disabledReason: "التنقل يتم داخل نافذة العميل" },
+    next:      { supported: false as const, disabledReason: "التنقل يتم داخل نافذة العميل" },
+    last:      { supported: false as const, disabledReason: "التنقل يتم داخل نافذة العميل" },
+    approve:   { supported: false as const, disabledReason: "غير مستخدم في قائمة العملاء" },
+    unapprove: { supported: false as const, disabledReason: "غير مستخدم في قائمة العملاء" },
+    preview:   { supported: false as const, disabledReason: "اضغط مرتين على عميل لمطالعة بياناته" },
+    send:      { supported: false as const, disabledReason: "افتح سجل عميل أولًا للإرسال" },
+    print:     { supported: true as const, allowed: true, stateEnabled: true, onClick: () => { toast.info("جاري طباعة قائمة العملاء..."); } },
+    exit:      { supported: false as const, disabledReason: "أغلق التبويب من شريط التبويبات العلوي" },
+  }), []);   // openCreate is defined in component scope — stable identity per render is fine here
+
+  useToolbarActions(toolbarActions, []);
+
   return (
     <div className="space-y-4" dir="rtl">
-
-      {/* ── Toolbar ── */}
-      <ERPToolbar
-        pageTitle="العملاء"
-        hideStatusBar
-        onNew={openCreate}
-        onEdit={() => toast.info("اختر عميلاً من القائمة للتعديل")}
-        onDelete={() => toast.info("اختر عميلاً من القائمة للحذف")}
-        onSearch={() => {}}
-        onRefresh={() => refetch()}
-        onPrint={() => toast.info("جاري الطباعة...")}
-        onBrowse={() => toast.info("حدّد عميلاً من القائمة لمطالعة بياناته")}
-      />
 
       {/* ── Search ── */}
       <div style={{ position: "relative", maxWidth: 340 }}>

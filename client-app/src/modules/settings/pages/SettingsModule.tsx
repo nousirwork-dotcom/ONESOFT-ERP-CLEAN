@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, lazy, Suspense } from "react";
+import React, { useState, useRef, useEffect, useMemo, lazy, Suspense } from "react";
 import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import { FoundationPolicyPanel } from "@/shared/components/FoundationPolicyPanel";
 import type { RecordPolicy } from "@/shared/components/FoundationPolicyPanel";
@@ -37,7 +37,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/core/ui/textarea";
 import { Switch } from "@/core/ui/switch";
 import { toast } from "sonner";
-import ERPToolbar from "@/shared/components/ERPToolbar";
+import { useToolbarActions } from "@/components/unified-toolbar/ToolbarActionsContext";
 
 type MenuId = string;
 
@@ -1921,6 +1921,33 @@ function UserGroupsPage() {
     action?.();
   }
 
+  // ── Unified Toolbar ──────────────────────────────────────────────────────────
+  const _ugRef = useRef<any>({});
+  _ugRef.current = { selectedGroup, isDirty, saveAllMut, currentGroupIndex, totalGroups, handleSave, handleNew, handleDelete, handleNav, handleClose };
+  const toolbarActions = useMemo(() => {
+    const hasSel = !!selectedGroup;
+    return {
+      save: { supported: true as const, allowed: true, stateEnabled: isDirty && !saveAllMut.isPending, disabledReason: !isDirty ? "لا توجد تعديلات للحفظ" : undefined, loading: saveAllMut.isPending, onClick: () => _ugRef.current.handleSave() },
+      new: { supported: true as const, allowed: true, stateEnabled: true, onClick: () => _ugRef.current.handleNew() },
+      edit: { supported: false as const, disabledReason: "التعديل يتم مباشرة في النموذج" },
+      duplicate: { supported: false as const, disabledReason: "النسخ غير متاح لمجموعات المستخدمين" },
+      draft: { supported: false as const, disabledReason: "المسودة غير مستخدمة" },
+      delete: { supported: true as const, allowed: true, stateEnabled: hasSel, disabledReason: "اختر مجموعة أولًا للحذف", onClick: () => _ugRef.current.selectedGroup && _ugRef.current.handleDelete() },
+      first: { supported: true as const, allowed: true, stateEnabled: hasSel && currentGroupIndex > 0, disabledReason: "أول مجموعة في القائمة بالفعل", onClick: () => _ugRef.current.handleNav('first') },
+      previous: { supported: true as const, allowed: true, stateEnabled: hasSel && currentGroupIndex > 0, disabledReason: "لا يوجد سجل سابق", onClick: () => _ugRef.current.handleNav('prev') },
+      next: { supported: true as const, allowed: true, stateEnabled: hasSel && currentGroupIndex < totalGroups - 1, disabledReason: "لا يوجد سجل تالٍ", onClick: () => _ugRef.current.handleNav('next') },
+      last: { supported: true as const, allowed: true, stateEnabled: hasSel && currentGroupIndex < totalGroups - 1, disabledReason: "آخر مجموعة في القائمة بالفعل", onClick: () => _ugRef.current.handleNav('last') },
+      approve: { supported: false as const, disabledReason: "غير متاح" },
+      unapprove: { supported: false as const, disabledReason: "غير متاح" },
+      preview: { supported: false as const, disabledReason: "المطالعة غير متاحة هنا" },
+      tools: { supported: false as const, disabledReason: "الأدوات غير متاحة هنا" },
+      send: { supported: false as const, disabledReason: "الإرسال غير متاح هنا" },
+      print: { supported: false as const, disabledReason: "الطباعة غير متاحة هنا" },
+      exit: { supported: true as const, allowed: true, stateEnabled: true, onClick: () => _ugRef.current.handleClose() },
+    };
+  }, [selectedGroup, isDirty, saveAllMut.isPending, currentGroupIndex, totalGroups]);
+  useToolbarActions(toolbarActions);
+
   return (
     <div className="flex flex-col h-full overflow-hidden" dir="rtl">
 
@@ -2311,26 +2338,6 @@ function UserGroupsPage() {
       </div>
 
       </div>{/* end flex-1 min-h-0 flex row */}
-
-      {/* ── ERPToolbar ─────────────────────────────────────────────────────────── */}
-      <ERPToolbar
-        buttons={['save', 'new', 'delete', 'first', 'prev', 'next', 'last', 'close']}
-        enableShortcuts={false}
-        mode={selectedGroup ? (isDirty ? 'edit' : 'view') : 'new'}
-        record={currentGroupIndex >= 0 ? currentGroupIndex + 1 : undefined}
-        total={totalGroups > 0 ? totalGroups : undefined}
-        pageTitle="مجموعات المستخدمين"
-        saveDisabled={!isDirty || saveAllMut.isPending}
-        onSave={handleSave}
-        onNew={handleNew}
-        onDelete={selectedGroup ? handleDelete : undefined}
-        onFirst={() => handleNav('first')}
-        onPrev={() => handleNav('prev')}
-        onNext={() => handleNav('next')}
-        onLast={() => handleNav('last')}
-        onClose={handleClose}
-        isSaved={!!selectedGroup}
-      />
 
       {/* ── Unsaved Changes Dialog ──────────────────────────────────────────────── */}
       <UnsavedChangesDialog

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from "react";
-import ERPToolbar from "@/shared/components/ERPToolbar";
+import { useToolbarActions } from "@/components/unified-toolbar/ToolbarActionsContext";
 import { Input } from "@/core/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/core/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/core/ui/dialog";
@@ -868,6 +868,34 @@ export default function DocumentJournalsPage() {
 
   /* ── Toolbar ── */
   const isBusy = createMut.isPending || updateMut.isPending || deleteMut.isPending;
+
+  // ── Unified Toolbar ──────────────────────────────────────────────────────────
+  const _djpRef = useRef<any>({});
+  _djpRef.current = { view, editId, typeJournals, currentIndex, isBusy, isDirty, handleSave, openCreate, handleDuplicate, setShowDelete, handleMutalaah, handlePrint, currentType, safeNavigate, openEdit, setView, setEditId };
+  const toolbarActions = useMemo(() => {
+    const hasEdit = editId !== null;
+    const inForm = view === "form";
+    return {
+      save: { supported: true as const, allowed: true, stateEnabled: inForm && !isBusy, disabledReason: !inForm ? "اختر دفترًا للتعديل" : undefined, loading: isBusy, onClick: () => _djpRef.current.handleSave() },
+      new: { supported: true as const, allowed: true, stateEnabled: true, onClick: () => _djpRef.current.safeNavigate(_djpRef.current.openCreate) },
+      duplicate: { supported: true as const, allowed: true, stateEnabled: hasEdit, disabledReason: "افتح دفترًا أولًا لنسخه", onClick: () => _djpRef.current.editId && _djpRef.current.handleDuplicate() },
+      edit: { supported: false as const, disabledReason: "الدفاتر دائمًا في وضع التعديل" },
+      delete: { supported: true as const, allowed: true, stateEnabled: hasEdit, disabledReason: "افتح دفترًا أولًا للحذف", onClick: () => _djpRef.current.editId && _djpRef.current.setShowDelete(true) },
+      draft: { supported: false as const, disabledReason: "المسودة غير مستخدمة" },
+      first: { supported: true as const, allowed: true, stateEnabled: inForm && typeJournals.length > 0, disabledReason: "لا توجد دفاتر", onClick: () => { const s = _djpRef.current; const f = s.typeJournals[0]; if (f) s.safeNavigate(() => s.openEdit(f)); } },
+      previous: { supported: true as const, allowed: true, stateEnabled: inForm && currentIndex > 0, disabledReason: "لا يوجد سجل سابق", onClick: () => { const s = _djpRef.current; if (s.currentIndex > 0) s.safeNavigate(() => s.openEdit(s.typeJournals[s.currentIndex - 1])); } },
+      next: { supported: true as const, allowed: true, stateEnabled: inForm && currentIndex < typeJournals.length - 1, disabledReason: "لا يوجد سجل تالٍ", onClick: () => { const s = _djpRef.current; if (s.currentIndex < s.typeJournals.length - 1) s.safeNavigate(() => s.openEdit(s.typeJournals[s.currentIndex + 1])); } },
+      last: { supported: true as const, allowed: true, stateEnabled: inForm && typeJournals.length > 0, disabledReason: "لا توجد دفاتر", onClick: () => { const s = _djpRef.current; const l = s.typeJournals.at(-1); if (l) s.safeNavigate(() => s.openEdit(l)); } },
+      approve: { supported: false as const, disabledReason: "الاعتماد غير متاح لدفاتر المستندات" },
+      unapprove: { supported: false as const, disabledReason: "غير متاح" },
+      preview: { supported: true as const, allowed: true, stateEnabled: inForm, disabledReason: "اختر دفترًا أولًا", onClick: () => _djpRef.current.handleMutalaah() },
+      tools: { supported: false as const, disabledReason: "الأدوات غير متاحة هنا" },
+      send: { supported: false as const, disabledReason: "الإرسال غير متاح هنا" },
+      print: { supported: true as const, allowed: true, stateEnabled: inForm && hasEdit, disabledReason: "افتح دفترًا أولًا للطباعة", onClick: () => _djpRef.current.handlePrint() },
+      exit: { supported: true as const, allowed: true, stateEnabled: inForm, disabledReason: "أنت في قائمة الدفاتر بالفعل", onClick: () => { const s = _djpRef.current; s.safeNavigate(() => { s.setView("list"); s.setEditId(null); }); } },
+    };
+  }, [view, editId, isBusy, typeJournals, currentIndex]);
+  useToolbarActions(toolbarActions);
 
   /* ──────────────── RENDER ──────────────── */
   return (
@@ -1790,26 +1818,6 @@ export default function DocumentJournalsPage() {
             </ActiveFieldCtx.Provider>
             {/* end Tab Content */}
 
-            {/* ══ ERPToolbar ══ */}
-            <ERPToolbar
-              onSave={handleSave}
-              onNew={() => safeNavigate(openCreate)}
-              onCopy={editId ? handleDuplicate : undefined}
-              onDelete={editId ? () => setShowDelete(true) : undefined}
-              onFirst={() => { const f = typeJournals[0]; if (f) safeNavigate(() => openEdit(f)); }}
-              onPrev={currentIndex > 0 ? () => safeNavigate(() => openEdit(typeJournals[currentIndex - 1])) : undefined}
-              onNext={currentIndex < typeJournals.length - 1 ? () => safeNavigate(() => openEdit(typeJournals[currentIndex + 1])) : undefined}
-              onLast={() => { const l = typeJournals.at(-1); if (l) safeNavigate(() => openEdit(l)); }}
-              onPreview={handleMutalaah}
-              onPrint={handlePrint}
-              onExit={() => safeNavigate(() => { setView("list"); setEditId(null); })}
-              saveDisabled={isBusy}
-              record={editId && currentIndex >= 0 ? currentIndex + 1 : undefined}
-              total={editId ? typeJournals.length : undefined}
-              mode={editId ? "view" : "new"}
-              pageTitle={currentType?.label}
-              hideStatusBar={false}
-            />
           </div>
         )}
       </div>

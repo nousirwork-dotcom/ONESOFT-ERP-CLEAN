@@ -192,13 +192,9 @@ export default function AppWindow({ tab, children }: AppWindowProps) {
 
         {/* ── Content ── */}
         <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-          {isPosFullMode ? (
-            children
-          ) : (
-            <ToolbarActionsProvider>
-              <UnifiedScreenShell>{children}</UnifiedScreenShell>
-            </ToolbarActionsProvider>
-          )}
+          <ToolbarActionsProvider>
+            <UnifiedScreenShell>{children}</UnifiedScreenShell>
+          </ToolbarActionsProvider>
         </div>
       </div>
     </div>

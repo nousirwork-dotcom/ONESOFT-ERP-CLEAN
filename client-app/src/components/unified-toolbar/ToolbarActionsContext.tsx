@@ -43,16 +43,24 @@ export function ToolbarActionsProvider({
     activeAction: undefined,
   });
 
-  const setActions = useCallback((actions: ToolbarActionMap) => {
-    setState((prev) => ({ ...prev, actions }));
+  // Bail out when reference hasn't changed — prevents infinite loops when
+  // useToolbarActions re-fires the effect after a parent re-render.
+  const setActions = useCallback((newActions: ToolbarActionMap) => {
+    setState((prev) =>
+      prev.actions === newActions ? prev : { ...prev, actions: newActions },
+    );
   }, []);
 
-  const setTools = useCallback((tools: ToolbarToolItem[]) => {
-    setState((prev) => ({ ...prev, tools }));
+  const setTools = useCallback((newTools: ToolbarToolItem[]) => {
+    setState((prev) =>
+      prev.tools === newTools ? prev : { ...prev, tools: newTools },
+    );
   }, []);
 
   const setActiveAction = useCallback((id?: ToolbarActionId) => {
-    setState((prev) => ({ ...prev, activeAction: id }));
+    setState((prev) =>
+      prev.activeAction === id ? prev : { ...prev, activeAction: id },
+    );
   }, []);
 
   const api = useMemo<ToolbarActionsApi>(
@@ -67,6 +75,11 @@ export function ToolbarActionsProvider({
   );
 }
 
+/**
+ * Register toolbar actions from a screen component.
+ * Cleans up automatically on unmount.
+ * Wrap `actions` and `tools` in useMemo to avoid re-registering every render.
+ */
 export function useToolbarActions(
   actions: ToolbarActionMap,
   tools?: ToolbarToolItem[],
@@ -79,17 +92,22 @@ export function useToolbarActions(
     );
   }
 
+  // Destructure stable setters (useCallback []) so the effect only re-fires
+  // when actions/tools change, NOT on every context state update.
+  const { setActions, setTools, setActiveAction } = ctx;
+
   useEffect(() => {
-    ctx.setActions(actions);
-    if (tools) ctx.setTools(tools);
-    ctx.setActiveAction(activeAction);
+    setActions(actions);
+    if (tools !== undefined) setTools(tools);
+    setActiveAction(activeAction);
 
     return () => {
-      ctx.setActions({});
-      ctx.setTools([]);
-      ctx.setActiveAction(undefined);
+      setActions({});
+      setTools([]);
+      setActiveAction(undefined);
     };
-  }, [ctx, actions, tools, activeAction]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setActions, setTools, setActiveAction, actions, tools, activeAction]);
 }
 
 export function useToolbarState(): ToolbarState {

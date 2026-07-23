@@ -7,7 +7,7 @@
  * - تنقل Tab/Enter بين خلايا الجدول
  * - بحث الأصناف بالاسم أو الكود
  */
-import React, { useState, useRef, useCallback, useEffect, KeyboardEvent } from "react";
+import React, { useState, useRef, useCallback, useEffect, useMemo, KeyboardEvent } from "react";
 import { clearBranchDependentFields } from "@/lib/invoiceBranchLogic";
 import { Plus, X } from "lucide-react";
 import { toast } from "sonner";
@@ -15,7 +15,9 @@ import { trpc } from "@/shared/lib/trpc";
 import { useLang } from "@/core/contexts/LanguageContext";
 import { useUnsavedChangesGuard } from "@/core/hooks/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
-import ERPToolbar, { ERPMode } from "@/shared/components/ERPToolbar";
+import { useToolbarActions } from "@/components/unified-toolbar/ToolbarActionsContext";
+import type { ToolbarActionMap } from "@/components/unified-toolbar/toolbar.types";
+type ERPMode = "view" | "new" | "edit" | "search";
 import PostingPreviewModal from "@/shared/components/PostingPreviewModal";
 import InvoicePrintModal from "@/shared/components/InvoicePrintModal";
 import SendDocumentPanel from "@/shared/components/SendDocumentPanel";
@@ -1147,6 +1149,46 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       paymentType, currency, notes, lines, subtotal, totalDiscount, totalTax, netTotal,
       paidAmount, remainingAmount, orgQuery.data, qrSettingsQuery.data, templateConfig]);
 
+  // ── Unified Toolbar ──────────────────────────────────────────────────────────
+  const _sipRef = useRef<any>({});
+  _sipRef.current = { erpMode, isDirty, savedInvoiceId, isPosted, handleNew, handleSave, handleDelete, handleDuplicate, handleRepost, createMutation, unpostMutation, allInvoicesQuery, navInvoiceId, setNavInvoiceId, setErpMode, dirtyRequestClose, setShowPostingPreview, setShowPrintModal, setShowSendPanel, nextNumberQuery };
+  const toolbarActions = useMemo(() => {
+    const hasSaved = savedInvoiceId !== null;
+    const isSaving = createMutation.isPending;
+    const isDirtyMode = erpMode === "new" || erpMode === "edit";
+    return ({
+      save: { supported: true as const, allowed: true, loading: isSaving, stateEnabled: !isSaving && isDirtyMode, disabledReason: isDirtyMode ? undefined : "وضع العرض — اضغط تعديل أولًا", onClick: () => { _sipRef.current.handleSave(); } },
+      new: { supported: true as const, allowed: true, stateEnabled: true, onClick: () => { const s = _sipRef.current; s.handleNew(); s.setErpMode("new" as ERPMode); } },
+      duplicate: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "احفظ الفاتورة أولًا لنسخها", onClick: () => _sipRef.current.handleDuplicate() },
+      edit: { supported: true as const, allowed: true, stateEnabled: erpMode === "view", disabledReason: erpMode !== "view" ? "الفاتورة في وضع التعديل بالفعل" : undefined, onClick: () => { _sipRef.current.setErpMode("edit" as ERPMode); toast.info("وضع التعديل"); } },
+      delete: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "لا يوجد سجل للحذف", onClick: () => _sipRef.current.handleDelete() },
+      draft: { supported: false as const, disabledReason: "المسودة غير مستخدمة" },
+      first: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "لا توجد فواتير", onClick: () => { const s = _sipRef.current; const ids = [...(s.allInvoicesQuery.data ?? [])].sort((a: any, b: any) => a.id - b.id).map((i: any) => i.id); if (ids.length) { s.setNavInvoiceId(ids[0]); s.setErpMode("view" as ERPMode); } } },
+      previous: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "لا يوجد سجل سابق", onClick: () => { const s = _sipRef.current; const ids = [...(s.allInvoicesQuery.data ?? [])].sort((a: any, b: any) => a.id - b.id).map((i: any) => i.id); const cur = s.navInvoiceId ?? s.savedInvoiceId; const idx = cur ? ids.indexOf(cur) : -1; if (idx > 0) { s.setNavInvoiceId(ids[idx - 1]); s.setErpMode("view" as ERPMode); } else if (idx === -1 && ids.length) { s.setNavInvoiceId(ids[ids.length - 1]); s.setErpMode("view" as ERPMode); } } },
+      next: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "لا يوجد سجل تالٍ", onClick: () => { const s = _sipRef.current; const ids = [...(s.allInvoicesQuery.data ?? [])].sort((a: any, b: any) => a.id - b.id).map((i: any) => i.id); const cur = s.navInvoiceId ?? s.savedInvoiceId; const idx = cur ? ids.indexOf(cur) : -1; if (idx >= 0 && idx < ids.length - 1) { s.setNavInvoiceId(ids[idx + 1]); s.setErpMode("view" as ERPMode); } else if (idx === -1 && ids.length) { s.setNavInvoiceId(ids[0]); s.setErpMode("view" as ERPMode); } } },
+      last: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "لا توجد فواتير", onClick: () => { const s = _sipRef.current; const ids = [...(s.allInvoicesQuery.data ?? [])].sort((a: any, b: any) => a.id - b.id).map((i: any) => i.id); if (ids.length) { s.setNavInvoiceId(ids[ids.length - 1]); s.setErpMode("view" as ERPMode); } } },
+      approve: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "احفظ الفاتورة أولًا للاعتماد", onClick: () => toast.success("تم الاعتماد") },
+      unapprove: { supported: true as const, allowed: true, stateEnabled: hasSaved && isPosted, disabledReason: !hasSaved ? "احفظ الفاتورة أولًا" : !isPosted ? "الفاتورة غير مرحّلة" : undefined, onClick: () => { const s = _sipRef.current; if (!s.savedInvoiceId) return; if (window.confirm("هل أنت متأكد من إلغاء ترحيل هذه الفاتورة؟")) s.unpostMutation.mutate({ invoiceId: s.savedInvoiceId }); } },
+      preview: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "احفظ الفاتورة أولًا للمطالعة", onClick: () => { const s = _sipRef.current; if (!s.savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً"); return; } s.setShowPostingPreview(true); } },
+      tools: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "احفظ الفاتورة أولًا" },
+      send: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "احفظ الفاتورة أولًا قبل الإرسال", onClick: () => { const s = _sipRef.current; if (!s.savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً قبل الإرسال"); return; } s.setShowSendPanel(true); } },
+      print: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "احفظ الفاتورة أولًا للطباعة", onClick: () => _sipRef.current.setShowPrintModal(true) },
+      exit: { supported: true as const, allowed: true, stateEnabled: true, onClick: () => { _sipRef.current.dirtyRequestClose(() => toast.info("إغلاق")); } },
+    }) as unknown as ToolbarActionMap;
+  }, [erpMode, isDirty, savedInvoiceId, isPosted, createMutation.isPending]);
+  const toolbarTools = useMemo(() => {
+    const hasSaved = savedInvoiceId !== null;
+    return [
+      { id: "post", label: "ترحيل الفاتورة", enabled: hasSaved && !isPosted, disabledReason: !hasSaved ? "احفظ الفاتورة أولًا" : isPosted ? "الفاتورة مرحّلة بالفعل" : undefined, onClick: () => { const s = _sipRef.current; if (!s.savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً"); return; } s.setShowPostingPreview(true); } },
+      { id: "unpost", label: "إلغاء ترحيل الفاتورة", enabled: hasSaved && isPosted, disabledReason: !isPosted ? "الفاتورة غير مرحّلة" : undefined, onClick: () => { const s = _sipRef.current; if (!s.savedInvoiceId) return; if (window.confirm("هل أنت متأكد من إلغاء ترحيل هذه الفاتورة؟")) s.unpostMutation.mutate({ invoiceId: s.savedInvoiceId }); } },
+      { id: "repost", label: "إعادة الترحيل", enabled: hasSaved && isPosted, disabledReason: !isPosted ? "الفاتورة غير مرحّلة" : undefined, onClick: () => _sipRef.current.handleRepost() },
+      { id: "suspend", label: "تعليق الترحيل", enabled: false, disabledReason: "قريباً" },
+      { id: "activity", label: "نشاط المستخدمين", separatorBefore: true as const, enabled: false, disabledReason: "قريباً" },
+      { id: "attachments", label: "إرفاق المستندات", enabled: false, disabledReason: "قريباً" },
+    ];
+  }, [savedInvoiceId, isPosted]);
+  useToolbarActions(toolbarActions, toolbarTools);
+
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div
@@ -2088,78 +2130,6 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           </div>
         </div>
       </div>
-
-      {/* ── ERP Toolbar (أسفل الشاشة) ────────────────────────────────── */}
-      <ERPToolbar
-        pageTitle="فواتير المبيعات"
-        mode={erpMode}
-        isSaved={savedInvoiceId !== null}
-        isPosted={isPosted}
-        postingStatus={savedInvoiceId !== null ? (isPosted ? "posted" : "unposted") : null}
-        onNew={() => { handleNew(); setErpMode("new"); }}
-        onEdit={() => { setErpMode("edit"); toast.info("وضع التعديل"); }}
-        onDelete={handleDelete}
-        onSearch={() => { setErpMode("search"); toast.info("بحث..."); }}
-        onRefresh={() => nextNumberQuery.refetch()}
-        onCopy={handleDuplicate}
-        onPost={() => {
-          if (!savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً"); return; }
-          setShowPostingPreview(true);
-        }}
-        onUnpost={() => {
-          if (!savedInvoiceId) return;
-          if (window.confirm("هل أنت متأكد من إلغاء ترحيل هذه الفاتورة؟")) {
-            unpostMutation.mutate({ invoiceId: savedInvoiceId });
-          }
-        }}
-        onRepost={handleRepost}
-        onPreviewJournal={() => {
-          if (!savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً"); return; }
-          setShowPostingPreview(true);
-        }}
-        onApprove={() => toast.success("تم الاعتماد")}
-        onCancel={() => dirtyRequestClose(() => { setErpMode("view"); toast.info("تم الإلغاء"); })}
-        onPrint={() => setShowPrintModal(true)}
-        onSend={() => {
-          if (!savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً قبل الإرسال"); return; }
-          setShowSendPanel(true);
-        }}
-        onFirst={() => {
-          const ids = [...(allInvoicesQuery.data ?? [])].sort((a, b) => a.id - b.id).map(i => i.id);
-          if (ids.length) { setNavInvoiceId(ids[0]); setErpMode("view"); }
-        }}
-        onPrev={() => {
-          const ids = [...(allInvoicesQuery.data ?? [])].sort((a, b) => a.id - b.id).map(i => i.id);
-          const cur = navInvoiceId ?? savedInvoiceId;
-          const idx = cur ? ids.indexOf(cur) : -1;
-          if (idx > 0) { setNavInvoiceId(ids[idx - 1]); setErpMode("view"); }
-          else if (idx === -1 && ids.length) { setNavInvoiceId(ids[ids.length - 1]); setErpMode("view"); }
-        }}
-        onNext={() => {
-          const ids = [...(allInvoicesQuery.data ?? [])].sort((a, b) => a.id - b.id).map(i => i.id);
-          const cur = navInvoiceId ?? savedInvoiceId;
-          const idx = cur ? ids.indexOf(cur) : -1;
-          if (idx >= 0 && idx < ids.length - 1) { setNavInvoiceId(ids[idx + 1]); setErpMode("view"); }
-          else if (idx === -1 && ids.length) { setNavInvoiceId(ids[0]); setErpMode("view"); }
-        }}
-        onLast={() => {
-          const ids = [...(allInvoicesQuery.data ?? [])].sort((a, b) => a.id - b.id).map(i => i.id);
-          if (ids.length) { setNavInvoiceId(ids[ids.length - 1]); setErpMode("view"); }
-        }}
-        onBrowse={() => {
-          const ids = [...(allInvoicesQuery.data ?? [])].sort((a, b) => a.id - b.id).map(i => i.id);
-          if (navInvoiceId) {
-            setErpMode("view");
-          } else if (ids.length) {
-            setNavInvoiceId(ids[ids.length - 1]);
-            setErpMode("view");
-          } else {
-            toast.info("لا توجد فواتير محفوظة بعد");
-          }
-        }}
-        onClose={() => toast.info("إغلاق")}
-        enableShortcuts
-      />
 
       {/* ── Styles ──────────────────────────────────────────────────────── */}
       <style>{`
