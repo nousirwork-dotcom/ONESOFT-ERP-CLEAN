@@ -152,52 +152,58 @@ export function UnifiedBottomToolbar({
       aria-label="شريط أوامر الشاشة"
     >
       <div className={styles.toolbarScroller}>
-        <div className={styles.toolbarGrid}>
-          {TOOLBAR_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const enabled =
-              item.id === "tools"
-                ? toolsEnabled
-                : canExecuteAction(item.id, actions);
+        <div className={styles.toolbarGroups}>
+          {TOOLBAR_GROUPS.map((group) => (
+            <div
+              key={group.id}
+              className={styles.toolbarGroup}
+              aria-label={group.label}
+            >
+              {group.actions.map((actionId) => {
+                const item = TOOLBAR_ITEMS.find((i) => i.id === actionId)!;
+                const Icon = item.icon;
+                const enabled =
+                  item.id === "tools"
+                    ? toolsEnabled
+                    : canExecuteAction(item.id, actions);
 
-            const isActive =
-              activeAction === item.id || (item.id === "tools" && toolsOpen);
+                const isActive =
+                  activeAction === item.id || (item.id === "tools" && toolsOpen);
 
-            const disabledReason =
-              item.id === "tools" && tools.length === 0
-                ? "لا توجد أدوات متاحة في هذه الشاشة"
-                : getDisabledReason(item.id, actions);
+                const disabledReason =
+                  item.id === "tools" && tools.length === 0
+                    ? "لا توجد أدوات متاحة في هذه الشاشة"
+                    : getDisabledReason(item.id, actions);
 
-            return (
-              <button
-                key={item.id}
-                ref={item.id === "tools" ? toolsButtonRef : undefined}
-                type="button"
-                disabled={!enabled}
-                title={enabled ? item.label : disabledReason}
-                aria-label={item.label}
-                aria-disabled={!enabled}
-                aria-expanded={item.id === "tools" ? toolsOpen : undefined}
-                data-active={isActive}
-                data-tone={item.tone ?? "default"}
-                className={styles.toolbarButton}
-                onClick={() => void executeToolbarAction(item.id)}
-              >
-                <Icon
-                  className={styles.toolbarIcon}
-                  size={18}
-                  strokeWidth={2.2}
-                />
-                <span className={styles.toolbarLabel}>{item.label}</span>
-                <span
-                  dir="ltr"
-                  className={styles.toolbarShortcut}
-                >
-                  {item.shortcut ?? "\u00A0"}
-                </span>
-              </button>
-            );
-          })}
+                return (
+                  <button
+                    key={item.id}
+                    ref={item.id === "tools" ? toolsButtonRef : undefined}
+                    type="button"
+                    disabled={!enabled}
+                    title={enabled ? item.label : disabledReason}
+                    aria-label={item.label}
+                    aria-disabled={!enabled}
+                    aria-expanded={item.id === "tools" ? toolsOpen : undefined}
+                    data-active={isActive}
+                    data-tone={item.tone ?? "default"}
+                    className={styles.toolbarButton}
+                    onClick={() => void executeToolbarAction(item.id)}
+                  >
+                    <Icon
+                      className={styles.toolbarIcon}
+                      size={18}
+                      strokeWidth={2.2}
+                    />
+                    <span className={styles.toolbarLabel}>{item.label}</span>
+                    <span dir="ltr" className={styles.toolbarShortcut}>
+                      {item.shortcut ?? "\u00A0"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </div>
       </div>
 
