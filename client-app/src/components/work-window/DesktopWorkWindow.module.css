@@ -9,16 +9,16 @@
 }
 
 /* ─────────────────────────────────────────────────────────────
-   طبقة الحجب الرصاصية الفاتحة
+   طبقة الحجب الكريمية البنية
    - تمتص النقر (pointer-events: auto) وتُشغّل اهتزاز النافذة
    - لا تُغلق النافذة عند النقر عليها
-   - الضبابية الخفيفة تُقلّل إزعاج الشاشة خلف النافذة
+   - اللون الكريمي يندمج مع ثيم البرنامج ويحجب تفاصيل الخلفية
    ───────────────────────────────────────────────────────────── */
 .backdrop {
   position:        absolute;
   inset:           0;
-  background:      rgba(210, 213, 216, 0.82);
-  backdrop-filter: blur(1.5px) saturate(0.55);
+  background:      rgba(226, 217, 202, 0.84);
+  backdrop-filter: blur(1.5px) saturate(0.50);
   /* fallback: إذا كان backdrop-filter غير مدعوم يكفي اللون وحده */
   pointer-events:  auto;
 }
@@ -30,14 +30,14 @@
    ───────────────────────────────────────────────────────────── */
 .window {
   position:       absolute;
-  top:            18px;
-  right:          18px;
+  top:            7px;
+  right:          15px;
 
   display:        flex;
   flex-direction: column;
 
   background:     #F8F5EF;
-  border:         2px solid #C7C7C7;
+  border:         3px solid #C9CDD2;
   border-radius:  8px;
   box-shadow:
     0 12px 30px rgba(0, 0, 0, 0.20),
