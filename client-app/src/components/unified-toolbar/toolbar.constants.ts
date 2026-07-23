@@ -72,6 +72,30 @@ export const DEFAULT_USER_TOOLS: ToolbarToolItem[] = [
   { id: "attachments", label: "إرفاق مستندات" },
 ];
 
+// ─── مجموعات الشريط الوظيفية ─────────────────────────────────────────────────
+export const TOOLBAR_GROUPS = [
+  {
+    id: "record",
+    label: "إدارة السجل",
+    actions: ["save", "draft", "new", "duplicate", "tools", "edit", "delete"] as ToolbarActionId[],
+  },
+  {
+    id: "navigation",
+    label: "التنقل",
+    actions: ["first", "previous", "next", "last"] as ToolbarActionId[],
+  },
+  {
+    id: "approval",
+    label: "الاعتماد والرقابة",
+    actions: ["approve", "unapprove"] as ToolbarActionId[],
+  },
+  {
+    id: "output",
+    label: "العرض والإخراج",
+    actions: ["preview", "send", "print", "exit"] as ToolbarActionId[],
+  },
+] as const;
+
 export function getToolIcon(id: string): LucideIcon {
   switch (id) {
     case "reverse":

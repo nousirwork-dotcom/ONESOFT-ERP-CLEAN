@@ -1,24 +1,29 @@
+/* ─── Outer container — centered, compact ───────────────────────────────── */
 .toolbarOuter {
   position: absolute;
-  right: 8px;
+  right: 50%;
   bottom: 8px;
-  left: 8px;
+  left: auto;
+  transform: translateX(50%);
   z-index: 500;
 
+  width: fit-content;
+  max-width: calc(100% - 16px);
   min-width: 0;
   padding: 4px;
 
   background: #f7f3eb;
-  border: 1px solid #cfc6b8;
+  border: 1px solid #bfb5a7;
   border-radius: 11px;
 
   box-shadow:
-    0 3px 11px rgba(0, 0, 0, 0.18),
+    0 3px 11px rgba(0, 0, 0, 0.20),
     inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 
+/* ─── Horizontal scroller (narrow screens) ──────────────────────────────── */
 .toolbarScroller {
-  width: 100%;
+  max-width: 100%;
   overflow-x: auto;
   overflow-y: visible;
 
@@ -26,16 +31,30 @@
   scrollbar-color: #aaa196 transparent;
 }
 
-.toolbarGrid {
-  display: grid;
-  grid-template-columns: repeat(17, minmax(54px, 1fr));
+/* ─── Row of groups ─────────────────────────────────────────────────────── */
+.toolbarGroups {
+  display: flex;
+  align-items: stretch;
+  gap: 9px;
 
-  min-width: 930px;
-  height: 62px;
-
+  width: max-content;
   direction: rtl;
 }
 
+/* ─── Individual group pill ─────────────────────────────────────────────── */
+.toolbarGroup {
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+
+  background: #f7f3eb;
+  border: 1px solid #cfc6b8;
+  border-radius: 7px;
+
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+/* ─── Button ────────────────────────────────────────────────────────────── */
 .toolbarButton {
   position: relative;
 
@@ -44,7 +63,8 @@
   align-items: center;
   justify-content: center;
 
-  min-width: 54px;
+  width: 60px;
+  min-width: 60px;
   height: 62px;
   padding: 3px 4px;
 
@@ -52,8 +72,9 @@
   background: transparent;
 
   border: 0;
-  border-inline-end: 1px solid #d8d0c4;
+  border-inline-end: 1px solid #d6cec2;
 
+  font-family: inherit;
   cursor: pointer;
 
   transition:
@@ -63,15 +84,9 @@
     box-shadow 120ms ease;
 }
 
-.toolbarButton:first-child {
-  border-start-start-radius: 7px;
-  border-end-start-radius: 7px;
-}
-
-.toolbarButton:last-child {
+/* remove trailing divider on last button in each group */
+.toolbarGroup .toolbarButton:last-child {
   border-inline-end: 0;
-  border-start-end-radius: 7px;
-  border-end-end-radius: 7px;
 }
 
 .toolbarButton:hover:not(:disabled) {
@@ -82,19 +97,16 @@
   z-index: 2;
 
   outline: none;
-  border-radius: 7px;
-
-  box-shadow: inset 0 0 0 1.5px #8a5a2b;
+  box-shadow: inset 0 0 0 1.5px #8A5A2B;
 }
 
 .toolbarButton[data-active="true"] {
   z-index: 1;
 
   background: #dedbd1;
-  border: 1px solid #8f8679;
-  border-radius: 7px;
-
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.12);
+  box-shadow:
+    inset 0 0 0 1px #8f8679,
+    inset 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
 .toolbarButton[data-tone="primary"] {
@@ -106,24 +118,27 @@
 }
 
 .toolbarButton:disabled {
-  color: #77716a;
+  color: #68635d;
   background: #f2eee7;
 
   cursor: not-allowed;
-
-  /* مهم: لا نستخدم شفافية منخفضة؛ النص والأيقونة يجب أن يظلا واضحين. */
+  /* أزرار معطّلة تبقى واضحة — ممنوع opacity منخفض */
   opacity: 1;
 }
 
 .toolbarButton:disabled .toolbarShortcut {
-  color: #8a847c;
+  color: #77716a;
 }
 
+/* ─── Icon ──────────────────────────────────────────────────────────────── */
 .toolbarIcon {
+  width: 18px;
+  height: 18px;
   flex: 0 0 auto;
   margin-bottom: 1px;
 }
 
+/* ─── Label ─────────────────────────────────────────────────────────────── */
 .toolbarLabel {
   display: block;
 
@@ -139,13 +154,14 @@
   text-overflow: ellipsis;
 }
 
+/* ─── Keyboard shortcut hint ────────────────────────────────────────────── */
 .toolbarShortcut {
   display: block;
 
   max-width: 100%;
   overflow: hidden;
 
-  color: #5b5751;
+  color: #57524c;
 
   font-size: 8px;
   font-weight: 600;
@@ -156,6 +172,7 @@
   text-overflow: ellipsis;
 }
 
+/* ─── Tools drop-down menu ──────────────────────────────────────────────── */
 .toolsMenu {
   overflow: hidden;
 
@@ -207,20 +224,4 @@
   margin: 4px 0;
 
   background: #ddd6cd;
-}
-
-@media (max-width: 1100px) {
-  .toolbarGrid {
-    grid-template-columns: repeat(17, 52px);
-
-    min-width: 884px;
-  }
-
-  .toolbarLabel {
-    font-size: 11px;
-  }
-
-  .toolbarShortcut {
-    font-size: 7px;
-  }
 }

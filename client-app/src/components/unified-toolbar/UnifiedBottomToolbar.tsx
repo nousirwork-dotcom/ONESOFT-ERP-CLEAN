@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import {
   DEFAULT_DOCUMENT_TOOLS,
   getToolIcon,
+  TOOLBAR_GROUPS,
   TOOLBAR_ITEMS,
 } from "./toolbar.constants";
 import type {
