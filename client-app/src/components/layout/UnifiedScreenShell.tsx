@@ -15,6 +15,8 @@ interface UnifiedScreenShellProps {
   toolbarTools?: ToolbarToolItem[];
   activeToolbarAction?: ToolbarActionId;
   className?: string;
+  /** false for module-home / navigation screens; toolbar is hidden and bottom padding is reduced */
+  showToolbar?: boolean;
 }
 
 export function UnifiedScreenShell({
@@ -23,6 +25,7 @@ export function UnifiedScreenShell({
   toolbarTools,
   activeToolbarAction,
   className = "",
+  showToolbar = true,
 }: UnifiedScreenShellProps) {
   const contextState = useToolbarState();
 
@@ -35,15 +38,17 @@ export function UnifiedScreenShell({
       dir="rtl"
       className={`relative flex h-full min-h-0 flex-col overflow-hidden ${className}`}
     >
-      <div className="min-h-0 flex-1 overflow-auto px-3 pt-3 pb-[82px]">
+      <div className={`min-h-0 flex-1 overflow-auto px-3 pt-3 ${showToolbar ? "pb-[82px]" : "pb-3"}`}>
         {children}
       </div>
 
-      <UnifiedBottomToolbar
-        actions={actions}
-        tools={tools}
-        activeAction={active}
-      />
+      {showToolbar && (
+        <UnifiedBottomToolbar
+          actions={actions}
+          tools={tools}
+          activeAction={active}
+        />
+      )}
     </section>
   );
 }

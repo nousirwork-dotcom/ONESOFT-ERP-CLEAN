@@ -321,6 +321,21 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/cfg/license":                LicenseActivationPage,
 };
 
+// ─── مسارات لا تعرض شريط الأدوات الموحد ──────────────────────────────────
+// صفحات التنقل والأقسام الرئيسية فقط — أي مسار آخر يرث showToolbar=true
+export const NO_TOOLBAR_PATHS = new Set<string>([
+  "/",                    // الشاشة الرئيسية
+  "/sales-module",        // قسم المبيعات
+  "/purchases-module",    // قسم المشتريات
+  "/inventory-module",    // قسم المخزون
+  "/accounting-module",   // قسم المحاسبة
+  "/hr-module",           // قسم الموارد البشرية
+  "/assets-module",       // قسم الأصول
+  "/manufacturing-module",// قسم التصنيع
+  "/help-services-module",// قسم المساعدة والخدمات
+  "/pos",                 // شاشة اختيار الكاشير (ليست LivePOSPage)
+]);
+
 // ─── Auth Guard ───────────────────────────────────────────────────────────
 // license_not_found ليس ضمن القائمة — جهاز بلا ملف ترخيص لكنه في فترة تجربة
 // صالحة يجب ألا يُجبَر على شاشة التفعيل. التفعيل يظهر فقط عند انتهاء فعلي.
@@ -453,8 +468,9 @@ function TabContent() {
       {tabs.map(tab => {
         const Component = PAGE_MAP[tab.path]
           ?? (tab.path.startsWith("/hs/custody-record/") ? CustodyRecordPage : null);
+        const showToolbar = !NO_TOOLBAR_PATHS.has(tab.path);
         return (
-          <AppWindow key={tab.id} tab={tab}>
+          <AppWindow key={tab.id} tab={tab} showToolbar={showToolbar}>
             <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }} dir="rtl">
               <TabPathContext.Provider value={tab.path}>
                 {Component ? <Component /> : <NotFound />}

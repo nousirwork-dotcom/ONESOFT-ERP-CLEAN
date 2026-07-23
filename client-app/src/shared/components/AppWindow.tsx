@@ -9,9 +9,11 @@ import { UnifiedScreenShell } from "@/components/layout/UnifiedScreenShell";
 interface AppWindowProps {
   tab: AppTab;
   children: React.ReactNode;
+  /** false for module-home / navigation pages; true (default) for all work screens */
+  showToolbar?: boolean;
 }
 
-export default function AppWindow({ tab, children }: AppWindowProps) {
+export default function AppWindow({ tab, children, showToolbar = true }: AppWindowProps) {
   const {
     closeTab, minimizeWindow, toggleMaximize,
     bringToFront, activeTabId, isPosWorkspaceActive,
@@ -193,7 +195,7 @@ export default function AppWindow({ tab, children }: AppWindowProps) {
         {/* ── Content ── */}
         <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
           <ToolbarActionsProvider>
-            <UnifiedScreenShell>{children}</UnifiedScreenShell>
+            <UnifiedScreenShell showToolbar={showToolbar}>{children}</UnifiedScreenShell>
           </ToolbarActionsProvider>
         </div>
       </div>
