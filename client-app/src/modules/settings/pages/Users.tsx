@@ -19,6 +19,7 @@ import { AI_MODULE_PERM, AI_PERM_DEFS } from "@/shared/lib/aiPermissions";
 import { UserFormDialog, UserFormValue, UserLoginMethod } from "./UserFormDialog";
 import { useModalAttention } from "./useModalAttention";
 import { DesktopWorkWindow } from "@/components/work-window";
+import styles from "@/components/responsive-layout/ResponsiveLayout.module.css";
 
 // ── صلاحيات وحدة «المساعدة والخدمات» (extra_permissions) ─────────────────────
 const HS_PERM_DEFS: Array<{ key: string; label: string; isModule?: boolean }> = [
@@ -1010,7 +1011,7 @@ export default function Users() {
   ) : null;
 
   return (
-    <div className="space-y-5">
+    <div className={`${styles.screenContainer} space-y-5`}>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">إدارة المستخدمين</h1>

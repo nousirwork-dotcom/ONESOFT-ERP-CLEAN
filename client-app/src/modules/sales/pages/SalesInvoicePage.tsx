@@ -28,6 +28,7 @@ import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import BasedOnDocInput from "@/shared/components/BasedOnDocInput";
 import ContextSelectInput from "@/shared/components/ContextSelectInput";
 import QRCode from "qrcode";
+import styles from "@/components/responsive-layout/ResponsiveLayout.module.css";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface InvoiceLine {
@@ -1192,7 +1193,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div
-      className="flex flex-col h-full text-[#1a1a1a] select-none"
+      className={`${styles.screenContainer} flex flex-col h-full text-[#1a1a1a] select-none`}
       style={{ fontFamily: "'Cairo', Tahoma, Arial, sans-serif", fontSize: "12px", background: "var(--background)" }}
       dir="rtl"
     >
@@ -1211,7 +1212,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           </div>
         )}
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", columnGap: 10, rowGap: 5, alignItems: "center" }}>
+        <div className={styles.formGrid} style={{ columnGap: 10, rowGap: 5, alignItems: "center" }}>
 
           {/* ══ صف 1: رقم الفاتورة │ بناءً على │ نوع السند ══ */}
 

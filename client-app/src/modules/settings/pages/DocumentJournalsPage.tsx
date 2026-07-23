@@ -18,6 +18,7 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/core/hooks/useAuth";
 import { FoundationPolicyPanel } from "@/shared/components/FoundationPolicyPanel";
+import styles from "@/components/responsive-layout/ResponsiveLayout.module.css";
 
 /* ──────────────── types ──────────────── */
 type JournalForm = {
@@ -902,7 +903,7 @@ export default function DocumentJournalsPage() {
 
   /* ──────────────── RENDER ──────────────── */
   return (
-    <div className="flex h-full gap-0 overflow-hidden" dir="rtl">
+    <div className={`${styles.screenContainer} flex h-full gap-0 overflow-hidden`} dir="rtl">
 
       {/* ══ Type Sidebar ══ */}
       <div className="shrink-0 flex flex-col overflow-hidden"

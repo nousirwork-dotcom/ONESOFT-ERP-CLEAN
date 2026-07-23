@@ -1,0 +1,38 @@
+/* ═══════════════════════════════════════════════════════════════════
+   OneSoft ERP — Layout Design Tokens
+   Single source of truth for all responsive layout values.
+   Imported once in index.css and referenced throughout the app.
+   ═══════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Field heights ──────────────────────────── */
+  --field-h:      22px;   /* compact (invoice table cells)    */
+  --field-h-md:   26px;   /* normal (header form fields)      */
+  --field-h-lg:   30px;   /* relaxed (settings / dialogs)     */
+
+  /* ── Spacing & gaps ─────────────────────────── */
+  --gap-xs:       3px;
+  --gap-sm:       4px;
+  --gap-md:       8px;
+  --gap-lg:      12px;
+  --gap-xl:      16px;
+
+  /* ── Label widths ───────────────────────────── */
+  --label-w:     72px;    /* compact (invoice header labels)  */
+  --label-w-md:  96px;    /* normal  (form field labels)      */
+  --label-w-lg: 120px;    /* wide    (settings section labels)*/
+
+  /* ── Field minimum widths ───────────────────── */
+  --field-min-w:    80px;
+  --field-min-w-md: 120px;
+  --field-min-w-lg: 160px;
+
+  /* ── Summary panel ──────────────────────────── */
+  --summary-panel-w: clamp(250px, 22%, 320px);
+
+  /* ── Container query breakpoints (reference only – used in CSS) */
+  /* --bp-xs:   500px  (narrow: single column)        */
+  /* --bp-sm:   760px  (medium: two columns)          */
+  /* --bp-md:  1000px  (normal: three columns)        */
+  /* --bp-lg:  1300px  (wide: full column count)      */
+}

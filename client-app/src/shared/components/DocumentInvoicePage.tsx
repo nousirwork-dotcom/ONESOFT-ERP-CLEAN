@@ -13,6 +13,7 @@ type ERPMode = "view" | "new" | "edit" | "search";
 import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import PostingPreviewModal from "@/shared/components/PostingPreviewModal";
 import InvoicePrintModal, { type DocTemplateConfig } from "@/shared/components/InvoicePrintModal";
+import styles from "@/components/responsive-layout/ResponsiveLayout.module.css";
 
 // ─── Config ────────────────────────────────────────────────────────────────────
 export interface DocPageConfig {
@@ -667,7 +668,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <div
-      className="flex flex-col h-full text-[#1a1a1a] select-none"
+      className={`${styles.screenContainer} flex flex-col h-full text-[#1a1a1a] select-none`}
       style={{ fontFamily: "'Cairo', Tahoma, Arial, sans-serif", fontSize: "12px", background: "var(--background)" }}
       dir="rtl"
     >
@@ -800,7 +801,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
           })()}
 
           {/* ─ 5-col main fields ─ */}
-          <div className="grid gap-x-2 gap-y-1 flex-1" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
+          <div className={`${styles.formGrid5} gap-x-2 gap-y-1`}>
             <HF label={config.partyLabel}>
               <select value={partyId ?? ""} onChange={e => {
                 const id = parseInt(e.target.value);
@@ -844,7 +845,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
         </div>
 
         {/* Row 2 */}
-        <div className="grid gap-x-2 gap-y-1" style={{ gridTemplateColumns: "150px 120px 90px 100px 1fr 1fr" }}>
+        <div className={`${styles.formGrid6} gap-x-2 gap-y-1`}>
 
           {/* نوع السند */}
           <HF label="نوع السند">
@@ -937,19 +938,33 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       {/* ── Lines Table ───────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-auto bg-white border-b border-[#b0a89a]">
         <table className="w-full border-collapse" style={{ fontSize: "12px" }}>
+          {/* Proportional column widths — controlled via colgroup so they reflow with the container */}
+          <colgroup>
+            <col style={{ width: 30, minWidth: 30 }} />   {/* # */}
+            <col style={{ width: "11%", minWidth: 70 }} /> {/* رقم الصنف */}
+            <col style={{ width: "24%", minWidth: 100 }} />{/* اسم الصنف */}
+            <col style={{ width: "9%",  minWidth: 60 }} /> {/* الكمية */}
+            <col style={{ width: "9%",  minWidth: 60 }} /> {/* الوحدة */}
+            <col style={{ width: "11%", minWidth: 70 }} /> {/* السعر */}
+            <col style={{ width: "8%",  minWidth: 50 }} /> {/* خصم% */}
+            <col style={{ width: "8%",  minWidth: 60 }} /> {/* الخصم ﷼ */}
+            <col style={{ width: "7%",  minWidth: 50 }} /> {/* ض% */}
+            <col style={{ width: "12%", minWidth: 75 }} /> {/* الإجمالي */}
+            <col style={{ width: 28,   minWidth: 28 }} />  {/* حذف */}
+          </colgroup>
           <thead className="sticky top-0 z-10">
             <tr style={{ background: `linear-gradient(to bottom, ${themeColor}, #365E80)`, color: "#fff" }}>
-              <th className="inv-th w-8 text-center">#</th>
-              <th className="inv-th w-24">رقم الصنف</th>
+              <th className="inv-th text-center">#</th>
+              <th className="inv-th">رقم الصنف</th>
               <th className="inv-th">اسم الصنف</th>
-              <th className="inv-th w-20 text-center">الكمية</th>
-              <th className="inv-th w-20 text-center">الوحدة</th>
-              <th className="inv-th w-24 text-center">السعر</th>
-              <th className="inv-th w-14 text-center">خصم%</th>
-              <th className="inv-th w-24 text-center">الخصم ﷼</th>
-              <th className="inv-th w-14 text-center">ض%</th>
-              <th className="inv-th w-24 text-center font-bold">الإجمالي</th>
-              <th className="inv-th w-7"></th>
+              <th className="inv-th text-center">الكمية</th>
+              <th className="inv-th text-center">الوحدة</th>
+              <th className="inv-th text-center">السعر</th>
+              <th className="inv-th text-center">خصم%</th>
+              <th className="inv-th text-center">الخصم ﷼</th>
+              <th className="inv-th text-center">ض%</th>
+              <th className="inv-th text-center font-bold">الإجمالي</th>
+              <th className="inv-th"></th>
             </tr>
           </thead>
           <tbody data-nav-internal="true">
