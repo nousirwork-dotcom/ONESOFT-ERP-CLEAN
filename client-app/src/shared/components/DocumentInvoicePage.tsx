@@ -14,6 +14,7 @@ import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import PostingPreviewModal from "@/shared/components/PostingPreviewModal";
 import InvoicePrintModal, { type DocTemplateConfig } from "@/shared/components/InvoicePrintModal";
 import styles from "@/components/responsive-layout/ResponsiveLayout.module.css";
+import { InvoiceTableColgroup } from "@/components/responsive-layout";
 
 // ─── Config ────────────────────────────────────────────────────────────────────
 export interface DocPageConfig {
@@ -938,20 +939,8 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       {/* ── Lines Table ───────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-auto bg-white border-b border-[#b0a89a]">
         <table className="w-full border-collapse" style={{ fontSize: "12px" }}>
-          {/* Proportional column widths — controlled via colgroup so they reflow with the container */}
-          <colgroup>
-            <col style={{ width: 30, minWidth: 30 }} />   {/* # */}
-            <col style={{ width: "11%", minWidth: 70 }} /> {/* رقم الصنف */}
-            <col style={{ width: "24%", minWidth: 100 }} />{/* اسم الصنف */}
-            <col style={{ width: "9%",  minWidth: 60 }} /> {/* الكمية */}
-            <col style={{ width: "9%",  minWidth: 60 }} /> {/* الوحدة */}
-            <col style={{ width: "11%", minWidth: 70 }} /> {/* السعر */}
-            <col style={{ width: "8%",  minWidth: 50 }} /> {/* خصم% */}
-            <col style={{ width: "8%",  minWidth: 60 }} /> {/* الخصم ﷼ */}
-            <col style={{ width: "7%",  minWidth: 50 }} /> {/* ض% */}
-            <col style={{ width: "12%", minWidth: 75 }} /> {/* الإجمالي */}
-            <col style={{ width: 28,   minWidth: 28 }} />  {/* حذف */}
-          </colgroup>
+          {/* Column widths — sourced centrally from INVOICE_TABLE_COLS via InvoiceTableColgroup */}
+          <InvoiceTableColgroup />
           <thead className="sticky top-0 z-10">
             <tr style={{ background: `linear-gradient(to bottom, ${themeColor}, #365E80)`, color: "#fff" }}>
               <th className="inv-th text-center">#</th>

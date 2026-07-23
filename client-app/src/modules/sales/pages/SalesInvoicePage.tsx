@@ -27,6 +27,7 @@ import { usePrintTemplate } from "@/shared/hooks/usePrintTemplate";
 import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import BasedOnDocInput from "@/shared/components/BasedOnDocInput";
 import ContextSelectInput from "@/shared/components/ContextSelectInput";
+import { InvoiceTableColgroup } from "@/components/responsive-layout";
 import QRCode from "qrcode";
 import styles from "@/components/responsive-layout/ResponsiveLayout.module.css";
 
@@ -1787,20 +1788,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       {/* جدول السطور (يمين) */}
       <div className="flex-1 overflow-auto bg-white">
         <table className="w-full border-collapse" style={{ fontSize: "12px" }}>
-          {/* Proportional column widths — all flexible cols share extra space via colgroup */}
-          <colgroup>
-            <col style={{ width: 30, minWidth: 30 }} />     {/* # */}
-            <col style={{ width: "11%", minWidth: 70 }} />  {/* رقم الصنف */}
-            <col style={{ width: "24%", minWidth: 100 }} /> {/* اسم الصنف */}
-            <col style={{ width: "9%",  minWidth: 60 }} />  {/* الكمية */}
-            <col style={{ width: "9%",  minWidth: 60 }} />  {/* الوحدة */}
-            <col style={{ width: "11%", minWidth: 70 }} />  {/* السعر */}
-            <col style={{ width: "8%",  minWidth: 50 }} />  {/* خصم% */}
-            <col style={{ width: "8%",  minWidth: 60 }} />  {/* الخصم ﷼ */}
-            <col style={{ width: "7%",  minWidth: 50 }} />  {/* ض% */}
-            <col style={{ width: "12%", minWidth: 75 }} />  {/* الإجمالي */}
-            <col style={{ width: 28,    minWidth: 28 }} />  {/* حذف */}
-          </colgroup>
+          {/* Column widths — sourced centrally from INVOICE_TABLE_COLS via InvoiceTableColgroup */}
+          <InvoiceTableColgroup />
           <thead className="sticky top-0 z-10">
             <tr style={{ background: "#DAD271", color: "#4A3800" }}>
               <th className="inv-th text-center">#</th>
