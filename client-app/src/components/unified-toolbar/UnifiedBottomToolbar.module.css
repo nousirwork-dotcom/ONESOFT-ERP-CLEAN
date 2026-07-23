@@ -1,9 +1,6 @@
-/* ─── Outer container — يضع مجموعة الأزرار ناحية اليمين فعلياً ──── */
+/* ─── Outer container — يمتد بعرض الـ Footer بالكامل ────────────── */
 .toolbarOuter {
   width:           100%;
-  display:         flex;
-  direction:       ltr;          /* justify-content: flex-end → يمين فعلي */
-  justify-content: flex-end;
   padding:         6px 12px;
   box-sizing:      border-box;
 
@@ -11,16 +8,16 @@
   box-shadow:      none;         /* الظل على مجموعة الأزرار وليس الخارج */
 }
 
-/* ─── مجموعة الأزرار — الحاوية المرئية ذات الظل والحواف الدائرية ── */
+/* ─── مجموعة الأزرار — تمتد بالعرض مع توزيع متوازن بين المجموعات ── */
 .toolbarGroups {
-  display:         flex;
-  align-items:     stretch;
-  gap:             0;
-
-  width:           fit-content;
-  max-width:       calc(100% - 24px); /* 12px padding يمين + 12px يسار */
+  width:           100%;
+  max-width:       none;
   margin:          0;
-  direction:       rtl;               /* ترتيب أزرار عربي — يمنة → يسرة */
+
+  display:         flex;
+  direction:       rtl;
+  justify-content: space-between;
+  align-items:     stretch;
 
   /* المظهر البارز — صندوق واحد فاتح */
   background:      #F7F4EE;
