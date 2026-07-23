@@ -1,5 +1,6 @@
 import * as React from "react";
 import { Eye, EyeOff, Loader2, LockKeyhole, UserRoundPlus } from "lucide-react";
+import { Button } from "@/core/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/core/ui/dialog";
 import { Input } from "@/core/ui/input";
 import { Label } from "@/core/ui/label";
