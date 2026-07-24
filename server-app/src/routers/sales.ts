@@ -1,11 +1,51 @@
 import { z } from 'zod';
-import { eq, and, desc, like, or } from 'drizzle-orm';
+import { eq, and, desc, like, or, sql } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import { salesInvoices, salesInvoiceItems, salesInvoicePayments, paymentMethods, products, customers, stockVouchers, stockVoucherItems, documentJournals, warehouses, users } from '../schema.js';
 import { autoPostSalesInvoice } from './posting.js';
 import { TRPCError } from '@trpc/server';
 import { validateSalesInvoiceWarehouseContext } from '../lib/salesWarehouseValidation.js';
+
+// ── توليد رقم فاتورة المبيعات من دفتر المستندات داخل transaction ───────────────
+async function generateInvoiceNumberForJournal(tx: any, journalId: number, orgId: number): Promise<string> {
+  const journal = await tx.query.documentJournals.findFirst({
+    where: and(eq(documentJournals.id, journalId), eq(documentJournals.orgId, orgId)),
+  });
+  if (!journal) throw new Error('الدفتر غير موجود');
+
+  // أقصى رقم محفوظ فعلياً لهذا الدفتر (نستخلص الأرقام الذيلية)
+  const existing = await tx.query.salesInvoices.findMany({
+    where: and(eq(salesInvoices.orgId, orgId), eq(salesInvoices.journalId, journalId)),
+    orderBy: [desc(salesInvoices.id)],
+    limit: 200,
+  });
+  let maxSaved = 0;
+  for (const inv of existing) {
+    const match = inv.invoiceNumber?.match(/(\d+)$/);
+    if (match) {
+      const n = parseInt(match[1], 10);
+      if (!isNaN(n) && n > maxSaved) maxSaved = n;
+    }
+  }
+
+  const firstNumber = journal.firstNumber ?? 1;
+  const increment   = journal.increment ?? 1;
+  // نعيد ضبط currentSeq على maxSaved: إذا لم يُحفظ شيء بعد فالرقم التالي = firstNumber
+  const baseSeq = maxSaved === 0 ? 0 : maxSaved;
+  const nextSeq = baseSeq === 0 ? firstNumber : Math.max(baseSeq + increment, firstNumber);
+  const clamped = Math.min(nextSeq, journal.lastNumber ?? 999999);
+
+  await tx.update(documentJournals)
+    .set({ currentSeq: clamped, updatedAt: new Date() })
+    .where(eq(documentJournals.id, journalId));
+
+  const prefix  = journal.numberPrefix ?? 'INV';
+  const digits  = journal.numDigits ?? 6;
+  const numPart = String(clamped).padStart(digits, '0');
+  if (journal.includeYear) return `${prefix}${new Date().getFullYear()}-${numPart}`;
+  return `${prefix}${numPart}`;
+}
 
 export const salesRouter = router({
   // قائمة الفواتير/عروض الأسعار
@@ -233,49 +273,65 @@ export const salesRouter = router({
         orgId,
       });
 
-      let invoice: typeof salesInvoices.$inferSelect;
-      try {
-        const [row] = await db.insert(salesInvoices).values({
-          ...invoiceData,
-          orgId,
-          userId: ctx.user.id,
-          invoiceDate: new Date(invoiceData.invoiceDate),
-          ...(dueDate ? { dueDate: new Date(dueDate) } : {}),
-        }).returning();
-        invoice = row;
-      } catch (e: any) {
-        console.error('[sales.create] INSERT ERROR:', {
-          message: e?.message,
-          code: e?.code,
-          detail: e?.detail,
-          constraint: e?.constraint,
-          table: e?.table,
-          data: { invoiceNumber: invoiceData.invoiceNumber, orgId, paymentMethod: invoiceData.paymentMethod },
-        });
-        throw e;
-      }
-      if (items.length > 0) {
-        await db.insert(salesInvoiceItems).values(
-          items.map((item, idx) => ({
-            ...item,
-            invoiceId: invoice.id,
+      const result = await db.transaction(async (tx) => {
+        // ── حجز الرقم التسلسلي داخل نفس transaction الحفظ ──────────────────
+        // قفل استشاري على الدفتر لمنع race conditions بين مستخدمين متعددين
+        if (invoiceData.journalId) {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(${invoiceData.journalId}::bigint)`);
+        }
+        let finalInvoiceNumber = invoiceData.invoiceNumber;
+        if (invoiceData.journalId) {
+          finalInvoiceNumber = await generateInvoiceNumberForJournal(tx, invoiceData.journalId, orgId);
+        }
+
+        let invoice: typeof salesInvoices.$inferSelect;
+        try {
+          const [row] = await tx.insert(salesInvoices).values({
+            ...invoiceData,
+            invoiceNumber: finalInvoiceNumber,
             orgId,
-            sortOrder: item.sortOrder ?? idx,
-          }))
-        );
-      }
+            userId: ctx.user.id,
+            invoiceDate: new Date(invoiceData.invoiceDate),
+            ...(dueDate ? { dueDate: new Date(dueDate) } : {}),
+          }).returning();
+          invoice = row;
+        } catch (e: any) {
+          console.error('[sales.create] INSERT ERROR:', {
+            message: e?.message,
+            code: e?.code,
+            detail: e?.detail,
+            constraint: e?.constraint,
+            table: e?.table,
+            data: { invoiceNumber: finalInvoiceNumber, orgId, paymentMethod: invoiceData.paymentMethod },
+          });
+          throw e;
+        }
+        if (items.length > 0) {
+          await tx.insert(salesInvoiceItems).values(
+            items.map((item, idx) => ({
+              ...item,
+              invoiceId: invoice.id,
+              orgId,
+              sortOrder: item.sortOrder ?? idx,
+            }))
+          );
+        }
+        return { invoice, finalInvoiceNumber };
+      });
+
+      const { invoice, finalInvoiceNumber } = result;
 
       // ── ترحيل تلقائي فور الحفظ ──────────────────────────────────────────────
       try {
         const posted = await autoPostSalesInvoice(invoice.id, orgId, ctx.user.id);
         if (posted) {
-          return { ...invoice, isPosted: true, autoPostedEntryNumber: posted.entryNumber };
+          return { ...invoice, invoiceNumber: finalInvoiceNumber, isPosted: true, autoPostedEntryNumber: posted.entryNumber };
         }
       } catch (e) {
         console.error('[sales.create] autoPostSalesInvoice error:', e);
       }
 
-      return invoice;
+      return { ...invoice, invoiceNumber: finalInvoiceNumber };
     }),
 
   // تعديل مستند

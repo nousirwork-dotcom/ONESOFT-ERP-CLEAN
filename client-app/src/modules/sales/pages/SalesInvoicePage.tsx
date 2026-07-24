@@ -149,8 +149,6 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
   const [exchangeRate, setExchangeRate] = useState("1.000");
   // ── Warehouse / Branch (اختيار المخزن/الفرع أولاً — إلزامي) ────────────────
   const [branchOpen, setBranchOpen] = useState(false);
-  const [pendingWarehouseId, setPendingWarehouseId] = useState<number | null>(null);
-  const [showWarehouseChangeConfirm, setShowWarehouseChangeConfirm] = useState(false);
   // ── Seller (بائع من جدول المستخدمين) ──────────────────────────────────────
   const [sellerUserId, setSellerUserId] = useState<number | null>(null);
   const [sellerOpen, setSellerOpen] = useState(false);
@@ -422,6 +420,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       setSavedInvoiceId(data.id);
       setNavInvoiceId(data.id);
       setIsPosted(data.isPosted ?? false);
+      setInvoiceNumber(data.invoiceNumber);
       setErpMode("view");
       // فتح شاشة الدفع تلقائياً للفواتير النقدية (إلا إذا كانت تُستدعى من saveForPayment)
       if (paymentType !== "credit" && !skipAutoPayModal.current) {
@@ -525,7 +524,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     }
   }, [journalsQuery.data, docTypesQuery.data, utils]);
 
-  // تفعيل المخزن/الفرع المختار: مسح جميع البيانات التابعة
+  // تفعيل المخزن/الفرع المختار: مسح جميع البيانات التابعة وإنشاء أول سطر تلقائياً
   const doSelectWarehouse = useCallback(async (id: number) => {
     setWarehouseId(id);
     setBranchOpen(false);
@@ -564,6 +563,15 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     if (currentUser?.id) {
       setSellerUserId(currentUser.id);
     }
+    // إنشاء سطر أول فارغ وتفعيله + تركيز حقل كود الصنف
+    setTimeout(() => {
+      setLines([EMPTY_LINE()]);
+      setSelectedLineIdx(0);
+      // انتظار إعادة الرسم ثم تركيز حقل كود الصنف في السطر الأول
+      requestAnimationFrame(() => {
+        cellRefs.current.get("0-0")?.focus();
+      });
+    }, 0);
   }, [journalsQuery.data, handleJournalSelect, basedOnType, basedOnNum, sellerUserId, lines, currentUser?.id]);
 
   // اختيار المخزن/الفرع مع تأكيد عند وجود بيانات مدخلة
@@ -593,18 +601,9 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
   const handleWarehouseSelect = useCallback((id: number) => {
     if (id === warehouseId) { setBranchOpen(false); return; }
-    const hasDependentData = !!(
-      customerId || customerName.trim() || basedOnTrigger ||
-      sellerUserId || lines.some(l => l.productName.trim())
-    );
-    if (hasDependentData) {
-      setPendingWarehouseId(id);
-      setShowWarehouseChangeConfirm(true);
-      setBranchOpen(false);
-    } else {
-      void doSelectWarehouse(id);
-    }
-  }, [customerId, customerName, basedOnTrigger, sellerUserId, lines, warehouseId, doSelectWarehouse]);
+    // تغيير الفرع مباشرة بدون تأكيد — مع مسح البيانات التابعة
+    void doSelectWarehouse(id);
+  }, [warehouseId, doSelectWarehouse]);
 
   // عند اختيار نوع السند
   const handleDocTypeSelect = useCallback(async (id: string) => {
@@ -893,17 +892,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       }
     }
 
-    // احجز الرقم التسلسلي من الدفتر فقط عند الحفظ الفعلي
-    let finalInvoiceNumber = invoiceNumber;
-    if (journalId) {
-      try {
-        finalInvoiceNumber = await nextJournalNumberMutation.mutateAsync({ journalId });
-        setInvoiceNumber(finalInvoiceNumber);
-      } catch {
-        toast.error("تعذّر حجز رقم الفاتورة من الدفتر");
-        throw new Error("journal_number");
-      }
-    }
+    // الرقم التسلسلي يُحجَز داخل transaction الحفظ في الخادم؛ المعروض هنا مجرد معاينة
+    const finalInvoiceNumber = invoiceNumber;
 
     const paid = paymentType === "cash" ? fmtDb(netTotal) : paymentType === "partial" ? fmtDb(paidAmount) : fmtDb(paidAmount);
     const remaining = paymentType === "cash" ? "0.0000" : fmtDb(remainingAmount);
@@ -959,7 +949,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     customerType, customerTaxNumber,
     warehouseId, currency, exchangeRate, paymentType, paidAmount,
     remainingAmount, notes, lines, subtotal, totalDiscount, totalTax,
-    netTotal, createMutation, journalId, nextJournalNumberMutation,
+    netTotal, createMutation, journalId,
     docTypeId, docTypesQuery.data, stockQuery.data, basedOnQuery.data,
   ]);
 
@@ -1016,15 +1006,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       if (selectedJournal.warehouseId !== warehouseId) { toast.error("دفتر الفرع لا يتوافق مع الفرع المختار"); return null; }
     }
 
-    let finalInvoiceNumber = invoiceNumber;
-    if (journalId) {
-      try {
-        finalInvoiceNumber = await nextJournalNumberMutation.mutateAsync({ journalId });
-        setInvoiceNumber(finalInvoiceNumber);
-      } catch {
-        toast.error("تعذّر حجز رقم الفاتورة من الدفتر"); return null;
-      }
-    }
+    // الرقم التسلسلي يُحجَز داخل transaction الحفظ في الخادم؛ المعروض هنا مجرد معاينة
+    const finalInvoiceNumber = invoiceNumber;
     const paid = paymentType === "cash" ? fmtDb(netTotal) : fmtDb(paidAmount);
     const remaining2 = paymentType === "cash" ? "0.0000" : fmtDb(remainingAmount);
     const payMethod = paymentType === "cash" ? "cash" : "credit";
@@ -1083,7 +1066,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     customerType, customerTaxNumber,
     warehouseId, currency, exchangeRate, paymentType, paidAmount,
     remainingAmount, notes, lines, subtotal, totalDiscount, totalTax,
-    netTotal, createMutation, journalId, nextJournalNumberMutation,
+    netTotal, createMutation, journalId,
     docTypeId, docTypesQuery.data, sellerUserId, stockQuery.data, basedOnQuery.data,
   ]);
 
@@ -2639,36 +2622,6 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
         </div>
       )}
 
-      {/* ── نافذة تأكيد تغيير الفرع ────────────────────────────────────────── */}
-      {showWarehouseChangeConfirm && (
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center" style={{ background: "rgba(0,0,0,0.45)" }}>
-          <div style={{ background: "white", borderRadius: 12, padding: 28, maxWidth: 420, width: "90%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)", direction: "rtl" }}>
-            <div style={{ fontSize: 20, marginBottom: 10 }}>🔄</div>
-            <p style={{ fontWeight: 800, fontSize: "15px", marginBottom: 8, color: "#1e293b" }}>تغيير الفرع / المخزن</p>
-            <p style={{ color: "#64748b", fontSize: "13px", marginBottom: 22, lineHeight: 1.6 }}>
-              تغيير الفرع/المخزن سيؤدي إلى مسح المستند المصدر والبائع وبنود الفاتورة والدفتر المؤقت. هل تريد المتابعة؟
-            </p>
-            <div className="flex gap-3 justify-start">
-              <button
-                onClick={() => {
-                  if (pendingWarehouseId) void doSelectWarehouse(pendingWarehouseId);
-                  setShowWarehouseChangeConfirm(false);
-                  setPendingWarehouseId(null);
-                }}
-                style={{ height: 36, padding: "0 20px", background: "#dc2626", color: "white", border: "none", borderRadius: 8, fontWeight: 700, fontSize: "13px", cursor: "pointer" }}
-              >
-                نعم، غيّر الفرع/المخزن
-              </button>
-              <button
-                onClick={() => { setShowWarehouseChangeConfirm(false); setPendingWarehouseId(null); }}
-                style={{ height: 36, padding: "0 20px", background: "#f1f5f9", color: "#334155", border: "1px solid #e2e8f0", borderRadius: 8, fontWeight: 600, fontSize: "13px", cursor: "pointer" }}
-              >
-                إلغاء
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
