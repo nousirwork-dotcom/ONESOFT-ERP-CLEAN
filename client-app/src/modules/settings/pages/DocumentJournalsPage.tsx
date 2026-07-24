@@ -350,7 +350,7 @@ function FieldCodeSearch({
 
 /* ──────────────── document types ──────────────── */
 const DOC_TYPES = [
-  { id: "sales",               label: "فاتورة المبيعات",     icon: <BookOpen className="w-3.5 h-3.5" /> },
+  { id: "sales_invoice",       label: "فاتورة المبيعات",     icon: <BookOpen className="w-3.5 h-3.5" /> },
   { id: "sales_return",        label: "مردود مبيعات",        icon: <RotateCcw className="w-3.5 h-3.5" /> },
   { id: "purchase_invoice",    label: "فاتورة مشتريات",      icon: <BookMarked className="w-3.5 h-3.5" /> },
   { id: "purchase_return",     label: "مردود مشتريات",       icon: <RotateCcw className="w-3.5 h-3.5" /> },
@@ -560,7 +560,7 @@ function buildPreview(fixedPart: string, firstNum: string, digits: string): stri
 
 /* ──────────────── main component ──────────────── */
 export default function DocumentJournalsPage() {
-  const [selectedType, setSelectedType] = useState("sales");
+  const [selectedType, setSelectedType] = useState("sales_invoice");
   const [view, setView]       = useState<"list" | "form">("list");
   const [editId, setEditId]   = useState<number | null>(null);
   const [form, setForm]       = useState<JournalForm>({ ...EMPTY });

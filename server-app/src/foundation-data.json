@@ -55,7 +55,7 @@
       "_salesAccountId_fk": "cert.sales.account"
     },
     {
-      "docType": "sales",
+      "docType": "sales_invoice",
       "code": "inv.02.",
       "name": "فاتورة مبيعات فرع 2",
       "name2": "Sales Invoice Br. 2",
@@ -223,7 +223,7 @@
         "suggestLastPurchaseOrder": false
       },
       "recordPolicy": "editable",
-      "foundationKey": "dj.sales.inv.02.",
+      "foundationKey": "dj.sales_invoice.inv.02.",
       "includeInFoundation": true,
       "recordOrigin": "foundation",
       "foundationTemplateVersion": "2026-07-16"
@@ -2839,7 +2839,7 @@
       "foundationTemplateVersion": "2026-07-16"
     },
     {
-      "docType": "sales",
+      "docType": "sales_invoice",
       "code": "CERT01",
       "name": "دفتر اختبار FK",
       "name2": null,
