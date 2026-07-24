@@ -218,7 +218,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
   const customersQuery   = trpc.customers.list.useQuery({});
   const warehousesQuery  = trpc.warehouses.list.useQuery();
   const productsQuery    = trpc.products.list.useQuery({});
-  const journalsQuery    = trpc.documentJournals.list.useQuery({ docTypes: ["sales"] });
+  const journalsQuery    = trpc.documentJournals.list.useQuery({ docType: "sales_invoice" });
   const salespersonsQuery = trpc.users.listSalespersons.useQuery({ warehouseId: warehouseId ?? undefined });
   const nextNumberQuery  = trpc.salesInvoices.nextNumber.useQuery({ prefix: "INV" });
   const docTypesQuery    = trpc.documentTypes.list.useQuery({ typeId: "sales" });
@@ -553,10 +553,12 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     setPaidAmountOverride("");
     setPaymentBreakdown({});
     setInvoiceNumber("");
-    // انتخاب الدفتر تلقائياً (الأول إذا وُجد) لتوليد رقم الفاتورة فوراً
-    const warehouseJournals = (journalsQuery.data ?? []).filter((j: any) => j.warehouseId === id);
+    // انتخاب دفتر فاتورة المبيعات المرتبط بالفرع تلقائياً
+    const warehouseJournals = (journalsQuery.data ?? []).filter((j: any) => j.warehouseId === id && j.docType === "sales_invoice");
     if (warehouseJournals.length >= 1) {
       await handleJournalSelect(warehouseJournals[0].id);
+    } else {
+      toast.error("لا يوجد دفتر فاتورة مبيعات مرتبط بهذا الفرع");
     }
     // تعيين البائع = المستخدم الحالي (يُحافظ على المستخدم المختار يدوياً إذا سمحت الصلاحية)
     if (currentUser?.id) {
