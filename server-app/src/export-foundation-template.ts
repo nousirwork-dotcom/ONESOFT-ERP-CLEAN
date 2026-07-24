@@ -14,7 +14,7 @@ import fs   from 'fs';
 const DATABASE_URL = process.env['DATABASE_URL'] ?? '';
 if (!DATABASE_URL) { console.error('DATABASE_URL not set'); process.exit(1); }
 
-const SOURCE_ORG_ID = 5;
+const SOURCE_ORG_ID = 1;
 
 const pool = new pg.Pool({ connectionString: DATABASE_URL, max: 3 });
 const q    = (sql: string, p: unknown[] = []) => pool.query(sql, p).then(r => r.rows);

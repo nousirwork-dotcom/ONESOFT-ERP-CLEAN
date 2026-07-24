@@ -483,7 +483,9 @@ export async function runFoundationUpdateForAllOrgs(dbUrl?: string): Promise<voi
     orgs = await db
       .select({ id: organizations.id, code: organizations.code })
       .from(organizations)
-      .where(eq(organizations.status, 'active'));
+      // جميع المنظمات بغض النظر عن status (active, trial, ...)
+      // foundation-update يجب أن يطبق القالب على أي مؤسسة عميل جديدة
+      .where(inArray(organizations.status, ['active', 'trial']));
   } catch (err: any) {
     logger.warn('foundation-update', `فشل جلب المنظمات: ${err.message}`);
     return;
