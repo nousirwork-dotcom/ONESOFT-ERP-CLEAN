@@ -2038,5 +2038,20 @@ export type ReTbPurchaseLink         = typeof reTbPurchaseLinks.$inferSelect;
 export type ReTbAuditLogEntry        = typeof reTbAuditLog.$inferSelect;
 export type ReTbSettlement           = typeof reTbSettlements.$inferSelect;
 
+// ─── Foundation Tombstones ─────────────────────────────────────────────────────
+export const foundationTombstones = pgTable('foundation_tombstones', {
+  id:             serial('id').primaryKey(),
+  orgId:          integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  tableName:      varchar('table_name', { length: 100 }).notNull(),
+  foundationKey:  varchar('foundation_key', { length: 255 }).notNull(),
+  deletedBy:      integer('deleted_by').references(() => users.id, { onDelete: 'set null' }),
+  deletedAt:      timestamp('deleted_at').notNull().defaultNow(),
+  reason:         text('reason'),
+}, (t) => ({
+  unqOrgTableKey: uniqueIndex('tombstone_org_table_key').on(t.orgId, t.tableName, t.foundationKey),
+}));
+
+export type FoundationTombstone = typeof foundationTombstones.$inferSelect;
+
 // Real Estate Housing Units Types
 export type ReHousingUnit            = typeof reHousingUnits.$inferSelect;

@@ -2,9 +2,10 @@ import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { warehouses, inventory, stockVouchers, inventoryCounts, salesInvoices, warehouseAccountLinks, chartOfAccounts } from '../schema.js';
+import { warehouses, warehouseAccountLinks, chartOfAccounts } from '../schema.js';
 import { eq, and, asc } from 'drizzle-orm';
 import { assertCanUpdate, assertCanDelete } from '../lib/foundation-framework.js';
+import { checkWarehouseDeletion, recordWarehouseTombstone } from '../lib/delete-validation.js';
 
 export const warehousesRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -80,22 +81,35 @@ export const warehousesRouter = router({
       if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'المخزن غير موجود' });
       assertCanDelete(current.recordPolicy, current.name, ctx.user.role === 'superadmin');
 
-      const [hasInventory, hasVouchers, hasInventoryCounts, hasSalesInvoices] = await Promise.all([
-        db.select({ id: inventory.id }).from(inventory)
-          .where(and(eq(inventory.warehouseId, input.id), eq(inventory.orgId, ctx.user.orgId))).limit(1),
-        db.select({ id: stockVouchers.id }).from(stockVouchers)
-          .where(and(eq(stockVouchers.warehouseId, input.id), eq(stockVouchers.orgId, ctx.user.orgId))).limit(1),
-        db.select({ id: inventoryCounts.id }).from(inventoryCounts)
-          .where(and(eq(inventoryCounts.warehouseId, input.id), eq(inventoryCounts.orgId, ctx.user.orgId))).limit(1),
-        db.select({ id: salesInvoices.id }).from(salesInvoices)
-          .where(and(eq(salesInvoices.warehouseId, input.id), eq(salesInvoices.orgId, ctx.user.orgId))).limit(1),
-      ]);
-      if (hasInventory.length > 0)       throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن حذف المخزن لأنه مرتبط بمنتجات في المخزون' });
-      if (hasVouchers.length > 0)        throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن حذف المخزن لأنه مرتبط بحركات مخزنية' });
-      if (hasInventoryCounts.length > 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن حذف المخزن لأنه مرتبط بعمليات جرد مخزني' });
-      if (hasSalesInvoices.length > 0)   throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن حذف المخزن لأنه مرتبط بفواتير مبيعات' });
+      const check = await checkWarehouseDeletion(input.id, ctx.user.orgId);
+
+      // حالة 1: هناك حركات فعلية → امنع الحذف، اعرض التفاصيل
+      if (check.hasMovements) {
+        const details = check.movements.map(m => `${m.label}: ${m.count}`).join('، ');
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `لا يمكن حذف المخزن "${current.name}" لوجود حركات مرتبطة به:\n${details}\n\nيمكنك تعطيل المخزن بدلاً من حذفه.`,
+        });
+      }
+
+      // حالة 2: هناك روابط فقط → اسمح بعد تأكيد المستخدم
+      if (check.hasLinksOnly) {
+        const details = check.links.map(l => `${l.label}: ${l.count}`).join('، ');
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: `المخزن "${current.name}" مرتبط بـ:\n${details}\n\nيجب نقل هذه الارتباطات إلى مخزن آخر قبل الحذف.`,
+        });
+      }
+
+      // حالة 3: لا شيء → احذف وسجّل Tombstone
       await db.update(warehouses).set({ isActive: false } as any)
         .where(and(eq(warehouses.id, input.id), eq(warehouses.orgId, ctx.user.orgId)));
+
+      // سجّل Tombstone للدفاتر التأسيسية
+      if (current.foundationKey && current.includeInFoundation) {
+        await recordWarehouseTombstone(input.id, ctx.user.orgId, ctx.user.id);
+      }
+
       return { success: true };
     }),
 
