@@ -1015,6 +1015,13 @@ export default function DocumentJournalsPage() {
             <DesktopWorkWindow
               title={editId ? (form.nameAr || `دفتر ${currentType?.label}`) : `دفتر جديد — ${currentType?.label}`}
               preset="standard"
+              defaultSize={{ width: 1080, height: 650 }}
+              autoMaximize={false}
+              fitMode="clamp"
+              minWidth={900}
+              minHeight={500}
+              widthPad={40}
+              heightPad={32}
               onClose={() => safeNavigate(() => { setView("list"); setEditId(null); })}
             >
               {/* يُسجّل إجراءات النموذج في ToolbarActionsProvider الداخلي لنافذة العمل */}

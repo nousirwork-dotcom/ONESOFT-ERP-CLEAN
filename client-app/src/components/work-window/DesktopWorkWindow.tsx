@@ -50,6 +50,14 @@ export interface DesktopWorkWindowProps {
    * - "auto"            — يحاول فتح النافذة بالحجم المطلوب، وإذا ضاقت المساحة يُكبّر.
    */
   fitMode?: "auto" | "clamp";
+  /** الحد الأدنى للعرض (افتراضي 680px) */
+  minWidth?: number;
+  /** الحد الأدنى للارتفاع (افتراضي 480px) */
+  minHeight?: number;
+  /** حشوة أفقية تُطرح من المساحة المتاحة (افتراضي 28px) */
+  widthPad?: number;
+  /** حشوة رأسية تُطرح من المساحة المتاحة (افتراضي 24px) */
+  heightPad?: number;
   /** يُستدعى عند رغبة المستخدم في الإغلاق — المستدعي مسؤول عن dirty-check */
   onClose:    () => void;
   children:   ReactNode;
@@ -85,6 +93,10 @@ export function DesktopWorkWindow({
   defaultSize: customDefaultSize,
   autoMaximize = false,
   fitMode = "clamp",
+  minWidth: minWProp,
+  minHeight: minHProp,
+  widthPad: widthPadProp,
+  heightPad: heightPadProp,
   onClose,
   children,
 }: DesktopWorkWindowProps) {
@@ -208,10 +220,10 @@ export function DesktopWorkWindow({
     }
 
     const BORDER_PAD = 12;
-    const PAD_W = 28;
-    const PAD_H = 24;
-    const MIN_W = 680;
-    const MIN_H = 480;
+    const PAD_W = widthPadProp ?? 28;
+    const PAD_H = heightPadProp ?? 24;
+    const MIN_W = minWProp ?? 680;
+    const MIN_H = minHProp ?? 480;
 
     function recalc() {
       if (!layer) return;
