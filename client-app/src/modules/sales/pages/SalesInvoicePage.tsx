@@ -18,6 +18,7 @@ import { useUnsavedChangesGuard } from "@/core/hooks/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import { useRegisterCommands } from "@/components/unified-toolbar/useRegisterCommands";
 import type { CommandHandlers, ScreenState } from "@/components/unified-toolbar/useRegisterCommands";
+import { useDocumentNavigation } from "@/components/unified-toolbar/useDocumentNavigation";
 type ERPMode = "view" | "new" | "edit" | "search";
 import PostingPreviewModal from "@/shared/components/PostingPreviewModal";
 import InvoicePrintModal from "@/shared/components/InvoicePrintModal";
@@ -206,6 +207,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
   const [isDirty, setIsDirty] = useState(false);
   const skipLinesRef  = useRef(false);
   const skipHeaderRef = useRef(false);
+  const skipSaveToast = useRef(false);
+  const pendingCreatePayloadRef = useRef<Parameters<typeof createMutation.mutate>[0] | null>(null);
 
   // ── ZATCA tab ──────────────────────────────────────────────────────────────
   const [activeMainTab, setActiveMainTab] = useState<"invoice" | "zatca">("invoice");
@@ -462,37 +465,34 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
   const createMutation = trpc.salesInvoices.create.useMutation({
     onSuccess: (data) => {
-      const autoEntry = (data as any).autoPostedEntryNumber as string | undefined;
-      if (autoEntry) {
-        toast.success(`✓ تم حفظ الفاتورة ${data.invoiceNumber} وترحيلها تلقائياً`, {
-          description: `قيد محاسبي رقم ${autoEntry} — الإجمالي: ${fmt(netTotal)} ${currency}`,
-          duration: 6000,
-        });
-      } else {
-        toast.success(`✓ تم حفظ الفاتورة ${data.invoiceNumber} بنجاح`, {
-          description: `الإجمالي: ${fmt(netTotal)} ${currency} — اضغط "ترحيل" لترحيل القيد`,
-          duration: 5000,
-        });
-      }
-      setSavedInvoiceId(data.id);
-      setNavInvoiceId(data.id);
+      setSavedInvoiceId(data.id ?? null);
+      setNavInvoiceId(data.id ?? null);
       setIsPosted(data.isPosted ?? false);
-      setInvoiceNumber(data.invoiceNumber);
+      setInvoiceNumber(data.invoiceNumber ?? invoiceNumber);
       setErpMode("view");
-      // فتح شاشة الدفع تلقائياً للفواتير النقدية (إلا إذا كانت تُستدعى من saveForPayment)
-      if (paymentType !== "credit" && !skipAutoPayModal.current) {
-        if (netTotal <= 0) {
-          toast.warning("إجمالي الفاتورة يساوي صفر — لا يمكن تسجيل دفعة");
+      // رسالة النجاح تُعرض هنا فقط للحفظ المباشر (آجل)؛ أما عند التأكيد من شاشة الدفع فالنافذة تُعرضها.
+      if (!skipSaveToast.current) {
+        const autoEntry = (data as any).autoPostedEntryNumber as string | undefined;
+        if (autoEntry) {
+          toast.success(`✓ تم حفظ الفاتورة ${data.invoiceNumber} وترحيلها تلقائياً`, {
+            description: `قيد محاسبي رقم ${autoEntry} — الإجمالي: ${fmt(netTotal)} ${currency}`,
+            duration: 6000,
+          });
         } else {
-          setPendingPayInvoiceId(data.id);
-          setPendingPayInvoiceNumber(data.invoiceNumber);
-          setPendingPayTotal(netTotal);
-          setShowPaymentModal(true);
+          toast.success(`✓ تم حفظ الفاتورة ${data.invoiceNumber} بنجاح`, {
+            description: `الإجمالي: ${fmt(netTotal)} ${currency} — اضغط "ترحيل" لترحيل القيد`,
+            duration: 5000,
+          });
         }
       }
-      skipAutoPayModal.current = false;
+      skipSaveToast.current = false;
+      pendingCreatePayloadRef.current = null;
     },
-    onError: (e) => toast.error(`خطأ في الحفظ: ${e.message}`),
+    onError: (e) => {
+      skipSaveToast.current = false;
+      pendingCreatePayloadRef.current = null;
+      toast.error(`خطأ في الحفظ: ${e.message}`);
+    },
   });
 
   const postMutation = trpc.posting.postSalesInvoice.useMutation({
@@ -911,6 +911,15 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
   // ── Validation & Save ─────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
+    // فاتورة محفوظة سابقاً: فتح شاشة الدفع لتسجيل/إكمال الدفع (لا حفظ جديد)
+    if (savedInvoiceId) {
+      setPendingPayInvoiceId(savedInvoiceId);
+      setPendingPayInvoiceNumber(invoiceNumber);
+      setPendingPayTotal(netTotal);
+      setShowPaymentModal(true);
+      return;
+    }
+
     // Validation — throw on failure so the unsaved-changes guard stays open
     if (!journalId) {
       toast.error("يجب اختيار نوع السند قبل الحفظ");
@@ -1016,9 +1025,9 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     const status = paymentType === "cash" ? "paid" : (remainingAmount <= 0 ? "paid" : "confirmed");
 
     if (!warehouseId) { toast.error("يجب اختيار الفرع / المخزن أولاً"); throw new Error("validation"); }
-    createMutation.mutate({
+    const payload = {
       invoiceNumber: finalInvoiceNumber,
-      invoiceType: "sale",
+      invoiceType: "sale" as const,
       invoiceDate,
       dueDate: dueDate || undefined,
       sellerUserId: sellerUserId ?? undefined,
@@ -1057,7 +1066,20 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
         total: l.total,
         sortOrder: idx,
       })),
-    });
+    };
+
+    // الدفع الآجل: حفظ مباشر بدون شاشة دفع
+    if (paymentType === "credit") {
+      createMutation.mutate(payload);
+      return;
+    }
+
+    // النقدي/الجزئي: افتح شاشة الدفع أولاً والحفظ النهائي يتم داخلها عند التأكيد
+    pendingCreatePayloadRef.current = payload;
+    setPendingPayInvoiceId(null);
+    setPendingPayInvoiceNumber(invoiceNumber);
+    setPendingPayTotal(netTotal);
+    setShowPaymentModal(true);
   }, [
     invoiceNumber, invoiceDate, dueDate, customerId, customerName,
     sellerUserId,
@@ -1069,74 +1091,51 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
   ]);
 
   // ── Save For Payment (حفظ الفاتورة من شاشة الدفع) ────────────────────────
-  const saveForPayment = useCallback(async (): Promise<number | null> => {
-    if (!journalId) { toast.error("يجب اختيار نوع السند قبل الحفظ"); return null; }
-    if (!invoiceNumber.trim()) { toast.error("رقم الفاتورة مطلوب"); return null; }
-    const validLines = lines.filter(l => l.productName.trim() !== "" || l.productCode.trim() !== "");
-    if (validLines.length === 0) { toast.error("يجب إضافة صنف واحد على الأقل في الفاتورة"); return null; }
-    for (const l of validLines) {
-      if (!l.productId) {
-        toast.error("الصنف غير مسجل، يرجى اختيار صنف من القائمة.");
-        return null;
-      }
-    }
-    if (sellerUserId && warehouseId) {
-      const sellers = salespersonsQuery.data ?? [];
-      if (!sellers.some(s => s.id === sellerUserId)) {
-        toast.error("البائع المختار غير مُسنَد للفرع/المخزن المختار — اختر بائعاً مؤهلاً");
-        return null;
-      }
-    }
-    if (customerType === 'organization' && !customerTaxNumber.trim()) {
-      toast.error("الرقم الضريبي مطلوب للعملاء من نوع مؤسسة"); return null;
-    }
-    for (const l of validLines) {
-      if (!l.unitPrice || parseFloat(l.unitPrice) === 0) {
-        toast.error(`سعر الصنف "${l.productName}" يجب أن يكون أكبر من صفر`); return null;
-      }
-      if (!l.quantity || parseFloat(l.quantity) === 0) {
-        toast.error(`كمية الصنف "${l.productName}" يجب أن تكون أكبر من صفر`); return null;
-      }
-    }
-    const selectedDocType = docTypeId
-      ? (docTypesQuery.data ?? []).find((dt: any) => String(dt.id) === docTypeId)
-      : null;
-    if (selectedDocType) {
-      if (selectedDocType.requireNote && !notes.trim()) { toast.error("يجب إدخال ملاحظة للمستند"); return null; }
-      if (selectedDocType.requireCustomerCode && !customerId) { toast.error("يجب اختيار العميل"); return null; }
-      if (selectedDocType.requireEmployeeCode && !sellerUserId) { toast.error("يجب اختيار البائع"); return null; }
-      if (selectedDocType.noStockDispatch && warehouseId) {
-        const stockData = stockQuery.data ?? [];
-        for (const line of validLines) {
-          if (!line.productId) continue;
-          const inv = stockData.find((s: any) => s.productId === line.productId);
-          const available = Number(inv?.totalQuantity ?? 0);
-          const requested = parseFloat(line.quantity) || 0;
-          if (requested > available) {
-            toast.error(`⛔ لا يوجد رصيد كافٍ للصنف "${line.productName}"\nالمتاح: ${available.toFixed(3)} — المطلوب: ${requested.toFixed(3)}`);
-            return null;
-          }
-        }
-      }
-    }
-    // ── التحقق من ربط الدفتر بالمخزن/الفرع قبل الحفظ ─────────────────────
-    if (journalId) {
-      const selectedJournal = (journalsQuery.data ?? []).find((j: any) => j.id === journalId);
-      if (!selectedJournal) { toast.error("الدفتر المختار غير موجود — اختر فرعاً آخر"); return null; }
-      if (!selectedJournal.warehouseId) { toast.error("دفتر فاتورة المبيعات غير مرتبط بمخزن/فرع — أكمل إعداد الدفتر أولاً"); return null; }
-      if (selectedJournal.warehouseId !== warehouseId) { toast.error("دفتر الفرع لا يتوافق مع الفرع المختار"); return null; }
-    }
-
-    // الرقم التسلسلي يُحجَز داخل transaction الحفظ في الخادم؛ المعروض هنا مجرد معاينة
-    const finalInvoiceNumber = invoiceNumber;
-    const paid = paymentType === "cash" ? fmtDb(netTotal) : fmtDb(paidAmount);
-    const remaining2 = paymentType === "cash" ? "0.0000" : fmtDb(remainingAmount);
-    const payMethod = paymentType === "cash" ? "cash" : "credit";
-    const status = paymentType === "cash" ? "paid" : (remainingAmount <= 0 ? "paid" : "confirmed");
+  // يُستخدم payload المُعدّ مسبقاً من handleSave؛ التحقق من البيانات تم قبل فتح النافذة.
+  const saveForPayment = useCallback(async (breakdown: Record<string, number>): Promise<number | null> => {
+    const payload = pendingCreatePayloadRef.current;
+    if (!payload) { toast.error("لا توجد بيانات فاتورة جاهزة للحفظ"); return null; }
+    const paid = Object.values(breakdown).reduce((s, v) => s + v, 0);
+    const remaining = Math.max(0, netTotal - paid);
+    const isFullPaid = paid >= netTotal - 0.005;
     try {
-      skipAutoPayModal.current = true;
+      skipSaveToast.current = true;
       const data = await createMutation.mutateAsync({
-        invoiceNumber: finalInvoiceNumber,
+        ...payload,
+        paidAmount: paid.toFixed(4),
+        remainingAmount: remaining.toFixed(4),
+        paymentMethod: "cash" as any,
+        status: (isFullPaid ? "paid" : "confirmed") as any,
+        paymentBreakdown: breakdown,
+      });
+      return data.id ?? null;
+    } catch {
+      skipSaveToast.current = false;
+      return null;
+    }
+  }, [createMutation, netTotal]);
+
+  // ── التحقق من أن الفاتورة الجديدة لا تحتوي على أي بيانات مُدخلة ──────────────
+  const isInvoiceEmpty = useCallback(() => {
+    const hasLine = lines.some(
+      l => l.productId || l.productName.trim() || l.productCode.trim() || l.quantity !== "1" || l.unitPrice.trim()
+    );
+    return !hasLine && !customerName.trim() && !customerId && !warehouseId && !notes.trim() && !basedOnType && !basedOnNum;
+  }, [lines, customerName, customerId, warehouseId, notes, basedOnType, basedOnNum]);
+
+  // ── حفظ المسودة — يُستخدم من حوار التنقل عند وجود تعديلات غير محفوظة ────────
+  const handleSaveDraft = useCallback(async () => {
+    if (!journalId) { toast.error("يجب اختيار نوع السند قبل الحفظ"); return; }
+    const validLines = lines.filter(l => l.productName.trim() !== "" || l.productCode.trim() !== "");
+    if (validLines.length === 0) { toast.error("يجب إضافة صنف واحد على الأقل في الفاتورة"); return; }
+    for (const l of validLines) {
+      if (!l.productId) { toast.error("الصنف غير مسجل، يرجى اختيار صنف من القائمة."); return; }
+    }
+    const payMethod = paymentType === "cash" ? "cash" : "credit";
+    const draftNumber = `DRAFT-${Date.now()}`;
+    try {
+      await createMutation.mutateAsync({
+        invoiceNumber: draftNumber,
         invoiceType: "sale",
         invoiceDate,
         dueDate: dueDate || undefined,
@@ -1153,10 +1152,10 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
         discountAmount: fmtDb(totalDiscount),
         taxAmount: fmtDb(totalTax),
         total: fmtDb(netTotal),
-        paidAmount: paid,
-        remainingAmount: remaining2,
+        paidAmount: "0.0000",
+        remainingAmount: fmtDb(netTotal),
         paymentMethod: payMethod as any,
-        status: status as any,
+        status: "draft",
         notes: notes || undefined,
         docTypeId: docTypeId ? parseInt(docTypeId) : undefined,
         basedOnType: basedOnType || undefined,
@@ -1177,18 +1176,14 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           sortOrder: idx,
         })),
       });
-      return data.id;
     } catch {
-      skipAutoPayModal.current = false;
-      return null;
+      throw new Error("draft-save-failed");
     }
   }, [
-    invoiceNumber, invoiceDate, dueDate, customerId, customerName,
-    customerType, customerTaxNumber,
-    warehouseId, currency, exchangeRate, paymentType, paidAmount,
-    remainingAmount, notes, lines, subtotal, totalDiscount, totalTax,
-    netTotal, createMutation, journalId,
-    docTypeId, docTypesQuery.data, sellerUserId, stockQuery.data, basedOnQuery.data,
+    invoiceDate, dueDate, customerId, customerName, sellerUserId,
+    customerType, customerTaxNumber, warehouseId, currency, exchangeRate,
+    paymentType, notes, lines, subtotal, totalDiscount, totalTax, netTotal,
+    createMutation, journalId, docTypeId, basedOnType, basedOnTrigger, basedOnQuery.data,
   ]);
 
   // ── New Invoice ───────────────────────────────────────────────────────────
@@ -1261,6 +1256,25 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       setInvoiceNumber("");
     }
   }, [journalId, journalsQuery.data, utils]);
+
+  // ── التنقل المركزي بين الفواتير المحفوظة ──────────────────────────────────────
+  const {
+    handlers: navHandlers,
+    hasRecord: navHasRecord,
+    hasPrevious: navHasPrevious,
+    hasNext: navHasNext,
+    showUnsavedDialog: navShowUnsavedDialog,
+    unsavedDialogActions: navUnsavedDialogActions,
+    isSavingDraft: navIsSavingDraft,
+  } = useDocumentNavigation({
+    records: (allInvoicesQuery.data ?? []).filter((i: any) => i.invoiceType === "sale"),
+    currentId: navInvoiceId ?? savedInvoiceId,
+    setCurrentId: id => setNavInvoiceId(id),
+    isDirty,
+    isEmpty: isInvoiceEmpty,
+    saveAsDraft: handleSaveDraft,
+    onBeforeNavigate: () => setErpMode("view" as ERPMode),
+  });
 
   /* ── تحميل PDF الفاتورة (تُستخدم في SendDocumentPanel) ── */
   const handleDownloadPdf = useCallback(async () => {
@@ -1351,10 +1365,10 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     duplicate: () => { _sipRef.current.handleDuplicate(); },
     edit:      () => { _sipRef.current.setErpMode("edit" as ERPMode); toast.info("وضع التعديل"); },
     delete:    () => { _sipRef.current.handleDelete(); },
-    first:     () => { const s = _sipRef.current; const ids = [...(s.allInvoicesQuery.data ?? [])].sort((a: any, b: any) => a.id - b.id).map((i: any) => i.id); if (ids.length) { s.setNavInvoiceId(ids[0]); s.setErpMode("view" as ERPMode); } },
-    previous:  () => { const s = _sipRef.current; const ids = [...(s.allInvoicesQuery.data ?? [])].sort((a: any, b: any) => a.id - b.id).map((i: any) => i.id); const cur = s.navInvoiceId ?? s.savedInvoiceId; const idx = cur ? ids.indexOf(cur) : -1; if (idx > 0) { s.setNavInvoiceId(ids[idx - 1]); s.setErpMode("view" as ERPMode); } else if (idx === -1 && ids.length) { s.setNavInvoiceId(ids[ids.length - 1]); s.setErpMode("view" as ERPMode); } },
-    next:      () => { const s = _sipRef.current; const ids = [...(s.allInvoicesQuery.data ?? [])].sort((a: any, b: any) => a.id - b.id).map((i: any) => i.id); const cur = s.navInvoiceId ?? s.savedInvoiceId; const idx = cur ? ids.indexOf(cur) : -1; if (idx >= 0 && idx < ids.length - 1) { s.setNavInvoiceId(ids[idx + 1]); s.setErpMode("view" as ERPMode); } else if (idx === -1 && ids.length) { s.setNavInvoiceId(ids[0]); s.setErpMode("view" as ERPMode); } },
-    last:      () => { const s = _sipRef.current; const ids = [...(s.allInvoicesQuery.data ?? [])].sort((a: any, b: any) => a.id - b.id).map((i: any) => i.id); if (ids.length) { s.setNavInvoiceId(ids[ids.length - 1]); s.setErpMode("view" as ERPMode); } },
+    first:     navHandlers.first,
+    previous:  navHandlers.previous,
+    next:      navHandlers.next,
+    last:      navHandlers.last,
     approve:   () => { toast.success("تم الاعتماد"); },
     unapprove: () => { const s = _sipRef.current; if (!s.savedInvoiceId) return; if (window.confirm("هل أنت متأكد من إلغاء ترحيل هذه الفاتورة؟")) s.unpostMutation.mutate({ invoiceId: s.savedInvoiceId }); },
     preview:   () => { const s = _sipRef.current; if (!s.savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً"); return; } s.setShowPostingPreview(true); },
@@ -1368,10 +1382,10 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     mode: (erpMode === "search" ? "view" : erpMode) as ScreenState["mode"],
     isDirty,
     isSaveable: !createMutation.isPending && (erpMode === "new" || erpMode === "edit"),
-    hasRecord:  savedInvoiceId !== null,
-    // التنقل مبني على وجود سجل محفوظ (لا على hasPrevious/hasNext المجردين)
-    hasPrevious: savedInvoiceId !== null,
-    hasNext:     savedInvoiceId !== null,
+    hasRecord:  navHasRecord,
+    // التنقل مبني على وجود سجلات والموقع الحالي (يعمل حتى من فاتورة جديدة فارغة)
+    hasPrevious: navHasPrevious,
+    hasNext:     navHasNext,
     isApproved: isPosted,
     isBusy:     createMutation.isPending,
   }), [erpMode, isDirty, savedInvoiceId, isPosted, createMutation.isPending]);
@@ -2167,16 +2181,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
         {/* زر الدفع */}
         <div className="px-3 pt-1 pb-2">
           <button
-            onClick={() => {
-              if (netTotal <= 0) {
-                toast.warning("يجب إضافة أصناف أو مبالغ إلى الفاتورة قبل تسجيل الدفع");
-                return;
-              }
-              setPendingPayInvoiceId(savedInvoiceId);
-              setPendingPayInvoiceNumber(invoiceNumber);
-              setPendingPayTotal(netTotal);
-              setShowPaymentModal(true);
-            }}
+            onClick={() => { handleSave(); }}
             disabled={netTotal <= 0}
             className="w-full py-2.5 rounded-md text-[13px] font-bold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             style={{
@@ -2672,6 +2677,15 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
         onDiscard={dirtyConfirmDiscard}
         onCancel={dirtyConfirmCancel}
         isSaving={createMutation.isPending}
+      />
+
+      {/* ── حوار التنقل عند وجود تعديلات غير محفوظة ── */}
+      <UnsavedChangesDialog
+        open={navShowUnsavedDialog}
+        onSaveAsDraft={navUnsavedDialogActions.onSaveAsDraft}
+        onDiscard={navUnsavedDialogActions.onDiscard}
+        onCancel={navUnsavedDialogActions.onCancel}
+        isSaving={navIsSavingDraft}
       />
 
       {/* ── نافذة تأكيد تغيير العميل (بناءً على مستند من عميل مختلف) ── */}

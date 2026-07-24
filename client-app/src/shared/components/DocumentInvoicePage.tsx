@@ -9,6 +9,7 @@ import { trpc } from "@/shared/lib/trpc";
 import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import { useToolbarActions } from "@/components/unified-toolbar/ToolbarActionsContext";
 import type { ToolbarActionMap } from "@/components/unified-toolbar/toolbar.types";
+import { useDocumentNavigation } from "@/components/unified-toolbar/useDocumentNavigation";
 type ERPMode = "view" | "new" | "edit" | "search";
 import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import PostingPreviewModal from "@/shared/components/PostingPreviewModal";
@@ -220,10 +221,12 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   const [journalOpen, setJournalOpen]   = useState(false);
 
   const [savedInvoiceId, setSavedInvoiceId]       = useState<number | null>(null);
+  const [navInvoiceId, setNavInvoiceId]           = useState<number | null>(null);
   const [isPosted, setIsPosted]                   = useState(false);
   const [showPostingPreview, setShowPostingPreview] = useState(false);
 
   const [erpMode, setErpMode] = useState<ERPMode>("new");
+  const isDirty = erpMode === "new" || erpMode === "edit";
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [showUnsaved, setShowUnsaved] = useState(false);
   const [pendingNav, setPendingNav] = useState<(() => void) | null>(null);
@@ -250,6 +253,54 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     { prefix: config.numberPrefix },
     { enabled: config.docCategory === "purchase" }
   );
+
+  const listQuery = config.docCategory === "sales"
+    ? trpc.salesInvoices.list.useQuery({ invoiceType: (config.invoiceType === "invoice" ? "sale" : config.invoiceType) as any })
+    : trpc.purchases.list.useQuery({ invoiceType: config.invoiceType });
+
+  const navInvoiceQuery = config.docCategory === "sales"
+    ? trpc.salesInvoices.get.useQuery({ id: navInvoiceId! }, { enabled: !!navInvoiceId })
+    : trpc.purchases.get.useQuery({ id: navInvoiceId! }, { enabled: !!navInvoiceId });
+
+  // تحميل المستند المختار بالتنقل
+  useEffect(() => {
+    const inv = navInvoiceQuery.data as any;
+    if (!inv) return;
+    setInvoiceNumber(inv.invoiceNumber || "");
+    setInvoiceDate(inv.invoiceDate ? new Date(inv.invoiceDate).toISOString().split("T")[0] : "");
+    setDueDate(inv.dueDate ? new Date(inv.dueDate).toISOString().split("T")[0] : "");
+    setPartyId(inv.customerId ?? inv.supplierId ?? null);
+    setPartyName(inv.customerName ?? inv.supplierName ?? "");
+    setSupplierInvoiceNumber(inv.supplierInvoiceNumber || "");
+    setWarehouseId(inv.warehouseId ?? null);
+    setJournalId(inv.journalId ?? null);
+    setCurrency(inv.currency ?? "SAR");
+    setExchangeRate(inv.exchangeRate ?? "1.000");
+    setPaymentType((inv.paymentMethod ?? "cash") as PaymentType);
+    setNotes(inv.notes ?? "");
+    setPaidAmountOverride(inv.paidAmount ?? "");
+    setSavedInvoiceId(inv.id);
+    setIsPosted(inv.isPosted ?? false);
+    setErpMode("view");
+    if (inv.items && inv.items.length > 0) {
+      setLines(inv.items.map((item: any) => ({
+        id: crypto.randomUUID(),
+        productCode: item.productCode ?? "",
+        productName: item.productName,
+        unit: item.unit ?? "",
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        discountPct: item.discountPercent ?? "0",
+        discountAmt: item.discountAmount ?? "0",
+        taxPct: item.taxPercent ?? "0",
+        taxAmt: item.taxAmount ?? "0",
+        total: item.total,
+        productId: item.productId ?? undefined,
+      })));
+    } else {
+      setLines([EMPTY_LINE()]);
+    }
+  }, [navInvoiceQuery.data]);
 
   const stockQuery = trpc.reports.stockByWarehouse.useQuery(
     { warehouseId: warehouseId! },
@@ -579,7 +630,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       notes: notes || undefined, items: itemsPayload,
     };
     if (config.docCategory === "sales") {
-      salesCreateMutation.mutate({ ...common, customerId: partyId ?? undefined, customerName: partyName || undefined });
+      salesCreateMutation.mutate({ ...common, customerId: partyId ?? undefined, customerName: partyName || undefined } as any);
     } else {
       purchaseCreateMutation.mutate({
         ...common,
@@ -599,7 +650,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   /* ── نسخة مماثلة ── */
   const handleDuplicate = useCallback(() => {
     if (!savedInvoiceId) { toast.warning("لا يوجد مستند محفوظ للنسخ — احفظ أولاً"); return; }
-    setSavedInvoiceId(null); setIsPosted(false); setShowPostingPreview(false);
+    setSavedInvoiceId(null); setNavInvoiceId(null); setIsPosted(false); setShowPostingPreview(false);
     setErpMode("new");
     setBasedOnType(""); setBasedOnNum(""); setBasedOnTrigger("");
     setPaidAmountOverride("");
@@ -618,13 +669,87 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     setBasedOnType(""); setBasedOnNum(""); setBasedOnTrigger("");
     setNotes(""); setDueDate(""); setSalesperson(""); setPaidAmountOverride("");
     setErpMode("new"); setJournalWarehouseId(null);
-    setSavedInvoiceId(null); setIsPosted(false); setShowPostingPreview(false);
+    setSavedInvoiceId(null); setNavInvoiceId(null); setIsPosted(false); setShowPostingPreview(false);
     if (journalId) {
       utils.documentJournals.previewNextNumber.fetch({ journalId }).then(p => {
         if (p) setInvoiceNumber(p);
       }).catch(() => setInvoiceNumber(""));
     } else setInvoiceNumber("");
   }, [journalId, utils]);
+
+  // ── التحقق من أن المستند الجديد لا يحتوي على بيانات مُدخلة ───────────────────
+  const isDocumentEmpty = useCallback(() => {
+    const hasLine = lines.some(
+      l => l.productId || l.productName.trim() || l.productCode.trim() || l.quantity !== "1" || l.unitPrice.trim()
+    );
+    return !hasLine && !partyName.trim() && !partyId && !warehouseId && !notes.trim() && !basedOnType && !basedOnNum;
+  }, [lines, partyName, partyId, warehouseId, notes, basedOnType, basedOnNum]);
+
+  // ── حفظ المسودة — يُستخدم من حوار التنقل عند وجود تعديلات غير محفوظة ───────
+  const handleSaveDraft = useCallback(async () => {
+    const validLines = lines.filter(l => l.productName.trim() !== "");
+    if (validLines.length === 0) { toast.error("يجب إضافة صنف واحد على الأقل"); return; }
+    const itemsPayload = validLines.map((l, idx) => ({
+      productId: l.productId, productCode: l.productCode || undefined, productName: l.productName,
+      unit: l.unit || undefined, quantity: l.quantity, unitPrice: l.unitPrice,
+      discountPercent: l.discountPct, discountAmount: l.discountAmt,
+      taxPercent: l.taxPct, taxAmount: l.taxAmt, total: l.total, sortOrder: idx,
+    }));
+    const common = {
+      invoiceNumber: `DRAFT-${Date.now()}`,
+      invoiceType: config.invoiceType,
+      invoiceDate,
+      dueDate: dueDate || undefined,
+      warehouseId: warehouseId ?? undefined,
+      journalId: journalId ?? undefined,
+      currency,
+      exchangeRate,
+      subtotal: fmt(subtotal), discountAmount: fmt(totalDiscount),
+      taxAmount: fmt(totalTax), total: fmt(netTotal),
+      paidAmount: "0.000", remainingAmount: fmt(netTotal),
+      paymentMethod: "credit" as any,
+      status: "draft" as any,
+      notes: notes || undefined,
+      items: itemsPayload,
+    };
+    try {
+      if (config.docCategory === "sales") {
+        await salesCreateMutation.mutateAsync({ ...common, customerId: partyId ?? undefined, customerName: partyName || undefined } as any);
+      } else {
+        await purchaseCreateMutation.mutateAsync({
+          ...common,
+          supplierId: partyId ?? undefined,
+          supplierName: partyName || undefined,
+          supplierInvoiceNumber: supplierInvoiceNumber || undefined,
+        });
+      }
+    } catch {
+      throw new Error("draft-save-failed");
+    }
+  }, [
+    invoiceDate, dueDate, partyId, partyName, supplierInvoiceNumber, warehouseId,
+    currency, exchangeRate, notes, lines, subtotal, totalDiscount, totalTax, netTotal,
+    salesCreateMutation, purchaseCreateMutation, journalId, config.docCategory, config.invoiceType,
+  ]);
+
+  // ── التنقل المركزي بين المستندات المحفوظة ────────────────────────────────────
+  const {
+    handlers: navHandlers,
+    hasRecord: navHasRecord,
+    hasPrevious: navHasPrevious,
+    hasNext: navHasNext,
+    showUnsavedDialog: navShowUnsavedDialog,
+    unsavedDialogActions: navUnsavedDialogActions,
+    isSavingDraft: navIsSavingDraft,
+  } = useDocumentNavigation({
+    records: (listQuery.data as any) as Array<{ id: number }> | undefined,
+    currentId: navInvoiceId ?? savedInvoiceId,
+    setCurrentId: id => { setNavInvoiceId(id); },
+    isDirty,
+    isEmpty: isDocumentEmpty,
+    saveAsDraft: handleSaveDraft,
+    onBeforeNavigate: () => setErpMode("view" as ERPMode),
+  });
 
   // ── Unified Toolbar ──────────────────────────────────────────────────────────
   const _tbRef = useRef<any>({});
@@ -640,10 +765,10 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       edit: { supported: true as const, allowed: true, stateEnabled: erpMode === "view", disabledReason: erpMode !== "view" ? "المستند في وضع التعديل بالفعل" : undefined, onClick: () => { _tbRef.current.setErpMode("edit"); toast.info("وضع التعديل"); } },
       delete: { supported: false as const, disabledReason: "حذف المستند غير متاح في هذه الشاشة" },
       draft: { supported: false as const, disabledReason: "المسودة غير مستخدمة" },
-      first:    { supported: false as const, disabledReason: "التنقل يتم داخل شاشة الفاتورة الكاملة" },
-      previous: { supported: false as const, disabledReason: "التنقل يتم داخل شاشة الفاتورة الكاملة" },
-      next:     { supported: false as const, disabledReason: "التنقل يتم داخل شاشة الفاتورة الكاملة" },
-      last:     { supported: false as const, disabledReason: "التنقل يتم داخل شاشة الفاتورة الكاملة" },
+      first:    { supported: true as const, stateEnabled: navHasRecord, disabledReason: "لا توجد سجلات", onClick: navHandlers.first },
+      previous: { supported: true as const, stateEnabled: navHasPrevious, disabledReason: "لا يوجد سجل سابق", onClick: navHandlers.previous },
+      next:     { supported: true as const, stateEnabled: navHasNext, disabledReason: "لا يوجد سجل تالي", onClick: navHandlers.next },
+      last:     { supported: true as const, stateEnabled: navHasRecord, disabledReason: "لا توجد سجلات", onClick: navHandlers.last },
       approve: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "احفظ المستند أولًا للاعتماد", onClick: () => toast.success("تم الاعتماد") },
       unapprove: { supported: canPost, allowed: true, stateEnabled: hasSaved && isPosted, disabledReason: !hasSaved ? "احفظ المستند أولًا" : !isPosted ? "المستند غير مرحّل" : undefined, onClick: () => { const s = _tbRef.current; if (!s.savedInvoiceId) return; if (window.confirm("هل أنت متأكد من إلغاء ترحيل هذا المستند؟")) s.unpostMutation.mutate({ invoiceId: s.savedInvoiceId! }); } },
       preview: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "احفظ المستند أولًا للمطالعة", onClick: () => { const s = _tbRef.current; if (s.savedInvoiceId) s.setErpMode("view"); else toast.info("لا يوجد سجل محفوظ للمطالعة"); } },
@@ -652,7 +777,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       print: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "احفظ المستند أولًا للطباعة", onClick: () => { const s = _tbRef.current; if (s.isPrintEnabled) s.setShowPrintModal(true); else toast.info("جاري الطباعة..."); } },
       exit: { supported: true as const, allowed: true, stateEnabled: true, onClick: () => { const s = _tbRef.current; const dirty = s.erpMode === "new" || s.erpMode === "edit"; const doExit = () => toast.info("أغلق التبويب لإغلاق الشاشة"); if (dirty) { s.setPendingNav(() => doExit); s.setShowUnsaved(true); } else doExit(); } },
     }) as unknown as ToolbarActionMap;
-  }, [erpMode, isSaving, savedInvoiceId, isPosted, isPrintEnabled, config]);
+  }, [erpMode, isSaving, savedInvoiceId, isPosted, isPrintEnabled, config, navHasRecord, navHasPrevious, navHasNext, navHandlers]);
   const toolbarTools = useMemo(() => {
     const canPost = config.canPost !== false && config.docCategory === "sales";
     const hasSaved = savedInvoiceId !== null;
@@ -689,6 +814,15 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
           setPendingNav(null);
         }}
         onCancel={() => { setShowUnsaved(false); setPendingNav(null); }}
+      />
+
+      {/* ── حوار التنقل عند وجود تعديلات غير محفوظة ── */}
+      <UnsavedChangesDialog
+        open={navShowUnsavedDialog}
+        onSaveAsDraft={navUnsavedDialogActions.onSaveAsDraft}
+        onDiscard={navUnsavedDialogActions.onDiscard}
+        onCancel={navUnsavedDialogActions.onCancel}
+        isSaving={navIsSavingDraft}
       />
 
       {/* ── Header Form ───────────────────────────────────────────────────── */}

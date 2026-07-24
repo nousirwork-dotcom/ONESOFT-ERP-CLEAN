@@ -49,6 +49,7 @@ export const journalRouter = router({
       sourceDocId:     z.number().optional(),
       sourceDocNumber: z.string().optional(),
       entryType:       z.enum(['manual', 'auto']).optional(),
+      status:          z.enum(['draft', 'posted', 'cancelled']).optional(),
       lines: z.array(z.object({
         accountId:   z.number().optional(),
         accountCode: z.string().optional(),
@@ -88,16 +89,23 @@ export const journalRouter = router({
       }
 
       // 3) توليد الرقم التسلسلي ذرياً مع advisory lock لمنع race conditions
+      // المسودة لا تستهلك الرقم الرسمي من مسلسل القيود.
       const orgId = ctx.user.orgId;
+      const isDraft = rest.status === 'draft';
       const entry = await db.transaction(async (tx) => {
-        await tx.execute(sql`SELECT pg_advisory_xact_lock(${orgId}::bigint)`);
-        const lastEntry = await tx.query.journalEntries.findFirst({
-          where: eq(journalEntries.orgId, orgId),
-          orderBy: [desc(journalEntries.id)],
-        });
-        const lastNum = lastEntry ? parseInt(lastEntry.entryNumber.replace(/\D/g, '') || '0') : 0;
-        const safeLastNum = lastNum > 9_000_000 ? 0 : lastNum;
-        const entryNumber = `JE-${String(safeLastNum + 1).padStart(4, '0')}`;
+        let entryNumber: string;
+        if (isDraft) {
+          entryNumber = `DRAFT-${Date.now()}`;
+        } else {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(${orgId}::bigint)`);
+          const lastEntry = await tx.query.journalEntries.findFirst({
+            where: eq(journalEntries.orgId, orgId),
+            orderBy: [desc(journalEntries.id)],
+          });
+          const lastNum = lastEntry ? parseInt(lastEntry.entryNumber.replace(/\D/g, '') || '0') : 0;
+          const safeLastNum = lastNum > 9_000_000 ? 0 : lastNum;
+          entryNumber = `JE-${String(safeLastNum + 1).padStart(4, '0')}`;
+        }
         const [newEntry] = await tx.insert(journalEntries).values({
           ...rest,
           entryNumber,
@@ -105,7 +113,7 @@ export const journalRouter = router({
           orgId,
           userId: ctx.user.id,
           entryDate: new Date(entryDate),
-          status: 'posted',
+          status: isDraft ? 'draft' : 'posted',
         }).returning();
         if (lines.length > 0) {
           await tx.insert(journalEntryLines).values(

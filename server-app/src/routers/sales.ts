@@ -292,14 +292,16 @@ export const salesRouter = router({
       // ── تحقق: جميع الأصناف مسجلة في النظام (لا يُقبل نص يدوي بدون productId) ──
       await validateInvoiceItems(items, orgId);
 
-      const result = await db.transaction(async (tx) => {
+      const isDraft = invoiceData.status === 'draft';
+      const { invoice, finalInvoiceNumber } = await db.transaction(async (tx) => {
         // ── حجز الرقم التسلسلي داخل نفس transaction الحفظ ──────────────────
+        // المسودة لا تستهلك الرقم الرسمي من دفتر المستندات.
         // قفل استشاري على الدفتر لمنع race conditions بين مستخدمين متعددين
-        if (invoiceData.journalId) {
+        if (invoiceData.journalId && !isDraft) {
           await tx.execute(sql`SELECT pg_advisory_xact_lock(${invoiceData.journalId}::bigint)`);
         }
         let finalInvoiceNumber = invoiceData.invoiceNumber;
-        if (invoiceData.journalId) {
+        if (invoiceData.journalId && !isDraft) {
           finalInvoiceNumber = await generateInvoiceNumberForJournal(tx, invoiceData.journalId, orgId);
         }
 
@@ -335,20 +337,43 @@ export const salesRouter = router({
             }))
           );
         }
+
+        // ── تسجيل تفاصيل الدفع داخل نفس transaction الإنشاء عند تأكيد الدفع ─────
+        // يضمن ذلك عدم ترك فاتورة بدون دفع في قاعدة البيانات.
+        if (!isDraft && invoiceData.paymentBreakdown != null) {
+          const pmEntries = Object.entries(invoiceData.paymentBreakdown).filter(([, v]) => v > 0);
+          if (pmEntries.length > 0) {
+            const pms = await tx.query.paymentMethods.findMany({
+              where: eq(paymentMethods.orgId, orgId),
+            });
+            const pmMap = new Map(pms.map(p => [p.code, p.nameAr]));
+            await tx.insert(salesInvoicePayments).values(
+              pmEntries.map(([code, amount]) => ({
+                orgId,
+                invoiceId: invoice.id,
+                paymentMethodCode: code,
+                paymentMethodName: pmMap.get(code) ?? code,
+                amount: amount.toFixed(4),
+              }))
+            );
+          }
+        }
+
+        // ── ترحيل تلقائي داخل نفس transaction الحفظ ───────────────────────────
+        // المسودة لا تُرحّل ولا تُنشئ حركات مخزون أو قيود محاسبية.
+        if (!isDraft) {
+          try {
+            const posted = await autoPostSalesInvoice(invoice.id, orgId, ctx.user.id, tx);
+            if (posted) {
+              return { ...invoice, invoiceNumber: finalInvoiceNumber, isPosted: true, autoPostedEntryNumber: posted.entryNumber };
+            }
+          } catch (e) {
+            console.error('[sales.create] autoPostSalesInvoice error:', e);
+          }
+        }
+
         return { invoice, finalInvoiceNumber };
       });
-
-      const { invoice, finalInvoiceNumber } = result;
-
-      // ── ترحيل تلقائي فور الحفظ ──────────────────────────────────────────────
-      try {
-        const posted = await autoPostSalesInvoice(invoice.id, orgId, ctx.user.id);
-        if (posted) {
-          return { ...invoice, invoiceNumber: finalInvoiceNumber, isPosted: true, autoPostedEntryNumber: posted.entryNumber };
-        }
-      } catch (e) {
-        console.error('[sales.create] autoPostSalesInvoice error:', e);
-      }
 
       return { ...invoice, invoiceNumber: finalInvoiceNumber };
     }),

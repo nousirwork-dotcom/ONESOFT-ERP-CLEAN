@@ -24,6 +24,8 @@ import { eq, and, desc, inArray } from 'drizzle-orm';
 // Types
 // ══════════════════════════════════════════════════════════════════════════════
 
+export type DbClient = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 export type PostingLine = {
   accountId:   number | null;
   accountCode: string;
@@ -125,8 +127,9 @@ export async function validateAccounts(accountIds: (number | null)[]): Promise<v
 // nextEntryNumber — رقم قيد تسلسلي
 // ══════════════════════════════════════════════════════════════════════════════
 
-export async function nextEntryNumber(orgId: number): Promise<string> {
-  const last = await db.query.journalEntries.findFirst({
+export async function nextEntryNumber(orgId: number, tx?: DbClient): Promise<string> {
+  const client = tx ?? db;
+  const last = await client.query.journalEntries.findFirst({
     where: eq(journalEntries.orgId, orgId),
     orderBy: [desc(journalEntries.id)],
   });
@@ -573,12 +576,14 @@ export async function insertJournalEntry(opts: {
   sourceDocId: number;
   sourceDocNumber: string;
   lines: PostingLine[];
+  tx?: DbClient;
 }) {
-  const entryNumber = await nextEntryNumber(opts.orgId);
+  const client = opts.tx ?? db;
+  const entryNumber = await nextEntryNumber(opts.orgId, opts.tx);
   const totalDebit  = opts.lines.reduce((s, l) => s + Number(l.debit),  0);
   const totalCredit = opts.lines.reduce((s, l) => s + Number(l.credit), 0);
 
-  const [entry] = await db.insert(journalEntries).values({
+  const [entry] = await client.insert(journalEntries).values({
     orgId:           opts.orgId,
     entryNumber,
     entryDate:       opts.date,
@@ -595,7 +600,7 @@ export async function insertJournalEntry(opts: {
   }).returning();
 
   if (opts.lines.length > 0) {
-    await db.insert(journalEntryLines).values(
+    await client.insert(journalEntryLines).values(
       opts.lines.map((l, i) => ({
         entryId:     entry.id,
         orgId:       opts.orgId,
@@ -620,8 +625,10 @@ export async function autoPostSalesInvoice(
   invoiceId: number,
   orgId: number,
   userId: number,
+  tx?: DbClient,
 ): Promise<{ entryNumber: string } | null> {
-  const invoice = await db.query.salesInvoices.findFirst({
+  const client = tx ?? db;
+  const invoice = await client.query.salesInvoices.findFirst({
     where: and(eq(salesInvoices.id, invoiceId), eq(salesInvoices.orgId, orgId)),
   });
   if (!invoice || invoice.isPosted) return null;
@@ -629,7 +636,7 @@ export async function autoPostSalesInvoice(
   if (!invoice.journalId && !invoice.docTypeId) return null;
 
   const journal = invoice.journalId
-    ? await db.query.documentJournals.findFirst({
+    ? await client.query.documentJournals.findFirst({
         where: and(eq(documentJournals.id, invoice.journalId), eq(documentJournals.orgId, orgId)),
       })
     : null;
@@ -685,9 +692,10 @@ export async function autoPostSalesInvoice(
     sourceDocId:     invoice.id,
     sourceDocNumber: invoice.invoiceNumber,
     lines,
+    tx,
   });
 
-  await db.update(salesInvoices)
+  await client.update(salesInvoices)
     .set({ isPosted: true, postedAt: new Date(), postedJournalEntryId: entry.id, updatedAt: new Date() })
     .where(and(eq(salesInvoices.id, invoiceId), eq(salesInvoices.orgId, orgId)));
 

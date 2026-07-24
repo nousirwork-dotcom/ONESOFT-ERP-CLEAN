@@ -128,6 +128,7 @@ export const purchasesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { items, dueDate, ...invoiceData } = input;
       const orgId = ctx.user.orgId;
+      const isDraft = invoiceData.status === 'draft';
       const [invoice] = await db.insert(purchaseInvoices).values({
         ...invoiceData,
         orgId,
@@ -146,11 +147,13 @@ export const purchasesRouter = router({
         );
       }
 
-      // ترحيل تلقائي عند الحفظ
-      try {
-        await autoPostPurchaseInvoice(invoice.id, orgId, ctx.user.id);
-      } catch (e) {
-        console.warn('[autoPostPurchaseInvoice] skipped:', e);
+      // ترحيل تلقائي عند الحفظ (لا يُنفّذ للمسودة)
+      if (!isDraft) {
+        try {
+          await autoPostPurchaseInvoice(invoice.id, orgId, ctx.user.id);
+        } catch (e) {
+          console.warn('[autoPostPurchaseInvoice] skipped:', e);
+        }
       }
 
       return invoice;

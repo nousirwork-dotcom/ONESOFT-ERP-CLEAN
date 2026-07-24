@@ -6,7 +6,8 @@ import { t } from "@/shared/lib/translations";
 
 interface UnsavedChangesDialogProps {
   open: boolean;
-  onSave: () => void | Promise<void>;
+  onSave?: () => void | Promise<void>;
+  onSaveAsDraft?: () => void | Promise<void>;
   onDiscard: () => void;
   onCancel: () => void;
   isSaving?: boolean;
@@ -15,6 +16,7 @@ interface UnsavedChangesDialogProps {
 export function UnsavedChangesDialog({
   open,
   onSave,
+  onSaveAsDraft,
   onDiscard,
   onCancel,
   isSaving,
@@ -33,9 +35,15 @@ export function UnsavedChangesDialog({
           {t(lang, "unsavedMessage")}
         </p>
         <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
-          <Button onClick={onSave} disabled={isSaving} className="gap-1">
-            {isSaving ? t(lang, "unsavedSaving") : t(lang, "unsavedSave")}
-          </Button>
+          {onSaveAsDraft ? (
+            <Button onClick={onSaveAsDraft} disabled={isSaving} className="gap-1">
+              {isSaving ? t(lang, "unsavedSaving") : t(lang, "unsavedSaveAsDraft")}
+            </Button>
+          ) : (
+            <Button onClick={onSave} disabled={isSaving} className="gap-1">
+              {isSaving ? t(lang, "unsavedSaving") : t(lang, "unsavedSave")}
+            </Button>
+          )}
           <Button variant="destructive" onClick={onDiscard} disabled={isSaving}>
             {t(lang, "unsavedDiscard")}
           </Button>

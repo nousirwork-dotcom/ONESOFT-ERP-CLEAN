@@ -480,10 +480,11 @@ const SOURCE_DOC_PAGE: Record<string, MenuId> = {
 
 function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherType?: string; onNavigateTo?: (id: MenuId) => void }) {
   const DRAFT_KEY = JE_DRAFT_PREFIX + voucherType;
-  const { setDirty, registerSave, confirmIfDirty } = useContext(DirtyCtx);
+  const { setDirty, registerSave, registerDraftSave, confirmIfDirty } = useContext(DirtyCtx);
   const justLoadedRef  = useRef(true);
   const saveResolveRef = useRef<((ok: boolean) => void) | null>(null);
-  const handleSaveRef  = useRef<() => void>(() => {});
+  const handleSaveRef      = useRef<() => void>(() => {});
+  const handleSaveDraftRef = useRef<() => void>(() => {});
 
   const accountsQuery    = trpc.accounts.list.useQuery();
   const costCentersQuery = trpc.costCenters.list.useQuery();
@@ -493,10 +494,11 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
 
   const createMutation = trpc.journal.create.useMutation({
     onSuccess: (data) => {
-      toast.success("تم حفظ القيد بنجاح ✓");
+      const isDraft = data.status === "draft";
+      toast.success(isDraft ? "تم حفظ المسودة" : "تم حفظ القيد بنجاح ✓");
       setSavedEntryId(data.id);
       setSavedEntryNumber(data.entryNumber);
-      setEntryStatus("posted");
+      setEntryStatus(isDraft ? "draft" : "posted");
       localStorage.removeItem(DRAFT_KEY);
       journalListQuery.refetch();
       nextNumberQuery.refetch();
@@ -652,6 +654,11 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
     localStorage.removeItem(DRAFT_KEY);
   }, [DRAFT_KEY]);
 
+  const isJournalEmpty = useCallback(() => {
+    const hasLine = lines.some(l => l.accountId || l.accountName.trim() || l.debit.trim() || l.credit.trim());
+    return !hasLine && !description.trim() && !basedOn.trim();
+  }, [lines, description, basedOn]);
+
   const handleSave = useCallback(() => {
     if (!balanced) return toast.error("القيد غير متوازن — المدين ≠ الدائن");
     const badLines = lines.filter(l => {
@@ -680,6 +687,27 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
         })),
     });
   }, [balanced, entryDate, description, basedOn, totalDebit, totalCredit, lines, createMutation]);
+
+  const handleSaveDraft = useCallback(() => {
+    const validLines = lines.filter(l => l.accountId && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0));
+    if (validLines.length === 0) { toast.error("يجب إضافة بند واحد على الأقل"); return; }
+    createMutation.mutate({
+      entryDate, description,
+      reference: basedOn || undefined,
+      totalDebit: totalDebit.toFixed(3),
+      totalCredit: totalCredit.toFixed(3),
+      entryType: "manual",
+      status: "draft",
+      lines: validLines.map((l, i) => ({
+        sortOrder: i + 1,
+        accountId: parseInt(l.accountId),
+        accountName: l.accountName,
+        description: l.description,
+        debit: l.debit || "0",
+        credit: l.credit || "0",
+      })),
+    });
+  }, [entryDate, description, basedOn, totalDebit, totalCredit, lines, createMutation]);
 
   const handleDuplicate = useCallback(() => {
     setSavedEntryId(null); setSavedEntryNumber(""); setEntryStatus("new");
@@ -819,6 +847,7 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
 
   // ── Dirty tracking + save registration ────────────────────────────────────
   handleSaveRef.current = handleSave;
+  handleSaveDraftRef.current = handleSaveDraft;
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -836,9 +865,18 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
         }, 10000);
       })
     );
-    return () => registerSave(null);
+    registerDraftSave(() =>
+      new Promise<boolean>(resolve => {
+        saveResolveRef.current = resolve;
+        handleSaveDraftRef.current();
+        setTimeout(() => {
+          if (saveResolveRef.current) { saveResolveRef.current(false); saveResolveRef.current = null; }
+        }, 10000);
+      })
+    );
+    return () => { registerSave(null); registerDraftSave(null); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [registerSave]);
+  }, [registerSave, registerDraftSave]);
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
@@ -895,22 +933,30 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
 
         {/* Group: Navigation */}
         <Button variant="ghost" size="sm" className="h-7 text-xs px-1.5 hover:bg-muted"
-          disabled={navList.length === 0} onClick={() => confirmIfDirty(() => navigateTo(0))} title="أول قيد">
+          disabled={navList.length === 0}
+          onClick={() => { if (isJournalEmpty()) navigateTo(0); else confirmIfDirty(() => navigateTo(0)); }}
+          title="أول قيد">
           <span className="text-[10px] font-mono">|◀</span>
         </Button>
         <Button variant="ghost" size="sm" className="h-7 text-xs px-1.5 hover:bg-muted"
-          disabled={navIdx <= 0} onClick={() => confirmIfDirty(() => navigateTo(navIdx - 1))} title="السابق">
+          disabled={navIdx === 0 || navList.length === 0}
+          onClick={() => { const idx = navIdx <= 0 ? navList.length - 1 : navIdx - 1; if (isJournalEmpty()) navigateTo(idx); else confirmIfDirty(() => navigateTo(idx)); }}
+          title="السابق">
           <ChevronRight className="w-3.5 h-3.5" />
         </Button>
         <span className="text-[10px] text-muted-foreground px-1 min-w-[48px] text-center">
           {navIdx >= 0 ? `${navIdx + 1}/${navList.length}` : `—/${navList.length}`}
         </span>
         <Button variant="ghost" size="sm" className="h-7 text-xs px-1.5 hover:bg-muted"
-          disabled={navIdx >= navList.length - 1} onClick={() => confirmIfDirty(() => navigateTo(navIdx + 1))} title="التالي">
+          disabled={navIdx === navList.length - 1 || navList.length === 0}
+          onClick={() => { const idx = navIdx === -1 ? 0 : navIdx + 1; if (isJournalEmpty()) navigateTo(idx); else confirmIfDirty(() => navigateTo(idx)); }}
+          title="التالي">
           <ChevronDown className="w-3.5 h-3.5 -rotate-90" />
         </Button>
         <Button variant="ghost" size="sm" className="h-7 text-xs px-1.5 hover:bg-muted"
-          disabled={navList.length === 0} onClick={() => confirmIfDirty(() => navigateTo(navList.length - 1))} title="آخر قيد">
+          disabled={navList.length === 0}
+          onClick={() => { if (isJournalEmpty()) navigateTo(navList.length - 1); else confirmIfDirty(() => navigateTo(navList.length - 1)); }}
+          title="آخر قيد">
           <span className="text-[10px] font-mono">▶|</span>
         </Button>
 
@@ -4472,17 +4518,19 @@ const DirtyCtx = createContext<{
   isDirty: boolean;
   setDirty: (v: boolean) => void;
   registerSave: (fn: (() => Promise<boolean>) | null) => void;
+  registerDraftSave: (fn: (() => Promise<boolean>) | null) => void;
   confirmIfDirty: (action: () => void) => void;
-}>({ isDirty: false, setDirty: () => {}, registerSave: () => {}, confirmIfDirty: a => a() });
+}>({ isDirty: false, setDirty: () => {}, registerSave: () => {}, registerDraftSave: () => {}, confirmIfDirty: a => a() });
 
 // ─── Content Router ────────────────────────────────────────────────────────────
 function AccountingContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
   const [ledgerCtx, setLedgerCtx] = useState<{ accountId: number; fromDate: string; toDate: string } | null>(null);
-  const { setDirty, registerSave } = useContext(DirtyCtx);
+  const { setDirty, registerSave, registerDraftSave } = useContext(DirtyCtx);
 
   useEffect(() => {
     setDirty(false);
     registerSave(null);
+    registerDraftSave(null);
   }, [activeId]);
 
   switch (activeId) {
@@ -4527,6 +4575,7 @@ export default function AccountingModule() {
   const isDirtyRef       = useRef(false);
   const pendingActionRef = useRef<(() => void) | null>(null);
   const saveFnRef        = useRef<(() => Promise<boolean>) | null>(null);
+  const draftSaveFnRef   = useRef<(() => Promise<boolean>) | null>(null);
 
   const setDirty = useCallback((v: boolean) => {
     isDirtyRef.current = v;
@@ -4537,6 +4586,10 @@ export default function AccountingModule() {
     saveFnRef.current = fn;
   }, []);
 
+  const registerDraftSave = useCallback((fn: (() => Promise<boolean>) | null) => {
+    draftSaveFnRef.current = fn;
+  }, []);
+
   const confirmIfDirty = useCallback((action: () => void) => {
     if (!isDirtyRef.current) { action(); return; }
     pendingActionRef.current = action;
@@ -4545,7 +4598,7 @@ export default function AccountingModule() {
 
   const navigate = useCallback((id: MenuId) => confirmIfDirty(() => setActiveId(id)), [confirmIfDirty]);
 
-  const ctxVal = useMemo(() => ({ isDirty, setDirty, registerSave, confirmIfDirty }), [isDirty, setDirty, registerSave, confirmIfDirty]);
+  const ctxVal = useMemo(() => ({ isDirty, setDirty, registerSave, registerDraftSave, confirmIfDirty }), [isDirty, setDirty, registerSave, registerDraftSave, confirmIfDirty]);
 
   const executePending = () => {
     const action = pendingActionRef.current;
@@ -4574,6 +4627,13 @@ export default function AccountingModule() {
           }
           executePending();
         }}
+        onSaveAsDraft={draftSaveFnRef.current ? async () => {
+          if (draftSaveFnRef.current) {
+            const ok = await draftSaveFnRef.current();
+            if (!ok) throw new Error("draft save failed");
+          }
+          executePending();
+        } : undefined}
         onDiscard={executePending}
         onCancel={() => { setShowDirtyDlg(false); pendingActionRef.current = null; }}
       />
