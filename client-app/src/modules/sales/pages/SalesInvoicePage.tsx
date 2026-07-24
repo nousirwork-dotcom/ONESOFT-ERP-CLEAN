@@ -162,6 +162,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
   const [journalWarehouseId, setJournalWarehouseId] = useState<number | null>(null); // مخزن مقيَّد من الدفتر
   const [docTypeWarehouseId, setDocTypeWarehouseId] = useState<number | null>(null); // مخزن مقيَّد من نوع السند
   const [paymentType, setPaymentType] = useState<PaymentType>("cash");
+  const [invoiceStatus, setInvoiceStatus] = useState<"draft" | "confirmed" | "paid" | "cancelled">("draft");
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [pendingPayInvoiceId, setPendingPayInvoiceId] = useState<number | null>(null);
   const [pendingPayInvoiceNumber, setPendingPayInvoiceNumber] = useState("");
@@ -443,6 +444,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     setPaidAmountOverride(inv.paidAmount ?? "");
     setSavedInvoiceId(inv.id);
     setIsPosted(inv.isPosted ?? false);
+    setInvoiceStatus((inv.status as any) ?? "draft");
     setPaymentBreakdown((inv.paymentBreakdown as Record<string, number>) ?? {});
     setErpMode("view");
     if (inv.items && inv.items.length > 0) {
@@ -493,6 +495,17 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       pendingCreatePayloadRef.current = null;
       toast.error(`خطأ في الحفظ: ${e.message}`);
     },
+  });
+
+  const updateMutation = trpc.salesInvoices.update.useMutation({
+    onSuccess: (data) => {
+      toast.success(`✓ تم تحديث المستند ${data.invoiceNumber ?? ""} بنجاح`, {
+        description: `الإجمالي: ${fmt(netTotal)} ${currency}`,
+        duration: 5000,
+      });
+      setInvoiceStatus("confirmed");
+    },
+    onError: (e) => toast.error(`خطأ في تحديث المستند: ${e.message}`),
   });
 
   const postMutation = trpc.posting.postSalesInvoice.useMutation({
@@ -911,8 +924,10 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
   // ── Validation & Save ─────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
-    // فاتورة محفوظة سابقاً: فتح شاشة الدفع لتسجيل/إكمال الدفع (لا حفظ جديد)
-    if (savedInvoiceId) {
+    const isDraftConversion = savedInvoiceId !== null && invoiceStatus === "draft";
+
+    // فاتورة محفوظة نهائية سابقاً: فتح شاشة الدفع لتسجيل/إكمال الدفع
+    if (savedInvoiceId && !isDraftConversion) {
       setPendingPayInvoiceId(savedInvoiceId);
       setPendingPayInvoiceNumber(invoiceNumber);
       setPendingPayTotal(netTotal);
@@ -1068,6 +1083,39 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       })),
     };
 
+    // تحويل مسودة إلى مستند نهائي: update بنفس المعرف، ثم تسجيل الدفع إن لزم
+    if (isDraftConversion) {
+      const { invoiceType: _invoiceType, ...basePayload } = payload;
+      // نحوّل المسودة إلى مستند نهائي بحالة "مؤكد" غير مسدّد، ثم نسجّل الدفع في النافذة
+      // (إذا أغلق المستخدم النافذة بدون تأكيد، يبقى المستند متاحاً للدفع لاحقاً بدون بيانات مالية غير متناسقة)
+      const finalizePayload = {
+        ...basePayload,
+        paidAmount: "0.0000",
+        remainingAmount: fmtDb(netTotal),
+        status: "confirmed" as any,
+      };
+      try {
+        const data = await updateMutation.mutateAsync({
+          id: savedInvoiceId,
+          ...finalizePayload,
+        });
+        setInvoiceNumber(data.invoiceNumber ?? invoiceNumber);
+        setInvoiceStatus("confirmed");
+        if (paymentType === "credit") {
+          toast.success("✓ تم تحويل المسودة إلى فاتورة نهائية");
+          return;
+        }
+        // النقدي/الجزئي: استكمل الدفع من خلال شاشة الدفع
+        setPendingPayInvoiceId(savedInvoiceId);
+        setPendingPayInvoiceNumber(data.invoiceNumber ?? invoiceNumber);
+        setPendingPayTotal(netTotal);
+        setShowPaymentModal(true);
+      } catch {
+        throw new Error("draft-finalize-failed");
+      }
+      return;
+    }
+
     // الدفع الآجل: حفظ مباشر بدون شاشة دفع
     if (paymentType === "credit") {
       createMutation.mutate(payload);
@@ -1125,17 +1173,12 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
   // ── حفظ المسودة — يُستخدم من حوار التنقل عند وجود تعديلات غير محفوظة ────────
   const handleSaveDraft = useCallback(async () => {
-    if (!journalId) { toast.error("يجب اختيار نوع السند قبل الحفظ"); return; }
     const validLines = lines.filter(l => l.productName.trim() !== "" || l.productCode.trim() !== "");
-    if (validLines.length === 0) { toast.error("يجب إضافة صنف واحد على الأقل في الفاتورة"); return; }
-    for (const l of validLines) {
-      if (!l.productId) { toast.error("الصنف غير مسجل، يرجى اختيار صنف من القائمة."); return; }
-    }
+    if (validLines.length === 0) { toast.error("يجب إضافة صنف واحد على الأقل في المسودة"); return; }
     const payMethod = paymentType === "cash" ? "cash" : "credit";
-    const draftNumber = `DRAFT-${Date.now()}`;
     try {
       await createMutation.mutateAsync({
-        invoiceNumber: draftNumber,
+        invoiceNumber: "",
         invoiceType: "sale",
         invoiceDate,
         dueDate: dueDate || undefined,
@@ -1176,6 +1219,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           sortOrder: idx,
         })),
       });
+      setInvoiceStatus("draft");
+      toast.success("تم حفظ المسودة");
     } catch {
       throw new Error("draft-save-failed");
     }
@@ -1240,6 +1285,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     setSavedInvoiceId(null);
     setNavInvoiceId(null);
     setIsPosted(false);
+    setInvoiceStatus("draft");
     setPaymentBreakdown({});
     setShowPostingPreview(false);
     // إذا كان هناك دفتر محدد، أعد تطبيق مخزنه وعرض الرقم المتوقع
@@ -1356,11 +1402,12 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
   // ── Unified Toolbar ──────────────────────────────────────────────────────────
   const _sipRef = useRef<any>({});
-  _sipRef.current = { erpMode, isDirty, savedInvoiceId, isPosted, handleNew, handleSave, handleDelete, handleDuplicate, handleRepost, createMutation, unpostMutation, allInvoicesQuery, navInvoiceId, setNavInvoiceId, setErpMode, dirtyRequestClose, setShowPostingPreview, setShowPrintModal, setShowSendPanel, nextNumberQuery };
+  _sipRef.current = { erpMode, isDirty, savedInvoiceId, isPosted, handleNew, handleSave, handleSaveDraft, handleDelete, handleDuplicate, handleRepost, createMutation, unpostMutation, allInvoicesQuery, navInvoiceId, setNavInvoiceId, setErpMode, dirtyRequestClose, setShowPostingPreview, setShowPrintModal, setShowSendPanel, nextNumberQuery };
 
   // handlers مستقرة ([] deps) — جميع الوصولات عبر _sipRef.current
   const sipHandlers = useMemo<CommandHandlers>(() => ({
     save:      () => { _sipRef.current.handleSave(); },
+    draft:     () => { _sipRef.current.handleSaveDraft(); },
     new:       () => { const s = _sipRef.current; s.handleNew(); s.setErpMode("new" as ERPMode); },
     duplicate: () => { _sipRef.current.handleDuplicate(); },
     edit:      () => { _sipRef.current.setErpMode("edit" as ERPMode); toast.info("وضع التعديل"); },
@@ -1387,8 +1434,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     hasPrevious: navHasPrevious,
     hasNext:     navHasNext,
     isApproved: isPosted,
-    isBusy:     createMutation.isPending,
-  }), [erpMode, isDirty, savedInvoiceId, isPosted, createMutation.isPending]);
+    isBusy:     createMutation.isPending || updateMutation.isPending,
+  }), [erpMode, isDirty, savedInvoiceId, isPosted, createMutation.isPending, updateMutation.isPending]);
 
   const toolbarTools = useMemo(() => {
     const hasSaved = savedInvoiceId !== null;
@@ -1510,6 +1557,14 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
               readOnly={!!journalId || !warehouseId}
               title={!warehouseId ? "اختر الفرع أولاً" : "رقم الفاتورة التسلسلي"}
             />
+            {invoiceStatus === "draft" && (
+              <span
+                className="px-2 py-0.5 rounded text-[10px] font-bold"
+                style={{ background: "#F59E0B", color: "#fff" }}
+              >
+                مسودة
+              </span>
+            )}
           </div>
 
           {/* col 3-4: بناءً على */}

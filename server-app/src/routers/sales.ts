@@ -279,20 +279,22 @@ export const salesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { items, dueDate, ...invoiceData } = input;
       const orgId = ctx.user.orgId;
-
-      // ── تحقق: سياق المخزن/الفرع الموحد (المخزن = الفرع في مسار المستندات) ──
-      await validateSalesInvoiceWarehouseContext({
-        warehouseId: invoiceData.warehouseId,
-        journalId: invoiceData.journalId,
-        sellerUserId: invoiceData.sellerUserId,
-        sourceDocumentId: invoiceData.sourceDocumentId,
-        orgId,
-      });
-
-      // ── تحقق: جميع الأصناف مسجلة في النظام (لا يُقبل نص يدوي بدون productId) ──
-      await validateInvoiceItems(items, orgId);
-
       const isDraft = invoiceData.status === 'draft';
+
+      // ── تحقق: المسودة لا تخضع للتحققات المشددة (لا مخزن/فرع، لا أصناف) ─────
+      if (!isDraft) {
+        // ── تحقق: سياق المخزن/الفرع الموحد (المخزن = الفرع في مسار المستندات) ──
+        await validateSalesInvoiceWarehouseContext({
+          warehouseId: invoiceData.warehouseId,
+          journalId: invoiceData.journalId,
+          sellerUserId: invoiceData.sellerUserId,
+          sourceDocumentId: invoiceData.sourceDocumentId,
+          orgId,
+        });
+
+        // ── تحقق: جميع الأصناف مسجلة في النظام (لا يُقبل نص يدوي بدون productId) ──
+        await validateInvoiceItems(items, orgId);
+      }
       const { invoice, finalInvoiceNumber } = await db.transaction(async (tx) => {
         // ── حجز الرقم التسلسلي داخل نفس transaction الحفظ ──────────────────
         // المسودة لا تستهلك الرقم الرسمي من دفتر المستندات.
@@ -301,7 +303,10 @@ export const salesRouter = router({
           await tx.execute(sql`SELECT pg_advisory_xact_lock(${invoiceData.journalId}::bigint)`);
         }
         let finalInvoiceNumber = invoiceData.invoiceNumber;
-        if (invoiceData.journalId && !isDraft) {
+        if (isDraft) {
+          // المسودة تحصل على رقم مسودة مستقل (غير رقم الفاتورة الرسمي)
+          finalInvoiceNumber = `DRAFT-${Date.now()}`;
+        } else if (invoiceData.journalId) {
           finalInvoiceNumber = await generateInvoiceNumberForJournal(tx, invoiceData.journalId, orgId);
         }
 
@@ -427,6 +432,10 @@ export const salesRouter = router({
       if (existing?.isPosted)
         throw new Error('لا يمكن تعديل مستند مرحّل — يجب فك الترحيل أولاً');
 
+      const wasDraft = existing?.status === 'draft';
+      const isNowDraft = rest.status === 'draft';
+      const isFinalizing = wasDraft && !isNowDraft;
+
       // ── الحالة النهائية الكاملة: دمج القيم الموجودة مع المدخلات الجديدة ─────
       const finalWarehouseId  = rest.warehouseId  ?? existing?.warehouseId  ?? undefined;
       const finalJournalId    = rest.journalId    ?? existing?.journalId    ?? undefined;
@@ -435,36 +444,55 @@ export const salesRouter = router({
         ? rest.sourceDocumentId
         : existing?.sourceDocumentId ?? undefined;
 
-      await validateSalesInvoiceWarehouseContext({
-        warehouseId:      finalWarehouseId,
-        journalId:        finalJournalId,
-        sellerUserId:     finalSellerUserId,
-        sourceDocumentId: finalSourceDocId,
-        orgId: ctx.user.orgId,
+      // التحقق من المخزن/الأصناف يُتخطى للمسودة فقط؛ عند تحويلها نهائية يجب التحقق
+      if (!isNowDraft) {
+        await validateSalesInvoiceWarehouseContext({
+          warehouseId:      finalWarehouseId,
+          journalId:        finalJournalId,
+          sellerUserId:     finalSellerUserId,
+          sourceDocumentId: finalSourceDocId,
+          orgId: ctx.user.orgId,
+        });
+
+        // ── تحقق: جميع الأصناف مسجلة في النظام (لا يُقبل نص يدوي بدون productId) ──
+        if (items) await validateInvoiceItems(items, ctx.user.orgId);
+      }
+
+      // تنفيذ التحديث داخل transaction؛ حجز القفل الاستشاري عند تحويل مسودة لمنع تضارب الأرقام
+      const { finalInvoiceNumber } = await db.transaction(async (tx) => {
+        if (isFinalizing && finalJournalId) {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(${finalJournalId}::bigint)`);
+        }
+
+        // عند تحويل مسودة إلى مستند نهائي: استبدل رقم المسودة بالرقم الرسمي من دفتر المستندات
+        let finalInvoiceNumber = existing?.invoiceNumber ?? '';
+        if (isFinalizing && finalJournalId) {
+          finalInvoiceNumber = await generateInvoiceNumberForJournal(tx, finalJournalId, ctx.user.orgId);
+        }
+
+        await tx.update(salesInvoices).set({
+          ...rest,
+          ...(invoiceDate ? { invoiceDate: new Date(invoiceDate) } : {}),
+          ...(isFinalizing ? { invoiceNumber: finalInvoiceNumber } : {}),
+          updatedAt: new Date(),
+        }).where(and(eq(salesInvoices.id, id), eq(salesInvoices.orgId, ctx.user.orgId)));
+        if (items) {
+          await tx.delete(salesInvoiceItems).where(eq(salesInvoiceItems.invoiceId, id));
+          if (items.length > 0) {
+            await tx.insert(salesInvoiceItems).values(
+              items.map((item, idx) => ({
+                ...item,
+                invoiceId: id,
+                orgId: ctx.user.orgId,
+                sortOrder: item.sortOrder ?? idx,
+              }))
+            );
+          }
+        }
+        return { finalInvoiceNumber };
       });
 
-      // ── تحقق: جميع الأصناف مسجلة في النظام (لا يُقبل نص يدوي بدون productId) ──
-      if (items) await validateInvoiceItems(items, ctx.user.orgId);
-
-      await db.update(salesInvoices).set({
-        ...rest,
-        ...(invoiceDate ? { invoiceDate: new Date(invoiceDate) } : {}),
-        updatedAt: new Date(),
-      }).where(and(eq(salesInvoices.id, id), eq(salesInvoices.orgId, ctx.user.orgId)));
-      if (items) {
-        await db.delete(salesInvoiceItems).where(eq(salesInvoiceItems.invoiceId, id));
-        if (items.length > 0) {
-          await db.insert(salesInvoiceItems).values(
-            items.map((item, idx) => ({
-              ...item,
-              invoiceId: id,
-              orgId: ctx.user.orgId,
-              sortOrder: item.sortOrder ?? idx,
-            }))
-          );
-        }
-      }
-      return { success: true };
+      return { success: true, invoiceNumber: isFinalizing ? finalInvoiceNumber : undefined };
     }),
 
   // جلب بيانات السداد المحفوظة لفاتورة معينة
