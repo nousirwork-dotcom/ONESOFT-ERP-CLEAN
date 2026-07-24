@@ -29,7 +29,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback, forwardRef } from "react";
 import { useUnsavedChangesGuard } from "@/core/hooks/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import { useWorkspaceEl } from "@/core/contexts/WorkspaceContext";
@@ -176,7 +176,7 @@ function CField({
 }
 
 // حقل نص كلاسيكي
-const CInput = React.forwardRef<HTMLInputElement, {
+const CInput = forwardRef<HTMLInputElement, {
   value: string;
   onChange?: (v: string) => void;
   placeholder?: string;
@@ -1701,7 +1701,7 @@ export default function Products() {
       name:          form.name.trim(),
       name2:         form.name2.trim() || undefined,
       nameEn:        form.nameEn.trim() || undefined,
-      sku:           form.sku.trim() || undefined,
+      sku:           form.sku.trim(),
       barcode:       form.barcode.trim() || undefined,
       barcode2:      form.barcode2.trim() || undefined,
       barcode3:      form.barcode3.trim() || undefined,
