@@ -436,14 +436,16 @@ export function DesktopWorkWindow({
           />
         </div>
 
-        <ToolbarActionsProvider>
-          <div className={styles.content}>
-            {children}
-          </div>
-          <div className={styles.footer}>
-            <WorkWindowToolbarFooter />
-          </div>
-        </ToolbarActionsProvider>
+        <div className={styles.workBody}>
+          <ToolbarActionsProvider>
+            <div className={styles.content}>
+              {children}
+            </div>
+            <div className={styles.footer}>
+              <WorkWindowToolbarFooter />
+            </div>
+          </ToolbarActionsProvider>
+        </div>
       </div>
     </div>
   );
