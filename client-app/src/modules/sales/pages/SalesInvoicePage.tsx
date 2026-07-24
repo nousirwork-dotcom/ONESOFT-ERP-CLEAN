@@ -708,16 +708,24 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
   // ── Product auto-fill ─────────────────────────────────────────────────────
   const handleProductCodeChange = useCallback((idx: number, code: string) => {
     updateLine(idx, "productCode", code);
-    if (!code) return;
+    if (!code.trim()) {
+      // مسح الصنف المختار يُمسح كل بيانات السطر
+      setLines(prev => {
+        const updated = [...prev];
+        updated[idx] = { ...EMPTY_LINE(), id: updated[idx].id };
+        return updated;
+      });
+      return;
+    }
     const found = (productsQuery.data ?? []).find(
-      (p: any) => p.sku === code || p.barcode === code || String(p.id) === code
+      (p: any) => p.code === code || p.barcode === code || String(p.id) === code
     );
     if (found) {
       const isStock = (found as any).itemType !== "service";
       setLines(prev => {
         const updated = [...prev];
         const l = { ...updated[idx] };
-        l.productCode = found.sku ?? found.barcode ?? code;
+        l.productCode = found.code ?? found.barcode ?? code;
         l.productName = found.name;
         l.productId = found.id;
         l.isStockItem = isStock;
@@ -732,7 +740,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       // كود غير موجود في قاعدة البيانات
       setLines(prev => {
         const updated = [...prev];
-        updated[idx] = { ...updated[idx], productId: undefined, isStockItem: undefined };
+        updated[idx] = { ...updated[idx], productId: undefined, isStockItem: undefined, productName: "", unit: "", unitPrice: "", taxPct: "0", total: "0" };
         return updated;
       });
     }
@@ -801,6 +809,40 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     }
   }, [lines, copiedLine, addLine, deleteLine]);
 
+  // ── تفعيل اختيار الصنف بالكود عند الضغط على Enter ────────────────────────────
+  const handleProductCodeKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>, idx: number) => {
+    if (e.key === "Enter") {
+      const code = lines[idx]?.productCode?.trim();
+      if (!code) return;
+      const found = (productsQuery.data ?? []).find(
+        (p: any) => p.code === code || p.barcode === code || String(p.id) === code
+      );
+      if (found) {
+        e.preventDefault();
+        handleProductCodeChange(idx, code);
+      } else {
+        e.preventDefault();
+        toast.error("الصنف غير مسجل، يرجى اختيار صنف من القائمة.");
+      }
+      return;
+    }
+    handleCellKeyDown(e, idx, 0);
+  }, [lines, productsQuery.data, handleCellKeyDown, handleProductCodeChange]);
+
+  // ── التحقق من مغادرة حقل كود الصنف بدون اختيار صنف مسجل ──────────────────────
+  const handleProductCodeBlur = useCallback((idx: number) => {
+    const line = lines[idx];
+    if (!line) return;
+    if (!line.productId && line.productCode.trim()) {
+      toast.error("الصنف غير مسجل، يرجى اختيار صنف من القائمة.");
+      setLines(prev => {
+        const updated = [...prev];
+        updated[idx] = { ...EMPTY_LINE(), id: updated[idx].id };
+        return updated;
+      });
+    }
+  }, [lines]);
+
   // ── Validation & Save ─────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
     // Validation — throw on failure so the unsaved-changes guard stays open
@@ -812,16 +854,15 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       toast.error("رقم الفاتورة مطلوب");
       throw new Error("validation");
     }
-    const validLines = lines.filter(l => l.productName.trim() !== "");
+    const validLines = lines.filter(l => l.productName.trim() !== "" || l.productCode.trim() !== "");
     if (validLines.length === 0) {
       toast.error("يجب إضافة صنف واحد على الأقل في الفاتورة");
       throw new Error("validation");
     }
-    // تحقق من أن جميع الأصناف مسجلة في النظام
+    // تحقق من أن جميع الأصناف مسجلة في النظام (لا يُقبل نص يدوي بدون productId)
     for (const l of validLines) {
       if (!l.productId) {
-        const nameOrCode = l.productCode || l.productName;
-        toast.error(`الصنف "${nameOrCode}" غير موجود — يرجى اختيار صنف مسجل أو إنشاء صنف جديد`);
+        toast.error("الصنف غير مسجل، يرجى اختيار صنف من القائمة.");
         throw new Error("validation");
       }
     }
@@ -957,12 +998,11 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
   const saveForPayment = useCallback(async (): Promise<number | null> => {
     if (!journalId) { toast.error("يجب اختيار نوع السند قبل الحفظ"); return null; }
     if (!invoiceNumber.trim()) { toast.error("رقم الفاتورة مطلوب"); return null; }
-    const validLines = lines.filter(l => l.productName.trim() !== "");
+    const validLines = lines.filter(l => l.productName.trim() !== "" || l.productCode.trim() !== "");
     if (validLines.length === 0) { toast.error("يجب إضافة صنف واحد على الأقل في الفاتورة"); return null; }
     for (const l of validLines) {
       if (!l.productId) {
-        const nameOrCode = l.productCode || l.productName;
-        toast.error(`الصنف "${nameOrCode}" غير موجود — يرجى اختيار صنف مسجل أو إنشاء صنف جديد`);
+        toast.error("الصنف غير مسجل، يرجى اختيار صنف من القائمة.");
         return null;
       }
     }
@@ -1826,11 +1866,15 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   <input
                     ref={el => { if (el) cellRefs.current.set(`${rowIdx}-0`, el); }}
                     value={line.productCode}
-                    onChange={e => handleProductCodeChange(rowIdx, e.target.value)}
+                    onChange={e => { if (!line.productId) handleProductCodeChange(rowIdx, e.target.value); }}
                     onFocus={() => setSelectedLineIdx(rowIdx)}
-                    onKeyDown={e => handleCellKeyDown(e, rowIdx, 0)}
+                    onBlur={() => handleProductCodeBlur(rowIdx)}
+                    onKeyDown={e => handleProductCodeKeyDown(e, rowIdx)}
                     className="inv-cell"
-                    placeholder="كود..."
+                    placeholder={line.productId ? "" : "كود / بحث..."}
+                    readOnly={!!line.productId}
+                    title={line.productId ? "كود الصنف لا يمكن تعديله" : "اكتب كود الصنف واضغط Enter"}
+                    style={line.productId ? { background: "#f5f5f3", color: "#555", cursor: "default" } : undefined}
                   />
                 </td>
 
@@ -1841,6 +1885,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                     products={productsQuery.data ?? []}
                     cellRefs={cellRefs}
                     isStockItem={line.isStockItem}
+                    productId={line.productId}
                     onSelect={(name, code, id, unit, price, tax, itemType) => {
                       setLines(prev => {
                         const updated = [...prev];
@@ -1849,6 +1894,25 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                         updated[rowIdx] = l;
                         return updated;
                       });
+                    }}
+                    onChange={v => {
+                      // السماح بتغيير الوصف/الاسم للصنف الخدمة فقط داخل السطر
+                      if (line.isStockItem) return;
+                      setLines(prev => {
+                        const updated = [...prev];
+                        updated[rowIdx] = { ...updated[rowIdx], productName: v };
+                        return updated;
+                      });
+                    }}
+                    onBlur={() => {
+                      // عند مغادرة حقل الاسم بدون صنف مُختار: مسح بيانات السطر
+                      if (!line.productId && line.productName.trim()) {
+                        setLines(prev => {
+                          const updated = [...prev];
+                          updated[rowIdx] = { ...EMPTY_LINE(), id: updated[rowIdx].id };
+                          return updated;
+                        });
+                      }
                     }}
                     onKeyDown={e => handleCellKeyDown(e, rowIdx, 1)}
                     onFocus={() => setSelectedLineIdx(rowIdx)}
@@ -2668,16 +2732,19 @@ function TF({ label, value, highlight, big, color }: {
 
 // ─── Product Name Cell with autocomplete ─────────────────────────────────────
 function ProductNameCell({
-  rowIdx, value, products, cellRefs, onSelect, onKeyDown, onFocus, isStockItem,
+  rowIdx, value, products, cellRefs, onSelect, onChange, onKeyDown, onFocus, onBlur, isStockItem, productId,
 }: {
   rowIdx: number;
   value: string;
   products: any[];
   cellRefs: React.MutableRefObject<Map<string, HTMLInputElement>>;
   onSelect: (name: string, code: string, id: number, unit: string, price: string, tax: string, itemType: string) => void;
+  onChange?: (v: string) => void;
   onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
   onFocus: () => void;
+  onBlur?: () => void;
   isStockItem?: boolean;
+  productId?: number;
 }) {
   const [search, setSearch] = useState(value);
   const [open, setOpen] = useState(false);
@@ -2690,10 +2757,13 @@ function ProductNameCell({
 
   const handleChange = (v: string) => {
     setSearch(v);
+    // للصنف الخدمة: نسمح بتعديل الوصف/الاسم داخل السطر فقط دون تغيير كوده أو productId
+    if (!isStockItem) onChange?.(v);
     if (v.length >= 1) {
+      const term = v.toLowerCase();
       const f = products.filter(p =>
-        p.name.includes(v) || (p.code && p.code.includes(v)) ||
-        (p.sku && p.sku.includes(v)) || (p.barcode && p.barcode.includes(v))
+        p.name.toLowerCase().includes(term) || (p.code && p.code.toLowerCase().includes(term)) ||
+        (p.barcode && p.barcode.toLowerCase().includes(term))
       ).slice(0, 12);
       setFiltered(f);
       setOpen(f.length > 0);
@@ -2706,7 +2776,25 @@ function ProductNameCell({
   const handleSelect = (p: any) => {
     setSearch(p.name);
     setOpen(false);
-    onSelect(p.name, p.sku ?? p.barcode ?? p.code ?? "", p.id, p.unit ?? "", p.salePrice ? String(p.salePrice) : "", p.taxRate ? String(p.taxRate) : "0", p.itemType ?? "stock");
+    onSelect(p.name, p.code ?? p.barcode ?? "", p.id, p.unit ?? "", p.salePrice ? String(p.salePrice) : "", p.taxRate ? String(p.taxRate) : "0", p.itemType ?? "stock");
+  };
+
+  const tryExactMatch = () => {
+    const term = search.trim();
+    if (!term) return null;
+    return products.find(p =>
+      p.name === term || p.code === term || p.barcode === term
+    ) ?? null;
+  };
+
+  const handleBlur = () => {
+    if (!productId && search.trim()) {
+      // لا يوجد صنف مسجل مُختار والحقل غير فارغ
+      toast.error("الصنف غير مسجل، يرجى اختيار صنف من القائمة.");
+      setSearch("");
+      onChange?.("");
+    }
+    onBlur?.();
   };
 
   useEffect(() => {
@@ -2725,8 +2813,9 @@ function ProductNameCell({
         ref={el => { (inputRef as any).current = el; if (el) cellRefs.current.set(`${rowIdx}-1`, el); }}
         data-no-desktop-field
         value={search}
-        onChange={e => { if (!isStockItem) handleChange(e.target.value); }}
+        onChange={e => { handleChange(e.target.value); }}
         onFocus={onFocus}
+        onBlur={handleBlur}
         onKeyDown={e => {
           if (open) {
             if (e.key === "ArrowDown") { e.preventDefault(); setHighlighted(h => Math.min(h + 1, filtered.length - 1)); return; }
@@ -2734,13 +2823,18 @@ function ProductNameCell({
             if (e.key === "Enter" && filtered[highlighted]) { e.preventDefault(); handleSelect(filtered[highlighted]); return; }
             if (e.key === "Escape") { setOpen(false); return; }
           }
+          // Enter بدون قائمة مفتوحة: اختيار تلقائي عند وجود تطابق تام
+          if (e.key === "Enter") {
+            const exact = tryExactMatch();
+            if (exact) { e.preventDefault(); handleSelect(exact); return; }
+          }
           onKeyDown(e);
         }}
         className="inv-cell w-full"
-        placeholder={isStockItem ? "" : "اسم الصنف..."}
+        placeholder={productId ? (isStockItem ? "" : "وصف الخدمة...") : "اسم الصنف / بحث..."}
         autoComplete="off"
         readOnly={isStockItem}
-        title={isStockItem ? "اسم الصنف المخزني لا يمكن تعديله" : undefined}
+        title={isStockItem ? "اسم الصنف المخزني لا يمكن تعديله" : (productId ? "يمكن تعديل وصف الخدمة داخل السطر فقط" : "ابحث واختر صنف مسجل")}
         style={isStockItem ? { background: "#f5f5f3", color: "#555", cursor: "default" } : undefined}
       />
       {open && (
@@ -2768,7 +2862,7 @@ function ProductNameCell({
               onMouseDown={() => handleSelect(p)}
               onMouseEnter={() => setHighlighted(i)}
             >
-              <span style={{ color: "#D19C05", fontWeight: 600, minWidth: 60 }}>{p.sku ?? p.code ?? ""}</span>
+              <span style={{ color: "#D19C05", fontWeight: 600, minWidth: 60 }}>{p.code ?? ""}</span>
               <span style={{ flex: 1 }}>{p.name}</span>
               <span style={{ color: "#16A34A", fontWeight: 600 }}>{p.salePrice}</span>
             </div>

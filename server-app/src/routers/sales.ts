@@ -7,6 +7,22 @@ import { autoPostSalesInvoice } from './posting.js';
 import { TRPCError } from '@trpc/server';
 import { validateSalesInvoiceWarehouseContext } from '../lib/salesWarehouseValidation.js';
 
+// ── تحقق أن جميع بنود الفاتورة تُشير إلى أصناف مسجلة في النظام ──────────────────
+async function validateInvoiceItems(items: { productId?: number; productName: string; productCode?: string }[], orgId: number) {
+  if (!items || items.length === 0) return;
+  for (const item of items) {
+    if (!item.productId) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'الصنف غير مسجل، يرجى اختيار صنف من القائمة.' });
+    }
+    const product = await db.query.products.findFirst({
+      where: and(eq(products.id, item.productId), eq(products.orgId, orgId)),
+    });
+    if (!product) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: `الصنف "${item.productName || item.productCode || ''}" غير مسجل في النظام.` });
+    }
+  }
+}
+
 // ── توليد رقم فاتورة المبيعات من دفتر المستندات داخل transaction ───────────────
 async function generateInvoiceNumberForJournal(tx: any, journalId: number, orgId: number): Promise<string> {
   const journal = await tx.query.documentJournals.findFirst({
@@ -273,6 +289,9 @@ export const salesRouter = router({
         orgId,
       });
 
+      // ── تحقق: جميع الأصناف مسجلة في النظام (لا يُقبل نص يدوي بدون productId) ──
+      await validateInvoiceItems(items, orgId);
+
       const result = await db.transaction(async (tx) => {
         // ── حجز الرقم التسلسلي داخل نفس transaction الحفظ ──────────────────
         // قفل استشاري على الدفتر لمنع race conditions بين مستخدمين متعددين
@@ -398,6 +417,9 @@ export const salesRouter = router({
         sourceDocumentId: finalSourceDocId,
         orgId: ctx.user.orgId,
       });
+
+      // ── تحقق: جميع الأصناف مسجلة في النظام (لا يُقبل نص يدوي بدون productId) ──
+      if (items) await validateInvoiceItems(items, ctx.user.orgId);
 
       await db.update(salesInvoices).set({
         ...rest,
