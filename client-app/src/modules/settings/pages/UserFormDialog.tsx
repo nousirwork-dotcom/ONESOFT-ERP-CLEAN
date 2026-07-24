@@ -168,10 +168,10 @@ export function UserFormDialog({
     setCodeAutoFilled(false);
   };
 
-  const requestClose = () => {
+  const requestClose = React.useCallback(() => {
     if (!isDirty) { onOpenChange(false); return; }
     setConfirmOpen(true);
-  };
+  }, [isDirty, onOpenChange]);
 
   /* ── حافظ على مرجع requestClose دائمًا حديثاً (لوضع embedded) ── */
   React.useEffect(() => {
@@ -183,7 +183,7 @@ export function UserFormDialog({
     };
   }); // بدون deps — يعمل بعد كل تصيير لضمان الحداثة
 
-  const save = async () => {
+  const save = React.useCallback(async () => {
     if (!value.fullName.trim()) {
       toast.error("الاسم الكامل مطلوب");
       setActiveTab("basic");
@@ -221,18 +221,21 @@ export function UserFormDialog({
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [value, onSubmit]);
 
-  const guardedToolbarAction = (action: () => void) => {
-    if (isDirty) {
-      setPendingToolbarAction(() => action);
-      setConfirmOpen(true);
-    } else {
-      action();
-    }
-  };
+  const guardedToolbarAction = React.useCallback(
+    (action: () => void) => {
+      if (isDirty) {
+        setPendingToolbarAction(() => action);
+        setConfirmOpen(true);
+      } else {
+        action();
+      }
+    },
+    [isDirty],
+  );
 
-  const toolbarActions: ToolbarActionMap = {
+  const toolbarActions: ToolbarActionMap = React.useMemo(() => ({
     save: {
       supported: true,
       allowed: true,
@@ -330,9 +333,13 @@ export function UserFormDialog({
       stateEnabled: true,
       onClick: requestClose,
     },
-  };
+  }), [isSaving, isDirty, mobileError, mode, save, requestClose,
+      guardedToolbarAction,
+      onToolbarNew, onToolbarCopy, onToolbarDelete,
+      onToolbarFirst, onToolbarPrev, onToolbarNext, onToolbarLast,
+      toolbarRecord, toolbarTotal]);
 
-  const toolbarTools: ToolbarToolItem[] = [
+  const toolbarTools: ToolbarToolItem[] = React.useMemo(() => [
     {
       id: "change-password",
       label: "تغيير كلمة المرور",
@@ -358,7 +365,7 @@ export function UserFormDialog({
       enabled: false,
       disabledReason: "غير مربوط بعد",
     },
-  ];
+  ], []);
 
   /* ── في وضع embedded: سجّل الإجراءات في ToolbarActionsProvider الداخلي لنافذة العمل ── */
   useToolbarActions(
