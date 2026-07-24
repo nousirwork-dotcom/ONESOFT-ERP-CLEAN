@@ -13,6 +13,7 @@ import { Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/shared/lib/trpc";
 import { useLang } from "@/core/contexts/LanguageContext";
+import { useAuth } from "@/core/hooks/useAuth";
 import { useUnsavedChangesGuard } from "@/core/hooks/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import { useRegisterCommands } from "@/components/unified-toolbar/useRegisterCommands";
@@ -104,6 +105,11 @@ function toIsoDate(display: string) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: { initialInvoiceId?: number; onDocTypeChange?: (name: string) => void } = {}) {
   const { isAr } = useLang();
+  const { user: currentUser } = useAuth();
+  const canChangeSeller = useMemo(() =>
+    currentUser?.role === "admin" || currentUser?.role === "superadmin",
+    [currentUser?.role]
+  );
 
   // ── نمط موحد لجميع تسميات رأس الفاتورة ───────────────────────────────────
   const headerLabelStyle: React.CSSProperties = {
@@ -298,6 +304,16 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  // تعيين البائع = المستخدم الحالي عند فتح فاتورة جديدة (وليس عند عرض فاتورة محفوظة)
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    if (erpMode !== "new") return;
+    if (navInvoiceId || savedInvoiceId) return;
+    if (sellerUserId) return;
+    setSellerUserId(currentUser.id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, erpMode, navInvoiceId, savedInvoiceId]);
 
   // تطبيق بيانات مستند مصدر (داخلي — يُستدعى بعد التأكيد إن لزم)
   const applySourceDoc = (src: NonNullable<typeof basedOnQuery.data>) => {
@@ -542,7 +558,11 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     if (warehouseJournals.length >= 1) {
       await handleJournalSelect(warehouseJournals[0].id);
     }
-  }, [journalsQuery.data, handleJournalSelect, basedOnType, basedOnNum, sellerUserId, lines]);
+    // تعيين البائع = المستخدم الحالي (يُحافظ على المستخدم المختار يدوياً إذا سمحت الصلاحية)
+    if (currentUser?.id) {
+      setSellerUserId(currentUser.id);
+    }
+  }, [journalsQuery.data, handleJournalSelect, basedOnType, basedOnNum, sellerUserId, lines, currentUser?.id]);
 
   // اختيار المخزن/الفرع مع تأكيد عند وجود بيانات مدخلة
   // إلغاء تحديد الفرع ومسح جميع البيانات التابعة
@@ -566,6 +586,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     setInvoiceNumber("");
     setPaidAmountOverride("");
     setPaymentBreakdown({});
+    setSellerUserId(null);
   }, []);
 
   const handleWarehouseSelect = useCallback((id: number) => {
@@ -853,6 +874,23 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       }
     }
 
+    // ── التحقق من ربط الدفتر بالمخزن/الفرع قبل الحفظ ─────────────────────
+    if (journalId) {
+      const selectedJournal = (journalsQuery.data ?? []).find((j: any) => j.id === journalId);
+      if (!selectedJournal) {
+        toast.error("الدفتر المختار غير موجود — اختر فرعاً آخر");
+        throw new Error("journal_missing");
+      }
+      if (!selectedJournal.warehouseId) {
+        toast.error("دفتر فاتورة المبيعات غير مرتبط بمخزن/فرع — أكمل إعداد الدفتر أولاً");
+        throw new Error("journal_no_warehouse");
+      }
+      if (selectedJournal.warehouseId !== warehouseId) {
+        toast.error("دفتر الفرع لا يتوافق مع الفرع المختار — اختر الفرع المرتبط بالدفتر");
+        throw new Error("journal_warehouse_mismatch");
+      }
+    }
+
     // احجز الرقم التسلسلي من الدفتر فقط عند الحفظ الفعلي
     let finalInvoiceNumber = invoiceNumber;
     if (journalId) {
@@ -968,6 +1006,14 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
         }
       }
     }
+    // ── التحقق من ربط الدفتر بالمخزن/الفرع قبل الحفظ ─────────────────────
+    if (journalId) {
+      const selectedJournal = (journalsQuery.data ?? []).find((j: any) => j.id === journalId);
+      if (!selectedJournal) { toast.error("الدفتر المختار غير موجود — اختر فرعاً آخر"); return null; }
+      if (!selectedJournal.warehouseId) { toast.error("دفتر فاتورة المبيعات غير مرتبط بمخزن/فرع — أكمل إعداد الدفتر أولاً"); return null; }
+      if (selectedJournal.warehouseId !== warehouseId) { toast.error("دفتر الفرع لا يتوافق مع الفرع المختار"); return null; }
+    }
+
     let finalInvoiceNumber = invoiceNumber;
     if (journalId) {
       try {
@@ -1085,7 +1131,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     setBasedOnTrigger('');
     setNotes("");
     setDueDate(new Date().toISOString().split("T")[0]);
-    setSellerUserId(null);
+    setSellerUserId(currentUser?.id ?? null);
     setPaidAmountOverride("");
     setExchangeRate("1.000");
     setErpMode("new");
@@ -1562,17 +1608,19 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             </div>
           </div>
 
-          {/* col 4: البائع — dropdown من المستخدمين المؤهلين للبيع في الفرع */}
+          {/* col 4: البائع — تلقائيًا = المستخدم الحالي؛ يمكن تغييره فقط للمدير */}
           {(() => {
             const sellers = salespersonsQuery.data ?? [];
-            const sellerObj = sellers.find(s => s.id === sellerUserId);
+            const sellerObj = sellers.find(s => s.id === sellerUserId) ?? (currentUser && sellerUserId === currentUser.id ? currentUser : null);
+            const sellerName = sellerObj ? (sellerObj.name || sellerObj.username) : (currentUser?.name || currentUser?.username || "");
+            const sellerDisabled = !warehouseId || erpMode === "view" || !canChangeSeller;
             return (
               <div className="flex items-center relative" style={{ gap: 6 }}>
                 <label style={headerLabelStyle}>البائع</label>
                 <div className="flex relative flex-1" style={{ height: "var(--work-field-h, 26px)" }}>
                   <button
-                    onClick={() => { if (warehouseId && erpMode !== "view") setSellerOpen(o => !o); }}
-                    disabled={!warehouseId || erpMode === "view"}
+                    onClick={() => { if (!sellerDisabled) setSellerOpen(o => !o); }}
+                    disabled={sellerDisabled}
                     className="flex items-center gap-1 classic-input flex-1"
                     style={{
                       height: "var(--work-field-h, 26px)", paddingInline: "6px 4px",
@@ -1581,22 +1629,22 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                       borderRadius: "4px 0 0 4px", borderInlineEnd: "none",
                       color: sellerObj ? "#5b21b6" : !warehouseId ? "#9ca3af" : "#888",
                       fontSize: "11px", fontWeight: sellerObj ? 700 : 400,
-                      cursor: !warehouseId || erpMode === "view" ? "not-allowed" : "pointer",
+                      cursor: sellerDisabled ? "not-allowed" : "pointer",
                     }}
-                    title={!warehouseId ? "اختر الفرع/المخزن أولاً" : "اختر البائع"}
+                    title={!warehouseId ? "اختر الفرع/المخزن أولاً" : !canChangeSeller ? `البائع: ${sellerName} (لا يمكن تغييره)` : "اختر البائع"}
                   >
                     <span className="flex-1 truncate text-start">
-                      {sellerObj ? (sellerObj.name || sellerObj.username) : !warehouseId ? "—" : "— اختر البائع —"}
+                      {sellerName || (!warehouseId ? "—" : "— اختر البائع —")}
                     </span>
                   </button>
                   <button
-                    onClick={() => { if (warehouseId && erpMode !== "view") setSellerOpen(o => !o); }}
-                    disabled={!warehouseId || erpMode === "view"}
+                    onClick={() => { if (!sellerDisabled) setSellerOpen(o => !o); }}
+                    disabled={sellerDisabled}
                     className="flex items-center justify-center flex-shrink-0"
                     style={{ width: "18px", height: "var(--work-field-h, 26px)", borderRadius: "0 4px 4px 0", background: sellerObj ? "#7c3aed" : "#e5e0d8", border: `1px solid ${sellerObj ? "#6d28d9" : "#c9c4bb"}`, color: sellerObj ? "white" : "#666", fontSize: "9px" }}
                   >▼</button>
 
-                  {sellerOpen && warehouseId && (<>
+                  {sellerOpen && warehouseId && canChangeSeller && (<>
                     <div className="fixed inset-0 z-[9998]" onClick={() => setSellerOpen(false)} />
                     <div className="absolute top-full z-[9999] mt-1 bg-white rounded-lg overflow-hidden" style={{ insetInlineStart: 0, minWidth: 220, boxShadow: "0 8px 32px rgba(0,0,0,0.18)", border: "1px solid #e2e8f0" }} dir={isAr ? "rtl" : "ltr"}>
                       <div className="px-3 py-2" style={{ background: "#4c1d95" }}>
