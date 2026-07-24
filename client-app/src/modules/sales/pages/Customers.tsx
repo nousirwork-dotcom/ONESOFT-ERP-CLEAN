@@ -49,7 +49,7 @@ export default function Customers() {
     exit:      { supported: false as const, disabledReason: "أغلق التبويب من شريط التبويبات العلوي" },
   }), []);   // openCreate is defined in component scope — stable identity per render is fine here
 
-  useToolbarActions(toolbarActions, []);
+  useToolbarActions(toolbarActions);
 
   return (
     <div className="space-y-4" dir="rtl">

@@ -899,7 +899,9 @@ export default function DocumentJournalsPage() {
   }, [view, editId, isBusy, typeJournals, currentIndex]);
   // في وضع القائمة: سجّل الإجراءات في السياق الخارجي
   // في وضع النموذج: فرّغ السياق الخارجي — الإجراءات تُسجَّل داخل نافذة العمل عبر DJPFormToolbarRegistrar
-  useToolbarActions(view === "list" ? toolbarActions : {} as Parameters<typeof useToolbarActions>[0]);
+  // نستخدم useMemo لإرجاع كائن ثابت في وضع النموذج — أي كائن حرفي {} جديد سيولّد حلقة لا نهائية
+  const [emptyActions] = React.useState<Parameters<typeof useToolbarActions>[0]>({});
+  useToolbarActions(view === "list" ? toolbarActions : emptyActions);
 
   /* ──────────────── RENDER ──────────────── */
   return (

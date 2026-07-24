@@ -38,7 +38,7 @@ export default function Invoices() {
     exit:      { supported: false as const, disabledReason: "أغلق التبويب من شريط التبويبات العلوي" },
   }), [navigate]);
 
-  useToolbarActions(toolbarActions, []);
+  useToolbarActions(toolbarActions);
 
   return (
     <div className="space-y-5">
