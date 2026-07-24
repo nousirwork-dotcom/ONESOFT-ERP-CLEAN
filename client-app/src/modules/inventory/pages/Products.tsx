@@ -176,15 +176,7 @@ function CField({
 }
 
 // حقل نص كلاسيكي
-function CInput({
-  value,
-  onChange,
-  placeholder = "",
-  type = "text",
-  dir,
-  readOnly,
-  className = "",
-}: {
+const CInput = React.forwardRef<HTMLInputElement, {
   value: string;
   onChange?: (v: string) => void;
   placeholder?: string;
@@ -192,19 +184,30 @@ function CInput({
   dir?: "rtl" | "ltr";
   readOnly?: boolean;
   className?: string;
-}) {
+  hasError?: boolean;
+}>(function CInput({
+  value,
+  onChange,
+  placeholder = "",
+  type = "text",
+  dir,
+  readOnly,
+  className = "",
+  hasError,
+}, ref) {
   return (
     <input
+      ref={ref}
       type={type}
       value={value}
       onChange={onChange ? (e) => onChange(e.target.value) : undefined}
       placeholder={placeholder}
       dir={dir}
       readOnly={readOnly}
-      className={`h-7 text-sm border border-slate-300 dark:border-slate-600 rounded px-2 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 ${readOnly ? "bg-slate-50 dark:bg-slate-700 text-slate-500" : ""} ${className}`}
+      className={`h-7 text-sm border rounded px-2 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 ${hasError ? "border-red-500 focus:border-red-500 focus:ring-red-500" : "border-slate-300 dark:border-slate-600 focus:border-blue-500 focus:ring-blue-500"} ${readOnly ? "bg-slate-50 dark:bg-slate-700 text-slate-500" : ""} ${className}`}
     />
   );
-}
+});
 
 // =============================================
 // بطاقة الصنف - 6 تبويبات كلاسيكية
@@ -215,12 +218,18 @@ function ProductCard({
   categories,
   groups,
   productId,
+  skuRef,
+  nameRef,
+  fieldErrors,
 }: {
   form: ProductForm;
   setForm: (f: ProductForm) => void;
   categories: Array<{ id: number; name: string }> | undefined;
   groups: Array<{ id: number; groupCode?: string | null; name: string; groupType?: string | null; parentId?: number | null; autoNumbering?: boolean | null; codeDigits?: number | null }> | undefined;
   productId?: number | null;
+  skuRef?: React.RefObject<HTMLInputElement | null>;
+  nameRef?: React.RefObject<HTMLInputElement | null>;
+  fieldErrors?: { sku?: boolean; name?: boolean };
 }) {
   const [activeTab, setActiveTab] = useState<string>("main");
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -471,11 +480,13 @@ function ProductCard({
                       </div>
                     )}
                     <CInput
+                      ref={skuRef}
                       value={form.sku}
                       onChange={(v) => { if (!autoNum || isEdit) set("sku", v); }}
                       placeholder={autoNum && !isEdit ? "يُولَّد تلقائياً..." : "SKU-001"}
                       className={`w-full ${autoNum && !isEdit ? "bg-slate-100 dark:bg-slate-700 text-blue-700 dark:text-blue-300 font-mono font-semibold cursor-not-allowed" : ""}`}
                       readOnly={autoNum && !isEdit}
+                      hasError={fieldErrors?.sku}
                     />
                   </div>
                 </div>
@@ -487,7 +498,7 @@ function ProductCard({
                 <span className="text-xs text-slate-600 dark:text-slate-400">إسم 1</span>
               </div>
               <div className="flex-1 px-1 py-0.5">
-                <CInput value={form.name} onChange={(v) => set("name", v)} placeholder="اسم الصنف بالعربية" className="w-full" />
+                <CInput ref={nameRef} value={form.name} onChange={(v) => set("name", v)} placeholder="اسم الصنف بالعربية" className="w-full" hasError={fieldErrors?.name} />
               </div>
             </div>
             {/* اسم 2 */}
@@ -1287,6 +1298,9 @@ export default function Products() {
   const [isOpen, setIsOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState<ProductForm>(emptyForm);
+  const [fieldErrors, setFieldErrors] = useState<{ sku?: boolean; name?: boolean }>({});
+  const skuRef = useRef<HTMLInputElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
   const [isDirty, setIsDirty] = useState(false);
   const skipFormRef = useRef(false);
   const [sortField, setSortField] = useState<string>("name");
@@ -1449,6 +1463,16 @@ export default function Products() {
 
   const confirmImport = async () => {
     if (!importRows.length) return;
+    const seen = new Set<string>();
+    for (let i = 0; i < importRows.length; i++) {
+      const r = importRows[i];
+      const code = (r.sku ?? "").trim();
+      const name = (r.name ?? "").trim();
+      if (!name) { toast.error(`الصف ${i + 1}: يرجى إدخال اسم الصنف بالعربي.`); return; }
+      if (!code) { toast.error(`الصف ${i + 1}: يرجى إدخال كود الصنف.`); return; }
+      if (seen.has(code)) { toast.error(`الصف ${i + 1}: كود مكرر داخل ملف الاستيراد (${code}).`); return; }
+      seen.add(code);
+    }
     setImportLoading(true);
     try {
       await bulkImport.mutateAsync({ rows: importRows });
@@ -1479,6 +1503,7 @@ export default function Products() {
     setIsDirty(false);
     setEditId(null);
     setForm(emptyForm);
+    setFieldErrors({});
     setIsOpen(true);
   }, []);
 
@@ -1649,12 +1674,26 @@ export default function Products() {
       foundationKey: p.foundationKey ?? "",
       includeInFoundation: p.includeInFoundation ?? false,
     });
+    setFieldErrors({});
     setIsOpen(true);
   }, []);
 
   const handleSubmit = async () => {
-    if (!form.name.trim()) {
-      toast.error("اسم الصنف (إسم 1) مطلوب");
+    const trimmedSku = form.sku.trim();
+    const trimmedName = form.name.trim();
+    const errors: { sku?: boolean; name?: boolean } = {};
+    if (!trimmedSku) errors.sku = true;
+    if (!trimmedName) errors.name = true;
+    setFieldErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
+      if (!trimmedSku) {
+        toast.error("يرجى إدخال كود الصنف.");
+        skuRef.current?.focus();
+      } else {
+        toast.error("يرجى إدخال اسم الصنف بالعربي.");
+        nameRef.current?.focus();
+      }
       throw new Error("validation");
     }
 
@@ -2545,6 +2584,9 @@ export default function Products() {
                   categories={categories}
                   groups={groups as any}
                   productId={editId}
+                  skuRef={skuRef}
+                  nameRef={nameRef}
+                  fieldErrors={fieldErrors}
                 />
               </div>
             </div>

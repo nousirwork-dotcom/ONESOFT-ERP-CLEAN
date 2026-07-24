@@ -3,7 +3,33 @@ import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import { products, productGroups } from '../schema.js';
-import { eq, and, or, like, desc, asc, isNotNull } from 'drizzle-orm';
+import { eq, and, or, like, desc, asc, isNotNull, ne } from 'drizzle-orm';
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+function validateProductRequired(name: string, code?: string) {
+  if (!name || !name.trim()) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'يرجى إدخال اسم الصنف بالعربي.' });
+  }
+  if (code !== undefined && !code.trim()) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'يرجى إدخال كود الصنف.' });
+  }
+}
+
+async function assertProductCodeUnique(code: string, orgId: number, excludeId?: number) {
+  const trimmed = code.trim();
+  if (!trimmed) return;
+  const existing = await db.query.products.findFirst({
+    where: and(
+      eq(products.orgId, orgId),
+      eq(products.code, trimmed),
+      eq(products.isActive, true),
+      excludeId ? ne(products.id, excludeId) : undefined,
+    ) as any,
+  });
+  if (existing) {
+    throw new TRPCError({ code: 'CONFLICT', message: 'يوجد صنف مسجل بنفس الكود.' });
+  }
+}
 
 export const productsRouter = router({
   list: protectedProcedure
@@ -44,10 +70,10 @@ export const productsRouter = router({
 
   create: protectedProcedure
     .input(z.object({
-      name: z.string().min(1, "اسم الصنف مطلوب"),
+      name: z.string().min(1, "يرجى إدخال اسم الصنف بالعربي."),
       name2: z.string().optional(),
       nameEn: z.string().optional(),
-      sku: z.string().optional(),
+      sku: z.string().min(1, "يرجى إدخال كود الصنف."),
       barcode: z.string().optional(),
       barcode2: z.string().optional(),
       barcode3: z.string().optional(),
@@ -97,7 +123,8 @@ export const productsRouter = router({
         recordPolicy, foundationKey, includeInFoundation,
       } = input;
 
-      if (!name || !name.trim()) throw new Error("اسم الصنف مطلوب");
+      validateProductRequired(name, sku);
+      await assertProductCodeUnique(sku, ctx.user.orgId);
 
       const resolvedGroupId = groupId ?? categoryId ?? undefined;
       const extraData: Record<string, any> = {};
@@ -153,9 +180,9 @@ export const productsRouter = router({
   bulkImport: protectedProcedure
     .input(z.object({
       rows: z.array(z.object({
-        name: z.string().min(1),
+        name: z.string().min(1, "يرجى إدخال اسم الصنف بالعربي."),
         nameEn: z.string().optional(),
-        sku: z.string().optional(),
+        sku: z.string().min(1, "يرجى إدخال كود الصنف."),
         barcode: z.string().optional(),
         unit: z.string().optional(),
         salePrice: z.string().optional(),
@@ -166,10 +193,29 @@ export const productsRouter = router({
       })).min(1).max(2000),
     }))
     .mutation(async ({ ctx, input }) => {
+      const seenCodes = new Set<string>();
+      for (let i = 0; i < input.rows.length; i++) {
+        const r = input.rows[i];
+        const rowNum = i + 1;
+        const code = r.sku?.trim() ?? "";
+        const name = r.name?.trim() ?? "";
+        if (!name) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: `الصف ${rowNum}: يرجى إدخال اسم الصنف بالعربي.` });
+        }
+        if (!code) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: `الصف ${rowNum}: يرجى إدخال كود الصنف.` });
+        }
+        if (seenCodes.has(code)) {
+          throw new TRPCError({ code: 'CONFLICT', message: `الصف ${rowNum}: يوجد كود مكرر داخل ملف الاستيراد (${code}).` });
+        }
+        seenCodes.add(code);
+        await assertProductCodeUnique(code, ctx.user.orgId);
+      }
+
       const values = input.rows.map(r => ({
         name:          r.name.trim(),
         nameEn:        r.nameEn?.trim() || undefined,
-        code:          r.sku?.trim() || undefined,
+        code:          r.sku.trim(),
         barcode:       r.barcode?.trim() || undefined,
         unit:          r.unit?.trim() || "قطعة",
         salePrice:     r.salePrice || "0",
@@ -187,10 +233,10 @@ export const productsRouter = router({
   update: protectedProcedure
     .input(z.object({
       id: z.number(),
-      name: z.string().min(1).optional(),
+      name: z.string().min(1, "يرجى إدخال اسم الصنف بالعربي."),
       name2: z.string().optional(),
       nameEn: z.string().optional(),
-      sku: z.string().optional(),
+      sku: z.string().min(1, "يرجى إدخال كود الصنف."),
       barcode: z.string().optional(),
       barcode2: z.string().optional(),
       barcode3: z.string().optional(),
@@ -233,6 +279,9 @@ export const productsRouter = router({
         wholesalePrice, maxStock, reorderPoint, itemType, brand, model, description,
         recordPolicy, foundationKey, includeInFoundation,
         ...rest } = input as any;
+
+      validateProductRequired(rest.name, sku);
+      await assertProductCodeUnique(sku, ctx.user.orgId, id);
 
       const extraData: Record<string, any> = {};
       if (name2 !== undefined)         extraData.name2          = name2;
