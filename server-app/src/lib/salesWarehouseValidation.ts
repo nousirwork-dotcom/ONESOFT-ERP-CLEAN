@@ -63,19 +63,31 @@ export async function validateSalesInvoiceWarehouseContext(params: {
   }
 
   // ── 4. البائع مؤهل ومسموح له بالمخزن ────────────────────────────────────
+  // مصدر التحقق: جدول users (canBeSalesperson) — نفس ما تُظهره شاشة المستخدمين.
   if (sellerUserId) {
     const seller = await db.query.users.findFirst({
       where: and(
         eq(users.id, sellerUserId),
         eq(users.orgId, orgId),
-        eq(users.isActive, true),
       ),
-      columns: { canBeSalesperson: true, defaultWarehouseId: true },
+      columns: { id: true, name: true, username: true, isActive: true, canBeSalesperson: true, defaultWarehouseId: true },
     });
-    if (!seller?.canBeSalesperson) {
+    if (!seller) {
       throw new TRPCError({
         code: 'BAD_REQUEST',
-        message: 'المستخدم المختار غير مؤهل للعمل كبائع — فعّل الخيار من إعدادات المستخدم أولاً',
+        message: 'المستخدم المختار كبائع غير موجود في المؤسسة',
+      });
+    }
+    if (!seller.isActive) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `المستخدم ${seller.name || seller.username} موقوف، لا يمكن العمل كبائع`,
+      });
+    }
+    if (!seller.canBeSalesperson) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `المستخدم ${seller.name || seller.username} غير مفعّل كبائع من إعدادات المستخدمين`,
       });
     }
     // تحقق: defaultWarehouseId يطابق، أو مُسنَد عبر user_warehouse_assignments
@@ -91,7 +103,7 @@ export async function validateSalesInvoiceWarehouseContext(params: {
       if (!assignment) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
-          message: 'البائع غير مُسنَد للفرع/المخزن المختار — أسنده أولاً من إعدادات المستخدمين',
+          message: `البائع ${seller.name || seller.username} غير مُسنَد للفرع/المخزن المختار — أسنده أولاً من إعدادات المستخدمين`,
         });
       }
     }

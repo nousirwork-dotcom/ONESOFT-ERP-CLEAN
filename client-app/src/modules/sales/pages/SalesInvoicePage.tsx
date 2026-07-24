@@ -102,6 +102,27 @@ function toIsoDate(display: string) {
   return display;
 }
 
+// ─── تنبيه صوتي قصير عند إدخال صنف غير مسجل ─────────────────────────────────────
+function playProductBeep() {
+  try {
+    const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "square";
+    osc.frequency.value = 880;
+    gain.gain.value = 0.08;
+    osc.start();
+    osc.stop(ctx.currentTime + 0.08);
+    setTimeout(() => ctx.close(), 150);
+  } catch {
+    // ignore audio errors
+  }
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: { initialInvoiceId?: number; onDocTypeChange?: (name: string) => void } = {}) {
   const { isAr } = useLang();
@@ -212,6 +233,22 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
   const cellRefs = useRef<Map<string, HTMLInputElement>>(new Map());
   const skipAutoPayModal = useRef(false);
 
+  // ── مساعدو التنبيه والتركيز على حقل صنف غير مسجل ─────────────────────────────
+  const focusAndSelectCell = useCallback((key: string) => {
+    const el = cellRefs.current.get(key);
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.focus();
+      el.select();
+    });
+  }, []);
+
+  const rejectInvalidProduct = useCallback((key: string) => {
+    playProductBeep();
+    toast.error("الصنف غير مسجل، يرجى اختيار صنف من القائمة.");
+    focusAndSelectCell(key);
+  }, [focusAndSelectCell]);
+
   // ── Queries ───────────────────────────────────────────────────────────────
   const customersQuery   = trpc.customers.list.useQuery({});
   const warehousesQuery  = trpc.warehouses.list.useQuery();
@@ -303,15 +340,35 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // تعيين البائع = المستخدم الحالي عند فتح فاتورة جديدة (وليس عند عرض فاتورة محفوظة)
+  // تعيين البائع = المستخدم الحالي عند فتح فاتورة جديدة، فقط إذا كان مفعّلاً كبائع
+  // مصدر التحقق: نفس حقل users.canBeSalesperson المستخدم في شاشة المستخدمين والـ Backend.
   useEffect(() => {
     if (!currentUser?.id) return;
     if (erpMode !== "new") return;
     if (navInvoiceId || savedInvoiceId) return;
     if (sellerUserId) return;
-    setSellerUserId(currentUser.id);
+    if (currentUser.canBeSalesperson) {
+      setSellerUserId(currentUser.id);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser?.id, erpMode, navInvoiceId, savedInvoiceId]);
+  }, [currentUser?.id, currentUser?.canBeSalesperson, erpMode, navInvoiceId, savedInvoiceId]);
+
+  // تأكد من أن البائع المختار لا يزال مؤهلاً للمخزن/الفرع المختار
+  useEffect(() => {
+    if (erpMode === "view") return;
+    if (!warehouseId) return;
+    if (!sellerUserId) return;
+    const sellers = salespersonsQuery.data ?? [];
+    const currentIsValid = currentUser?.canBeSalesperson && sellers.some(s => s.id === currentUser.id);
+    if (sellers.some(s => s.id === sellerUserId)) return; // البائع المختار مؤهل
+    // البائع المختار غير مؤهل للفرع الحالي → حاول المستخدم الحالي، وإلا اتركه فارغاً
+    if (currentIsValid) {
+      setSellerUserId(currentUser.id);
+    } else if (sellerUserId === currentUser?.id) {
+      setSellerUserId(null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [warehouseId, salespersonsQuery.data, currentUser?.id, currentUser?.canBeSalesperson, erpMode]);
 
   // تطبيق بيانات مستند مصدر (داخلي — يُستدعى بعد التأكيد إن لزم)
   const applySourceDoc = (src: NonNullable<typeof basedOnQuery.data>) => {
@@ -559,9 +616,11 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     } else {
       toast.error("لا يوجد دفتر فاتورة مبيعات مرتبط بهذا الفرع");
     }
-    // تعيين البائع = المستخدم الحالي (يُحافظ على المستخدم المختار يدوياً إذا سمحت الصلاحية)
-    if (currentUser?.id) {
+    // تعيين البائع = المستخدم الحالي فقط إذا كان مفعّلاً كبائع في إعدادات المستخدمين
+    if (currentUser?.id && currentUser.canBeSalesperson) {
       setSellerUserId(currentUser.id);
+    } else {
+      setSellerUserId(null);
     }
     // إنشاء سطر أول فارغ وتفعيله + تركيز حقل كود الصنف
     setTimeout(() => {
@@ -809,11 +868,14 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     }
   }, [lines, copiedLine, addLine, deleteLine]);
 
-  // ── تفعيل اختيار الصنف بالكود عند الضغط على Enter ────────────────────────────
+  // ── التحقق من اختيار صنف مسجل في حقل الكود عند Enter/Tab/Blur ─────────────────
   const handleProductCodeKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>, idx: number) => {
-    if (e.key === "Enter") {
-      const code = lines[idx]?.productCode?.trim();
-      if (!code) return;
+    const line = lines[idx];
+    const code = line?.productCode?.trim() ?? "";
+    const key = `${idx}-0`;
+
+    // Enter/Tab: اختيار تلقائي إذا كان الكود مطابقًا لصنف مسجل
+    if ((e.key === "Enter" || e.key === "Tab") && code) {
       const found = (productsQuery.data ?? []).find(
         (p: any) => p.code === code || p.barcode === code || String(p.id) === code
       );
@@ -822,26 +884,30 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
         handleProductCodeChange(idx, code);
       } else {
         e.preventDefault();
-        toast.error("الصنف غير مسجل، يرجى اختيار صنف من القائمة.");
+        rejectInvalidProduct(key);
       }
       return;
     }
+
+    // منع الانتقال من حقل كود الصنف إذا كان النص غير مسجل
+    if ((e.key === "Enter" || e.key === "Tab") && !line?.productId && !code) {
+      e.preventDefault();
+      rejectInvalidProduct(key);
+      return;
+    }
+
     handleCellKeyDown(e, idx, 0);
-  }, [lines, productsQuery.data, handleCellKeyDown, handleProductCodeChange]);
+  }, [lines, productsQuery.data, handleCellKeyDown, handleProductCodeChange, rejectInvalidProduct]);
 
   // ── التحقق من مغادرة حقل كود الصنف بدون اختيار صنف مسجل ──────────────────────
   const handleProductCodeBlur = useCallback((idx: number) => {
     const line = lines[idx];
     if (!line) return;
+    const key = `${idx}-0`;
     if (!line.productId && line.productCode.trim()) {
-      toast.error("الصنف غير مسجل، يرجى اختيار صنف من القائمة.");
-      setLines(prev => {
-        const updated = [...prev];
-        updated[idx] = { ...EMPTY_LINE(), id: updated[idx].id };
-        return updated;
-      });
+      rejectInvalidProduct(key);
     }
-  }, [lines]);
+  }, [lines, rejectInvalidProduct]);
 
   // ── Validation & Save ─────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
@@ -863,6 +929,14 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     for (const l of validLines) {
       if (!l.productId) {
         toast.error("الصنف غير مسجل، يرجى اختيار صنف من القائمة.");
+        throw new Error("validation");
+      }
+    }
+    // تحقق من البائع: مؤهل للفرع/المخزن المختار ومتاح في قائمة البائعين
+    if (sellerUserId && warehouseId) {
+      const sellers = salespersonsQuery.data ?? [];
+      if (!sellers.some(s => s.id === sellerUserId)) {
+        toast.error("البائع المختار غير مُسنَد للفرع/المخزن المختار — اختر بائعاً مؤهلاً");
         throw new Error("validation");
       }
     }
@@ -1003,6 +1077,13 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     for (const l of validLines) {
       if (!l.productId) {
         toast.error("الصنف غير مسجل، يرجى اختيار صنف من القائمة.");
+        return null;
+      }
+    }
+    if (sellerUserId && warehouseId) {
+      const sellers = salespersonsQuery.data ?? [];
+      if (!sellers.some(s => s.id === sellerUserId)) {
+        toast.error("البائع المختار غير مُسنَد للفرع/المخزن المختار — اختر بائعاً مؤهلاً");
         return null;
       }
     }
@@ -2787,12 +2868,19 @@ function ProductNameCell({
     ) ?? null;
   };
 
+  const rejectAndStay = useCallback(() => {
+    playProductBeep();
+    toast.error("الصنف غير مسجل، يرجى اختيار صنف من القائمة.");
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    });
+  }, []);
+
   const handleBlur = () => {
     if (!productId && search.trim()) {
-      // لا يوجد صنف مسجل مُختار والحقل غير فارغ
-      toast.error("الصنف غير مسجل، يرجى اختيار صنف من القائمة.");
-      setSearch("");
-      onChange?.("");
+      // لا يوجد صنف مسجل مُختار والحقل غير فارغ → نبقي النص ونرجّع التركيز
+      rejectAndStay();
     }
     onBlur?.();
   };
@@ -2827,6 +2915,14 @@ function ProductNameCell({
           if (e.key === "Enter") {
             const exact = tryExactMatch();
             if (exact) { e.preventDefault(); handleSelect(exact); return; }
+            if (search.trim() && !productId) { e.preventDefault(); rejectAndStay(); return; }
+            if (!search.trim() && !productId) { e.preventDefault(); rejectAndStay(); return; }
+          }
+          // Tab: لا ينتقل إلا بعد اختيار صنف حقيقي
+          if (e.key === "Tab" && !productId) {
+            e.preventDefault();
+            rejectAndStay();
+            return;
           }
           onKeyDown(e);
         }}

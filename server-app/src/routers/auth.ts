@@ -17,6 +17,8 @@ export const authRouter = router({
       role:             ctx.user.role,
       orgId:            ctx.user.orgId,
       extraPermissions: (ctx.user.extraPermissions ?? {}) as Record<string, boolean>,
+      canBeSalesperson: ctx.user.canBeSalesperson ?? false,
+      defaultWarehouseId: ctx.user.defaultWarehouseId ?? null,
     } : null;
   }),
 
