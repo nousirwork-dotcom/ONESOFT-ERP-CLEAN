@@ -403,33 +403,65 @@ export function UserFormDialog({
       )}
     >
             {/* ─── الرأس ──────────────────────────────────────────────────────── */}
-            <DialogHeader className="shrink-0 border-b px-6 py-4 text-right">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                    <UserRoundPlus className="h-5 w-5" />
+            {/* في وضع dialog نستخدم DialogHeader+DialogTitle (Radix يتطلب Dialog Provider)،
+                في وضع embedded نستخدم عناصر HTML عادية لتجنب خطأ DialogTitle خارج Dialog. */}
+            {renderMode === "dialog" ? (
+              <DialogHeader className="shrink-0 border-b px-6 py-4 text-right">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      <UserRoundPlus className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <DialogTitle className="text-xl">
+                        {mode === "create" ? "إضافة مستخدم جديد" : "تعديل بيانات المستخدم"}
+                      </DialogTitle>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        بيانات الحساب ونطاق العمل والصلاحيات.
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <DialogTitle className="text-xl">
-                      {mode === "create" ? "إضافة مستخدم جديد" : "تعديل بيانات المستخدم"}
-                    </DialogTitle>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      بيانات الحساب ونطاق العمل والصلاحيات.
-                    </p>
-                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={requestClose}
+                    aria-label="إغلاق"
+                    className="shrink-0 text-muted-foreground hover:text-foreground"
+                  >
+                    <span className="text-lg leading-none">×</span>
+                  </Button>
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={requestClose}
-                  aria-label="إغلاق"
-                  className="shrink-0 text-muted-foreground hover:text-foreground"
-                >
-                  <span className="text-lg leading-none">×</span>
-                </Button>
+              </DialogHeader>
+            ) : (
+              <div className="shrink-0 border-b px-6 py-4 text-right">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      <UserRoundPlus className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-semibold">
+                        {mode === "create" ? "إضافة مستخدم جديد" : "تعديل بيانات المستخدم"}
+                      </h2>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        بيانات الحساب ونطاق العمل والصلاحيات.
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={requestClose}
+                    aria-label="إغلاق"
+                    className="shrink-0 text-muted-foreground hover:text-foreground"
+                  >
+                    <span className="text-lg leading-none">×</span>
+                  </Button>
+                </div>
               </div>
-            </DialogHeader>
+            )}
 
             {/* ─── التبويبات ──────────────────────────────────────────────────── */}
             <Tabs
