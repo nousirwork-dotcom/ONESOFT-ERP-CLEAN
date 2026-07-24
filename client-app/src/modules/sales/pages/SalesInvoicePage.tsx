@@ -104,6 +104,20 @@ function toIsoDate(display: string) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: { initialInvoiceId?: number; onDocTypeChange?: (name: string) => void } = {}) {
   const { isAr } = useLang();
+
+  // ── نمط موحد لجميع تسميات رأس الفاتورة ───────────────────────────────────
+  const headerLabelStyle: React.CSSProperties = {
+    fontSize: "10px",
+    fontWeight: 700,
+    color: "#555",
+    width: 70,
+    minWidth: 70,
+    textAlign: "right",
+    padding: 0,
+    margin: 0,
+    whiteSpace: "nowrap",
+    flexShrink: 0,
+  };
   // ── Header state ─────────────────────────────────────────────────────────
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().split("T")[0]);
@@ -523,14 +537,37 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     setPaidAmountOverride("");
     setPaymentBreakdown({});
     setInvoiceNumber("");
-    // انتخاب الدفتر تلقائياً إذا كان هناك دفتر واحد للمخزن
+    // انتخاب الدفتر تلقائياً (الأول إذا وُجد) لتوليد رقم الفاتورة فوراً
     const warehouseJournals = (journalsQuery.data ?? []).filter((j: any) => j.warehouseId === id);
-    if (warehouseJournals.length === 1) {
+    if (warehouseJournals.length >= 1) {
       await handleJournalSelect(warehouseJournals[0].id);
     }
   }, [journalsQuery.data, handleJournalSelect, basedOnType, basedOnNum, sellerUserId, lines]);
 
   // اختيار المخزن/الفرع مع تأكيد عند وجود بيانات مدخلة
+  // إلغاء تحديد الفرع ومسح جميع البيانات التابعة
+  const handleClearWarehouse = useCallback(() => {
+    setWarehouseId(null);
+    setBranchOpen(false);
+    setJournalId(null);
+    setJournalWarehouseId(null);
+    setDocTypeWarehouseId(null);
+    setDocTypeId("");
+    setCustomerId(null);
+    setCustomerName("");
+    setCustSearch("");
+    setCustomerType('individual');
+    setCustomerTaxNumber("");
+    setBasedOnType('');
+    setBasedOnNum('');
+    setBasedOnTrigger('');
+    setSellerUserId(null);
+    setLines([]);
+    setInvoiceNumber("");
+    setPaidAmountOverride("");
+    setPaymentBreakdown({});
+  }, []);
+
   const handleWarehouseSelect = useCallback((id: number) => {
     if (id === warehouseId) { setBranchOpen(false); return; }
     const hasDependentData = !!(
@@ -1205,75 +1242,76 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
   return (
     <div
       className={`${styles.screenContainer} flex flex-col h-full text-[#1a1a1a] select-none`}
-      style={{ fontFamily: "'Cairo', Tahoma, Arial, sans-serif", fontSize: "12px", background: "var(--background)" }}
+      style={{ fontFamily: "'Cairo', Tahoma, Arial, sans-serif", fontSize: "var(--work-font-size, 12px)", background: "var(--background)" }}
       dir="rtl"
     >
       {/* ── Main Content: outer flex row (left-col + summary) ──────────── */}
       <div className="flex-1 flex overflow-hidden" dir="rtl">
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden" style={{ maxWidth: 1400, marginInline: "auto", width: "100%" }}>
 
       {/* ── Header Form ─────────────────────────────────────────────────── */}
-      <div className="border-b border-[#b0a89a] px-3 pt-2 pb-2" style={{ background: "#F7F5EE", boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }}>
+      <div className="border-b border-[#b0a89a] px-3 pt-2 pb-2" style={{ background: "#FFFFFF", boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }}>
         {/* ثوابت مشتركة لجميع الحقول — ارتفاع موحد 26px + عرض label موحد */}
-        {/* ─── تنبيه: اختر الفرع أولاً ───────────────────────────────────── */}
-        {!warehouseId && erpMode !== "view" && (
-          <div style={{ background: "#fef3c7", border: "1px solid #f59e0b", borderRadius: 6, padding: "5px 12px", marginBottom: 6, display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#92400e", fontWeight: 600 }}>
-            <span style={{ fontSize: 15 }}>⚠</span>
-            اختر الفرع / المخزن أولاً لاستكمال بيانات الفاتورة — جميع الحقول مُعطَّلة حتى اختيار الفرع/المخزن
-          </div>
-        )}
-
         <div className={styles.formGrid} style={{ columnGap: 10, rowGap: 5, alignItems: "center" }}>
 
-          {/* ══ صف 1: رقم الفاتورة │ بناءً على │ نوع السند ══ */}
+          {/* ══ صف 1 (من اليمين): الفرع ← رقم الفاتورة ← بناءً على ══ */}
 
-          {/* ══ col 1: الفرع / المخزن — أول حقل إلزامي ══ */}
+          {/* col 1 (يمين): الفرع — أول حقل إلزامي ══ */}
           {(() => {
             const whs = warehousesQuery.data ?? [];
             const selWh = whs.find((w: any) => w.id === warehouseId);
             const wName = (w: any): string => isAr ? (w.name ?? w.nameEn ?? "") : (w.nameEn || (w.name ?? ""));
             return (
               <div className="flex items-center w-full min-w-0 relative" style={{ gap: 5 }}>
-                <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 56, flexShrink: 0, whiteSpace: "nowrap" }}>
-                  {isAr ? "الفرع/المخزن" : "Branch/WH"}
+                <label style={headerLabelStyle}>
+                  {isAr ? "الفـــــــرع" : "Branch"}
                 </label>
-                <div className="flex relative flex-1 min-w-0" style={{ height: 26 }}>
+                <div className="flex relative flex-1 min-w-0" style={{ height: "var(--work-field-h, 26px)" }}>
                   <button
                     onClick={() => { if (erpMode !== "view") setBranchOpen(o => !o); }}
                     disabled={erpMode === "view"}
                     className="flex items-center gap-1 classic-input"
                     style={{
-                      height: 26, flex: 1, minWidth: 120, paddingInline: "6px 4px",
+                      height: "var(--work-field-h, 26px)", flex: 1, minWidth: 120, paddingInline: "6px 4px",
                       background: selWh ? "#f0fff4" : "#fff8e1",
                       border: `2px solid ${selWh ? "#22c55e" : "#f59e0b"}`,
                       borderRadius: "4px 0 0 4px", borderInlineEnd: "none",
-                      color: selWh ? "#15803d" : "#b45309", fontSize: 11, fontWeight: 700,
+                      color: selWh ? "#15803d" : "#b45309", fontSize: "11px", fontWeight: 700,
                       whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                     }}
-                    title="اختر الفرع / المخزن (مطلوب)"
+                    title={selWh ? wName(selWh) : "اختر الفرع (مطلوب)"}
                   >
                     <span className="flex-1 truncate text-start">
-                      {selWh ? wName(selWh) : "⚠ اختر الفرع/المخزن"}
+                      {selWh ? wName(selWh) : "⚠ اختر الفرع"}
                     </span>
                   </button>
                   <button
                     onClick={() => { if (erpMode !== "view") setBranchOpen(o => !o); }}
                     disabled={erpMode === "view"}
                     className="flex items-center justify-center flex-shrink-0"
-                    style={{ width: 18, height: 26, borderRadius: "0 4px 4px 0", background: selWh ? "#22c55e" : "#f59e0b", border: `2px solid ${selWh ? "#16a34a" : "#d97706"}`, borderInlineStart: "none", color: "white", fontSize: "9px" }}
+                    style={{ width: "18px", height: "var(--work-field-h, 26px)", borderRadius: "0 4px 4px 0", background: selWh ? "#22c55e" : "#f59e0b", border: `2px solid ${selWh ? "#16a34a" : "#d97706"}`, borderInlineStart: "none", color: "white", fontSize: "9px" }}
                   >▼</button>
 
                   {branchOpen && (<>
                     <div className="fixed inset-0 z-[9998]" onClick={() => setBranchOpen(false)} />
                     <div className="absolute top-full z-[9999] mt-1 bg-white rounded-lg overflow-hidden" style={{ insetInlineStart: 0, minWidth: 240, boxShadow: "0 8px 32px rgba(0,0,0,0.18)", border: "1px solid #e2e8f0" }} dir={isAr ? "rtl" : "ltr"}>
                       <div className="flex items-center justify-between px-3 py-2" style={{ background: "#166534" }}>
-                        <span className="text-white text-[11px] font-bold">اختر الفرع / المخزن</span>
+                        <span className="text-white text-[11px] font-bold">اختر الفرع</span>
                         <button onClick={() => setBranchOpen(false)} style={{ color: "rgba(255,255,255,0.7)", fontSize: "11px" }}>✕</button>
                       </div>
                       {whs.length === 0 ? (
-                        <div className="px-4 py-5 text-center text-[11px] text-slate-500">لا توجد مخازن/فروع مُعرَّفة</div>
+                        <div className="px-4 py-5 text-center text-[11px] text-slate-500">لا توجد فروع مُعرَّفة</div>
                       ) : (
                         <div className="overflow-y-auto" style={{ maxHeight: 220 }}>
+                          {/* زر إلغاء التحديد — يظهر فقط عند وجود فرع مختار */}
+                          {selWh && (
+                            <button onClick={() => { handleClearWarehouse(); }} className="w-full flex items-center transition-colors" style={{ textAlign: isAr ? "right" : "left", background: "#FEF2F2", borderBottom: "1px solid #fecaca", padding: "7px 12px" }}>
+                              <span style={{ width: 16, color: "#ef4444", fontSize: "11px", flexShrink: 0 }}>✕</span>
+                              <div className="flex-1 min-w-0 mx-2">
+                                <div className="text-[12px] font-bold truncate" style={{ color: "#dc2626" }}>إلغاء تحديد الفرع</div>
+                              </div>
+                            </button>
+                          )}
                           {whs.map((w: any, idx: number) => {
                             const isSel = w.id === warehouseId;
                             return (
@@ -1294,102 +1332,25 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             );
           })()}
 
-          {/* ══ col 2: الدفتر + رقم الفاتورة ══ */}
-          {(() => {
-            const allJournals = journalsQuery.data ?? [];
-            const branchJournals = warehouseId ? allJournals.filter((j: any) => j.warehouseId === warehouseId) : allJournals;
-            const selected = allJournals.find((j: any) => j.id === journalId);
-            const jName = (j: any): string => isAr ? (j.name ?? "") : (j.name2 || (j.name ?? ""));
-            return (
-              <div className="flex items-center w-full min-w-0 relative" style={{ gap: 8 }}>
-                {/* الدفتر */}
-                <div className="flex items-center flex-1 min-w-0 relative" style={{ gap: 4 }}>
-                  <label style={{ fontSize: 10, fontWeight: 700, color: "#555", flexShrink: 0, whiteSpace: "nowrap" }}>الدفتر</label>
-                  <div className="flex relative flex-1 min-w-0" style={{ height: 26 }}>
-                    <button
-                      onClick={() => { if (warehouseId && erpMode !== "view") setJournalOpen(o => !o); }}
-                      disabled={!warehouseId || erpMode === "view"}
-                      className="flex items-center gap-1 classic-input"
-                      style={{
-                        height: 26, flex: 1, minWidth: 100, paddingInline: "6px 4px",
-                        background: selected ? "#eff6ff" : !warehouseId ? "#f3f4f6" : "#fafafa",
-                        border: `1px solid ${selected ? "#3b82f6" : "#c9c4bb"}`,
-                        borderRadius: "4px 0 0 4px", borderInlineEnd: "none",
-                        color: selected ? "#1d4ed8" : !warehouseId ? "#9ca3af" : "#888", fontSize: 11, fontWeight: selected ? 700 : 400,
-                        cursor: !warehouseId || erpMode === "view" ? "not-allowed" : "pointer",
-                      }}
-                      title={!warehouseId ? "اختر الفرع/المخزن أولاً" : "اختر الدفتر"}
-                    >
-                      <span className="flex-1 truncate text-start">
-                        {selected ? jName(selected) : !warehouseId ? "—" : "— اختر —"}
-                      </span>
-                    </button>
-                    <button
-                      onClick={() => { if (warehouseId && erpMode !== "view") setJournalOpen(o => !o); }}
-                      disabled={!warehouseId || erpMode === "view"}
-                      className="flex items-center justify-center flex-shrink-0"
-                      style={{ width: 18, height: 26, borderRadius: "0 4px 4px 0", background: selected ? "#3b82f6" : "#e5e0d8", border: `1px solid ${selected ? "#2563eb" : "#c9c4bb"}`, color: selected ? "white" : "#666", fontSize: "9px" }}
-                    >▼</button>
-
-                    {journalOpen && warehouseId && (<>
-                      <div className="fixed inset-0 z-[9998]" onClick={() => setJournalOpen(false)} />
-                      <div className="absolute top-full z-[9999] mt-1 bg-white rounded-lg overflow-hidden" style={{ insetInlineStart: 0, minWidth: 270, boxShadow: "0 8px 32px rgba(0,0,0,0.18)", border: "1px solid #e2e8f0" }} dir={isAr ? "rtl" : "ltr"}>
-                        <div className="flex items-center justify-between px-3 py-2" style={{ background: "#1e40af" }}>
-                          <span className="text-white text-[11px] font-bold">دفاتر المبيعات — {(warehousesQuery.data ?? []).find((w: any) => w.id === warehouseId)?.name ?? ""}</span>
-                          <button onClick={() => setJournalOpen(false)} style={{ color: "rgba(255,255,255,0.7)", fontSize: "11px" }}>✕</button>
-                        </div>
-                        {branchJournals.length === 0 ? (
-                          <div className="px-4 py-5 text-center text-[11px] text-slate-500">لا توجد دفاتر مُعرَّفة لهذا الفرع</div>
-                        ) : (
-                          <div className="overflow-y-auto" style={{ maxHeight: 230 }}>
-                            {branchJournals.map((j: any, idx: number) => {
-                              const isSel = j.id === journalId;
-                              return (
-                                <button key={j.id} onClick={() => handleJournalSelect(j.id)} className="w-full flex items-center transition-colors" style={{ textAlign: isAr ? "right" : "left", background: isSel ? "#eff6ff" : idx % 2 === 0 ? "#fafafa" : "white", borderBottom: "1px solid #f1f5f9", padding: "6px 12px" }}>
-                                  <span style={{ width: 16, color: isSel ? "#3b82f6" : "transparent", fontSize: "11px", flexShrink: 0 }}>✓</span>
-                                  <div className="flex-1 min-w-0 mx-2">
-                                    <div className="text-[12px] font-semibold truncate" style={{ color: isSel ? "#1d4ed8" : "#1e293b" }}>{jName(j)}</div>
-                                    {j.description && <div className="text-[10px] text-slate-400 truncate">{j.description}</div>}
-                                  </div>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
-                        <div className="px-3 py-1.5 flex items-center justify-end" style={{ background: "#f8fafc", borderTop: "1px solid #e2e8f0" }}>
-                          {journalId && (
-                            <button onClick={() => { setJournalId(null); setJournalOpen(false); setWarehouseId(null); setJournalWarehouseId(null); setInvoiceNumber(""); }} className="text-[9px] text-red-400 hover:text-red-600">
-                              إلغاء الاختيار
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </>)}
-                  </div>
-                </div>
-
-                {/* رقم الفاتورة */}
-                <div className="flex items-center flex-shrink-0" style={{ gap: 4 }}>
-                  <label style={{ fontSize: 10, fontWeight: 700, color: "#D19C05", flexShrink: 0, whiteSpace: "nowrap" }}>
-                    {isAr ? "رقم الفاتورة" : "Invoice No."}
-                  </label>
-                  <input
-                    value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)}
-                    className="classic-input text-center font-bold"
-                    style={{ width: 128, height: 26, background: selected ? "#eff6ff" : !warehouseId ? "#f3f4f6" : "#FFFDE7", borderColor: selected ? "#3b82f6" : "#F59E0B", borderRadius: "4px", color: !warehouseId ? "#9ca3af" : "#1a1a1a", fontSize: "13px", fontWeight: 700 }}
-                    readOnly={!!journalId || !warehouseId}
-                    title={!warehouseId ? "اختر الفرع/المخزن أولاً" : "رقم الفاتورة التسلسلي"}
-                  />
-                </div>
-              </div>
-            );
-          })()}
+          {/* col 2: رقم الفاتورة — ملاصق للفرع مباشرة */}
+          <div className="flex items-center justify-center" style={{ gap: 4 }}>
+            <label style={{ ...headerLabelStyle, color: "#D19C05" }}>
+              {isAr ? "رقم الفاتورة" : "Invoice No."}
+            </label>
+            <input
+              value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)}
+              className="classic-input text-center font-bold"
+              style={{ width: "128px", height: "var(--work-field-h, 26px)", background: journalId ? "#eff6ff" : !warehouseId ? "#f3f4f6" : "#FFFDE7", borderColor: journalId ? "#3b82f6" : "#F59E0B", borderRadius: "4px", color: !warehouseId ? "#9ca3af" : "#1a1a1a", fontSize: "13px", fontWeight: 700 }}
+              readOnly={!!journalId || !warehouseId}
+              title={!warehouseId ? "اختر الفرع أولاً" : "رقم الفاتورة التسلسلي"}
+            />
+          </div>
 
           {/* col 3-4: بناءً على */}
           <div className="flex items-center" style={{ gap: 6, gridColumn: "3/5" }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>بناءً على</label>
-            <div className="flex flex-1 min-w-0" style={{ gap: 4 }}>
-              <div style={{ flexShrink: 0, width: 110, display: "flex" }}>
+            <label style={headerLabelStyle}>بناءً على</label>
+            <div className="flex flex-1 min-w-0" style={{ gap: 12 }}>
+              <div style={{ flexShrink: 0, width: 120, display: "flex" }}>
                 <ContextSelectInput
                   value={basedOnType}
                   onChange={v => { if (!warehouseId) { return; } setBasedOnType(v as any); setBasedOnNum(''); setBasedOnTrigger(''); }}
@@ -1402,7 +1363,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   menuTitle="نوع المستند المصدر"
                   placeholder={!warehouseId ? "— —" : "النوع ⊞"}
                   disabled={!warehouseId || erpMode === "view"}
-                  style={{ height: 26 }}
+                  style={{ height: "var(--work-field-h, 26px)" }}
                 />
               </div>
               <BasedOnDocInput
@@ -1426,7 +1387,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
           {/* col 1-3: العميل */}
           <div className="flex items-center" ref={custDropRef} style={{ gap: 6, gridColumn: "1/4", position: "relative" }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>العـ ـ ـميل</label>
+            <label style={headerLabelStyle}>العميل</label>
             <div className="flex flex-1 min-w-0" style={{ gap: 4, position: "relative" }}>
               {/* حقل البحث / اسم العميل */}
               {(() => {
@@ -1448,7 +1409,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                       placeholder="ابحث عن عميل..."
                       className="classic-input flex-1 min-w-0"
                       style={{
-                        height: 26,
+                        height: "var(--work-field-h, 26px)",
                         cursor: customerLocked ? "not-allowed" : customerId ? "pointer" : "text",
                         background: customerLocked ? "#f3f4f6" : undefined,
                         paddingLeft: customerId && !customerLocked ? 20 : undefined,
@@ -1458,11 +1419,11 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                     {/* زر مسح العميل — يظهر فقط قبل الحفظ */}
                     {customerId && !customerLocked && (
                       <button type="button" onClick={clearCustomer}
-                        style={{ position: "absolute", left: 4, top: "50%", transform: "translateY(-50%)", color: "#ef4444", fontSize: 12, lineHeight: 1, background: "none", border: "none", cursor: "pointer", padding: "0 2px", zIndex: 2 }}
+                        style={{ position: "absolute", left: 4, top: "50%", transform: "translateY(-50%)", color: "#ef4444", fontSize: "var(--work-font-size, 12px)", lineHeight: 1, background: "none", border: "none", cursor: "pointer", padding: "0 2px", zIndex: 2 }}
                         title="تغيير العميل">✕</button>
                     )}
                     {customerId && (
-                      <div className="flex items-center flex-shrink-0 px-1.5 rounded text-[10px] font-bold" style={{ height: 26, background: customerType === 'organization' ? '#EFF6FF' : '#F0FDF4', border: `1px solid ${customerType === 'organization' ? '#93C5FD' : '#86EFAC'}`, color: customerType === 'organization' ? '#1D4ED8' : '#15803D' }}>
+                      <div className="flex items-center flex-shrink-0 px-1.5 rounded text-[10px] font-bold" style={{ height: "var(--work-field-h, 26px)", background: customerType === 'organization' ? '#EFF6FF' : '#F0FDF4', border: `1px solid ${customerType === 'organization' ? '#93C5FD' : '#86EFAC'}`, color: customerType === 'organization' ? '#1D4ED8' : '#15803D' }}>
                         {customerType === 'organization' ? '🏢' : '👤'}
                       </div>
                     )}
@@ -1472,7 +1433,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
               <button type="button"
                 onClick={() => { if (!(savedInvoiceId || isPosted) && !customerId) { setCustSearch(""); setShowCustDrop(v => !v); } }}
                 className="flex-shrink-0 flex items-center justify-center"
-                style={{ width: 26, height: 26, borderRadius: 3, background: (savedInvoiceId || isPosted) ? "#9ca3af" : "#6B7280", color: "white", fontSize: 11, border: "1px solid #4B5563", cursor: (savedInvoiceId || isPosted) ? "not-allowed" : "pointer" }}>▾</button>
+                style={{ width: "var(--work-field-h, 26px)", height: "var(--work-field-h, 26px)", borderRadius: 3, background: (savedInvoiceId || isPosted) ? "#9ca3af" : "#6B7280", color: "white", fontSize: "11px", border: "1px solid #4B5563", cursor: (savedInvoiceId || isPosted) ? "not-allowed" : "pointer" }}>▾</button>
               <button type="button"
                 onClick={async () => {
                   setNewCustName(custSearch.trim()); setNewCustCode(""); setNewCustPhone(""); setNewCustEmail(""); setNewCustAddr("");
@@ -1482,12 +1443,12 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   setShowAddCustomer(true); setShowCustDrop(false);
                 }}
                 className="flex-shrink-0 flex items-center justify-center"
-                style={{ width: 26, height: 26, borderRadius: 3, background: "#D19C05", color: "white", fontSize: 15, fontWeight: 700, border: "1px solid #9A7203" }}
+                style={{ width: "var(--work-field-h, 26px)", height: "var(--work-field-h, 26px)", borderRadius: 3, background: "#D19C05", color: "white", fontSize: "15px", fontWeight: 700, border: "1px solid #9A7203" }}
                 title="إضافة عميل جديد">+</button>
               {customerId && (
                 <div className="flex items-center flex-shrink-0 px-2 rounded text-[10px] font-bold whitespace-nowrap"
                   style={{
-                    height: 26,
+                    height: "var(--work-field-h, 26px)",
                     background: customerTaxNumber ? "#EFF6FF" : "#F0FDF4",
                     border: `1px solid ${customerTaxNumber ? "#93C5FD" : "#86EFAC"}`,
                     color: customerTaxNumber ? "#1D4ED8" : "#15803D",
@@ -1510,7 +1471,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                         onMouseLeave={e => (e.currentTarget.style.background = "")}
                         className="flex items-center gap-2 px-3 cursor-default text-[12px]"
                         style={{ borderBottom: "1px solid #e0e0e0", minHeight: 28, cursor: "default" }}>
-                        <span style={{ fontSize: 13 }}>{(c as any).customerType === 'organization' ? '🏢' : '👤'}</span>
+                        <span style={{ fontSize: "13px" }}>{(c as any).customerType === 'organization' ? '🏢' : '👤'}</span>
                         {(c as any).code && <span className="font-mono text-[11px] font-bold px-1" style={{ background: "#FEF3C7", color: "#D19C05" }}>{(c as any).code}</span>}
                         <span style={{ fontWeight: 500, color: "#1a1a1a" }}>{c.name}</span>
                         {(c as any).customerType === 'organization' && <span className="text-[10px] mr-auto" style={{ color: "#0078D7" }}>مؤسسة</span>}
@@ -1540,7 +1501,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
           {/* col 4: العملة — تحت نوع السند */}
           <div className="flex items-center" style={{ gap: 6 }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", flexShrink: 0, whiteSpace: "nowrap" }}>العملة</label>
+            <label style={headerLabelStyle}>العملة</label>
             <ContextSelectInput
               value={currency}
               onChange={v => setCurrency(v || "SAR")}
@@ -1552,7 +1513,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
               ]}
               menuTitle="اختر العملة"
               placeholder="العملة ⊞"
-              style={{ height: 26, flex: 1, minWidth: 0 }}
+              style={{ height: "var(--work-field-h, 26px)", flex: 1, minWidth: 0 }}
             />
           </div>
 
@@ -1560,7 +1521,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
           {/* col 1: المخزن */}
           <div className="flex items-center w-full min-w-0" style={{ gap: 6 }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>المـ ـ ـخزن</label>
+            <label style={headerLabelStyle}>المخزن</label>
             {(() => {
               const activeWh = journalWarehouseId ?? docTypeWarehouseId;
               const whOptions = activeWh
@@ -1575,28 +1536,28 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   placeholder="يُحدَّد من الفرع"
                   disabled={true}
                   title={activeWh ? "المخزن محدد من الفرع" : "اختر الفرع أولاً"}
-                  style={{ height: 26, flex: 1, minWidth: 0 }}
+                  style={{ height: "var(--work-field-h, 26px)", flex: 1, minWidth: 0 }}
                 />
               );
             })()}
           </div>
 
-          {/* col 2: تاريخ التحرير */}
+          {/* col 2: تاريخ التحرير — حاوية موحدة بحد واحد */}
           <div className="flex items-center" style={{ gap: 6 }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>تاريخ التحرير</label>
-            <div className="flex flex-1" style={{ height: 26 }}>
-              <DateSegmentInput value={invoiceDate} onChange={setInvoiceDate} style={{ flex: 1, minWidth: 0, height: 26 }} />
-              <button type="button" onClick={() => invoiceDatePickerRef.current?.showPicker()} className="flex items-center justify-center flex-shrink-0" style={{ height: 26, width: 26, background: "#f3f4f6", border: "1px solid #d1d5db", borderLeft: "none", borderRadius: "0 4px 4px 0", color: "#555", cursor: "pointer", fontSize: 12 }}>📅</button>
+            <label style={headerLabelStyle}>تاريخ التحرير</label>
+            <div className="flex flex-1 min-w-0" style={{ height: "var(--work-field-h, 26px)", border: "1px solid #d1d5db", borderRadius: 4, overflow: "hidden" }}>
+              <DateSegmentInput value={invoiceDate} onChange={setInvoiceDate} style={{ flex: 1, minWidth: 0, height: "var(--work-field-h, 26px)", border: "none", borderRadius: 0 }} />
+              <button type="button" onClick={() => invoiceDatePickerRef.current?.showPicker()} className="flex items-center justify-center flex-shrink-0" style={{ height: "var(--work-field-h, 26px)", width: "26px", background: "#f3f4f6", border: "none", borderInlineStart: "1px solid #d1d5db", color: "#555", cursor: "pointer", fontSize: "var(--work-font-size, 12px)" }}>📅</button>
               <input ref={invoiceDatePickerRef} type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} aria-hidden="true" />
             </div>
           </div>
 
-          {/* col 3: تاريخ الدفع */}
+          {/* col 3: تاريخ الدفع — حاوية موحدة بحد واحد */}
           <div className="flex items-center" style={{ gap: 6 }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>تاريخ الدفع</label>
-            <div className="flex flex-1" style={{ height: 26 }}>
-              <DateSegmentInput value={dueDate} onChange={setDueDate} style={{ flex: 1, minWidth: 0, height: 26 }} />
-              <button type="button" onClick={() => dueDatePickerRef.current?.showPicker()} className="flex items-center justify-center flex-shrink-0" style={{ height: 26, width: 26, background: "#f3f4f6", border: "1px solid #d1d5db", borderLeft: "none", borderRadius: "0 4px 4px 0", color: "#555", cursor: "pointer", fontSize: 12 }}>📅</button>
+            <label style={headerLabelStyle}>تاريخ الدفع</label>
+            <div className="flex flex-1 min-w-0" style={{ height: "var(--work-field-h, 26px)", border: "1px solid #d1d5db", borderRadius: 4, overflow: "hidden" }}>
+              <DateSegmentInput value={dueDate} onChange={setDueDate} style={{ flex: 1, minWidth: 0, height: "var(--work-field-h, 26px)", border: "none", borderRadius: 0 }} />
+              <button type="button" onClick={() => dueDatePickerRef.current?.showPicker()} className="flex items-center justify-center flex-shrink-0" style={{ height: "var(--work-field-h, 26px)", width: "26px", background: "#f3f4f6", border: "none", borderInlineStart: "1px solid #d1d5db", color: "#555", cursor: "pointer", fontSize: "var(--work-font-size, 12px)" }}>📅</button>
               <input ref={dueDatePickerRef} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} aria-hidden="true" />
             </div>
           </div>
@@ -1607,19 +1568,19 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             const sellerObj = sellers.find(s => s.id === sellerUserId);
             return (
               <div className="flex items-center relative" style={{ gap: 6 }}>
-                <label style={{ fontSize: 10, fontWeight: 700, color: "#555", flexShrink: 0, whiteSpace: "nowrap" }}>البائع</label>
-                <div className="flex relative flex-1" style={{ height: 26 }}>
+                <label style={headerLabelStyle}>البائع</label>
+                <div className="flex relative flex-1" style={{ height: "var(--work-field-h, 26px)" }}>
                   <button
                     onClick={() => { if (warehouseId && erpMode !== "view") setSellerOpen(o => !o); }}
                     disabled={!warehouseId || erpMode === "view"}
                     className="flex items-center gap-1 classic-input flex-1"
                     style={{
-                      height: 26, paddingInline: "6px 4px",
+                      height: "var(--work-field-h, 26px)", paddingInline: "6px 4px",
                       background: sellerObj ? "#faf5ff" : !warehouseId ? "#f3f4f6" : "#fafafa",
                       border: `1px solid ${sellerObj ? "#7c3aed" : "#c9c4bb"}`,
                       borderRadius: "4px 0 0 4px", borderInlineEnd: "none",
                       color: sellerObj ? "#5b21b6" : !warehouseId ? "#9ca3af" : "#888",
-                      fontSize: 11, fontWeight: sellerObj ? 700 : 400,
+                      fontSize: "11px", fontWeight: sellerObj ? 700 : 400,
                       cursor: !warehouseId || erpMode === "view" ? "not-allowed" : "pointer",
                     }}
                     title={!warehouseId ? "اختر الفرع/المخزن أولاً" : "اختر البائع"}
@@ -1632,7 +1593,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                     onClick={() => { if (warehouseId && erpMode !== "view") setSellerOpen(o => !o); }}
                     disabled={!warehouseId || erpMode === "view"}
                     className="flex items-center justify-center flex-shrink-0"
-                    style={{ width: 18, height: 26, borderRadius: "0 4px 4px 0", background: sellerObj ? "#7c3aed" : "#e5e0d8", border: `1px solid ${sellerObj ? "#6d28d9" : "#c9c4bb"}`, color: sellerObj ? "white" : "#666", fontSize: "9px" }}
+                    style={{ width: "18px", height: "var(--work-field-h, 26px)", borderRadius: "0 4px 4px 0", background: sellerObj ? "#7c3aed" : "#e5e0d8", border: `1px solid ${sellerObj ? "#6d28d9" : "#c9c4bb"}`, color: sellerObj ? "white" : "#666", fontSize: "9px" }}
                   >▼</button>
 
                   {sellerOpen && warehouseId && (<>
@@ -1673,21 +1634,21 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
           {/* ══ صف 4: ملحوظة ══ */}
           <div className="flex items-center" style={{ gap: 6, gridColumn: "1/-1" }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>ملاحـ ـ ـظة</label>
-            <input value={notes} onChange={e => setNotes(e.target.value)} className="classic-input flex-1" style={{ height: 26 }} />
+            <label style={headerLabelStyle}>ملاحظة</label>
+            <input value={notes} onChange={e => setNotes(e.target.value)} className="classic-input flex-1" style={{ height: "var(--work-field-h, 26px)" }} />
           </div>
 
         </div>
       </div>
 
       {/* ── Main Tab Bar ─────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #b0a89a", background: "#F0EDE4", padding: "0 10px" }}>
+      <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #b0a89a", background: "#F2F0EC", padding: "0 10px" }}>
         {[
           { id: "invoice", label: "📋 بيانات الفاتورة" },
           { id: "zatca",   label: "🏛️ الهيئة (ZATCA)", disabled: !currentInvId },
         ].map(t => (
           <button key={t.id} onClick={() => !t.disabled && setActiveMainTab(t.id as "invoice" | "zatca")}
-            style={{ height: 30, padding: "0 14px", border: "none", borderBottom: activeMainTab === t.id ? "2px solid #D19C05" : "2px solid transparent", background: "transparent", color: activeMainTab === t.id ? "#D19C05" : t.disabled ? "#bbb" : "#4a4a4a", fontWeight: activeMainTab === t.id ? 800 : 600, fontSize: 11, cursor: t.disabled ? "not-allowed" : "pointer", fontFamily: "'Cairo', Tahoma, Arial, sans-serif", marginBottom: -1 }}>
+            style={{ height: "var(--work-btn-h, 30px)", padding: "0 14px", border: "none", borderBottom: activeMainTab === t.id ? "2px solid #D19C05" : "2px solid transparent", background: "transparent", color: activeMainTab === t.id ? "#D19C05" : t.disabled ? "#bbb" : "#4a4a4a", fontWeight: activeMainTab === t.id ? 800 : 600, fontSize: "11px", cursor: t.disabled ? "not-allowed" : "pointer", fontFamily: "'Cairo', Tahoma, Arial, sans-serif", marginBottom: -1 }}>
             {t.label}
             {t.id === "zatca" && currentInvId && zatcaQuery.data?.zatcaStatus === "cleared" && (
               <span style={{ marginRight: 4, fontSize: 9, color: "#16a34a" }}>✓</span>
@@ -1698,7 +1659,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
       {/* ── ZATCA Panel ──────────────────────────────────────────────────── */}
       {activeMainTab === "zatca" && currentInvId && (
-        <div className="flex-1 overflow-auto p-4" style={{ background: "#F7F5EE" }} dir="rtl">
+        <div className="flex-1 overflow-auto p-4" style={{ background: "#FFFFFF" }} dir="rtl">
           {zatcaQuery.isLoading ? (
             <div style={{ textAlign: "center", padding: 40, color: "#9ca3af" }}>جارٍ التحميل...</div>
           ) : zatcaQuery.data && (
@@ -1715,24 +1676,24 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                 };
                 const st = statusMap[zatcaQuery.data.zatcaStatus ?? "not_submitted"] ?? statusMap.not_submitted;
                 return (
-                  <div style={{ padding: "14px 18px", borderRadius: 10, background: st.bg, border: `1px solid ${st.color}44`, marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ padding: "14px 18px", borderRadius: "10px", background: st.bg, border: `1px solid ${st.color}44`, marginBottom: "20px", display: "flex", alignItems: "center", gap: "12px" }}>
                     <span style={{ fontSize: 24 }}>{st.icon}</span>
                     <div>
-                      <div style={{ fontWeight: 800, fontSize: 14, color: st.color }}>{st.label}</div>
+                      <div style={{ fontWeight: 800, fontSize: "14px", color: st.color }}>{st.label}</div>
                       {zatcaQuery.data.zatcaClearedAt && (
-                        <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>
+                        <div style={{ fontSize: "11px", color: "#6b7280", marginTop: 2 }}>
                           تاريخ التخليص: {new Date(zatcaQuery.data.zatcaClearedAt).toLocaleString('ar-SA')}
                         </div>
                       )}
                     </div>
                     <div style={{ marginRight: "auto", display: "flex", gap: 8 }}>
                       {zatcaQuery.data.zatcaStatus !== "cleared" && (
-                        <button onClick={() => zatcaSubmitMut.mutate({ invoiceId: currentInvId })} disabled={zatcaSubmitMut.isPending} style={{ height: 30, padding: "0 16px", background: "#D19C05", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: "pointer", opacity: zatcaSubmitMut.isPending ? 0.6 : 1 }}>
+                        <button onClick={() => zatcaSubmitMut.mutate({ invoiceId: currentInvId })} disabled={zatcaSubmitMut.isPending} style={{ height: "var(--work-btn-h, 30px)", padding: "0 16px", background: "#D19C05", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, fontSize: "var(--work-font-size, 12px)", cursor: "pointer", opacity: zatcaSubmitMut.isPending ? 0.6 : 1 }}>
                           {zatcaSubmitMut.isPending ? "جارٍ الإرسال..." : "🏛️ إرسال للهيئة"}
                         </button>
                       )}
                       {zatcaQuery.data.zatcaStatus === "rejected" && (
-                        <button onClick={() => zatcaSubmitMut.mutate({ invoiceId: currentInvId, forceResend: true })} disabled={zatcaSubmitMut.isPending} style={{ height: 30, padding: "0 16px", background: "#dc2626", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                        <button onClick={() => zatcaSubmitMut.mutate({ invoiceId: currentInvId, forceResend: true })} disabled={zatcaSubmitMut.isPending} style={{ height: "var(--work-btn-h, 30px)", padding: "0 16px", background: "#dc2626", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, fontSize: "var(--work-font-size, 12px)", cursor: "pointer" }}>
                           إعادة الإرسال
                         </button>
                       )}
@@ -1743,10 +1704,10 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
               {/* التفاصيل التقنية */}
               <div style={{ background: "#fff", borderRadius: 10, border: "1px solid #e2e8f0", overflow: "hidden" }}>
-                <div style={{ background: "#f8fafc", padding: "10px 16px", fontWeight: 800, fontSize: 12, color: "#374151", borderBottom: "1px solid #e2e8f0" }}>
+                <div style={{ background: "#f8fafc", padding: "10px 16px", fontWeight: 800, fontSize: "var(--work-font-size, 12px)", color: "#374151", borderBottom: "1px solid #e2e8f0" }}>
                   🔑 البيانات التقنية
                 </div>
-                <div style={{ padding: "14px 16px", display: "grid", gridTemplateColumns: "140px 1fr", rowGap: 10, alignItems: "start", fontSize: 12 }}>
+                <div style={{ padding: "14px 16px", display: "grid", gridTemplateColumns: "140px 1fr", rowGap: "10px", alignItems: "start", fontSize: "var(--work-font-size, 12px)" }}>
                   {[
                     { label: "UUID الفاتورة",      value: zatcaQuery.data.zatcaUuid },
                     { label: "Hash التشفيري",       value: zatcaQuery.data.zatcaHash },
@@ -1755,7 +1716,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   ].map(row => row.value ? (
                     <React.Fragment key={row.label}>
                       <div style={{ fontWeight: 700, color: "#6b7280", paddingLeft: 8 }}>{row.label}</div>
-                      <div style={{ fontFamily: "monospace", fontSize: 10, color: "#1e293b", background: "#f8fafc", padding: "3px 8px", borderRadius: 4, wordBreak: "break-all" }}>{row.value}</div>
+                      <div style={{ fontFamily: "monospace", fontSize: "10px", color: "#1e293b", background: "#f8fafc", padding: "3px 8px", borderRadius: 4, wordBreak: "break-all" }}>{row.value}</div>
                     </React.Fragment>
                   ) : null)}
                   {!zatcaQuery.data.zatcaUuid && (
@@ -1769,19 +1730,19 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
               {/* QR Code */}
               {zatcaQuery.data.zatcaQrCode && (
                 <div style={{ marginTop: 16, background: "#fff", borderRadius: 10, border: "1px solid #e2e8f0", padding: "14px 16px" }}>
-                  <div style={{ fontWeight: 700, fontSize: 12, color: "#374151", marginBottom: 10 }}>📱 QR Code الهيئة</div>
-                  <img src={`data:image/png;base64,${zatcaQuery.data.zatcaQrCode}`} alt="ZATCA QR" style={{ width: 140, height: 140 }} />
+                  <div style={{ fontWeight: 700, fontSize: "var(--work-font-size, 12px)", color: "#374151", marginBottom: 10 }}>📱 QR Code الهيئة</div>
+                  <img src={`data:image/png;base64,${zatcaQuery.data.zatcaQrCode}`} alt="ZATCA QR" style={{ width: "140px", height: "140px" }} />
                 </div>
               )}
 
               {/* استجابة الهيئة */}
               {zatcaQuery.data.zatcaResponse && (
                 <div style={{ marginTop: 16, background: "#fff", borderRadius: 10, border: "1px solid #e2e8f0", overflow: "hidden" }}>
-                  <div style={{ background: "#f8fafc", padding: "10px 16px", fontWeight: 700, fontSize: 12, color: "#374151", borderBottom: "1px solid #e2e8f0" }}>
+                  <div style={{ background: "#f8fafc", padding: "10px 16px", fontWeight: 700, fontSize: "var(--work-font-size, 12px)", color: "#374151", borderBottom: "1px solid #e2e8f0" }}>
                     📋 استجابة الهيئة
                   </div>
-                  <div style={{ padding: 14 }}>
-                    <pre style={{ fontFamily: "monospace", fontSize: 10, background: "#1e293b", color: "#e2e8f0", borderRadius: 6, padding: "10px 14px", overflow: "auto", maxHeight: 200, margin: 0 }}>
+                  <div style={{ padding: "14px" }}>
+                    <pre style={{ fontFamily: "monospace", fontSize: "10px", background: "#1e293b", color: "#e2e8f0", borderRadius: "6px", padding: "10px 14px", overflow: "auto", maxHeight: 200, margin: 0 }}>
                       {JSON.stringify(zatcaQuery.data.zatcaResponse, null, 2)}
                     </pre>
                   </div>
@@ -1797,7 +1758,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
       {/* جدول السطور (يمين) */}
       <div className="flex-1 overflow-auto bg-white">
-        <table className="w-full border-collapse" style={{ fontSize: "12px" }}>
+        <table className="w-full border-collapse" style={{ fontSize: "var(--work-font-size, 12px)" }}>
           {/* Column widths — sourced centrally from INVOICE_TABLE_COLS via InvoiceTableColgroup */}
           <InvoiceTableColgroup />
           <thead className="sticky top-0 z-10">
@@ -1938,7 +1899,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   />
                 </td>
 
-                <td className="inv-td text-center font-bold" style={{ color: "#003399", fontSize: "12px" }}>
+                <td className="inv-td text-center font-bold" style={{ color: "#003399", fontSize: "var(--work-font-size, 12px)" }}>
                   {fmt(parseFloat(line.total) || 0)}
                 </td>
 
@@ -1974,7 +1935,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       {/* ── لوحة الإجماليات (يسار) ──────────────────────────────────────── */}
       <div
         className="border-r border-[#b0a89a] overflow-y-auto flex-shrink-0"
-        style={{ width: 320, minWidth: 320, background: "#F4F1EC" }}
+        style={{ width: "320px", minWidth: "320px", background: "#F4F1EC" }}
       >
         {/* عنوان اللوحة — ثابت دائماً في الأعلى */}
         <div
@@ -2150,8 +2111,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
         .classic-input {
           border: 1px solid #a0a0a0;
           padding: 2px 5px;
-          height: 24px;
-          font-size: 12px;
+          height: var(--work-field-h, 24px);
+          font-size: var(--work-font-size, 12px);
           font-family: 'Cairo', Tahoma, Arial, sans-serif;
           background: #fff;
           outline: none;
@@ -2166,27 +2127,31 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           border: 1px solid rgba(255,255,255,0.15);
           border-bottom: 2px solid rgba(0,0,0,0.15);
           padding: 4px 6px;
-          text-align: right;
+          text-align: center;
+          vertical-align: middle;
           font-weight: 700;
-          font-size: 11px;
+          font-size: calc(var(--work-font-size, 12px) - 1px);
           white-space: nowrap;
           font-family: 'Cairo', Tahoma, sans-serif;
+          height: var(--work-row-h, 27px);
         }
         .inv-td {
           border: 1px solid #e8e4dc;
           padding: 1px 3px;
-          height: 27px;
+          height: var(--work-row-h, 27px);
+          text-align: center;
           vertical-align: middle;
         }
         .inv-cell {
           border: none;
           outline: none;
           padding: 2px 4px;
-          height: 25px;
-          font-size: 12px;
+          height: var(--work-cell-h, 25px);
+          font-size: var(--work-font-size, 12px);
           font-family: 'Cairo', Tahoma, Arial, sans-serif;
           background: transparent;
           width: 100%;
+          text-align: center;
         }
         .inv-cell:focus {
           background: #FFFFF0;
@@ -2199,9 +2164,6 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           padding: 1px 4px;
           height: 24px;
           cursor: pointer;
-        }
-        .inv-th {
-          padding: 5px 6px;
         }
       `}</style>
 
@@ -2390,22 +2352,22 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   <label className="text-[11px] font-bold text-gray-600">اسم العميل <span className="text-red-500">*</span></label>
                   <input autoFocus value={newCustName} onChange={e => setNewCustName(e.target.value)}
                     className="classic-input w-full" placeholder="أدخل اسم العميل..."
-                    style={{ height: 28, fontSize: 13 }} />
+                    style={{ height: "28px", fontSize: "13px" }} />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] font-bold text-gray-600">رقم الجوال</label>
                   <input value={newCustPhone} onChange={e => setNewCustPhone(e.target.value)}
-                    className="classic-input w-full" placeholder="05xxxxxxxx" style={{ height: 28 }} />
+                    className="classic-input w-full" placeholder="05xxxxxxxx" style={{ height: "28px" }} />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] font-bold text-gray-600">البريد الإلكتروني</label>
                   <input value={newCustEmail} onChange={e => setNewCustEmail(e.target.value)}
-                    className="classic-input w-full" placeholder="example@domain.com" style={{ height: 28 }} />
+                    className="classic-input w-full" placeholder="example@domain.com" style={{ height: "28px" }} />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] font-bold text-gray-600">العنوان</label>
                   <input value={newCustAddr} onChange={e => setNewCustAddr(e.target.value)}
-                    className="classic-input w-full" placeholder="العنوان..." style={{ height: 28 }} />
+                    className="classic-input w-full" placeholder="العنوان..." style={{ height: "28px" }} />
                 </div>
               </>)}
 
@@ -2415,17 +2377,17 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   <label className="text-[11px] font-bold text-gray-600">اسم المؤسسة <span className="text-red-500">*</span></label>
                   <input autoFocus value={newCustName} onChange={e => setNewCustName(e.target.value)}
                     className="classic-input w-full" placeholder="اسم الشركة أو المؤسسة..."
-                    style={{ height: 28, fontSize: 13 }} />
+                    style={{ height: "28px", fontSize: "13px" }} />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] font-bold text-gray-600">رقم الجوال</label>
                   <input value={newCustPhone} onChange={e => setNewCustPhone(e.target.value)}
-                    className="classic-input w-full" placeholder="05xxxxxxxx" style={{ height: 28 }} />
+                    className="classic-input w-full" placeholder="05xxxxxxxx" style={{ height: "28px" }} />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] font-bold text-gray-600">البريد الإلكتروني</label>
                   <input value={newCustEmail} onChange={e => setNewCustEmail(e.target.value)}
-                    className="classic-input w-full" placeholder="example@domain.com" style={{ height: 28 }} />
+                    className="classic-input w-full" placeholder="example@domain.com" style={{ height: "28px" }} />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] font-bold" style={{ color: '#DC2626' }}>
@@ -2433,24 +2395,24 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   </label>
                   <input value={newCustTaxNum} onChange={e => setNewCustTaxNum(e.target.value)}
                     className="classic-input w-full" placeholder="3xxxxxxxxxxxxxxxxx"
-                    style={{ height: 28, borderColor: newCustTaxNum.trim() ? '#86EFAC' : '#FCA5A5', background: newCustTaxNum.trim() ? '#F0FDF4' : '#FFF5F5' }} />
+                    style={{ height: "28px", borderColor: newCustTaxNum.trim() ? '#86EFAC' : '#FCA5A5', background: newCustTaxNum.trim() ? '#F0FDF4' : '#FFF5F5' }} />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] font-bold text-gray-600">رقم السجل التجاري</label>
                   <input value={newCustRegNum} onChange={e => setNewCustRegNum(e.target.value)}
-                    className="classic-input w-full" placeholder="1010xxxxxx" style={{ height: 28 }} />
+                    className="classic-input w-full" placeholder="1010xxxxxx" style={{ height: "28px" }} />
                 </div>
                 {/* صف: العنوان المختصر + المدينة */}
                 <div className="flex gap-2">
                   <div className="flex flex-col gap-1 flex-1">
                     <label className="text-[11px] font-bold text-gray-600">العنوان المختصر</label>
                     <input value={newCustShortAddr} onChange={e => setNewCustShortAddr(e.target.value)}
-                      className="classic-input w-full" placeholder="مثال: ABCD" style={{ height: 28 }} />
+                      className="classic-input w-full" placeholder="مثال: ABCD" style={{ height: "28px" }} />
                   </div>
                   <div className="flex flex-col gap-1 flex-1">
                     <label className="text-[11px] font-bold text-gray-600">المدينة</label>
                     <input value={newCustCity} onChange={e => setNewCustCity(e.target.value)}
-                      className="classic-input w-full" placeholder="الرياض" style={{ height: 28 }} />
+                      className="classic-input w-full" placeholder="الرياض" style={{ height: "28px" }} />
                   </div>
                 </div>
                 {/* صف: رقم المبنى + الرقم الفرعي */}
@@ -2458,18 +2420,18 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   <div className="flex flex-col gap-1 flex-1">
                     <label className="text-[11px] font-bold text-gray-600">رقم المبنى</label>
                     <input value={newCustBuilding} onChange={e => setNewCustBuilding(e.target.value)}
-                      className="classic-input w-full" placeholder="1234" style={{ height: 28 }} />
+                      className="classic-input w-full" placeholder="1234" style={{ height: "28px" }} />
                   </div>
                   <div className="flex flex-col gap-1 flex-1">
                     <label className="text-[11px] font-bold text-gray-600">الرقم الفرعي</label>
                     <input value={newCustAdditional} onChange={e => setNewCustAdditional(e.target.value)}
-                      className="classic-input w-full" placeholder="5678" style={{ height: 28 }} />
+                      className="classic-input w-full" placeholder="5678" style={{ height: "28px" }} />
                   </div>
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] font-bold text-gray-600">الرمز البريدي</label>
                   <input value={newCustPostal} onChange={e => setNewCustPostal(e.target.value)}
-                    className="classic-input w-full" placeholder="12345" style={{ height: 28 }} />
+                    className="classic-input w-full" placeholder="12345" style={{ height: "28px" }} />
                 </div>
               </>)}
             </div>
@@ -2556,14 +2518,14 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             <div style={{
               padding: "12px 18px",
               background: "linear-gradient(135deg,#b45309,#92400e)",
-              color: "#fff", fontWeight: 700, fontSize: 13,
+              color: "#fff", fontWeight: 700, fontSize: "13px",
               display: "flex", alignItems: "center", gap: 8,
             }}>
               <span style={{ fontSize: 16 }}>⚠️</span>
               تغيير العميل
             </div>
             {/* Body */}
-            <div style={{ padding: "18px 20px", fontSize: 13, color: "#374151", lineHeight: 1.7 }}>
+            <div style={{ padding: "18px 20px", fontSize: "13px", color: "#374151", lineHeight: 1.7 }}>
               <p>
                 المستند <strong style={{ fontFamily: "monospace", color: "#1a3f6f" }}>{pendingSourceDoc.number}</strong> يخصّ العميل:
               </p>
@@ -2578,14 +2540,14 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                 بينما الفاتورة الحالية تحتوي على العميل:
                 <strong style={{ color: "#374151", marginRight: 4 }}>{customerName}</strong>
               </p>
-              <p style={{ marginTop: 10, color: "#6b7280", fontSize: 12 }}>
+              <p style={{ marginTop: "10px", color: "#6b7280", fontSize: "var(--work-font-size, 12px)" }}>
                 هل تريد تغيير العميل في الفاتورة إلى عميل المستند المصدر؟
               </p>
             </div>
             {/* Footer */}
             <div style={{
               padding: "10px 20px 14px",
-              display: "flex", gap: 8, justifyContent: "flex-start",
+              display: "flex", gap: "8px", justifyContent: "flex-start",
             }}>
               <button
                 type="button"
@@ -2598,7 +2560,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   padding: "6px 20px",
                   background: "linear-gradient(135deg,#b45309,#92400e)",
                   color: "#fff", border: "none",
-                  borderRadius: 6, fontSize: 12, fontWeight: 700,
+                  borderRadius: 6, fontSize: "var(--work-font-size, 12px)", fontWeight: 700,
                   cursor: "pointer",
                 }}
               >
@@ -2616,7 +2578,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   padding: "6px 20px",
                   background: "#e5e7eb",
                   color: "#374151", border: "1px solid #d1d5db",
-                  borderRadius: 6, fontSize: 12, fontWeight: 600,
+                  borderRadius: 6, fontSize: "var(--work-font-size, 12px)", fontWeight: 600,
                   cursor: "pointer",
                 }}
               >
@@ -2632,8 +2594,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
         <div className="fixed inset-0 z-[10000] flex items-center justify-center" style={{ background: "rgba(0,0,0,0.45)" }}>
           <div style={{ background: "white", borderRadius: 12, padding: 28, maxWidth: 420, width: "90%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)", direction: "rtl" }}>
             <div style={{ fontSize: 20, marginBottom: 10 }}>🔄</div>
-            <p style={{ fontWeight: 800, fontSize: 15, marginBottom: 8, color: "#1e293b" }}>تغيير الفرع / المخزن</p>
-            <p style={{ color: "#64748b", fontSize: 13, marginBottom: 22, lineHeight: 1.6 }}>
+            <p style={{ fontWeight: 800, fontSize: "15px", marginBottom: 8, color: "#1e293b" }}>تغيير الفرع / المخزن</p>
+            <p style={{ color: "#64748b", fontSize: "13px", marginBottom: 22, lineHeight: 1.6 }}>
               تغيير الفرع/المخزن سيؤدي إلى مسح المستند المصدر والبائع وبنود الفاتورة والدفتر المؤقت. هل تريد المتابعة؟
             </p>
             <div className="flex gap-3 justify-start">
@@ -2643,13 +2605,13 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   setShowWarehouseChangeConfirm(false);
                   setPendingWarehouseId(null);
                 }}
-                style={{ height: 36, padding: "0 20px", background: "#dc2626", color: "white", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                style={{ height: 36, padding: "0 20px", background: "#dc2626", color: "white", border: "none", borderRadius: 8, fontWeight: 700, fontSize: "13px", cursor: "pointer" }}
               >
                 نعم، غيّر الفرع/المخزن
               </button>
               <button
                 onClick={() => { setShowWarehouseChangeConfirm(false); setPendingWarehouseId(null); }}
-                style={{ height: 36, padding: "0 20px", background: "#f1f5f9", color: "#334155", border: "1px solid #e2e8f0", borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: "pointer" }}
+                style={{ height: 36, padding: "0 20px", background: "#f1f5f9", color: "#334155", border: "1px solid #e2e8f0", borderRadius: 8, fontWeight: 600, fontSize: "13px", cursor: "pointer" }}
               >
                 إلغاء
               </button>
@@ -2683,7 +2645,7 @@ function TF({ label, value, highlight, big, color }: {
 }) {
   return (
     <div className="flex items-center gap-1">
-      <span style={{ fontSize: 11, color: "#555", whiteSpace: "nowrap" }}>{label}</span>
+      <span style={{ fontSize: "11px", color: "#555", whiteSpace: "nowrap" }}>{label}</span>
       <input
         readOnly
         value={value}
@@ -2786,7 +2748,7 @@ function ProductNameCell({
             background: "#fff", border: "1px solid #a0a0a0",
             boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
             width: 280, maxHeight: 200, overflowY: "auto",
-            fontSize: "12px",
+            fontSize: "var(--work-font-size, 12px)",
           }}
         >
           {filtered.map((p, i) => (

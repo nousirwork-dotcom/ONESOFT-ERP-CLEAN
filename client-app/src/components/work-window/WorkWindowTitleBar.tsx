@@ -53,10 +53,10 @@ export function WorkWindowTitleBar({
       onDoubleClick={onToggleMax}
       dir="rtl"
       style={{
-        height:          42,
+        height:          "42px",
         display:         "flex",
         alignItems:      "center",
-        paddingRight:    12,
+        paddingRight:    "12px",
         paddingLeft:     0,
         flexShrink:      0,
         userSelect:      "none",
@@ -69,7 +69,7 @@ export function WorkWindowTitleBar({
       {/* Title */}
       <span style={{
         flex:         1,
-        fontSize:     13,
+        fontSize:     "13px",
         fontWeight:   700,
         color:        "#fff",
         overflow:     "hidden",
@@ -82,12 +82,12 @@ export function WorkWindowTitleBar({
       </span>
 
       {/* Window controls */}
-      <div data-winctrl style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+      <div data-winctrl style={{ display: "flex", alignItems: "center", gap: "2px", flexShrink: 0 }}>
         <TitleBarBtn onClick={onToggleMax} title={isMaximized ? "استعادة" : "تكبير"} hoverBg="rgba(255,255,255,0.15)">
-          {isMaximized ? <Minimize2 style={{ width: 12, height: 12 }} /> : <Maximize2 style={{ width: 12, height: 12 }} />}
+          {isMaximized ? <Minimize2 style={{ width: "12px", height: "12px" }} /> : <Maximize2 style={{ width: "12px", height: "12px" }} />}
         </TitleBarBtn>
         <TitleBarBtn onClick={onClose} title="إغلاق" hoverBg="#c42b1c">
-          <X style={{ width: 13, height: 13 }} />
+          <X style={{ width: "13px", height: "13px" }} />
         </TitleBarBtn>
       </div>
     </div>
@@ -106,8 +106,8 @@ function TitleBarBtn({ children, onClick, title, hoverBg }: {
       onClick={e => { e.stopPropagation(); onClick(); }}
       title={title}
       style={{
-        width:           40,
-        height:          42,
+        width:           "40px",
+        height:          "42px",
         display:         "flex",
         alignItems:      "center",
         justifyContent:  "center",

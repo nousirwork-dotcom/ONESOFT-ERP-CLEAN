@@ -34,6 +34,22 @@ export interface DesktopWorkWindowProps {
    * "center"             — منتصف مساحة العمل.
    */
   placement?: WorkWindowPlacement;
+  /**
+   * أبعاد مخصصة تتجاوز preset (اختياري).
+   * يُستخدم عندما تريد شاشة معينة حجماً مختلفاً عن preset القياسي.
+   */
+  defaultSize?: { width: number; height: number };
+  /**
+   * يمنع التكبير التلقائي للنافذة (افتراضي false).
+   * autoMaximize={false} = لا تتكبّر النافذة تلقائياً تحت أي ظرف.
+   */
+  autoMaximize?: boolean;
+  /**
+   * وضع احتواء الحجم:
+   * - "clamp" (افتراضي) — يقص الحجم داخل المساحة المتاحة دون تكبير أبداً.
+   * - "auto"            — يحاول فتح النافذة بالحجم المطلوب، وإذا ضاقت المساحة يُكبّر.
+   */
+  fitMode?: "auto" | "clamp";
   /** يُستدعى عند رغبة المستخدم في الإغلاق — المستدعي مسؤول عن dirty-check */
   onClose:    () => void;
   children:   ReactNode;
@@ -54,10 +70,21 @@ const TITLE_BAR_H = 42; // px — ارتفاع شريط العنوان
 const CSS_TOP   = 6;
 const CSS_RIGHT = 14;
 
+/* ─── مقاسات كل Preset ─── */
+const PRESET_LAYOUTS: Record<WorkWindowPreset, { width: number; height: number }> = {
+  compact:  { width: 760,  height: 520 },
+  standard: { width: 980,  height: 620 },
+  wide:     { width: 1180, height: 680 },
+  fullscreen: { width: 1920, height: 1080 }, /* يُتجاهل في auto-fit */
+};
+
 export function DesktopWorkWindow({
   title,
   preset,
   placement = "top-right",
+  defaultSize: customDefaultSize,
+  autoMaximize = false,
+  fitMode = "clamp",
   onClose,
   children,
 }: DesktopWorkWindowProps) {
@@ -66,6 +93,33 @@ export function DesktopWorkWindow({
   /* ─── refs للحاوية والنافذة ─── */
   const layerRef  = useRef<HTMLDivElement>(null);
   const windowRef = useRef<HTMLDivElement>(null);
+
+  /* ─── Density Mode — ثلاث مستويات ثابتة للتكبير البسيط ─── */
+  const [density, setDensity] = useState<"compact" | "normal" | "large">("normal");
+  const densityObsRef = useRef<ResizeObserver | null>(null);
+
+  useEffect(() => {
+    const win = windowRef.current;
+    if (!win) return;
+
+    function recalcDensity() {
+      if (!win) return;
+      const w = win.clientWidth;
+      const next = w < 1000 ? "compact" : w < 1400 ? "normal" : "large";
+      setDensity(prev => (prev === next ? prev : next));
+    }
+
+    recalcDensity();
+    densityObsRef.current = new ResizeObserver(recalcDensity);
+    densityObsRef.current.observe(win);
+
+    return () => {
+      if (densityObsRef.current) {
+        densityObsRef.current.disconnect();
+        densityObsRef.current = null;
+      }
+    };
+  }, []);
 
   /* ─── حفظ التركيز وإعادته عند الإغلاق ─── */
   const savedFocusRef = useRef<Element | null>(null);
@@ -114,14 +168,158 @@ export function DesktopWorkWindow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // intentional: run once on mount/unmount
 
+  /* ─── حالة النافذة ─── */
+  const [isMaximized, setIsMaximized] = useState(false);
+  const [dragOffset, setDragOffset]   = useState<{ x: number; y: number } | null>(null);
+  const [shaking,    setShaking]      = useState(false);
+  const dx = dragOffset?.x ?? 0;
+  const dy = dragOffset?.y ?? 0;
+
+  /* ─── تخزين الأبعاد والموضع الطبيعي قبل التكبير ─── */
+  const [normalBounds, setNormalBounds] = useState<{
+    width: number; height: number; x: number; y: number;
+  } | null>(null);
+  const normalBoundsRef = useRef(normalBounds);
+  normalBoundsRef.current = normalBounds;
+
+  /* ─── Auto-Fit الذكي عبر ResizeObserver ─── */
+  const [autoSize, setAutoSize] = useState<{ width: number; height: number } | null>(null);
+  const prevSizeRef = useRef<string>("");
+
+  // إعادة ضبط isMaximized عند كل فتح جديد
+  useEffect(() => {
+    if (!autoMaximize) {
+      setIsMaximized(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ResizeObserver واحد مستقر — لا يُعاد إنشاؤه مع كل render
+  const resizeRef = useRef<ResizeObserver | null>(null);
+
+  useEffect(() => {
+    const layer = layerRef.current;
+    if (!layer) return;
+
+    // لا نطبق auto-fit في fullscreen أو maximized
+    if (preset === "fullscreen" || isMaximized) {
+      setAutoSize(null);
+      return;
+    }
+
+    const BORDER_PAD = 12;
+    const PAD_W = 28;
+    const PAD_H = 24;
+    const MIN_W = 680;
+    const MIN_H = 480;
+
+    function recalc() {
+      if (!layer) return;
+      const availW = layer.clientWidth  - BORDER_PAD;
+      const availH = layer.clientHeight - BORDER_PAD;
+
+      // ─── استخدم normalBounds إذا كانت مناسبة (لا تعِد حساب من preset) ───
+      const nb = normalBoundsRef.current;
+      if (nb && !isMaximized) {
+        const fitsW = nb.width <= availW - PAD_W;
+        const fitsH = nb.height <= availH - PAD_H;
+        if (fitsW && fitsH && nb.width >= MIN_W && nb.height >= MIN_H) {
+          const key = `${nb.width}x${nb.height}`;
+          if (key === prevSizeRef.current) return;
+          prevSizeRef.current = key;
+          console.debug(`[AutoFit] restored normalBounds ${nb.width}x${nb.height}`);
+          setAutoSize({ width: nb.width, height: nb.height });
+          return;
+        }
+      }
+
+      // ─── حساب عادي من الـPreset ───
+      const layout = PRESET_LAYOUTS[preset] ?? PRESET_LAYOUTS.standard;
+      const target = customDefaultSize ?? layout;
+
+      const calcW = Math.max(MIN_W, Math.min(target.width, availW - PAD_W));
+      const calcH = Math.max(MIN_H, Math.min(target.height, availH - PAD_H));
+
+      // ─── منع حلقات ResizeObserver — لا نحدّث State إذا الحجم نفسه ───
+      const key = `${calcW}x${calcH}`;
+      if (key === prevSizeRef.current) return;
+      prevSizeRef.current = key;
+
+      console.debug(`[AutoFit] preset=${preset}`, {
+        availableWidth:    availW,
+        availableHeight:   availH,
+        targetWidth:       target.width,
+        targetHeight:      target.height,
+        calculatedWidth:   calcW,
+        calculatedHeight:  calcH,
+        isMaximized,
+      });
+
+      setAutoSize({ width: calcW, height: calcH });
+    }
+
+    // أول حساب فوري
+    recalc();
+
+    // ResizeObserver واحد — نعيد استخدامه إذا موجود
+    if (!resizeRef.current) {
+      resizeRef.current = new ResizeObserver(() => { recalc(); });
+    }
+    resizeRef.current.observe(layer);
+
+    return () => {
+      if (resizeRef.current) {
+        resizeRef.current.disconnect();
+        resizeRef.current = null;
+      }
+    };
+  }, [preset, isMaximized, customDefaultSize]);
+
+  /* ─── حافظ على normalBounds محدّثاً عند تغيير الأبعاد/الموضع (خارج التكبير) ─── */
+  useEffect(() => {
+    if (isMaximized) return;
+    if (!autoSize) return;
+
+    const bounds = {
+      width:  autoSize.width,
+      height: autoSize.height,
+      x:      dragOffset?.x ?? 0,
+      y:      dragOffset?.y ?? 0,
+    };
+
+    setNormalBounds(prev => {
+      if (!prev) return bounds;
+      if (
+        prev.width  === bounds.width  &&
+        prev.height === bounds.height &&
+        prev.x      === bounds.x      &&
+        prev.y      === bounds.y
+      ) return prev;
+      return bounds;
+    });
+  }, [autoSize, dragOffset, isMaximized]);
+
+  /* وازن autoSize مع preset الداخلي */
+  const winStyle: React.CSSProperties = autoSize
+    ? {
+        ...(preset === "fullscreen" ? {} : { width: autoSize.width, height: autoSize.height }),
+        transform: `translate(${dx}px, ${dy}px)`,
+        "--tx": `${dx}px`,
+        "--ty": `${dy}px`,
+      } as React.CSSProperties
+    : {
+        transform: `translate(${dx}px, ${dy}px)`,
+        "--tx": `${dx}px`,
+        "--ty": `${dy}px`,
+      } as React.CSSProperties;
+
   /* ─── الموضع الأولي للتوسيط (center placement) ─── */
   useEffect(() => {
     if (placement !== "center") return;
     const layer = layerRef.current;
     const win   = windowRef.current;
     if (!layer || !win) return;
-    // النافذة مثبّتة في CSS عند top:CSS_TOP right:CSS_RIGHT؛
-    // نحسب الإزاحة اللازمة لتوسيطها داخل الحاوية.
+    // النافذة مثبّتة في CSS عند top/right؛ نحسب الإزاحة اللازمة لتوسيطها.
     const cw = layer.offsetWidth;
     const ch = layer.offsetHeight;
     const ww = win.offsetWidth;
@@ -132,11 +330,6 @@ export function DesktopWorkWindow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // يعمل مرة واحدة بعد الوصل
 
-  /* ─── حالة النافذة ─── */
-  const [isMaximized, setIsMaximized] = useState(false);
-  const [dragOffset, setDragOffset]   = useState<{ x: number; y: number } | null>(null);
-  const [shaking,    setShaking]      = useState(false);
-
   /* ─── النقر على الخلفية → اهتزاز بدون إغلاق ─── */
   const handleBackdropMouseDown = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -146,9 +339,32 @@ export function DesktopWorkWindow({
   }, [shaking]);
 
   const handleToggleMax = useCallback(() => {
-    setIsMaximized(m => !m);
-    setDragOffset(null);
-  }, []);
+    if (isMaximized) {
+      // ─── استعادة: أعد الأبعاد والموضع المحفوظين كما هما ───
+      const nb = normalBoundsRef.current;
+      if (nb) {
+        setAutoSize({ width: nb.width, height: nb.height });
+        setDragOffset(
+          nb.x !== 0 || nb.y !== 0 ? { x: nb.x, y: nb.y } : null,
+        );
+      } else {
+        setDragOffset(null);
+      }
+      setIsMaximized(false);
+    } else {
+      // ─── تكبير: احفظ الأبعاد والموضع الحاليين أولاً ───
+      const win = windowRef.current;
+      const bounds = {
+        width:  autoSize?.width  ?? win?.offsetWidth  ?? 800,
+        height: autoSize?.height ?? win?.offsetHeight ?? 600,
+        x:      dragOffset?.x ?? 0,
+        y:      dragOffset?.y ?? 0,
+      };
+      setNormalBounds(bounds);
+      setIsMaximized(true);
+      setDragOffset(null);
+    }
+  }, [isMaximized, autoSize, dragOffset]);
 
   /* ─── السحب مع حدّ داخل الحاوية (إطار AppWindow كاملاً عبر layerRef) ─── */
   const handleDragOffset = useCallback(
@@ -164,8 +380,7 @@ export function DesktopWorkWindow({
       const ww = win.offsetWidth;
 
       // ─── حدود أفقية ───
-      // النافذة مثبّتة عند right:CSS_RIGHT؛ الحافة اليسرى = cw - CSS_RIGHT - ww + dx
-      // نضمن بقاء 60px على الأقل ظاهراً
+      // الحافة اليسرى = cw - CSS_RIGHT - ww + dx؛ نضمن بقاء 60px ظاهراً
       const MARGIN = 60;
       const dxMin = -(cw - CSS_RIGHT - MARGIN);
       const dxMax =  CSS_RIGHT;
@@ -182,9 +397,6 @@ export function DesktopWorkWindow({
     },
     [isMaximized],
   );
-
-  const dx = dragOffset?.x ?? 0;
-  const dy = dragOffset?.y ?? 0;
 
   const windowCls = [
     styles.window,
@@ -208,11 +420,8 @@ export function DesktopWorkWindow({
         className={windowCls}
         data-preset={preset}
         data-placement={placement}
-        style={{
-          transform: `translate(${dx}px, ${dy}px)`,
-          "--tx": `${dx}px`,
-          "--ty": `${dy}px`,
-        } as React.CSSProperties}
+        data-density={density}
+        style={winStyle}
         onMouseDown={e => e.stopPropagation()}
       >
         {/* ── شريط العنوان — يغطي العرض بالكامل (دون تأثر بـ padding) ── */}
@@ -227,7 +436,6 @@ export function DesktopWorkWindow({
           />
         </div>
 
-        {/* ── المحتوى + شريط الأدوات منعزلان ── */}
         <ToolbarActionsProvider>
           <div className={styles.content}>
             {children}

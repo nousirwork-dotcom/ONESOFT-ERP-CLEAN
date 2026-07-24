@@ -1,4 +1,29 @@
 /* ─────────────────────────────────────────────────────────────
+   متغيرات Density ثابتة — ثلاثة مستويات بدلاً من Zoom/Scale المستمر
+   الوضع Normal يحتفظ بالأحجام الحالية (القيم الافتراضية).
+   Compact = أصغر بقليل، Large = أكبر بقليل فقط.
+   ───────────────────────────────────────────────────────────── */
+.window[data-density="compact"] {
+  --work-font-size: 11px;
+  --work-field-h:   23px;
+  --work-cell-h:    22px;
+  --work-row-h:     24px;
+  --work-btn-h:     27px;
+  --work-gap:       3px;
+  --work-pad:       4px;
+}
+
+.window[data-density="large"] {
+  --work-font-size: 13px;
+  --work-field-h:   29px;
+  --work-cell-h:    28px;
+  --work-row-h:     30px;
+  --work-btn-h:     33px;
+  --work-gap:       6px;
+  --work-pad:       8px;
+}
+
+/* ─────────────────────────────────────────────────────────────
    طبقة الحاوية الكاملة — تملأ مساحة AppWindow بالكامل
    ───────────────────────────────────────────────────────────── */
 .layer {
@@ -33,8 +58,8 @@
   top:            6px;
   right:          14px;
 
-  display:        flex;
-  flex-direction: column;
+  display:        grid;
+  grid-template-rows: auto minmax(0, 1fr);
 
   background:     #E6DED2;  /* يظهر في منطقة الـ padding كإطار داخلي */
   background-clip: padding-box; /* لا يمتد تحت الـ border الأزرق */
@@ -48,6 +73,9 @@
     0  3px  9px rgba(0, 0, 0, 0.10),
     inset 0 0 0 1px rgba(255, 255, 255, 0.70);
 
+  outline:        1px solid #6B4A2D;
+  outline-offset: -1px;
+
   overflow:       hidden;
   transition:     width 0.18s ease, height 0.18s ease, border-radius 0.18s ease;
   will-change:    transform;
@@ -59,18 +87,20 @@
   /* الإزاحة الأولية تُطبَّق بـ JS في useEffect */
 }
 
-/* ─── أحجام مسبقة الإعداد ─── */
+/* ─── أحجام مسبقة الإعداد مع Auto-Fit ذكي ─── */
+/* القيم الافتراضية: تستخدم clamp فتعطي حدوداً عليا ودنيا
+   يُطبَّق auto-fit عبر ResizeObserver في JS ويُضبط عبر style.width/height مباشرة */
 .window[data-preset="compact"] {
-  width:  min(760px, calc(100% - 36px));
-  height: min(520px, calc(100% - 36px));
+  width:  clamp(680px, 85%, 960px);
+  height: clamp(480px, 85%, calc(100% - 16px));
 }
 .window[data-preset="standard"] {
-  width:  min(980px, calc(100% - 36px));
-  height: min(620px, calc(100% - 36px));
+  width:  clamp(980px, 92%, 1280px);
+  height: clamp(620px, 90%, calc(100% - 16px));
 }
 .window[data-preset="wide"] {
-  width:  min(1180px, calc(100% - 36px));
-  height: min(650px, calc(100% - 36px));
+  width:  clamp(1100px, 94%, 1400px);
+  height: clamp(620px, 90%, calc(100% - 16px));
 }
 .window[data-preset="fullscreen"] {
   width:         calc(100% - 12px);
@@ -88,17 +118,6 @@
   transform:     none !important;
 }
 
-/* ─── منطقة المحتوى ─── */
-.content {
-  flex:           1;
-  overflow-y:     auto;
-  overflow-x:     hidden;
-  display:        flex;
-  flex-direction: column;
-  min-height:     0;
-  background:     #F8F5EF; /* يغطي مساحة المحتوى — يمنع ظهـور #E6DED2 داخله */
-}
-
 /* ─── حاوية شريط العنوان — تمتد على كامل العرض (تلغي 10px padding) ─ */
 .titleBarWrapper {
   margin-left:  -10px;
@@ -107,17 +126,30 @@
   background:   #2F5F8F; /* يطابق لون شريط العنوان — يمنع ظهور الكريمي */
 }
 
-/* ─── الشريط السفلي — أزرار منخفضة نحو القاع ─── */
+/* ─── منطقة المحتوى — تملأ المساحة المتبقية بعد شريط العنوان ─── */
+.content {
+  flex:           1 1 0;
+  overflow-y:     auto;
+  overflow-x:     hidden;
+  display:        flex;
+  flex-direction: column;
+  min-height:     0;
+  background:     #FFFFFF;
+  font-size:      var(--work-font-size);
+}
+
+/* ─── الشريط السفلي — ملاصق للحافة السفلية، لا يقص الأزرار ─── */
 .footer {
   flex-shrink:     0;
+  margin:          0;
   width:           100%;
   display:         flex;
   flex-direction:  column;
   align-items:     center;
   overflow:        visible;
-  padding:         7px 0 1px 0;   /* 7px أعلى فقط — يدفع الشريط لأسفل */
+  padding:         6px 0 4px 0;
   border-top:      1px solid #E5E7EB;
-  background:      #F8F5EF;
+  background:      #FCFAF5;
 }
 
 /* ─── اهتزاز الاهتمام عند النقر خارج النافذة ─── */

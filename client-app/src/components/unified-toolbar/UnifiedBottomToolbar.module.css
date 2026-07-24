@@ -1,11 +1,12 @@
 /* ─── Outer container — يمتد بعرض الـ Footer بالكامل ────────────── */
 .toolbarOuter {
   width:           100%;
-  padding:         2px 6px 3px 6px;  /* هامش جانبي 6px — الشريط شبه ممتد */
+  padding:         5px 6px 6px 6px;  /* هامش جانبي 6px — مسافة علوية وسفلية كافية */
   box-sizing:      border-box;
 
   background:      #F8F5EF;     /* يندمج مع الـ Footer */
   box-shadow:      none;         /* الظل على مجموعة الأزرار وليس الخارج */
+  overflow:        visible;      /* لا قص للأزرار */
 }
 
 /* ─── مجموعة الأزرار — تمتد بالعرض مع توزيع متوازن بين المجموعات ── */
@@ -26,7 +27,8 @@
   box-shadow:      0 3px 10px rgba(0, 0, 0, 0.22);
 
   overflow-x:      auto;
-  overflow-y:      hidden;
+  overflow-y:      visible;      /* يمنع قص الأزرار رأسياً */
+  height:          auto;         /* الارتفاع يتبع المحتوى */
 
   padding:         4px;
 }
