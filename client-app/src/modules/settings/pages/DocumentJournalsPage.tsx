@@ -369,18 +369,20 @@ const DOC_TYPES = [
 ];
 
 /* ──────────────── small atoms ──────────────── */
+import sharedForm from "../../../styles/shared-form.module.css";
+
 const FI = ({ value, onChange, placeholder, disabled, mono }: {
   value: string; onChange: (v: string) => void; placeholder?: string; disabled?: boolean; mono?: boolean;
 }) => (
   <Input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} disabled={disabled}
-    className={`h-7 text-[11px] px-2 border-slate-200 focus:border-indigo-400 focus-visible:ring-0 focus-visible:ring-offset-0 bg-white rounded disabled:bg-slate-50 disabled:text-slate-400 ${mono ? "font-mono" : ""}`} />
+    className={`${sharedForm.textInput} ${mono ? sharedForm.textInputMono : ""}`} />
 );
 /* ── Active-Field context ── */
 type ActiveFieldState = {
   id: string | null;
-  value: string;
+  value: string | null;
   previewPage: string | null;
-  previewLabel: string;
+  previewLabel: string | null;
 };
 const ActiveFieldCtx = React.createContext<{
   state: ActiveFieldState;
@@ -410,11 +412,10 @@ const FS = ({ id, value, onValueChange, children, placeholder, previewPage, prev
     <Tooltip>
       <TooltipTrigger asChild>
         <div
-          className={`relative flex items-center rounded border bg-white h-7 px-2 text-[11px] cursor-text select-none transition-all ${
-            isActive
-              ? "border-indigo-400 ring-1 ring-indigo-200"
-              : "border-slate-200 hover:border-slate-300"
-          }`}
+          className={`relative flex items-center rounded cursor-text select-none transition-all ${
+            sharedForm.selectTrigger
+          } ${isActive ? "ring-2 ring-[rgba(138,107,78,0.3)]" : ""}`}
+          style={{ border: isActive ? "1px solid #8A6B4E" : undefined }}
           onPointerDown={e => {
             if (e.button === 0) {
               e.preventDefault();
@@ -444,7 +445,7 @@ const FS = ({ id, value, onValueChange, children, placeholder, previewPage, prev
             >
               <SelectValue placeholder={placeholder ?? ""} />
             </SelectTrigger>
-            <SelectContent onInteractOutside={() => setOpen(false)}>{children}</SelectContent>
+            <SelectContent onPointerDownOutside={() => setOpen(false)}>{children}</SelectContent>
           </Select>
           <span className="absolute left-1 top-1/2 -translate-y-1/2 pointer-events-none opacity-40">
             <ListFilter className="w-3 h-3 text-slate-400" />
@@ -456,24 +457,24 @@ const FS = ({ id, value, onValueChange, children, placeholder, previewPage, prev
   );
 };
 const P = ({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) => (
-  <div className="overflow-hidden" style={{ border: "1px solid #d8d3c8", borderRadius: 6, boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
-    <div className="px-3 py-1.5 flex items-center justify-between" style={{ background: "linear-gradient(to left, #f0ece3, #e8e3d8)", borderBottom: "1px solid #d8d3c8" }}>
-      <span className="font-semibold text-indigo-800 text-[12px]">{title}</span>
-      {action}
+  <div className={sharedForm.section}>
+    <div className={sharedForm.sectionHeader}>
+      <span className={sharedForm.sectionTitle}>{title}</span>
+      {action && <span className={sharedForm.sectionAction}>{action}</span>}
     </div>
-    <div className="px-3 py-2.5" style={{ background: "#FDFAF5" }}>{children}</div>
+    <div className={sharedForm.sectionBody}>{children}</div>
   </div>
 );
 const R = ({ label, lw = 100, children }: { label: string; lw?: number; children: React.ReactNode }) => (
-  <div className="flex items-center gap-2 min-w-0">
-    <span className="text-[11px] text-slate-500 font-medium shrink-0" style={{ width: lw }}>{label}</span>
-    <div className="flex-1 min-w-0">{children}</div>
+  <div className={sharedForm.fieldRow}>
+    <span className={sharedForm.fieldLabel} style={{ width: lw }}>{label}</span>
+    <div className={sharedForm.fieldContent}>{children}</div>
   </div>
 );
 const CB = ({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) => (
-  <label className="flex items-center gap-1.5 cursor-pointer select-none">
-    <input type="checkbox" className="w-3.5 h-3.5 accent-indigo-600" checked={checked} onChange={e => onChange(e.target.checked)} />
-    <span className="text-[11px] text-slate-600">{label}</span>
+  <label className={sharedForm.checkbox}>
+    <input type="checkbox" className={sharedForm.checkboxInput} checked={checked} onChange={e => onChange(e.target.checked)} />
+    <span className={sharedForm.checkboxLabel}>{label}</span>
   </label>
 );
 
@@ -981,7 +982,7 @@ export default function DocumentJournalsPage() {
                 {typeJournals.map((j, idx) => (
                   <button key={j.id} onClick={() => openEdit(j)}
                     className="group flex flex-col items-start gap-1 p-3 rounded-lg text-right transition-all hover:shadow-md hover:border-indigo-200"
-                    style={{ background: "#FDFAF5", border: "1px solid #d8d3c8", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+                    style={{ background: "#FCFAF5", border: "1px solid #d8d3c8", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
                     <div className="flex items-center gap-2 w-full">
                       <span className="text-[9px] font-bold text-slate-300">#{String(idx + 1).padStart(2, "0")}</span>
                       <span className="flex-1 text-[12px] font-semibold text-slate-700 truncate group-hover:text-indigo-700">
@@ -1021,7 +1022,7 @@ export default function DocumentJournalsPage() {
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* Form header */}
             <div className="flex items-center gap-2 px-4 py-2 shrink-0"
-              style={{ borderBottom: "1px solid #d8d3c8", background: "#EBE7DE" }}>
+              style={{ borderBottom: "1px solid #d8d3c8", background: "#F2F0EC" }}>
               <button onClick={() => safeNavigate(() => { setView("list"); setEditId(null); })}
                 className="w-5 h-5 flex items-center justify-center rounded-full bg-white border border-slate-200 shadow-sm text-slate-400 hover:text-indigo-600 hover:border-indigo-300 transition-colors">
                 <ArrowLeft className="w-2.5 h-2.5" />
@@ -1036,7 +1037,7 @@ export default function DocumentJournalsPage() {
             </div>
 
             {/* ── Tabs Bar ── */}
-            <div className="shrink-0 flex items-center gap-0 px-2" style={{ borderBottom: "1px solid #D8DCE2", background: "#F2F4F7" }} dir="rtl">
+            <div className="flex items-center gap-0 shrink-0" style={{ borderBottom: "1px solid #D8DCE2", background: "#F2F0EC" }} dir="rtl">
               {[
                 { id: "basic",             label: "البيانات الأساسية" },
                 { id: "payment-types",     label: "أنواع السندات" },
@@ -1048,13 +1049,7 @@ export default function DocumentJournalsPage() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className="relative px-4 py-2 text-[11px] font-semibold transition-all whitespace-nowrap rounded-t"
-                  style={{
-                    color: activeTab === tab.id ? "#406B93" : "#64748b",
-                    borderBottom: activeTab === tab.id ? "2px solid #406B93" : "2px solid transparent",
-                    background: activeTab === tab.id ? "#FFFFFF" : "transparent",
-                    marginBottom: -1,
-                  }}
+                  className={`${sharedForm.tabButton} ${activeTab === tab.id ? sharedForm.tabButtonActive : ""}`}
                 >
                   {tab.label}
                 </button>
