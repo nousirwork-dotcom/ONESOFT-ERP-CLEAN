@@ -403,6 +403,7 @@ export const salesRouter = router({
       paidAmount: z.string().optional(),
       remainingAmount: z.string().optional(),
       paymentBreakdown: z.record(z.string(), z.number()).optional().nullable(),
+      paymentMethod: z.enum(['cash', 'bank', 'credit', 'check', 'other']).optional(),
       status: z.enum(['draft', 'confirmed', 'cancelled', 'paid']).optional(),
       notes: z.string().optional(),
       basedOnType: z.string().optional(),
@@ -459,7 +460,7 @@ export const salesRouter = router({
       }
 
       // تنفيذ التحديث داخل transaction؛ حجز القفل الاستشاري عند تحويل مسودة لمنع تضارب الأرقام
-      const { finalInvoiceNumber } = await db.transaction(async (tx) => {
+      const { finalInvoiceNumber, isPosted, autoPostedEntryNumber } = await db.transaction(async (tx) => {
         if (isFinalizing && finalJournalId) {
           await tx.execute(sql`SELECT pg_advisory_xact_lock(${finalJournalId}::bigint)`);
         }
@@ -489,10 +490,47 @@ export const salesRouter = router({
             );
           }
         }
-        return { finalInvoiceNumber };
+
+        // ── عند تحويل المسودة إلى مستند نهائي: سجّل تفاصيل الدفع داخل نفس transaction ──
+        if (isFinalizing && rest.paymentBreakdown != null) {
+          // امسح أي مدفوعات سابقة للمسودة (لا ينبغي أن تكون موجودة، لكن تأميناً)
+          await tx.delete(salesInvoicePayments).where(
+            and(eq(salesInvoicePayments.invoiceId, id), eq(salesInvoicePayments.orgId, ctx.user.orgId))
+          );
+          const pmEntries = Object.entries(rest.paymentBreakdown).filter(([, v]) => v > 0);
+          if (pmEntries.length > 0) {
+            const pms = await tx.query.paymentMethods.findMany({
+              where: eq(paymentMethods.orgId, ctx.user.orgId),
+            });
+            const pmMap = new Map(pms.map(p => [p.code, p.nameAr]));
+            await tx.insert(salesInvoicePayments).values(
+              pmEntries.map(([code, amount]) => ({
+                orgId: ctx.user.orgId,
+                invoiceId: id,
+                paymentMethodCode: code,
+                paymentMethodName: pmMap.get(code) ?? code,
+                amount: amount.toFixed(4),
+              }))
+            );
+          }
+        }
+
+        // ── الترحيل التلقائي عند تحويل المسودة إلى مستند نهائي ─────────────────────
+        if (isFinalizing) {
+          try {
+            const posted = await autoPostSalesInvoice(id, ctx.user.orgId, ctx.user.id, tx);
+            if (posted) {
+              return { finalInvoiceNumber, isPosted: true, autoPostedEntryNumber: posted.entryNumber };
+            }
+          } catch (e) {
+            console.error('[sales.update] autoPostSalesInvoice error:', e);
+          }
+        }
+
+        return { finalInvoiceNumber, isPosted: false, autoPostedEntryNumber: undefined };
       });
 
-      return { success: true, invoiceNumber: isFinalizing ? finalInvoiceNumber : undefined };
+      return { success: true, invoiceNumber: isFinalizing ? finalInvoiceNumber : undefined, isPosted, autoPostedEntryNumber };
     }),
 
   // جلب بيانات السداد المحفوظة لفاتورة معينة

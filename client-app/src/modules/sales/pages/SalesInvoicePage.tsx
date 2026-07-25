@@ -236,6 +236,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
   const cellRefs = useRef<Map<string, HTMLInputElement>>(new Map());
   const skipAutoPayModal = useRef(false);
+  const draftIdToFinalizeRef = useRef<number | null>(null);
+  const skipUpdateToast = useRef(false);
 
   // ── مساعدو التنبيه والتركيز على حقل صنف غير مسجل ─────────────────────────────
   const focusAndSelectCell = useCallback((key: string) => {
@@ -499,13 +501,20 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
   const updateMutation = trpc.salesInvoices.update.useMutation({
     onSuccess: (data) => {
+      if (skipUpdateToast.current) {
+        skipUpdateToast.current = false;
+        return; // شاشة الدفع تعرض رسالة النجاح بنفسها عند إتمام الدورة الكاملة
+      }
       toast.success(`✓ تم تحديث المستند ${data.invoiceNumber ?? ""} بنجاح`, {
         description: `الإجمالي: ${fmt(netTotal)} ${currency}`,
         duration: 5000,
       });
       setInvoiceStatus("confirmed");
     },
-    onError: (e) => toast.error(`خطأ في تحديث المستند: ${e.message}`),
+    onError: (e) => {
+      skipUpdateToast.current = false;
+      toast.error(`خطأ في تحديث المستند: ${e.message}`);
+    },
   });
 
   const postMutation = trpc.posting.postSalesInvoice.useMutation({
@@ -1083,36 +1092,39 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       })),
     };
 
-    // تحويل مسودة إلى مستند نهائي: update بنفس المعرف، ثم تسجيل الدفع إن لزم
+    // تحويل مسودة إلى مستند نهائي
     if (isDraftConversion) {
       const { invoiceType: _invoiceType, ...basePayload } = payload;
-      // نحوّل المسودة إلى مستند نهائي بحالة "مؤكد" غير مسدّد، ثم نسجّل الدفع في النافذة
-      // (إذا أغلق المستخدم النافذة بدون تأكيد، يبقى المستند متاحاً للدفع لاحقاً بدون بيانات مالية غير متناسقة)
-      const finalizePayload = {
-        ...basePayload,
-        paidAmount: "0.0000",
-        remainingAmount: fmtDb(netTotal),
-        status: "confirmed" as any,
-      };
-      try {
-        const data = await updateMutation.mutateAsync({
-          id: savedInvoiceId,
-          ...finalizePayload,
-        });
-        setInvoiceNumber(data.invoiceNumber ?? invoiceNumber);
-        setInvoiceStatus("confirmed");
-        if (paymentType === "credit") {
+
+      // الدفع الآجل: حوّل المسودة مباشرةً بدون شاشة دفع
+      if (paymentType === "credit") {
+        const finalizePayload = {
+          ...basePayload,
+          paidAmount: "0.0000",
+          remainingAmount: fmtDb(netTotal),
+          status: "confirmed" as any,
+        };
+        try {
+          const data = await updateMutation.mutateAsync({
+            id: savedInvoiceId,
+            ...finalizePayload,
+          });
+          setInvoiceNumber(data.invoiceNumber ?? invoiceNumber);
+          setInvoiceStatus("confirmed");
           toast.success("✓ تم تحويل المسودة إلى فاتورة نهائية");
-          return;
+        } catch {
+          throw new Error("draft-finalize-failed");
         }
-        // النقدي/الجزئي: استكمل الدفع من خلال شاشة الدفع
-        setPendingPayInvoiceId(savedInvoiceId);
-        setPendingPayInvoiceNumber(data.invoiceNumber ?? invoiceNumber);
-        setPendingPayTotal(netTotal);
-        setShowPaymentModal(true);
-      } catch {
-        throw new Error("draft-finalize-failed");
+        return;
       }
+
+      // النقدي/الجزئي: خزّن المعرّف والبيانات وافتح شاشة الدفع — لا شيء يُكتب في DB حتى تأكيد الدفع
+      draftIdToFinalizeRef.current = savedInvoiceId;
+      pendingCreatePayloadRef.current = { ...basePayload } as any;
+      setPendingPayInvoiceId(null);
+      setPendingPayInvoiceNumber(invoiceNumber);
+      setPendingPayTotal(netTotal);
+      setShowPaymentModal(true);
       return;
     }
 
@@ -1141,11 +1153,41 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
   // ── Save For Payment (حفظ الفاتورة من شاشة الدفع) ────────────────────────
   // يُستخدم payload المُعدّ مسبقاً من handleSave؛ التحقق من البيانات تم قبل فتح النافذة.
   const saveForPayment = useCallback(async (breakdown: Record<string, number>): Promise<number | null> => {
-    const payload = pendingCreatePayloadRef.current;
-    if (!payload) { toast.error("لا توجد بيانات فاتورة جاهزة للحفظ"); return null; }
     const paid = Object.values(breakdown).reduce((s, v) => s + v, 0);
     const remaining = Math.max(0, netTotal - paid);
     const isFullPaid = paid >= netTotal - 0.005;
+
+    // ── مسار المسودة: حوّل المسودة وسجّل الدفع معاً داخل transaction واحدة ──────
+    if (draftIdToFinalizeRef.current !== null) {
+      const draftId = draftIdToFinalizeRef.current;
+      const payload = pendingCreatePayloadRef.current;
+      if (!payload) { toast.error("لا توجد بيانات فاتورة جاهزة للحفظ"); return null; }
+      try {
+        skipUpdateToast.current = true;
+        const data = await updateMutation.mutateAsync({
+          id: draftId,
+          ...(payload as any),
+          paidAmount: paid.toFixed(4),
+          remainingAmount: remaining.toFixed(4),
+          paymentMethod: "cash" as any,
+          status: (isFullPaid ? "paid" : "confirmed") as any,
+          paymentBreakdown: breakdown,
+        });
+        draftIdToFinalizeRef.current = null;
+        pendingCreatePayloadRef.current = null;
+        if (data.invoiceNumber) setInvoiceNumber(data.invoiceNumber);
+        setInvoiceStatus(isFullPaid ? "paid" : "confirmed");
+        setNavInvoiceId(draftId); // يُحفّز إعادة جلب بيانات الفاتورة المحدّثة
+        return draftId;
+      } catch {
+        skipUpdateToast.current = false;
+        return null;
+      }
+    }
+
+    // ── مسار الفاتورة الجديدة: أنشئ الفاتورة مع تفاصيل الدفع في transaction واحدة ──
+    const payload = pendingCreatePayloadRef.current;
+    if (!payload) { toast.error("لا توجد بيانات فاتورة جاهزة للحفظ"); return null; }
     try {
       skipSaveToast.current = true;
       const data = await createMutation.mutateAsync({
@@ -1161,7 +1203,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       skipSaveToast.current = false;
       return null;
     }
-  }, [createMutation, netTotal]);
+  }, [updateMutation, createMutation, netTotal]);
 
   // ── التحقق من أن الفاتورة الجديدة لا تحتوي على أي بيانات مُدخلة ──────────────
   const isInvoiceEmpty = useCallback(() => {
@@ -2419,7 +2461,12 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       {showPaymentModal && (
         <PaymentModal
           open={showPaymentModal}
-          onClose={() => setShowPaymentModal(false)}
+          onClose={() => {
+            // إذا أُلغيت شاشة الدفع دون تأكيد، احتفظ بالمسودة كما هي ولا تُحدِث DB
+            draftIdToFinalizeRef.current = null;
+            pendingCreatePayloadRef.current = null;
+            setShowPaymentModal(false);
+          }}
           invoiceId={pendingPayInvoiceId}
           invoiceNumber={pendingPayInvoiceNumber}
           invoiceTotal={pendingPayTotal}
