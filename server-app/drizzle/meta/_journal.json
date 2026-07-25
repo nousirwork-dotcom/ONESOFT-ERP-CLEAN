@@ -351,6 +351,13 @@
       "when": 1753315200000,
       "tag": "0049_user_login_method",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1753401600000,
+      "tag": "0050_add_draft_numbering_to_document_journals",
+      "breakpoints": true
     }
   ]
 }

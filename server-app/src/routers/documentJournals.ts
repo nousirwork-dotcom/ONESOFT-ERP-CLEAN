@@ -33,13 +33,18 @@ const journalInputShape = {
   name:             z.string().min(1),
   name2:            z.string().optional(),
   description:      z.string().optional(),
-  numberPrefix:     z.string().default('INV'),
-  firstNumber:      z.number().default(1),
-  lastNumber:       z.number().default(999999),
-  increment:        z.number().default(1),
-  numDigits:        z.number().default(6),
-  includeYear:      z.boolean().default(false),
-  warehouseId:      z.number().nullable().optional(),
+  numberPrefix:      z.string().default('INV'),
+  firstNumber:       z.number().default(1),
+  lastNumber:        z.number().default(999999),
+  increment:         z.number().default(1),
+  numDigits:         z.number().default(6),
+  includeYear:       z.boolean().default(false),
+  draftAutoSerial:   z.boolean().default(false),
+  draftNumberPrefix: z.string().default('DRAFT'),
+  draftFirstNumber:  z.number().default(1),
+  draftLastNumber:   z.number().default(999999),
+  draftNumDigits:    z.number().default(6),
+  warehouseId:       z.number().nullable().optional(),
   salesAccountId:   z.number().nullable().optional(),
   cashAccountId:    z.number().nullable().optional(),
   creditAccountId:  z.number().nullable().optional(),
@@ -162,7 +167,7 @@ export const documentJournalsRouter = router({
       return { success: true };
     }),
 
-  // إعادة ضبط الترقيم
+  // إعادة ضبط الترقيم الرسمي
   resetNumbering: protectedProcedure
     .input(z.object({ journalId: z.number() }))
     .mutation(async ({ ctx, input }) => {
@@ -174,6 +179,20 @@ export const documentJournalsRouter = router({
         .set({ currentSeq: (journal.firstNumber ?? 1) - 1, updatedAt: new Date() })
         .where(eq(documentJournals.id, journal.id));
       return { success: true, resetTo: (journal.firstNumber ?? 1) - 1 };
+    }),
+
+  // إعادة ضبط ترقيم المسودات
+  resetDraftNumbering: protectedProcedure
+    .input(z.object({ journalId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const journal = await db.query.documentJournals.findFirst({
+        where: and(eq(documentJournals.id, input.journalId), eq(documentJournals.orgId, ctx.user.orgId)),
+      });
+      if (!journal) throw new Error('الدفتر غير موجود');
+      await db.update(documentJournals)
+        .set({ draftCurrentSeq: (journal.draftFirstNumber ?? 1) - 1, updatedAt: new Date() })
+        .where(eq(documentJournals.id, journal.id));
+      return { success: true, resetTo: (journal.draftFirstNumber ?? 1) - 1 };
     }),
 
   // الرقم التالي — transaction-safe

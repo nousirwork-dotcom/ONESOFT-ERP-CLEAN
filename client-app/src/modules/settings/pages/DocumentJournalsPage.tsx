@@ -28,6 +28,10 @@ type JournalForm = {
   lastNum: string; printTemplate: string; printTemplate2: string;
   printOnSave: boolean; status: string; postingMethod: string;
   resetFrequency: string;
+  // ── ترقيم المسودات ──
+  draftAutoSerial: boolean; draftFixedPart: string; draftFirstNum: string;
+  draftDigits: string; draftLastNum: string;
+  draftResetFrequency: string;
   customersJournal: string; suppliersJournal: string;
   salesAccountId: string; cashAccountId: string; creditAccountId: string;
   taxAccountId: string; discountAccountId: string;
@@ -60,6 +64,14 @@ type DBJournal = {
   autoSerial: boolean; printOnSave: boolean;
   isActive: boolean; sortOrder: number;
   recordPolicy?: string | null; foundationKey?: string | null; includeInFoundation?: boolean | null;
+  // ── ترقيم المسودات ──
+  draftAutoSerial?: boolean | null;
+  draftNumberPrefix?: string | null;
+  draftFirstNumber?: number | null;
+  draftLastNumber?: number | null;
+  draftNumDigits?: number | null;
+  draftCurrentSeq?: number | null;
+  draftResetFrequency?: string | null;
 };
 
 type DocComponent = {
@@ -80,6 +92,8 @@ const EMPTY: JournalForm = {
   lastNum: "999999", printTemplate: "", printTemplate2: "",
   printOnSave: false, status: "ready", postingMethod: "normal",
   resetFrequency: "none",
+  draftAutoSerial: false, draftFixedPart: "DRAFT", draftFirstNum: "1",
+  draftDigits: "6", draftLastNum: "999999", draftResetFrequency: "none",
   customersJournal: "", suppliersJournal: "",
   salesAccountId: "", cashAccountId: "", creditAccountId: "",
   taxAccountId: "", discountAccountId: "",
@@ -465,8 +479,8 @@ const P = ({ title, children, action }: { title: string; children: React.ReactNo
     <div className={sharedForm.sectionBody}>{children}</div>
   </div>
 );
-const R = ({ label, lw = 100, children }: { label: string; lw?: number; children: React.ReactNode }) => (
-  <div className={sharedForm.fieldRow}>
+const R = ({ label, lw = 100, className, children }: { label: string; lw?: number; className?: string; children: React.ReactNode }) => (
+  <div className={`${sharedForm.fieldRow} ${className || ""}`}>
     <span className={sharedForm.fieldLabel} style={{ width: lw }}>{label}</span>
     <div className={sharedForm.fieldContent}>{children}</div>
   </div>
@@ -502,6 +516,12 @@ function dbToForm(j: DBJournal): JournalForm {
     status:            "ready",
     postingMethod:     "normal",
     resetFrequency:    j.resetFrequency ?? "none",
+    draftAutoSerial:   (j as any).draftAutoSerial ?? false,
+    draftFixedPart:    (j as any).draftNumberPrefix ?? "DRAFT",
+    draftFirstNum:     String((j as any).draftFirstNumber ?? 1),
+    draftDigits:       String((j as any).draftNumDigits ?? 6),
+    draftLastNum:      String((j as any).draftLastNumber ?? 999999),
+    draftResetFrequency: (j as any).draftResetFrequency ?? "none",
     customersJournal:  (j as any).customersJournal ?? "",
     suppliersJournal:  (j as any).suppliersJournal ?? "",
     salesAccountId:    (j as any).salesAccountId != null ? String((j as any).salesAccountId) : "",
@@ -570,6 +590,7 @@ export default function DocumentJournalsPage() {
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [showDelete, setShowDelete]     = useState(false);
   const [showReset, setShowReset]       = useState(false);
+  const [resetMode, setResetMode]       = useState<"official" | "draft">("official");
   const [ptConfig, setPtConfig]         = useState<PTC>(DEFAULT_PTC);
   const [activeTab, setActiveTab]       = useState<"basic" | "payment-types" | "accounting-links" | "issuance" | "options" | "doc-components">("basic");
   const [docComponents, setDocComponents] = useState<DocComponent[]>([]);
@@ -682,6 +703,14 @@ export default function DocumentJournalsPage() {
     },
     onError: e => toast.error(e.message),
   });
+  const resetDraftMut = trpc.documentJournals.resetDraftNumbering.useMutation({
+    onSuccess: () => {
+      toast.success("تم إعادة ضبط ترقيم المسودات ✓");
+      listQuery.refetch();
+      setShowReset(false);
+    },
+    onError: e => toast.error(e.message),
+  });
 
   const set = <K extends keyof JournalForm>(k: K, v: JournalForm[K]) => {
     setForm(p => ({ ...p, [k]: v }));
@@ -737,6 +766,12 @@ export default function DocumentJournalsPage() {
       resetFrequency:   form.resetFrequency,
       autoSerial:       form.autoSerial,
       printOnSave:      form.printOnSave,
+      draftAutoSerial:   form.draftAutoSerial,
+      draftNumberPrefix: form.draftFixedPart.trim() || "DRAFT",
+      draftFirstNumber:  parseInt(form.draftFirstNum) || 1,
+      draftLastNumber:   parseInt(form.draftLastNum) || 999999,
+      draftNumDigits:    parseInt(form.draftDigits) || 6,
+      draftResetFrequency: form.draftResetFrequency,
       customersJournal: (form.customersJournal && form.customersJournal !== "none") ? form.customersJournal : null,
       suppliersJournal: (form.suppliersJournal && form.suppliersJournal !== "none") ? form.suppliersJournal : null,
       paymentTypesConfig: ptConfig,
@@ -803,6 +838,7 @@ export default function DocumentJournalsPage() {
 
   const handleDelete = () => deleteMut.mutate({ id: editId! });
   const handleResetNumbering = () => { if (editId != null) resetMut.mutate({ journalId: editId }); };
+  const handleResetDraftNumbering = () => { if (editId != null) resetDraftMut.mutate({ journalId: editId }); };
 
   const handleDuplicate = useCallback(() => {
     if (!editId) { toast.warning("اختر دفتراً أولاً ثم اضغط نسخة مماثلة"); return; }
@@ -1151,49 +1187,106 @@ export default function DocumentJournalsPage() {
               </div>
 
               {/* ── الأرقام والترقيم ── */}
-              <P title="الأرقام والترقيم"
-                action={
-                  editId != null ? (
-                    <button onClick={() => setShowReset(true)}
-                      className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-orange-600 border border-orange-200 hover:bg-orange-50 transition-colors">
-                      <RefreshCw className="w-3 h-3" /> إعادة ضبط
-                    </button>
-                  ) : null
-                }
-              >
-                <div className="grid grid-cols-4 gap-x-4 gap-y-2 items-center mb-3">
-                  <div className="col-span-4">
-                    <CB label="تسلسل أرقام أوتوماتيكي" checked={form.autoSerial} onChange={v => set("autoSerial", v)} />
+              <P title="الأرقام والترقيم">
+                {/* 1) ترقيم المستند الرسمي */}
+                <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-semibold text-slate-700">ترقيم المستند الرسمي</h4>
+                    {editId != null && (
+                      <button onClick={() => { setResetMode("official"); setShowReset(true); }}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-orange-600 border border-orange-200 hover:bg-orange-50 transition-colors">
+                        <RefreshCw className="w-3 h-3" /> إعادة ضبط المسلسل الرسمي
+                      </button>
+                    )}
                   </div>
-                  <R label="أول رقم">
-                    <FI value={form.firstNum} onChange={v => set("firstNum", v)} placeholder="1" mono />
-                  </R>
-                  <R label="عدد الخانات">
-                    <FI value={form.digits} onChange={v => set("digits", v)} placeholder="6" mono />
-                  </R>
-                  <R label="آخر رقم">
-                    <FI value={form.lastNum} onChange={v => set("lastNum", v)} placeholder="999999" mono />
-                  </R>
-                  <R label="آخر مستخدم">
-                    <FI value={currentDBJournal ? String(currentDBJournal.currentSeq) : "0"} onChange={() => {}} disabled mono />
-                  </R>
+                  <div className="grid grid-cols-4 gap-x-4 gap-y-2 items-center mb-3">
+                    <div className="col-span-4">
+                      <CB label="تسلسل أرقام أوتوماتيكي" checked={form.autoSerial} onChange={v => set("autoSerial", v)} />
+                    </div>
+                    <R label="أول رقم">
+                      <FI value={form.firstNum} onChange={v => set("firstNum", v)} placeholder="1" mono />
+                    </R>
+                    <R label="عدد الخانات">
+                      <FI value={form.digits} onChange={v => set("digits", v)} placeholder="6" mono />
+                    </R>
+                    <R label="آخر رقم">
+                      <FI value={form.lastNum} onChange={v => set("lastNum", v)} placeholder="999999" mono />
+                    </R>
+                    <R label="آخر رقم مستخدم">
+                      <FI value={currentDBJournal ? String(currentDBJournal.currentSeq) : "0"} onChange={() => {}} disabled mono />
+                    </R>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 items-center pt-2" style={{ borderTop: "1px solid #e2e8f0" }}>
+                    <R label="إعادة الترقيم" lw={110}>
+                      <FS id="resetFrequency" value={form.resetFrequency} onValueChange={v => set("resetFrequency", v)}>
+                        <SelectItem value="none">بدون إعادة</SelectItem>
+                        <SelectItem value="daily">يومي</SelectItem>
+                        <SelectItem value="monthly">شهري</SelectItem>
+                        <SelectItem value="annual">سنوي</SelectItem>
+                      </FS>
+                    </R>
+                    {/* معاينة الرقم */}
+                    <div className="flex items-center gap-2">
+                      <Eye className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span className="text-[10px] text-slate-400 shrink-0">معاينة:</span>
+                      <span className="font-mono text-[13px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                        {buildPreview(form.fixedPart, form.firstNum, form.digits)}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2 items-center pt-2" style={{ borderTop: "1px solid #f1f5f9" }}>
-                  <R label="إعادة الترقيم" lw={110}>
-                    <FS id="resetFrequency" value={form.resetFrequency} onValueChange={v => set("resetFrequency", v)}>
-                      <SelectItem value="none">بدون إعادة</SelectItem>
-                      <SelectItem value="daily">يومي</SelectItem>
-                      <SelectItem value="monthly">شهري</SelectItem>
-                      <SelectItem value="annual">سنوي</SelectItem>
-                    </FS>
-                  </R>
-                  {/* معاينة الرقم */}
-                  <div className="flex items-center gap-2">
-                    <Eye className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span className="text-[10px] text-slate-400 shrink-0">معاينة:</span>
-                    <span className="font-mono text-[13px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
-                      {buildPreview(form.fixedPart, form.firstNum, form.digits)}
-                    </span>
+
+                {/* فاصل أفقي واضح */}
+                <hr className="border-slate-300 my-4" />
+
+                {/* 2) ترقيم المسودات */}
+                <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-semibold text-slate-700">ترقيم المسودات</h4>
+                    {editId != null && (
+                      <button onClick={() => { setResetMode("draft"); setShowReset(true); }}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-orange-600 border border-orange-200 hover:bg-orange-50 transition-colors">
+                        <RefreshCw className="w-3 h-3" /> إعادة ضبط مسلسل المسودات
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-4 gap-x-4 gap-y-2 items-center mb-3">
+                    <div className="col-span-4">
+                      <CB label="تفعيل الترقيم التلقائي للمسودات" checked={form.draftAutoSerial} onChange={v => set("draftAutoSerial", v)} />
+                    </div>
+                    <R label="الجزء الثابت للمسودة" className="col-span-4">
+                      <FI value={form.draftFixedPart} onChange={v => set("draftFixedPart", v)} placeholder="DRAFT-" mono />
+                    </R>
+                    <R label="أول رقم مسودة">
+                      <FI value={form.draftFirstNum} onChange={v => set("draftFirstNum", v)} placeholder="1" mono />
+                    </R>
+                    <R label="عدد الخانات">
+                      <FI value={form.draftDigits} onChange={v => set("draftDigits", v)} placeholder="6" mono />
+                    </R>
+                    <R label="آخر رقم مسودة">
+                      <FI value={form.draftLastNum} onChange={v => set("draftLastNum", v)} placeholder="999999" mono />
+                    </R>
+                    <R label="آخر رقم مسودة مستخدم">
+                      <FI value={currentDBJournal ? String((currentDBJournal as any).draftCurrentSeq ?? 0) : "0"} onChange={() => {}} disabled mono />
+                    </R>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 items-center pt-2" style={{ borderTop: "1px solid #e2e8f0" }}>
+                    <R label="إعادة ترقيم المسودات" lw={110}>
+                      <FS id="draftResetFrequency" value={form.draftResetFrequency} onValueChange={v => set("draftResetFrequency", v)}>
+                        <SelectItem value="none">بدون إعادة</SelectItem>
+                        <SelectItem value="daily">يومي</SelectItem>
+                        <SelectItem value="monthly">شهري</SelectItem>
+                        <SelectItem value="annual">سنوي</SelectItem>
+                      </FS>
+                    </R>
+                    {/* معاينة رقم المسودة */}
+                    <div className="flex items-center gap-2">
+                      <Eye className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span className="text-[10px] text-slate-400 shrink-0">معاينة:</span>
+                      <span className="font-mono text-[13px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                        {buildPreview(form.draftFixedPart, form.draftFirstNum, form.draftDigits)}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </P>
@@ -1877,27 +1970,31 @@ export default function DocumentJournalsPage() {
       <Dialog open={showReset} onOpenChange={setShowReset}>
         <DialogContent className="max-w-sm" dir="rtl">
           <DialogHeader><DialogTitle className="text-right text-base flex items-center gap-2">
-            <RefreshCw className="w-4 h-4 text-orange-500" /> إعادة ضبط الترقيم
+            <RefreshCw className="w-4 h-4 text-orange-500" />
+            {resetMode === "draft" ? "إعادة ضبط ترقيم المسودات" : "إعادة ضبط الترقيم"}
           </DialogTitle></DialogHeader>
           <div className="space-y-2">
             <p className="text-sm text-slate-600 text-right">
-              هل تريد إعادة ضبط ترقيم دفتر <strong>{form.nameAr}</strong>؟
+              هل تريد إعادة ضبط {resetMode === "draft" ? "ترقيم المسودات" : "ترقيم دفتر"} <strong>{form.nameAr}</strong>؟
             </p>
             <p className="text-[12px] text-slate-500 text-right">
-              سيتم إعادة الرقم إلى البداية ({form.firstNum || "1"}) والرقم التالي الجديد سيكون:
+              سيتم إعادة الرقم إلى البداية ({resetMode === "draft" ? (form.draftFirstNum || "1") : (form.firstNum || "1")}) والرقم التالي الجديد سيكون:
             </p>
             <div className="text-center py-2">
               <span className="font-mono text-[18px] font-bold text-indigo-700 bg-indigo-50 px-4 py-1 rounded border border-indigo-200">
-                {buildPreview(form.fixedPart, form.firstNum, form.digits)}
+                {resetMode === "draft"
+                  ? buildPreview(form.draftFixedPart, form.draftFirstNum, form.draftDigits)
+                  : buildPreview(form.fixedPart, form.firstNum, form.digits)}
               </span>
             </div>
             <p className="text-[11px] text-orange-600 bg-orange-50 rounded p-2 text-right">
-              ⚠ تأكد أن لا توجد فواتير مستخدمة بهذا الترقيم قبل إعادة الضبط
+              ⚠ تأكد أن لا توجد {resetMode === "draft" ? "مسودات" : "فواتير"} مستخدمة بهذا الترقيم قبل إعادة الضبط
             </p>
           </div>
           <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
             <Button variant="destructive" className="flex-1 bg-orange-600 hover:bg-orange-700"
-              onClick={handleResetNumbering} disabled={resetMut.isPending}>
+              onClick={resetMode === "draft" ? handleResetDraftNumbering : handleResetNumbering}
+              disabled={resetMode === "draft" ? resetDraftMut.isPending : resetMut.isPending}>
               <RefreshCw className="w-3.5 h-3.5 ml-1" /> إعادة الضبط
             </Button>
             <Button variant="outline" className="flex-1" onClick={() => setShowReset(false)}>إلغاء</Button>

@@ -686,6 +686,13 @@ export const documentJournals = pgTable('document_journals', {
   numDigits:     integer('num_digits').notNull().default(6),
   includeYear:   boolean('include_year').notNull().default(true),
   currentSeq:    integer('current_seq').notNull().default(0), // آخر رقم مستخدم
+  // ── ترقيم المسودات ─────────────────────────────────────────────────────────
+  draftAutoSerial:   boolean('draft_auto_serial').notNull().default(false),
+  draftNumberPrefix: varchar('draft_number_prefix', { length: 20 }).notNull().default('DRAFT'),
+  draftFirstNumber:  integer('draft_first_number').notNull().default(1),
+  draftLastNumber:   integer('draft_last_number').notNull().default(999999),
+  draftNumDigits:    integer('draft_num_digits').notNull().default(6),
+  draftCurrentSeq:   integer('draft_current_seq').notNull().default(0),
   // ── الربط بالكيان (المخزن = الفرع في مسار المستندات) ─────────────────────────
   warehouseId:   integer('warehouse_id').references(() => warehouses.id, { onDelete: 'set null' }),
   // ── الحسابات الافتراضية ───────────────────────────────────────────────────
