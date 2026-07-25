@@ -200,6 +200,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   const [partyName, setPartyName]                     = useState("");
   const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState("");
   const [warehouseId, setWarehouseId]                 = useState<number | null>(null);
+  const [warehouseDisplayName, setWarehouseDisplayName] = useState<string>("");
   const [journalWarehouseId, setJournalWarehouseId]   = useState<number | null>(null);
   const [docTypeWarehouseId, setDocTypeWarehouseId]   = useState<number | null>(null);
   const [paymentType, setPaymentType]                 = useState<PaymentType>("cash");
@@ -273,6 +274,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     setPartyName(inv.customerName ?? inv.supplierName ?? "");
     setSupplierInvoiceNumber(inv.supplierInvoiceNumber || "");
     setWarehouseId(inv.warehouseId ?? null);
+    setWarehouseDisplayName(inv.warehouseName ?? "");
     setJournalId(inv.journalId ?? null);
     setCurrency(inv.currency ?? "SAR");
     setExchangeRate(inv.exchangeRate ?? "1.000");
@@ -339,13 +341,20 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     if (n && !invoiceNumber) setInvoiceNumber(n);
   }, [salesNextNumberQuery.data, purchaseNextNumberQuery.data]);
 
+  // تحديث اسم المخزن الظاهر عند تحميل قائمة المخازن أو تغير المخزن المختار
+  useEffect(() => {
+    if (!warehouseId) return;
+    const wh = warehousesQuery.data?.find(w => w.id === warehouseId);
+    if (wh?.name) setWarehouseDisplayName(wh.name);
+  }, [warehouseId, warehousesQuery.data]);
+
   // Fill from source doc (بناءً على)
   useEffect(() => {
     const src = basedOnQuery.data;
     if (!src) return;
     if (src.customerName) setPartyName(src.customerName);
     if (src.customerId)   setPartyId(src.customerId);
-    if (src.warehouseId && !journalWarehouseId) setWarehouseId(src.warehouseId);
+    if (src.warehouseId && !journalWarehouseId) setWarehouseId(src.warehouseId ?? null);
     if (src.currency) setCurrency(src.currency);
     if (src.notes)    setNotes(src.notes ?? "");
     if (src.items.length > 0) {
@@ -372,7 +381,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
           : `الإجمالي: ${fmt(netTotal)} ${currency} — اضغط "ترحيل" لترحيل القيد`,
         duration: 5000,
       });
-      setSavedInvoiceId(data.id);
+      setSavedInvoiceId(data.id ?? null);
       setIsPosted(autoPosted);
       setErpMode("view");
       pendingNavRef.current?.();
@@ -542,8 +551,15 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     setJournalId(id); setJournalOpen(false);
     const j = (journalsQuery.data ?? []).find((x: any) => x.id === id);
     if (j) {
-      if (j.warehouseId) { setWarehouseId(j.warehouseId); setJournalWarehouseId(j.warehouseId); }
-      else setJournalWarehouseId(null);
+      if (j.warehouseId) {
+        setWarehouseId(j.warehouseId);
+        setJournalWarehouseId(j.warehouseId);
+        const whName = warehousesQuery.data?.find((w: any) => w.id === j.warehouseId)?.name ?? "";
+        setWarehouseDisplayName(whName);
+      } else {
+        setJournalWarehouseId(null);
+        setWarehouseDisplayName("");
+      }
       if (j.defaultCurrency) setCurrency(j.defaultCurrency);
       if (j.defaultPayMethod) setPaymentType(j.defaultPayMethod as any);
     }
@@ -959,16 +975,21 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
             <HF label="المخزن">
               {(() => {
                 const lockedWh = journalWarehouseId ?? docTypeWarehouseId;
+                const whFromList = warehousesQuery.data?.find(w => w.id === (lockedWh ?? warehouseId));
+                const whName = whFromList?.name ?? warehouseDisplayName ?? "";
                 return (
                   <select value={warehouseId ?? ""}
                     onChange={e => !lockedWh && setWarehouseId(parseInt(e.target.value) || null)}
                     className="classic-input w-full" disabled={!!lockedWh}
-                    title={lockedWh ? "المخزن محدد ولا يمكن تغييره" : undefined}>
+                    title={lockedWh ? `المخزن: ${whName}` : undefined}>
                     <option value="">-- اختر مخزن --</option>
                     {(lockedWh
                       ? warehousesQuery.data?.filter(w => w.id === lockedWh)
                       : warehousesQuery.data
                     )?.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                    {lockedWh && !whFromList && warehouseId && (
+                      <option key={warehouseId} value={warehouseId}>{whName}</option>
+                    )}
                   </select>
                 );
               })()}

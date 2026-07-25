@@ -159,6 +159,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
   const invoiceDatePickerRef = useRef<HTMLInputElement>(null);
   const dueDatePickerRef = useRef<HTMLInputElement>(null);
   const [warehouseId, setWarehouseId] = useState<number | null>(null);
+  const [warehouseDisplayName, setWarehouseDisplayName] = useState<string>(""); // اسم المخزن المحفوظ (للعرض قبل تحميل قائمة المخازن)
   const [journalWarehouseId, setJournalWarehouseId] = useState<number | null>(null); // مخزن مقيَّد من الدفتر
   const [docTypeWarehouseId, setDocTypeWarehouseId] = useState<number | null>(null); // مخزن مقيَّد من نوع السند
   const [paymentType, setPaymentType] = useState<PaymentType>("cash");
@@ -346,6 +347,13 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // تحديث اسم المخزن الظاهر عند تحميل قائمة المخازن أو تغير المخزن المختار
+  useEffect(() => {
+    if (!warehouseId) return;
+    const wh = warehousesQuery.data?.find(w => w.id === warehouseId);
+    if (wh?.name) setWarehouseDisplayName(wh.name);
+  }, [warehouseId, warehousesQuery.data]);
+
   // تعيين البائع = المستخدم الحالي عند فتح فاتورة جديدة، فقط إذا كان مفعّلاً كبائع
   // مصدر التحقق: نفس حقل users.canBeSalesperson المستخدم في شاشة المستخدمين والـ Backend.
   useEffect(() => {
@@ -436,6 +444,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     setCustomerType((inv.customerType as any) ?? 'individual');
     setCustomerTaxNumber(inv.customerTaxNumber ?? "");
     setWarehouseId(inv.warehouseId ?? null);
+    setWarehouseDisplayName(inv.warehouseName ?? "");
     setJournalId(inv.journalId ?? null);
     if (inv.docTypeId) setDocTypeId(String(inv.docTypeId));
     setCurrency(inv.currency ?? "SAR");
@@ -580,8 +589,11 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       if (j.warehouseId) {
         setWarehouseId(j.warehouseId);
         setJournalWarehouseId(j.warehouseId);
+        const whName = warehousesQuery.data?.find(w => w.id === j.warehouseId)?.name ?? "";
+        setWarehouseDisplayName(whName);
       } else {
         setJournalWarehouseId(null);
+        setWarehouseDisplayName("");
       }
       if (j.defaultCurrency) setCurrency(j.defaultCurrency);
       if (j.defaultPayMethod) setPaymentType(j.defaultPayMethod as any);
@@ -1796,19 +1808,19 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           <div className="flex items-center w-full min-w-0" style={{ gap: 6 }}>
             <label style={headerLabelStyle}>المخزن</label>
             {(() => {
-              const activeWh = journalWarehouseId ?? docTypeWarehouseId;
-              const whOptions = activeWh
-                ? (warehousesQuery.data?.filter(w => w.id === activeWh) ?? []).map(w => ({ value: String(w.id), label: w.name }))
-                : [];
+              const activeWh = journalWarehouseId ?? docTypeWarehouseId ?? warehouseId;
+              const whFromList = warehousesQuery.data?.find(w => w.id === activeWh);
+              const whName = whFromList?.name ?? warehouseDisplayName ?? "";
+              const whOptions = activeWh ? [{ value: String(activeWh), label: whName }] : [];
               return (
                 <ContextSelectInput
                   value={warehouseId ? String(warehouseId) : ""}
                   onChange={() => {}}
                   options={whOptions}
                   menuTitle="المخزن"
-                  placeholder="يُحدَّد من الفرع"
+                  placeholder={activeWh ? "يُحدَّد من الفرع" : "اختر الفرع أولاً"}
                   disabled={true}
-                  title={activeWh ? "المخزن محدد من الفرع" : "اختر الفرع أولاً"}
+                  title={activeWh ? `المخزن: ${whName}` : "اختر الفرع أولاً"}
                   style={{ height: "var(--work-field-h, 26px)", flex: 1, minWidth: 0 }}
                 />
               );

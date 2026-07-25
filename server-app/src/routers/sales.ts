@@ -88,6 +88,25 @@ async function generateDraftNumberForJournal(tx: any, journalId: number, orgId: 
   return `${prefix}${numPart}`;
 }
 
+// ── تحديد المخزن/الفرع الصحيح: إذا لم يُرسل warehouseId نحله من دفتر المستندات ──
+async function resolveInvoiceWarehouseId(
+  tx: any,
+  inputWarehouseId: number | null | undefined,
+  journalId: number | null | undefined,
+  orgId: number,
+): Promise<number> {
+  if (inputWarehouseId) return inputWarehouseId;
+
+  if (journalId) {
+    const journal = await tx.query.documentJournals.findFirst({
+      where: and(eq(documentJournals.id, journalId), eq(documentJournals.orgId, orgId)),
+    });
+    if (journal?.warehouseId) return journal.warehouseId;
+  }
+
+  throw new Error('لم يتم تحديد المخزن/الفرع — يجب اختيار دفتر مرتبط بمخزن');
+}
+
 export const salesRouter = router({
   // قائمة الفواتير/عروض الأسعار
   list: protectedProcedure
@@ -263,7 +282,17 @@ export const salesRouter = router({
         where: eq(salesInvoiceItems.invoiceId, input.id),
         orderBy: (i, { asc }) => [asc(i.sortOrder)],
       });
-      return { ...invoice, items };
+
+      // إرجاع اسم المخزن/الفرع مع المستند لتعبئة الحقل عند فتح سجل محفوظ
+      let warehouseName: string | null = null;
+      if (invoice.warehouseId) {
+        const wh = await db.query.warehouses.findFirst({
+          where: and(eq(warehouses.id, invoice.warehouseId), eq(warehouses.orgId, ctx.user.orgId)),
+        });
+        warehouseName = wh?.name ?? null;
+      }
+
+      return { ...invoice, warehouseName, items };
     }),
 
   // إنشاء فاتورة/عرض سعر
@@ -333,6 +362,14 @@ export const salesRouter = router({
         await validateInvoiceItems(items, orgId);
       }
       const { invoice, finalInvoiceNumber } = await db.transaction(async (tx) => {
+        // حلّ warehouseId من الدفتر إذا لم يُرسل، أو رفض الحفظ إذا تعذّر
+        const resolvedWarehouseId = await resolveInvoiceWarehouseId(
+          tx,
+          invoiceData.warehouseId,
+          invoiceData.journalId,
+          orgId,
+        );
+
         // ── حجز الرقم التسلسلي داخل نفس transaction الحفظ ──────────────────
         // المسودة لا تستهلك الرقم الرسمي من دفتر المستندات.
         // قفل استشاري على الدفتر لمنع race conditions بين مستخدمين متعددين
@@ -353,6 +390,7 @@ export const salesRouter = router({
         try {
           const [row] = await tx.insert(salesInvoices).values({
             ...invoiceData,
+            warehouseId: resolvedWarehouseId,
             invoiceNumber: finalInvoiceNumber,
             draftNumber: draftNumber ?? invoiceData.draftNumber,
             orgId,
@@ -501,6 +539,14 @@ export const salesRouter = router({
 
       // تنفيذ التحديث داخل transaction؛ حجز القفل الاستشاري عند تحويل مسودة لمنع تضارب الأرقام
       const { finalInvoiceNumber, isPosted, autoPostedEntryNumber } = await db.transaction(async (tx) => {
+        // حلّ warehouseId إذا كان فارغاً/غير مُرسل من الدفتر (السجلات القديمة)
+        const resolvedWarehouseId = await resolveInvoiceWarehouseId(
+          tx,
+          finalWarehouseId,
+          finalJournalId,
+          ctx.user.orgId,
+        );
+
         if (isFinalizing && finalJournalId) {
           await tx.execute(sql`SELECT pg_advisory_xact_lock(${finalJournalId}::bigint)`);
         }
@@ -520,6 +566,7 @@ export const salesRouter = router({
           ...rest,
           ...(invoiceDate ? { invoiceDate: new Date(invoiceDate) } : {}),
           ...(isFinalizing ? { invoiceNumber: finalInvoiceNumber, draftNumber: finalDraftNumber } : {}),
+          warehouseId: resolvedWarehouseId,
           updatedAt: new Date(),
         }).where(and(eq(salesInvoices.id, id), eq(salesInvoices.orgId, ctx.user.orgId)));
         if (items) {

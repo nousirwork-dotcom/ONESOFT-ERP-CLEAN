@@ -2,8 +2,27 @@ import { z } from 'zod';
 import { eq, and, desc } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { purchaseInvoices, purchaseInvoiceItems } from '../schema.js';
+import { purchaseInvoices, purchaseInvoiceItems, documentJournals, warehouses } from '../schema.js';
 import { autoPostPurchaseInvoice } from './posting.js';
+
+// ── تحديد المخزن/الفرع الصحيح: إذا لم يُرسل warehouseId نحله من دفتر المستندات ──
+async function resolvePurchaseWarehouseId(
+  tx: any,
+  inputWarehouseId: number | null | undefined,
+  journalId: number | null | undefined,
+  orgId: number,
+): Promise<number> {
+  if (inputWarehouseId) return inputWarehouseId;
+
+  if (journalId) {
+    const journal = await tx.query.documentJournals.findFirst({
+      where: and(eq(documentJournals.id, journalId), eq(documentJournals.orgId, orgId)),
+    });
+    if (journal?.warehouseId) return journal.warehouseId;
+  }
+
+  throw new Error('لم يتم تحديد المخزن/الفرع — يجب اختيار دفتر مرتبط بمخزن');
+}
 
 export const purchasesRouter = router({
   // قائمة فواتير المشتريات
@@ -83,7 +102,16 @@ export const purchasesRouter = router({
         where: eq(purchaseInvoiceItems.invoiceId, input.id),
         orderBy: (i, { asc }) => [asc(i.sortOrder)],
       });
-      return { ...invoice, items };
+
+      let warehouseName: string | null = null;
+      if (invoice.warehouseId) {
+        const wh = await db.query.warehouses.findFirst({
+          where: and(eq(warehouses.id, invoice.warehouseId), eq(warehouses.orgId, ctx.user.orgId)),
+        });
+        warehouseName = wh?.name ?? null;
+      }
+
+      return { ...invoice, warehouseName, items };
     }),
 
   // إنشاء مستند مشتريات
@@ -129,8 +157,15 @@ export const purchasesRouter = router({
       const { items, dueDate, ...invoiceData } = input;
       const orgId = ctx.user.orgId;
       const isDraft = invoiceData.status === 'draft';
+      const resolvedWarehouseId = await resolvePurchaseWarehouseId(
+        db,
+        invoiceData.warehouseId,
+        invoiceData.journalId,
+        orgId,
+      );
       const [invoice] = await db.insert(purchaseInvoices).values({
         ...invoiceData,
+        warehouseId: resolvedWarehouseId,
         orgId,
         userId: ctx.user.id,
         invoiceDate: new Date(invoiceData.invoiceDate),
@@ -166,6 +201,8 @@ export const purchasesRouter = router({
       invoiceDate: z.string().optional(),
       supplierId: z.number().optional(),
       supplierName: z.string().optional(),
+      warehouseId: z.number().optional(),
+      journalId: z.number().optional(),
       subtotal: z.string().optional(),
       discountAmount: z.string().optional(),
       taxAmount: z.string().optional(),
@@ -197,8 +234,15 @@ export const purchasesRouter = router({
       });
       if (existing?.isPosted)
         throw new Error('لا يمكن تعديل مستند مرحَّل — يجب فك الترحيل أولاً');
+      const resolvedWarehouseId = await resolvePurchaseWarehouseId(
+        db,
+        rest.warehouseId ?? existing?.warehouseId,
+        rest.journalId ?? existing?.journalId,
+        ctx.user.orgId,
+      );
       await db.update(purchaseInvoices).set({
         ...rest,
+        warehouseId: resolvedWarehouseId,
         ...(invoiceDate ? { invoiceDate: new Date(invoiceDate) } : {}),
         updatedAt: new Date(),
       }).where(and(eq(purchaseInvoices.id, id), eq(purchaseInvoices.orgId, ctx.user.orgId)));
