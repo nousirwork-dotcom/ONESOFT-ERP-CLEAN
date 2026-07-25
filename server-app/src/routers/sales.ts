@@ -88,7 +88,18 @@ export const salesRouter = router({
         where: eq(salesInvoices.orgId, orgId),
         orderBy: [desc(salesInvoices.invoiceDate)],
       });
-      let filtered = allRecords;
+      const [warehousesList, usersList] = await Promise.all([
+        db.query.warehouses.findMany({ where: eq(warehouses.orgId, orgId) }),
+        db.query.users.findMany({ where: eq(users.orgId, orgId) }),
+      ]);
+      const warehouseMap = new Map(warehousesList.map(w => [w.id, w.name]));
+      const userMap = new Map(usersList.map(u => [u.id, u.name]));
+      const records = allRecords.map(r => ({
+        ...r,
+        warehouseName: warehouseMap.get(r.warehouseId!) ?? null,
+        userName: userMap.get(r.userId!) ?? null,
+      }));
+      let filtered = records;
       if (input?.invoiceType) {
         filtered = filtered.filter(r => r.invoiceType === input.invoiceType);
       }

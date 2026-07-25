@@ -2257,6 +2257,7 @@ function SalesInvoiceListView() {
   const [dateFrom, setDateFrom]     = useState(today);
   const [dateTo, setDateTo]         = useState(today);
   const [search, setSearch]         = useState("");
+  const [activeTab, setActiveTab]   = useState<"invoices" | "drafts">("invoices");
   const [mode, setMode]             = useState<"list" | "form" | "view">("list");
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
   const [invoiceTypeName, setInvoiceTypeName]     = useState<string>("");
@@ -2279,7 +2280,11 @@ function SalesInvoiceListView() {
   const fmt = (v: string | null | undefined) =>
     v ? parseFloat(v).toLocaleString("ar-EG", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00";
 
-  const totalAmount = invoices.reduce((s, r) => s + parseFloat(r.total ?? "0"), 0);
+  const invoiceRecords = invoices.filter(r => r.status !== "draft");
+  const draftRecords = invoices.filter(r => r.status === "draft");
+  const visibleRecords = activeTab === "invoices" ? invoiceRecords : draftRecords;
+
+  const totalAmount = visibleRecords.reduce((s, r) => s + parseFloat(r.total ?? "0"), 0);
 
   const statusLabel: Record<string, { label: string; color: string }> = {
     draft:     { label: "مسودة",    color: "#6B7280" },
@@ -2399,6 +2404,58 @@ function SalesInvoiceListView() {
           <Plus style={{ width: 14, height: 14 }} />
           فاتورة جديدة
         </button>
+
+        {/* زر إضافة مسودة — يظهر فقط في تبويب المسودات */}
+        {activeTab === "drafts" && (
+          <button
+            onClick={() => setMode("form")}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "5px 14px", borderRadius: 7, border: "1px solid #2563EB",
+              background: "#fff", color: "#2563EB", cursor: "pointer",
+              fontSize: 12, fontWeight: 700, fontFamily: "'Cairo', Tahoma, sans-serif",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = "#EFF6FF"; e.currentTarget.style.color = "#1D4ED8"; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.color = "#2563EB"; }}
+          >
+            <Plus style={{ width: 14, height: 14 }} />
+            مسودة جديدة
+          </button>
+        )}
+      </div>
+
+      {/* ── تبويبات الفواتير / المسودات ── */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8,
+        padding: "8px 12px", borderBottom: "1px solid #E5E7EB",
+        background: "#fff", flexShrink: 0,
+      }}>
+        <button
+          onClick={() => setActiveTab("invoices")}
+          style={{
+            padding: "6px 16px", borderRadius: 6, fontSize: 12, fontWeight: 600,
+            border: `1px solid ${activeTab === "invoices" ? "#2563EB" : "transparent"}`,
+            background: activeTab === "invoices" ? "#EFF6FF" : "transparent",
+            color: activeTab === "invoices" ? "#2563EB" : "#6B7280",
+            cursor: "pointer", fontFamily: "'Cairo', Tahoma, sans-serif",
+            transition: "all 0.12s",
+          }}
+        >
+          فواتير المبيعات ({invoiceRecords.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("drafts")}
+          style={{
+            padding: "6px 16px", borderRadius: 6, fontSize: 12, fontWeight: 600,
+            border: `1px solid ${activeTab === "drafts" ? "#2563EB" : "transparent"}`,
+            background: activeTab === "drafts" ? "#F3F4F6" : "transparent",
+            color: activeTab === "drafts" ? "#111827" : "#6B7280",
+            cursor: "pointer", fontFamily: "'Cairo', Tahoma, sans-serif",
+            transition: "all 0.12s",
+          }}
+        >
+          المسودات ({draftRecords.length})
+        </button>
       </div>
 
       {/* ── الجدول ── */}
@@ -2406,7 +2463,10 @@ function SalesInvoiceListView() {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
           <thead>
             <tr style={{ background: "#F3F4F6", position: "sticky", top: 0, zIndex: 2 }}>
-              {["رقم الفاتورة", "العميل", "التاريخ", "المخزن", "نوع السداد", "الإجمالي", "الحالة"].map(h => (
+              {(activeTab === "drafts"
+                ? ["رقم المسودة", "التاريخ", "العميل", "المخزن/الفرع", "الإجمالي", "آخر تعديل", "المستخدم", "الحالة"]
+                : ["رقم الفاتورة", "العميل", "التاريخ", "المخزن", "نوع السداد", "الإجمالي", "الحالة"]
+              ).map(h => (
                 <th key={h} style={{
                   padding: "8px 12px", textAlign: "right",
                   color: "#6B7280", fontWeight: 600, fontSize: 11.5,
@@ -2420,16 +2480,18 @@ function SalesInvoiceListView() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={7} style={{ textAlign: "center", padding: 32, color: "#9CA3AF" }}>
+                <td colSpan={activeTab === "drafts" ? 8 : 7} style={{ textAlign: "center", padding: 32, color: "#9CA3AF" }}>
                   جاري التحميل...
                 </td>
               </tr>
-            ) : invoices.length === 0 ? (
+            ) : visibleRecords.length === 0 ? (
               <tr>
-                <td colSpan={7} style={{ textAlign: "center", padding: 40, color: "#9CA3AF" }}>
+                <td colSpan={activeTab === "drafts" ? 8 : 7} style={{ textAlign: "center", padding: 40, color: "#9CA3AF" }}>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
                     <Receipt style={{ width: 32, height: 32, color: "#D1D5DB" }} />
-                    <span style={{ fontSize: 13 }}>لا توجد فواتير لهذه الفترة</span>
+                    <span style={{ fontSize: 13 }}>
+                      {activeTab === "drafts" ? "لا توجد مسودات لهذه الفترة" : "لا توجد فواتير لهذه الفترة"}
+                    </span>
                     <button
                       onClick={() => setMode("form")}
                       style={{
@@ -2439,16 +2501,17 @@ function SalesInvoiceListView() {
                         fontFamily: "'Cairo', Tahoma, sans-serif",
                       }}
                     >
-                      + إنشاء فاتورة جديدة
+                      {activeTab === "drafts" ? "+ إنشاء مسودة جديدة" : "+ إنشاء فاتورة جديدة"}
                     </button>
                   </div>
                 </td>
               </tr>
             ) : (
-              invoices.map((inv, i) => {
+              visibleRecords.map((inv, i) => {
                 const st = statusLabel[inv.status] ?? { label: inv.status, color: "#6B7280" };
                 const payLabel = inv.paymentMethod === "cash" ? "نقداً" : "آجل";
                 const invDate = fmtDate(inv.invoiceDate);
+                const updatedAt = fmtDate(inv.updatedAt);
                 return (
                   <tr
                     key={inv.id}
@@ -2467,7 +2530,7 @@ function SalesInvoiceListView() {
                           color: "#2563EB", fontWeight: 600, cursor: "pointer",
                           textDecoration: "underline", textUnderlineOffset: 3,
                         }}
-                        title="انقر لفتح الفاتورة"
+                        title={activeTab === "drafts" ? "انقر لفتح المسودة" : "انقر لفتح الفاتورة"}
                       >
                         {inv.invoiceNumber}
                       </span>
@@ -2479,29 +2542,53 @@ function SalesInvoiceListView() {
                       {invDate}
                     </td>
                     <td style={{ padding: "7px 12px", color: "#6B7280" }}>
-                      {(inv as any).warehouseId ?? "—"}
+                      {(inv as any).warehouseName ?? (inv as any).warehouseId ?? "—"}
                     </td>
-                    <td style={{ padding: "7px 12px" }}>
-                      <span style={{
-                        padding: "2px 8px", borderRadius: 12, fontSize: 11,
-                        background: inv.paymentMethod === "cash" ? "#F0FDF4" : "#FFF7ED",
-                        color: inv.paymentMethod === "cash" ? "#059669" : "#D97706",
-                        fontWeight: 600,
-                      }}>
-                        {payLabel}
-                      </span>
-                    </td>
-                    <td style={{ padding: "7px 12px", color: "#111827", fontWeight: 700, textAlign: "left", direction: "ltr" }}>
-                      {fmt(inv.total)} {inv.currency ?? ""}
-                    </td>
-                    <td style={{ padding: "7px 12px" }}>
-                      <span style={{
-                        padding: "2px 8px", borderRadius: 12, fontSize: 11,
-                        background: `${st.color}18`, color: st.color, fontWeight: 600,
-                      }}>
-                        {st.label}
-                      </span>
-                    </td>
+                    {activeTab === "drafts" ? (
+                      <>
+                        <td style={{ padding: "7px 12px", color: "#111827", fontWeight: 700, textAlign: "left", direction: "ltr" }}>
+                          {fmt(inv.total)} {inv.currency ?? ""}
+                        </td>
+                        <td style={{ padding: "7px 12px", color: "#6B7280", direction: "ltr", textAlign: "right" }}>
+                          {updatedAt}
+                        </td>
+                        <td style={{ padding: "7px 12px", color: "#6B7280" }}>
+                          {(inv as any).userName ?? "—"}
+                        </td>
+                        <td style={{ padding: "7px 12px" }}>
+                          <span style={{
+                            padding: "2px 8px", borderRadius: 12, fontSize: 11,
+                            background: `${st.color}18`, color: st.color, fontWeight: 600,
+                          }}>
+                            {st.label}
+                          </span>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td style={{ padding: "7px 12px" }}>
+                          <span style={{
+                            padding: "2px 8px", borderRadius: 12, fontSize: 11,
+                            background: inv.paymentMethod === "cash" ? "#F0FDF4" : "#FFF7ED",
+                            color: inv.paymentMethod === "cash" ? "#059669" : "#D97706",
+                            fontWeight: 600,
+                          }}>
+                            {payLabel}
+                          </span>
+                        </td>
+                        <td style={{ padding: "7px 12px", color: "#111827", fontWeight: 700, textAlign: "left", direction: "ltr" }}>
+                          {fmt(inv.total)} {inv.currency ?? ""}
+                        </td>
+                        <td style={{ padding: "7px 12px" }}>
+                          <span style={{
+                            padding: "2px 8px", borderRadius: 12, fontSize: 11,
+                            background: `${st.color}18`, color: st.color, fontWeight: 600,
+                          }}>
+                            {st.label}
+                          </span>
+                        </td>
+                      </>
+                    )}
                   </tr>
                 );
               })
@@ -2511,14 +2598,14 @@ function SalesInvoiceListView() {
       </div>
 
       {/* ── شريط الإجمالي ── */}
-      {invoices.length > 0 && (
+      {visibleRecords.length > 0 && (
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: "6px 16px", borderTop: "2px solid #E5E7EB",
           background: "#F9FAFB", flexShrink: 0,
         }}>
           <span style={{ fontSize: 12, color: "#6B7280" }}>
-            إجمالي {invoices.length} فاتورة
+            إجمالي {visibleRecords.length} {activeTab === "drafts" ? "مسودة" : "فاتورة"}
           </span>
           <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>
             الإجمالي الكلي: {totalAmount.toLocaleString("ar-EG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
