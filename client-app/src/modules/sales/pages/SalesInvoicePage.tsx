@@ -949,7 +949,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       toast.error("يجب اختيار نوع السند قبل الحفظ");
       throw new Error("validation");
     }
-    if (!invoiceNumber.trim()) {
+    // رقم الفاتورة/المسودة يُولّد في الخادم للمستندات الجديدة؛ للمسودات المحفوظة يُستخدم رقمها المسجّل
+    if (savedInvoiceId && invoiceStatus !== "draft" && !invoiceNumber.trim()) {
       toast.error("رقم الفاتورة مطلوب");
       throw new Error("validation");
     }

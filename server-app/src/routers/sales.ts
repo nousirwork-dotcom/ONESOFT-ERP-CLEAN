@@ -24,42 +24,67 @@ async function validateInvoiceItems(items: { productId?: number; productName: st
 }
 
 // ── توليد رقم فاتورة المبيعات من دفتر المستندات داخل transaction ───────────────
+// القواعد:
+// - آخر رقم مستخدم = currentSeq (0 = لم يُستخدم شيء بعد).
+// - الرقم التالي = max(آخر رقم مستخدم + increment, أول رقم).
+// - حقل "آخر رقم" (lastNumber) هو الحد الأقصى فقط، وليس الرقم التالي.
 async function generateInvoiceNumberForJournal(tx: any, journalId: number, orgId: number): Promise<string> {
   const journal = await tx.query.documentJournals.findFirst({
     where: and(eq(documentJournals.id, journalId), eq(documentJournals.orgId, orgId)),
   });
   if (!journal) throw new Error('الدفتر غير موجود');
 
-  // أقصى رقم محفوظ فعلياً لهذا الدفتر (نستخلص الأرقام الذيلية)
-  const existing = await tx.query.salesInvoices.findMany({
-    where: and(eq(salesInvoices.orgId, orgId), eq(salesInvoices.journalId, journalId)),
-    orderBy: [desc(salesInvoices.id)],
-    limit: 200,
-  });
-  let maxSaved = 0;
-  for (const inv of existing) {
-    const match = inv.invoiceNumber?.match(/(\d+)$/);
-    if (match) {
-      const n = parseInt(match[1], 10);
-      if (!isNaN(n) && n > maxSaved) maxSaved = n;
-    }
-  }
-
   const firstNumber = journal.firstNumber ?? 1;
   const increment   = journal.increment ?? 1;
-  // نعيد ضبط currentSeq على maxSaved: إذا لم يُحفظ شيء بعد فالرقم التالي = firstNumber
-  const baseSeq = maxSaved === 0 ? 0 : maxSaved;
-  const nextSeq = baseSeq === 0 ? firstNumber : Math.max(baseSeq + increment, firstNumber);
-  const clamped = Math.min(nextSeq, journal.lastNumber ?? 999999);
+  const lastNumber  = journal.lastNumber ?? 999999;
+
+  let lastUsed = journal.currentSeq ?? 0;
+  if (lastUsed === 0) {
+    // لم يُستخدم شيء بعد: نبدأ من قبل أول رقم بمقدار increment ليصبح الرقم التالي = firstNumber
+    lastUsed = firstNumber - increment;
+  }
+
+  let nextSeq = lastUsed + increment;
+  if (nextSeq < firstNumber) nextSeq = firstNumber;
+  if (nextSeq > lastNumber) throw new Error('تم استنفاد أرقام دفتر المستندات');
 
   await tx.update(documentJournals)
-    .set({ currentSeq: clamped, updatedAt: new Date() })
+    .set({ currentSeq: nextSeq, updatedAt: new Date() })
     .where(eq(documentJournals.id, journalId));
 
   const prefix  = journal.numberPrefix ?? 'INV';
   const digits  = journal.numDigits ?? 6;
-  const numPart = String(clamped).padStart(digits, '0');
+  const numPart = String(nextSeq).padStart(digits, '0');
   if (journal.includeYear) return `${prefix}${new Date().getFullYear()}-${numPart}`;
+  return `${prefix}${numPart}`;
+}
+
+// ── توليد رقم مسودة من دفتر المستندات داخل transaction ───────────────────────────
+async function generateDraftNumberForJournal(tx: any, journalId: number, orgId: number): Promise<string> {
+  const journal = await tx.query.documentJournals.findFirst({
+    where: and(eq(documentJournals.id, journalId), eq(documentJournals.orgId, orgId)),
+  });
+  if (!journal) throw new Error('الدفتر غير موجود');
+
+  const firstNumber = journal.draftFirstNumber ?? 1;
+  const lastNumber  = journal.draftLastNumber ?? 999999;
+
+  let lastUsed = journal.draftCurrentSeq ?? 0;
+  if (lastUsed === 0) {
+    lastUsed = firstNumber - 1;
+  }
+
+  let nextSeq = lastUsed + 1;
+  if (nextSeq < firstNumber) nextSeq = firstNumber;
+  if (nextSeq > lastNumber) throw new Error('تم استنفاد أرقام مسودات دفتر المستندات');
+
+  await tx.update(documentJournals)
+    .set({ draftCurrentSeq: nextSeq, updatedAt: new Date() })
+    .where(eq(documentJournals.id, journalId));
+
+  const prefix = journal.draftNumberPrefix ?? 'DRAFT';
+  const digits = journal.draftNumDigits ?? 6;
+  const numPart = String(nextSeq).padStart(digits, '0');
   return `${prefix}${numPart}`;
 }
 
@@ -272,6 +297,7 @@ export const salesRouter = router({
       basedOnType: z.string().optional(),
       basedOnNumber: z.string().optional(),
       sourceDocumentId: z.number().optional(),
+      draftNumber: z.string().optional(),
       items: z.array(z.object({
         productId: z.number().optional(),
         productCode: z.string().optional(),
@@ -314,10 +340,12 @@ export const salesRouter = router({
           await tx.execute(sql`SELECT pg_advisory_xact_lock(${invoiceData.journalId}::bigint)`);
         }
         let finalInvoiceNumber = invoiceData.invoiceNumber;
-        if (isDraft) {
-          // المسودة تحصل على رقم مسودة مستقل (غير رقم الفاتورة الرسمي)
-          finalInvoiceNumber = `DRAFT-${Date.now()}`;
-        } else if (invoiceData.journalId) {
+        let draftNumber: string | undefined = undefined;
+        if (isDraft && invoiceData.journalId) {
+          // المسودة تحصل على رقم من مسلسل مسودات الدفتر
+          draftNumber = await generateDraftNumberForJournal(tx, invoiceData.journalId, orgId);
+          finalInvoiceNumber = draftNumber;
+        } else if (!isDraft && invoiceData.journalId) {
           finalInvoiceNumber = await generateInvoiceNumberForJournal(tx, invoiceData.journalId, orgId);
         }
 
@@ -326,6 +354,7 @@ export const salesRouter = router({
           const [row] = await tx.insert(salesInvoices).values({
             ...invoiceData,
             invoiceNumber: finalInvoiceNumber,
+            draftNumber: draftNumber ?? invoiceData.draftNumber,
             orgId,
             userId: ctx.user.id,
             invoiceDate: new Date(invoiceData.invoiceDate),
@@ -478,14 +507,19 @@ export const salesRouter = router({
 
         // عند تحويل مسودة إلى مستند نهائي: استبدل رقم المسودة بالرقم الرسمي من دفتر المستندات
         let finalInvoiceNumber = existing?.invoiceNumber ?? '';
+        let finalDraftNumber = existing?.draftNumber ?? null;
         if (isFinalizing && finalJournalId) {
           finalInvoiceNumber = await generateInvoiceNumberForJournal(tx, finalJournalId, ctx.user.orgId);
+          // الاحتفاظ برقم المسودة الأصلي: إذا لم يكن موجوداً (بيانات قديمة)، نسجله من رقم المسودة السابق
+          if (!finalDraftNumber && existing?.invoiceNumber) {
+            finalDraftNumber = existing.invoiceNumber;
+          }
         }
 
         await tx.update(salesInvoices).set({
           ...rest,
           ...(invoiceDate ? { invoiceDate: new Date(invoiceDate) } : {}),
-          ...(isFinalizing ? { invoiceNumber: finalInvoiceNumber } : {}),
+          ...(isFinalizing ? { invoiceNumber: finalInvoiceNumber, draftNumber: finalDraftNumber } : {}),
           updatedAt: new Date(),
         }).where(and(eq(salesInvoices.id, id), eq(salesInvoices.orgId, ctx.user.orgId)));
         if (items) {

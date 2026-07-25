@@ -385,6 +385,8 @@ export const salesInvoices = pgTable('sales_invoices', {
   basedOnNumber: varchar('based_on_number', { length: 50 }),
   sourceDocumentId: integer('source_document_id'), // FK للفاتورة المصدر — يُتحقق منه لأمان الفرع
   sellerUserId: integer('seller_user_id').references(() => users.id, { onDelete: 'set null' }),
+  // رقم المسودة الأصلي — يُحفظ عند تحويل المسودة إلى فاتورة نهائية للرجوع إليه
+  draftNumber: varchar('draft_number', { length: 50 }),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
