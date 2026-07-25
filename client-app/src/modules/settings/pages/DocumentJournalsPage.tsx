@@ -1115,9 +1115,6 @@ export default function DocumentJournalsPage() {
                       {DOC_TYPES.map(dt => <SelectItem key={dt.id} value={dt.id}>{dt.label}</SelectItem>)}
                     </FS>
                   </R>
-                  <R label="الجزء الثابت">
-                    <FI value={form.fixedPart} onChange={v => set("fixedPart", v)} placeholder="S01-" mono />
-                  </R>
                   <R label="إسم عربي *">
                     <FI value={form.nameAr} onChange={v => set("nameAr", v)} placeholder={`دفتر ${currentType?.label}`} />
                   </R>
@@ -1203,6 +1200,9 @@ export default function DocumentJournalsPage() {
                     <div className="col-span-4">
                       <CB label="تسلسل أرقام أوتوماتيكي" checked={form.autoSerial} onChange={v => set("autoSerial", v)} />
                     </div>
+                    <R label="الجزء الثابت" className="col-span-4">
+                      <FI value={form.fixedPart} onChange={v => set("fixedPart", v)} placeholder="S01-" mono />
+                    </R>
                     <R label="أول رقم">
                       <FI value={form.firstNum} onChange={v => set("firstNum", v)} placeholder="1" mono />
                     </R>
