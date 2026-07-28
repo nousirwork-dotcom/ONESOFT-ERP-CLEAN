@@ -47,6 +47,7 @@ import { dashboardRouter }          from './dashboard.js';
 import { reportsRouter }            from './reports.js';
 import { vouchersRouter, receiptVouchersRouter, paymentVouchersRouter } from './vouchers.js';
 import { accountingRouter }         from './accounting.js';
+import { documentToolsRouter }      from './documentTools.js';
 import {
   userGroupsRouter, userCategoriesRouter, groupMembersRouter,
   qrSettingsRouter, branchesRouter, unitsRouter, freeProductsRouter,
@@ -95,6 +96,7 @@ const baseConfig = {
   reports:             reportsRouter,
   freeProducts:        freeProductsRouter,
   accounting:          accountingRouter,
+  documentTools:       documentToolsRouter,
   sales:               salesRouter,
   salesInvoices:       salesRouter,
   purchases:           purchasesRouter,

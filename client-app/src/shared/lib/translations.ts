@@ -73,6 +73,7 @@ const AR = {
   tbRelatedDocs:    "مستندات مرتبطة",
   tbUserActivity:   "نشاط المستخدمين",
   tbAttach:         "إرفاق مستند",
+  tbAttachments:    "إرفاق المستندات",
 
   // ─── Toolbar — status bar ─────────────────────
   tbModeView:   "عرض",
@@ -152,6 +153,7 @@ const EN: Record<keyof typeof AR, string> = {
   tbRelatedDocs:    "Related Documents",
   tbUserActivity:   "User Activity",
   tbAttach:         "Attach Document",
+  tbAttachments:    "Document Attachments",
   tbModeView:   "View",
   tbModeNew:    "New Entry",
   tbModeEdit:   "Edit",

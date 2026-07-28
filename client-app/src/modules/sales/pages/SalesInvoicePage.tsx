@@ -17,6 +17,7 @@ import { useAuth } from "@/core/hooks/useAuth";
 import { useUnsavedChangesGuard } from "@/core/hooks/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import { useRegisterCommands } from "@/components/unified-toolbar/useRegisterCommands";
+import { useDocumentToolsMenu } from "@/components/unified-toolbar/DocumentToolsMenu";
 import type { CommandHandlers, ScreenState } from "@/components/unified-toolbar/useRegisterCommands";
 import { useDocumentNavigation } from "@/components/unified-toolbar/useDocumentNavigation";
 type ERPMode = "view" | "new" | "edit" | "search";
@@ -1510,17 +1511,17 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
     isBusy:     createMutation.isPending || updateMutation.isPending,
   }), [erpMode, isDirty, savedInvoiceId, isPosted, createMutation.isPending, updateMutation.isPending]);
 
-  const toolbarTools = useMemo(() => {
-    const hasSaved = savedInvoiceId !== null;
-    return [
-      { id: "post",        label: "ترحيل الفاتورة",        enabled: hasSaved && !isPosted,  disabledReason: !hasSaved ? "احفظ الفاتورة أولًا" : isPosted ? "الفاتورة مرحّلة بالفعل" : undefined, onClick: () => { const s = _sipRef.current; if (!s.savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً"); return; } s.setShowPostingPreview(true); } },
-      { id: "unpost",      label: "إلغاء ترحيل الفاتورة",  enabled: hasSaved && isPosted,   disabledReason: !isPosted ? "الفاتورة غير مرحّلة" : undefined, onClick: () => { const s = _sipRef.current; if (!s.savedInvoiceId) return; if (window.confirm("هل أنت متأكد من إلغاء ترحيل هذه الفاتورة؟")) s.unpostMutation.mutate({ invoiceId: s.savedInvoiceId }); } },
-      { id: "repost",      label: "إعادة الترحيل",          enabled: hasSaved && isPosted,   disabledReason: !isPosted ? "الفاتورة غير مرحّلة" : undefined, onClick: () => _sipRef.current.handleRepost() },
-      { id: "suspend",     label: "تعليق الترحيل",          enabled: false, disabledReason: "قريباً" },
-      { id: "activity",    label: "نشاط المستخدمين", separatorBefore: true as const, enabled: false, disabledReason: "قريباً" },
-      { id: "attachments", label: "إرفاق المستندات",         enabled: false, disabledReason: "قريباً" },
-    ];
-  }, [savedInvoiceId, isPosted]);
+  const documentTools = useDocumentToolsMenu({
+    documentType: "sales_invoice",
+    documentTypeLabel: "فاتورة مبيعات",
+    documentId: savedInvoiceId,
+    documentNumber: invoiceNumber,
+    documentStatus: invoiceStatus,
+    isPosted,
+    isSaved: savedInvoiceId !== null,
+    isAr,
+  });
+  const toolbarTools = documentTools.tools;
 
   useRegisterCommands(sipHandlers, sipState, toolbarTools);
 
@@ -2571,6 +2572,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
           isPosting={postMutation.isPending}
         />
       )}
+
+      {documentTools.dialog}
 
       {/* ── شاشة الدفع ──────────────────────────────────────────────────── */}
       {showPaymentModal && (
