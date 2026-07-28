@@ -1502,7 +1502,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       {/* ── Header Form ─────────────────────────────────────────────────── */}
       <div className="border-b border-[#b0a89a] px-3 pt-2 pb-2" style={{ background: "#FFFFFF", boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }}>
         {/* ثوابت مشتركة لجميع الحقول — ارتفاع موحد 26px + عرض label موحد */}
-        <div className={styles.salesHeaderGrid} style={{ alignItems: "center" }}>
+        <div className={styles.invoiceHeader}>
+          <div className={styles.invoiceHeaderRow1}>
 
           {/* ══ صف 1 (من اليمين): الفرع ← رقم الفاتورة ← بناءً على ══ */}
 
@@ -1512,11 +1513,11 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             const selWh = whs.find((w: any) => w.id === warehouseId);
             const wName = (w: any): string => isAr ? (w.name ?? w.nameEn ?? "") : (w.nameEn || (w.name ?? ""));
             return (
-              <div className="sales-header-group sales-field-medium relative" style={{ gap: 5 }}>
+              <div className="invoice-field-group relative" style={{ gap: 5 }}>
                 <label style={headerLabelStyle}>
                   {isAr ? "الفـــــــرع" : "Branch"}
                 </label>
-                <div className="sales-field-control flex relative min-w-0" style={{ height: "var(--work-field-h, 26px)" }}>
+                <div className="invoice-field-control flex relative min-w-0" style={{ height: "var(--work-field-h, 26px)" }}>
                   <button
                     onClick={() => { if (erpMode !== "view") setBranchOpen(o => !o); }}
                     disabled={erpMode === "view"}
@@ -1583,7 +1584,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           })()}
 
           {/* col 2: رقم الفاتورة — ملاصق للفرع مباشرة */}
-          <div className="sales-header-group sales-field-medium justify-start" style={{ gap: 4 }}>
+          <div className="invoice-field-group justify-start" style={{ gap: 4 }}>
             <label style={{ ...headerLabelStyle, color: "#D19C05" }}>
               {isAr ? "رقم الفاتورة" : "Invoice No."}
             </label>
@@ -1605,10 +1606,10 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           </div>
 
           {/* col 3-4: بناءً على */}
-          <div className="sales-header-group sales-field-large sales-header-based" style={{ gap: 6 }}>
+          <div className="invoice-field-group invoice-header-based" style={{ gap: 6 }}>
             <label style={headerLabelStyle}>بناءً على</label>
             <div className="flex min-w-0" style={{ gap: 12 }}>
-              <div className="sales-field-control" style={{ width: 120, display: "flex" }}>
+              <div className="invoice-field-control" style={{ width: 120, display: "flex" }}>
                 <ContextSelectInput
                   value={basedOnType}
                   onChange={v => { if (!warehouseId) { return; } setBasedOnType(v as any); setBasedOnNum(''); setBasedOnTrigger(''); }}
@@ -1639,14 +1640,14 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
               />
             </div>
           </div>
+          </div>
 
-
-          {/* ══ صف 2: العميل (col 1-3) │ العملة (col 4) ══ */}
+          <div className={styles.invoiceHeaderRow2}>
 
           {/* col 1-3: العميل */}
-          <div className="sales-header-group sales-field-large sales-header-customer" ref={custDropRef} style={{ gap: 6, position: "relative" }}>
+          <div className="invoice-field-group invoice-header-customer" ref={custDropRef} style={{ gap: 6, position: "relative" }}>
             <label style={headerLabelStyle}>العميل</label>
-            <div className="sales-field-control flex min-w-0" style={{ gap: 4, position: "relative" }}>
+            <div className="invoice-field-control flex min-w-0" style={{ gap: 4, position: "relative" }}>
               {/* حقل البحث / اسم العميل */}
               {(() => {
                 const customerLocked = !!(savedInvoiceId || isPosted);
@@ -1757,28 +1758,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             </div>
           </div>
 
-          {/* col 4: العملة — تحت نوع السند */}
-          <div className="sales-header-group sales-field-small" style={{ gap: 6 }}>
-            <label style={headerLabelStyle}>العملة</label>
-            <ContextSelectInput
-              value={currency}
-              onChange={v => setCurrency(v || "SAR")}
-              options={[
-                { value: "SAR", label: "ريال سعودي", sublabel: "SAR" },
-                { value: "USD", label: "دولار أمريكي", sublabel: "USD" },
-                { value: "EUR", label: "يورو", sublabel: "EUR" },
-                { value: "AED", label: "درهم إماراتي", sublabel: "AED" },
-              ]}
-              menuTitle="اختر العملة"
-              placeholder="العملة ⊞"
-               style={{ height: "var(--work-field-h, 26px)", width: 104, minWidth: 0 }}
-            />
-          </div>
-
-          {/* ══ صف 3: المخزن │ تاريخ التحرير │ تاريخ الدفع │ البائع ══ */}
-
           {/* col 1: المخزن */}
-          <div className="sales-header-group sales-field-medium" style={{ gap: 6 }}>
+          <div className="invoice-field-group" style={{ gap: 6 }}>
             <label style={headerLabelStyle}>المخزن</label>
             {(() => {
               const activeWh = journalWarehouseId ?? docTypeWarehouseId ?? warehouseId;
@@ -1794,16 +1775,16 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   placeholder={activeWh ? "يُحدَّد من الفرع" : "اختر الفرع أولاً"}
                   disabled={true}
                   title={activeWh ? `المخزن: ${whName}` : "اختر الفرع أولاً"}
-                   style={{ height: "var(--work-field-h, 26px)", width: 154, minWidth: 0 }}
+                   style={{ height: "var(--work-field-h, 26px)", width: 114, minWidth: 0 }}
                 />
               );
             })()}
           </div>
 
           {/* col 2: تاريخ التحرير — حاوية موحدة بحد واحد */}
-          <div className="sales-header-group sales-field-medium" style={{ gap: 6 }}>
+          <div className="invoice-field-group" style={{ gap: 6 }}>
             <label style={headerLabelStyle}>تاريخ التحرير</label>
-            <div className="sales-field-control flex min-w-0" style={{ width: 154, height: "var(--work-field-h, 26px)", border: "1px solid #d1d5db", borderRadius: 4, overflow: "hidden" }}>
+            <div className="invoice-field-control flex min-w-0" style={{ width: 114, height: "var(--work-field-h, 26px)", border: "1px solid #d1d5db", borderRadius: 4, overflow: "hidden" }}>
               <DateSegmentInput value={invoiceDate} onChange={setInvoiceDate} style={{ flex: 1, minWidth: 0, height: "var(--work-field-h, 26px)", border: "none", borderRadius: 0 }} />
               <button type="button" onClick={() => invoiceDatePickerRef.current?.showPicker()} className="flex items-center justify-center flex-shrink-0" style={{ height: "var(--work-field-h, 26px)", width: "26px", background: "#f3f4f6", border: "none", borderInlineStart: "1px solid #d1d5db", color: "#555", cursor: "pointer", fontSize: "var(--work-font-size, 12px)" }}>📅</button>
               <input ref={invoiceDatePickerRef} type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} aria-hidden="true" />
@@ -1811,14 +1792,17 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           </div>
 
           {/* col 3: تاريخ الدفع — حاوية موحدة بحد واحد */}
-          <div className="sales-header-group sales-field-medium" style={{ gap: 6 }}>
+          <div className="invoice-field-group" style={{ gap: 6 }}>
             <label style={headerLabelStyle}>تاريخ الدفع</label>
-            <div className="sales-field-control flex min-w-0" style={{ width: 154, height: "var(--work-field-h, 26px)", border: "1px solid #d1d5db", borderRadius: 4, overflow: "hidden" }}>
+            <div className="invoice-field-control flex min-w-0" style={{ width: 114, height: "var(--work-field-h, 26px)", border: "1px solid #d1d5db", borderRadius: 4, overflow: "hidden" }}>
               <DateSegmentInput value={dueDate} onChange={setDueDate} style={{ flex: 1, minWidth: 0, height: "var(--work-field-h, 26px)", border: "none", borderRadius: 0 }} />
               <button type="button" onClick={() => dueDatePickerRef.current?.showPicker()} className="flex items-center justify-center flex-shrink-0" style={{ height: "var(--work-field-h, 26px)", width: "26px", background: "#f3f4f6", border: "none", borderInlineStart: "1px solid #d1d5db", color: "#555", cursor: "pointer", fontSize: "var(--work-font-size, 12px)" }}>📅</button>
               <input ref={dueDatePickerRef} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} aria-hidden="true" />
             </div>
           </div>
+
+          </div>
+          <div className={styles.invoiceHeaderRow3}>
 
           {/* col 4: البائع — تلقائيًا = المستخدم الحالي؛ يمكن تغييره فقط للمدير */}
           {(() => {
@@ -1827,9 +1811,9 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             const sellerName = sellerObj ? (sellerObj.name || sellerObj.username) : (currentUser?.name || currentUser?.username || "");
             const sellerDisabled = !warehouseId || erpMode === "view" || !canChangeSeller;
             return (
-              <div className="sales-header-group sales-field-medium relative" style={{ gap: 6 }}>
+              <div className="invoice-field-group relative" style={{ gap: 6 }}>
                 <label style={headerLabelStyle}>البائع</label>
-                  <div className="sales-field-control flex relative" style={{ width: 154, height: "var(--work-field-h, 26px)" }}>
+                  <div className="invoice-field-control flex relative" style={{ width: 114, height: "var(--work-field-h, 26px)" }}>
                   <button
                     onClick={() => { if (!sellerDisabled) setSellerOpen(o => !o); }}
                     disabled={sellerDisabled}
@@ -1891,13 +1875,31 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
               </div>
             );
           })()}
-
-          {/* ══ صف 4: ملحوظة ══ */}
-          <div className="sales-header-group sales-field-full sales-header-note" style={{ gap: 6 }}>
-            <label style={headerLabelStyle}>ملاحظة</label>
-            <input value={notes} onChange={e => setNotes(e.target.value)} className="classic-input sales-field-control" style={{ height: "var(--work-field-h, 26px)" }} />
+          {/* العملة — الصف الثالث ثابت الترتيب */}
+          <div className="invoice-field-group invoice-header-currency" style={{ gap: 6 }}>
+            <label style={headerLabelStyle}>العملة</label>
+            <ContextSelectInput
+              value={currency}
+              onChange={v => setCurrency(v || "SAR")}
+              options={[
+                { value: "SAR", label: "ريال سعودي", sublabel: "SAR" },
+                { value: "USD", label: "دولار أمريكي", sublabel: "USD" },
+                { value: "EUR", label: "يورو", sublabel: "EUR" },
+                { value: "AED", label: "درهم إماراتي", sublabel: "AED" },
+              ]}
+              menuTitle="اختر العملة"
+              placeholder="العملة ⊞"
+              style={{ height: "var(--work-field-h, 26px)", width: 104, minWidth: 0 }}
+            />
           </div>
 
+          {/* ══ صف 4: ملحوظة ══ */}
+          <div className="invoice-field-group invoice-header-note" style={{ gap: 6 }}>
+            <label style={headerLabelStyle}>ملاحظة</label>
+            <input value={notes} onChange={e => setNotes(e.target.value)} className="classic-input invoice-field-control" style={{ height: "var(--work-field-h, 26px)" }} />
+          </div>
+
+          </div>
         </div>
       </div>
 

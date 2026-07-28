@@ -40,79 +40,81 @@
   align-items: center;
 }
 
-/* Sales invoice header: fixed-size groups that wrap as complete units. */
-.salesHeaderGrid {
-  display: flex;
-  flex-wrap: wrap;
+.invoiceHeader {
+  min-width: 1140px;
+}
+
+.invoiceHeaderRow1,
+.invoiceHeaderRow2,
+.invoiceHeaderRow3 {
+  display: grid;
   align-items: center;
-  align-content: flex-start;
-  gap: 5px 10px;
+  column-gap: 10px;
+  row-gap: 5px;
+  min-width: 1140px;
+}
+
+.invoiceHeaderRow1 {
+  grid-template-columns: 230px 230px minmax(420px, 1fr);
+}
+
+.invoiceHeaderRow2 {
+  grid-template-columns: minmax(420px, 1fr) 230px 230px 230px;
+}
+
+.invoiceHeaderRow3 {
+  grid-template-columns: 180px 230px minmax(0, 1fr);
+}
+
+.invoiceHeaderRow3 .invoice-header-currency {
+  grid-column: 1;
+}
+
+.invoiceHeaderRow3 .invoice-header-note {
+  grid-column: 3;
+}
+
+.invoiceHeaderRow3 > .invoice-field-group {
+  width: 100%;
+}
+
+.invoiceHeaderRow3 > :global(.invoice-field-group):first-child {
+  grid-column: 2;
+}
+
+.invoiceHeaderRow1 > *,
+.invoiceHeaderRow2 > *,
+.invoiceHeaderRow3 > * {
   min-width: 0;
 }
 
-.salesHeaderGrid > * {
-  min-width: 0;
-}
-
-.salesHeaderGrid :global(.sales-header-group) {
+.invoiceHeader :global(.invoice-field-group) {
   display: flex;
-  flex: 0 0 var(--invoice-field-medium-width);
-  width: var(--invoice-field-medium-width);
+  flex: 0 0 auto;
+  width: 100%;
   min-width: 0;
   align-items: center;
   gap: var(--invoice-field-gap);
 }
 
-.salesHeaderGrid label {
+.invoiceHeader label {
   flex: 0 0 var(--invoice-label-width);
   width: var(--invoice-label-width);
   white-space: nowrap;
 }
 
-.salesHeaderGrid input,
-.salesHeaderGrid select,
-.salesHeaderGrid button {
+.invoiceHeader input,
+.invoiceHeader select,
+.invoiceHeader button {
   min-width: 0;
 }
 
-.salesHeaderGrid :global(.sales-field-small) {
-  flex-basis: var(--invoice-field-small-width);
-  width: var(--invoice-field-small-width);
-}
-
-.salesHeaderGrid :global(.sales-field-medium) {
-  flex-basis: var(--invoice-field-medium-width);
-  width: var(--invoice-field-medium-width);
-}
-
-.salesHeaderGrid :global(.sales-field-large) {
-  flex-basis: var(--invoice-field-large-width);
-  width: var(--invoice-field-large-width);
-}
-
-.salesHeaderGrid :global(.sales-field-full) {
-  flex: 1 1 100%;
-  width: 100%;
-}
-
-.salesHeaderGrid :global(.sales-field-control) {
+.invoiceHeader :global(.invoice-field-control) {
   flex: 0 0 auto;
   min-width: 0;
 }
 
-.salesHeaderGrid :global(.sales-field-medium) > :global(.sales-field-control) {
-  width: calc(var(--invoice-field-medium-width) - var(--invoice-label-width) - var(--invoice-field-gap));
-}
-
-.salesHeaderGrid :global(.sales-field-small) > :global(.sales-field-control) {
-  width: calc(var(--invoice-field-small-width) - var(--invoice-label-width) - var(--invoice-field-gap));
-}
-
-.salesHeaderGrid :global(.sales-field-large) > :global(.sales-field-control) {
-  width: calc(var(--invoice-field-large-width) - var(--invoice-label-width) - var(--invoice-field-gap));
-}
-
-.salesHeaderGrid :global(.sales-field-full) > :global(.sales-field-control) {
+.invoiceHeaderRow3 .invoice-header-note :global(.invoice-field-control) {
   flex: 1 1 auto;
 }
 
@@ -125,25 +127,7 @@
 }
 
 @container erp-screen (max-width: 1000px) {
-  .formGrid,
-  .formGrid5,
-  .formGrid6 {
-    grid-template-columns: repeat(3, minmax(var(--field-min-w, 80px), 1fr));
-  }
-}
-
-@container erp-screen (max-width: 760px) {
-  .formGrid,
-  .formGrid5,
-  .formGrid6 {
-    grid-template-columns: repeat(2, minmax(var(--field-min-w, 80px), 1fr));
-  }
-}
-
-@container erp-screen (max-width: 500px) {
-  .formGrid,
-  .formGrid5,
-  .formGrid6 {
-    grid-template-columns: 1fr;
+  .invoiceHeader {
+    overflow-x: hidden;
   }
 }
