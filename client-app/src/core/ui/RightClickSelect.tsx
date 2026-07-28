@@ -6,10 +6,8 @@
  * - أيقونة ListFilter كإشارة بصرية
  * - Tooltip يوضّح السلوك
  */
-import React, { useState } from "react";
-import { ListFilter } from "lucide-react";
+import React, { useRef, useState } from "react";
 import { Select, SelectContent, SelectTrigger, SelectValue } from "@/core/ui/select";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/core/ui/tooltip";
 
 export interface RightClickSelectProps {
   id?: string;
@@ -28,11 +26,12 @@ export default function RightClickSelect({
 }: RightClickSelectProps) {
   const [open, setOpen]       = useState(false);
   const [focused, setFocused] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editText, setEditText] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <div
+    <div
           id={id}
           className={[
             "relative flex items-center rounded border bg-white h-7 px-2 text-[11px]",
@@ -43,12 +42,16 @@ export default function RightClickSelect({
             disabled ? "opacity-50 pointer-events-none" : "",
             className ?? "",
           ].join(" ")}
-          onPointerDown={e => {
-            if (e.button === 0) {
-              e.preventDefault();
-              e.stopPropagation();
-              setFocused(true);
-            }
+          onClick={() => { if (!editMode && !disabled) setOpen(true); }}
+          onDoubleClick={() => {
+            if (disabled) return;
+            setEditText(value);
+            setEditMode(true);
+            setOpen(false);
+            window.setTimeout(() => {
+              inputRef.current?.focus();
+              inputRef.current?.select();
+            }, 0);
           }}
           onBlur={() => setFocused(false)}
           onContextMenu={e => {
@@ -58,7 +61,19 @@ export default function RightClickSelect({
           }}
           tabIndex={disabled ? -1 : 0}
         >
-          <Select
+          {editMode ? (
+            <input
+              ref={inputRef}
+              value={editText}
+              onChange={e => setEditText(e.target.value)}
+              onBlur={() => { setEditMode(false); }}
+              onKeyDown={e => {
+                if (e.key === "Enter") setEditMode(false);
+                if (e.key === "Escape") setEditMode(false);
+              }}
+              className="h-full w-full border-0 bg-transparent p-0 text-right outline-none"
+            />
+          ) : <Select
             value={value || ""}
             onValueChange={v => { onValueChange(v); setOpen(false); }}
             open={open}
@@ -75,15 +90,7 @@ export default function RightClickSelect({
             <SelectContent onPointerDownOutside={() => setOpen(false)}>
               {children}
             </SelectContent>
-          </Select>
-          <span className="absolute left-1 top-1/2 -translate-y-1/2 pointer-events-none opacity-40">
-            <ListFilter className="w-3 h-3 text-slate-400" />
-          </span>
-        </div>
-      </TooltipTrigger>
-      <TooltipContent side="bottom" align="center">
-        كليك يمين لعرض الاختيارات
-      </TooltipContent>
-    </Tooltip>
+          </Select>}
+    </div>
   );
 }
