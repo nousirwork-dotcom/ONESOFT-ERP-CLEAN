@@ -88,6 +88,19 @@ function fmt(n: number) {
 function fmtDb(n: number) {
   return n.toFixed(4);
 }
+
+function fieldsExcludedFromHeader(el: HTMLElement): boolean {
+  return !!el.closest("[data-global-keyboard], [data-no-desktop-field]");
+}
+
+function focusHeaderField(field: HTMLElement, backwards: boolean): void {
+  if (field.matches("[data-date-field]")) {
+    const parts = Array.from(field.querySelectorAll<HTMLInputElement>("input:not([disabled])"));
+    (backwards ? parts.at(-1) : parts[0])?.focus();
+    return;
+  }
+  field.focus();
+}
 function toDisplayDate(iso: string) {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');
@@ -906,6 +919,11 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
           setSelectedLineIdx(rowIdx + 1);
           cellRefs.current.get(`${rowIdx + 1}-0`)?.focus();
         } else {
+          const currentLine = lines[rowIdx];
+          const isEmpty = !currentLine?.productId &&
+            !currentLine?.productCode.trim() &&
+            !currentLine?.productName.trim();
+          if (isEmpty) return;
           addLine();
           setTimeout(() => cellRefs.current.get(`${rowIdx + 1}-0`)?.focus(), 50);
         }
@@ -932,6 +950,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
       if (found) {
         e.preventDefault();
         handleProductCodeChange(idx, code);
+        requestAnimationFrame(() => cellRefs.current.get(`${idx}-2`)?.focus());
       } else {
         e.preventDefault();
         rejectInvalidProduct(key);
@@ -1507,23 +1526,40 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
 
   // ─── Render ───────────────────────────────────────────────────────────────
   const handleWorkKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== "Enter" || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
+    if (!["Enter", "Tab"].includes(e.key) || e.ctrlKey || e.altKey || e.metaKey) return;
     const target = e.target as HTMLElement;
-    if (!target.matches("input, select, textarea") || target.closest("[data-line-item]")) return;
+    if (target.closest("[data-line-item]")) return;
+
+    // التاريخ مكوّن داخلي من عدة inputs، لكنه حقل واحد في تنقل رأس الفاتورة.
+    const current = target.closest<HTMLElement>("[data-date-field], [data-enter-nav]") ??
+      (target.matches("input:not([disabled]):not([readonly]), textarea:not([disabled])") ? target : null);
+    if (!current) return;
+
     e.preventDefault();
-    const focusable = Array.from(
+    e.stopPropagation();
+
+    const fields = Array.from(
       workRootRef.current?.querySelectorAll<HTMLElement>(
-        "input:not([disabled]):not([readonly]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])"
+        "[data-date-field], [data-enter-nav], input:not([disabled]):not([readonly]):not([data-date-segment]), textarea:not([disabled])"
       ) ?? []
-    ).filter(el => el.offsetParent !== null && el.tabIndex !== -1);
-    const index = focusable.indexOf(target);
-    focusable[index + 1]?.focus();
+    ).filter(el =>
+      el.offsetParent !== null &&
+      el.tabIndex !== -1 &&
+      !(el as HTMLButtonElement).disabled &&
+      !el.closest("[data-line-item]") &&
+      !fieldsExcludedFromHeader(el)
+    );
+    const index = fields.indexOf(current);
+    if (index < 0) return;
+    const direction = e.key === "Tab" && e.shiftKey ? -1 : 1;
+    const next = fields[index + direction];
+    if (next) focusHeaderField(next, direction < 0);
   }, []);
 
   return (
     <div
       ref={workRootRef}
-      onKeyDown={handleWorkKeyDown}
+      onKeyDownCapture={handleWorkKeyDown}
       className={`${styles.screenContainer} flex flex-col h-full text-[#1a1a1a] select-none`}
       style={{ fontFamily: "'Cairo', Tahoma, Arial, sans-serif", fontSize: "var(--work-font-size, 12px)", background: "var(--background)" }}
       dir="rtl"
@@ -1551,6 +1587,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
                 </label>
                 <div className="flex relative flex-1 min-w-0" style={{ height: "var(--work-field-h, 26px)" }}>
                   <button
+                    data-enter-nav="true"
                     onClick={() => { if (erpMode !== "view") setBranchOpen(o => !o); }}
                     disabled={erpMode === "view"}
                     className="flex items-center gap-1 classic-input"
@@ -1831,8 +1868,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
           {/* col 2: تاريخ التحرير — حاوية موحدة بحد واحد */}
           <div className="flex items-center w-full min-w-0" style={{ gap: 3, gridColumn: "2" }}>
             <label style={compactHeaderLabelStyle}>تاريخ التحرير</label>
-            <div className="flex flex-1 min-w-0" style={{ height: "var(--work-field-h, 26px)", border: "1px solid #d1d5db", borderRadius: 4, overflow: "hidden" }}>
-              <DateSegmentInput value={invoiceDate} onChange={setInvoiceDate} style={{ flex: 1, minWidth: 0, height: "var(--work-field-h, 26px)", border: "none", borderRadius: 0, justifyContent: "center", textAlign: "center" }} />
+            <div data-date-field className="flex min-w-0" style={{ flex: "0 0 112px", width: 112, height: "var(--work-field-h, 26px)", border: "1px solid #d1d5db", borderRadius: 4, overflow: "hidden" }}>
+              <DateSegmentInput value={invoiceDate} onChange={setInvoiceDate} style={{ flex: 1, minWidth: 0, width: "100%", height: "var(--work-field-h, 26px)", border: "none", borderRadius: 0, justifyContent: "center", textAlign: "center", paddingInline: 2 }} />
               <button type="button" onClick={() => invoiceDatePickerRef.current?.showPicker()} className="flex items-center justify-center flex-shrink-0" style={{ height: "var(--work-field-h, 26px)", width: "26px", background: "#f3f4f6", border: "none", borderInlineStart: "1px solid #d1d5db", color: "#555", cursor: "pointer", fontSize: "var(--work-font-size, 12px)" }}>📅</button>
               <input ref={invoiceDatePickerRef} type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} aria-hidden="true" />
             </div>
@@ -1841,8 +1878,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
           {/* col 3: تاريخ الدفع — حاوية موحدة بحد واحد */}
           <div className="flex items-center w-full min-w-0" style={{ gap: 3, gridColumn: "3" }}>
             <label style={compactHeaderLabelStyle}>تاريخ الدفع</label>
-            <div className="flex flex-1 min-w-0" style={{ height: "var(--work-field-h, 26px)", border: "1px solid #d1d5db", borderRadius: 4, overflow: "hidden" }}>
-              <DateSegmentInput value={dueDate} onChange={setDueDate} style={{ flex: 1, minWidth: 0, height: "var(--work-field-h, 26px)", border: "none", borderRadius: 0, justifyContent: "center", textAlign: "center" }} />
+            <div data-date-field className="flex min-w-0" style={{ flex: "0 0 112px", width: 112, height: "var(--work-field-h, 26px)", border: "1px solid #d1d5db", borderRadius: 4, overflow: "hidden" }}>
+              <DateSegmentInput value={dueDate} onChange={setDueDate} style={{ flex: 1, minWidth: 0, width: "100%", height: "var(--work-field-h, 26px)", border: "none", borderRadius: 0, justifyContent: "center", textAlign: "center", paddingInline: 2 }} />
               <button type="button" onClick={() => dueDatePickerRef.current?.showPicker()} className="flex items-center justify-center flex-shrink-0" style={{ height: "var(--work-field-h, 26px)", width: "26px", background: "#f3f4f6", border: "none", borderInlineStart: "1px solid #d1d5db", color: "#555", cursor: "pointer", fontSize: "var(--work-font-size, 12px)" }}>📅</button>
               <input ref={dueDatePickerRef} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} aria-hidden="true" />
             </div>
@@ -1857,13 +1894,14 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
             return (
               <div className="flex items-center relative w-full min-w-0" style={{ gap: 3, gridColumn: "4" }}>
                 <label style={compactHeaderLabelStyle}>البائع</label>
-                  <div className="flex relative flex-1 min-w-0 w-full" style={{ height: "var(--work-field-h, 26px)" }}>
+                  <div className="flex relative flex-1 min-w-0 w-full" style={{ flexBasis: 0, height: "var(--work-field-h, 26px)" }}>
                   <button
                     onClick={() => { if (!sellerDisabled) setSellerOpen(o => !o); }}
                     disabled={sellerDisabled}
+                    data-enter-nav="true"
                     className="flex items-center gap-1 classic-input"
-                    style={{
-                      height: "var(--work-field-h, 26px)", paddingInline: "6px 4px",
+                     style={{
+                       flex: 1, minWidth: 0, width: "100%", boxSizing: "border-box", height: "var(--work-field-h, 26px)", paddingInline: "6px 4px",
                       background: sellerObj ? "#faf5ff" : !warehouseId ? "#f3f4f6" : "#fafafa",
                       border: `1px solid ${sellerObj ? "#7c3aed" : "#c9c4bb"}`,
                       borderRadius: "4px 0 0 4px", borderInlineEnd: "none",
@@ -2101,7 +2139,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
                     cellRefs={cellRefs}
                     isStockItem={line.isStockItem}
                     productId={line.productId}
-                    onSelect={(name, code, id, unit, price, tax, itemType) => {
+                     onSelect={(name, code, id, unit, price, tax, itemType) => {
                       setLines(prev => {
                         const updated = [...prev];
                         const l = { ...updated[rowIdx], productName: name, productCode: code, productId: id, unit, unitPrice: price, taxPct: tax, isStockItem: itemType !== "service" };
@@ -2109,6 +2147,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
                         updated[rowIdx] = l;
                         return updated;
                       });
+                       requestAnimationFrame(() => cellRefs.current.get(`${rowIdx}-2`)?.focus());
                     }}
                     onChange={v => {
                       // السماح بتغيير الوصف/الاسم للصنف الخدمة فقط داخل السطر
