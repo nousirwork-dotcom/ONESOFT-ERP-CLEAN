@@ -262,11 +262,13 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
     >
       <div dir="rtl" style={{
         width: 940, maxWidth: "98vw",
-        background: "#eeece8",
+        height: 620, maxHeight: "calc(100vh - 24px)",
+        minHeight: 620,
+        background: "#f0ede8",
         border: "2px solid #315f88",
         boxShadow: "0 8px 28px rgba(20,35,50,0.42)",
         display: "flex", flexDirection: "column",
-        maxHeight: "90vh", overflow: "hidden",
+        overflow: "hidden",
         borderRadius: 5,
       }}>
 
@@ -324,7 +326,10 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
         </div>
 
         {/* ── Body ── */}
-        <div style={{ overflowY: "auto", flexGrow: 1, padding: "10px 12px", background: "#eeece8" }}>
+        <div style={{
+          overflowY: "auto", flex: "1 1 auto", minHeight: 0,
+          padding: "10px 12px", background: "#f0ede8",
+        }}>
 
           {/* ══ نافذة رئيسية ══ */}
           {tab === "main" && (
@@ -797,7 +802,7 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
         </div>
 
         {/* ── سياسة التأسيس ── */}
-        <div style={{ padding: "4px 14px 4px", borderTop: "1px solid #D0D0D0", background: "#F8F8F8" }}>
+        <div style={{ padding: "4px 14px 4px", borderTop: "1px solid #d2cec8", background: "#f0ede8" }}>
           <FoundationPolicyPanel
             recordPolicy={form.recordPolicy ?? "flexible"}
             foundationKey={form.foundationKey ?? null}
@@ -851,18 +856,16 @@ function ESection({ title, children, headerColor, note }: {
   headerColor?: string; note?: string;
 }) {
   return (
-    <div style={{ border: "1px solid #c4c5c5", borderRadius: 4, overflow: "hidden", background: "#f8f7f3", boxShadow: "0 1px 2px rgba(0,0,0,.06)" }}>
+    <div style={{ border: "1px solid #c9c4bc", borderRadius: 4, overflow: "hidden", background: "#f0ede8", boxShadow: "0 1px 2px rgba(0,0,0,.06)" }}>
       <div style={{
-        background: headerColor
-          ? `linear-gradient(180deg, ${headerColor} 0%, ${headerColor}dd 100%)`
-          : "linear-gradient(180deg, #6b7075 0%, #4d5257 100%)",
-        borderBottom: "1px solid #454a4f", padding: "5px 10px",
+        background: "#f0ede8",
+        borderBottom: "1px solid #c9c4bc", padding: "5px 10px",
         display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>{title}</span>
-        {note && <span style={{ fontSize: 9, color: "rgba(255,255,255,.8)" }}>{note}</span>}
+        <span style={{ fontSize: 11, fontWeight: 700, color: "#4e5459" }}>{title}</span>
+        {note && <span style={{ fontSize: 9, color: "#7a7d7e" }}>{note}</span>}
       </div>
-      <div style={{ padding: "10px", background: "#f8f7f3" }}>{children}</div>
+      <div style={{ padding: "10px", background: "#f0ede8" }}>{children}</div>
     </div>
   );
 }
