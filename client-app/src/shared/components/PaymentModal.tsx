@@ -166,6 +166,8 @@ export default function PaymentModal({
     onError: (e) => toast.error(e.message),
   });
 
+  const isBusy = isSavingFirst || updatePaymentMut.isPending;
+
   // ─── core save (after validation) ────────────────────────────────────────
   const doSave = useCallback(async (finalAmounts: Record<string, string>) => {
     if (isSavingFirst || updatePaymentMut.isPending) return;
@@ -244,8 +246,6 @@ export default function PaymentModal({
       .reduce((s, [, v]) => s + (parseFloat(v) || 0), 0);
     setAmounts((prev) => ({ ...prev, [code]: Math.max(0, invoiceTotal - otherTotal).toFixed(2) }));
   }, [amounts, invoiceTotal]);
-
-  const isBusy = isSavingFirst || updatePaymentMut.isPending;
 
   // ─── prevent outside-click close: show shake instead ─────────────────────
   const handleAttemptClose = useCallback(() => {
