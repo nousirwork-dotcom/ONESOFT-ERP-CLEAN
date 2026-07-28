@@ -1200,7 +1200,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
                           ? "جاري تحميل الفروع..."
                           : branchesQuery.error || warehousesQuery.error || journalsQuery.error
                             ? "تعذّر تحميل الفروع"
-                            : "عدم الاختيار"
+                            : "بدون اختيار"
                       )}
                     </button>
                   )}
@@ -1214,7 +1214,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
                         className="block w-full px-2 py-1 text-right text-sm hover:bg-[#eadbc9]"
                         onClick={() => handlePurchaseBranchSelect("")}
                       >
-                        عدم الاختيار
+                        بدون اختيار
                       </button>
                       {purchaseBranchOptions.map(option => (
                         <button
