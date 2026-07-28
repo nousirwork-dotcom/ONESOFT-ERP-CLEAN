@@ -199,6 +199,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   const [partyId, setPartyId]                         = useState<number | null>(null);
   const [partyName, setPartyName]                     = useState("");
   const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState("");
+  const [branchId, setBranchId]                         = useState<number | null>(null);
   const [warehouseId, setWarehouseId]                 = useState<number | null>(null);
   const [warehouseDisplayName, setWarehouseDisplayName] = useState<string>("");
   const [journalWarehouseId, setJournalWarehouseId]   = useState<number | null>(null);
@@ -242,6 +243,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     : (suppliersQuery.data ?? []);
 
   const warehousesQuery = trpc.warehouses.list.useQuery();
+  const branchesQuery   = trpc.branches.list.useQuery(undefined, { enabled: config.docCategory === "purchase" });
   const productsQuery   = trpc.products.list.useQuery({});
   const journalsQuery   = trpc.documentJournals.list.useQuery({ docType: config.journalDocType });
   const docTypesQuery   = trpc.documentTypes.list.useQuery({ typeId: config.docTypeFilter });
@@ -274,6 +276,11 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     setPartyName(inv.customerName ?? inv.supplierName ?? "");
     setSupplierInvoiceNumber(inv.supplierInvoiceNumber || "");
     setWarehouseId(inv.warehouseId ?? null);
+    setBranchId(
+      inv.branchId ??
+      warehousesQuery.data?.find((warehouse: any) => warehouse.id === inv.warehouseId)?.branchId ??
+      null,
+    );
     setWarehouseDisplayName(inv.warehouseName ?? "");
     setJournalId(inv.journalId ?? null);
     setCurrency(inv.currency ?? "SAR");
@@ -302,7 +309,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     } else {
       setLines([EMPTY_LINE()]);
     }
-  }, [navInvoiceQuery.data]);
+  }, [navInvoiceQuery.data, warehousesQuery.data]);
 
   const stockQuery = trpc.reports.stockByWarehouse.useQuery(
     { warehouseId: warehouseId! },
@@ -338,8 +345,8 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   // Set initial invoice number
   useEffect(() => {
     const n = config.docCategory === "sales" ? salesNextNumberQuery.data : purchaseNextNumberQuery.data;
-    if (n && !invoiceNumber) setInvoiceNumber(n);
-  }, [salesNextNumberQuery.data, purchaseNextNumberQuery.data]);
+    if (config.docCategory === "sales" && n && !invoiceNumber) setInvoiceNumber(n);
+  }, [config.docCategory, salesNextNumberQuery.data, purchaseNextNumberQuery.data, invoiceNumber]);
 
   // تحديث اسم المخزن الظاهر عند تحميل قائمة المخازن أو تغير المخزن المختار
   useEffect(() => {
@@ -347,6 +354,14 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     const wh = warehousesQuery.data?.find(w => w.id === warehouseId);
     if (wh?.name) setWarehouseDisplayName(wh.name);
   }, [warehouseId, warehousesQuery.data]);
+
+  // For purchases, branch is the UI selector while warehouse remains the
+  // single operational source of truth in the invoice payload.
+  useEffect(() => {
+    if (config.docCategory !== "purchase" || !warehouseId) return;
+    const warehouse = warehousesQuery.data?.find((item: any) => item.id === warehouseId);
+    if (warehouse?.branchId && warehouse.branchId !== branchId) setBranchId(warehouse.branchId);
+  }, [config.docCategory, warehouseId, warehousesQuery.data, branchId]);
 
   // Fill from source doc (بناءً على)
   useEffect(() => {
@@ -595,6 +610,65 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     } catch { toast.error("تعذّر جلب رقم المستند من الدفتر"); }
   }, [journalsQuery.data, docTypesQuery.data, utils]);
 
+  const handlePurchaseBranchSelect = useCallback(async (nextBranchId: number | null) => {
+    if (config.docCategory !== "purchase") return;
+    if (
+      branchId &&
+      nextBranchId &&
+      branchId !== nextBranchId &&
+      lines.some(line => line.productName.trim() || line.productId)
+    ) {
+      const accepted = window.confirm(
+        "تغيير الفرع سيؤدي إلى تغيير المخزن ورقم المستند، وقد تتغير كميات الأصناف المتاحة. هل تريد المتابعة؟",
+      );
+      if (!accepted) return;
+    }
+    if (!nextBranchId) {
+      setBranchId(null);
+      setWarehouseId(null);
+      setWarehouseDisplayName("");
+      setJournalId(null);
+      setJournalWarehouseId(null);
+      setInvoiceNumber("");
+      return;
+    }
+    const warehouse = (warehousesQuery.data ?? []).find(
+      (item: any) => item.branchId === nextBranchId,
+    );
+    if (!warehouse) {
+      toast.error("لا يوجد مخزن مرتبط بالفرع المحدد.");
+      return;
+    }
+    const journal = (journalsQuery.data ?? []).find(
+      (item: any) => item.warehouseId === warehouse.id,
+    );
+    if (!journal) {
+      toast.error("لا يوجد دفتر مشتريات مرتبط بالفرع المحدد.");
+      return;
+    }
+    setBranchId(nextBranchId);
+    setWarehouseId(warehouse.id);
+    setWarehouseDisplayName(warehouse.name);
+    setJournalId(journal.id);
+    setJournalWarehouseId(warehouse.id);
+    if (journal.defaultCurrency) setCurrency(journal.defaultCurrency);
+    if (journal.defaultPayMethod) setPaymentType(journal.defaultPayMethod as any);
+    try {
+      const preview = await utils.documentJournals.previewNextNumber.fetch({ journalId: journal.id });
+      setInvoiceNumber(preview ?? "");
+    } catch {
+      setInvoiceNumber("");
+      toast.error("تعذّر جلب رقم المستند من دفتر الفرع");
+    }
+  }, [
+    config.docCategory,
+    branchId,
+    lines,
+    warehousesQuery.data,
+    journalsQuery.data,
+    utils,
+  ]);
+
   const handleDocTypeSelect = useCallback((id: string) => {
     setDocTypeId(id);
     if (!id) { setDocTypeWarehouseId(null); return; }
@@ -609,6 +683,10 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
 
   // ── Save ───────────────────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
+    if (config.docCategory === "purchase" && !branchId) {
+      toast.error("يجب اختيار الفرع أولًا لتحديد المخزن ودفتر المستند");
+      return;
+    }
     if (!invoiceNumber.trim()) { toast.error("رقم المستند مطلوب"); return; }
     const validLines = lines.filter(l => l.productName.trim() !== "");
     if (validLines.length === 0) { toast.error("يجب إضافة صنف واحد على الأقل"); return; }
@@ -681,7 +759,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     warehouseId, currency, exchangeRate, paymentType, paidAmount, remainingAmount,
     notes, lines, subtotal, totalDiscount, totalTax, netTotal,
     salesCreateMutation, purchaseCreateMutation, journalId, nextJournalNumberMutation,
-    docTypeId, docTypesQuery.data, salesperson, stockQuery.data, config,
+     docTypeId, docTypesQuery.data, salesperson, stockQuery.data, config, branchId,
   ]);
 
   /* ── نسخة مماثلة ── */
@@ -702,7 +780,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   const handleNew = useCallback(() => {
     setLines([EMPTY_LINE()]); setSelectedLineIdx(0);
     setPartyId(null); setPartyName(""); setSupplierInvoiceNumber("");
-    setWarehouseId(null); setPaymentType("cash");
+     setWarehouseId(null); setBranchId(null); setPaymentType("cash");
     setBasedOnType(""); setBasedOnNum(""); setBasedOnTrigger("");
     setNotes(""); setDueDate(""); setSalesperson(""); setPaidAmountOverride("");
     setErpMode("new"); setJournalWarehouseId(null);
@@ -831,8 +909,8 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <div
-      className={`${styles.screenContainer} flex flex-col h-full text-[#1a1a1a] select-none`}
-      style={{ fontFamily: "'Cairo', Tahoma, Arial, sans-serif", fontSize: "12px", background: "var(--background)" }}
+      className={`${styles.screenContainer} flex flex-col h-full text-[#2d241e] select-none`}
+      style={{ fontFamily: "'Cairo', Tahoma, Arial, sans-serif", fontSize: "12px", background: config.docCategory === "purchase" ? "#f7f2e9" : "var(--background)" }}
       dir="rtl"
     >
       {/* ── Unsaved Changes Guard ──────────────────────────────────────────────── */}
@@ -863,13 +941,40 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       />
 
       {/* ── Header Form ───────────────────────────────────────────────────── */}
-      <div className="bg-white border-b border-[#b0a89a] px-3 pt-2 pb-1.5" style={{ boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }}>
+      <div
+        className="border-b px-3 pt-2 pb-1.5"
+        style={{
+          background: config.docCategory === "purchase" ? "#fbf8f3" : "#fff",
+          borderColor: config.docCategory === "purchase" ? "#d8c7b5" : "#b0a89a",
+          boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
+        }}
+      >
 
         {/* Row 1: رقم المستند + 5-col grid */}
         <div className="flex items-start gap-2 mb-1.5">
 
           {/* ─ رقم المستند مع منتقي الدفتر ─ */}
-          {(() => {
+          {config.docCategory === "purchase" ? (
+            <div className="flex flex-col gap-0.5 flex-shrink-0" style={{ minWidth: 176 }}>
+              <label className="text-[10px] font-bold uppercase tracking-wide" style={{ color: "#6f4d34" }}>
+                الفرع
+              </label>
+              <select
+                value={branchId ?? ""}
+                onChange={e => handlePurchaseBranchSelect(e.target.value ? Number(e.target.value) : null)}
+                className="classic-input text-right font-bold"
+                style={{ width: 176, height: 28, background: "#fffdf8", borderColor: "#c8ad93", color: "#4b3424" }}
+              >
+                <option value="">— اختر الفرع أولًا —</option>
+                {(branchesQuery.data ?? []).map((branch: any) => (
+                  <option key={branch.id} value={branch.id}>{branch.name}</option>
+                ))}
+              </select>
+              <span className="text-[9px]" style={{ color: "#8b7768" }}>
+                {warehouseDisplayName || "سيتم تحديد المخزن بعد اختيار الفرع"}
+              </span>
+            </div>
+          ) : (() => {
             const journals = journalsQuery.data ?? [];
             const selected = journals.find((j: any) => j.id === journalId);
             const previewNum = (j: any): string => {
@@ -892,7 +997,9 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
                 </div>
                 <div className="flex items-stretch">
                   <input
-                    value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)}
+                     value={config.docCategory === "purchase" && !branchId ? "" : invoiceNumber}
+                     onChange={e => setInvoiceNumber(e.target.value)}
+                     readOnly={config.docCategory === "purchase"}
                     onContextMenu={e => { e.preventDefault(); setJournalOpen(o => !o); }}
                     onKeyDown={e => { if (e.key === "F4" || (e.key === "ArrowDown" && e.altKey)) { e.preventDefault(); setJournalOpen(o => !o); } }}
                     className="classic-input text-center font-bold"
@@ -1001,7 +1108,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
                 return (
                   <select value={warehouseId ?? ""}
                     onChange={e => !lockedWh && setWarehouseId(parseInt(e.target.value) || null)}
-                    className="classic-input w-full" disabled={!!lockedWh}
+                     className="classic-input w-full" disabled={config.docCategory === "purchase" || !!lockedWh}
                     title={lockedWh ? `المخزن: ${whName}` : undefined}>
                     <option value="">-- اختر مخزن --</option>
                     {(lockedWh
@@ -1118,7 +1225,12 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
           {/* Column widths — sourced centrally from INVOICE_TABLE_COLS via InvoiceTableColgroup */}
           <InvoiceTableColgroup />
           <thead className="sticky top-0 z-10">
-            <tr style={{ background: `linear-gradient(to bottom, ${themeColor}, #365E80)`, color: "#fff" }}>
+            <tr style={{
+              background: config.docCategory === "purchase"
+                ? "linear-gradient(to bottom, #805c40, #6f4d34)"
+                : `linear-gradient(to bottom, ${themeColor}, #365E80)`,
+              color: "#fff",
+            }}>
               <th className="inv-th text-center">#</th>
               <th className="inv-th">رقم الصنف</th>
               <th className="inv-th">اسم الصنف</th>
@@ -1269,16 +1381,16 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       </div>
 
       {/* ── Styles ────────────────────────────────────────────────────────── */}
-      <style>{`
+       <style>{`
         .classic-input {
           border: 1px solid #a0a0a0; padding: 1px 5px; height: 22px; font-size: 12px;
           font-family: 'Cairo', Tahoma, Arial, sans-serif; background: #fff; outline: none; border-radius: 1px;
         }
-        .classic-input:focus { border-color: #406B93; background: #F0F6FF; box-shadow: 0 0 0 1px rgba(64,107,147,0.2); }
+         .classic-input:focus { border-color: ${config.docCategory === "purchase" ? "#8a5a2b" : "#406B93"}; background: ${config.docCategory === "purchase" ? "#fffdf8" : "#F0F6FF"}; box-shadow: 0 0 0 1px ${config.docCategory === "purchase" ? "rgba(138,90,43,0.2)" : "rgba(64,107,147,0.2)"}; }
         .inv-th { border: 1px solid rgba(255,255,255,0.15); border-bottom: 2px solid rgba(0,0,0,0.15); padding: 4px 6px; text-align: right; font-weight: 700; font-size: 11px; white-space: nowrap; font-family: 'Cairo', Tahoma, sans-serif; }
         .inv-td { border: 1px solid #e8e4dc; padding: 1px 3px; height: 24px; vertical-align: middle; }
         .inv-cell { border: none; outline: none; padding: 1px 4px; height: 22px; font-size: 12px; font-family: 'Cairo', Tahoma, Arial, sans-serif; background: transparent; width: 100%; }
-        .inv-cell:focus { background: #FFFFF0; border: 1px solid #406B93; box-shadow: inset 0 0 0 1px rgba(64,107,147,0.15); }
+         .inv-cell:focus { background: ${config.docCategory === "purchase" ? "#fffdf8" : "#FFFFF0"}; border: 1px solid ${config.docCategory === "purchase" ? "#8a5a2b" : "#406B93"}; box-shadow: inset 0 0 0 1px ${config.docCategory === "purchase" ? "rgba(138,90,43,0.15)" : "rgba(64,107,147,0.15)"}; }
         input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
       `}</style>
 
