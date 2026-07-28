@@ -1481,14 +1481,6 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
             <strong>{fmt(netTotal)}</strong>
             <small>{currency === "SAR" ? "ريال سعودي" : currency}</small>
           </div>
-          <div className="purchase-payment-group">
-            <b>السداد</b>
-            <label>المدفوع نقدًا <strong>{fmt(paymentType === "cash" ? netTotal : 0)}</strong></label>
-            <label>مدفوع بواسطة <strong>{fmt(paymentType === "credit" ? paidAmount : 0)}</strong></label>
-            <label>مدفوع بشيكات أخرى <strong>0.00</strong></label>
-            <label>آجل (على حساب) <strong>{fmt(remainingAmount)}</strong></label>
-            <label className="purchase-remaining">المتبقي <strong>{fmt(remainingAmount)}</strong></label>
-          </div>
         </div>
       ) : (
         <div style={{ background: "#E8E4DC", borderTop: "1px solid #b0a89a" }}>
