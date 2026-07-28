@@ -1,18 +1,20 @@
-/* ═══════════════════════════════════════════════════════════════════
-   OneSoft ERP — Responsive Layout CSS Module
-   All container queries use the named container "erp-screen" which is
-   set on the outermost screen div via .screenContainer.
-   ═══════════════════════════════════════════════════════════════════ */
-
-/* ── Container context ──────────────────────────────────────────── */
+/* OneSoft ERP responsive layout primitives. */
 .screenContainer {
   container-type: inline-size;
   container-name: erp-screen;
 }
 
-/* ── Form grids ─────────────────────────────────────────────────── */
+:global(:root) {
+  --invoice-field-height: 26px;
+  --invoice-label-width: 70px;
+  --invoice-field-small-width: 180px;
+  --invoice-field-medium-width: 230px;
+  --invoice-field-large-width: 420px;
+  --invoice-field-gap: 8px;
+  --invoice-summary-width: 288px;
+}
 
-/* 4-column header grid (SalesInvoicePage, master-data, settings) */
+/* Legacy grids used by other screens. */
 .formGrid {
   display: grid;
   grid-template-columns: repeat(4, minmax(var(--field-min-w-md, 120px), 1fr));
@@ -21,40 +23,6 @@
   align-items: center;
 }
 
-/* Sales invoice header: keep each label/control pair together and let the
-   container, rather than the viewport, decide when groups wrap. */
-.salesHeaderGrid {
-  display: grid;
-  grid-template-columns:
-    minmax(180px, 1fr)
-    minmax(210px, 1.1fr)
-    minmax(300px, 1.5fr)
-    minmax(180px, 1fr);
-  column-gap: 10px;
-  row-gap: 5px;
-  align-items: center;
-}
-
-.salesHeaderGrid > * {
-  min-width: 0;
-}
-
-.salesHeaderGrid :global(.sales-header-group) {
-  min-width: 0;
-}
-
-.salesHeaderGrid label {
-  white-space: nowrap;
-  flex: 0 0 70px;
-}
-
-.salesHeaderGrid input,
-.salesHeaderGrid select,
-.salesHeaderGrid button {
-  min-width: 0;
-}
-
-/* 5-column header grid (DocumentInvoicePage row 1) */
 .formGrid5 {
   display: grid;
   grid-template-columns: repeat(5, minmax(var(--field-min-w-md, 120px), 1fr));
@@ -64,7 +32,6 @@
   flex: 1;
 }
 
-/* 6-column header grid (DocumentInvoicePage row 2) */
 .formGrid6 {
   display: grid;
   grid-template-columns: minmax(130px, 150px) minmax(100px, 120px) minmax(80px, 90px) minmax(80px, 100px) minmax(var(--field-min-w-md, 120px), 1fr) minmax(var(--field-min-w-md, 120px), 1fr);
@@ -73,74 +40,110 @@
   align-items: center;
 }
 
-/* ── Summary panel ──────────────────────────────────────────────── */
+/* Sales invoice header: fixed-size groups that wrap as complete units. */
+.salesHeaderGrid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  align-content: flex-start;
+  gap: 5px 10px;
+  min-width: 0;
+}
+
+.salesHeaderGrid > * {
+  min-width: 0;
+}
+
+.salesHeaderGrid :global(.sales-header-group) {
+  display: flex;
+  flex: 0 0 var(--invoice-field-medium-width);
+  width: var(--invoice-field-medium-width);
+  min-width: 0;
+  align-items: center;
+  gap: var(--invoice-field-gap);
+}
+
+.salesHeaderGrid label {
+  flex: 0 0 var(--invoice-label-width);
+  width: var(--invoice-label-width);
+  white-space: nowrap;
+}
+
+.salesHeaderGrid input,
+.salesHeaderGrid select,
+.salesHeaderGrid button {
+  min-width: 0;
+}
+
+.salesHeaderGrid :global(.sales-field-small) {
+  flex-basis: var(--invoice-field-small-width);
+  width: var(--invoice-field-small-width);
+}
+
+.salesHeaderGrid :global(.sales-field-medium) {
+  flex-basis: var(--invoice-field-medium-width);
+  width: var(--invoice-field-medium-width);
+}
+
+.salesHeaderGrid :global(.sales-field-large) {
+  flex-basis: var(--invoice-field-large-width);
+  width: var(--invoice-field-large-width);
+}
+
+.salesHeaderGrid :global(.sales-field-full) {
+  flex: 1 1 100%;
+  width: 100%;
+}
+
+.salesHeaderGrid :global(.sales-field-control) {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.salesHeaderGrid :global(.sales-field-medium) > :global(.sales-field-control) {
+  width: calc(var(--invoice-field-medium-width) - var(--invoice-label-width) - var(--invoice-field-gap));
+}
+
+.salesHeaderGrid :global(.sales-field-small) > :global(.sales-field-control) {
+  width: calc(var(--invoice-field-small-width) - var(--invoice-label-width) - var(--invoice-field-gap));
+}
+
+.salesHeaderGrid :global(.sales-field-large) > :global(.sales-field-control) {
+  width: calc(var(--invoice-field-large-width) - var(--invoice-label-width) - var(--invoice-field-gap));
+}
+
+.salesHeaderGrid :global(.sales-field-full) > :global(.sales-field-control) {
+  flex: 1 1 auto;
+}
+
 .summaryPanel {
-  width: var(--summary-panel-w, clamp(250px, 22%, 320px));
+  width: var(--invoice-summary-width);
+  min-width: var(--invoice-summary-width);
+  max-width: var(--invoice-summary-width);
   flex-shrink: 0;
   overflow-y: auto;
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   Container Query Breakpoints
-   All responsive rules are scoped to @container erp-screen so they
-   react to the panel width, not the viewport.
-   ═══════════════════════════════════════════════════════════════════ */
-
-/* ── ≤1000px: collapse to 3 columns ──────────────────────────────── */
 @container erp-screen (max-width: 1000px) {
   .formGrid,
   .formGrid5,
   .formGrid6 {
     grid-template-columns: repeat(3, minmax(var(--field-min-w, 80px), 1fr));
   }
-
-  .salesHeaderGrid {
-    grid-template-columns: repeat(3, minmax(180px, 1fr));
-  }
-
-  .salesHeaderGrid :global(.sales-header-based),
-  .salesHeaderGrid :global(.sales-header-customer) {
-    grid-column: span 2 !important;
-  }
 }
 
-/* ── ≤760px: collapse to 2 columns ───────────────────────────────── */
 @container erp-screen (max-width: 760px) {
   .formGrid,
   .formGrid5,
   .formGrid6 {
     grid-template-columns: repeat(2, minmax(var(--field-min-w, 80px), 1fr));
   }
-
-  .summaryPanel {
-    width: 100%;
-  }
-
-  .salesHeaderGrid {
-    grid-template-columns: repeat(2, minmax(180px, 1fr));
-  }
-
-  .salesHeaderGrid :global(.sales-header-based),
-  .salesHeaderGrid :global(.sales-header-customer) {
-    grid-column: 1 / -1 !important;
-  }
 }
 
-/* ── ≤500px: single column ───────────────────────────────────────── */
 @container erp-screen (max-width: 500px) {
   .formGrid,
   .formGrid5,
   .formGrid6 {
     grid-template-columns: 1fr;
-  }
-
-  .salesHeaderGrid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .salesHeaderGrid :global(.sales-header-based),
-  .salesHeaderGrid :global(.sales-header-customer),
-  .salesHeaderGrid :global(.sales-header-note) {
-    grid-column: 1 !important;
   }
 }
