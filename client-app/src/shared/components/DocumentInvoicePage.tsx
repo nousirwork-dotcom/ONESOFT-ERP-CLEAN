@@ -264,7 +264,11 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     : (suppliersQuery.data ?? []);
 
   const warehousesQuery = trpc.warehouses.list.useQuery();
-  const branchesQuery   = trpc.branches.list.useQuery(undefined, { enabled: config.docCategory === "purchase" });
+  const branchesQuery   = trpc.branches.list.useQuery(undefined, {
+    enabled: config.docCategory === "purchase",
+    retry: 2,
+    refetchOnMount: "always",
+  });
   const productsQuery   = trpc.products.list.useQuery({});
   const journalsQuery   = trpc.documentJournals.list.useQuery({ docType: config.journalDocType });
   const docTypesQuery   = trpc.documentTypes.list.useQuery({ typeId: config.docTypeFilter });
@@ -1019,7 +1023,13 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
                   className="classic-input w-full font-bold"
                   style={{ borderColor: "#c8ad93", color: "#4b3424", background: "#fffdf8" }}
                 >
-                  <option value="">— اختر الفرع أولًا —</option>
+                  <option value="">
+                    {branchesQuery.isLoading
+                      ? "جاري تحميل الفروع..."
+                      : branchesQuery.error
+                        ? "تعذّر تحميل الفروع"
+                        : "— اختر الفرع أولًا —"}
+                  </option>
                   {(branchesQuery.data ?? []).map((branch: any) => (
                     <option key={branch.id} value={branch.id}>{branch.name}</option>
                   ))}
