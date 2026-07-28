@@ -290,23 +290,35 @@ export const postingRouter = router({
 
       await validateAccounts(lines.map(l => l.accountId));
 
-      const entry = await insertJournalEntry({
-        orgId,
-        userId:          ctx.user.id,
-        date:            invoice.invoiceDate,
-        description:     `ترحيل فاتورة مشتريات ${invoice.invoiceNumber}`,
-        reference:       invoice.invoiceNumber,
-        sourceDocType:   'purchase_invoice',
-        sourceDocId:     invoice.id,
-        sourceDocNumber: invoice.invoiceNumber,
-        lines,
+      return db.transaction(async (tx) => {
+        const entry = await insertJournalEntry({
+          orgId,
+          userId:          ctx.user.id,
+          date:            invoice.invoiceDate,
+          description:     `ترحيل فاتورة مشتريات ${invoice.invoiceNumber}`,
+          reference:       invoice.invoiceNumber,
+          sourceDocType:   'purchase_invoice',
+          sourceDocId:     invoice.id,
+          sourceDocNumber: invoice.invoiceNumber,
+          lines,
+          tx,
+        });
+
+        const [updatedInvoice] = await tx.update(purchaseInvoices)
+          .set({ isPosted: true, postedAt: new Date(), postedJournalEntryId: entry.id, updatedAt: new Date() })
+          .where(and(
+            eq(purchaseInvoices.id, input.invoiceId),
+            eq(purchaseInvoices.orgId, orgId),
+            eq(purchaseInvoices.isPosted, false),
+          ))
+          .returning({ id: purchaseInvoices.id });
+
+        if (!updatedInvoice) {
+          throw new Error('الفاتورة مرحَّلة مسبقاً أو تغيّرت حالتها أثناء الترحيل');
+        }
+
+        return { success: true, journalEntryId: entry.id, entryNumber: entry.entryNumber };
       });
-
-      await db.update(purchaseInvoices)
-        .set({ isPosted: true, postedAt: new Date(), postedJournalEntryId: entry.id, updatedAt: new Date() })
-        .where(and(eq(purchaseInvoices.id, input.invoiceId), eq(purchaseInvoices.orgId, orgId)));
-
-      return { success: true, journalEntryId: entry.id, entryNumber: entry.entryNumber };
     }),
 
   unpostPurchaseInvoice: protectedProcedure
@@ -328,18 +340,20 @@ export const postingRouter = router({
       if (journal && !journal.allowUnpost)
         throw new Error('إلغاء الترحيل غير مسموح به في هذا الدفتر');
 
-      if (invoice.postedJournalEntryId) {
-        await db.delete(journalEntryLines)
-          .where(eq(journalEntryLines.entryId, invoice.postedJournalEntryId));
-        await db.delete(journalEntries)
-          .where(and(eq(journalEntries.id, invoice.postedJournalEntryId), eq(journalEntries.orgId, orgId)));
-      }
+      return db.transaction(async (tx) => {
+        if (invoice.postedJournalEntryId) {
+          await tx.delete(journalEntryLines)
+            .where(eq(journalEntryLines.entryId, invoice.postedJournalEntryId));
+          await tx.delete(journalEntries)
+            .where(and(eq(journalEntries.id, invoice.postedJournalEntryId), eq(journalEntries.orgId, orgId)));
+        }
 
-      await db.update(purchaseInvoices)
-        .set({ isPosted: false, postedAt: null, postedJournalEntryId: null, updatedAt: new Date() })
-        .where(and(eq(purchaseInvoices.id, input.invoiceId), eq(purchaseInvoices.orgId, orgId)));
+        await tx.update(purchaseInvoices)
+          .set({ isPosted: false, postedAt: null, postedJournalEntryId: null, updatedAt: new Date() })
+          .where(and(eq(purchaseInvoices.id, input.invoiceId), eq(purchaseInvoices.orgId, orgId)));
 
-      return { success: true };
+        return { success: true };
+      });
     }),
 
   // ══════════════════════════════════════════════════════════════════════════

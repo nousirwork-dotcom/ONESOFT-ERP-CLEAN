@@ -3,7 +3,6 @@ import { eq, and, desc } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import { purchaseInvoices, purchaseInvoiceItems, documentJournals, warehouses } from '../schema.js';
-import { autoPostPurchaseInvoice } from './posting.js';
 
 // ── تحديد المخزن/الفرع الصحيح: إذا لم يُرسل warehouseId نحله من دفتر المستندات ──
 async function resolvePurchaseWarehouseId(
@@ -156,7 +155,6 @@ export const purchasesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { items, dueDate, ...invoiceData } = input;
       const orgId = ctx.user.orgId;
-      const isDraft = invoiceData.status === 'draft';
       const resolvedWarehouseId = await resolvePurchaseWarehouseId(
         db,
         invoiceData.warehouseId,
@@ -180,15 +178,6 @@ export const purchasesRouter = router({
             sortOrder: item.sortOrder ?? idx,
           }))
         );
-      }
-
-      // ترحيل تلقائي عند الحفظ (لا يُنفّذ للمسودة)
-      if (!isDraft) {
-        try {
-          await autoPostPurchaseInvoice(invoice.id, orgId, ctx.user.id);
-        } catch (e) {
-          console.warn('[autoPostPurchaseInvoice] skipped:', e);
-        }
       }
 
       return invoice;

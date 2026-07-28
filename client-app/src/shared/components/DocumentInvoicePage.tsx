@@ -418,10 +418,31 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     onError: (e) => toast.error(`خطأ في الترحيل: ${e.message}`),
   });
 
+  const purchasePostMutation = trpc.posting.postPurchaseInvoice.useMutation({
+    onSuccess: (data) => {
+      toast.success(`✓ تم الترحيل — قيد رقم ${data.entryNumber}`);
+      setIsPosted(true);
+      setShowPostingPreview(false);
+    },
+    onError: (e) => toast.error(`خطأ في ترحيل فاتورة المشتريات: ${e.message}`),
+  });
+
   const unpostMutation = trpc.posting.unpostSalesInvoice.useMutation({
     onSuccess: () => { toast.success("تم إلغاء الترحيل"); setIsPosted(false); },
     onError: (e) => toast.error(`خطأ في إلغاء الترحيل: ${e.message}`),
   });
+
+  const purchaseUnpostMutation = trpc.posting.unpostPurchaseInvoice.useMutation({
+    onSuccess: () => { toast.success("تم إلغاء ترحيل فاتورة المشتريات"); setIsPosted(false); },
+    onError: (e) => toast.error(`خطأ في إلغاء ترحيل فاتورة المشتريات: ${e.message}`),
+  });
+
+  const activePostMutation = config.docCategory === "purchase"
+    ? purchasePostMutation
+    : postMutation;
+  const activeUnpostMutation = config.docCategory === "purchase"
+    ? purchaseUnpostMutation
+    : unpostMutation;
 
   // ── Calculations ───────────────────────────────────────────────────────────
   const subtotal = lines.reduce((s, l) =>
@@ -769,9 +790,9 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
 
   // ── Unified Toolbar ──────────────────────────────────────────────────────────
   const _tbRef = useRef<any>({});
-  _tbRef.current = { erpMode, isSaving, savedInvoiceId, isPosted, isPrintEnabled, config, handleSave, handleNew, handleDuplicate, setErpMode, setPendingNav, setShowUnsaved, setShowPrintModal, setShowPostingPreview, unpostMutation };
+  _tbRef.current = { erpMode, isSaving, savedInvoiceId, isPosted, isPrintEnabled, config, handleSave, handleNew, handleDuplicate, setErpMode, setPendingNav, setShowUnsaved, setShowPrintModal, setShowPostingPreview, unpostMutation: activeUnpostMutation };
   const toolbarActions = useMemo(() => {
-    const canPost = config.canPost !== false && config.docCategory === "sales";
+    const canPost = config.canPost !== false;
     const hasSaved = savedInvoiceId !== null;
     const isDirtyMode = erpMode === "new" || erpMode === "edit";
     return ({
@@ -795,7 +816,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     }) as unknown as ToolbarActionMap;
   }, [erpMode, isSaving, savedInvoiceId, isPosted, isPrintEnabled, config, navHasRecord, navHasPrevious, navHasNext, navHandlers]);
   const toolbarTools = useMemo(() => {
-    const canPost = config.canPost !== false && config.docCategory === "sales";
+    const canPost = config.canPost !== false;
     const hasSaved = savedInvoiceId !== null;
     return [
       { id: "post", label: "ترحيل المستند", enabled: canPost && hasSaved && !isPosted, disabledReason: !canPost ? "الترحيل غير متاح لهذا النوع" : !hasSaved ? "احفظ المستند أولًا" : isPosted ? "المستند مرحّل بالفعل" : undefined, onClick: () => { if (!_tbRef.current.savedInvoiceId) { toast.warning("يجب حفظ المستند أولاً"); return; } _tbRef.current.setShowPostingPreview(true); } },
@@ -1265,9 +1286,10 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       {showPostingPreview && savedInvoiceId && (
         <PostingPreviewModal
           invoiceId={savedInvoiceId}
+          docCategory={config.docCategory}
           onClose={() => setShowPostingPreview(false)}
-          onConfirmPost={() => postMutation.mutate({ invoiceId: savedInvoiceId! })}
-          isPosting={postMutation.isPending}
+          onConfirmPost={() => activePostMutation.mutate({ invoiceId: savedInvoiceId! })}
+          isPosting={activePostMutation.isPending}
         />
       )}
 

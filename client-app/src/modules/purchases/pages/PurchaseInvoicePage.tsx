@@ -11,7 +11,7 @@ export default function PurchaseInvoicePage() {
       partyLabel: "المورد",
       numberPrefix: "PUR",
       journalDropdownTitle: "دفاتر فاتورة المشتريات",
-      canPost: false,
+       canPost: true,
       themeColor: "#4A5568",
     }} />
   );
