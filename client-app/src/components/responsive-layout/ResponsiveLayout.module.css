@@ -21,6 +21,39 @@
   align-items: center;
 }
 
+/* Sales invoice header: keep each label/control pair together and let the
+   container, rather than the viewport, decide when groups wrap. */
+.salesHeaderGrid {
+  display: grid;
+  grid-template-columns:
+    minmax(180px, 1fr)
+    minmax(210px, 1.1fr)
+    minmax(300px, 1.5fr)
+    minmax(180px, 1fr);
+  column-gap: 10px;
+  row-gap: 5px;
+  align-items: center;
+}
+
+.salesHeaderGrid > * {
+  min-width: 0;
+}
+
+.salesHeaderGrid :global(.sales-header-group) {
+  min-width: 0;
+}
+
+.salesHeaderGrid label {
+  white-space: nowrap;
+  flex: 0 0 70px;
+}
+
+.salesHeaderGrid input,
+.salesHeaderGrid select,
+.salesHeaderGrid button {
+  min-width: 0;
+}
+
 /* 5-column header grid (DocumentInvoicePage row 1) */
 .formGrid5 {
   display: grid;
@@ -60,6 +93,15 @@
   .formGrid6 {
     grid-template-columns: repeat(3, minmax(var(--field-min-w, 80px), 1fr));
   }
+
+  .salesHeaderGrid {
+    grid-template-columns: repeat(3, minmax(180px, 1fr));
+  }
+
+  .salesHeaderGrid :global(.sales-header-based),
+  .salesHeaderGrid :global(.sales-header-customer) {
+    grid-column: span 2 !important;
+  }
 }
 
 /* ── ≤760px: collapse to 2 columns ───────────────────────────────── */
@@ -73,6 +115,15 @@
   .summaryPanel {
     width: 100%;
   }
+
+  .salesHeaderGrid {
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+  }
+
+  .salesHeaderGrid :global(.sales-header-based),
+  .salesHeaderGrid :global(.sales-header-customer) {
+    grid-column: 1 / -1 !important;
+  }
 }
 
 /* ── ≤500px: single column ───────────────────────────────────────── */
@@ -81,5 +132,15 @@
   .formGrid5,
   .formGrid6 {
     grid-template-columns: 1fr;
+  }
+
+  .salesHeaderGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .salesHeaderGrid :global(.sales-header-based),
+  .salesHeaderGrid :global(.sales-header-customer),
+  .salesHeaderGrid :global(.sales-header-note) {
+    grid-column: 1 !important;
   }
 }
