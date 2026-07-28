@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { eq, and, inArray, gte, lte } from 'drizzle-orm';
+import { eq, and, inArray, gte, lte, sql } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import {
@@ -7,6 +7,7 @@ import {
   journalEntries, journalEntryLines,
   documentJournals, chartOfAccounts,
   pendingAccountMovements, pendingStockMovements,
+  stockVouchers, stockVoucherItems, purchaseInvoiceItems, warehouses,
 } from '../schema.js';
 
 // ── PostingEngine: كل Business Logic هنا ──────────────────────────────────────
@@ -19,8 +20,35 @@ import {
   autoPostPurchaseInvoice,
   validateAccounts,
   insertJournalEntry,
+  reserveDocumentNumber,
   type AccountLinkConfig,
 } from '../services/PostingEngine.js';
+
+type IssuanceConfig = {
+  journalEntryType?: string | null;
+  journalBookId?: string | number | null;
+  inventoryDocType?: string | null;
+  inventoryDocBookId?: string | number | null;
+};
+
+function parseIssuanceConfig(value: unknown): Required<IssuanceConfig> {
+  const config = (value && typeof value === 'object' ? value : {}) as IssuanceConfig;
+  const journalBookId = Number(config.journalBookId);
+  const inventoryDocBookId = Number(config.inventoryDocBookId);
+  if (!config.journalEntryType || !Number.isInteger(journalBookId) ||
+      !config.inventoryDocType || !Number.isInteger(inventoryDocBookId)) {
+    throw new Error('لا يمكن الترحيل: خصائص السندات المصدرة غير مكتملة في دفتر فاتورة المشتريات');
+  }
+  if (!config.inventoryDocType.includes('receipt')) {
+    throw new Error('لا يمكن ترحيل فاتورة مشتريات إلى نوع مستند مخزون غير توريد');
+  }
+  return {
+    journalEntryType: config.journalEntryType,
+    journalBookId,
+    inventoryDocType: config.inventoryDocType,
+    inventoryDocBookId,
+  };
+}
 
 // ── إعادة تصدير الدوال التي تستوردها روترات أخرى (sales.ts, purchases.ts) ────
 export {
@@ -292,6 +320,44 @@ export const postingRouter = router({
       await validateAccounts(lines.map(l => l.accountId));
 
       return db.transaction(async (tx) => {
+        const locked = await tx.execute(sql`
+          SELECT id, is_posted AS "isPosted"
+          FROM purchase_invoices
+          WHERE id = ${input.invoiceId} AND org_id = ${orgId}
+          FOR UPDATE
+        `);
+        const lockedRow = locked.rows[0] as { id: number; isPosted: boolean } | undefined;
+        if (!lockedRow) throw new Error('الفاتورة غير موجودة');
+        if (lockedRow.isPosted) throw new Error('الفاتورة مرحَّلة مسبقاً');
+
+        const issuance = parseIssuanceConfig(journal?.issuanceConfig);
+        const outputJournal = await tx.query.documentJournals.findFirst({
+          where: and(
+            eq(documentJournals.id, Number(issuance.journalBookId)),
+            eq(documentJournals.orgId, orgId),
+            eq(documentJournals.isActive, true),
+          ),
+        });
+        const stockBook = await tx.query.documentJournals.findFirst({
+          where: and(
+            eq(documentJournals.id, Number(issuance.inventoryDocBookId)),
+            eq(documentJournals.orgId, orgId),
+            eq(documentJournals.isActive, true),
+          ),
+        });
+        if (!outputJournal || outputJournal.docType !== issuance.journalEntryType) {
+          throw new Error('دفتر القيد الناتج لا يطابق نوع القيد المحدد في خصائص السندات المصدرة');
+        }
+        if (!stockBook || stockBook.docType !== issuance.inventoryDocType) {
+          throw new Error('دفتر مستند المخزون الناتج لا يطابق نوع المستند المحدد في خصائص السندات المصدرة');
+        }
+        if (!stockBook.warehouseId || stockBook.warehouseId !== invoice.warehouseId) {
+          throw new Error('دفتر سند التوريد يجب أن يكون مرتبطًا بنفس مخزن فاتورة المشتريات');
+        }
+        if (!outputJournal.purchaseAccountId || !outputJournal.inventoryAccountId) {
+          throw new Error('دفتر القيد الناتج يجب أن يحدد حساب المشتريات وحساب المخزون');
+        }
+
         const entry = await insertJournalEntry({
           orgId,
           userId:          ctx.user.id,
@@ -302,24 +368,96 @@ export const postingRouter = router({
           sourceDocId:     invoice.id,
           sourceDocNumber: invoice.invoiceNumber,
           lines,
+          journalId: outputJournal.id,
+          generatedDocType: issuance.journalEntryType,
           tx,
         });
 
-        const [updatedInvoice] = await tx.update(purchaseInvoices)
-          .set({ isPosted: true, postedAt: new Date(), postedJournalEntryId: entry.id, updatedAt: new Date() })
-          .where(and(
-            eq(purchaseInvoices.id, input.invoiceId),
-            eq(purchaseInvoices.orgId, orgId),
-            eq(purchaseInvoices.isPosted, false),
-          ))
-          .returning({ id: purchaseInvoices.id });
+        const { number: stockNumber } = await reserveDocumentNumber(stockBook.id, orgId, tx);
+        const invoiceItems = await tx.query.purchaseInvoiceItems.findMany({
+          where: eq(purchaseInvoiceItems.invoiceId, invoice.id),
+        });
+        const stockItems = invoiceItems.filter((item) => item.productId && Number(item.quantity) !== 0);
+        if (!stockItems.length) throw new Error('لا يمكن إنشاء سند توريد: الفاتورة لا تحتوي أصنافًا مخزنية');
+        const stockTotal = stockItems.reduce((sum, item) => sum + Number(item.total), 0).toFixed(4);
+        const [stockVoucher] = await tx.insert(stockVouchers).values({
+          orgId,
+          voucherNumber: stockNumber,
+          type: 'receipt',
+          voucherDate: invoice.invoiceDate,
+          warehouseId: invoice.warehouseId,
+          branchId: null,
+          supplierId: invoice.supplierId,
+          reason: `توريد أصناف من فاتورة مشتريات ${invoice.invoiceNumber}`,
+          notes: invoice.notes,
+          totalCost: stockTotal,
+          status: 'confirmed',
+          userId: ctx.user.id,
+          sourceDocType: 'purchase_invoice',
+          sourceDocId: invoice.id,
+          sourceDocNumber: invoice.invoiceNumber,
+          sourceJournalId: stockBook.id,
+        }).returning();
+        await tx.insert(stockVoucherItems).values(stockItems.map((item, index) => ({
+          voucherId: stockVoucher.id,
+          orgId,
+          productId: item.productId,
+          productName: item.productName,
+          quantity: item.quantity,
+          unitCost: item.unitPrice,
+          totalCost: item.total,
+          sortOrder: index,
+        })));
 
-        if (!updatedInvoice) {
-          throw new Error('الفاتورة مرحَّلة مسبقاً أو تغيّرت حالتها أثناء الترحيل');
-        }
+        const stockLines = [
+          {
+            accountId: outputJournal.inventoryAccountId,
+            accountCode: '',
+            accountName: 'المخزون',
+            debit: stockTotal,
+            credit: '0.0000',
+            description: `مخزون سند التوريد ${stockNumber}`,
+          },
+          {
+            accountId: outputJournal.purchaseAccountId,
+            accountCode: '',
+            accountName: 'إجمالي المشتريات',
+            debit: '0.0000',
+            credit: stockTotal,
+            description: `تسوية مشتريات سند التوريد ${stockNumber}`,
+          },
+        ];
+        const stockEntry = await insertJournalEntry({
+          orgId,
+          userId: ctx.user.id,
+          date: invoice.invoiceDate,
+          description: `قيد سند توريد ${stockNumber} من فاتورة ${invoice.invoiceNumber}`,
+          reference: stockNumber,
+          sourceDocType: 'stock_receipt',
+          sourceDocId: stockVoucher.id,
+          sourceDocNumber: stockNumber,
+          lines: stockLines,
+          journalId: outputJournal.id,
+          generatedDocType: issuance.inventoryDocType,
+          tx,
+        });
+        await tx.update(stockVouchers).set({ generatedJournalEntryId: stockEntry.id }).where(eq(stockVouchers.id, stockVoucher.id));
+
+        const [updatedInvoice] = await tx.update(purchaseInvoices)
+          .set({
+            isPosted: true,
+            postedAt: new Date(),
+            postedJournalEntryId: entry.id,
+            generatedStockVoucherId: stockVoucher.id,
+            generatedStockJournalEntryId: stockEntry.id,
+            updatedAt: new Date(),
+          })
+          .where(and(eq(purchaseInvoices.id, invoice.id), eq(purchaseInvoices.orgId, orgId), eq(purchaseInvoices.isPosted, false)))
+          .returning({ id: purchaseInvoices.id });
+        if (!updatedInvoice) throw new Error('الفاتورة تغيرت حالتها أثناء الترحيل');
 
         await tx.update(pendingAccountMovements)
-          .set({ status: 'linked', linkedJournalEntryId: entry.id, updatedAt: new Date() })
+          .set({ status: 'linked', linkedJournalEntryId: entry.id, linkedStockVoucherId: stockVoucher.id, updatedAt: new Date() })
           .where(and(
             eq(pendingAccountMovements.orgId, orgId),
             eq(pendingAccountMovements.sourceDocType, 'purchase_invoice'),
@@ -327,7 +465,7 @@ export const postingRouter = router({
             eq(pendingAccountMovements.status, 'unposted'),
           ));
         await tx.update(pendingStockMovements)
-          .set({ status: 'linked', linkedJournalEntryId: entry.id, updatedAt: new Date() })
+          .set({ status: 'linked', linkedJournalEntryId: stockEntry.id, linkedStockVoucherId: stockVoucher.id, updatedAt: new Date() })
           .where(and(
             eq(pendingStockMovements.orgId, orgId),
             eq(pendingStockMovements.sourceDocType, 'purchase_invoice'),
@@ -335,7 +473,15 @@ export const postingRouter = router({
             eq(pendingStockMovements.status, 'unposted'),
           ));
 
-        return { success: true, journalEntryId: entry.id, entryNumber: entry.entryNumber };
+        return {
+          success: true,
+          journalEntryId: entry.id,
+          entryNumber: entry.entryNumber,
+          stockVoucherId: stockVoucher.id,
+          stockVoucherNumber: stockNumber,
+          stockJournalEntryId: stockEntry.id,
+          stockEntryNumber: stockEntry.entryNumber,
+        };
       });
     }),
 
@@ -362,16 +508,36 @@ export const postingRouter = router({
         if (invoice.postedJournalEntryId) {
           await tx.delete(journalEntryLines)
             .where(eq(journalEntryLines.entryId, invoice.postedJournalEntryId));
-          await tx.delete(journalEntries)
+          await tx.update(journalEntries)
+            .set({ status: 'cancelled' })
             .where(and(eq(journalEntries.id, invoice.postedJournalEntryId), eq(journalEntries.orgId, orgId)));
+        }
+        if (invoice.generatedStockJournalEntryId) {
+          await tx.delete(journalEntryLines)
+            .where(eq(journalEntryLines.entryId, invoice.generatedStockJournalEntryId));
+          await tx.update(journalEntries)
+            .set({ status: 'cancelled' })
+            .where(and(eq(journalEntries.id, invoice.generatedStockJournalEntryId), eq(journalEntries.orgId, orgId)));
+        }
+        if (invoice.generatedStockVoucherId) {
+          await tx.update(stockVouchers)
+            .set({ status: 'cancelled' })
+            .where(and(eq(stockVouchers.id, invoice.generatedStockVoucherId), eq(stockVouchers.orgId, orgId)));
         }
 
         await tx.update(purchaseInvoices)
-          .set({ isPosted: false, postedAt: null, postedJournalEntryId: null, updatedAt: new Date() })
+          .set({
+            isPosted: false,
+            postedAt: null,
+            postedJournalEntryId: null,
+            generatedStockVoucherId: null,
+            generatedStockJournalEntryId: null,
+            updatedAt: new Date(),
+          })
           .where(and(eq(purchaseInvoices.id, input.invoiceId), eq(purchaseInvoices.orgId, orgId)));
 
         await tx.update(pendingAccountMovements)
-          .set({ status: 'unposted', linkedJournalEntryId: null, updatedAt: new Date() })
+          .set({ status: 'unposted', linkedJournalEntryId: null, linkedStockVoucherId: null, updatedAt: new Date() })
           .where(and(
             eq(pendingAccountMovements.orgId, orgId),
             eq(pendingAccountMovements.sourceDocType, 'purchase_invoice'),
@@ -379,12 +545,12 @@ export const postingRouter = router({
             eq(pendingAccountMovements.linkedJournalEntryId, invoice.postedJournalEntryId),
           ));
         await tx.update(pendingStockMovements)
-          .set({ status: 'unposted', linkedJournalEntryId: null, updatedAt: new Date() })
+          .set({ status: 'unposted', linkedJournalEntryId: null, linkedStockVoucherId: null, updatedAt: new Date() })
           .where(and(
             eq(pendingStockMovements.orgId, orgId),
             eq(pendingStockMovements.sourceDocType, 'purchase_invoice'),
             eq(pendingStockMovements.sourceDocId, invoice.id),
-            eq(pendingStockMovements.linkedJournalEntryId, invoice.postedJournalEntryId),
+            eq(pendingStockMovements.linkedJournalEntryId, invoice.generatedStockJournalEntryId),
           ));
 
         return { success: true };

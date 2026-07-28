@@ -5,10 +5,13 @@ import { db } from '../db.js';
 import {
   journalEntries,
   salesInvoices,
+  purchaseInvoices,
+  stockVouchers,
   users,
 } from '../schema.js';
 
 const salesInvoiceInput = z.object({ documentId: z.number().int().positive() });
+const purchaseInvoiceInput = z.object({ documentId: z.number().int().positive() });
 
 async function getSalesInvoice(documentId: number, orgId: number) {
   return db.query.salesInvoices.findFirst({
@@ -19,7 +22,71 @@ async function getSalesInvoice(documentId: number, orgId: number) {
   });
 }
 
+async function getPurchaseInvoice(documentId: number, orgId: number) {
+  return db.query.purchaseInvoices.findFirst({
+    where: and(eq(purchaseInvoices.id, documentId), eq(purchaseInvoices.orgId, orgId)),
+  });
+}
+
+async function purchaseRelations(documentId: number, orgId: number) {
+  const invoice = await getPurchaseInvoice(documentId, orgId);
+  if (!invoice) return { documentExists: false, rows: [] };
+  const entries = await db.query.journalEntries.findMany({
+    where: and(
+      eq(journalEntries.orgId, orgId),
+      or(
+        and(eq(journalEntries.sourceDocType, 'purchase_invoice'), eq(journalEntries.sourceDocId, invoice.id)),
+        and(eq(journalEntries.sourceDocType, 'stock_receipt'), eq(journalEntries.sourceDocId, invoice.generatedStockVoucherId ?? -1)),
+      ),
+    ),
+    orderBy: (entry, { asc }) => [asc(entry.entryDate), asc(entry.id)],
+  });
+  const voucher = invoice.generatedStockVoucherId
+    ? await db.query.stockVouchers.findFirst({
+        where: and(eq(stockVouchers.id, invoice.generatedStockVoucherId), eq(stockVouchers.orgId, orgId)),
+      })
+    : null;
+  const actorIds = [...entries.map((entry) => entry.userId), voucher?.userId]
+    .filter((id): id is number => id !== null && id !== undefined);
+  const actors = actorIds.length
+    ? await db.query.users.findMany({
+        where: and(eq(users.orgId, orgId), or(...actorIds.map((id) => eq(users.id, id)))),
+      })
+    : [];
+  const actorNames = new Map(actors.map((actor) => [actor.id, actor.name]));
+  return {
+    documentExists: true,
+    rows: [
+      ...entries.map((entry) => ({
+        documentType: entry.sourceDocType ?? 'journal_entry',
+        documentId: entry.id,
+        documentNumber: entry.entryNumber,
+        date: entry.entryDate,
+        relationType: entry.sourceDocType === 'stock_receipt' ? 'generated_stock_journal' : 'generated_by',
+        status: entry.status,
+        debit: entry.totalDebit,
+        credit: entry.totalCredit,
+        user: entry.userId ? actorNames.get(entry.userId) ?? null : null,
+      })),
+      ...(voucher ? [{
+        documentType: 'stock_receipt',
+        documentId: voucher.id,
+        documentNumber: voucher.voucherNumber,
+        date: voucher.voucherDate,
+        relationType: 'generated_by',
+        status: voucher.status,
+        debit: null,
+        credit: null,
+        user: voucher.userId ? actorNames.get(voucher.userId) ?? null : null,
+      }] : []),
+    ],
+  };
+}
+
 export const documentToolsRouter = router({
+  purchaseInvoiceRelations: protectedProcedure
+    .input(purchaseInvoiceInput)
+    .query(async ({ ctx, input }) => purchaseRelations(input.documentId, ctx.user.orgId)),
   /**
    * Read-only contract for the Related Documents window.
    * Only returns journal entries that actually point at this invoice.

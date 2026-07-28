@@ -1,4 +1,4 @@
-ALTER TYPE "public"."invoice_type" ADD VALUE 'order';--> statement-breakpoint
+ALTER TYPE "public"."invoice_type" ADD VALUE IF NOT EXISTS 'order';--> statement-breakpoint
 CREATE TABLE "document_templates" (
         "id" serial PRIMARY KEY NOT NULL,
         "org_id" integer NOT NULL,

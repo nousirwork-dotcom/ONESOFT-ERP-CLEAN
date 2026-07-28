@@ -49,17 +49,29 @@ export async function autoMigrate(pool: Pool): Promise<{ ok: boolean; error?: st
 
   const client = await pool.connect();
   try {
-    // ── 1. base_schema.sql ──────────────────────────────────────────────────
-    const baseSchemaFile = path.join(drizzleDir, 'base_schema.sql');
-    if (!fs.existsSync(baseSchemaFile)) {
-      return { ok: false, error: `base_schema.sql غير موجود في: ${drizzleDir}` };
-    }
-    console.log('[auto-migrate] تطبيق base_schema.sql...');
-    await client.query(fs.readFileSync(baseSchemaFile, 'utf-8'));
-
+    // Bootstrap DDL is for an empty database only. Replaying it against an
+    // existing installation is unsafe because its historical shape can differ
+    // from the live schema (for example branch_id changes).
     const orgCheck = await client.query(`SELECT to_regclass('public.organizations') AS tbl`);
     if (orgCheck.rows[0]?.tbl === null) {
-      return { ok: false, error: 'فشل إنشاء الجداول الأساسية (organizations مفقود بعد base_schema.sql)' };
+      const baseSchemaFile = path.join(drizzleDir, 'base_schema.sql');
+      if (!fs.existsSync(baseSchemaFile)) {
+        return { ok: false, error: `base_schema.sql غير موجود في: ${drizzleDir}` };
+      }
+      console.log('[auto-migrate] قاعدة فارغة — تطبيق base_schema.sql مرة واحدة...');
+      await client.query('BEGIN');
+      try {
+        await client.query(fs.readFileSync(baseSchemaFile, 'utf-8'));
+        const created = await client.query(`SELECT to_regclass('public.organizations') AS tbl`);
+        if (created.rows[0]?.tbl === null) throw new Error('organizations مفقود بعد تهيئة القاعدة');
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        const msg = err instanceof Error ? err.message : String(err);
+        return { ok: false, error: `فشل تهيئة القاعدة الفارغة: ${msg}` };
+      }
+    } else {
+      console.log('[auto-migrate] قاعدة موجودة — تخطي base_schema.sql');
     }
 
     // ── 2. جدول تتبع migrations التدريجية ───────────────────────────────────
@@ -71,10 +83,36 @@ export async function autoMigrate(pool: Pool): Promise<{ ok: boolean; error?: st
       )
     `);
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS _schema_version (
+        id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+        version TEXT NOT NULL,
+        stamped_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    const versionRow = await client.query<{ version: string }>(
+      'SELECT version FROM _schema_version WHERE id = 1',
+    );
+    const currentTag = versionRow.rows[0]?.version ?? null;
+    const currentIndex = currentTag ? entries.findIndex((entry) => entry.tag === currentTag) : -1;
+
+    // Legacy installations may have been stamped before the migration ledger
+    // existed. Reconstruct only the already-completed prefix; never mark
+    // migrations beyond the stamped version as applied.
+    if (currentIndex >= 0) {
+      for (const entry of entries.slice(0, currentIndex + 1)) {
+        await client.query(
+          'INSERT INTO __drizzle_migrations (tag) VALUES ($1) ON CONFLICT (tag) DO NOTHING',
+          [entry.tag],
+        );
+      }
+    }
+
     // ── 3. تطبيق كل migration لم تُطبَّق بعد ────────────────────────────────
-    for (const entry of entries) {
+    for (const [index, entry] of entries.entries()) {
       const sqlFile = path.join(drizzleDir, `${entry.tag}.sql`);
       if (!fs.existsSync(sqlFile)) continue;
+      if (index <= currentIndex) continue;
 
       const { rowCount } = await client.query(
         'SELECT 1 FROM __drizzle_migrations WHERE tag = $1',
@@ -96,15 +134,8 @@ export async function autoMigrate(pool: Pool): Promise<{ ok: boolean; error?: st
       }
     }
 
-    // ── 4. ختم _schema_version (لازم يطابق check-schema.ts) ─────────────────
+    // Stamp only after every pending SQL file has committed successfully.
     const latestVersion = entries.length > 0 ? entries[entries.length - 1]!.tag : REQUIRED_SCHEMA_VERSION;
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS _schema_version (
-        id         INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
-        version    TEXT    NOT NULL,
-        stamped_at TIMESTAMP NOT NULL DEFAULT NOW()
-      )
-    `);
     await client.query(
       `INSERT INTO _schema_version (id, version, stamped_at)
        VALUES (1, $1, NOW())

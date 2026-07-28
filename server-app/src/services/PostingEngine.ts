@@ -18,7 +18,7 @@ import {
   documentJournals, chartOfAccounts, documentTypes,
   warehouseAccountLinks, paymentMethods,
 } from '../schema.js';
-import { eq, and, desc, inArray } from 'drizzle-orm';
+import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Types
@@ -135,6 +135,25 @@ export async function nextEntryNumber(orgId: number, tx?: DbClient): Promise<str
   });
   const n = last ? parseInt(last.entryNumber.replace(/\D/g, '') || '0') + 1 : 1;
   return `JE-${String(n).padStart(4, '0')}`;
+}
+
+export async function reserveDocumentNumber(
+  journalId: number,
+  orgId: number,
+  tx: DbClient,
+): Promise<{ number: string; journal: typeof documentJournals.$inferSelect }> {
+  const [journal] = await tx.update(documentJournals)
+    .set({ currentSeq: sql`${documentJournals.currentSeq} + ${documentJournals.increment}` })
+    .where(and(eq(documentJournals.id, journalId), eq(documentJournals.orgId, orgId), eq(documentJournals.isActive, true)))
+    .returning();
+  if (!journal) throw new Error('دفتر المستند الناتج غير موجود أو غير فعال');
+  const seq = journal.currentSeq;
+  if (seq > journal.lastNumber) throw new Error(`انتهى تسلسل دفتر المستند: ${journal.name}`);
+  const year = journal.includeYear ? `${new Date().getFullYear()}-` : '';
+  return {
+    number: `${journal.numberPrefix}${year}${String(seq).padStart(journal.numDigits, '0')}`,
+    journal,
+  };
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -576,10 +595,15 @@ export async function insertJournalEntry(opts: {
   sourceDocId: number;
   sourceDocNumber: string;
   lines: PostingLine[];
+  journalId?: number | null;
+  generatedDocType?: string | null;
   tx?: DbClient;
 }) {
   const client = opts.tx ?? db;
-  const entryNumber = await nextEntryNumber(opts.orgId, opts.tx);
+  const reserved = opts.journalId
+    ? await reserveDocumentNumber(opts.journalId, opts.orgId, client)
+    : null;
+  const entryNumber = reserved?.number ?? await nextEntryNumber(opts.orgId, opts.tx);
   const totalDebit  = opts.lines.reduce((s, l) => s + Number(l.debit),  0);
   const totalCredit = opts.lines.reduce((s, l) => s + Number(l.credit), 0);
 
@@ -597,6 +621,8 @@ export async function insertJournalEntry(opts: {
     sourceDocId:     opts.sourceDocId,
     sourceDocNumber: opts.sourceDocNumber,
     entryType:       'auto',
+    journalId:       opts.journalId ?? null,
+    generatedDocType: opts.generatedDocType ?? null,
   }).returning();
 
   if (opts.lines.length > 0) {

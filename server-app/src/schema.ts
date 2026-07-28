@@ -445,6 +445,8 @@ export const purchaseInvoices = pgTable('purchase_invoices', {
   postedJournalEntryId: integer('posted_journal_entry_id'),
   inventoryPosted: boolean('inventory_posted').notNull().default(false),
   costPostedJournalEntryId: integer('cost_posted_journal_entry_id'),
+  generatedStockVoucherId: integer('generated_stock_voucher_id'),
+  generatedStockJournalEntryId: integer('generated_stock_journal_entry_id'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -526,6 +528,8 @@ export const journalEntries = pgTable('journal_entries', {
   sourceDocId:     integer('source_doc_id'),
   sourceDocNumber: varchar('source_doc_number', { length: 100 }),
   entryType:       varchar('entry_type',         { length: 20 }).notNull().default('manual'),
+  journalId:       integer('journal_id').references(() => documentJournals.id, { onDelete: 'set null' }),
+  generatedDocType: varchar('generated_doc_type', { length: 50 }),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 }, (t) => [
   uniqueIndex('journal_entries_org_entry_number_uidx').on(t.orgId, t.entryNumber),
@@ -639,6 +643,11 @@ export const stockVouchers = pgTable('stock_vouchers', {
   totalCost: decimal('total_cost', { precision: 18, scale: 4 }).default('0'),
   status: varchar('status', { length: 20 }).notNull().default('confirmed'),
   userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+  sourceDocType: varchar('source_doc_type', { length: 50 }),
+  sourceDocId: integer('source_doc_id'),
+  sourceDocNumber: varchar('source_doc_number', { length: 100 }),
+  sourceJournalId: integer('source_journal_id').references(() => documentJournals.id, { onDelete: 'set null' }),
+  generatedJournalEntryId: integer('generated_journal_entry_id'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 

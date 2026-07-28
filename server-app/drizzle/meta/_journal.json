@@ -379,6 +379,13 @@
       "when": 1753660800000,
       "tag": "0053_link_unposted_movements",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1753747200000,
+      "tag": "0054_purchase_issuance_links",
+      "breakpoints": true
     }
   ]
 }
