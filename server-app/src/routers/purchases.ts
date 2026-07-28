@@ -187,14 +187,19 @@ async function resolvePurchaseWarehouseId(
   journalId: number | null | undefined,
   orgId: number,
 ): Promise<number> {
-  if (inputWarehouseId) return inputWarehouseId;
-
   if (journalId) {
     const journal = await tx.query.documentJournals.findFirst({
       where: and(eq(documentJournals.id, journalId), eq(documentJournals.orgId, orgId)),
     });
-    if (journal?.warehouseId) return journal.warehouseId;
+    if (!journal) throw new Error('دفتر المستند غير موجود أو لا ينتمي للمنظمة الحالية');
+    if (!journal.warehouseId) throw new Error('دفتر المستند غير مرتبط بمخزن');
+    if (inputWarehouseId && inputWarehouseId !== journal.warehouseId) {
+      throw new Error('المخزن لا يطابق المخزن المرتبط بدفتر المستند');
+    }
+    return journal.warehouseId;
   }
+
+  if (inputWarehouseId) return inputWarehouseId;
 
   throw new Error('لم يتم تحديد المخزن/الفرع — يجب اختيار دفتر مرتبط بمخزن');
 }

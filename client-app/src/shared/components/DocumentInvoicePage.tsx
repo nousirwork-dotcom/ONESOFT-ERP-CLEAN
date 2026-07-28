@@ -302,8 +302,17 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       warehousesQuery.data?.find((warehouse: any) => warehouse.id === inv.warehouseId)?.branchId ??
       null,
     );
-    setWarehouseDisplayName(inv.warehouseName ?? "");
+    setWarehouseDisplayName(
+      inv.warehouseName ??
+      warehousesQuery.data?.find((warehouse: any) => warehouse.id === inv.warehouseId)?.name ??
+      "",
+    );
     setJournalId(inv.journalId ?? null);
+    setJournalWarehouseId(
+      inv.journalId
+        ? (journalsQuery.data ?? []).find((journal: any) => journal.id === inv.journalId)?.warehouseId ?? null
+        : null,
+    );
     setCurrency(inv.currency ?? "SAR");
     setExchangeRate(inv.exchangeRate ?? "1.000");
     setPaymentType((inv.paymentMethod ?? "cash") as PaymentType);
@@ -332,7 +341,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     } else {
       setLines([EMPTY_LINE()]);
     }
-  }, [navInvoiceQuery.data, warehousesQuery.data]);
+  }, [navInvoiceQuery.data, warehousesQuery.data, journalsQuery.data]);
 
   const stockQuery = trpc.reports.stockByWarehouse.useQuery(
     { warehouseId: warehouseId! },
@@ -615,9 +624,17 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
         setJournalWarehouseId(j.warehouseId);
         const whName = warehousesQuery.data?.find((w: any) => w.id === j.warehouseId)?.name ?? "";
         setWarehouseDisplayName(whName);
+        if (config.docCategory === "purchase") {
+          const branch = warehousesQuery.data?.find((w: any) => w.id === j.warehouseId)?.branchId;
+          if (branch) setBranchId(branch);
+        }
       } else {
         setJournalWarehouseId(null);
         setWarehouseDisplayName("");
+        if (config.docCategory === "purchase") {
+          setBranchId(null);
+          setWarehouseId(null);
+        }
       }
       if (j.defaultCurrency) setCurrency(j.defaultCurrency);
       if (j.defaultPayMethod) setPaymentType(j.defaultPayMethod as any);
@@ -631,7 +648,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       const preview = await utils.documentJournals.previewNextNumber.fetch({ journalId: id });
       if (preview) setInvoiceNumber(preview);
     } catch { toast.error("تعذّر جلب رقم المستند من الدفتر"); }
-  }, [journalsQuery.data, docTypesQuery.data, utils]);
+  }, [config.docCategory, journalsQuery.data, warehousesQuery.data, docTypesQuery.data, utils]);
 
   const handlePurchaseBranchSelect = useCallback(async (nextBranchId: number | null) => {
     if (config.docCategory !== "purchase") return;
@@ -674,6 +691,12 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     setWarehouseDisplayName(warehouse.name);
     setJournalId(journal.id);
     setJournalWarehouseId(warehouse.id);
+    setDocTypeId(prev => {
+      const filtered = (docTypesQuery.data ?? []).filter((dt: any) => dt.journal === String(journal.id));
+      return filtered.some((dt: any) => String(dt.id) === prev)
+        ? prev
+        : (filtered[0] ? String(filtered[0].id) : "");
+    });
     if (journal.defaultCurrency) setCurrency(journal.defaultCurrency);
     if (journal.defaultPayMethod) setPaymentType(journal.defaultPayMethod as any);
     try {
@@ -691,6 +714,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     lines,
     warehousesQuery.data,
     journalsQuery.data,
+    docTypesQuery.data,
     utils,
     nextJournalNumberMutation,
   ]);
@@ -1340,7 +1364,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
           <thead className="sticky top-0 z-10">
             <tr style={{
               background: config.docCategory === "purchase"
-                ? "linear-gradient(to bottom, #805c40, #6f4d34)"
+                ? "linear-gradient(to bottom, #58616b, #3f474f)"
                 : `linear-gradient(to bottom, ${themeColor}, #365E80)`,
               color: "#fff",
             }}>
