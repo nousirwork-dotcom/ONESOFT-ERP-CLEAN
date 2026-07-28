@@ -6,6 +6,7 @@ import {
   salesInvoices, purchaseInvoices,
   journalEntries, journalEntryLines,
   documentJournals, chartOfAccounts,
+  pendingAccountMovements, pendingStockMovements,
 } from '../schema.js';
 
 // ── PostingEngine: كل Business Logic هنا ──────────────────────────────────────
@@ -317,6 +318,23 @@ export const postingRouter = router({
           throw new Error('الفاتورة مرحَّلة مسبقاً أو تغيّرت حالتها أثناء الترحيل');
         }
 
+        await tx.update(pendingAccountMovements)
+          .set({ status: 'linked', linkedJournalEntryId: entry.id, updatedAt: new Date() })
+          .where(and(
+            eq(pendingAccountMovements.orgId, orgId),
+            eq(pendingAccountMovements.sourceDocType, 'purchase_invoice'),
+            eq(pendingAccountMovements.sourceDocId, invoice.id),
+            eq(pendingAccountMovements.status, 'unposted'),
+          ));
+        await tx.update(pendingStockMovements)
+          .set({ status: 'linked', linkedJournalEntryId: entry.id, updatedAt: new Date() })
+          .where(and(
+            eq(pendingStockMovements.orgId, orgId),
+            eq(pendingStockMovements.sourceDocType, 'purchase_invoice'),
+            eq(pendingStockMovements.sourceDocId, invoice.id),
+            eq(pendingStockMovements.status, 'unposted'),
+          ));
+
         return { success: true, journalEntryId: entry.id, entryNumber: entry.entryNumber };
       });
     }),
@@ -351,6 +369,23 @@ export const postingRouter = router({
         await tx.update(purchaseInvoices)
           .set({ isPosted: false, postedAt: null, postedJournalEntryId: null, updatedAt: new Date() })
           .where(and(eq(purchaseInvoices.id, input.invoiceId), eq(purchaseInvoices.orgId, orgId)));
+
+        await tx.update(pendingAccountMovements)
+          .set({ status: 'unposted', linkedJournalEntryId: null, updatedAt: new Date() })
+          .where(and(
+            eq(pendingAccountMovements.orgId, orgId),
+            eq(pendingAccountMovements.sourceDocType, 'purchase_invoice'),
+            eq(pendingAccountMovements.sourceDocId, invoice.id),
+            eq(pendingAccountMovements.linkedJournalEntryId, invoice.postedJournalEntryId),
+          ));
+        await tx.update(pendingStockMovements)
+          .set({ status: 'unposted', linkedJournalEntryId: null, updatedAt: new Date() })
+          .where(and(
+            eq(pendingStockMovements.orgId, orgId),
+            eq(pendingStockMovements.sourceDocType, 'purchase_invoice'),
+            eq(pendingStockMovements.sourceDocId, invoice.id),
+            eq(pendingStockMovements.linkedJournalEntryId, invoice.postedJournalEntryId),
+          ));
 
         return { success: true };
       });

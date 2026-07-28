@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { chartOfAccounts, journalEntries, journalEntryLines } from '../schema.js';
+import { chartOfAccounts, journalEntries, journalEntryLines, pendingAccountMovements } from '../schema.js';
 import { eq, and, asc, gte, lte } from 'drizzle-orm';
 
 export const accountingRouter = router({
@@ -15,7 +15,7 @@ export const accountingRouter = router({
       const { fromDate, toDate } = input;
       const endOfDay = (d: Date) => new Date(d.getTime() + 86399999);
 
-      const [accounts, allLines] = await Promise.all([
+      const [accounts, allLines, pendingLines] = await Promise.all([
         db.select({
           id:                 chartOfAccounts.id,
           code:               chartOfAccounts.code,
@@ -42,6 +42,15 @@ export const accountingRouter = router({
             eq(journalEntries.orgId, ctx.user.orgId),
           ))
           .where(eq(journalEntryLines.orgId, ctx.user.orgId)),
+        db.select({
+          accountId: pendingAccountMovements.accountId,
+          debit: pendingAccountMovements.debit,
+          credit: pendingAccountMovements.credit,
+          entryDate: pendingAccountMovements.movementDate,
+        }).from(pendingAccountMovements).where(and(
+          eq(pendingAccountMovements.orgId, ctx.user.orgId),
+          eq(pendingAccountMovements.status, 'unposted'),
+        )),
       ]);
 
       type Agg = { priorD: number; priorC: number; moveD: number; moveC: number };
@@ -62,6 +71,20 @@ export const accountingRouter = router({
         const a = agg.get(ln.accountId)!;
         if (isPrior)         { a.priorD += d; a.priorC += cr; }
         else if (isInPeriod) { a.moveD  += d; a.moveC  += cr; }
+      }
+      for (const ln of pendingLines) {
+        if (!ln.accountId) continue;
+        const d = parseFloat(ln.debit ?? '0');
+        const cr = parseFloat(ln.credit ?? '0');
+        const dt = ln.entryDate;
+        const isPrior = fromDate ? dt < fromDate : false;
+        const isInPeriod = fromDate
+          ? dt >= fromDate && (!toDate || dt <= endOfDay(toDate))
+          : (!toDate || dt <= endOfDay(toDate));
+        if (!agg.has(ln.accountId)) agg.set(ln.accountId, { priorD: 0, priorC: 0, moveD: 0, moveC: 0 });
+        const a = agg.get(ln.accountId)!;
+        if (isPrior) { a.priorD += d; a.priorC += cr; }
+        else if (isInPeriod) { a.moveD += d; a.moveC += cr; }
       }
 
       return accounts.map(acc => {
@@ -129,6 +152,22 @@ export const accountingRouter = router({
         .where(and(...conds))
         .orderBy(asc(journalEntries.entryDate), asc(journalEntries.id));
 
+      const pendingConds: any[] = [
+        eq(pendingAccountMovements.accountId, accountId),
+        eq(pendingAccountMovements.orgId, ctx.user.orgId),
+        eq(pendingAccountMovements.status, 'unposted'),
+      ];
+      if (fromDate) pendingConds.push(gte(pendingAccountMovements.movementDate, fromDate));
+      if (toDate) pendingConds.push(lte(pendingAccountMovements.movementDate, endOfDay(toDate)));
+      const pending = await db.select({
+        id: pendingAccountMovements.id,
+        entryDate: pendingAccountMovements.movementDate,
+        reference: pendingAccountMovements.sourceDocNumber,
+        description: pendingAccountMovements.description,
+        debit: pendingAccountMovements.debit,
+        credit: pendingAccountMovements.credit,
+      }).from(pendingAccountMovements).where(and(...pendingConds));
+
       const docTypeLabel = (src: string | null) => {
         switch (src) {
           case 'sales_invoice':    return 'فاتورة مبيعات';
@@ -141,15 +180,29 @@ export const accountingRouter = router({
         }
       };
 
-      return lines.map(l => ({
-        entryId:     l.entryId,
-        entryDate:   l.entryDate,
-        entryNumber: l.entryNumber,
-        reference:   l.reference,
-        voucherType: docTypeLabel(l.sourceDocType),
-        description: l.lineDesc ?? l.description,
-        debit:       l.debit,
-        credit:      l.credit,
-      }));
+      return [
+        ...lines.map(l => ({
+          entryId:     l.entryId,
+          entryDate:   l.entryDate,
+          entryNumber: l.entryNumber,
+          reference:   l.reference,
+          voucherType: docTypeLabel(l.sourceDocType),
+          description: l.lineDesc ?? l.description,
+          debit:       l.debit,
+          credit:      l.credit,
+          status:      'posted' as const,
+        })),
+        ...pending.map(l => ({
+          entryId:     null,
+          entryDate:   l.entryDate,
+          entryNumber: null,
+          reference:   l.reference,
+          voucherType: 'فاتورة مشتريات',
+          description: l.description ?? `فاتورة مشتريات ${l.reference}`,
+          debit:       l.debit,
+          credit:      l.credit,
+          status:      'unposted' as const,
+        })),
+      ].sort((a, b) => a.entryDate.getTime() - b.entryDate.getTime());
     }),
 });

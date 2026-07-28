@@ -1,8 +1,189 @@
 import { z } from 'zod';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, inArray } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { purchaseInvoices, purchaseInvoiceItems, documentJournals, warehouses } from '../schema.js';
+import {
+  purchaseInvoices, purchaseInvoiceItems, documentJournals, warehouses,
+  pendingAccountMovements, pendingStockMovements, inventory, products,
+} from '../schema.js';
+import { buildPurchaseInvoiceLines, resolveDocTypeAccounts, resolveDocTypeAccountsByJournal } from './posting.js';
+
+type PurchaseClient = typeof db | any;
+
+async function getPurchasePostingContext(invoice: any, orgId: number) {
+  const journal = invoice.journalId
+    ? await db.query.documentJournals.findFirst({
+        where: and(eq(documentJournals.id, invoice.journalId), eq(documentJournals.orgId, orgId)),
+      })
+    : null;
+  const docTypeAccs = invoice.docTypeId
+    ? await resolveDocTypeAccounts(invoice.docTypeId, orgId)
+    : invoice.journalId
+      ? await resolveDocTypeAccountsByJournal(invoice.journalId, orgId)
+      : null;
+  return {
+    journal,
+    effectiveJournal: {
+      purchaseAccountId: docTypeAccs?.purchaseAccountId ?? journal?.purchaseAccountId ?? null,
+      supplierAccountId: docTypeAccs?.supplierAccountId ?? journal?.supplierAccountId ?? null,
+      cashAccountId: docTypeAccs?.cashAccountId ?? journal?.cashAccountId ?? null,
+      taxAccountId: docTypeAccs?.taxAccountId ?? journal?.taxAccountId ?? null,
+      discountAccountId: docTypeAccs?.discountAccountId ?? journal?.discountAccountId ?? null,
+    },
+  };
+}
+
+async function syncUnpostedPurchaseEffects(
+  tx: PurchaseClient,
+  invoice: any,
+  items: any[],
+  orgId: number,
+) {
+  const sourceType = 'purchase_invoice';
+  const oldStock = await tx.query.pendingStockMovements.findMany({
+    where: and(
+      eq(pendingStockMovements.orgId, orgId),
+      eq(pendingStockMovements.sourceDocType, sourceType),
+      eq(pendingStockMovements.sourceDocId, invoice.id),
+      eq(pendingStockMovements.status, 'unposted'),
+    ),
+  });
+
+  for (const old of oldStock) {
+    const current = await tx.query.inventory.findFirst({
+      where: and(
+        eq(inventory.orgId, orgId),
+        eq(inventory.productId, old.productId),
+        eq(inventory.warehouseId, old.warehouseId),
+      ),
+    });
+    if (current) {
+      const nextQty = Number(current.quantity) - Number(old.quantity);
+      if (nextQty < -0.0001) {
+        throw new Error('لا يمكن تعديل الفاتورة: تم صرف أو بيع جزء من الكمية الناتجة عنها');
+      }
+      await tx.update(inventory).set({
+        quantity: Math.max(0, nextQty).toFixed(4),
+        updatedAt: new Date(),
+      }).where(eq(inventory.id, current.id));
+    }
+  }
+
+  await tx.delete(pendingAccountMovements).where(and(
+    eq(pendingAccountMovements.orgId, orgId),
+    eq(pendingAccountMovements.sourceDocType, sourceType),
+    eq(pendingAccountMovements.sourceDocId, invoice.id),
+  ));
+  await tx.delete(pendingStockMovements).where(and(
+    eq(pendingStockMovements.orgId, orgId),
+    eq(pendingStockMovements.sourceDocType, sourceType),
+    eq(pendingStockMovements.sourceDocId, invoice.id),
+  ));
+
+  const { effectiveJournal } = await getPurchasePostingContext(invoice, orgId);
+  const { lines } = await buildPurchaseInvoiceLines(invoice, effectiveJournal, orgId);
+  const accountRows = lines
+    .filter((line) => Number(line.debit) !== 0 || Number(line.credit) !== 0)
+    .map((line) => ({
+      orgId,
+      sourceDocType: sourceType,
+      sourceDocId: invoice.id,
+      sourceDocNumber: invoice.invoiceNumber,
+      movementDate: invoice.invoiceDate,
+      accountId: line.accountId ?? null,
+      debit: line.debit,
+      credit: line.credit,
+      description: line.description ?? `فاتورة مشتريات ${invoice.invoiceNumber}`,
+      status: 'unposted' as const,
+      updatedAt: new Date(),
+    }));
+  if (accountRows.length) await tx.insert(pendingAccountMovements).values(accountRows);
+
+  const stockItems = items.filter((item) => item.productId);
+  if (!stockItems.length || !invoice.warehouseId) return;
+  const productRows = await tx.query.products.findMany({
+    where: and(eq(products.orgId, orgId), inArray(products.id, stockItems.map((item: any) => item.productId))),
+  });
+  const productMap = new Map(productRows.map((product: any) => [product.id, product]));
+
+  for (const item of stockItems) {
+    const product = productMap.get(item.productId) as { itemType?: string } | undefined;
+    if (!product || product.itemType !== 'stock') continue;
+    const quantity = Number(item.quantity);
+    if (!Number.isFinite(quantity) || quantity === 0) continue;
+    const unitCost = Number(item.unitPrice ?? 0);
+    const current = await tx.query.inventory.findFirst({
+      where: and(
+        eq(inventory.orgId, orgId),
+        eq(inventory.productId, item.productId),
+        eq(inventory.warehouseId, invoice.warehouseId),
+      ),
+    });
+    if (current) {
+      const oldQty = Number(current.quantity);
+      const oldCost = Number(current.avgCost ?? 0);
+      const nextQty = oldQty + quantity;
+      const nextCost = nextQty > 0 ? ((oldQty * oldCost) + (quantity * unitCost)) / nextQty : unitCost;
+      await tx.update(inventory).set({
+        quantity: nextQty.toFixed(4),
+        avgCost: nextCost.toFixed(4),
+        updatedAt: new Date(),
+      }).where(eq(inventory.id, current.id));
+    } else {
+      await tx.insert(inventory).values({
+        orgId,
+        productId: item.productId,
+        warehouseId: invoice.warehouseId,
+        quantity: quantity.toFixed(4),
+        avgCost: unitCost.toFixed(4),
+      });
+    }
+    await tx.insert(pendingStockMovements).values({
+      orgId,
+      sourceDocType: sourceType,
+      sourceDocId: invoice.id,
+      sourceDocNumber: invoice.invoiceNumber,
+      movementDate: invoice.invoiceDate,
+      productId: item.productId,
+      warehouseId: invoice.warehouseId,
+      quantity: quantity.toFixed(4),
+      unitCost: unitCost.toFixed(4),
+      status: 'unposted',
+      updatedAt: new Date(),
+    });
+  }
+}
+
+async function removeUnpostedPurchaseEffects(tx: PurchaseClient, invoice: any, orgId: number) {
+  const oldStock = await tx.query.pendingStockMovements.findMany({
+    where: and(
+      eq(pendingStockMovements.orgId, orgId),
+      eq(pendingStockMovements.sourceDocType, 'purchase_invoice'),
+      eq(pendingStockMovements.sourceDocId, invoice.id),
+      eq(pendingStockMovements.status, 'unposted'),
+    ),
+  });
+  for (const old of oldStock) {
+    const current = await tx.query.inventory.findFirst({
+      where: and(eq(inventory.orgId, orgId), eq(inventory.productId, old.productId), eq(inventory.warehouseId, old.warehouseId)),
+    });
+    if (current) {
+      const nextQty = Number(current.quantity) - Number(old.quantity);
+      if (nextQty < -0.0001) throw new Error('لا يمكن حذف الفاتورة: تم صرف أو بيع جزء من الكمية الناتجة عنها');
+      await tx.update(inventory).set({ quantity: Math.max(0, nextQty).toFixed(4), updatedAt: new Date() }).where(eq(inventory.id, current.id));
+    }
+  }
+  await tx.delete(pendingAccountMovements).where(and(
+    eq(pendingAccountMovements.orgId, orgId),
+    eq(pendingAccountMovements.sourceDocType, 'purchase_invoice'),
+    eq(pendingAccountMovements.sourceDocId, invoice.id),
+  ));
+  await tx.delete(pendingStockMovements).where(and(
+    eq(pendingStockMovements.orgId, orgId),
+    eq(pendingStockMovements.sourceDocType, 'purchase_invoice'),
+    eq(pendingStockMovements.sourceDocId, invoice.id),
+  ));
+}
 
 // ── تحديد المخزن/الفرع الصحيح: إذا لم يُرسل warehouseId نحله من دفتر المستندات ──
 async function resolvePurchaseWarehouseId(
@@ -161,26 +342,31 @@ export const purchasesRouter = router({
         invoiceData.journalId,
         orgId,
       );
-      const [invoice] = await db.insert(purchaseInvoices).values({
-        ...invoiceData,
-        warehouseId: resolvedWarehouseId,
-        orgId,
-        userId: ctx.user.id,
-        invoiceDate: new Date(invoiceData.invoiceDate),
-        ...(dueDate ? { dueDate: new Date(dueDate) } : {}),
-      }).returning();
-      if (items.length > 0) {
-        await db.insert(purchaseInvoiceItems).values(
-          items.map((item, idx) => ({
-            ...item,
-            invoiceId: invoice.id,
-            orgId,
-            sortOrder: item.sortOrder ?? idx,
-          }))
-        );
-      }
-
-      return invoice;
+      return db.transaction(async (tx) => {
+        const [invoice] = await tx.insert(purchaseInvoices).values({
+          ...invoiceData,
+          warehouseId: resolvedWarehouseId,
+          orgId,
+          userId: ctx.user.id,
+          invoiceDate: new Date(invoiceData.invoiceDate),
+          ...(dueDate ? { dueDate: new Date(dueDate) } : {}),
+        }).returning();
+        if (items.length > 0) {
+          await tx.insert(purchaseInvoiceItems).values(
+            items.map((item, idx) => ({
+              ...item,
+              invoiceId: invoice.id,
+              orgId,
+              sortOrder: item.sortOrder ?? idx,
+            }))
+          );
+        }
+        const savedItems = await tx.query.purchaseInvoiceItems.findMany({
+          where: eq(purchaseInvoiceItems.invoiceId, invoice.id),
+        });
+        await syncUnpostedPurchaseEffects(tx, invoice, savedItems, orgId);
+        return invoice;
+      });
     }),
 
   // تعديل مستند
@@ -229,26 +415,37 @@ export const purchasesRouter = router({
         rest.journalId ?? existing?.journalId,
         ctx.user.orgId,
       );
-      await db.update(purchaseInvoices).set({
-        ...rest,
-        warehouseId: resolvedWarehouseId,
-        ...(invoiceDate ? { invoiceDate: new Date(invoiceDate) } : {}),
-        updatedAt: new Date(),
-      }).where(and(eq(purchaseInvoices.id, id), eq(purchaseInvoices.orgId, ctx.user.orgId)));
-      if (items) {
-        await db.delete(purchaseInvoiceItems).where(eq(purchaseInvoiceItems.invoiceId, id));
-        if (items.length > 0) {
-          await db.insert(purchaseInvoiceItems).values(
-            items.map((item, idx) => ({
-              ...item,
-              invoiceId: id,
-              orgId: ctx.user.orgId,
-              sortOrder: item.sortOrder ?? idx,
-            }))
-          );
+      return db.transaction(async (tx) => {
+        await removeUnpostedPurchaseEffects(tx, existing, ctx.user.orgId);
+        await tx.update(purchaseInvoices).set({
+          ...rest,
+          warehouseId: resolvedWarehouseId,
+          ...(invoiceDate ? { invoiceDate: new Date(invoiceDate) } : {}),
+          updatedAt: new Date(),
+        }).where(and(eq(purchaseInvoices.id, id), eq(purchaseInvoices.orgId, ctx.user.orgId)));
+        if (items) {
+          await tx.delete(purchaseInvoiceItems).where(eq(purchaseInvoiceItems.invoiceId, id));
+          if (items.length > 0) {
+            await tx.insert(purchaseInvoiceItems).values(
+              items.map((item, idx) => ({
+                ...item,
+                invoiceId: id,
+                orgId: ctx.user.orgId,
+                sortOrder: item.sortOrder ?? idx,
+              }))
+            );
+          }
         }
-      }
-      return { success: true };
+        const updated = await tx.query.purchaseInvoices.findFirst({
+          where: and(eq(purchaseInvoices.id, id), eq(purchaseInvoices.orgId, ctx.user.orgId)),
+        });
+        if (!updated) throw new Error('المستند غير موجود');
+        const updatedItems = await tx.query.purchaseInvoiceItems.findMany({
+          where: eq(purchaseInvoiceItems.invoiceId, id),
+        });
+        await syncUnpostedPurchaseEffects(tx, updated, updatedItems, ctx.user.orgId);
+        return { success: true };
+      });
     }),
 
   // حذف مستند
@@ -260,9 +457,12 @@ export const purchasesRouter = router({
       });
       if (existing?.isPosted)
         throw new Error('لا يمكن حذف مستند مرحَّل — يجب فك الترحيل أولاً');
-      await db.delete(purchaseInvoices).where(
-        and(eq(purchaseInvoices.id, input.id), eq(purchaseInvoices.orgId, ctx.user.orgId))
-      );
-      return { success: true };
+      return db.transaction(async (tx) => {
+        await removeUnpostedPurchaseEffects(tx, existing, ctx.user.orgId);
+        await tx.delete(purchaseInvoices).where(
+          and(eq(purchaseInvoices.id, input.id), eq(purchaseInvoices.orgId, ctx.user.orgId))
+        );
+        return { success: true };
+      });
     }),
 });

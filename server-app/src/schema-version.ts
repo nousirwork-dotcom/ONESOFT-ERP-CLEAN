@@ -5,4 +5,4 @@
  * constant to match the new filename (without the .sql extension), then
  * run `pnpm migrate` so the live database is stamped with the new version.
  */
-export const REQUIRED_SCHEMA_VERSION = '0051_add_draft_number_to_sales_invoices';
+export const REQUIRED_SCHEMA_VERSION = '0053_link_unposted_movements';

@@ -9,6 +9,7 @@ export const invoiceStatusEnum = pgEnum('invoice_status', ['draft', 'confirmed',
 export const paymentMethodEnum = pgEnum('payment_method', ['cash', 'bank', 'credit', 'check', 'other']);
 export const voucherTypeEnum = pgEnum('voucher_type', ['receipt', 'payment']);
 export const journalStatusEnum = pgEnum('journal_status', ['draft', 'posted', 'cancelled']);
+export const pendingMovementStatusEnum = pgEnum('pending_movement_status', ['unposted', 'linked', 'cancelled']);
 
 // ─── Organizations ────────────────────────────────────────────────────────────
 export const organizations = pgTable('organizations', {
@@ -466,6 +467,48 @@ export const purchaseInvoiceItems = pgTable('purchase_invoice_items', {
   total: decimal('total', { precision: 18, scale: 4 }).notNull(),
   sortOrder: integer('sort_order').default(0),
 });
+
+// ─── Unposted source-document movements ───────────────────────────────────────
+// These are operational effects, not numbered journal entries or stock vouchers.
+export const pendingAccountMovements = pgTable('pending_account_movements', {
+  id: serial('id').primaryKey(),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  sourceDocType: varchar('source_doc_type', { length: 50 }).notNull(),
+  sourceDocId: integer('source_doc_id').notNull(),
+  sourceDocNumber: varchar('source_doc_number', { length: 100 }).notNull(),
+  movementDate: timestamp('movement_date').notNull(),
+  accountId: integer('account_id').references(() => chartOfAccounts.id, { onDelete: 'set null' }),
+  debit: decimal('debit', { precision: 18, scale: 4 }).notNull().default('0'),
+  credit: decimal('credit', { precision: 18, scale: 4 }).notNull().default('0'),
+  description: text('description'),
+  status: pendingMovementStatusEnum('status').notNull().default('unposted'),
+  linkedJournalEntryId: integer('linked_journal_entry_id').references(() => journalEntries.id, { onDelete: 'set null' }),
+  linkedStockVoucherId: integer('linked_stock_voucher_id').references(() => stockVouchers.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('pending_account_movements_source_account_uidx').on(t.orgId, t.sourceDocType, t.sourceDocId, t.accountId),
+]);
+
+export const pendingStockMovements = pgTable('pending_stock_movements', {
+  id: serial('id').primaryKey(),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  sourceDocType: varchar('source_doc_type', { length: 50 }).notNull(),
+  sourceDocId: integer('source_doc_id').notNull(),
+  sourceDocNumber: varchar('source_doc_number', { length: 100 }).notNull(),
+  movementDate: timestamp('movement_date').notNull(),
+  productId: integer('product_id').notNull().references(() => products.id, { onDelete: 'cascade' }),
+  warehouseId: integer('warehouse_id').references(() => warehouses.id, { onDelete: 'set null' }),
+  quantity: decimal('quantity', { precision: 18, scale: 4 }).notNull(),
+  unitCost: decimal('unit_cost', { precision: 18, scale: 4 }).notNull().default('0'),
+  status: pendingMovementStatusEnum('status').notNull().default('unposted'),
+  linkedJournalEntryId: integer('linked_journal_entry_id').references(() => journalEntries.id, { onDelete: 'set null' }),
+  linkedStockVoucherId: integer('linked_stock_voucher_id').references(() => stockVouchers.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('pending_stock_movements_source_product_uidx').on(t.orgId, t.sourceDocType, t.sourceDocId, t.productId, t.warehouseId),
+]);
 
 // ─── Journal Entries ──────────────────────────────────────────────────────────
 export const journalEntries = pgTable('journal_entries', {
