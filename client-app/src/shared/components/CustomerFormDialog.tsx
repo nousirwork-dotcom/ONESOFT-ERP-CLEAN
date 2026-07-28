@@ -859,11 +859,12 @@ function ESection({ title, children, headerColor, note }: {
     <div style={{ border: "1px solid #c9c4bc", borderRadius: 4, overflow: "hidden", background: "#f0ede8", boxShadow: "0 1px 2px rgba(0,0,0,.06)" }}>
       <div style={{
         background: "#f0ede8",
-        borderBottom: "1px solid #c9c4bc", padding: "5px 10px",
+        borderBottom: "1px solid #c9c4bc", padding: "0 10px",
+        minHeight: 28, height: 28,
         display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: "#4e5459" }}>{title}</span>
-        {note && <span style={{ fontSize: 9, color: "#7a7d7e" }}>{note}</span>}
+        <span style={{ fontSize: 11, lineHeight: "28px", fontWeight: 800, color: "#3f4448" }}>{title}</span>
+        {note && <span style={{ fontSize: 9, lineHeight: "28px", color: "#686d70" }}>{note}</span>}
       </div>
       <div style={{ padding: "10px", background: "#f0ede8" }}>{children}</div>
     </div>
