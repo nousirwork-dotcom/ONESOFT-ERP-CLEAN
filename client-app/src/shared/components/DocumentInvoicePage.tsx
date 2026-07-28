@@ -1364,7 +1364,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
           <thead className="sticky top-0 z-10">
             <tr style={{
               background: config.docCategory === "purchase"
-                ? "linear-gradient(to bottom, #58616b, #3f474f)"
+                ? "linear-gradient(to bottom, #6b7075, #4d5257)"
                 : `linear-gradient(to bottom, ${themeColor}, #365E80)`,
               color: "#fff",
             }}>
