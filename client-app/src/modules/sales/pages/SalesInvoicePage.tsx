@@ -1588,6 +1588,11 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
                 <div className="flex relative flex-1 min-w-0" style={{ height: "var(--work-field-h, 26px)" }}>
                   <button
                     data-enter-nav="true"
+                    data-focused-entity-type="warehouse"
+                    data-focused-entity-id={warehouseId ?? undefined}
+                    data-focused-field="branch"
+                    data-focused-source="sales-invoice"
+                    data-focused-entity-title={selWh ? wName(selWh) : undefined}
                     onClick={() => { if (erpMode !== "view") setBranchOpen(o => !o); }}
                     disabled={erpMode === "view"}
                     className="flex items-center gap-1 classic-input"
@@ -1635,7 +1640,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
                           {whs.map((w: any, idx: number) => {
                             const isSel = w.id === warehouseId;
                             return (
-                              <button key={w.id} onClick={() => handleWarehouseSelect(w.id)} className="w-full flex items-center transition-colors" style={{ textAlign: isAr ? "right" : "left", background: isSel ? "#f0fff4" : idx % 2 === 0 ? "#fafafa" : "white", borderBottom: "1px solid #f1f5f9", padding: "7px 12px" }}>
+                               <button key={w.id} onClick={() => handleWarehouseSelect(w.id)} data-focused-entity-type="warehouse" data-focused-entity-id={w.id} data-focused-field="branch" data-focused-source="sales-invoice" data-focused-entity-title={wName(w)} className="w-full flex items-center transition-colors" style={{ textAlign: isAr ? "right" : "left", background: isSel ? "#f0fff4" : idx % 2 === 0 ? "#fafafa" : "white", borderBottom: "1px solid #f1f5f9", padding: "7px 12px" }}>
                                 <span style={{ width: 16, color: isSel ? "#22c55e" : "transparent", fontSize: "11px", flexShrink: 0 }}>✓</span>
                                 <div className="flex-1 min-w-0 mx-2">
                                   <div className="text-[12px] font-semibold truncate" style={{ color: isSel ? "#15803d" : "#1e293b" }}>{wName(w)}</div>
@@ -1659,6 +1664,11 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
             </label>
             <input
               value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)}
+              data-focused-entity-type="documentBook"
+              data-focused-entity-id={journalId ?? undefined}
+              data-focused-field="documentBook"
+              data-focused-source="sales-invoice"
+              data-focused-entity-title={(journalsQuery.data ?? []).find((j: any) => j.id === journalId)?.name}
               className="classic-input text-center font-bold"
               style={{ width: "128px", height: "var(--work-field-h, 26px)", background: journalId ? "#eff6ff" : !warehouseId ? "#f3f4f6" : "#FFFDE7", borderColor: journalId ? "#3b82f6" : "#F59E0B", borderRadius: "4px", color: !warehouseId ? "#9ca3af" : "#1a1a1a", fontSize: "13px", fontWeight: 700 }}
               readOnly={!!journalId || !warehouseId}
@@ -1691,6 +1701,11 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
                   menuTitle="نوع المستند المصدر"
                   placeholder={!warehouseId ? "— —" : "النوع ⊞"}
                   disabled={!warehouseId || erpMode === "view"}
+                  focusedEntityType="documentBook"
+                  focusedEntityId={journalId}
+                  focusedFieldName="documentBook"
+                  focusedSourceScreen="sales-invoice"
+                  focusedEntityTitle={(journalsQuery.data ?? []).find((j: any) => j.id === journalId)?.name}
                   style={{ height: "var(--work-field-h, 26px)" }}
                 />
               </div>
@@ -1706,6 +1721,11 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
                   ? basedOnQuery.data != null
                   : null}
                 disabled={!warehouseId || erpMode === "view"}
+                focusedEntityType="sourceDocument"
+                focusedEntityId={(basedOnQuery.data as any)?.id}
+                focusedFieldName="basedOn"
+                focusedSourceScreen="sales-invoice"
+                focusedEntityTitle={basedOnTrigger}
               />
             </div>
           </div>
@@ -1740,6 +1760,11 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
                         paddingLeft: customerId && !customerLocked ? 20 : undefined,
                       }}
                       title={customerId && !customerLocked ? "انقر لتغيير العميل" : undefined}
+                      data-focused-entity-type={customerId ? "customer" : undefined}
+                      data-focused-entity-id={customerId ?? undefined}
+                      data-focused-field="customer"
+                      data-focused-source="sales-invoice"
+                      data-focused-entity-title={customerId ? `${customerCode ? `${customerCode} - ` : ""}${customerName}` : undefined}
                     />
                     {/* زر مسح العميل — يظهر فقط قبل الحفظ */}
                     {customerId && !customerLocked && (
@@ -1859,6 +1884,11 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
                   placeholder={activeWh ? "يُحدَّد من الفرع" : "اختر الفرع أولاً"}
                   disabled={true}
                   title={activeWh ? `المخزن: ${whName}` : "اختر الفرع أولاً"}
+                  focusedEntityType="warehouse"
+                  focusedEntityId={activeWh}
+                  focusedFieldName="warehouse"
+                  focusedSourceScreen="sales-invoice"
+                  focusedEntityTitle={whName}
                    style={{ height: "var(--work-field-h, 26px)", flex: 1, minWidth: 0 }}
                 />
               );
@@ -1899,6 +1929,11 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
                     onClick={() => { if (!sellerDisabled) setSellerOpen(o => !o); }}
                     disabled={sellerDisabled}
                     data-enter-nav="true"
+                    data-focused-entity-type={sellerUserId ? "user" : undefined}
+                    data-focused-entity-id={sellerUserId ?? undefined}
+                    data-focused-field="seller"
+                    data-focused-source="sales-invoice"
+                    data-focused-entity-title={sellerName || undefined}
                     className="flex items-center gap-1 classic-input"
                      style={{
                        flex: 1, minWidth: 0, width: "100%", boxSizing: "border-box", height: "var(--work-field-h, 26px)", paddingInline: "6px 4px",
@@ -2118,6 +2153,12 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
                 <td className="inv-td p-0">
                   <input
                     ref={el => { if (el) cellRefs.current.set(`${rowIdx}-0`, el); }}
+                    data-focused-entity-type={line.productId ? "product" : undefined}
+                    data-focused-entity-id={line.productId ?? undefined}
+                    data-focused-field="productCode"
+                    data-focused-source="sales-invoice"
+                    data-focused-row={line.id}
+                    data-focused-entity-title={line.productCode || line.productName || undefined}
                     value={line.productCode}
                     onChange={e => { if (!line.productId) handleProductCodeChange(rowIdx, e.target.value); }}
                     onFocus={() => setSelectedLineIdx(rowIdx)}
@@ -2139,6 +2180,12 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
                     cellRefs={cellRefs}
                     isStockItem={line.isStockItem}
                     productId={line.productId}
+                    focusedEntityType={line.productId ? "product" : undefined}
+                    focusedEntityId={line.productId}
+                    focusedFieldName="productName"
+                    focusedSourceScreen="sales-invoice"
+                    focusedRowId={line.id}
+                    focusedEntityTitle={line.productCode || line.productName || undefined}
                      onSelect={(name, code, id, unit, price, tax, itemType) => {
                       setLines(prev => {
                         const updated = [...prev];
@@ -2998,6 +3045,7 @@ function TF({ label, value, highlight, big, color }: {
 // ─── Product Name Cell with autocomplete ─────────────────────────────────────
 function ProductNameCell({
   rowIdx, value, products, cellRefs, onSelect, onChange, onKeyDown, onFocus, onBlur, isStockItem, productId,
+  focusedEntityType, focusedEntityId, focusedFieldName, focusedSourceScreen, focusedRowId, focusedEntityTitle,
 }: {
   rowIdx: number;
   value: string;
@@ -3010,6 +3058,12 @@ function ProductNameCell({
   onBlur?: () => void;
   isStockItem?: boolean;
   productId?: number;
+  focusedEntityType?: string;
+  focusedEntityId?: number | string | null;
+  focusedFieldName?: string;
+  focusedSourceScreen?: string;
+  focusedRowId?: string;
+  focusedEntityTitle?: string;
 }) {
   const [search, setSearch] = useState(value);
   const [open, setOpen] = useState(false);
@@ -3084,6 +3138,12 @@ function ProductNameCell({
       <input
         ref={el => { (inputRef as any).current = el; if (el) cellRefs.current.set(`${rowIdx}-1`, el); }}
         data-no-desktop-field
+        data-focused-entity-type={focusedEntityType}
+        data-focused-entity-id={focusedEntityId ?? undefined}
+        data-focused-field={focusedFieldName}
+        data-focused-source={focusedSourceScreen}
+        data-focused-row={focusedRowId}
+        data-focused-entity-title={focusedEntityTitle}
         value={search}
         onChange={e => { handleChange(e.target.value); }}
         onFocus={onFocus}

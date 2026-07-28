@@ -24,6 +24,11 @@ interface Props {
   menuTitle?:   string;
   className?:   string;
   style?:       React.CSSProperties;
+  focusedEntityType?: string;
+  focusedEntityId?: number | string | null;
+  focusedFieldName?: string;
+  focusedSourceScreen?: string;
+  focusedEntityTitle?: string;
 }
 
 /* ── ألوان القائمة ── */
@@ -38,6 +43,11 @@ export default function ContextSelectInput({
   disabled, title, menuTitle,
   className = "classic-input",
   style,
+  focusedEntityType,
+  focusedEntityId,
+  focusedFieldName,
+  focusedSourceScreen,
+  focusedEntityTitle,
 }: Props) {
 
   const [menuVisible, setMenuVisible] = useState(false);
@@ -113,6 +123,11 @@ export default function ContextSelectInput({
         ref={wrapRef}
         className="relative flex-1 min-w-0"
         data-enter-nav="true"
+        data-focused-entity-type={focusedEntityType}
+        data-focused-entity-id={focusedEntityId ?? undefined}
+        data-focused-field={focusedFieldName}
+        data-focused-source={focusedSourceScreen}
+        data-focused-entity-title={focusedEntityTitle}
         style={{
           cursor: disabled ? "not-allowed" : "default",
           outline: focused && !menuVisible ? "2px solid #818cf8" : "none",

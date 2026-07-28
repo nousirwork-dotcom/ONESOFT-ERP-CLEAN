@@ -33,6 +33,11 @@ interface Props {
   trigger:     string;
   isFound:     boolean | null;
   disabled?:   boolean;
+  focusedEntityType?: string;
+  focusedEntityId?: number | string | null;
+  focusedFieldName?: string;
+  focusedSourceScreen?: string;
+  focusedEntityTitle?: string;
 }
 
 /* ── Mapping basedOnType → journal docType ──────────────────────────────── */
@@ -100,6 +105,11 @@ function fmtNum(v: any): string {
 export default function BasedOnDocInput({
   docType, value, onChange, onPick,
   warehouseId, isFetching, trigger, isFound, disabled,
+  focusedEntityType,
+  focusedEntityId,
+  focusedFieldName,
+  focusedSourceScreen,
+  focusedEntityTitle,
 }: Props) {
 
   /* ── Context menu state ── */
@@ -447,6 +457,11 @@ export default function BasedOnDocInput({
           ref={inputRef}
           type="text"
           value={suffixDisplay}
+          data-focused-entity-type={focusedEntityType}
+          data-focused-entity-id={focusedEntityId ?? undefined}
+          data-focused-field={focusedFieldName}
+          data-focused-source={focusedSourceScreen}
+          data-focused-entity-title={focusedEntityTitle}
           disabled={!docType || !!disabled}
           onChange={e => {
             const newSuffix = e.target.value;

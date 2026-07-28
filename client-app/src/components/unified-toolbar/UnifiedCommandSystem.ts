@@ -168,8 +168,10 @@ export function computeButtonStates(
     preview: has("preview") ? {
       supported: true,
       allowed: canPreview,
-      stateEnabled: hasRecord,
-      disabledReason: !hasRecord ? "احفظ السجل اولا" : undefined,
+      // The centralized focused-entity registry decides whether a linked
+      // record exists. This also allows previewing a linked record from a
+      // new/unsaved document without saving or closing the current screen.
+      stateEnabled: true,
       onClick: handlers.preview,
     } : { supported: false },
 

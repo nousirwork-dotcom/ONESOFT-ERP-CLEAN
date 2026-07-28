@@ -17,6 +17,7 @@ import type {
   ToolbarToolItem,
 } from "./toolbar.types";
 import { useToolbarShortcuts } from "./useToolbarShortcuts";
+import { useFocusedEntityRegistrySafe } from "./FocusedEntityRegistry";
 
 import styles from "./UnifiedBottomToolbar.module.css";
 
@@ -69,6 +70,7 @@ export function UnifiedBottomToolbar({
   activeAction,
   className = "",
 }: UnifiedBottomToolbarProps) {
+  const { focusedEntity, previewFocusedEntity } = useFocusedEntityRegistrySafe();
   const [toolsOpen, setToolsOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
   const toolsButtonRef = useRef<HTMLButtonElement>(null);
@@ -161,17 +163,21 @@ export function UnifiedBottomToolbar({
               {group.actions.map((actionId) => {
                 const item = TOOLBAR_ITEMS.find((i) => i.id === actionId)!;
                 const Icon = item.icon;
-                const enabled =
+                 const enabled =
                   item.id === "tools"
                     ? toolsEnabled
-                    : canExecuteAction(item.id, actions);
+                     : item.id === "preview"
+                       ? canExecuteAction(item.id, actions) && !!focusedEntity
+                       : canExecuteAction(item.id, actions);
 
                 const isActive =
                   activeAction === item.id || (item.id === "tools" && toolsOpen);
 
-                const disabledReason =
+                 const disabledReason =
                   item.id === "tools" && tools.length === 0
                     ? "لا توجد أدوات متاحة في هذه الشاشة"
+                     : item.id === "preview" && !focusedEntity
+                       ? "لا يوجد سجل مرتبط بالحقل الحالي"
                     : getDisabledReason(item.id, actions);
 
                 return (
@@ -187,7 +193,13 @@ export function UnifiedBottomToolbar({
                     data-active={isActive}
                     data-tone={item.tone ?? "default"}
                     className={styles.toolbarButton}
-                    onClick={() => void executeToolbarAction(item.id)}
+                     onClick={() => {
+                       if (item.id === "preview") {
+                         previewFocusedEntity();
+                         return;
+                       }
+                       void executeToolbarAction(item.id);
+                     }}
                   >
                     <Icon
                       className={styles.toolbarIcon}

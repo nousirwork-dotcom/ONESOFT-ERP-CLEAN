@@ -21,6 +21,7 @@ import { createPortal } from "react-dom";
 import { WorkWindowTitleBar } from "./WorkWindowTitleBar";
 import { useWorkWindowSafe } from "./WorkWindowContext";
 import { ToolbarActionsProvider } from "@/components/unified-toolbar/ToolbarActionsContext";
+import { FocusedEntityProvider } from "@/components/unified-toolbar/FocusedEntityRegistry";
 import { WorkWindowToolbarFooter } from "./WorkWindowToolbarFooter";
 import styles from "./DesktopWorkWindow.module.css";
 import type { WorkWindowPreset, WorkWindowPlacement } from "./workWindow.types";
@@ -449,14 +450,16 @@ export function DesktopWorkWindow({
         </div>
 
         <div className={styles.workBody}>
-          <ToolbarActionsProvider>
-            <div className={styles.content}>
-              {children}
-            </div>
-            <div className={styles.footer}>
-              <WorkWindowToolbarFooter />
-            </div>
-          </ToolbarActionsProvider>
+          <FocusedEntityProvider>
+            <ToolbarActionsProvider>
+              <div className={styles.content}>
+                {children}
+              </div>
+              <div className={styles.footer}>
+                <WorkWindowToolbarFooter />
+              </div>
+            </ToolbarActionsProvider>
+          </FocusedEntityProvider>
         </div>
       </div>
     </div>
