@@ -1754,8 +1754,26 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             </div>
           </div>
 
+          {/* col 4: العملة — بجانب العميل، والبائع تحتها */}
+          <div className="flex items-center" style={{ gap: 6, gridColumn: "4" }}>
+            <label style={headerLabelStyle}>العملة</label>
+            <ContextSelectInput
+              value={currency}
+              onChange={v => setCurrency(v || "SAR")}
+              options={[
+                { value: "SAR", label: "ريال سعودي", sublabel: "SAR" },
+                { value: "USD", label: "دولار أمريكي", sublabel: "USD" },
+                { value: "EUR", label: "يورو", sublabel: "EUR" },
+                { value: "AED", label: "درهم إماراتي", sublabel: "AED" },
+              ]}
+              menuTitle="اختر العملة"
+              placeholder="العملة ⊞"
+              style={{ height: "var(--work-field-h, 26px)", flex: 1, minWidth: 0 }}
+            />
+          </div>
+
           {/* col 1: المخزن */}
-          <div className="flex items-center" style={{ gap: 6 }}>
+          <div className="flex items-center" style={{ gap: 6, gridColumn: "1" }}>
             <label style={headerLabelStyle}>المخزن</label>
             {(() => {
               const activeWh = journalWarehouseId ?? docTypeWarehouseId ?? warehouseId;
@@ -1778,7 +1796,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           </div>
 
           {/* col 2: تاريخ التحرير — حاوية موحدة بحد واحد */}
-          <div className="flex items-center" style={{ gap: 6 }}>
+          <div className="flex items-center" style={{ gap: 6, gridColumn: "2" }}>
             <label style={headerLabelStyle}>تاريخ التحرير</label>
             <div className="flex flex-1 min-w-0" style={{ height: "var(--work-field-h, 26px)", border: "1px solid #d1d5db", borderRadius: 4, overflow: "hidden" }}>
               <DateSegmentInput value={invoiceDate} onChange={setInvoiceDate} style={{ flex: 1, minWidth: 0, height: "var(--work-field-h, 26px)", border: "none", borderRadius: 0 }} />
@@ -1788,7 +1806,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           </div>
 
           {/* col 3: تاريخ الدفع — حاوية موحدة بحد واحد */}
-          <div className="flex items-center" style={{ gap: 6 }}>
+          <div className="flex items-center" style={{ gap: 6, gridColumn: "3" }}>
             <label style={headerLabelStyle}>تاريخ الدفع</label>
             <div className="flex flex-1 min-w-0" style={{ height: "var(--work-field-h, 26px)", border: "1px solid #d1d5db", borderRadius: 4, overflow: "hidden" }}>
               <DateSegmentInput value={dueDate} onChange={setDueDate} style={{ flex: 1, minWidth: 0, height: "var(--work-field-h, 26px)", border: "none", borderRadius: 0 }} />
@@ -1804,7 +1822,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             const sellerName = sellerObj ? (sellerObj.name || sellerObj.username) : (currentUser?.name || currentUser?.username || "");
             const sellerDisabled = !warehouseId || erpMode === "view" || !canChangeSeller;
             return (
-              <div className="flex items-center relative" style={{ gap: 6 }}>
+              <div className="flex items-center relative" style={{ gap: 6, gridColumn: "4" }}>
                 <label style={headerLabelStyle}>البائع</label>
                   <div className="flex relative flex-1" style={{ height: "var(--work-field-h, 26px)" }}>
                   <button
@@ -1868,24 +1886,6 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
               </div>
             );
           })()}
-          {/* col 4: العملة — تحت نوع السند */}
-          <div className="flex items-center" style={{ gap: 6 }}>
-            <label style={headerLabelStyle}>العملة</label>
-            <ContextSelectInput
-              value={currency}
-              onChange={v => setCurrency(v || "SAR")}
-              options={[
-                { value: "SAR", label: "ريال سعودي", sublabel: "SAR" },
-                { value: "USD", label: "دولار أمريكي", sublabel: "USD" },
-                { value: "EUR", label: "يورو", sublabel: "EUR" },
-                { value: "AED", label: "درهم إماراتي", sublabel: "AED" },
-              ]}
-              menuTitle="اختر العملة"
-              placeholder="العملة ⊞"
-              style={{ height: "var(--work-field-h, 26px)", flex: 1, minWidth: 0 }}
-            />
-          </div>
-
           {/* ══ صف 4: ملحوظة ══ */}
           <div className="flex items-center" style={{ gap: 6, gridColumn: "1/-1" }}>
             <label style={headerLabelStyle}>ملاحظة</label>
