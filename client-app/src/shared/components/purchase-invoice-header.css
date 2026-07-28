@@ -18,48 +18,75 @@
 }
 
 .purchase-invoice-window-titlebar {
-  min-height: 38px;
-  padding: 0 16px;
+  position: relative;
+  min-height: 30px;
+  padding: 0 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   color: #fff;
   background: linear-gradient(90deg, var(--purchase-window-header-dark), var(--purchase-window-header));
-  border-radius: 8px 8px 0 0;
+  border-radius: 2px 2px 0 0;
   font-weight: 700;
-  font-size: 13px;
+  font-size: 11px;
+}
+
+.purchase-invoice-window-titlebar > span:first-child {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.purchase-invoice-window-titlebar > span:last-child {
+  margin-right: auto;
+  color: #f6e4c9;
+  font-size: 10px;
+  direction: ltr;
 }
 
 .purchase-invoice-header {
   display: block;
-  padding: 12px;
+  padding: 6px 8px 7px;
   background: var(--purchase-panel-bg);
   border-bottom: 1px solid var(--purchase-border);
   box-shadow: 0 1px 2px rgba(82, 53, 31, 0.08);
 }
 
+.purchase-invoice-header::before {
+  content: "البيانات الرئيسية";
+  display: block;
+  width: fit-content;
+  margin: -2px 0 6px auto;
+  padding: 0 4px 2px;
+  color: #5c412c;
+  border-bottom: 2px solid #805c40;
+  font-size: 11px;
+  font-weight: 800;
+}
+
 .purchase-header-columns {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: 7px;
   align-items: stretch;
   direction: rtl;
 }
 
 .purchase-header-column {
   min-width: 0;
-  padding: 14px;
-  background: rgba(255, 255, 255, 0.52);
+  padding: 7px 8px 3px;
+  background: rgba(255, 255, 255, 0.7);
   border: 1px solid var(--purchase-border);
-  border-radius: 9px;
+  border-radius: 1px;
 }
 
 .purchase-field-row {
   display: grid;
-  grid-template-columns: 112px minmax(0, 1fr);
+  grid-template-columns: 96px minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: 5px;
+  margin-bottom: 6px;
 }
 
 .purchase-field-row-start {
@@ -67,7 +94,8 @@
 }
 
 .purchase-field-row > label {
-  font-size: 13px;
+  color: #66584d;
+  font-size: 10px;
   font-weight: 700;
   text-align: right;
   white-space: nowrap;
@@ -82,19 +110,19 @@
 .purchase-field-control textarea,
 .purchase-reference-button {
   width: 100%;
-  min-height: 38px;
-  padding: 8px 10px;
+  min-height: 29px;
+  padding: 3px 6px;
   color: var(--purchase-text);
   background: var(--purchase-input-bg);
   border: 1px solid var(--purchase-border);
-  border-radius: 7px;
+  border-radius: 1px;
   font-family: inherit;
-  font-size: 13px;
+  font-size: 10px;
   outline: none;
 }
 
 .purchase-field-control textarea {
-  min-height: 154px;
+  min-height: 88px;
   resize: vertical;
 }
 
@@ -112,18 +140,16 @@
 }
 
 .purchase-date-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  display: block;
 }
 
 .purchase-checkbox-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 14px;
-  padding-right: 122px;
-  font-size: 13px;
+  margin-top: 4px;
+  padding-right: 101px;
+  font-size: 10px;
   font-weight: 700;
 }
 
@@ -145,7 +171,7 @@
   }
 
   .purchase-field-row {
-    grid-template-columns: 100px minmax(0, 1fr);
+    grid-template-columns: 90px minmax(0, 1fr);
   }
 
   .purchase-checkbox-row {

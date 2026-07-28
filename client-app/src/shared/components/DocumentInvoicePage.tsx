@@ -1017,14 +1017,12 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
                   style={{ borderColor: "#c8ad93", background: "#f8f1e8", color: "#4b3424" }}
                 />
               </PurchaseField>
-              <div className="purchase-date-grid">
-                <PurchaseField label="تاريخ التحرير">
-                  <DateSegmentInput value={invoiceDate} onChange={setInvoiceDate} standalone className="classic-input w-full" />
-                </PurchaseField>
-                <PurchaseField label="تاريخ الاستحقاق">
-                  <DateSegmentInput value={dueDate} onChange={setDueDate} standalone className="classic-input w-full" />
-                </PurchaseField>
-              </div>
+              <PurchaseField label="تاريخ التحرير">
+                <DateSegmentInput value={invoiceDate} onChange={setInvoiceDate} standalone className="classic-input w-full" />
+              </PurchaseField>
+              <PurchaseField label="تاريخ الاستحقاق">
+                <DateSegmentInput value={dueDate} onChange={setDueDate} standalone className="classic-input w-full" />
+              </PurchaseField>
               <PurchaseField label="نوع السند">
                 {(() => {
                   const allDocTypes = docTypesQuery.data ?? [];
