@@ -261,46 +261,61 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
                alignItems: "center", justifyContent: "center" }}
     >
       <div dir="rtl" style={{
-        width: 760, maxWidth: "98vw",
-        background: "#F0F0F0",
-        border: "2px solid #A0A0A0",
-        boxShadow: "4px 4px 16px rgba(0,0,0,0.5)",
+        width: 940, maxWidth: "98vw",
+        background: "#eeece8",
+        border: "2px solid #315f88",
+        boxShadow: "0 8px 28px rgba(20,35,50,0.42)",
         display: "flex", flexDirection: "column",
-        maxHeight: "92vh", overflow: "hidden",
-        borderRadius: 2,
+        maxHeight: "90vh", overflow: "hidden",
+        borderRadius: 5,
       }}>
 
         {/* ── Title Bar ── */}
         <div style={{
-          background: `linear-gradient(90deg, ${PRIMARY} 0%, #2e5070 100%)`,
-          padding: "5px 8px", display: "flex", alignItems: "center",
+          background: "linear-gradient(180deg, #376d9c 0%, #28567f 100%)",
+          minHeight: 31, padding: "4px 8px", display: "flex", alignItems: "center",
           justifyContent: "space-between", flexShrink: 0,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 16 }}>👤</span>
-            <span style={{ color: "white", fontWeight: 700, fontSize: 13 }}>{title}</span>
+            <span style={{ fontSize: 15 }}>👤</span>
+            <span style={{ color: "white", fontWeight: 700, fontSize: 12 }}>{title}</span>
           </div>
-          <button onClick={handleClose} style={{
-            width: 18, height: 18, background: "#C75050", border: "1px solid #9a3030",
-            color: "white", fontSize: 10, fontWeight: 700, cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 2,
-          }}>✕</button>
+          <div style={{ display: "flex", gap: 4 }}>
+            <button type="button" aria-label="تكبير النافذة" style={{
+              width: 20, height: 18, background: "transparent", border: "1px solid rgba(255,255,255,.35)",
+              color: "white", fontSize: 11, cursor: "pointer", borderRadius: 2,
+            }}>↗</button>
+            <button type="button" onClick={handleClose} aria-label="إغلاق" style={{
+              width: 20, height: 18, background: "#c95757", border: "1px solid #8f3030",
+              color: "white", fontSize: 11, fontWeight: 700, cursor: "pointer", borderRadius: 2,
+            }}>×</button>
+          </div>
+        </div>
+
+        {/* ── Record strip ── */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          minHeight: 29, padding: "3px 10px", color: "#68727b", fontSize: 10,
+          background: "#f4f3f0", borderBottom: "1px solid #c7c8c8",
+        }}>
+          <span style={{ fontWeight: 700 }}>{editData?.id ? "تعديل بيانات العميل" : "إضافة عميل جديد"}</span>
+          <span>{editData?.id ? `رقم السجل: ${editData.id}` : "سجل جديد"} <b style={{ margin: "0 5px" }}>•</b> {isDirty ? "تعديلات غير محفوظة" : "جاهز"}</span>
         </div>
 
         {/* ── Tab Bar ── */}
         <div style={{
-          background: "#E0E0E0", borderBottom: "2px solid #A0A0A0",
-          display: "flex", flexShrink: 0, overflowX: "auto",
+          background: "#e5e4e1", borderBottom: "1px solid #9da3a8",
+          display: "flex", flexShrink: 0, overflowX: "auto", paddingRight: 7,
         }}>
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)} style={{
-              padding: "5px 12px", fontSize: 12,
+              padding: "7px 13px 6px", fontSize: 11,
               fontWeight: tab === t.id ? 700 : 500,
-              background: tab === t.id ? "#F0F0F0" : "transparent",
-              color: tab === t.id ? PRIMARY : "#444",
-              border: "none", borderLeft: "1px solid #C0C0C0",
-              borderBottom: tab === t.id ? "2px solid #F0F0F0" : "none",
-              marginBottom: tab === t.id ? -2 : 0,
+              background: tab === t.id ? "#f7f6f3" : "transparent",
+              color: tab === t.id ? "#315f88" : "#62676c",
+              border: "none", borderLeft: "1px solid #c9cacc",
+              borderBottom: tab === t.id ? "2px solid #f7f6f3" : "2px solid transparent",
+              marginBottom: -1,
               cursor: "pointer", whiteSpace: "nowrap",
             }}>
               {t.label}
@@ -309,7 +324,7 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
         </div>
 
         {/* ── Body ── */}
-        <div style={{ overflowY: "auto", flexGrow: 1, padding: "12px 14px" }}>
+        <div style={{ overflowY: "auto", flexGrow: 1, padding: "10px 12px", background: "#eeece8" }}>
 
           {/* ══ نافذة رئيسية ══ */}
           {tab === "main" && (
@@ -793,33 +808,26 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
 
         {/* ── Footer ── */}
         <div style={{
-          background: "#E0E0E0", borderTop: "1px solid #A0A0A0",
-          padding: "8px 14px", display: "flex", alignItems: "center",
-          justifyContent: "space-between", flexShrink: 0,
+          background: "linear-gradient(180deg, #f8f7f4 0%, #deddd9 100%)",
+          borderTop: "1px solid #9da3a8", padding: "5px 8px",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          flexShrink: 0, gap: 8,
         }}>
-          <span style={{
-            padding: "2px 10px", borderRadius: 10, fontSize: 11, fontWeight: 700,
-            background: isOrg ? "#DBEAFE" : "#DCFCE7",
-            color:      isOrg ? "#1D4ED8" : "#15803D",
-            border:     `1px solid ${isOrg ? "#93C5FD" : "#86EFAC"}`,
-          }}>
-            {isOrg ? "📋 مؤسسة" : "🧾 فرد"}
+          <span style={{ fontSize: 10, color: "#68727b", whiteSpace: "nowrap" }}>
+            {isOrg ? "📋 مؤسسة" : "🧾 فرد"} {isDirty && "• غير محفوظ"}
           </span>
-
-          <div style={{ display: "flex", gap: 6 }}>
-            <button onClick={handleClose} disabled={isPending} style={{
-              padding: "5px 14px", fontSize: 12, fontWeight: 600, borderRadius: 3,
-              background: "#E0E0E0", color: "#333", border: "1px solid #A0A0A0",
-              cursor: "pointer",
-            }}>إلغاء</button>
-            <button onClick={() => handleSave().catch(() => {})} disabled={isPending} style={{
-              padding: "5px 18px", fontSize: 12, fontWeight: 700, borderRadius: 3,
-              background: isPending ? "#A0A0A0" : PRIMARY, color: "white",
-              border: `1px solid ${isPending ? "#888" : "#2e5070"}`,
-              cursor: isPending ? "not-allowed" : "pointer",
-            }}>
-              {isPending ? "جاري الحفظ..." : editData?.id ? "💾 حفظ التعديلات" : "➕ إضافة العميل"}
-            </button>
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-start" }}>
+            <CommandButton icon="💾" label={isPending ? "جاري الحفظ" : "حفظ"} primary disabled={isPending} onClick={() => handleSave().catch(() => {})} />
+            <CommandButton icon="＋" label="جديد" disabled={isPending} onClick={() => {
+              if (isDirty) { toast.info("احفظ التعديلات أو أغلق النافذة أولاً"); return; }
+              setForm(EMPTY); setTab("main"); setIsDirty(false);
+            }} />
+            <CommandButton icon="↶" label="تراجع" disabled={!isDirty || isPending} onClick={() => {
+              if (editData) setForm({ ...EMPTY, ...editData });
+              else setForm(EMPTY);
+              setIsDirty(false);
+            }} />
+            <CommandButton icon="✕" label="إلغاء" disabled={isPending} onClick={handleClose} />
           </div>
         </div>
 
@@ -843,16 +851,18 @@ function ESection({ title, children, headerColor, note }: {
   headerColor?: string; note?: string;
 }) {
   return (
-    <div style={{ border: "1px solid #C0C0C0", borderRadius: 3, overflow: "hidden" }}>
+    <div style={{ border: "1px solid #c4c5c5", borderRadius: 4, overflow: "hidden", background: "#f8f7f3", boxShadow: "0 1px 2px rgba(0,0,0,.06)" }}>
       <div style={{
-        background: headerColor ? `${headerColor}18` : "#E8EEF4",
-        borderBottom: "1px solid #C0C0C0", padding: "4px 10px",
+        background: headerColor
+          ? `linear-gradient(180deg, ${headerColor} 0%, ${headerColor}dd 100%)`
+          : "linear-gradient(180deg, #6b7075 0%, #4d5257 100%)",
+        borderBottom: "1px solid #454a4f", padding: "5px 10px",
         display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: headerColor ?? "#2B4A6A" }}>{title}</span>
-        {note && <span style={{ fontSize: 10, color: "#888" }}>{note}</span>}
+        <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>{title}</span>
+        {note && <span style={{ fontSize: 9, color: "rgba(255,255,255,.8)" }}>{note}</span>}
       </div>
-      <div style={{ padding: "10px" }}>{children}</div>
+      <div style={{ padding: "10px", background: "#f8f7f3" }}>{children}</div>
     </div>
   );
 }
@@ -883,14 +893,34 @@ function EInput({ value, onChange, placeholder, ltr, mono, inputRef, style }: {
       placeholder={placeholder}
       dir={ltr ? "ltr" : "rtl"}
       style={{
-        height: 26, fontSize: 13, padding: "0 7px",
-        border: "1px solid #A0A0A0", background: "white",
+         height: 29, fontSize: 12, padding: "0 8px",
+         border: "1px solid #b8b9b9", background: "#fff",
         fontFamily: mono ? "monospace" : "inherit",
         outline: "none", width: "100%", borderRadius: 2,
         boxSizing: "border-box",
         ...style,
       }}
     />
+  );
+}
+
+function CommandButton({ icon, label, primary, disabled, onClick }: {
+  icon: string; label: string; primary?: boolean; disabled?: boolean; onClick: () => void;
+}) {
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} style={{
+      minWidth: 55, height: 34, padding: "2px 7px", display: "inline-flex",
+      flexDirection: "column", alignItems: "center", justifyContent: "center",
+      gap: 1, fontFamily: "inherit", fontSize: 9, fontWeight: 700,
+      color: primary ? "#fff" : "#4b5156",
+      background: primary ? "linear-gradient(#3d739f, #28567f)" : "#f8f7f4",
+      border: `1px solid ${primary ? "#244d70" : "#b5b6b5"}`,
+      borderRadius: 3, boxShadow: "0 1px 1px rgba(0,0,0,.12)",
+      cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? .5 : 1,
+    }}>
+      <span style={{ fontSize: 14, lineHeight: 14 }}>{icon}</span>
+      <span>{label}</span>
+    </button>
   );
 }
 
