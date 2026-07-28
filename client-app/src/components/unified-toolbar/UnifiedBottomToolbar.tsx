@@ -138,11 +138,12 @@ export function UnifiedBottomToolbar({
   }, []);
 
   async function executeToolbarAction(actionId: ToolbarActionId) {
-    if (!canExecuteAction(actionId, actions)) return;
     if (actionId === "tools") {
+      if (!toolsEnabled) return;
       setToolsOpen((current) => !current);
       return;
     }
+    if (!canExecuteAction(actionId, actions)) return;
     setToolsOpen(false);
     await actions[actionId]?.onClick?.();
   }
