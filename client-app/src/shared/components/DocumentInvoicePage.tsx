@@ -327,6 +327,15 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     return options;
   }, [config.docCategory, branchesQuery.data, warehousesQuery.data, journalsQuery.data]);
 
+  const selectedPurchaseBranchValue = useMemo(() => {
+    if (config.docCategory !== "purchase" || !branchId) return "";
+    const byJournal = journalId
+      ? purchaseBranchOptions.find(option => option.journalId === journalId)
+      : undefined;
+    const byBranch = purchaseBranchOptions.find(option => option.branchId === branchId);
+    return (byJournal ?? byBranch)?.value ?? "";
+  }, [config.docCategory, branchId, journalId, purchaseBranchOptions]);
+
   const salesNextNumberQuery = trpc.salesInvoices.nextNumber.useQuery(
     { prefix: config.numberPrefix },
     { enabled: config.docCategory === "sales" }
@@ -780,6 +789,17 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     nextJournalNumberMutation,
   ]);
 
+  const clearPurchaseBranchSelection = useCallback(() => {
+    setBranchId(null);
+    setWarehouseId(null);
+    setWarehouseDisplayName("");
+    setJournalId(null);
+    setJournalWarehouseId(null);
+    setDocTypeId("");
+    setDocTypeWarehouseId(null);
+    setInvoiceNumber("");
+  }, []);
+
   const handleDocTypeSelect = useCallback((id: string) => {
     setDocTypeId(id);
     if (!id) { setDocTypeWarehouseId(null); return; }
@@ -1074,23 +1094,36 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
             {/* العمود الأول من اليمين: بيانات المستند */}
             <div className="purchase-header-column">
               <PurchaseField label="الفرع">
-                <select
-                  value={branchId ?? ""}
-                  onChange={e => handlePurchaseBranchSelect(e.target.value)}
-                  className="classic-input w-full font-bold"
-                  style={{ borderColor: "#c8ad93", color: "#4b3424", background: "#fffdf8" }}
-                >
-                  <option value="">
-                    {branchesQuery.isLoading || warehousesQuery.isLoading || journalsQuery.isLoading
-                      ? "جاري تحميل الفروع..."
-                      : branchesQuery.error || warehousesQuery.error || journalsQuery.error
-                        ? "تعذّر تحميل الفروع"
-                        : "— اختر الفرع أولًا —"}
-                  </option>
-                  {purchaseBranchOptions.map(option => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
+                <div className="flex items-center gap-1">
+                  <select
+                    value={selectedPurchaseBranchValue}
+                    onChange={e => handlePurchaseBranchSelect(e.target.value)}
+                    className="classic-input w-full font-bold"
+                    style={{ borderColor: "#c8ad93", color: "#4b3424", background: "#fffdf8" }}
+                  >
+                    <option value="">
+                      {branchesQuery.isLoading || warehousesQuery.isLoading || journalsQuery.isLoading
+                        ? "جاري تحميل الفروع..."
+                        : branchesQuery.error || warehousesQuery.error || journalsQuery.error
+                          ? "تعذّر تحميل الفروع"
+                          : "— اختر الفرع أولًا —"}
+                    </option>
+                    {purchaseBranchOptions.map(option => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                  {(branchId || warehouseId || journalId || invoiceNumber) && (
+                    <button
+                      type="button"
+                      onClick={clearPurchaseBranchSelection}
+                      className="shrink-0 rounded border border-[#c8ad93] px-1.5 text-[11px] font-bold text-[#76533a] hover:bg-[#f3e8dc]"
+                      title="مسح الفرع والمخزن والدفتر ورقم المستند"
+                      aria-label="مسح اختيار الفرع"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
               </PurchaseField>
               <PurchaseField label="رقم المستند">
                 <input
