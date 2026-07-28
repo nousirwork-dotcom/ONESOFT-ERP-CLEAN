@@ -6,7 +6,7 @@ import {
   purchaseInvoices, purchaseInvoiceItems, documentJournals, warehouses,
   pendingAccountMovements, pendingStockMovements, inventory, products,
 } from '../schema.js';
-import { buildPurchaseInvoiceLines, resolveDocTypeAccounts, resolveDocTypeAccountsByJournal } from './posting.js';
+import { buildPurchaseInvoiceLines } from './posting.js';
 
 type PurchaseClient = typeof db | any;
 
@@ -16,19 +16,14 @@ async function getPurchasePostingContext(invoice: any, orgId: number) {
         where: and(eq(documentJournals.id, invoice.journalId), eq(documentJournals.orgId, orgId)),
       })
     : null;
-  const docTypeAccs = invoice.docTypeId
-    ? await resolveDocTypeAccounts(invoice.docTypeId, orgId)
-    : invoice.journalId
-      ? await resolveDocTypeAccountsByJournal(invoice.journalId, orgId)
-      : null;
   return {
     journal,
     effectiveJournal: {
-      purchaseAccountId: docTypeAccs?.purchaseAccountId ?? journal?.purchaseAccountId ?? null,
-      supplierAccountId: docTypeAccs?.supplierAccountId ?? journal?.supplierAccountId ?? null,
-      cashAccountId: docTypeAccs?.cashAccountId ?? journal?.cashAccountId ?? null,
-      taxAccountId: docTypeAccs?.taxAccountId ?? journal?.taxAccountId ?? null,
-      discountAccountId: docTypeAccs?.discountAccountId ?? journal?.discountAccountId ?? null,
+      purchaseAccountId: journal?.purchaseAccountId ?? null,
+      supplierAccountId: journal?.supplierAccountId ?? null,
+      cashAccountId: journal?.cashAccountId ?? null,
+      taxAccountId: journal?.taxAccountId ?? null,
+      discountAccountId: journal?.discountAccountId ?? null,
     },
   };
 }

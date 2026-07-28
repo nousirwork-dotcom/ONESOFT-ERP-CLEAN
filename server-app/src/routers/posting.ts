@@ -108,7 +108,7 @@ export const postingRouter = router({
         customerName:  invoice.customerName,
         total:         invoice.total,
         paymentMethod: invoice.paymentMethod,
-        journalName:   journal?.name ?? docTypeAccs?.docType?.nameAr ?? null,
+         journalName:   journal?.name ?? null,
         lines, warnings, totalDebit, totalCredit, isBalanced,
         canPost:  !invoice.isPosted,
         isPosted:  invoice.isPosted,
@@ -241,18 +241,12 @@ export const postingRouter = router({
           })
         : null;
 
-      const docTypeAccs = invoice.docTypeId
-        ? await resolveDocTypeAccounts(invoice.docTypeId, orgId)
-        : invoice.journalId
-          ? await resolveDocTypeAccountsByJournal(invoice.journalId, orgId)
-          : null;
-
       const effectiveJournal = {
-        purchaseAccountId: docTypeAccs?.purchaseAccountId ?? journal?.purchaseAccountId ?? null,
-        supplierAccountId: docTypeAccs?.supplierAccountId ?? journal?.supplierAccountId ?? null,
-        cashAccountId:     docTypeAccs?.cashAccountId     ?? journal?.cashAccountId     ?? null,
-        taxAccountId:      docTypeAccs?.taxAccountId      ?? journal?.taxAccountId      ?? null,
-        discountAccountId: docTypeAccs?.discountAccountId ?? journal?.discountAccountId ?? null,
+        purchaseAccountId: journal?.purchaseAccountId ?? null,
+        supplierAccountId: journal?.supplierAccountId ?? null,
+        cashAccountId:     journal?.cashAccountId     ?? null,
+        taxAccountId:      journal?.taxAccountId      ?? null,
+        discountAccountId: journal?.discountAccountId ?? null,
       };
 
       const { lines, warnings, totalDebit, totalCredit, isBalanced } =
@@ -264,7 +258,7 @@ export const postingRouter = router({
         supplierName:  invoice.supplierName,
         total:         invoice.total,
         paymentMethod: invoice.paymentMethod,
-        journalName:   journal?.name ?? docTypeAccs?.docType?.nameAr ?? null,
+        journalName:   journal?.name ?? null,
         lines, warnings, totalDebit, totalCredit, isBalanced,
         canPost:  !invoice.isPosted,
         isPosted:  invoice.isPosted,
@@ -290,18 +284,12 @@ export const postingRouter = router({
       if (journal?.postingMode === 'disabled')
         throw new Error('الترحيل معطَّل لهذا الدفتر');
 
-      const docTypeAccs = invoice.docTypeId
-        ? await resolveDocTypeAccounts(invoice.docTypeId, orgId)
-        : invoice.journalId
-          ? await resolveDocTypeAccountsByJournal(invoice.journalId, orgId)
-          : null;
-
       const effectiveJournal = {
-        purchaseAccountId: docTypeAccs?.purchaseAccountId ?? journal?.purchaseAccountId ?? null,
-        supplierAccountId: docTypeAccs?.supplierAccountId ?? journal?.supplierAccountId ?? null,
-        cashAccountId:     docTypeAccs?.cashAccountId     ?? journal?.cashAccountId     ?? null,
-        taxAccountId:      docTypeAccs?.taxAccountId      ?? journal?.taxAccountId      ?? null,
-        discountAccountId: docTypeAccs?.discountAccountId ?? journal?.discountAccountId ?? null,
+        purchaseAccountId: journal?.purchaseAccountId ?? null,
+        supplierAccountId: journal?.supplierAccountId ?? null,
+        cashAccountId:     journal?.cashAccountId     ?? null,
+        taxAccountId:      journal?.taxAccountId      ?? null,
+        discountAccountId: journal?.discountAccountId ?? null,
       };
 
       const isCredit = invoice.paymentMethod === 'credit';
@@ -354,9 +342,15 @@ export const postingRouter = router({
         if (!stockBook.warehouseId || stockBook.warehouseId !== invoice.warehouseId) {
           throw new Error('دفتر سند التوريد يجب أن يكون مرتبطًا بنفس مخزن فاتورة المشتريات');
         }
-        if (!outputJournal.purchaseAccountId || !outputJournal.inventoryAccountId) {
-          throw new Error('دفتر القيد الناتج يجب أن يحدد حساب المشتريات وحساب المخزون');
+        const stockDocTypeAccs = await resolveDocTypeAccountsByJournal(stockBook.id, orgId);
+        const stockAccounts = {
+          inventoryAccountId: stockDocTypeAccs?.inventoryAccountId ?? stockBook.inventoryAccountId ?? null,
+          purchaseAccountId: stockDocTypeAccs?.purchaseAccountId ?? stockBook.purchaseAccountId ?? null,
+        };
+        if (!stockAccounts.inventoryAccountId || !stockAccounts.purchaseAccountId) {
+          throw new Error('دفتر/تعريف ترحيل سند التوريد يجب أن يحدد حساب المخزون وحساب المشتريات');
         }
+        await validateAccounts([stockAccounts.inventoryAccountId, stockAccounts.purchaseAccountId]);
 
         const entry = await insertJournalEntry({
           orgId,
@@ -411,7 +405,7 @@ export const postingRouter = router({
 
         const stockLines = [
           {
-            accountId: outputJournal.inventoryAccountId,
+            accountId: stockAccounts.inventoryAccountId,
             accountCode: '',
             accountName: 'المخزون',
             debit: stockTotal,
@@ -419,7 +413,7 @@ export const postingRouter = router({
             description: `مخزون سند التوريد ${stockNumber}`,
           },
           {
-            accountId: outputJournal.purchaseAccountId,
+            accountId: stockAccounts.purchaseAccountId,
             accountCode: '',
             accountName: 'إجمالي المشتريات',
             debit: '0.0000',
@@ -437,7 +431,7 @@ export const postingRouter = router({
           sourceDocId: stockVoucher.id,
           sourceDocNumber: stockNumber,
           lines: stockLines,
-          journalId: outputJournal.id,
+          journalId: stockBook.id,
           generatedDocType: issuance.inventoryDocType,
           tx,
         });
