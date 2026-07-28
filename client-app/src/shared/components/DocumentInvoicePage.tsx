@@ -1445,30 +1445,27 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
 
       {/* ── Totals / payment summary ─────────────────────────────────────── */}
       {config.docCategory === "purchase" ? (
-        <div className="purchase-bottom-summary" dir="rtl">
-          <section className="purchase-summary-card purchase-summary-breakdown">
-            <h3>إجماليات الفاتورة <span aria-hidden="true">▦</span></h3>
-            <div className="purchase-summary-row"><span>إجمالي قبل الخصم</span><strong>{fmt(subtotal)}</strong></div>
-            <div className="purchase-summary-row"><span>إجمالي الخصم</span><strong>{fmt(totalDiscount)}</strong></div>
-            <div className="purchase-summary-row"><span>إجمالي بعد الخصم</span><strong>{fmt(subtotal - totalDiscount)}</strong></div>
-            <div className="purchase-summary-row"><span>إجمالي الضريبة</span><strong>{fmt(totalTax)}</strong></div>
-            <div className="purchase-summary-row purchase-summary-total"><span>صافي الفاتورة</span><strong>{fmt(netTotal)}</strong></div>
-          </section>
-
-          <section className="purchase-summary-card purchase-summary-net">
+        <div className="purchase-sales-like-totals" dir="rtl">
+          <div className="purchase-total-group">
+            <span>إجمالي قبل الخصم</span><strong>{fmt(subtotal)}</strong>
+            <span>إجمالي الخصم</span><strong className="purchase-negative">{fmt(totalDiscount)}</strong>
+            <span>إجمالي بعد الخصم</span><strong>{fmt(subtotal - totalDiscount)}</strong>
+            <span>إجمالي الضريبة</span><strong>{fmt(totalTax)}</strong>
+            <span>صافي الفاتورة</span><strong>{fmt(netTotal)}</strong>
+          </div>
+          <div className="purchase-net-total">
             <span>صافي الفاتورة</span>
             <strong>{fmt(netTotal)}</strong>
             <small>{currency === "SAR" ? "ريال سعودي" : currency}</small>
-          </section>
-
-          <section className="purchase-summary-card purchase-summary-payment">
-            <h3>السداد</h3>
-            <div className="purchase-payment-row"><span>المدفوع نقدًا</span><strong>{fmt(paymentType === "cash" ? netTotal : 0)}</strong></div>
-            <div className="purchase-payment-row"><span>مدفوع بواسطة</span><strong>{fmt(paymentType === "credit" ? paidAmount : 0)}</strong></div>
-            <div className="purchase-payment-row"><span>مدفوع بشيكات أخرى</span><strong>0.00</strong></div>
-            <div className="purchase-payment-row"><span>آجل (على حساب)</span><strong>{fmt(remainingAmount)}</strong></div>
-            <div className="purchase-payment-row purchase-payment-remaining"><span>المتبقي</span><strong>{fmt(remainingAmount)}</strong></div>
-          </section>
+          </div>
+          <div className="purchase-payment-group">
+            <b>السداد</b>
+            <label>المدفوع نقدًا <strong>{fmt(paymentType === "cash" ? netTotal : 0)}</strong></label>
+            <label>مدفوع بواسطة <strong>{fmt(paymentType === "credit" ? paidAmount : 0)}</strong></label>
+            <label>مدفوع بشيكات أخرى <strong>0.00</strong></label>
+            <label>آجل (على حساب) <strong>{fmt(remainingAmount)}</strong></label>
+            <label className="purchase-remaining">المتبقي <strong>{fmt(remainingAmount)}</strong></label>
+          </div>
         </div>
       ) : (
         <div style={{ background: "#E8E4DC", borderTop: "1px solid #b0a89a" }}>
