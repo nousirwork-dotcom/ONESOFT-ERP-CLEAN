@@ -136,6 +136,10 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
     onSuccess: () => { utils.customers.list.invalidate(); toast.success("تم حفظ التعديلات"); onSaved(); },
     onError:   (e) => toast.error(e.message),
   });
+  const remove = trpc.customers.delete.useMutation({
+    onSuccess: () => { utils.customers.list.invalidate(); toast.success("تم حذف العميل"); onSaved(); },
+    onError:   (e) => toast.error(e.message),
+  });
 
   /* ── سجل المبيعات للعميل ── */
   const slRange = dateRange(slYear, slMonth);
@@ -237,7 +241,7 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
       whatsappPhone:      form.whatsappPhone?.trim()      || undefined,
       telegramId:         form.telegramId?.trim()         || undefined,
       defaultSendMethod:  (form.defaultSendMethod as any) || undefined,
-      recordPolicy:       form.recordPolicy ?? "flexible",
+       recordPolicy:       form.recordPolicy === "editable" ? "flexible" : (form.recordPolicy ?? "flexible"),
       includeInFoundation: form.includeInFoundation ?? false,
       foundationKey:      form.foundationKey?.trim() || undefined,
     };
@@ -251,7 +255,7 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
   if (!open) return null;
 
   const isOrg     = form.customerType === "organization";
-  const isPending = create.isPending || update.isPending;
+  const isPending = create.isPending || update.isPending || remove.isPending;
   const title     = editData?.id ? `تعديل العميل — ${editData.name ?? ""}` : "إضافة عميل جديد";
 
   return (
@@ -311,7 +315,7 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
         }}>
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)} style={{
-              padding: "7px 13px 6px", fontSize: 11,
+              padding: "6px 12px 5px", fontSize: 10,
               fontWeight: tab === t.id ? 700 : 500,
               background: tab === t.id ? "#f7f6f3" : "transparent",
               color: tab === t.id ? "#315f88" : "#62676c",
@@ -827,12 +831,25 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
               if (isDirty) { toast.info("احفظ التعديلات أو أغلق النافذة أولاً"); return; }
               setForm(EMPTY); setTab("main"); setIsDirty(false);
             }} />
+            <CommandButton icon="✎" label="تعديل" disabled={!editData?.id || isPending} onClick={() => nameRef.current?.focus()} />
+            <CommandButton icon="🗑" label="حذف" danger disabled={!editData?.id || isPending} onClick={() => {
+              if (!editData?.id) return;
+              if (window.confirm(`هل تريد حذف العميل «${editData.name ?? form.name}»؟`)) {
+                remove.mutate({ id: editData.id });
+              }
+            }} />
+            <CommandButton icon="◀" label="السابق" disabled onClick={() => undefined} />
+            <CommandButton icon="▶" label="التالي" disabled onClick={() => undefined} />
+            <CommandButton icon="⏮" label="الأول" disabled onClick={() => undefined} />
+            <CommandButton icon="⏭" label="الأخير" disabled onClick={() => undefined} />
+            <CommandButton icon="◉" label="معاينة" disabled={!editData?.id || isPending} onClick={() => toast.info("المعاينة متاحة بعد ربط قالب العميل")} />
+            <CommandButton icon="🖨" label="طباعة" disabled={!editData?.id || isPending} onClick={() => window.print()} />
             <CommandButton icon="↶" label="تراجع" disabled={!isDirty || isPending} onClick={() => {
               if (editData) setForm({ ...EMPTY, ...editData });
               else setForm(EMPTY);
               setIsDirty(false);
             }} />
-            <CommandButton icon="✕" label="إلغاء" disabled={isPending} onClick={handleClose} />
+            <CommandButton icon="↩" label="خروج" disabled={isPending} onClick={handleClose} />
           </div>
         </div>
 
@@ -863,7 +880,7 @@ function ESection({ title, children, headerColor, note }: {
         minHeight: 28, height: 28,
         display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
-        <span style={{ fontSize: 11, lineHeight: "28px", fontWeight: 800, color: "#3f4448" }}>{title}</span>
+        <span style={{ fontSize: 10, lineHeight: "28px", fontWeight: 800, color: "#3f4448" }}>{title}</span>
         {note && <span style={{ fontSize: 9, lineHeight: "28px", color: "#686d70" }}>{note}</span>}
       </div>
       <div style={{ padding: "10px", background: "#f0ede8" }}>{children}</div>
@@ -874,7 +891,7 @@ function ESection({ title, children, headerColor, note }: {
 function EField({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      <label style={{ fontSize: 11, fontWeight: 700, color: "#333" }}>
+       <label style={{ fontSize: 10, fontWeight: 700, color: "#333" }}>
         {label}
         {hint && <span style={{ fontWeight: 400, color: "#888", marginRight: 4 }}>({hint})</span>}
       </label>
@@ -897,7 +914,7 @@ function EInput({ value, onChange, placeholder, ltr, mono, inputRef, style }: {
       placeholder={placeholder}
       dir={ltr ? "ltr" : "rtl"}
       style={{
-         height: 29, fontSize: 12, padding: "0 8px",
+         height: 27, fontSize: 11, padding: "0 7px",
          border: "1px solid #b8b9b9", background: "#fff",
         fontFamily: mono ? "monospace" : "inherit",
         outline: "none", width: "100%", borderRadius: 2,
@@ -908,17 +925,17 @@ function EInput({ value, onChange, placeholder, ltr, mono, inputRef, style }: {
   );
 }
 
-function CommandButton({ icon, label, primary, disabled, onClick }: {
-  icon: string; label: string; primary?: boolean; disabled?: boolean; onClick: () => void;
+function CommandButton({ icon, label, primary, danger, disabled, onClick }: {
+  icon: string; label: string; primary?: boolean; danger?: boolean; disabled?: boolean; onClick: () => void;
 }) {
   return (
     <button type="button" onClick={onClick} disabled={disabled} style={{
       minWidth: 55, height: 34, padding: "2px 7px", display: "inline-flex",
       flexDirection: "column", alignItems: "center", justifyContent: "center",
-      gap: 1, fontFamily: "inherit", fontSize: 9, fontWeight: 700,
-      color: primary ? "#fff" : "#4b5156",
-      background: primary ? "linear-gradient(#3d739f, #28567f)" : "#f8f7f4",
-      border: `1px solid ${primary ? "#244d70" : "#b5b6b5"}`,
+      gap: 1, fontFamily: "inherit", fontSize: 8, fontWeight: 700,
+      color: primary || danger ? "#fff" : "#4b5156",
+      background: primary ? "linear-gradient(#3d739f, #28567f)" : danger ? "linear-gradient(#d96565, #a63d3d)" : "#f8f7f4",
+      border: `1px solid ${primary ? "#244d70" : danger ? "#8f3030" : "#b5b6b5"}`,
       borderRadius: 3, boxShadow: "0 1px 1px rgba(0,0,0,.12)",
       cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? .5 : 1,
     }}>
@@ -933,7 +950,7 @@ function TypeBtn({ active, label, color, onClick }: {
 }) {
   return (
     <button type="button" onClick={onClick} style={{
-      flex: 1, padding: "7px 10px", fontSize: 12, fontWeight: 700,
+       flex: 1, padding: "6px 9px", fontSize: 11, fontWeight: 700,
       borderRadius: 3, cursor: "pointer",
       background: active ? color : "#E8E8E8",
       color:      active ? "white" : "#555",

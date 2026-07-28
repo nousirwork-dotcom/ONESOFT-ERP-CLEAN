@@ -57,6 +57,7 @@ export const customersRouter = router({
   update: protectedProcedure
     .input(z.object({
       id: z.number(),
+      code: z.string().optional(),
       name: z.string().min(1).optional(),
       phone: z.string().optional(),
       email: z.string().optional(),
@@ -89,6 +90,14 @@ export const customersRouter = router({
         dealStartDate: dealStartDate !== undefined ? (dealStartDate ? new Date(dealStartDate) : null) : undefined,
         dealEndDate:   dealEndDate   !== undefined ? (dealEndDate   ? new Date(dealEndDate)   : null) : undefined,
       }).where(and(eq(customers.id, id), eq(customers.orgId, ctx.user.orgId)));
+      return { success: true };
+    }),
+  delete: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      await db.update(customers)
+        .set({ isActive: false })
+        .where(and(eq(customers.id, input.id), eq(customers.orgId, ctx.user.orgId)));
       return { success: true };
     }),
 });
