@@ -499,11 +499,12 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
         }
       }
       skipSaveToast.current = false;
-      pendingCreatePayloadRef.current = null;
+      if (data.id) {
+        pendingCreatePayloadRef.current = null;
+      }
     },
     onError: (e) => {
       skipSaveToast.current = false;
-      pendingCreatePayloadRef.current = null;
       toast.error(`خطأ في الحفظ: ${e.message}`);
     },
   });
@@ -1169,9 +1170,11 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
         setInvoiceStatus(isFullPaid ? "paid" : "confirmed");
         setNavInvoiceId(draftId); // يُحفّز إعادة جلب بيانات الفاتورة المحدّثة
         return draftId;
-      } catch {
+      } catch (error) {
         skipUpdateToast.current = false;
-        return null;
+        console.error("[sales.saveForPayment] draft conversion failed:", error);
+        toast.error(`فشل تحويل المسودة: ${error instanceof Error ? error.message : String(error)}`);
+        throw error;
       }
     }
 
@@ -1189,9 +1192,11 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
         paymentBreakdown: breakdown,
       });
       return data.id ?? null;
-    } catch {
+    } catch (error) {
       skipSaveToast.current = false;
-      return null;
+      console.error("[sales.saveForPayment] invoice creation failed:", error);
+      toast.error(`فشل حفظ الفاتورة: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
     }
   }, [updateMutation, createMutation, netTotal]);
 

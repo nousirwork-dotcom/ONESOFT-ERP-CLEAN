@@ -361,7 +361,7 @@ export const salesRouter = router({
         // ── تحقق: جميع الأصناف مسجلة في النظام (لا يُقبل نص يدوي بدون productId) ──
         await validateInvoiceItems(items, orgId);
       }
-      const { invoice, finalInvoiceNumber } = await db.transaction(async (tx) => {
+      const { invoice, finalInvoiceNumber, isPosted, autoPostedEntryNumber } = await db.transaction(async (tx) => {
         // حلّ warehouseId من الدفتر إذا لم يُرسل، أو رفض الحفظ إذا تعذّر
         const resolvedWarehouseId = await resolveInvoiceWarehouseId(
           tx,
@@ -448,7 +448,12 @@ export const salesRouter = router({
           try {
             const posted = await autoPostSalesInvoice(invoice.id, orgId, ctx.user.id, tx);
             if (posted) {
-              return { ...invoice, invoiceNumber: finalInvoiceNumber, isPosted: true, autoPostedEntryNumber: posted.entryNumber };
+              return {
+                invoice,
+                finalInvoiceNumber,
+                isPosted: true,
+                autoPostedEntryNumber: posted.entryNumber,
+              };
             }
           } catch (e) {
             console.error('[sales.create] autoPostSalesInvoice error — rolling back:', e);
@@ -456,10 +461,20 @@ export const salesRouter = router({
           }
         }
 
-        return { invoice, finalInvoiceNumber };
+        return {
+          invoice,
+          finalInvoiceNumber,
+          isPosted: false,
+          autoPostedEntryNumber: undefined,
+        };
       });
 
-      return { ...invoice, invoiceNumber: finalInvoiceNumber };
+      return {
+        ...invoice,
+        invoiceNumber: finalInvoiceNumber,
+        isPosted,
+        autoPostedEntryNumber,
+      };
     }),
 
   // تعديل مستند

@@ -168,6 +168,7 @@ export default function PaymentModal({
 
   // ─── core save (after validation) ────────────────────────────────────────
   const doSave = useCallback(async (finalAmounts: Record<string, string>) => {
+    if (isSavingFirst || updatePaymentMut.isPending) return;
     const breakdown: Record<string, number> = {};
     Object.entries(finalAmounts).forEach(([k, v]) => {
       const n = parseFloat(v) || 0;
@@ -181,7 +182,10 @@ export default function PaymentModal({
       setIsSavingFirst(true);
       try {
         const finalId = await onSaveFirst(breakdown);
-        if (!finalId) return;
+        if (!finalId) {
+          toast.error("تم تنفيذ الطلب دون إرجاع رقم الفاتورة؛ لم يتم إغلاق شاشة الدفع. راجع سجل الخادم أو أعد المحاولة.");
+          return;
+        }
         toast.success("تم تسجيل الدفع بنجاح ✓");
         onConfirmed(paid, breakdown);
       } finally {
@@ -199,10 +203,11 @@ export default function PaymentModal({
       remainingAmount: Math.max(0, invoiceTotal - paid).toFixed(4),
       status: isFullPaid ? "paid" : "confirmed",
     });
-  }, [invoiceId, invoiceTotal, onSaveFirst, updatePaymentMut, onConfirmed]);
+  }, [invoiceId, invoiceTotal, onSaveFirst, updatePaymentMut, onConfirmed, isSavingFirst]);
 
   // ─── confirm ──────────────────────────────────────────────────────────────
   const handleConfirm = useCallback(async () => {
+    if (isBusy) return;
     if (!hasAnyPayment) { toast.warning("أدخل مبلغاً واحداً على الأقل"); return; }
     if (isOverPaid)     { toast.error("المبلغ المدفوع يتجاوز إجمالي الفاتورة"); return; }
 
@@ -212,7 +217,7 @@ export default function PaymentModal({
       return;
     }
     await doSave(amounts);
-  }, [hasAnyPayment, isOverPaid, isFullyPaid, remaining, amounts, doSave]);
+  }, [hasAnyPayment, isOverPaid, isFullyPaid, remaining, amounts, doSave, isBusy]);
 
   // ─── ترحيل المتبقي على حساب العميل ───────────────────────────────────────
   const handleMoveToAccount = useCallback(async () => {
