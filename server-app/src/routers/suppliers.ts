@@ -15,6 +15,7 @@ export const suppliersRouter = router({
     .input(z.object({
       code: z.string().optional(),
       name: z.string().min(1),
+      supplierType: z.enum(["individual", "organization"]).default("individual"),
       phone: z.string().optional(),
       email: z.string().optional(),
       address: z.string().optional(),
@@ -25,6 +26,7 @@ export const suppliersRouter = router({
         orgId: ctx.user.orgId,
         code: input.code?.trim() || undefined,
         name: input.name.trim(),
+        supplierType: input.supplierType,
         phone: input.phone?.trim() || undefined,
         email: input.email?.trim() || undefined,
         address: input.address?.trim() || undefined,

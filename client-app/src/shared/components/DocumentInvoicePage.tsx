@@ -255,6 +255,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   const [supplierSearch, setSupplierSearch] = useState("");
   const [showAddSupplier, setShowAddSupplier] = useState(false);
   const [newSupplierName, setNewSupplierName] = useState("");
+  const [newSupplierType, setNewSupplierType] = useState<"individual" | "organization">("individual");
   const [newSupplierPhone, setNewSupplierPhone] = useState("");
   const [newSupplierEmail, setNewSupplierEmail] = useState("");
   const [newSupplierAddress, setNewSupplierAddress] = useState("");
@@ -315,6 +316,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     try {
       const created = await createSupplierMutation.mutateAsync({
         name,
+        supplierType: newSupplierType,
         phone: newSupplierPhone.trim() || undefined,
         email: newSupplierEmail.trim() || undefined,
         address: newSupplierAddress.trim() || undefined,
@@ -326,6 +328,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       setSupplierPickerOpen(false);
       setSupplierSearch("");
       setNewSupplierName("");
+      setNewSupplierType("individual");
       setNewSupplierPhone("");
       setNewSupplierEmail("");
       setNewSupplierAddress("");
@@ -338,6 +341,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     newSupplierAddress,
     newSupplierEmail,
     newSupplierName,
+    newSupplierType,
     newSupplierPhone,
     utils.suppliers.list,
   ]);
@@ -1951,6 +1955,33 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
                   placeholder="اكتب اسم المورد"
                 />
               </label>
+              <div className="text-xs font-bold text-[#4b3424]">
+                نوع المورد
+                <div className="mt-1 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNewSupplierType("individual")}
+                    className={`flex-1 rounded border px-3 py-1.5 text-xs font-bold ${
+                      newSupplierType === "individual"
+                        ? "border-[#8a5a2b] bg-[#eadbc9] text-[#4b3424]"
+                        : "border-gray-300 bg-white text-gray-600"
+                    }`}
+                  >
+                    فرد
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewSupplierType("organization")}
+                    className={`flex-1 rounded border px-3 py-1.5 text-xs font-bold ${
+                      newSupplierType === "organization"
+                        ? "border-[#8a5a2b] bg-[#eadbc9] text-[#4b3424]"
+                        : "border-gray-300 bg-white text-gray-600"
+                    }`}
+                  >
+                    مؤسسة
+                  </button>
+                </div>
+              </div>
               <label className="text-xs font-bold text-[#4b3424]">
                 الهاتف
                 <input

@@ -393,6 +393,13 @@
       "when": 1753833600000,
       "tag": "0055_purchase_item_batch_expiry",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1753920000000,
+      "tag": "0056_supplier_type",
+      "breakpoints": true
     }
   ]
 }

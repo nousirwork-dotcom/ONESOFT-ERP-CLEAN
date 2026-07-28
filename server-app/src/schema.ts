@@ -294,6 +294,7 @@ export const suppliers = pgTable('suppliers', {
   orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   code: varchar('code', { length: 50 }),
   name: varchar('name', { length: 500 }).notNull(),
+  supplierType: varchar('supplier_type', { length: 20 }).notNull().default('individual'),
   phone: varchar('phone', { length: 50 }),
   email: varchar('email', { length: 255 }),
   address: text('address'),

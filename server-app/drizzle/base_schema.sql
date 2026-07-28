@@ -468,6 +468,7 @@ CREATE TABLE IF NOT EXISTS "suppliers" (
     "org_id" INTEGER NOT NULL,
     "code" VARCHAR(50),
     "name" VARCHAR(500) NOT NULL,
+    "supplier_type" VARCHAR(20) NOT NULL DEFAULT 'individual',
     "phone" VARCHAR(50),
     "email" VARCHAR(255),
     "address" TEXT,
