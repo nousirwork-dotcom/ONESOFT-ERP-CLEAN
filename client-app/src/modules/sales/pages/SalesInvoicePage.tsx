@@ -2273,7 +2273,12 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
         {/* زر الدفع */}
         <div className="px-3 pt-1 pb-2">
           <button
-            onClick={() => { handleSave(); }}
+            type="button"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              void handleSave();
+            }}
             disabled={netTotal <= 0}
             className="w-full py-2.5 rounded-md text-[13px] font-bold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             style={{
@@ -2316,6 +2321,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             <div className="mx-3 mb-3 rounded-md overflow-hidden border border-[#d4cfc7]" dir="rtl">
               {/* رأس القسم */}
               <button
+                type="button"
                 onClick={openPayModal}
                 className="w-full flex items-center justify-between px-2.5 py-1.5 text-[10px] font-bold text-white"
                 style={{ background: "linear-gradient(to left, #7C5A02, #9A7203)" }}
