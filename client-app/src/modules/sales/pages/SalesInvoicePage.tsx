@@ -1868,7 +1868,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
           {/* col 2: تاريخ التحرير — حاوية موحدة بحد واحد */}
           <div className="flex items-center w-full min-w-0" style={{ gap: 3, gridColumn: "2" }}>
             <label style={compactHeaderLabelStyle}>تاريخ التحرير</label>
-            <div data-date-field className="flex min-w-0" style={{ flex: "0 0 112px", width: 112, height: "var(--work-field-h, 26px)", border: "1px solid #d1d5db", borderRadius: 4, overflow: "hidden" }}>
+            <div data-date-field className="flex min-w-0" style={{ flex: "0 0 112px", width: 112, transform: "translateX(-4px)", height: "var(--work-field-h, 26px)", border: "1px solid #d1d5db", borderRadius: 4, overflow: "hidden" }}>
               <DateSegmentInput value={invoiceDate} onChange={setInvoiceDate} style={{ flex: 1, minWidth: 0, width: "100%", height: "var(--work-field-h, 26px)", border: "none", borderRadius: 0, justifyContent: "center", textAlign: "center", paddingInline: 2 }} />
               <button type="button" onClick={() => invoiceDatePickerRef.current?.showPicker()} className="flex items-center justify-center flex-shrink-0" style={{ height: "var(--work-field-h, 26px)", width: "26px", background: "#f3f4f6", border: "none", borderInlineStart: "1px solid #d1d5db", color: "#555", cursor: "pointer", fontSize: "var(--work-font-size, 12px)" }}>📅</button>
               <input ref={invoiceDatePickerRef} type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} aria-hidden="true" />
@@ -1878,7 +1878,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
           {/* col 3: تاريخ الدفع — حاوية موحدة بحد واحد */}
           <div className="flex items-center w-full min-w-0" style={{ gap: 3, gridColumn: "3" }}>
             <label style={compactHeaderLabelStyle}>تاريخ الدفع</label>
-            <div data-date-field className="flex min-w-0" style={{ flex: "0 0 112px", width: 112, height: "var(--work-field-h, 26px)", border: "1px solid #d1d5db", borderRadius: 4, overflow: "hidden" }}>
+            <div data-date-field className="flex min-w-0" style={{ flex: "0 0 112px", width: 112, transform: "translateX(-4px)", height: "var(--work-field-h, 26px)", border: "1px solid #d1d5db", borderRadius: 4, overflow: "hidden" }}>
               <DateSegmentInput value={dueDate} onChange={setDueDate} style={{ flex: 1, minWidth: 0, width: "100%", height: "var(--work-field-h, 26px)", border: "none", borderRadius: 0, justifyContent: "center", textAlign: "center", paddingInline: 2 }} />
               <button type="button" onClick={() => dueDatePickerRef.current?.showPicker()} className="flex items-center justify-center flex-shrink-0" style={{ height: "var(--work-field-h, 26px)", width: "26px", background: "#f3f4f6", border: "none", borderInlineStart: "1px solid #d1d5db", color: "#555", cursor: "pointer", fontSize: "var(--work-font-size, 12px)" }}>📅</button>
               <input ref={dueDatePickerRef} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} aria-hidden="true" />
