@@ -272,6 +272,60 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   const productsQuery   = trpc.products.list.useQuery({});
   const journalsQuery   = trpc.documentJournals.list.useQuery({ docType: config.journalDocType });
   const docTypesQuery   = trpc.documentTypes.list.useQuery({ typeId: config.docTypeFilter });
+  const purchaseBranchOptions = useMemo(() => {
+    if (config.docCategory !== "purchase") return [];
+
+    const branches = branchesQuery.data ?? [];
+    const warehouses = warehousesQuery.data ?? [];
+    const journals = journalsQuery.data ?? [];
+    const options: Array<{ value: string; label: string; branchId: number | null; warehouseId: number; journalId: number }> = [];
+    const usedWarehouses = new Set<number>();
+
+    // Prefer the normal branch → warehouse → purchase journal relationship.
+    for (const branch of branches as any[]) {
+      const warehouse = warehouses.find((item: any) => item.branchId === branch.id);
+      const journal = warehouse
+        ? journals.find((item: any) => item.warehouseId === warehouse.id)
+        : undefined;
+      if (warehouse && journal) {
+        options.push({
+          value: `branch:${branch.id}`,
+          label: branch.name,
+          branchId: branch.id,
+          warehouseId: warehouse.id,
+          journalId: journal.id,
+        });
+        usedWarehouses.add(warehouse.id);
+      }
+    }
+
+    // Some existing organizations have purchase journals linked to warehouses
+    // whose branch_id is empty. Keep those selectable instead of hiding them.
+    for (const journal of journals as any[]) {
+      if (!journal.warehouseId || usedWarehouses.has(journal.warehouseId)) continue;
+      const warehouse = warehouses.find((item: any) => item.id === journal.warehouseId);
+      if (!warehouse) continue;
+      options.push({
+        value: `journal:${journal.id}`,
+        label: journal.name || warehouse.name,
+        branchId: warehouse.branchId ?? (branches[0]?.id ?? null),
+        warehouseId: warehouse.id,
+        journalId: journal.id,
+      });
+    }
+
+    // If no journal has been configured yet, still show the actual branches.
+    if (options.length === 0) {
+      return (branches as any[]).map((branch: any) => ({
+        value: `branch:${branch.id}`,
+        label: branch.name,
+        branchId: branch.id,
+        warehouseId: 0,
+        journalId: 0,
+      }));
+    }
+    return options;
+  }, [config.docCategory, branchesQuery.data, warehousesQuery.data, journalsQuery.data]);
 
   const salesNextNumberQuery = trpc.salesInvoices.nextNumber.useQuery(
     { prefix: config.numberPrefix },
@@ -654,8 +708,10 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     } catch { toast.error("تعذّر جلب رقم المستند من الدفتر"); }
   }, [config.docCategory, journalsQuery.data, warehousesQuery.data, docTypesQuery.data, utils]);
 
-  const handlePurchaseBranchSelect = useCallback(async (nextBranchId: number | null) => {
+  const handlePurchaseBranchSelect = useCallback(async (selection: string) => {
     if (config.docCategory !== "purchase") return;
+    const selected = purchaseBranchOptions.find(option => option.value === selection);
+    const nextBranchId = selected?.branchId ?? null;
     if (
       branchId &&
       nextBranchId &&
@@ -676,16 +732,16 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       setInvoiceNumber("");
       return;
     }
-    const warehouse = (warehousesQuery.data ?? []).find(
-      (item: any) => item.branchId === nextBranchId,
-    );
+    const warehouse = selected?.warehouseId
+      ? (warehousesQuery.data ?? []).find((item: any) => item.id === selected.warehouseId)
+      : (warehousesQuery.data ?? []).find((item: any) => item.branchId === nextBranchId);
     if (!warehouse) {
       toast.error("لا يوجد مخزن مرتبط بالفرع المحدد.");
       return;
     }
-    const journal = (journalsQuery.data ?? []).find(
-      (item: any) => item.warehouseId === warehouse.id,
-    );
+    const journal = selected?.journalId
+      ? (journalsQuery.data ?? []).find((item: any) => item.id === selected.journalId)
+      : (journalsQuery.data ?? []).find((item: any) => item.warehouseId === warehouse.id);
     if (!journal) {
       toast.error("لا يوجد دفتر مشتريات مرتبط بالفرع المحدد.");
       return;
@@ -716,6 +772,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     config.docCategory,
     branchId,
     lines,
+    purchaseBranchOptions,
     warehousesQuery.data,
     journalsQuery.data,
     docTypesQuery.data,
@@ -1019,19 +1076,19 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
               <PurchaseField label="الفرع">
                 <select
                   value={branchId ?? ""}
-                  onChange={e => handlePurchaseBranchSelect(e.target.value ? Number(e.target.value) : null)}
+                  onChange={e => handlePurchaseBranchSelect(e.target.value)}
                   className="classic-input w-full font-bold"
                   style={{ borderColor: "#c8ad93", color: "#4b3424", background: "#fffdf8" }}
                 >
                   <option value="">
-                    {branchesQuery.isLoading
+                    {branchesQuery.isLoading || warehousesQuery.isLoading || journalsQuery.isLoading
                       ? "جاري تحميل الفروع..."
-                      : branchesQuery.error
+                      : branchesQuery.error || warehousesQuery.error || journalsQuery.error
                         ? "تعذّر تحميل الفروع"
                         : "— اختر الفرع أولًا —"}
                   </option>
-                  {(branchesQuery.data ?? []).map((branch: any) => (
-                    <option key={branch.id} value={branch.id}>{branch.name}</option>
+                  {purchaseBranchOptions.map(option => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
                 </select>
               </PurchaseField>
