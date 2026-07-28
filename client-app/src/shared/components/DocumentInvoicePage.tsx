@@ -1094,36 +1094,25 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
             {/* العمود الأول من اليمين: بيانات المستند */}
             <div className="purchase-header-column">
               <PurchaseField label="الفرع">
-                <div className="flex items-center gap-1">
-                  <select
-                    value={selectedPurchaseBranchValue}
-                    onChange={e => handlePurchaseBranchSelect(e.target.value)}
-                    className="classic-input w-full font-bold"
-                    style={{ borderColor: "#c8ad93", color: "#4b3424", background: "#fffdf8" }}
-                  >
-                    <option value="">
-                      {branchesQuery.isLoading || warehousesQuery.isLoading || journalsQuery.isLoading
-                        ? "جاري تحميل الفروع..."
-                        : branchesQuery.error || warehousesQuery.error || journalsQuery.error
-                          ? "تعذّر تحميل الفروع"
-                          : "عدم الاختيار"}
-                    </option>
-                    {purchaseBranchOptions.map(option => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                  {(branchId || warehouseId || journalId || invoiceNumber) && (
-                    <button
-                      type="button"
-                      onClick={clearPurchaseBranchSelection}
-                      className="shrink-0 rounded border border-[#c8ad93] px-1.5 text-[11px] font-bold text-[#76533a] hover:bg-[#f3e8dc]"
-                      title="مسح الفرع والمخزن والدفتر ورقم المستند"
-                      aria-label="مسح اختيار الفرع"
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
+                <select
+                  value={selectedPurchaseBranchValue}
+                  onChange={e => handlePurchaseBranchSelect(e.target.value)}
+                  onDoubleClick={clearPurchaseBranchSelection}
+                  className="classic-input w-full font-bold"
+                  style={{ borderColor: "#c8ad93", color: "#4b3424", background: "#fffdf8" }}
+                  title="اختر الفرع، أو اختر عدم الاختيار لمسح القيمة. النقر المزدوج يمسح الاختيار."
+                >
+                  <option value="">
+                    {branchesQuery.isLoading || warehousesQuery.isLoading || journalsQuery.isLoading
+                      ? "جاري تحميل الفروع..."
+                      : branchesQuery.error || warehousesQuery.error || journalsQuery.error
+                        ? "تعذّر تحميل الفروع"
+                        : "عدم الاختيار"}
+                  </option>
+                  {purchaseBranchOptions.map(option => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
               </PurchaseField>
               <PurchaseField label="رقم المستند">
                 <input
