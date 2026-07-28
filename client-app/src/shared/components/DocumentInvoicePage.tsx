@@ -963,12 +963,6 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       />
 
       {/* ── Header Form ───────────────────────────────────────────────────── */}
-      {config.docCategory === "purchase" && (
-        <div className="purchase-invoice-window-titlebar">
-          <span>فاتورة شراء · {invoiceNumber || "رقم جديد"}</span>
-          <span aria-hidden="true">PUR</span>
-        </div>
-      )}
       <div
         className={config.docCategory === "purchase" ? "purchase-invoice-header" : "border-b px-3 pt-2 pb-1.5"}
         style={{
