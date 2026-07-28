@@ -1494,15 +1494,6 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       <div className="flex-1 flex overflow-hidden" dir="rtl">
       <div className="flex-1 flex flex-col overflow-hidden" style={{ maxWidth: 1400, marginInline: "auto", width: "100%" }}>
 
-      {/* ── تنبيه المسودة ── */}
-      {invoiceStatus === "draft" && (
-        <div className="flex items-center justify-center px-3 py-1.5" style={{ background: "#FEF3C7", borderBottom: "1px solid #F59E0B" }}>
-          <span className="text-[12px] font-bold" style={{ color: "#92400E" }}>
-            ⚠️ هذه الفاتورة محفوظة كمسودة — يمكنك تعديلها أو حذفها أو استكمالها وتحويلها إلى فاتورة نهائية.
-          </span>
-        </div>
-      )}
-
       {/* ── Header Form ─────────────────────────────────────────────────── */}
       <div className="border-b border-[#b0a89a] px-3 pt-2 pb-2" style={{ background: "#FFFFFF", boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }}>
         {/* ثوابت مشتركة لجميع الحقول — ارتفاع موحد 26px + عرض label موحد */}
