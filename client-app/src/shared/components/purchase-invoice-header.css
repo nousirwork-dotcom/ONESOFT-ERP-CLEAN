@@ -136,22 +136,6 @@
   display: block;
 }
 
-.purchase-checkbox-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 4px;
-  padding-right: 101px;
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.purchase-checkbox-row input {
-  width: 17px;
-  height: 17px;
-  accent-color: var(--purchase-focus);
-}
-
 .purchase-sales-like-totals {
   display: grid;
   grid-template-columns: minmax(280px, 1.4fr) minmax(180px, .8fr) minmax(280px, 1.4fr);
@@ -273,10 +257,6 @@
 
   .purchase-field-row {
     grid-template-columns: 90px minmax(0, 1fr);
-  }
-
-  .purchase-checkbox-row {
-    padding-right: 0;
   }
 
   .purchase-sales-like-totals {

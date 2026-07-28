@@ -226,7 +226,6 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   const [docTypeId, setDocTypeId]                     = useState<string>("");
   const [currency, setCurrency]                       = useState("SAR");
   const [exchangeRate, setExchangeRate]               = useState("1.000");
-  const [pricesIncludeTax, setPricesIncludeTax]       = useState(false);
   const [salesperson, setSalesperson]                 = useState("");
   const [basedOnType, setBasedOnType]                 = useState<string>("");
   const [basedOnNum, setBasedOnNum]                   = useState("");
@@ -1073,10 +1072,6 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
                   );
                 })()}
               </PurchaseField>
-              <label className="purchase-checkbox-row">
-                <input type="checkbox" checked={pricesIncludeTax} onChange={e => setPricesIncludeTax(e.target.checked)} />
-                الأسعار تشمل الضريبة
-              </label>
             </div>
           </div>
         ) : (
