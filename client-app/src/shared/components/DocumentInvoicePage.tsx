@@ -208,6 +208,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   const [docTypeId, setDocTypeId]                     = useState<string>("");
   const [currency, setCurrency]                       = useState("SAR");
   const [exchangeRate, setExchangeRate]               = useState("1.000");
+  const [pricesIncludeTax, setPricesIncludeTax]       = useState(false);
   const [salesperson, setSalesperson]                 = useState("");
   const [basedOnType, setBasedOnType]                 = useState<string>("");
   const [basedOnNum, setBasedOnNum]                   = useState("");
@@ -654,8 +655,10 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     if (journal.defaultCurrency) setCurrency(journal.defaultCurrency);
     if (journal.defaultPayMethod) setPaymentType(journal.defaultPayMethod as any);
     try {
-      const preview = await utils.documentJournals.previewNextNumber.fetch({ journalId: journal.id });
-      setInvoiceNumber(preview ?? "");
+      // Reserve the exact number shown to the user. Saving must not reserve
+      // another number and silently replace the visible document number.
+      const reserved = await nextJournalNumberMutation.mutateAsync({ journalId: journal.id });
+      setInvoiceNumber(reserved);
     } catch {
       setInvoiceNumber("");
       toast.error("تعذّر جلب رقم المستند من دفتر الفرع");
@@ -667,6 +670,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     warehousesQuery.data,
     journalsQuery.data,
     utils,
+    nextJournalNumberMutation,
   ]);
 
   const handleDocTypeSelect = useCallback((id: string) => {
@@ -718,7 +722,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       }
     }
     let finalInvoiceNumber = invoiceNumber;
-    if (journalId) {
+    if (journalId && config.docCategory !== "purchase") {
       try {
         finalInvoiceNumber = await nextJournalNumberMutation.mutateAsync({ journalId });
         setInvoiceNumber(finalInvoiceNumber);
@@ -950,31 +954,135 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
         }}
       >
 
+        {config.docCategory === "purchase" ? (
+          <div
+            className="grid grid-cols-3 gap-3 items-start"
+            style={{ direction: "rtl" }}
+            data-testid="purchase-invoice-three-column-header"
+          >
+            {/* العمود الأول من اليمين: بيانات المستند */}
+            <div className="rounded border p-2 space-y-1.5" style={{ borderColor: "#decfbe", background: "#fffdf9" }}>
+              <div className="text-[11px] font-bold pb-1 mb-1 border-b" style={{ color: "#6f4d34", borderColor: "#e8daca" }}>
+                بيانات المستند
+              </div>
+              <HF label="الفرع">
+                <select
+                  value={branchId ?? ""}
+                  onChange={e => handlePurchaseBranchSelect(e.target.value ? Number(e.target.value) : null)}
+                  className="classic-input w-full font-bold"
+                  style={{ borderColor: "#c8ad93", color: "#4b3424", background: "#fffdf8" }}
+                >
+                  <option value="">— اختر الفرع أولًا —</option>
+                  {(branchesQuery.data ?? []).map((branch: any) => (
+                    <option key={branch.id} value={branch.id}>{branch.name}</option>
+                  ))}
+                </select>
+              </HF>
+              <HF label="رقم المستند">
+                <input
+                  value={branchId ? invoiceNumber : ""}
+                  readOnly
+                  placeholder="يظهر بعد اختيار الفرع"
+                  className="classic-input w-full text-center font-bold"
+                  style={{ borderColor: "#c8ad93", background: "#f8f1e8", color: "#4b3424" }}
+                />
+              </HF>
+              <HF label="المخزن">
+                <input
+                  value={branchId ? warehouseDisplayName : ""}
+                  readOnly
+                  placeholder="يحدد تلقائيًا من الفرع"
+                  className="classic-input w-full"
+                  style={{ borderColor: "#c8ad93", background: "#f8f1e8", color: "#4b3424" }}
+                />
+              </HF>
+              <div className="grid grid-cols-2 gap-2">
+                <HF label="تاريخ التحرير">
+                  <DateSegmentInput value={invoiceDate} onChange={setInvoiceDate} standalone className="classic-input w-full" />
+                </HF>
+                <HF label="تاريخ الاستحقاق">
+                  <DateSegmentInput value={dueDate} onChange={setDueDate} standalone className="classic-input w-full" />
+                </HF>
+              </div>
+              <HF label="نوع السند">
+                {(() => {
+                  const allDocTypes = docTypesQuery.data ?? [];
+                  const filteredDocTypes = journalId ? allDocTypes.filter((dt: any) => dt.journal === String(journalId)) : allDocTypes;
+                  const selectedDT = docTypeId ? allDocTypes.find((dt: any) => String(dt.id) === docTypeId) : null;
+                  return allDocTypes.length > 0 ? (
+                    <select value={docTypeId} onChange={e => handleDocTypeSelect(e.target.value)} className="classic-input w-full">
+                      <option value="">— اختر نوع السند —</option>
+                      {filteredDocTypes.map((dt: any) => <option key={dt.id} value={String(dt.id)}>{dt.codeAr ? `${dt.codeAr} — ${dt.nameAr}` : dt.nameAr}</option>)}
+                    </select>
+                  ) : (
+                    <select value={paymentType} onChange={e => setPaymentType(e.target.value as PaymentType)} className="classic-input w-full">
+                      <option value="cash">نقدًا</option><option value="credit">آجل</option>
+                    </select>
+                  );
+                })()}
+              </HF>
+            </div>
+
+            {/* العمود الأوسط: المورد وبياناته */}
+            <div className="rounded border p-2 space-y-1.5" style={{ borderColor: "#decfbe", background: "#fffdf9" }}>
+              <div className="text-[11px] font-bold pb-1 mb-1 border-b" style={{ color: "#6f4d34", borderColor: "#e8daca" }}>
+                بيانات المورد
+              </div>
+              <HF label="اسم المورد">
+                <select value={partyId ?? ""} onChange={e => {
+                  const id = parseInt(e.target.value);
+                  setPartyId(isNaN(id) ? null : id);
+                  const supplier = (parties as any[]).find((item: any) => item.id === id);
+                  setPartyName(supplier?.name ?? "");
+                }} className="classic-input w-full">
+                  <option value="">-- اختر المورد --</option>
+                  {(parties as any[]).map((party: any) => <option key={party.id} value={party.id}>{party.name}</option>)}
+                </select>
+              </HF>
+              <HF label="رقم فاتورة المورد">
+                <input value={supplierInvoiceNumber} onChange={e => setSupplierInvoiceNumber(e.target.value)} className="classic-input w-full" />
+              </HF>
+              <HF label="ملاحظة">
+                <textarea value={notes} onChange={e => setNotes(e.target.value)} className="classic-input w-full resize-none" style={{ height: 62 }} />
+              </HF>
+            </div>
+
+            {/* العمود الثالث من اليمين: المرجع والعملة والضريبة */}
+            <div className="rounded border p-2 space-y-1.5" style={{ borderColor: "#decfbe", background: "#fffdf9" }}>
+              <div className="text-[11px] font-bold pb-1 mb-1 border-b" style={{ color: "#6f4d34", borderColor: "#e8daca" }}>
+                إعدادات الفاتورة
+              </div>
+              <HF label="بناءً على">
+                <input disabled className="classic-input w-full" placeholder="—" />
+              </HF>
+              <HF label="رقم المستند المبني عليه">
+                <input value={basedOnNum} onChange={e => setBasedOnNum(e.target.value)} className="classic-input w-full" placeholder="رقم المستند..." />
+              </HF>
+              <HF label="العملة">
+                <select value={currency} onChange={e => setCurrency(e.target.value)} className="classic-input w-full">
+                  <option value="SAR">ريال (SAR)</option><option value="USD">دولار (USD)</option>
+                  <option value="EUR">يورو (EUR)</option><option value="AED">درهم (AED)</option>
+                </select>
+              </HF>
+              <HF label="سعر الصرف">
+                <input value={exchangeRate} onChange={e => setExchangeRate(e.target.value)} className="classic-input w-full text-center" />
+              </HF>
+              <HF label="الضريبة">
+                <input value={`${totalTax.toFixed(3)} ر.س`} readOnly className="classic-input w-full text-left" style={{ background: "#f8f1e8" }} />
+              </HF>
+              <label className="flex items-center gap-2 text-[11px] font-semibold pt-1" style={{ color: "#6f4d34" }}>
+                <input type="checkbox" checked={pricesIncludeTax} onChange={e => setPricesIncludeTax(e.target.checked)} />
+                الأسعار تشمل الضريبة
+              </label>
+            </div>
+          </div>
+        ) : (
+        <>
         {/* Row 1: رقم المستند + 5-col grid */}
         <div className="flex items-start gap-2 mb-1.5">
 
           {/* ─ رقم المستند مع منتقي الدفتر ─ */}
-          {config.docCategory === "purchase" ? (
-            <div className="flex flex-col gap-0.5 flex-shrink-0" style={{ minWidth: 176 }}>
-              <label className="text-[10px] font-bold uppercase tracking-wide" style={{ color: "#6f4d34" }}>
-                الفرع
-              </label>
-              <select
-                value={branchId ?? ""}
-                onChange={e => handlePurchaseBranchSelect(e.target.value ? Number(e.target.value) : null)}
-                className="classic-input text-right font-bold"
-                style={{ width: 176, height: 28, background: "#fffdf8", borderColor: "#c8ad93", color: "#4b3424" }}
-              >
-                <option value="">— اختر الفرع أولًا —</option>
-                {(branchesQuery.data ?? []).map((branch: any) => (
-                  <option key={branch.id} value={branch.id}>{branch.name}</option>
-                ))}
-              </select>
-              <span className="text-[9px]" style={{ color: "#8b7768" }}>
-                {warehouseDisplayName || "سيتم تحديد المخزن بعد اختيار الفرع"}
-              </span>
-            </div>
-          ) : (() => {
+          {(() => {
             const journals = journalsQuery.data ?? [];
             const selected = journals.find((j: any) => j.id === journalId);
             const previewNum = (j: any): string => {
@@ -997,9 +1105,8 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
                 </div>
                 <div className="flex items-stretch">
                   <input
-                     value={config.docCategory === "purchase" && !branchId ? "" : invoiceNumber}
+                     value={invoiceNumber}
                      onChange={e => setInvoiceNumber(e.target.value)}
-                     readOnly={config.docCategory === "purchase"}
                     onContextMenu={e => { e.preventDefault(); setJournalOpen(o => !o); }}
                     onKeyDown={e => { if (e.key === "F4" || (e.key === "ArrowDown" && e.altKey)) { e.preventDefault(); setJournalOpen(o => !o); } }}
                     className="classic-input text-center font-bold"
@@ -1108,7 +1215,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
                 return (
                   <select value={warehouseId ?? ""}
                     onChange={e => !lockedWh && setWarehouseId(parseInt(e.target.value) || null)}
-                     className="classic-input w-full" disabled={config.docCategory === "purchase" || !!lockedWh}
+                     className="classic-input w-full" disabled={!!lockedWh}
                     title={lockedWh ? `المخزن: ${whName}` : undefined}>
                     <option value="">-- اختر مخزن --</option>
                     {(lockedWh
@@ -1183,11 +1290,8 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
           </HF>
 
           {/* بناءً على (sales) | رقم فاتورة المورد (purchase) */}
-          <HF label={config.docCategory === "purchase" ? "رقم فاتورة المورد" : "بناءً على"}>
-            {config.docCategory === "purchase" ? (
-              <input value={supplierInvoiceNumber} onChange={e => setSupplierInvoiceNumber(e.target.value)}
-                className="classic-input w-full" placeholder="رقم الفاتورة الأصلية..." />
-            ) : (config.basedOnOptions && config.basedOnOptions.length > 0) ? (
+          <HF label="بناءً على">
+            {(config.basedOnOptions && config.basedOnOptions.length > 0) ? (
               <div className="flex gap-1 w-full">
                 <select value={basedOnType}
                   onChange={e => { setBasedOnType(e.target.value); setBasedOnNum(""); setBasedOnTrigger(""); }}
@@ -1217,6 +1321,8 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
 
           <div />
         </div>
+        </>
+        )}
       </div>
 
       {/* ── Lines Table ───────────────────────────────────────────────────── */}

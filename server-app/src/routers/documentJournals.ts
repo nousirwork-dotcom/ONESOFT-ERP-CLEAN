@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { eq, and, asc, inArray } from 'drizzle-orm';
+import { eq, and, asc, inArray, sql } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import { documentJournals } from '../schema.js';
@@ -199,19 +199,31 @@ export const documentJournalsRouter = router({
   nextNumber: protectedProcedure
     .input(z.object({ journalId: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      const journal = await db.query.documentJournals.findFirst({
-        where: and(eq(documentJournals.id, input.journalId), eq(documentJournals.orgId, ctx.user.orgId)),
-      });
-      if (!journal) throw new Error('الدفتر غير موجود');
-      const currentSeq  = journal.currentSeq ?? 0;
-      const firstNumber = journal.firstNumber ?? 1;
-      const increment   = journal.increment ?? 1;
-      // إذا لم يُستخدم الدفتر بعد (currentSeq=0) ابدأ من firstNumber، وإلا زِد بمقدار increment
-      const nextSeq = currentSeq === 0 ? firstNumber : Math.max(currentSeq + increment, firstNumber);
-      const clamped = Math.min(nextSeq, journal.lastNumber ?? 999999);
-      await db.update(documentJournals)
-        .set({ currentSeq: clamped, updatedAt: new Date() })
-        .where(eq(documentJournals.id, journal.id));
+      // One UPDATE statement both locks the journal row and advances the
+      // sequence. This prevents two browser sessions from receiving the same
+      // number when a branch is selected at the same time.
+      const [journal] = await db.update(documentJournals)
+        .set({
+          currentSeq: sql`LEAST(
+            CASE
+              WHEN ${documentJournals.currentSeq} = 0 THEN ${documentJournals.firstNumber}
+              ELSE GREATEST(
+                ${documentJournals.currentSeq} + ${documentJournals.increment},
+                ${documentJournals.firstNumber}
+              )
+            END,
+            ${documentJournals.lastNumber}
+          )`,
+          updatedAt: new Date(),
+        })
+        .where(and(
+          eq(documentJournals.id, input.journalId),
+          eq(documentJournals.orgId, ctx.user.orgId),
+          eq(documentJournals.isActive, true),
+        ))
+        .returning();
+      if (!journal) throw new Error('الدفتر غير موجود أو غير فعال');
+      const clamped = journal.currentSeq ?? journal.firstNumber ?? 1;
       const prefix  = journal.numberPrefix ?? 'INV';
       const digits  = journal.numDigits ?? 6;
       const numPart = String(clamped).padStart(digits, '0');
