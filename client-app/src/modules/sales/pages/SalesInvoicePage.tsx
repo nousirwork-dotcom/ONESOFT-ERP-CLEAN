@@ -1497,13 +1497,12 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     >
       {/* ── Main Content: outer flex row (left-col + summary) ──────────── */}
       <div className="flex-1 flex overflow-hidden" dir="rtl">
-      <div className="flex-1 min-w-0 flex flex-col overflow-hidden" style={{ maxWidth: 1400, marginInline: "auto", width: "100%" }}>
+      <div className="flex-1 flex flex-col overflow-hidden" style={{ maxWidth: 1400, marginInline: "auto", width: "100%" }}>
 
       {/* ── Header Form ─────────────────────────────────────────────────── */}
       <div className="border-b border-[#b0a89a] px-3 pt-2 pb-2" style={{ background: "#FFFFFF", boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }}>
         {/* ثوابت مشتركة لجميع الحقول — ارتفاع موحد 26px + عرض label موحد */}
-        <div className={styles.invoiceHeader}>
-          <div className={styles.invoiceHeaderRow1}>
+        <div className={styles.formGrid} style={{ columnGap: 10, rowGap: 5, alignItems: "center" }}>
 
           {/* ══ صف 1 (من اليمين): الفرع ← رقم الفاتورة ← بناءً على ══ */}
 
@@ -1513,17 +1512,17 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             const selWh = whs.find((w: any) => w.id === warehouseId);
             const wName = (w: any): string => isAr ? (w.name ?? w.nameEn ?? "") : (w.nameEn || (w.name ?? ""));
             return (
-              <div className="invoice-field-group relative" style={{ gap: 5 }}>
+              <div className="flex items-center w-full min-w-0 relative" style={{ gap: 5 }}>
                 <label style={headerLabelStyle}>
                   {isAr ? "الفـــــــرع" : "Branch"}
                 </label>
-                <div className="invoice-field-control flex relative min-w-0" style={{ height: "var(--work-field-h, 26px)" }}>
+                <div className="flex relative flex-1 min-w-0" style={{ height: "var(--work-field-h, 26px)" }}>
                   <button
                     onClick={() => { if (erpMode !== "view") setBranchOpen(o => !o); }}
                     disabled={erpMode === "view"}
                     className="flex items-center gap-1 classic-input"
                     style={{
-                      height: "var(--work-field-h, 26px)", width: 120, flex: "0 0 120px", minWidth: 120, paddingInline: "6px 4px",
+                      height: "var(--work-field-h, 26px)", flex: 1, minWidth: 120, paddingInline: "6px 4px",
                       background: selWh ? "#f0fff4" : "#fff8e1",
                       border: `2px solid ${selWh ? "#22c55e" : "#f59e0b"}`,
                       borderRadius: "4px 0 0 4px", borderInlineEnd: "none",
@@ -1532,7 +1531,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                     }}
                     title={selWh ? wName(selWh) : "اختر الفرع (مطلوب)"}
                   >
-                    <span className="truncate text-start" style={{ width: 96 }}>
+                    <span className="flex-1 truncate text-start">
                       {selWh ? wName(selWh) : "⚠ اختر الفرع"}
                     </span>
                   </button>
@@ -1584,7 +1583,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           })()}
 
           {/* col 2: رقم الفاتورة — ملاصق للفرع مباشرة */}
-          <div className="invoice-field-group justify-start" style={{ gap: 4 }}>
+          <div className="flex items-center justify-center" style={{ gap: 4 }}>
             <label style={{ ...headerLabelStyle, color: "#D19C05" }}>
               {isAr ? "رقم الفاتورة" : "Invoice No."}
             </label>
@@ -1606,10 +1605,10 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           </div>
 
           {/* col 3-4: بناءً على */}
-          <div className="invoice-field-group invoice-header-based" style={{ gap: 6 }}>
+          <div className="flex items-center" style={{ gap: 6, gridColumn: "3/5" }}>
             <label style={headerLabelStyle}>بناءً على</label>
             <div className="flex min-w-0" style={{ gap: 12 }}>
-              <div className="invoice-field-control" style={{ width: 120, display: "flex" }}>
+              <div style={{ flexShrink: 0, width: 120, display: "flex" }}>
                 <ContextSelectInput
                   value={basedOnType}
                   onChange={v => { if (!warehouseId) { return; } setBasedOnType(v as any); setBasedOnNum(''); setBasedOnTrigger(''); }}
@@ -1622,7 +1621,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   menuTitle="نوع المستند المصدر"
                   placeholder={!warehouseId ? "— —" : "النوع ⊞"}
                   disabled={!warehouseId || erpMode === "view"}
-                style={{ height: "var(--work-field-h, 26px)", width: 120 }}
+                  style={{ height: "var(--work-field-h, 26px)" }}
                 />
               </div>
               <BasedOnDocInput
@@ -1640,14 +1639,11 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
               />
             </div>
           </div>
-          </div>
-
-          <div className={styles.invoiceHeaderRow2}>
 
           {/* col 1-3: العميل */}
-          <div className="invoice-field-group invoice-header-customer" ref={custDropRef} style={{ gap: 6, position: "relative" }}>
+          <div className="flex items-center" ref={custDropRef} style={{ gap: 6, gridColumn: "1/4", position: "relative" }}>
             <label style={headerLabelStyle}>العميل</label>
-            <div className="invoice-field-control flex min-w-0" style={{ gap: 4, position: "relative" }}>
+            <div className="flex flex-1 min-w-0" style={{ gap: 4, position: "relative" }}>
               {/* حقل البحث / اسم العميل */}
               {(() => {
                 const customerLocked = !!(savedInvoiceId || isPosted);
@@ -1668,7 +1664,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                       placeholder="ابحث عن عميل..."
                       className="classic-input min-w-0"
                       style={{
-                        height: "var(--work-field-h, 26px)", width: 250, flex: "0 0 250px",
+                        height: "var(--work-field-h, 26px)",
                         cursor: customerLocked ? "not-allowed" : customerId ? "pointer" : "text",
                         background: customerLocked ? "#f3f4f6" : undefined,
                         paddingLeft: customerId && !customerLocked ? 20 : undefined,
@@ -1759,7 +1755,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           </div>
 
           {/* col 1: المخزن */}
-          <div className="invoice-field-group" style={{ gap: 6 }}>
+          <div className="flex items-center" style={{ gap: 6 }}>
             <label style={headerLabelStyle}>المخزن</label>
             {(() => {
               const activeWh = journalWarehouseId ?? docTypeWarehouseId ?? warehouseId;
@@ -1775,16 +1771,16 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   placeholder={activeWh ? "يُحدَّد من الفرع" : "اختر الفرع أولاً"}
                   disabled={true}
                   title={activeWh ? `المخزن: ${whName}` : "اختر الفرع أولاً"}
-                   style={{ height: "var(--work-field-h, 26px)", width: 114, minWidth: 0 }}
+                   style={{ height: "var(--work-field-h, 26px)", flex: 1, minWidth: 0 }}
                 />
               );
             })()}
           </div>
 
           {/* col 2: تاريخ التحرير — حاوية موحدة بحد واحد */}
-          <div className="invoice-field-group" style={{ gap: 6 }}>
+          <div className="flex items-center" style={{ gap: 6 }}>
             <label style={headerLabelStyle}>تاريخ التحرير</label>
-            <div className="invoice-field-control flex min-w-0" style={{ width: 114, height: "var(--work-field-h, 26px)", border: "1px solid #d1d5db", borderRadius: 4, overflow: "hidden" }}>
+            <div className="flex flex-1 min-w-0" style={{ height: "var(--work-field-h, 26px)", border: "1px solid #d1d5db", borderRadius: 4, overflow: "hidden" }}>
               <DateSegmentInput value={invoiceDate} onChange={setInvoiceDate} style={{ flex: 1, minWidth: 0, height: "var(--work-field-h, 26px)", border: "none", borderRadius: 0 }} />
               <button type="button" onClick={() => invoiceDatePickerRef.current?.showPicker()} className="flex items-center justify-center flex-shrink-0" style={{ height: "var(--work-field-h, 26px)", width: "26px", background: "#f3f4f6", border: "none", borderInlineStart: "1px solid #d1d5db", color: "#555", cursor: "pointer", fontSize: "var(--work-font-size, 12px)" }}>📅</button>
               <input ref={invoiceDatePickerRef} type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} aria-hidden="true" />
@@ -1792,17 +1788,14 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           </div>
 
           {/* col 3: تاريخ الدفع — حاوية موحدة بحد واحد */}
-          <div className="invoice-field-group" style={{ gap: 6 }}>
+          <div className="flex items-center" style={{ gap: 6 }}>
             <label style={headerLabelStyle}>تاريخ الدفع</label>
-            <div className="invoice-field-control flex min-w-0" style={{ width: 114, height: "var(--work-field-h, 26px)", border: "1px solid #d1d5db", borderRadius: 4, overflow: "hidden" }}>
+            <div className="flex flex-1 min-w-0" style={{ height: "var(--work-field-h, 26px)", border: "1px solid #d1d5db", borderRadius: 4, overflow: "hidden" }}>
               <DateSegmentInput value={dueDate} onChange={setDueDate} style={{ flex: 1, minWidth: 0, height: "var(--work-field-h, 26px)", border: "none", borderRadius: 0 }} />
               <button type="button" onClick={() => dueDatePickerRef.current?.showPicker()} className="flex items-center justify-center flex-shrink-0" style={{ height: "var(--work-field-h, 26px)", width: "26px", background: "#f3f4f6", border: "none", borderInlineStart: "1px solid #d1d5db", color: "#555", cursor: "pointer", fontSize: "var(--work-font-size, 12px)" }}>📅</button>
               <input ref={dueDatePickerRef} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} aria-hidden="true" />
             </div>
           </div>
-
-          </div>
-          <div className={styles.invoiceHeaderRow3}>
 
           {/* col 4: البائع — تلقائيًا = المستخدم الحالي؛ يمكن تغييره فقط للمدير */}
           {(() => {
@@ -1811,15 +1804,15 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             const sellerName = sellerObj ? (sellerObj.name || sellerObj.username) : (currentUser?.name || currentUser?.username || "");
             const sellerDisabled = !warehouseId || erpMode === "view" || !canChangeSeller;
             return (
-              <div className="invoice-field-group relative" style={{ gap: 6 }}>
+              <div className="flex items-center relative" style={{ gap: 6 }}>
                 <label style={headerLabelStyle}>البائع</label>
-                  <div className="invoice-field-control flex relative" style={{ width: 114, height: "var(--work-field-h, 26px)" }}>
+                  <div className="flex relative flex-1" style={{ height: "var(--work-field-h, 26px)" }}>
                   <button
                     onClick={() => { if (!sellerDisabled) setSellerOpen(o => !o); }}
                     disabled={sellerDisabled}
                     className="flex items-center gap-1 classic-input"
                     style={{
-                      height: "var(--work-field-h, 26px)", width: 136, flex: "0 0 136px", paddingInline: "6px 4px",
+                      height: "var(--work-field-h, 26px)", paddingInline: "6px 4px",
                       background: sellerObj ? "#faf5ff" : !warehouseId ? "#f3f4f6" : "#fafafa",
                       border: `1px solid ${sellerObj ? "#7c3aed" : "#c9c4bb"}`,
                       borderRadius: "4px 0 0 4px", borderInlineEnd: "none",
@@ -1829,7 +1822,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                     }}
                     title={!warehouseId ? "اختر الفرع/المخزن أولاً" : !canChangeSeller ? `البائع: ${sellerName} (لا يمكن تغييره)` : "اختر البائع"}
                   >
-                    <span className="truncate text-start" style={{ width: 116 }}>
+                    <span className="flex-1 truncate text-start">
                       {sellerName || (!warehouseId ? "—" : "— اختر البائع —")}
                     </span>
                   </button>
@@ -1875,8 +1868,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
               </div>
             );
           })()}
-          {/* العملة — الصف الثالث ثابت الترتيب */}
-          <div className="invoice-field-group invoice-header-currency" style={{ gap: 6 }}>
+          {/* col 4: العملة — تحت نوع السند */}
+          <div className="flex items-center" style={{ gap: 6 }}>
             <label style={headerLabelStyle}>العملة</label>
             <ContextSelectInput
               value={currency}
@@ -1889,17 +1882,16 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
               ]}
               menuTitle="اختر العملة"
               placeholder="العملة ⊞"
-              style={{ height: "var(--work-field-h, 26px)", width: 104, minWidth: 0 }}
+              style={{ height: "var(--work-field-h, 26px)", flex: 1, minWidth: 0 }}
             />
           </div>
 
           {/* ══ صف 4: ملحوظة ══ */}
-          <div className="invoice-field-group invoice-header-note" style={{ gap: 6 }}>
+          <div className="flex items-center" style={{ gap: 6, gridColumn: "1/-1" }}>
             <label style={headerLabelStyle}>ملاحظة</label>
-            <input value={notes} onChange={e => setNotes(e.target.value)} className="classic-input invoice-field-control" style={{ height: "var(--work-field-h, 26px)" }} />
+            <input value={notes} onChange={e => setNotes(e.target.value)} className="classic-input flex-1" style={{ height: "var(--work-field-h, 26px)" }} />
           </div>
 
-          </div>
         </div>
       </div>
 
@@ -2221,7 +2213,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       {/* ── لوحة الإجماليات (يسار) ──────────────────────────────────────── */}
       <div
         className="border-r border-[#b0a89a] overflow-y-auto flex-shrink-0"
-        style={{ width: "var(--invoice-summary-width)", minWidth: "var(--invoice-summary-width)", background: "#F4F1EC" }}
+        style={{ width: "320px", minWidth: "320px", background: "#F4F1EC" }}
       >
         {/* عنوان اللوحة — ثابت دائماً في الأعلى */}
         <div
