@@ -16,6 +16,7 @@ import PostingPreviewModal from "@/shared/components/PostingPreviewModal";
 import InvoicePrintModal, { type DocTemplateConfig } from "@/shared/components/InvoicePrintModal";
 import styles from "@/components/responsive-layout/ResponsiveLayout.module.css";
 import { InvoiceTableColgroup } from "@/components/responsive-layout";
+import "./purchase-invoice-header.css";
 
 // ─── Config ────────────────────────────────────────────────────────────────────
 export interface DocPageConfig {
@@ -81,6 +82,23 @@ function HF({ label, children }: { label: string; children: React.ReactNode }) {
         {label}
       </label>
       {children}
+    </div>
+  );
+}
+
+function PurchaseField({
+  label,
+  children,
+  alignStart = false,
+}: {
+  label: string;
+  children: React.ReactNode;
+  alignStart?: boolean;
+}) {
+  return (
+    <div className={`purchase-field-row${alignStart ? " purchase-field-row-start" : ""}`}>
+      <label>{label}</label>
+      <div className="purchase-field-control">{children}</div>
     </div>
   );
 }
@@ -913,7 +931,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <div
-      className={`${styles.screenContainer} flex flex-col h-full text-[#2d241e] select-none`}
+      className={`${styles.screenContainer} flex flex-col h-full text-[#2d241e] select-none ${config.docCategory === "purchase" ? "purchase-invoice-page" : ""}`}
       style={{ fontFamily: "'Cairo', Tahoma, Arial, sans-serif", fontSize: "12px", background: config.docCategory === "purchase" ? "#f7f2e9" : "var(--background)" }}
       dir="rtl"
     >
@@ -945,8 +963,14 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       />
 
       {/* ── Header Form ───────────────────────────────────────────────────── */}
+      {config.docCategory === "purchase" && (
+        <div className="purchase-invoice-window-titlebar">
+          <span>فاتورة شراء · {invoiceNumber || "رقم جديد"}</span>
+          <span aria-hidden="true">PUR</span>
+        </div>
+      )}
       <div
-        className="border-b px-3 pt-2 pb-1.5"
+        className={config.docCategory === "purchase" ? "purchase-invoice-header" : "border-b px-3 pt-2 pb-1.5"}
         style={{
           background: config.docCategory === "purchase" ? "#fbf8f3" : "#fff",
           borderColor: config.docCategory === "purchase" ? "#d8c7b5" : "#b0a89a",
@@ -956,16 +980,13 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
 
         {config.docCategory === "purchase" ? (
           <div
-            className="grid grid-cols-3 gap-3 items-start"
+            className="purchase-header-columns"
             style={{ direction: "rtl" }}
             data-testid="purchase-invoice-three-column-header"
           >
             {/* العمود الأول من اليمين: بيانات المستند */}
-            <div className="rounded border p-2 space-y-1.5" style={{ borderColor: "#decfbe", background: "#fffdf9" }}>
-              <div className="text-[11px] font-bold pb-1 mb-1 border-b" style={{ color: "#6f4d34", borderColor: "#e8daca" }}>
-                بيانات المستند
-              </div>
-              <HF label="الفرع">
+            <div className="purchase-header-column">
+              <PurchaseField label="الفرع">
                 <select
                   value={branchId ?? ""}
                   onChange={e => handlePurchaseBranchSelect(e.target.value ? Number(e.target.value) : null)}
@@ -977,8 +998,8 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
                     <option key={branch.id} value={branch.id}>{branch.name}</option>
                   ))}
                 </select>
-              </HF>
-              <HF label="رقم المستند">
+              </PurchaseField>
+              <PurchaseField label="رقم المستند">
                 <input
                   value={branchId ? invoiceNumber : ""}
                   readOnly
@@ -986,8 +1007,8 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
                   className="classic-input w-full text-center font-bold"
                   style={{ borderColor: "#c8ad93", background: "#f8f1e8", color: "#4b3424" }}
                 />
-              </HF>
-              <HF label="المخزن">
+              </PurchaseField>
+              <PurchaseField label="المخزن">
                 <input
                   value={branchId ? warehouseDisplayName : ""}
                   readOnly
@@ -995,16 +1016,16 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
                   className="classic-input w-full"
                   style={{ borderColor: "#c8ad93", background: "#f8f1e8", color: "#4b3424" }}
                 />
-              </HF>
-              <div className="grid grid-cols-2 gap-2">
-                <HF label="تاريخ التحرير">
+              </PurchaseField>
+              <div className="purchase-date-grid">
+                <PurchaseField label="تاريخ التحرير">
                   <DateSegmentInput value={invoiceDate} onChange={setInvoiceDate} standalone className="classic-input w-full" />
-                </HF>
-                <HF label="تاريخ الاستحقاق">
+                </PurchaseField>
+                <PurchaseField label="تاريخ الاستحقاق">
                   <DateSegmentInput value={dueDate} onChange={setDueDate} standalone className="classic-input w-full" />
-                </HF>
+                </PurchaseField>
               </div>
-              <HF label="نوع السند">
+              <PurchaseField label="نوع السند">
                 {(() => {
                   const allDocTypes = docTypesQuery.data ?? [];
                   const filteredDocTypes = journalId ? allDocTypes.filter((dt: any) => dt.journal === String(journalId)) : allDocTypes;
@@ -1020,15 +1041,12 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
                     </select>
                   );
                 })()}
-              </HF>
+              </PurchaseField>
             </div>
 
             {/* العمود الأوسط: المورد وبياناته */}
-            <div className="rounded border p-2 space-y-1.5" style={{ borderColor: "#decfbe", background: "#fffdf9" }}>
-              <div className="text-[11px] font-bold pb-1 mb-1 border-b" style={{ color: "#6f4d34", borderColor: "#e8daca" }}>
-                بيانات المورد
-              </div>
-              <HF label="اسم المورد">
+            <div className="purchase-header-column">
+              <PurchaseField label="اسم المورد">
                 <select value={partyId ?? ""} onChange={e => {
                   const id = parseInt(e.target.value);
                   setPartyId(isNaN(id) ? null : id);
@@ -1038,39 +1056,36 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
                   <option value="">-- اختر المورد --</option>
                   {(parties as any[]).map((party: any) => <option key={party.id} value={party.id}>{party.name}</option>)}
                 </select>
-              </HF>
-              <HF label="رقم فاتورة المورد">
+              </PurchaseField>
+              <PurchaseField label="رقم فاتورة المورد">
                 <input value={supplierInvoiceNumber} onChange={e => setSupplierInvoiceNumber(e.target.value)} className="classic-input w-full" />
-              </HF>
-              <HF label="ملاحظة">
+              </PurchaseField>
+              <PurchaseField label="ملاحظة" alignStart>
                 <textarea value={notes} onChange={e => setNotes(e.target.value)} className="classic-input w-full resize-none" style={{ height: 62 }} />
-              </HF>
+              </PurchaseField>
             </div>
 
             {/* العمود الثالث من اليمين: المرجع والعملة والضريبة */}
-            <div className="rounded border p-2 space-y-1.5" style={{ borderColor: "#decfbe", background: "#fffdf9" }}>
-              <div className="text-[11px] font-bold pb-1 mb-1 border-b" style={{ color: "#6f4d34", borderColor: "#e8daca" }}>
-                إعدادات الفاتورة
-              </div>
-              <HF label="بناءً على">
+            <div className="purchase-header-column">
+              <PurchaseField label="بناءً على">
                 <input disabled className="classic-input w-full" placeholder="—" />
-              </HF>
-              <HF label="رقم المستند المبني عليه">
+              </PurchaseField>
+              <PurchaseField label="رقم المستند المبني عليه">
                 <input value={basedOnNum} onChange={e => setBasedOnNum(e.target.value)} className="classic-input w-full" placeholder="رقم المستند..." />
-              </HF>
-              <HF label="العملة">
+              </PurchaseField>
+              <PurchaseField label="العملة">
                 <select value={currency} onChange={e => setCurrency(e.target.value)} className="classic-input w-full">
                   <option value="SAR">ريال (SAR)</option><option value="USD">دولار (USD)</option>
                   <option value="EUR">يورو (EUR)</option><option value="AED">درهم (AED)</option>
                 </select>
-              </HF>
-              <HF label="سعر الصرف">
+              </PurchaseField>
+              <PurchaseField label="سعر الصرف">
                 <input value={exchangeRate} onChange={e => setExchangeRate(e.target.value)} className="classic-input w-full text-center" />
-              </HF>
-              <HF label="الضريبة">
+              </PurchaseField>
+              <PurchaseField label="الضريبة">
                 <input value={`${totalTax.toFixed(3)} ر.س`} readOnly className="classic-input w-full text-left" style={{ background: "#f8f1e8" }} />
-              </HF>
-              <label className="flex items-center gap-2 text-[11px] font-semibold pt-1" style={{ color: "#6f4d34" }}>
+              </PurchaseField>
+              <label className="purchase-checkbox-row">
                 <input type="checkbox" checked={pricesIncludeTax} onChange={e => setPricesIncludeTax(e.target.checked)} />
                 الأسعار تشمل الضريبة
               </label>
