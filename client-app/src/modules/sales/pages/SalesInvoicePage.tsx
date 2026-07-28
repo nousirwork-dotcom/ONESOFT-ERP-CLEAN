@@ -125,7 +125,7 @@ function playProductBeep() {
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: { initialInvoiceId?: number; onDocTypeChange?: (name: string) => void } = {}) {
+export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, onClose, registerClose }: { initialInvoiceId?: number; onDocTypeChange?: (name: string) => void; onClose?: () => void; registerClose?: (requestClose: () => void) => void } = {}) {
   const { isAr } = useLang();
   const { user: currentUser } = useAuth();
   const canChangeSeller = useMemo(() =>
@@ -216,6 +216,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
   const skipHeaderRef = useRef(false);
   const skipSaveToast = useRef(false);
   const pendingCreatePayloadRef = useRef<Parameters<typeof createMutation.mutate>[0] | null>(null);
+  const workRootRef = useRef<HTMLDivElement>(null);
 
   // ── ZATCA tab ──────────────────────────────────────────────────────────────
   const [activeMainTab, setActiveMainTab] = useState<"invoice" | "zatca">("invoice");
@@ -531,6 +532,15 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       toast.error(`خطأ في تحديث المستند: ${e.message}`);
     },
   });
+
+  const requestWorkClose = useCallback(() => {
+    if (createMutation.isPending || updateMutation.isPending || showPaymentModal) return;
+    dirtyRequestClose(() => onClose?.());
+  }, [createMutation.isPending, updateMutation.isPending, showPaymentModal, dirtyRequestClose, onClose]);
+
+  useEffect(() => {
+    registerClose?.(requestWorkClose);
+  }, [registerClose, requestWorkClose]);
 
   const postMutation = trpc.posting.postSalesInvoice.useMutation({
     onSuccess: (data) => {
@@ -1444,7 +1454,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
   // ── Unified Toolbar ──────────────────────────────────────────────────────────
   const _sipRef = useRef<any>({});
-  _sipRef.current = { erpMode, isDirty, savedInvoiceId, isPosted, handleNew, handleSave, handleSaveDraft, handleDelete, handleDuplicate, handleRepost, createMutation, unpostMutation, allInvoicesQuery, navInvoiceId, setNavInvoiceId, setErpMode, dirtyRequestClose, setShowPostingPreview, setShowPrintModal, setShowSendPanel, nextNumberQuery };
+  _sipRef.current = { erpMode, isDirty, savedInvoiceId, isPosted, handleNew, handleSave, handleSaveDraft, handleDelete, handleDuplicate, handleRepost, createMutation, unpostMutation, allInvoicesQuery, navInvoiceId, setNavInvoiceId, setErpMode, requestWorkClose, setShowPostingPreview, setShowPrintModal, setShowSendPanel, nextNumberQuery };
 
   // handlers مستقرة ([] deps) — جميع الوصولات عبر _sipRef.current
   const sipHandlers = useMemo<CommandHandlers>(() => ({
@@ -1463,7 +1473,9 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     preview:   () => { const s = _sipRef.current; if (!s.savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً"); return; } s.setShowPostingPreview(true); },
     send:      () => { const s = _sipRef.current; if (!s.savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً قبل الإرسال"); return; } s.setShowSendPanel(true); },
     print:     () => { _sipRef.current.setShowPrintModal(true); },
-    exit:      () => { _sipRef.current.dirtyRequestClose(() => toast.info("إغلاق")); },
+    exit:      () => {
+      _sipRef.current.requestWorkClose();
+    },
   }), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // حالة الشاشة — تتغير مع كل تحديث حقيقي
@@ -1494,8 +1506,24 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
   useRegisterCommands(sipHandlers, sipState, toolbarTools);
 
   // ─── Render ───────────────────────────────────────────────────────────────
+  const handleWorkKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== "Enter" || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
+    const target = e.target as HTMLElement;
+    if (!target.matches("input, select, textarea") || target.closest("[data-line-item]")) return;
+    e.preventDefault();
+    const focusable = Array.from(
+      workRootRef.current?.querySelectorAll<HTMLElement>(
+        "input:not([disabled]):not([readonly]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])"
+      ) ?? []
+    ).filter(el => el.offsetParent !== null && el.tabIndex !== -1);
+    const index = focusable.indexOf(target);
+    focusable[index + 1]?.focus();
+  }, []);
+
   return (
     <div
+      ref={workRootRef}
+      onKeyDown={handleWorkKeyDown}
       className={`${styles.screenContainer} flex flex-col h-full text-[#1a1a1a] select-none`}
       style={{ fontFamily: "'Cairo', Tahoma, Arial, sans-serif", fontSize: "var(--work-font-size, 12px)", background: "var(--background)" }}
       dir="rtl"
@@ -1599,7 +1627,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
               readOnly={!!journalId || !warehouseId}
               title={!warehouseId ? "اختر الفرع أولاً" : "رقم الفاتورة التسلسلي"}
             />
-            {invoiceStatus === "draft" && (
+            {savedInvoiceId !== null && invoiceStatus === "draft" && (
               <span
                 className="px-2 py-0.5 rounded text-[10px] font-bold"
                 style={{ background: "#F59E0B", color: "#fff" }}
@@ -2039,6 +2067,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             {lines.map((line, rowIdx) => (
               <tr
                 key={line.id}
+                data-line-item="true"
                 className={`border-b border-[#e8e4dc] ${
                   selectedLineIdx === rowIdx
                     ? "bg-[#EEF4FA]"
@@ -2775,10 +2804,10 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
       <UnsavedChangesDialog
         open={dirtyConfirmOpen}
-        onSave={() => dirtyConfirmSave(handleSave)}
+        onSaveAsDraft={() => dirtyConfirmSave(handleSaveDraft)}
         onDiscard={dirtyConfirmDiscard}
         onCancel={dirtyConfirmCancel}
-        isSaving={createMutation.isPending}
+        isSaving={createMutation.isPending || updateMutation.isPending}
       />
 
       {/* ── حوار التنقل عند وجود تعديلات غير محفوظة ── */}

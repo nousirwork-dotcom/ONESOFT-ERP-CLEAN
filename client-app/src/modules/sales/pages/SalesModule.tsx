@@ -2260,6 +2260,7 @@ function SalesInvoiceListView() {
   const [activeTab, setActiveTab]   = useState<"invoices" | "drafts">("invoices");
   const [mode, setMode]             = useState<"list" | "form" | "view">("list");
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
+  const invoiceCloseRequestRef = useRef<() => void>(() => {});
   const [invoiceTypeName, setInvoiceTypeName]     = useState<string>("");
 
   const applyPeriod = (p: string) => {
@@ -2620,12 +2621,14 @@ function SalesInvoiceListView() {
             ? "عرض / تعديل فاتورة مبيعات"
             : (invoiceTypeName ? `إنشاء ${invoiceTypeName}` : "فاتورة مبيعات جديدة")}
           preset="wide"
-          onClose={() => { setMode("list"); setSelectedInvoiceId(null); setInvoiceTypeName(""); refetch(); }}
+          onClose={() => invoiceCloseRequestRef.current()}
         >
           <div className="h-full overflow-auto">
             <SalesInvoicePageNew
               initialInvoiceId={mode === "view" ? selectedInvoiceId! : undefined}
               onDocTypeChange={setInvoiceTypeName}
+              onClose={() => { setMode("list"); setSelectedInvoiceId(null); setInvoiceTypeName(""); refetch(); }}
+              registerClose={(requestClose: () => void) => { invoiceCloseRequestRef.current = requestClose; }}
             />
           </div>
         </DesktopWorkWindow>
