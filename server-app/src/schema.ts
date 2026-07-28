@@ -467,6 +467,8 @@ export const purchaseInvoiceItems = pgTable('purchase_invoice_items', {
   taxPercent: decimal('tax_percent', { precision: 5, scale: 2 }).default('0'),
   taxAmount: decimal('tax_amount', { precision: 18, scale: 4 }).default('0'),
   total: decimal('total', { precision: 18, scale: 4 }).notNull(),
+  batchNumber: varchar('batch_number', { length: 100 }),
+  expiryDate: varchar('expiry_date', { length: 20 }),
   sortOrder: integer('sort_order').default(0),
 });
 

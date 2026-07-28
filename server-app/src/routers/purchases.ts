@@ -325,6 +325,8 @@ export const purchasesRouter = router({
         taxPercent: z.string().default('0'),
         taxAmount: z.string().default('0'),
         total: z.string(),
+         batchNumber: z.string().optional(),
+         expiryDate: z.string().optional(),
         sortOrder: z.number().optional(),
       })),
     }))
@@ -394,6 +396,8 @@ export const purchasesRouter = router({
         taxPercent: z.string().default('0'),
         taxAmount: z.string().default('0'),
         total: z.string(),
+         batchNumber: z.string().optional(),
+         expiryDate: z.string().optional(),
         sortOrder: z.number().optional(),
       })).optional(),
     }))

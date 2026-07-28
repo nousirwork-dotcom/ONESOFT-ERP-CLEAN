@@ -46,6 +46,8 @@ interface InvoiceLine {
   taxPct: string;
   taxAmt: string;
   total: string;
+  batchNumber: string;
+  expiryDate: string;
   productId?: number;
 }
 
@@ -55,11 +57,12 @@ const EMPTY_LINE = (): InvoiceLine => ({
   id: crypto.randomUUID(),
   productCode: "", productName: "", quantity: "1", unit: "",
   unitPrice: "", discountPct: "0", discountAmt: "0", taxPct: "0", taxAmt: "0", total: "0",
+  batchNumber: "", expiryDate: "",
 });
 
 const COL_FIELDS: (keyof InvoiceLine)[] = [
   "productCode", "productName", "quantity", "unit", "unitPrice",
-  "discountPct", "discountAmt", "taxPct", "taxAmt",
+  "discountPct", "discountAmt", "taxPct", "taxAmt", "batchNumber", "expiryDate",
 ];
 
 function calcLineTotal(line: InvoiceLine): string {
@@ -322,6 +325,8 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
         taxPct: item.taxPercent ?? "0",
         taxAmt: item.taxAmount ?? "0",
         total: item.total,
+         batchNumber: item.batchNumber ?? "",
+         expiryDate: item.expiryDate ?? "",
         productId: item.productId ?? undefined,
       })));
     } else {
@@ -753,7 +758,9 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       productId: l.productId, productCode: l.productCode || undefined, productName: l.productName,
       unit: l.unit || undefined, quantity: l.quantity, unitPrice: l.unitPrice,
       discountPercent: l.discountPct, discountAmount: l.discountAmt,
-      taxPercent: l.taxPct, taxAmount: l.taxAmt, total: l.total, sortOrder: idx,
+       taxPercent: l.taxPct, taxAmount: l.taxAmt, total: l.total,
+       ...(config.docCategory === "purchase" ? { batchNumber: l.batchNumber || undefined, expiryDate: l.expiryDate || undefined } : {}),
+       sortOrder: idx,
     }));
     const common = {
       invoiceNumber: finalInvoiceNumber, invoiceType: config.invoiceType, invoiceDate,
@@ -829,7 +836,9 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       productId: l.productId, productCode: l.productCode || undefined, productName: l.productName,
       unit: l.unit || undefined, quantity: l.quantity, unitPrice: l.unitPrice,
       discountPercent: l.discountPct, discountAmount: l.discountAmt,
-      taxPercent: l.taxPct, taxAmount: l.taxAmt, total: l.total, sortOrder: idx,
+       taxPercent: l.taxPct, taxAmount: l.taxAmt, total: l.total,
+       ...(config.docCategory === "purchase" ? { batchNumber: l.batchNumber || undefined, expiryDate: l.expiryDate || undefined } : {}),
+       sortOrder: idx,
     }));
     const common = {
       invoiceNumber: `DRAFT-${Date.now()}`,
@@ -1345,6 +1354,8 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
               <th className="inv-th text-center">الخصم ﷼</th>
               <th className="inv-th text-center">ض%</th>
               <th className="inv-th text-center font-bold">الإجمالي</th>
+              {config.docCategory === "purchase" && <th className="inv-th text-center">التشغيلة</th>}
+              {config.docCategory === "purchase" && <th className="inv-th text-center">تاريخ الصلاحية</th>}
               <th className="inv-th"></th>
             </tr>
           </thead>
@@ -1410,6 +1421,33 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
                 <td className="inv-td text-center font-bold" style={{ color: "#003399", fontSize: "12px" }}>
                   {parseFloat(line.total).toFixed(3)}
                 </td>
+                {config.docCategory === "purchase" && (
+                  <>
+                    <td className="inv-td p-0">
+                      <input
+                        ref={el => { if (el) cellRefs.current.set(`${rowIdx}-8`, el); }}
+                        value={line.batchNumber}
+                        onChange={e => updateLine(rowIdx, "batchNumber", e.target.value)}
+                        onFocus={() => setSelectedLineIdx(rowIdx)}
+                        onKeyDown={e => handleCellKeyDown(e, rowIdx, 8)}
+                        className="inv-cell text-center"
+                        placeholder="تشغيلة"
+                      />
+                    </td>
+                    <td className="inv-td p-0">
+                      <input
+                        ref={el => { if (el) cellRefs.current.set(`${rowIdx}-9`, el); }}
+                        value={line.expiryDate}
+                        onChange={e => updateLine(rowIdx, "expiryDate", e.target.value)}
+                        onFocus={() => setSelectedLineIdx(rowIdx)}
+                        onKeyDown={e => handleCellKeyDown(e, rowIdx, 9)}
+                        className="inv-cell text-center"
+                        placeholder="YYYY-MM-DD"
+                        maxLength={10}
+                      />
+                    </td>
+                  </>
+                )}
                 <td className="inv-td text-center">
                   <button onClick={() => deleteLine(rowIdx)} className="text-red-400 hover:text-red-600 transition-colors" title="حذف السطر (Ctrl+Del)">
                     <X className="w-3 h-3" />

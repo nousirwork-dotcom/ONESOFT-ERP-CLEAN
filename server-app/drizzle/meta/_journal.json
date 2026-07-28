@@ -386,6 +386,13 @@
       "when": 1753747200000,
       "tag": "0054_purchase_issuance_links",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1753833600000,
+      "tag": "0055_purchase_item_batch_expiry",
+      "breakpoints": true
     }
   ]
 }
