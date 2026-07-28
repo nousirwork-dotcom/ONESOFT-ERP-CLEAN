@@ -1443,61 +1443,68 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
         </div>
       </div>
 
-      {/* ── Totals Bar ────────────────────────────────────────────────────── */}
-      <div style={{ background: "#E8E4DC", borderTop: "1px solid #b0a89a" }}>
-        <div className="flex items-center gap-0 px-3 py-1.5">
-          <div className="flex items-center gap-3 flex-1">
-            <TF label="إجمالي" value={fmt(subtotal)} />
-            <span className="text-[#aaa]">−</span>
-            <TF label="الخصم" value={fmt(totalDiscount)} color="#C0392B" />
-            <span className="text-[#aaa]">+</span>
-            <TF label="الضريبة" value={fmt(totalTax)} />
-          </div>
-          <div style={{ width: 1, height: 28, background: "#b0a89a", margin: "0 12px" }} />
-          <div className="flex items-center gap-3">
-            <TF label="الصافي" value={fmt(netTotal)} highlight />
-            {paymentType === "cash" ? (
-              <>
-                <TF label="مدفوع نقداً" value={fmt(netTotal)} color="#16A34A" />
-                <TF label="المتبقي" value="0.000" />
-              </>
-            ) : (
-              <>
-                <div className="flex items-center gap-1">
-                  <span className="text-[11px] text-[#444] whitespace-nowrap">مدفوع:</span>
-                  <input type="number" value={paidAmountOverride} onChange={e => setPaidAmountOverride(e.target.value)}
-                    placeholder="0.000" className="classic-input text-center w-24"
-                    style={{ background: "#FFF7ED", borderColor: "#D97706" }} min="0" />
-                </div>
-                <TF label="المتبقي" value={fmt(remainingAmount)} color={remainingAmount > 0 ? "#C0392B" : "#16A34A"} />
-              </>
-            )}
-            <div style={{ width: 1, height: 28, background: "#b0a89a", margin: "0 4px" }} />
-            <TF label="الإجمالي الكلي" value={fmt(netTotal)} highlight big />
-          </div>
-        </div>
+      {/* ── Totals / payment summary ─────────────────────────────────────── */}
+      {config.docCategory === "purchase" ? (
+        <div className="purchase-bottom-summary" dir="rtl">
+          <section className="purchase-summary-card purchase-summary-breakdown">
+            <h3>إجماليات الفاتورة <span aria-hidden="true">▦</span></h3>
+            <div className="purchase-summary-row"><span>إجمالي قبل الخصم</span><strong>{fmt(subtotal)}</strong></div>
+            <div className="purchase-summary-row"><span>إجمالي الخصم</span><strong>{fmt(totalDiscount)}</strong></div>
+            <div className="purchase-summary-row"><span>إجمالي بعد الخصم</span><strong>{fmt(subtotal - totalDiscount)}</strong></div>
+            <div className="purchase-summary-row"><span>إجمالي الضريبة</span><strong>{fmt(totalTax)}</strong></div>
+            <div className="purchase-summary-row purchase-summary-total"><span>صافي الفاتورة</span><strong>{fmt(netTotal)}</strong></div>
+          </section>
 
-        <div className="flex items-center justify-between px-3 py-0.5 border-t border-[#c8c0b4]"
-          style={{ background: "#DDD9D0", fontSize: "10px", color: "#666" }}>
-          <div className="flex gap-4">
-            <span>
-              نوع السند:&nbsp;
-              <strong style={{ color: paymentType === "cash" ? "#16A34A" : "#B45309" }}>
-                {paymentType === "cash" ? "نقدًا — سيُحفظ بحالة مدفوع" : "آجل — يمكن المدفوع الجزئي"}
-              </strong>
-            </span>
-            <span>الأصناف: <strong style={{ color: "#406B93" }}>{lines.filter(l => l.productName).length}</strong></span>
-          </div>
-          <div className="flex gap-3">
-            <span>Tab/Enter: انتقال</span>
-            <span>Ctrl+C: نسخ سطر</span>
-            <span>Ctrl+V: لصق</span>
-            <span>Ctrl+Del: حذف سطر</span>
-            <span>F1: جديد</span>
-            <span>F2: حفظ</span>
+          <section className="purchase-summary-card purchase-summary-net">
+            <span>صافي الفاتورة</span>
+            <strong>{fmt(netTotal)}</strong>
+            <small>{currency === "SAR" ? "ريال سعودي" : currency}</small>
+          </section>
+
+          <section className="purchase-summary-card purchase-summary-payment">
+            <h3>السداد</h3>
+            <div className="purchase-payment-row"><span>المدفوع نقدًا</span><strong>{fmt(paymentType === "cash" ? netTotal : 0)}</strong></div>
+            <div className="purchase-payment-row"><span>مدفوع بواسطة</span><strong>{fmt(paymentType === "credit" ? paidAmount : 0)}</strong></div>
+            <div className="purchase-payment-row"><span>مدفوع بشيكات أخرى</span><strong>0.00</strong></div>
+            <div className="purchase-payment-row"><span>آجل (على حساب)</span><strong>{fmt(remainingAmount)}</strong></div>
+            <div className="purchase-payment-row purchase-payment-remaining"><span>المتبقي</span><strong>{fmt(remainingAmount)}</strong></div>
+          </section>
+        </div>
+      ) : (
+        <div style={{ background: "#E8E4DC", borderTop: "1px solid #b0a89a" }}>
+          <div className="flex items-center gap-0 px-3 py-1.5">
+            <div className="flex items-center gap-3 flex-1">
+              <TF label="إجمالي" value={fmt(subtotal)} />
+              <span className="text-[#aaa]">−</span>
+              <TF label="الخصم" value={fmt(totalDiscount)} color="#C0392B" />
+              <span className="text-[#aaa]">+</span>
+              <TF label="الضريبة" value={fmt(totalTax)} />
+            </div>
+            <div style={{ width: 1, height: 28, background: "#b0a89a", margin: "0 12px" }} />
+            <div className="flex items-center gap-3">
+              <TF label="الصافي" value={fmt(netTotal)} highlight />
+              {paymentType === "cash" ? (
+                <>
+                  <TF label="مدفوع نقداً" value={fmt(netTotal)} color="#16A34A" />
+                  <TF label="المتبقي" value="0.000" />
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[11px] text-[#444] whitespace-nowrap">مدفوع:</span>
+                    <input type="number" value={paidAmountOverride} onChange={e => setPaidAmountOverride(e.target.value)}
+                      placeholder="0.000" className="classic-input text-center w-24"
+                      style={{ background: "#FFF7ED", borderColor: "#D97706" }} min="0" />
+                  </div>
+                  <TF label="المتبقي" value={fmt(remainingAmount)} color={remainingAmount > 0 ? "#C0392B" : "#16A34A"} />
+                </>
+              )}
+              <div style={{ width: 1, height: 28, background: "#b0a89a", margin: "0 4px" }} />
+              <TF label="الإجمالي الكلي" value={fmt(netTotal)} highlight big />
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* ── Styles ────────────────────────────────────────────────────────── */}
        <style>{`
