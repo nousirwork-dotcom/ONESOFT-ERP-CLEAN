@@ -146,6 +146,11 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     whiteSpace: "nowrap",
     flexShrink: 0,
   };
+  const compactHeaderLabelStyle: React.CSSProperties = {
+    ...headerLabelStyle,
+    width: 42,
+    minWidth: 42,
+  };
   // ── Header state ─────────────────────────────────────────────────────────
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().split("T")[0]);
@@ -1512,8 +1517,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             const selWh = whs.find((w: any) => w.id === warehouseId);
             const wName = (w: any): string => isAr ? (w.name ?? w.nameEn ?? "") : (w.nameEn || (w.name ?? ""));
             return (
-              <div className="flex items-center w-full min-w-0 relative" style={{ gap: 5 }}>
-                <label style={headerLabelStyle}>
+              <div className="flex items-center w-full min-w-0 relative" style={{ gap: 3 }}>
+                <label style={compactHeaderLabelStyle}>
                   {isAr ? "الفـــــــرع" : "Branch"}
                 </label>
                 <div className="flex relative flex-1 min-w-0" style={{ height: "var(--work-field-h, 26px)" }}>
@@ -1641,8 +1646,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           </div>
 
           {/* col 1-3: العميل */}
-          <div className="flex items-center" ref={custDropRef} style={{ gap: 6, gridColumn: "1/4", position: "relative" }}>
-            <label style={headerLabelStyle}>العميل</label>
+          <div className="flex items-center" ref={custDropRef} style={{ gap: 3, gridColumn: "1/4", position: "relative" }}>
+            <label style={compactHeaderLabelStyle}>العميل</label>
             <div className="flex flex-1 min-w-0" style={{ gap: 4, position: "relative" }}>
               {/* حقل البحث / اسم العميل */}
               {(() => {
@@ -1773,8 +1778,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           </div>
 
           {/* col 1: المخزن */}
-          <div className="flex items-center" style={{ gap: 6, gridColumn: "1" }}>
-            <label style={headerLabelStyle}>المخزن</label>
+          <div className="flex items-center" style={{ gap: 3, gridColumn: "1" }}>
+            <label style={compactHeaderLabelStyle}>المخزن</label>
             {(() => {
               const activeWh = journalWarehouseId ?? docTypeWarehouseId ?? warehouseId;
               const whFromList = warehousesQuery.data?.find(w => w.id === activeWh);
@@ -1887,8 +1892,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             );
           })()}
           {/* ══ صف 4: ملحوظة ══ */}
-          <div className="flex items-center" style={{ gap: 6, gridColumn: "1/-1" }}>
-            <label style={headerLabelStyle}>ملاحظة</label>
+          <div className="flex items-center" style={{ gap: 3, gridColumn: "1/-1" }}>
+            <label style={compactHeaderLabelStyle}>ملاحظة</label>
             <input value={notes} onChange={e => setNotes(e.target.value)} className="classic-input flex-1" style={{ height: "var(--work-field-h, 26px)" }} />
           </div>
 
