@@ -1760,8 +1760,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           </div>
 
           {/* col 4: العملة — بجانب العميل، والبائع تحتها */}
-          <div className="flex items-center" style={{ gap: 6, gridColumn: "4" }}>
-            <label style={headerLabelStyle}>العملة</label>
+          <div className="flex items-center" style={{ gap: 3, gridColumn: "4" }}>
+            <label style={compactHeaderLabelStyle}>العملة</label>
             <ContextSelectInput
               value={currency}
               onChange={v => setCurrency(v || "SAR")}
@@ -1827,8 +1827,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             const sellerName = sellerObj ? (sellerObj.name || sellerObj.username) : (currentUser?.name || currentUser?.username || "");
             const sellerDisabled = !warehouseId || erpMode === "view" || !canChangeSeller;
             return (
-              <div className="flex items-center relative" style={{ gap: 6, gridColumn: "4" }}>
-                <label style={headerLabelStyle}>البائع</label>
+              <div className="flex items-center relative" style={{ gap: 3, gridColumn: "4" }}>
+                <label style={compactHeaderLabelStyle}>البائع</label>
                   <div className="flex relative flex-1" style={{ height: "var(--work-field-h, 26px)" }}>
                   <button
                     onClick={() => { if (!sellerDisabled) setSellerOpen(o => !o); }}
