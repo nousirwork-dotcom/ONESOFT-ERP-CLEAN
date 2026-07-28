@@ -247,6 +247,11 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   const [navInvoiceId, setNavInvoiceId]           = useState<number | null>(null);
   const [isPosted, setIsPosted]                   = useState(false);
   const [showPostingPreview, setShowPostingPreview] = useState(false);
+  const [purchaseBranchMenuOpen, setPurchaseBranchMenuOpen] = useState(false);
+  const [purchaseBranchEditMode, setPurchaseBranchEditMode] = useState(false);
+  const [purchaseBranchEditText, setPurchaseBranchEditText] = useState("");
+  const purchaseBranchMenuRef = useRef<HTMLDivElement>(null);
+  const purchaseBranchInputRef = useRef<HTMLInputElement>(null);
 
   const [erpMode, setErpMode] = useState<ERPMode>("new");
   const isDirty = erpMode === "new" || erpMode === "edit";
@@ -335,6 +340,10 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     const byBranch = purchaseBranchOptions.find(option => option.branchId === branchId);
     return (byJournal ?? byBranch)?.value ?? "";
   }, [config.docCategory, branchId, journalId, purchaseBranchOptions]);
+  const selectedPurchaseBranchLabel = useMemo(
+    () => purchaseBranchOptions.find(option => option.value === selectedPurchaseBranchValue)?.label ?? "",
+    [purchaseBranchOptions, selectedPurchaseBranchValue],
+  );
 
   const salesNextNumberQuery = trpc.salesInvoices.nextNumber.useQuery(
     { prefix: config.numberPrefix },
@@ -739,6 +748,8 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       setJournalId(null);
       setJournalWarehouseId(null);
       setInvoiceNumber("");
+      setPurchaseBranchMenuOpen(false);
+      setPurchaseBranchEditMode(false);
       return;
     }
     const warehouse = selected?.warehouseId
@@ -768,6 +779,8 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     });
     if (journal.defaultCurrency) setCurrency(journal.defaultCurrency);
     if (journal.defaultPayMethod) setPaymentType(journal.defaultPayMethod as any);
+    setPurchaseBranchMenuOpen(false);
+    setPurchaseBranchEditMode(false);
     try {
       // Reserve the exact number shown to the user. Saving must not reserve
       // another number and silently replace the visible document number.
@@ -798,7 +811,59 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     setDocTypeId("");
     setDocTypeWarehouseId(null);
     setInvoiceNumber("");
+    setPurchaseBranchEditMode(false);
+    setPurchaseBranchEditText("");
   }, []);
+
+  const openPurchaseBranchMenu = useCallback(() => {
+    if (!purchaseBranchEditMode) setPurchaseBranchMenuOpen(true);
+  }, [purchaseBranchEditMode]);
+
+  const startPurchaseBranchEdit = useCallback(() => {
+    setPurchaseBranchEditText(selectedPurchaseBranchLabel);
+    setPurchaseBranchEditMode(true);
+    setPurchaseBranchMenuOpen(false);
+  }, [selectedPurchaseBranchLabel]);
+
+  const commitPurchaseBranchEdit = useCallback(() => {
+    const text = purchaseBranchEditText.trim();
+    if (!text) {
+      clearPurchaseBranchSelection();
+      return;
+    }
+    const match = purchaseBranchOptions.find(option => option.label.trim() === text);
+    if (match) {
+      void handlePurchaseBranchSelect(match.value);
+      return;
+    }
+    toast.error("اختر فرعًا موجودًا من القائمة");
+    setPurchaseBranchEditText(selectedPurchaseBranchLabel);
+    setPurchaseBranchEditMode(false);
+  }, [
+    clearPurchaseBranchSelection,
+    handlePurchaseBranchSelect,
+    purchaseBranchEditText,
+    purchaseBranchOptions,
+    selectedPurchaseBranchLabel,
+  ]);
+
+  useEffect(() => {
+    if (!purchaseBranchMenuOpen) return;
+    const closeMenu = (event: MouseEvent) => {
+      if (!purchaseBranchMenuRef.current?.contains(event.target as Node)) {
+        setPurchaseBranchMenuOpen(false);
+        setPurchaseBranchEditMode(false);
+      }
+    };
+    document.addEventListener("mousedown", closeMenu);
+    return () => document.removeEventListener("mousedown", closeMenu);
+  }, [purchaseBranchMenuOpen]);
+
+  useEffect(() => {
+    if (!purchaseBranchEditMode) return;
+    purchaseBranchInputRef.current?.focus();
+    purchaseBranchInputRef.current?.select();
+  }, [purchaseBranchEditMode]);
 
   const handleDocTypeSelect = useCallback((id: string) => {
     setDocTypeId(id);
@@ -1094,25 +1159,78 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
             {/* العمود الأول من اليمين: بيانات المستند */}
             <div className="purchase-header-column">
               <PurchaseField label="الفرع">
-                <select
-                  value={selectedPurchaseBranchValue}
-                  onChange={e => handlePurchaseBranchSelect(e.target.value)}
-                  onDoubleClick={clearPurchaseBranchSelection}
-                  className="classic-input w-full font-bold"
-                  style={{ borderColor: "#c8ad93", color: "#4b3424", background: "#fffdf8" }}
-                  title="اختر الفرع، أو اختر عدم الاختيار لمسح القيمة. النقر المزدوج يمسح الاختيار."
+                <div
+                  ref={purchaseBranchMenuRef}
+                  className="relative w-full"
+                  onContextMenu={event => {
+                    event.preventDefault();
+                    openPurchaseBranchMenu();
+                  }}
                 >
-                  <option value="">
-                    {branchesQuery.isLoading || warehousesQuery.isLoading || journalsQuery.isLoading
-                      ? "جاري تحميل الفروع..."
-                      : branchesQuery.error || warehousesQuery.error || journalsQuery.error
-                        ? "تعذّر تحميل الفروع"
-                        : "عدم الاختيار"}
-                  </option>
-                  {purchaseBranchOptions.map(option => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
+                  {purchaseBranchEditMode ? (
+                    <input
+                      ref={purchaseBranchInputRef}
+                      value={purchaseBranchEditText}
+                      onChange={event => setPurchaseBranchEditText(event.target.value)}
+                      onBlur={commitPurchaseBranchEdit}
+                      onKeyDown={event => {
+                        if (event.key === "Enter") commitPurchaseBranchEdit();
+                        if (event.key === "Escape") setPurchaseBranchEditMode(false);
+                      }}
+                      className="classic-input w-full font-bold"
+                      style={{ borderColor: "#c8ad93", color: "#4b3424", background: "#fffdf8" }}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className="classic-input w-full cursor-pointer text-right font-bold"
+                      style={{ borderColor: "#c8ad93", color: "#4b3424", background: "#fffdf8" }}
+                      onClick={openPurchaseBranchMenu}
+                      onDoubleClick={startPurchaseBranchEdit}
+                      onContextMenu={event => {
+                        event.preventDefault();
+                        openPurchaseBranchMenu();
+                      }}
+                      aria-haspopup="listbox"
+                      aria-expanded={purchaseBranchMenuOpen}
+                      title="اضغط لعرض الفروع، انقر مرتين للتعديل"
+                    >
+                      {selectedPurchaseBranchLabel || (
+                        branchesQuery.isLoading || warehousesQuery.isLoading || journalsQuery.isLoading
+                          ? "جاري تحميل الفروع..."
+                          : branchesQuery.error || warehousesQuery.error || journalsQuery.error
+                            ? "تعذّر تحميل الفروع"
+                            : "عدم الاختيار"
+                      )}
+                    </button>
+                  )}
+                  {purchaseBranchMenuOpen && !purchaseBranchEditMode && (
+                    <div
+                      className="absolute right-0 z-50 mt-0 max-h-52 w-full overflow-y-auto rounded border border-[#c8ad93] bg-[#fffdf8] shadow-lg"
+                      role="listbox"
+                    >
+                      <button
+                        type="button"
+                        className="block w-full px-2 py-1 text-right text-sm hover:bg-[#eadbc9]"
+                        onClick={() => handlePurchaseBranchSelect("")}
+                      >
+                        عدم الاختيار
+                      </button>
+                      {purchaseBranchOptions.map(option => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={`block w-full px-2 py-1 text-right text-sm hover:bg-[#eadbc9] ${
+                            option.value === selectedPurchaseBranchValue ? "bg-[#d9e9fa]" : ""
+                          }`}
+                          onClick={() => handlePurchaseBranchSelect(option.value)}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </PurchaseField>
               <PurchaseField label="رقم المستند">
                 <input
