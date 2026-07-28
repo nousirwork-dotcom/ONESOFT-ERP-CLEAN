@@ -1017,23 +1017,6 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
               <PurchaseField label="تاريخ الاستحقاق">
                 <DateSegmentInput value={dueDate} onChange={setDueDate} standalone className="classic-input w-full" />
               </PurchaseField>
-              <PurchaseField label="نوع السند">
-                {(() => {
-                  const allDocTypes = docTypesQuery.data ?? [];
-                  const filteredDocTypes = journalId ? allDocTypes.filter((dt: any) => dt.journal === String(journalId)) : allDocTypes;
-                  const selectedDT = docTypeId ? allDocTypes.find((dt: any) => String(dt.id) === docTypeId) : null;
-                  return allDocTypes.length > 0 ? (
-                    <select value={docTypeId} onChange={e => handleDocTypeSelect(e.target.value)} className="classic-input w-full">
-                      <option value="">— اختر نوع السند —</option>
-                      {filteredDocTypes.map((dt: any) => <option key={dt.id} value={String(dt.id)}>{dt.codeAr ? `${dt.codeAr} — ${dt.nameAr}` : dt.nameAr}</option>)}
-                    </select>
-                  ) : (
-                    <select value={paymentType} onChange={e => setPaymentType(e.target.value as PaymentType)} className="classic-input w-full">
-                      <option value="cash">نقدًا</option><option value="credit">آجل</option>
-                    </select>
-                  );
-                })()}
-              </PurchaseField>
             </div>
 
             {/* العمود الأوسط: المورد وبياناته */}
@@ -1074,8 +1057,21 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
               <PurchaseField label="سعر الصرف">
                 <input value={exchangeRate} onChange={e => setExchangeRate(e.target.value)} className="classic-input w-full text-center" />
               </PurchaseField>
-              <PurchaseField label="الضريبة">
-                <input value={`${totalTax.toFixed(3)} ر.س`} readOnly className="classic-input w-full text-left" style={{ background: "#f8f1e8" }} />
+              <PurchaseField label="نوع السند">
+                {(() => {
+                  const allDocTypes = docTypesQuery.data ?? [];
+                  const filteredDocTypes = journalId ? allDocTypes.filter((dt: any) => dt.journal === String(journalId)) : allDocTypes;
+                  return allDocTypes.length > 0 ? (
+                    <select value={docTypeId} onChange={e => handleDocTypeSelect(e.target.value)} className="classic-input w-full">
+                      <option value="">— اختر نوع السند —</option>
+                      {filteredDocTypes.map((dt: any) => <option key={dt.id} value={String(dt.id)}>{dt.codeAr ? `${dt.codeAr} — ${dt.nameAr}` : dt.nameAr}</option>)}
+                    </select>
+                  ) : (
+                    <select value={paymentType} onChange={e => setPaymentType(e.target.value as PaymentType)} className="classic-input w-full">
+                      <option value="cash">نقدًا</option><option value="credit">آجل</option>
+                    </select>
+                  );
+                })()}
               </PurchaseField>
               <label className="purchase-checkbox-row">
                 <input type="checkbox" checked={pricesIncludeTax} onChange={e => setPricesIncludeTax(e.target.checked)} />
