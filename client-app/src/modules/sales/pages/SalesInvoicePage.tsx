@@ -949,6 +949,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
     // فاتورة محفوظة نهائية سابقاً: فتح شاشة الدفع لتسجيل/إكمال الدفع
     if (savedInvoiceId && !isDraftConversion) {
+      // الفاتورة النهائية موجودة بالفعل؛ حدّث دفع نفس السجل عند التأكيد فقط.
+      // لا يوجد أي create هنا.
       setPendingPayInvoiceId(savedInvoiceId);
       setPendingPayInvoiceNumber(invoiceNumber);
       setPendingPayTotal(netTotal);
@@ -1109,31 +1111,12 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     if (isDraftConversion) {
       const { invoiceType: _invoiceType, ...basePayload } = payload;
 
-      // الدفع الآجل: حوّل المسودة مباشرةً بدون شاشة دفع
-      if (paymentType === "credit") {
-        const finalizePayload = {
-          ...basePayload,
-          paidAmount: "0.0000",
-          remainingAmount: fmtDb(netTotal),
-          status: "confirmed" as any,
-        };
-        try {
-          const data = await updateMutation.mutateAsync({
-            id: savedInvoiceId,
-            ...finalizePayload,
-          });
-          setInvoiceNumber(data.invoiceNumber ?? invoiceNumber);
-          setInvoiceStatus("confirmed");
-          toast.success("✓ تم تحويل المسودة إلى فاتورة نهائية");
-        } catch {
-          throw new Error("draft-finalize-failed");
-        }
-        return;
-      }
-
-      // النقدي/الجزئي: خزّن المعرّف والبيانات وافتح شاشة الدفع — لا شيء يُكتب في DB حتى تأكيد الدفع
+      // جميع طرق الدفع تمر من شاشة الدفع؛ لا يُكتب أي شيء في DB قبل التأكيد.
+      // يُستخدم نفس recordId عند تأكيد تحويل المسودة.
       draftIdToFinalizeRef.current = savedInvoiceId;
       pendingCreatePayloadRef.current = { ...basePayload } as any;
+      // null يجعل PaymentModal يستدعي onSaveFirst عند التأكيد؛
+      // saveForPayment سيستخدم draftIdToFinalizeRef لتحديث نفس المسودة.
       setPendingPayInvoiceId(null);
       setPendingPayInvoiceNumber(invoiceNumber);
       setPendingPayTotal(netTotal);
@@ -1141,13 +1124,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       return;
     }
 
-    // الدفع الآجل: حفظ مباشر بدون شاشة دفع
-    if (paymentType === "credit") {
-      createMutation.mutate(payload);
-      return;
-    }
-
-    // النقدي/الجزئي: افتح شاشة الدفع أولاً والحفظ النهائي يتم داخلها عند التأكيد
+    // افتح شاشة الدفع أولاً؛ الإنشاء النهائي يتم داخل saveForPayment عند التأكيد فقط.
     pendingCreatePayloadRef.current = payload;
     setPendingPayInvoiceId(null);
     setPendingPayInvoiceNumber(invoiceNumber);

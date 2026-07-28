@@ -451,7 +451,8 @@ export const salesRouter = router({
               return { ...invoice, invoiceNumber: finalInvoiceNumber, isPosted: true, autoPostedEntryNumber: posted.entryNumber };
             }
           } catch (e) {
-            console.error('[sales.create] autoPostSalesInvoice error:', e);
+            console.error('[sales.create] autoPostSalesInvoice error — rolling back:', e);
+            throw e;
           }
         }
 
@@ -615,7 +616,8 @@ export const salesRouter = router({
               return { finalInvoiceNumber, isPosted: true, autoPostedEntryNumber: posted.entryNumber };
             }
           } catch (e) {
-            console.error('[sales.update] autoPostSalesInvoice error:', e);
+            console.error('[sales.update] autoPostSalesInvoice error — rolling back:', e);
+            throw e;
           }
         }
 
@@ -814,37 +816,43 @@ export const salesRouter = router({
       const { id, paymentBreakdown, paidAmount, remainingAmount, status } = input;
       const orgId = ctx.user.orgId;
 
-      // تحديث الفاتورة
-      await db.update(salesInvoices).set({
-        paidAmount,
-        remainingAmount,
-        ...(status ? { status } : {}),
-        updatedAt: new Date(),
-      }).where(and(eq(salesInvoices.id, id), eq(salesInvoices.orgId, orgId)));
+      return db.transaction(async (tx) => {
+        const invoice = await tx.query.salesInvoices.findFirst({
+          where: and(eq(salesInvoices.id, id), eq(salesInvoices.orgId, orgId)),
+        });
+        if (!invoice) throw new Error('الفاتورة غير موجودة');
+        if (invoice.isPosted) throw new Error('لا يمكن تعديل دفعة فاتورة مرحّلة');
 
-      // تحديث سجلات الدفع
-      if (paymentBreakdown != null) {
-        await db.delete(salesInvoicePayments).where(
-          and(eq(salesInvoicePayments.invoiceId, id), eq(salesInvoicePayments.orgId, orgId))
-        );
-        const pmEntries = Object.entries(paymentBreakdown).filter(([, v]) => v > 0);
-        if (pmEntries.length > 0) {
-          const pms = await db.query.paymentMethods.findMany({
-            where: eq(paymentMethods.orgId, orgId),
-          });
-          const pmMap = new Map(pms.map(p => [p.code, p.nameAr]));
-          await db.insert(salesInvoicePayments).values(
-            pmEntries.map(([code, amount]) => ({
-              orgId,
-              invoiceId: id,
-              paymentMethodCode: code,
-              paymentMethodName: pmMap.get(code) ?? code,
-              amount: amount.toFixed(4),
-            }))
+        await tx.update(salesInvoices).set({
+          paidAmount,
+          remainingAmount,
+          ...(status ? { status } : {}),
+          updatedAt: new Date(),
+        }).where(and(eq(salesInvoices.id, id), eq(salesInvoices.orgId, orgId)));
+
+        if (paymentBreakdown != null) {
+          await tx.delete(salesInvoicePayments).where(
+            and(eq(salesInvoicePayments.invoiceId, id), eq(salesInvoicePayments.orgId, orgId))
           );
+          const pmEntries = Object.entries(paymentBreakdown).filter(([, v]) => v > 0);
+          if (pmEntries.length > 0) {
+            const pms = await tx.query.paymentMethods.findMany({
+              where: eq(paymentMethods.orgId, orgId),
+            });
+            const pmMap = new Map(pms.map(p => [p.code, p.nameAr]));
+            await tx.insert(salesInvoicePayments).values(
+              pmEntries.map(([code, amount]) => ({
+                orgId,
+                invoiceId: id,
+                paymentMethodCode: code,
+                paymentMethodName: pmMap.get(code) ?? code,
+                amount: amount.toFixed(4),
+              }))
+            );
+          }
         }
-      }
-      return { success: true };
+        return { success: true };
+      });
     }),
 
   // حذف مستند
