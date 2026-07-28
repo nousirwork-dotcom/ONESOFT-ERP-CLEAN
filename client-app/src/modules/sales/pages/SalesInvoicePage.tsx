@@ -1638,9 +1638,9 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
           </div>
 
           {/* col 3-4: بناءً على */}
-          <div className="flex items-center" style={{ gap: 6, gridColumn: "3/5" }}>
-            <label style={headerLabelStyle}>بناءً على</label>
-            <div className="flex flex-1 min-w-0" style={{ gap: 12 }}>
+          <div className="flex items-center w-full min-w-0" style={{ gap: 3, gridColumn: "3/5" }}>
+            <label style={compactHeaderLabelStyle}>بناءً على</label>
+            <div className="flex flex-1 min-w-0" style={{ gap: 6 }}>
               <div style={{ flexShrink: 0, width: 120, display: "flex" }}>
                 <ContextSelectInput
                   value={basedOnType}
@@ -1788,7 +1788,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
           </div>
 
           {/* col 4: العملة — بجانب العميل، والبائع تحتها */}
-          <div className="flex items-center" style={{ gap: 3, gridColumn: "4" }}>
+          <div className="flex items-center w-full min-w-0" style={{ gap: 3, gridColumn: "4" }}>
             <label style={compactHeaderLabelStyle}>العملة</label>
             <ContextSelectInput
               value={currency}
@@ -1801,7 +1801,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
               ]}
               menuTitle="اختر العملة"
               placeholder="العملة ⊞"
-              style={{ height: "var(--work-field-h, 26px)", flex: 1, minWidth: 0 }}
+              style={{ height: "var(--work-field-h, 26px)", flex: 1, minWidth: 0, width: "100%" }}
             />
           </div>
 
@@ -1829,20 +1829,20 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
           </div>
 
           {/* col 2: تاريخ التحرير — حاوية موحدة بحد واحد */}
-          <div className="flex items-center" style={{ gap: 6, gridColumn: "2" }}>
-            <label style={headerLabelStyle}>تاريخ التحرير</label>
+          <div className="flex items-center w-full min-w-0" style={{ gap: 3, gridColumn: "2" }}>
+            <label style={compactHeaderLabelStyle}>تاريخ التحرير</label>
             <div className="flex flex-1 min-w-0" style={{ height: "var(--work-field-h, 26px)", border: "1px solid #d1d5db", borderRadius: 4, overflow: "hidden" }}>
-              <DateSegmentInput value={invoiceDate} onChange={setInvoiceDate} style={{ flex: 1, minWidth: 0, height: "var(--work-field-h, 26px)", border: "none", borderRadius: 0 }} />
+              <DateSegmentInput value={invoiceDate} onChange={setInvoiceDate} style={{ flex: 1, minWidth: 0, height: "var(--work-field-h, 26px)", border: "none", borderRadius: 0, justifyContent: "center", textAlign: "center" }} />
               <button type="button" onClick={() => invoiceDatePickerRef.current?.showPicker()} className="flex items-center justify-center flex-shrink-0" style={{ height: "var(--work-field-h, 26px)", width: "26px", background: "#f3f4f6", border: "none", borderInlineStart: "1px solid #d1d5db", color: "#555", cursor: "pointer", fontSize: "var(--work-font-size, 12px)" }}>📅</button>
               <input ref={invoiceDatePickerRef} type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} aria-hidden="true" />
             </div>
           </div>
 
           {/* col 3: تاريخ الدفع — حاوية موحدة بحد واحد */}
-          <div className="flex items-center" style={{ gap: 6, gridColumn: "3" }}>
-            <label style={headerLabelStyle}>تاريخ الدفع</label>
+          <div className="flex items-center w-full min-w-0" style={{ gap: 3, gridColumn: "3" }}>
+            <label style={compactHeaderLabelStyle}>تاريخ الدفع</label>
             <div className="flex flex-1 min-w-0" style={{ height: "var(--work-field-h, 26px)", border: "1px solid #d1d5db", borderRadius: 4, overflow: "hidden" }}>
-              <DateSegmentInput value={dueDate} onChange={setDueDate} style={{ flex: 1, minWidth: 0, height: "var(--work-field-h, 26px)", border: "none", borderRadius: 0 }} />
+              <DateSegmentInput value={dueDate} onChange={setDueDate} style={{ flex: 1, minWidth: 0, height: "var(--work-field-h, 26px)", border: "none", borderRadius: 0, justifyContent: "center", textAlign: "center" }} />
               <button type="button" onClick={() => dueDatePickerRef.current?.showPicker()} className="flex items-center justify-center flex-shrink-0" style={{ height: "var(--work-field-h, 26px)", width: "26px", background: "#f3f4f6", border: "none", borderInlineStart: "1px solid #d1d5db", color: "#555", cursor: "pointer", fontSize: "var(--work-font-size, 12px)" }}>📅</button>
               <input ref={dueDatePickerRef} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} aria-hidden="true" />
             </div>
@@ -1855,9 +1855,9 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
             const sellerName = sellerObj ? (sellerObj.name || sellerObj.username) : (currentUser?.name || currentUser?.username || "");
             const sellerDisabled = !warehouseId || erpMode === "view" || !canChangeSeller;
             return (
-              <div className="flex items-center relative" style={{ gap: 3, gridColumn: "4" }}>
+              <div className="flex items-center relative w-full min-w-0" style={{ gap: 3, gridColumn: "4" }}>
                 <label style={compactHeaderLabelStyle}>البائع</label>
-                  <div className="flex relative flex-1" style={{ height: "var(--work-field-h, 26px)" }}>
+                  <div className="flex relative flex-1 min-w-0 w-full" style={{ height: "var(--work-field-h, 26px)" }}>
                   <button
                     onClick={() => { if (!sellerDisabled) setSellerOpen(o => !o); }}
                     disabled={sellerDisabled}
@@ -1920,7 +1920,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
             );
           })()}
           {/* ══ صف 4: ملحوظة ══ */}
-          <div className="flex items-center" style={{ gap: 3, gridColumn: "1/-1" }}>
+          <div className="flex items-center w-full min-w-0" style={{ gap: 3, gridColumn: "1/-1" }}>
             <label style={compactHeaderLabelStyle}>ملاحظة</label>
             <input value={notes} onChange={e => setNotes(e.target.value)} className="classic-input flex-1" style={{ height: "var(--work-field-h, 26px)" }} />
           </div>
