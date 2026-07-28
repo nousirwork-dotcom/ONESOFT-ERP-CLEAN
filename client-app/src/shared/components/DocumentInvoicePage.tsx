@@ -1044,7 +1044,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
               <PurchaseField label="بناءً على">
                 <input disabled className="classic-input w-full" placeholder="—" />
               </PurchaseField>
-              <PurchaseField label="رقم المستند المبني عليه">
+              <PurchaseField label="رقم المستند">
                 <input value={basedOnNum} onChange={e => setBasedOnNum(e.target.value)} className="classic-input w-full" placeholder="رقم المستند..." />
               </PurchaseField>
               <PurchaseField label="العملة">
