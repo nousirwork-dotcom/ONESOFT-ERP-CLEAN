@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import { suppliers } from '../schema.js';
@@ -10,4 +11,26 @@ export const suppliersRouter = router({
       orderBy: (s, { asc }) => [asc(s.name)],
     });
   }),
+  create: protectedProcedure
+    .input(z.object({
+      code: z.string().optional(),
+      name: z.string().min(1),
+      phone: z.string().optional(),
+      email: z.string().optional(),
+      address: z.string().optional(),
+      taxNumber: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const [supplier] = await db.insert(suppliers).values({
+        orgId: ctx.user.orgId,
+        code: input.code?.trim() || undefined,
+        name: input.name.trim(),
+        phone: input.phone?.trim() || undefined,
+        email: input.email?.trim() || undefined,
+        address: input.address?.trim() || undefined,
+        taxNumber: input.taxNumber?.trim() || undefined,
+        isActive: true,
+      }).returning();
+      return supplier;
+    }),
 });

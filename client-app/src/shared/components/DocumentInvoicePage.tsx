@@ -7,6 +7,7 @@ import { Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/shared/lib/trpc";
 import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
+import ContextSelectInput from "@/shared/components/ContextSelectInput";
 import { useToolbarActions } from "@/components/unified-toolbar/ToolbarActionsContext";
 import type { ToolbarActionMap } from "@/components/unified-toolbar/toolbar.types";
 import { useDocumentNavigation } from "@/components/unified-toolbar/useDocumentNavigation";
@@ -250,6 +251,13 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   const [purchaseBranchMenuOpen, setPurchaseBranchMenuOpen] = useState(false);
   const [purchaseBranchEditMode, setPurchaseBranchEditMode] = useState(false);
   const [purchaseBranchEditText, setPurchaseBranchEditText] = useState("");
+  const [supplierPickerOpen, setSupplierPickerOpen] = useState(false);
+  const [supplierSearch, setSupplierSearch] = useState("");
+  const [showAddSupplier, setShowAddSupplier] = useState(false);
+  const [newSupplierName, setNewSupplierName] = useState("");
+  const [newSupplierPhone, setNewSupplierPhone] = useState("");
+  const [newSupplierEmail, setNewSupplierEmail] = useState("");
+  const [newSupplierAddress, setNewSupplierAddress] = useState("");
   const purchaseBranchMenuRef = useRef<HTMLDivElement>(null);
   const purchaseBranchInputRef = useRef<HTMLInputElement>(null);
 
@@ -264,9 +272,75 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   // ── Queries ────────────────────────────────────────────────────────────────
   const customersQuery  = trpc.customers.list.useQuery(undefined, { enabled: config.docCategory === "sales" });
   const suppliersQuery  = trpc.suppliers.list.useQuery(undefined, { enabled: config.docCategory === "purchase" });
+  const utils = trpc.useUtils();
+  const createSupplierMutation = trpc.suppliers.create.useMutation({
+    onError: error => toast.error(error.message),
+  });
   const parties = config.docCategory === "sales"
     ? (customersQuery.data ?? [])
     : (suppliersQuery.data ?? []);
+  const filteredSuppliers = useMemo(() => {
+    const term = supplierSearch.trim().toLowerCase();
+    return (suppliersQuery.data ?? []).filter((supplier: any) =>
+      !term || supplier.name.toLowerCase().includes(term) ||
+      supplier.phone?.toLowerCase().includes(term) ||
+      supplier.code?.toLowerCase().includes(term)
+    );
+  }, [suppliersQuery.data, supplierSearch]);
+  const selectedSupplier = (suppliersQuery.data ?? []).find((supplier: any) => supplier.id === partyId);
+  const supplierOptions = useMemo(() => [
+    { value: "", label: "بدون اختيار" },
+    ...(parties as any[]).map(supplier => ({
+      value: String(supplier.id),
+      label: supplier.code ? `${supplier.code} — ${supplier.name}` : supplier.name,
+      sublabel: supplier.phone ?? undefined,
+    })),
+  ], [parties]);
+
+  const selectSupplier = useCallback((value: string) => {
+    const id = Number(value);
+    const supplier = (parties as any[]).find(item => item.id === id);
+    setPartyId(Number.isFinite(id) && id > 0 ? id : null);
+    setPartyName(supplier?.name ?? "");
+    setSupplierPickerOpen(false);
+    setSupplierSearch("");
+  }, [parties]);
+
+  const createSupplierFromInvoice = useCallback(async () => {
+    const name = newSupplierName.trim();
+    if (!name) {
+      toast.error("اسم المورد مطلوب");
+      return;
+    }
+    try {
+      const created = await createSupplierMutation.mutateAsync({
+        name,
+        phone: newSupplierPhone.trim() || undefined,
+        email: newSupplierEmail.trim() || undefined,
+        address: newSupplierAddress.trim() || undefined,
+      });
+      await utils.suppliers.list.invalidate();
+      setPartyId(created.id);
+      setPartyName(created.name);
+      setShowAddSupplier(false);
+      setSupplierPickerOpen(false);
+      setSupplierSearch("");
+      setNewSupplierName("");
+      setNewSupplierPhone("");
+      setNewSupplierEmail("");
+      setNewSupplierAddress("");
+      toast.success("تم إضافة المورد واختياره");
+    } catch {
+      // mutation يعرض رسالة الخطأ عبر onError
+    }
+  }, [
+    createSupplierMutation,
+    newSupplierAddress,
+    newSupplierEmail,
+    newSupplierName,
+    newSupplierPhone,
+    utils.suppliers.list,
+  ]);
 
   const warehousesQuery = trpc.warehouses.list.useQuery();
   const branchesQuery   = trpc.branches.list.useQuery(undefined, {
@@ -443,8 +517,6 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   );
 
   const nextJournalNumberMutation = trpc.documentJournals.nextNumber.useMutation();
-  const utils = trpc.useUtils();
-
   const basedOnQuery = trpc.salesInvoices.getByNumber.useQuery(
     { type: basedOnType as any, number: basedOnTrigger },
     { enabled: config.docCategory === "sales" && !!basedOnType && !!basedOnTrigger }
@@ -1261,15 +1333,60 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
             {/* العمود الأوسط: المورد وبياناته */}
             <div className="purchase-header-column">
               <PurchaseField label="اسم المورد">
-                <select value={partyId ?? ""} onChange={e => {
-                  const id = parseInt(e.target.value);
-                  setPartyId(isNaN(id) ? null : id);
-                  const supplier = (parties as any[]).find((item: any) => item.id === id);
-                  setPartyName(supplier?.name ?? "");
-                }} className="classic-input w-full">
-                  <option value="">-- اختر المورد --</option>
-                  {(parties as any[]).map((party: any) => <option key={party.id} value={party.id}>{party.name}</option>)}
-                </select>
+                <div className="relative flex w-full gap-1">
+                  <div className="relative min-w-0 flex-1">
+                    <button
+                      type="button"
+                      className="classic-input w-full cursor-pointer text-right font-bold"
+                      style={{ borderColor: "#c8ad93", color: "#4b3424", background: "#fffdf8" }}
+                      onClick={() => setSupplierPickerOpen(open => !open)}
+                      onContextMenu={event => { event.preventDefault(); setSupplierPickerOpen(true); }}
+                      onDoubleClick={() => { setSupplierSearch(selectedSupplier?.name ?? ""); setSupplierPickerOpen(true); }}
+                      title="اضغط لعرض الموردين، كليك يمين لفتح القائمة، ودبل كليك للبحث"
+                    >
+                      {selectedSupplier?.name || "بدون اختيار"}
+                    </button>
+                    {supplierPickerOpen && (
+                      <div className="absolute right-0 z-50 mt-0 w-full overflow-hidden rounded border border-[#c8ad93] bg-[#fffdf8] shadow-lg">
+                        <div className="border-b border-[#decdbb] p-1">
+                          <input
+                            autoFocus
+                            value={supplierSearch}
+                            onChange={event => setSupplierSearch(event.target.value)}
+                            onKeyDown={event => {
+                              if (event.key === "Escape") setSupplierPickerOpen(false);
+                            }}
+                            placeholder="ابحث باسم المورد أو الكود..."
+                            className="classic-input w-full text-right text-xs"
+                          />
+                        </div>
+                        <div className="max-h-48 overflow-y-auto">
+                          <button type="button" className="block w-full px-2 py-1 text-right text-sm hover:bg-[#eadbc9]" onClick={() => selectSupplier("")}>
+                            بدون اختيار
+                          </button>
+                          {filteredSuppliers.map((supplier: any) => (
+                            <button
+                              type="button"
+                              key={supplier.id}
+                              className={`block w-full px-2 py-1 text-right text-sm hover:bg-[#eadbc9] ${supplier.id === partyId ? "bg-[#d9e9fa]" : ""}`}
+                              onClick={() => selectSupplier(String(supplier.id))}
+                            >
+                              <span className="block">{supplier.name}</span>
+                              {(supplier.code || supplier.phone) && <span className="block text-[10px] text-gray-500">{supplier.code || supplier.phone}</span>}
+                            </button>
+                          ))}
+                          {filteredSuppliers.length === 0 && <div className="px-2 py-2 text-center text-xs text-gray-500">لا يوجد مورد مطابق</div>}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="shrink-0 rounded border border-[#8a5a2b] bg-[#8a5a2b] px-2 text-sm font-bold text-white hover:bg-[#70471f]"
+                    onClick={() => { setShowAddSupplier(true); setSupplierPickerOpen(false); }}
+                    title="إضافة مورد جديد"
+                  >+</button>
+                </div>
               </PurchaseField>
               <PurchaseField label="رقم فاتورة المورد">
                 <input value={supplierInvoiceNumber} onChange={e => setSupplierInvoiceNumber(e.target.value)} className="classic-input w-full" />
@@ -1288,10 +1405,18 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
                 <input value={basedOnNum} onChange={e => setBasedOnNum(e.target.value)} className="classic-input w-full" placeholder="رقم المستند..." />
               </PurchaseField>
               <PurchaseField label="العملة">
-                <select value={currency} onChange={e => setCurrency(e.target.value)} className="classic-input w-full">
-                  <option value="SAR">ريال (SAR)</option><option value="USD">دولار (USD)</option>
-                  <option value="EUR">يورو (EUR)</option><option value="AED">درهم (AED)</option>
-                </select>
+                <ContextSelectInput
+                  value={currency}
+                  onChange={setCurrency}
+                  options={[
+                    { value: "SAR", label: "ريال (SAR)" },
+                    { value: "USD", label: "دولار (USD)" },
+                    { value: "EUR", label: "يورو (EUR)" },
+                    { value: "AED", label: "درهم (AED)" },
+                  ]}
+                  placeholder="بدون اختيار"
+                  className="classic-input w-full text-right"
+                />
               </PurchaseField>
               <PurchaseField label="سعر الصرف">
                 <input value={exchangeRate} onChange={e => setExchangeRate(e.target.value)} className="classic-input w-full text-center" />
@@ -1301,14 +1426,26 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
                   const allDocTypes = docTypesQuery.data ?? [];
                   const filteredDocTypes = journalId ? allDocTypes.filter((dt: any) => dt.journal === String(journalId)) : allDocTypes;
                   return allDocTypes.length > 0 ? (
-                    <select value={docTypeId} onChange={e => handleDocTypeSelect(e.target.value)} className="classic-input w-full">
-                      <option value="">— اختر نوع السند —</option>
-                      {filteredDocTypes.map((dt: any) => <option key={dt.id} value={String(dt.id)}>{dt.codeAr ? `${dt.codeAr} — ${dt.nameAr}` : dt.nameAr}</option>)}
-                    </select>
+                    <ContextSelectInput
+                      value={docTypeId}
+                      onChange={handleDocTypeSelect}
+                      options={[
+                        { value: "", label: "بدون اختيار" },
+                        ...filteredDocTypes.map((dt: any) => ({
+                          value: String(dt.id),
+                          label: dt.codeAr ? `${dt.codeAr} — ${dt.nameAr}` : dt.nameAr,
+                        })),
+                      ]}
+                      placeholder="بدون اختيار"
+                      className="classic-input w-full text-right"
+                    />
                   ) : (
-                    <select value={paymentType} onChange={e => setPaymentType(e.target.value as PaymentType)} className="classic-input w-full">
-                      <option value="cash">نقدًا</option><option value="credit">آجل</option>
-                    </select>
+                    <ContextSelectInput
+                      value={paymentType}
+                      onChange={value => setPaymentType(value as PaymentType)}
+                      options={[{ value: "cash", label: "نقدًا" }, { value: "credit", label: "آجل" }]}
+                      className="classic-input w-full text-right"
+                    />
                   );
                 })()}
               </PurchaseField>
@@ -1773,6 +1910,95 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
           onConfirmPost={() => activePostMutation.mutate({ invoiceId: savedInvoiceId! })}
           isPosting={activePostMutation.isPending}
         />
+      )}
+
+      {config.docCategory === "purchase" && showAddSupplier && (
+        <div
+          className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/40"
+          onMouseDown={event => {
+            if (event.target === event.currentTarget) setShowAddSupplier(false);
+          }}
+        >
+          <div
+            dir="rtl"
+            className="w-[430px] max-w-[95vw] rounded border-2 border-[#9d9d9d] bg-[#f4f4f4] shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-label="إضافة مورد"
+          >
+            <div className="flex items-center justify-between bg-[#8a5a2b] px-3 py-2 text-white">
+              <strong className="text-sm">إضافة مورد جديد</strong>
+              <button
+                type="button"
+                className="text-lg leading-none"
+                onClick={() => setShowAddSupplier(false)}
+                aria-label="إغلاق"
+              >
+                ×
+              </button>
+            </div>
+            <div className="grid gap-2 p-3">
+              <label className="text-xs font-bold text-[#4b3424]">
+                اسم المورد *
+                <input
+                  autoFocus
+                  value={newSupplierName}
+                  onChange={event => setNewSupplierName(event.target.value)}
+                  onKeyDown={event => {
+                    if (event.key === "Enter") void createSupplierFromInvoice();
+                  }}
+                  className="classic-input mt-1 w-full"
+                  placeholder="اكتب اسم المورد"
+                />
+              </label>
+              <label className="text-xs font-bold text-[#4b3424]">
+                الهاتف
+                <input
+                  value={newSupplierPhone}
+                  onChange={event => setNewSupplierPhone(event.target.value)}
+                  className="classic-input mt-1 w-full"
+                  placeholder="رقم الهاتف"
+                />
+              </label>
+              <label className="text-xs font-bold text-[#4b3424]">
+                البريد الإلكتروني
+                <input
+                  type="email"
+                  value={newSupplierEmail}
+                  onChange={event => setNewSupplierEmail(event.target.value)}
+                  className="classic-input mt-1 w-full"
+                  placeholder="example@domain.com"
+                />
+              </label>
+              <label className="text-xs font-bold text-[#4b3424]">
+                العنوان
+                <input
+                  value={newSupplierAddress}
+                  onChange={event => setNewSupplierAddress(event.target.value)}
+                  className="classic-input mt-1 w-full"
+                  placeholder="عنوان المورد"
+                />
+              </label>
+              <div className="mt-2 flex justify-start gap-2">
+                <button
+                  type="button"
+                  disabled={createSupplierMutation.isPending}
+                  onClick={() => void createSupplierFromInvoice()}
+                  className="rounded border border-[#70471f] bg-[#8a5a2b] px-4 py-1.5 text-xs font-bold text-white disabled:opacity-50"
+                >
+                  {createSupplierMutation.isPending ? "جاري الحفظ..." : "حفظ واختيار"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAddSupplier(false)}
+                  className="rounded border border-gray-400 bg-white px-4 py-1.5 text-xs font-bold text-gray-700"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Print Modal (Purchase Invoice / Sales Return) ──────────────────── */}
