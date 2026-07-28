@@ -87,8 +87,8 @@
 }
 
 .purchase-field-row > label {
-  color: #66584d;
-  font-size: 10px;
+  color: #514338;
+  font-size: 11px;
   font-weight: 700;
   text-align: right;
   white-space: nowrap;
@@ -103,14 +103,15 @@
 .purchase-field-control textarea,
 .purchase-reference-button {
   width: 100%;
-  min-height: 29px;
-  padding: 3px 6px;
-  color: var(--purchase-text);
+  min-height: 32px;
+  padding: 4px 7px;
+  color: #241b15;
   background: var(--purchase-input-bg);
   border: 1px solid var(--purchase-border);
   border-radius: 1px;
   font-family: inherit;
-  font-size: 10px;
+  font-size: 11px;
+  font-weight: 600;
   outline: none;
 }
 
@@ -123,13 +124,20 @@
 .purchase-field-control select:focus,
 .purchase-field-control textarea:focus,
 .purchase-reference-button:focus {
-  border: 1.5px solid var(--purchase-focus);
-  box-shadow: 0 0 0 2px rgba(138, 90, 43, 0.12);
+  border: 2px solid var(--purchase-focus);
+  box-shadow: 0 0 0 2px rgba(138, 90, 43, 0.18);
 }
 
 .purchase-field-control input[readonly] {
-  color: #4d443d;
+  color: #3c2e24;
   background: #f3eee7;
+}
+
+.purchase-field-control input::placeholder,
+.purchase-field-control select:invalid,
+.purchase-field-control textarea::placeholder {
+  color: #766558;
+  opacity: 1;
 }
 
 .purchase-date-grid {
@@ -158,9 +166,9 @@
   display: grid;
   grid-template-columns: 1fr 92px;
   align-items: center;
-  gap: 3px 8px;
+  gap: 3px 4px;
   color: #4e4842;
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .purchase-total-group strong {
@@ -169,7 +177,7 @@
   background: #fff;
   border: 1px solid #e1d8cc;
   color: #2f2a26;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   text-align: center;
 }
@@ -195,8 +203,8 @@
 .purchase-net-total strong {
   margin-top: 3px;
   color: #4c834b;
-  font-size: 24px;
-  line-height: 27px;
+  font-size: 26px;
+  line-height: 29px;
 }
 
 .purchase-net-total small {
