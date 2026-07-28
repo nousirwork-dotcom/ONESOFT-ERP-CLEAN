@@ -1590,7 +1590,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             <input
               value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)}
               className="classic-input text-center font-bold"
-              style={{ width: "128px", minWidth: 0, height: "var(--work-field-h, 26px)", background: journalId ? "#eff6ff" : !warehouseId ? "#f3f4f6" : "#FFFDE7", borderColor: journalId ? "#3b82f6" : "#F59E0B", borderRadius: "4px", color: !warehouseId ? "#9ca3af" : "#1a1a1a", fontSize: "13px", fontWeight: 700 }}
+              style={{ width: "128px", height: "var(--work-field-h, 26px)", background: journalId ? "#eff6ff" : !warehouseId ? "#f3f4f6" : "#FFFDE7", borderColor: journalId ? "#3b82f6" : "#F59E0B", borderRadius: "4px", color: !warehouseId ? "#9ca3af" : "#1a1a1a", fontSize: "13px", fontWeight: 700 }}
               readOnly={!!journalId || !warehouseId}
               title={!warehouseId ? "اختر الفرع أولاً" : "رقم الفاتورة التسلسلي"}
             />
@@ -1607,7 +1607,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           {/* col 3-4: بناءً على */}
           <div className="flex items-center" style={{ gap: 6, gridColumn: "3/5" }}>
             <label style={headerLabelStyle}>بناءً على</label>
-            <div className="flex min-w-0" style={{ gap: 12 }}>
+            <div className="flex flex-1 min-w-0" style={{ gap: 12 }}>
               <div style={{ flexShrink: 0, width: 120, display: "flex" }}>
                 <ContextSelectInput
                   value={basedOnType}
@@ -1662,7 +1662,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                       readOnly={!!(customerId || customerLocked)}
                       aria-expanded={showCustDrop ? "true" : "false"}
                       placeholder="ابحث عن عميل..."
-                      className="classic-input min-w-0"
+                      className="classic-input flex-1 min-w-0"
                       style={{
                         height: "var(--work-field-h, 26px)",
                         cursor: customerLocked ? "not-allowed" : customerId ? "pointer" : "text",
