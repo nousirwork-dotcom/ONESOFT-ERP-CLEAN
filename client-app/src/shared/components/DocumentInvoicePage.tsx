@@ -1106,7 +1106,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
                         ? "جاري تحميل الفروع..."
                         : branchesQuery.error || warehousesQuery.error || journalsQuery.error
                           ? "تعذّر تحميل الفروع"
-                          : "— اختر الفرع أولًا —"}
+                          : "عدم الاختيار"}
                     </option>
                     {purchaseBranchOptions.map(option => (
                       <option key={option.value} value={option.value}>{option.label}</option>
