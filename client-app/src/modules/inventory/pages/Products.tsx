@@ -38,7 +38,7 @@ import { toast } from "sonner";
 // =============================================
 // نوع نموذج الصنف الكامل (6 تبويبات)
 // =============================================
-type ProductForm = {
+export type ProductForm = {
   // التبويب 1 - النافذة الرئيسية
   name: string;
   name2: string;
@@ -151,6 +151,85 @@ const emptyForm: ProductForm = {
   recordPolicy: "flexible", foundationKey: "", includeInFoundation: false,
 };
 
+export function productToForm(p: any): ProductForm {
+  return {
+    ...emptyForm,
+    name: p?.name ?? "",
+    name2: p?.name2 ?? "",
+    sku: p?.code ?? p?.sku ?? "",
+    itemType: p?.itemType ?? "مخزون",
+    groupId: p?.groupId ? String(p.groupId) : "",
+    categoryId: p?.categoryId ? String(p.categoryId) : "",
+    parentItem: p?.parentItem ? String(p.parentItem) : "",
+    unit: p?.unit ?? "قطعة",
+    unit2: p?.unit2 ?? "",
+    unit3: p?.unit3 ?? "",
+    conversionFactor: p?.conversionFactor ?? "1",
+    convFactor2: p?.convFactor2 ?? "1",
+    convFactor3: p?.convFactor3 ?? "1",
+    barcode: p?.barcode ?? "",
+    barcode2: p?.barcode2 ?? "",
+    barcode3: p?.barcode3 ?? "",
+    category1: p?.category1 ?? "",
+    category2: p?.category2 ?? "",
+    category3: p?.category3 ?? "",
+    unitsJson: p?.unitsJson ?? "",
+    catsJson: p?.catsJson ?? "",
+    distinguishNo: p?.distinguishNo ?? "",
+    weight: p?.weight ?? "",
+    size: p?.size ?? "",
+    colorCode: p?.colorCode ?? "",
+    itemSize: p?.itemSize ?? "",
+    taxType: p?.taxType ?? "",
+    prevTaxType: p?.prevTaxType ?? "",
+    taxable: p?.taxable ?? true,
+    vatRate: p?.vatRate ?? p?.taxRate ?? "15",
+    nameEn: p?.nameEn ?? "",
+    brand: p?.brand ?? "",
+    model: p?.model ?? "",
+    description: p?.description ?? "",
+    purchaseUnit: p?.purchaseUnit ?? "",
+    saleUnit: p?.saleUnit ?? "",
+    minStock: String(p?.minStock ?? 0),
+    maxStock: String(p?.maxStock ?? 0),
+    reorderPoint: String(p?.reorderPoint ?? 0),
+    trackBatch: p?.trackBatch ?? false,
+    trackSerial: p?.trackSerial ?? false,
+    hasBOM: p?.hasBOM ?? false,
+    extDesc1: p?.extDesc1 ?? "", extVal1: p?.extVal1 ?? "",
+    extDesc2: p?.extDesc2 ?? "", extVal2: p?.extVal2 ?? "",
+    extDesc3: p?.extDesc3 ?? "", extVal3: p?.extVal3 ?? "",
+    extDesc4: p?.extDesc4 ?? "", extVal4: p?.extVal4 ?? "",
+    extDesc5: p?.extDesc5 ?? "", extVal5: p?.extVal5 ?? "",
+    extDesc6: p?.extDesc6 ?? "", extVal6: p?.extVal6 ?? "",
+    purchasePrice: p?.purchasePrice ?? "0",
+    costPrice: p?.costPrice ?? "0",
+    salePrice: p?.salePrice ?? "0",
+    salePrice2: p?.salePrice2 ?? "0",
+    salePrice3: p?.salePrice3 ?? "0",
+    salePrice4: p?.salePrice4 ?? "0",
+    salePrice5: p?.salePrice5 ?? "0",
+    wholesalePrice: p?.wholesalePrice ?? "0",
+    minSalePrice: p?.minSalePrice ?? "0",
+    priceIncludesTax: p?.priceIncludesTax ?? false,
+    price1Tax: p?.price1Tax ?? false,
+    price2Tax: p?.price2Tax ?? false,
+    price3Tax: p?.price3Tax ?? false,
+    price4Tax: p?.price4Tax ?? false,
+    price5Tax: p?.price5Tax ?? false,
+    wholesaleTax: p?.wholesaleTax ?? false,
+    pricingPlan: p?.pricingPlan ?? "",
+    stdCost: p?.stdCost ?? "0",
+    defaultSupplier: p?.defaultSupplier ?? "",
+    lastSupplier1: p?.lastSupplier1 ?? "",
+    lastSupplier2: p?.lastSupplier2 ?? "",
+    defaultOrderQty: p?.defaultOrderQty ?? "0",
+    recordPolicy: p?.recordPolicy ?? "flexible",
+    foundationKey: p?.foundationKey ?? "",
+    includeInFoundation: p?.includeInFoundation ?? false,
+  };
+}
+
 // =============================================
 // حقل نموذج كلاسيكي
 // =============================================
@@ -212,7 +291,7 @@ const CInput = forwardRef<HTMLInputElement, {
 // =============================================
 // بطاقة الصنف - 6 تبويبات كلاسيكية
 // =============================================
-function ProductCard({
+export function ProductCard({
   form,
   setForm,
   categories,
@@ -221,15 +300,17 @@ function ProductCard({
   skuRef,
   nameRef,
   fieldErrors,
+  readOnly = false,
 }: {
   form: ProductForm;
-  setForm: (f: ProductForm) => void;
+  setForm: React.Dispatch<React.SetStateAction<ProductForm>>;
   categories: Array<{ id: number; name: string }> | undefined;
   groups: Array<{ id: number; groupCode?: string | null; name: string; groupType?: string | null; parentId?: number | null; autoNumbering?: boolean | null; codeDigits?: number | null }> | undefined;
   productId?: number | null;
   skuRef?: React.RefObject<HTMLInputElement | null>;
   nameRef?: React.RefObject<HTMLInputElement | null>;
   fieldErrors?: { sku?: boolean; name?: boolean };
+  readOnly?: boolean;
 }) {
   const [activeTab, setActiveTab] = useState<string>("main");
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -240,6 +321,7 @@ function ProductCard({
   const [skuLoading, setSkuLoading] = useState(false);
 
   const handleGroupSelect = async (groupId: string) => {
+    if (readOnly) return;
     // Update groupId immediately; only clear sku when creating new product
     setForm(prev => ({ ...prev, groupId, ...(isEdit ? {} : { sku: "" }) }));
     if (!groupId || isEdit) return;
@@ -403,8 +485,9 @@ function ProductCard({
     { productId: productId! },
     { enabled: isEdit && activeTab === "costs" }
   );
-  const set = (key: keyof ProductForm, val: string | boolean) =>
-    setForm({ ...form, [key]: val });
+  const set = (key: keyof ProductForm, val: string | boolean) => {
+    if (!readOnly) setForm({ ...form, [key]: val });
+  };
 
   const tabs = [
     { id: "main", label: "النافذة الرئيسية" },
@@ -424,6 +507,7 @@ function ProductCard({
         {tabs.map((tab) => (
           <button
             key={tab.id}
+            type="button"
             onClick={() => setActiveTab(tab.id)}
             className={`px-3 py-2 text-xs font-bold border rounded transition-colors whitespace-nowrap
               ${activeTab === tab.id
@@ -435,6 +519,11 @@ function ProductCard({
           </button>
         ))}
       </div>
+
+      <fieldset
+        disabled={readOnly}
+        className="flex-1 min-h-0 overflow-auto min-w-0 border-0 p-0 m-0"
+      >
 
       {/* شريط المعلومات الثابت */}
       {(form.name || form.sku) && (
@@ -1284,7 +1373,8 @@ function ProductCard({
         )}
 
       </div>
-    </div>
+      </fieldset>
+      </div>
   );
 }
 

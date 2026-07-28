@@ -32,6 +32,18 @@ async function assertProductCodeUnique(code: string, orgId: number, excludeId?: 
 }
 
 export const productsRouter = router({
+  getById: protectedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      return db.query.products.findFirst({
+        where: and(
+          eq(products.id, input.id),
+          eq(products.orgId, ctx.user.orgId),
+          eq(products.isActive, true),
+        ),
+      });
+    }),
+
   list: protectedProcedure
     .input(z.object({
       search: z.string().optional(),

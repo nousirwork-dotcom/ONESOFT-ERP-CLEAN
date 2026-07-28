@@ -10,6 +10,8 @@ import {
 import { useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/core/ui/dialog";
 import { toast } from "sonner";
+import { trpc } from "@/shared/lib/trpc";
+import { ProductCard, productToForm, type ProductForm } from "@/modules/inventory/pages/Products";
 
 export type FocusedEntityType =
   | "product"
@@ -68,6 +70,28 @@ export function FocusedEntityProvider({ children }: { children: ReactNode }) {
   const [focusedEntity, setFocusedEntity] = useState<FocusedEntity | null>(null);
   const [previewEntity, setPreviewEntity] = useState<FocusedEntity | null>(null);
   const previewFocusRef = useRef<HTMLElement | null>(null);
+  const lastEntityElementRef = useRef<HTMLElement | null>(null);
+  const previewProductId = previewEntity?.entityType === "product"
+    ? Number(previewEntity.entityId)
+    : 0;
+  const { data: previewProduct, isLoading: isProductLoading } =
+    trpc.products.getById.useQuery(
+      { id: previewProductId },
+      { enabled: previewProductId > 0, staleTime: 30000 },
+    );
+  const { data: categories } = trpc.categories.list.useQuery(undefined, {
+    enabled: previewProductId > 0,
+    staleTime: 60000,
+  });
+  const { data: groups } = trpc.productGroups.list.useQuery(undefined, {
+    enabled: previewProductId > 0,
+    staleTime: 60000,
+  });
+  const [previewProductForm, setPreviewProductForm] = useState<ProductForm>(productToForm(null));
+
+  useEffect(() => {
+    setPreviewProductForm(productToForm(previewProduct));
+  }, [previewProduct]);
 
   useEffect(() => {
     const readMarker = (target: EventTarget | null) => {
@@ -76,6 +100,7 @@ export function FocusedEntityProvider({ children }: { children: ReactNode }) {
     };
     const updateFromMarker = (marker: HTMLElement | null) => {
       if (!marker) return;
+      lastEntityElementRef.current = marker;
       const rawId = marker.dataset.focusedEntityId ?? "";
       if (!rawId) {
         setFocusedEntity(null);
@@ -110,13 +135,16 @@ export function FocusedEntityProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const previewFocusedEntity = useCallback(() => {
-    if (!focusedEntity || focusedEntity.entityId === "" || focusedEntity.entityId == null) {
-      toast.error("اختر سجلًا صحيحًا أولًا حتى يمكن فتح الكارت.");
+    if (
+      !focusedEntity ||
+      focusedEntity.entityType !== "product" ||
+      focusedEntity.entityId === "" ||
+      focusedEntity.entityId == null
+    ) {
+      toast.error("اختر صنفًا صحيحًا أولًا.");
       return;
     }
-    previewFocusRef.current = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
+    previewFocusRef.current = lastEntityElementRef.current;
     setPreviewEntity(focusedEntity);
   }, [focusedEntity]);
 
@@ -136,39 +164,29 @@ export function FocusedEntityProvider({ children }: { children: ReactNode }) {
           requestAnimationFrame(() => previewFocusRef.current?.focus());
         }}
       >
-        <DialogContent className="w-[min(560px,calc(100%-2rem))] p-0" dir="rtl">
-          {previewEntity && (
+        <DialogContent className="w-[min(1100px,calc(100%-2rem))] max-w-none p-0" dir="rtl">
+          {previewEntity?.entityType === "product" && (
             <>
               <DialogHeader className="border-b px-5 py-4 text-right">
                 <DialogTitle className="text-base">
-                  بطاقة {ENTITY_LABELS[previewEntity.entityType]}
+                  بطاقة الصنف
                 </DialogTitle>
-                <div className="text-xs text-muted-foreground">
-                  معاينة قراءة فقط — {entityTitle(previewEntity)}
-                </div>
               </DialogHeader>
-              <div className="space-y-3 px-5 py-4">
-                <div className="rounded border bg-muted/30 px-3 py-2">
-                  <div className="text-[11px] text-muted-foreground">السجل المحدد</div>
-                  <div className="font-semibold">{entityTitle(previewEntity)}</div>
-                  <div className="text-xs text-muted-foreground" dir="ltr">
-                    ID: {String(previewEntity.entityId)}
+              <div className="h-[min(720px,calc(100vh-7rem))] min-h-[420px] overflow-hidden">
+                {isProductLoading || !previewProduct ? (
+                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                    جاري تحميل بطاقة الصنف...
                   </div>
-                </div>
-                {previewEntity.details?.length ? (
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    {previewEntity.details.map((detail) => (
-                      <div key={detail.label} className="rounded border px-3 py-2">
-                        <div className="text-[11px] text-muted-foreground">{detail.label}</div>
-                        <div className="truncate">{detail.value == null || detail.value === "" ? "—" : String(detail.value)}</div>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-                <div className="text-[11px] text-muted-foreground">
-                  الشاشة: {previewEntity.sourceScreen}
-                  {previewEntity.rowId ? ` — السطر: ${previewEntity.rowId}` : ""}
-                </div>
+                ) : (
+                  <ProductCard
+                    form={previewProductForm}
+                    setForm={setPreviewProductForm}
+                    categories={categories}
+                    groups={groups as any}
+                    productId={previewProductId}
+                    readOnly
+                  />
+                )}
               </div>
             </>
           )}
