@@ -233,7 +233,7 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
                       else addBlankAfter(i);
                     }} /></td>
                     <td><button className="remove-line" tabIndex={-1} onClick={() => deleteLine(i)}>×</button></td>
-                  </tr>)}</tbody>
+                   </tr>)}<tr className="supply-receipt-grid-spacer" aria-hidden="true"><td colSpan={9} /></tr></tbody>
                 </table>
               </div>
               <div className="supply-receipt-totals"><span>إجمالي عدد الأصناف: {completedLines.length}</span><span>إجمالي الكمية: <b dir="ltr">{totalQty.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}</b></span><span>إجمالي القيمة: <b dir="ltr">{totalValue.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}</b> ريال سعودي</span></div>
