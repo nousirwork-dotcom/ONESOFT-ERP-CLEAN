@@ -13,6 +13,7 @@ import { FoundationPolicyPanel } from "@/shared/components/FoundationPolicyPanel
 import type { RecordPolicy } from "@/shared/components/FoundationPolicyPanel";
 import { UnifiedBottomToolbar } from "@/components/unified-toolbar/UnifiedBottomToolbar";
 import type { ToolbarActionMap } from "@/components/unified-toolbar/toolbar.types";
+import { useModalAttention } from "@/modules/settings/pages/useModalAttention";
 
 /* ═══════════════════════════ Types ═══════════════════════════ */
 interface CustomerData {
@@ -121,6 +122,7 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
   const skipFormRef     = useRef(true);
   const nameRef         = useRef<HTMLInputElement>(null);
   const modalRef        = useRef<HTMLDivElement>(null);
+  const { contentRef: attentionRef, attractAttention } = useModalAttention();
   const utils           = trpc.useUtils();
 
   /* فلاتر تبويب المبيعات */
@@ -267,8 +269,8 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
     setIsShaking(false);
     requestAnimationFrame(() => setIsShaking(true));
     window.setTimeout(() => setIsShaking(false), 350);
+    attractAttention();
     modalRef.current?.focus();
-    toast.info("أغلق النافذة من زر الخروج أو احفظ التغييرات أولًا");
   };
   const isOrg     = form.customerType === "organization";
   const isPending = create.isPending || update.isPending || remove.isPending;
@@ -365,7 +367,10 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
                alignItems: "center", justifyContent: "center" }}
     >
       <div
-        ref={modalRef}
+        ref={(node) => {
+          modalRef.current = node;
+          attentionRef.current = node;
+        }}
         tabIndex={-1}
         onMouseDown={event => event.stopPropagation()}
         className={`erp-standard-ui customer-form${isShaking ? " customer-modal-window-shake" : ""}`}
