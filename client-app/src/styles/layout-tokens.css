@@ -126,6 +126,7 @@
   font-size: 13px !important;
   line-height: 20px !important;
   color: var(--app-text-primary) !important;
+  background: #ffffff !important;
 }
 
 .customer-form textarea {
