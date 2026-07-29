@@ -121,8 +121,8 @@
 
 /* ─── Icon ────────────────────────────────────────────────────────── */
 .toolbarIcon {
-  width:         16px;
-  height:        16px;
+  width:         18px;
+  height:        18px;
   flex:          0 0 auto;
   margin-bottom: 1px;
 }
@@ -152,9 +152,9 @@
   overflow:      hidden;
 
   color:         #3e3934;
-  font-size:     8px;
+  font-size:     11px;
   font-weight:   700;
-  line-height:   10px;
+  line-height:   12px;
 
   text-align:    center;
   white-space:   nowrap;

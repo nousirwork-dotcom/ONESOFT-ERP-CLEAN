@@ -2,7 +2,7 @@
  * CustomerFormDialog.tsx
  * نافذة إضافة / تعديل العميل — متعددة التبويبات بأسلوب ERP الكلاسيكي
  */
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useUnsavedChangesGuard } from "@/core/hooks/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
@@ -11,6 +11,8 @@ import { trpc } from "@/shared/lib/trpc";
 import { toast } from "sonner";
 import { FoundationPolicyPanel } from "@/shared/components/FoundationPolicyPanel";
 import type { RecordPolicy } from "@/shared/components/FoundationPolicyPanel";
+import { UnifiedBottomToolbar } from "@/components/unified-toolbar/UnifiedBottomToolbar";
+import type { ToolbarActionMap } from "@/components/unified-toolbar/toolbar.types";
 
 /* ═══════════════════════════ Types ═══════════════════════════ */
 interface CustomerData {
@@ -251,12 +253,77 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
 
   const { confirmOpen, requestClose, confirmSave, confirmDiscard, confirmCancel } = useUnsavedChangesGuard({ isDirty });
   const handleClose = () => requestClose(onClose);
-
-  if (!open) return null;
-
   const isOrg     = form.customerType === "organization";
   const isPending = create.isPending || update.isPending || remove.isPending;
   const title     = editData?.id ? `تعديل العميل — ${editData.name ?? ""}` : "إضافة عميل جديد";
+
+  const toolbarActions = useMemo<ToolbarActionMap>(() => ({
+    save: {
+      supported: true,
+      stateEnabled: !isPending,
+      loading: isPending,
+      onClick: async () => { await handleSave(); },
+    },
+    draft: { supported: false, disabledReason: "حفظ العميل كمسودة غير مستخدم في هذه الشاشة" },
+    new: {
+      supported: true,
+      stateEnabled: !isPending,
+      onClick: () => {
+        if (isDirty) {
+          toast.info("احفظ التعديلات أو أغلق النافذة أولاً");
+          return;
+        }
+        setForm(EMPTY);
+        setTab("main");
+        setIsDirty(false);
+      },
+    },
+    duplicate: { supported: false, disabledReason: "نسخ العميل غير مستخدم في هذه الشاشة" },
+    tools: { supported: false, disabledReason: "لا توجد أدوات إضافية متاحة للعميل" },
+    edit: {
+      supported: !!editData?.id,
+      stateEnabled: !isPending,
+      disabledReason: editData?.id ? undefined : "التعديل متاح بعد فتح عميل محفوظ",
+      onClick: () => nameRef.current?.focus(),
+    },
+    delete: {
+      supported: !!editData?.id,
+      stateEnabled: !isPending,
+      disabledReason: editData?.id ? undefined : "الحذف متاح بعد فتح عميل محفوظ",
+      onClick: () => {
+        if (!editData?.id) return;
+        if (window.confirm(`هل تريد حذف العميل «${editData.name ?? form.name}»؟`)) {
+          remove.mutate({ id: editData.id });
+        }
+      },
+    },
+    first: { supported: false, disabledReason: "التنقل بين العملاء غير مربوط داخل النافذة" },
+    previous: { supported: false, disabledReason: "التنقل بين العملاء غير مربوط داخل النافذة" },
+    next: { supported: false, disabledReason: "التنقل بين العملاء غير مربوط داخل النافذة" },
+    last: { supported: false, disabledReason: "التنقل بين العملاء غير مربوط داخل النافذة" },
+    approve: { supported: false, disabledReason: "اعتماد العميل غير مستخدم في هذه الشاشة" },
+    unapprove: { supported: false, disabledReason: "إلغاء اعتماد العميل غير مستخدم في هذه الشاشة" },
+    preview: {
+      supported: !!editData?.id,
+      stateEnabled: !isPending,
+      disabledReason: editData?.id ? undefined : "المعاينة متاحة بعد حفظ العميل",
+      onClick: () => { toast.info("المعاينة متاحة بعد ربط قالب العميل"); },
+    },
+    send: { supported: false, disabledReason: "الإرسال يتم من تبويب قنوات الإرسال" },
+    print: {
+      supported: !!editData?.id,
+      stateEnabled: !isPending,
+      disabledReason: editData?.id ? undefined : "الطباعة متاحة بعد حفظ العميل",
+      onClick: () => window.print(),
+    },
+    exit: {
+      supported: true,
+      stateEnabled: !isPending,
+      onClick: handleClose,
+    },
+  }), [editData, form.name, handleClose, handleSave, isDirty, isPending, remove]);
+
+  if (!open) return null;
 
   return (
     <div
@@ -264,7 +331,7 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
                background: "rgba(0,0,0,0.45)", display: "flex",
                alignItems: "center", justifyContent: "center" }}
     >
-      <div className="erp-standard-ui" dir="rtl" style={{
+      <div className="erp-standard-ui customer-form" dir="rtl" style={{
         width: 940, maxWidth: "98vw",
         height: 620, maxHeight: "calc(100vh - 24px)",
         minHeight: 620,
@@ -314,7 +381,7 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
           display: "flex", flexShrink: 0, overflowX: "auto", paddingRight: 7,
         }}>
           {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)} style={{
+            <button className="customer-tab-button" key={t.id} onClick={() => setTab(t.id)} style={{
               padding: "6px 12px 5px", fontSize: 10,
               fontWeight: tab === t.id ? 700 : 500,
               background: tab === t.id ? "#f7f6f3" : "transparent",
@@ -815,42 +882,12 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
           />
         </div>
 
-        {/* ── Footer ── */}
-        <div style={{
-          background: "linear-gradient(180deg, #f8f7f4 0%, #deddd9 100%)",
-          borderTop: "1px solid #9da3a8", padding: "5px 8px",
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          flexShrink: 0, gap: 8,
-        }}>
-          <span style={{ fontSize: 10, color: "#68727b", whiteSpace: "nowrap" }}>
-            {isOrg ? "📋 مؤسسة" : "🧾 فرد"} {isDirty && "• غير محفوظ"}
-          </span>
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-start" }}>
-            <CommandButton icon="💾" label={isPending ? "جاري الحفظ" : "حفظ"} primary disabled={isPending} onClick={() => handleSave().catch(() => {})} />
-            <CommandButton icon="＋" label="جديد" disabled={isPending} onClick={() => {
-              if (isDirty) { toast.info("احفظ التعديلات أو أغلق النافذة أولاً"); return; }
-              setForm(EMPTY); setTab("main"); setIsDirty(false);
-            }} />
-            <CommandButton icon="✎" label="تعديل" disabled={!editData?.id || isPending} onClick={() => nameRef.current?.focus()} />
-            <CommandButton icon="🗑" label="حذف" danger disabled={!editData?.id || isPending} onClick={() => {
-              if (!editData?.id) return;
-              if (window.confirm(`هل تريد حذف العميل «${editData.name ?? form.name}»؟`)) {
-                remove.mutate({ id: editData.id });
-              }
-            }} />
-            <CommandButton icon="◀" label="السابق" disabled onClick={() => undefined} />
-            <CommandButton icon="▶" label="التالي" disabled onClick={() => undefined} />
-            <CommandButton icon="⏮" label="الأول" disabled onClick={() => undefined} />
-            <CommandButton icon="⏭" label="الأخير" disabled onClick={() => undefined} />
-            <CommandButton icon="◉" label="معاينة" disabled={!editData?.id || isPending} onClick={() => toast.info("المعاينة متاحة بعد ربط قالب العميل")} />
-            <CommandButton icon="🖨" label="طباعة" disabled={!editData?.id || isPending} onClick={() => window.print()} />
-            <CommandButton icon="↶" label="تراجع" disabled={!isDirty || isPending} onClick={() => {
-              if (editData) setForm({ ...EMPTY, ...editData });
-              else setForm(EMPTY);
-              setIsDirty(false);
-            }} />
-            <CommandButton icon="↩" label="خروج" disabled={isPending} onClick={handleClose} />
-          </div>
+        {/* ── Unified bottom toolbar ── */}
+        <div style={{ flexShrink: 0 }}>
+          <UnifiedBottomToolbar
+            actions={toolbarActions}
+            activeAction={isPending ? "save" : undefined}
+          />
         </div>
 
       </div>
@@ -873,15 +910,15 @@ function ESection({ title, children, headerColor, note }: {
   headerColor?: string; note?: string;
 }) {
   return (
-    <div style={{ border: "1px solid #c9c4bc", borderRadius: 4, overflow: "hidden", background: "#f0ede8", boxShadow: "0 1px 2px rgba(0,0,0,.06)" }}>
+      <div className="customer-section" style={{ border: "1px solid #c9c4bc", borderRadius: 4, overflow: "hidden", background: "#f0ede8", boxShadow: "0 1px 2px rgba(0,0,0,.06)" }}>
       <div style={{
         background: "#f0ede8",
         borderBottom: "1px solid #c9c4bc", padding: "0 10px",
         minHeight: 28, height: 28,
         display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
-        <span style={{ fontSize: 10, lineHeight: "28px", fontWeight: 800, color: "#3f4448" }}>{title}</span>
-        {note && <span style={{ fontSize: 9, lineHeight: "28px", color: "#686d70" }}>{note}</span>}
+        <span className="customer-section-title" style={{ fontSize: 10, lineHeight: "28px", fontWeight: 800, color: "#3f4448" }}>{title}</span>
+        {note && <span className="customer-section-note" style={{ fontSize: 9, lineHeight: "28px", color: "#686d70" }}>{note}</span>}
       </div>
       <div style={{ padding: "10px", background: "#f0ede8" }}>{children}</div>
     </div>
@@ -891,7 +928,7 @@ function ESection({ title, children, headerColor, note }: {
 function EField({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-       <label style={{ fontSize: 10, fontWeight: 700, color: "#333" }}>
+       <label className="customer-field-label" style={{ fontSize: 10, fontWeight: 700, color: "#333" }}>
         {label}
         {hint && <span style={{ fontWeight: 400, color: "#888", marginRight: 4 }}>({hint})</span>}
       </label>
@@ -908,6 +945,7 @@ function EInput({ value, onChange, placeholder, ltr, mono, inputRef, style }: {
 }) {
   return (
     <input
+      className="customer-field-input"
       ref={inputRef}
       value={value ?? ""}
       onChange={e => onChange(e.target.value)}
@@ -922,26 +960,6 @@ function EInput({ value, onChange, placeholder, ltr, mono, inputRef, style }: {
         ...style,
       }}
     />
-  );
-}
-
-function CommandButton({ icon, label, primary, danger, disabled, onClick }: {
-  icon: string; label: string; primary?: boolean; danger?: boolean; disabled?: boolean; onClick: () => void;
-}) {
-  return (
-    <button type="button" onClick={onClick} disabled={disabled} style={{
-      minWidth: 55, height: 34, padding: "2px 7px", display: "inline-flex",
-      flexDirection: "column", alignItems: "center", justifyContent: "center",
-      gap: 1, fontFamily: "inherit", fontSize: 8, fontWeight: 700,
-      color: primary || danger ? "#fff" : "#4b5156",
-      background: primary ? "linear-gradient(#3d739f, #28567f)" : danger ? "linear-gradient(#d96565, #a63d3d)" : "#f8f7f4",
-      border: `1px solid ${primary ? "#244d70" : danger ? "#8f3030" : "#b5b6b5"}`,
-      borderRadius: 3, boxShadow: "0 1px 1px rgba(0,0,0,.12)",
-      cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? .5 : 1,
-    }}>
-      <span style={{ fontSize: 14, lineHeight: 14 }}>{icon}</span>
-      <span>{label}</span>
-    </button>
   );
 }
 

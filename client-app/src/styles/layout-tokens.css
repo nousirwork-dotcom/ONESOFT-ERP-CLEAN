@@ -99,3 +99,59 @@
 .erp-standard-ui .text-\[12px\] {
   font-size: var(--app-font-size-helper);
 }
+
+/* Customer dialog: direct element rules intentionally win over legacy inline
+   sizing, so the dialog has measurable computed values at browser zoom 100%. */
+.customer-form {
+  font-family: var(--app-font-family);
+}
+
+.customer-form .customer-field-label,
+.customer-form label.customer-field-label {
+  font-size: 13px !important;
+  line-height: 18px !important;
+  font-weight: 700 !important;
+  color: var(--app-text-primary) !important;
+}
+
+.customer-form .customer-field-input,
+.customer-form input.customer-field-input,
+.customer-form select,
+.customer-form textarea {
+  min-height: 34px !important;
+  height: 34px !important;
+  box-sizing: border-box;
+  padding: 6px 10px !important;
+  font-family: var(--app-font-family) !important;
+  font-size: 13px !important;
+  line-height: 20px !important;
+  color: var(--app-text-primary) !important;
+}
+
+.customer-form textarea {
+  height: auto !important;
+  min-height: 64px !important;
+}
+
+.customer-form .customer-section-title {
+  font-size: 14px !important;
+  line-height: 20px !important;
+  font-weight: 700 !important;
+  color: var(--app-text-primary) !important;
+}
+
+.customer-form .customer-section-note,
+.customer-form .customer-helper {
+  font-size: 11px !important;
+  line-height: 16px !important;
+  color: var(--app-text-secondary) !important;
+}
+
+.customer-form .customer-tab-button {
+  min-height: 34px;
+  padding: 7px 12px !important;
+  font-family: var(--app-font-family) !important;
+  font-size: 13px !important;
+  line-height: 18px !important;
+  font-weight: 600;
+}
