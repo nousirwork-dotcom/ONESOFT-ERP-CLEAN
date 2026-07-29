@@ -1,17 +1,20 @@
 /* ─── Outer container — يمتد بعرض الـ Footer بالكامل ────────────── */
 .toolbarOuter {
   width:           100%;
+  max-width:       100%;
+  min-width:       0;
   padding:         5px 6px 6px 6px;  /* هامش جانبي 6px — مسافة علوية وسفلية كافية */
   box-sizing:      border-box;
 
   background:      #F8F5EF;     /* يندمج مع الـ Footer */
   box-shadow:      none;         /* الظل على مجموعة الأزرار وليس الخارج */
-  overflow:        visible;      /* لا قص للأزرار */
+  overflow:        hidden;
 }
 
 /* ─── مجموعة الأزرار — تمتد بالعرض مع توزيع متوازن بين المجموعات ── */
 .toolbarGroups {
   width:           100%;
+  min-width:       0;
   max-width:       none;
   margin:          0;
 
@@ -26,8 +29,7 @@
   border-radius:   10px;
   box-shadow:      0 3px 10px rgba(0, 0, 0, 0.22);
 
-  overflow-x:      auto;
-  overflow-y:      visible;      /* يمنع قص الأزرار رأسياً */
+  overflow:        hidden;
   height:          auto;         /* الارتفاع يتبع المحتوى */
 
   padding:         4px;
@@ -36,14 +38,17 @@
 /* ─── Individual group — لا خلفية ولا حدود ───────────────────────── */
 .toolbarGroup {
   display:        flex;
+  flex:           1 1 0;
+  min-width:      0;
+  gap:            3px;
   align-items:    stretch;
 }
 
 /* ─── فاصل رأسي بين المجموعات الأربع ─────────────────────────────── */
 .toolbarGroup + .toolbarGroup {
   border-inline-start: 1.5px solid #C9BFAF;
-  margin-inline-start: 10px;
-  padding-inline-start: 10px;
+  margin-inline-start: 5px;
+  padding-inline-start: 5px;
 }
 
 /* ─── Button — مربّع مستقل بحدود وخلفية فاتحة ────────────────────── */
@@ -55,10 +60,11 @@
   align-items:    center;
   justify-content: center;
 
-  width:          56px;
-  min-width:      56px;
+  width:          auto;
+  min-width:      0;
+  flex:           1 1 0;
   height:         54px;
-  padding:        2px 3px;
+  padding:        2px;
 
   color:          #181818;
   background:     #FCFAF5;         /* خلفية فاتحة لكل زر */

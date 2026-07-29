@@ -117,8 +117,10 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
   const [tab, setTab]   = useState<TabId>("main");
   const [form, setForm] = useState<CustomerData>(EMPTY);
   const [isDirty, setIsDirty] = useState(false);
+  const [isShaking, setIsShaking] = useState(false);
   const skipFormRef     = useRef(true);
   const nameRef         = useRef<HTMLInputElement>(null);
+  const modalRef        = useRef<HTMLDivElement>(null);
   const utils           = trpc.useUtils();
 
   /* فلاتر تبويب المبيعات */
@@ -253,6 +255,14 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
 
   const { confirmOpen, requestClose, confirmSave, confirmDiscard, confirmCancel } = useUnsavedChangesGuard({ isDirty });
   const handleClose = () => requestClose(onClose);
+  const handleBackdropClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return;
+    setIsShaking(false);
+    requestAnimationFrame(() => setIsShaking(true));
+    window.setTimeout(() => setIsShaking(false), 350);
+    modalRef.current?.focus();
+    toast.info("أغلق النافذة من زر الخروج أو احفظ التغييرات أولًا");
+  };
   const isOrg     = form.customerType === "organization";
   const isPending = create.isPending || update.isPending || remove.isPending;
   const title     = editData?.id ? `تعديل العميل — ${editData.name ?? ""}` : "إضافة عميل جديد";
@@ -327,11 +337,18 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
 
   return (
     <div
+      onMouseDown={handleBackdropClick}
       style={{ position: "fixed", inset: 0, zIndex: 1200,
                background: "rgba(0,0,0,0.45)", display: "flex",
                alignItems: "center", justifyContent: "center" }}
     >
-      <div className="erp-standard-ui customer-form" dir="rtl" style={{
+      <div
+        ref={modalRef}
+        tabIndex={-1}
+        onMouseDown={event => event.stopPropagation()}
+        className={`erp-standard-ui customer-form${isShaking ? " customer-modal-window-shake" : ""}`}
+        dir="rtl"
+        style={{
         width: 940, maxWidth: "98vw",
         height: 620, maxHeight: "calc(100vh - 24px)",
         minHeight: 620,
