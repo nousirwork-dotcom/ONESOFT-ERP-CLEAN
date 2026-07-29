@@ -255,6 +255,13 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
 
   const { confirmOpen, requestClose, confirmSave, confirmDiscard, confirmCancel } = useUnsavedChangesGuard({ isDirty });
   const handleClose = () => requestClose(onClose);
+  const handlePreview = () => {
+    toast.info("المعاينة متاحة بعد ربط قالب العميل");
+  };
+  const handleSend = () => {
+    toast.info("الإرسال يتم من تبويب قنوات الإرسال");
+  };
+  const handlePrint = () => window.print();
   const handleBackdropClick = (event: React.MouseEvent<HTMLDivElement>) => {
     if (event.target !== event.currentTarget) return;
     setIsShaking(false);
@@ -317,21 +324,36 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
       supported: !!editData?.id,
       stateEnabled: !isPending,
       disabledReason: editData?.id ? undefined : "المعاينة متاحة بعد حفظ العميل",
-      onClick: () => { toast.info("المعاينة متاحة بعد ربط قالب العميل"); },
+      onClick: handlePreview,
     },
-    send: { supported: false, disabledReason: "الإرسال يتم من تبويب قنوات الإرسال" },
+    send: {
+      supported: false,
+      disabledReason: "الإرسال يتم من تبويب قنوات الإرسال",
+      onClick: handleSend,
+    },
     print: {
       supported: !!editData?.id,
       stateEnabled: !isPending,
       disabledReason: editData?.id ? undefined : "الطباعة متاحة بعد حفظ العميل",
-      onClick: () => window.print(),
+      onClick: handlePrint,
     },
     exit: {
       supported: true,
       stateEnabled: !isPending,
       onClick: handleClose,
     },
-  }), [editData, form.name, handleClose, handleSave, isDirty, isPending, remove]);
+  }), [
+    editData,
+    form.name,
+    handleClose,
+    handlePreview,
+    handleSend,
+    handlePrint,
+    handleSave,
+    isDirty,
+    isPending,
+    remove,
+  ]);
 
   if (!open) return null;
 

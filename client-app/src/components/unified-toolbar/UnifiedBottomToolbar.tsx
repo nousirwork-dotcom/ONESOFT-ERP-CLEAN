@@ -204,13 +204,7 @@ export function UnifiedBottomToolbar({
                     data-tone={item.tone ?? "default"}
                     className={styles.toolbarButton}
                     data-action={item.id}
-                     onClick={() => {
-                       if (item.id === "preview") {
-                         previewFocusedEntity();
-                         return;
-                       }
-                       void executeToolbarAction(item.id);
-                     }}
+                      onClick={() => void executeToolbarAction(item.id)}
                   >
                     <Icon
                       className={styles.toolbarIcon}

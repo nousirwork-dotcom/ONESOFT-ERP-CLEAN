@@ -167,40 +167,38 @@
   text-overflow: clip;
 }
 
-/* Important actions keep enough room for their full Arabic label and shortcut.
-   Secondary actions may be narrower, but never collapse to a clipped button. */
-.toolbarButton[data-action="save"],
-.toolbarButton[data-action="new"],
-.toolbarButton[data-action="edit"],
-.toolbarButton[data-action="delete"],
-.toolbarButton[data-action="preview"],
-.toolbarButton[data-action="exit"] {
-  min-width: 60px;
-  width: 60px;
+/* The full 17-action toolbar must fit in a work window without hiding the
+   output group. Buttons never flex-shrink, so fitting is achieved by using
+   the same compact dimensions for every action rather than clipping a side. */
+.toolbarButton {
+  width: 48px;
+  min-width: 48px;
+  padding-inline: 1px;
 }
 
-.toolbarButton[data-action="duplicate"],
-.toolbarButton[data-action="first"],
-.toolbarButton[data-action="last"],
-.toolbarButton[data-action="print"] {
-  min-width: 66px;
-  width: 66px;
-}
-
-.toolbarButton[data-action="previous"],
-.toolbarButton[data-action="next"] {
-  min-width: 70px;
-  width: 70px;
-}
-
-.toolbarButton[data-action="approve"] {
-  min-width: 70px;
-  width: 70px;
+.toolbarButton[data-action="delete"] {
+  width: 52px;
+  min-width: 52px;
 }
 
 .toolbarButton[data-action="unapprove"] {
-  min-width: 92px;
-  width: 92px;
+  width: 60px;
+  min-width: 60px;
+}
+
+.toolbarIcon {
+  width: 16px;
+  height: 16px;
+}
+
+.toolbarLabel {
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.toolbarShortcut {
+  font-size: 7px;
+  line-height: 10px;
 }
 
 /* ─── Tools drop-down menu ────────────────────────────────────────── */
