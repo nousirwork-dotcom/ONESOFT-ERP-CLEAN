@@ -27,6 +27,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/core/ui/tabs";
 import { Textarea } from "@/core/ui/textarea";
 import { toast } from "sonner";
 import { trpc } from "@/shared/lib/trpc";
+import SupplierFormDialog from "@/shared/components/SupplierFormDialog";
 
 type MenuId = string;
 
@@ -173,6 +174,60 @@ function PurchasesOverview({ onSelect }: { onSelect: (id: MenuId) => void }) {
 }
 
 // ─── Suppliers List (دليل الموردين) ───────────────────────────────────────────
+function SupplierDirectoryPage() {
+  const listQuery = trpc.suppliers.list.useQuery();
+  const [showForm, setShowForm] = useState(false);
+  const [editData, setEditData] = useState<any>(null);
+  const [search, setSearch] = useState("");
+  const filtered = listQuery.data?.filter(s =>
+    !search || s.name?.includes(search) || s.phone?.includes(search) || s.code?.includes(search)
+  ) ?? [];
+
+  return (
+    <div className="erp-standard-ui space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="font-bold text-sm flex items-center gap-2"><Users className="w-4 h-4 text-primary" /> دليل الموردين</h3>
+        <div className="flex gap-2">
+          <div className="relative">
+            <Search className="absolute right-2 top-1.5 w-3 h-3 text-muted-foreground" />
+            <Input value={search} onChange={e => setSearch(e.target.value)} className="h-7 text-xs pr-7 w-48" placeholder="بحث الموردين..." />
+          </div>
+          <Button size="sm" className="h-7 text-xs gap-1" onClick={() => { setEditData(null); setShowForm(true); }}>
+            <Plus className="w-3 h-3" /> إضافة مورد
+          </Button>
+        </div>
+      </div>
+      <Card className="border-border/60">
+        <Table>
+          <TableHeader><TableRow className="bg-muted/30">
+            <TableHead className="text-xs">كود المورد</TableHead>
+            <TableHead className="text-xs">اسم المورد</TableHead>
+            <TableHead className="text-xs">الهاتف</TableHead>
+            <TableHead className="text-xs">البريد الإلكتروني</TableHead>
+            <TableHead className="text-xs">إجراءات</TableHead>
+          </TableRow></TableHeader>
+          <TableBody>
+            {filtered.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-xs text-muted-foreground py-8">لا يوجد موردون</TableCell></TableRow>}
+            {filtered.map(s => <TableRow key={s.id}>
+              <TableCell className="text-xs">{s.code ?? "-"}</TableCell>
+              <TableCell className="text-xs font-semibold">{s.name}</TableCell>
+              <TableCell className="text-xs">{s.phone ?? "-"}</TableCell>
+              <TableCell className="text-xs">{s.email ?? "-"}</TableCell>
+              <TableCell><Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => { setEditData(s); setShowForm(true); }}><Edit2 className="w-3 h-3" /></Button></TableCell>
+            </TableRow>)}
+          </TableBody>
+        </Table>
+      </Card>
+      <SupplierFormDialog
+        open={showForm}
+        editData={editData}
+        onClose={() => { setShowForm(false); setEditData(null); }}
+        onSaved={() => { setShowForm(false); setEditData(null); listQuery.refetch(); }}
+      />
+    </div>
+  );
+}
+
 function SuppliersListPage() {
   const listQuery = trpc.suppliers.list.useQuery({});
 
@@ -214,7 +269,9 @@ function SuppliersListPage() {
       phone: form.phone || undefined,
       email: form.email || undefined,
       address: form.address || undefined,
-      recordPolicy: form.recordPolicy,
+       recordPolicy: form.recordPolicy === "editable" || form.recordPolicy === "protected"
+         ? "flexible"
+         : form.recordPolicy,
       includeInFoundation: form.includeInFoundation,
       foundationKey: form.foundationKey || undefined,
     });
@@ -1016,7 +1073,7 @@ function PurchasesContent({ activeId, onSelect }: { activeId: MenuId; onSelect: 
     case "purchase-returns":   return <PurchaseReturnPage />;
     case "debit-note":         return <ComingSoon label="إشعار مدين" />;
     case "purchase-orders":    return <PurchaseOrderPage />;
-    case "suppliers-list":     return <SuppliersListPage />;
+    case "suppliers-list":     return <SupplierDirectoryPage />;
     case "supplier-groups":    return <SupplierGroupsPage />;
     case "supplier-balances":  return <ComingSoon label="أرصدة الموردين" />;
     case "supplier-statement": return <ComingSoon label="كشف حساب المورد" />;
@@ -1029,7 +1086,7 @@ function PurchasesContent({ activeId, onSelect }: { activeId: MenuId; onSelect: 
 
 // ─── Exported Sub-Page Wrappers (for MDI tab system) ──────────────────────────
 export function PurchaseSuppliersPage() {
-  return <div className="h-full overflow-auto p-5" dir="rtl"><SuppliersListPage /></div>;
+  return <div className="h-full overflow-auto p-5" dir="rtl"><SupplierDirectoryPage /></div>;
 }
 export function PurchaseSupplierGroupsPage() {
   return <div className="h-full overflow-auto p-5" dir="rtl"><SupplierGroupsPage /></div>;
