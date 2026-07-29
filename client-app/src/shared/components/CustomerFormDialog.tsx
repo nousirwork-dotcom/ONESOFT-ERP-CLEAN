@@ -903,6 +903,11 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
         <div style={{ flexShrink: 0 }}>
           <UnifiedBottomToolbar
             actions={toolbarActions}
+            visibleActions={[
+              "save", "new", "duplicate", "edit", "delete",
+              "first", "previous", "next", "last",
+              "preview", "print", "exit",
+            ]}
             activeAction={isPending ? "save" : undefined}
           />
         </div>

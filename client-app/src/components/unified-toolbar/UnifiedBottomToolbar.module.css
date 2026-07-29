@@ -38,7 +38,7 @@
 /* ─── Individual group — لا خلفية ولا حدود ───────────────────────── */
 .toolbarGroup {
   display:        flex;
-  flex:           1 1 0;
+  flex:           0 0 auto;
   min-width:      0;
   gap:            3px;
   align-items:    stretch;
@@ -60,11 +60,11 @@
   align-items:    center;
   justify-content: center;
 
-  width:          auto;
-  min-width:      0;
-  flex:           1 1 0;
+  width:          58px;
+  min-width:      58px;
+  flex:           0 0 auto;
   height:         54px;
-  padding:        2px;
+  padding:        2px 3px;
 
   color:          #181818;
   background:     #FCFAF5;         /* خلفية فاتحة لكل زر */
@@ -137,8 +137,8 @@
 .toolbarLabel {
   display:       block;
 
-  max-width:     100%;
-  overflow:      hidden;
+  max-width:     none;
+  overflow:      visible;
 
   color:         #111111;
   font-size:     12px;
@@ -147,24 +147,60 @@
 
   text-align:    center;
   white-space:   nowrap;
-  text-overflow: ellipsis;
+  text-overflow: clip;
 }
 
 /* ─── Keyboard shortcut hint ──────────────────────────────────────── */
 .toolbarShortcut {
   display:       block;
 
-  max-width:     100%;
-  overflow:      hidden;
+  max-width:     none;
+  overflow:      visible;
 
   color:         #3e3934;
-  font-size:     11px;
+  font-size:     9px;
   font-weight:   700;
   line-height:   12px;
 
   text-align:    center;
   white-space:   nowrap;
-  text-overflow: ellipsis;
+  text-overflow: clip;
+}
+
+/* Important actions keep enough room for their full Arabic label and shortcut.
+   Secondary actions may be narrower, but never collapse to a clipped button. */
+.toolbarButton[data-action="save"],
+.toolbarButton[data-action="new"],
+.toolbarButton[data-action="edit"],
+.toolbarButton[data-action="delete"],
+.toolbarButton[data-action="preview"],
+.toolbarButton[data-action="exit"] {
+  min-width: 60px;
+  width: 60px;
+}
+
+.toolbarButton[data-action="duplicate"],
+.toolbarButton[data-action="first"],
+.toolbarButton[data-action="last"],
+.toolbarButton[data-action="print"] {
+  min-width: 66px;
+  width: 66px;
+}
+
+.toolbarButton[data-action="previous"],
+.toolbarButton[data-action="next"] {
+  min-width: 70px;
+  width: 70px;
+}
+
+.toolbarButton[data-action="approve"] {
+  min-width: 70px;
+  width: 70px;
+}
+
+.toolbarButton[data-action="unapprove"] {
+  min-width: 92px;
+  width: 92px;
 }
 
 /* ─── Tools drop-down menu ────────────────────────────────────────── */

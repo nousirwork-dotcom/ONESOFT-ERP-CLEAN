@@ -48,7 +48,7 @@ export const TOOLBAR_ITEMS: ToolbarDefinition[] = [
   { id: "next", label: "التالي", shortcut: "PageDown", icon: ChevronLeft },
   { id: "last", label: "الأخير", shortcut: "Ctrl+End", icon: ChevronLast },
   { id: "approve", label: "اعتماد", shortcut: "Ctrl+F11", icon: ShieldCheck },
-  { id: "unapprove", label: "إلغاء", shortcut: "F7", icon: XCircle },
+  { id: "unapprove", label: "إلغاء اعتماد", shortcut: "F7", icon: XCircle },
   { id: "preview", label: "معاينة", icon: Eye },
   { id: "send", label: "إرسال", icon: Send },
   { id: "print", label: "طباعة", shortcut: "Ctrl+P", icon: Printer },
