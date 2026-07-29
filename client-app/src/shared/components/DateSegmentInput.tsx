@@ -23,6 +23,7 @@ import type { KeyboardEvent, CSSProperties } from "react";
 export interface DateSegmentInputProps {
   value: string;
   onChange: (v: string) => void;
+  onNavigate?: (direction: "next" | "previous") => void;
   style?: CSSProperties;
   className?: string;
   standalone?: boolean;
@@ -79,7 +80,7 @@ function focusPrev(from: HTMLElement | null) {
 }
 
 export function DateSegmentInput({
-  value, onChange, style, className, standalone = false, tabIndex, disabled,
+  value, onChange, onNavigate, style, className, standalone = false, tabIndex, disabled,
 }: DateSegmentInputProps) {
   const [dd,   setDd]   = useState("");
   const [mm,   setMm]   = useState("");
@@ -155,9 +156,9 @@ export function DateSegmentInput({
 
   const onYyyyKey = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault(); focusNext(yyyyRef.current);
+      e.preventDefault(); onNavigate ? onNavigate("next") : focusNext(yyyyRef.current);
     } else if (e.key === "Enter" && e.shiftKey) {
-      e.preventDefault(); mmRef.current?.focus(); mmRef.current?.select();
+      e.preventDefault(); onNavigate ? onNavigate("previous") : (mmRef.current?.focus(), mmRef.current?.select());
     } else if (e.key === "ArrowRight") {
       e.preventDefault(); mmRef.current?.focus(); mmRef.current?.select();
     } else if (e.key === "Backspace" && yyyy === "") {
