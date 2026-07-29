@@ -12,9 +12,10 @@
  */
 
 import { readdir, readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 
-const SRC_DIR = new URL("../src", import.meta.url).pathname;
+const SRC_DIR = fileURLToPath(new URL("../src", import.meta.url));
 
 async function* walk(dir) {
   const entries = await readdir(dir, { withFileTypes: true });
