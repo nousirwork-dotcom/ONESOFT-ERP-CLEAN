@@ -1,17 +1,18 @@
 {
-  "latestVersion": "1.0.23",
+  "latestVersion": "1.0.25",
   "minSupportedVersion": "1.0.0",
   "mandatory": false,
-  "messageAr": "يوجد تحديث جديد (v1.0.23): تحسينات في واجهة قائمة المبيعات وتبسيط تجربة المستخدم.",
-  "messageEn": "New update (v1.0.23): Sales sidebar improvements and user experience polish.",
+  "messageAr": "يوجد تحديث جديد (v1.0.25): تحسينات سند التوريد وتنسيق جدول الأصناف وإصلاحات في التحديث التلقائي.",
+  "messageEn": "New update (v1.0.25): Supply receipt improvements, item-table styling, and auto-update fixes.",
   "releaseNotes": [
-    "تبسيط قائمة المبيعات الجانبية: حذف الشاشات غير المستخدمة",
-    "تحسينات عامة في الأداء والواجهة"
+    "نقل البحث إلى عمود اسم الصنف وجعل كود الصنف للكتابة فقط",
+    "تحسين تمدد جدول مواد سند التوريد وتنسيق العناوين",
+    "إصلاح فحص المسارات عند بناء نسخة Windows"
   ],
-  "downloadUrl": "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.23/OneSoftSetup-1.0.23-x64.exe",
-  "fileSizeBytes": 81522854,
-  "sha512": "a3P9Lpam5PuKJe8ilDRVCPI13n8ZafeVvpFSr4cwmdE40aj0XmSf//1Qc2HYLThrFl09FxoQBRe3U8a1GskkdA==",
-  "publishedAt": "2026-07-18T20:34:00Z",
+  "downloadUrl": "https://github.com/nousirwork-dotcom/ONESOFT-ERP-CLEAN/releases/download/v1.0.25/OneSoftSetup-1.0.25-x64.exe",
+  "fileSizeBytes": 81631131,
+  "sha512": "Kxofxzcaj8FVbAwf1lR2j9d2GrW1Uazqg2ypr31ktdPdLvyd5dv7HguIBJg6G4yY/+X19LdMrsDcdo1l6Bh+Jw==",
+  "publishedAt": "2026-07-29T13:03:56.606Z",
   "_notes": {
     "MANIFEST_URL": "استضِف هذا الملف على CDN عام أو GitHub Pages بدون توثيق (Public URL).",
     "ONESOFT_UPDATE_URL": "يمكن تجاوز الرابط الافتراضي عبر متغير البيئة ONESOFT_UPDATE_URL.",
@@ -22,9 +23,9 @@
     "publishedAt": "تاريخ نشر الإصدار بصيغة ISO 8601.",
     "skip_policy": "التحديث الاختياري يُعرض مرة واحدة ثم يُؤجّل 24 ساعة إذا ضغط المستخدم 'لاحقاً'.",
     "mandatory_block": "التحديث الإجباري يمنع الدخول لجميع صفحات النظام (login / dashboard / إلخ) حتى إتمام التحديث.",
-    "generate_sha512": "لحساب sha512 للملف على Windows: certutil -hashfile OneSoftSetup-1.0.23-x64.exe SHA512",
-    "generate_sha512_linux": "sha512sum OneSoftSetup-1.0.23-x64.exe | awk '{print $1}'"
+    "generate_sha512": "لحساب sha512 للملف على Windows: certutil -hashfile OneSoftSetup-1.0.25-x64.exe SHA512",
+    "generate_sha512_linux": "sha512sum OneSoftSetup-1.0.25-x64.exe | awk '{print $1}'"
   },
-  "version": "1.0.23",
-  "notes": "v1.0.23 — تحسينات قائمة المبيعات"
+  "version": "1.0.25",
+  "notes": "v1.0.25 — تحسينات سند التوريد وإصلاح بناء Windows"
 }
