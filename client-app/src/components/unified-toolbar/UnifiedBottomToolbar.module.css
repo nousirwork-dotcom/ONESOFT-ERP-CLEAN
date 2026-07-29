@@ -203,68 +203,6 @@
   width: 92px;
 }
 
-/* Compact full toolbar used by the 940px customer window. It keeps every
-   standard action visible while reserving enough width for the Arabic label
-   and its shortcut; no action is allowed to shrink or ellipsize. */
-.customer-toolbar .toolbarGroups {
-  gap: 2px;
-  padding: 3px;
-}
-
-.customer-toolbar .toolbarGroup {
-  gap: 2px;
-}
-
-.customer-toolbar .toolbarGroup + .toolbarGroup {
-  margin-inline-start: 3px;
-  padding-inline-start: 3px;
-}
-
-.customer-toolbar .toolbarButton,
-.customer-toolbar .toolbarButton[data-action="save"],
-.customer-toolbar .toolbarButton[data-action="new"],
-.customer-toolbar .toolbarButton[data-action="duplicate"],
-.customer-toolbar .toolbarButton[data-action="tools"],
-.customer-toolbar .toolbarButton[data-action="edit"],
-.customer-toolbar .toolbarButton[data-action="delete"],
-.customer-toolbar .toolbarButton[data-action="first"],
-.customer-toolbar .toolbarButton[data-action="previous"],
-.customer-toolbar .toolbarButton[data-action="next"],
-.customer-toolbar .toolbarButton[data-action="last"],
-.customer-toolbar .toolbarButton[data-action="approve"],
-.customer-toolbar .toolbarButton[data-action="unapprove"],
-.customer-toolbar .toolbarButton[data-action="preview"],
-.customer-toolbar .toolbarButton[data-action="send"],
-.customer-toolbar .toolbarButton[data-action="print"],
-.customer-toolbar .toolbarButton[data-action="exit"] {
-  width: 46px;
-  min-width: 46px;
-  height: 54px;
-  padding-inline: 1px;
-}
-
-.customer-toolbar .toolbarButton[data-action="unapprove"] {
-  width: 58px;
-  min-width: 58px;
-}
-
-.customer-toolbar .toolbarIcon {
-  width: 16px;
-  height: 16px;
-}
-
-.customer-toolbar .toolbarLabel {
-  font-size: 10px;
-  line-height: 13px;
-  font-weight: 800;
-}
-
-.customer-toolbar .toolbarShortcut {
-  font-size: 8px;
-  line-height: 10px;
-  font-weight: 700;
-}
-
 /* ─── Tools drop-down menu ────────────────────────────────────────── */
 .toolsMenu {
   overflow:      hidden;
