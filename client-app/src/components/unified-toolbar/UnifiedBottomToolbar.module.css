@@ -237,15 +237,15 @@
 .customer-toolbar .toolbarButton[data-action="send"],
 .customer-toolbar .toolbarButton[data-action="print"],
 .customer-toolbar .toolbarButton[data-action="exit"] {
-  width: 48px;
-  min-width: 48px;
+  width: 46px;
+  min-width: 46px;
   height: 54px;
   padding-inline: 1px;
 }
 
 .customer-toolbar .toolbarButton[data-action="unapprove"] {
-  width: 66px;
-  min-width: 66px;
+  width: 58px;
+  min-width: 58px;
 }
 
 .customer-toolbar .toolbarIcon {
@@ -254,8 +254,8 @@
 }
 
 .customer-toolbar .toolbarLabel {
-  font-size: 11px;
-  line-height: 14px;
+  font-size: 10px;
+  line-height: 13px;
   font-weight: 800;
 }
 
