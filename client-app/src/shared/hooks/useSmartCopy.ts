@@ -41,7 +41,7 @@ export function useSmartCopy() {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const ctrlOrCmd = e.ctrlKey || e.metaKey;
-      if (!ctrlOrCmd || e.key.toLowerCase() !== "c") return;
+      if (!ctrlOrCmd || e.code !== "KeyC") return;
 
       const selection = window.getSelection();
       const hasSelection = selection && selection.toString().length > 0;

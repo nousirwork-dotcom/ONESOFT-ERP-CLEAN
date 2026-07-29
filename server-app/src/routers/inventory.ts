@@ -1,10 +1,39 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { stockVouchers, stockVoucherItems, inventory, inventoryCounts, inventoryCountItems, products } from '../schema.js';
-import { eq, and, desc } from 'drizzle-orm';
+import { stockVouchers, stockVoucherItems, inventory, inventoryCounts, inventoryCountItems, products, documentJournals } from '../schema.js';
+import { eq, and, desc, sql } from 'drizzle-orm';
 
 export const stockVouchersRouter = router({
+  reserveNumber: protectedProcedure
+    .input(z.object({ warehouseId: z.number(), type: z.enum(['receipt', 'issue', 'transfer']).default('receipt') }))
+    .mutation(async ({ ctx, input }) => {
+      const [journal] = await db.select().from(documentJournals).where(and(
+        eq(documentJournals.orgId, ctx.user.orgId),
+        eq(documentJournals.warehouseId, input.warehouseId),
+        eq(documentJournals.docType, input.type === 'receipt' ? 'stock_receipt' : input.type === 'issue' ? 'stock_issue' : 'stock_transfer'),
+        eq(documentJournals.isActive, true),
+      )).limit(1);
+      if (!journal) throw new Error('لا يوجد دفتر سند مرتبط بالمخزن المحدد');
+      const [updated] = await db.update(documentJournals).set({
+        currentSeq: sql`LEAST(
+          CASE WHEN ${documentJournals.currentSeq} = 0
+            THEN ${documentJournals.firstNumber}
+            ELSE GREATEST(${documentJournals.currentSeq} + ${documentJournals.increment}, ${documentJournals.firstNumber})
+          END,
+          ${documentJournals.lastNumber}
+        )`,
+        updatedAt: new Date(),
+      }).where(and(
+        eq(documentJournals.id, journal.id),
+        eq(documentJournals.orgId, ctx.user.orgId),
+        eq(documentJournals.isActive, true),
+      )).returning();
+      if (!updated) throw new Error('تعذر حجز رقم السند');
+      const seq = updated.currentSeq ?? updated.firstNumber ?? 1;
+      const number = `${updated.numberPrefix ?? 'SV-IN'}${updated.includeYear ? new Date().getFullYear() + '-' : ''}${String(seq).padStart(updated.numDigits ?? 6, '0')}`;
+      return { journalId: updated.id, warehouseId: updated.warehouseId, voucherNumber: number };
+    }),
   list: protectedProcedure
     .input(z.object({ type: z.enum(['receipt', 'issue', 'transfer']).optional() }).optional())
     .query(async ({ ctx, input }) => {
@@ -36,28 +65,39 @@ export const stockVouchersRouter = router({
       supplierId:  z.number().optional(),
       reason:      z.string().optional(),
       notes:       z.string().optional(),
+       voucherDate: z.string().optional(),
+       sourceDocType: z.string().optional(),
+       sourceDocNumber: z.string().optional(),
+       voucherNumber: z.string().optional(),
+       sourceJournalId: z.number().optional(),
+       receiverUserId: z.number().optional(),
       items: z.array(z.object({
         productId:   z.number(),
         productName: z.string(),
         quantity:    z.string(),
         unitCost:    z.string(),
         totalCost:   z.string(),
+         productCode: z.string().optional(),
+         unit: z.string().optional(),
+         batchNumber: z.string().optional(),
+         expiryDate: z.string().optional(),
       })),
     }))
     .mutation(async ({ ctx, input }) => {
       const { items, ...rest } = input;
       const totalCost = items.reduce((s, i) => s + Number(i.totalCost), 0).toFixed(4);
 
-      const last = await db.query.stockVouchers.findFirst({
+       const last = await db.query.stockVouchers.findFirst({
         where: eq(stockVouchers.orgId, ctx.user.orgId),
         orderBy: [desc(stockVouchers.id)],
       });
       const num    = last ? parseInt(last.voucherNumber.replace(/\D/g, '') || '0') + 1 : 1;
       const prefix = rest.type === 'receipt' ? 'SV-IN' : rest.type === 'issue' ? 'SV-OUT' : 'SV-TR';
-      const voucherNumber = `${prefix}-${String(num).padStart(4, '0')}`;
+       const voucherNumber = rest.voucherNumber ?? `${prefix}-${String(num).padStart(4, '0')}`;
 
       const [v] = await db.insert(stockVouchers).values({
-        ...rest, orgId: ctx.user.orgId, userId: ctx.user.id, voucherNumber, totalCost, status: 'confirmed',
+         ...rest, voucherDate: rest.voucherDate ? new Date(rest.voucherDate) : undefined,
+        orgId: ctx.user.orgId, userId: ctx.user.id, voucherNumber, totalCost, status: 'confirmed',
       }).returning();
 
       if (items.length > 0) {
@@ -177,9 +217,9 @@ export const inventoryCountRouter = router({
           where: and(eq(inventory.orgId, ctx.user.orgId), eq(inventory.productId, item.productId), eq(inventory.warehouseId, count.warehouseId)),
         });
         if (existing) {
-          await db.update(inventory).set({ quantity: item.actualQuantity, updatedAt: new Date() }).where(eq(inventory.id, existing.id));
+          await db.update(inventory).set({ quantity: item.actualQuantity ?? '0', updatedAt: new Date() }).where(eq(inventory.id, existing.id));
         } else {
-          await db.insert(inventory).values({ orgId: ctx.user.orgId, productId: item.productId, warehouseId: count.warehouseId, quantity: item.actualQuantity });
+          await db.insert(inventory).values({ orgId: ctx.user.orgId, productId: item.productId, warehouseId: count.warehouseId, quantity: item.actualQuantity ?? '0' });
         }
       }
       await db.update(inventoryCounts).set({ status: 'confirmed', confirmedAt: new Date() }).where(eq(inventoryCounts.id, input.id));

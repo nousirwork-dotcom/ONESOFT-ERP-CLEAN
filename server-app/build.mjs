@@ -8,7 +8,19 @@
  */
 
 import * as esbuild from 'esbuild';
-import { statSync } from 'fs';
+import { statSync, writeFileSync, mkdirSync } from 'fs';
+import { execSync } from 'child_process';
+
+// ── Build metadata — computed ONCE at build time ──────────────────────────────
+const BUILD_DATE = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+function getCommitSha() {
+  try { return execSync('git rev-parse --short HEAD', { encoding: 'utf8', timeout: 5000 }).trim(); }
+  catch { return 'unknown'; }
+}
+const BUILD_COMMIT     = getCommitSha();
+const BUILD_DATE_ID    = BUILD_DATE.replace(/-/g, '');              // YYYYMMDD
+const BUILD_CACHE_NAME = `onesoft-erp-${BUILD_DATE_ID}-${BUILD_COMMIT}`;
 
 const DEV          = process.argv.includes('--dev');
 const CLIENT_BUILD = process.env.CLIENT_BUILD === 'true';
@@ -80,6 +92,18 @@ try {
   console.error('\n❌ فشل البناء:\n', e.message ?? e);
   process.exit(1);
 }
+
+// ── كتابة build-info.json ─────────────────────────────────────────────────────
+// يُحفظ في dist/ بجانب index.mjs — يُقرأ من setup.ts بدلاً من git runtime
+const buildInfo = {
+  buildDate:      BUILD_DATE,
+  buildCommit:    BUILD_COMMIT,
+  buildDateId:    BUILD_DATE_ID,
+  buildCacheName: BUILD_CACHE_NAME,
+};
+mkdirSync('dist', { recursive: true });
+writeFileSync('dist/build-info.json', JSON.stringify(buildInfo, null, 2), 'utf-8');
+console.log(`\n🏷️  Build Info: ${BUILD_DATE} · ${BUILD_COMMIT} · ${BUILD_CACHE_NAME}`);
 
 // ── تقرير الحجم ─────────────────────────────────────────────────────────────
 const bytes = statSync(OUTFILE).size;

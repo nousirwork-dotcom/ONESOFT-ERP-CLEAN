@@ -1,18 +1,13 @@
 /**
  * BasedOnDocInput — حقل رقم المستند المصدر (بناءً على)
  *
- * كليك يمين → قائمة سلاسل الترقيم المُشتقّة من:
- *   1) دفاتر المستندات المُعدَّة (تظهر حتى لو لا يوجد أي مستند بعد)
- *   2) المستندات الفعلية الموجودة في قاعدة البيانات
- *
- * زر 🔍 → نافذة بحث كاملة في مستندات النوع المحدد
- *   - بحث نصي، ترتيب بالأعمدة، تنقل بـ ↑↓ Enter Esc
- *   - نقر مزدوج أو Enter لتحميل المستند مباشرةً
- *
- * اختر سلسلة → يظهر البادئة الثابتة، اكتب الرقم الباقي + Enter → تحميل.
- * رسالة خطأ عند عدم العثور على المستند.
- *
- * يعمل مع: عرض أسعار | أمر بيع | فاتورة مبيعات | تحويل داخلي
+ * ميزات:
+ * - شريط بادئة مقفل + حقل لاحقة منفصل عند اختيار سلسلة
+ * - اختيار تلقائي للسلسلة عند وجود سلسلة واحدة فقط
+ * - فتح نافذة البحث تلقائياً عند تغيير النوع
+ * - تصفية المستندات الملغاة من نافذة البحث
+ * - أعمدة الفرع والمخزن في جدول البحث
+ * - رسالة واضحة عند عدم العثور على المستند
  */
 import React, {
   useState, useMemo, useRef, useEffect,
@@ -21,6 +16,7 @@ import React, {
 import { toast } from "sonner";
 import { trpc } from "@/shared/lib/trpc";
 import { Search, X, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
+import { fmtDate } from "@/shared/utils/dateUtils";
 
 /* ── Types ─────────────────────────────────────────────────────────────────── */
 type DocType = 'quote' | 'order' | 'sale' | 'transfer' | '';
@@ -36,6 +32,12 @@ interface Props {
   isFetching:  boolean;
   trigger:     string;
   isFound:     boolean | null;
+  disabled?:   boolean;
+  focusedEntityType?: string;
+  focusedEntityId?: number | string | null;
+  focusedFieldName?: string;
+  focusedSourceScreen?: string;
+  focusedEntityTitle?: string;
 }
 
 /* ── Mapping basedOnType → journal docType ──────────────────────────────── */
@@ -84,14 +86,15 @@ const DOC_TITLE: Record<string, string> = {
   transfer: "تحويلات المخزون",
 };
 
-/* ── Helpers ──────────────────────────────────────────────────────────── */
-function fmtDate(d: any): string {
-  if (!d) return "—";
-  try {
-    return new Date(d).toLocaleDateString("en-SA", { year: "numeric", month: "2-digit", day: "2-digit" });
-  } catch { return String(d).slice(0, 10); }
-}
+/* ── Not-found message per doc type ────────────────────────────────────── */
+const NOT_FOUND_MSG: Record<string, string> = {
+  quote:    "عرض الأسعار غير موجود أو ملغي",
+  order:    "أمر البيع غير موجود، ملغي، أو تم تحويله بالكامل",
+  sale:     "الفاتورة غير موجودة",
+  transfer: "وصل التحويل غير موجود",
+};
 
+/* ── Helpers ──────────────────────────────────────────────────────────── */
 function fmtNum(v: any): string {
   const n = parseFloat(v);
   if (isNaN(n)) return "—";
@@ -101,7 +104,12 @@ function fmtNum(v: any): string {
 /* ═══════════════════════════════════════════════════════════════════════════ */
 export default function BasedOnDocInput({
   docType, value, onChange, onPick,
-  warehouseId, isFetching, trigger, isFound,
+  warehouseId, isFetching, trigger, isFound, disabled,
+  focusedEntityType,
+  focusedEntityId,
+  focusedFieldName,
+  focusedSourceScreen,
+  focusedEntityTitle,
 }: Props) {
 
   /* ── Context menu state ── */
@@ -130,10 +138,11 @@ export default function BasedOnDocInput({
   /* ── Toast on not found ─────────────────────────────────────────────── */
   useEffect(() => {
     if (trigger && trigger !== prevTrigger && !isFetching && isFound === false) {
-      toast.error(`لا يمكن العثور على المستند: ${trigger}`, { duration: 3000 });
+      const msg = docType ? (NOT_FOUND_MSG[docType] ?? `لا يمكن العثور على المستند: ${trigger}`) : `لا يمكن العثور على المستند: ${trigger}`;
+      toast.error(msg, { duration: 4000 });
     }
     if (trigger !== prevTrigger) setPrevTrigger(trigger);
-  }, [trigger, isFetching, isFound]);
+  }, [trigger, isFetching, isFound, docType]);
 
   /* ── Fetch journals ─────────────────────────────────────────────────── */
   const journalDocType = docType ? JOURNAL_DOC_TYPE[docType] : null;
@@ -142,10 +151,35 @@ export default function BasedOnDocInput({
     { enabled: !!journalDocType, staleTime: 300_000 }
   );
 
+  /* ── Fetch warehouses (for search dialog columns) ───────────────────── */
+  const warehousesQ = trpc.warehouses.list.useQuery(undefined, {
+    enabled: !!docType,
+    staleTime: 300_000,
+  });
+
+  /* ── Build lookup maps ──────────────────────────────────────────────── */
+  const journalMap = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const j of (journalsQ.data ?? [])) m.set(j.id, j.name);
+    return m;
+  }, [journalsQ.data]);
+
+  const warehouseMap = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const w of (warehousesQ.data ?? [])) m.set(w.id, (w as any).name ?? (w as any).warehouseName ?? "");
+    return m;
+  }, [warehousesQ.data]);
+
   /* ── Fetch existing docs ─────────────────────────────────────────────── */
   const isSales = docType === 'sale' || docType === 'quote' || docType === 'order';
   const salesQ  = trpc.salesInvoices.list.useQuery(
-    { invoiceType: docType as 'sale' | 'quote' | 'order', ...(warehouseId ? { warehouseId } : {}), limit: 500 },
+    {
+      invoiceType: docType as 'sale' | 'quote' | 'order',
+      ...(warehouseId ? { warehouseId } : {}),
+      limit: 500,
+      // للأوامر: استثنِ الملغاة والمحوَّلة بالكامل من قائمة الاختيار
+      ...(docType === 'order' ? { excludeCancelled: true, excludeFullyConverted: true } : {}),
+    },
     { enabled: isSales && !!docType, staleTime: 60_000 }
   );
   const stockQ = trpc.stockVouchers.list.useQuery(
@@ -185,9 +219,11 @@ export default function BasedOnDocInput({
     return [];
   }, [salesQ.data, stockQ.data, isSales, docType]);
 
-  /* ── Filtered + sorted ──────────────────────────────────────────────── */
+  /* ── Filtered + sorted (exclude cancelled for orders/quotes) ────────── */
   const filteredDocs: any[] = useMemo(() => {
     let docs = [...allDocs];
+    // استثناء المستندات الملغاة من البحث (لا يمكن الاستناد إليها)
+    docs = docs.filter(d => d.status !== 'cancelled');
     if (searchQ.trim()) {
       const q = searchQ.toLowerCase();
       docs = docs.filter(d => {
@@ -207,8 +243,22 @@ export default function BasedOnDocInput({
     return docs;
   }, [allDocs, searchQ, sortCol, sortDir]);
 
-  /* ── Reset on type change ───────────────────────────────────────────── */
-  useEffect(() => { setSelPrefix(""); setSelPadLen(6); }, [docType]);
+  /* ── Reset on type change + auto-open search when type selected ─────── */
+  useEffect(() => {
+    setSelPrefix("");
+    setSelPadLen(6);
+    if (docType && !value) {
+      setSearchOpen(true);
+    }
+  }, [docType]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ── Auto-select series when only one is available ──────────────────── */
+  useEffect(() => {
+    if (!selPrefix && series.length === 1 && docType && !value) {
+      setSelPrefix(series[0].prefix);
+      setSelPadLen(series[0].padLen || 6);
+    }
+  }, [series]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Focus & reset when dialog opens ───────────────────────────────── */
   useEffect(() => {
@@ -281,19 +331,28 @@ export default function BasedOnDocInput({
     setSelPrefix(s.prefix);
     setSelPadLen(s.padLen || 6);
     setMenuVisible(false);
-    onChange(s.prefix);
+    // لا نغيّر value — البادئة تُعرض فقط في الـ badge
     setTimeout(() => {
       const el = inputRef.current;
       if (!el) return;
       el.focus();
-      el.setSelectionRange(s.prefix.length, s.prefix.length);
+      el.setSelectionRange(0, el.value.length);
     }, 0);
   }
 
+  /* ── Get suffix value for display ────────────────────────────────────── */
+  const suffixDisplay = selPrefix && value.startsWith(selPrefix)
+    ? value.slice(selPrefix.length)
+    : value;
+
   /* ── Construct full number then trigger load ─────────────────────────── */
   function doPick() {
-    const raw = value.trim();
-    if (!raw) return;
+    // أعد تكوين القيمة الكاملة من البادئة + اللاحقة الحالية
+    const currentSuffix = selPrefix && value.startsWith(selPrefix)
+      ? value.slice(selPrefix.length)
+      : (selPrefix ? value : value);
+    const raw = (selPrefix ? selPrefix + currentSuffix : value).trim();
+    if (!raw || raw === selPrefix) return;
     let fullNum = raw;
     if (selPrefix && raw.startsWith(selPrefix)) {
       const suffix = raw.slice(selPrefix.length);
@@ -307,7 +366,7 @@ export default function BasedOnDocInput({
 
   /* ── Input keyboard ──────────────────────────────────────────────────── */
   function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Enter') doPick();
+    if (e.key === 'Enter') { e.preventDefault(); doPick(); }
   }
 
   /* ── Pick from search dialog ─────────────────────────────────────────── */
@@ -341,46 +400,120 @@ export default function BasedOnDocInput({
   const isLoading     = salesQ.isLoading || stockQ.isLoading;
   const dialogTitle   = docType ? (DOC_TITLE[docType] ?? "مستندات") : "مستندات";
 
+  /* ── Whether to show richer columns (for sales types) ───────────────── */
+  const showBranchCol = isSales;
+
+  /* ─── Search table columns ──────────────────────────────────────────── */
+  const tableCols = showBranchCol
+    ? [
+        { col: "invoiceNumber", label: "رقم المستند", w: "17%" },
+        { col: "invoiceDate",   label: "التاريخ",     w: "10%" },
+        { col: "customerName",  label: "العميل",      w: "22%" },
+        { col: "_journalName",  label: "الفرع",       w: "14%" },
+        { col: "_warehouseName",label: "المخزن",      w: "12%" },
+        { col: "total",         label: "الإجمالي",    w: "11%" },
+        { col: "status",        label: "الحالة",      w: "14%" },
+      ]
+    : [
+        { col: "invoiceNumber", label: "رقم المستند", w: "22%" },
+        { col: "invoiceDate",   label: "التاريخ",     w: "14%" },
+        { col: "customerName",  label: "العميل / ملاحظة", w: "35%" },
+        { col: "total",         label: "الإجمالي",    w: "14%" },
+        { col: "status",        label: "الحالة",      w: "15%" },
+      ];
+
   /* ═══════════════════════════════════════════════════════════════════════ */
   return (
     <>
-      {/* ── Input ── */}
-      <div className="relative flex-1 min-w-0">
+      {/* ── Input: prefix badge + suffix input ── */}
+      <div className="relative flex-1 min-w-0 flex items-center" style={{ gap: 0 }}>
+
+        {/* Prefix badge — shown when a series is selected */}
+        {selPrefix && (
+          <span
+            title={`البادئة: ${selPrefix} — كليك ⊞ لتغيير السلسلة`}
+            style={{
+              display: "inline-flex", alignItems: "center",
+              padding: "0 7px",
+              background: "linear-gradient(135deg,#1e3a8a,#1a3f6f)",
+              color: "#fff",
+              fontSize: 11, fontFamily: "monospace", fontWeight: 700,
+              borderRadius: "4px 0 0 4px",
+              height: 26,
+              flexShrink: 0,
+              whiteSpace: "nowrap",
+              direction: "ltr",
+              cursor: "default",
+              userSelect: "none",
+              letterSpacing: "0.5px",
+            }}
+          >
+            {selPrefix}
+          </span>
+        )}
+
+        {/* Suffix / full number input */}
         <input
           ref={inputRef}
           type="text"
-          value={value}
-          disabled={!docType}
+          value={suffixDisplay}
+          data-focused-entity-type={focusedEntityType}
+          data-focused-entity-id={focusedEntityId ?? undefined}
+          data-focused-field={focusedFieldName}
+          data-focused-source={focusedSourceScreen}
+          data-focused-entity-title={focusedEntityTitle}
+          disabled={!docType || !!disabled}
           onChange={e => {
-            onChange(e.target.value);
-            if (selPrefix && !e.target.value.startsWith(selPrefix)) setSelPrefix("");
+            const newSuffix = e.target.value;
+            if (selPrefix) {
+              // إذا كان المستخدم مسح كل شيء → أعِد تعيين البادئة
+              if (!newSuffix) {
+                onChange("");
+              } else {
+                onChange(selPrefix + newSuffix);
+              }
+            } else {
+              onChange(newSuffix);
+              // إذا أزال الأحرف التي تشكّل البادئة → ألغِ البادئة
+              if (selPrefix && !newSuffix.startsWith(selPrefix)) setSelPrefix("");
+            }
           }}
-          onBlur={() => { if (docType && value.trim()) doPick(); }}
+          onBlur={() => { if (docType && value.trim() && value !== selPrefix) doPick(); }}
           onKeyDown={handleKeyDown}
           onContextMenu={handleContextMenu}
           placeholder={docType
-            ? (series.length > 0 ? "رقم المستند + Enter ↵  (كليك ⊞ للسلاسل)" : "رقم المستند ثم Enter ↵")
+            ? (selPrefix
+                ? "أرقام فقط + Enter ↵"
+                : series.length > 0
+                  ? "رقم المستند + Enter ↵  (⊞ للسلاسل)"
+                  : "رقم المستند ثم Enter ↵")
             : ""}
-          title={series.length > 0 ? "كليك يمين لاختيار سلسلة الترقيم" : ""}
-          className="classic-input w-full"
-          style={{ height: 26, direction: "ltr" }}
+          title={!selPrefix && series.length > 0 ? "كليك يمين لاختيار سلسلة الترقيم" : ""}
+          className="classic-input"
+          style={{
+            height: 26,
+            direction: "ltr",
+            flex: 1,
+            minWidth: 0,
+            borderRadius: selPrefix ? "0 4px 4px 0" : 4,
+          }}
           spellCheck={false}
           autoComplete="off"
         />
 
-        {/* Status icons */}
+        {/* Status icons — overlaid on the right of the full row */}
         {isFetching && (
-          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-blue-500">⏳</span>
+          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-blue-500" style={{ pointerEvents: "none" }}>⏳</span>
         )}
         {trigger && !isFetching && isFound === false && (
-          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-red-500 font-bold">✗</span>
+          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-red-500 font-bold" style={{ pointerEvents: "none" }}>✗</span>
         )}
         {trigger && !isFetching && isFound === true && (
-          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-green-600 font-bold">✓</span>
+          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-green-600 font-bold" style={{ pointerEvents: "none" }}>✓</span>
         )}
 
         {/* Series available indicator */}
-        {docType && series.length > 0 && !isFetching && (
+        {docType && !selPrefix && series.length > 0 && !isFetching && (
           <span
             className="absolute top-1/2 -translate-y-1/2"
             style={{ right: 5, fontSize: 7, color: "#1a7fd4", opacity: 0.6, pointerEvents: "none", userSelect: "none" }}
@@ -388,7 +521,7 @@ export default function BasedOnDocInput({
         )}
       </div>
 
-      {/* ── (+) Search Button ── */}
+      {/* ── 🔍 Search Button ── */}
       {docType && (
         <button
           type="button"
@@ -411,7 +544,7 @@ export default function BasedOnDocInput({
       )}
 
       {/* ════════════════════════════════════════════════════════════════════
-          Context Menu
+          Context Menu — سلاسل الترقيم
           ════════════════════════════════════════════════════════════════════ */}
       {menuVisible && (
         <div
@@ -465,12 +598,14 @@ export default function BasedOnDocInput({
                 fontSize: 12,
                 borderBottom: "1px solid #f3f4f6",
                 gap: 10,
+                background: selPrefix === s.prefix ? "#eff6ff" : undefined,
               }}
               onMouseEnter={e => (e.currentTarget.style.background = "#eff6ff")}
-              onMouseLeave={e => (e.currentTarget.style.background = "")}
+              onMouseLeave={e => (e.currentTarget.style.background = selPrefix === s.prefix ? "#eff6ff" : "")}
             >
               <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#1a3f6f", direction: "ltr" }}>
                 {s.prefix}
+                {selPrefix === s.prefix && <span style={{ fontSize: 9, color: "#3b82f6", marginRight: 6 }}>✓ محدد</span>}
               </span>
               <span style={{ fontSize: 10, color: s.count > 0 ? "#555" : "#aaa", flexShrink: 0, whiteSpace: "nowrap" }}>
                 {s.count > 0 ? `${s.count} مستند` : "جديد"}
@@ -506,7 +641,7 @@ export default function BasedOnDocInput({
               background: "#fff",
               borderRadius: 10,
               boxShadow: "0 24px 60px rgba(0,0,0,0.35)",
-              width: "min(820px, 96vw)",
+              width: showBranchCol ? "min(950px, 96vw)" : "min(820px, 96vw)",
               maxHeight: "82vh",
               display: "flex",
               flexDirection: "column",
@@ -532,6 +667,11 @@ export default function BasedOnDocInput({
                     borderRadius: 10, padding: "1px 8px",
                   }}>الفرع الحالي فقط</span>
                 )}
+                <span style={{
+                  fontSize: 10, opacity: 0.7,
+                  background: "rgba(255,255,255,0.12)",
+                  borderRadius: 10, padding: "1px 8px",
+                }}>الملغاة مستثناة</span>
               </div>
               <button
                 type="button"
@@ -571,7 +711,7 @@ export default function BasedOnDocInput({
                 <span>
                   {isLoading
                     ? "⏳ جاري التحميل…"
-                    : <><strong style={{ color: "#374151" }}>{filteredDocs.length}</strong> مستند{allDocs.length !== filteredDocs.length ? ` من ${allDocs.length}` : ""}</>
+                    : <><strong style={{ color: "#374151" }}>{filteredDocs.length}</strong> مستند{allDocs.filter(d => d.status !== 'cancelled').length !== filteredDocs.length ? ` من ${allDocs.filter(d => d.status !== 'cancelled').length}` : ""}</>
                   }
                 </span>
                 <span style={{ direction: "ltr", fontFamily: "monospace", fontSize: 10 }}>
@@ -596,14 +736,7 @@ export default function BasedOnDocInput({
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                   <thead style={{ position: "sticky", top: 0, zIndex: 1 }}>
                     <tr style={{ background: "#f1f5f9" }}>
-                      {[
-                        { col: "invoiceNumber", label: "رقم المستند",  w: "19%" },
-                        { col: "invoiceDate",   label: "التاريخ",       w: "13%" },
-                        { col: "customerName",  label: "العميل",        w: "30%" },
-                        { col: "total",         label: "الإجمالي",      w: "13%" },
-                        { col: "status",        label: "الحالة",        w: "12%" },
-                        { col: "invoiceType",   label: "النوع",         w: "13%" },
-                      ].map(({ col, label, w }) => (
+                      {tableCols.map(({ col, label, w }) => (
                         <th
                           key={col}
                           onClick={() => handleSort(col)}
@@ -628,6 +761,8 @@ export default function BasedOnDocInput({
                       const num   = doc.invoiceNumber ?? doc.voucherNumber ?? "";
                       const st    = STATUS_MAP[doc.status] ?? { ar: doc.status ?? "—", color: "#555", bg: "#f3f4f6" };
                       const isAct = idx === activeIdx;
+                      const jName = doc.journalId ? (journalMap.get(doc.journalId) ?? "—") : "—";
+                      const wName = doc.warehouseId ? (warehouseMap.get(doc.warehouseId) ?? "—") : "—";
                       return (
                         <tr
                           key={doc.id ?? idx}
@@ -656,6 +791,18 @@ export default function BasedOnDocInput({
                           <td style={{ padding: "7px 10px", color: "#374151", maxWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                             {doc.customerName ?? doc.notes ?? "—"}
                           </td>
+                          {/* الفرع — فقط للمبيعات */}
+                          {showBranchCol && (
+                            <td style={{ padding: "7px 10px", color: "#475569", fontSize: 11, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 0 }}>
+                              {jName}
+                            </td>
+                          )}
+                          {/* المخزن — فقط للمبيعات */}
+                          {showBranchCol && (
+                            <td style={{ padding: "7px 10px", color: "#475569", fontSize: 11, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 0 }}>
+                              {wName}
+                            </td>
+                          )}
                           {/* الإجمالي */}
                           <td style={{ padding: "7px 10px", direction: "ltr", textAlign: "left", fontFamily: "monospace", color: "#065f46", fontWeight: 600 }}>
                             {fmtNum(doc.total ?? doc.totalAmount)}
@@ -669,15 +816,6 @@ export default function BasedOnDocInput({
                               background: st.bg, color: st.color,
                               whiteSpace: "nowrap",
                             }}>{st.ar}</span>
-                          </td>
-                          {/* النوع */}
-                          <td style={{ padding: "7px 10px", color: "#64748b", fontSize: 11 }}>
-                            {doc.invoiceType === "quote"    ? "عرض أسعار"
-                           : doc.invoiceType === "order"    ? "أمر بيع"
-                           : doc.invoiceType === "sale"     ? "فاتورة مبيعات"
-                           : doc.invoiceType === "return"   ? "مردود"
-                           : doc.voucherType  === "transfer"? "تحويل مخزون"
-                           : "—"}
                           </td>
                         </tr>
                       );

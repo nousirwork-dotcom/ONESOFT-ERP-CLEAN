@@ -1,5 +1,6 @@
 import { useDialogComposition } from "@/core/ui/dialog";
 import { useComposition } from "@/shared/hooks/useComposition";
+import { useDesktopField } from "@/shared/hooks/useDesktopField";
 import { cn } from "@/shared/lib/utils";
 import * as React from "react";
 
@@ -9,8 +10,14 @@ function Input({
   onKeyDown,
   onCompositionStart,
   onCompositionEnd,
+  onFocus: externalOnFocus,
+  onBlur: externalOnBlur,
+  onMouseDown: externalOnMouseDown,
+  disableSelectOnFocus,
   ...props
-}: React.ComponentProps<"input">) {
+}: React.ComponentProps<"input"> & {
+  disableSelectOnFocus?: boolean;
+}) {
   const dialogComposition = useDialogComposition();
   const {
     onCompositionStart: handleCompositionStart,
@@ -30,6 +37,27 @@ function Input({
     },
   });
 
+  const {
+    onMouseDown: deskMouseDown,
+    onFocus:    deskFocus,
+    onBlur:     deskBlur,
+  } = useDesktopField<HTMLInputElement>();
+
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    if (!disableSelectOnFocus) deskFocus(e);
+    externalOnFocus?.(e);
+  };
+
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    deskBlur();
+    externalOnBlur?.(e);
+  };
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLInputElement>) => {
+    if (!disableSelectOnFocus) deskMouseDown(e);
+    externalOnMouseDown?.(e);
+  };
+
   return (
     <input
       type={type}
@@ -46,6 +74,9 @@ function Input({
       onCompositionStart={handleCompositionStart}
       onCompositionEnd={handleCompositionEnd}
       onKeyDown={handleKeyDown}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+      onMouseDown={handleMouseDown}
       {...props}
     />
   );

@@ -4,12 +4,14 @@
  * ترتيب الإدخال:  DD → MM → YYYY
  * ترتيب العرض:   YYYY - MM - DD  (CSS order على flex)
  *
- * Tab / Shift+Tab : ينتقل DD↔MM↔YYYY ثم يخرج طبيعياً عبر ترتيب DOM
- * Enter           : يخرج مباشرة إلى الحقل التالي من أي موضع
- * ← →             : ينتقل بصرياً بين الأجزاء
- * Backspace فارغ  : يرجع للجزء السابق في ترتيب الإدخال
- * Auto-advance    : بعد 2 رقم في DD→MM وبعد اكتمال YYYY
- * onFocus         : يحدد المحتوى تلقائياً
+ * Tab / Shift+Tab   : ينتقل DD↔MM↔YYYY ثم يخرج طبيعياً
+ * Enter             : ينتقل للأمام (DD→MM→YYYY ثم يخرج)
+ * Shift+Enter       : ينتقل للخلف (يرجع داخل الحقل أو يخرج للحقل السابق)
+ * ← →              : ينتقل بصرياً بين الأجزاء (اتجاه LTR)
+ * Backspace فارغ   : يرجع للجزء السابق في ترتيب الإدخال
+ * Auto-advance      : بعد 2 رقم في DD→MM وبعد اكتمال YYYY
+ * onFocus           : يحدد المحتوى تلقائياً
+ * Validation        : يتحقق من عدد أيام الشهر والسنة الكبيسة
  *
  * Props:
  *   standalone   — true: حدود كاملة (بدون زر تقويم)
@@ -19,13 +21,18 @@ import { useRef, useState, useEffect } from "react";
 import type { KeyboardEvent, CSSProperties } from "react";
 
 export interface DateSegmentInputProps {
-  value: string;           // YYYY-MM-DD أو ""
+  value: string;
   onChange: (v: string) => void;
+  onNavigate?: (direction: "next" | "previous") => void;
   style?: CSSProperties;
   className?: string;
-  standalone?: boolean;    // true = حدود كاملة بدون زر تقويم جانبي
+  standalone?: boolean;
   tabIndex?: number;
   disabled?: boolean;
+}
+
+function daysInMonth(mo: number, y: number): number {
+  return new Date(y, mo, 0).getDate();
 }
 
 function parse(iso: string): [string, string, string] {
@@ -36,35 +43,49 @@ function parse(iso: string): [string, string, string] {
 function build(dd: string, mm: string, yyyy: string): string {
   if (dd.length === 2 && mm.length === 2 && yyyy.length === 4) {
     const d = +dd, mo = +mm, y = +yyyy;
-    if (d >= 1 && d <= 31 && mo >= 1 && mo <= 12 && y >= 1000)
+    if (d >= 1 && mo >= 1 && mo <= 12 && y >= 1000 && d <= daysInMonth(mo, y))
       return `${yyyy}-${mm}-${dd}`;
   }
   return "";
 }
 
+const FOCUSABLE_SEL = [
+  'input:not([disabled]):not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="reset"])',
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  '[data-enter-nav="true"]:not([disabled])',
+].join(", ");
+
+function getFocusable(doc: Document): HTMLElement[] {
+  return Array.from(doc.querySelectorAll<HTMLElement>(FOCUSABLE_SEL)).filter(el =>
+    el.offsetParent !== null &&
+    !el.getAttribute("data-global-keyboard") &&
+    !el.hasAttribute("data-no-desktop-field") &&
+    !(el.closest('[tabindex="-1"]') && !el.closest('[role="dialog"]') && !el.hasAttribute("data-enter-nav"))
+  );
+}
+
 function focusNext(from: HTMLElement | null) {
   if (!from) return;
-  const doc = from.ownerDocument ?? document;
-  const all = Array.from(
-    doc.querySelectorAll<HTMLElement>(
-      'input:not([disabled]):not([type="hidden"]):not([tabindex="-1"]),' +
-      'select:not([disabled]):not([tabindex="-1"]),' +
-      'textarea:not([disabled]):not([tabindex="-1"]),' +
-      'button:not([disabled]):not([tabindex="-1"])'
-    )
-  ).filter(el => el.offsetParent !== null);
+  const all = getFocusable(from.ownerDocument ?? document);
   const i = all.indexOf(from);
   if (i >= 0 && i + 1 < all.length) all[i + 1].focus();
 }
 
+function focusPrev(from: HTMLElement | null) {
+  if (!from) return;
+  const all = getFocusable(from.ownerDocument ?? document);
+  const i = all.indexOf(from);
+  if (i > 0) all[i - 1].focus();
+}
+
 export function DateSegmentInput({
-  value, onChange, style, className, standalone = false, tabIndex, disabled,
+  value, onChange, onNavigate, style, className, standalone = false, tabIndex, disabled,
 }: DateSegmentInputProps) {
   const [dd,   setDd]   = useState("");
   const [mm,   setMm]   = useState("");
   const [yyyy, setYyyy] = useState("");
 
-  // DOM order: ddRef → mmRef → yyyyRef  (ترتيب Tab الطبيعي)
   const ddRef   = useRef<HTMLInputElement>(null);
   const mmRef   = useRef<HTMLInputElement>(null);
   const yyyyRef = useRef<HTMLInputElement>(null);
@@ -73,6 +94,9 @@ export function DateSegmentInput({
     const [d, m, y] = parse(value);
     setDd(d); setMm(m); setYyyy(y);
   }, [value]);
+
+  const allFilled = dd.length === 2 && mm.length === 2 && yyyy.length === 4;
+  const isError   = allFilled && !build(dd, mm, yyyy);
 
   const emit = (d: string, m: string, y: string) => {
     if (!d && !m && !y) { onChange(""); return; }
@@ -89,9 +113,10 @@ export function DateSegmentInput({
   };
 
   const onDdKey = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      mmRef.current?.focus(); mmRef.current?.select();
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault(); mmRef.current?.focus(); mmRef.current?.select();
+    } else if (e.key === "Enter" && e.shiftKey) {
+      e.preventDefault(); focusPrev(ddRef.current);
     } else if (e.key === "ArrowLeft") {
       e.preventDefault(); mmRef.current?.focus(); mmRef.current?.select();
     }
@@ -108,8 +133,10 @@ export function DateSegmentInput({
   };
 
   const onMmKey = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault(); yyyyRef.current?.focus(); yyyyRef.current?.select();
+    } else if (e.key === "Enter" && e.shiftKey) {
+      e.preventDefault(); ddRef.current?.focus(); ddRef.current?.select();
     } else if (e.key === "ArrowRight") {
       e.preventDefault(); ddRef.current?.focus(); ddRef.current?.select();
     } else if (e.key === "ArrowLeft") {
@@ -128,14 +155,18 @@ export function DateSegmentInput({
   };
 
   const onYyyyKey = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.preventDefault(); focusNext(yyyyRef.current);
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault(); onNavigate ? onNavigate("next") : focusNext(yyyyRef.current);
+    } else if (e.key === "Enter" && e.shiftKey) {
+      e.preventDefault(); onNavigate ? onNavigate("previous") : (mmRef.current?.focus(), mmRef.current?.select());
     } else if (e.key === "ArrowRight") {
       e.preventDefault(); mmRef.current?.focus(); mmRef.current?.select();
     } else if (e.key === "Backspace" && yyyy === "") {
       e.preventDefault(); mmRef.current?.focus(); mmRef.current?.select();
     }
   };
+
+  const borderColor = isError ? "#ef4444" : "#d1d5db";
 
   const seg: CSSProperties = {
     border: "none", outline: "none", background: "transparent",
@@ -148,12 +179,15 @@ export function DateSegmentInput({
     <div
       dir="ltr"
       className={className}
+      data-nav-internal="true"
+      data-no-desktop-field
+      title={isError ? "تاريخ غير صحيح" : undefined}
       style={{
         display: "flex", alignItems: "center",
-        border: "1px solid #d1d5db",
+        border: `1px solid ${borderColor}`,
         borderRadius: standalone ? 4 : "4px 0 0 4px",
-        borderRight: standalone ? "1px solid #d1d5db" : "none",
-        background: disabled ? "#f9fafb" : "white",
+        borderRight: standalone ? `1px solid ${borderColor}` : "none",
+        background: isError ? "#fff5f5" : (disabled ? "#f9fafb" : "white"),
         paddingInline: 5,
         cursor: disabled ? "not-allowed" : undefined,
         ...style,
@@ -202,8 +236,8 @@ export function DateSegmentInput({
         tabIndex={tabIndex !== undefined ? -1 : undefined}
         style={{ ...seg, width: 34, order: 1 }}
       />
-      <span style={{ color: "#bbb", userSelect: "none", fontSize: 11, margin: "0 1px", order: 2 }}>-</span>
-      <span style={{ color: "#bbb", userSelect: "none", fontSize: 11, margin: "0 1px", order: 4 }}>-</span>
+      <span style={{ color: isError ? "#ef4444" : "inherit", userSelect: "none", fontSize: 11, margin: "0 1px", order: 2 }}>-</span>
+      <span style={{ color: isError ? "#ef4444" : "inherit", userSelect: "none", fontSize: 11, margin: "0 1px", order: 4 }}>-</span>
     </div>
   );
 }

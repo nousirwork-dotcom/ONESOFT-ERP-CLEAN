@@ -1,12 +1,12 @@
 import { fmtDate } from "@/shared/utils/dateUtils";
 import { useTabManager } from "@/core/contexts/TabManagerContext";
-import { LayoutDashboard, Store } from "lucide-react";
+import { Store } from "lucide-react";
 import { useState, useEffect } from "react";
 
 export const TASKBAR_H = 40;
 
 export default function WindowTaskbar() {
-  const { tabs, activeTabId, activateTab, minimizeWindow, toggleDashboard, dashboardVisible, showDashboard } = useTabManager();
+  const { tabs, activeTabId, activateTab, minimizeWindow, toggleDashboard, dashboardVisible, showDashboard, isPosWorkspaceActive } = useTabManager();
   const [clock, setClock] = useState(() => fmtTime());
 
   useEffect(() => {
@@ -14,7 +14,9 @@ export default function WindowTaskbar() {
     return () => clearInterval(id);
   }, []);
 
-  const visibleTabs = tabs; // show all (minimized too)
+  if (isPosWorkspaceActive) return null;
+
+  const visibleTabs = tabs;
 
   return (
     <div
@@ -89,14 +91,14 @@ export default function WindowTaskbar() {
                 gap: 6,
                 paddingRight: 8,
                 paddingLeft: 8,
-                borderRadius: 5,
+                borderRadius: isActive ? 10 : 5,
                 background: isActive
                   ? "rgba(59,130,246,0.30)"
                   : isMinimized
                   ? "rgba(255,255,255,0.06)"
                   : "rgba(255,255,255,0.10)",
                 border: isActive
-                  ? "1px solid rgba(59,130,246,0.55)"
+                  ? "1.5px solid var(--color-border-active)"
                   : "1px solid rgba(255,255,255,0.08)",
                 cursor: "pointer",
                 color: isActive ? "#fff" : "rgba(255,255,255,0.72)",

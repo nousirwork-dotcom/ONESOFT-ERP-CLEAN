@@ -1,5 +1,5 @@
-import { pgTable, serial, varchar, text, integer, boolean, decimal, timestamp, pgEnum, uniqueIndex, jsonb, uuid } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { pgTable, serial, varchar, text, integer, boolean, decimal, timestamp, pgEnum, uniqueIndex, jsonb, uuid, index, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import { relations, sql } from 'drizzle-orm';
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 export const userRoleEnum = pgEnum('user_role', ['superadmin', 'admin', 'cashier', 'accountant', 'warehouse_manager', 'viewer']);
@@ -9,6 +9,7 @@ export const invoiceStatusEnum = pgEnum('invoice_status', ['draft', 'confirmed',
 export const paymentMethodEnum = pgEnum('payment_method', ['cash', 'bank', 'credit', 'check', 'other']);
 export const voucherTypeEnum = pgEnum('voucher_type', ['receipt', 'payment']);
 export const journalStatusEnum = pgEnum('journal_status', ['draft', 'posted', 'cancelled']);
+export const pendingMovementStatusEnum = pgEnum('pending_movement_status', ['unposted', 'linked', 'cancelled']);
 
 // ─── Organizations ────────────────────────────────────────────────────────────
 export const organizations = pgTable('organizations', {
@@ -46,6 +47,7 @@ export const users = pgTable('users', {
   extraPermissions: jsonb('extra_permissions').$type<Record<string, boolean>>(),
   categoryId: integer('category_id'),
   isActive: boolean('is_active').notNull().default(true),
+  allowLogin: boolean('allow_login').notNull().default(true),
   passwordStatus: varchar('password_status', { length: 20 }).notNull().default('set'),
   lastLoginAt: timestamp('last_login_at'),
   phoneVerifiedAt: timestamp('phone_verified_at'),
@@ -54,20 +56,41 @@ export const users = pgTable('users', {
   forcePasswordChange: boolean('force_password_change').notNull().default(false),
   recoveryEnabledPhone: boolean('recovery_enabled_phone').notNull().default(false),
   recoveryEnabledEmail: boolean('recovery_enabled_email').notNull().default(false),
+  userGroupId: integer('user_group_id'),
+  defaultBranchId: integer('default_branch_id'),
+  defaultWarehouseId: integer('default_warehouse_id'),
+  defaultLanguage: varchar('default_language', { length: 10 }),
+  sessionVersion: integer('session_version').notNull().default(1),
+  canBeSalesperson: boolean('can_be_salesperson').notNull().default(false),
+  allowEmailLogin: boolean('allow_email_login').notNull().default(false),
+  loginMethod: varchar('login_method', { length: 30 }).notNull().default('username'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
+
+// ─── User Warehouse Assignments (المخزن = الفرع في مسار المستندات) ──────────────
+export const userWarehouseAssignments = pgTable('user_warehouse_assignments', {
+  id:          serial('id').primaryKey(),
+  orgId:       integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  userId:      integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  warehouseId: integer('warehouse_id').notNull().references(() => warehouses.id, { onDelete: 'cascade' }),
+  createdAt:   timestamp('created_at').notNull().defaultNow(),
+}, (t) => ({
+  uwaOrgUserWarehouseUnique: uniqueIndex('uwa_org_user_warehouse_unique').on(t.orgId, t.userId, t.warehouseId),
+}));
 
 // ─── User Groups ──────────────────────────────────────────────────────────────
 export const userGroups = pgTable('user_groups', {
   id: serial('id').primaryKey(),
   orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
-  code: varchar('code', { length: 50 }),
+  code: varchar('code', { length: 50 }).notNull(),
   name: varchar('name', { length: 255 }).notNull(),
   description: text('description'),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),
-});
+}, (t) => ({
+  orgCodeActiveUidx: uniqueIndex('ug_org_code_active_uidx').on(t.orgId, t.code).where(sql`${t.isActive} = true`),
+}));
 
 // ─── User Categories ──────────────────────────────────────────────────────────
 export const userCategories = pgTable('user_categories', {
@@ -92,6 +115,20 @@ export const userGroupMembers = pgTable('user_group_members', {
   memberType: varchar('member_type', { length: 10 }).notNull(),
   memberCode: varchar('member_code', { length: 50 }),
   memberName: varchar('member_name', { length: 255 }),
+  memberUserId: integer('member_user_id').references(() => users.id, { onDelete: 'cascade' }),
+  memberGroupId: integer('member_group_id').references(() => userGroups.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+// ─── User Group Migration Log ─────────────────────────────────────────────────
+export const userGroupMigrationLog = pgTable('user_group_migration_log', {
+  id: serial('id').primaryKey(),
+  originalMemberId: integer('original_member_id'),
+  groupId: integer('group_id'),
+  memberType: varchar('member_type', { length: 10 }),
+  memberCode: varchar('member_code', { length: 50 }),
+  memberName: varchar('member_name', { length: 255 }),
+  reason: text('reason'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
@@ -102,8 +139,13 @@ export const branches = pgTable('branches', {
   name: varchar('name', { length: 255 }).notNull(),
   address: text('address'),
   phone: varchar('phone', { length: 50 }),
-  isActive: boolean('is_active').notNull().default(true),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
+  isActive:             boolean('is_active').notNull().default(true),
+  recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
+  foundationKey:        varchar('foundation_key', { length: 100 }),
+  includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:                varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion:   varchar('foundation_template_version', { length: 20 }),
+  createdAt:            timestamp('created_at').notNull().defaultNow(),
 });
 
 // ─── Warehouses ───────────────────────────────────────────────────────────────
@@ -126,8 +168,13 @@ export const warehouses = pgTable('warehouses', {
   salesAccount1Id: integer('sales_account1_id').references(() => chartOfAccounts.id, { onDelete: 'set null' }),
   allowedUserId: integer('allowed_user_id').references(() => users.id, { onDelete: 'set null' }),
   allowedUserGroup: varchar('allowed_user_group', { length: 255 }),
-  copyFromWarehouseId: integer('copy_from_warehouse_id'),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
+  copyFromWarehouseId:  integer('copy_from_warehouse_id'),
+  recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
+  foundationKey:        varchar('foundation_key', { length: 100 }),
+  includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:                varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion:   varchar('foundation_template_version', { length: 20 }),
+  createdAt:            timestamp('created_at').notNull().defaultNow(),
 });
 
 // ─── Warehouse Account Links ───────────────────────────────────────────────────
@@ -144,7 +191,12 @@ export const units = pgTable('units', {
   id: serial('id').primaryKey(),
   orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   name: varchar('name', { length: 100 }).notNull(),
-  symbol: varchar('symbol', { length: 20 }),
+  symbol:               varchar('symbol', { length: 20 }),
+  recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
+  foundationKey:        varchar('foundation_key', { length: 100 }),
+  includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:                varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion:   varchar('foundation_template_version', { length: 20 }),
 });
 
 // ─── Product Groups ───────────────────────────────────────────────────────────
@@ -163,8 +215,13 @@ export const productGroups = pgTable('product_groups', {
   lastNumber: integer('last_number').default(99999),
   increment: integer('increment').default(1),
   codeDigits: integer('code_digits').default(5),
-  color: varchar('color', { length: 30 }),
-  isActive: boolean('is_active').default(true),
+  color:                varchar('color', { length: 30 }),
+  isActive:             boolean('is_active').default(true),
+  recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
+  foundationKey:        varchar('foundation_key', { length: 100 }),
+  includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:                varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion:   varchar('foundation_template_version', { length: 20 }),
 });
 
 // ─── Products ─────────────────────────────────────────────────────────────────
@@ -186,6 +243,11 @@ export const products = pgTable('products', {
   isActive: boolean('is_active').notNull().default(true),
   notes: text('notes'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
+  recordPolicy:              varchar('record_policy', { length: 20 }).notNull().default('flexible'),
+  foundationKey:             varchar('foundation_key', { length: 100 }),
+  includeInFoundation:       boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:              varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion: varchar('foundation_template_version', { length: 20 }),
 });
 
 // ─── Customers ────────────────────────────────────────────────────────────────
@@ -219,6 +281,11 @@ export const customers = pgTable('customers', {
   defaultSendMethod: varchar('default_send_method', { length: 20 }),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),
+  recordPolicy:              varchar('record_policy', { length: 20 }).notNull().default('flexible'),
+  foundationKey:             varchar('foundation_key', { length: 100 }),
+  includeInFoundation:       boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:              varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion: varchar('foundation_template_version', { length: 20 }),
 });
 
 // ─── Suppliers ────────────────────────────────────────────────────────────────
@@ -227,13 +294,20 @@ export const suppliers = pgTable('suppliers', {
   orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   code: varchar('code', { length: 50 }),
   name: varchar('name', { length: 500 }).notNull(),
+  supplierType: varchar('supplier_type', { length: 20 }).notNull().default('individual'),
   phone: varchar('phone', { length: 50 }),
   email: varchar('email', { length: 255 }),
   address: text('address'),
   taxNumber: varchar('tax_number', { length: 50 }),
+  registrationNumber: varchar('registration_number', { length: 100 }),
   balance: decimal('balance', { precision: 18, scale: 4 }).default('0'),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),
+  recordPolicy:              varchar('record_policy', { length: 20 }).notNull().default('flexible'),
+  foundationKey:             varchar('foundation_key', { length: 100 }),
+  includeInFoundation:       boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:              varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion: varchar('foundation_template_version', { length: 20 }),
 });
 
 // ─── Chart of Accounts ────────────────────────────────────────────────────────
@@ -255,7 +329,12 @@ export const chartOfAccounts = pgTable('chart_of_accounts', {
   notes: text('notes'),
   isActive: boolean('is_active').notNull().default(true),
   balance: decimal('balance', { precision: 18, scale: 4 }).default('0'),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
+  recordType: varchar('record_type', { length: 30 }).notNull().default('user'),
+  systemKey:           varchar('system_key', { length: 100 }),
+  includeInFoundation: boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:                varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion:   varchar('foundation_template_version', { length: 20 }),
+  createdAt:           timestamp('created_at').notNull().defaultNow(),
 });
 
 // ─── Sales Invoices ───────────────────────────────────────────────────────────
@@ -271,7 +350,6 @@ export const salesInvoices = pgTable('sales_invoices', {
   customerType: varchar('customer_type', { length: 20 }).default('individual'),
   customerTaxNumber: varchar('customer_tax_number', { length: 100 }),
   warehouseId: integer('warehouse_id').references(() => warehouses.id, { onDelete: 'set null' }),
-  branchId: integer('branch_id').references(() => branches.id, { onDelete: 'set null' }),
   userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
   currency: varchar('currency', { length: 10 }).default('SAR'),
   exchangeRate: decimal('exchange_rate', { precision: 10, scale: 4 }).default('1'),
@@ -306,6 +384,12 @@ export const salesInvoices = pgTable('sales_invoices', {
   zatcaSubmittedAt: timestamp('zatca_submitted_at'),
   zatcaAttemptCount: integer('zatca_attempt_count').notNull().default(0),
   zatcaRejectionReason: text('zatca_rejection_reason'),
+  basedOnType: varchar('based_on_type', { length: 20 }),
+  basedOnNumber: varchar('based_on_number', { length: 50 }),
+  sourceDocumentId: integer('source_document_id'), // FK للفاتورة المصدر — يُتحقق منه لأمان الفرع
+  sellerUserId: integer('seller_user_id').references(() => users.id, { onDelete: 'set null' }),
+  // رقم المسودة الأصلي — يُحفظ عند تحويل المسودة إلى فاتورة نهائية للرجوع إليه
+  draftNumber: varchar('draft_number', { length: 50 }),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -363,6 +447,8 @@ export const purchaseInvoices = pgTable('purchase_invoices', {
   postedJournalEntryId: integer('posted_journal_entry_id'),
   inventoryPosted: boolean('inventory_posted').notNull().default(false),
   costPostedJournalEntryId: integer('cost_posted_journal_entry_id'),
+  generatedStockVoucherId: integer('generated_stock_voucher_id'),
+  generatedStockJournalEntryId: integer('generated_stock_journal_entry_id'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -383,8 +469,52 @@ export const purchaseInvoiceItems = pgTable('purchase_invoice_items', {
   taxPercent: decimal('tax_percent', { precision: 5, scale: 2 }).default('0'),
   taxAmount: decimal('tax_amount', { precision: 18, scale: 4 }).default('0'),
   total: decimal('total', { precision: 18, scale: 4 }).notNull(),
+  batchNumber: varchar('batch_number', { length: 100 }),
+  expiryDate: varchar('expiry_date', { length: 20 }),
   sortOrder: integer('sort_order').default(0),
 });
+
+// ─── Unposted source-document movements ───────────────────────────────────────
+// These are operational effects, not numbered journal entries or stock vouchers.
+export const pendingAccountMovements = pgTable('pending_account_movements', {
+  id: serial('id').primaryKey(),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  sourceDocType: varchar('source_doc_type', { length: 50 }).notNull(),
+  sourceDocId: integer('source_doc_id').notNull(),
+  sourceDocNumber: varchar('source_doc_number', { length: 100 }).notNull(),
+  movementDate: timestamp('movement_date').notNull(),
+  accountId: integer('account_id').references(() => chartOfAccounts.id, { onDelete: 'set null' }),
+  debit: decimal('debit', { precision: 18, scale: 4 }).notNull().default('0'),
+  credit: decimal('credit', { precision: 18, scale: 4 }).notNull().default('0'),
+  description: text('description'),
+  status: pendingMovementStatusEnum('status').notNull().default('unposted'),
+  linkedJournalEntryId: integer('linked_journal_entry_id').references(() => journalEntries.id, { onDelete: 'set null' }),
+  linkedStockVoucherId: integer('linked_stock_voucher_id').references(() => stockVouchers.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('pending_account_movements_source_account_uidx').on(t.orgId, t.sourceDocType, t.sourceDocId, t.accountId),
+]);
+
+export const pendingStockMovements = pgTable('pending_stock_movements', {
+  id: serial('id').primaryKey(),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  sourceDocType: varchar('source_doc_type', { length: 50 }).notNull(),
+  sourceDocId: integer('source_doc_id').notNull(),
+  sourceDocNumber: varchar('source_doc_number', { length: 100 }).notNull(),
+  movementDate: timestamp('movement_date').notNull(),
+  productId: integer('product_id').notNull().references(() => products.id, { onDelete: 'cascade' }),
+  warehouseId: integer('warehouse_id').references(() => warehouses.id, { onDelete: 'set null' }),
+  quantity: decimal('quantity', { precision: 18, scale: 4 }).notNull(),
+  unitCost: decimal('unit_cost', { precision: 18, scale: 4 }).notNull().default('0'),
+  status: pendingMovementStatusEnum('status').notNull().default('unposted'),
+  linkedJournalEntryId: integer('linked_journal_entry_id').references(() => journalEntries.id, { onDelete: 'set null' }),
+  linkedStockVoucherId: integer('linked_stock_voucher_id').references(() => stockVouchers.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('pending_stock_movements_source_product_uidx').on(t.orgId, t.sourceDocType, t.sourceDocId, t.productId, t.warehouseId),
+]);
 
 // ─── Journal Entries ──────────────────────────────────────────────────────────
 export const journalEntries = pgTable('journal_entries', {
@@ -402,6 +532,8 @@ export const journalEntries = pgTable('journal_entries', {
   sourceDocId:     integer('source_doc_id'),
   sourceDocNumber: varchar('source_doc_number', { length: 100 }),
   entryType:       varchar('entry_type',         { length: 20 }).notNull().default('manual'),
+  journalId:       integer('journal_id').references(() => documentJournals.id, { onDelete: 'set null' }),
+  generatedDocType: varchar('generated_doc_type', { length: 50 }),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 }, (t) => [
   uniqueIndex('journal_entries_org_entry_number_uidx').on(t.orgId, t.entryNumber),
@@ -515,6 +647,12 @@ export const stockVouchers = pgTable('stock_vouchers', {
   totalCost: decimal('total_cost', { precision: 18, scale: 4 }).default('0'),
   status: varchar('status', { length: 20 }).notNull().default('confirmed'),
   userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+  receiverUserId: integer('receiver_user_id').references(() => users.id, { onDelete: 'set null' }),
+  sourceDocType: varchar('source_doc_type', { length: 50 }),
+  sourceDocId: integer('source_doc_id'),
+  sourceDocNumber: varchar('source_doc_number', { length: 100 }),
+  sourceJournalId: integer('source_journal_id').references(() => documentJournals.id, { onDelete: 'set null' }),
+  generatedJournalEntryId: integer('generated_journal_entry_id'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
@@ -527,6 +665,10 @@ export const stockVoucherItems = pgTable('stock_voucher_items', {
   quantity: decimal('quantity', { precision: 18, scale: 4 }).notNull(),
   unitCost: decimal('unit_cost', { precision: 18, scale: 4 }).default('0'),
   totalCost: decimal('total_cost', { precision: 18, scale: 4 }).default('0'),
+  productCode: varchar('product_code', { length: 100 }),
+  unit: varchar('unit', { length: 100 }),
+  batchNumber: varchar('batch_number', { length: 100 }),
+  expiryDate: varchar('expiry_date', { length: 10 }),
   sortOrder: integer('sort_order').default(0),
 });
 
@@ -607,9 +749,15 @@ export const documentJournals = pgTable('document_journals', {
   numDigits:     integer('num_digits').notNull().default(6),
   includeYear:   boolean('include_year').notNull().default(true),
   currentSeq:    integer('current_seq').notNull().default(0), // آخر رقم مستخدم
-  // ── الربط بالكيانات ───────────────────────────────────────────────────────
+  // ── ترقيم المسودات ─────────────────────────────────────────────────────────
+  draftAutoSerial:   boolean('draft_auto_serial').notNull().default(false),
+  draftNumberPrefix: varchar('draft_number_prefix', { length: 20 }).notNull().default('DRAFT'),
+  draftFirstNumber:  integer('draft_first_number').notNull().default(1),
+  draftLastNumber:   integer('draft_last_number').notNull().default(999999),
+  draftNumDigits:    integer('draft_num_digits').notNull().default(6),
+  draftCurrentSeq:   integer('draft_current_seq').notNull().default(0),
+  // ── الربط بالكيان (المخزن = الفرع في مسار المستندات) ─────────────────────────
   warehouseId:   integer('warehouse_id').references(() => warehouses.id, { onDelete: 'set null' }),
-  branchId:      integer('branch_id').references(() => branches.id, { onDelete: 'set null' }),
   // ── الحسابات الافتراضية ───────────────────────────────────────────────────
   salesAccountId:   integer('sales_account_id').references(() => chartOfAccounts.id, { onDelete: 'set null' }),
   cashAccountId:    integer('cash_account_id').references(() => chartOfAccounts.id, { onDelete: 'set null' }),
@@ -640,11 +788,16 @@ export const documentJournals = pgTable('document_journals', {
   paymentTypesConfig: jsonb('payment_types_config'),
   issuanceConfig:   jsonb('issuance_config'),
   optionsConfig:    jsonb('options_config'),
-  notes:            text('notes'),
-  isActive:         boolean('is_active').notNull().default(true),
-  sortOrder:        integer('sort_order').notNull().default(0),
-  createdAt:        timestamp('created_at').notNull().defaultNow(),
-  updatedAt:        timestamp('updated_at').notNull().defaultNow(),
+  notes:                text('notes'),
+  recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
+  foundationKey:        varchar('foundation_key', { length: 100 }),
+  includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:                varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion:   varchar('foundation_template_version', { length: 20 }),
+  isActive:             boolean('is_active').notNull().default(true),
+  sortOrder:            integer('sort_order').notNull().default(0),
+  createdAt:            timestamp('created_at').notNull().defaultNow(),
+  updatedAt:            timestamp('updated_at').notNull().defaultNow(),
 });
 
 export type DocumentJournal = typeof documentJournals.$inferSelect;
@@ -698,6 +851,11 @@ export const documentTypes = pgTable('document_types', {
   supplierAccountId:    integer('supplier_account_id').references(() => chartOfAccounts.id, { onDelete: 'set null' }),
   sortOrder:            integer('sort_order').notNull().default(0),
   isActive:             boolean('is_active').notNull().default(true),
+  recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
+  foundationKey:        varchar('foundation_key', { length: 100 }),
+  includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:                varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion:   varchar('foundation_template_version', { length: 20 }),
   createdAt:            timestamp('created_at').notNull().defaultNow(),
   updatedAt:            timestamp('updated_at').notNull().defaultNow(),
 });
@@ -718,10 +876,15 @@ export const documentTemplates = pgTable('document_templates', {
   isDefault:   boolean('is_default').notNull().default(false),
   layoutJson:  text('layout_json'),
   notes:       text('notes'),
-  isActive:    boolean('is_active').notNull().default(true),
-  sortOrder:   integer('sort_order').notNull().default(0),
-  createdAt:   timestamp('created_at').notNull().defaultNow(),
-  updatedAt:   timestamp('updated_at').notNull().defaultNow(),
+  isActive:             boolean('is_active').notNull().default(true),
+  sortOrder:            integer('sort_order').notNull().default(0),
+  recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
+  foundationKey:        varchar('foundation_key', { length: 100 }),
+  includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:                varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion:   varchar('foundation_template_version', { length: 20 }),
+  createdAt:            timestamp('created_at').notNull().defaultNow(),
+  updatedAt:            timestamp('updated_at').notNull().defaultNow(),
 });
 
 export type DocumentTemplate = typeof documentTemplates.$inferSelect;
@@ -737,8 +900,13 @@ export const costCenters = pgTable('cost_centers', {
   parentId:   integer('parent_id'),
   level:      integer('level').notNull().default(1),
   notes:      text('notes'),
-  isActive:   boolean('is_active').notNull().default(true),
-  createdAt:  timestamp('created_at').notNull().defaultNow(),
+  isActive:             boolean('is_active').notNull().default(true),
+  recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
+  foundationKey:        varchar('foundation_key', { length: 100 }),
+  includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:                varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion:   varchar('foundation_template_version', { length: 20 }),
+  createdAt:            timestamp('created_at').notNull().defaultNow(),
 });
 
 // ─── QR Settings ──────────────────────────────────────────────────────────────
@@ -848,9 +1016,14 @@ export const currencies = pgTable('currencies', {
   subUnitAr:      varchar('sub_unit_ar', { length: 50 }),
   mainUnitEn:     varchar('main_unit_en', { length: 50 }),
   subUnitEn:      varchar('sub_unit_en', { length: 50 }),
-  isActive:       boolean('is_active').notNull().default(true),
-  createdAt:      timestamp('created_at').notNull().defaultNow(),
-  updatedAt:      timestamp('updated_at').notNull().defaultNow(),
+  isActive:             boolean('is_active').notNull().default(true),
+  recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
+  foundationKey:        varchar('foundation_key', { length: 100 }),
+  includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:                varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion:   varchar('foundation_template_version', { length: 20 }),
+  createdAt:            timestamp('created_at').notNull().defaultNow(),
+  updatedAt:            timestamp('updated_at').notNull().defaultNow(),
 });
 
 // ─── Posting Definitions ─────────────────────────────────────────────────────
@@ -860,10 +1033,15 @@ export const postingDefinitions = pgTable('posting_definitions', {
   docType:   varchar('doc_type', { length: 30 }).notNull(),
   variant:   varchar('variant', { length: 20 }).notNull().default(''),
   name:      varchar('name', { length: 200 }).notNull(),
-  isActive:  boolean('is_active').notNull().default(true),
-  sortOrder: integer('sort_order').notNull().default(0),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  isActive:             boolean('is_active').notNull().default(true),
+  sortOrder:            integer('sort_order').notNull().default(0),
+  recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
+  foundationKey:        varchar('foundation_key', { length: 100 }),
+  includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:                varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion:   varchar('foundation_template_version', { length: 20 }),
+  createdAt:            timestamp('created_at').notNull().defaultNow(),
+  updatedAt:            timestamp('updated_at').notNull().defaultNow(),
 });
 
 export const postingDefinitionLines = pgTable('posting_definition_lines', {
@@ -907,9 +1085,14 @@ export const paymentMethods = pgTable('payment_methods', {
   isActive:    boolean('is_active').notNull().default(true),
   isVisible:   boolean('is_visible').notNull().default(true),
   isBuiltIn:   boolean('is_built_in').notNull().default(false),
-  sortOrder:   integer('sort_order').notNull().default(0),
-  createdAt:   timestamp('created_at').notNull().defaultNow(),
-  updatedAt:   timestamp('updated_at').notNull().defaultNow(),
+  sortOrder:            integer('sort_order').notNull().default(0),
+  recordPolicy:         varchar('record_policy', { length: 20 }).notNull().default('flexible'),
+  foundationKey:        varchar('foundation_key', { length: 100 }),
+  includeInFoundation:  boolean('include_in_foundation').notNull().default(false),
+  recordOrigin:                varchar('record_origin', { length: 20 }).notNull().default('user'),
+  foundationTemplateVersion:   varchar('foundation_template_version', { length: 20 }),
+  createdAt:            timestamp('created_at').notNull().defaultNow(),
+  updatedAt:            timestamp('updated_at').notNull().defaultNow(),
 });
 
 // ─── Sales Invoice Payments (حركات السداد المستقلة) ──────────────────────────
@@ -1300,6 +1483,107 @@ export const lcOperationsLog = pgTable('lc_operations_log', {
   createdAt:     timestamp('created_at').notNull().defaultNow(),
 });
 
+// ─── Support Tickets — Client Side (0021) ────────────────────────────────────
+export const supportTicketsLocal = pgTable('support_tickets_local', {
+  id:                serial('id').primaryKey(),
+  ticketNumber:      varchar('ticket_number', { length: 30 }).notNull().unique(),
+  orgId:             integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  createdByUserId:   integer('created_by_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  subject:           varchar('subject', { length: 500 }).notNull(),
+  description:       text('description').notNull(),
+  category:          varchar('category', { length: 50 }).notNull().default('general'),
+  priority:          varchar('priority', { length: 20 }).notNull().default('normal'),
+  status:            varchar('status', { length: 30 }).notNull().default('draft'),
+  sourceInfo:        jsonb('source_info').$type<Record<string, any>>(),
+  isOfflineDraft:    boolean('is_offline_draft').notNull().default(false),
+  submittedAt:       timestamp('submitted_at'),
+  lcTicketRef:       varchar('lc_ticket_ref', { length: 50 }),
+  lastReplyAt:       timestamp('last_reply_at'),
+  unreadReplies:     integer('unread_replies').notNull().default(0),
+  rating:            integer('rating'),
+  ratingComment:     text('rating_comment'),
+  ratedAt:           timestamp('rated_at'),
+  cancelledAt:       timestamp('cancelled_at'),
+  resolvedAt:        timestamp('resolved_at'),
+  createdAt:         timestamp('created_at').notNull().defaultNow(),
+  updatedAt:         timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const supportTicketMessagesLocal = pgTable('support_ticket_messages_local', {
+  id:          serial('id').primaryKey(),
+  ticketId:    integer('ticket_id').notNull().references(() => supportTicketsLocal.id, { onDelete: 'cascade' }),
+  senderType:  varchar('sender_type', { length: 20 }).notNull().default('user'),
+  senderName:  varchar('sender_name', { length: 200 }),
+  body:        text('body').notNull(),
+  isRead:      boolean('is_read').notNull().default(false),
+  sentAt:      timestamp('sent_at').notNull().defaultNow(),
+  lcMsgRef:    varchar('lc_msg_ref', { length: 50 }),
+  createdAt:   timestamp('created_at').notNull().defaultNow(),
+});
+
+export const supportTicketAttachmentsLocal = pgTable('support_ticket_attachments_local', {
+  id:         serial('id').primaryKey(),
+  ticketId:   integer('ticket_id').notNull().references(() => supportTicketsLocal.id, { onDelete: 'cascade' }),
+  messageId:  integer('message_id').references(() => supportTicketMessagesLocal.id, { onDelete: 'set null' }),
+  filename:   varchar('filename', { length: 300 }).notNull(),
+  filePath:   text('file_path').notNull(),
+  fileSize:   integer('file_size'),
+  mimeType:   varchar('mime_type', { length: 100 }),
+  createdAt:  timestamp('created_at').notNull().defaultNow(),
+});
+
+// ─── Support Tickets — LC Side (0021) ────────────────────────────────────────
+export const lcSupportTickets = pgTable('lc_support_tickets', {
+  id:             serial('id').primaryKey(),
+  ticketNumber:   varchar('ticket_number', { length: 30 }).notNull().unique(),
+  clientId:       integer('client_id').references(() => lcClients.id, { onDelete: 'set null' }),
+  orgId:          varchar('org_id', { length: 50 }),
+  orgName:        varchar('org_name', { length: 300 }),
+  subject:        varchar('subject', { length: 500 }).notNull(),
+  description:    text('description').notNull(),
+  category:       varchar('category', { length: 50 }).notNull().default('general'),
+  priority:       varchar('priority', { length: 20 }).notNull().default('normal'),
+  status:         varchar('status', { length: 30 }).notNull().default('open'),
+  submitterName:  varchar('submitter_name', { length: 200 }),
+  submitterEmail: varchar('submitter_email', { length: 200 }),
+  sourceInfo:     jsonb('source_info').$type<Record<string, any>>(),
+  assignedTo:     varchar('assigned_to', { length: 200 }),
+  resolvedAt:     timestamp('resolved_at'),
+  closedAt:       timestamp('closed_at'),
+  createdAt:      timestamp('created_at').notNull().defaultNow(),
+  updatedAt:      timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const lcSupportTicketMessages = pgTable('lc_support_ticket_messages', {
+  id:                serial('id').primaryKey(),
+  ticketId:          integer('ticket_id').notNull().references(() => lcSupportTickets.id, { onDelete: 'cascade' }),
+  senderType:        varchar('sender_type', { length: 20 }).notNull().default('client'),
+  senderName:        varchar('sender_name', { length: 200 }),
+  body:              text('body').notNull(),
+  isReadByClient:    boolean('is_read_by_client').notNull().default(false),
+  isReadBySupport:   boolean('is_read_by_support').notNull().default(false),
+  createdAt:         timestamp('created_at').notNull().defaultNow(),
+});
+
+export const lcSupportTicketAttachments = pgTable('lc_support_ticket_attachments', {
+  id:         serial('id').primaryKey(),
+  ticketId:   integer('ticket_id').notNull().references(() => lcSupportTickets.id, { onDelete: 'cascade' }),
+  messageId:  integer('message_id').references(() => lcSupportTicketMessages.id, { onDelete: 'set null' }),
+  filename:   varchar('filename', { length: 300 }).notNull(),
+  fileUrl:    text('file_url').notNull(),
+  fileSize:   integer('file_size'),
+  mimeType:   varchar('mime_type', { length: 100 }),
+  createdAt:  timestamp('created_at').notNull().defaultNow(),
+});
+
+export const lcSupportTicketNotes = pgTable('lc_support_ticket_notes', {
+  id:        serial('id').primaryKey(),
+  ticketId:  integer('ticket_id').notNull().references(() => lcSupportTickets.id, { onDelete: 'cascade' }),
+  author:    varchar('author', { length: 200 }),
+  body:      text('body').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
 // ─── Verification Tokens (0017) ───────────────────────────────────────────────
 export const verificationTokens = pgTable('verification_tokens', {
   id:            serial('id').primaryKey(),
@@ -1444,6 +1728,182 @@ export const hsTasks = pgTable('hs_tasks', {
   updatedAt:       timestamp('updated_at').notNull().defaultNow(),
 });
 
+// ─── متابعة العهد — أداة مساعدة داخلية مستقلة (0022/0023) ───────────────────
+// تنبيه: هذه الجداول مستقلة تمامًا عن النظام المحاسبي ولا ترتبط بأي قيد أو سند
+
+// سجل العهدة (الهيدر) — 0023
+export const hsCustodyRecords = pgTable('hs_custody_records', {
+  id:               serial('id').primaryKey(),
+  orgId:            integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  createdByUserId:  integer('created_by_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  recordNumber:     integer('record_number').notNull().default(1),
+  custodyName:      text('custody_name').notNull().default(''),
+  email:            varchar('email', { length: 255 }),
+  autoSendEmail:    boolean('auto_send_email').notNull().default(false),
+  createdAt:        timestamp('created_at').notNull().defaultNow(),
+  updatedAt:        timestamp('updated_at').notNull().defaultNow(),
+});
+
+// حركات العهدة — 0022 + إضافة custodyId في 0023
+export const hsCustodyEntries = pgTable('hs_custody_entries', {
+  id:               serial('id').primaryKey(),
+  orgId:            integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  createdByUserId:  integer('created_by_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  custodyId:        integer('custody_id').references(() => hsCustodyRecords.id, { onDelete: 'cascade' }),
+  entryDate:        varchar('entry_date', { length: 10 }).notNull(), // YYYY-MM-DD
+  description:      text('description').notNull().default(''),
+  referenceNumber:  varchar('reference_number', { length: 100 }),
+  // المبلغ المحصل (incomeCollected) + المبلغ المسدد (expensePaid) — حقول التتبع الجديدة
+  incomeDue:        decimal('income_due',       { precision: 15, scale: 4 }).notNull().default('0'),
+  incomeCollected:  decimal('income_collected', { precision: 15, scale: 4 }).notNull().default('0'),
+  incomeNote:       text('income_note'),
+  expenseDue:       decimal('expense_due',  { precision: 15, scale: 4 }).notNull().default('0'),
+  expensePaid:      decimal('expense_paid', { precision: 15, scale: 4 }).notNull().default('0'),
+  expenseNote:      text('expense_note'),
+  sortOrder:        integer('sort_order').notNull().default(0),
+  createdAt:        timestamp('created_at').notNull().defaultNow(),
+  updatedAt:        timestamp('updated_at').notNull().defaultNow(),
+});
+
+// ─── 0024: الروابط والخدمات ───────────────────────────────────────────────────
+export const hsLinkSections = pgTable('hs_link_sections', {
+  id:         serial('id').primaryKey(),
+  orgId:      integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  name:       varchar('name', { length: 200 }).notNull(),
+  icon:       varchar('icon', { length: 50 }),
+  color:      varchar('color', { length: 20 }),
+  sortOrder:  integer('sort_order').notNull().default(0),
+  createdBy:  integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt:  timestamp('created_at').notNull().defaultNow(),
+  updatedAt:  timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const hsLinks = pgTable('hs_links', {
+  id:          serial('id').primaryKey(),
+  orgId:       integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  sectionId:   integer('section_id').references(() => hsLinkSections.id, { onDelete: 'set null' }),
+  name:        varchar('name', { length: 200 }).notNull(),
+  url:         text('url').notNull(),
+  description: text('description'),
+  icon:        varchar('icon', { length: 50 }),
+  cardColor:   varchar('card_color', { length: 20 }),
+  openMode:    varchar('open_mode',    { length: 20 }).notNull().default('external'),
+  browserType: varchar('browser_type', { length: 20 }).notNull().default('default'),
+  browserPath: text('browser_path'),
+  isActive:    boolean('is_active').notNull().default(true),
+  isFavorite:  boolean('is_favorite').notNull().default(false),
+  isPinned:    boolean('is_pinned').notNull().default(false),
+  sortOrder:   integer('sort_order').notNull().default(0),
+  createdBy:   integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt:   timestamp('created_at').notNull().defaultNow(),
+  updatedAt:   timestamp('updated_at').notNull().defaultNow(),
+});
+
+// ─── 0025: البيان التفصيلي للمشتريات (المطور العقاري) ─────────────────
+export const rePurchaseStatements = pgTable('re_purchase_statements', {
+  id:              serial('id').primaryKey(),
+  orgId:           integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  name:            varchar('name',      { length: 255 }).notNull(),
+  project:         varchar('project',   { length: 255 }),
+  dateFrom:        timestamp('date_from').notNull(),
+  dateTo:          timestamp('date_to').notNull(),
+  defaultTaxRate:  decimal('default_tax_rate', { precision: 5, scale: 2 }).notNull().default('15'),
+  notes:           text('notes'),
+  createdBy:       integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:       integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt:       timestamp('created_at').notNull().defaultNow(),
+  updatedAt:       timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const rePurchases = pgTable('re_purchases', {
+  id:              serial('id').primaryKey(),
+  orgId:           integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  statementId:     integer('statement_id').references(() => rePurchaseStatements.id, { onDelete: 'cascade' }),
+  sequence:        integer('sequence'),
+  supplierName:    varchar('supplier_name',    { length: 255 }).notNull(),
+  supplierTaxId:   varchar('supplier_tax_id',  { length: 50 }),
+  invoiceDate:     timestamp('invoice_date').notNull().defaultNow(),
+  invoiceNumber:   varchar('invoice_number',   { length: 100 }).notNull(),
+  preTaxValue:     decimal('pre_tax_value',    { precision: 18, scale: 4 }).notNull().default('0'),
+  taxRate:         decimal('tax_rate',         { precision: 5,  scale: 2 }).notNull().default('15'),
+  taxAmount:       decimal('tax_amount',       { precision: 18, scale: 4 }).notNull().default('0'),
+  totalValue:      decimal('total_value',      { precision: 18, scale: 4 }).notNull().default('0'),
+  notes:           text('notes'),
+  attachmentUrl:   text('attachment_url'),
+  createdBy:       integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:       integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt:       timestamp('created_at').notNull().defaultNow(),
+  updatedAt:       timestamp('updated_at').notNull().defaultNow(),
+});
+
+// ─── Real Estate: Project Documents ────────────────────────────────────────────
+export const reProjects = pgTable('re_projects', {
+  id:            serial('id').primaryKey(),
+  orgId:         integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  code:          varchar('code',    { length: 50 }).notNull(),
+  name:          varchar('name',    { length: 255 }).notNull(),
+  location:      varchar('location',{ length: 255 }),
+  ownerName:     varchar('owner_name', { length: 255 }),
+  plotNumber:    varchar('plot_number',{ length: 50 }),
+  planNumber:    varchar('plan_number',{ length: 50 }),
+  startDate:     timestamp('start_date'),
+  expectedEndDate: timestamp('expected_end_date'),
+  status:        varchar('status',{ length: 20 }).notNull().default('active'),
+  notes:         text('notes'),
+  createdBy:     integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:     integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+  updatedAt:     timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const reDocumentTypes = pgTable('re_document_types', {
+  id:            serial('id').primaryKey(),
+  orgId:         integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  name:          varchar('name',{ length: 255 }).notNull(),
+  icon:          varchar('icon',{ length: 50 }),
+  sortOrder:     integer('sort_order').notNull().default(0),
+  isSystem:      boolean('is_system').notNull().default(false),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+  updatedAt:     timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const reDocuments = pgTable('re_documents', {
+  id:            serial('id').primaryKey(),
+  orgId:         integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  projectId:     integer('project_id').notNull().references(() => reProjects.id, { onDelete: 'cascade' }),
+  documentTypeId: integer('document_type_id').notNull().references(() => reDocumentTypes.id, { onDelete: 'restrict' }),
+  name:          varchar('name',{ length: 255 }).notNull(),
+  documentNumber: varchar('document_number',{ length: 100 }),
+  issuer:        varchar('issuer',{ length: 255 }),
+  issueDate:     timestamp('issue_date'),
+  expiryDate:    timestamp('expiry_date'),
+  needsRenewal:  boolean('needs_renewal').notNull().default(false),
+  alertDays:     integer('alert_days').default(30),
+  notes:         text('notes'),
+  filePath:      text('file_path'),
+  originalName:  varchar('original_name',{ length: 255 }),
+  fileSize:      integer('file_size'),
+  mimeType:      varchar('mime_type',{ length: 100 }),
+  createdBy:     integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:     integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+  updatedAt:     timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const reDocumentVersions = pgTable('re_document_versions', {
+  id:            serial('id').primaryKey(),
+  orgId:         integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  documentId:    integer('document_id').notNull().references(() => reDocuments.id, { onDelete: 'cascade' }),
+  versionNumber: integer('version_number').notNull(),
+  filePath:      text('file_path').notNull(),
+  originalName:  varchar('original_name',{ length: 255 }),
+  fileSize:      integer('file_size'),
+  mimeType:      varchar('mime_type',{ length: 100 }),
+  notes:         text('notes'),
+  createdBy:     integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+});
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type Organization = typeof organizations.$inferSelect;
 export type User = typeof users.$inferSelect;
@@ -1473,3 +1933,195 @@ export type ZatcaXmlDocument         = typeof zatcaXmlDocuments.$inferSelect;
 export type ZatcaQrCode              = typeof zatcaQrCodes.$inferSelect;
 export type ZatcaSettings            = typeof zatcaSettings.$inferSelect;
 export type ZatcaApiHistory          = typeof zatcaApiHistory.$inferSelect;
+
+// Real Estate Purchases Types
+export type RePurchaseStatement      = typeof rePurchaseStatements.$inferSelect;
+export type RePurchase               = typeof rePurchases.$inferSelect;
+
+// Real Estate Documents Types
+export type ReProject                = typeof reProjects.$inferSelect;
+export type ReDocumentType           = typeof reDocumentTypes.$inferSelect;
+export type ReDocument               = typeof reDocuments.$inferSelect;
+export type ReDocumentVersion        = typeof reDocumentVersions.$inferSelect;
+
+// ─── Real Estate: Simplified Trial Balance ───────────────────────────────────
+export const reTrialBalances = pgTable('re_trial_balances', {
+  id:            serial('id').primaryKey(),
+  orgId:         integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  name:          varchar('name',    { length: 255 }).notNull(),
+  periodLabel:   varchar('period_label',{ length: 100 }),
+  fromDate:      timestamp('from_date'),
+  toDate:        timestamp('to_date'),
+  projectId:     integer('project_id').references(() => reProjects.id, { onDelete: 'set null' }),
+  scope:         varchar('scope',   { length: 20 }).notNull().default('org'), // 'org' | 'project'
+  settlementAccountId: integer('settlement_account_id').references((): AnyPgColumn => reTbAccounts.id, { onDelete: 'set null' }),
+  notes:         text('notes'),
+  status:        varchar('status',  { length: 20 }).notNull().default('draft'), // 'draft' | 'balanced' | 'unbalanced' | 'reviewed'
+  createdBy:     integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:     integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+  updatedAt:     timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const reTbAccounts = pgTable('re_tb_accounts', {
+  id:            serial('id').primaryKey(),
+  orgId:         integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  trialBalanceId: integer('trial_balance_id').notNull().references((): AnyPgColumn => reTrialBalances.id, { onDelete: 'cascade' }),
+  parentId:      integer('parent_id').references((): AnyPgColumn => reTbAccounts.id, { onDelete: 'cascade' }),
+  code:          varchar('code',    { length: 50 }).notNull(),
+  name:          varchar('name',    { length: 255 }).notNull(),
+  category:      varchar('category',{ length: 50 }).notNull(), // 'assets' | 'liabilities' | 'equity' | 'revenue' | 'expenses'
+  nature:        varchar('nature',  { length: 10 }).notNull().default('debit'), // 'debit' | 'credit'
+  sortOrder:     integer('sort_order').notNull().default(0),
+  isSystem:      boolean('is_system').notNull().default(false),
+  isActive:      boolean('is_active').notNull().default(true),
+  reviewStatus:  varchar('review_status',{ length: 20 }).notNull().default('not_reviewed'), // 'not_reviewed' | 'reviewed' | 'has_diff' | 'needs_doc'
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+  updatedAt:     timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const reTbEntries = pgTable('re_tb_entries', {
+  id:            serial('id').primaryKey(),
+  orgId:         integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  trialBalanceId: integer('trial_balance_id').notNull().references(() => reTrialBalances.id, { onDelete: 'cascade' }),
+  accountId:     integer('account_id').notNull().references(() => reTbAccounts.id, { onDelete: 'cascade' }),
+  openingDebit:  decimal('opening_debit',  { precision: 18, scale: 2 }).notNull().default('0'),
+  openingCredit: decimal('opening_credit', { precision: 18, scale: 2 }).notNull().default('0'),
+  movementDebit: decimal('movement_debit', { precision: 18, scale: 2 }).notNull().default('0'),
+  movementCredit: decimal('movement_credit',{ precision: 18, scale: 2 }).notNull().default('0'),
+  endingDebit:   decimal('ending_debit',   { precision: 18, scale: 2 }).notNull().default('0'),
+  endingCredit:  decimal('ending_credit',  { precision: 18, scale: 2 }).notNull().default('0'),
+  notes:         text('notes'),
+  createdBy:     integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:     integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+  updatedAt:     timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const reTbTaxReturns = pgTable('re_tb_tax_returns', {
+  id:                  serial('id').primaryKey(),
+  orgId:               integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  trialBalanceId:      integer('trial_balance_id').notNull().references(() => reTrialBalances.id, { onDelete: 'cascade' }),
+  periodLabel:         varchar('period_label',{ length: 100 }),
+  purchasesPreTax:     decimal('purchases_pre_tax',    { precision: 18, scale: 2 }).notNull().default('0'),
+  purchaseReturns:     decimal('purchase_returns',     { precision: 18, scale: 2 }).notNull().default('0'),
+  netPurchases:        decimal('net_purchases',        { precision: 18, scale: 2 }).notNull().default('0'),
+  deductibleTax:     decimal('deductible_tax',       { precision: 18, scale: 2 }).notNull().default('0'),
+  openingTaxBalance: decimal('opening_tax_balance',  { precision: 18, scale: 2 }).notNull().default('0'),
+  actualRefund:        decimal('actual_refund',        { precision: 18, scale: 2 }).notNull().default('0'),
+  actualOffset:        decimal('actual_offset',        { precision: 18, scale: 2 }).notNull().default('0'),
+  refundStatus:        varchar('refund_status',{ length: 30 }).notNull().default('not_submitted'), // 'not_submitted' | 'under_review' | 'approved' | 'refunded' | 'offset'
+  notes:               text('notes'),
+  createdBy:           integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:           integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt:           timestamp('created_at').notNull().defaultNow(),
+  updatedAt:           timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const reTbPurchaseLinks = pgTable('re_tb_purchase_links', {
+  id:            serial('id').primaryKey(),
+  orgId:         integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  trialBalanceId: integer('trial_balance_id').notNull().references(() => reTrialBalances.id, { onDelete: 'cascade' }),
+  accountId:     integer('account_id').notNull().references(() => reTbAccounts.id, { onDelete: 'cascade' }),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+});
+
+export const reTbAuditLog = pgTable('re_tb_audit_log', {
+  id:            serial('id').primaryKey(),
+  orgId:         integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  trialBalanceId: integer('trial_balance_id').notNull().references(() => reTrialBalances.id, { onDelete: 'cascade' }),
+  accountId:     integer('account_id').references(() => reTbAccounts.id, { onDelete: 'set null' }),
+  action:        varchar('action',{ length: 50 }).notNull(), // 'create' | 'update' | 'delete' | 'settlement' | 'reset_accounts'
+  fieldName:     varchar('field_name',{ length: 50 }),
+  oldValue:      text('old_value'),
+  newValue:      text('new_value'),
+  userId:        integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+  userName:      varchar('user_name',{ length: 255 }),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+});
+
+export const reTbSettlements = pgTable('re_tb_settlements', {
+  id:            serial('id').primaryKey(),
+  orgId:         integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  trialBalanceId: integer('trial_balance_id').notNull().references(() => reTrialBalances.id, { onDelete: 'cascade' }),
+  accountId:     integer('account_id').notNull().references(() => reTbAccounts.id, { onDelete: 'cascade' }),
+  difference:    decimal('difference',{ precision: 18, scale: 2 }).notNull(),
+  direction:     varchar('direction',{ length: 10 }).notNull(), // 'debit' | 'credit'
+  previousBalanceDebit:  decimal('prev_balance_debit',  { precision: 18, scale: 2 }).notNull().default('0'),
+  previousBalanceCredit: decimal('prev_balance_credit', { precision: 18, scale: 2 }).notNull().default('0'),
+  newBalanceDebit:       decimal('new_balance_debit',   { precision: 18, scale: 2 }).notNull().default('0'),
+  newBalanceCredit:      decimal('new_balance_credit',  { precision: 18, scale: 2 }).notNull().default('0'),
+  userConfirmed: boolean('user_confirmed').notNull().default(false),
+  confirmedAt:   timestamp('confirmed_at'),
+  notes:         text('notes'),
+  createdBy:     integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+});
+
+// ─── Real Estate: Housing Units (Phase 1) ──────────────────────────────────────
+export const reHousingUnits = pgTable('re_housing_units', {
+  id:            serial('id').primaryKey(),
+  orgId:         integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  projectId:     integer('project_id').references(() => reProjects.id, { onDelete: 'set null' }),
+  unitNo:        varchar('unit_no',    { length: 50 }).notNull(),
+  unitType:      varchar('unit_type',  { length: 30 }).notNull().default('apartment'),
+  status:        varchar('status',     { length: 20 }).notNull().default('available'),
+  area:          decimal('area',       { precision: 12, scale: 2 }),
+  price:         decimal('price',      { precision: 18, scale: 4 }),
+  floor:         varchar('floor',      { length: 20 }),
+  block:         varchar('block',      { length: 30 }),
+  building:      varchar('building',   { length: 30 }),
+  notes:         text('notes'),
+  createdBy:     integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:     integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+  updatedAt:     timestamp('updated_at').notNull().defaultNow(),
+});
+
+// ─── User Audit Log (0044) ────────────────────────────────────────────────────
+// لا تحتوي على FK cascade إلى users — السجل يبقى حتى بعد حذف المستخدم المستهدف
+export const userAuditLogs = pgTable('user_audit_logs', {
+  id:             serial('id').primaryKey(),
+  orgId:          integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  actorUserId:    integer('actor_user_id').notNull(),      // بدون CASCADE — المنفذ قد يُحذف لاحقاً
+  actorUsername:  varchar('actor_username', { length: 100 }).notNull(),
+  targetUserId:   integer('target_user_id').notNull(),     // بدون CASCADE — المستهدف يُحذف في هذه العملية
+  targetCode:     varchar('target_code', { length: 50 }),
+  targetName:     varchar('target_name', { length: 255 }).notNull(),
+  targetUsername: varchar('target_username', { length: 100 }).notNull(),
+  action:         varchar('action', { length: 30 }).notNull(),  // DELETE_USER | DEACTIVATE_USER
+  reason:         text('reason'),
+  ipAddress:      varchar('ip_address', { length: 100 }),
+  deviceInfo:     varchar('device_info', { length: 255 }),
+  result:         varchar('result', { length: 20 }).notNull().default('success'), // success | rejected
+  resultReason:   text('result_reason'),
+  createdAt:      timestamp('created_at').notNull().defaultNow(),
+});
+export type UserAuditLog = typeof userAuditLogs.$inferSelect;
+
+// Real Estate Trial Balance Types
+export type ReTrialBalance           = typeof reTrialBalances.$inferSelect;
+export type ReTbAccount              = typeof reTbAccounts.$inferSelect;
+export type ReTbEntry                = typeof reTbEntries.$inferSelect;
+export type ReTbTaxReturn            = typeof reTbTaxReturns.$inferSelect;
+export type ReTbPurchaseLink         = typeof reTbPurchaseLinks.$inferSelect;
+export type ReTbAuditLogEntry        = typeof reTbAuditLog.$inferSelect;
+export type ReTbSettlement           = typeof reTbSettlements.$inferSelect;
+
+// ─── Foundation Tombstones ─────────────────────────────────────────────────────
+export const foundationTombstones = pgTable('foundation_tombstones', {
+  id:             serial('id').primaryKey(),
+  orgId:          integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  tableName:      varchar('table_name', { length: 100 }).notNull(),
+  foundationKey:  varchar('foundation_key', { length: 255 }).notNull(),
+  deletedBy:      integer('deleted_by').references(() => users.id, { onDelete: 'set null' }),
+  deletedAt:      timestamp('deleted_at').notNull().defaultNow(),
+  reason:         text('reason'),
+}, (t) => ({
+  unqOrgTableKey: uniqueIndex('tombstone_org_table_key').on(t.orgId, t.tableName, t.foundationKey),
+}));
+
+export type FoundationTombstone = typeof foundationTombstones.$inferSelect;
+
+// Real Estate Housing Units Types
+export type ReHousingUnit            = typeof reHousingUnits.$inferSelect;

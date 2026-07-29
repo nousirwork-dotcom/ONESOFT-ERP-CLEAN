@@ -146,7 +146,7 @@ export default function PostingOperationsPage() {
     op === "post_purchases_inventory" ? "حساب المشتريات (دائن)" : "حساب المخزون (دائن)";
 
   return (
-    <div className="h-full flex flex-col bg-slate-50" dir="rtl">
+    <div className="h-full flex flex-col bg-background" dir="rtl">
       {/* رأس الشاشة */}
       <div className="bg-white border-b border-slate-200 px-4 py-2.5 flex items-center gap-3">
         <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center text-white text-base font-bold select-none">
@@ -186,21 +186,11 @@ export default function PostingOperationsPage() {
             <div className="text-[11px] font-bold text-slate-700 border-b pb-1.5">نطاق التاريخ</div>
             <div className="flex flex-col gap-1">
               <Label className="text-[11px] text-slate-600">من تاريخ</Label>
-              <Input
-                type="date"
-                value={fromDate}
-                onChange={e => setFromDate(e.target.value)}
-                className="h-8 text-[12px]"
-              />
+              <DateSegmentInput value={fromDate} onChange={setFromDate} standalone className="h-8 text-[12px]" />
             </div>
             <div className="flex flex-col gap-1">
               <Label className="text-[11px] text-slate-600">إلى تاريخ</Label>
-              <Input
-                type="date"
-                value={toDate}
-                onChange={e => setToDate(e.target.value)}
-                className="h-8 text-[12px]"
-              />
+              <DateSegmentInput value={toDate} onChange={setToDate} standalone className="h-8 text-[12px]" />
             </div>
           </div>
 

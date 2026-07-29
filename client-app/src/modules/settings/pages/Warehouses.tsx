@@ -1,9 +1,12 @@
 import { Badge } from "@/core/ui/badge";
 import { Button } from "@/core/ui/button";
+import { FoundationPolicyPanel } from "@/shared/components/FoundationPolicyPanel";
+import type { RecordPolicy } from "@/shared/components/FoundationPolicyPanel";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/core/ui/dialog";
 import { Input } from "@/core/ui/input";
 import { Label } from "@/core/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/core/ui/select";
+import { SelectItem } from "@/core/ui/select";
+import RightClickSelect from "@/core/ui/RightClickSelect";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/core/ui/table";
 import { trpc } from "@/shared/lib/trpc";
 import {
@@ -20,33 +23,7 @@ import { toast } from "sonner";
 /* ─────────────────────────── density context ─────────────────────── */
 const Density = createContext<"compact" | "comfortable">("comfortable");
 
-/* ─────────────────────────── constants ─────────────────────────── */
-const REQUIRED_ACCOUNT_LABELS = [
-  "حساب المخزون",
-  "حساب تكلفة مبيعات 1",
-  "حساب الصندوق",
-  "حساب البنك",
-  "حساب اجمالى المبيعات",
-  "حساب مردود المبيعات",
-  "حساب خصم مسموح به",
-  "حساب اجمالى المشتريات",
-  "حساب مردود مشتريات",
-  "حساب خصم مكتسب",
-];
-
-const DEFAULT_LINKS = [
-  "حساب المخزون", "حساب تكلفة مبيعات 1", "حساب تكلفة مبيعات 2",
-  "حساب الصندوق", "حساب البنك",
-  "حساب اجمالى المبيعات", "حساب مردود المبيعات", "حساب خصم مسموح به",
-  "حساب مبيعات 4", "حساب مبيعات 5",
-  "حساب اجمالى المشتريات", "حساب مردود مشتريات", "حساب خصم مكتسب", "حساب مشتريات 4",
-  "حساب أخرى 1",  "حساب أخرى 2",  "حساب أخرى 3",  "حساب أخرى 4",  "حساب أخرى 5",
-  "حساب أخرى 6",  "حساب أخرى 7",  "حساب أخرى 8",  "حساب أخرى 9",  "حساب أخرى 10",
-  "حساب أخرى 11", "حساب أخرى 12", "حساب أخرى 13", "حساب أخرى 14", "حساب أخرى 15",
-  "مركز التكلفة 1", "مركز التكلفة 2", "مركز التكلفة 3", "مركز التكلفة 4", "مركز التكلفة 5",
-].map((label, i) => ({ label, accountId: "" as string, sortOrder: i }));
-
-type LinkRow = { label: string; accountId: string; sortOrder: number };
+/* ─────────────────────────── types & constants ─────────────────────────── */
 
 type JournalData = {
   nameAr: string; nameEn: string; docType: string; fixedPart: string;
@@ -82,6 +59,9 @@ const EMPTY_FORM = {
   code: "", name: "", name2: "", fullName1: "", fullName2: "",
   branchId: "", description: "", allowedUserGroup: "",
   allowedUserId: "", copyFromWarehouseId: "",
+  recordPolicy: "flexible" as RecordPolicy,
+  foundationKey: "",
+  includeInFoundation: false,
 };
 type FormState = typeof EMPTY_FORM;
 
@@ -172,20 +152,14 @@ const FI = ({
   );
 };
 
-/** Select — height adapts to density */
+/** Select — right-click to open dropdown, left-click to focus */
 const FS = ({
   value, onValueChange, placeholder, children,
-}: { value: string; onValueChange: (v: string) => void; placeholder?: string; children: React.ReactNode }) => {
-  const c = useContext(Density) === "compact";
-  return (
-    <Select value={value} onValueChange={onValueChange}>
-      <SelectTrigger className={`${c ? "h-5 text-[10px] px-1.5 py-0" : "h-9 text-sm"} border-slate-200 focus:ring-0 focus:ring-offset-0 bg-white rounded`}>
-        <SelectValue placeholder={placeholder ?? "— اختر —"} />
-      </SelectTrigger>
-      <SelectContent>{children}</SelectContent>
-    </Select>
-  );
-};
+}: { value: string; onValueChange: (v: string) => void; placeholder?: string; children: React.ReactNode }) => (
+  <RightClickSelect value={value} onValueChange={onValueChange} placeholder={placeholder ?? "— اختر —"} className="w-full">
+    {children}
+  </RightClickSelect>
+);
 
 /** ERP compact section panel — رأس رمادي + محتوى أبيض */
 const P = ({ title, children }: { title: string; children: React.ReactNode }) => {
@@ -235,93 +209,6 @@ const RB = ({ name, label, checked, onChange }: { name: string; label: string; c
   );
 };
 
-/* ─────────────────────────── account code input ─────────────────────── */
-const normalizeAr = (s: string) =>
-  (s ?? "").toLowerCase().replace(/[أإآ]/g, "ا").replace(/ة/g, "ه").replace(/ى/g, "ي");
-
-function AccountCodeInput({
-  allAccounts, selectedId, onChange,
-}: {
-  allAccounts: any[];
-  selectedId: string;
-  onChange: (id: string) => void;
-}) {
-  const postable = useMemo(
-    () => (allAccounts ?? []).filter((a: any) => a.allowPosting === true && !a.isParent),
-    [allAccounts],
-  );
-  const selected = useMemo(() => postable.find((a: any) => String(a.id) === selectedId), [postable, selectedId]);
-  const [q, setQ]     = useState(selected?.code ?? "");
-  const [open, setOpen] = useState(false);
-  const [hi, setHi]   = useState(0);
-  const wrapRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => { setQ(selected?.code ?? ""); }, [selected?.code]);
-
-  const filtered = useMemo(() => {
-    const sq = normalizeAr(q.trim());
-    if (!sq) return postable.slice(0, 30);
-    const codeFirst = postable.filter((a: any) => normalizeAr(a.code).startsWith(sq));
-    const rest      = postable.filter((a: any) => !normalizeAr(a.code).startsWith(sq) &&
-                        (normalizeAr(a.code).includes(sq) || normalizeAr(a.name).includes(sq)));
-    return [...codeFirst, ...rest].slice(0, 30);
-  }, [q, postable]);
-
-  useEffect(() => { setHi(0); }, [filtered]);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const pick = (a: any) => {
-    onChange(String(a.id));
-    setQ(a.code ?? "");
-    setOpen(false);
-  };
-
-  const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "ArrowDown") { e.preventDefault(); setHi(h => Math.min(h + 1, filtered.length - 1)); setOpen(true); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); setHi(h => Math.max(h - 1, 0)); }
-    else if (e.key === "Escape") { setOpen(false); setQ(selected?.code ?? ""); }
-    else if ((e.key === "Enter" || e.key === "Tab") && open && filtered[hi]) { e.preventDefault(); pick(filtered[hi]); }
-  };
-
-  return (
-    <div ref={wrapRef} className="relative w-full">
-      <input
-        value={open || !selected ? q : selected.code}
-        dir="ltr"
-        onChange={e => { setQ(e.target.value); setOpen(true); setHi(0); }}
-        onFocus={() => { setOpen(true); if (selected) setQ(""); }}
-        onBlur={() => setTimeout(() => { if (!wrapRef.current?.contains(document.activeElement)) { setOpen(false); setQ(selected?.code ?? ""); } }, 120)}
-        onKeyDown={onKey}
-        placeholder="كود..."
-        className="h-5 w-full text-[10px] px-1.5 border-0 bg-transparent outline-none focus:bg-indigo-50 font-mono text-slate-700 placeholder:text-slate-300"
-      />
-      {open && (
-        <div className="absolute top-full right-0 z-[9990] mt-0.5 w-72 bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden" dir="rtl">
-          <div className="overflow-y-auto max-h-48">
-            {filtered.length === 0 && <div className="text-[11px] text-center text-slate-400 py-3">لا نتائج</div>}
-            {filtered.map((a: any, idx: number) => (
-              <button key={a.id} onMouseDown={() => pick(a)}
-                className={`w-full flex items-center gap-2 px-2 py-1 text-[11px] transition-colors ${idx === hi ? "bg-indigo-50" : "hover:bg-slate-50"}`}
-              >
-                <span className="font-mono text-[10px] text-slate-400 w-14 text-left shrink-0">{a.code}</span>
-                <span className="flex-1 text-right truncate text-slate-700">{a.name}</span>
-              </button>
-            ))}
-          </div>
-          <div className="px-2 py-1 border-t border-slate-100 bg-slate-50 text-[9px] text-slate-400">↑↓ تنقل · Enter اختيار</div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 /* ─────────────────────────── main component ─────────────────────────── */
 export default function Warehouses() {
   const [density, setDensity] = useState<"compact" | "comfortable">(() =>
@@ -342,7 +229,6 @@ export default function Warehouses() {
   const [journalsOpen, setJournalsOpen] = useState(true);
   const [docTypesOpen, setDocTypesOpen] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [links, setLinks] = useState<LinkRow[]>(DEFAULT_LINKS.map(l => ({ ...l })));
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -362,30 +248,9 @@ export default function Warehouses() {
   const utils = trpc.useUtils();
   const { data: warehouses, isLoading } = trpc.warehouses.list.useQuery();
   const { data: branches } = trpc.branches.list.useQuery();
-  const { data: accounts } = trpc.accounts.list.useQuery();
-  const postableAccounts = (accounts as any[])?.filter((a: any) => a.allowPosting === true && !a.isParent) ?? [];
   const { data: users } = trpc.users.list.useQuery();
   const { data: userGroupsList } = trpc.userGroups.list.useQuery();
-  const { data: loadedLinks } = trpc.warehouses.accountLinks.list.useQuery(
-    { warehouseId: editId! }, { enabled: !!editId },
-  );
 
-  useEffect(() => {
-    if (loadedLinks !== undefined) {
-      const savedMap = new Map(loadedLinks.map((l: any) => [l.label, l]));
-      const defaultLabels = new Set(DEFAULT_LINKS.map(d => d.label));
-      const merged = DEFAULT_LINKS.map(def => {
-        const saved = savedMap.get(def.label) as any;
-        return { label: def.label, accountId: saved?.accountId ? String(saved.accountId) : "", sortOrder: def.sortOrder };
-      });
-      const extras = (loadedLinks as any[])
-        .filter((l: any) => !defaultLabels.has(l.label))
-        .map((l: any) => ({ label: l.label, accountId: l.accountId ? String(l.accountId) : "", sortOrder: l.sortOrder }));
-      setLinks([...merged, ...extras]);
-    }
-  }, [loadedLinks]);
-
-  const saveLinks = trpc.warehouses.accountLinks.save.useMutation();
   const deleteWarehouse = trpc.warehouses.delete.useMutation({
     onSuccess: () => { utils.warehouses.list.invalidate(); toast.success("تم حذف المخزن"); setDeleteError(null); setEditId(null); setShowDeleteDialog(false); setView("list"); },
     onError: (e) => { setDeleteError(e.message); toast.error(e.message); },
@@ -404,7 +269,7 @@ export default function Warehouses() {
 
   const openCreate = () => {
     setEditId(null); setForm(EMPTY_FORM);
-    setLinks(DEFAULT_LINKS.map(l => ({ ...l }))); setFormTab("basic"); setIsDirty(false); setView("form");
+    setFormTab("basic"); setIsDirty(false); setView("form");
   };
   const openEdit = (w: any) => {
     setEditId(w.id); setFormTab("basic");
@@ -416,29 +281,16 @@ export default function Warehouses() {
       allowedUserGroup: w.allowedUserGroup ?? "",
       allowedUserId: w.allowedUserId ? String(w.allowedUserId) : "",
       copyFromWarehouseId: w.copyFromWarehouseId ? String(w.copyFromWarehouseId) : "",
+      recordPolicy: (w.recordPolicy as RecordPolicy) ?? "flexible",
+      foundationKey: w.foundationKey ?? "",
+      includeInFoundation: w.includeInFoundation ?? false,
     });
-    setLinks([]); setIsDirty(false); setView("form");
+    setIsDirty(false); setView("form");
   };
 
   const handleSave = async () => {
     if (!form.name.trim()) { toast.error("إسم 1 مطلوب"); return; }
     if (!form.code.trim()) { toast.error("رقم المخزن مطلوب"); return; }
-
-    /* ── التحقق من الحسابات الأساسية ── */
-    const missing = REQUIRED_ACCOUNT_LABELS.filter(label => {
-      const row = links.find(l => l.label === label);
-      return !row || !row.accountId || row.accountId === "none";
-    });
-    if (missing.length > 0) {
-      toast.error(
-        <div dir="rtl" style={{ lineHeight: 1.7 }}>
-          <div style={{ fontWeight: 700, marginBottom: 4 }}>الحسابات الأساسية مطلوبة:</div>
-          {missing.map(m => <div key={m} style={{ fontSize: 12 }}>• {m}</div>)}
-        </div>,
-        { duration: 5000 }
-      );
-      return;
-    }
 
     const payload = {
       name: form.name, code: f(form.code), name2: f(form.name2),
@@ -447,13 +299,10 @@ export default function Warehouses() {
       allowedUserGroup: f(form.allowedUserGroup),
       allowedUserId: fNum(form.allowedUserId),
       copyFromWarehouseId: fNum(form.copyFromWarehouseId),
+      recordPolicy: form.recordPolicy,
+      includeInFoundation: form.includeInFoundation,
+      foundationKey: f(form.foundationKey),
     };
-    // التقط الروابط الحالية الآن (قبل أي re-render)
-    const linksSnapshot = links.filter(l => l.label.trim()).map((l, i) => ({
-      label: l.label,
-      accountId: l.accountId && l.accountId !== "none" ? Number(l.accountId) : null,
-      sortOrder: i,
-    }));
     try {
       let warehouseId: number;
       if (editId) {
@@ -463,8 +312,6 @@ export default function Warehouses() {
         const w = await create.mutateAsync(payload);
         warehouseId = w.id;
       }
-      await saveLinks.mutateAsync({ warehouseId, links: linksSnapshot });
-      utils.warehouses.accountLinks.list.invalidate({ warehouseId });
       utils.warehouses.list.invalidate();
       if (!editId) setEditId(warehouseId);
       setIsDirty(false);
@@ -474,13 +321,8 @@ export default function Warehouses() {
     }
   };
 
-  const addLink = () => setLinks(p => [...p, { label: "", accountId: "", sortOrder: p.length }]);
-  const removeLink = (i: number) => setLinks(p => p.filter((_, idx) => idx !== i));
-  const updateLink = (i: number, field: keyof LinkRow, val: string) =>
-    setLinks(p => p.map((l, idx) => idx === i ? { ...l, [field]: val } : l));
-
   const getBranchName = (id: number | null) => branches?.find(b => b.id === id)?.name ?? "—";
-  const isSaving = create.isPending || update.isPending || saveLinks.isPending;
+  const isSaving = create.isPending || update.isPending;
   const warehouseList = warehouses ?? [];
   const currentIndex = editId ? warehouseList.findIndex(w => w.id === editId) : -1;
   const otherWarehouses = warehouseList.filter(w => w.id !== editId);
@@ -499,7 +341,7 @@ export default function Warehouses() {
       { label: "السابق", icon: <CRight className="w-3.5 h-3.5" />,       action: () => currentIndex > 0 && safeNavigate(() => openEdit(warehouseList[currentIndex - 1])) },
       { label: "الأول",  icon: <ChevronFirst className="w-3.5 h-3.5" />, action: () => warehouseList[0] && safeNavigate(() => openEdit(warehouseList[0])) },
       { label: "حذف",    icon: <Trash2 className="w-3.5 h-3.5" />,       action: () => { if (editId) { setDeleteError(null); setShowDeleteDialog(true); } }, danger: true },
-      { label: "عرض",    icon: <Eye className="w-3.5 h-3.5" />,          action: () => {} },
+      { label: "مطالعة", icon: <Eye className="w-3.5 h-3.5" />,          action: () => editId ? toast.info(`مخزن: ${form.nameAr || form.nameEn}`) : {} },
       { label: "طباعة",  icon: <Printer className="w-3.5 h-3.5" />,      action: () => {} },
       { label: "خروج",   icon: <LogOut className="w-3.5 h-3.5" />,       action: () => safeNavigate(() => { setEditId(null); setView("list"); }) },
     ];
@@ -508,7 +350,7 @@ export default function Warehouses() {
       <Density.Provider value={density}>
       <div
         className="flex flex-col min-h-full -mx-6 -mt-6 px-6 pt-4"
-        style={{ background: "#ECE7DD" }}
+        style={{ background: "var(--background)" }}
         dir="rtl"
       >
         {/* ── Page title ── */}
@@ -621,80 +463,14 @@ export default function Warehouses() {
               </div>
             </Section>
 
-            {/* ── جدول الروابط المحاسبية ── */}
-            <Section title="الروابط المحاسبية">
-              <div className={c ? "" : "overflow-x-auto"}>
-                <table
-                  className="text-right w-full"
-                  style={{ borderCollapse: "separate", borderSpacing: 0, maxWidth: c ? 420 : 580 }}
-                >
-                  <thead>
-                    <tr style={{ background: "linear-gradient(to left, #e8e3d8, #e2ddd3)" }}>
-                      <th
-                        className={`font-semibold text-slate-400 text-right ${c ? "px-1 py-0.5 text-[9px]" : "px-3 py-2 text-[11px]"}`}
-                        style={{ width: c ? 20 : 28, borderBottom: "2px solid #d8d3c8" }}
-                      >#</th>
-                      <th
-                        className={`font-semibold text-slate-500 text-right ${c ? "px-1 py-0.5 text-[9px]" : "px-3 py-2 text-[11px]"}`}
-                        style={{ borderBottom: "2px solid #d8d3c8" }}
-                      >بيان</th>
-                      <th
-                        className={`font-semibold text-slate-500 text-right ${c ? "px-1 py-0.5 text-[9px]" : "px-3 py-2 text-[11px]"}`}
-                        style={{ width: c ? 90 : 110, borderBottom: "2px solid #d8d3c8", borderRight: "1px solid #d8d3c8" }}
-                      >كود الحساب</th>
-                      <th
-                        className={`font-semibold text-slate-500 text-right ${c ? "px-1 py-0.5 text-[9px]" : "px-3 py-2 text-[11px]"}`}
-                        style={{ borderBottom: "2px solid #d8d3c8" }}
-                      >إسم الحساب</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {links.map((row, idx) => {
-                      const acc = postableAccounts.find((a: any) => String(a.id) === row.accountId)
-                               ?? (accounts as any[])?.find((a: any) => String(a.id) === row.accountId);
-                      const even = idx % 2 === 0;
-                      const isRequired = REQUIRED_ACCOUNT_LABELS.includes(row.label);
-                      const isMissing  = isRequired && (!row.accountId || row.accountId === "none");
-                      return (
-                        <tr
-                          key={idx}
-                          style={{
-                            background: isMissing ? "#fff3e0" : even ? "#FDFAF5" : "#F5F0E8",
-                            borderBottom: isMissing ? "1px solid #fed7aa" : "1px solid #e8e3d8",
-                            transition: "background 0.1s",
-                          }}
-                          className="hover:bg-indigo-50/30"
-                        >
-                          <td className={`text-center text-slate-400 ${c ? "px-1 text-[9px]" : "px-2 py-1.5 text-[11px]"}`}>
-                            {idx + 1}
-                          </td>
-                          <td className={`font-medium whitespace-nowrap ${c ? "px-1 text-[10px]" : "px-3 py-1.5 text-[12px]"} ${isMissing ? "text-orange-700" : "text-slate-700"}`}>
-                            {isRequired && (
-                              <span title="حساب أساسي مطلوب" style={{ color: "#ef4444", marginLeft: 2, fontSize: 10 }}>*</span>
-                            )}
-                            {row.label}
-                          </td>
-                          <td
-                            className="py-0"
-                            style={{ borderRight: "1px solid #eef2f7", borderLeft: "1px solid #eef2f7" }}
-                          >
-                            <AccountCodeInput
-                              allAccounts={(accounts as any[]) ?? []}
-                              selectedId={row.accountId}
-                              onChange={v => { setLinks(prev => prev.map((l, i) => i === idx ? { ...l, accountId: v } : l)); setIsDirty(true); }}
-                            />
-                          </td>
-                          <td className={`text-slate-500 truncate ${c ? "px-1 text-[10px]" : "px-3 py-1.5 text-[12px]"}`}
-                              style={{ maxWidth: c ? 140 : 200 }}>
-                            {acc?.name ?? <span className="text-slate-300 text-[10px]">—</span>}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </Section>
+            {/* ── سياسة التأسيس ── */}
+            <FoundationPolicyPanel
+              recordPolicy={form.recordPolicy}
+              foundationKey={form.foundationKey || null}
+              includeInFoundation={form.includeInFoundation}
+              onChange={(policy, include) => { setForm(p => ({ ...p, recordPolicy: policy, includeInFoundation: include })); setIsDirty(true); }}
+            />
+
           </>}
 
           {/* ══ TAB: دفاتر المستندات (انتقل إلى الإعدادات ← النظام) ══ */}
@@ -1064,9 +840,9 @@ export default function Warehouses() {
         <div
           className="sticky bottom-0 z-30 flex items-center gap-1 px-3 shrink-0"
           style={{
-            borderTop: "1px solid #d8d3c8",
-            background: "#EBE7DE",
-            boxShadow: "0 -2px 10px rgba(0,0,0,0.07)",
+            borderTop: "1px solid #C8CDD6",
+            background: "#E8EBF0",
+            boxShadow: "0 -2px 8px rgba(0,0,0,0.07)",
             height: c ? 36 : 44,
           }}
           dir="rtl"

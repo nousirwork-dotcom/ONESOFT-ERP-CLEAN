@@ -389,8 +389,8 @@ function QuotationForm({
     }
     if (e.key === "ArrowUp") { e.preventDefault(); focusCell(rowIdx - 1, colIdx); }
     if (e.key === "ArrowDown") { e.preventDefault(); focusCell(rowIdx + 1, colIdx); }
-    if (e.ctrlKey && e.key === "c") { setCopiedLine({ ...lines[rowIdx] }); toast.info("تم نسخ السطر"); }
-    if (e.ctrlKey && e.key === "v" && copiedLine) {
+    if (e.ctrlKey && e.code === "KeyC") { setCopiedLine({ ...lines[rowIdx] }); toast.info("تم نسخ السطر"); }
+    if (e.ctrlKey && e.code === "KeyV" && copiedLine) {
       setLines(prev => {
         const updated = [...prev];
         updated.splice(rowIdx + 1, 0, { ...copiedLine, id: crypto.randomUUID() });
@@ -510,12 +510,12 @@ function QuotationForm({
           {/* التاريخ */}
           <div>
             <Label className="text-xs text-muted-foreground">تاريخ العرض</Label>
-            <Input type="date" value={quoteDate} onChange={e => setQuoteDate(e.target.value)} className="h-8 text-sm" />
+            <DateSegmentInput value={quoteDate} onChange={setQuoteDate} standalone className="h-8 text-sm" />
           </div>
           {/* صلاحية حتى */}
           <div>
             <Label className="text-xs text-muted-foreground">صالح حتى</Label>
-            <Input type="date" value={validUntil} onChange={e => setValidUntil(e.target.value)} className="h-8 text-sm" />
+            <DateSegmentInput value={validUntil} onChange={setValidUntil} standalone className="h-8 text-sm" />
           </div>
           {/* العملة */}
           <div>
@@ -540,6 +540,8 @@ function QuotationForm({
               onBlur={() => setTimeout(() => setShowCustDropdown(false), 150)}
               placeholder="اسم العميل أو رمزه..."
               className="h-8 text-sm"
+              aria-expanded={showCustDropdown ? "true" : "false"}
+              disableSelectOnFocus
             />
             {showCustDropdown && filteredCustomers.length > 0 && (
               <div className="absolute z-50 top-full mt-1 w-full bg-card border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
@@ -577,6 +579,7 @@ function QuotationForm({
               onFocus={() => { setShowProdDropdown(true); setSearchForRow(selectedIdx); }}
               onBlur={() => setTimeout(() => setShowProdDropdown(false), 150)}
               className="h-7 text-xs"
+              disableSelectOnFocus
             />
             {showProdDropdown && productSearch && filteredProducts.length > 0 && (
               <div className="absolute z-50 top-full mt-1 w-full bg-card border border-border rounded-lg shadow-xl max-h-56 overflow-y-auto">
@@ -616,7 +619,7 @@ function QuotationForm({
                 <th className="w-8"></th>
               </tr>
             </thead>
-            <tbody>
+            <tbody data-nav-internal="true">
               {lines.map((line, rowIdx) => (
                 <tr
                   key={line.id}

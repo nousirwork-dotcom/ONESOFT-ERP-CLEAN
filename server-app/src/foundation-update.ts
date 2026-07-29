@@ -37,6 +37,7 @@ import {
   documentTemplates,
   postingDefinitions,
   chartOfAccounts,
+  foundationTombstones,
 } from './schema.js';
 
 // ─── حقول FK التي تشير إلى جداول التأسيس أو الحسابات ──────────────────────
@@ -269,6 +270,14 @@ export async function applyFoundationRecords(
   const fkMap   = await buildFoundationKeyIdMap(orgId);
   const acctMap = await buildAccountSystemKeyMap(orgId);
 
+  // نحمل Tombstones للسجلات التي حذفها المستخدم عمداً
+  const tombstoneRows = await db.select({
+    tableName: foundationTombstones.tableName,
+    foundationKey: foundationTombstones.foundationKey,
+  }).from(foundationTombstones)
+    .where(eq(foundationTombstones.orgId, orgId));
+  const tombstoneSet = new Set(tombstoneRows.map(r => `${r.tableName}:${r.foundationKey}`));
+
   for (const { tableName, dataKey } of APPLY_ORDER) {
     const records: Record<string, unknown>[] = (data[dataKey] as any[]) ?? [];
     if (!records.length) continue;
@@ -288,6 +297,9 @@ export async function applyFoundationRecords(
       const fKey = record['foundationKey'] as string | undefined;
       if (!fKey) { skipped++; continue; }
       if (existingKeys.has(fKey)) { skipped++; continue; }
+
+      // تحقق من Tombstone: إذا حذف المستخدم هذا السجل عمداً، لا نعيده
+      if (tombstoneSet.has(`${tableName}:${fKey}`)) { skipped++; continue; }
 
       // سياسة التحديث: سجلات flexible المحذوفة لا تُعاد إلا في أول تثبيت.
       // إذا وصلنا هنا فالسجل غير موجود (تم حذفه) — نحترم قرار المستخدم.
@@ -483,7 +495,9 @@ export async function runFoundationUpdateForAllOrgs(dbUrl?: string): Promise<voi
     orgs = await db
       .select({ id: organizations.id, code: organizations.code })
       .from(organizations)
-      .where(eq(organizations.status, 'active'));
+      // جميع المنظمات بغض النظر عن status (active, trial, ...)
+      // foundation-update يجب أن يطبق القالب على أي مؤسسة عميل جديدة
+      .where(inArray(organizations.status, ['active', 'trial']));
   } catch (err: any) {
     logger.warn('foundation-update', `فشل جلب المنظمات: ${err.message}`);
     return;

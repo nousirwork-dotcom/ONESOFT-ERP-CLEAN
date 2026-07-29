@@ -54,7 +54,7 @@ export default function InvoicePrintModal({
       buyerTaxNumber:  data.customerTaxNumber,
     };
 
-    QRCodeService.resolveForInvoice(qrSettings, invoiceData, docType)
+    QRCodeService.resolveForInvoice(qrSettings, invoiceData, docType as "sales_invoice" | "purchase_invoice" | "receipt_voucher" | undefined)
       .then(result => setQrDataUrl(result.dataUrl))
       .catch(() => setQrDataUrl(""));
   }, [open, data, qrSettings, docType]);
@@ -121,7 +121,7 @@ export default function InvoicePrintModal({
       </div>
 
       {/* ── معاينة — iframe مطابق لمخرج الطباعة ── */}
-      <div className="flex-1 overflow-y-auto bg-gray-300 flex items-start justify-center py-6">
+      <div className="flex-1 overflow-y-auto bg-background flex items-start justify-center py-6">
         <iframe
           key={qrDataUrl}
           srcDoc={invoiceHtml}

@@ -50,6 +50,7 @@ export default function ChangeMyPasswordDialog({
               placeholder="اتركها فارغة إن لم تكن معيّنة"
               value={current} onChange={(e) => setCurrent(e.target.value)}
               autoFocus
+              data-global-keyboard="false"
             />
           </div>
           <div>
@@ -58,6 +59,7 @@ export default function ChangeMyPasswordDialog({
               className="mt-1" type="password" dir="ltr"
               placeholder="6 أحرف على الأقل"
               value={next} onChange={(e) => setNext(e.target.value)}
+              data-global-keyboard="false"
             />
           </div>
           <div>
@@ -67,6 +69,7 @@ export default function ChangeMyPasswordDialog({
               placeholder="أعد كتابتها"
               value={confirm} onChange={(e) => setConfirm(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !changePass.isPending && handleSubmit()}
+              data-global-keyboard="false"
             />
           </div>
           {error && (

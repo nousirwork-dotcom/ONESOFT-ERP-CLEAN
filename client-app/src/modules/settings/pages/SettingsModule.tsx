@@ -1,10 +1,13 @@
-import { useState, useRef, useEffect, lazy, Suspense } from "react";
+import React, { useState, useRef, useEffect, useMemo, lazy, Suspense } from "react";
 import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
+import { FoundationPolicyPanel } from "@/shared/components/FoundationPolicyPanel";
+import type { RecordPolicy } from "@/shared/components/FoundationPolicyPanel";
 import { fmtDate, fmtDateTime } from "@/shared/utils/dateUtils";
 import { useTabManager } from "@/core/contexts/TabManagerContext";
 import { trpc } from "@/shared/lib/trpc";
 import Warehouses from "./Warehouses";
 import DocumentJournalsPage from "./DocumentJournalsPage";
+import UsersPage from "./Users";
 import UpdatesPage from "./UpdatesPage";
 import ServiceDiagnosticsPage from "./ServiceDiagnosticsPage";
 
@@ -14,12 +17,12 @@ import ZatcaCenterPage from "./ZatcaCenterPage";
 import AISettingsPage from "./AISettingsPage";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/core/ui/dialog";
 import {
-  ChevronDown, ChevronRight, Settings, Building2, DollarSign,
+  ChevronDown, ChevronRight, ChevronLeft, Settings, Building2, DollarSign,
   Calendar, Users, Shield, Database, FileText, History,
   Warehouse, Tag, BookOpen, Layout, Download, Bell,
   ArrowRight, Save, Plus, Trash2, Edit2, Clock, GitBranch,
   AlertTriangle, CheckCircle, XCircle, BarChart2, Lock, List, QrCode,
-  MessageSquare, Send, Bot, Mail, Eye, RefreshCw,
+  MessageSquare, Send, Bot, Mail, Eye, RefreshCw, Search, Check, X,
 } from "lucide-react";
 import QRCodeDisplay from "@/shared/components/QRCodeDisplay";
 import { generateQrContent, QR_SYSTEMS, CUSTOM_TEMPLATE_HELP, type QrSystem } from "@/shared/lib/qrUtils";
@@ -34,6 +37,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/core/ui/textarea";
 import { Switch } from "@/core/ui/switch";
 import { toast } from "sonner";
+import { useToolbarActions } from "@/components/unified-toolbar/ToolbarActionsContext";
 
 type MenuId = string;
 
@@ -73,10 +77,10 @@ export const menuSections = [
     color: "#406B93",
     emoji: "👥",
     children: [
-      { id: "user-categories", label: "فئات المستخدمين",     status: "done",    path: "/cfg/user-categories" },
-      { id: "users-list",      label: "المستخدمين",          status: "missing", path: "/cfg/users"           },
-      { id: "user-groups",     label: "مجموعات المستخدمين",  status: "missing", path: "/cfg/user-groups"     },
-      { id: "permissions",     label: "صلاحيات المستخدمين",  status: "missing", path: "/cfg/permissions"     },
+      { id: "user-categories", label: "فئات المستخدمين",          status: "done",    path: "/cfg/user-categories" },
+      { id: "users-list",      label: "المستخدمين",               status: "missing", path: "/cfg/users"           },
+      { id: "user-groups",     label: "مجموعات المستخدمين",       status: "missing", path: "/cfg/user-groups"     },
+      { id: "permissions",     label: "صلاحيات المستخدمين",       status: "missing", path: "/cfg/permissions"     },
     ],
   },
   {
@@ -226,7 +230,6 @@ function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id:
     "hr-settings": false,
   });
   const toggle = (id: string) => setExpanded(p => ({ ...p, [id]: !p[id] }));
-  const { openTab } = useTabManager();
 
   return (
     <nav className="w-64 shrink-0 border-l border-border bg-[#1a1a2e] overflow-y-auto flex flex-col">
@@ -251,7 +254,7 @@ function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id:
             {expanded[section.id] && (
               <div className="mb-1">
                 {section.children.map(child => (
-                  <button key={child.id} onClick={() => { onSelect(child.id); openTab(child.path, child.label, Settings); }}
+                  <button key={child.id} onClick={(e) => { e.stopPropagation(); onSelect(child.id); }}
                     className={`w-full flex items-center gap-2 px-4 py-1.5 text-xs transition-colors ${
                       activeId === child.id
                         ? "bg-[#a855f7]/15 text-white font-semibold"
@@ -369,12 +372,16 @@ type CurrencyRow = {
   isBase: boolean; isActive: boolean;
   mainUnitAr: string | null; subUnitAr: string | null;
   mainUnitEn: string | null; subUnitEn: string | null;
+  recordPolicy?: RecordPolicy | null; foundationKey?: string | null; includeInFoundation?: boolean | null;
 };
 
 const EMPTY_CURRENCY: Omit<CurrencyRow, "id"> = {
   code: "", nameAr: "", nameEn: "", symbol: "", symbolIntl: "",
   exchangeRate: "1", decimalPlaces: 2, isBase: false, isActive: true,
   mainUnitAr: "", subUnitAr: "", mainUnitEn: "", subUnitEn: "",
+  recordPolicy: "flexible" as RecordPolicy,
+  foundationKey: "",
+  includeInFoundation: false,
 };
 
 function CurrencyDialog({
@@ -415,6 +422,9 @@ function CurrencyDialog({
       subUnitAr: form.subUnitAr?.trim() || null,
       mainUnitEn: form.mainUnitEn?.trim() || null,
       subUnitEn: form.subUnitEn?.trim() || null,
+      recordPolicy: (form as any).recordPolicy ?? "flexible",
+      includeInFoundation: (form as any).includeInFoundation ?? false,
+      foundationKey: (form as any).foundationKey || undefined,
     };
     if (!payload.code || !payload.nameAr || !payload.nameEn || !payload.symbol) {
       toast.error("الكود واسم العملة والرمز مطلوبة"); return;
@@ -508,6 +518,12 @@ function CurrencyDialog({
             </div>
           </div>
         </div>
+        <FoundationPolicyPanel
+          recordPolicy={((form as any).recordPolicy as RecordPolicy) ?? "flexible"}
+          foundationKey={(form as any).foundationKey ?? null}
+          includeInFoundation={(form as any).includeInFoundation ?? false}
+          onChange={(policy, include) => setForm((f: any) => ({ ...f, recordPolicy: policy, includeInFoundation: include }))}
+        />
         <DialogFooter className="mt-2 gap-2">
           <Button variant="outline" onClick={onClose} className="h-8 text-xs">إلغاء</Button>
           <Button onClick={handleSave} disabled={saving} className="h-8 text-xs">
@@ -739,183 +755,7 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 function UsersListPage() {
-  const utils = trpc.useUtils();
-  const { data: users = [], isLoading } = trpc.users.list.useQuery();
-  const { data: cats = [] } = trpc.userCategories.list.useQuery();
-
-  const [showAdd, setShowAdd] = useState(false);
-  const [categoryId, setCategoryId] = useState<number | null>(null);
-  const [form, setForm] = useState({ code: "", username: "", password: "", name: "", email: "", phone: "", role: "cashier" });
-  const sf = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
-
-  // fetch next code whenever a category with autoNumbering is selected
-  const { data: nextCodeData } = trpc.userCategories.nextCode.useQuery(
-    { categoryId: categoryId! },
-    { enabled: !!categoryId }
-  );
-  // auto-fill code when next code data arrives (only if code is still empty / matches previous auto)
-  const prevCatId = useRef<number | null>(null);
-  useEffect(() => {
-    if (!categoryId) { if (prevCatId.current !== null) { sf("code", ""); } prevCatId.current = null; return; }
-    if (nextCodeData?.code) { sf("code", nextCodeData.code); }
-    prevCatId.current = categoryId;
-  }, [nextCodeData, categoryId]);
-
-  const createUser = trpc.users.create.useMutation({
-    onSuccess: () => {
-      utils.users.list.invalidate();
-      utils.userCategories.nextCode.invalidate(categoryId ? { categoryId } : undefined);
-      setShowAdd(false);
-      setCategoryId(null);
-      setForm({ code: "", username: "", password: "", name: "", email: "", phone: "", role: "cashier" });
-      toast.success("تم إضافة المستخدم");
-    },
-    onError: (e) => toast.error(e.message),
-  });
-  const deleteUser = trpc.users.delete.useMutation({
-    onSuccess: () => { utils.users.list.invalidate(); toast.success("تم حذف المستخدم"); },
-    onError: (e) => toast.error(e.message),
-  });
-
-  return (
-    <div className="space-y-4" dir="rtl">
-      <div className="flex justify-between items-center">
-        <h3 className="font-semibold text-sm">إدارة المستخدمين</h3>
-        <Button className="h-8 text-sm" onClick={() => setShowAdd(v => !v)}>
-          <Plus className="w-3.5 h-3.5 ml-1" />مستخدم جديد
-        </Button>
-      </div>
-
-      {showAdd && (
-        <Card className="border-indigo-200 bg-indigo-50/40 p-4">
-          <div className="grid grid-cols-3 gap-3 mb-3">
-            <div>
-              <Label className="text-xs mb-1 block">فئة المستخدم</Label>
-              <Select
-                value={categoryId ? String(categoryId) : "none"}
-                onValueChange={v => setCategoryId(v === "none" ? null : Number(v))}
-              >
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="بدون فئة" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">بدون فئة</SelectItem>
-                  {(cats as any[]).map((c: any) => (
-                    <SelectItem key={c.id} value={String(c.id)}>
-                      {c.code ? `${c.code} — ` : ""}{c.name}
-                      {c.autoNumbering ? " (ترقيم تلقائي)" : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs mb-1 block flex items-center gap-1">
-                الكود
-                {nextCodeData?.code && categoryId && (
-                  <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">تلقائي</span>
-                )}
-              </Label>
-              <Input
-                className={`h-8 text-sm ${nextCodeData?.code && categoryId ? "border-emerald-300 bg-emerald-50/40" : ""}`}
-                value={form.code}
-                onChange={e => sf("code", e.target.value)}
-                placeholder={nextCodeData?.code ?? "U001"}
-              />
-            </div>
-            <div>
-              <Label className="text-xs mb-1 block">الاسم الكامل *</Label>
-              <Input className="h-8 text-sm" value={form.name} onChange={e => sf("name", e.target.value)} placeholder="أحمد محمد" />
-            </div>
-            <div>
-              <Label className="text-xs mb-1 block">اسم المستخدم *</Label>
-              <Input className="h-8 text-sm" value={form.username} onChange={e => sf("username", e.target.value)} placeholder="ahmed" dir="ltr" autoComplete="off" name="new-username" />
-            </div>
-            <div>
-              <Label className="text-xs mb-1 block">كلمة المرور *</Label>
-              <Input className="h-8 text-sm" type="password" value={form.password} onChange={e => sf("password", e.target.value)} placeholder="••••••" dir="ltr" autoComplete="new-password" name="new-password" />
-            </div>
-            <div>
-              <Label className="text-xs mb-1 block">البريد الإلكتروني</Label>
-              <Input className="h-8 text-sm" value={form.email} onChange={e => sf("email", e.target.value)} placeholder="ahmed@co.sa" dir="ltr" />
-            </div>
-            <div>
-              <Label className="text-xs mb-1 block">الدور</Label>
-              <Select value={form.role} onValueChange={v => sf("role", v)}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="admin">مدير النظام</SelectItem>
-                  <SelectItem value="accountant">محاسب</SelectItem>
-                  <SelectItem value="cashier">كاشير</SelectItem>
-                  <SelectItem value="warehouse_manager">أمين مخزن</SelectItem>
-                  <SelectItem value="viewer">مشاهد</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="flex gap-2 items-center">
-            <Button size="sm" className="h-7 text-xs" disabled={!form.name || !form.username || !form.password || createUser.isPending}
-              onClick={() => createUser.mutate({
-                code: form.code || undefined,
-                username: form.username,
-                password: form.password,
-                name: form.name,
-                email: form.email || undefined,
-                role: form.role as any,
-                categoryId: categoryId ?? undefined,
-              })}>
-              {createUser.isPending ? "جارٍ الحفظ..." : "حفظ"}
-            </Button>
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setShowAdd(false); setCategoryId(null); setForm({ code: "", username: "", password: "", name: "", email: "", phone: "", role: "cashier" }); }}>إلغاء</Button>
-          </div>
-        </Card>
-      )}
-
-      <Card className="border-border/50">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="text-xs w-16">الكود</TableHead>
-              <TableHead className="text-xs">الاسم</TableHead>
-              <TableHead className="text-xs">اسم المستخدم</TableHead>
-              <TableHead className="text-xs">البريد الإلكتروني</TableHead>
-              <TableHead className="text-xs">الدور</TableHead>
-              <TableHead className="text-xs text-center">الحالة</TableHead>
-              <TableHead className="text-xs">الإجراءات</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading && (
-              <TableRow><TableCell colSpan={7} className="text-xs text-center text-muted-foreground py-6">جارٍ التحميل...</TableCell></TableRow>
-            )}
-            {!isLoading && users.length === 0 && (
-              <TableRow><TableCell colSpan={7} className="text-xs text-center text-muted-foreground py-6">لا يوجد مستخدمون</TableCell></TableRow>
-            )}
-            {users.map((u: any) => (
-              <TableRow key={u.id}>
-                <TableCell className="text-xs font-mono text-muted-foreground">{u.code ?? "—"}</TableCell>
-                <TableCell className="text-xs font-medium">{u.name}</TableCell>
-                <TableCell className="text-xs font-mono" dir="ltr">{u.username}</TableCell>
-                <TableCell className="text-xs" dir="ltr">{u.email ?? "—"}</TableCell>
-                <TableCell className="text-xs">{ROLE_LABELS[u.role] ?? u.role}</TableCell>
-                <TableCell className="text-center">
-                  <Badge variant={u.isActive ? "default" : "secondary"} className="text-xs">
-                    {u.isActive ? "نشط" : "موقوف"}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="flex gap-2">
-                    <button className="text-destructive text-xs hover:underline"
-                      onClick={() => deleteUser.mutate({ id: u.id })}>
-                      حذف
-                    </button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Card>
-    </div>
-  );
+  return <UsersPage />;
 }
 
 // ─── User Categories ───────────────────────────────────────────────────────────
@@ -1180,522 +1020,1333 @@ function UserCategoriesPage() {
   );
 }
 
-// ─── Group Members Section ────────────────────────────────────────────────────
+// ─── Group Members — Search Input ─────────────────────────────────────────────
 
-type PendingMember = { memberType: 'user' | 'group'; memberCode: string; memberName: string };
+type ResolvedMember = { id: number; name: string; code: string | null; type: 'user' | 'group' };
+type PendingMember  = {
+  tempId: string;
+  memberType: 'user' | 'group';
+  memberUserId?:  number;
+  memberGroupId?: number;
+  memberName: string;
+  memberCode: string | null;
+};
 
-function MemberRow({ memberType, setMemberType, memberCode, setMemberCode, memberName, setMemberName, onAdd, users, groups, existingCodes = [], dupHighlight = false }:
-  { memberType: 'user'|'group'; setMemberType: (v:'user'|'group')=>void; memberCode:string; setMemberCode:(v:string)=>void; memberName:string; setMemberName:(v:string)=>void; onAdd:()=>void; users:any[]; groups:any[]; existingCodes?: string[]; dupHighlight?: boolean }) {
+// ─── SelectUsersDialog ─────────────────────────────────────────────────────────
 
-  const [notFound, setNotFound] = useState(false);
-  const [showPicker, setShowPicker] = useState(false);
-  const [pickerFocusIdx, setPickerFocusIdx] = useState(-1);
-  const pickerRef = useRef<HTMLDivElement>(null);
-  const pickerListRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+function SelectUsersDialog({
+  open, onOpenChange, groupId, onAdded, onConfirm, pendingUserIds,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  groupId: number;
+  onAdded?: () => void;
+  onConfirm?: (users: Array<{ id: number; name: string; code: string | null }>) => void;
+  pendingUserIds?: Set<number>;
+}) {
+  const [search, setSearch]             = useState('');
+  const [selected, setSelected]         = useState<Set<number>>(new Set());
+  const [showInactive, setShowInactive] = useState(false);
 
-  const availableList: any[] = memberType === 'user' ? users : groups;
-  const filteredList = availableList.filter((item: any) => {
-    if (!memberCode.trim()) return true;
-    return (
-      item.code?.toLowerCase().includes(memberCode.toLowerCase()) ||
-      item.name?.toLowerCase().includes(memberCode.toLowerCase())
-    );
-  });
+  const { data: usersData = [], isLoading } = trpc.groupMembers.listUsersForDialog.useQuery(
+    { groupId, query: search || undefined, showInactive },
+    { enabled: open }
+  );
 
-  useEffect(() => { setPickerFocusIdx(-1); }, [filteredList.length]);
+  const selectableIds = usersData.filter(u => !u.alreadyAdded && !pendingUserIds?.has(u.id)).map(u => u.id);
+  const allSelected   = selectableIds.length > 0 && selectableIds.every(id => selected.has(id));
 
-  useEffect(() => {
-    if (pickerFocusIdx < 0 || !pickerListRef.current) return;
-    const items = pickerListRef.current.querySelectorAll<HTMLElement>('[data-picker-item]');
-    items[pickerFocusIdx]?.scrollIntoView({ block: 'nearest' });
-  }, [pickerFocusIdx]);
-
-  const handleCodeBlur = () => {
-    setTimeout(() => {
-      if (pickerRef.current?.contains(document.activeElement)) return;
-      setShowPicker(false);
-      if (!memberCode.trim()) { setNotFound(false); return; }
-      if (memberType === 'user') {
-        const found = users.find((u:any) => u.code === memberCode.trim());
-        if (found) { setMemberName(found.name); setNotFound(false); }
-        else { setMemberName(""); setNotFound(true); }
-      } else {
-        const found = groups.find((g:any) => g.code === memberCode.trim());
-        if (found) { setMemberName(found.name); setNotFound(false); }
-        else { setMemberName(""); setNotFound(true); }
-      }
-    }, 150);
-  };
-
-  // onPointerDown prevents focus move → input stays focused → no blur race condition
-  const selectFromPicker = (item: any) => {
-    setMemberCode(item.code ?? "");
-    setMemberName(item.name ?? "");
-    setNotFound(false);
-    setShowPicker(false);
-    setPickerFocusIdx(-1);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!showPicker) {
-      if (e.key === 'Enter' && canAdd) { e.preventDefault(); onAdd(); }
-      if (e.key === 'F2' || e.key === 'F4') { e.preventDefault(); setShowPicker(true); }
-      return;
+  function toggleAll() {
+    setSelected(allSelected ? new Set() : new Set(selectableIds));
+  }
+  function toggle(id: number) {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelected(next);
+  }
+  function handleAdd() {
+    if (onConfirm) {
+      const selectedUsers = usersData
+        .filter(u => selected.has(u.id))
+        .map(u => ({ id: u.id, name: u.name, code: u.code ?? null }));
+      onConfirm(selectedUsers);
+      setSelected(new Set());
+      onOpenChange(false);
     }
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setPickerFocusIdx(i => Math.min(i + 1, filteredList.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setPickerFocusIdx(i => Math.max(i - 1, 0));
-    } else if (e.key === 'Enter' || e.key === 'Tab') {
-      const idx = pickerFocusIdx >= 0 ? pickerFocusIdx
-        : filteredList.findIndex(it => it.code === memberCode.trim());
-      if (idx >= 0 && filteredList[idx]) {
-        e.preventDefault();
-        selectFromPicker(filteredList[idx]);
-      } else if (e.key === 'Enter' && canAdd) {
-        e.preventDefault(); setShowPicker(false); onAdd();
-      } else if (e.key === 'Tab') {
-        setShowPicker(false);
-      }
-    } else if (e.key === 'Escape') {
-      e.preventDefault(); setShowPicker(false); setPickerFocusIdx(-1);
-    }
-  };
+  }
 
-  useEffect(() => {
-    const onOutside = (e: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setShowPicker(false);
-    };
-    document.addEventListener("mousedown", onOutside);
-    return () => document.removeEventListener("mousedown", onOutside);
-  }, []);
-
-  // no real-time duplicate error — only notFound shown during typing
-  const errorMsg = notFound ? "كود غير موجود" : null;
-  const canAdd = !!(memberCode.trim() && memberName.trim() && !notFound);
+  useEffect(() => { if (!open) { setSearch(''); setSelected(new Set()); setShowInactive(false); } }, [open]);
 
   return (
-    <TableRow>
-      <TableCell className="py-1 pe-1">
-        <Select value={memberType} onValueChange={v => { setMemberType(v as any); setMemberCode(""); setMemberName(""); setNotFound(false); setShowPicker(false); }}>
-          <SelectTrigger className="h-7 text-xs w-28"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="user">مستخدم</SelectItem>
-            <SelectItem value="group">مجموعة</SelectItem>
-          </SelectContent>
-        </Select>
-      </TableCell>
-      <TableCell className="py-1 pe-1">
-        <div className="relative space-y-0.5" ref={pickerRef}>
-          <div className="flex items-center gap-0.5">
-            <Input
-              ref={inputRef}
-              className={`h-7 text-xs w-24 ${errorMsg || dupHighlight ? "border-destructive focus-visible:ring-destructive" : ""}`}
-              placeholder="الكود"
-              value={memberCode}
-              onChange={e => { setMemberCode(e.target.value); setMemberName(""); setNotFound(false); setShowPicker(true); setPickerFocusIdx(-1); }}
-              onFocus={() => setShowPicker(true)}
-              onBlur={handleCodeBlur}
-              onKeyDown={handleKeyDown}
-              onContextMenu={e => { e.preventDefault(); setShowPicker(v => !v); }}
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col" dir="rtl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <Users className="w-4 h-4 text-blue-500" />
+            اختيار المستخدمين
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="relative flex-1">
+            <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            <input
+              className="w-full h-8 text-xs border border-border rounded pr-8 pl-3 bg-background focus:outline-none focus:ring-1 focus:ring-primary/40"
+              placeholder="بحث بالاسم أو الكود أو اسم الدخول..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              autoFocus
             />
-            <button
-              type="button"
-              title="اختر من القائمة (F2 / كليك يمين)"
-              className="h-7 w-7 flex items-center justify-center rounded border border-border hover:bg-primary hover:text-primary-foreground text-muted-foreground transition-colors shrink-0"
-              onMouseDown={e => { e.preventDefault(); setShowPicker(v => !v); }}
-            >
-              <List className="w-3.5 h-3.5" />
-            </button>
           </div>
-          {errorMsg && <p className="text-[10px] text-destructive leading-tight font-medium">{errorMsg}</p>}
-          {showPicker && (
-            <div ref={pickerListRef} className="absolute z-50 top-9 right-0 bg-white border border-border rounded-md shadow-xl max-h-52 overflow-y-auto min-w-[260px]" dir="rtl">
-              <div className="px-3 py-1.5 border-b border-border/50 bg-primary/5 flex items-center gap-2 sticky top-0 z-10">
-                <List className="w-3 h-3 text-primary shrink-0" />
-                <span className="text-[10px] text-primary font-medium flex-1">
-                  {memberType === 'user' ? 'المستخدمون' : 'المجموعات'}
-                </span>
-                <span className="text-[9px] text-muted-foreground">↑↓ Enter / Tab</span>
-              </div>
-              {filteredList.length === 0 && (
-                <p className="text-[10px] text-muted-foreground text-center py-3">لا توجد نتائج</p>
-              )}
-              {filteredList.map((item: any, idx: number) => {
-                const isFocused = idx === pickerFocusIdx;
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer shrink-0 select-none">
+            <Checkbox checked={showInactive} onCheckedChange={v => setShowInactive(!!v)} className="h-3.5 w-3.5" />
+            إظهار الموقوفين
+          </label>
+        </div>
+
+        <div className="border border-border/50 rounded-md overflow-hidden flex-1 overflow-y-auto min-h-0">
+          <table className="w-full text-xs">
+            <thead className="sticky top-0 bg-muted/90 backdrop-blur-sm z-10">
+              <tr>
+                <th className="w-8 px-2 py-2 text-center">
+                  <Checkbox checked={allSelected} onCheckedChange={toggleAll} disabled={selectableIds.length === 0} className="h-3.5 w-3.5" />
+                </th>
+                <th className="text-right px-2 py-2 font-medium text-muted-foreground">الكود</th>
+                <th className="text-right px-2 py-2 font-medium text-muted-foreground">الاسم الكامل</th>
+                <th className="text-right px-2 py-2 font-medium text-muted-foreground">اسم الدخول</th>
+                <th className="text-right px-2 py-2 font-medium text-muted-foreground">الفئة</th>
+                <th className="text-right px-2 py-2 font-medium text-muted-foreground">الحالة</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading ? (
+                <tr><td colSpan={6} className="text-center py-10 text-muted-foreground">جارٍ التحميل...</td></tr>
+              ) : usersData.length === 0 ? (
+                <tr><td colSpan={6} className="text-center py-10 text-muted-foreground">لا توجد نتائج مطابقة</td></tr>
+              ) : usersData.map(u => {
+                const isPending  = pendingUserIds?.has(u.id) ?? false;
+                const isDisabled = u.alreadyAdded || isPending;
                 return (
-                  <button
-                    key={item.id}
-                    data-picker-item=""
-                    type="button"
-                    className={`w-full text-right px-3 py-2 text-xs flex justify-between gap-2 items-center border-b border-border/20 last:border-0 transition-colors
-                      ${isFocused ? "bg-primary text-primary-foreground" : "hover:bg-accent cursor-pointer"}`}
-                    onPointerDown={e => e.preventDefault()}
-                    onClick={() => selectFromPicker(item)}
-                    onDoubleClick={() => selectFromPicker(item)}
-                    onMouseEnter={() => setPickerFocusIdx(idx)}
-                  >
-                    <code className={`font-mono text-xs shrink-0 px-1.5 py-0.5 rounded ${isFocused ? "bg-white/20 text-white" : "text-primary bg-primary/10"}`}>
-                      {item.code ?? "—"}
-                    </code>
-                    <span className="flex-1 truncate text-right">{item.name}</span>
-                  </button>
+                <tr key={u.id}
+                  onClick={() => !isDisabled && toggle(u.id)}
+                  className={`border-t border-border/20 transition-colors ${isDisabled ? 'opacity-50 bg-muted/10' : selected.has(u.id) ? 'bg-primary/5' : 'hover:bg-accent/40 cursor-pointer'}`}>
+                  <td className="w-8 px-2 py-2 text-center">
+                    <Checkbox
+                      checked={selected.has(u.id) || isDisabled}
+                      onCheckedChange={() => !isDisabled && toggle(u.id)}
+                      disabled={isDisabled}
+                      className="h-3.5 w-3.5"
+                      onClick={e => e.stopPropagation()}
+                    />
+                  </td>
+                  <td className="px-2 py-1.5">
+                    {u.code ? <code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">{u.code}</code> : <span className="text-muted-foreground">—</span>}
+                  </td>
+                  <td className="px-2 py-1.5 font-medium">
+                    {u.name}
+                    {u.alreadyAdded && <Badge variant="outline" className="mr-2 text-[9px] h-4 px-1 border-green-300 text-green-700">مضاف</Badge>}
+                    {isPending && <Badge variant="outline" className="mr-2 text-[9px] h-4 px-1 border-amber-300 text-amber-700">في الانتظار</Badge>}
+                  </td>
+                  <td className="px-2 py-1.5 text-muted-foreground font-mono text-[11px]">{u.username}</td>
+                  <td className="px-2 py-1.5 text-muted-foreground">{u.categoryName ?? '—'}</td>
+                  <td className="px-2 py-1.5">
+                    {u.isActive
+                      ? <span className="text-[10px] text-green-700 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded">نشط</span>
+                      : <span className="text-[10px] text-orange-700 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded">موقوف</span>}
+                  </td>
+                </tr>
                 );
               })}
-            </div>
-          )}
+            </tbody>
+          </table>
         </div>
-      </TableCell>
-      <TableCell className="py-1 pe-1">
-        <Input className="h-7 text-xs w-40 bg-muted/40" placeholder="يُحمَّل تلقائياً" value={memberName} readOnly tabIndex={-1} />
-      </TableCell>
-      <TableCell className="py-1">
-        <Button size="sm" variant="outline" className="h-7 text-xs px-2" disabled={!canAdd} onClick={onAdd} title="إضافة (Enter)">
-          <Plus className="w-3 h-3" />
-        </Button>
-      </TableCell>
-    </TableRow>
+
+        <DialogFooter className="flex-row items-center justify-between gap-2 shrink-0">
+          <span className="text-xs text-muted-foreground">
+            {selected.size > 0 ? `تم تحديد ${selected.size} مستخدم` : 'لم يُحدَّد أحد'}
+          </span>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="text-xs h-8" onClick={() => onOpenChange(false)}>إلغاء</Button>
+            <Button size="sm" className="text-xs h-8 gap-1.5" disabled={selected.size === 0} onClick={handleAdd}>
+              <Plus className="w-3 h-3" />
+              إضافة المحددين{selected.size > 0 ? ` (${selected.size})` : ''}
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
-function SavedMembersTable({ groupId }: { groupId: number }) {
-  const utils = trpc.useUtils();
-  const { data: members = [] } = trpc.groupMembers.list.useQuery({ groupId });
-  const removeMember = trpc.groupMembers.remove.useMutation({
-    onSuccess: () => utils.groupMembers.list.invalidate({ groupId }),
-    onError: (e) => toast.error(e.message),
-  });
-  if (!members.length) return (
-    <p className="text-xs text-muted-foreground text-center py-2">لا يوجد أعضاء بعد</p>
+// ─── SelectGroupsDialog ────────────────────────────────────────────────────────
+
+function SelectGroupsDialog({
+  open, onOpenChange, groupId, onAdded, onConfirm, pendingGroupIds,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  groupId: number;
+  onAdded?: () => void;
+  onConfirm?: (groups: Array<{ id: number; name: string; code: string | null }>) => void;
+  pendingGroupIds?: Set<number>;
+}) {
+  const [search, setSearch]     = useState('');
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+
+  const { data: groupsData = [], isLoading } = trpc.groupMembers.listGroupsForDialog.useQuery(
+    { groupId, query: search || undefined },
+    { enabled: open }
   );
+
+  const selectableIds = groupsData.filter(g => !g.alreadyAdded && !g.cycleRisk && !pendingGroupIds?.has(g.id)).map(g => g.id);
+  const allSelected   = selectableIds.length > 0 && selectableIds.every(id => selected.has(id));
+
+  function toggleAll() {
+    setSelected(allSelected ? new Set() : new Set(selectableIds));
+  }
+  function toggle(id: number) {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelected(next);
+  }
+  function handleAdd() {
+    if (onConfirm) {
+      const selectedGroups = groupsData
+        .filter(g => selected.has(g.id))
+        .map(g => ({ id: g.id, name: g.name, code: g.code ?? null }));
+      onConfirm(selectedGroups);
+      setSelected(new Set());
+      onOpenChange(false);
+    }
+  }
+
+  useEffect(() => { if (!open) { setSearch(''); setSelected(new Set()); } }, [open]);
+
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead className="text-xs">نوع العضو</TableHead>
-          <TableHead className="text-xs">كود العضو</TableHead>
-          <TableHead className="text-xs">اسم العضو</TableHead>
-          <TableHead className="text-xs w-8"></TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {members.map((m: any) => (
-          <TableRow key={m.id}>
-            <TableCell className="text-xs">{m.memberType === 'user' ? 'مستخدم' : 'مجموعة'}</TableCell>
-            <TableCell className="text-xs font-mono">{m.memberCode ?? '—'}</TableCell>
-            <TableCell className="text-xs">{m.memberName ?? '—'}</TableCell>
-            <TableCell>
-              <button className="text-destructive text-xs hover:underline" onClick={() => removeMember.mutate({ id: m.id })}>
-                حذف
-              </button>
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col" dir="rtl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <Shield className="w-4 h-4 text-purple-500" />
+            اختيار مجموعات المستخدمين
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="relative shrink-0">
+          <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+          <input
+            className="w-full h-8 text-xs border border-border rounded pr-8 pl-3 bg-background focus:outline-none focus:ring-1 focus:ring-primary/40"
+            placeholder="بحث بالاسم أو الكود..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            autoFocus
+          />
+        </div>
+
+        <div className="border border-border/50 rounded-md overflow-hidden flex-1 overflow-y-auto min-h-0">
+          <table className="w-full text-xs">
+            <thead className="sticky top-0 bg-muted/90 backdrop-blur-sm z-10">
+              <tr>
+                <th className="w-8 px-2 py-2 text-center">
+                  <Checkbox checked={allSelected} onCheckedChange={toggleAll} disabled={selectableIds.length === 0} className="h-3.5 w-3.5" />
+                </th>
+                <th className="text-right px-2 py-2 font-medium text-muted-foreground">الكود</th>
+                <th className="text-right px-2 py-2 font-medium text-muted-foreground">اسم المجموعة</th>
+                <th className="text-center px-2 py-2 font-medium text-muted-foreground">مباشر</th>
+                <th className="text-center px-2 py-2 font-medium text-muted-foreground">فعلي</th>
+                <th className="text-right px-2 py-2 font-medium text-muted-foreground">الحالة</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading ? (
+                <tr><td colSpan={6} className="text-center py-10 text-muted-foreground">جارٍ التحميل...</td></tr>
+              ) : groupsData.length === 0 ? (
+                <tr><td colSpan={6} className="text-center py-10 text-muted-foreground">لا توجد مجموعات</td></tr>
+              ) : groupsData.map(g => {
+                const isPending  = pendingGroupIds?.has(g.id) ?? false;
+                const isDisabled = g.alreadyAdded || g.cycleRisk || isPending;
+                return (
+                  <tr key={g.id}
+                    onClick={() => !isDisabled && toggle(g.id)}
+                    className={`border-t border-border/20 transition-colors ${isDisabled ? 'opacity-50 bg-muted/10' : selected.has(g.id) ? 'bg-primary/5' : 'hover:bg-accent/40 cursor-pointer'}`}>
+                    <td className="w-8 px-2 py-2 text-center">
+                      <Checkbox
+                        checked={selected.has(g.id) || isDisabled}
+                        onCheckedChange={() => !isDisabled && toggle(g.id)}
+                        disabled={isDisabled}
+                        className="h-3.5 w-3.5"
+                        onClick={e => e.stopPropagation()}
+                      />
+                    </td>
+                    <td className="px-2 py-1.5">
+                      {g.code ? <code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">{g.code}</code> : <span className="text-muted-foreground">—</span>}
+                    </td>
+                    <td className="px-2 py-1.5 font-medium">
+                      {g.name}
+                      {isPending && <Badge variant="outline" className="mr-2 text-[9px] h-4 px-1 border-amber-300 text-amber-700">في الانتظار</Badge>}
+                    </td>
+                    <td className="px-2 py-1.5 text-center text-muted-foreground">{g.directMemberCount}</td>
+                    <td className="px-2 py-1.5 text-center text-muted-foreground">{g.effectiveMemberCount}</td>
+                    <td className="px-2 py-1.5">
+                      {g.alreadyAdded ? (
+                        <Badge variant="outline" className="text-[9px] h-4 px-1 border-green-300 text-green-700">مضافة</Badge>
+                      ) : isPending ? (
+                        <Badge variant="outline" className="text-[9px] h-4 px-1 border-amber-300 text-amber-700">في الانتظار</Badge>
+                      ) : g.cycleRisk ? (
+                        <span className="text-[10px] text-destructive" title={g.cycleReason ?? ''}>⚠ دورة دائرية</span>
+                      ) : (
+                        <span className="text-[10px] text-green-700">متاحة</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <DialogFooter className="flex-row items-center justify-between gap-2 shrink-0">
+          <span className="text-xs text-muted-foreground">
+            {selected.size > 0 ? `تم تحديد ${selected.size} مجموعة` : 'لم تُحدَّد أي مجموعة'}
+          </span>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="text-xs h-8" onClick={() => onOpenChange(false)}>إلغاء</Button>
+            <Button size="sm" className="text-xs h-8 gap-1.5" disabled={selected.size === 0} onClick={handleAdd}>
+              <Plus className="w-3 h-3" />
+              إضافة المحددين{selected.size > 0 ? ` (${selected.size})` : ''}
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
-function AddMemberToGroup({ groupId, users, groups, onErrorChange }: { groupId: number; users: any[]; groups: any[]; onErrorChange?: (hasError: boolean) => void }) {
+// ─── MemberAddToolbar — replaces the old MemberSearchInput ────────────────────
+
+function MemberAddToolbar({ groupId, onAdded }: { groupId: number; onAdded?: () => void }) {
   const utils = trpc.useUtils();
-  const { data: savedMembers = [] } = trpc.groupMembers.list.useQuery({ groupId });
+  const [showUsers,  setShowUsers]  = useState(false);
+  const [showGroups, setShowGroups] = useState(false);
+
+  // Quick code-entry
+  const [memberType, setMemberType] = useState<'user' | 'group'>('user');
+  const [code, setCode]             = useState('');
+  const [isLooking, setIsLooking]   = useState(false);
+  const [resolved, setResolved]     = useState<ResolvedMember | null | 'not_found'>(null);
+
   const addMember = trpc.groupMembers.add.useMutation({
-    onSuccess: () => { utils.groupMembers.list.invalidate({ groupId }); setCode(""); setName(""); toast.success("تم إضافة العضو"); },
-    onError: (e) => toast.error(e.message),
-  });
-  const [type, setType] = useState<'user'|'group'>('user');
-  const [code, setCode] = useState("");
-  const [name, setName] = useState("");
-
-  const existingCodes = (savedMembers as any[])
-    .filter((m: any) => m.memberType === type)
-    .map((m: any) => m.memberCode)
-    .filter(Boolean);
-
-  const isDuplicate = !!code.trim() && existingCodes.includes(code.trim());
-  useEffect(() => { onErrorChange?.(isDuplicate); }, [isDuplicate]);
-
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead className="text-xs">نوع العضو</TableHead>
-          <TableHead className="text-xs">كود العضو</TableHead>
-          <TableHead className="text-xs">اسم العضو</TableHead>
-          <TableHead className="text-xs w-8"></TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        <MemberRow memberType={type} setMemberType={setType} memberCode={code} setMemberCode={setCode}
-          memberName={name} setMemberName={setName} users={users} groups={groups}
-          existingCodes={existingCodes}
-          onAdd={() => {
-            if (existingCodes.includes(code.trim())) return;
-            addMember.mutate({ groupId, memberType: type, memberCode: code.trim(), memberName: name || undefined });
-          }} />
-      </TableBody>
-    </Table>
-  );
-}
-
-// ─── User Groups ───────────────────────────────────────────────────────────────
-
-function UserGroupsPage() {
-  const utils = trpc.useUtils();
-  const { data: groups = [], isLoading } = trpc.userGroups.list.useQuery();
-  const { data: allUsers = [] } = trpc.users.list.useQuery();
-
-  const createGroup = trpc.userGroups.create.useMutation({
-    onError: (e) => toast.error(e.message),
-  });
-  const addBulk = trpc.groupMembers.addBulk.useMutation({
+    onSuccess: () => {
+      utils.groupMembers.list.invalidate({ groupId });
+      utils.groupMembers.effectiveMembers.invalidate({ groupId });
+      setCode(''); setResolved(null);
+      onAdded?.();
+      toast.success('تم إضافة العضو');
+    },
     onError: (e) => toast.error(e.message),
   });
 
-  const deleteGroup = trpc.userGroups.delete.useMutation({
-    onSuccess: () => { utils.userGroups.list.invalidate(); toast.success("تم حذف المجموعة"); },
-    onError: (e) => toast.error(e.message),
-  });
-  const updateGroup = trpc.userGroups.update.useMutation({
-    onSuccess: () => { utils.userGroups.list.invalidate(); setEditId(null); toast.success("تم تعديل المجموعة"); },
-    onError: (e) => toast.error(e.message),
-  });
-
-  const [showAdd, setShowAdd] = useState(false);
-  const [newCode, setNewCode] = useState("");
-  const [newName, setNewName] = useState("");
-  const [pendingMembers, setPendingMembers] = useState<PendingMember[]>([]);
-  const [rowType, setRowType] = useState<'user'|'group'>('user');
-  const [rowCode, setRowCode] = useState("");
-  const [rowName, setRowName] = useState("");
-
-  const [editId, setEditId] = useState<number | null>(null);
-  const [editCode, setEditCode] = useState("");
-  const [editName, setEditName] = useState("");
-  const [editMemberHasError, setEditMemberHasError] = useState(false);
-
-  // duplicate rows highlighted at save time (not during typing)
-  const [dupKeySet, setDupKeySet] = useState<Set<string>>(new Set());
-  const [inputRowDup, setInputRowDup] = useState(false);
-
-  const addPending = () => {
-    if (!rowCode.trim() || !rowName.trim()) return;
-    setPendingMembers(prev => [...prev, { memberType: rowType, memberCode: rowCode.trim(), memberName: rowName }]);
-    setDupKeySet(new Set());
-    setInputRowDup(false);
-    setRowCode(""); setRowName("");
-  };
-
-  const validateAndSave = async () => {
-    // build full list: pendingMembers + current input row (if filled)
-    const inputFilled = !!rowCode.trim() && !!rowName.trim();
-    const allRows: PendingMember[] = inputFilled
-      ? [...pendingMembers, { memberType: rowType, memberCode: rowCode.trim(), memberName: rowName }]
-      : [...pendingMembers];
-
-    // find duplicate type:code keys
-    const seen = new Map<string, number>();
-    for (const m of allRows) {
-      const key = `${m.memberType}:${m.memberCode}`;
-      seen.set(key, (seen.get(key) ?? 0) + 1);
-    }
-    const dups = new Set<string>();
-    for (const [key, count] of seen.entries()) { if (count > 1) dups.add(key); }
-
-    // also flag input row if it duplicates an existing pendingMember
-    const inputKey = `${rowType}:${rowCode.trim()}`;
-    const inputIsDup = inputFilled && pendingMembers.some(m => `${m.memberType}:${m.memberCode}` === inputKey);
-
-    if (dups.size > 0 || inputIsDup) {
-      setDupKeySet(dups);
-      setInputRowDup(inputIsDup);
-      toast.error("العضو تم تكراره بالجدول — أزل التكرار ثم احفظ");
-      return;
-    }
-    setDupKeySet(new Set());
-    setInputRowDup(false);
+  async function handleLookup() {
+    const trimmed = code.trim();
+    if (!trimmed) return;
+    setIsLooking(true); setResolved(null);
     try {
-      const g = await createGroup.mutateAsync({ code: newCode || undefined, name: newName.trim() });
-      if (pendingMembers.length) {
-        await addBulk.mutateAsync({ groupId: g.id, members: pendingMembers });
-      }
-      utils.userGroups.list.invalidate();
-      setShowAdd(false);
-      setNewCode(""); setNewName("");
-      setPendingMembers([]);
-      toast.success("تم إضافة المجموعة");
-    } catch { /* errors shown via onError */ }
-  };
+      const result = await utils.groupMembers.resolveMember.fetch({ memberType, memberCode: trimmed, groupId });
+      setResolved(result ?? 'not_found');
+    } catch { setResolved('not_found'); }
+    finally { setIsLooking(false); }
+  }
+
+  function handleQuickAdd() {
+    if (!resolved || resolved === 'not_found') return;
+    if (resolved.type === 'user') addMember.mutate({ groupId, memberType: 'user', memberUserId: resolved.id });
+    else addMember.mutate({ groupId, memberType: 'group', memberGroupId: resolved.id });
+  }
+
+  function handleAdded() {
+    utils.groupMembers.list.invalidate({ groupId });
+    utils.groupMembers.effectiveMembers.invalidate({ groupId });
+    onAdded?.();
+  }
 
   return (
-    <div className="space-y-4" dir="rtl">
-      <div className="flex justify-between items-center">
-        <h3 className="font-semibold text-sm">مجموعات المستخدمين</h3>
-        <Button className="h-8 text-sm" onClick={() => { setShowAdd(v => !v); setEditId(null); }}>
-          <Plus className="w-3.5 h-3.5 ml-1" />مجموعة جديدة
+    <div className="border-b border-border/30 p-3 space-y-2" dir="rtl">
+      {/* Primary action buttons */}
+      <div className="flex gap-2">
+        <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5 flex-1 justify-center"
+          onClick={() => setShowUsers(true)}>
+          <Users className="w-3.5 h-3.5 text-blue-500" />
+          اختيار مستخدمين
+        </Button>
+        <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5 flex-1 justify-center"
+          onClick={() => setShowGroups(true)}>
+          <Shield className="w-3.5 h-3.5 text-purple-500" />
+          اختيار مجموعات
         </Button>
       </div>
 
-      {/* ── نموذج إضافة مجموعة ── */}
-      {showAdd && (
-        <Card className="border-indigo-200 bg-indigo-50/40 p-4 space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs mb-1 block">الكود</Label>
-              <Input className="h-8 text-sm" value={newCode} onChange={e => setNewCode(e.target.value)} placeholder="GRP01" />
-            </div>
-            <div>
-              <Label className="text-xs mb-1 block">اسم المجموعة *</Label>
-              <Input className="h-8 text-sm" value={newName} onChange={e => setNewName(e.target.value)} placeholder="مثال: أمناء المخازن" />
-            </div>
-          </div>
+      {/* Quick code-entry */}
+      <div className="flex items-center gap-1.5">
+        <span className="text-[10px] text-muted-foreground shrink-0 w-16">الكود السريع:</span>
+        <select
+          value={memberType}
+          onChange={e => { setMemberType(e.target.value as 'user' | 'group'); setResolved(null); setCode(''); }}
+          className="h-7 text-[11px] border border-border/60 rounded px-1.5 bg-background shrink-0 focus:outline-none"
+          style={{ direction: 'rtl' }}
+        >
+          <option value="user">مستخدم</option>
+          <option value="group">مجموعة</option>
+        </select>
+        <input
+          className="flex-1 h-7 text-xs border border-border/60 rounded px-2 bg-background font-mono placeholder:font-sans placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/40 min-w-0"
+          placeholder="أدخل الكود ثم Enter..."
+          value={code}
+          onChange={e => { setCode(e.target.value); setResolved(null); }}
+          onKeyDown={e => e.key === 'Enter' && handleLookup()}
+          disabled={isLooking || addMember.isPending}
+          dir="ltr"
+        />
+        {isLooking && <RefreshCw className="w-3 h-3 animate-spin text-muted-foreground shrink-0" />}
+      </div>
 
-          {/* ─ جدول الأعضاء المؤقتين ─ */}
-          <div className="border border-border/60 rounded-md overflow-hidden bg-white">
-            <div className="bg-muted/30 px-3 py-1.5 border-b border-border/40">
-              <span className="text-xs font-medium text-muted-foreground">أعضاء المجموعة</span>
+      {/* Code lookup result */}
+      {resolved !== null && (
+        <div className="flex items-center gap-2 px-1">
+          {resolved === 'not_found' ? (
+            <p className="text-xs text-destructive flex items-center gap-1.5">
+              <X className="w-3 h-3 shrink-0" />
+              لم يُعثر على {memberType === 'user' ? 'مستخدم' : 'مجموعة'} بهذا الكود
+            </p>
+          ) : (
+            <>
+              <Check className="w-3 h-3 text-green-500 shrink-0" />
+              <span className="text-xs flex-1 truncate">
+                <span className="font-medium">{resolved.name}</span>
+                {resolved.code && <code className="text-[10px] text-muted-foreground font-mono mr-2">{resolved.code}</code>}
+              </span>
+              <Button size="sm" className="h-6 text-xs gap-1 px-2 shrink-0" onClick={handleQuickAdd} disabled={addMember.isPending}>
+                <Plus className="w-3 h-3" />إضافة
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+
+      <SelectUsersDialog  open={showUsers}  onOpenChange={setShowUsers}  groupId={groupId} onAdded={handleAdded} />
+      <SelectGroupsDialog open={showGroups} onOpenChange={setShowGroups} groupId={groupId} onAdded={handleAdded} />
+    </div>
+  );
+}
+
+// ─── end of member-add components ─────────────────────────────────────────────
+
+// ─── User Groups ───────────────────────────────────────────────────────────────
+
+// QuickCodeEntry: inline quick-add by code, used in the members table toolbar
+function QuickCodeEntry({ groupId, onAdded, onAdd }: { groupId: number; onAdded?: () => void; onAdd?: (member: ResolvedMember) => void }) {
+  const utils = trpc.useUtils();
+  const [memberType, setMemberType] = useState<'user' | 'group'>('user');
+  const [code, setCode]             = useState('');
+  const [isLooking, setIsLooking]   = useState(false);
+  const [resolved, setResolved]     = useState<ResolvedMember | null | 'not_found'>(null);
+
+  const addMember = trpc.groupMembers.add.useMutation({
+    onSuccess: () => {
+      utils.groupMembers.list.invalidate({ groupId });
+      utils.groupMembers.effectiveMembers.invalidate({ groupId });
+      setCode(''); setResolved(null);
+      onAdded?.();
+      toast.success('تم إضافة العضو');
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  async function handleLookup() {
+    const trimmed = code.trim();
+    if (!trimmed) return;
+    setIsLooking(true); setResolved(null);
+    try {
+      const result = await utils.groupMembers.resolveMember.fetch({ memberType, memberCode: trimmed, groupId });
+      setResolved(result ?? 'not_found');
+    } catch { setResolved('not_found'); }
+    finally { setIsLooking(false); }
+  }
+
+  function handleQuickAdd() {
+    if (!resolved || resolved === 'not_found') return;
+    if (onAdd) {
+      onAdd(resolved);
+      setCode(''); setResolved(null);
+    } else {
+      if (resolved.type === 'user') addMember.mutate({ groupId, memberType: 'user', memberUserId: resolved.id });
+      else addMember.mutate({ groupId, memberType: 'group', memberGroupId: resolved.id });
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+      <span className="text-[10px] text-muted-foreground shrink-0">الكود:</span>
+      <select
+        value={memberType}
+        onChange={e => { setMemberType(e.target.value as 'user' | 'group'); setResolved(null); setCode(''); }}
+        className="h-7 text-[11px] border border-border/60 rounded px-1.5 bg-background shrink-0 focus:outline-none"
+        style={{ direction: 'rtl' }}>
+        <option value="user">مستخدم</option>
+        <option value="group">مجموعة</option>
+      </select>
+      <input
+        className="flex-1 h-7 text-xs border border-border/60 rounded px-2 bg-background font-mono placeholder:font-sans placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/40 min-w-0 max-w-40"
+        placeholder="أدخل الكود + Enter"
+        value={code}
+        onChange={e => { setCode(e.target.value); setResolved(null); }}
+        onKeyDown={e => e.key === 'Enter' && handleLookup()}
+        disabled={isLooking || addMember.isPending}
+        dir="ltr"
+      />
+      {isLooking && <RefreshCw className="w-3 h-3 animate-spin text-muted-foreground shrink-0" />}
+      {resolved !== null && resolved !== 'not_found' && (
+        <div className="flex items-center gap-1.5 shrink-0">
+          <Check className="w-3 h-3 text-green-500 shrink-0" />
+          <span className="text-xs text-foreground max-w-[100px] truncate">{resolved.name}</span>
+          <Button size="sm" className="h-6 text-xs gap-1 px-2 shrink-0" onClick={handleQuickAdd} disabled={!onAdd && addMember.isPending}>
+            <Plus className="w-3 h-3" />إضافة
+          </Button>
+        </div>
+      )}
+      {resolved === 'not_found' && (
+        <span className="text-xs text-destructive flex items-center gap-1 shrink-0">
+          <X className="w-3 h-3" />غير موجود
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ─── UnsavedChangesDialog ──────────────────────────────────────────────────────
+
+function UnsavedChangesDialog({
+  open, onSave, onDiscard, onCancel, isSaving,
+}: {
+  open: boolean;
+  onSave: () => void;
+  onDiscard: () => void;
+  onCancel: () => void;
+  isSaving: boolean;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!v) onCancel(); }}>
+      <DialogContent className="max-w-sm" dir="rtl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-500" />
+            تعديلات غير محفوظة
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          لديك تعديلات غير محفوظة في هذه المجموعة. هل تريد حفظها قبل الانتقال؟
+        </p>
+        <DialogFooter className="flex-row gap-2 justify-end mt-2">
+          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={onCancel}>
+            البقاء هنا
+          </Button>
+          <Button variant="destructive" size="sm" className="h-8 text-xs" onClick={onDiscard}>
+            تجاهل التغييرات
+          </Button>
+          <Button size="sm" className="h-8 text-xs gap-1.5" onClick={onSave} disabled={isSaving}>
+            {isSaving ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+            حفظ والمتابعة
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ExpandedSubRows: shows sub-members of a group row, indented inside the table
+function ExpandedSubRows({ memberGroupId, groupName, depth = 1 }: {
+  memberGroupId: number;
+  groupName: string;
+  depth?: number;
+}) {
+  const { data: subs = [], isLoading } = trpc.groupMembers.list.useQuery({ groupId: memberGroupId });
+  const indent = depth * 20 + 28;
+
+  if (isLoading) return (
+    <tr className="bg-purple-50/20">
+      <td colSpan={6} className="py-2 text-xs text-muted-foreground" style={{ paddingRight: `${indent}px` }}>
+        <RefreshCw className="w-3 h-3 animate-spin inline ml-1" />جارٍ التحميل...
+      </td>
+    </tr>
+  );
+  if ((subs as any[]).length === 0) return (
+    <tr className="bg-purple-50/20">
+      <td colSpan={6} className="py-2 text-[11px] text-muted-foreground italic" style={{ paddingRight: `${indent}px` }}>
+        لا يوجد أعضاء في هذه المجموعة الفرعية
+      </td>
+    </tr>
+  );
+  return (
+    <>
+      {(subs as any[]).map((sub: any) => (
+        <tr key={`sub-${sub.id}`} className="bg-purple-50/20 border-b border-purple-100/40 hover:bg-purple-50/40 transition-colors">
+          <td className="py-1.5 px-3 text-muted-foreground" />
+          <td className="py-1.5 px-2" style={{ paddingRight: `${indent}px` }}>
+            <div className="flex items-center gap-1.5">
+              <span className="text-purple-300 text-[10px] shrink-0">└─</span>
+              {sub.memberType === 'user' ? (
+                <span className="flex items-center gap-1 text-[9px] font-medium text-blue-600 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-full">
+                  <Users className="w-2.5 h-2.5 shrink-0" />مستخدم
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-[9px] font-medium text-purple-600 bg-purple-50 border border-purple-100 px-1.5 py-0.5 rounded-full">
+                  <Shield className="w-2.5 h-2.5 shrink-0" />مجموعة
+                </span>
+              )}
             </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-xs">نوع العضو</TableHead>
-                  <TableHead className="text-xs">كود العضو</TableHead>
-                  <TableHead className="text-xs">اسم العضو</TableHead>
-                  <TableHead className="text-xs w-8"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pendingMembers.map((m, i) => {
-                  const rowKey = `${m.memberType}:${m.memberCode}`;
-                  const isDupRow = dupKeySet.has(rowKey);
+          </td>
+          <td className="py-1.5 px-2">
+            {sub.memberCode
+              ? <code className="font-mono text-[10px] bg-muted px-1.5 py-0.5 rounded">{sub.memberCode}</code>
+              : <span className="text-muted-foreground">—</span>}
+          </td>
+          <td className="py-1.5 px-2 text-xs text-foreground font-medium">{sub.memberName ?? '—'}</td>
+          <td className="py-1.5 px-2">
+            <span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+              موروث من: {groupName}
+            </span>
+          </td>
+          <td className="py-1.5 px-2" />
+        </tr>
+      ))}
+    </>
+  );
+}
+
+function UserGroupsPage() {
+  const utils = trpc.useUtils();
+  const tabManager = useTabManager();
+  const { data: groups = [], isLoading } = trpc.userGroups.list.useQuery();
+
+  // ── Mutations ─────────────────────────────────────────────────────────────────
+  const saveAllMut = trpc.userGroups.saveAll.useMutation({
+    onSuccess: ({ groupId }) => {
+      utils.userGroups.list.invalidate();
+      utils.groupMembers.list.invalidate({ groupId });
+      utils.groupMembers.effectiveMembers.invalidate({ groupId });
+      resetDirtyState();
+      setSelectedId(groupId);
+      toast.success('تم حفظ مجموعة المستخدمين بنجاح');
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const createGroup = trpc.userGroups.create.useMutation({
+    onSuccess: (g) => {
+      utils.userGroups.list.invalidate();
+      setShowNew(false); setNewCode(''); setNewName(''); setNewDesc('');
+      setSelectedId(g.id);
+      toast.success('تم إنشاء المجموعة');
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const deleteGroup = trpc.userGroups.delete.useMutation({
+    onSuccess: () => {
+      utils.userGroups.list.invalidate();
+      setSelectedId(null);
+      resetDirtyState();
+      toast.success('تم حذف المجموعة');
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  // ── State ─────────────────────────────────────────────────────────────────────
+  const [selectedId, setSelectedId]             = useState<number | null>(null);
+  const [showNew, setShowNew]                   = useState(false);
+  const [newCode, setNewCode]                   = useState('');
+  const [newName, setNewName]                   = useState('');
+  const [newDesc, setNewDesc]                   = useState('');
+  const [editing, setEditing]                   = useState(false);
+  const [editCode, setEditCode]                 = useState('');
+  const [editName, setEditName]                 = useState('');
+  const [editDesc, setEditDesc]                 = useState('');
+  const [expandedGroupIds, setExpandedGroupIds] = useState<Set<number>>(new Set());
+  const [showEffective, setShowEffective]       = useState(false);
+  const [showUsersDialog, setShowUsersDialog]   = useState(false);
+  const [showGroupsDialog, setShowGroupsDialog] = useState(false);
+
+  // Batch pending state
+  const [pendingAdditions, setPendingAdditions] = useState<PendingMember[]>([]);
+  const [pendingRemovals, setPendingRemovals]   = useState<Set<number>>(new Set());
+  const [dirtyCode, setDirtyCode]               = useState<string | null>(null);
+  const [dirtyName, setDirtyName]               = useState<string | null>(null);
+  const [dirtyDesc, setDirtyDesc]               = useState<string | null>(null);
+
+  // Unsaved changes guard
+  const [showUnsaved, setShowUnsaved]           = useState(false);
+  const [pendingNavAction, setPendingNavAction] = useState<(() => void) | null>(null);
+
+  const selectedGroup     = (groups as any[]).find((g: any) => g.id === selectedId) ?? null;
+  const currentGroupIndex = (groups as any[]).findIndex((g: any) => g.id === selectedId);
+  const totalGroups       = (groups as any[]).length;
+
+  const { data: members = [] } = trpc.groupMembers.list.useQuery(
+    { groupId: selectedId! },
+    { enabled: selectedId !== null }
+  );
+  const { data: effectiveMembers = [] } = trpc.groupMembers.effectiveMembers.useQuery(
+    { groupId: selectedId! },
+    { enabled: selectedId !== null }
+  );
+
+  const directUsers   = (members as any[]).filter((m: any) => m.memberType === 'user');
+  const directGroups  = (members as any[]).filter((m: any) => m.memberType === 'group');
+  const inheritedOnly = (effectiveMembers as any[]).filter((e: any) => e.source === 'inherited');
+
+  // Computed dirty flags
+  const isGroupInfoDirty = dirtyCode !== null || dirtyName !== null || dirtyDesc !== null;
+  const isEditFormDirty  = editing && (
+    editCode.trim() !== (selectedGroup?.code ?? '') ||
+    editName.trim() !== (selectedGroup?.name ?? '') ||
+    editDesc.trim() !== (selectedGroup?.description ?? '')
+  );
+  const isDirty = isGroupInfoDirty || pendingAdditions.length > 0 || pendingRemovals.size > 0 || isEditFormDirty;
+
+  const displayName = dirtyName ?? selectedGroup?.name ?? '';
+  const displayCode = dirtyCode ?? selectedGroup?.code ?? '';
+  const displayDesc = dirtyDesc ?? selectedGroup?.description ?? '';
+
+  const pendingUserIds  = new Set(pendingAdditions.filter(p => p.memberType === 'user').map(p => p.memberUserId!));
+  const pendingGroupIds = new Set(pendingAdditions.filter(p => p.memberType === 'group').map(p => p.memberGroupId!));
+
+  // ── Helpers ───────────────────────────────────────────────────────────────────
+  function resetDirtyState() {
+    setPendingAdditions([]);
+    setPendingRemovals(new Set());
+    setDirtyCode(null); setDirtyName(null); setDirtyDesc(null);
+  }
+
+  function selectGroup(id: number | null) {
+    setSelectedId(id); setEditing(false);
+    setExpandedGroupIds(new Set()); setShowEffective(false);
+    resetDirtyState();
+    if (id !== null) {
+      const g = (groups as any[]).find((gg: any) => gg.id === id);
+      setEditCode(g?.code ?? ''); setEditName(g?.name ?? ''); setEditDesc(g?.description ?? '');
+    }
+  }
+
+  function safeNavigate(action: () => void) {
+    if (isDirty) { setPendingNavAction(() => action); setShowUnsaved(true); }
+    else action();
+  }
+
+  function startEdit() {
+    if (!selectedGroup) return;
+    setEditCode((dirtyCode ?? selectedGroup.code) ?? '');
+    setEditName((dirtyName ?? selectedGroup.name) ?? '');
+    setEditDesc((dirtyDesc ?? selectedGroup.description) ?? '');
+    setEditing(true);
+  }
+
+  function applyEditLocally() {
+    const c = editCode.trim(); const n = editName.trim();
+    if (!c) { toast.error('يرجى إدخال كود مجموعة المستخدمين'); return; }
+    if (!n) { toast.error('يرجى إدخال اسم المجموعة'); return; }
+    const codeDup = (groups as any[]).some((g: any) => g.code === c && g.id !== selectedGroup?.id);
+    if (codeDup) { toast.error('كود مجموعة المستخدمين مستخدم من قبل'); return; }
+    setDirtyCode(c !== (selectedGroup?.code ?? '') ? c : null);
+    setDirtyName(n !== (selectedGroup?.name ?? '') ? n : null);
+    setDirtyDesc(editDesc.trim() !== (selectedGroup?.description ?? '') ? (editDesc.trim() || null) : null);
+    setEditing(false);
+  }
+
+  function toggleGroupExpand(memberGroupId: number) {
+    setExpandedGroupIds(prev => {
+      const next = new Set(prev);
+      if (next.has(memberGroupId)) next.delete(memberGroupId); else next.add(memberGroupId);
+      return next;
+    });
+  }
+
+  function handleToggleRemoval(id: number) {
+    setPendingRemovals(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function handleCancelPending(tempId: string) {
+    setPendingAdditions(prev => prev.filter(p => p.tempId !== tempId));
+  }
+
+  function handleUsersConfirm(users: Array<{ id: number; name: string; code: string | null }>) {
+    const existingIds = new Set([
+      ...(members as any[]).filter((m: any) => m.memberType === 'user').map((m: any) => m.memberUserId as number),
+      ...pendingAdditions.filter(p => p.memberType === 'user').map(p => p.memberUserId!),
+    ]);
+    const toAdd: PendingMember[] = users.filter(u => !existingIds.has(u.id))
+      .map(u => ({ tempId: crypto.randomUUID(), memberType: 'user' as const, memberUserId: u.id, memberName: u.name, memberCode: u.code }));
+    if (toAdd.length < users.length) toast.info(`تم تجاهل ${users.length - toAdd.length} مستخدم مضاف مسبقًا`);
+    if (toAdd.length > 0) setPendingAdditions(prev => [...prev, ...toAdd]);
+  }
+
+  function handleGroupsConfirm(grps: Array<{ id: number; name: string; code: string | null }>) {
+    const existingIds = new Set([
+      ...(members as any[]).filter((m: any) => m.memberType === 'group').map((m: any) => m.memberGroupId as number),
+      ...pendingAdditions.filter(p => p.memberType === 'group').map(p => p.memberGroupId!),
+    ]);
+    const toAdd: PendingMember[] = grps.filter(g => !existingIds.has(g.id))
+      .map(g => ({ tempId: crypto.randomUUID(), memberType: 'group' as const, memberGroupId: g.id, memberName: g.name, memberCode: g.code }));
+    if (toAdd.length < grps.length) toast.info(`تم تجاهل ${grps.length - toAdd.length} مجموعة مضافة مسبقًا`);
+    if (toAdd.length > 0) setPendingAdditions(prev => [...prev, ...toAdd]);
+  }
+
+  function handleQuickAddMember(member: ResolvedMember) {
+    if (member.type === 'user') {
+      const exists = (members as any[]).some((m: any) => m.memberType === 'user' && m.memberUserId === member.id)
+        || pendingAdditions.some(p => p.memberType === 'user' && p.memberUserId === member.id);
+      if (exists) { toast.error('المستخدم موجود بالفعل في هذه المجموعة'); return; }
+    } else {
+      const exists = (members as any[]).some((m: any) => m.memberType === 'group' && m.memberGroupId === member.id)
+        || pendingAdditions.some(p => p.memberType === 'group' && p.memberGroupId === member.id);
+      if (exists) { toast.error('المجموعة موجودة بالفعل في هذه المجموعة'); return; }
+    }
+    setPendingAdditions(prev => [...prev, {
+      tempId: crypto.randomUUID(),
+      memberType: member.type,
+      memberUserId:  member.type === 'user'  ? member.id : undefined,
+      memberGroupId: member.type === 'group' ? member.id : undefined,
+      memberName: member.name,
+      memberCode: member.code,
+    }]);
+    toast.success(`تمت إضافة "${member.name}" في انتظار الحفظ`);
+  }
+
+  // ── Toolbar actions ───────────────────────────────────────────────────────────
+  function handleSave() {
+    if (!selectedGroup) return;
+    if (editing) { toast.error('طبّق التغييرات أولاً ثم احفظ'); return; }
+    const code = (dirtyCode ?? selectedGroup.code ?? '').trim();
+    const name = (dirtyName ?? selectedGroup.name ?? '').trim();
+    const desc = (dirtyDesc ?? selectedGroup.description ?? '').trim();
+    if (!code) { toast.error('يرجى إدخال كود مجموعة المستخدمين'); return; }
+    if (!name) { toast.error('يرجى إدخال اسم المجموعة'); return; }
+    saveAllMut.mutate({
+      id: selectedGroup.id, code, name,
+      description: desc || undefined,
+      addMembers: pendingAdditions.map(p =>
+        p.memberType === 'user'
+          ? { memberType: 'user' as const, memberUserId: p.memberUserId! }
+          : { memberType: 'group' as const, memberGroupId: p.memberGroupId! }
+      ),
+      removeIds: [...pendingRemovals],
+    });
+  }
+
+  function handleNew() {
+    safeNavigate(() => {
+      setShowNew(true); setSelectedId(null);
+      setNewCode(''); setNewName(''); setNewDesc('');
+      resetDirtyState(); setEditing(false);
+    });
+  }
+
+  function handleDelete() {
+    if (!selectedGroup) return;
+    if (confirm(`هل أنت متأكد من حذف مجموعة "${selectedGroup.name}"؟\nلن يتم حذف المستخدمين الموجودين في المجموعة.`)) {
+      deleteGroup.mutate({ id: selectedGroup.id });
+    }
+  }
+
+  function handleNav(dir: 'first' | 'prev' | 'next' | 'last') {
+    if (totalGroups === 0) return;
+    const newIdx = dir === 'first' ? 0 : dir === 'last' ? totalGroups - 1
+      : dir === 'prev' ? Math.max(0, currentGroupIndex - 1)
+      : Math.min(totalGroups - 1, currentGroupIndex + 1);
+    const g = (groups as any[])[newIdx];
+    if (g && g.id !== selectedId) safeNavigate(() => selectGroup(g.id));
+  }
+
+  function handleClose() { safeNavigate(() => tabManager.closeTab('user-groups')); }
+
+  // Keyboard shortcuts via ref to avoid stale closures
+  const handlersRef = useRef({ handleSave, handleNew, handleDelete, handleNav, handleClose });
+  useEffect(() => { handlersRef.current = { handleSave, handleNew, handleDelete, handleNav, handleClose }; });
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      const inInput = ['INPUT', 'SELECT', 'TEXTAREA'].includes(tag);
+      const h = handlersRef.current;
+      if (e.key === 'F2')                   { e.preventDefault(); h.handleSave(); }
+      if (e.key === 'F3' && !inInput)       { e.preventDefault(); h.handleNew(); }
+      if (e.key === 'Delete' && e.ctrlKey)  { e.preventDefault(); h.handleDelete(); }
+      if (e.key === 'Home'   && e.ctrlKey)  { e.preventDefault(); h.handleNav('first'); }
+      if (e.key === 'End'    && e.ctrlKey)  { e.preventDefault(); h.handleNav('last'); }
+      if (e.key === 'PageUp'   && !inInput) { e.preventDefault(); h.handleNav('prev'); }
+      if (e.key === 'PageDown' && !inInput) { e.preventDefault(); h.handleNav('next'); }
+      if (e.key === 'Escape'   && !inInput) { e.preventDefault(); h.handleClose(); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  // Unsaved changes save+navigate
+  function handleUnsavedSave() {
+    if (!selectedGroup) return;
+    const code = (dirtyCode ?? selectedGroup.code ?? '').trim();
+    const name = (dirtyName ?? selectedGroup.name ?? '').trim();
+    const desc = (dirtyDesc ?? selectedGroup.description ?? '').trim();
+    saveAllMut.mutate({
+      id: selectedGroup.id, code, name,
+      description: desc || undefined,
+      addMembers: pendingAdditions.map(p =>
+        p.memberType === 'user'
+          ? { memberType: 'user' as const, memberUserId: p.memberUserId! }
+          : { memberType: 'group' as const, memberGroupId: p.memberGroupId! }
+      ),
+      removeIds: [...pendingRemovals],
+    }, {
+      onSuccess: () => {
+        const action = pendingNavAction;
+        setShowUnsaved(false); setPendingNavAction(null);
+        action?.();
+      },
+      onError: () => setShowUnsaved(false),
+    });
+  }
+
+  function handleUnsavedDiscard() {
+    const action = pendingNavAction;
+    setShowUnsaved(false); setPendingNavAction(null);
+    resetDirtyState(); setEditing(false);
+    action?.();
+  }
+
+  // ── Unified Toolbar ──────────────────────────────────────────────────────────
+  const _ugRef = useRef<any>({});
+  _ugRef.current = { selectedGroup, isDirty, saveAllMut, currentGroupIndex, totalGroups, handleSave, handleNew, handleDelete, handleNav, handleClose };
+  const toolbarActions = useMemo(() => {
+    const hasSel = !!selectedGroup;
+    return {
+      save: { supported: true as const, allowed: true, stateEnabled: isDirty && !saveAllMut.isPending, disabledReason: !isDirty ? "لا توجد تعديلات للحفظ" : undefined, loading: saveAllMut.isPending, onClick: () => _ugRef.current.handleSave() },
+      new: { supported: true as const, allowed: true, stateEnabled: true, onClick: () => _ugRef.current.handleNew() },
+      edit: { supported: false as const, disabledReason: "التعديل يتم مباشرة في النموذج" },
+      duplicate: { supported: false as const, disabledReason: "النسخ غير متاح لمجموعات المستخدمين" },
+      draft: { supported: false as const, disabledReason: "المسودة غير مستخدمة" },
+      delete: { supported: true as const, allowed: true, stateEnabled: hasSel, disabledReason: "اختر مجموعة أولًا للحذف", onClick: () => _ugRef.current.selectedGroup && _ugRef.current.handleDelete() },
+      first: { supported: true as const, allowed: true, stateEnabled: hasSel && currentGroupIndex > 0, disabledReason: "أول مجموعة في القائمة بالفعل", onClick: () => _ugRef.current.handleNav('first') },
+      previous: { supported: true as const, allowed: true, stateEnabled: hasSel && currentGroupIndex > 0, disabledReason: "لا يوجد سجل سابق", onClick: () => _ugRef.current.handleNav('prev') },
+      next: { supported: true as const, allowed: true, stateEnabled: hasSel && currentGroupIndex < totalGroups - 1, disabledReason: "لا يوجد سجل تالٍ", onClick: () => _ugRef.current.handleNav('next') },
+      last: { supported: true as const, allowed: true, stateEnabled: hasSel && currentGroupIndex < totalGroups - 1, disabledReason: "آخر مجموعة في القائمة بالفعل", onClick: () => _ugRef.current.handleNav('last') },
+      approve: { supported: false as const, disabledReason: "غير متاح" },
+      cancel: { supported: false as const, disabledReason: "غير متاح" },
+      preview: { supported: false as const, disabledReason: "المطالعة غير متاحة هنا" },
+      tools: { supported: false as const, disabledReason: "الأدوات غير متاحة هنا" },
+      send: { supported: false as const, disabledReason: "الإرسال غير متاح هنا" },
+      print: { supported: false as const, disabledReason: "الطباعة غير متاحة هنا" },
+      exit: { supported: true as const, allowed: true, stateEnabled: true, onClick: () => _ugRef.current.handleClose() },
+    };
+  }, [selectedGroup, isDirty, saveAllMut.isPending, currentGroupIndex, totalGroups]);
+  useToolbarActions(toolbarActions);
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden" dir="rtl">
+
+      {/* ── Main flex row: sidebar + content ──────────────────────────────────── */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+
+      {/* ── Right sidebar: Groups list ───────────────────────────────────────── */}
+      <div className="w-72 border-l border-border/50 flex flex-col shrink-0 bg-muted/30">
+        <div className="flex items-center justify-between px-3 py-2.5 border-b border-border/40 bg-background">
+          <div className="flex items-center gap-1.5">
+            <Shield className="w-3.5 h-3.5 text-purple-500" />
+            <span className="text-xs font-semibold">مجموعات المستخدمين</span>
+          </div>
+        </div>
+
+        {showNew && (() => {
+          const newCodeDup   = !!newCode.trim() && (groups as any[]).some((g: any) => g.code === newCode.trim());
+          const newCodeEmpty = !newCode.trim();
+          return (
+            <div className="p-3 border-b border-border/40 bg-primary/5 space-y-2">
+              <p className="text-[10px] font-semibold text-primary">مجموعة جديدة</p>
+              <Input className="h-7 text-xs" placeholder="اسم المجموعة *" value={newName}
+                onChange={e => setNewName(e.target.value)} autoFocus />
+              <div className="grid grid-cols-2 gap-1.5">
+                <div>
+                  <Input
+                    className={`h-7 text-xs ${newCodeDup ? "border-destructive focus-visible:ring-destructive" : ""}`}
+                    placeholder="الكود *" value={newCode}
+                    onChange={e => setNewCode(e.target.value)} />
+                  {newCodeEmpty && showNew && newName.trim() && (
+                    <p className="text-[10px] text-destructive mt-0.5">يرجى إدخال كود مجموعة المستخدمين</p>
+                  )}
+                  {!newCodeEmpty && newCodeDup && (
+                    <p className="text-[10px] text-destructive mt-0.5">كود مجموعة المستخدمين مستخدم من قبل</p>
+                  )}
+                </div>
+                <Input className="h-7 text-xs" placeholder="الوصف" value={newDesc}
+                  onChange={e => setNewDesc(e.target.value)} />
+              </div>
+              <div className="flex gap-1.5">
+                <Button size="sm" className="h-6 text-[10px] flex-1"
+                  disabled={!newName.trim() || newCodeEmpty || newCodeDup || createGroup.isPending}
+                  onClick={() => createGroup.mutate({ code: newCode.trim(), name: newName.trim(), description: newDesc || undefined })}>
+                  {createGroup.isPending ? "..." : "حفظ"}
+                </Button>
+                <Button size="sm" variant="outline" className="h-6 text-[10px]"
+                  onClick={() => { setShowNew(false); setNewCode(""); setNewName(""); setNewDesc(""); }}>
+                  إلغاء
+                </Button>
+              </div>
+            </div>
+          );
+        })()}
+
+        <div className="flex-1 overflow-y-auto">
+          {isLoading && <p className="text-xs text-muted-foreground text-center py-8">جارٍ التحميل...</p>}
+          {!isLoading && (groups as any[]).length === 0 && (
+            <div className="text-center py-8 px-3 text-muted-foreground">
+              <Shield className="w-7 h-7 mx-auto mb-2 opacity-20" />
+              <p className="text-xs">لا توجد مجموعات</p>
+              <p className="text-[10px] mt-1 opacity-70">اضغط «جديد» في الشريط السفلي</p>
+            </div>
+          )}
+          {(groups as any[]).map((g: any) => {
+            const isSelected     = g.id === selectedId;
+            const isCurrentDirty = isSelected && isDirty;
+            return (
+              <button key={g.id} type="button"
+                className={`w-full text-right px-3 py-2.5 flex items-center gap-2 transition-colors border-b border-border/15 last:border-0
+                  ${isSelected ? "bg-primary text-primary-foreground" : "hover:bg-accent/70 text-foreground"}`}
+                onClick={() => {
+                  if (g.id !== selectedId) safeNavigate(() => { selectGroup(g.id); setShowNew(false); });
+                }}>
+                <Shield className={`w-3.5 h-3.5 shrink-0 ${isSelected ? "text-white/80" : "text-purple-400"}`} />
+                <div className="flex-1 min-w-0">
+                  <p className={`text-xs font-medium truncate ${isSelected ? "text-white" : ""}`}>{g.name}</p>
+                  {g.code && (
+                    <p className={`text-[10px] font-mono ${isSelected ? "text-white/60" : "text-muted-foreground"}`}>{g.code}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {isCurrentDirty && <span className="text-[8px] text-amber-300 font-bold">●</span>}
+                {g.directMemberCount > 0 && (
+                  <span className={`text-[9px] min-w-[18px] text-center px-1.5 py-0.5 rounded-full font-semibold
+                    ${isSelected ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}`}>
+                    {g.directMemberCount}
+                  </span>
+                )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Main content panel ─────────────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col overflow-hidden p-4">
+        <div className="flex-1 flex flex-col bg-white border border-border/50 rounded-xl shadow-sm overflow-hidden">
+
+          {/* ── Empty state ──────────────────────────────────────────────────── */}
+          {!selectedGroup && (
+            <div className="flex-1 flex flex-col items-center justify-center text-center px-6 py-12">
+              <div className="w-16 h-16 rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center mb-4">
+                <Shield className="w-8 h-8 text-purple-300" />
+              </div>
+              <h3 className="text-sm font-semibold text-foreground mb-1">اختر مجموعة لعرض تفاصيلها</h3>
+              <p className="text-xs text-muted-foreground max-w-xs">
+                اختر مجموعة من القائمة على اليمين لعرض أعضائها وتفاصيلها، أو أنشئ مجموعة جديدة بالضغط على «جديد».
+              </p>
+              {!isLoading && (groups as any[]).length > 0 && (
+                <div className="mt-6 flex flex-wrap gap-2 justify-center max-w-xs">
+                  {(groups as any[]).slice(0, 4).map((g: any) => (
+                    <button key={g.id} type="button"
+                      className="flex items-center gap-1.5 text-xs border border-border/50 rounded-lg px-3 py-1.5 hover:bg-accent/50 transition-colors"
+                      onClick={() => setSelectedId(g.id)}>
+                      <Shield className="w-3 h-3 text-purple-400" />
+                      {g.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Group detail ──────────────────────────────────────────────────── */}
+          {selectedGroup && (
+            <div className="flex-1 flex flex-col overflow-hidden">
+
+              {/* ── Group header ─────────────────────────────────────────────── */}
+              <div className="px-5 py-4 border-b border-border/30 bg-gradient-to-b from-purple-50/60 to-white shrink-0">
+                {editing ? (() => {
+                  const editCodeDup     = !!editCode.trim() && (groups as any[]).some((g: any) => g.code === editCode.trim() && g.id !== selectedGroup.id);
+                  const editCodeEmpty   = !editCode.trim();
+                  const editCodeChanged = editCode.trim() !== (selectedGroup.code ?? '');
                   return (
-                    <TableRow key={i} className={isDupRow ? "bg-destructive/10" : ""}>
-                      <TableCell className="text-xs">{m.memberType === 'user' ? 'مستخدم' : 'مجموعة'}</TableCell>
-                      <TableCell className={`text-xs font-mono ${isDupRow ? "text-destructive font-bold" : ""}`}>{m.memberCode}</TableCell>
-                      <TableCell className="text-xs">{m.memberName || '—'}</TableCell>
-                      <TableCell>
-                        <button className="text-destructive text-xs" onClick={() => {
-                          setPendingMembers(p => p.filter((_, j) => j !== i));
-                          setDupKeySet(new Set());
-                        }}>حذف</button>
-                      </TableCell>
-                    </TableRow>
+                    <div className="space-y-2.5">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="w-8 h-8 rounded-lg bg-purple-100 border border-purple-200 flex items-center justify-center shrink-0">
+                          <Edit2 className="w-3.5 h-3.5 text-purple-500" />
+                        </div>
+                        <span className="text-sm font-semibold text-foreground">تعديل المجموعة</span>
+                      </div>
+                      {editCodeChanged && (
+                        <div className="flex items-start gap-1.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
+                          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                          <span>تغيير الكود قد يؤثر على ارتباطات المجموعة الحالية</span>
+                        </div>
+                      )}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-[10px] text-muted-foreground">الاسم *</Label>
+                          <Input className="h-8 text-xs mt-0.5" value={editName}
+                            onChange={e => setEditName(e.target.value)} autoFocus />
+                        </div>
+                        <div>
+                          <Label className="text-[10px] text-muted-foreground">الكود *</Label>
+                          <Input
+                            className={`h-8 text-xs mt-0.5 ${editCodeDup ? "border-destructive focus-visible:ring-destructive" : ""}`}
+                            value={editCode}
+                            onChange={e => setEditCode(e.target.value)} />
+                          {editCodeEmpty && <p className="text-[10px] text-destructive mt-0.5">يرجى إدخال كود مجموعة المستخدمين</p>}
+                          {!editCodeEmpty && editCodeDup && <p className="text-[10px] text-destructive mt-0.5">كود مجموعة المستخدمين مستخدم من قبل</p>}
+                        </div>
+                      </div>
+                      <Input className="h-8 text-xs" placeholder="الوصف" value={editDesc}
+                        onChange={e => setEditDesc(e.target.value)} />
+                      <div className="flex gap-2">
+                        <Button size="sm" className="h-7 text-xs"
+                          disabled={!editName.trim() || editCodeEmpty || editCodeDup}
+                          onClick={applyEditLocally}>
+                          <Check className="w-3 h-3 ml-1" />
+                          تطبيق (في انتظار الحفظ)
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditing(false)}>إلغاء</Button>
+                      </div>
+                      <p className="text-[10px] text-amber-600 font-medium">● التغييرات معلّقة حتى الضغط على حفظ في الشريط السفلي</p>
+                    </div>
                   );
-                })}
-                <MemberRow memberType={rowType} setMemberType={setRowType}
-                  memberCode={rowCode} setMemberCode={v => { setRowCode(v); setInputRowDup(false); }}
-                  memberName={rowName} setMemberName={setRowName} users={allUsers} groups={groups}
-                  existingCodes={[]}
-                  dupHighlight={inputRowDup}
-                  onAdd={addPending} />
-              </TableBody>
-            </Table>
-          </div>
-
-          <div className="flex gap-2 items-center flex-wrap">
-            <Button size="sm" className="h-7 text-xs"
-              disabled={!newName.trim() || createGroup.isPending || addBulk.isPending}
-              onClick={validateAndSave}>
-              {(createGroup.isPending || addBulk.isPending) ? "جارٍ الحفظ..." : "حفظ"}
-            </Button>
-            <Button size="sm" variant="outline" className="h-7 text-xs"
-              onClick={() => { setShowAdd(false); setNewCode(""); setNewName(""); setPendingMembers([]); setDupKeySet(new Set()); setInputRowDup(false); }}>
-              إلغاء
-            </Button>
-            {(dupKeySet.size > 0 || inputRowDup) && (
-              <span className="text-[11px] text-destructive font-medium flex items-center gap-1">
-                ⚠ العضو تم تكراره بالجدول — لا يمكن الحفظ
-              </span>
-            )}
-          </div>
-        </Card>
-      )}
-
-      {/* ── نموذج تعديل مجموعة ── */}
-      {editId !== null && (
-        <Card className="border-amber-200 bg-amber-50/30 p-4 space-y-3">
-          <p className="text-xs font-semibold text-amber-700">تعديل المجموعة</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs mb-1 block">الكود</Label>
-              <Input className="h-8 text-sm" value={editCode} onChange={e => setEditCode(e.target.value)} />
-            </div>
-            <div>
-              <Label className="text-xs mb-1 block">اسم المجموعة *</Label>
-              <Input className="h-8 text-sm" value={editName} onChange={e => setEditName(e.target.value)} />
-            </div>
-          </div>
-
-          {/* ─ أعضاء المجموعة الحالية ─ */}
-          <div className="border border-border/60 rounded-md overflow-hidden bg-white">
-            <div className="bg-muted/30 px-3 py-1.5 border-b border-border/40">
-              <span className="text-xs font-medium text-muted-foreground">أعضاء المجموعة</span>
-            </div>
-            <SavedMembersTable groupId={editId} />
-            <div className="border-t border-border/40">
-              <AddMemberToGroup groupId={editId} users={allUsers} groups={groups} onErrorChange={setEditMemberHasError} />
-            </div>
-          </div>
-
-          <div className="flex gap-2 items-center flex-wrap">
-            <Button size="sm" className="h-7 text-xs" disabled={!editName.trim() || editMemberHasError || updateGroup.isPending}
-              onClick={() => {
-                if (editMemberHasError) { toast.error("يوجد كود عضو مكرر — أزل الكود المكرر أولاً"); return; }
-                updateGroup.mutate({ id: editId, code: editCode || undefined, name: editName });
-              }}>
-              {updateGroup.isPending ? "جارٍ الحفظ..." : "حفظ"}
-            </Button>
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setEditId(null); setEditMemberHasError(false); }}>إلغاء</Button>
-            {editMemberHasError && (
-              <span className="text-[11px] text-destructive font-medium flex items-center gap-1">
-                ⚠ العضو تم تكرار بالجدول — لا يمكن الحفظ
-              </span>
-            )}
-          </div>
-        </Card>
-      )}
-
-      {/* ── جدول المجموعات ── */}
-      <Card className="border-border/50">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="text-xs w-20">الكود</TableHead>
-              <TableHead className="text-xs">اسم المجموعة</TableHead>
-              <TableHead className="text-xs">الإجراءات</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading && (
-              <TableRow><TableCell colSpan={3} className="text-xs text-center text-muted-foreground py-6">جارٍ التحميل...</TableCell></TableRow>
-            )}
-            {!isLoading && groups.length === 0 && (
-              <TableRow><TableCell colSpan={3} className="text-xs text-center text-muted-foreground py-6">لا توجد مجموعات — أضف مجموعة جديدة</TableCell></TableRow>
-            )}
-            {groups.map((g: any) => (
-              <TableRow key={g.id} className={editId === g.id ? "bg-amber-50/40" : ""}>
-                <TableCell className="text-xs font-mono text-muted-foreground">{g.code ?? "—"}</TableCell>
-                <TableCell className="text-xs font-medium">{g.name}</TableCell>
-                <TableCell>
-                  <div className="flex gap-2">
-                    <button className="text-primary text-xs hover:underline"
-                      onClick={() => { setEditId(g.id); setEditCode(g.code ?? ""); setEditName(g.name); setShowAdd(false); }}>
-                      تعديل
-                    </button>
-                    <button className="text-destructive text-xs hover:underline"
-                      onClick={() => deleteGroup.mutate({ id: g.id })}>
-                      حذف
-                    </button>
+                })() : (
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-purple-100 border border-purple-200 flex items-center justify-center shrink-0">
+                      <Shield className="w-5 h-5 text-purple-500" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h2 className="text-base font-bold text-foreground leading-tight">{displayName || selectedGroup.name}</h2>
+                        {(displayCode || selectedGroup.code) && (
+                          <code className={`text-[11px] font-mono border px-2 py-0.5 rounded-md ${isGroupInfoDirty ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-purple-50 text-purple-600 border-purple-200'}`}>
+                            {displayCode || selectedGroup.code}
+                          </code>
+                        )}
+                        {isDirty && (
+                          <span className="text-[10px] font-semibold text-amber-600 flex items-center gap-1">● تعديلات غير محفوظة</span>
+                        )}
+                      </div>
+                      {(displayDesc || selectedGroup.description) && (
+                        <p className="text-xs text-muted-foreground mt-0.5">{displayDesc || selectedGroup.description}</p>
+                      )}
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <button type="button" title="تعديل"
+                        className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={startEdit}>
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Card>
+                )}
+              </div>
+
+              {/* ── Member table toolbar ──────────────────────────────────────── */}
+              {!editing && (
+                <div className="px-4 py-2.5 border-b border-border/20 bg-muted/20 shrink-0 flex items-center gap-2 flex-wrap">
+                  <Button size="sm" variant="outline"
+                    className="h-8 text-xs gap-1.5 border-blue-200 hover:bg-blue-50 hover:border-blue-300"
+                    onClick={() => setShowUsersDialog(true)}>
+                    <Users className="w-3.5 h-3.5 text-blue-500" />
+                    إضافة مستخدمين
+                  </Button>
+                  <Button size="sm" variant="outline"
+                    className="h-8 text-xs gap-1.5 border-purple-200 hover:bg-purple-50 hover:border-purple-300"
+                    onClick={() => setShowGroupsDialog(true)}>
+                    <Shield className="w-3.5 h-3.5 text-purple-500" />
+                    إضافة مجموعات
+                  </Button>
+                  <div className="h-5 w-px bg-border/50 mx-0.5" />
+                  <QuickCodeEntry groupId={selectedGroup.id} onAdd={handleQuickAddMember} />
+                  <SelectUsersDialog
+                    open={showUsersDialog} onOpenChange={setShowUsersDialog}
+                    groupId={selectedGroup.id}
+                    pendingUserIds={pendingUserIds}
+                    onConfirm={handleUsersConfirm}
+                  />
+                  <SelectGroupsDialog
+                    open={showGroupsDialog} onOpenChange={setShowGroupsDialog}
+                    groupId={selectedGroup.id}
+                    pendingGroupIds={pendingGroupIds}
+                    onConfirm={handleGroupsConfirm}
+                  />
+                </div>
+              )}
+
+              {/* ── Members table ─────────────────────────────────────────────── */}
+              {!editing && (
+                <div className="flex-1 overflow-y-auto">
+                  <table className="w-full text-xs border-collapse">
+                    <thead className="sticky top-0 z-10">
+                      <tr className="bg-[#1C4576] text-white">
+                        <th className="px-3 py-2.5 text-right font-semibold w-28">نوع العضو</th>
+                        <th className="px-3 py-2.5 text-right font-semibold w-36">كود العضو</th>
+                        <th className="px-3 py-2.5 text-right font-semibold">اسم العضو</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(members as any[]).length === 0 && pendingAdditions.length === 0 ? (
+                        <tr>
+                          <td colSpan={3} className="py-14 text-center text-muted-foreground">
+                            <div className="flex flex-col items-center gap-2">
+                              <Users className="w-8 h-8 opacity-20" />
+                              <p className="text-sm font-medium">لا يوجد أعضاء في هذه المجموعة</p>
+                              <p className="text-[11px] opacity-70">اضغط «إضافة مستخدمين» أو «إضافة مجموعات» أعلاه</p>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        <>
+                          {/* Committed members */}
+                          {(members as any[]).map((m: any, idx: number) => {
+                            const isGroup    = m.memberType === 'group';
+                            const isExpanded = isGroup && m.memberGroupId != null && expandedGroupIds.has(m.memberGroupId);
+                            const isRemoving = pendingRemovals.has(m.id);
+                            const rowBg      = isRemoving ? 'bg-red-50/60'
+                              : idx % 2 === 0 ? 'bg-white' : 'bg-muted/25';
+                            const clickable  = isGroup && m.memberGroupId != null && !isRemoving;
+                            return (
+                              <React.Fragment key={m.id}>
+                                <tr
+                                  className={`${rowBg} border-b border-border/20 transition-colors group ${isRemoving ? 'opacity-60' : ''} ${clickable ? 'cursor-pointer hover:bg-purple-50/60' : 'hover:bg-primary/5'}`}
+                                  onClick={clickable ? () => toggleGroupExpand(m.memberGroupId) : undefined}
+                                >
+                                  {/* نوع العضو */}
+                                  <td className="px-3 py-2.5">
+                                    {isGroup ? (
+                                      <span className="flex items-center gap-1.5 text-[10px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-1 rounded-full w-fit">
+                                        {isExpanded ? <ChevronDown className="w-3 h-3 shrink-0" /> : <Shield className="w-3 h-3 shrink-0" />}
+                                        مجموعة
+                                      </span>
+                                    ) : (
+                                      <span className="flex items-center gap-1.5 text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-1 rounded-full w-fit">
+                                        <Users className="w-3 h-3 shrink-0" />مستخدم
+                                      </span>
+                                    )}
+                                  </td>
+                                  {/* كود العضو */}
+                                  <td className={`px-3 py-2.5 ${isRemoving ? 'line-through' : ''}`}>
+                                    {m.memberCode
+                                      ? <code className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded">{m.memberCode}</code>
+                                      : <span className="text-muted-foreground">—</span>}
+                                  </td>
+                                  {/* اسم العضو + actions inline */}
+                                  <td className={`px-3 py-2.5 font-medium ${isRemoving ? 'line-through text-destructive/70' : 'text-foreground'}`}>
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span>{m.memberName ?? '—'}</span>
+                                      {isRemoving ? (
+                                        <div className="flex items-center gap-1 shrink-0">
+                                          <span className="text-[9px] font-semibold text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">سيُحذف</span>
+                                          <button type="button" title="التراجع عن الحذف"
+                                            className="h-5 w-5 flex items-center justify-center rounded hover:bg-green-100 text-green-600 transition-colors"
+                                            onClick={e => { e.stopPropagation(); handleToggleRemoval(m.id); }}>
+                                            <Check className="w-3 h-3" />
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <button type="button" title="إزالة من المجموعة"
+                                          className="h-5 w-5 flex items-center justify-center rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+                                          onClick={e => { e.stopPropagation(); handleToggleRemoval(m.id); }}>
+                                          <Trash2 className="w-3 h-3" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                                {isExpanded && m.memberGroupId != null && !isRemoving && (
+                                  <ExpandedSubRows memberGroupId={m.memberGroupId} groupName={m.memberName ?? '—'} />
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+
+                          {/* Pending additions */}
+                          {pendingAdditions.map((p, idx) => {
+                            const baseIdx = (members as any[]).length + idx;
+                            const rowBg   = baseIdx % 2 === 0 ? 'bg-amber-50/40' : 'bg-amber-50/60';
+                            return (
+                              <tr key={`pending-${p.tempId}`} className={`${rowBg} border-b border-amber-100/60 group`}>
+                                <td className="px-3 py-2.5">
+                                  {p.memberType === 'group' ? (
+                                    <span className="flex items-center gap-1.5 text-[10px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-1 rounded-full w-fit">
+                                      <Shield className="w-3 h-3 shrink-0" />مجموعة
+                                    </span>
+                                  ) : (
+                                    <span className="flex items-center gap-1.5 text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-1 rounded-full w-fit">
+                                      <Users className="w-3 h-3 shrink-0" />مستخدم
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2.5">
+                                  {p.memberCode
+                                    ? <code className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded">{p.memberCode}</code>
+                                    : <span className="text-muted-foreground">—</span>}
+                                </td>
+                                <td className="px-3 py-2.5 font-medium text-foreground">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="flex items-center gap-1.5">
+                                      {p.memberName ?? '—'}
+                                      <span className="text-[9px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">جديد</span>
+                                    </span>
+                                    <button type="button" title="إلغاء الإضافة"
+                                      className="h-5 w-5 flex items-center justify-center rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+                                      onClick={() => handleCancelPending(p.tempId)}>
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </>
+                      )}
+                    </tbody>
+                  </table>
+
+                  {/* Footer */}
+                  {((members as any[]).length > 0 || pendingAdditions.length > 0) && (
+                    <div className="px-4 py-2.5 border-t border-border/20 bg-muted/10 flex items-center gap-4">
+                      <span className="text-[11px] text-muted-foreground">
+                        {(members as any[]).length - pendingRemovals.size} عضو
+                        {pendingAdditions.length > 0 && <> · <span className="text-amber-600 font-semibold">{pendingAdditions.length} في الانتظار</span></>}
+                        {pendingRemovals.size > 0 && <> · <span className="text-red-600 font-semibold">{pendingRemovals.size} سيُحذف</span></>}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      </div>{/* end flex-1 min-h-0 flex row */}
+
+      {/* ── Unsaved Changes Dialog ──────────────────────────────────────────────── */}
+      <UnsavedChangesDialog
+        open={showUnsaved}
+        onSave={handleUnsavedSave}
+        onDiscard={handleUnsavedDiscard}
+        onCancel={() => { setShowUnsaved(false); setPendingNavAction(null); }}
+        isSaving={saveAllMut.isPending}
+      />
     </div>
   );
 }
@@ -3084,8 +3735,8 @@ function LoyaltyPromosPage() {
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-xs">اسم العرض (عربي)</Label><Input value={form.name} onChange={e => updForm("name", e.target.value)} className="h-8 text-sm mt-1" /></div>
               <div><Label className="text-xs">اسم العرض (إنجليزي)</Label><Input value={form.nameEn} onChange={e => updForm("nameEn", e.target.value)} className="h-8 text-sm mt-1" /></div>
-              <div><Label className="text-xs">تاريخ البداية</Label><Input type="date" value={form.startDate} onChange={e => updForm("startDate", e.target.value)} className="h-8 text-sm mt-1" /></div>
-              <div><Label className="text-xs">تاريخ الانتهاء</Label><Input type="date" value={form.endDate} onChange={e => updForm("endDate", e.target.value)} className="h-8 text-sm mt-1" /></div>
+              <div><Label className="text-xs">تاريخ البداية</Label><DateSegmentInput value={form.startDate} onChange={v => updForm("startDate", v)} standalone className="h-8 text-sm mt-1" /></div>
+              <div><Label className="text-xs">تاريخ الانتهاء</Label><DateSegmentInput value={form.endDate} onChange={v => updForm("endDate", v)} standalone className="h-8 text-sm mt-1" /></div>
               <div><Label className="text-xs">مضاعف النقاط</Label><Input type="number" value={form.multiplier} min="1" step="0.5" onChange={e => updForm("multiplier", parseFloat(e.target.value) || 1)} className="h-8 text-sm mt-1" /></div>
               <div>
                 <Label className="text-xs">نطاق التطبيق</Label>
@@ -4711,11 +5362,13 @@ type PMRow = {
   icon?: string | null; color?: string | null; bgColor?: string | null;
   accountId?: number | null; isActive: boolean; isVisible: boolean;
   isBuiltIn: boolean; sortOrder: number;
+  recordPolicy?: RecordPolicy | null; foundationKey?: string | null; includeInFoundation?: boolean | null;
 };
 
 const EMPTY_PM: Omit<PMRow, "id" | "isBuiltIn"> = {
   code: "", nameAr: "", nameEn: "", icon: "other", color: "#406B93", bgColor: "#EFF6FF",
   accountId: null, isActive: true, isVisible: true, sortOrder: 0,
+  recordPolicy: "flexible", foundationKey: "", includeInFoundation: false,
 };
 
 function PaymentMethodDialog({
@@ -4744,14 +5397,21 @@ function PaymentMethodDialog({
   function handleSave() {
     if (!form.nameAr.trim()) return toast.error("الاسم العربي مطلوب");
     if (!isEdit && !form.code.trim()) return toast.error("الكود مطلوب");
+    const foundationFields = {
+      recordPolicy: form.recordPolicy ?? "flexible",
+      includeInFoundation: form.includeInFoundation ?? false,
+      foundationKey: form.foundationKey || undefined,
+    };
     if (isEdit && form.id) {
       updateMut.mutate({ id: form.id, nameAr: form.nameAr, nameEn: form.nameEn ?? undefined,
         icon: form.icon ?? undefined, color: form.color ?? undefined, bgColor: form.bgColor ?? undefined,
-        accountId: form.accountId ?? undefined, isActive: form.isActive, isVisible: form.isVisible, sortOrder: form.sortOrder });
+        accountId: form.accountId ?? undefined, isActive: form.isActive, isVisible: form.isVisible, sortOrder: form.sortOrder,
+        ...foundationFields });
     } else {
       createMut.mutate({ code: form.code, nameAr: form.nameAr, nameEn: form.nameEn ?? undefined,
         icon: form.icon ?? undefined, color: form.color ?? undefined, bgColor: form.bgColor ?? undefined,
-        accountId: form.accountId ?? undefined, isActive: form.isActive, isVisible: form.isVisible, sortOrder: form.sortOrder });
+        accountId: form.accountId ?? undefined, isActive: form.isActive, isVisible: form.isVisible, sortOrder: form.sortOrder,
+        ...foundationFields });
     }
   }
 
@@ -4833,6 +5493,12 @@ function PaymentMethodDialog({
               مرئية في نافذة الدفع
             </label>
           </div>
+          <FoundationPolicyPanel
+            recordPolicy={(form.recordPolicy as RecordPolicy) ?? "flexible"}
+            foundationKey={form.foundationKey ?? null}
+            includeInFoundation={form.includeInFoundation ?? false}
+            onChange={(policy, include) => { upd("recordPolicy", policy); upd("includeInFoundation", include); }}
+          />
         </div>
         <div className="flex justify-end gap-2 px-5 pb-4">
           <Button variant="outline" size="sm" className="h-8 text-xs" onClick={onClose} disabled={busy}>إلغاء</Button>
@@ -5100,6 +5766,7 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
   }
 }
 
+
 // ─── Root ──────────────────────────────────────────────────────────────────────
 
 export default function SettingsModule() {
@@ -5107,7 +5774,7 @@ export default function SettingsModule() {
   return (
     <div className="flex h-full" dir="rtl">
       <SettingsMenu activeId={activeId} onSelect={setActiveId} />
-      <div className="flex-1 overflow-auto p-5" style={{ background: "#ECE7DD" }}>
+      <div className="flex-1 overflow-auto p-5 bg-background">
         <SettingsContent activeId={activeId} onSelect={setActiveId} />
       </div>
     </div>
@@ -5116,7 +5783,7 @@ export default function SettingsModule() {
 
 // ─── Tab Sub-Pages ─────────────────────────────────────────────────────────────
 function CfgSubPage({ activeId }: { activeId: string }) {
-  return <div className="h-full overflow-auto p-5" dir="rtl" style={{ background: "#ECE7DD" }}><SettingsContent activeId={activeId} onSelect={() => {}} /></div>;
+  return <div className="h-full overflow-auto p-5 bg-background" dir="rtl"><SettingsContent activeId={activeId} onSelect={() => {}} /></div>;
 }
 export function CfgCompanyTab()          { return <CfgSubPage activeId="company-info" />; }
 export function CfgCurrenciesTab()       { return <CfgSubPage activeId="currencies" />; }

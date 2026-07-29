@@ -65,7 +65,7 @@ export function generateZATCAQrContent(data: QrInvoiceData): string {
     offset += tlv.length;
   }
 
-  return btoa(String.fromCharCode(...combined));
+  return btoa(String.fromCharCode(...Array.from(combined)));
 }
 
 // ─── ETA (مصر) ───────────────────────────────────────────────────────────────

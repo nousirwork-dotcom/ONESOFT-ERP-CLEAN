@@ -34,7 +34,7 @@ export interface FoundationData {
 export const FOUNDATION_DATA: FoundationData = {
   "documentJournals": [
     {
-      "docType": "sales",
+      "docType": "sales_invoice",
       "code": "inv.02.",
       "name": "فاتورة مبيعات فرع 2",
       "name2": "Sales Invoice Br. 2",
@@ -199,7 +199,7 @@ export const FOUNDATION_DATA: FoundationData = {
       },
       "notes": null,
       "recordPolicy": "editable",
-      "foundationKey": "dj.sales.inv.02.",
+      "foundationKey": "dj.sales_invoice.inv.02.",
       "includeInFoundation": true,
       "recordOrigin": "user",
       "foundationTemplateVersion": null,

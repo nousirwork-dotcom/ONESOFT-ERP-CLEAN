@@ -1,4 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
+import { useUnsavedChangesGuard } from "@/core/hooks/useUnsavedChangesGuard";
+import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
+import { FoundationPolicyPanel } from "@/shared/components/FoundationPolicyPanel";
+import type { RecordPolicy } from "@/shared/components/FoundationPolicyPanel";
 import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import { fmtDate } from "@/shared/utils/dateUtils";
 import PurchaseInvoicePage from "./PurchaseInvoicePage";
@@ -18,9 +22,12 @@ import { Badge } from "@/core/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/core/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/core/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/core/ui/dialog";
+import { DesktopWorkWindow } from "@/components/work-window";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/core/ui/tabs";
+import { Textarea } from "@/core/ui/textarea";
 import { toast } from "sonner";
 import { trpc } from "@/shared/lib/trpc";
+import SupplierFormDialog from "@/shared/components/SupplierFormDialog";
 
 type MenuId = string;
 
@@ -167,14 +174,75 @@ function PurchasesOverview({ onSelect }: { onSelect: (id: MenuId) => void }) {
 }
 
 // ─── Suppliers List (دليل الموردين) ───────────────────────────────────────────
+function SupplierDirectoryPage() {
+  const listQuery = trpc.suppliers.list.useQuery();
+  const [showForm, setShowForm] = useState(false);
+  const [editData, setEditData] = useState<any>(null);
+  const [search, setSearch] = useState("");
+  const filtered = listQuery.data?.filter(s =>
+    !search || s.name?.includes(search) || s.phone?.includes(search) || s.code?.includes(search)
+  ) ?? [];
+
+  return (
+    <div className="erp-standard-ui space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="font-bold text-sm flex items-center gap-2"><Users className="w-4 h-4 text-primary" /> دليل الموردين</h3>
+        <div className="flex gap-2">
+          <div className="relative">
+            <Search className="absolute right-2 top-1.5 w-3 h-3 text-muted-foreground" />
+            <Input value={search} onChange={e => setSearch(e.target.value)} className="h-7 text-xs pr-7 w-48" placeholder="بحث الموردين..." />
+          </div>
+          <Button size="sm" className="h-7 text-xs gap-1" onClick={() => { setEditData(null); setShowForm(true); }}>
+            <Plus className="w-3 h-3" /> إضافة مورد
+          </Button>
+        </div>
+      </div>
+      <Card className="border-border/60">
+        <Table>
+          <TableHeader><TableRow className="bg-muted/30">
+            <TableHead className="text-xs">كود المورد</TableHead>
+            <TableHead className="text-xs">اسم المورد</TableHead>
+            <TableHead className="text-xs">الهاتف</TableHead>
+            <TableHead className="text-xs">البريد الإلكتروني</TableHead>
+            <TableHead className="text-xs">إجراءات</TableHead>
+          </TableRow></TableHeader>
+          <TableBody>
+            {filtered.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-xs text-muted-foreground py-8">لا يوجد موردون</TableCell></TableRow>}
+            {filtered.map(s => <TableRow key={s.id}>
+              <TableCell className="text-xs">{s.code ?? "-"}</TableCell>
+              <TableCell className="text-xs font-semibold">{s.name}</TableCell>
+              <TableCell className="text-xs">{s.phone ?? "-"}</TableCell>
+              <TableCell className="text-xs">{s.email ?? "-"}</TableCell>
+              <TableCell><Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => { setEditData(s); setShowForm(true); }}><Edit2 className="w-3 h-3" /></Button></TableCell>
+            </TableRow>)}
+          </TableBody>
+        </Table>
+      </Card>
+      <SupplierFormDialog
+        open={showForm}
+        editData={editData}
+        onClose={() => { setShowForm(false); setEditData(null); }}
+        onSaved={() => { setShowForm(false); setEditData(null); listQuery.refetch(); }}
+      />
+    </div>
+  );
+}
+
 function SuppliersListPage() {
   const listQuery = trpc.suppliers.list.useQuery({});
+
+  const [showForm, setShowForm] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const { confirmOpen, requestClose, confirmSave, confirmDiscard, confirmCancel } =
+    useUnsavedChangesGuard({ isDirty });
+
+  const closeForm = useCallback(() => { setShowForm(false); setIsDirty(false); }, []);
+
   const createMutation = trpc.suppliers.create.useMutation({
-    onSuccess: () => { toast.success("تم إضافة المورد"); listQuery.refetch(); setShowForm(false); },
+    onSuccess: () => { toast.success("تم إضافة المورد"); listQuery.refetch(); closeForm(); },
     onError: (e) => toast.error(e.message),
   });
 
-  const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState("");
   const [form, setForm] = useState({
     name: "", name2: "", phone: "", phone2: "", email: "",
@@ -184,25 +252,33 @@ function SuppliersListPage() {
     groupCode: "", accountCode: "", costCenterId: "",
     creditLimit: "", paymentTerms: "", defaultDiscount: "",
     notes: "",
+    recordPolicy: "flexible" as RecordPolicy,
+    foundationKey: "",
+    includeInFoundation: false,
   });
-  const setF = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
+  const setF = (k: string, v: string) => { setIsDirty(true); setForm(p => ({ ...p, [k]: v })); };
 
   const filtered = listQuery.data?.filter(s =>
     !search || s.name?.includes(search) || s.phone?.includes(search)
   ) ?? [];
 
-  const handleSave = () => {
-    if (!form.name) return toast.error("أدخل اسم المورد");
-    createMutation.mutate({
+  const handleSave = useCallback(async (): Promise<void> => {
+    if (!form.name) { toast.error("أدخل اسم المورد"); throw new Error("validation"); }
+    await createMutation.mutateAsync({
       name: form.name,
       phone: form.phone || undefined,
       email: form.email || undefined,
       address: form.address || undefined,
+       recordPolicy: form.recordPolicy === "editable" || form.recordPolicy === "protected"
+         ? "flexible"
+         : form.recordPolicy,
+      includeInFoundation: form.includeInFoundation,
+      foundationKey: form.foundationKey || undefined,
     });
-  };
+  }, [form, createMutation]);
 
   return (
-    <div className="space-y-3">
+    <div className="erp-standard-ui space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="font-bold text-sm flex items-center gap-2">
           <Users className="w-4 h-4 text-primary" /> دليل الموردين
@@ -212,7 +288,7 @@ function SuppliersListPage() {
             <Search className="absolute right-2 top-1.5 w-3 h-3 text-muted-foreground" />
             <Input value={search} onChange={e => setSearch(e.target.value)} className="h-7 text-xs pr-7 w-48" placeholder="بحث..." />
           </div>
-          <Button size="sm" className="h-7 text-xs gap-1" onClick={() => setShowForm(true)}>
+          <Button size="sm" className="h-7 text-xs gap-1" onClick={() => { setIsDirty(false); setShowForm(true); }}>
             <Plus className="w-3 h-3" /> إضافة مورد
           </Button>
         </div>
@@ -242,7 +318,7 @@ function SuppliersListPage() {
                 <TableCell className="text-xs">{s.email ?? "-"}</TableCell>
                 <TableCell className="text-xs">{s.address ?? "-"}</TableCell>
                 <TableCell>
-                  <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setShowForm(true)}>
+                  <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => { setIsDirty(false); setShowForm(true); }}>
                     <Edit2 className="w-3 h-3" />
                   </Button>
                 </TableCell>
@@ -253,7 +329,7 @@ function SuppliersListPage() {
       </Card>
 
       {/* نموذج إضافة مورد - مطابق للصورة المرجعية */}
-      <Dialog open={showForm} onOpenChange={setShowForm}>
+      <Dialog open={showForm} onOpenChange={v => { if (!v) requestClose(closeForm); else setShowForm(true); }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" dir="rtl">
           <DialogHeader>
             <DialogTitle className="text-sm flex items-center gap-2">
@@ -408,7 +484,7 @@ function SuppliersListPage() {
             <TabsContent value="extra" className="space-y-3 pt-3">
               <div>
                 <Label className="text-xs">ملاحظات</Label>
-                <textarea value={form.notes} onChange={e => setF("notes", e.target.value)}
+                <Textarea value={form.notes} onChange={e => setF("notes", e.target.value)}
                   className="w-full h-32 text-xs border border-border rounded p-2 bg-background resize-none" />
               </div>
             </TabsContent>
@@ -447,14 +523,28 @@ function SuppliersListPage() {
             </TabsContent>
           </Tabs>
 
+          <FoundationPolicyPanel
+            recordPolicy={form.recordPolicy}
+            foundationKey={form.foundationKey || null}
+            includeInFoundation={form.includeInFoundation}
+            onChange={(policy, include) => setForm(p => ({ ...p, recordPolicy: policy, includeInFoundation: include }))}
+          />
           <div className="flex justify-end gap-2 mt-3 border-t border-border pt-3">
-            <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>إلغاء</Button>
-            <Button size="sm" disabled={!form.name || createMutation.isPending} onClick={handleSave}>
+            <Button variant="outline" size="sm" onClick={() => requestClose(closeForm)}>إلغاء</Button>
+            <Button size="sm" disabled={!form.name || createMutation.isPending} onClick={() => handleSave().catch(() => {})}>
               <Check className="w-3 h-3 ml-1" /> حفظ
             </Button>
           </div>
         </DialogContent>
       </Dialog>
+
+      <UnsavedChangesDialog
+        open={confirmOpen}
+        onSave={() => confirmSave(handleSave)}
+        onDiscard={confirmDiscard}
+        onCancel={confirmCancel}
+        isSaving={createMutation.isPending}
+      />
     </div>
   );
 }
@@ -616,16 +706,14 @@ function PurchaseDocPage({ invoiceType }: { invoiceType: InvoiceType }) {
         </Table>
       </Card>
 
-      {/* نموذج المستند - Dialog كبير مطابق للصورة */}
-      <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-5xl max-h-[92vh] overflow-hidden flex flex-col" dir="rtl">
-          <DialogHeader className="shrink-0">
-            <DialogTitle className="text-sm flex items-center gap-2">
-              <FileText className={`w-4 h-4 ${typeColors[invoiceType]}`} />
-              إضافة {typeLabels[invoiceType]}
-            </DialogTitle>
-          </DialogHeader>
-
+      {/* نافذة العمل: إضافة مستند */}
+      {showForm && (
+        <DesktopWorkWindow
+          title={`إضافة ${typeLabels[invoiceType]}`}
+          preset="wide"
+          onClose={() => setShowForm(false)}
+        >
+          <div className="flex flex-col h-full overflow-hidden" dir="rtl">
           <Tabs defaultValue="main" className="flex-1 flex flex-col overflow-hidden">
             <TabsList className="w-full grid grid-cols-2 shrink-0">
               <TabsTrigger value="main"    className="text-xs">نافذة رئيسية</TabsTrigger>
@@ -651,7 +739,7 @@ function PurchaseDocPage({ invoiceType }: { invoiceType: InvoiceType }) {
                     </div>
                     <div>
                       <Label className="text-xs">تاريخ التحرير</Label>
-                      <Input type="date" value={form.invoiceDate} onChange={e => setF("invoiceDate", e.target.value)} className="h-7 text-xs" />
+                      <DateSegmentInput value={form.invoiceDate} onChange={v => setF("invoiceDate", v)} standalone className="h-7 text-xs" />
                     </div>
                   </div>
                   <div className="grid grid-cols-4 gap-2 mb-2">
@@ -816,15 +904,16 @@ function PurchaseDocPage({ invoiceType }: { invoiceType: InvoiceType }) {
             </TabsContent>
           </Tabs>
 
-          <div className="flex justify-end gap-2 border-t border-border pt-3 shrink-0">
+          <div className="flex justify-end gap-2 border-t border-border pt-3 px-3 pb-3 shrink-0">
             <Button variant="outline" size="sm" className="h-7 text-xs gap-1"><Printer className="w-3 h-3" /> طباعة</Button>
             <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowForm(false)}>إلغاء</Button>
             <Button size="sm" className="h-7 text-xs gap-1" disabled={createMutation.isPending} onClick={handleSave}>
               <Check className="w-3 h-3" /> حفظ
             </Button>
           </div>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </DesktopWorkWindow>
+      )}
     </div>
   );
 }
@@ -984,7 +1073,7 @@ function PurchasesContent({ activeId, onSelect }: { activeId: MenuId; onSelect: 
     case "purchase-returns":   return <PurchaseReturnPage />;
     case "debit-note":         return <ComingSoon label="إشعار مدين" />;
     case "purchase-orders":    return <PurchaseOrderPage />;
-    case "suppliers-list":     return <SuppliersListPage />;
+    case "suppliers-list":     return <SupplierDirectoryPage />;
     case "supplier-groups":    return <SupplierGroupsPage />;
     case "supplier-balances":  return <ComingSoon label="أرصدة الموردين" />;
     case "supplier-statement": return <ComingSoon label="كشف حساب المورد" />;
@@ -997,7 +1086,7 @@ function PurchasesContent({ activeId, onSelect }: { activeId: MenuId; onSelect: 
 
 // ─── Exported Sub-Page Wrappers (for MDI tab system) ──────────────────────────
 export function PurchaseSuppliersPage() {
-  return <div className="h-full overflow-auto p-5" dir="rtl"><SuppliersListPage /></div>;
+  return <div className="h-full overflow-auto p-5" dir="rtl"><SupplierDirectoryPage /></div>;
 }
 export function PurchaseSupplierGroupsPage() {
   return <div className="h-full overflow-auto p-5" dir="rtl"><SupplierGroupsPage /></div>;

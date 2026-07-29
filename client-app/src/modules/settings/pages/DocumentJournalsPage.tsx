@@ -1,16 +1,24 @@
-import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import React, { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import { useToolbarActions } from "@/components/unified-toolbar/ToolbarActionsContext";
+import { DesktopWorkWindow } from "@/components/work-window";
 import { Input } from "@/core/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/core/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/core/ui/dialog";
 import { Button } from "@/core/ui/button";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/core/ui/tooltip";
 import { trpc } from "@/shared/lib/trpc";
+import { useTabManager } from "@/core/contexts/TabManagerContext";
 import {
   BookOpen, BookMarked, RotateCcw, ClipboardList, ArrowLeftRight, Tag,
   Plus, Save, Trash2, ChevronFirst, ChevronLast, RefreshCw,
   ChevronLeft as CLeft, ChevronRight as CRight, ArrowLeft, FileText, Eye,
   BookText, PackageMinus, PackagePlus, Users, Truck, Copy,
+  ListFilter, Search, Printer, ArrowDownCircle, ArrowUpCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/core/hooks/useAuth";
+import { FoundationPolicyPanel } from "@/shared/components/FoundationPolicyPanel";
+import styles from "@/components/responsive-layout/ResponsiveLayout.module.css";
 
 /* ──────────────── types ──────────────── */
 type JournalForm = {
@@ -20,6 +28,10 @@ type JournalForm = {
   lastNum: string; printTemplate: string; printTemplate2: string;
   printOnSave: boolean; status: string; postingMethod: string;
   resetFrequency: string;
+  // ── ترقيم المسودات ──
+  draftAutoSerial: boolean; draftFixedPart: string; draftFirstNum: string;
+  draftDigits: string; draftLastNum: string;
+  draftResetFrequency: string;
   customersJournal: string; suppliersJournal: string;
   salesAccountId: string; cashAccountId: string; creditAccountId: string;
   taxAccountId: string; discountAccountId: string;
@@ -38,6 +50,7 @@ type JournalForm = {
   maxUnitsCount: string; suggestedSalesUnit: string; returnPeriodDays: string;
   availableQtyDisplay: string; currentQtyDisplay: string;
   colWidthItemCode: string; colWidthItemName: string; colWidthUnit: string; colWidthAccount: string;
+  recordPolicy: string; includeInFoundation: boolean; foundationKey: string;
 };
 
 type DBJournal = {
@@ -50,6 +63,15 @@ type DBJournal = {
   resetFrequency?: string | null;
   autoSerial: boolean; printOnSave: boolean;
   isActive: boolean; sortOrder: number;
+  recordPolicy?: string | null; foundationKey?: string | null; includeInFoundation?: boolean | null;
+  // ── ترقيم المسودات ──
+  draftAutoSerial?: boolean | null;
+  draftNumberPrefix?: string | null;
+  draftFirstNumber?: number | null;
+  draftLastNumber?: number | null;
+  draftNumDigits?: number | null;
+  draftCurrentSeq?: number | null;
+  draftResetFrequency?: string | null;
 };
 
 type DocComponent = {
@@ -70,6 +92,8 @@ const EMPTY: JournalForm = {
   lastNum: "999999", printTemplate: "", printTemplate2: "",
   printOnSave: false, status: "ready", postingMethod: "normal",
   resetFrequency: "none",
+  draftAutoSerial: false, draftFixedPart: "DRAFT", draftFirstNum: "1",
+  draftDigits: "6", draftLastNum: "999999", draftResetFrequency: "none",
   customersJournal: "", suppliersJournal: "",
   salesAccountId: "", cashAccountId: "", creditAccountId: "",
   taxAccountId: "", discountAccountId: "",
@@ -88,6 +112,7 @@ const EMPTY: JournalForm = {
   maxUnitsCount: "3", suggestedSalesUnit: "", returnPeriodDays: "0",
   availableQtyDisplay: "show", currentQtyDisplay: "show",
   colWidthItemCode: "0", colWidthItemName: "32", colWidthUnit: "12", colWidthAccount: "25",
+  recordPolicy: "flexible", includeInFoundation: false, foundationKey: "",
 };
 
 /* ── أنواع السندات (sales journal only) ── */
@@ -191,6 +216,7 @@ function AccCodeSearch({
       <input
         value={open || !selected ? q : (selected?.code ?? "")}
         dir="ltr"
+        data-no-desktop-field
         onChange={e => { setQ(e.target.value); setOpen(true); setHi(0); }}
         onFocus={() => { setOpen(true); if (selected) setQ(""); }}
         onBlur={() => setTimeout(() => { if (!wrapRef.current?.contains(document.activeElement)) { setOpen(false); setQ(selected?.code ?? ""); } }, 120)}
@@ -338,7 +364,7 @@ function FieldCodeSearch({
 
 /* ──────────────── document types ──────────────── */
 const DOC_TYPES = [
-  { id: "sales",               label: "فاتورة المبيعات",     icon: <BookOpen className="w-3.5 h-3.5" /> },
+  { id: "sales_invoice",       label: "فاتورة المبيعات",     icon: <BookOpen className="w-3.5 h-3.5" /> },
   { id: "sales_return",        label: "مردود مبيعات",        icon: <RotateCcw className="w-3.5 h-3.5" /> },
   { id: "purchase_invoice",    label: "فاتورة مشتريات",      icon: <BookMarked className="w-3.5 h-3.5" /> },
   { id: "purchase_return",     label: "مردود مشتريات",       icon: <RotateCcw className="w-3.5 h-3.5" /> },
@@ -348,6 +374,8 @@ const DOC_TYPES = [
   { id: "purchase_quote",      label: "عرض سعر مشتريات",    icon: <Tag className="w-3.5 h-3.5" /> },
   { id: "stock_transfer",      label: "سند تحويل مخزني",    icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
   { id: "journal_entry",       label: "سند قيد",             icon: <BookText className="w-3.5 h-3.5" /> },
+  { id: "receipt_voucher",     label: "سند قبض",             icon: <ArrowDownCircle className="w-3.5 h-3.5" /> },
+  { id: "payment_voucher",     label: "سند صرف",             icon: <ArrowUpCircle className="w-3.5 h-3.5" /> },
   { id: "stock_issue_items",   label: "سند صرف أصناف",       icon: <PackageMinus className="w-3.5 h-3.5" /> },
   { id: "stock_receipt_items", label: "سند توريد أصناف",     icon: <PackagePlus className="w-3.5 h-3.5" /> },
   { id: "customers_journal",   label: "دفتر العملاء",         icon: <Users className="w-3.5 h-3.5" /> },
@@ -355,41 +383,112 @@ const DOC_TYPES = [
 ];
 
 /* ──────────────── small atoms ──────────────── */
+import sharedForm from "../../../styles/shared-form.module.css";
+
 const FI = ({ value, onChange, placeholder, disabled, mono }: {
   value: string; onChange: (v: string) => void; placeholder?: string; disabled?: boolean; mono?: boolean;
 }) => (
   <Input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} disabled={disabled}
-    className={`h-7 text-[11px] px-2 border-slate-200 focus:border-indigo-400 focus-visible:ring-0 focus-visible:ring-offset-0 bg-white rounded disabled:bg-slate-50 disabled:text-slate-400 ${mono ? "font-mono" : ""}`} />
+    className={`${sharedForm.textInput} ${mono ? sharedForm.textInputMono : ""}`} />
 );
-const FS = ({ value, onValueChange, children, placeholder }: {
-  value: string; onValueChange: (v: string) => void; children: React.ReactNode; placeholder?: string;
-}) => (
-  <Select value={value || "__none__"} onValueChange={v => onValueChange(v === "__none__" ? "" : v)}>
-    <SelectTrigger className="h-7 text-[11px] px-2 border-slate-200 focus:ring-0 focus:ring-offset-0 bg-white rounded">
-      <SelectValue placeholder={placeholder ?? "— اختر —"} />
-    </SelectTrigger>
-    <SelectContent>{children}</SelectContent>
-  </Select>
-);
+/* ── Active-Field context ── */
+type ActiveFieldState = {
+  id: string | null;
+  value: string | null;
+  previewPage: string | null;
+  previewLabel: string | null;
+};
+const ActiveFieldCtx = React.createContext<{
+  state: ActiveFieldState;
+  set: (s: ActiveFieldState) => void;
+} | null>(null);
+
+function useActiveField() {
+  const ctx = React.useContext(ActiveFieldCtx);
+  if (!ctx) throw new Error("useActiveField must be inside ActiveFieldCtx.Provider");
+  return ctx;
+}
+
+const FS = ({ id, value, onValueChange, children, placeholder, previewPage, previewLabel }: {
+  id: string;
+  value: string;
+  onValueChange: (v: string) => void;
+  children: React.ReactNode;
+  placeholder?: string;
+  previewPage?: string;
+  previewLabel?: string;
+}) => {
+  const [open, setOpen] = useState(false);
+  const { state, set } = useActiveField();
+  const isActive = state.id === id;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div
+          className={`relative flex items-center rounded cursor-text select-none transition-all ${
+            sharedForm.selectTrigger
+          } ${isActive ? "ring-2 ring-[rgba(138,107,78,0.3)]" : ""}`}
+          style={{ border: isActive ? "1px solid #8A6B4E" : undefined }}
+          onPointerDown={e => {
+            if (e.button === 0) {
+              e.preventDefault();
+              e.stopPropagation();
+              set({ id, value, previewPage: previewPage ?? null, previewLabel: previewLabel ?? "" });
+              (e.currentTarget as HTMLDivElement).focus();
+            }
+          }}
+          onContextMenu={e => {
+            e.preventDefault();
+            e.stopPropagation();
+            set({ id, value, previewPage: previewPage ?? null, previewLabel: previewLabel ?? "" });
+            setOpen(true);
+          }}
+          tabIndex={0}
+        >
+          <Select
+            value={value || ""}
+            onValueChange={v => { onValueChange(v); setOpen(false); }}
+            open={open}
+            onOpenChange={isOpen => { if (!isOpen) setOpen(false); }}
+          >
+            <SelectTrigger
+              hideArrow
+              dir="rtl"
+              className="h-full w-full border-0 bg-transparent p-0 shadow-none focus:ring-0 focus:ring-offset-0 focus-visible:ring-0 cursor-text text-right"
+            >
+              <SelectValue placeholder={placeholder ?? ""} />
+            </SelectTrigger>
+            <SelectContent onPointerDownOutside={() => setOpen(false)}>{children}</SelectContent>
+          </Select>
+          <span className="absolute left-1 top-1/2 -translate-y-1/2 pointer-events-none opacity-40">
+            <ListFilter className="w-3 h-3 text-slate-400" />
+          </span>
+        </div>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" align="center">كليك يمين لعرض الاختيارات</TooltipContent>
+    </Tooltip>
+  );
+};
 const P = ({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) => (
-  <div className="overflow-hidden" style={{ border: "1px solid #d8d3c8", borderRadius: 6, boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
-    <div className="px-3 py-1.5 flex items-center justify-between" style={{ background: "linear-gradient(to left, #f0ece3, #e8e3d8)", borderBottom: "1px solid #d8d3c8" }}>
-      <span className="font-semibold text-indigo-800 text-[12px]">{title}</span>
-      {action}
+  <div className={sharedForm.section}>
+    <div className={sharedForm.sectionHeader}>
+      <span className={sharedForm.sectionTitle}>{title}</span>
+      {action && <span className={sharedForm.sectionAction}>{action}</span>}
     </div>
-    <div className="px-3 py-2.5" style={{ background: "#FDFAF5" }}>{children}</div>
+    <div className={sharedForm.sectionBody}>{children}</div>
   </div>
 );
-const R = ({ label, lw = 100, children }: { label: string; lw?: number; children: React.ReactNode }) => (
-  <div className="flex items-center gap-2 min-w-0">
-    <span className="text-[11px] text-slate-500 font-medium shrink-0" style={{ width: lw }}>{label}</span>
-    <div className="flex-1 min-w-0">{children}</div>
+const R = ({ label, lw = 100, className, children }: { label: string; lw?: number; className?: string; children: React.ReactNode }) => (
+  <div className={`${sharedForm.fieldRow} ${className || ""}`}>
+    <span className={sharedForm.fieldLabel} style={{ width: lw }}>{label}</span>
+    <div className={sharedForm.fieldContent}>{children}</div>
   </div>
 );
 const CB = ({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) => (
-  <label className="flex items-center gap-1.5 cursor-pointer select-none">
-    <input type="checkbox" className="w-3.5 h-3.5 accent-indigo-600" checked={checked} onChange={e => onChange(e.target.checked)} />
-    <span className="text-[11px] text-slate-600">{label}</span>
+  <label className={sharedForm.checkbox}>
+    <input type="checkbox" className={sharedForm.checkboxInput} checked={checked} onChange={e => onChange(e.target.checked)} />
+    <span className={sharedForm.checkboxLabel}>{label}</span>
   </label>
 );
 
@@ -417,6 +516,12 @@ function dbToForm(j: DBJournal): JournalForm {
     status:            "ready",
     postingMethod:     "normal",
     resetFrequency:    j.resetFrequency ?? "none",
+    draftAutoSerial:   (j as any).draftAutoSerial ?? false,
+    draftFixedPart:    (j as any).draftNumberPrefix ?? "DRAFT",
+    draftFirstNum:     String((j as any).draftFirstNumber ?? 1),
+    draftDigits:       String((j as any).draftNumDigits ?? 6),
+    draftLastNum:      String((j as any).draftLastNumber ?? 999999),
+    draftResetFrequency: (j as any).draftResetFrequency ?? "none",
     customersJournal:  (j as any).customersJournal ?? "",
     suppliersJournal:  (j as any).suppliersJournal ?? "",
     salesAccountId:    (j as any).salesAccountId != null ? String((j as any).salesAccountId) : "",
@@ -462,6 +567,9 @@ function dbToForm(j: DBJournal): JournalForm {
     colWidthItemName:         oc.colWidthItemName         ?? "32",
     colWidthUnit:             oc.colWidthUnit             ?? "12",
     colWidthAccount:          oc.colWidthAccount          ?? "25",
+    recordPolicy:             (j as any).recordPolicy          ?? "flexible",
+    includeInFoundation:      (j as any).includeInFoundation   ?? false,
+    foundationKey:            (j as any).foundationKey         ?? "",
   };
 }
 
@@ -473,7 +581,7 @@ function buildPreview(fixedPart: string, firstNum: string, digits: string): stri
 
 /* ──────────────── main component ──────────────── */
 export default function DocumentJournalsPage() {
-  const [selectedType, setSelectedType] = useState("sales");
+  const [selectedType, setSelectedType] = useState("sales_invoice");
   const [view, setView]       = useState<"list" | "form">("list");
   const [editId, setEditId]   = useState<number | null>(null);
   const [form, setForm]       = useState<JournalForm>({ ...EMPTY });
@@ -482,9 +590,14 @@ export default function DocumentJournalsPage() {
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [showDelete, setShowDelete]     = useState(false);
   const [showReset, setShowReset]       = useState(false);
+  const [resetMode, setResetMode]       = useState<"official" | "draft">("official");
   const [ptConfig, setPtConfig]         = useState<PTC>(DEFAULT_PTC);
   const [activeTab, setActiveTab]       = useState<"basic" | "payment-types" | "accounting-links" | "issuance" | "options" | "doc-components">("basic");
   const [docComponents, setDocComponents] = useState<DocComponent[]>([]);
+  const [activeField, setActiveField]     = useState<ActiveFieldState>({ id: null, value: null, previewPage: null, previewLabel: null });
+  const tabManager = useTabManager();
+  const { user } = useAuth();
+  const isSuperadmin = user?.role === 'superadmin';
 
   /* ── queries ── */
   const listQuery = trpc.documentJournals.list.useQuery();
@@ -503,6 +616,45 @@ export default function DocumentJournalsPage() {
   const { data: chartAccounts = [] }   = trpc.accounts.list.useQuery();
   const { data: fieldDictList = [] }   = trpc.fieldDictionary.list.useQuery();
   const syncFieldsMut = trpc.fieldDictionary.syncSystemFields.useMutation();
+
+  // ── navigate intent (مطالعة من صفحة أخرى) ──────────────────────────────
+  const djpIntentRef = useRef<{ docType?: string; editId?: number } | null>(null);
+
+  // Case 1: الصفحة لم تكن مفتوحة → sessionStorage
+  useEffect(() => {
+    const raw = sessionStorage.getItem("djp_intent");
+    if (raw) {
+      sessionStorage.removeItem("djp_intent");
+      try {
+        const intent = JSON.parse(raw) as { docType?: string; editId?: number };
+        djpIntentRef.current = intent;
+        if (intent.docType) setSelectedType(intent.docType);
+      } catch { /* ignore */ }
+    }
+  }, []);
+
+  // Case 1 cont: لما تحمل البيانات نفذ التنقل
+  useEffect(() => {
+    if (!djpIntentRef.current?.editId || allJournals.length === 0) return;
+    const j = allJournals.find(jj => jj.id === djpIntentRef.current!.editId);
+    if (j) { openEdit(j); setView("form"); }
+    djpIntentRef.current = null;
+  }, [allJournals]);
+
+  // Case 2: الصفحة مفتوحة بالفعل → CustomEvent
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ docType?: string; editId?: number }>).detail;
+      if (detail.docType) setSelectedType(detail.docType);
+      if (detail.editId) {
+        const j = allJournals.find(jj => jj.id === detail.editId);
+        if (j) { openEdit(j); setView("form"); }
+        else { djpIntentRef.current = detail; }
+      }
+    };
+    window.addEventListener("djp_navigate", handler);
+    return () => window.removeEventListener("djp_navigate", handler);
+  }, [allJournals]);
 
   // ── مزامنة الحقول النظامية عند تحميل الصفحة ───────────────────────────
   const syncedRef = useRef(false);
@@ -546,6 +698,14 @@ export default function DocumentJournalsPage() {
   const resetMut = trpc.documentJournals.resetNumbering.useMutation({
     onSuccess: () => {
       toast.success("تم إعادة ضبط الترقيم ✓");
+      listQuery.refetch();
+      setShowReset(false);
+    },
+    onError: e => toast.error(e.message),
+  });
+  const resetDraftMut = trpc.documentJournals.resetDraftNumbering.useMutation({
+    onSuccess: () => {
+      toast.success("تم إعادة ضبط ترقيم المسودات ✓");
       listQuery.refetch();
       setShowReset(false);
     },
@@ -606,6 +766,12 @@ export default function DocumentJournalsPage() {
       resetFrequency:   form.resetFrequency,
       autoSerial:       form.autoSerial,
       printOnSave:      form.printOnSave,
+      draftAutoSerial:   form.draftAutoSerial,
+      draftNumberPrefix: form.draftFixedPart.trim() || "DRAFT",
+      draftFirstNumber:  parseInt(form.draftFirstNum) || 1,
+      draftLastNumber:   parseInt(form.draftLastNum) || 999999,
+      draftNumDigits:    parseInt(form.draftDigits) || 6,
+      draftResetFrequency: form.draftResetFrequency,
       customersJournal: (form.customersJournal && form.customersJournal !== "none") ? form.customersJournal : null,
       suppliersJournal: (form.suppliersJournal && form.suppliersJournal !== "none") ? form.suppliersJournal : null,
       paymentTypesConfig: ptConfig,
@@ -658,6 +824,10 @@ export default function DocumentJournalsPage() {
         documentComponents:       docComponents,
       },
       sortOrder:        0,
+      ...(isSuperadmin ? {
+        recordPolicy:        form.recordPolicy as 'protected' | 'editable' | 'flexible',
+        includeInFoundation: form.includeInFoundation,
+      } : {}),
     };
     if (editId != null) {
       updateMut.mutate({ id: editId, ...payload });
@@ -668,6 +838,7 @@ export default function DocumentJournalsPage() {
 
   const handleDelete = () => deleteMut.mutate({ id: editId! });
   const handleResetNumbering = () => { if (editId != null) resetMut.mutate({ journalId: editId }); };
+  const handleResetDraftNumbering = () => { if (editId != null) resetDraftMut.mutate({ journalId: editId }); };
 
   const handleDuplicate = useCallback(() => {
     if (!editId) { toast.warning("اختر دفتراً أولاً ثم اضغط نسخة مماثلة"); return; }
@@ -683,23 +854,95 @@ export default function DocumentJournalsPage() {
     toast.success("تم نسخ الدفتر — راجع البيانات ثم احفظ");
   }, [editId]);
 
+  /* ── مطالعة: map field id → page path + label ── */
+  const FIELD_PAGE_MAP: Record<string, { path: string; label: string; icon: React.ElementType }> = {
+    userGroup:                 { path: "/cfg/user-groups",        label: "مجموعات المستخدمين", icon: Users },
+    user:                      { path: "/cfg/users",              label: "المستخدمين",          icon: Users },
+    warehouse:                 { path: "/cfg/warehouses",         label: "المخازن",             icon: Truck },
+    customersJournal:          { path: "/cfg/document-journals",  label: "دفاتر المستندات",     icon: BookOpen },
+    suppliersJournal:          { path: "/cfg/document-journals",  label: "دفاتر المستندات",     icon: BookOpen },
+    issuanceJournalBookId:     { path: "/cfg/document-journals",  label: "دفاتر المستندات",     icon: BookOpen },
+    issuanceInventoryDocBookId:{ path: "/cfg/document-journals",  label: "دفاتر المستندات",     icon: BookOpen },
+    printTemplate:             { path: "/cfg/print-settings",     label: "نماذج الطباعة",       icon: Printer },
+    printTemplate2:            { path: "/cfg/print-settings",     label: "نماذج الطباعة",       icon: Printer },
+  };
+
+  const handleMutalaah = useCallback(() => {
+    const fieldId = activeField.id;
+    const fieldValue = activeField.value;
+    if (!fieldId) {
+      toast.info("لم يتم تحديد أي حقل — اضغط على حقل أولاً");
+      return;
+    }
+    const mapped = FIELD_PAGE_MAP[fieldId];
+    if (!mapped) {
+      toast.info("لا يوجد سجل مرتبط بالحقل المحدد.");
+      return;
+    }
+    // للحقول المرتبطة بدفاتر المستندات — افتح السجل المحدد مباشرةً
+    const djpFields = ["customersJournal", "suppliersJournal", "issuanceJournalBookId", "issuanceInventoryDocBookId"];
+    if (djpFields.includes(fieldId) && fieldValue) {
+      const journalId = parseInt(fieldValue);
+      if (journalId) {
+        const linked = allJournals.find(j => j.id === journalId);
+        const intent = { docType: linked?.docType, editId: journalId };
+        sessionStorage.setItem("djp_intent", JSON.stringify(intent));
+        window.dispatchEvent(new CustomEvent("djp_navigate", { detail: intent }));
+      }
+    }
+    tabManager.openTab(mapped.path, mapped.label, mapped.icon);
+  }, [activeField.id, activeField.value, allJournals, tabManager]);
+
+  const handlePrint = useCallback(() => {
+    if (isDirty) {
+      toast.warning("يرجى حفظ البيانات أولاً قبل الطباعة");
+      return;
+    }
+    if (!editId) {
+      toast.info("لا يوجد سجل محفوظ للطباعة");
+      return;
+    }
+    window.print();
+  }, [isDirty, editId]);
+
   /* ── Toolbar ── */
   const isBusy = createMut.isPending || updateMut.isPending || deleteMut.isPending;
-  const toolbar = [
-    { label: "حفظ",           icon: <Save className="w-3.5 h-3.5" />,  action: handleSave,       primary: true,  disabled: isBusy },
-    { label: "جديد",          icon: <Plus className="w-3.5 h-3.5" />,  action: () => safeNavigate(openCreate) },
-    { label: "نسخة مماثلة",   icon: <Copy className="w-3.5 h-3.5" />,  action: handleDuplicate,  disabled: !editId },
-    { label: "الأخير", icon: <ChevronLast className="w-3.5 h-3.5" />,  action: () => typeJournals.at(-1) && safeNavigate(() => openEdit(typeJournals.at(-1)!)) },
-    { label: "التالي", icon: <CLeft className="w-3.5 h-3.5" />,        action: () => currentIndex < typeJournals.length - 1 && safeNavigate(() => openEdit(typeJournals[currentIndex + 1])) },
-    { label: "السابق", icon: <CRight className="w-3.5 h-3.5" />,       action: () => currentIndex > 0 && safeNavigate(() => openEdit(typeJournals[currentIndex - 1])) },
-    { label: "الأول",  icon: <ChevronFirst className="w-3.5 h-3.5" />, action: () => typeJournals[0] && safeNavigate(() => openEdit(typeJournals[0])) },
-    { label: "حذف",    icon: <Trash2 className="w-3.5 h-3.5" />,       action: () => editId && setShowDelete(true), danger: true, disabled: !editId },
-    { label: "خروج",   icon: <ArrowLeft className="w-3.5 h-3.5" />,    action: () => safeNavigate(() => { setView("list"); setEditId(null); }) },
-  ];
+
+  // ── Unified Toolbar ──────────────────────────────────────────────────────────
+  const _djpRef = useRef<any>({});
+  _djpRef.current = { view, editId, typeJournals, currentIndex, isBusy, isDirty, handleSave, openCreate, handleDuplicate, setShowDelete, handleMutalaah, handlePrint, currentType, safeNavigate, openEdit, setView, setEditId };
+  const toolbarActions = useMemo(() => {
+    const hasEdit = editId !== null;
+    const inForm = view === "form";
+    return {
+      save: { supported: true as const, allowed: true, stateEnabled: inForm && !isBusy, disabledReason: !inForm ? "اختر دفترًا للتعديل" : undefined, loading: isBusy, onClick: () => _djpRef.current.handleSave() },
+      new: { supported: true as const, allowed: true, stateEnabled: true, onClick: () => _djpRef.current.safeNavigate(_djpRef.current.openCreate) },
+      duplicate: { supported: true as const, allowed: true, stateEnabled: hasEdit, disabledReason: "افتح دفترًا أولًا لنسخه", onClick: () => _djpRef.current.editId && _djpRef.current.handleDuplicate() },
+      edit: { supported: false as const, disabledReason: "الدفاتر دائمًا في وضع التعديل" },
+      delete: { supported: true as const, allowed: true, stateEnabled: hasEdit, disabledReason: "افتح دفترًا أولًا للحذف", onClick: () => _djpRef.current.editId && _djpRef.current.setShowDelete(true) },
+      draft: { supported: false as const, disabledReason: "المسودة غير مستخدمة" },
+      first: { supported: true as const, allowed: true, stateEnabled: inForm && typeJournals.length > 0, disabledReason: "لا توجد دفاتر", onClick: () => { const s = _djpRef.current; const f = s.typeJournals[0]; if (f) s.safeNavigate(() => s.openEdit(f)); } },
+      previous: { supported: true as const, allowed: true, stateEnabled: inForm && currentIndex > 0, disabledReason: "لا يوجد سجل سابق", onClick: () => { const s = _djpRef.current; if (s.currentIndex > 0) s.safeNavigate(() => s.openEdit(s.typeJournals[s.currentIndex - 1])); } },
+      next: { supported: true as const, allowed: true, stateEnabled: inForm && currentIndex < typeJournals.length - 1, disabledReason: "لا يوجد سجل تالٍ", onClick: () => { const s = _djpRef.current; if (s.currentIndex < s.typeJournals.length - 1) s.safeNavigate(() => s.openEdit(s.typeJournals[s.currentIndex + 1])); } },
+      last: { supported: true as const, allowed: true, stateEnabled: inForm && typeJournals.length > 0, disabledReason: "لا توجد دفاتر", onClick: () => { const s = _djpRef.current; const l = s.typeJournals.at(-1); if (l) s.safeNavigate(() => s.openEdit(l)); } },
+      approve: { supported: false as const, disabledReason: "الاعتماد غير متاح لدفاتر المستندات" },
+      cancel: { supported: false as const, disabledReason: "غير متاح" },
+      preview: { supported: true as const, allowed: true, stateEnabled: inForm, disabledReason: "اختر دفترًا أولًا", onClick: () => _djpRef.current.handleMutalaah() },
+      tools: { supported: false as const, disabledReason: "الأدوات غير متاحة هنا" },
+      send: { supported: false as const, disabledReason: "الإرسال غير متاح هنا" },
+      print: { supported: true as const, allowed: true, stateEnabled: inForm && hasEdit, disabledReason: "افتح دفترًا أولًا للطباعة", onClick: () => _djpRef.current.handlePrint() },
+      exit: { supported: true as const, allowed: true, stateEnabled: inForm, disabledReason: "أنت في قائمة الدفاتر بالفعل", onClick: () => { const s = _djpRef.current; s.safeNavigate(() => { s.setView("list"); s.setEditId(null); }); } },
+    };
+  }, [view, editId, isBusy, typeJournals, currentIndex]);
+  // في وضع القائمة: سجّل الإجراءات في السياق الخارجي
+  // في وضع النموذج: فرّغ السياق الخارجي — الإجراءات تُسجَّل داخل نافذة العمل عبر DJPFormToolbarRegistrar
+  // نستخدم useMemo لإرجاع كائن ثابت في وضع النموذج — أي كائن حرفي {} جديد سيولّد حلقة لا نهائية
+  const [emptyActions] = React.useState<Parameters<typeof useToolbarActions>[0]>({});
+  useToolbarActions(view === "list" ? toolbarActions : emptyActions);
 
   /* ──────────────── RENDER ──────────────── */
   return (
-    <div className="flex h-full gap-0 overflow-hidden" dir="rtl">
+    <div className={`${styles.screenContainer} flex h-full gap-0 overflow-hidden`} dir="rtl">
 
       {/* ══ Type Sidebar ══ */}
       <div className="shrink-0 flex flex-col overflow-hidden"
@@ -736,10 +979,9 @@ export default function DocumentJournalsPage() {
       </div>
 
       {/* ══ Main Area ══ */}
-      <div className="flex-1 min-w-0 flex flex-col overflow-hidden" style={{ background: "#ECE7DD" }}>
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden bg-background">
 
-        {view === "list" ? (
-          /* ─────────────── List View ─────────────── */
+        {/* ─────────────── List View (دائمًا مرئية) ─────────────── */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -776,7 +1018,7 @@ export default function DocumentJournalsPage() {
                 {typeJournals.map((j, idx) => (
                   <button key={j.id} onClick={() => openEdit(j)}
                     className="group flex flex-col items-start gap-1 p-3 rounded-lg text-right transition-all hover:shadow-md hover:border-indigo-200"
-                    style={{ background: "#FDFAF5", border: "1px solid #d8d3c8", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+                    style={{ background: "#FCFAF5", border: "1px solid #d8d3c8", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
                     <div className="flex items-center gap-2 w-full">
                       <span className="text-[9px] font-bold text-slate-300">#{String(idx + 1).padStart(2, "0")}</span>
                       <span className="flex-1 text-[12px] font-semibold text-slate-700 truncate group-hover:text-indigo-700">
@@ -804,12 +1046,26 @@ export default function DocumentJournalsPage() {
             )}
           </div>
 
-        ) : (
-          /* ─────────────── Form View ─────────────── */
+          {/* ─────────────── Form View in Work Window ─────────────── */}
+          {view === "form" && (
+            <DesktopWorkWindow
+              title={editId ? (form.nameAr || `دفتر ${currentType?.label}`) : `دفتر جديد — ${currentType?.label}`}
+              preset="standard"
+              defaultSize={{ width: 1080, height: 650 }}
+              autoMaximize={false}
+              fitMode="clamp"
+              minWidth={900}
+              minHeight={500}
+              widthPad={40}
+              heightPad={32}
+              onClose={() => safeNavigate(() => { setView("list"); setEditId(null); })}
+            >
+              {/* يُسجّل إجراءات النموذج في ToolbarActionsProvider الداخلي لنافذة العمل */}
+              <DJPFormToolbarRegistrar actions={toolbarActions} />
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* Form header */}
             <div className="flex items-center gap-2 px-4 py-2 shrink-0"
-              style={{ borderBottom: "1px solid #d8d3c8", background: "#EBE7DE" }}>
+              style={{ borderBottom: "1px solid #d8d3c8", background: "#F2F0EC" }}>
               <button onClick={() => safeNavigate(() => { setView("list"); setEditId(null); })}
                 className="w-5 h-5 flex items-center justify-center rounded-full bg-white border border-slate-200 shadow-sm text-slate-400 hover:text-indigo-600 hover:border-indigo-300 transition-colors">
                 <ArrowLeft className="w-2.5 h-2.5" />
@@ -824,7 +1080,7 @@ export default function DocumentJournalsPage() {
             </div>
 
             {/* ── Tabs Bar ── */}
-            <div className="shrink-0 flex items-center gap-0 px-3" style={{ borderBottom: "1px solid #d8d3c8", background: "#EBE7DE" }} dir="rtl">
+            <div className="flex items-center gap-0 shrink-0" style={{ borderBottom: "1px solid #D8DCE2", background: "#F2F0EC" }} dir="rtl">
               {[
                 { id: "basic",             label: "البيانات الأساسية" },
                 { id: "payment-types",     label: "أنواع السندات" },
@@ -836,13 +1092,7 @@ export default function DocumentJournalsPage() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className="relative px-4 py-2.5 text-[11px] font-semibold transition-colors whitespace-nowrap"
-                  style={{
-                    color: activeTab === tab.id ? "#406B93" : "#64748b",
-                    borderBottom: activeTab === tab.id ? "2px solid #406B93" : "2px solid transparent",
-                    background: "transparent",
-                    marginBottom: -1,
-                  }}
+                  className={`${sharedForm.tabButton} ${activeTab === tab.id ? sharedForm.tabButtonActive : ""}`}
                 >
                   {tab.label}
                 </button>
@@ -850,6 +1100,7 @@ export default function DocumentJournalsPage() {
             </div>
 
             {/* ── Tab Content ── */}
+            <ActiveFieldCtx.Provider value={{ state: activeField, set: setActiveField }}>
             <div className="flex-1 overflow-hidden">
 
             {/* ── TAB: البيانات الأساسية ── */}
@@ -860,13 +1111,9 @@ export default function DocumentJournalsPage() {
               <P title="البيانات الأساسية">
                 <div className="grid grid-cols-2 gap-x-5 gap-y-2">
                   <R label="نوع المستند">
-                    <FS value={form.docType} onValueChange={v => set("docType", v)}>
-                      <SelectItem value="__none__">— اختر —</SelectItem>
+                    <FS id="docType" value={form.docType} onValueChange={v => set("docType", v)}>
                       {DOC_TYPES.map(dt => <SelectItem key={dt.id} value={dt.id}>{dt.label}</SelectItem>)}
                     </FS>
-                  </R>
-                  <R label="الجزء الثابت">
-                    <FI value={form.fixedPart} onChange={v => set("fixedPart", v)} placeholder="S01-" mono />
                   </R>
                   <R label="إسم عربي *">
                     <FI value={form.nameAr} onChange={v => set("nameAr", v)} placeholder={`دفتر ${currentType?.label}`} />
@@ -885,20 +1132,17 @@ export default function DocumentJournalsPage() {
                 <P title="حدود الاستخدام">
                   <div className="grid grid-cols-1 gap-y-2">
                     <R label="مجموعة مستخدمين" lw={130}>
-                      <FS value={form.userGroup} onValueChange={v => set("userGroup", v)}>
-                        <SelectItem value="__none__">الكل</SelectItem>
+                      <FS id="userGroup" value={form.userGroup} onValueChange={v => set("userGroup", v)}>
                         {(userGroupsList ?? []).map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>)}
                       </FS>
                     </R>
                     <R label="مستخدم" lw={130}>
-                      <FS value={form.user} onValueChange={v => set("user", v)}>
-                        <SelectItem value="__none__">الكل</SelectItem>
+                      <FS id="user" value={form.user} onValueChange={v => set("user", v)}>
                         {(users as any[])?.map((u: any) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
                       </FS>
                     </R>
                     <R label="مخزن" lw={130}>
-                      <FS value={form.warehouse} onValueChange={v => set("warehouse", v)}>
-                        <SelectItem value="__none__">الكل</SelectItem>
+                      <FS id="warehouse" value={form.warehouse} onValueChange={v => set("warehouse", v)} previewPage="/cfg/warehouses" previewLabel="المخازن">
                         {(warehousesList as any[])?.map((w: any) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
                       </FS>
                     </R>
@@ -911,7 +1155,7 @@ export default function DocumentJournalsPage() {
                 <P title="ربط العملاء والموردين بالدفتر">
                   <div className="grid grid-cols-1 gap-y-2">
                     <R label="تكويد العملاء" lw={120}>
-                      <FS value={form.customersJournal} onValueChange={v => set("customersJournal", v)}>
+                      <FS id="customersJournal" value={form.customersJournal} onValueChange={v => set("customersJournal", v)}>
                         <SelectItem value="none">— بدون ربط —</SelectItem>
                         {(custJournalsList as any[] ?? []).map((j: any) => (
                           <SelectItem key={j.id} value={String(j.id)}>
@@ -921,7 +1165,7 @@ export default function DocumentJournalsPage() {
                       </FS>
                     </R>
                     <R label="تكويد الموردين" lw={120}>
-                      <FS value={form.suppliersJournal} onValueChange={v => set("suppliersJournal", v)}>
+                      <FS id="suppliersJournal" value={form.suppliersJournal} onValueChange={v => set("suppliersJournal", v)}>
                         <SelectItem value="none">— بدون ربط —</SelectItem>
                         {(suppJournalsList as any[] ?? []).map((j: any) => (
                           <SelectItem key={j.id} value={String(j.id)}>
@@ -940,49 +1184,109 @@ export default function DocumentJournalsPage() {
               </div>
 
               {/* ── الأرقام والترقيم ── */}
-              <P title="الأرقام والترقيم"
-                action={
-                  editId != null ? (
-                    <button onClick={() => setShowReset(true)}
-                      className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-orange-600 border border-orange-200 hover:bg-orange-50 transition-colors">
-                      <RefreshCw className="w-3 h-3" /> إعادة ضبط
-                    </button>
-                  ) : null
-                }
-              >
-                <div className="grid grid-cols-4 gap-x-4 gap-y-2 items-center mb-3">
-                  <div className="col-span-4">
-                    <CB label="تسلسل أرقام أوتوماتيكي" checked={form.autoSerial} onChange={v => set("autoSerial", v)} />
+              <P title="الأرقام والترقيم">
+                {/* 1) ترقيم المستند الرسمي */}
+                <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-semibold text-slate-700">ترقيم المستند الرسمي</h4>
+                    {editId != null && (
+                      <button onClick={() => { setResetMode("official"); setShowReset(true); }}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-orange-600 border border-orange-200 hover:bg-orange-50 transition-colors">
+                        <RefreshCw className="w-3 h-3" /> إعادة ضبط المسلسل الرسمي
+                      </button>
+                    )}
                   </div>
-                  <R label="أول رقم">
-                    <FI value={form.firstNum} onChange={v => set("firstNum", v)} placeholder="1" mono />
-                  </R>
-                  <R label="عدد الخانات">
-                    <FI value={form.digits} onChange={v => set("digits", v)} placeholder="6" mono />
-                  </R>
-                  <R label="آخر رقم">
-                    <FI value={form.lastNum} onChange={v => set("lastNum", v)} placeholder="999999" mono />
-                  </R>
-                  <R label="آخر مستخدم">
-                    <FI value={currentDBJournal ? String(currentDBJournal.currentSeq) : "0"} onChange={() => {}} disabled mono />
-                  </R>
+                  <div className="grid grid-cols-4 gap-x-4 gap-y-2 items-center mb-3">
+                    <div className="col-span-4">
+                      <CB label="تسلسل أرقام أوتوماتيكي" checked={form.autoSerial} onChange={v => set("autoSerial", v)} />
+                    </div>
+                    <R label="الجزء الثابت" className="col-span-4">
+                      <FI value={form.fixedPart} onChange={v => set("fixedPart", v)} placeholder="S01-" mono />
+                    </R>
+                    <R label="أول رقم">
+                      <FI value={form.firstNum} onChange={v => set("firstNum", v)} placeholder="1" mono />
+                    </R>
+                    <R label="عدد الخانات">
+                      <FI value={form.digits} onChange={v => set("digits", v)} placeholder="6" mono />
+                    </R>
+                    <R label="آخر رقم">
+                      <FI value={form.lastNum} onChange={v => set("lastNum", v)} placeholder="999999" mono />
+                    </R>
+                    <R label="آخر رقم مستخدم">
+                      <FI value={currentDBJournal ? String(currentDBJournal.currentSeq) : "0"} onChange={() => {}} disabled mono />
+                    </R>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 items-center pt-2" style={{ borderTop: "1px solid #e2e8f0" }}>
+                    <R label="إعادة الترقيم" lw={110}>
+                      <FS id="resetFrequency" value={form.resetFrequency} onValueChange={v => set("resetFrequency", v)}>
+                        <SelectItem value="none">بدون إعادة</SelectItem>
+                        <SelectItem value="daily">يومي</SelectItem>
+                        <SelectItem value="monthly">شهري</SelectItem>
+                        <SelectItem value="annual">سنوي</SelectItem>
+                      </FS>
+                    </R>
+                    {/* معاينة الرقم */}
+                    <div className="flex items-center gap-2">
+                      <Eye className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span className="text-[10px] text-slate-400 shrink-0">معاينة:</span>
+                      <span className="font-mono text-[13px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                        {buildPreview(form.fixedPart, form.firstNum, form.digits)}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2 items-center pt-2" style={{ borderTop: "1px solid #f1f5f9" }}>
-                  <R label="إعادة الترقيم" lw={110}>
-                    <FS value={form.resetFrequency} onValueChange={v => set("resetFrequency", v)}>
-                      <SelectItem value="none">بدون إعادة</SelectItem>
-                      <SelectItem value="daily">يومي</SelectItem>
-                      <SelectItem value="monthly">شهري</SelectItem>
-                      <SelectItem value="annual">سنوي</SelectItem>
-                    </FS>
-                  </R>
-                  {/* معاينة الرقم */}
-                  <div className="flex items-center gap-2">
-                    <Eye className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span className="text-[10px] text-slate-400 shrink-0">معاينة:</span>
-                    <span className="font-mono text-[13px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
-                      {buildPreview(form.fixedPart, form.firstNum, form.digits)}
-                    </span>
+
+                {/* فاصل أفقي واضح */}
+                <hr className="border-slate-300 my-4" />
+
+                {/* 2) ترقيم المسودات */}
+                <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-semibold text-slate-700">ترقيم المسودات</h4>
+                    {editId != null && (
+                      <button onClick={() => { setResetMode("draft"); setShowReset(true); }}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-orange-600 border border-orange-200 hover:bg-orange-50 transition-colors">
+                        <RefreshCw className="w-3 h-3" /> إعادة ضبط مسلسل المسودات
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-4 gap-x-4 gap-y-2 items-center mb-3">
+                    <div className="col-span-4">
+                      <CB label="تفعيل الترقيم التلقائي للمسودات" checked={form.draftAutoSerial} onChange={v => set("draftAutoSerial", v)} />
+                    </div>
+                    <R label="الجزء الثابت للمسودة" className="col-span-4">
+                      <FI value={form.draftFixedPart} onChange={v => set("draftFixedPart", v)} placeholder="DRAFT-" mono />
+                    </R>
+                    <R label="أول رقم مسودة">
+                      <FI value={form.draftFirstNum} onChange={v => set("draftFirstNum", v)} placeholder="1" mono />
+                    </R>
+                    <R label="عدد الخانات">
+                      <FI value={form.draftDigits} onChange={v => set("draftDigits", v)} placeholder="6" mono />
+                    </R>
+                    <R label="آخر رقم مسودة">
+                      <FI value={form.draftLastNum} onChange={v => set("draftLastNum", v)} placeholder="999999" mono />
+                    </R>
+                    <R label="آخر رقم مسودة مستخدم">
+                      <FI value={currentDBJournal ? String((currentDBJournal as any).draftCurrentSeq ?? 0) : "0"} onChange={() => {}} disabled mono />
+                    </R>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 items-center pt-2" style={{ borderTop: "1px solid #e2e8f0" }}>
+                    <R label="إعادة ترقيم المسودات" lw={110}>
+                      <FS id="draftResetFrequency" value={form.draftResetFrequency} onValueChange={v => set("draftResetFrequency", v)}>
+                        <SelectItem value="none">بدون إعادة</SelectItem>
+                        <SelectItem value="daily">يومي</SelectItem>
+                        <SelectItem value="monthly">شهري</SelectItem>
+                        <SelectItem value="annual">سنوي</SelectItem>
+                      </FS>
+                    </R>
+                    {/* معاينة رقم المسودة */}
+                    <div className="flex items-center gap-2">
+                      <Eye className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span className="text-[10px] text-slate-400 shrink-0">معاينة:</span>
+                      <span className="font-mono text-[13px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                        {buildPreview(form.draftFixedPart, form.draftFirstNum, form.draftDigits)}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </P>
@@ -992,8 +1296,7 @@ export default function DocumentJournalsPage() {
                 <P title="نماذج الطباعة">
                   <div className="space-y-2">
                     <R label="النموذج الأساسي">
-                      <FS value={form.printTemplate} onValueChange={v => set("printTemplate", v)} placeholder="— اختر نموذج —">
-                        <SelectItem value="__none__">— بدون نموذج —</SelectItem>
+                      <FS id="printTemplate" value={form.printTemplate} onValueChange={v => set("printTemplate", v)}>
                         {(templates ?? []).map(t => (
                           <SelectItem key={t.code} value={t.code}>
                             {t.code} — {t.nameAr}
@@ -1002,8 +1305,7 @@ export default function DocumentJournalsPage() {
                       </FS>
                     </R>
                     <R label="النموذج الثانوي">
-                      <FS value={form.printTemplate2} onValueChange={v => set("printTemplate2", v)} placeholder="— اختر نموذج —">
-                        <SelectItem value="__none__">— بدون نموذج —</SelectItem>
+                      <FS id="printTemplate2" value={form.printTemplate2} onValueChange={v => set("printTemplate2", v)}>
                         {(templates ?? []).map(t => (
                           <SelectItem key={t.code} value={t.code}>
                             {t.code} — {t.nameAr}
@@ -1047,8 +1349,8 @@ export default function DocumentJournalsPage() {
               const thCls = "text-[10px] font-semibold text-slate-500 px-2 py-1.5 text-right bg-slate-50 border-b border-slate-200";
               const tdCls = "px-1.5 py-1 border-b border-slate-100";
               const cellInput = (val: string, onChange: (v: string) => void) => (
-                <input value={val} onChange={e => onChange(e.target.value)}
-                  className="w-full h-6 text-[11px] px-1.5 border border-slate-200 rounded bg-white focus:outline-none focus:border-indigo-400" />
+                <Input value={val} onChange={e => onChange(e.target.value)}
+                  className="w-full h-6 text-[11px] px-1.5 border-slate-200 rounded bg-white focus-visible:ring-0 focus-visible:ring-offset-0 focus:border-indigo-400" />
               );
               const addType = () => {
                 const newId = String(Date.now());
@@ -1127,8 +1429,8 @@ export default function DocumentJournalsPage() {
               const thCls = "text-[10px] font-semibold text-slate-500 px-2 py-1.5 text-right bg-slate-50 border-b border-slate-200";
               const tdCls = "px-1.5 py-1 border-b border-slate-100";
               const cellInput = (val: string, onChange: (v: string) => void) => (
-                <input value={val} onChange={e => onChange(e.target.value)}
-                  className="w-full h-6 text-[11px] px-1.5 border border-slate-200 rounded bg-white focus:outline-none focus:border-indigo-400" />
+                <Input value={val} onChange={e => onChange(e.target.value)}
+                  className="w-full h-6 text-[11px] px-1.5 border-slate-200 rounded bg-white focus-visible:ring-0 focus-visible:ring-offset-0 focus:border-indigo-400" />
               );
               const addLink = () => {
                 const newId = String(Date.now());
@@ -1231,15 +1533,13 @@ export default function DocumentJournalsPage() {
               <P title="خصائص السندات المصدرة">
                 <div className="grid grid-cols-2 gap-x-5 gap-y-2.5">
                   <R label="نوع القيد" lw={145}>
-                    <FS value={form.issuanceJournalType} onValueChange={v => set("issuanceJournalType", v)}>
-                      <SelectItem value="__none__">— اختر —</SelectItem>
+                    <FS id="issuanceJournalType" value={form.issuanceJournalType} onValueChange={v => set("issuanceJournalType", v)}>
                       {DOC_TYPES.filter(dt => ["journal_entry","purchase_invoice","receipt_voucher","payment_voucher"].includes(dt.id))
                         .map(dt => <SelectItem key={dt.id} value={dt.id}>{dt.label}</SelectItem>)}
                     </FS>
                   </R>
                   <R label="دفتر القيد" lw={145}>
-                    <FS value={form.issuanceJournalBookId} onValueChange={v => set("issuanceJournalBookId", v)}>
-                      <SelectItem value="__none__">— اختر —</SelectItem>
+                    <FS id="issuanceJournalBookId" value={form.issuanceJournalBookId} onValueChange={v => set("issuanceJournalBookId", v)}>
                       {allJournals
                         .filter(j => !form.issuanceJournalType || j.docType === form.issuanceJournalType)
                         .map(j => (
@@ -1250,15 +1550,13 @@ export default function DocumentJournalsPage() {
                     </FS>
                   </R>
                   <R label="نوع مستند المخزون" lw={145}>
-                    <FS value={form.issuanceInventoryDocType} onValueChange={v => { set("issuanceInventoryDocType", v); set("issuanceInventoryDocBookId", ""); }}>
-                      <SelectItem value="__none__">— اختر —</SelectItem>
+                    <FS id="issuanceInventoryDocType" value={form.issuanceInventoryDocType} onValueChange={v => { set("issuanceInventoryDocType", v); set("issuanceInventoryDocBookId", ""); }}>
                       {DOC_TYPES.filter(dt => ["stock_issue_items","stock_receipt_items","stock_transfer","stock_receipt","stock_issue"].includes(dt.id))
                         .map(dt => <SelectItem key={dt.id} value={dt.id}>{dt.label}</SelectItem>)}
                     </FS>
                   </R>
                   <R label="دفتر مستند المخزون" lw={145}>
-                    <FS value={form.issuanceInventoryDocBookId} onValueChange={v => set("issuanceInventoryDocBookId", v)}>
-                      <SelectItem value="__none__">— اختر —</SelectItem>
+                    <FS id="issuanceInventoryDocBookId" value={form.issuanceInventoryDocBookId} onValueChange={v => set("issuanceInventoryDocBookId", v)}>
                       {allJournals
                         .filter(j => !form.issuanceInventoryDocType || j.docType === form.issuanceInventoryDocType)
                         .map(j => (
@@ -1290,7 +1588,7 @@ export default function DocumentJournalsPage() {
                 {/* سطر الطباعة */}
                 <div className="flex items-center gap-4 mb-3">
                   <span className="text-[11px] text-slate-500 font-medium shrink-0" style={{ width: 100 }}>نموذج الطباعة</span>
-                  <FS value={form.printPageSize} onValueChange={v => set("printPageSize", v)} placeholder="نموذج الطباعة">
+                  <FS id="printPageSize" value={form.printPageSize} onValueChange={v => set("printPageSize", v)} placeholder="نموذج الطباعة">
                     <SelectItem value="A4">A4</SelectItem>
                     <SelectItem value="A5">A5</SelectItem>
                     <SelectItem value="letter">Letter</SelectItem>
@@ -1326,7 +1624,7 @@ export default function DocumentJournalsPage() {
               <P title="خيارات الأصناف">
                 <div className="grid grid-cols-2 gap-x-8 gap-y-2.5">
                   <R label="أقصى عدد الوحدات" lw={160}>
-                    <FS value={form.maxUnitsCount} onValueChange={v => set("maxUnitsCount", v)}>
+                    <FS id="maxUnitsCount" value={form.maxUnitsCount} onValueChange={v => set("maxUnitsCount", v)}>
                       <SelectItem value="1">وحدة واحدة</SelectItem>
                       <SelectItem value="2">وحدتان</SelectItem>
                       <SelectItem value="3">ثلاث وحدات</SelectItem>
@@ -1362,13 +1660,13 @@ export default function DocumentJournalsPage() {
               <P title="خيارات الكميات">
                 <div className="grid grid-cols-2 gap-x-8 gap-y-2.5">
                   <R label="الكمية المتاحة" lw={140}>
-                    <FS value={form.availableQtyDisplay} onValueChange={v => set("availableQtyDisplay", v)}>
+                    <FS id="availableQtyDisplay" value={form.availableQtyDisplay} onValueChange={v => set("availableQtyDisplay", v)}>
                       <SelectItem value="show">إظهار</SelectItem>
                       <SelectItem value="hide">إخفاء</SelectItem>
                     </FS>
                   </R>
                   <R label="الكمية الموجودة" lw={140}>
-                    <FS value={form.currentQtyDisplay} onValueChange={v => set("currentQtyDisplay", v)}>
+                    <FS id="currentQtyDisplay" value={form.currentQtyDisplay} onValueChange={v => set("currentQtyDisplay", v)}>
                       <SelectItem value="show">إظهار</SelectItem>
                       <SelectItem value="hide">إخفاء</SelectItem>
                     </FS>
@@ -1492,11 +1790,11 @@ export default function DocumentJournalsPage() {
                             >
                               {/* الترتيب */}
                               <td className="px-2 py-1.5 border-b border-slate-100">
-                                <input
+                                <Input
                                   type="number" min="1" step="1"
                                   value={comp.sortOrder}
                                   onChange={e => updateComp({ sortOrder: parseInt(e.target.value) || 0 })}
-                                  className="w-12 h-7 text-center text-[11px] font-mono border border-slate-200 rounded px-1 focus:outline-none focus:border-[#406B93]"
+                                  className="w-12 h-7 text-center text-[11px] font-mono border-slate-200 rounded px-1 focus-visible:ring-0 focus-visible:ring-offset-0 focus:border-[#406B93]"
                                 />
                               </td>
                               {/* كود الحقل */}
@@ -1535,12 +1833,12 @@ export default function DocumentJournalsPage() {
                               </td>
                               {/* الاسم */}
                               <td className="px-2 py-1.5 border-b border-slate-100">
-                                <input
+                                <Input
                                   type="text"
                                   value={comp.nameAr}
                                   onChange={e => updateComp({ nameAr: e.target.value })}
                                   placeholder="اسم المكوّن"
-                                  className="w-full h-7 text-[11px] border border-slate-200 rounded px-2 focus:outline-none focus:border-[#406B93]"
+                                  className="w-full h-7 text-[11px] border-slate-200 rounded px-2 focus-visible:ring-0 focus-visible:ring-offset-0 focus:border-[#406B93]"
                                 />
                               </td>
                               {/* مستند */}
@@ -1609,27 +1907,27 @@ export default function DocumentJournalsPage() {
             )}
 
             </div>
+
+            {/* ══ Foundation Policy Panel (superadmin only) ══ */}
+            {isSuperadmin && (
+              <div className="px-4 pb-3">
+                <FoundationPolicyPanel
+                  recordPolicy={(form.recordPolicy as any) || 'flexible'}
+                  foundationKey={form.foundationKey || null}
+                  includeInFoundation={form.includeInFoundation}
+                  onChange={(policy, include) => {
+                    setForm(p => ({ ...p, recordPolicy: policy, includeInFoundation: include }));
+                    setIsDirty(true);
+                  }}
+                />
+              </div>
+            )}
+            </ActiveFieldCtx.Provider>
             {/* end Tab Content */}
 
-            {/* ══ Sticky Toolbar ══ */}
-            <div className="shrink-0 flex items-center gap-1 px-3"
-              style={{ borderTop: "1px solid #d8d3c8", background: "#EBE7DE", boxShadow: "0 -2px 8px rgba(0,0,0,0.04)", height: 44 }}>
-              {toolbar.map(({ label, icon, action, primary, danger, disabled: dis }: any) => (
-                <button key={label} onClick={action} disabled={dis || isBusy}
-                  className={[
-                    "flex items-center gap-1 px-3 h-8 rounded-md text-[11px] font-medium transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed",
-                    primary ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm"
-                      : danger ? "text-red-500 hover:bg-red-50 border border-red-200"
-                        : "text-slate-600 hover:bg-slate-100 border border-slate-200",
-                  ].join(" ")}>
-                  <span className="w-3.5 h-3.5 flex">{icon}</span>
-                  <span>{label}</span>
-                </button>
-              ))}
-              {isDirty && <span className="text-[10px] text-amber-600 mr-auto flex items-center gap-1">● تعديلات غير محفوظة</span>}
-            </div>
           </div>
-        )}
+            </DesktopWorkWindow>
+          )}
       </div>
 
       {/* ══ Unsaved dialog ══ */}
@@ -1672,27 +1970,31 @@ export default function DocumentJournalsPage() {
       <Dialog open={showReset} onOpenChange={setShowReset}>
         <DialogContent className="max-w-sm" dir="rtl">
           <DialogHeader><DialogTitle className="text-right text-base flex items-center gap-2">
-            <RefreshCw className="w-4 h-4 text-orange-500" /> إعادة ضبط الترقيم
+            <RefreshCw className="w-4 h-4 text-orange-500" />
+            {resetMode === "draft" ? "إعادة ضبط ترقيم المسودات" : "إعادة ضبط الترقيم"}
           </DialogTitle></DialogHeader>
           <div className="space-y-2">
             <p className="text-sm text-slate-600 text-right">
-              هل تريد إعادة ضبط ترقيم دفتر <strong>{form.nameAr}</strong>؟
+              هل تريد إعادة ضبط {resetMode === "draft" ? "ترقيم المسودات" : "ترقيم دفتر"} <strong>{form.nameAr}</strong>؟
             </p>
             <p className="text-[12px] text-slate-500 text-right">
-              سيتم إعادة الرقم إلى البداية ({form.firstNum || "1"}) والرقم التالي الجديد سيكون:
+              سيتم إعادة الرقم إلى البداية ({resetMode === "draft" ? (form.draftFirstNum || "1") : (form.firstNum || "1")}) والرقم التالي الجديد سيكون:
             </p>
             <div className="text-center py-2">
               <span className="font-mono text-[18px] font-bold text-indigo-700 bg-indigo-50 px-4 py-1 rounded border border-indigo-200">
-                {buildPreview(form.fixedPart, form.firstNum, form.digits)}
+                {resetMode === "draft"
+                  ? buildPreview(form.draftFixedPart, form.draftFirstNum, form.draftDigits)
+                  : buildPreview(form.fixedPart, form.firstNum, form.digits)}
               </span>
             </div>
             <p className="text-[11px] text-orange-600 bg-orange-50 rounded p-2 text-right">
-              ⚠ تأكد أن لا توجد فواتير مستخدمة بهذا الترقيم قبل إعادة الضبط
+              ⚠ تأكد أن لا توجد {resetMode === "draft" ? "مسودات" : "فواتير"} مستخدمة بهذا الترقيم قبل إعادة الضبط
             </p>
           </div>
           <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
             <Button variant="destructive" className="flex-1 bg-orange-600 hover:bg-orange-700"
-              onClick={handleResetNumbering} disabled={resetMut.isPending}>
+              onClick={resetMode === "draft" ? handleResetDraftNumbering : handleResetNumbering}
+              disabled={resetMode === "draft" ? resetDraftMut.isPending : resetMut.isPending}>
               <RefreshCw className="w-3.5 h-3.5 ml-1" /> إعادة الضبط
             </Button>
             <Button variant="outline" className="flex-1" onClick={() => setShowReset(false)}>إلغاء</Button>
@@ -1702,4 +2004,13 @@ export default function DocumentJournalsPage() {
 
     </div>
   );
+}
+
+/**
+ * مكوّن خفيف يُسجّل إجراءات نموذج دفاتر المستندات في ToolbarActionsProvider الداخلي
+ * لنافذة العمل (DesktopWorkWindow)، فيظهر الشريط في تذييل النافذة بدلاً من الشريط الخارجي.
+ */
+function DJPFormToolbarRegistrar({ actions }: { actions: Parameters<typeof useToolbarActions>[0] }) {
+  useToolbarActions(actions);
+  return null;
 }

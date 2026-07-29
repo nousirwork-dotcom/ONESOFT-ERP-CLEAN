@@ -22,6 +22,7 @@ const uiPrefsSchema = z.object({
     label: z.string().max(200),
     ts: z.number(),
   })).max(20).optional(),
+  modalAlertSound: z.boolean().optional(),
 });
 
 const userKey = (userId: number) => `ui_prefs.user.${userId}`;

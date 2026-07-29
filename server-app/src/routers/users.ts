@@ -1,8 +1,13 @@
 import { z } from 'zod';
-import { eq, and, sql, count, inArray } from 'drizzle-orm';
+import { eq, and, sql, count, inArray, or } from 'drizzle-orm';
 import { router, adminProcedure, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { users, organizations, salesInvoices, vouchers, stockVouchers, userCategories, appSettings } from '../schema.js';
+import {
+  users, organizations, salesInvoices, purchaseInvoices, journalEntries,
+  vouchers, receiptVouchers, paymentVouchers, stockVouchers, inventoryCounts,
+  userCategories, appSettings, userGroups, warehouses,
+  userWarehouseAssignments, userGroupMembers, userAuditLogs,
+} from '../schema.js';
 import { hashPassword } from '../auth.js';
 import { TRPCError } from '@trpc/server';
 import { getLimit } from '../lib/license.js';
@@ -18,6 +23,55 @@ async function isPasswordlessAllowed(orgId: number): Promise<boolean> {
   try { return JSON.parse(rows[0].value ?? 'false') === true; } catch { return false; }
 }
 
+// ── فحص شامل لجميع مراجع المستخدم التاريخية (كل FKs غير cascade) ─────────────
+// استعلام UNION واحد يغطي كل الجداول دفعةً واحدة بدلاً من ~35 استعلام منفصل
+async function countAllLinkedRefs(orgId: number, userId: number): Promise<number> {
+  const result = await db.execute(sql`
+    SELECT COALESCE(SUM(c), 0)::bigint AS total FROM (
+      SELECT COUNT(*) AS c FROM sales_invoices          WHERE org_id = ${orgId} AND (user_id = ${userId} OR seller_user_id = ${userId})
+      UNION ALL SELECT COUNT(*) FROM purchase_invoices   WHERE org_id = ${orgId} AND user_id = ${userId}
+      UNION ALL SELECT COUNT(*) FROM journal_entries     WHERE org_id = ${orgId} AND user_id = ${userId}
+      UNION ALL SELECT COUNT(*) FROM vouchers            WHERE org_id = ${orgId} AND user_id = ${userId}
+      UNION ALL SELECT COUNT(*) FROM receipt_vouchers    WHERE org_id = ${orgId} AND user_id = ${userId}
+      UNION ALL SELECT COUNT(*) FROM payment_vouchers    WHERE org_id = ${orgId} AND user_id = ${userId}
+      UNION ALL SELECT COUNT(*) FROM stock_vouchers      WHERE org_id = ${orgId} AND user_id = ${userId}
+      UNION ALL SELECT COUNT(*) FROM inventory_counts    WHERE org_id = ${orgId} AND user_id = ${userId}
+      UNION ALL SELECT COUNT(*) FROM document_send_logs  WHERE org_id = ${orgId} AND sent_by_user_id = ${userId}
+      UNION ALL SELECT COUNT(*) FROM messages            WHERE org_id = ${orgId} AND (sender_id = ${userId} OR receiver_id = ${userId})
+      UNION ALL SELECT COUNT(*) FROM security_events     WHERE org_id = ${orgId} AND user_id = ${userId}
+      UNION ALL SELECT COUNT(*) FROM re_documents        WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM re_housing_units    WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM re_projects         WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM re_purchase_statements WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM re_purchases        WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM re_tb_audit_log     WHERE org_id = ${orgId} AND user_id = ${userId}
+      UNION ALL SELECT COUNT(*) FROM re_tb_entries       WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM re_tb_settlements   WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM re_tb_tax_returns   WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM re_trial_balances   WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM zatca_api_history   WHERE org_id = ${orgId} AND (user_id = ${userId} OR created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM zatca_certificates  WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM zatca_csid          WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM zatca_csr_requests  WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM zatca_devices       WHERE org_id = ${orgId} AND (user_id = ${userId} OR created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM zatca_environments  WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM zatca_error_log     WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM zatca_invoice_transactions WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM zatca_keys          WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM zatca_logs          WHERE org_id = ${orgId} AND user_id = ${userId}
+      UNION ALL SELECT COUNT(*) FROM zatca_qr_codes      WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM zatca_request_log   WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM zatca_response_log  WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM zatca_settings      WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM zatca_xml_documents WHERE org_id = ${orgId} AND (created_by = ${userId} OR updated_by = ${userId})
+      UNION ALL SELECT COUNT(*) FROM hs_link_sections    WHERE org_id = ${orgId} AND created_by = ${userId}
+      UNION ALL SELECT COUNT(*) FROM hs_links            WHERE org_id = ${orgId} AND created_by = ${userId}
+    ) t
+  `);
+  const row = (result as any).rows?.[0] ?? (result as any)[0] ?? {};
+  return Number(row.total ?? 0);
+}
+
 export const usersRouter = router({
   // قائمة مبسّطة (id + name) لقوائم الاختيار — متاحة لجميع المستخدمين
   listBasic: protectedProcedure.query(async ({ ctx }) => {
@@ -25,6 +79,94 @@ export const usersRouter = router({
       .from(users)
       .where(and(eq(users.orgId, ctx.user.orgId), eq(users.isActive, true)));
   }),
+
+  // قائمة البائعين — مفلترة بالمخزن/الفرع عبر user_warehouse_assignments (fallback: defaultWarehouseId)
+  listSalespersons: protectedProcedure
+    .input(z.object({ warehouseId: z.number().optional() }))
+    .query(async ({ ctx, input }) => {
+      const orgId = ctx.user.orgId;
+      const allSalespersons = await db.select({
+        id: users.id,
+        name: users.name,
+        username: users.username,
+        code: users.code,
+        defaultWarehouseId: users.defaultWarehouseId,
+      })
+        .from(users)
+        .where(and(
+          eq(users.orgId, orgId),
+          eq(users.isActive, true),
+          eq(users.canBeSalesperson, true),
+        ));
+
+      if (!input.warehouseId || allSalespersons.length === 0) return allSalespersons;
+
+      // جلب assignment IDs للمخزن المطلوب
+      const assignedUserIds = new Set(
+        (await db.select({ userId: userWarehouseAssignments.userId })
+          .from(userWarehouseAssignments)
+          .where(and(
+            eq(userWarehouseAssignments.orgId, orgId),
+            eq(userWarehouseAssignments.warehouseId, input.warehouseId),
+          ))
+        ).map(r => r.userId)
+      );
+
+      // فلترة: مُسنَد للمخزن عبر assignments OR defaultWarehouseId يطابق المخزن
+      return allSalespersons.filter(u =>
+        assignedUserIds.has(u.id) || u.defaultWarehouseId === input.warehouseId
+      );
+    }),
+
+  // جلب مخازن مستخدم محدد
+  listUserWarehouseAssignments: adminProcedure
+    .input(z.object({ userId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      return db.select({
+        id: userWarehouseAssignments.id,
+        warehouseId: userWarehouseAssignments.warehouseId,
+        warehouseName: warehouses.name,
+        createdAt: userWarehouseAssignments.createdAt,
+      })
+        .from(userWarehouseAssignments)
+        .innerJoin(warehouses, eq(warehouses.id, userWarehouseAssignments.warehouseId))
+        .where(and(
+          eq(userWarehouseAssignments.orgId, ctx.user.orgId),
+          eq(userWarehouseAssignments.userId, input.userId),
+        ))
+        .orderBy(warehouses.name);
+    }),
+
+  // إسناد مستخدم لمخزن/فرع
+  addUserWarehouseAssignment: adminProcedure
+    .input(z.object({ userId: z.number(), warehouseId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const orgId = ctx.user.orgId;
+      // تحقق أن المستخدم والمخزن ينتميان لنفس المنشأة (حماية Cross-Org على مستوى DB)
+      const [userRow, warehouseRow] = await Promise.all([
+        db.query.users.findFirst({ where: and(eq(users.id, input.userId), eq(users.orgId, orgId)), columns: { id: true } }),
+        db.query.warehouses.findFirst({ where: and(eq(warehouses.id, input.warehouseId), eq(warehouses.orgId, orgId)), columns: { id: true } }),
+      ]);
+      if (!userRow) throw new TRPCError({ code: 'NOT_FOUND', message: 'المستخدم غير موجود' });
+      if (!warehouseRow) throw new TRPCError({ code: 'NOT_FOUND', message: 'المخزن/الفرع غير موجود' });
+      const [row] = await db.insert(userWarehouseAssignments)
+        .values({ orgId, userId: input.userId, warehouseId: input.warehouseId })
+        .onConflictDoNothing()
+        .returning();
+      return row ?? { userId: input.userId, warehouseId: input.warehouseId };
+    }),
+
+  // إزالة إسناد مستخدم من مخزن/فرع
+  removeUserWarehouseAssignment: adminProcedure
+    .input(z.object({ assignmentId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      await db.delete(userWarehouseAssignments)
+        .where(and(
+          eq(userWarehouseAssignments.id, input.assignmentId),
+          eq(userWarehouseAssignments.orgId, ctx.user.orgId),
+        ));
+      return { ok: true };
+    }),
 
   // قائمة مستخدمي المؤسسة (للمديرين فقط) — تشمل الموقوفين حتى يمكن إعادة تفعيلهم
   list: adminProcedure.query(async ({ ctx }) => {
@@ -34,6 +176,33 @@ export const usersRouter = router({
       orderBy: (u, { desc, asc }) => [desc(u.isActive), asc(u.name)],
     });
   }),
+
+  // قائمة مجموعات المستخدمين (للقوائم المنسدلة في نافذة المستخدم)
+  listUserGroups: adminProcedure.query(async ({ ctx }) => {
+    return db.select({ id: userGroups.id, name: userGroups.name })
+      .from(userGroups)
+      .where(and(eq(userGroups.orgId, ctx.user.orgId), eq(userGroups.isActive, true)))
+      .orderBy(userGroups.name);
+  }),
+
+  // تسجيل خروج المستخدم من جميع الأجهزة (إبطال الجلسات بتحديث updatedAt)
+  logoutAllSessions: adminProcedure
+    .input(z.object({ userId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      if (input.userId === ctx.user.id) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكنك تسجيل خروج حسابك الحالي من هنا — استخدم زر تسجيل الخروج العادي' });
+      }
+      const user = await db.query.users.findFirst({
+        where: and(eq(users.id, input.userId), eq(users.orgId, ctx.user.orgId)),
+        columns: { id: true, sessionVersion: true },
+      });
+      if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: 'المستخدم غير موجود' });
+      await db.update(users).set({
+        sessionVersion: (user.sessionVersion ?? 1) + 1,
+        updatedAt: new Date(),
+      }).where(and(eq(users.id, input.userId), eq(users.orgId, ctx.user.orgId)));
+      return { success: true };
+    }),
 
   // إضافة مستخدم جديد
   create: adminProcedure
@@ -46,6 +215,13 @@ export const usersRouter = router({
       phone: z.string().optional(),
       role: z.enum(['admin', 'cashier', 'accountant', 'warehouse_manager', 'viewer']),
       categoryId: z.number().int().positive().optional(),
+      userGroupId: z.number().int().positive().nullable().optional(),
+      defaultBranchId: z.number().int().positive().nullable().optional(),
+      defaultWarehouseId: z.number().int().positive().nullable().optional(),
+      defaultLanguage: z.string().max(10).nullable().optional(),
+      allowLogin: z.boolean().optional(),
+      allowEmailLogin: z.boolean().optional(),
+      loginMethod: z.enum(['username', 'username_or_email', 'email']).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       // ── License enforcement: max_users ──────────────────────────────────────
@@ -89,8 +265,6 @@ export const usersRouter = router({
             message: 'سياسة المؤسسة لا تسمح بإنشاء مستخدمين بدون كلمة مرور — فعّل الخيار من إعدادات المستخدمين أو عيّن كلمة مرور',
           });
         }
-      } else if (input.password.length < 6) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' });
       }
 
       if (input.phone) {
@@ -98,6 +272,17 @@ export const usersRouter = router({
           where: and(eq(users.phone, input.phone), eq(users.orgId, ctx.user.orgId), eq(users.isActive, true)),
         });
         if (phoneExists) throw new TRPCError({ code: 'CONFLICT', message: 'رقم الجوال مستخدم لمستخدم آخر في هذه المؤسسة' });
+      }
+
+      // منع تكرار كود المستخدم على مستوى المنشأة
+      if (input.code) {
+        const codeConflict = await db.query.users.findFirst({
+          where: and(eq(users.orgId, ctx.user.orgId), eq(users.code, input.code)),
+          columns: { id: true },
+        });
+        if (codeConflict) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'كود المستخدم مستخدم من قبل' });
+        }
       }
 
       // if category has autoNumbering and no code provided, generate next code
@@ -137,6 +322,13 @@ export const usersRouter = router({
         phone: input.phone,
         role: input.role,
         categoryId: input.categoryId,
+        userGroupId: input.userGroupId ?? null,
+        defaultBranchId: input.defaultBranchId ?? null,
+        defaultWarehouseId: input.defaultWarehouseId ?? null,
+        defaultLanguage: input.defaultLanguage ?? null,
+        allowLogin: input.allowLogin ?? true,
+        allowEmailLogin: input.allowEmailLogin ?? false,
+        loginMethod: input.loginMethod ?? 'username',
         isActive: true,
         passwordStatus: wantsPasswordless ? 'not_set' : 'set',
       }).returning({ id: users.id, code: users.code, name: users.name, username: users.username, role: users.role });
@@ -153,8 +345,17 @@ export const usersRouter = router({
       phone: z.string().optional(),
       role: z.enum(['admin', 'cashier', 'accountant', 'warehouse_manager', 'viewer']).optional(),
       isActive: z.boolean().optional(),
-      newPassword: z.string().min(6).optional(),
+      allowLogin: z.boolean().optional(),
+      newPassword: z.string().min(1).optional(),
       clearPassword: z.boolean().optional(),
+      userGroupId: z.number().int().positive().nullable().optional(),
+      defaultBranchId: z.number().int().positive().nullable().optional(),
+      defaultWarehouseId: z.number().int().positive().nullable().optional(),
+      defaultLanguage: z.string().max(10).nullable().optional(),
+      forcePasswordChange: z.boolean().optional(),
+      canBeSalesperson: z.boolean().optional(),
+      allowEmailLogin: z.boolean().optional(),
+      loginMethod: z.enum(['username', 'username_or_email', 'email']).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const { id, newPassword, clearPassword, ...rest } = input;
@@ -259,12 +460,16 @@ export const usersRouter = router({
           'help_services',
           'hs_rentals', 'hs_custody', 'hs_customers', 'hs_tasks',
           'hs_gov_links', 'hs_notes', 'hs_internal_comm',
+          'hs_links_add', 'hs_links_edit', 'hs_links_delete', 'hs_links_manage_sections',
+          'hs_real_estate', 'hs_re_purchases', 'hs_re_documents', 'hs_re_trial_balance',
           // المساعد الذكي
           'ai_use',
           'ai_ask_customers', 'ai_ask_rentals', 'ai_ask_custody',
           'ai_ask_projects', 'ai_ask_tasks',
           'ai_draft_messages', 'ai_propose_tasks', 'ai_confirm_tasks',
           'ai_view_history', 'ai_delete_conversations', 'ai_manage_settings',
+          // إعدادات العمل
+          'can_work_cashier', 'can_work_accountant',
         ]),
         z.boolean(),
       ),
@@ -293,7 +498,6 @@ export const usersRouter = router({
     .input(z.object({
       userId: z.number(),
       role: z.enum(['admin', 'cashier', 'accountant', 'warehouse_manager', 'viewer']),
-      branchId: z.number().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const user = await db.query.users.findFirst({
@@ -309,22 +513,71 @@ export const usersRouter = router({
       return { success: true };
     }),
 
-  // حذف مستخدم (تعطيل)
-  delete: adminProcedure
+  // ── فحص إمكانية حذف مستخدم ───────────────────────────────────────────────
+  checkDeleteEligibility: adminProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input, ctx }) => {
+    .query(async ({ input, ctx }) => {
+      const orgId = ctx.user.orgId;
+
+      const targetUser = await db.query.users.findFirst({
+        where: and(eq(users.id, input.id), eq(users.orgId, orgId)),
+      });
+      if (!targetUser) throw new TRPCError({ code: 'NOT_FOUND', message: 'المستخدم غير موجود' });
+
       if (input.id === ctx.user.id) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكنك حذف حسابك الخاص' });
+        return { canDelete: false, canDeactivate: false, linkedCount: 0, reason: 'لا يمكنك حذف حسابك الخاص' };
       }
 
-      const user = await db.query.users.findFirst({
-        where: and(eq(users.id, input.id), eq(users.orgId, ctx.user.orgId)),
-      });
-      if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: 'المستخدم غير موجود' });
-
-      // ── حماية المدير الأساسي (أول مستخدم في المؤسسة) ───────────────────────
       const firstUser = await db.query.users.findFirst({
-        where: eq(users.orgId, ctx.user.orgId),
+        where: eq(users.orgId, orgId),
+        orderBy: (u, { asc }) => [asc(u.id)],
+        columns: { id: true },
+      });
+      if (firstUser?.id === input.id) {
+        return { canDelete: false, canDeactivate: false, linkedCount: 0, reason: 'لا يمكن حذف أو إيقاف المدير الأساسي للنظام' };
+      }
+
+      if (targetUser.isActive && (targetUser.role === 'admin' || targetUser.role === 'superadmin')) {
+        const [adminRow] = await db.select({ cnt: count() }).from(users).where(
+          and(eq(users.orgId, orgId), eq(users.isActive, true), inArray(users.role, ['admin', 'superadmin'])),
+        );
+        if (Number(adminRow.cnt) <= 1) {
+          return { canDelete: false, canDeactivate: false, linkedCount: 0, reason: 'لا يمكن حذف أو إيقاف آخر مدير نظام نشط في المؤسسة' };
+        }
+      }
+
+      // ── فحص شامل لجميع المراجع التاريخية عبر استعلام UNION واحد ─────────
+      const linkedCount = await countAllLinkedRefs(orgId, input.id);
+
+      if (linkedCount > 0) {
+        return {
+          canDelete: false,
+          canDeactivate: targetUser.isActive,
+          linkedCount,
+          reason: 'لا يمكن حذف المستخدم لأنه مرتبط بحركات أو مستندات مسجلة. يمكنك إيقاف المستخدم بدلًا من حذفه.',
+        };
+      }
+
+      return { canDelete: true, canDeactivate: true, linkedCount: 0, reason: undefined };
+    }),
+
+  // ── حذف مستخدم نهائياً (لا يمكن التراجع) ────────────────────────────────
+  deleteUser: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const orgId = ctx.user.orgId;
+
+      if (input.id === ctx.user.id) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك حذف حسابك الخاص' });
+      }
+
+      const targetUser = await db.query.users.findFirst({
+        where: and(eq(users.id, input.id), eq(users.orgId, orgId)),
+      });
+      if (!targetUser) throw new TRPCError({ code: 'NOT_FOUND', message: 'المستخدم غير موجود' });
+
+      const firstUser = await db.query.users.findFirst({
+        where: eq(users.orgId, orgId),
         orderBy: (u, { asc }) => [asc(u.id)],
         columns: { id: true },
       });
@@ -332,70 +585,122 @@ export const usersRouter = router({
         throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكن حذف المدير الأساسي للنظام' });
       }
 
-      // ── حماية آخر مدير نشط ────────────────────────────────────────────────
-      if (user.isActive && (user.role === 'admin' || user.role === 'superadmin')) {
-        const [adminRow] = await db.select({ cnt: count() }).from(users)
-          .where(and(
-            eq(users.orgId, ctx.user.orgId),
-            eq(users.isActive, true),
-            inArray(users.role, ['admin', 'superadmin']),
-          ));
+      if (targetUser.isActive && (targetUser.role === 'admin' || targetUser.role === 'superadmin')) {
+        const [adminRow] = await db.select({ cnt: count() }).from(users).where(
+          and(eq(users.orgId, orgId), eq(users.isActive, true), inArray(users.role, ['admin', 'superadmin'])),
+        );
         if (Number(adminRow.cnt) <= 1) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'لا يمكن حذف آخر مدير نظام نشط في المؤسسة',
-          });
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكن حذف آخر مدير نظام نشط في المؤسسة' });
         }
       }
 
-      const hasDraftInvoices = await db
-        .select({ id: salesInvoices.id })
-        .from(salesInvoices)
-        .where(
-          and(
-            eq(salesInvoices.userId, input.id),
-            eq(salesInvoices.orgId, ctx.user.orgId),
-            sql`${salesInvoices.status} = 'draft'`
-          )
-        )
-        .limit(1);
-      if (hasDraftInvoices.length > 0) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن حذف المستخدم لأنه مرتبط بفواتير مبيعات مفتوحة' });
+      // ── إعادة فحص شامل وقت الحذف الفعلي (منع race condition) ─────────────
+      const linkedCount = await countAllLinkedRefs(orgId, input.id);
+
+      if (linkedCount > 0) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'لا يمكن حذف المستخدم لأنه مرتبط بحركات أو مستندات مسجلة. يمكنك إيقاف المستخدم بدلًا من حذفه.',
+        });
       }
 
-      const hasDraftVouchers = await db
-        .select({ id: vouchers.id })
-        .from(vouchers)
-        .where(
-          and(
-            eq(vouchers.userId, input.id),
-            eq(vouchers.orgId, ctx.user.orgId),
-            sql`${vouchers.status} = 'draft'`
-          )
-        )
-        .limit(1);
-      if (hasDraftVouchers.length > 0) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن حذف المستخدم لأنه مرتبط بسندات مالية مفتوحة' });
+      const ipAddress = (ctx.req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim()
+        ?? ctx.req.socket?.remoteAddress ?? null;
+
+      // ── حذف نهائي + سجل تدقيق داخل transaction واحدة ────────────────────
+      await db.transaction(async (tx) => {
+        // 1. سجل التدقيق أولاً (قبل الحذف حتى لا تضيع البيانات)
+        await tx.insert(userAuditLogs).values({
+          orgId,
+          actorUserId:   ctx.user.id,
+          actorUsername: ctx.user.username,
+          targetUserId:  input.id,
+          targetCode:    targetUser.code ?? null,
+          targetName:    targetUser.name,
+          targetUsername: targetUser.username,
+          action:        'DELETE_USER',
+          ipAddress:     ipAddress ?? null,
+          result:        'success',
+        });
+        // 2. إسنادات المخازن (لا FK cascade — يجب حذفها صراحةً)
+        await tx.delete(userWarehouseAssignments).where(eq(userWarehouseAssignments.userId, input.id));
+        // 3. عضوية مجموعات المستخدمين (تُخزَّن بـ memberCode — لا FK مباشر)
+        if (targetUser.code) {
+          await tx.delete(userGroupMembers).where(
+            and(
+              eq(userGroupMembers.orgId, orgId),
+              eq(userGroupMembers.memberType, 'user'),
+              eq(userGroupMembers.memberCode, targetUser.code),
+            ),
+          );
+        }
+        // 4. حذف سجل المستخدم (بقية علاقات onDelete:cascade تُحذف تلقائياً)
+        await tx.delete(users).where(and(eq(users.id, input.id), eq(users.orgId, orgId)));
+      });
+
+      return { success: true, deletedId: input.id };
+    }),
+
+  // ── إيقاف مستخدم (يحتفظ بالبيانات التاريخية) ────────────────────────────
+  deactivateUser: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const orgId = ctx.user.orgId;
+
+      if (input.id === ctx.user.id) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكنك إيقاف حسابك الخاص' });
       }
 
-      const hasDraftStockVouchers = await db
-        .select({ id: stockVouchers.id })
-        .from(stockVouchers)
-        .where(
-          and(
-            eq(stockVouchers.userId, input.id),
-            eq(stockVouchers.orgId, ctx.user.orgId),
-            sql`${stockVouchers.status} = 'draft'`
-          )
-        )
-        .limit(1);
-      if (hasDraftStockVouchers.length > 0) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن حذف المستخدم لأنه مرتبط بحركات مخزنية مفتوحة' });
+      const targetUser = await db.query.users.findFirst({
+        where: and(eq(users.id, input.id), eq(users.orgId, orgId)),
+      });
+      if (!targetUser) throw new TRPCError({ code: 'NOT_FOUND', message: 'المستخدم غير موجود' });
+
+      const firstUser = await db.query.users.findFirst({
+        where: eq(users.orgId, orgId),
+        orderBy: (u, { asc }) => [asc(u.id)],
+        columns: { id: true },
+      });
+      if (firstUser?.id === input.id) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكن إيقاف المدير الأساسي للنظام' });
       }
 
-      await db.update(users).set({ isActive: false }).where(
-        and(eq(users.id, input.id), eq(users.orgId, ctx.user.orgId))
-      );
+      if (targetUser.isActive && (targetUser.role === 'admin' || targetUser.role === 'superadmin')) {
+        const [adminRow] = await db.select({ cnt: count() }).from(users).where(
+          and(eq(users.orgId, orgId), eq(users.isActive, true), inArray(users.role, ['admin', 'superadmin'])),
+        );
+        if (Number(adminRow.cnt) <= 1) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن إيقاف آخر مدير نظام نشط في المؤسسة' });
+        }
+      }
+
+      const ipAddress = (ctx.req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim()
+        ?? ctx.req.socket?.remoteAddress ?? null;
+
+      // ── إيقاف + إبطال الجلسات + سجل تدقيق داخل transaction واحدة ─────────
+      await db.transaction(async (tx) => {
+        // 1. إيقاف المستخدم ورفع sessionVersion (يُبطل جميع JWT tokens فوراً)
+        await tx.update(users).set({
+          isActive:       false,
+          allowLogin:     false,
+          sessionVersion: sql`session_version + 1`,
+          updatedAt:      new Date(),
+        }).where(and(eq(users.id, input.id), eq(users.orgId, orgId)));
+        // 2. سجل التدقيق
+        await tx.insert(userAuditLogs).values({
+          orgId,
+          actorUserId:   ctx.user.id,
+          actorUsername: ctx.user.username,
+          targetUserId:  input.id,
+          targetCode:    targetUser.code ?? null,
+          targetName:    targetUser.name,
+          targetUsername: targetUser.username,
+          action:        'DEACTIVATE_USER',
+          ipAddress:     ipAddress ?? null,
+          result:        'success',
+        });
+      });
+
       return { success: true };
     }),
 
@@ -403,7 +708,7 @@ export const usersRouter = router({
   changeMyPassword: protectedProcedure
     .input(z.object({
       currentPassword: z.string(),
-      newPassword: z.string().min(6),
+      newPassword: z.string().min(1),
     }))
     .mutation(async ({ input, ctx }) => {
       const user = await db.query.users.findFirst({ where: eq(users.id, ctx.user.id) });

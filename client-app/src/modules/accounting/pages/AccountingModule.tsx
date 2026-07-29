@@ -31,7 +31,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/core/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/core/ui/command";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/core/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/core/ui/dialog";
+import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/core/ui/tabs";
+import { Textarea } from "@/core/ui/textarea";
 import { toast } from "sonner";
 import { trpc } from "@/shared/lib/trpc";
 import { PrintEngine } from "@/shared/lib/print";
@@ -233,103 +235,6 @@ const normalizeAr = (s: string) =>
 const typeLabel = (t: string | null) =>
   ({ assets:"أصول", liabilities:"خصوم", equity:"حقوق ملكية", revenue:"إيرادات", expenses:"مصروفات" }[t ?? ""] ?? "");
 
-// ── Date Mask Input (DD/MM/YYYY) ──────────────────────────────────────────────
-function DateMaskInput({
-  value, onChange, className, placeholder,
-}: {
-  value: string;
-  onChange: (val: string) => void;
-  className?: string;
-  placeholder?: string;
-}) {
-  const mask  = (v: string) => {
-    const d = v.replace(/[٠-٩]/g, c => String("٠١٢٣٤٥٦٧٨٩".indexOf(c))).replace(/\D/g, "").slice(0, 8);
-    if (d.length <= 2) return d;
-    if (d.length <= 4) return `${d.slice(0,2)}/${d.slice(2)}`;
-    return `${d.slice(0,2)}/${d.slice(2,4)}/${d.slice(4)}`;
-  };
-  const toISO = (v: string) => {
-    const n = v.replace(/\D/g, "");
-    if (n.length < 8) return "";
-    const dd = n.slice(0,2), mm = n.slice(2,4), yy = n.slice(4,8);
-    if (+dd<1||+dd>31||+mm<1||+mm>12||+yy<1000) return "";
-    return `${yy}-${mm}-${dd}`;
-  };
-  const fromISO = (v: string) => {
-    if (!v || v.length < 10) return "";
-    const [y, m, d] = v.split("-");
-    return `${d}/${m}/${y}`;
-  };
-
-  const ref = useRef<HTMLInputElement>(null);
-  const [disp, setDisp] = useState(() => fromISO(value));
-
-  useEffect(() => {
-    setDisp(prev => toISO(prev) === value ? prev : fromISO(value));
-  }, [value]);
-
-  const commit = (newDisp: string) => {
-    setDisp(newDisp);
-    onChange(toISO(newDisp));
-  };
-
-  return (
-    <Input
-      ref={ref}
-      type="text"
-      inputMode="numeric"
-      value={disp}
-      placeholder={placeholder ?? "DD/MM/YYYY"}
-      dir="ltr"
-      className={`text-left ${className ?? ""}`}
-      onKeyDown={e => {
-        const el = ref.current;
-        if (!el) return;
-        const pos = el.selectionStart ?? disp.length;
-
-        if (e.key === "Backspace") {
-          e.preventDefault();
-          const realPos = pos > 0 && disp[pos-1] === "/" ? pos - 1 : pos;
-          if (realPos === 0) { commit(""); return; }
-          const digits = (disp.slice(0, realPos-1) + disp.slice(realPos)).replace(/\D/g, "");
-          const nd = mask(digits);
-          commit(nd);
-          setTimeout(() => el.setSelectionRange(realPos-1, realPos-1), 0);
-          return;
-        }
-        if (e.key === "Delete") {
-          e.preventDefault();
-          const realPos = disp[pos] === "/" ? pos + 1 : pos;
-          if (realPos >= disp.length) return;
-          const digits = (disp.slice(0, realPos) + disp.slice(realPos+1)).replace(/\D/g, "");
-          commit(mask(digits));
-          setTimeout(() => el.setSelectionRange(pos, pos), 0);
-          return;
-        }
-        const key = e.key.replace(/[٠-٩]/g, c => String("٠١٢٣٤٥٦٧٨٩".indexOf(c)));
-        if (!/^\d$/.test(key)) {
-          if (!["Tab","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Home","End","Enter"].includes(e.key))
-            e.preventDefault();
-          return;
-        }
-        e.preventDefault();
-        const digPos = pos <= 2 ? pos : pos <= 5 ? pos-1 : pos-2;
-        const digits = disp.replace(/\D/g, "").padEnd(Math.max(digPos+1, disp.replace(/\D/g,"").length), "0");
-        const newDigs = digits.slice(0,digPos) + key + digits.slice(digPos+1);
-        const nd = mask(newDigs.slice(0,8));
-        commit(nd);
-        const ncp = digPos < 2 ? digPos+1 : digPos < 4 ? digPos+2 : digPos+3;
-        setTimeout(() => el.setSelectionRange(Math.min(ncp, nd.length), Math.min(ncp, nd.length)), 0);
-      }}
-      onChange={e => {
-        const nd = mask(e.target.value);
-        commit(nd);
-      }}
-      onFocus={e => e.target.select()}
-    />
-  );
-}
-
 // ── Full-screen Account Picker Dialog (F2 / Ctrl+K) ──────────────────────────
 function AccountPickerDialog({
   open, onClose, accounts, recentIds, onSelect,
@@ -505,6 +410,7 @@ function SmartAccountInput({
         onFocus={() => { setOpen(true); onFocusCb?.(); if (selected) setQ(""); }}
         onBlur={() => { setTimeout(() => { if (!wrapRef.current?.contains(document.activeElement)) { setOpen(false); setQ(selected?.code ?? ""); } }, 120); }}
         onKeyDown={onKey}
+        data-no-desktop-field
         placeholder="كود أو اسم الحساب..."
         className={`h-7 w-full text-xs px-2 py-1 border border-input rounded-md bg-background
           focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/60
@@ -574,10 +480,11 @@ const SOURCE_DOC_PAGE: Record<string, MenuId> = {
 
 function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherType?: string; onNavigateTo?: (id: MenuId) => void }) {
   const DRAFT_KEY = JE_DRAFT_PREFIX + voucherType;
-  const { setDirty, registerSave, confirmIfDirty } = useContext(DirtyCtx);
+  const { setDirty, registerSave, registerDraftSave, confirmIfDirty } = useContext(DirtyCtx);
   const justLoadedRef  = useRef(true);
   const saveResolveRef = useRef<((ok: boolean) => void) | null>(null);
-  const handleSaveRef  = useRef<() => void>(() => {});
+  const handleSaveRef      = useRef<() => void>(() => {});
+  const handleSaveDraftRef = useRef<() => void>(() => {});
 
   const accountsQuery    = trpc.accounts.list.useQuery();
   const costCentersQuery = trpc.costCenters.list.useQuery();
@@ -587,10 +494,11 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
 
   const createMutation = trpc.journal.create.useMutation({
     onSuccess: (data) => {
-      toast.success("تم حفظ القيد بنجاح ✓");
+      const isDraft = data.status === "draft";
+      toast.success(isDraft ? "تم حفظ المسودة" : "تم حفظ القيد بنجاح ✓");
       setSavedEntryId(data.id);
       setSavedEntryNumber(data.entryNumber);
-      setEntryStatus("posted");
+      setEntryStatus(isDraft ? "draft" : "posted");
       localStorage.removeItem(DRAFT_KEY);
       journalListQuery.refetch();
       nextNumberQuery.refetch();
@@ -746,6 +654,11 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
     localStorage.removeItem(DRAFT_KEY);
   }, [DRAFT_KEY]);
 
+  const isJournalEmpty = useCallback(() => {
+    const hasLine = lines.some(l => l.accountId || l.accountName.trim() || l.debit.trim() || l.credit.trim());
+    return !hasLine && !description.trim() && !basedOn.trim();
+  }, [lines, description, basedOn]);
+
   const handleSave = useCallback(() => {
     if (!balanced) return toast.error("القيد غير متوازن — المدين ≠ الدائن");
     const badLines = lines.filter(l => {
@@ -774,6 +687,27 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
         })),
     });
   }, [balanced, entryDate, description, basedOn, totalDebit, totalCredit, lines, createMutation]);
+
+  const handleSaveDraft = useCallback(() => {
+    const validLines = lines.filter(l => l.accountId && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0));
+    if (validLines.length === 0) { toast.error("يجب إضافة بند واحد على الأقل"); return; }
+    createMutation.mutate({
+      entryDate, description,
+      reference: basedOn || undefined,
+      totalDebit: totalDebit.toFixed(3),
+      totalCredit: totalCredit.toFixed(3),
+      entryType: "manual",
+      status: "draft",
+      lines: validLines.map((l, i) => ({
+        sortOrder: i + 1,
+        accountId: parseInt(l.accountId),
+        accountName: l.accountName,
+        description: l.description,
+        debit: l.debit || "0",
+        credit: l.credit || "0",
+      })),
+    });
+  }, [entryDate, description, basedOn, totalDebit, totalCredit, lines, createMutation]);
 
   const handleDuplicate = useCallback(() => {
     setSavedEntryId(null); setSavedEntryNumber(""); setEntryStatus("new");
@@ -837,12 +771,12 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
   // ── F2 / Ctrl+K / Ctrl+S / Ctrl+D / Ctrl+P / F3 ──────────────────────────
   useEffect(() => {
     const handler = (e: globalThis.KeyboardEvent) => {
-      if (e.key === "F2" || (e.ctrlKey && e.key === "k")) {
+      if (e.key === "F2" || (e.ctrlKey && e.code === "KeyK")) {
         e.preventDefault(); setPickerTarget(selectedLineIdx); setShowPicker(true);
       }
-      if (e.ctrlKey && e.key === "s") { e.preventDefault(); handleSave(); }
-      if (e.ctrlKey && e.key === "d") { e.preventDefault(); handleDuplicate(); }
-      if (e.ctrlKey && e.key === "p") { e.preventDefault(); handlePrint(); }
+      if (e.ctrlKey && e.code === "KeyS") { e.preventDefault(); handleSave(); }
+      if (e.ctrlKey && e.code === "KeyD") { e.preventDefault(); handleDuplicate(); }
+      if (e.ctrlKey && e.code === "KeyP") { e.preventDefault(); handlePrint(); }
       if (e.key === "F3") { e.preventDefault(); confirmIfDirty(handleNew); }
     };
     document.addEventListener("keydown", handler);
@@ -859,10 +793,10 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
   // ── Cell keyboard navigation ───────────────────────────────────────────────
   const JCOLS = 4;
   const handleCellKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>, rowIdx: number, colIdx: number) => {
-    if (e.ctrlKey && e.key === "c") {
+    if (e.ctrlKey && e.code === "KeyC") {
       e.preventDefault(); setCopiedLine({ ...lines[rowIdx] }); toast.info(`نسخ السطر ${rowIdx + 1}`); return;
     }
-    if (e.ctrlKey && e.key === "v") {
+    if (e.ctrlKey && e.code === "KeyV") {
       e.preventDefault();
       if (!copiedLine) { toast.warning("لا يوجد سطر منسوخ"); return; }
       setLines(prev => { const u = [...prev]; u.splice(rowIdx + 1, 0, { ...copiedLine }); return u; });
@@ -913,6 +847,7 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
 
   // ── Dirty tracking + save registration ────────────────────────────────────
   handleSaveRef.current = handleSave;
+  handleSaveDraftRef.current = handleSaveDraft;
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -930,9 +865,18 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
         }, 10000);
       })
     );
-    return () => registerSave(null);
+    registerDraftSave(() =>
+      new Promise<boolean>(resolve => {
+        saveResolveRef.current = resolve;
+        handleSaveDraftRef.current();
+        setTimeout(() => {
+          if (saveResolveRef.current) { saveResolveRef.current(false); saveResolveRef.current = null; }
+        }, 10000);
+      })
+    );
+    return () => { registerSave(null); registerDraftSave(null); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [registerSave]);
+  }, [registerSave, registerDraftSave]);
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
@@ -989,22 +933,30 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
 
         {/* Group: Navigation */}
         <Button variant="ghost" size="sm" className="h-7 text-xs px-1.5 hover:bg-muted"
-          disabled={navList.length === 0} onClick={() => confirmIfDirty(() => navigateTo(0))} title="أول قيد">
+          disabled={navList.length === 0}
+          onClick={() => { if (isJournalEmpty()) navigateTo(0); else confirmIfDirty(() => navigateTo(0)); }}
+          title="أول قيد">
           <span className="text-[10px] font-mono">|◀</span>
         </Button>
         <Button variant="ghost" size="sm" className="h-7 text-xs px-1.5 hover:bg-muted"
-          disabled={navIdx <= 0} onClick={() => confirmIfDirty(() => navigateTo(navIdx - 1))} title="السابق">
+          disabled={navIdx === 0 || navList.length === 0}
+          onClick={() => { const idx = navIdx <= 0 ? navList.length - 1 : navIdx - 1; if (isJournalEmpty()) navigateTo(idx); else confirmIfDirty(() => navigateTo(idx)); }}
+          title="السابق">
           <ChevronRight className="w-3.5 h-3.5" />
         </Button>
         <span className="text-[10px] text-muted-foreground px-1 min-w-[48px] text-center">
           {navIdx >= 0 ? `${navIdx + 1}/${navList.length}` : `—/${navList.length}`}
         </span>
         <Button variant="ghost" size="sm" className="h-7 text-xs px-1.5 hover:bg-muted"
-          disabled={navIdx >= navList.length - 1} onClick={() => confirmIfDirty(() => navigateTo(navIdx + 1))} title="التالي">
+          disabled={navIdx === navList.length - 1 || navList.length === 0}
+          onClick={() => { const idx = navIdx === -1 ? 0 : navIdx + 1; if (isJournalEmpty()) navigateTo(idx); else confirmIfDirty(() => navigateTo(idx)); }}
+          title="التالي">
           <ChevronDown className="w-3.5 h-3.5 -rotate-90" />
         </Button>
         <Button variant="ghost" size="sm" className="h-7 text-xs px-1.5 hover:bg-muted"
-          disabled={navList.length === 0} onClick={() => confirmIfDirty(() => navigateTo(navList.length - 1))} title="آخر قيد">
+          disabled={navList.length === 0}
+          onClick={() => { if (isJournalEmpty()) navigateTo(navList.length - 1); else confirmIfDirty(() => navigateTo(navList.length - 1)); }}
+          title="آخر قيد">
           <span className="text-[10px] font-mono">▶|</span>
         </Button>
 
@@ -1051,7 +1003,7 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">تاريخ التحرير</Label>
-                  <DateMaskInput value={entryDate} onChange={setEntryDate} className="h-7 text-xs" disabled={entryType === "auto"} />
+                  <DateSegmentInput value={entryDate} onChange={setEntryDate} standalone className="h-7 text-xs" disabled={entryType === "auto"} />
                 </div>
               </div>
             );
@@ -1133,7 +1085,7 @@ function JournalEntryPage({ voucherType = "journal", onNavigateTo }: { voucherTy
                 <TableHead className="w-8"></TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
+            <TableBody data-nav-internal="true">
               {lines.map((line, i) => {
                 const hasDebit  = parseFloat(line.debit  || "0") > 0;
                 const hasCredit = parseFloat(line.credit || "0") > 0;
@@ -1293,9 +1245,7 @@ function buildVoucherHtml(v: {
   const partyLabel = isReceipt ? "استُلم من / Received From" : "صُرف لـ / Paid To";
   const amt       = parseFloat(String(v.amount) || "0");
   const fmtAmt    = amt.toLocaleString("ar-SA", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
-  const dateStr   = v.voucherDate instanceof Date
-    ? v.voucherDate.toLocaleDateString("ar-SA")
-    : String(v.voucherDate);
+  const dateStr   = fmtDate(v.voucherDate);
   const pmLabels: Record<string, string> = { cash: "نقدي / Cash", check: "شيك / Cheque", transfer: "تحويل / Transfer", card: "بطاقة / Card" };
   const pmLabel = pmLabels[v.paymentMethod] ?? v.paymentMethod;
 
@@ -1388,7 +1338,7 @@ function VoucherPrintModal({ data, docType, onClose }: {
           <X className="w-5 h-5" />
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto bg-gray-300 flex items-start justify-center py-6">
+      <div className="flex-1 overflow-y-auto bg-background flex items-start justify-center py-6">
         <iframe srcDoc={html} className="bg-white shadow-2xl"
           style={{ width: 900, minHeight: 700, border: "none", boxShadow: "0 4px 32px rgba(0,0,0,0.3)" }}
           title="معاينة السند" />
@@ -1556,7 +1506,7 @@ function ReceiptVoucherPage() {
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <Label className="text-xs">التاريخ</Label>
-                <DateMaskInput value={form.voucherDate} onChange={v => setF("voucherDate", v)} className="h-8 text-xs" />
+                <DateSegmentInput value={form.voucherDate} onChange={v => setF("voucherDate", v)} standalone className="h-8 text-xs" />
               </div>
               <div>
                 <Label className="text-xs">المستلم من</Label>
@@ -1786,7 +1736,7 @@ function PaymentVoucherPage() {
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <Label className="text-xs">التاريخ</Label>
-                <DateMaskInput value={form.voucherDate} onChange={v => setF("voucherDate", v)} className="h-8 text-xs" />
+                <DateSegmentInput value={form.voucherDate} onChange={v => setF("voucherDate", v)} standalone className="h-8 text-xs" />
               </div>
               <div>
                 <Label className="text-xs">المدفوع لـ</Label>
@@ -1852,7 +1802,7 @@ function PaymentVoucherPage() {
 
 // ─── Journal List (دفتر اليومية) ──────────────────────────────────────────────
 function JournalListPage({ onOpenEntry }: { onOpenEntry?: (id: number) => void }) {
-  const listQuery = trpc.journal.list.useQuery({});
+  const listQuery = trpc.journal.list.useQuery(undefined);
   const [search, setSearch] = useState("");
   const filtered = listQuery.data?.filter(e =>
     !search || e.entryNumber?.includes(search) || e.description?.includes(search)
@@ -1897,7 +1847,7 @@ function JournalListPage({ onOpenEntry }: { onOpenEntry?: (id: number) => void }
                 <TableCell className="text-xs">{fmtDate(e.entryDate)}</TableCell>
                 <TableCell className="text-xs">
                   <Badge variant="outline" className="text-xs">
-                    {e.voucherType === "journal" ? "قيد يومي" : e.voucherType === "receipt" ? "سند قبض" : e.voucherType === "payment" ? "سند صرف" : e.voucherType === "opening" ? "قيد افتتاحي" : e.voucherType}
+                    {e.entryType === "journal" ? "قيد يومي" : e.entryType === "receipt" ? "سند قبض" : e.entryType === "payment" ? "سند صرف" : e.entryType === "opening" ? "قيد افتتاحي" : e.entryType}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-xs">{e.description ?? "-"}</TableCell>
@@ -1926,6 +1876,33 @@ type TAccount = {
   isParent: boolean | null;
   allowPosting: boolean | null;
   parentId: number | null;
+  recordType?: string | null;
+  systemKey?: string | null;
+};
+
+/** هل السجل محمي من الحذف تماماً؟ */
+const isDeleteProtected = (rt: string | null | undefined) =>
+  rt === 'system_protected' || rt === 'system_editable';
+
+/** هل السجل محمي من التعديل تماماً؟ */
+const isEditProtected = (rt: string | null | undefined) =>
+  rt === 'system_protected';
+
+/** شارة نوع السجل النظامي */
+const RecordTypeBadge = ({ rt }: { rt: string | null | undefined }) => {
+  if (!rt || rt === 'user') return null;
+  const cfg: Record<string, { label: string; cls: string }> = {
+    system_protected: { label: '🔒 محمي',         cls: 'bg-red-100 text-red-700 border-red-200' },
+    system_editable:  { label: '🔐 نظامي',        cls: 'bg-amber-100 text-amber-700 border-amber-200' },
+    system_flexible:  { label: '⚙ مرن',           cls: 'bg-blue-100 text-blue-600 border-blue-200' },
+  };
+  const c = cfg[rt];
+  if (!c) return null;
+  return (
+    <span className={`text-[9px] px-1 py-0 rounded border font-medium shrink-0 ${c.cls}`}>
+      {c.label}
+    </span>
+  );
 };
 
 const TREE_INDENT = 18;
@@ -1954,7 +1931,7 @@ function TreeContextMenu({
   onAddChild: (a: TAccount) => void;
   onView: (a: TAccount) => void;
   onCopy: (a: TAccount) => void;
-  onDelete: (id: number, name: string) => void;
+  onDelete: (id: number, name: string, rt?: string | null) => void;
 }) {
   useEffect(() => {
     if (!state) return;
@@ -2036,7 +2013,7 @@ function TreeContextMenu({
       {item(
         <Trash2 className="w-3.5 h-3.5 shrink-0" />,
         "حذف الحساب",
-        () => onDelete(state.account.id, state.account.name ?? ""),
+        () => onDelete(state.account.id, state.account.name ?? "", state.account.recordType),
         "text-red-600 hover:bg-red-50",
       )}
     </div>
@@ -2049,7 +2026,7 @@ function AccountTreeNode({ account, depth, selectedId, onSelect, onDelete, onCon
   depth: number;
   selectedId: number | null;
   onSelect: (a: TAccount) => void;
-  onDelete: (id: number, name: string) => void;
+  onDelete: (id: number, name: string, rt?: string | null) => void;
   onContextMenu: (a: TAccount, e: React.MouseEvent) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -2096,6 +2073,9 @@ function AccountTreeNode({ account, depth, selectedId, onSelect, onDelete, onCon
         {/* name */}
         <span className={`flex-1 truncate ${lvlText(lvl)}`}>{account.name}</span>
 
+        {/* شارة نوع السجل النظامي */}
+        <RecordTypeBadge rt={account.recordType} />
+
         {/* meta — visible on hover */}
         <span className="hidden group-hover:flex items-center gap-1.5 shrink-0">
           <span className="text-[10px] text-slate-400">{treeTypeLabel(account.accountType)}</span>
@@ -2116,10 +2096,11 @@ function AccountTreeNode({ account, depth, selectedId, onSelect, onDelete, onCon
           >
             <MoreVertical className="w-3 h-3" />
           </button>
-          {!account.isParent && (
+          {!account.isParent && !isDeleteProtected(account.recordType) && (
             <button
               className="text-red-300 hover:text-red-500"
               onClick={e => { e.stopPropagation(); onDelete(account.id, account.name ?? ""); }}
+              title="حذف"
             >
               <Trash2 className="w-3 h-3" />
             </button>
@@ -2147,7 +2128,7 @@ function AccountTreeNode({ account, depth, selectedId, onSelect, onDelete, onCon
 function AccountTreeRootView({ selectedId, onSelect, onDelete, onContextMenu }: {
   selectedId: number | null;
   onSelect: (a: TAccount) => void;
-  onDelete: (id: number, name: string) => void;
+  onDelete: (id: number, name: string, rt?: string | null) => void;
   onContextMenu: (a: TAccount, e: React.MouseEvent) => void;
 }) {
   const rootQ = trpc.accounts.children.useQuery({ parentId: null }, { staleTime: 30_000 });
@@ -2502,7 +2483,11 @@ function ChartOfAccountsPage() {
 
   const typeLabel = (t: string) => ({ assets: "أصول", liabilities: "خصوم", equity: "حقوق ملكية", revenue: "إيرادات", expenses: "مصروفات" }[t] ?? t);
 
-  const handleTreeDelete = (id: number, name: string) => {
+  const handleTreeDelete = (id: number, name: string, rt?: string | null) => {
+    if (isDeleteProtected(rt)) {
+      toast.error(`لا يمكن حذف هذا الحساب — ${rt === 'system_protected' ? 'سجل نظامي محمي' : 'سجل نظامي أساسي'}`);
+      return;
+    }
     if (confirm(`هل تريد حذف الحساب "${name}"؟`)) {
       deleteMutation.mutate({ id });
     }
@@ -2670,7 +2655,7 @@ function ChartOfAccountsPage() {
             onAddChild={handleCtxAddChild}
             onView={handleCtxView}
             onCopy={handleCtxCopy}
-            onDelete={(id, name) => { setCtxMenu(null); handleTreeDelete(id, name); }}
+            onDelete={(id, name, rt) => { setCtxMenu(null); handleTreeDelete(id, name, rt); }}
           />
 
           {/* detail panel */}
@@ -2715,12 +2700,20 @@ function ChartOfAccountsPage() {
                     </span>
                   </div>
                 </div>
-                {!selectedAccount.isParent && (
+                {/* نوع السجل */}
+                {selectedAccount.recordType && selectedAccount.recordType !== 'user' && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">نوع السجل</span>
+                    <RecordTypeBadge rt={selectedAccount.recordType} />
+                  </div>
+                )}
+
+                {!selectedAccount.isParent && !isDeleteProtected(selectedAccount.recordType) && (
                   <Button
                     variant="destructive" size="sm"
                     className="w-full h-7 text-xs mt-2"
                     disabled={deleteMutation.isPending}
-                    onClick={() => handleTreeDelete(selectedAccount.id, selectedAccount.name ?? "")}
+                    onClick={() => handleTreeDelete(selectedAccount.id, selectedAccount.name ?? "", selectedAccount.recordType)}
                   >
                     <Trash2 className="w-3 h-3 ml-1" /> حذف الحساب
                   </Button>
@@ -2728,6 +2721,12 @@ function ChartOfAccountsPage() {
                 {selectedAccount.isParent && (
                   <p className="text-[10px] text-amber-600 flex items-center gap-1 bg-amber-50 rounded p-1.5 border border-amber-100">
                     <AlertCircle className="w-3 h-3 shrink-0" /> لا يمكن حذف هذا الحساب لأنه يحتوي على حسابات فرعية
+                  </p>
+                )}
+                {!selectedAccount.isParent && isDeleteProtected(selectedAccount.recordType) && (
+                  <p className="text-[10px] text-slate-500 flex items-center gap-1 bg-slate-50 rounded p-1.5 border border-slate-200">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    {selectedAccount.recordType === 'system_protected' ? 'سجل نظامي محمي — لا يمكن حذفه أو تعديله' : 'سجل نظامي أساسي — لا يمكن حذفه'}
                   </p>
                 )}
               </div>
@@ -3054,7 +3053,7 @@ function ChartOfAccountsPage() {
                   <span className="text-[11px] font-bold text-slate-600 tracking-wide">ملاحظات</span>
                 </div>
                 <div className="p-3">
-                  <textarea
+                  <Textarea
                     value={form.notes}
                     onChange={e => setF("notes", e.target.value)}
                     className="w-full h-14 text-xs rounded-lg border-2 border-slate-200 px-3 py-2 resize-none bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300"
@@ -3232,11 +3231,11 @@ function AccountLedgerPage({
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 32px", marginBottom: 6 }}>
               <div style={fieldRow}>
                 <span style={fieldLabel}>تاريخ أول الفترة</span>
-                <div style={{ flex: 1 }}><DateMaskInput value={fromDate} onChange={setFromDate} className="h-6 text-xs" /></div>
+                <div style={{ flex: 1 }}><DateSegmentInput value={fromDate} onChange={setFromDate} standalone className="h-6 text-xs" /></div>
               </div>
               <div style={fieldRow}>
                 <span style={fieldLabel}>تاريخ نهاية الفترة</span>
-                <div style={{ flex: 1 }}><DateMaskInput value={toDate} onChange={setToDate} className="h-6 text-xs" /></div>
+                <div style={{ flex: 1 }}><DateSegmentInput value={toDate} onChange={setToDate} standalone className="h-6 text-xs" /></div>
               </div>
             </div>
 
@@ -3568,7 +3567,7 @@ function CostAllocationPage() {
           <div className="grid grid-cols-3 gap-3">
             <div>
               <Label className="text-xs">تاريخ التوزيع</Label>
-              <DateMaskInput value={new Date().toISOString().split("T")[0]} onChange={() => {}} className="h-8 text-xs" />
+              <DateSegmentInput value={new Date().toISOString().split("T")[0]} onChange={() => {}} standalone className="h-8 text-xs" />
             </div>
             <div>
               <Label className="text-xs">الحساب الأصلي</Label>
@@ -3799,11 +3798,11 @@ function LedgerDialogBody({
             </div>
             <div>
               <Label className="text-xs">من تاريخ</Label>
-              <DateMaskInput value={fromDate} onChange={setFromDate} className="h-8 text-xs" />
+              <DateSegmentInput value={fromDate} onChange={setFromDate} standalone className="h-8 text-xs" />
             </div>
             <div>
               <Label className="text-xs">إلى تاريخ</Label>
-              <DateMaskInput value={toDate} onChange={setToDate} className="h-8 text-xs" />
+              <DateSegmentInput value={toDate} onChange={setToDate} standalone className="h-8 text-xs" />
             </div>
             <div className="flex items-end">
               <Button size="sm" className="h-8 text-xs w-full gap-1"
@@ -4011,9 +4010,9 @@ function TrialBalancePage({
           ))}
           <span style={{ fontSize: 13, color: "#9CA3AF" }}>أو مخصص:</span>
           <span style={{ fontSize: 13, color: "#6B7280" }}>من</span>
-          <input type="date" value={fromDate} onChange={e => { setFromDate(e.target.value); setPeriod("custom"); }} style={{ padding: "3px 7px", border: `1px solid ${period === "custom" ? "#406B93" : "#D1D5DB"}`, borderRadius: 6, fontSize: 13, background: "#fff", color: "#111827" }} />
+          <DateSegmentInput value={fromDate} onChange={v => { setFromDate(v); setPeriod("custom"); }} standalone style={{ padding: "3px 7px", border: `1px solid ${period === "custom" ? "#406B93" : "#D1D5DB"}`, borderRadius: 6, fontSize: 13 }} />
           <span style={{ fontSize: 13, color: "#6B7280" }}>إلى</span>
-          <input type="date" value={toDate} onChange={e => { setToDate(e.target.value); setPeriod("custom"); }} style={{ padding: "3px 7px", border: `1px solid ${period === "custom" ? "#406B93" : "#D1D5DB"}`, borderRadius: 6, fontSize: 13, background: "#fff", color: "#111827" }} />
+          <DateSegmentInput value={toDate} onChange={v => { setToDate(v); setPeriod("custom"); }} standalone style={{ padding: "3px 7px", border: `1px solid ${period === "custom" ? "#406B93" : "#D1D5DB"}`, borderRadius: 6, fontSize: 13 }} />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <div style={{ position: "relative", flex: 1, minWidth: 180, maxWidth: 300 }}>
@@ -4519,17 +4518,19 @@ const DirtyCtx = createContext<{
   isDirty: boolean;
   setDirty: (v: boolean) => void;
   registerSave: (fn: (() => Promise<boolean>) | null) => void;
+  registerDraftSave: (fn: (() => Promise<boolean>) | null) => void;
   confirmIfDirty: (action: () => void) => void;
-}>({ isDirty: false, setDirty: () => {}, registerSave: () => {}, confirmIfDirty: a => a() });
+}>({ isDirty: false, setDirty: () => {}, registerSave: () => {}, registerDraftSave: () => {}, confirmIfDirty: a => a() });
 
 // ─── Content Router ────────────────────────────────────────────────────────────
 function AccountingContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
   const [ledgerCtx, setLedgerCtx] = useState<{ accountId: number; fromDate: string; toDate: string } | null>(null);
-  const { setDirty, registerSave } = useContext(DirtyCtx);
+  const { setDirty, registerSave, registerDraftSave } = useContext(DirtyCtx);
 
   useEffect(() => {
     setDirty(false);
     registerSave(null);
+    registerDraftSave(null);
   }, [activeId]);
 
   switch (activeId) {
@@ -4574,6 +4575,7 @@ export default function AccountingModule() {
   const isDirtyRef       = useRef(false);
   const pendingActionRef = useRef<(() => void) | null>(null);
   const saveFnRef        = useRef<(() => Promise<boolean>) | null>(null);
+  const draftSaveFnRef   = useRef<(() => Promise<boolean>) | null>(null);
 
   const setDirty = useCallback((v: boolean) => {
     isDirtyRef.current = v;
@@ -4584,6 +4586,10 @@ export default function AccountingModule() {
     saveFnRef.current = fn;
   }, []);
 
+  const registerDraftSave = useCallback((fn: (() => Promise<boolean>) | null) => {
+    draftSaveFnRef.current = fn;
+  }, []);
+
   const confirmIfDirty = useCallback((action: () => void) => {
     if (!isDirtyRef.current) { action(); return; }
     pendingActionRef.current = action;
@@ -4592,7 +4598,7 @@ export default function AccountingModule() {
 
   const navigate = useCallback((id: MenuId) => confirmIfDirty(() => setActiveId(id)), [confirmIfDirty]);
 
-  const ctxVal = useMemo(() => ({ isDirty, setDirty, registerSave, confirmIfDirty }), [isDirty, setDirty, registerSave, confirmIfDirty]);
+  const ctxVal = useMemo(() => ({ isDirty, setDirty, registerSave, registerDraftSave, confirmIfDirty }), [isDirty, setDirty, registerSave, registerDraftSave, confirmIfDirty]);
 
   const executePending = () => {
     const action = pendingActionRef.current;
@@ -4612,45 +4618,25 @@ export default function AccountingModule() {
       </div>
 
       {/* ── Unsaved Changes Dialog ── */}
-      <Dialog open={showDirtyDlg} onOpenChange={open => { if (!open) { setShowDirtyDlg(false); pendingActionRef.current = null; } }}>
-        <DialogContent className="max-w-sm" dir="rtl">
-          <DialogHeader>
-            <DialogTitle className="text-sm flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-500" />
-              تغييرات غير محفوظة
-            </DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground py-1">
-            يوجد تغييرات غير محفوظة، هل تريد حفظها؟
-          </p>
-          <div className="flex gap-2 justify-end pt-2">
-            <Button
-              size="sm" className="h-8 text-xs gap-1"
-              onClick={async () => {
-                if (saveFnRef.current) {
-                  const ok = await saveFnRef.current();
-                  if (!ok) return;
-                }
-                executePending();
-              }}
-            >
-              <Save className="w-3 h-3" /> نعم — احفظ وتابع
-            </Button>
-            <Button
-              size="sm" variant="outline" className="h-8 text-xs"
-              onClick={executePending}
-            >
-              لا — تجاهل التعديلات
-            </Button>
-            <Button
-              size="sm" variant="ghost" className="h-8 text-xs"
-              onClick={() => { setShowDirtyDlg(false); pendingActionRef.current = null; }}
-            >
-              إلغاء
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <UnsavedChangesDialog
+        open={showDirtyDlg}
+        onSave={async () => {
+          if (saveFnRef.current) {
+            const ok = await saveFnRef.current();
+            if (!ok) throw new Error("save failed");
+          }
+          executePending();
+        }}
+        onSaveAsDraft={draftSaveFnRef.current ? async () => {
+          if (draftSaveFnRef.current) {
+            const ok = await draftSaveFnRef.current();
+            if (!ok) throw new Error("draft save failed");
+          }
+          executePending();
+        } : undefined}
+        onDiscard={executePending}
+        onCancel={() => { setShowDirtyDlg(false); pendingActionRef.current = null; }}
+      />
     </DirtyCtx.Provider>
   );
 }

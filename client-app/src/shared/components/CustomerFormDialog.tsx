@@ -2,10 +2,19 @@
  * CustomerFormDialog.tsx
  * نافذة إضافة / تعديل العميل — متعددة التبويبات بأسلوب ERP الكلاسيكي
  */
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import { useUnsavedChangesGuard } from "@/core/hooks/useUnsavedChangesGuard";
+import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
+import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import { fmtDate } from "@/shared/utils/dateUtils";
 import { trpc } from "@/shared/lib/trpc";
 import { toast } from "sonner";
+import { FoundationPolicyPanel } from "@/shared/components/FoundationPolicyPanel";
+import type { RecordPolicy } from "@/shared/components/FoundationPolicyPanel";
+import { UnifiedBottomToolbar } from "@/components/unified-toolbar/UnifiedBottomToolbar";
+import type { ToolbarActionMap } from "@/components/unified-toolbar/toolbar.types";
+import { useModalAttention } from "@/modules/settings/pages/useModalAttention";
+import { PartyMainTab } from "@/shared/components/PartyMainTab";
 
 /* ═══════════════════════════ Types ═══════════════════════════ */
 interface CustomerData {
@@ -36,6 +45,9 @@ interface CustomerData {
   telegramId?: string;
   defaultSendMethod?: string;
   isActive?: boolean;
+  recordPolicy?: RecordPolicy;
+  foundationKey?: string;
+  includeInFoundation?: boolean;
 }
 
 interface Props {
@@ -68,6 +80,7 @@ const EMPTY: CustomerData = {
   priceLevel: 1, maxDiscountPct: "0", canSellOnCredit: true,
   dealStartDate: null, dealEndDate: null,
   whatsappPhone: "", telegramId: "", defaultSendMethod: "",
+  recordPolicy: "flexible", foundationKey: "", includeInFoundation: false,
 };
 
 /* مستويات الأسعار المتاحة — مرتبطة بحقل salePrice في كارت الصنف */
@@ -105,7 +118,12 @@ function dateRange(year: number | null, month: number | null): { from?: string; 
 export default function CustomerFormDialog({ open, editData, onClose, onSaved }: Props) {
   const [tab, setTab]   = useState<TabId>("main");
   const [form, setForm] = useState<CustomerData>(EMPTY);
+  const [isDirty, setIsDirty] = useState(false);
+  const [isShaking, setIsShaking] = useState(false);
+  const skipFormRef     = useRef(true);
   const nameRef         = useRef<HTMLInputElement>(null);
+  const modalRef        = useRef<HTMLDivElement>(null);
+  const { contentRef: attentionRef, attractAttention } = useModalAttention();
   const utils           = trpc.useUtils();
 
   /* فلاتر تبويب المبيعات */
@@ -123,6 +141,10 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
   });
   const update = trpc.customers.update.useMutation({
     onSuccess: () => { utils.customers.list.invalidate(); toast.success("تم حفظ التعديلات"); onSaved(); },
+    onError:   (e) => toast.error(e.message),
+  });
+  const remove = trpc.customers.delete.useMutation({
+    onSuccess: () => { utils.customers.list.invalidate(); toast.success("تم حذف العميل"); onSaved(); },
     onError:   (e) => toast.error(e.message),
   });
 
@@ -149,6 +171,8 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
   useEffect(() => {
     if (!open) return;
     setTab("main");
+    setIsDirty(false);
+    skipFormRef.current = true;
     if (editData) {
       setForm({
         ...EMPTY,
@@ -175,6 +199,9 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
         whatsappPhone:      editData.whatsappPhone      ?? "",
         telegramId:         editData.telegramId         ?? "",
         defaultSendMethod:  editData.defaultSendMethod  ?? "",
+        recordPolicy:       (editData.recordPolicy as RecordPolicy) ?? "flexible",
+        foundationKey:      editData.foundationKey      ?? "",
+        includeInFoundation: editData.includeInFoundation ?? false,
       });
     } else {
       setForm(EMPTY);
@@ -182,15 +209,21 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
   }, [open, editData]);
 
   useEffect(() => {
+    if (!open) return;
+    if (skipFormRef.current) { skipFormRef.current = false; return; }
+    setIsDirty(true);
+  }, [form, open]);
+
+  useEffect(() => {
     if (open) setTimeout(() => nameRef.current?.focus(), 80);
   }, [open]);
 
   const set = (k: keyof CustomerData, v: string) => setForm(f => ({ ...f, [k]: v }));
 
-  const handleSave = () => {
-    if (!form.name?.trim()) { toast.error("اسم العميل مطلوب"); setTab("main"); return; }
+  const handleSave = async (): Promise<void> => {
+    if (!form.name?.trim()) { toast.error("اسم العميل مطلوب"); setTab("main"); throw new Error("validation"); }
     if (form.customerType === "organization" && !form.taxNumber?.trim()) {
-      toast.error("الرقم الضريبي مطلوب للمؤسسات"); setTab("main"); return;
+      toast.error("الرقم الضريبي مطلوب للمؤسسات"); setTab("main"); throw new Error("validation");
     }
     const payload = {
       code:               form.code?.trim()              || undefined,
@@ -215,65 +248,192 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
       whatsappPhone:      form.whatsappPhone?.trim()      || undefined,
       telegramId:         form.telegramId?.trim()         || undefined,
       defaultSendMethod:  (form.defaultSendMethod as any) || undefined,
+       recordPolicy:       form.recordPolicy === "editable" ? "flexible" : (form.recordPolicy ?? "flexible"),
+      includeInFoundation: form.includeInFoundation ?? false,
+      foundationKey:      form.foundationKey?.trim() || undefined,
     };
-    if (editData?.id) update.mutate({ id: editData.id, ...payload });
-    else              create.mutate(payload);
+    if (editData?.id) await update.mutateAsync({ id: editData.id, ...payload });
+    else              await create.mutateAsync(payload);
   };
+
+  const { confirmOpen, requestClose, confirmSave, confirmDiscard, confirmCancel } = useUnsavedChangesGuard({ isDirty });
+  const handleClose = () => requestClose(onClose);
+  const handlePreview = () => {
+    toast.info("المعاينة متاحة بعد ربط قالب العميل");
+  };
+  const handleSend = () => {
+    toast.info("الإرسال يتم من تبويب قنوات الإرسال");
+  };
+  const handlePrint = () => window.print();
+  const handleBackdropClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return;
+    setIsShaking(false);
+    requestAnimationFrame(() => setIsShaking(true));
+    window.setTimeout(() => setIsShaking(false), 350);
+    attractAttention();
+    modalRef.current?.focus();
+  };
+  const isOrg     = form.customerType === "organization";
+  const isPending = create.isPending || update.isPending || remove.isPending;
+  const title     = editData?.id ? `تعديل العميل — ${editData.name ?? ""}` : "إضافة عميل جديد";
+
+  const toolbarActions = useMemo<ToolbarActionMap>(() => ({
+    save: {
+      supported: true,
+      stateEnabled: !isPending,
+      loading: isPending,
+      onClick: async () => { await handleSave(); },
+    },
+    draft: { supported: false, disabledReason: "حفظ العميل كمسودة غير مستخدم في هذه الشاشة" },
+    new: {
+      supported: true,
+      stateEnabled: !isPending,
+      onClick: () => {
+        if (isDirty) {
+          toast.info("احفظ التعديلات أو أغلق النافذة أولاً");
+          return;
+        }
+        setForm(EMPTY);
+        setTab("main");
+        setIsDirty(false);
+      },
+    },
+    duplicate: { supported: false, disabledReason: "نسخ العميل غير مستخدم في هذه الشاشة" },
+    tools: { supported: true, stateEnabled: !isPending },
+    edit: {
+      supported: !!editData?.id,
+      stateEnabled: !isPending,
+      disabledReason: editData?.id ? undefined : "التعديل متاح بعد فتح عميل محفوظ",
+      onClick: () => nameRef.current?.focus(),
+    },
+    delete: {
+      supported: !!editData?.id,
+      stateEnabled: !isPending,
+      disabledReason: editData?.id ? undefined : "الحذف متاح بعد فتح عميل محفوظ",
+      onClick: () => {
+        if (!editData?.id) return;
+        if (window.confirm(`هل تريد حذف العميل «${editData.name ?? form.name}»؟`)) {
+          remove.mutate({ id: editData.id });
+        }
+      },
+    },
+    first: { supported: false, disabledReason: "التنقل بين العملاء غير مربوط داخل النافذة" },
+    previous: { supported: false, disabledReason: "التنقل بين العملاء غير مربوط داخل النافذة" },
+    next: { supported: false, disabledReason: "التنقل بين العملاء غير مربوط داخل النافذة" },
+    last: { supported: false, disabledReason: "التنقل بين العملاء غير مربوط داخل النافذة" },
+    approve: { supported: false, disabledReason: "اعتماد العميل غير مستخدم في هذه الشاشة" },
+    cancel: { supported: false, disabledReason: "الإلغاء غير مستخدم في هذه الشاشة" },
+    preview: {
+      supported: !!editData?.id,
+      stateEnabled: !isPending,
+      disabledReason: editData?.id ? undefined : "المعاينة متاحة بعد حفظ العميل",
+      onClick: handlePreview,
+    },
+    send: {
+      supported: false,
+      disabledReason: "الإرسال يتم من تبويب قنوات الإرسال",
+      onClick: handleSend,
+    },
+    print: {
+      supported: !!editData?.id,
+      stateEnabled: !isPending,
+      disabledReason: editData?.id ? undefined : "الطباعة متاحة بعد حفظ العميل",
+      onClick: handlePrint,
+    },
+    exit: {
+      supported: true,
+      stateEnabled: !isPending,
+      onClick: handleClose,
+    },
+  }), [
+    editData,
+    form.name,
+    handleClose,
+    handlePreview,
+    handleSend,
+    handlePrint,
+    handleSave,
+    isDirty,
+    isPending,
+    remove,
+  ]);
 
   if (!open) return null;
 
-  const isOrg     = form.customerType === "organization";
-  const isPending = create.isPending || update.isPending;
-  const title     = editData?.id ? `تعديل العميل — ${editData.name ?? ""}` : "إضافة عميل جديد";
-
   return (
     <div
+      onMouseDown={handleBackdropClick}
       style={{ position: "fixed", inset: 0, zIndex: 1200,
                background: "rgba(0,0,0,0.45)", display: "flex",
                alignItems: "center", justifyContent: "center" }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div dir="rtl" style={{
-        width: 760, maxWidth: "98vw",
-        background: "#F0F0F0",
-        border: "2px solid #A0A0A0",
-        boxShadow: "4px 4px 16px rgba(0,0,0,0.5)",
+      <div
+        ref={(node) => {
+          modalRef.current = node;
+          attentionRef.current = node;
+        }}
+        tabIndex={-1}
+        onMouseDown={event => event.stopPropagation()}
+        className={`erp-standard-ui customer-form${isShaking ? " customer-modal-window-shake" : ""}`}
+        dir="rtl"
+        style={{
+        width: 940, maxWidth: "98vw",
+        height: 620, maxHeight: "calc(100vh - 24px)",
+        minHeight: 620,
+        background: "#f0ede8",
+        border: "2px solid #315f88",
+        boxShadow: "0 8px 28px rgba(20,35,50,0.42)",
         display: "flex", flexDirection: "column",
-        maxHeight: "92vh", overflow: "hidden",
-        borderRadius: 2,
+        overflow: "hidden",
+        borderRadius: 5,
       }}>
 
         {/* ── Title Bar ── */}
         <div style={{
-          background: `linear-gradient(90deg, ${PRIMARY} 0%, #2e5070 100%)`,
-          padding: "5px 8px", display: "flex", alignItems: "center",
+          background: "linear-gradient(180deg, #376d9c 0%, #28567f 100%)",
+          minHeight: 31, padding: "4px 8px", display: "flex", alignItems: "center",
           justifyContent: "space-between", flexShrink: 0,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 16 }}>👤</span>
-            <span style={{ color: "white", fontWeight: 700, fontSize: 13 }}>{title}</span>
+            <span style={{ fontSize: 15 }}>👤</span>
+            <span style={{ color: "white", fontWeight: 700, fontSize: 12 }}>{title}</span>
           </div>
-          <button onClick={onClose} style={{
-            width: 18, height: 18, background: "#C75050", border: "1px solid #9a3030",
-            color: "white", fontSize: 10, fontWeight: 700, cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 2,
-          }}>✕</button>
+          <div style={{ display: "flex", gap: 4 }}>
+            <button type="button" aria-label="تكبير النافذة" style={{
+              width: 20, height: 18, background: "transparent", border: "1px solid rgba(255,255,255,.35)",
+              color: "white", fontSize: 11, cursor: "pointer", borderRadius: 2,
+            }}>↗</button>
+            <button type="button" onClick={handleClose} aria-label="إغلاق" style={{
+              width: 20, height: 18, background: "#c95757", border: "1px solid #8f3030",
+              color: "white", fontSize: 11, fontWeight: 700, cursor: "pointer", borderRadius: 2,
+            }}>×</button>
+          </div>
+        </div>
+
+        {/* ── Record strip ── */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          minHeight: 29, padding: "3px 10px", color: "#68727b", fontSize: 10,
+          background: "#f4f3f0", borderBottom: "1px solid #c7c8c8",
+        }}>
+          <span style={{ fontWeight: 700 }}>{editData?.id ? "تعديل بيانات العميل" : "إضافة عميل جديد"}</span>
+          <span>{editData?.id ? `رقم السجل: ${editData.id}` : "سجل جديد"} <b style={{ margin: "0 5px" }}>•</b> {isDirty ? "تعديلات غير محفوظة" : "جاهز"}</span>
         </div>
 
         {/* ── Tab Bar ── */}
         <div style={{
-          background: "#E0E0E0", borderBottom: "2px solid #A0A0A0",
-          display: "flex", flexShrink: 0, overflowX: "auto",
+          background: "#e5e4e1", borderBottom: "1px solid #9da3a8",
+          display: "flex", flexShrink: 0, overflowX: "auto", paddingRight: 7,
         }}>
           {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)} style={{
-              padding: "5px 12px", fontSize: 12,
+            <button className="customer-tab-button" key={t.id} onClick={() => setTab(t.id)} style={{
+              padding: "6px 12px 5px", fontSize: 10,
               fontWeight: tab === t.id ? 700 : 500,
-              background: tab === t.id ? "#F0F0F0" : "transparent",
-              color: tab === t.id ? PRIMARY : "#444",
-              border: "none", borderLeft: "1px solid #C0C0C0",
-              borderBottom: tab === t.id ? "2px solid #F0F0F0" : "none",
-              marginBottom: tab === t.id ? -2 : 0,
+              background: tab === t.id ? "#f7f6f3" : "transparent",
+              color: tab === t.id ? "#315f88" : "#62676c",
+              border: "none", borderLeft: "1px solid #c9cacc",
+              borderBottom: tab === t.id ? "2px solid #f7f6f3" : "2px solid transparent",
+              marginBottom: -1,
               cursor: "pointer", whiteSpace: "nowrap",
             }}>
               {t.label}
@@ -282,62 +442,30 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
         </div>
 
         {/* ── Body ── */}
-        <div style={{ overflowY: "auto", flexGrow: 1, padding: "12px 14px" }}>
+        <div style={{
+          overflowY: "auto", flex: "1 1 auto", minHeight: 0,
+          padding: "10px 12px", background: "#f0ede8",
+        }}>
 
           {/* ══ نافذة رئيسية ══ */}
           {tab === "main" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-
-              <ESection title="نوع العميل">
-                <div style={{ display: "flex", gap: 8 }}>
-                  <TypeBtn active={!isOrg} label="🧾 فرد (فاتورة مبسطة)" color="#15803D"
-                    onClick={() => { set("customerType", "individual"); set("taxNumber", ""); }} />
-                  <TypeBtn active={isOrg}  label="📋 مؤسسة (فاتورة ضريبية)" color="#1D4ED8"
-                    onClick={() => set("customerType", "organization")} />
-                </div>
-              </ESection>
-
-              <ESection title="المعلومات الأساسية">
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 14px" }}>
-                  <EField label="كود العميل" hint="يُعبأ تلقائياً إن تُرك فارغاً">
-                    <EInput value={form.code} onChange={v => set("code", v)} placeholder="مثال: CU-001" mono />
-                  </EField>
-                  <EField label={isOrg ? "اسم المؤسسة *" : "اسم العميل *"}>
-                    <EInput inputRef={nameRef} value={form.name} onChange={v => set("name", v)}
-                      placeholder={isOrg ? "اسم الشركة أو المؤسسة..." : "أدخل اسم العميل..."} />
-                  </EField>
-                  <EField label="رقم الجوال">
-                    <EInput value={form.phone} onChange={v => set("phone", v)} placeholder="05xxxxxxxx" ltr />
-                  </EField>
-                  <EField label="البريد الإلكتروني">
-                    <EInput value={form.email} onChange={v => set("email", v)} placeholder="example@domain.com" ltr />
-                  </EField>
-                </div>
-              </ESection>
-
-              <ESection title="البيانات الضريبية والتجارية"
-                headerColor={isOrg ? "#1D4ED8" : undefined}
-                note={!isOrg ? "تنطبق على المؤسسات فقط" : undefined}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 14px",
-                              opacity: isOrg ? 1 : 0.4, pointerEvents: isOrg ? "auto" : "none" }}>
-                  <EField label="الرقم الضريبي *">
-                    <EInput value={form.taxNumber} onChange={v => set("taxNumber", v)}
-                      placeholder="3xxxxxxxxxxxxxxxxx" ltr
-                      style={isOrg
-                        ? (form.taxNumber?.trim()
-                            ? { borderColor: "#86EFAC", background: "#F0FDF4" }
-                            : { borderColor: "#FCA5A5", background: "#FFF5F5" })
-                        : undefined}
-                    />
-                  </EField>
-                  <EField label="رقم السجل التجاري">
-                    <EInput value={form.registrationNumber} onChange={v => set("registrationNumber", v)}
-                      placeholder="1010xxxxxx" ltr />
-                  </EField>
-                </div>
-              </ESection>
-
-            </div>
+            <PartyMainTab
+              entityType="customer"
+              form={{
+                code: form.code,
+                name: form.name,
+                partyType: form.customerType,
+                phone: form.phone,
+                email: form.email,
+                taxNumber: form.taxNumber,
+                registrationNumber: form.registrationNumber,
+              }}
+              onChange={(key, value) => {
+                const mapped = key === "partyType" ? "customerType" : key;
+                set(mapped as keyof CustomerData, value);
+              }}
+              nameRef={nameRef}
+            />
           )}
 
           {/* ══ عنوان ══ */}
@@ -618,15 +746,12 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
                             <div style={{ fontSize: 10, color: DEAL_COLOR, fontWeight: 700, marginBottom: 4 }}>
                               📅 من تاريخ
                             </div>
-                            <input type="date"
+                            <DateSegmentInput
                               value={form.dealStartDate ?? ""}
-                              onChange={e => setForm(f => ({ ...f, dealStartDate: e.target.value || null }))}
-                              style={{
-                                width: "100%", height: 30, padding: "0 8px", fontSize: 12,
-                                border: `1px solid ${DEAL_COLOR}50`, borderRadius: 3,
-                                background: "white", color: "#333", outline: "none",
-                                direction: "ltr",
-                              }} />
+                              onChange={v => setForm(f => ({ ...f, dealStartDate: v || null }))}
+                              standalone
+                              style={{ width: "100%", height: 30, fontSize: 12, border: `1px solid ${DEAL_COLOR}50`, borderRadius: 3 }}
+                            />
                           </div>
                           {/* إلى تاريخ */}
                           <div>
@@ -636,16 +761,12 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
                                 (اتركه فارغاً = مفتوح النهاية)
                               </span>
                             </div>
-                            <input type="date"
+                            <DateSegmentInput
                               value={form.dealEndDate ?? ""}
-                              onChange={e => setForm(f => ({ ...f, dealEndDate: e.target.value || null }))}
-                              min={form.dealStartDate ?? undefined}
-                              style={{
-                                width: "100%", height: 30, padding: "0 8px", fontSize: 12,
-                                border: `1px solid #DC262650`, borderRadius: 3,
-                                background: "white", color: "#333", outline: "none",
-                                direction: "ltr",
-                              }} />
+                              onChange={v => setForm(f => ({ ...f, dealEndDate: v || null }))}
+                              standalone
+                              style={{ width: "100%", height: 30, fontSize: 12, border: `1px solid #DC262650`, borderRadius: 3 }}
+                            />
                           </div>
 
                           {/* ملخص الفترة */}
@@ -761,39 +882,33 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
 
         </div>
 
-        {/* ── Footer ── */}
-        <div style={{
-          background: "#E0E0E0", borderTop: "1px solid #A0A0A0",
-          padding: "8px 14px", display: "flex", alignItems: "center",
-          justifyContent: "space-between", flexShrink: 0,
-        }}>
-          <span style={{
-            padding: "2px 10px", borderRadius: 10, fontSize: 11, fontWeight: 700,
-            background: isOrg ? "#DBEAFE" : "#DCFCE7",
-            color:      isOrg ? "#1D4ED8" : "#15803D",
-            border:     `1px solid ${isOrg ? "#93C5FD" : "#86EFAC"}`,
-          }}>
-            {isOrg ? "📋 مؤسسة" : "🧾 فرد"}
-          </span>
+        {/* ── سياسة التأسيس ── */}
+        <div style={{ padding: "4px 14px 4px", borderTop: "1px solid #d2cec8", background: "#f0ede8" }}>
+          <FoundationPolicyPanel
+            recordPolicy={form.recordPolicy ?? "flexible"}
+            foundationKey={form.foundationKey ?? null}
+            includeInFoundation={form.includeInFoundation ?? false}
+            onChange={(policy, include) => setForm(f => ({ ...f, recordPolicy: policy, includeInFoundation: include }))}
+          />
+        </div>
 
-          <div style={{ display: "flex", gap: 6 }}>
-            <button onClick={onClose} disabled={isPending} style={{
-              padding: "5px 14px", fontSize: 12, fontWeight: 600, borderRadius: 3,
-              background: "#E0E0E0", color: "#333", border: "1px solid #A0A0A0",
-              cursor: "pointer",
-            }}>إلغاء</button>
-            <button onClick={handleSave} disabled={isPending} style={{
-              padding: "5px 18px", fontSize: 12, fontWeight: 700, borderRadius: 3,
-              background: isPending ? "#A0A0A0" : PRIMARY, color: "white",
-              border: `1px solid ${isPending ? "#888" : "#2e5070"}`,
-              cursor: isPending ? "not-allowed" : "pointer",
-            }}>
-              {isPending ? "جاري الحفظ..." : editData?.id ? "💾 حفظ التعديلات" : "➕ إضافة العميل"}
-            </button>
-          </div>
+        {/* ── Unified bottom toolbar ── */}
+        <div style={{ flexShrink: 0 }}>
+          <UnifiedBottomToolbar
+            actions={toolbarActions}
+            activeAction={isPending ? "save" : undefined}
+          />
         </div>
 
       </div>
+
+      <UnsavedChangesDialog
+        open={confirmOpen}
+        onSave={() => confirmSave(handleSave)}
+        onDiscard={confirmDiscard}
+        onCancel={confirmCancel}
+        isSaving={isPending}
+      />
     </div>
   );
 }
@@ -805,16 +920,17 @@ function ESection({ title, children, headerColor, note }: {
   headerColor?: string; note?: string;
 }) {
   return (
-    <div style={{ border: "1px solid #C0C0C0", borderRadius: 3, overflow: "hidden" }}>
+      <div className="customer-section" style={{ border: "1px solid #c9c4bc", borderRadius: 4, overflow: "hidden", background: "#f0ede8", boxShadow: "0 1px 2px rgba(0,0,0,.06)" }}>
       <div style={{
-        background: headerColor ? `${headerColor}18` : "#E8EEF4",
-        borderBottom: "1px solid #C0C0C0", padding: "4px 10px",
+        background: "#f0ede8",
+        borderBottom: "1px solid #c9c4bc", padding: "0 10px",
+        minHeight: 28, height: 28,
         display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: headerColor ?? "#2B4A6A" }}>{title}</span>
-        {note && <span style={{ fontSize: 10, color: "#888" }}>{note}</span>}
+        <span className="customer-section-title" style={{ fontSize: 10, lineHeight: "28px", fontWeight: 800, color: "#3f4448" }}>{title}</span>
+        {note && <span className="customer-section-note" style={{ fontSize: 9, lineHeight: "28px", color: "#686d70" }}>{note}</span>}
       </div>
-      <div style={{ padding: "10px" }}>{children}</div>
+      <div style={{ padding: "10px", background: "#f0ede8" }}>{children}</div>
     </div>
   );
 }
@@ -822,7 +938,7 @@ function ESection({ title, children, headerColor, note }: {
 function EField({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      <label style={{ fontSize: 11, fontWeight: 700, color: "#333" }}>
+       <label className="customer-field-label" style={{ fontSize: 10, fontWeight: 700, color: "#333" }}>
         {label}
         {hint && <span style={{ fontWeight: 400, color: "#888", marginRight: 4 }}>({hint})</span>}
       </label>
@@ -839,14 +955,15 @@ function EInput({ value, onChange, placeholder, ltr, mono, inputRef, style }: {
 }) {
   return (
     <input
+      className="customer-field-input"
       ref={inputRef}
       value={value ?? ""}
       onChange={e => onChange(e.target.value)}
       placeholder={placeholder}
       dir={ltr ? "ltr" : "rtl"}
       style={{
-        height: 26, fontSize: 13, padding: "0 7px",
-        border: "1px solid #A0A0A0", background: "white",
+         height: 27, fontSize: 11, padding: "0 7px",
+         border: "1px solid #b8b9b9", background: "#fff",
         fontFamily: mono ? "monospace" : "inherit",
         outline: "none", width: "100%", borderRadius: 2,
         boxSizing: "border-box",
@@ -861,7 +978,7 @@ function TypeBtn({ active, label, color, onClick }: {
 }) {
   return (
     <button type="button" onClick={onClick} style={{
-      flex: 1, padding: "7px 10px", fontSize: 12, fontWeight: 700,
+       flex: 1, padding: "6px 9px", fontSize: 11, fontWeight: 700,
       borderRadius: 3, cursor: "pointer",
       background: active ? color : "#E8E8E8",
       color:      active ? "white" : "#555",

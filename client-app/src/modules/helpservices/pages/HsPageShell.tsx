@@ -16,6 +16,7 @@ type SubOption = {
   labelEn: string;
   descAr: string;
   descEn: string;
+  route?: string;
 };
 
 export default function HsPageShell({
@@ -100,9 +101,10 @@ export default function HsPageShell({
             {subOptions.map(opt => (
               <Card
                 key={opt.id}
-                className="border-border/50 opacity-70 cursor-not-allowed select-none"
-                aria-disabled="true"
+                className={`border-border/50 transition-all ${opt.route ? "cursor-pointer hover:border-primary/40 hover:shadow-md active:scale-[.99]" : "opacity-70 cursor-not-allowed select-none"}`}
+                aria-disabled={!opt.route}
                 data-testid={`card-hs-sub-${opt.id}`}
+                onClick={() => opt.route && openTab(opt.route, ar ? opt.labelAr : opt.labelEn, opt.icon)}
               >
                 <CardContent className="p-5">
                   <div className="flex items-start gap-3.5">
@@ -114,9 +116,11 @@ export default function HsPageShell({
                         <p className="text-sm font-bold text-foreground">
                           {ar ? opt.labelAr : opt.labelEn}
                         </p>
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/60">
-                          {ar ? "قريبًا" : "Coming soon"}
-                        </span>
+                        {!opt.route && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/60">
+                            {ar ? "قريبًا" : "Coming soon"}
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
                         {ar ? opt.descAr : opt.descEn}

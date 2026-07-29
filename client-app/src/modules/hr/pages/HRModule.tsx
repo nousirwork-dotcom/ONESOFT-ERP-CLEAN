@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import { useTabManager } from "@/core/contexts/TabManagerContext";
 import {
   ChevronDown, ChevronRight, Users, FileText, BarChart3,
@@ -334,6 +335,7 @@ function PayrollRunPage() {
 
 function AttendanceLogPage() {
   const today = new Date().toISOString().split("T")[0];
+  const [attendanceDate, setAttendanceDate] = useState(today);
   const records = [
     { name: "أحمد محمد علي",  checkIn: "08:05", checkOut: "17:00", status: "حاضر" },
     { name: "فاطمة عبدالله",  checkIn: "08:15", checkOut: "17:10", status: "حاضر" },
@@ -351,7 +353,7 @@ function AttendanceLogPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-sm">سجل الحضور والانصراف</h3>
-        <Input type="date" defaultValue={today} className="h-8 text-sm w-40" />
+        <DateSegmentInput value={attendanceDate} onChange={setAttendanceDate} standalone className="h-8 text-sm w-40" />
       </div>
       <Card className="border-border/50">
         <Table>

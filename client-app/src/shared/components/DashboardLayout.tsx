@@ -185,10 +185,10 @@ function SidebarNav({ user }: { user: any }) {
                         isActive={hasActiveChild}
                         onClick={() => toggleModule(item.path)}
                         tooltip={collapsed ? item.label : undefined}
-                        className={`h-[38px] rounded-[4px] px-3 transition-colors text-[14px] font-semibold ${
+                        className={`h-[38px] px-3 transition-colors text-[14px] font-semibold ${
                           hasActiveChild
-                            ? "bg-[var(--sidebar-primary)] text-white"
-                            : "text-[var(--sidebar-foreground)] hover:text-white hover:bg-[var(--sidebar-accent)]"
+                            ? "bg-[var(--sidebar-primary)] text-white active-ring"
+                            : "rounded-[4px] text-[var(--sidebar-foreground)] hover:text-white hover:bg-[var(--sidebar-accent)]"
                         }`}
                       >
                         <item.icon className="w-4 h-4 shrink-0 text-[var(--sidebar-foreground)]" />
@@ -207,10 +207,10 @@ function SidebarNav({ user }: { user: any }) {
                               <button
                                 key={child.path}
                                 onClick={() => openTab(child.path, child.label, child.icon)}
-                                className={`w-full flex items-center gap-2 px-3 h-[34px] text-[12px] font-medium transition-colors rounded-[4px] ${
+                                className={`w-full flex items-center gap-2 px-3 h-[34px] text-[12px] font-medium transition-colors ${
                                   childActive
-                                    ? "bg-[var(--sidebar-primary)] text-white"
-                                    : "text-[var(--sidebar-foreground)]/80 hover:text-white hover:bg-[var(--sidebar-accent)]"
+                                    ? "bg-[var(--sidebar-primary)] text-white active-ring"
+                                    : "rounded-[4px] text-[var(--sidebar-foreground)]/80 hover:text-white hover:bg-[var(--sidebar-accent)]"
                                 }`}
                               >
                                 <child.icon className="w-3.5 h-3.5 shrink-0" />
@@ -231,10 +231,10 @@ function SidebarNav({ user }: { user: any }) {
                       isActive={isActive}
                       onClick={() => isDashboard ? toggleDashboard() : openTab(item.path, item.label, item.icon)}
                       tooltip={collapsed ? item.label : undefined}
-                      className={`h-[38px] rounded-[4px] px-3 transition-colors text-[14px] font-semibold ${
+                      className={`h-[38px] px-3 transition-colors text-[14px] font-semibold ${
                         isActive
-                          ? "bg-[var(--sidebar-primary)] text-white"
-                          : "text-[var(--sidebar-foreground)] hover:text-white hover:bg-[var(--sidebar-accent)]"
+                          ? "bg-[var(--sidebar-primary)] text-white active-ring"
+                          : "rounded-[4px] text-[var(--sidebar-foreground)] hover:text-white hover:bg-[var(--sidebar-accent)]"
                       }`}
                     >
                       <item.icon className={`w-4 h-4 shrink-0 ${isActive ? "text-white" : "text-[var(--sidebar-foreground)]"}`} />
@@ -283,12 +283,12 @@ function HorizontalNav({ user }: { user: any }) {
             <DropdownMenu key={item.path}>
               <DropdownMenuTrigger asChild>
                 <button className={`
-                  relative flex items-center gap-2 px-3.5 mx-0.5 my-1.5 rounded-md
+                  relative flex items-center gap-2 px-3.5 mx-0.5 my-1.5
                   text-[14.5px] font-[500] whitespace-nowrap
                   transition-colors duration-150 outline-none
                   ${hasActiveChild
-                    ? "bg-[var(--primary)] text-white shadow-sm"
-                    : "text-foreground/60 hover:text-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.06]"
+                    ? "bg-[var(--primary)] text-white shadow-sm active-ring"
+                    : "rounded-md text-foreground/60 hover:text-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.06]"
                   }
                 `}>
                   <item.icon className={`w-3.5 h-3.5 shrink-0 ${hasActiveChild ? "text-white" : "text-foreground/50"}`} />
@@ -318,12 +318,12 @@ function HorizontalNav({ user }: { user: any }) {
             key={item.path}
             onClick={() => isDashboardItem ? toggleDashboard() : openTab(item.path, item.label, item.icon)}
             className={`
-              relative flex items-center gap-2 px-3.5 mx-0.5 my-1.5 rounded-md
+              relative flex items-center gap-2 px-3.5 mx-0.5 my-1.5
               text-[14.5px] font-[500] whitespace-nowrap
               transition-colors duration-150
               ${isActive
-                ? "bg-[var(--primary)] text-white shadow-sm"
-                : "text-foreground/60 hover:text-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.06]"
+                ? "bg-[var(--primary)] text-white shadow-sm active-ring"
+                : "rounded-md text-foreground/60 hover:text-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.06]"
               }
             `}
           >
@@ -351,7 +351,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [showChangePassword, setShowChangePassword] = useState(false);
   const { loading, user, logout } = useAuth();
   const isMobile = useIsMobile();
-  const { openTab, showDashboard } = useTabManager();
+  const { openTab, showDashboard, isPosWorkspaceActive } = useTabManager();
   const { lang, toggleLang, dir, isAr } = useLang();
   const isResizing = useRef(false);
   const startX = useRef(0);
@@ -513,7 +513,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <>
       <div className="flex flex-col h-screen overflow-hidden bg-background" style={{ paddingTop: "var(--titlebar-h, 0px)" }}>
         {/* Top Bar */}
-        <header className="sticky top-0 z-20 border-b border-[#D4CDC1] dark:border-slate-700 bg-[#DDD4C4] dark:bg-slate-900">
+        <header className="sticky top-0 z-20 border-b border-[#D4CDC1] dark:border-slate-700 bg-[#DDD4C4] dark:bg-slate-900" style={{ display: isPosWorkspaceActive ? 'none' : undefined }}>
           <div className="flex items-center gap-3 px-4 h-10" dir={dir}>
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-primary/20 flex items-center justify-center">
@@ -546,7 +546,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <main
             ref={setWorkspaceEl as any}
             className="flex-1 overflow-hidden"
-            style={{ position: "relative", paddingBottom: 40 }}
+            style={{ position: "relative", paddingBottom: isPosWorkspaceActive ? 0 : 40 }}
           >
             {children}
           </main>
@@ -554,7 +554,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
       <WindowTaskbar />
       <ChatWidget />
-      <ElectronTitleBar />
+      {!isPosWorkspaceActive && <ElectronTitleBar />}
       <ChangeMyPasswordDialog open={showChangePassword} onClose={() => setShowChangePassword(false)} />
       </>
     );
@@ -568,7 +568,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <>
       <div className="flex flex-col h-screen overflow-hidden bg-background" style={{ paddingTop: "var(--titlebar-h, 0px)" }}>
         {/* Top Bar */}
-        <header className="sticky top-0 z-20 border-b border-[#D4CDC1] dark:border-slate-700 bg-[#DDD4C4] dark:bg-slate-900">
+        <header className="sticky top-0 z-20 border-b border-[#D4CDC1] dark:border-slate-700 bg-[#DDD4C4] dark:bg-slate-900" style={{ display: isPosWorkspaceActive ? 'none' : undefined }}>
           {/* Row 1: Logo + User */}
           <div className="flex items-center gap-3 px-4 h-10 border-b border-[#C8C1B8] dark:border-slate-700" dir={dir}>
             <div className="flex items-center gap-2">
@@ -598,7 +598,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <main
             ref={setWorkspaceEl as any}
             className="flex-1 overflow-hidden"
-            style={{ position: "relative", paddingBottom: 40 }}
+            style={{ position: "relative", paddingBottom: isPosWorkspaceActive ? 0 : 40 }}
           >
             {children}
           </main>
@@ -606,7 +606,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
       <WindowTaskbar />
       <ChatWidget />
-      <ElectronTitleBar />
+      {!isPosWorkspaceActive && <ElectronTitleBar />}
       <ChangeMyPasswordDialog open={showChangePassword} onClose={() => setShowChangePassword(false)} />
       </>
     );
@@ -698,7 +698,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       <SidebarInset className="flex flex-col h-screen overflow-hidden" style={{ paddingTop: "var(--titlebar-h, 0px)" }}>
         {/* Top Bar */}
-        <header className="sticky top-0 z-10 flex items-center gap-3 px-4 h-10 border-b border-[#D4CDC1] bg-[#DDD4C4] dark:bg-slate-900 dark:border-slate-700" dir={dir}>
+        <header className="sticky top-0 z-10 flex items-center gap-3 px-4 h-10 border-b border-[#D4CDC1] bg-[#DDD4C4] dark:bg-slate-900 dark:border-slate-700" dir={dir} style={{ display: isPosWorkspaceActive ? 'none' : undefined }}>
           <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
           <div className="flex-1" />
           <div className="flex items-center gap-2">
@@ -716,7 +716,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <main
             ref={setWorkspaceEl as any}
             className="flex-1 overflow-hidden"
-            style={{ position: "relative", paddingBottom: 40 }}
+            style={{ position: "relative", paddingBottom: isPosWorkspaceActive ? 0 : 40 }}
           >
             {children}
           </main>
@@ -725,7 +725,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     </SidebarProvider>
     <WindowTaskbar />
     <ChatWidget />
-    <ElectronTitleBar />
+    {!isPosWorkspaceActive && <ElectronTitleBar />}
     <ChangeMyPasswordDialog open={showChangePassword} onClose={() => setShowChangePassword(false)} />
     </>
   );

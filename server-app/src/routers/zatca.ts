@@ -48,7 +48,7 @@ export const zatcaRouter = router({
   // ── إعدادات ZATCA للمنشأة ─────────────────────────────────────────────────
   getConfig: protectedProcedure.query(async ({ ctx }) => {
     const org = await db.query.organizations.findFirst({
-      where: eq(organizations.id, ctx.orgId),
+      where: eq(organizations.id, ctx.user.orgId),
       columns: { zatcaConfig: true },
     });
     const cfg = (org?.zatcaConfig ?? {}) as Record<string, unknown>;
@@ -70,7 +70,7 @@ export const zatcaRouter = router({
       const userName = (ctx.user as any).name ?? (ctx.user as any).username ?? 'مسؤول';
 
       const existing = await db.query.organizations.findFirst({
-        where: eq(organizations.id, ctx.orgId),
+        where: eq(organizations.id, ctx.user.orgId),
         columns: { zatcaConfig: true },
       });
       const existingCfg = (existing?.zatcaConfig ?? {}) as any;
@@ -90,10 +90,10 @@ export const zatcaRouter = router({
 
       await db.update(organizations)
         .set({ zatcaConfig: updated as any, updatedAt: new Date() })
-        .where(eq(organizations.id, ctx.orgId));
+        .where(eq(organizations.id, ctx.user.orgId));
 
       await db.insert(zatcaLogs).values({
-        orgId:      ctx.orgId,
+        orgId:      ctx.user.orgId,
         eventType:  'config_update',
         status:     'success',
         environment: input.environment,
@@ -108,7 +108,7 @@ export const zatcaRouter = router({
   // ── اختبار الاتصال ────────────────────────────────────────────────────────
   testConnection: adminProcedure.mutation(async ({ ctx }) => {
     const org = await db.query.organizations.findFirst({
-      where: eq(organizations.id, ctx.orgId),
+      where: eq(organizations.id, ctx.user.orgId),
       columns: { zatcaConfig: true },
     });
     const cfg = (org?.zatcaConfig ?? {}) as any;
@@ -125,10 +125,10 @@ export const zatcaRouter = router({
         lastConnectionStatus: success ? 'success' : 'failed',
       } as any,
       updatedAt: new Date(),
-    }).where(eq(organizations.id, ctx.orgId));
+    }).where(eq(organizations.id, ctx.user.orgId));
 
     await db.insert(zatcaLogs).values({
-      orgId:       ctx.orgId,
+      orgId:       ctx.user.orgId,
       eventType:   'connection_test',
       status:      success ? 'success' : 'error',
       environment: cfg.environment ?? 'sandbox',
@@ -148,7 +148,7 @@ export const zatcaRouter = router({
       const inv = await db.query.salesInvoices.findFirst({
         where: and(
           eq(salesInvoices.id, input.invoiceId),
-          eq(salesInvoices.orgId, ctx.orgId),
+          eq(salesInvoices.orgId, ctx.user.orgId),
         ),
         columns: {
           id: true,
@@ -182,7 +182,7 @@ export const zatcaRouter = router({
       const inv = await db.query.salesInvoices.findFirst({
         where: and(
           eq(salesInvoices.id, input.invoiceId),
-          eq(salesInvoices.orgId, ctx.orgId),
+          eq(salesInvoices.orgId, ctx.user.orgId),
         ),
       });
       if (!inv) throw new Error('Invoice not found');
@@ -192,7 +192,7 @@ export const zatcaRouter = router({
       }
 
       const org = await db.query.organizations.findFirst({
-        where: eq(organizations.id, ctx.orgId),
+        where: eq(organizations.id, ctx.user.orgId),
         columns: { zatcaConfig: true },
       });
       const cfg = (org?.zatcaConfig ?? {}) as any;
@@ -230,7 +230,7 @@ export const zatcaRouter = router({
       }).where(eq(salesInvoices.id, input.invoiceId));
 
       await db.insert(zatcaLogs).values({
-        orgId:         ctx.orgId,
+        orgId:         ctx.user.orgId,
         invoiceId:     input.invoiceId,
         invoiceNumber: inv.invoiceNumber,
         eventType:     input.forceResend ? 'resend' : 'submit',
@@ -271,11 +271,11 @@ export const zatcaRouter = router({
         ...(input.status === 'cleared' ? { zatcaClearedAt: new Date() } : {}),
       }).where(and(
         eq(salesInvoices.id, input.invoiceId),
-        eq(salesInvoices.orgId, ctx.orgId),
+        eq(salesInvoices.orgId, ctx.user.orgId),
       ));
 
       await db.insert(zatcaLogs).values({
-        orgId:       ctx.orgId,
+        orgId:       ctx.user.orgId,
         invoiceId:   input.invoiceId,
         eventType:   'manual_status_update',
         status:      input.status,
@@ -302,7 +302,7 @@ export const zatcaRouter = router({
     .query(async ({ ctx, input }) => {
       const offset = (input.page - 1) * input.limit;
 
-      const conditions: any[] = [eq(zatcaLogs.orgId, ctx.orgId)];
+      const conditions: any[] = [eq(zatcaLogs.orgId, ctx.user.orgId)];
       if (input.invoiceNumber) conditions.push(like(zatcaLogs.invoiceNumber, `%${input.invoiceNumber}%`));
       if (input.status)        conditions.push(eq(zatcaLogs.status, input.status));
       if (input.eventType)     conditions.push(eq(zatcaLogs.eventType, input.eventType));
@@ -333,25 +333,25 @@ export const zatcaRouter = router({
   // ── إحصائيات لوحة المتابعة ────────────────────────────────────────────────
   getStats: protectedProcedure.query(async ({ ctx }) => {
     const org = await db.query.organizations.findFirst({
-      where: eq(organizations.id, ctx.orgId),
+      where: eq(organizations.id, ctx.user.orgId),
       columns: { zatcaConfig: true },
     });
     const cfg = (org?.zatcaConfig ?? {}) as any;
 
     const [total, cleared, pending, rejected, errors, notSubmitted] = await Promise.all([
       db.select({ cnt: count() }).from(salesInvoices)
-        .where(and(eq(salesInvoices.orgId, ctx.orgId), eq(salesInvoices.invoiceType, 'sale'))),
+        .where(and(eq(salesInvoices.orgId, ctx.user.orgId), eq(salesInvoices.invoiceType, 'sale'))),
       db.select({ cnt: count() }).from(salesInvoices)
-        .where(and(eq(salesInvoices.orgId, ctx.orgId), eq(salesInvoices.zatcaStatus, 'cleared'))),
+        .where(and(eq(salesInvoices.orgId, ctx.user.orgId), eq(salesInvoices.zatcaStatus, 'cleared'))),
       db.select({ cnt: count() }).from(salesInvoices)
-        .where(and(eq(salesInvoices.orgId, ctx.orgId), eq(salesInvoices.zatcaStatus, 'pending'))),
+        .where(and(eq(salesInvoices.orgId, ctx.user.orgId), eq(salesInvoices.zatcaStatus, 'pending'))),
       db.select({ cnt: count() }).from(salesInvoices)
-        .where(and(eq(salesInvoices.orgId, ctx.orgId), eq(salesInvoices.zatcaStatus, 'rejected'))),
+        .where(and(eq(salesInvoices.orgId, ctx.user.orgId), eq(salesInvoices.zatcaStatus, 'rejected'))),
       db.select({ cnt: count() }).from(salesInvoices)
-        .where(and(eq(salesInvoices.orgId, ctx.orgId), eq(salesInvoices.zatcaStatus, 'error'))),
+        .where(and(eq(salesInvoices.orgId, ctx.user.orgId), eq(salesInvoices.zatcaStatus, 'error'))),
       db.select({ cnt: count() }).from(salesInvoices)
         .where(and(
-          eq(salesInvoices.orgId, ctx.orgId),
+          eq(salesInvoices.orgId, ctx.user.orgId),
           sql`${salesInvoices.zatcaStatus} IS NULL OR ${salesInvoices.zatcaStatus} = 'not_submitted'`,
         )),
     ]);
@@ -388,13 +388,13 @@ export const zatcaRouter = router({
       // جلب الفاتورة والبنود والإعدادات معاً
       const [inv, items, org] = await Promise.all([
         db.query.salesInvoices.findFirst({
-          where: and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, ctx.orgId)),
+          where: and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, ctx.user.orgId)),
         }),
         db.select().from(salesInvoiceItems)
-          .where(and(eq(salesInvoiceItems.invoiceId, input.invoiceId), eq(salesInvoiceItems.orgId, ctx.orgId)))
+          .where(and(eq(salesInvoiceItems.invoiceId, input.invoiceId), eq(salesInvoiceItems.orgId, ctx.user.orgId)))
           .orderBy(salesInvoiceItems.sortOrder),
         db.query.organizations.findFirst({
-          where: eq(organizations.id, ctx.orgId),
+          where: eq(organizations.id, ctx.user.orgId),
           columns: { zatcaConfig: true, name: true },
         }),
       ]);
@@ -645,7 +645,7 @@ export const zatcaRouter = router({
       // تسجيل في السجل
       const userName = (ctx.user as any).name ?? (ctx.user as any).username ?? 'مستخدم';
       await db.insert(zatcaLogs).values({
-        orgId:         ctx.orgId,
+        orgId:         ctx.user.orgId,
         invoiceId:     input.invoiceId,
         invoiceNumber: inv.invoiceNumber,
         eventType:     'xml_validation',
@@ -671,7 +671,7 @@ export const zatcaRouter = router({
       const offset = (input.page - 1) * input.limit;
 
       const conditions = [
-        eq(salesInvoices.orgId, ctx.orgId),
+        eq(salesInvoices.orgId, ctx.user.orgId),
         eq(salesInvoices.invoiceType, 'sale'),
       ];
       if (input.status) {

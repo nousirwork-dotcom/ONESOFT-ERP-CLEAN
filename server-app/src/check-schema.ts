@@ -66,6 +66,15 @@ const EXPECTED_TABLES = [
   'verification_tokens',
   'password_reset_tokens',
   'security_events',
+  // Real Estate Purchases (0025 + 0026 + 0027)
+  're_purchases',
+  're_purchase_statements',
+  // Warehouse-as-Branch unification (0043)
+  'user_warehouse_assignments',
+  // User Audit Log (0044)
+  'user_audit_logs',
+  // User Group Members FK upgrade (0045)
+  'user_group_migration_log',
 ];
 
 export async function checkSchema(pool: Pool): Promise<boolean> {
@@ -90,7 +99,7 @@ export async function checkSchema(pool: Pool): Promise<boolean> {
 
   try {
     // ── 1. Verify all expected tables exist ───────────────────────────────────
-    const tableResult = await client.query<{ table_name: string }>(
+    const tableResult = await client.query(
       `SELECT table_name
        FROM information_schema.tables
        WHERE table_schema = 'public'
@@ -112,7 +121,7 @@ export async function checkSchema(pool: Pool): Promise<boolean> {
     // `_schema_version` is written by `pnpm migrate` via scripts/stamp-migration.ts.
     // If it is absent, or its version does not match REQUIRED_SCHEMA_VERSION,
     // the database has not been fully migrated for this release.
-    const versionResult = await client.query<{ version: string }>(
+    const versionResult = await client.query(
       `SELECT version FROM _schema_version WHERE id = 1`
     );
 

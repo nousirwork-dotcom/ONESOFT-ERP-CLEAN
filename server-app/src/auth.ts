@@ -1,13 +1,26 @@
 import { SignJWT, jwtVerify } from 'jose';
 import bcrypt from 'bcryptjs';
 import { db } from './db.js';
-import { users, organizations } from './schema.js';
-import { eq, and } from 'drizzle-orm';
+import { users, organizations, appSettings } from './schema.js';
+import { eq, and, sql } from 'drizzle-orm';
 import { ENV } from './env.js';
 import type { Request, Response } from 'express';
 import { saveDevicePrefs } from './lib/devicePrefs.js';
 
 const SECRET = new TextEncoder().encode(ENV.jwtSecret);
+
+// ─── خيارات Cookie المشتركة بين login وlogout ─────────────────────────────────
+// يجب أن يكون clearCookie له نفس خيارات set بالضبط وإلا لن يُمسح في بعض البيئات.
+export function getAuthCookieOptions(): {
+  httpOnly: boolean; secure: boolean; sameSite: 'lax'; path: string;
+} {
+  return {
+    httpOnly: true,
+    secure:   ENV.nodeEnv === 'production',
+    sameSite: 'lax',
+    path:     '/',
+  };
+}
 
 // ─── إنشاء JWT token ──────────────────────────────────────────────────────────
 export async function createToken(payload: {
@@ -15,6 +28,7 @@ export async function createToken(payload: {
   orgId: number;
   username: string;
   role: string;
+  sessionVersion: number;
 }): Promise<string> {
   return new SignJWT(payload as any)
     .setProtectedHeader({ alg: 'HS256' })
@@ -27,7 +41,7 @@ export async function createToken(payload: {
 export async function verifyToken(token: string) {
   try {
     const { payload } = await jwtVerify(token, SECRET);
-    return payload as { userId: number; orgId: number; username: string; role: string };
+    return payload as { userId: number; orgId: number; username: string; role: string; sessionVersion?: number };
   } catch {
     return null;
   }
@@ -61,10 +75,22 @@ export async function getUserFromRequest(req: Request) {
 
   const user = await db.query.users.findFirst({
     where: and(eq(users.id, payload.userId), eq(users.isActive, true)),
-
   });
 
-  return user || null;
+  if (!user) return null;
+
+  // ── فحص allowLogin (مقيّد الدخول) — يُوقف الجلسات النشطة فوراً ─────────────
+  if (user.allowLogin === false) return null;
+
+  // ── إبطال الجلسة إذا تغيّرت sessionVersion (تسجيل خروج كل الأجهزة) ──────────
+  // الرموز القديمة التي لا تحمل sessionVersion تُعامَل كـ version=0
+  // مما يجعل أي رفع للـ sessionVersion يُبطلها تلقائياً
+  const tokenVersion = payload.sessionVersion ?? 0;
+  if (user.sessionVersion !== tokenVersion) {
+    return null;
+  }
+
+  return user;
 }
 
 // ─── تسجيل الدخول ────────────────────────────────────────────────────────────
@@ -92,23 +118,65 @@ export async function loginHandler(req: Request, res: Response) {
       orgRecord = org;
     }
 
-    // البحث عن المستخدم
-    const conditions = orgId
-      ? and(eq(users.username, username), eq(users.orgId, orgId), eq(users.isActive, true))
-      : and(eq(users.username, username), eq(users.isActive, true));
+    // ── رسالة الخطأ العامة (لا تكشف سبب الرفض لأسباب أمنية) ───────────────────
+    const loginErrorMsg = 'اسم المستخدم أو البريد الإلكتروني أو كلمة المرور غير صحيحة';
 
-    const user = await db.query.users.findFirst({ where: conditions });
+    // ── البحث عن المستخدم حسب نوع المدخل ────────────────────────────────────────
+    // كل مستخدم يملك loginMethod خاصاً به: 'username' | 'username_or_email' | 'email'
+    const isEmailInput = username.includes('@');
+    let user: typeof import('./schema.js').users.$inferSelect | undefined;
+    let foundByEmail = false;
 
-    if (!user) return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
+    if (isEmailInput) {
+      // ── البحث بالبريد: نقبل فقط من loginMethod يسمح بالبريد ──────────────
+      const emailVal = username.toLowerCase().trim();
+      const emailCond = orgId
+        ? and(eq(sql`lower(trim(${users.email}))`, emailVal), eq(users.orgId, orgId), eq(users.isActive, true))
+        : and(eq(sql`lower(trim(${users.email}))`, emailVal), eq(users.isActive, true));
+      const emailUser = await db.query.users.findFirst({ where: emailCond });
+      if (emailUser && emailUser.loginMethod !== 'username') {
+        user = emailUser;
+        foundByEmail = true;
+      }
+    } else {
+      // ── البحث باسم المستخدم: نقبل فقط من loginMethod يسمح باسم المستخدم ──
+      const userCond = orgId
+        ? and(eq(users.username, username), eq(users.orgId, orgId), eq(users.isActive, true))
+        : and(eq(users.username, username), eq(users.isActive, true));
+      const usernameUser = await db.query.users.findFirst({ where: userCond });
+      if (usernameUser && usernameUser.loginMethod !== 'email') {
+        user = usernameUser;
+      }
+    }
 
-    const valid = await verifyPassword(safePassword, user.passwordHash);
-    if (!valid) return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
+    if (!user) return res.status(401).json({ error: loginErrorMsg });
+
+    // ── فحص السماح بتسجيل الدخول (allowLogin) ────────────────────────────────
+    if (user.allowLogin === false) {
+      return res.status(403).json({ error: 'غير مسموح لهذا المستخدم بتسجيل الدخول. يرجى التواصل مع مدير النظام.' });
+    }
+
+    // ── منطق التخطي عن كلمة المرور ─────────────────────────────────────────────
+    // يُسمح بالدخول بكلمة مرور فارغة حصراً لحساب ADMIN الذي لم تُعيَّن له كلمة مرور بعد
+    // (أول تشغيل)، شرط أن يكون الدخول باسم المستخدم لا بالبريد.
+    // أي مستخدم آخر (accountant, cashier …) لا يُسمح له بالدخول بدون كلمة مرور حتى لو
+    // كان passwordStatus='not_set'.
+    const skipPassword =
+      user.passwordStatus === 'not_set' &&
+      safePassword === ''               &&
+      !foundByEmail                     &&
+      user.role === 'admin';
+
+    if (!skipPassword) {
+      const valid = await verifyPassword(safePassword, user.passwordHash ?? '');
+      if (!valid) return res.status(401).json({ error: loginErrorMsg });
+    }
 
     // ── أمان: حساب افتراضي بكلمة مرور غير مُعيَّنة (ADMIN أول تشغيل) ──────────
     // يُسمح بالدخول إليه فقط من نفس الجهاز (localhost) حتى تُعيَّن كلمة مرور.
-    // يمنع استغلال الحساب الافتراضي الفارغ عبر الشبكة المحلية قبل ضبط كلمة المرور.
+    // في الإنتاج: الحرس يشتغل فقط في production. في التطوير (Replit) مسموح.
     // المستخدمون العاديون (password_status='set') لا يتأثرون.
-    if (user.passwordStatus === 'not_set') {
+    if (user.passwordStatus === 'not_set' && ENV.nodeEnv === 'production') {
       const remoteAddr = req.socket.remoteAddress ?? '';
       const isLocalhost = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(remoteAddr);
       if (!isLocalhost) {
@@ -134,18 +202,17 @@ export async function loginHandler(req: Request, res: Response) {
       } catch { /* صامت */ }
     }
 
-    // إنشاء token
+    // إنشاء token (يتضمن sessionVersion لإبطال الجلسات عند الحاجة)
     const token = await createToken({
       userId: user.id,
       orgId: user.orgId,
       username: user.username,
       role: user.role,
+      sessionVersion: user.sessionVersion ?? 1,
     });
 
     res.cookie(ENV.cookieName, token, {
-      httpOnly: true,
-      secure: false,
-      sameSite: 'lax',
+      ...getAuthCookieOptions(),
       maxAge: ENV.sessionExpiry,
     });
 
@@ -167,11 +234,7 @@ export async function loginHandler(req: Request, res: Response) {
 
 // ─── تسجيل الخروج ────────────────────────────────────────────────────────────
 export function logoutHandler(req: Request, res: Response) {
-  res.clearCookie(ENV.cookieName, {
-    httpOnly: true,
-    secure: false,
-    sameSite: 'lax',
-  });
+  res.clearCookie(ENV.cookieName, getAuthCookieOptions());
   if (req.method === 'GET') {
     return res.redirect('/');
   }

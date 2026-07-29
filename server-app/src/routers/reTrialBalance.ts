@@ -85,6 +85,50 @@ async function logAction(opts: {
   });
 }
 
+// ─── Standalone balance-sheet computation (no self-reference in router) ────────
+async function computeBalanceSheet(trialBalanceId: number) {
+  const accounts = await db.select().from(reTbAccounts)
+    .where(eq(reTbAccounts.trialBalanceId, trialBalanceId))
+    .orderBy(asc(reTbAccounts.sortOrder));
+  const entries = await db.select().from(reTbEntries).where(eq(reTbEntries.trialBalanceId, trialBalanceId));
+  const entryMap = new Map(entries.map(e => [e.accountId, e]));
+
+  const parentIds = new Set<number>();
+  for (const a of accounts) if (a.parentId) parentIds.add(a.parentId);
+
+  const rows = accounts.map(a => {
+    const e = entryMap.get(a.id);
+    const hasChildren = parentIds.has(a.id);
+    let aggEntry = null;
+    if (hasChildren) {
+      const children = accounts.filter(ca => ca.parentId === a.id);
+      const od = children.reduce((sum, c) => sum + toNum(entryMap.get(c.id)?.openingDebit ?? 0), 0);
+      const oc = children.reduce((sum, c) => sum + toNum(entryMap.get(c.id)?.openingCredit ?? 0), 0);
+      const md = children.reduce((sum, c) => sum + toNum(entryMap.get(c.id)?.movementDebit ?? 0), 0);
+      const mc = children.reduce((sum, c) => sum + toNum(entryMap.get(c.id)?.movementCredit ?? 0), 0);
+      const net = od - oc + md - mc;
+      aggEntry = {
+        openingDebit: od.toFixed(2), openingCredit: oc.toFixed(2),
+        movementDebit: md.toFixed(2), movementCredit: mc.toFixed(2),
+        endingDebit: net >= 0 ? net.toFixed(2) : '0',
+        endingCredit: net < 0 ? (-net).toFixed(2) : '0',
+      } as any;
+    }
+    return { account: { ...a, hasChildren }, entry: hasChildren ? aggEntry : (e ?? null), isParent: hasChildren };
+  });
+  const totals = { openingDebit: 0, openingCredit: 0, movementDebit: 0, movementCredit: 0, endingDebit: 0, endingCredit: 0 };
+  for (const r of rows) {
+    totals.openingDebit  += toNum(r.entry?.openingDebit);
+    totals.openingCredit += toNum(r.entry?.openingCredit);
+    totals.movementDebit += toNum(r.entry?.movementDebit);
+    totals.movementCredit += toNum(r.entry?.movementCredit);
+    totals.endingDebit += toNum(r.entry?.endingDebit);
+    totals.endingCredit += toNum(r.entry?.endingCredit);
+  }
+  const difference = +(totals.endingDebit - totals.endingCredit).toFixed(2);
+  return { rows, totals, difference, status: difference === 0 ? 'balanced' : 'unbalanced' };
+}
+
 // Default simplified chart of accounts
 function getDefaultAccounts(): Array<{
   code: string; name: string; category: string; nature: string; sortOrder: number; isSystem: boolean;
@@ -200,8 +244,8 @@ export const reTrialBalanceRouter = router({
       const q = input?.q?.trim();
       if (q) conditions.push(or(
         ilike(reTrialBalances.name, `%${q}%`),
-        ilike(reTrialBalances.periodLabel ?? '', `%${q}%`),
-        ilike(reTrialBalances.notes ?? '', `%${q}%`),
+        ilike(sql`COALESCE(${reTrialBalances.periodLabel}, '')`, `%${q}%`),
+        ilike(sql`COALESCE(${reTrialBalances.notes}, '')`, `%${q}%`),
       ));
       if (input?.scope) conditions.push(eq(reTrialBalances.scope, input.scope));
       if (input?.status) conditions.push(eq(reTrialBalances.status, input.status));
@@ -612,52 +656,7 @@ export const reTrialBalanceRouter = router({
     .input(z.number().int())
     .query(async ({ ctx, input: trialBalanceId }) => {
       assertViewPerm(ctx.user);
-      const accounts = await db.select().from(reTbAccounts)
-        .where(eq(reTbAccounts.trialBalanceId, trialBalanceId))
-        .orderBy(asc(reTbAccounts.sortOrder));
-      const entries = await db.select().from(reTbEntries).where(eq(reTbEntries.trialBalanceId, trialBalanceId));
-      const entryMap = new Map(entries.map(e => [e.accountId, e]));
-
-      // Build parentId set for hasChildren detection
-      const parentIds = new Set<number>();
-      for (const a of accounts) if (a.parentId) parentIds.add(a.parentId);
-
-      const rows = accounts.map(a => {
-        const e = entryMap.get(a.id);
-        // Aggregate child entries for parent accounts
-        const hasChildren = parentIds.has(a.id);
-        let aggEntry = null;
-        if (hasChildren) {
-          const children = accounts.filter(ca => ca.parentId === a.id);
-          const od = children.reduce((sum, c) => sum + toNum(entryMap.get(c.id)?.openingDebit ?? 0), 0);
-          const oc = children.reduce((sum, c) => sum + toNum(entryMap.get(c.id)?.openingCredit ?? 0), 0);
-          const md = children.reduce((sum, c) => sum + toNum(entryMap.get(c.id)?.movementDebit ?? 0), 0);
-          const mc = children.reduce((sum, c) => sum + toNum(entryMap.get(c.id)?.movementCredit ?? 0), 0);
-          const net = od - oc + md - mc;
-          aggEntry = {
-            openingDebit: od.toFixed(2), openingCredit: oc.toFixed(2),
-            movementDebit: md.toFixed(2), movementCredit: mc.toFixed(2),
-            endingDebit: net >= 0 ? net.toFixed(2) : '0',
-            endingCredit: net < 0 ? (-net).toFixed(2) : '0',
-          } as any;
-        }
-        return { account: { ...a, hasChildren }, entry: hasChildren ? aggEntry : (e ?? null), isParent: hasChildren };
-      });
-      const totals = {
-        openingDebit: 0, openingCredit: 0,
-        movementDebit: 0, movementCredit: 0,
-        endingDebit: 0, endingCredit: 0,
-      };
-      for (const r of rows) {
-        totals.openingDebit  += toNum(r.entry?.openingDebit);
-        totals.openingCredit += toNum(r.entry?.openingCredit);
-        totals.movementDebit += toNum(r.entry?.movementDebit);
-        totals.movementCredit += toNum(r.entry?.movementCredit);
-        totals.endingDebit += toNum(r.entry?.endingDebit);
-        totals.endingCredit += toNum(r.entry?.endingCredit);
-      }
-      const difference = +(totals.endingDebit - totals.endingCredit).toFixed(2);
-      return { rows, totals, difference, status: difference === 0 ? 'balanced' : 'unbalanced' };
+      return computeBalanceSheet(trialBalanceId);
     }),
 
   // ─── Export (raw data for print/Excel/PDF) ───────────────────────────────────
@@ -668,7 +667,7 @@ export const reTrialBalanceRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       assertExportPerm(ctx.user);
-      const bs = await (reTrialBalanceRouter._def.procedures.getBalanceSheet as any)._def.resolver({ ctx, input: input.trialBalanceId });
+      const bs = await computeBalanceSheet(input.trialBalanceId);
       const tb = await db.select().from(reTrialBalances).where(eq(reTrialBalances.id, input.trialBalanceId)).limit(1).then(r => r[0]);
       const tax = await db.select().from(reTbTaxReturns).where(eq(reTbTaxReturns.trialBalanceId, input.trialBalanceId)).limit(1).then(r => r[0] ?? null);
       const result = {

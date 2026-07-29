@@ -177,8 +177,19 @@ function fetchJson(url: string): Promise<unknown> {
   });
 }
 
-// ─── Download file with progress ──────────────────────────────────────────────
+// ─── Download file with progress (cancelable) ─────────────────────────────────
 let downloadedFilePath: string | null = null;
+let _activeRequest:     import('http').ClientRequest | null = null;
+let _downloadAborted    = false;
+
+/** إلغاء التحميل الجاري — يُطلق من update:cancel-download */
+function abortActiveDownload(): void {
+  _downloadAborted = true;
+  if (_activeRequest) {
+    _activeRequest.destroy(new Error('download-cancelled'));
+    _activeRequest = null;
+  }
+}
 
 function downloadFile(
   url:        string,
@@ -186,13 +197,19 @@ function downloadFile(
   onProgress: (e: UpdateProgressEvent) => void,
 ): Promise<void> {
   enforceHttps(url, 'Download URL');
+  _downloadAborted = false;
   return new Promise((resolve, reject) => {
     const file      = fs.createWriteStream(destPath);
     const startTime = Date.now();
 
     const doGet = (u: string) => {
+      if (_downloadAborted) {
+        file.close(); fs.unlink(destPath, () => {});
+        reject(new Error('download-cancelled'));
+        return;
+      }
       enforceHttps(u, 'Redirect URL');
-      https.get(u, (res) => {
+      const req = https.get(u, (res) => {
         if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           doGet(res.headers.location);
           return;
@@ -212,9 +229,20 @@ function downloadFile(
           onProgress({ percent, transferred, total, bytesPerSecond });
         });
         res.pipe(file);
-        res.on('end', () => { file.close(); resolve(); });
-        res.on('error', (e) => { file.close(); fs.unlink(destPath, () => {}); reject(e); });
-      }).on('error', (e) => { file.close(); fs.unlink(destPath, () => {}); reject(e); });
+        res.on('end', () => { _activeRequest = null; file.close(); resolve(); });
+        res.on('error', (e) => {
+          _activeRequest = null;
+          file.close(); fs.unlink(destPath, () => {}); reject(e);
+        });
+      });
+      _activeRequest = req;
+      req.on('error', (e) => {
+        _activeRequest = null;
+        file.close();
+        fs.unlink(destPath, () => {});
+        const isCancelled = _downloadAborted || e.message === 'download-cancelled';
+        reject(isCancelled ? new Error('download-cancelled') : e);
+      });
     };
 
     doGet(url);
@@ -425,6 +453,20 @@ export function setupUpdater(mainWindow: BrowserWindow): void {
     const child = spawn(downloadedFilePath, ['/S'], { detached: true, stdio: 'ignore', shell: false });
     child.unref();
     setTimeout(() => app.quit(), 500);
+    return { ok: true };
+  });
+
+  // ─── IPC: إلغاء التحميل الجاري ──────────────────────────────────────────────
+  ipcMain.handle('update:cancel-download', () => {
+    log('INFO', 'user-cancelled-download');
+    send('update:log', { event: 'user-cancelled-download' });
+    abortActiveDownload();
+    // حذف الملف الجزئي إن وجد
+    if (downloadedFilePath) {
+      try { if (fs.existsSync(downloadedFilePath)) fs.unlinkSync(downloadedFilePath); } catch {}
+      downloadedFilePath = null;
+    }
+    send('update:cancelled', {});
     return { ok: true };
   });
 

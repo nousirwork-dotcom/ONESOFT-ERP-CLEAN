@@ -5,6 +5,7 @@
  *             مستخدم عادي — عرض محدود بدون بيانات حساسة
  */
 import React, { useState } from "react";
+import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import { trpc } from "@/shared/lib/trpc";
 import { toast } from "sonner";
 
@@ -247,7 +248,7 @@ function ZatcaSettings() {
             </div>
             <div style={grp}>
               <label style={lbl}>تاريخ انتهاء الشهادة</label>
-              <input type="date" style={fld} value={cfg.certExpiryDate?.slice(0, 10) ?? ""} onChange={e => set("certExpiryDate", e.target.value)} />
+              <DateSegmentInput value={cfg.certExpiryDate?.slice(0, 10) ?? ""} onChange={v => set("certExpiryDate", v)} standalone style={fld} />
             </div>
           </>
         )}
@@ -588,11 +589,11 @@ function ZatcaLogs({ errorsOnly = false }: { errorsOnly?: boolean }) {
           </div>
           <div>
             <label style={lbl}>من تاريخ</label>
-            <input type="date" style={{ ...fld, height: 26 }} value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1); }} />
+            <DateSegmentInput value={dateFrom} onChange={v => { setDateFrom(v); setPage(1); }} standalone style={{ ...fld, height: 26 }} />
           </div>
           <div>
             <label style={lbl}>إلى تاريخ</label>
-            <input type="date" style={{ ...fld, height: 26 }} value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1); }} />
+            <DateSegmentInput value={dateTo} onChange={v => { setDateTo(v); setPage(1); }} standalone style={{ ...fld, height: 26 }} />
           </div>
           <div style={{ display: "flex", gap: 6 }}>
             <button onClick={() => { setInvNum(""); setEvType(""); setStatus(""); setDateFrom(""); setDateTo(""); setPage(1); }} style={{ height: 26, padding: "0 10px", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: 4, fontSize: 11, cursor: "pointer", fontWeight: 600 }}>مسح</button>

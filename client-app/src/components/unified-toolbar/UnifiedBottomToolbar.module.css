@@ -1,0 +1,254 @@
+/* ─── Outer container — يمتد بعرض الـ Footer بالكامل ────────────── */
+.toolbarOuter {
+  width:           100%;
+  max-width:       100%;
+  min-width:       0;
+  padding:         5px 6px 6px 6px;  /* هامش جانبي 6px — مسافة علوية وسفلية كافية */
+  box-sizing:      border-box;
+
+  background:      #F8F5EF;     /* يندمج مع الـ Footer */
+  box-shadow:      none;         /* الظل على مجموعة الأزرار وليس الخارج */
+  overflow:        hidden;
+}
+
+/* ─── مجموعة الأزرار — تمتد بالعرض مع توزيع متوازن بين المجموعات ── */
+.toolbarGroups {
+  width:           100%;
+  min-width:       0;
+  max-width:       none;
+  margin:          0;
+
+  display:         flex;
+  direction:       rtl;
+  justify-content: space-between;
+  align-items:     stretch;
+
+  /* المظهر البارز — صندوق واحد فاتح */
+  background:      #F7F4EE;
+  border:          1px solid #C9BFAF;
+  border-radius:   10px;
+  box-shadow:      0 3px 10px rgba(0, 0, 0, 0.22);
+
+  overflow:        hidden;
+  height:          auto;         /* الارتفاع يتبع المحتوى */
+
+  padding:         4px;
+}
+
+/* ─── Individual group — لا خلفية ولا حدود ───────────────────────── */
+.toolbarGroup {
+  display:        flex;
+  flex:           0 0 auto;
+  min-width:      0;
+  gap:            3px;
+  align-items:    stretch;
+}
+
+/* ─── فاصل رأسي بين المجموعات الأربع ─────────────────────────────── */
+.toolbarGroup + .toolbarGroup {
+  border-inline-start: 1.5px solid #C9BFAF;
+  margin-inline-start: 5px;
+  padding-inline-start: 5px;
+}
+
+/* ─── Button — مربّع مستقل بحدود وخلفية فاتحة ────────────────────── */
+.toolbarButton {
+  position:       relative;
+
+  display:        flex;
+  flex-direction: column;
+  align-items:    center;
+  justify-content: center;
+
+  width:          58px;
+  min-width:      58px;
+  flex:           0 0 auto;
+  height:         54px;
+  padding:        2px 3px;
+
+  color:          #181818;
+  background:     #FCFAF5;         /* خلفية فاتحة لكل زر */
+  border:         1px solid #DED5C8; /* حدود خفيفة واضحة */
+  border-radius:  6px;             /* زوايا دائرية خفيفة */
+
+  font-family:    inherit;
+  cursor:         pointer;
+
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.toolbarButton:hover:not(:disabled) {
+  background: #F5EFE5;
+  border-color: #C9BFAF;
+}
+
+.toolbarButton:focus-visible {
+  z-index:   2;
+  outline:   none;
+  box-shadow: 0 0 0 1.5px #8A5A2B;
+}
+
+.toolbarButton[data-active="true"] {
+  z-index:   1;
+  background: #EBE5D9;
+  border-color: #B8AD9C;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.10);
+}
+
+.toolbarButton[data-tone="primary"] {
+  color:      #155f9d;
+  border-color: #B8CDE0;
+  background: #EDF3FA;
+}
+
+.toolbarButton[data-tone="primary"]:hover:not(:disabled) {
+  background: #DDE9F5;
+  border-color: #97B5D0;
+}
+
+.toolbarButton[data-tone="danger"] {
+  color: #d82424;
+}
+
+.toolbarButton:disabled {
+  color:      #68635d;
+  background: #F2EFEB;
+  border-color: #E2DCD2;
+  cursor:     not-allowed;
+  opacity:    1;
+}
+
+.toolbarButton:disabled .toolbarShortcut {
+  color: #77716a;
+}
+
+/* ─── Icon ────────────────────────────────────────────────────────── */
+.toolbarIcon {
+  width:         18px;
+  height:        18px;
+  flex:          0 0 auto;
+  margin-bottom: 1px;
+}
+
+/* ─── Label ───────────────────────────────────────────────────────── */
+.toolbarLabel {
+  display:       block;
+
+  max-width:     none;
+  overflow:      visible;
+
+  color:         #111111;
+  font-size:     12px;
+  font-weight:   800;
+  line-height:   15px;
+
+  text-align:    center;
+  white-space:   nowrap;
+  text-overflow: clip;
+}
+
+/* ─── Keyboard shortcut hint ──────────────────────────────────────── */
+.toolbarShortcut {
+  display:       block;
+
+  max-width:     none;
+  overflow:      visible;
+
+  color:         #3e3934;
+  font-size:     9px;
+  font-weight:   700;
+  line-height:   12px;
+
+  text-align:    center;
+  white-space:   nowrap;
+  text-overflow: clip;
+}
+
+/* The full 17-action toolbar must fit in a work window without hiding the
+   output group. Buttons never flex-shrink, so fitting is achieved by using
+   the same compact dimensions for every action rather than clipping a side. */
+.toolbarButton {
+  width: 48px;
+  min-width: 48px;
+  padding-inline: 1px;
+}
+
+.toolbarButton[data-action="delete"] {
+  width: 52px;
+  min-width: 52px;
+}
+
+.toolbarButton[data-action="cancel"] {
+  width: 60px;
+  min-width: 60px;
+}
+
+.toolbarIcon {
+  width: 16px;
+  height: 16px;
+}
+
+.toolbarLabel {
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.toolbarShortcut {
+  font-size: 7px;
+  line-height: 10px;
+}
+
+/* ─── Tools drop-down menu ────────────────────────────────────────── */
+.toolsMenu {
+  overflow:      hidden;
+  padding:       5px 0;
+
+  background:    #ffffff;
+  border:        1px solid #c9c0b4;
+  border-radius: 8px;
+
+  box-shadow:    0 10px 28px rgba(0, 0, 0, 0.26);
+}
+
+.toolsMenuItem {
+  display:         flex;
+  align-items:     center;
+  justify-content: space-between;
+
+  width:           100%;
+  min-height:      37px;
+  padding:         7px 14px;
+
+  color:           #202020;
+  background:      transparent;
+  border:          0;
+
+  font-family:     inherit;
+  font-size:       13px;
+  font-weight:     600;
+
+  text-align:      right;
+
+  cursor:          pointer;
+}
+
+.toolsMenuItem:hover:not(:disabled),
+.toolsMenuItem:focus-visible {
+  background: #eee9df;
+  outline:    none;
+}
+
+.toolsMenuItem:disabled {
+  color:      #817b73;
+  cursor:     not-allowed;
+  opacity:    1;
+}
+
+.toolsSeparator {
+  height:     1px;
+  margin:     4px 0;
+  background: #ddd6cd;
+}

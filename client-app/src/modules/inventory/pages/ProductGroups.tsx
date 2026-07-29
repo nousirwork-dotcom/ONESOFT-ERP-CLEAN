@@ -12,6 +12,8 @@ import {
   Plus, Edit, Trash2, Search, ListTree, TableIcon,
   ChevronDown, ChevronLeft, FolderOpen, Folder, GitBranch
 } from "lucide-react";
+import { FoundationPolicyPanel } from "@/shared/components/FoundationPolicyPanel";
+import type { RecordPolicy } from "@/shared/components/FoundationPolicyPanel";
 
 const emptyForm = {
   groupCode: "",
@@ -26,6 +28,9 @@ const emptyForm = {
   increment: 1,
   codeDigits: 5,
   parentId: undefined as number | undefined,
+  recordPolicy: "flexible" as RecordPolicy,
+  foundationKey: "",
+  includeInFoundation: false,
 };
 
 function buildPreview(prefix: string, totalDigits: number, firstNum: number, increment: number) {
@@ -248,6 +253,9 @@ export default function ProductGroups() {
       increment: g.increment ?? 1,
       codeDigits: g.codeDigits ?? 5,
       parentId: g.parentId,
+      recordPolicy: (g.recordPolicy as RecordPolicy) ?? "flexible",
+      foundationKey: g.foundationKey ?? "",
+      includeInFoundation: g.includeInFoundation ?? false,
     });
     setShowDialog(true);
   };
@@ -272,6 +280,9 @@ export default function ProductGroups() {
       increment: form.increment,
       codeDigits: form.codeDigits,
       parentId: form.parentId,
+      recordPolicy: form.recordPolicy,
+      includeInFoundation: form.includeInFoundation,
+      foundationKey: form.foundationKey || undefined,
     };
     if (editItem) updateMutation.mutate({ id: editItem.id, ...payload });
     else createMutation.mutate(payload);
@@ -617,6 +628,16 @@ export default function ProductGroups() {
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* ── سياسة التأسيس ── */}
+            <div className="px-4 py-2 border-b border-border">
+              <FoundationPolicyPanel
+                recordPolicy={form.recordPolicy}
+                foundationKey={form.foundationKey || null}
+                includeInFoundation={form.includeInFoundation}
+                onChange={(policy, include) => setForm(p => ({ ...p, recordPolicy: policy, includeInFoundation: include }))}
+              />
             </div>
 
             {/* ── إعدادات الترقيم ── */}

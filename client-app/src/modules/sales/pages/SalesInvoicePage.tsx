@@ -7,11 +7,20 @@
  * - تنقل Tab/Enter بين خلايا الجدول
  * - بحث الأصناف بالاسم أو الكود
  */
-import React, { useState, useRef, useCallback, useEffect, KeyboardEvent } from "react";
+import React, { useState, useRef, useCallback, useEffect, useMemo, KeyboardEvent } from "react";
+import { clearBranchDependentFields } from "@/lib/invoiceBranchLogic";
 import { Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/shared/lib/trpc";
-import ERPToolbar, { ERPMode } from "@/shared/components/ERPToolbar";
+import { useLang } from "@/core/contexts/LanguageContext";
+import { useAuth } from "@/core/hooks/useAuth";
+import { useUnsavedChangesGuard } from "@/core/hooks/useUnsavedChangesGuard";
+import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
+import { useRegisterCommands } from "@/components/unified-toolbar/useRegisterCommands";
+import { useDocumentToolsMenu } from "@/components/unified-toolbar/DocumentToolsMenu";
+import type { CommandHandlers, ScreenState } from "@/components/unified-toolbar/useRegisterCommands";
+import { useDocumentNavigation } from "@/components/unified-toolbar/useDocumentNavigation";
+type ERPMode = "view" | "new" | "edit" | "search";
 import PostingPreviewModal from "@/shared/components/PostingPreviewModal";
 import InvoicePrintModal from "@/shared/components/InvoicePrintModal";
 import SendDocumentPanel from "@/shared/components/SendDocumentPanel";
@@ -21,7 +30,9 @@ import { usePrintTemplate } from "@/shared/hooks/usePrintTemplate";
 import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import BasedOnDocInput from "@/shared/components/BasedOnDocInput";
 import ContextSelectInput from "@/shared/components/ContextSelectInput";
+import { InvoiceTableColgroup } from "@/components/responsive-layout";
 import QRCode from "qrcode";
+import styles from "@/components/responsive-layout/ResponsiveLayout.module.css";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface InvoiceLine {
@@ -78,6 +89,19 @@ function fmt(n: number) {
 function fmtDb(n: number) {
   return n.toFixed(4);
 }
+
+function fieldsExcludedFromHeader(el: HTMLElement): boolean {
+  return !!el.closest("[data-global-keyboard], [data-no-desktop-field]");
+}
+
+function focusHeaderField(field: HTMLElement, backwards: boolean): void {
+  if (field.matches("[data-date-field]")) {
+    const parts = Array.from(field.querySelectorAll<HTMLInputElement>("input:not([disabled])"));
+    (backwards ? parts.at(-1) : parts[0])?.focus();
+    return;
+  }
+  field.focus();
+}
 function toDisplayDate(iso: string) {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');
@@ -93,8 +117,54 @@ function toIsoDate(display: string) {
   return display;
 }
 
+// ─── تنبيه صوتي قصير عند إدخال صنف غير مسجل ─────────────────────────────────────
+function playProductBeep() {
+  try {
+    const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "square";
+    osc.frequency.value = 880;
+    gain.gain.value = 0.08;
+    osc.start();
+    osc.stop(ctx.currentTime + 0.08);
+    setTimeout(() => ctx.close(), 150);
+  } catch {
+    // ignore audio errors
+  }
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
-export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: { initialInvoiceId?: number; onDocTypeChange?: (name: string) => void } = {}) {
+export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, onClose, registerClose }: { initialInvoiceId?: number; onDocTypeChange?: (name: string) => void; onClose?: () => void; registerClose?: (requestClose: () => void) => void } = {}) {
+  const { isAr } = useLang();
+  const { user: currentUser } = useAuth();
+  const canChangeSeller = useMemo(() =>
+    currentUser?.role === "admin" || currentUser?.role === "superadmin",
+    [currentUser?.role]
+  );
+
+  // ── نمط موحد لجميع تسميات رأس الفاتورة ───────────────────────────────────
+  const headerLabelStyle: React.CSSProperties = {
+    fontSize: "10px",
+    fontWeight: 700,
+    color: "#555",
+    width: 70,
+    minWidth: 70,
+    textAlign: "right",
+    padding: 0,
+    margin: 0,
+    whiteSpace: "nowrap",
+    flexShrink: 0,
+  };
+  const compactHeaderLabelStyle: React.CSSProperties = {
+    ...headerLabelStyle,
+    width: 42,
+    minWidth: 42,
+  };
   // ── Header state ─────────────────────────────────────────────────────────
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().split("T")[0]);
@@ -108,9 +178,11 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
   const invoiceDatePickerRef = useRef<HTMLInputElement>(null);
   const dueDatePickerRef = useRef<HTMLInputElement>(null);
   const [warehouseId, setWarehouseId] = useState<number | null>(null);
+  const [warehouseDisplayName, setWarehouseDisplayName] = useState<string>(""); // اسم المخزن المحفوظ (للعرض قبل تحميل قائمة المخازن)
   const [journalWarehouseId, setJournalWarehouseId] = useState<number | null>(null); // مخزن مقيَّد من الدفتر
   const [docTypeWarehouseId, setDocTypeWarehouseId] = useState<number | null>(null); // مخزن مقيَّد من نوع السند
   const [paymentType, setPaymentType] = useState<PaymentType>("cash");
+  const [invoiceStatus, setInvoiceStatus] = useState<"draft" | "confirmed" | "paid" | "cancelled">("draft");
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [pendingPayInvoiceId, setPendingPayInvoiceId] = useState<number | null>(null);
   const [pendingPayInvoiceNumber, setPendingPayInvoiceNumber] = useState("");
@@ -118,10 +190,15 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
   const [docTypeId, setDocTypeId] = useState<string>("");
   const [currency, setCurrency] = useState("SAR");
   const [exchangeRate, setExchangeRate] = useState("1.000");
-  const [salesperson, setSalesperson] = useState("");
+  // ── Warehouse / Branch (اختيار المخزن/الفرع أولاً — إلزامي) ────────────────
+  const [branchOpen, setBranchOpen] = useState(false);
+  // ── Seller (بائع من جدول المستخدمين) ──────────────────────────────────────
+  const [sellerUserId, setSellerUserId] = useState<number | null>(null);
+  const [sellerOpen, setSellerOpen] = useState(false);
   const [basedOnType, setBasedOnType] = useState<'sale' | 'quote' | 'order' | 'transfer' | ''>('');
   const [basedOnNum, setBasedOnNum]   = useState("");
   const [basedOnTrigger, setBasedOnTrigger] = useState(""); // يُحرِّك جلب البيانات
+  const [pendingSourceDoc, setPendingSourceDoc] = useState<any | null>(null); // مستند معلّق بانتظار تأكيد تغيير العميل
   const [notes, setNotes] = useState("");
   const [paidAmountOverride, setPaidAmountOverride] = useState<string>("");
   const [paymentBreakdown, setPaymentBreakdown]     = useState<Record<string, number>>({});
@@ -146,6 +223,14 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
   // ── ERP mode ──────────────────────────────────────────────────────────────
   const [erpMode, setErpMode] = useState<ERPMode>("new");
+
+  // ── Dirty guard ───────────────────────────────────────────────────────────
+  const [isDirty, setIsDirty] = useState(false);
+  const skipLinesRef  = useRef(false);
+  const skipHeaderRef = useRef(false);
+  const skipSaveToast = useRef(false);
+  const pendingCreatePayloadRef = useRef<Parameters<typeof createMutation.mutate>[0] | null>(null);
+  const workRootRef = useRef<HTMLDivElement>(null);
 
   // ── ZATCA tab ──────────────────────────────────────────────────────────────
   const [activeMainTab, setActiveMainTab] = useState<"invoice" | "zatca">("invoice");
@@ -172,12 +257,31 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
   const cellRefs = useRef<Map<string, HTMLInputElement>>(new Map());
   const skipAutoPayModal = useRef(false);
+  const draftIdToFinalizeRef = useRef<number | null>(null);
+  const skipUpdateToast = useRef(false);
+
+  // ── مساعدو التنبيه والتركيز على حقل صنف غير مسجل ─────────────────────────────
+  const focusAndSelectCell = useCallback((key: string) => {
+    const el = cellRefs.current.get(key);
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.focus();
+      el.select();
+    });
+  }, []);
+
+  const rejectInvalidProduct = useCallback((key: string) => {
+    playProductBeep();
+    toast.error("الصنف غير مسجل، يرجى اختيار صنف من القائمة.");
+    focusAndSelectCell(key);
+  }, [focusAndSelectCell]);
 
   // ── Queries ───────────────────────────────────────────────────────────────
   const customersQuery   = trpc.customers.list.useQuery({});
   const warehousesQuery  = trpc.warehouses.list.useQuery();
   const productsQuery    = trpc.products.list.useQuery({});
-  const journalsQuery    = trpc.documentJournals.list.useQuery({ docTypes: ["sales_invoice", "sales"] });
+  const journalsQuery    = trpc.documentJournals.list.useQuery({ docType: "sales_invoice" });
+  const salespersonsQuery = trpc.users.listSalespersons.useQuery({ warehouseId: warehouseId ?? undefined });
   const nextNumberQuery  = trpc.salesInvoices.nextNumber.useQuery({ prefix: "INV" });
   const docTypesQuery    = trpc.documentTypes.list.useQuery({ typeId: "sales" });
   const allInvoicesQuery = trpc.salesInvoices.list.useQuery({});
@@ -226,6 +330,32 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     { enabled: !!basedOnType && !!basedOnTrigger }
   );
 
+  // ── Dirty guard hook ──────────────────────────────────────────────────────
+  const { confirmOpen: dirtyConfirmOpen, requestClose: dirtyRequestClose,
+          confirmSave: dirtyConfirmSave, confirmDiscard: dirtyConfirmDiscard,
+          confirmCancel: dirtyConfirmCancel } = useUnsavedChangesGuard({ isDirty });
+
+  // reset dirty when entering view; skip first lines/header effect after mode change
+  useEffect(() => {
+    if (erpMode === "view") { setIsDirty(false); return; }
+    skipLinesRef.current  = true;
+    skipHeaderRef.current = true;
+  }, [erpMode]);
+
+  // mark dirty when lines change (skip first run after mode change)
+  useEffect(() => {
+    if (skipLinesRef.current) { skipLinesRef.current = false; return; }
+    if (erpMode === "new" || erpMode === "edit") setIsDirty(true);
+  }, [lines]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // mark dirty when any header field changes (skip first run after mode change)
+  useEffect(() => {
+    if (skipHeaderRef.current) { skipHeaderRef.current = false; return; }
+    if (erpMode === "new" || erpMode === "edit") setIsDirty(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerId, notes, invoiceDate, dueDate, journalId, warehouseId, docTypeId,
+      currency, sellerUserId, paymentType, paidAmountOverride, customerTaxNumber, customerType]);
+
   // إغلاق dropdown العميل عند الضغط خارجه
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -237,10 +367,45 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // عند ورود بيانات المستند المصدر: ملء حقول الفاتورة
+  // تحديث اسم المخزن الظاهر عند تحميل قائمة المخازن أو تغير المخزن المختار
   useEffect(() => {
-    const src = basedOnQuery.data;
-    if (!src) return;
+    if (!warehouseId) return;
+    const wh = warehousesQuery.data?.find(w => w.id === warehouseId);
+    if (wh?.name) setWarehouseDisplayName(wh.name);
+  }, [warehouseId, warehousesQuery.data]);
+
+  // تعيين البائع = المستخدم الحالي عند فتح فاتورة جديدة، فقط إذا كان مفعّلاً كبائع
+  // مصدر التحقق: نفس حقل users.canBeSalesperson المستخدم في شاشة المستخدمين والـ Backend.
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    if (erpMode !== "new") return;
+    if (navInvoiceId || savedInvoiceId) return;
+    if (sellerUserId) return;
+    if (currentUser.canBeSalesperson) {
+      setSellerUserId(currentUser.id);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, currentUser?.canBeSalesperson, erpMode, navInvoiceId, savedInvoiceId]);
+
+  // تأكد من أن البائع المختار لا يزال مؤهلاً للمخزن/الفرع المختار
+  useEffect(() => {
+    if (erpMode === "view") return;
+    if (!warehouseId) return;
+    if (!sellerUserId) return;
+    const sellers = salespersonsQuery.data ?? [];
+    const currentIsValid = currentUser?.canBeSalesperson && sellers.some(s => s.id === currentUser.id);
+    if (sellers.some(s => s.id === sellerUserId)) return; // البائع المختار مؤهل
+    // البائع المختار غير مؤهل للفرع الحالي → حاول المستخدم الحالي، وإلا اتركه فارغاً
+    if (currentIsValid) {
+      setSellerUserId(currentUser.id);
+    } else if (sellerUserId === currentUser?.id) {
+      setSellerUserId(null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [warehouseId, salespersonsQuery.data, currentUser?.id, currentUser?.canBeSalesperson, erpMode]);
+
+  // تطبيق بيانات مستند مصدر (داخلي — يُستدعى بعد التأكيد إن لزم)
+  const applySourceDoc = (src: NonNullable<typeof basedOnQuery.data>) => {
     if (src.customerName) setCustomerName(src.customerName);
     if (src.customerId)   setCustomerId(src.customerId);
     if (src.warehouseId && !journalWarehouseId) setWarehouseId(src.warehouseId);
@@ -263,7 +428,23 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       })));
     }
     toast.success(`✓ تم استيراد بيانات المستند ${src.number}`);
-  }, [basedOnQuery.data]);
+  };
+
+  // عند ورود بيانات المستند المصدر: تحقق من تعارض العميل ثم طبّق
+  useEffect(() => {
+    const src = basedOnQuery.data;
+    if (!src) return;
+    // إذا كان هناك عميل حالي مختلف عن عميل المستند → انتظر التأكيد
+    const hasCurrentCustomer = !!customerId || !!customerName.trim();
+    const hasNewCustomer     = !!src.customerId || !!src.customerName;
+    const customerConflict   = hasCurrentCustomer && hasNewCustomer &&
+                               (src.customerId !== customerId || src.customerName !== customerName);
+    if (customerConflict) {
+      setPendingSourceDoc(src);
+      return;
+    }
+    applySourceDoc(src);
+  }, [basedOnQuery.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── فتح فاتورة موجودة بالـ ID (من القائمة أو التنقل) ────────────────────
   const navInvoiceQuery = trpc.salesInvoices.get.useQuery(
@@ -283,15 +464,18 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     setCustomerType((inv.customerType as any) ?? 'individual');
     setCustomerTaxNumber(inv.customerTaxNumber ?? "");
     setWarehouseId(inv.warehouseId ?? null);
+    setWarehouseDisplayName(inv.warehouseName ?? "");
     setJournalId(inv.journalId ?? null);
     if (inv.docTypeId) setDocTypeId(String(inv.docTypeId));
     setCurrency(inv.currency ?? "SAR");
     setExchangeRate(inv.exchangeRate ?? "1.000");
     setPaymentType((inv.paymentMethod ?? "cash") as PaymentType);
+    setSellerUserId((inv as any).sellerUserId ?? null);
     setNotes(inv.notes ?? "");
     setPaidAmountOverride(inv.paidAmount ?? "");
     setSavedInvoiceId(inv.id);
     setIsPosted(inv.isPosted ?? false);
+    setInvoiceStatus((inv.status as any) ?? "draft");
     setPaymentBreakdown((inv.paymentBreakdown as Record<string, number>) ?? {});
     setErpMode("view");
     if (inv.items && inv.items.length > 0) {
@@ -314,37 +498,63 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
   const createMutation = trpc.salesInvoices.create.useMutation({
     onSuccess: (data) => {
-      const autoEntry = (data as any).autoPostedEntryNumber as string | undefined;
-      if (autoEntry) {
-        toast.success(`✓ تم حفظ الفاتورة ${data.invoiceNumber} وترحيلها تلقائياً`, {
-          description: `قيد محاسبي رقم ${autoEntry} — الإجمالي: ${fmt(netTotal)} ${currency}`,
-          duration: 6000,
-        });
-      } else {
-        toast.success(`✓ تم حفظ الفاتورة ${data.invoiceNumber} بنجاح`, {
-          description: `الإجمالي: ${fmt(netTotal)} ${currency} — اضغط "ترحيل" لترحيل القيد`,
-          duration: 5000,
-        });
-      }
-      setSavedInvoiceId(data.id);
-      setNavInvoiceId(data.id);
+      setSavedInvoiceId(data.id ?? null);
+      setNavInvoiceId(data.id ?? null);
       setIsPosted(data.isPosted ?? false);
+      setInvoiceNumber(data.invoiceNumber ?? invoiceNumber);
       setErpMode("view");
-      // فتح شاشة الدفع تلقائياً للفواتير النقدية (إلا إذا كانت تُستدعى من saveForPayment)
-      if (paymentType !== "credit" && !skipAutoPayModal.current) {
-        if (netTotal <= 0) {
-          toast.warning("إجمالي الفاتورة يساوي صفر — لا يمكن تسجيل دفعة");
+      // رسالة النجاح تُعرض هنا فقط للحفظ المباشر (آجل)؛ أما عند التأكيد من شاشة الدفع فالنافذة تُعرضها.
+      if (!skipSaveToast.current) {
+        const autoEntry = (data as any).autoPostedEntryNumber as string | undefined;
+        if (autoEntry) {
+          toast.success(`✓ تم حفظ الفاتورة ${data.invoiceNumber} وترحيلها تلقائياً`, {
+            description: `قيد محاسبي رقم ${autoEntry} — الإجمالي: ${fmt(netTotal)} ${currency}`,
+            duration: 6000,
+          });
         } else {
-          setPendingPayInvoiceId(data.id);
-          setPendingPayInvoiceNumber(data.invoiceNumber);
-          setPendingPayTotal(netTotal);
-          setShowPaymentModal(true);
+          toast.success(`✓ تم حفظ الفاتورة ${data.invoiceNumber} بنجاح`, {
+            description: `الإجمالي: ${fmt(netTotal)} ${currency} — اضغط "ترحيل" لترحيل القيد`,
+            duration: 5000,
+          });
         }
       }
-      skipAutoPayModal.current = false;
+      skipSaveToast.current = false;
+      if (data.id) {
+        pendingCreatePayloadRef.current = null;
+      }
     },
-    onError: (e) => toast.error(`خطأ في الحفظ: ${e.message}`),
+    onError: (e) => {
+      skipSaveToast.current = false;
+      toast.error(`خطأ في الحفظ: ${e.message}`);
+    },
   });
+
+  const updateMutation = trpc.salesInvoices.update.useMutation({
+    onSuccess: (data) => {
+      if (skipUpdateToast.current) {
+        skipUpdateToast.current = false;
+        return; // شاشة الدفع تعرض رسالة النجاح بنفسها عند إتمام الدورة الكاملة
+      }
+      toast.success(`✓ تم تحديث المستند ${data.invoiceNumber ?? ""} بنجاح`, {
+        description: `الإجمالي: ${fmt(netTotal)} ${currency}`,
+        duration: 5000,
+      });
+      setInvoiceStatus("confirmed");
+    },
+    onError: (e) => {
+      skipUpdateToast.current = false;
+      toast.error(`خطأ في تحديث المستند: ${e.message}`);
+    },
+  });
+
+  const requestWorkClose = useCallback(() => {
+    if (createMutation.isPending || updateMutation.isPending || showPaymentModal) return;
+    dirtyRequestClose(() => onClose?.());
+  }, [createMutation.isPending, updateMutation.isPending, showPaymentModal, dirtyRequestClose, onClose]);
+
+  useEffect(() => {
+    registerClose?.(requestWorkClose);
+  }, [registerClose, requestWorkClose]);
 
   const postMutation = trpc.posting.postSalesInvoice.useMutation({
     onSuccess: (data) => {
@@ -409,8 +619,11 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       if (j.warehouseId) {
         setWarehouseId(j.warehouseId);
         setJournalWarehouseId(j.warehouseId);
+        const whName = warehousesQuery.data?.find(w => w.id === j.warehouseId)?.name ?? "";
+        setWarehouseDisplayName(whName);
       } else {
         setJournalWarehouseId(null);
+        setWarehouseDisplayName("");
       }
       if (j.defaultCurrency) setCurrency(j.defaultCurrency);
       if (j.defaultPayMethod) setPaymentType(j.defaultPayMethod as any);
@@ -431,6 +644,89 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       toast.error("تعذّر جلب رقم الفاتورة من الدفتر");
     }
   }, [journalsQuery.data, docTypesQuery.data, utils]);
+
+  // تفعيل المخزن/الفرع المختار: مسح جميع البيانات التابعة وإنشاء أول سطر تلقائياً
+  const doSelectWarehouse = useCallback(async (id: number) => {
+    setWarehouseId(id);
+    setBranchOpen(false);
+    // مسح الحقول التابعة للمخزن/الفرع
+    const cleared = clearBranchDependentFields({
+      basedOnType:   basedOnType,
+      basedOnNumber: basedOnNum,
+      sellerUserId:  sellerUserId,
+      lines:         lines,
+    });
+    setBasedOnType(cleared.basedOnType as typeof basedOnType);
+    setBasedOnNum(cleared.basedOnNumber);
+    setBasedOnTrigger('');
+    setSellerUserId(cleared.sellerUserId);
+    setLines(cleared.lines as typeof lines);
+    setJournalId(null);
+    setJournalWarehouseId(null);
+    setDocTypeWarehouseId(null);
+    setDocTypeId("");
+    setCustomerId(null);
+    setCustomerName("");
+    setCustSearch("");
+    setCustomerType('individual');
+    setCustomerTaxNumber("");
+    setPaidAmountOverride("");
+    setPaymentBreakdown({});
+    setInvoiceNumber("");
+    // انتخاب دفتر فاتورة المبيعات المرتبط بالفرع تلقائياً
+    const warehouseJournals = (journalsQuery.data ?? []).filter((j: any) => j.warehouseId === id && j.docType === "sales_invoice");
+    if (warehouseJournals.length >= 1) {
+      await handleJournalSelect(warehouseJournals[0].id);
+    } else {
+      toast.error("لا يوجد دفتر فاتورة مبيعات مرتبط بهذا الفرع");
+    }
+    // تعيين البائع = المستخدم الحالي فقط إذا كان مفعّلاً كبائع في إعدادات المستخدمين
+    if (currentUser?.id && currentUser.canBeSalesperson) {
+      setSellerUserId(currentUser.id);
+    } else {
+      setSellerUserId(null);
+    }
+    // إنشاء سطر أول فارغ وتفعيله + تركيز حقل كود الصنف
+    setTimeout(() => {
+      setLines([EMPTY_LINE()]);
+      setSelectedLineIdx(0);
+      // انتظار إعادة الرسم ثم تركيز حقل كود الصنف في السطر الأول
+      requestAnimationFrame(() => {
+        cellRefs.current.get("0-0")?.focus();
+      });
+    }, 0);
+  }, [journalsQuery.data, handleJournalSelect, basedOnType, basedOnNum, sellerUserId, lines, currentUser?.id]);
+
+  // اختيار المخزن/الفرع مع تأكيد عند وجود بيانات مدخلة
+  // إلغاء تحديد الفرع ومسح جميع البيانات التابعة
+  const handleClearWarehouse = useCallback(() => {
+    setWarehouseId(null);
+    setBranchOpen(false);
+    setJournalId(null);
+    setJournalWarehouseId(null);
+    setDocTypeWarehouseId(null);
+    setDocTypeId("");
+    setCustomerId(null);
+    setCustomerName("");
+    setCustSearch("");
+    setCustomerType('individual');
+    setCustomerTaxNumber("");
+    setBasedOnType('');
+    setBasedOnNum('');
+    setBasedOnTrigger('');
+    setSellerUserId(null);
+    setLines([]);
+    setInvoiceNumber("");
+    setPaidAmountOverride("");
+    setPaymentBreakdown({});
+    setSellerUserId(null);
+  }, []);
+
+  const handleWarehouseSelect = useCallback((id: number) => {
+    if (id === warehouseId) { setBranchOpen(false); return; }
+    // تغيير الفرع مباشرة بدون تأكيد — مع مسح البيانات التابعة
+    void doSelectWarehouse(id);
+  }, [warehouseId, doSelectWarehouse]);
 
   // عند اختيار نوع السند
   const handleDocTypeSelect = useCallback(async (id: string) => {
@@ -535,16 +831,24 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
   // ── Product auto-fill ─────────────────────────────────────────────────────
   const handleProductCodeChange = useCallback((idx: number, code: string) => {
     updateLine(idx, "productCode", code);
-    if (!code) return;
+    if (!code.trim()) {
+      // مسح الصنف المختار يُمسح كل بيانات السطر
+      setLines(prev => {
+        const updated = [...prev];
+        updated[idx] = { ...EMPTY_LINE(), id: updated[idx].id };
+        return updated;
+      });
+      return;
+    }
     const found = (productsQuery.data ?? []).find(
-      (p: any) => p.sku === code || p.barcode === code || String(p.id) === code
+      (p: any) => p.code === code || p.barcode === code || String(p.id) === code
     );
     if (found) {
       const isStock = (found as any).itemType !== "service";
       setLines(prev => {
         const updated = [...prev];
         const l = { ...updated[idx] };
-        l.productCode = found.sku ?? found.barcode ?? code;
+        l.productCode = found.code ?? found.barcode ?? code;
         l.productName = found.name;
         l.productId = found.id;
         l.isStockItem = isStock;
@@ -559,7 +863,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       // كود غير موجود في قاعدة البيانات
       setLines(prev => {
         const updated = [...prev];
-        updated[idx] = { ...updated[idx], productId: undefined, isStockItem: undefined };
+        updated[idx] = { ...updated[idx], productId: undefined, isStockItem: undefined, productName: "", unit: "", unitPrice: "", taxPct: "0", total: "0" };
         return updated;
       });
     }
@@ -574,13 +878,13 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     const totalCols = COL_FIELDS.length;
     const totalRows = lines.length;
 
-    if (e.ctrlKey && e.key === "c") {
+    if (e.ctrlKey && e.code === "KeyC") {
       e.preventDefault();
       setCopiedLine({ ...lines[rowIdx] });
       toast.info(`تم نسخ السطر ${rowIdx + 1}`);
       return;
     }
-    if (e.ctrlKey && e.key === "v") {
+    if (e.ctrlKey && e.code === "KeyV") {
       e.preventDefault();
       if (!copiedLine) { toast.warning("لا يوجد سطر منسوخ"); return; }
       setLines(prev => {
@@ -591,27 +895,40 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       setTimeout(() => cellRefs.current.get(`${rowIdx + 1}-0`)?.focus(), 50);
       return;
     }
-    if (e.key === "Tab" || e.key === "Enter") {
+    if (e.key === "Tab" && e.shiftKey) {
       e.preventDefault();
-      const nextCol = colIdx + 1;
-      if (nextCol < totalCols) {
-        cellRefs.current.get(`${rowIdx}-${nextCol}`)?.focus();
+      const prevCol = colIdx - 1;
+      if (prevCol >= 0 && cellRefs.current.has(`${rowIdx}-${prevCol}`)) {
+        cellRefs.current.get(`${rowIdx}-${prevCol}`)?.focus();
+      } else if (rowIdx > 0) {
+        for (let c = totalCols; c >= 0; c--) {
+          if (cellRefs.current.has(`${rowIdx - 1}-${c}`)) {
+            cellRefs.current.get(`${rowIdx - 1}-${c}`)?.focus();
+            break;
+          }
+        }
+      }
+      return;
+    }
+    if ((e.key === "Tab" && !e.shiftKey) || e.key === "Enter") {
+      e.preventDefault();
+      const nextKey = `${rowIdx}-${colIdx + 1}`;
+      if (cellRefs.current.has(nextKey)) {
+        cellRefs.current.get(nextKey)?.focus();
       } else {
         if (rowIdx + 1 < totalRows) {
           setSelectedLineIdx(rowIdx + 1);
           cellRefs.current.get(`${rowIdx + 1}-0`)?.focus();
         } else {
+          const currentLine = lines[rowIdx];
+          const isEmpty = !currentLine?.productId &&
+            !currentLine?.productCode.trim() &&
+            !currentLine?.productName.trim();
+          if (isEmpty) return;
           addLine();
           setTimeout(() => cellRefs.current.get(`${rowIdx + 1}-0`)?.focus(), 50);
         }
       }
-      return;
-    }
-    if (e.shiftKey && e.key === "Tab") {
-      e.preventDefault();
-      const prevCol = colIdx - 1;
-      if (prevCol >= 0) cellRefs.current.get(`${rowIdx}-${prevCol}`)?.focus();
-      else if (rowIdx > 0) cellRefs.current.get(`${rowIdx - 1}-${totalCols - 1}`)?.focus();
       return;
     }
     if (e.ctrlKey && e.key === "Delete") {
@@ -620,43 +937,106 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     }
   }, [lines, copiedLine, addLine, deleteLine]);
 
+  // ── التحقق من اختيار صنف مسجل في حقل الكود عند Enter/Tab/Blur ─────────────────
+  const handleProductCodeKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>, idx: number) => {
+    const line = lines[idx];
+    const code = line?.productCode?.trim() ?? "";
+    const key = `${idx}-0`;
+
+    // Enter/Tab: اختيار تلقائي إذا كان الكود مطابقًا لصنف مسجل
+    if ((e.key === "Enter" || e.key === "Tab") && code) {
+      const found = (productsQuery.data ?? []).find(
+        (p: any) => p.code === code || p.barcode === code || String(p.id) === code
+      );
+      if (found) {
+        e.preventDefault();
+        handleProductCodeChange(idx, code);
+        requestAnimationFrame(() => cellRefs.current.get(`${idx}-2`)?.focus());
+      } else {
+        e.preventDefault();
+        rejectInvalidProduct(key);
+      }
+      return;
+    }
+
+    // منع الانتقال من حقل كود الصنف إذا كان النص غير مسجل
+    if ((e.key === "Enter" || e.key === "Tab") && !line?.productId && !code) {
+      e.preventDefault();
+      rejectInvalidProduct(key);
+      return;
+    }
+
+    handleCellKeyDown(e, idx, 0);
+  }, [lines, productsQuery.data, handleCellKeyDown, handleProductCodeChange, rejectInvalidProduct]);
+
+  // ── التحقق من مغادرة حقل كود الصنف بدون اختيار صنف مسجل ──────────────────────
+  const handleProductCodeBlur = useCallback((idx: number) => {
+    const line = lines[idx];
+    if (!line) return;
+    const key = `${idx}-0`;
+    if (!line.productId && line.productCode.trim()) {
+      rejectInvalidProduct(key);
+    }
+  }, [lines, rejectInvalidProduct]);
+
   // ── Validation & Save ─────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
-    // Validation
+    const isDraftConversion = savedInvoiceId !== null && invoiceStatus === "draft";
+
+    // فاتورة محفوظة نهائية سابقاً: فتح شاشة الدفع لتسجيل/إكمال الدفع
+    if (savedInvoiceId && !isDraftConversion) {
+      // الفاتورة النهائية موجودة بالفعل؛ حدّث دفع نفس السجل عند التأكيد فقط.
+      // لا يوجد أي create هنا.
+      setPendingPayInvoiceId(savedInvoiceId);
+      setPendingPayInvoiceNumber(invoiceNumber);
+      setPendingPayTotal(netTotal);
+      setShowPaymentModal(true);
+      return;
+    }
+
+    // Validation — throw on failure so the unsaved-changes guard stays open
     if (!journalId) {
       toast.error("يجب اختيار نوع السند قبل الحفظ");
-      return;
+      throw new Error("validation");
     }
-    if (!invoiceNumber.trim()) {
+    // رقم الفاتورة/المسودة يُولّد في الخادم للمستندات الجديدة؛ للمسودات المحفوظة يُستخدم رقمها المسجّل
+    if (savedInvoiceId && invoiceStatus !== "draft" && !invoiceNumber.trim()) {
       toast.error("رقم الفاتورة مطلوب");
-      return;
+      throw new Error("validation");
     }
-    const validLines = lines.filter(l => l.productName.trim() !== "");
+    const validLines = lines.filter(l => l.productName.trim() !== "" || l.productCode.trim() !== "");
     if (validLines.length === 0) {
       toast.error("يجب إضافة صنف واحد على الأقل في الفاتورة");
-      return;
+      throw new Error("validation");
     }
-    // تحقق من أن جميع الأصناف مسجلة في النظام
+    // تحقق من أن جميع الأصناف مسجلة في النظام (لا يُقبل نص يدوي بدون productId)
     for (const l of validLines) {
       if (!l.productId) {
-        const nameOrCode = l.productCode || l.productName;
-        toast.error(`الصنف "${nameOrCode}" غير موجود — يرجى اختيار صنف مسجل أو إنشاء صنف جديد`);
-        return;
+        toast.error("الصنف غير مسجل، يرجى اختيار صنف من القائمة.");
+        throw new Error("validation");
+      }
+    }
+    // تحقق من البائع: مؤهل للفرع/المخزن المختار ومتاح في قائمة البائعين
+    if (sellerUserId && warehouseId) {
+      const sellers = salespersonsQuery.data ?? [];
+      if (!sellers.some(s => s.id === sellerUserId)) {
+        toast.error("البائع المختار غير مُسنَد للفرع/المخزن المختار — اختر بائعاً مؤهلاً");
+        throw new Error("validation");
       }
     }
     // تحقق من الرقم الضريبي للمؤسسات
     if (customerType === 'organization' && !customerTaxNumber.trim()) {
       toast.error("الرقم الضريبي مطلوب للعملاء من نوع مؤسسة");
-      return;
+      throw new Error("validation");
     }
     for (const l of validLines) {
       if (!l.unitPrice || parseFloat(l.unitPrice) === 0) {
         toast.error(`سعر الصنف "${l.productName}" يجب أن يكون أكبر من صفر`);
-        return;
+        throw new Error("validation");
       }
       if (!l.quantity || parseFloat(l.quantity) === 0) {
         toast.error(`كمية الصنف "${l.productName}" يجب أن تكون أكبر من صفر`);
-        return;
+        throw new Error("validation");
       }
     }
 
@@ -667,15 +1047,15 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     if (selectedDocType) {
       if (selectedDocType.requireNote && !notes.trim()) {
         toast.error("يجب إدخال ملاحظة للمستند (مطلوب في نوع المستند المختار)");
-        return;
+        throw new Error("validation");
       }
       if (selectedDocType.requireCustomerCode && !customerId) {
         toast.error("يجب اختيار العميل (مطلوب في نوع المستند المختار)");
-        return;
+        throw new Error("validation");
       }
-      if (selectedDocType.requireEmployeeCode && !salesperson.trim()) {
-        toast.error("يجب إدخال كود الموظف (مطلوب في نوع المستند المختار)");
-        return;
+      if (selectedDocType.requireEmployeeCode && !sellerUserId) {
+        toast.error("يجب اختيار البائع (مطلوب في نوع المستند المختار)");
+        throw new Error("validation");
       }
       if (selectedDocType.noStockDispatch && warehouseId) {
         const stockData = stockQuery.data ?? [];
@@ -688,34 +1068,44 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             toast.error(
               `⛔ لا يوجد رصيد كافٍ للصنف "${line.productName}"\nالمتاح: ${available.toFixed(3)} — المطلوب: ${requested.toFixed(3)}`
             );
-            return;
+            throw new Error("validation");
           }
         }
       }
     }
 
-    // احجز الرقم التسلسلي من الدفتر فقط عند الحفظ الفعلي
-    let finalInvoiceNumber = invoiceNumber;
+    // ── التحقق من ربط الدفتر بالمخزن/الفرع قبل الحفظ ─────────────────────
     if (journalId) {
-      try {
-        finalInvoiceNumber = await nextJournalNumberMutation.mutateAsync({ journalId });
-        setInvoiceNumber(finalInvoiceNumber);
-      } catch {
-        toast.error("تعذّر حجز رقم الفاتورة من الدفتر");
-        return;
+      const selectedJournal = (journalsQuery.data ?? []).find((j: any) => j.id === journalId);
+      if (!selectedJournal) {
+        toast.error("الدفتر المختار غير موجود — اختر فرعاً آخر");
+        throw new Error("journal_missing");
+      }
+      if (!selectedJournal.warehouseId) {
+        toast.error("دفتر فاتورة المبيعات غير مرتبط بمخزن/فرع — أكمل إعداد الدفتر أولاً");
+        throw new Error("journal_no_warehouse");
+      }
+      if (selectedJournal.warehouseId !== warehouseId) {
+        toast.error("دفتر الفرع لا يتوافق مع الفرع المختار — اختر الفرع المرتبط بالدفتر");
+        throw new Error("journal_warehouse_mismatch");
       }
     }
+
+    // الرقم التسلسلي يُحجَز داخل transaction الحفظ في الخادم؛ المعروض هنا مجرد معاينة
+    const finalInvoiceNumber = invoiceNumber;
 
     const paid = paymentType === "cash" ? fmtDb(netTotal) : paymentType === "partial" ? fmtDb(paidAmount) : fmtDb(paidAmount);
     const remaining = paymentType === "cash" ? "0.0000" : fmtDb(remainingAmount);
     const payMethod = paymentType === "cash" ? "cash" : "credit";
     const status = paymentType === "cash" ? "paid" : (remainingAmount <= 0 ? "paid" : "confirmed");
 
-    createMutation.mutate({
+    if (!warehouseId) { toast.error("يجب اختيار الفرع / المخزن أولاً"); throw new Error("validation"); }
+    const payload = {
       invoiceNumber: finalInvoiceNumber,
-      invoiceType: "sale",
+      invoiceType: "sale" as const,
       invoiceDate,
       dueDate: dueDate || undefined,
+      sellerUserId: sellerUserId ?? undefined,
       customerId: customerId ?? undefined,
       customerName: customerName || undefined,
       customerType,
@@ -734,6 +1124,9 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       status: status as any,
       notes: notes || undefined,
       docTypeId: docTypeId ? parseInt(docTypeId) : undefined,
+      basedOnType: basedOnType || undefined,
+      basedOnNumber: basedOnTrigger || undefined,
+      sourceDocumentId: basedOnQuery.data && basedOnQuery.data.sourceType !== 'transfer' ? (basedOnQuery.data as any).id ?? undefined : undefined,
       items: validLines.map((l, idx) => ({
         productId: l.productId,
         productCode: l.productCode || undefined,
@@ -748,81 +1141,120 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
         total: l.total,
         sortOrder: idx,
       })),
-    });
+    };
+
+    // تحويل مسودة إلى مستند نهائي
+    if (isDraftConversion) {
+      const { invoiceType: _invoiceType, ...basePayload } = payload;
+
+      // جميع طرق الدفع تمر من شاشة الدفع؛ لا يُكتب أي شيء في DB قبل التأكيد.
+      // يُستخدم نفس recordId عند تأكيد تحويل المسودة.
+      draftIdToFinalizeRef.current = savedInvoiceId;
+      pendingCreatePayloadRef.current = { ...basePayload } as any;
+      // null يجعل PaymentModal يستدعي onSaveFirst عند التأكيد؛
+      // saveForPayment سيستخدم draftIdToFinalizeRef لتحديث نفس المسودة.
+      setPendingPayInvoiceId(null);
+      setPendingPayInvoiceNumber(invoiceNumber);
+      setPendingPayTotal(netTotal);
+      setShowPaymentModal(true);
+      return;
+    }
+
+    // افتح شاشة الدفع أولاً؛ الإنشاء النهائي يتم داخل saveForPayment عند التأكيد فقط.
+    pendingCreatePayloadRef.current = payload;
+    setPendingPayInvoiceId(null);
+    setPendingPayInvoiceNumber(invoiceNumber);
+    setPendingPayTotal(netTotal);
+    setShowPaymentModal(true);
   }, [
     invoiceNumber, invoiceDate, dueDate, customerId, customerName,
+    sellerUserId,
     customerType, customerTaxNumber,
     warehouseId, currency, exchangeRate, paymentType, paidAmount,
     remainingAmount, notes, lines, subtotal, totalDiscount, totalTax,
-    netTotal, createMutation, journalId, nextJournalNumberMutation,
-    docTypeId, docTypesQuery.data, salesperson, stockQuery.data,
+    netTotal, createMutation, journalId,
+    docTypeId, docTypesQuery.data, stockQuery.data, basedOnQuery.data,
   ]);
 
   // ── Save For Payment (حفظ الفاتورة من شاشة الدفع) ────────────────────────
-  const saveForPayment = useCallback(async (): Promise<number | null> => {
-    if (!journalId) { toast.error("يجب اختيار نوع السند قبل الحفظ"); return null; }
-    if (!invoiceNumber.trim()) { toast.error("رقم الفاتورة مطلوب"); return null; }
-    const validLines = lines.filter(l => l.productName.trim() !== "");
-    if (validLines.length === 0) { toast.error("يجب إضافة صنف واحد على الأقل في الفاتورة"); return null; }
-    for (const l of validLines) {
-      if (!l.productId) {
-        const nameOrCode = l.productCode || l.productName;
-        toast.error(`الصنف "${nameOrCode}" غير موجود — يرجى اختيار صنف مسجل أو إنشاء صنف جديد`);
-        return null;
-      }
-    }
-    if (customerType === 'organization' && !customerTaxNumber.trim()) {
-      toast.error("الرقم الضريبي مطلوب للعملاء من نوع مؤسسة"); return null;
-    }
-    for (const l of validLines) {
-      if (!l.unitPrice || parseFloat(l.unitPrice) === 0) {
-        toast.error(`سعر الصنف "${l.productName}" يجب أن يكون أكبر من صفر`); return null;
-      }
-      if (!l.quantity || parseFloat(l.quantity) === 0) {
-        toast.error(`كمية الصنف "${l.productName}" يجب أن تكون أكبر من صفر`); return null;
-      }
-    }
-    const selectedDocType = docTypeId
-      ? (docTypesQuery.data ?? []).find((dt: any) => String(dt.id) === docTypeId)
-      : null;
-    if (selectedDocType) {
-      if (selectedDocType.requireNote && !notes.trim()) { toast.error("يجب إدخال ملاحظة للمستند"); return null; }
-      if (selectedDocType.requireCustomerCode && !customerId) { toast.error("يجب اختيار العميل"); return null; }
-      if (selectedDocType.requireEmployeeCode && !salesperson.trim()) { toast.error("يجب إدخال كود الموظف"); return null; }
-      if (selectedDocType.noStockDispatch && warehouseId) {
-        const stockData = stockQuery.data ?? [];
-        for (const line of validLines) {
-          if (!line.productId) continue;
-          const inv = stockData.find((s: any) => s.productId === line.productId);
-          const available = Number(inv?.totalQuantity ?? 0);
-          const requested = parseFloat(line.quantity) || 0;
-          if (requested > available) {
-            toast.error(`⛔ لا يوجد رصيد كافٍ للصنف "${line.productName}"\nالمتاح: ${available.toFixed(3)} — المطلوب: ${requested.toFixed(3)}`);
-            return null;
-          }
-        }
-      }
-    }
-    let finalInvoiceNumber = invoiceNumber;
-    if (journalId) {
+  // يُستخدم payload المُعدّ مسبقاً من handleSave؛ التحقق من البيانات تم قبل فتح النافذة.
+  const saveForPayment = useCallback(async (breakdown: Record<string, number>): Promise<number | null> => {
+    const paid = Object.values(breakdown).reduce((s, v) => s + v, 0);
+    const remaining = Math.max(0, netTotal - paid);
+    const isFullPaid = paid >= netTotal - 0.005;
+
+    // ── مسار المسودة: حوّل المسودة وسجّل الدفع معاً داخل transaction واحدة ──────
+    if (draftIdToFinalizeRef.current !== null) {
+      const draftId = draftIdToFinalizeRef.current;
+      const payload = pendingCreatePayloadRef.current;
+      if (!payload) { toast.error("لا توجد بيانات فاتورة جاهزة للحفظ"); return null; }
       try {
-        finalInvoiceNumber = await nextJournalNumberMutation.mutateAsync({ journalId });
-        setInvoiceNumber(finalInvoiceNumber);
-      } catch {
-        toast.error("تعذّر حجز رقم الفاتورة من الدفتر"); return null;
+        skipUpdateToast.current = true;
+        const data = await updateMutation.mutateAsync({
+          id: draftId,
+          ...(payload as any),
+          paidAmount: paid.toFixed(4),
+          remainingAmount: remaining.toFixed(4),
+          paymentMethod: "cash" as any,
+          status: (isFullPaid ? "paid" : "confirmed") as any,
+          paymentBreakdown: breakdown,
+        });
+        draftIdToFinalizeRef.current = null;
+        pendingCreatePayloadRef.current = null;
+        if (data.invoiceNumber) setInvoiceNumber(data.invoiceNumber);
+        setInvoiceStatus(isFullPaid ? "paid" : "confirmed");
+        setNavInvoiceId(draftId); // يُحفّز إعادة جلب بيانات الفاتورة المحدّثة
+        return draftId;
+      } catch (error) {
+        skipUpdateToast.current = false;
+        console.error("[sales.saveForPayment] draft conversion failed:", error);
+        toast.error(`فشل تحويل المسودة: ${error instanceof Error ? error.message : String(error)}`);
+        throw error;
       }
     }
-    const paid = paymentType === "cash" ? fmtDb(netTotal) : fmtDb(paidAmount);
-    const remaining2 = paymentType === "cash" ? "0.0000" : fmtDb(remainingAmount);
-    const payMethod = paymentType === "cash" ? "cash" : "credit";
-    const status = paymentType === "cash" ? "paid" : (remainingAmount <= 0 ? "paid" : "confirmed");
+
+    // ── مسار الفاتورة الجديدة: أنشئ الفاتورة مع تفاصيل الدفع في transaction واحدة ──
+    const payload = pendingCreatePayloadRef.current;
+    if (!payload) { toast.error("لا توجد بيانات فاتورة جاهزة للحفظ"); return null; }
     try {
-      skipAutoPayModal.current = true;
+      skipSaveToast.current = true;
       const data = await createMutation.mutateAsync({
-        invoiceNumber: finalInvoiceNumber,
+        ...payload,
+        paidAmount: paid.toFixed(4),
+        remainingAmount: remaining.toFixed(4),
+        paymentMethod: "cash" as any,
+        status: (isFullPaid ? "paid" : "confirmed") as any,
+        paymentBreakdown: breakdown,
+      });
+      return data.id ?? null;
+    } catch (error) {
+      skipSaveToast.current = false;
+      console.error("[sales.saveForPayment] invoice creation failed:", error);
+      toast.error(`فشل حفظ الفاتورة: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
+    }
+  }, [updateMutation, createMutation, netTotal]);
+
+  // ── التحقق من أن الفاتورة الجديدة لا تحتوي على أي بيانات مُدخلة ──────────────
+  const isInvoiceEmpty = useCallback(() => {
+    const hasLine = lines.some(
+      l => l.productId || l.productName.trim() || l.productCode.trim() || l.quantity !== "1" || l.unitPrice.trim()
+    );
+    return !hasLine && !customerName.trim() && !customerId && !warehouseId && !notes.trim() && !basedOnType && !basedOnNum;
+  }, [lines, customerName, customerId, warehouseId, notes, basedOnType, basedOnNum]);
+
+  // ── حفظ المسودة — يُستخدم من حوار التنقل عند وجود تعديلات غير محفوظة ────────
+  const handleSaveDraft = useCallback(async () => {
+    const validLines = lines.filter(l => l.productName.trim() !== "" || l.productCode.trim() !== "");
+    if (validLines.length === 0) { toast.error("يجب إضافة صنف واحد على الأقل في المسودة"); return; }
+    const payMethod = paymentType === "cash" ? "cash" : "credit";
+    try {
+      await createMutation.mutateAsync({
+        invoiceNumber: "",
         invoiceType: "sale",
         invoiceDate,
         dueDate: dueDate || undefined,
+        sellerUserId: sellerUserId ?? undefined,
         customerId: customerId ?? undefined,
         customerName: customerName || undefined,
         customerType,
@@ -835,12 +1267,15 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
         discountAmount: fmtDb(totalDiscount),
         taxAmount: fmtDb(totalTax),
         total: fmtDb(netTotal),
-        paidAmount: paid,
-        remainingAmount: remaining2,
+        paidAmount: "0.0000",
+        remainingAmount: fmtDb(netTotal),
         paymentMethod: payMethod as any,
-        status: status as any,
+        status: "draft",
         notes: notes || undefined,
         docTypeId: docTypeId ? parseInt(docTypeId) : undefined,
+        basedOnType: basedOnType || undefined,
+        basedOnNumber: basedOnTrigger || undefined,
+        sourceDocumentId: basedOnQuery.data && basedOnQuery.data.sourceType !== 'transfer' ? (basedOnQuery.data as any).id ?? undefined : undefined,
         items: validLines.map((l, idx) => ({
           productId: l.productId,
           productCode: l.productCode || undefined,
@@ -856,18 +1291,16 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           sortOrder: idx,
         })),
       });
-      return data.id;
+      setInvoiceStatus("draft");
+      toast.success("تم حفظ المسودة");
     } catch {
-      skipAutoPayModal.current = false;
-      return null;
+      throw new Error("draft-save-failed");
     }
   }, [
-    invoiceNumber, invoiceDate, dueDate, customerId, customerName,
-    customerType, customerTaxNumber,
-    warehouseId, currency, exchangeRate, paymentType, paidAmount,
-    remainingAmount, notes, lines, subtotal, totalDiscount, totalTax,
-    netTotal, createMutation, journalId, nextJournalNumberMutation,
-    docTypeId, docTypesQuery.data, salesperson, stockQuery.data,
+    invoiceDate, dueDate, customerId, customerName, sellerUserId,
+    customerType, customerTaxNumber, warehouseId, currency, exchangeRate,
+    paymentType, notes, lines, subtotal, totalDiscount, totalTax, netTotal,
+    createMutation, journalId, docTypeId, basedOnType, basedOnTrigger, basedOnQuery.data,
   ]);
 
   // ── New Invoice ───────────────────────────────────────────────────────────
@@ -916,7 +1349,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     setBasedOnTrigger('');
     setNotes("");
     setDueDate(new Date().toISOString().split("T")[0]);
-    setSalesperson("");
+    setSellerUserId(currentUser?.id ?? null);
     setPaidAmountOverride("");
     setExchangeRate("1.000");
     setErpMode("new");
@@ -924,17 +1357,42 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     setSavedInvoiceId(null);
     setNavInvoiceId(null);
     setIsPosted(false);
+    setInvoiceStatus("draft");
     setPaymentBreakdown({});
     setShowPostingPreview(false);
-    // إذا كان هناك دفتر محدد، اعرض الرقم المتوقع — وإلا يبقى الحقل فارغاً
+    // إذا كان هناك دفتر محدد، أعد تطبيق مخزنه وعرض الرقم المتوقع
     if (journalId) {
+      const j = (journalsQuery.data ?? []).find((x: any) => x.id === journalId);
+      if (j?.warehouseId) {
+        setWarehouseId(j.warehouseId);
+        setJournalWarehouseId(j.warehouseId);
+      }
       utils.documentJournals.previewNextNumber.fetch({ journalId }).then(preview => {
         if (preview) setInvoiceNumber(preview);
       }).catch(() => setInvoiceNumber(""));
     } else {
       setInvoiceNumber("");
     }
-  }, [journalId, utils]);
+  }, [journalId, journalsQuery.data, utils]);
+
+  // ── التنقل المركزي بين الفواتير المحفوظة ──────────────────────────────────────
+  const {
+    handlers: navHandlers,
+    hasRecord: navHasRecord,
+    hasPrevious: navHasPrevious,
+    hasNext: navHasNext,
+    showUnsavedDialog: navShowUnsavedDialog,
+    unsavedDialogActions: navUnsavedDialogActions,
+    isSavingDraft: navIsSavingDraft,
+  } = useDocumentNavigation({
+    records: (allInvoicesQuery.data ?? []).filter((i: any) => i.invoiceType === "sale"),
+    currentId: navInvoiceId ?? savedInvoiceId,
+    setCurrentId: id => setNavInvoiceId(id),
+    isDirty,
+    isEmpty: isInvoiceEmpty,
+    saveAsDraft: handleSaveDraft,
+    onBeforeNavigate: () => setErpMode("view" as ERPMode),
+  });
 
   /* ── تحميل PDF الفاتورة (تُستخدم في SendDocumentPanel) ── */
   const handleDownloadPdf = useCallback(async () => {
@@ -973,7 +1431,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           customerCity: (customersQuery.data ?? []).find(c => c.id === customerId)?.city || undefined,
           customerPostalCode: (customersQuery.data ?? []).find(c => c.id === customerId)?.postalCode || undefined,
           customerAdditionalNo: (customersQuery.data ?? []).find(c => c.id === customerId)?.shortAddress || undefined,
-          salesperson: salesperson || undefined,
+          salesperson: sellerUserId ? ((salespersonsQuery.data ?? []).find(u => u.id === sellerUserId)?.name ?? undefined) : undefined,
           paymentType,
           currency,
           notes: notes || undefined,
@@ -1010,101 +1468,231 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
     } catch (e: any) {
       toast.error("تعذّر توليد PDF");
     }
-  }, [invoiceNumber, invoiceDate, customerName, customerCode, customerTaxNumber, salesperson,
+  }, [invoiceNumber, invoiceDate, customerName, customerCode, customerTaxNumber, sellerUserId, salespersonsQuery.data,
       paymentType, currency, notes, lines, subtotal, totalDiscount, totalTax, netTotal,
       paidAmount, remainingAmount, orgQuery.data, qrSettingsQuery.data, templateConfig]);
 
+  // ── Unified Toolbar ──────────────────────────────────────────────────────────
+  const _sipRef = useRef<any>({});
+  _sipRef.current = { erpMode, isDirty, savedInvoiceId, isPosted, handleNew, handleSave, handleSaveDraft, handleDelete, handleDuplicate, handleRepost, createMutation, unpostMutation, allInvoicesQuery, navInvoiceId, setNavInvoiceId, setErpMode, requestWorkClose, setShowPostingPreview, setShowPrintModal, setShowSendPanel, nextNumberQuery };
+
+  // handlers مستقرة ([] deps) — جميع الوصولات عبر _sipRef.current
+  const sipHandlers = useMemo<CommandHandlers>(() => ({
+    save:      () => { _sipRef.current.handleSave(); },
+    draft:     () => { _sipRef.current.handleSaveDraft(); },
+    new:       () => { const s = _sipRef.current; s.handleNew(); s.setErpMode("new" as ERPMode); },
+    duplicate: () => { _sipRef.current.handleDuplicate(); },
+    edit:      () => { _sipRef.current.setErpMode("edit" as ERPMode); toast.info("وضع التعديل"); },
+    delete:    () => { _sipRef.current.handleDelete(); },
+    first:     navHandlers.first,
+    previous:  navHandlers.previous,
+    next:      navHandlers.next,
+    last:      navHandlers.last,
+    approve:   () => { toast.success("تم الاعتماد"); },
+    cancel: () => { const s = _sipRef.current; if (!s.savedInvoiceId) return; if (window.confirm("هل أنت متأكد من إلغاء ترحيل هذه الفاتورة؟")) s.unpostMutation.mutate({ invoiceId: s.savedInvoiceId }); },
+    preview:   () => { const s = _sipRef.current; if (!s.savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً"); return; } s.setShowPostingPreview(true); },
+    send:      () => { const s = _sipRef.current; if (!s.savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً قبل الإرسال"); return; } s.setShowSendPanel(true); },
+    print:     () => { _sipRef.current.setShowPrintModal(true); },
+    exit:      () => {
+      _sipRef.current.requestWorkClose();
+    },
+  }), []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // حالة الشاشة — تتغير مع كل تحديث حقيقي
+  const sipState = useMemo<ScreenState>(() => ({
+    mode: (erpMode === "search" ? "view" : erpMode) as ScreenState["mode"],
+    isDirty,
+    isSaveable: !createMutation.isPending && (erpMode === "new" || erpMode === "edit"),
+    hasRecord:  navHasRecord,
+    // التنقل مبني على وجود سجلات والموقع الحالي (يعمل حتى من فاتورة جديدة فارغة)
+    hasPrevious: navHasPrevious,
+    hasNext:     navHasNext,
+    isApproved: isPosted,
+    isBusy:     createMutation.isPending || updateMutation.isPending,
+  }), [erpMode, isDirty, savedInvoiceId, isPosted, createMutation.isPending, updateMutation.isPending]);
+
+  const documentTools = useDocumentToolsMenu({
+    documentType: "sales_invoice",
+    documentTypeLabel: "فاتورة مبيعات",
+    documentId: savedInvoiceId,
+    documentNumber: invoiceNumber,
+    documentStatus: invoiceStatus,
+    isPosted,
+    isSaved: savedInvoiceId !== null,
+    isAr,
+  });
+  const toolbarTools = documentTools.tools;
+
+  useRegisterCommands(sipHandlers, sipState, toolbarTools);
+
   // ─── Render ───────────────────────────────────────────────────────────────
+  const handleWorkKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!["Enter", "Tab"].includes(e.key) || e.ctrlKey || e.altKey || e.metaKey) return;
+    const target = e.target as HTMLElement;
+    if (target.closest("[data-line-item]")) return;
+
+    // التاريخ مكوّن داخلي من عدة inputs، لكنه حقل واحد في تنقل رأس الفاتورة.
+    const current = target.closest<HTMLElement>("[data-date-field], [data-enter-nav]") ??
+      (target.matches("input:not([disabled]):not([readonly]), textarea:not([disabled])") ? target : null);
+    if (!current) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const fields = Array.from(
+      workRootRef.current?.querySelectorAll<HTMLElement>(
+        "[data-date-field], [data-enter-nav], input:not([disabled]):not([readonly]):not([data-date-segment]), textarea:not([disabled])"
+      ) ?? []
+    ).filter(el =>
+      el.offsetParent !== null &&
+      el.tabIndex !== -1 &&
+      !(el as HTMLButtonElement).disabled &&
+      !el.closest("[data-line-item]") &&
+      !fieldsExcludedFromHeader(el)
+    );
+    const index = fields.indexOf(current);
+    if (index < 0) return;
+    const direction = e.key === "Tab" && e.shiftKey ? -1 : 1;
+    const next = fields[index + direction];
+    if (next) focusHeaderField(next, direction < 0);
+  }, []);
+
   return (
     <div
-      className="flex flex-col h-full text-[#1a1a1a] select-none"
-      style={{ fontFamily: "'Cairo', Tahoma, Arial, sans-serif", fontSize: "12px", background: "#ECE7DD" }}
+      ref={workRootRef}
+      onKeyDownCapture={handleWorkKeyDown}
+       className={`${styles.screenContainer} erp-standard-ui flex flex-col h-full text-[#1a1a1a] select-none`}
+       style={{ fontFamily: "var(--app-font-family)", fontSize: "var(--app-font-size-field-value)", background: "var(--background)" }}
       dir="rtl"
     >
       {/* ── Main Content: outer flex row (left-col + summary) ──────────── */}
       <div className="flex-1 flex overflow-hidden" dir="rtl">
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden" style={{ maxWidth: 1400, marginInline: "auto", width: "100%" }}>
 
       {/* ── Header Form ─────────────────────────────────────────────────── */}
-      <div className="border-b border-[#b0a89a] px-3 pt-2 pb-2" style={{ background: "#F7F5EE", boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }}>
+      <div className="border-b border-[#b0a89a] px-3 pt-2 pb-2" style={{ background: "#FFFFFF", boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }}>
         {/* ثوابت مشتركة لجميع الحقول — ارتفاع موحد 26px + عرض label موحد */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", columnGap: 10, rowGap: 5, alignItems: "center" }}>
+        <div className={styles.formGrid} style={{ columnGap: 10, rowGap: 5, alignItems: "center" }}>
 
-          {/* ══ صف 1: رقم الفاتورة │ بناءً على │ نوع السند ══ */}
+          {/* ══ صف 1 (من اليمين): الفرع ← رقم الفاتورة ← بناءً على ══ */}
 
-          {/* col 1: رقم الفاتورة */}
+          {/* col 1 (يمين): الفرع — أول حقل إلزامي ══ */}
           {(() => {
-            const journals = journalsQuery.data ?? [];
-            const selected = journals.find((j: any) => j.id === journalId);
-            const previewNum = (j: any): string => {
-              const seq = (j.currentSeq ?? 0) === 0 ? (j.firstNumber ?? 1) : (j.currentSeq ?? 0) + (j.increment ?? 1);
-              const padded = String(seq).padStart(j.numDigits ?? 6, "0");
-              const year = j.includeYear ? `-${new Date().getFullYear()}` : "";
-              return `${j.numberPrefix}${year}-${padded}`;
-            };
+            const whs = warehousesQuery.data ?? [];
+            const selWh = whs.find((w: any) => w.id === warehouseId);
+            const wName = (w: any): string => isAr ? (w.name ?? w.nameEn ?? "") : (w.nameEn || (w.name ?? ""));
             return (
-              <div className="flex items-center flex-shrink-0 relative" style={{ gap: 6 }}>
-                <label style={{ fontSize: 10, fontWeight: 700, color: "#D19C05", flexShrink: 0, whiteSpace: "nowrap" }}>رقم الفاتورة</label>
-                {selected && (
-                  <span className="text-[9px] px-1 rounded cursor-pointer" style={{ background: "#dbeafe", color: "#1d4ed8", lineHeight: "16px" }} onClick={() => setJournalId(null)} title="إلغاء الدفتر">
-                    {selected.name} ✕
-                  </span>
-                )}
-                <div className="flex" style={{ height: 26 }}>
-                  <input
-                    value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)}
-                    onContextMenu={e => { e.preventDefault(); setJournalOpen(o => !o); }}
-                    onKeyDown={e => { if (e.key === "F4" || (e.key === "ArrowDown" && e.altKey)) { e.preventDefault(); setJournalOpen(o => !o); } }}
-                    className="classic-input text-center font-bold"
-                    style={{ width: 100, height: 26, background: selected ? "#eff6ff" : "#FFFDE7", borderColor: selected ? "#3b82f6" : "#F59E0B", borderRadius: "4px 0 0 4px", borderLeft: "none", color: "#1a1a1a", fontSize: "13px", fontWeight: 700 }}
-                    title="كليك يمين أو F4 لاختيار الدفتر"
-                  />
-                  <button onClick={() => setJournalOpen(o => !o)} className="flex items-center justify-center" style={{ width: 20, height: 26, borderRadius: "0 4px 4px 0", background: selected ? "#3b82f6" : "#F59E0B", border: `1px solid ${selected ? "#2563eb" : "#d97706"}`, color: "white", fontSize: "9px" }}>▼</button>
-                </div>
-                {journalOpen && (<>
-                  <div className="fixed inset-0 z-[9998]" onClick={() => setJournalOpen(false)} />
-                  <div className="absolute top-full right-0 z-[9999] mt-1 bg-white rounded-lg overflow-hidden" style={{ minWidth: 320, boxShadow: "0 8px 32px rgba(0,0,0,0.18)", border: "1px solid #e2e8f0" }} dir="rtl">
-                    <div className="flex items-center justify-between px-3 py-2" style={{ background: "#1e40af" }}>
-                      <span className="text-white text-[11px] font-bold">دفاتر فاتورة المبيعات</span>
-                      <button onClick={() => setJournalOpen(false)} style={{ color: "rgba(255,255,255,0.7)", fontSize: "11px" }}>✕</button>
-                    </div>
-                    {journals.length === 0 ? (
-                      <div className="px-4 py-5 text-center"><div className="text-[20px] mb-1">📒</div><div className="text-[11px] text-slate-500">لا توجد دفاتر مُعرَّفة</div></div>
-                    ) : (
-                      <div className="overflow-y-auto" style={{ maxHeight: 240 }}>
-                        {journals.map((j: any, idx: number) => {
-                          const isSelected = j.id === journalId;
-                          return (
-                            <button key={j.id} onClick={() => handleJournalSelect(j.id)} className="w-full flex items-center gap-0 text-right transition-colors" style={{ background: isSelected ? "#eff6ff" : idx % 2 === 0 ? "#fafafa" : "white", borderBottom: "1px solid #f1f5f9", padding: "6px 12px" }}>
-                              <span style={{ width: 16, color: isSelected ? "#3b82f6" : "transparent", fontSize: "11px", flexShrink: 0 }}>✓</span>
-                              <div className="flex-1 min-w-0 mx-2">
-                                <div className="text-[12px] font-semibold truncate" style={{ color: isSelected ? "#1d4ed8" : "#1e293b" }}>فاتورة مبيعات – {j.name}</div>
-                                {j.description && <div className="text-[10px] text-slate-400 truncate">{j.description}</div>}
-                              </div>
-                              <div className="font-mono text-[11px] font-bold px-2 py-0.5 rounded shrink-0" style={{ background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0" }}>{previewNum(j)}</div>
-                            </button>
-                          );
-                        })}
+              <div className="flex items-center w-full min-w-0 relative" style={{ gap: 3 }}>
+                <label style={compactHeaderLabelStyle}>
+                  {isAr ? "الفـــــــرع" : "Branch"}
+                </label>
+                <div className="flex relative flex-1 min-w-0" style={{ height: "var(--work-field-h, 26px)" }}>
+                  <button
+                    data-enter-nav="true"
+                    data-focused-entity-type="warehouse"
+                    data-focused-entity-id={warehouseId ?? undefined}
+                    data-focused-field="branch"
+                    data-focused-source="sales-invoice"
+                    data-focused-entity-title={selWh ? wName(selWh) : undefined}
+                    onClick={() => { if (erpMode !== "view") setBranchOpen(o => !o); }}
+                    disabled={erpMode === "view"}
+                    className="flex items-center gap-1 classic-input"
+                    style={{
+                      height: "var(--work-field-h, 26px)", flex: 1, minWidth: 120, paddingInline: "6px 4px",
+                      background: selWh ? "#f0fff4" : "#fff8e1",
+                      border: `2px solid ${selWh ? "#22c55e" : "#f59e0b"}`,
+                      borderRadius: "4px 0 0 4px", borderInlineEnd: "none",
+                      color: selWh ? "#15803d" : "#b45309", fontSize: "11px", fontWeight: 700,
+                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                    }}
+                    title={selWh ? wName(selWh) : "اختر الفرع (مطلوب)"}
+                  >
+                    <span className="flex-1 truncate text-start">
+                      {selWh ? wName(selWh) : "⚠ اختر الفرع"}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => { if (erpMode !== "view") setBranchOpen(o => !o); }}
+                    disabled={erpMode === "view"}
+                    className="flex items-center justify-center flex-shrink-0"
+                    style={{ width: "18px", height: "var(--work-field-h, 26px)", borderRadius: "0 4px 4px 0", background: selWh ? "#22c55e" : "#f59e0b", border: `2px solid ${selWh ? "#16a34a" : "#d97706"}`, borderInlineStart: "none", color: "white", fontSize: "9px" }}
+                  >▼</button>
+
+                  {branchOpen && (<>
+                    <div className="fixed inset-0 z-[9998]" onClick={() => setBranchOpen(false)} />
+                    <div className="absolute top-full z-[9999] mt-1 bg-white rounded-lg overflow-hidden" style={{ insetInlineStart: 0, minWidth: 240, boxShadow: "0 8px 32px rgba(0,0,0,0.18)", border: "1px solid #e2e8f0" }} dir={isAr ? "rtl" : "ltr"}>
+                      <div className="flex items-center justify-between px-3 py-2" style={{ background: "#166534" }}>
+                        <span className="text-white text-[11px] font-bold">اختر الفرع</span>
+                        <button onClick={() => setBranchOpen(false)} style={{ color: "rgba(255,255,255,0.7)", fontSize: "11px" }}>✕</button>
                       </div>
-                    )}
-                    <div className="px-3 py-1.5 flex items-center justify-between" style={{ background: "#f8fafc", borderTop: "1px solid #e2e8f0" }}>
-                      <span className="text-[9px] text-slate-400">كليك يمين أو F4 لفتح القائمة</span>
-                      {journalId && <button onClick={() => { setJournalId(null); setJournalOpen(false); }} className="text-[9px] text-red-400 hover:text-red-600">إلغاء اختيار الدفتر</button>}
+                      {whs.length === 0 ? (
+                        <div className="px-4 py-5 text-center text-[11px] text-slate-500">لا توجد فروع مُعرَّفة</div>
+                      ) : (
+                        <div className="overflow-y-auto" style={{ maxHeight: 220 }}>
+                          {/* زر إلغاء التحديد — يظهر فقط عند وجود فرع مختار */}
+                          {selWh && (
+                            <button onClick={() => { handleClearWarehouse(); }} className="w-full flex items-center transition-colors" style={{ textAlign: isAr ? "right" : "left", background: "#FEF2F2", borderBottom: "1px solid #fecaca", padding: "7px 12px" }}>
+                              <span style={{ width: 16, color: "#ef4444", fontSize: "11px", flexShrink: 0 }}>✕</span>
+                              <div className="flex-1 min-w-0 mx-2">
+                                <div className="text-[12px] font-bold truncate" style={{ color: "#dc2626" }}>إلغاء تحديد الفرع</div>
+                              </div>
+                            </button>
+                          )}
+                          {whs.map((w: any, idx: number) => {
+                            const isSel = w.id === warehouseId;
+                            return (
+                               <button key={w.id} onClick={() => handleWarehouseSelect(w.id)} data-focused-entity-type="warehouse" data-focused-entity-id={w.id} data-focused-field="branch" data-focused-source="sales-invoice" data-focused-entity-title={wName(w)} className="w-full flex items-center transition-colors" style={{ textAlign: isAr ? "right" : "left", background: isSel ? "#f0fff4" : idx % 2 === 0 ? "#fafafa" : "white", borderBottom: "1px solid #f1f5f9", padding: "7px 12px" }}>
+                                <span style={{ width: 16, color: isSel ? "#22c55e" : "transparent", fontSize: "11px", flexShrink: 0 }}>✓</span>
+                                <div className="flex-1 min-w-0 mx-2">
+                                  <div className="text-[12px] font-semibold truncate" style={{ color: isSel ? "#15803d" : "#1e293b" }}>{wName(w)}</div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                </>)}
+                  </>)}
+                </div>
               </div>
             );
           })()}
 
-          {/* col 2-3: بناءً على */}
-          <div className="flex items-center" style={{ gap: 6, gridColumn: "2/4" }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>بناءً على</label>
-            <div className="flex flex-1 min-w-0" style={{ gap: 4 }}>
-              <div style={{ flexShrink: 0, width: 110, display: "flex" }}>
+          {/* col 2: رقم الفاتورة — ملاصق للفرع مباشرة */}
+          <div className="flex items-center justify-center" style={{ gap: 4 }}>
+            <label style={{ ...headerLabelStyle, color: "#D19C05" }}>
+              {isAr ? "رقم الفاتورة" : "Invoice No."}
+            </label>
+            <input
+              value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)}
+              data-focused-entity-type="documentBook"
+              data-focused-entity-id={journalId ?? undefined}
+              data-focused-field="documentBook"
+              data-focused-source="sales-invoice"
+              data-focused-entity-title={(journalsQuery.data ?? []).find((j: any) => j.id === journalId)?.name}
+              className="classic-input text-center font-bold"
+              style={{ width: "128px", height: "var(--work-field-h, 26px)", background: journalId ? "#eff6ff" : !warehouseId ? "#f3f4f6" : "#FFFDE7", borderColor: journalId ? "#3b82f6" : "#F59E0B", borderRadius: "4px", color: !warehouseId ? "#9ca3af" : "#1a1a1a", fontSize: "13px", fontWeight: 700 }}
+              readOnly={!!journalId || !warehouseId}
+              title={!warehouseId ? "اختر الفرع أولاً" : "رقم الفاتورة التسلسلي"}
+            />
+            {savedInvoiceId !== null && invoiceStatus === "draft" && (
+              <span
+                className="px-2 py-0.5 rounded text-[10px] font-bold"
+                style={{ background: "#F59E0B", color: "#fff" }}
+              >
+                مسودة
+              </span>
+            )}
+          </div>
+
+          {/* col 3-4: بناءً على */}
+          <div className="flex items-center w-full min-w-0" style={{ gap: 3, gridColumn: "3/5" }}>
+            <label style={compactHeaderLabelStyle}>بناءً على</label>
+            <div className="flex flex-1 min-w-0" style={{ gap: 6 }}>
+              <div style={{ flexShrink: 0, width: 120, display: "flex" }}>
                 <ContextSelectInput
                   value={basedOnType}
-                  onChange={v => { setBasedOnType(v as any); setBasedOnNum(''); setBasedOnTrigger(''); }}
+                  onChange={v => { if (!warehouseId) { return; } setBasedOnType(v as any); setBasedOnNum(''); setBasedOnTrigger(''); }}
                   options={[
                     { value: "order",    label: "أمر بيع" },
                     { value: "quote",    label: "عرض أسعار" },
@@ -1112,8 +1700,14 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                     { value: "sale",     label: "فاتورة مبيعات" },
                   ]}
                   menuTitle="نوع المستند المصدر"
-                  placeholder="النوع ⊞"
-                  style={{ height: 26 }}
+                  placeholder={!warehouseId ? "— —" : "النوع ⊞"}
+                  disabled={!warehouseId || erpMode === "view"}
+                  focusedEntityType="documentBook"
+                  focusedEntityId={journalId}
+                  focusedFieldName="documentBook"
+                  focusedSourceScreen="sales-invoice"
+                  focusedEntityTitle={(journalsQuery.data ?? []).find((j: any) => j.id === journalId)?.name}
+                  style={{ height: "var(--work-field-h, 26px)" }}
                 />
               </div>
               <BasedOnDocInput
@@ -1127,58 +1721,19 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                 isFound={basedOnTrigger && !basedOnQuery.isFetching
                   ? basedOnQuery.data != null
                   : null}
+                disabled={!warehouseId || erpMode === "view"}
+                focusedEntityType="sourceDocument"
+                focusedEntityId={(basedOnQuery.data as any)?.id}
+                focusedFieldName="basedOn"
+                focusedSourceScreen="sales-invoice"
+                focusedEntityTitle={basedOnTrigger}
               />
             </div>
           </div>
 
-          {/* col 4: نوع السند */}
-          <div className="flex items-center" style={{ gap: 6 }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>نوع السند</label>
-            {(() => {
-              const allDocTypes = docTypesQuery.data ?? [];
-              const filteredDocTypes = journalId ? allDocTypes.filter((dt: any) => dt.journal === String(journalId)) : allDocTypes;
-              const selectedDT = docTypeId ? allDocTypes.find((dt: any) => String(dt.id) === docTypeId) : null;
-              if (allDocTypes.length > 0) {
-                return (
-                  <ContextSelectInput
-                    value={docTypeId}
-                    onChange={v => handleDocTypeSelect(v)}
-                    options={filteredDocTypes.map((dt: any) => ({
-                      value: String(dt.id),
-                      label: dt.codeAr ? `${dt.codeAr} — ${dt.nameAr}` : dt.nameAr,
-                    }))}
-                    menuTitle="نوع السند"
-                    placeholder="نوع السند ⊞"
-                    style={{ height: 26, fontWeight: 600, color: "#1e40af" }}
-                  />
-                );
-              }
-              return (
-                <ContextSelectInput
-                  value={paymentType}
-                  onChange={v => { setPaymentType((v || "cash") as PaymentType); setPaidAmountOverride(""); }}
-                  options={[
-                    { value: "cash",    label: "نقدًا", color: "#15803D" },
-                    { value: "partial", label: "جزئي",  color: "#1D4ED8" },
-                    { value: "credit",  label: "آجل",   color: "#B45309" },
-                  ]}
-                  menuTitle="نوع الدفع"
-                  style={{
-                    height: 26, fontWeight: 700,
-                    background:   paymentType === "cash" ? "#F0FDF4" : paymentType === "partial" ? "#EFF6FF" : "#FFF7ED",
-                    borderColor:  paymentType === "cash" ? "#16A34A" : paymentType === "partial" ? "#2563EB" : "#D97706",
-                    color:        paymentType === "cash" ? "#15803D" : paymentType === "partial" ? "#1D4ED8" : "#B45309",
-                  }}
-                />
-              );
-            })()}
-          </div>
-
-          {/* ══ صف 2: العميل (col 1-3) │ العملة (col 4) ══ */}
-
           {/* col 1-3: العميل */}
-          <div className="flex items-center" ref={custDropRef} style={{ gap: 6, gridColumn: "1/4", position: "relative" }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>العميل</label>
+          <div className="flex items-center" ref={custDropRef} style={{ gap: 3, gridColumn: "1/4", position: "relative" }}>
+            <label style={compactHeaderLabelStyle}>العميل</label>
             <div className="flex flex-1 min-w-0" style={{ gap: 4, position: "relative" }}>
               {/* حقل البحث / اسم العميل */}
               {(() => {
@@ -1196,24 +1751,30 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                       onFocus={() => { if (!customerLocked && !customerId) setShowCustDrop(true); }}
                       onClick={() => { if (!customerLocked && customerId) clearCustomer(); }}
                       readOnly={!!(customerId || customerLocked)}
+                      aria-expanded={showCustDrop ? "true" : "false"}
                       placeholder="ابحث عن عميل..."
                       className="classic-input flex-1 min-w-0"
                       style={{
-                        height: 26,
+                        height: "var(--work-field-h, 26px)",
                         cursor: customerLocked ? "not-allowed" : customerId ? "pointer" : "text",
                         background: customerLocked ? "#f3f4f6" : undefined,
                         paddingLeft: customerId && !customerLocked ? 20 : undefined,
                       }}
                       title={customerId && !customerLocked ? "انقر لتغيير العميل" : undefined}
+                      data-focused-entity-type={customerId ? "customer" : undefined}
+                      data-focused-entity-id={customerId ?? undefined}
+                      data-focused-field="customer"
+                      data-focused-source="sales-invoice"
+                      data-focused-entity-title={customerId ? `${customerCode ? `${customerCode} - ` : ""}${customerName}` : undefined}
                     />
                     {/* زر مسح العميل — يظهر فقط قبل الحفظ */}
                     {customerId && !customerLocked && (
                       <button type="button" onClick={clearCustomer}
-                        style={{ position: "absolute", left: 4, top: "50%", transform: "translateY(-50%)", color: "#ef4444", fontSize: 12, lineHeight: 1, background: "none", border: "none", cursor: "pointer", padding: "0 2px", zIndex: 2 }}
+                        style={{ position: "absolute", left: 4, top: "50%", transform: "translateY(-50%)", color: "#ef4444", fontSize: "var(--work-font-size, 12px)", lineHeight: 1, background: "none", border: "none", cursor: "pointer", padding: "0 2px", zIndex: 2 }}
                         title="تغيير العميل">✕</button>
                     )}
                     {customerId && (
-                      <div className="flex items-center flex-shrink-0 px-1.5 rounded text-[10px] font-bold" style={{ height: 26, background: customerType === 'organization' ? '#EFF6FF' : '#F0FDF4', border: `1px solid ${customerType === 'organization' ? '#93C5FD' : '#86EFAC'}`, color: customerType === 'organization' ? '#1D4ED8' : '#15803D' }}>
+                      <div className="flex items-center flex-shrink-0 px-1.5 rounded text-[10px] font-bold" style={{ height: "var(--work-field-h, 26px)", background: customerType === 'organization' ? '#EFF6FF' : '#F0FDF4', border: `1px solid ${customerType === 'organization' ? '#93C5FD' : '#86EFAC'}`, color: customerType === 'organization' ? '#1D4ED8' : '#15803D' }}>
                         {customerType === 'organization' ? '🏢' : '👤'}
                       </div>
                     )}
@@ -1223,7 +1784,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
               <button type="button"
                 onClick={() => { if (!(savedInvoiceId || isPosted) && !customerId) { setCustSearch(""); setShowCustDrop(v => !v); } }}
                 className="flex-shrink-0 flex items-center justify-center"
-                style={{ width: 26, height: 26, borderRadius: 3, background: (savedInvoiceId || isPosted) ? "#9ca3af" : "#6B7280", color: "white", fontSize: 11, border: "1px solid #4B5563", cursor: (savedInvoiceId || isPosted) ? "not-allowed" : "pointer" }}>▾</button>
+                style={{ width: "var(--work-field-h, 26px)", height: "var(--work-field-h, 26px)", borderRadius: 3, background: (savedInvoiceId || isPosted) ? "#9ca3af" : "#6B7280", color: "white", fontSize: "11px", border: "1px solid #4B5563", cursor: (savedInvoiceId || isPosted) ? "not-allowed" : "pointer" }}>▾</button>
               <button type="button"
                 onClick={async () => {
                   setNewCustName(custSearch.trim()); setNewCustCode(""); setNewCustPhone(""); setNewCustEmail(""); setNewCustAddr("");
@@ -1233,12 +1794,12 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   setShowAddCustomer(true); setShowCustDrop(false);
                 }}
                 className="flex-shrink-0 flex items-center justify-center"
-                style={{ width: 26, height: 26, borderRadius: 3, background: "#D19C05", color: "white", fontSize: 15, fontWeight: 700, border: "1px solid #9A7203" }}
+                style={{ width: "var(--work-field-h, 26px)", height: "var(--work-field-h, 26px)", borderRadius: 3, background: "#D19C05", color: "white", fontSize: "15px", fontWeight: 700, border: "1px solid #9A7203" }}
                 title="إضافة عميل جديد">+</button>
               {customerId && (
                 <div className="flex items-center flex-shrink-0 px-2 rounded text-[10px] font-bold whitespace-nowrap"
                   style={{
-                    height: 26,
+                    height: "var(--work-field-h, 26px)",
                     background: customerTaxNumber ? "#EFF6FF" : "#F0FDF4",
                     border: `1px solid ${customerTaxNumber ? "#93C5FD" : "#86EFAC"}`,
                     color: customerTaxNumber ? "#1D4ED8" : "#15803D",
@@ -1261,7 +1822,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                         onMouseLeave={e => (e.currentTarget.style.background = "")}
                         className="flex items-center gap-2 px-3 cursor-default text-[12px]"
                         style={{ borderBottom: "1px solid #e0e0e0", minHeight: 28, cursor: "default" }}>
-                        <span style={{ fontSize: 13 }}>{(c as any).customerType === 'organization' ? '🏢' : '👤'}</span>
+                        <span style={{ fontSize: "13px" }}>{(c as any).customerType === 'organization' ? '🏢' : '👤'}</span>
                         {(c as any).code && <span className="font-mono text-[11px] font-bold px-1" style={{ background: "#FEF3C7", color: "#D19C05" }}>{(c as any).code}</span>}
                         <span style={{ fontWeight: 500, color: "#1a1a1a" }}>{c.name}</span>
                         {(c as any).customerType === 'organization' && <span className="text-[10px] mr-auto" style={{ color: "#0078D7" }}>مؤسسة</span>}
@@ -1289,9 +1850,9 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             </div>
           </div>
 
-          {/* col 4: العملة — تحت نوع السند */}
-          <div className="flex items-center" style={{ gap: 6 }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>العملة</label>
+          {/* col 4: العملة — بجانب العميل، والبائع تحتها */}
+          <div className="flex items-center w-full min-w-0" style={{ gap: 3, gridColumn: "4" }}>
+            <label style={compactHeaderLabelStyle}>العملة</label>
             <ContextSelectInput
               value={currency}
               onChange={v => setCurrency(v || "SAR")}
@@ -1303,80 +1864,152 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
               ]}
               menuTitle="اختر العملة"
               placeholder="العملة ⊞"
-              style={{ height: 26 }}
+              style={{ height: "var(--work-field-h, 26px)", flex: 1, minWidth: 0, width: "100%" }}
             />
           </div>
 
-          {/* ══ صف 3: المخزن │ تاريخ التحرير │ تاريخ الدفع │ البائع ══ */}
-
           {/* col 1: المخزن */}
-          <div className="flex items-center" style={{ gap: 6 }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>المخزن</label>
+          <div className="flex items-center" style={{ gap: 3, gridColumn: "1" }}>
+            <label style={compactHeaderLabelStyle}>المخزن</label>
             {(() => {
-              const lockedWh = journalWarehouseId ?? docTypeWarehouseId;
-              const whTitle = journalWarehouseId ? "المخزن محدد من الدفتر" : docTypeWarehouseId ? "المخزن محدد من نوع السند" : undefined;
-              const whOptions = (lockedWh
-                ? warehousesQuery.data?.filter(w => w.id === lockedWh)
-                : warehousesQuery.data
-              )?.map(w => ({ value: String(w.id), label: w.name })) ?? [];
+              const activeWh = journalWarehouseId ?? docTypeWarehouseId ?? warehouseId;
+              const whFromList = warehousesQuery.data?.find(w => w.id === activeWh);
+              const whName = whFromList?.name ?? warehouseDisplayName ?? "";
+              const whOptions = activeWh ? [{ value: String(activeWh), label: whName }] : [];
               return (
                 <ContextSelectInput
                   value={warehouseId ? String(warehouseId) : ""}
-                  onChange={v => !lockedWh && setWarehouseId(parseInt(v) || null)}
+                  onChange={() => {}}
                   options={whOptions}
-                  menuTitle="اختر المخزن"
-                  placeholder="المخزن ⊞"
-                  disabled={!!lockedWh}
-                  title={whTitle}
-                  style={{ height: 26 }}
+                  menuTitle="المخزن"
+                  placeholder={activeWh ? "يُحدَّد من الفرع" : "اختر الفرع أولاً"}
+                  disabled={true}
+                  title={activeWh ? `المخزن: ${whName}` : "اختر الفرع أولاً"}
+                  focusedEntityType="warehouse"
+                  focusedEntityId={activeWh}
+                  focusedFieldName="warehouse"
+                  focusedSourceScreen="sales-invoice"
+                  focusedEntityTitle={whName}
+                   style={{ height: "var(--work-field-h, 26px)", flex: 1, minWidth: 0 }}
                 />
               );
             })()}
           </div>
 
-          {/* col 2: تاريخ التحرير */}
-          <div className="flex items-center" style={{ gap: 6 }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>تاريخ التحرير</label>
-            <div className="flex flex-1" style={{ height: 26 }}>
-              <DateSegmentInput value={invoiceDate} onChange={setInvoiceDate} style={{ flex: 1, minWidth: 0, height: 26 }} />
-              <button type="button" onClick={() => invoiceDatePickerRef.current?.showPicker()} className="flex items-center justify-center flex-shrink-0" style={{ height: 26, width: 26, background: "#f3f4f6", border: "1px solid #d1d5db", borderLeft: "none", borderRadius: "0 4px 4px 0", color: "#555", cursor: "pointer", fontSize: 12 }}>📅</button>
-              <input ref={invoiceDatePickerRef} type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} />
+          {/* col 2: تاريخ التحرير — حاوية موحدة بحد واحد */}
+          <div className="flex items-center w-full min-w-0" style={{ gap: 3, gridColumn: "2" }}>
+            <label style={compactHeaderLabelStyle}>تاريخ التحرير</label>
+            <div data-date-field className="flex min-w-0" style={{ flex: "0 0 118px", width: 118, transform: "translateX(-11px)", height: "var(--work-field-h, 26px)", border: "1px solid #d1d5db", borderRadius: 4, overflow: "hidden" }}>
+              <DateSegmentInput value={invoiceDate} onChange={setInvoiceDate} style={{ flex: 1, minWidth: 0, width: "100%", height: "var(--work-field-h, 26px)", border: "none", borderRadius: 0, justifyContent: "center", textAlign: "center", paddingInline: 2 }} />
+              <button type="button" onClick={() => invoiceDatePickerRef.current?.showPicker()} className="flex items-center justify-center flex-shrink-0" style={{ height: "var(--work-field-h, 26px)", width: "26px", background: "#f3f4f6", border: "none", borderInlineStart: "1px solid #d1d5db", color: "#555", cursor: "pointer", fontSize: "var(--work-font-size, 12px)" }}>📅</button>
+              <input ref={invoiceDatePickerRef} type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} aria-hidden="true" />
             </div>
           </div>
 
-          {/* col 3: تاريخ الدفع */}
-          <div className="flex items-center" style={{ gap: 6 }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>تاريخ الدفع</label>
-            <div className="flex flex-1" style={{ height: 26 }}>
-              <DateSegmentInput value={dueDate} onChange={setDueDate} style={{ flex: 1, minWidth: 0, height: 26 }} />
-              <button type="button" onClick={() => dueDatePickerRef.current?.showPicker()} className="flex items-center justify-center flex-shrink-0" style={{ height: 26, width: 26, background: "#f3f4f6", border: "1px solid #d1d5db", borderLeft: "none", borderRadius: "0 4px 4px 0", color: "#555", cursor: "pointer", fontSize: 12 }}>📅</button>
-              <input ref={dueDatePickerRef} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} />
+          {/* col 3: تاريخ الدفع — حاوية موحدة بحد واحد */}
+          <div className="flex items-center w-full min-w-0" style={{ gap: 3, gridColumn: "3" }}>
+            <label style={compactHeaderLabelStyle}>تاريخ الدفع</label>
+            <div data-date-field className="flex min-w-0" style={{ flex: "0 0 118px", width: 118, transform: "translateX(-11px)", height: "var(--work-field-h, 26px)", border: "1px solid #d1d5db", borderRadius: 4, overflow: "hidden" }}>
+              <DateSegmentInput value={dueDate} onChange={setDueDate} style={{ flex: 1, minWidth: 0, width: "100%", height: "var(--work-field-h, 26px)", border: "none", borderRadius: 0, justifyContent: "center", textAlign: "center", paddingInline: 2 }} />
+              <button type="button" onClick={() => dueDatePickerRef.current?.showPicker()} className="flex items-center justify-center flex-shrink-0" style={{ height: "var(--work-field-h, 26px)", width: "26px", background: "#f3f4f6", border: "none", borderInlineStart: "1px solid #d1d5db", color: "#555", cursor: "pointer", fontSize: "var(--work-font-size, 12px)" }}>📅</button>
+              <input ref={dueDatePickerRef} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }} tabIndex={-1} aria-hidden="true" />
             </div>
           </div>
 
-          {/* col 4: البائع — تحت العملة */}
-          <div className="flex items-center" style={{ gap: 6 }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>البائع</label>
-            <input value={salesperson} onChange={e => setSalesperson(e.target.value)} className="classic-input flex-1" style={{ height: 26 }} />
-          </div>
+          {/* col 4: البائع — تلقائيًا = المستخدم الحالي؛ يمكن تغييره فقط للمدير */}
+          {(() => {
+            const sellers = salespersonsQuery.data ?? [];
+            const sellerObj = sellers.find(s => s.id === sellerUserId) ?? (currentUser && sellerUserId === currentUser.id ? currentUser : null);
+            const sellerName = sellerObj ? (sellerObj.name || sellerObj.username) : (currentUser?.name || currentUser?.username || "");
+            const sellerDisabled = !warehouseId || erpMode === "view" || !canChangeSeller;
+            return (
+              <div className="flex items-center relative w-full min-w-0" style={{ gap: 3, gridColumn: "4" }}>
+                <label style={compactHeaderLabelStyle}>البائع</label>
+                  <div className="flex relative flex-1 min-w-0 w-full" style={{ flexBasis: 0, height: "var(--work-field-h, 26px)" }}>
+                  <button
+                    onClick={() => { if (!sellerDisabled) setSellerOpen(o => !o); }}
+                    disabled={sellerDisabled}
+                    data-enter-nav="true"
+                    data-focused-entity-type={sellerUserId ? "user" : undefined}
+                    data-focused-entity-id={sellerUserId ?? undefined}
+                    data-focused-field="seller"
+                    data-focused-source="sales-invoice"
+                    data-focused-entity-title={sellerName || undefined}
+                    className="flex items-center gap-1 classic-input"
+                     style={{
+                       flex: 1, minWidth: 0, width: "100%", boxSizing: "border-box", height: "var(--work-field-h, 26px)", paddingInline: "6px 4px",
+                      background: sellerObj ? "#faf5ff" : !warehouseId ? "#f3f4f6" : "#fafafa",
+                      border: `1px solid ${sellerObj ? "#7c3aed" : "#c9c4bb"}`,
+                      borderRadius: "4px 0 0 4px", borderInlineEnd: "none",
+                      color: sellerObj ? "#5b21b6" : !warehouseId ? "#9ca3af" : "#888",
+                      fontSize: "11px", fontWeight: sellerObj ? 700 : 400,
+                      cursor: sellerDisabled ? "not-allowed" : "pointer",
+                    }}
+                    title={!warehouseId ? "اختر الفرع/المخزن أولاً" : !canChangeSeller ? `البائع: ${sellerName} (لا يمكن تغييره)` : "اختر البائع"}
+                  >
+                    <span className="flex-1 truncate text-start">
+                      {sellerName || (!warehouseId ? "—" : "— اختر البائع —")}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => { if (!sellerDisabled) setSellerOpen(o => !o); }}
+                    disabled={sellerDisabled}
+                    className="flex items-center justify-center flex-shrink-0"
+                    style={{ width: "18px", height: "var(--work-field-h, 26px)", borderRadius: "0 4px 4px 0", background: sellerObj ? "#7c3aed" : "#e5e0d8", border: `1px solid ${sellerObj ? "#6d28d9" : "#c9c4bb"}`, color: sellerObj ? "white" : "#666", fontSize: "9px" }}
+                  >▼</button>
 
+                  {sellerOpen && warehouseId && canChangeSeller && (<>
+                    <div className="fixed inset-0 z-[9998]" onClick={() => setSellerOpen(false)} />
+                    <div className="absolute top-full z-[9999] mt-1 bg-white rounded-lg overflow-hidden" style={{ insetInlineStart: 0, minWidth: 220, boxShadow: "0 8px 32px rgba(0,0,0,0.18)", border: "1px solid #e2e8f0" }} dir={isAr ? "rtl" : "ltr"}>
+                      <div className="px-3 py-2" style={{ background: "#4c1d95" }}>
+                        <span className="text-white text-[11px] font-bold">اختر البائع</span>
+                      </div>
+                      {sellers.length === 0 ? (
+                        <div className="px-4 py-4 text-center text-[11px] text-slate-500">لا يوجد بائعون مؤهلون لهذا الفرع/المخزن</div>
+                      ) : (
+                        <div className="overflow-y-auto" style={{ maxHeight: 200 }}>
+                          {sellers.map((s, idx) => {
+                            const isSel = s.id === sellerUserId;
+                            return (
+                              <button key={s.id} onClick={() => { setSellerUserId(s.id); setSellerOpen(false); }} className="w-full flex items-center transition-colors" style={{ textAlign: isAr ? "right" : "left", background: isSel ? "#f5f3ff" : idx % 2 === 0 ? "#fafafa" : "white", borderBottom: "1px solid #f1f5f9", padding: "6px 12px" }}>
+                                <span style={{ width: 16, color: isSel ? "#7c3aed" : "transparent", fontSize: "11px", flexShrink: 0 }}>✓</span>
+                                <div className="flex-1 min-w-0 mx-2">
+                                  <div className="text-[12px] font-semibold truncate" style={{ color: isSel ? "#5b21b6" : "#1e293b" }}>{s.name || s.username}</div>
+                                  {(s as any).code && <div className="text-[10px] text-slate-400">كود: {(s as any).code}</div>}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {sellerUserId && (
+                        <div className="px-3 py-1.5" style={{ background: "#f8fafc", borderTop: "1px solid #e2e8f0" }}>
+                          <button onClick={() => { setSellerUserId(null); setSellerOpen(false); }} className="text-[9px] text-red-400 hover:text-red-600">إلغاء الاختيار</button>
+                        </div>
+                      )}
+                    </div>
+                  </>)}
+                </div>
+              </div>
+            );
+          })()}
           {/* ══ صف 4: ملحوظة ══ */}
-          <div className="flex items-center" style={{ gap: 6, gridColumn: "1/-1" }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: "#555", minWidth: 62, flexShrink: 0, whiteSpace: "nowrap" }}>ملحوظة</label>
-            <input value={notes} onChange={e => setNotes(e.target.value)} className="classic-input flex-1" style={{ height: 26 }} />
+          <div className="flex items-center w-full min-w-0" style={{ gap: 3, gridColumn: "1/-1" }}>
+            <label style={compactHeaderLabelStyle}>ملاحظة</label>
+            <input value={notes} onChange={e => setNotes(e.target.value)} className="classic-input flex-1" style={{ height: "var(--work-field-h, 26px)" }} />
           </div>
 
         </div>
       </div>
 
       {/* ── Main Tab Bar ─────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #b0a89a", background: "#F0EDE4", padding: "0 10px" }}>
+      <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #b0a89a", background: "#F2F0EC", padding: "0 10px" }}>
         {[
           { id: "invoice", label: "📋 بيانات الفاتورة" },
           { id: "zatca",   label: "🏛️ الهيئة (ZATCA)", disabled: !currentInvId },
         ].map(t => (
           <button key={t.id} onClick={() => !t.disabled && setActiveMainTab(t.id as "invoice" | "zatca")}
-            style={{ height: 30, padding: "0 14px", border: "none", borderBottom: activeMainTab === t.id ? "2px solid #D19C05" : "2px solid transparent", background: "transparent", color: activeMainTab === t.id ? "#D19C05" : t.disabled ? "#bbb" : "#4a4a4a", fontWeight: activeMainTab === t.id ? 800 : 600, fontSize: 11, cursor: t.disabled ? "not-allowed" : "pointer", fontFamily: "'Cairo', Tahoma, Arial, sans-serif", marginBottom: -1 }}>
+            style={{ height: "var(--work-btn-h, 30px)", padding: "0 14px", border: "none", borderBottom: activeMainTab === t.id ? "2px solid #D19C05" : "2px solid transparent", background: "transparent", color: activeMainTab === t.id ? "#D19C05" : t.disabled ? "#bbb" : "#4a4a4a", fontWeight: activeMainTab === t.id ? 800 : 600, fontSize: "11px", cursor: t.disabled ? "not-allowed" : "pointer", fontFamily: "'Cairo', Tahoma, Arial, sans-serif", marginBottom: -1 }}>
             {t.label}
             {t.id === "zatca" && currentInvId && zatcaQuery.data?.zatcaStatus === "cleared" && (
               <span style={{ marginRight: 4, fontSize: 9, color: "#16a34a" }}>✓</span>
@@ -1387,7 +2020,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
       {/* ── ZATCA Panel ──────────────────────────────────────────────────── */}
       {activeMainTab === "zatca" && currentInvId && (
-        <div className="flex-1 overflow-auto p-4" style={{ background: "#F7F5EE" }} dir="rtl">
+        <div className="flex-1 overflow-auto p-4" style={{ background: "#FFFFFF" }} dir="rtl">
           {zatcaQuery.isLoading ? (
             <div style={{ textAlign: "center", padding: 40, color: "#9ca3af" }}>جارٍ التحميل...</div>
           ) : zatcaQuery.data && (
@@ -1404,24 +2037,24 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                 };
                 const st = statusMap[zatcaQuery.data.zatcaStatus ?? "not_submitted"] ?? statusMap.not_submitted;
                 return (
-                  <div style={{ padding: "14px 18px", borderRadius: 10, background: st.bg, border: `1px solid ${st.color}44`, marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ padding: "14px 18px", borderRadius: "10px", background: st.bg, border: `1px solid ${st.color}44`, marginBottom: "20px", display: "flex", alignItems: "center", gap: "12px" }}>
                     <span style={{ fontSize: 24 }}>{st.icon}</span>
                     <div>
-                      <div style={{ fontWeight: 800, fontSize: 14, color: st.color }}>{st.label}</div>
+                      <div style={{ fontWeight: 800, fontSize: "14px", color: st.color }}>{st.label}</div>
                       {zatcaQuery.data.zatcaClearedAt && (
-                        <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>
+                        <div style={{ fontSize: "11px", color: "#6b7280", marginTop: 2 }}>
                           تاريخ التخليص: {new Date(zatcaQuery.data.zatcaClearedAt).toLocaleString('ar-SA')}
                         </div>
                       )}
                     </div>
                     <div style={{ marginRight: "auto", display: "flex", gap: 8 }}>
                       {zatcaQuery.data.zatcaStatus !== "cleared" && (
-                        <button onClick={() => zatcaSubmitMut.mutate({ invoiceId: currentInvId })} disabled={zatcaSubmitMut.isPending} style={{ height: 30, padding: "0 16px", background: "#D19C05", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: "pointer", opacity: zatcaSubmitMut.isPending ? 0.6 : 1 }}>
+                        <button onClick={() => zatcaSubmitMut.mutate({ invoiceId: currentInvId })} disabled={zatcaSubmitMut.isPending} style={{ height: "var(--work-btn-h, 30px)", padding: "0 16px", background: "#D19C05", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, fontSize: "var(--work-font-size, 12px)", cursor: "pointer", opacity: zatcaSubmitMut.isPending ? 0.6 : 1 }}>
                           {zatcaSubmitMut.isPending ? "جارٍ الإرسال..." : "🏛️ إرسال للهيئة"}
                         </button>
                       )}
                       {zatcaQuery.data.zatcaStatus === "rejected" && (
-                        <button onClick={() => zatcaSubmitMut.mutate({ invoiceId: currentInvId, forceResend: true })} disabled={zatcaSubmitMut.isPending} style={{ height: 30, padding: "0 16px", background: "#dc2626", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                        <button onClick={() => zatcaSubmitMut.mutate({ invoiceId: currentInvId, forceResend: true })} disabled={zatcaSubmitMut.isPending} style={{ height: "var(--work-btn-h, 30px)", padding: "0 16px", background: "#dc2626", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, fontSize: "var(--work-font-size, 12px)", cursor: "pointer" }}>
                           إعادة الإرسال
                         </button>
                       )}
@@ -1432,10 +2065,10 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
               {/* التفاصيل التقنية */}
               <div style={{ background: "#fff", borderRadius: 10, border: "1px solid #e2e8f0", overflow: "hidden" }}>
-                <div style={{ background: "#f8fafc", padding: "10px 16px", fontWeight: 800, fontSize: 12, color: "#374151", borderBottom: "1px solid #e2e8f0" }}>
+                <div style={{ background: "#f8fafc", padding: "10px 16px", fontWeight: 800, fontSize: "var(--work-font-size, 12px)", color: "#374151", borderBottom: "1px solid #e2e8f0" }}>
                   🔑 البيانات التقنية
                 </div>
-                <div style={{ padding: "14px 16px", display: "grid", gridTemplateColumns: "140px 1fr", rowGap: 10, alignItems: "start", fontSize: 12 }}>
+                <div style={{ padding: "14px 16px", display: "grid", gridTemplateColumns: "140px 1fr", rowGap: "10px", alignItems: "start", fontSize: "var(--work-font-size, 12px)" }}>
                   {[
                     { label: "UUID الفاتورة",      value: zatcaQuery.data.zatcaUuid },
                     { label: "Hash التشفيري",       value: zatcaQuery.data.zatcaHash },
@@ -1444,7 +2077,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   ].map(row => row.value ? (
                     <React.Fragment key={row.label}>
                       <div style={{ fontWeight: 700, color: "#6b7280", paddingLeft: 8 }}>{row.label}</div>
-                      <div style={{ fontFamily: "monospace", fontSize: 10, color: "#1e293b", background: "#f8fafc", padding: "3px 8px", borderRadius: 4, wordBreak: "break-all" }}>{row.value}</div>
+                      <div style={{ fontFamily: "monospace", fontSize: "10px", color: "#1e293b", background: "#f8fafc", padding: "3px 8px", borderRadius: 4, wordBreak: "break-all" }}>{row.value}</div>
                     </React.Fragment>
                   ) : null)}
                   {!zatcaQuery.data.zatcaUuid && (
@@ -1458,19 +2091,19 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
               {/* QR Code */}
               {zatcaQuery.data.zatcaQrCode && (
                 <div style={{ marginTop: 16, background: "#fff", borderRadius: 10, border: "1px solid #e2e8f0", padding: "14px 16px" }}>
-                  <div style={{ fontWeight: 700, fontSize: 12, color: "#374151", marginBottom: 10 }}>📱 QR Code الهيئة</div>
-                  <img src={`data:image/png;base64,${zatcaQuery.data.zatcaQrCode}`} alt="ZATCA QR" style={{ width: 140, height: 140 }} />
+                  <div style={{ fontWeight: 700, fontSize: "var(--work-font-size, 12px)", color: "#374151", marginBottom: 10 }}>📱 QR Code الهيئة</div>
+                  <img src={`data:image/png;base64,${zatcaQuery.data.zatcaQrCode}`} alt="ZATCA QR" style={{ width: "140px", height: "140px" }} />
                 </div>
               )}
 
               {/* استجابة الهيئة */}
               {zatcaQuery.data.zatcaResponse && (
                 <div style={{ marginTop: 16, background: "#fff", borderRadius: 10, border: "1px solid #e2e8f0", overflow: "hidden" }}>
-                  <div style={{ background: "#f8fafc", padding: "10px 16px", fontWeight: 700, fontSize: 12, color: "#374151", borderBottom: "1px solid #e2e8f0" }}>
+                  <div style={{ background: "#f8fafc", padding: "10px 16px", fontWeight: 700, fontSize: "var(--work-font-size, 12px)", color: "#374151", borderBottom: "1px solid #e2e8f0" }}>
                     📋 استجابة الهيئة
                   </div>
-                  <div style={{ padding: 14 }}>
-                    <pre style={{ fontFamily: "monospace", fontSize: 10, background: "#1e293b", color: "#e2e8f0", borderRadius: 6, padding: "10px 14px", overflow: "auto", maxHeight: 200, margin: 0 }}>
+                  <div style={{ padding: "14px" }}>
+                    <pre style={{ fontFamily: "monospace", fontSize: "10px", background: "#1e293b", color: "#e2e8f0", borderRadius: "6px", padding: "10px 14px", overflow: "auto", maxHeight: 200, margin: 0 }}>
                       {JSON.stringify(zatcaQuery.data.zatcaResponse, null, 2)}
                     </pre>
                   </div>
@@ -1486,26 +2119,29 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
 
       {/* جدول السطور (يمين) */}
       <div className="flex-1 overflow-auto bg-white">
-        <table className="w-full border-collapse" style={{ fontSize: "12px" }}>
+        <table className="w-full border-collapse" style={{ fontSize: "var(--work-font-size, 12px)" }}>
+          {/* Column widths — sourced centrally from INVOICE_TABLE_COLS via InvoiceTableColgroup */}
+          <InvoiceTableColgroup />
           <thead className="sticky top-0 z-10">
             <tr style={{ background: "#DAD271", color: "#4A3800" }}>
-              <th className="inv-th w-8 text-center">#</th>
-              <th className="inv-th w-24">رقم الصنف</th>
+              <th className="inv-th text-center">#</th>
+              <th className="inv-th">رقم الصنف</th>
               <th className="inv-th">اسم الصنف</th>
-              <th className="inv-th w-20 text-center">الكمية</th>
-              <th className="inv-th w-20 text-center">الوحدة</th>
-              <th className="inv-th w-24 text-center">السعر</th>
-              <th className="inv-th w-14 text-center">خصم%</th>
-              <th className="inv-th w-24 text-center">الخصم ﷼</th>
-              <th className="inv-th w-14 text-center">ض%</th>
-              <th className="inv-th w-24 text-center font-bold">الإجمالي</th>
-              <th className="inv-th w-7"></th>
+              <th className="inv-th text-center">الكمية</th>
+              <th className="inv-th text-center">الوحدة</th>
+              <th className="inv-th text-center">السعر</th>
+              <th className="inv-th text-center">خصم%</th>
+              <th className="inv-th text-center">الخصم ﷼</th>
+              <th className="inv-th text-center">ض%</th>
+              <th className="inv-th text-center font-bold">الإجمالي</th>
+              <th className="inv-th"></th>
             </tr>
           </thead>
-          <tbody>
+          <tbody data-nav-internal="true">
             {lines.map((line, rowIdx) => (
               <tr
                 key={line.id}
+                data-line-item="true"
                 className={`border-b border-[#e8e4dc] ${
                   selectedLineIdx === rowIdx
                     ? "bg-[#EEF4FA]"
@@ -1518,12 +2154,22 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                 <td className="inv-td p-0">
                   <input
                     ref={el => { if (el) cellRefs.current.set(`${rowIdx}-0`, el); }}
+                    data-focused-entity-type={line.productId ? "product" : undefined}
+                    data-focused-entity-id={line.productId ?? undefined}
+                    data-focused-field="productCode"
+                    data-focused-source="sales-invoice"
+                    data-focused-row={line.id}
+                    data-focused-entity-title={line.productCode || line.productName || undefined}
                     value={line.productCode}
-                    onChange={e => handleProductCodeChange(rowIdx, e.target.value)}
+                    onChange={e => { if (!line.productId) handleProductCodeChange(rowIdx, e.target.value); }}
                     onFocus={() => setSelectedLineIdx(rowIdx)}
-                    onKeyDown={e => handleCellKeyDown(e, rowIdx, 0)}
+                    onBlur={() => handleProductCodeBlur(rowIdx)}
+                    onKeyDown={e => handleProductCodeKeyDown(e, rowIdx)}
                     className="inv-cell"
-                    placeholder="كود..."
+                    placeholder={line.productId ? "" : "كود / بحث..."}
+                    readOnly={!!line.productId}
+                    title={line.productId ? "كود الصنف لا يمكن تعديله" : "اكتب كود الصنف واضغط Enter"}
+                    style={line.productId ? { background: "#f5f5f3", color: "#555", cursor: "default" } : undefined}
                   />
                 </td>
 
@@ -1534,7 +2180,14 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                     products={productsQuery.data ?? []}
                     cellRefs={cellRefs}
                     isStockItem={line.isStockItem}
-                    onSelect={(name, code, id, unit, price, tax, itemType) => {
+                    productId={line.productId}
+                    focusedEntityType={line.productId ? "product" : undefined}
+                    focusedEntityId={line.productId}
+                    focusedFieldName="productName"
+                    focusedSourceScreen="sales-invoice"
+                    focusedRowId={line.id}
+                    focusedEntityTitle={line.productCode || line.productName || undefined}
+                     onSelect={(name, code, id, unit, price, tax, itemType) => {
                       setLines(prev => {
                         const updated = [...prev];
                         const l = { ...updated[rowIdx], productName: name, productCode: code, productId: id, unit, unitPrice: price, taxPct: tax, isStockItem: itemType !== "service" };
@@ -1542,6 +2195,26 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                         updated[rowIdx] = l;
                         return updated;
                       });
+                       requestAnimationFrame(() => cellRefs.current.get(`${rowIdx}-2`)?.focus());
+                    }}
+                    onChange={v => {
+                      // السماح بتغيير الوصف/الاسم للصنف الخدمة فقط داخل السطر
+                      if (line.isStockItem) return;
+                      setLines(prev => {
+                        const updated = [...prev];
+                        updated[rowIdx] = { ...updated[rowIdx], productName: v };
+                        return updated;
+                      });
+                    }}
+                    onBlur={() => {
+                      // عند مغادرة حقل الاسم بدون صنف مُختار: مسح بيانات السطر
+                      if (!line.productId && line.productName.trim()) {
+                        setLines(prev => {
+                          const updated = [...prev];
+                          updated[rowIdx] = { ...EMPTY_LINE(), id: updated[rowIdx].id };
+                          return updated;
+                        });
+                      }
                     }}
                     onKeyDown={e => handleCellKeyDown(e, rowIdx, 1)}
                     onFocus={() => setSelectedLineIdx(rowIdx)}
@@ -1625,7 +2298,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   />
                 </td>
 
-                <td className="inv-td text-center font-bold" style={{ color: "#003399", fontSize: "12px" }}>
+                <td className="inv-td text-center font-bold" style={{ color: "#003399", fontSize: "var(--work-font-size, 12px)" }}>
                   {fmt(parseFloat(line.total) || 0)}
                 </td>
 
@@ -1661,7 +2334,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
       {/* ── لوحة الإجماليات (يسار) ──────────────────────────────────────── */}
       <div
         className="border-r border-[#b0a89a] overflow-y-auto flex-shrink-0"
-        style={{ width: 320, minWidth: 320, background: "#F4F1EC" }}
+        style={{ width: "320px", minWidth: "320px", background: "#F4F1EC" }}
       >
         {/* عنوان اللوحة — ثابت دائماً في الأعلى */}
         <div
@@ -1715,15 +2388,11 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
         {/* زر الدفع */}
         <div className="px-3 pt-1 pb-2">
           <button
-            onClick={() => {
-              if (netTotal <= 0) {
-                toast.warning("يجب إضافة أصناف أو مبالغ إلى الفاتورة قبل تسجيل الدفع");
-                return;
-              }
-              setPendingPayInvoiceId(savedInvoiceId);
-              setPendingPayInvoiceNumber(invoiceNumber);
-              setPendingPayTotal(netTotal);
-              setShowPaymentModal(true);
+            type="button"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              void handleSave();
             }}
             disabled={netTotal <= 0}
             className="w-full py-2.5 rounded-md text-[13px] font-bold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
@@ -1767,6 +2436,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             <div className="mx-3 mb-3 rounded-md overflow-hidden border border-[#d4cfc7]" dir="rtl">
               {/* رأس القسم */}
               <button
+                type="button"
                 onClick={openPayModal}
                 className="w-full flex items-center justify-between px-2.5 py-1.5 text-[10px] font-bold text-white"
                 style={{ background: "linear-gradient(to left, #7C5A02, #9A7203)" }}
@@ -1832,74 +2502,13 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
         </div>
       </div>
 
-      {/* ── ERP Toolbar (أسفل الشاشة) ────────────────────────────────── */}
-      <ERPToolbar
-        pageTitle="فواتير المبيعات"
-        mode={erpMode}
-        isSaved={savedInvoiceId !== null}
-        isPosted={isPosted}
-        postingStatus={savedInvoiceId !== null ? (isPosted ? "posted" : "unposted") : null}
-        onNew={() => { handleNew(); setErpMode("new"); }}
-        onEdit={() => { setErpMode("edit"); toast.info("وضع التعديل"); }}
-        onDelete={handleDelete}
-        onSearch={() => { setErpMode("search"); toast.info("بحث..."); }}
-        onRefresh={() => nextNumberQuery.refetch()}
-        onCopy={handleDuplicate}
-        onPost={() => {
-          if (!savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً"); return; }
-          setShowPostingPreview(true);
-        }}
-        onUnpost={() => {
-          if (!savedInvoiceId) return;
-          if (window.confirm("هل أنت متأكد من إلغاء ترحيل هذه الفاتورة؟")) {
-            unpostMutation.mutate({ invoiceId: savedInvoiceId });
-          }
-        }}
-        onRepost={handleRepost}
-        onPreviewJournal={() => {
-          if (!savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً"); return; }
-          setShowPostingPreview(true);
-        }}
-        onApprove={() => toast.success("تم الاعتماد")}
-        onCancel={() => { setErpMode("view"); toast.info("تم الإلغاء"); }}
-        onPrint={() => setShowPrintModal(true)}
-        onSend={() => {
-          if (!savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً قبل الإرسال"); return; }
-          setShowSendPanel(true);
-        }}
-        onFirst={() => {
-          const ids = [...(allInvoicesQuery.data ?? [])].sort((a, b) => a.id - b.id).map(i => i.id);
-          if (ids.length) { setNavInvoiceId(ids[0]); setErpMode("view"); }
-        }}
-        onPrev={() => {
-          const ids = [...(allInvoicesQuery.data ?? [])].sort((a, b) => a.id - b.id).map(i => i.id);
-          const cur = navInvoiceId ?? savedInvoiceId;
-          const idx = cur ? ids.indexOf(cur) : -1;
-          if (idx > 0) { setNavInvoiceId(ids[idx - 1]); setErpMode("view"); }
-          else if (idx === -1 && ids.length) { setNavInvoiceId(ids[ids.length - 1]); setErpMode("view"); }
-        }}
-        onNext={() => {
-          const ids = [...(allInvoicesQuery.data ?? [])].sort((a, b) => a.id - b.id).map(i => i.id);
-          const cur = navInvoiceId ?? savedInvoiceId;
-          const idx = cur ? ids.indexOf(cur) : -1;
-          if (idx >= 0 && idx < ids.length - 1) { setNavInvoiceId(ids[idx + 1]); setErpMode("view"); }
-          else if (idx === -1 && ids.length) { setNavInvoiceId(ids[0]); setErpMode("view"); }
-        }}
-        onLast={() => {
-          const ids = [...(allInvoicesQuery.data ?? [])].sort((a, b) => a.id - b.id).map(i => i.id);
-          if (ids.length) { setNavInvoiceId(ids[ids.length - 1]); setErpMode("view"); }
-        }}
-        onClose={() => toast.info("إغلاق")}
-        enableShortcuts
-      />
-
       {/* ── Styles ──────────────────────────────────────────────────────── */}
       <style>{`
         .classic-input {
           border: 1px solid #a0a0a0;
           padding: 2px 5px;
-          height: 24px;
-          font-size: 12px;
+          height: var(--work-field-h, 24px);
+          font-size: var(--work-font-size, 12px);
           font-family: 'Cairo', Tahoma, Arial, sans-serif;
           background: #fff;
           outline: none;
@@ -1914,27 +2523,31 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           border: 1px solid rgba(255,255,255,0.15);
           border-bottom: 2px solid rgba(0,0,0,0.15);
           padding: 4px 6px;
-          text-align: right;
+          text-align: center;
+          vertical-align: middle;
           font-weight: 700;
-          font-size: 11px;
+          font-size: calc(var(--work-font-size, 12px) - 1px);
           white-space: nowrap;
           font-family: 'Cairo', Tahoma, sans-serif;
+          height: var(--work-row-h, 27px);
         }
         .inv-td {
           border: 1px solid #e8e4dc;
           padding: 1px 3px;
-          height: 27px;
+          height: var(--work-row-h, 27px);
+          text-align: center;
           vertical-align: middle;
         }
         .inv-cell {
           border: none;
           outline: none;
           padding: 2px 4px;
-          height: 25px;
-          font-size: 12px;
+          height: var(--work-cell-h, 25px);
+          font-size: var(--work-font-size, 12px);
           font-family: 'Cairo', Tahoma, Arial, sans-serif;
           background: transparent;
           width: 100%;
+          text-align: center;
         }
         .inv-cell:focus {
           background: #FFFFF0;
@@ -1948,9 +2561,6 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           height: 24px;
           cursor: pointer;
         }
-        .inv-th {
-          padding: 5px 6px;
-        }
       `}</style>
 
       {/* ── نافذة معاينة القيد المحاسبي ─────────────────────────────────── */}
@@ -1963,11 +2573,18 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
         />
       )}
 
+      {documentTools.dialog}
+
       {/* ── شاشة الدفع ──────────────────────────────────────────────────── */}
       {showPaymentModal && (
         <PaymentModal
           open={showPaymentModal}
-          onClose={() => setShowPaymentModal(false)}
+          onClose={() => {
+            // إذا أُلغيت شاشة الدفع دون تأكيد، احتفظ بالمسودة كما هي ولا تُحدِث DB
+            draftIdToFinalizeRef.current = null;
+            pendingCreatePayloadRef.current = null;
+            setShowPaymentModal(false);
+          }}
           invoiceId={pendingPayInvoiceId}
           invoiceNumber={pendingPayInvoiceNumber}
           invoiceTotal={pendingPayTotal}
@@ -2039,7 +2656,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
             customerCity: (customersQuery.data ?? []).find(c => c.id === customerId)?.city || undefined,
             customerPostalCode: (customersQuery.data ?? []).find(c => c.id === customerId)?.postalCode || undefined,
             customerAdditionalNo: (customersQuery.data ?? []).find(c => c.id === customerId)?.shortAddress || undefined,
-            salesperson: salesperson || undefined,
+            salesperson: sellerUserId ? ((salespersonsQuery.data ?? []).find(u => u.id === sellerUserId)?.name ?? undefined) : undefined,
             paymentType,
             currency,
             notes: notes || undefined,
@@ -2138,22 +2755,22 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   <label className="text-[11px] font-bold text-gray-600">اسم العميل <span className="text-red-500">*</span></label>
                   <input autoFocus value={newCustName} onChange={e => setNewCustName(e.target.value)}
                     className="classic-input w-full" placeholder="أدخل اسم العميل..."
-                    style={{ height: 28, fontSize: 13 }} />
+                    style={{ height: "28px", fontSize: "13px" }} />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] font-bold text-gray-600">رقم الجوال</label>
                   <input value={newCustPhone} onChange={e => setNewCustPhone(e.target.value)}
-                    className="classic-input w-full" placeholder="05xxxxxxxx" style={{ height: 28 }} />
+                    className="classic-input w-full" placeholder="05xxxxxxxx" style={{ height: "28px" }} />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] font-bold text-gray-600">البريد الإلكتروني</label>
                   <input value={newCustEmail} onChange={e => setNewCustEmail(e.target.value)}
-                    className="classic-input w-full" placeholder="example@domain.com" style={{ height: 28 }} />
+                    className="classic-input w-full" placeholder="example@domain.com" style={{ height: "28px" }} />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] font-bold text-gray-600">العنوان</label>
                   <input value={newCustAddr} onChange={e => setNewCustAddr(e.target.value)}
-                    className="classic-input w-full" placeholder="العنوان..." style={{ height: 28 }} />
+                    className="classic-input w-full" placeholder="العنوان..." style={{ height: "28px" }} />
                 </div>
               </>)}
 
@@ -2163,17 +2780,17 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   <label className="text-[11px] font-bold text-gray-600">اسم المؤسسة <span className="text-red-500">*</span></label>
                   <input autoFocus value={newCustName} onChange={e => setNewCustName(e.target.value)}
                     className="classic-input w-full" placeholder="اسم الشركة أو المؤسسة..."
-                    style={{ height: 28, fontSize: 13 }} />
+                    style={{ height: "28px", fontSize: "13px" }} />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] font-bold text-gray-600">رقم الجوال</label>
                   <input value={newCustPhone} onChange={e => setNewCustPhone(e.target.value)}
-                    className="classic-input w-full" placeholder="05xxxxxxxx" style={{ height: 28 }} />
+                    className="classic-input w-full" placeholder="05xxxxxxxx" style={{ height: "28px" }} />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] font-bold text-gray-600">البريد الإلكتروني</label>
                   <input value={newCustEmail} onChange={e => setNewCustEmail(e.target.value)}
-                    className="classic-input w-full" placeholder="example@domain.com" style={{ height: 28 }} />
+                    className="classic-input w-full" placeholder="example@domain.com" style={{ height: "28px" }} />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] font-bold" style={{ color: '#DC2626' }}>
@@ -2181,24 +2798,24 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   </label>
                   <input value={newCustTaxNum} onChange={e => setNewCustTaxNum(e.target.value)}
                     className="classic-input w-full" placeholder="3xxxxxxxxxxxxxxxxx"
-                    style={{ height: 28, borderColor: newCustTaxNum.trim() ? '#86EFAC' : '#FCA5A5', background: newCustTaxNum.trim() ? '#F0FDF4' : '#FFF5F5' }} />
+                    style={{ height: "28px", borderColor: newCustTaxNum.trim() ? '#86EFAC' : '#FCA5A5', background: newCustTaxNum.trim() ? '#F0FDF4' : '#FFF5F5' }} />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] font-bold text-gray-600">رقم السجل التجاري</label>
                   <input value={newCustRegNum} onChange={e => setNewCustRegNum(e.target.value)}
-                    className="classic-input w-full" placeholder="1010xxxxxx" style={{ height: 28 }} />
+                    className="classic-input w-full" placeholder="1010xxxxxx" style={{ height: "28px" }} />
                 </div>
                 {/* صف: العنوان المختصر + المدينة */}
                 <div className="flex gap-2">
                   <div className="flex flex-col gap-1 flex-1">
                     <label className="text-[11px] font-bold text-gray-600">العنوان المختصر</label>
                     <input value={newCustShortAddr} onChange={e => setNewCustShortAddr(e.target.value)}
-                      className="classic-input w-full" placeholder="مثال: ABCD" style={{ height: 28 }} />
+                      className="classic-input w-full" placeholder="مثال: ABCD" style={{ height: "28px" }} />
                   </div>
                   <div className="flex flex-col gap-1 flex-1">
                     <label className="text-[11px] font-bold text-gray-600">المدينة</label>
                     <input value={newCustCity} onChange={e => setNewCustCity(e.target.value)}
-                      className="classic-input w-full" placeholder="الرياض" style={{ height: 28 }} />
+                      className="classic-input w-full" placeholder="الرياض" style={{ height: "28px" }} />
                   </div>
                 </div>
                 {/* صف: رقم المبنى + الرقم الفرعي */}
@@ -2206,18 +2823,18 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
                   <div className="flex flex-col gap-1 flex-1">
                     <label className="text-[11px] font-bold text-gray-600">رقم المبنى</label>
                     <input value={newCustBuilding} onChange={e => setNewCustBuilding(e.target.value)}
-                      className="classic-input w-full" placeholder="1234" style={{ height: 28 }} />
+                      className="classic-input w-full" placeholder="1234" style={{ height: "28px" }} />
                   </div>
                   <div className="flex flex-col gap-1 flex-1">
                     <label className="text-[11px] font-bold text-gray-600">الرقم الفرعي</label>
                     <input value={newCustAdditional} onChange={e => setNewCustAdditional(e.target.value)}
-                      className="classic-input w-full" placeholder="5678" style={{ height: 28 }} />
+                      className="classic-input w-full" placeholder="5678" style={{ height: "28px" }} />
                   </div>
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] font-bold text-gray-600">الرمز البريدي</label>
                   <input value={newCustPostal} onChange={e => setNewCustPostal(e.target.value)}
-                    className="classic-input w-full" placeholder="12345" style={{ height: 28 }} />
+                    className="classic-input w-full" placeholder="12345" style={{ height: "28px" }} />
                 </div>
               </>)}
             </div>
@@ -2273,6 +2890,117 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange }: 
           </div>
         </>
       )}
+
+      <UnsavedChangesDialog
+        open={dirtyConfirmOpen}
+        onSaveAsDraft={() => dirtyConfirmSave(handleSaveDraft)}
+        onDiscard={dirtyConfirmDiscard}
+        onCancel={dirtyConfirmCancel}
+        isSaving={createMutation.isPending || updateMutation.isPending}
+      />
+
+      {/* ── حوار التنقل عند وجود تعديلات غير محفوظة ── */}
+      <UnsavedChangesDialog
+        open={navShowUnsavedDialog}
+        onSaveAsDraft={navUnsavedDialogActions.onSaveAsDraft}
+        onDiscard={navUnsavedDialogActions.onDiscard}
+        onCancel={navUnsavedDialogActions.onCancel}
+        isSaving={navIsSavingDraft}
+      />
+
+      {/* ── نافذة تأكيد تغيير العميل (بناءً على مستند من عميل مختلف) ── */}
+      {pendingSourceDoc && (
+        <div
+          style={{
+            position: "fixed", inset: 0,
+            background: "rgba(15,23,42,0.55)",
+            zIndex: 99999,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+        >
+          <div style={{
+            background: "#fff",
+            borderRadius: 10,
+            boxShadow: "0 24px 60px rgba(0,0,0,0.35)",
+            width: "min(460px,92vw)",
+            direction: "rtl",
+            overflow: "hidden",
+          }}>
+            {/* Header */}
+            <div style={{
+              padding: "12px 18px",
+              background: "linear-gradient(135deg,#b45309,#92400e)",
+              color: "#fff", fontWeight: 700, fontSize: "13px",
+              display: "flex", alignItems: "center", gap: 8,
+            }}>
+              <span style={{ fontSize: 16 }}>⚠️</span>
+              تغيير العميل
+            </div>
+            {/* Body */}
+            <div style={{ padding: "18px 20px", fontSize: "13px", color: "#374151", lineHeight: 1.7 }}>
+              <p>
+                المستند <strong style={{ fontFamily: "monospace", color: "#1a3f6f" }}>{pendingSourceDoc.number}</strong> يخصّ العميل:
+              </p>
+              <p style={{
+                background: "#fef3c7", border: "1px solid #f59e0b",
+                borderRadius: 6, padding: "6px 12px", margin: "8px 0",
+                fontWeight: 700, color: "#92400e",
+              }}>
+                {pendingSourceDoc.customerName ?? "—"}
+              </p>
+              <p>
+                بينما الفاتورة الحالية تحتوي على العميل:
+                <strong style={{ color: "#374151", marginRight: 4 }}>{customerName}</strong>
+              </p>
+              <p style={{ marginTop: "10px", color: "#6b7280", fontSize: "var(--work-font-size, 12px)" }}>
+                هل تريد تغيير العميل في الفاتورة إلى عميل المستند المصدر؟
+              </p>
+            </div>
+            {/* Footer */}
+            <div style={{
+              padding: "10px 20px 14px",
+              display: "flex", gap: "8px", justifyContent: "flex-start",
+            }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const src = pendingSourceDoc;
+                  setPendingSourceDoc(null);
+                  applySourceDoc(src);
+                }}
+                style={{
+                  padding: "6px 20px",
+                  background: "linear-gradient(135deg,#b45309,#92400e)",
+                  color: "#fff", border: "none",
+                  borderRadius: 6, fontSize: "var(--work-font-size, 12px)", fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                نعم، غيّر العميل
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  // رفض التحميل — إلغاء كامل للمستند المصدر
+                  setPendingSourceDoc(null);
+                  setBasedOnNum("");
+                  setBasedOnTrigger("");
+                }}
+                style={{
+                  padding: "6px 20px",
+                  background: "#e5e7eb",
+                  color: "#374151", border: "1px solid #d1d5db",
+                  borderRadius: 6, fontSize: "var(--work-font-size, 12px)", fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                لا، إلغاء التحميل
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
@@ -2299,7 +3027,7 @@ function TF({ label, value, highlight, big, color }: {
 }) {
   return (
     <div className="flex items-center gap-1">
-      <span style={{ fontSize: 11, color: "#555", whiteSpace: "nowrap" }}>{label}</span>
+      <span style={{ fontSize: "11px", color: "#555", whiteSpace: "nowrap" }}>{label}</span>
       <input
         readOnly
         value={value}
@@ -2319,16 +3047,26 @@ function TF({ label, value, highlight, big, color }: {
 
 // ─── Product Name Cell with autocomplete ─────────────────────────────────────
 function ProductNameCell({
-  rowIdx, value, products, cellRefs, onSelect, onKeyDown, onFocus, isStockItem,
+  rowIdx, value, products, cellRefs, onSelect, onChange, onKeyDown, onFocus, onBlur, isStockItem, productId,
+  focusedEntityType, focusedEntityId, focusedFieldName, focusedSourceScreen, focusedRowId, focusedEntityTitle,
 }: {
   rowIdx: number;
   value: string;
   products: any[];
   cellRefs: React.MutableRefObject<Map<string, HTMLInputElement>>;
   onSelect: (name: string, code: string, id: number, unit: string, price: string, tax: string, itemType: string) => void;
+  onChange?: (v: string) => void;
   onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
   onFocus: () => void;
+  onBlur?: () => void;
   isStockItem?: boolean;
+  productId?: number;
+  focusedEntityType?: string;
+  focusedEntityId?: number | string | null;
+  focusedFieldName?: string;
+  focusedSourceScreen?: string;
+  focusedRowId?: string;
+  focusedEntityTitle?: string;
 }) {
   const [search, setSearch] = useState(value);
   const [open, setOpen] = useState(false);
@@ -2341,10 +3079,13 @@ function ProductNameCell({
 
   const handleChange = (v: string) => {
     setSearch(v);
+    // للصنف الخدمة: نسمح بتعديل الوصف/الاسم داخل السطر فقط دون تغيير كوده أو productId
+    if (!isStockItem) onChange?.(v);
     if (v.length >= 1) {
+      const term = v.toLowerCase();
       const f = products.filter(p =>
-        p.name.includes(v) || (p.code && p.code.includes(v)) ||
-        (p.sku && p.sku.includes(v)) || (p.barcode && p.barcode.includes(v))
+        p.name.toLowerCase().includes(term) || (p.code && p.code.toLowerCase().includes(term)) ||
+        (p.barcode && p.barcode.toLowerCase().includes(term))
       ).slice(0, 12);
       setFiltered(f);
       setOpen(f.length > 0);
@@ -2357,7 +3098,32 @@ function ProductNameCell({
   const handleSelect = (p: any) => {
     setSearch(p.name);
     setOpen(false);
-    onSelect(p.name, p.sku ?? p.barcode ?? p.code ?? "", p.id, p.unit ?? "", p.salePrice ? String(p.salePrice) : "", p.taxRate ? String(p.taxRate) : "0", p.itemType ?? "stock");
+    onSelect(p.name, p.code ?? p.barcode ?? "", p.id, p.unit ?? "", p.salePrice ? String(p.salePrice) : "", p.taxRate ? String(p.taxRate) : "0", p.itemType ?? "stock");
+  };
+
+  const tryExactMatch = () => {
+    const term = search.trim();
+    if (!term) return null;
+    return products.find(p =>
+      p.name === term || p.code === term || p.barcode === term
+    ) ?? null;
+  };
+
+  const rejectAndStay = useCallback(() => {
+    playProductBeep();
+    toast.error("الصنف غير مسجل، يرجى اختيار صنف من القائمة.");
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    });
+  }, []);
+
+  const handleBlur = () => {
+    if (!productId && search.trim()) {
+      // لا يوجد صنف مسجل مُختار والحقل غير فارغ → نبقي النص ونرجّع التركيز
+      rejectAndStay();
+    }
+    onBlur?.();
   };
 
   useEffect(() => {
@@ -2374,9 +3140,17 @@ function ProductNameCell({
     <div className="relative w-full">
       <input
         ref={el => { (inputRef as any).current = el; if (el) cellRefs.current.set(`${rowIdx}-1`, el); }}
+        data-no-desktop-field
+        data-focused-entity-type={focusedEntityType}
+        data-focused-entity-id={focusedEntityId ?? undefined}
+        data-focused-field={focusedFieldName}
+        data-focused-source={focusedSourceScreen}
+        data-focused-row={focusedRowId}
+        data-focused-entity-title={focusedEntityTitle}
         value={search}
-        onChange={e => { if (!isStockItem) handleChange(e.target.value); }}
+        onChange={e => { handleChange(e.target.value); }}
         onFocus={onFocus}
+        onBlur={handleBlur}
         onKeyDown={e => {
           if (open) {
             if (e.key === "ArrowDown") { e.preventDefault(); setHighlighted(h => Math.min(h + 1, filtered.length - 1)); return; }
@@ -2384,13 +3158,26 @@ function ProductNameCell({
             if (e.key === "Enter" && filtered[highlighted]) { e.preventDefault(); handleSelect(filtered[highlighted]); return; }
             if (e.key === "Escape") { setOpen(false); return; }
           }
+          // Enter بدون قائمة مفتوحة: اختيار تلقائي عند وجود تطابق تام
+          if (e.key === "Enter") {
+            const exact = tryExactMatch();
+            if (exact) { e.preventDefault(); handleSelect(exact); return; }
+            if (search.trim() && !productId) { e.preventDefault(); rejectAndStay(); return; }
+            if (!search.trim() && !productId) { e.preventDefault(); rejectAndStay(); return; }
+          }
+          // Tab: لا ينتقل إلا بعد اختيار صنف حقيقي
+          if (e.key === "Tab" && !productId) {
+            e.preventDefault();
+            rejectAndStay();
+            return;
+          }
           onKeyDown(e);
         }}
         className="inv-cell w-full"
-        placeholder={isStockItem ? "" : "اسم الصنف..."}
+        placeholder={productId ? (isStockItem ? "" : "وصف الخدمة...") : "اسم الصنف / بحث..."}
         autoComplete="off"
         readOnly={isStockItem}
-        title={isStockItem ? "اسم الصنف المخزني لا يمكن تعديله" : undefined}
+        title={isStockItem ? "اسم الصنف المخزني لا يمكن تعديله" : (productId ? "يمكن تعديل وصف الخدمة داخل السطر فقط" : "ابحث واختر صنف مسجل")}
         style={isStockItem ? { background: "#f5f5f3", color: "#555", cursor: "default" } : undefined}
       />
       {open && (
@@ -2401,7 +3188,7 @@ function ProductNameCell({
             background: "#fff", border: "1px solid #a0a0a0",
             boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
             width: 280, maxHeight: 200, overflowY: "auto",
-            fontSize: "12px",
+            fontSize: "var(--work-font-size, 12px)",
           }}
         >
           {filtered.map((p, i) => (
@@ -2418,7 +3205,7 @@ function ProductNameCell({
               onMouseDown={() => handleSelect(p)}
               onMouseEnter={() => setHighlighted(i)}
             >
-              <span style={{ color: "#D19C05", fontWeight: 600, minWidth: 60 }}>{p.sku ?? p.code ?? ""}</span>
+              <span style={{ color: "#D19C05", fontWeight: 600, minWidth: 60 }}>{p.code ?? ""}</span>
               <span style={{ flex: 1 }}>{p.name}</span>
               <span style={{ color: "#16A34A", fontWeight: 600 }}>{p.salePrice}</span>
             </div>

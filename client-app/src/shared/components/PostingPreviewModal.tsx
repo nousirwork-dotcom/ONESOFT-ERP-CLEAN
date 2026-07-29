@@ -3,14 +3,32 @@ import { trpc } from "@/shared/lib/trpc";
 
 interface Props {
   invoiceId: number;
+  docCategory?: "sales" | "purchase";
   onClose: () => void;
   onConfirmPost: () => void;
   isPosting?: boolean;
 }
 
-export default function PostingPreviewModal({ invoiceId, onClose, onConfirmPost, isPosting }: Props) {
-  const preview = trpc.posting.previewSalesInvoice.useQuery({ invoiceId }, { enabled: invoiceId > 0 });
+type PostingPreviewPartyData = {
+  customerName?: string | null;
+  supplierName?: string | null;
+};
+
+export default function PostingPreviewModal({ invoiceId, docCategory = "sales", onClose, onConfirmPost, isPosting }: Props) {
+  const salesPreview = trpc.posting.previewSalesInvoice.useQuery(
+    { invoiceId },
+    { enabled: invoiceId > 0 && docCategory === "sales" },
+  );
+  const purchasePreview = trpc.posting.previewPurchaseInvoice.useQuery(
+    { invoiceId },
+    { enabled: invoiceId > 0 && docCategory === "purchase" },
+  );
+  const preview = docCategory === "purchase" ? purchasePreview : salesPreview;
   const data = preview.data;
+  const partyData = data as PostingPreviewPartyData | undefined;
+  const partyName = docCategory === "purchase"
+    ? partyData?.supplierName
+    : partyData?.customerName;
 
   return (
     <div
@@ -52,8 +70,8 @@ export default function PostingPreviewModal({ invoiceId, onClose, onConfirmPost,
                   <div className="font-bold text-[#406B93]">{data.invoiceNumber}</div>
                 </div>
                 <div>
-                  <div className="text-[10px] text-slate-400 mb-0.5">العميل</div>
-                  <div className="font-semibold">{data.customerName ?? '—'}</div>
+                    <div className="text-[10px] text-slate-400 mb-0.5">{docCategory === "purchase" ? "المورد" : "العميل"}</div>
+                    <div className="font-semibold">{partyName ?? '—'}</div>
                 </div>
                 <div>
                   <div className="text-[10px] text-slate-400 mb-0.5">الإجمالي</div>

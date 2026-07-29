@@ -144,8 +144,8 @@ export default function ForgotPasswordFlow({ onBack, orgCode, orgName }: ForgotP
   const requestReset = trpc.recovery.requestPasswordReset.useMutation({
     onSuccess: (data) => {
       setError('');
-      setResetToken(data.resetToken ?? '');
-      if (data.devOtp) setDevOtp(data.devOtp);
+      setResetToken(('resetToken' in data ? data.resetToken : '') ?? '');
+      if ('devOtp' in data && data.devOtp) setDevOtp(data.devOtp);
       setStep('reset');
     },
     onError: (e) => setError(e.message),
@@ -318,6 +318,7 @@ export default function ForgotPasswordFlow({ onBack, orgCode, orgName }: ForgotP
             value={identifier}
             onChange={(e) => setIdentifier(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !requestReset.isPending && handleRequest()}
+            data-global-keyboard="false"
           />
         </div>
 
@@ -360,6 +361,7 @@ export default function ForgotPasswordFlow({ onBack, orgCode, orgName }: ForgotP
             autoFocus
             value={otp}
             onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            data-global-keyboard="false"
           />
         </div>
 
@@ -372,6 +374,7 @@ export default function ForgotPasswordFlow({ onBack, orgCode, orgName }: ForgotP
             placeholder="6 أحرف على الأقل"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
+            data-global-keyboard="false"
           />
         </div>
 
@@ -385,6 +388,7 @@ export default function ForgotPasswordFlow({ onBack, orgCode, orgName }: ForgotP
             value={confirmPwd}
             onChange={(e) => setConfirmPwd(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !resetPassword.isPending && handleReset()}
+            data-global-keyboard="false"
           />
         </div>
 

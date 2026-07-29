@@ -2,8 +2,33 @@ import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { chartOfAccounts, costCenters } from '../schema.js';
+import { chartOfAccounts, costCenters, journalEntryLines } from '../schema.js';
 import { eq, and, asc, isNull } from 'drizzle-orm';
+
+// ─── ثوابت أنواع السجلات ──────────────────────────────────────────────────────
+const RECORD_TYPE_LABELS: Record<string, string> = {
+  system_protected: 'نظامي محمي',
+  system_editable:  'نظامي قابل للتعديل',
+  system_flexible:  'نظامي مرن',
+  user:             'سجل مستخدم',
+};
+
+/** فحص إذا كان الحذف مسموحاً به بحسب نوع السجل */
+function assertCanDelete(recordType: string, name: string): void {
+  if (recordType === 'system_protected') {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: `لا يمكن حذف هذا السجل — سجل نظامي محمي (${name})` });
+  }
+  if (recordType === 'system_editable') {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: `لا يمكن حذف هذا السجل لوجود حركات أو بيانات مرتبطة به` });
+  }
+}
+
+/** فحص إذا كان التعديل مسموحاً به */
+function assertCanEdit(recordType: string, name: string): void {
+  if (recordType === 'system_protected') {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: `لا يمكن تعديل هذا السجل — سجل نظامي محمي (${name})` });
+  }
+}
 
 export const accountsRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -30,6 +55,8 @@ export const accountsRouter = router({
           isParent:     chartOfAccounts.isParent,
           allowPosting: chartOfAccounts.allowPosting,
           parentId:     chartOfAccounts.parentId,
+          recordType:   chartOfAccounts.recordType,
+          systemKey:    chartOfAccounts.systemKey,
         })
         .from(chartOfAccounts)
         .where(and(
@@ -74,6 +101,8 @@ export const accountsRouter = router({
         level: input.level, isParent: input.isParent,
         allowPosting: input.allowPosting, costCenterType: input.costCenterType,
         isActive: input.isActive,
+        recordType: 'user',   // العميل يضيف سجلات مستخدم دائماً
+        systemKey: null,
       };
       if (input.nameEn)   insertData.nameEn   = input.nameEn;
       if (input.parentId) insertData.parentId  = input.parentId;
@@ -86,11 +115,74 @@ export const accountsRouter = router({
       return account;
     }),
 
+  update: protectedProcedure
+    .input(z.object({
+      id:             z.number().int(),
+      name:           z.string().min(1).optional(),
+      nameEn:         z.string().optional(),
+      notes:          z.string().optional(),
+      openingBalance: z.string().optional(),
+      openingBalanceType: z.string().optional(),
+      costCenterType: z.enum(['not_allowed', 'optional', 'mandatory']).optional(),
+      isActive:       z.boolean().optional(),
+      nature:         z.string().optional(),
+      allowPosting:   z.boolean().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const [acct] = await db
+        .select({ id: chartOfAccounts.id, recordType: chartOfAccounts.recordType, name: chartOfAccounts.name })
+        .from(chartOfAccounts)
+        .where(and(eq(chartOfAccounts.id, input.id), eq(chartOfAccounts.orgId, ctx.user.orgId)))
+        .limit(1);
+
+      if (!acct) throw new TRPCError({ code: 'NOT_FOUND', message: 'الحساب غير موجود' });
+
+      assertCanEdit(acct.recordType ?? 'user', acct.name ?? '');
+
+      // system_editable: يسمح فقط بتغيير الاسم والملاحظات
+      const { id: _id, ...updates } = input;
+      let safeUpdates: Record<string, unknown> = {};
+
+      if (acct.recordType === 'system_editable') {
+        if (input.name !== undefined)  safeUpdates.name   = input.name;
+        if (input.nameEn !== undefined) safeUpdates.nameEn = input.nameEn;
+        if (input.notes !== undefined)  safeUpdates.notes  = input.notes;
+      } else {
+        // system_flexible / user: كل الحقول المسموح بها
+        safeUpdates = Object.fromEntries(
+          Object.entries(updates).filter(([, v]) => v !== undefined)
+        );
+      }
+
+      if (Object.keys(safeUpdates).length === 0) return { success: true };
+
+      await db.update(chartOfAccounts).set(safeUpdates as any)
+        .where(and(eq(chartOfAccounts.id, input.id), eq(chartOfAccounts.orgId, ctx.user.orgId)));
+
+      return { success: true };
+    }),
+
   delete: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
+      const [acct] = await db
+        .select({
+          id:         chartOfAccounts.id,
+          name:       chartOfAccounts.name,
+          recordType: chartOfAccounts.recordType,
+        })
+        .from(chartOfAccounts)
+        .where(and(eq(chartOfAccounts.id, input.id), eq(chartOfAccounts.orgId, ctx.user.orgId)))
+        .limit(1);
+
+      if (!acct) throw new TRPCError({ code: 'NOT_FOUND', message: 'الحساب غير موجود' });
+
+      // فحص نوع السجل
+      assertCanDelete(acct.recordType ?? 'user', acct.name ?? '');
+
+      // فحص حسابات فرعية
       const children = await db
-        .select({ id: chartOfAccounts.id, code: chartOfAccounts.code, name: chartOfAccounts.name })
+        .select({ id: chartOfAccounts.id })
         .from(chartOfAccounts)
         .where(and(
           eq(chartOfAccounts.parentId, input.id),
@@ -99,8 +191,19 @@ export const accountsRouter = router({
         ))
         .limit(1);
       if (children.length > 0) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: `لا يمكن حذف هذا الحساب لأنه يحتوي على حسابات فرعية — يجب حذف الحسابات الفرعية أولاً` });
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن حذف هذا السجل لوجود حركات أو بيانات مرتبطة به' });
       }
+
+      // فحص قيود محاسبية مرتبطة
+      const lines = await db
+        .select({ id: journalEntryLines.id })
+        .from(journalEntryLines)
+        .where(eq(journalEntryLines.accountId, input.id))
+        .limit(1);
+      if (lines.length > 0) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن حذف هذا السجل لوجود حركات أو بيانات مرتبطة به' });
+      }
+
       await db.update(chartOfAccounts).set({ isActive: false })
         .where(and(eq(chartOfAccounts.id, input.id), eq(chartOfAccounts.orgId, ctx.user.orgId)));
       return { success: true };
@@ -128,7 +231,9 @@ export const accountsRouter = router({
       const existingCodes = new Set(existing.map(r => r.code));
       const toInsert = input.accounts.filter(a => !existingCodes.has(a.code) || !input.skipDuplicates);
       if (toInsert.length === 0) return { inserted: 0, skipped: input.accounts.length };
-      await db.insert(chartOfAccounts).values(toInsert.map(a => ({ ...a, orgId: ctx.user.orgId })));
+      await db.insert(chartOfAccounts).values(
+        toInsert.map(a => ({ ...a, orgId: ctx.user.orgId, recordType: 'user', systemKey: null }))
+      );
       return { inserted: toInsert.length, skipped: input.accounts.length - toInsert.length };
     }),
 });

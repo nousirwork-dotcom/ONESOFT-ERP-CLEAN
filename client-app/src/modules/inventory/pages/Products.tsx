@@ -1,4 +1,6 @@
 import { fmtDate } from "@/shared/utils/dateUtils";
+import { FoundationPolicyPanel } from "@/shared/components/FoundationPolicyPanel";
+import type { RecordPolicy } from "@/shared/components/FoundationPolicyPanel";
 import { Badge } from "@/core/ui/badge";
 import { Button } from "@/core/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/core/ui/card";
@@ -6,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/core/ui/dial
 import { createPortal } from "react-dom";
 import { Rnd } from "react-rnd";
 import { Input } from "@/core/ui/input";
+import { Textarea } from "@/core/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/core/ui/select";
 import { Switch } from "@/core/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/core/ui/table";
@@ -26,14 +29,16 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback, forwardRef } from "react";
+import { useUnsavedChangesGuard } from "@/core/hooks/useUnsavedChangesGuard";
+import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import { useWorkspaceEl } from "@/core/contexts/WorkspaceContext";
 import { toast } from "sonner";
 
 // =============================================
 // نوع نموذج الصنف الكامل (6 تبويبات)
 // =============================================
-type ProductForm = {
+export type ProductForm = {
   // التبويب 1 - النافذة الرئيسية
   name: string;
   name2: string;
@@ -114,6 +119,9 @@ type ProductForm = {
   lastSupplier1: string;
   lastSupplier2: string;
   defaultOrderQty: string;
+  recordPolicy: RecordPolicy;
+  foundationKey: string;
+  includeInFoundation: boolean;
 };
 
 const emptyForm: ProductForm = {
@@ -140,7 +148,87 @@ const emptyForm: ProductForm = {
   pricingPlan: "",
   stdCost: "0", defaultSupplier: "", lastSupplier1: "", lastSupplier2: "",
   defaultOrderQty: "0",
+  recordPolicy: "flexible", foundationKey: "", includeInFoundation: false,
 };
+
+export function productToForm(p: any): ProductForm {
+  return {
+    ...emptyForm,
+    name: p?.name ?? "",
+    name2: p?.name2 ?? "",
+    sku: p?.code ?? p?.sku ?? "",
+    itemType: p?.itemType ?? "مخزون",
+    groupId: p?.groupId ? String(p.groupId) : "",
+    categoryId: p?.categoryId ? String(p.categoryId) : "",
+    parentItem: p?.parentItem ? String(p.parentItem) : "",
+    unit: p?.unit ?? "قطعة",
+    unit2: p?.unit2 ?? "",
+    unit3: p?.unit3 ?? "",
+    conversionFactor: p?.conversionFactor ?? "1",
+    convFactor2: p?.convFactor2 ?? "1",
+    convFactor3: p?.convFactor3 ?? "1",
+    barcode: p?.barcode ?? "",
+    barcode2: p?.barcode2 ?? "",
+    barcode3: p?.barcode3 ?? "",
+    category1: p?.category1 ?? "",
+    category2: p?.category2 ?? "",
+    category3: p?.category3 ?? "",
+    unitsJson: p?.unitsJson ?? "",
+    catsJson: p?.catsJson ?? "",
+    distinguishNo: p?.distinguishNo ?? "",
+    weight: p?.weight ?? "",
+    size: p?.size ?? "",
+    colorCode: p?.colorCode ?? "",
+    itemSize: p?.itemSize ?? "",
+    taxType: p?.taxType ?? "",
+    prevTaxType: p?.prevTaxType ?? "",
+    taxable: p?.taxable ?? true,
+    vatRate: p?.vatRate ?? p?.taxRate ?? "15",
+    nameEn: p?.nameEn ?? "",
+    brand: p?.brand ?? "",
+    model: p?.model ?? "",
+    description: p?.description ?? "",
+    purchaseUnit: p?.purchaseUnit ?? "",
+    saleUnit: p?.saleUnit ?? "",
+    minStock: String(p?.minStock ?? 0),
+    maxStock: String(p?.maxStock ?? 0),
+    reorderPoint: String(p?.reorderPoint ?? 0),
+    trackBatch: p?.trackBatch ?? false,
+    trackSerial: p?.trackSerial ?? false,
+    hasBOM: p?.hasBOM ?? false,
+    extDesc1: p?.extDesc1 ?? "", extVal1: p?.extVal1 ?? "",
+    extDesc2: p?.extDesc2 ?? "", extVal2: p?.extVal2 ?? "",
+    extDesc3: p?.extDesc3 ?? "", extVal3: p?.extVal3 ?? "",
+    extDesc4: p?.extDesc4 ?? "", extVal4: p?.extVal4 ?? "",
+    extDesc5: p?.extDesc5 ?? "", extVal5: p?.extVal5 ?? "",
+    extDesc6: p?.extDesc6 ?? "", extVal6: p?.extVal6 ?? "",
+    purchasePrice: p?.purchasePrice ?? "0",
+    costPrice: p?.costPrice ?? "0",
+    salePrice: p?.salePrice ?? "0",
+    salePrice2: p?.salePrice2 ?? "0",
+    salePrice3: p?.salePrice3 ?? "0",
+    salePrice4: p?.salePrice4 ?? "0",
+    salePrice5: p?.salePrice5 ?? "0",
+    wholesalePrice: p?.wholesalePrice ?? "0",
+    minSalePrice: p?.minSalePrice ?? "0",
+    priceIncludesTax: p?.priceIncludesTax ?? false,
+    price1Tax: p?.price1Tax ?? false,
+    price2Tax: p?.price2Tax ?? false,
+    price3Tax: p?.price3Tax ?? false,
+    price4Tax: p?.price4Tax ?? false,
+    price5Tax: p?.price5Tax ?? false,
+    wholesaleTax: p?.wholesaleTax ?? false,
+    pricingPlan: p?.pricingPlan ?? "",
+    stdCost: p?.stdCost ?? "0",
+    defaultSupplier: p?.defaultSupplier ?? "",
+    lastSupplier1: p?.lastSupplier1 ?? "",
+    lastSupplier2: p?.lastSupplier2 ?? "",
+    defaultOrderQty: p?.defaultOrderQty ?? "0",
+    recordPolicy: p?.recordPolicy ?? "flexible",
+    foundationKey: p?.foundationKey ?? "",
+    includeInFoundation: p?.includeInFoundation ?? false,
+  };
+}
 
 // =============================================
 // حقل نموذج كلاسيكي
@@ -167,15 +255,7 @@ function CField({
 }
 
 // حقل نص كلاسيكي
-function CInput({
-  value,
-  onChange,
-  placeholder = "",
-  type = "text",
-  dir,
-  readOnly,
-  className = "",
-}: {
+const CInput = forwardRef<HTMLInputElement, {
   value: string;
   onChange?: (v: string) => void;
   placeholder?: string;
@@ -183,35 +263,54 @@ function CInput({
   dir?: "rtl" | "ltr";
   readOnly?: boolean;
   className?: string;
-}) {
+  hasError?: boolean;
+}>(function CInput({
+  value,
+  onChange,
+  placeholder = "",
+  type = "text",
+  dir,
+  readOnly,
+  className = "",
+  hasError,
+}, ref) {
   return (
     <input
+      ref={ref}
       type={type}
       value={value}
       onChange={onChange ? (e) => onChange(e.target.value) : undefined}
       placeholder={placeholder}
       dir={dir}
       readOnly={readOnly}
-      className={`h-7 text-sm border border-slate-300 dark:border-slate-600 rounded px-2 bg-white dark:bg-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 ${readOnly ? "bg-slate-50 dark:bg-slate-700 text-slate-500" : ""} ${className}`}
+      className={`h-7 text-sm border rounded px-2 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 ${hasError ? "border-red-500 focus:border-red-500 focus:ring-red-500" : "border-slate-300 dark:border-slate-600 focus:border-blue-500 focus:ring-blue-500"} ${readOnly ? "bg-slate-50 dark:bg-slate-700 text-slate-500" : ""} ${className}`}
     />
   );
-}
+});
 
 // =============================================
 // بطاقة الصنف - 6 تبويبات كلاسيكية
 // =============================================
-function ProductCard({
+export function ProductCard({
   form,
   setForm,
   categories,
   groups,
   productId,
+  skuRef,
+  nameRef,
+  fieldErrors,
+  readOnly = false,
 }: {
   form: ProductForm;
-  setForm: (f: ProductForm) => void;
+  setForm: React.Dispatch<React.SetStateAction<ProductForm>>;
   categories: Array<{ id: number; name: string }> | undefined;
   groups: Array<{ id: number; groupCode?: string | null; name: string; groupType?: string | null; parentId?: number | null; autoNumbering?: boolean | null; codeDigits?: number | null }> | undefined;
   productId?: number | null;
+  skuRef?: React.RefObject<HTMLInputElement | null>;
+  nameRef?: React.RefObject<HTMLInputElement | null>;
+  fieldErrors?: { sku?: boolean; name?: boolean };
+  readOnly?: boolean;
 }) {
   const [activeTab, setActiveTab] = useState<string>("main");
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -222,6 +321,7 @@ function ProductCard({
   const [skuLoading, setSkuLoading] = useState(false);
 
   const handleGroupSelect = async (groupId: string) => {
+    if (readOnly) return;
     // Update groupId immediately; only clear sku when creating new product
     setForm(prev => ({ ...prev, groupId, ...(isEdit ? {} : { sku: "" }) }));
     if (!groupId || isEdit) return;
@@ -385,8 +485,9 @@ function ProductCard({
     { productId: productId! },
     { enabled: isEdit && activeTab === "costs" }
   );
-  const set = (key: keyof ProductForm, val: string | boolean) =>
-    setForm({ ...form, [key]: val });
+  const set = (key: keyof ProductForm, val: string | boolean) => {
+    if (!readOnly) setForm({ ...form, [key]: val });
+  };
 
   const tabs = [
     { id: "main", label: "النافذة الرئيسية" },
@@ -406,6 +507,7 @@ function ProductCard({
         {tabs.map((tab) => (
           <button
             key={tab.id}
+            type="button"
             onClick={() => setActiveTab(tab.id)}
             className={`px-3 py-2 text-xs font-bold border rounded transition-colors whitespace-nowrap
               ${activeTab === tab.id
@@ -417,6 +519,11 @@ function ProductCard({
           </button>
         ))}
       </div>
+
+      <fieldset
+        disabled={readOnly}
+        className="flex-1 min-h-0 overflow-auto min-w-0 border-0 p-0 m-0"
+      >
 
       {/* شريط المعلومات الثابت */}
       {(form.name || form.sku) && (
@@ -462,11 +569,13 @@ function ProductCard({
                       </div>
                     )}
                     <CInput
+                      ref={skuRef}
                       value={form.sku}
                       onChange={(v) => { if (!autoNum || isEdit) set("sku", v); }}
                       placeholder={autoNum && !isEdit ? "يُولَّد تلقائياً..." : "SKU-001"}
                       className={`w-full ${autoNum && !isEdit ? "bg-slate-100 dark:bg-slate-700 text-blue-700 dark:text-blue-300 font-mono font-semibold cursor-not-allowed" : ""}`}
                       readOnly={autoNum && !isEdit}
+                      hasError={fieldErrors?.sku}
                     />
                   </div>
                 </div>
@@ -478,7 +587,7 @@ function ProductCard({
                 <span className="text-xs text-slate-600 dark:text-slate-400">إسم 1</span>
               </div>
               <div className="flex-1 px-1 py-0.5">
-                <CInput value={form.name} onChange={(v) => set("name", v)} placeholder="اسم الصنف بالعربية" className="w-full" />
+                <CInput ref={nameRef} value={form.name} onChange={(v) => set("name", v)} placeholder="اسم الصنف بالعربية" className="w-full" hasError={fieldErrors?.name} />
               </div>
             </div>
             {/* اسم 2 */}
@@ -806,6 +915,18 @@ function ProductCard({
           </div>
         )}
 
+        {/* ===== سياسة التأسيس (تظهر في جميع التبويبات) ===== */}
+        {activeTab === "main" && (
+          <div className="px-3 py-2 border-t border-slate-200 dark:border-slate-700">
+            <FoundationPolicyPanel
+              recordPolicy={form.recordPolicy}
+              foundationKey={form.foundationKey || null}
+              includeInFoundation={form.includeInFoundation}
+              onChange={(policy, include) => setForm(f => ({ ...f, recordPolicy: policy, includeInFoundation: include }))}
+            />
+          </div>
+        )}
+
         {/* ===== التبويب 2: وصف إضافي ===== */}
         {activeTab === "extra" && (
           <div className="flex gap-3 h-full">
@@ -818,7 +939,7 @@ function ProductCard({
                   <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">الوصف</span>
                 </div>
                 <div className="p-2">
-                  <textarea
+                  <Textarea
                     value={form.description}
                     onChange={(e) => set("description", e.target.value)}
                     rows={2}
@@ -1252,7 +1373,8 @@ function ProductCard({
         )}
 
       </div>
-    </div>
+      </fieldset>
+      </div>
   );
 }
 
@@ -1266,6 +1388,11 @@ export default function Products() {
   const [isOpen, setIsOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState<ProductForm>(emptyForm);
+  const [fieldErrors, setFieldErrors] = useState<{ sku?: boolean; name?: boolean }>({});
+  const skuRef = useRef<HTMLInputElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const [isDirty, setIsDirty] = useState(false);
+  const skipFormRef = useRef(false);
   const [sortField, setSortField] = useState<string>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [viewTab, setViewTab] = useState<"products" | "categories">("products");
@@ -1426,6 +1553,16 @@ export default function Products() {
 
   const confirmImport = async () => {
     if (!importRows.length) return;
+    const seen = new Set<string>();
+    for (let i = 0; i < importRows.length; i++) {
+      const r = importRows[i];
+      const code = (r.sku ?? "").trim();
+      const name = (r.name ?? "").trim();
+      if (!name) { toast.error(`الصف ${i + 1}: يرجى إدخال اسم الصنف بالعربي.`); return; }
+      if (!code) { toast.error(`الصف ${i + 1}: يرجى إدخال كود الصنف.`); return; }
+      if (seen.has(code)) { toast.error(`الصف ${i + 1}: كود مكرر داخل ملف الاستيراد (${code}).`); return; }
+      seen.add(code);
+    }
     setImportLoading(true);
     try {
       await bulkImport.mutateAsync({ rows: importRows });
@@ -1451,24 +1588,38 @@ export default function Products() {
     onError: (e) => toast.error(e.message),
   });
 
-  const openCreate = () => {
+  const openCreate = useCallback(() => {
+    skipFormRef.current = true;
+    setIsDirty(false);
     setEditId(null);
     setForm(emptyForm);
+    setFieldErrors({});
     setIsOpen(true);
-  };
+  }, []);
+
+  const { confirmOpen, requestClose, confirmSave, confirmDiscard, confirmCancel } =
+    useUnsavedChangesGuard({ isDirty });
+
+  // Track dirty when user edits form fields (skip right after load/navigate)
+  useEffect(() => {
+    if (skipFormRef.current) { skipFormRef.current = false; return; }
+    if (isOpen) setIsDirty(true);
+  }, [form]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // F1 shortcut for add product
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "F1") { e.preventDefault(); openCreate(); }
+      if (e.key === "F1") { e.preventDefault(); requestClose(openCreate); }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, []);
+  }, [requestClose]);
 
   // ─── التنقل بين الأصناف ──────────────────────────────────────────────────────
-  const navigateTo = (p: any) => {
+  const navigateTo = useCallback((p: any) => {
     if (!p) return;
+    skipFormRef.current = true;
+    setIsDirty(false);
     setEditId(p.id);
     setForm({
       name: p.name ?? "",
@@ -1534,9 +1685,11 @@ export default function Products() {
       lastSupplier2: p.lastSupplier2 ?? "",
       defaultOrderQty: p.defaultOrderQty ?? "0",
     });
-  };
+  }, []);
 
-  const openEdit = (p: any) => {
+  const openEdit = useCallback((p: any) => {
+    skipFormRef.current = true;
+    setIsDirty(false);
     setEditId(p.id);
     setForm({
       name: p.name ?? "",
@@ -1607,21 +1760,38 @@ export default function Products() {
       lastSupplier1: p.lastSupplier1 ?? "",
       lastSupplier2: p.lastSupplier2 ?? "",
       defaultOrderQty: p.defaultOrderQty ?? "0",
+      recordPolicy: p.recordPolicy ?? "flexible",
+      foundationKey: p.foundationKey ?? "",
+      includeInFoundation: p.includeInFoundation ?? false,
     });
+    setFieldErrors({});
     setIsOpen(true);
-  };
+  }, []);
 
-  const handleSubmit = () => {
-    if (!form.name.trim()) {
-      toast.error("اسم الصنف (إسم 1) مطلوب");
-      return;
+  const handleSubmit = async () => {
+    const trimmedSku = form.sku.trim();
+    const trimmedName = form.name.trim();
+    const errors: { sku?: boolean; name?: boolean } = {};
+    if (!trimmedSku) errors.sku = true;
+    if (!trimmedName) errors.name = true;
+    setFieldErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
+      if (!trimmedSku) {
+        toast.error("يرجى إدخال كود الصنف.");
+        skuRef.current?.focus();
+      } else {
+        toast.error("يرجى إدخال اسم الصنف بالعربي.");
+        nameRef.current?.focus();
+      }
+      throw new Error("validation");
     }
 
     const data = {
       name:          form.name.trim(),
       name2:         form.name2.trim() || undefined,
       nameEn:        form.nameEn.trim() || undefined,
-      sku:           form.sku.trim() || undefined,
+      sku:           form.sku.trim(),
       barcode:       form.barcode.trim() || undefined,
       barcode2:      form.barcode2.trim() || undefined,
       barcode3:      form.barcode3.trim() || undefined,
@@ -1651,15 +1821,19 @@ export default function Products() {
       minStock:      Number(form.minStock) || 0,
       maxStock:      Number(form.maxStock) || 0,
       reorderPoint:  Number(form.reorderPoint) || 0,
+      recordPolicy:       form.recordPolicy,
+      includeInFoundation: form.includeInFoundation,
+      foundationKey:      form.foundationKey || undefined,
     };
 
     console.log("[handleSubmit] data:", data);
 
     if (editId) {
-      updateProduct.mutate({ id: editId, ...data });
+      await updateProduct.mutateAsync({ id: editId, ...data });
     } else {
-      createProduct.mutate(data);
+      await createProduct.mutateAsync(data);
     }
+    setIsDirty(false);
   };
 
   const formatCurrency = (val: string | number | null) =>
@@ -1690,10 +1864,10 @@ export default function Products() {
   }, [products, groupFilter, sortField, sortDir]);
 
   const currentNavIdx = editId ? sortedProducts.findIndex((p: any) => p.id === editId) : -1;
-  const navFirst  = () => { if (sortedProducts.length) navigateTo(sortedProducts[0]); };
-  const navLast   = () => { if (sortedProducts.length) navigateTo(sortedProducts[sortedProducts.length - 1]); };
-  const navPrev   = () => { if (currentNavIdx > 0) navigateTo(sortedProducts[currentNavIdx - 1]); };
-  const navNext   = () => { if (currentNavIdx < sortedProducts.length - 1) navigateTo(sortedProducts[currentNavIdx + 1]); };
+  const navFirst  = () => requestClose(() => { if (sortedProducts.length) navigateTo(sortedProducts[0]); });
+  const navLast   = () => requestClose(() => { if (sortedProducts.length) navigateTo(sortedProducts[sortedProducts.length - 1]); });
+  const navPrev   = () => requestClose(() => { if (currentNavIdx > 0) navigateTo(sortedProducts[currentNavIdx - 1]); });
+  const navNext   = () => requestClose(() => { if (currentNavIdx < sortedProducts.length - 1) navigateTo(sortedProducts[currentNavIdx + 1]); });
 
   return (
     <div className="space-y-4" dir="rtl">
@@ -2023,13 +2197,13 @@ export default function Products() {
                   <TableRow key={p.id} className="hover:bg-muted/30">
                     <TableCell
                       className="font-mono text-xs text-blue-600 dark:text-blue-400 cursor-pointer hover:underline"
-                      onClick={() => openEdit(p)}
+                      onClick={() => requestClose(() => openEdit(p))}
                     >
                       {p.code ?? p.sku ?? "—"}
                     </TableCell>
                     <TableCell
                       className="font-medium cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
-                      onClick={() => openEdit(p)}
+                      onClick={() => requestClose(() => openEdit(p))}
                     >
                       <div>
                         <p>{p.name}</p>
@@ -2058,7 +2232,7 @@ export default function Products() {
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7"
-                          onClick={() => openEdit(p)}
+                          onClick={() => requestClose(() => openEdit(p))}
                           title="تعديل"
                         >
                           <Edit className="w-3.5 h-3.5" />
@@ -2168,7 +2342,7 @@ export default function Products() {
                       </TableRow>
                     ) : (
                       (selectedCatId === null ? products : catProducts)?.map((p: any) => (
-                        <TableRow key={p.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => openEdit(p)}>
+                        <TableRow key={p.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => requestClose(() => openEdit(p))}>
                           <TableCell className="font-mono text-xs text-blue-600 dark:text-blue-400">{p.sku ?? "—"}</TableCell>
                           <TableCell className="font-medium">
                             <div>
@@ -2206,7 +2380,7 @@ export default function Products() {
           {/* طبقة الخلفية — داخل منطقة العمل فقط */}
           <div
             style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.38)", zIndex: 9998 }}
-            onClick={() => setIsOpen(false)}
+            onClick={() => requestClose(() => setIsOpen(false))}
           />
 
           <Rnd
@@ -2301,7 +2475,7 @@ export default function Products() {
                     icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>}
                     label="حفظ" variant="primary"
                     disabled={createProduct.isPending || updateProduct.isPending}
-                    onClick={handleSubmit}
+                    onClick={() => handleSubmit().catch(() => {})}
                   />
                   <BotDivider />
                   <BotBtn
@@ -2318,7 +2492,7 @@ export default function Products() {
                   <BotBtn
                     icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>}
                     label="جديد"
-                    onClick={() => { setEditId(null); setForm(emptyForm); }}
+                    onClick={() => requestClose(openCreate)}
                   />
                   <BotDivider />
                   {/* أدوات */}
@@ -2463,7 +2637,7 @@ export default function Products() {
                       : <Maximize2 style={{ width: 13, height: 13, pointerEvents: "none" }} />}
                   </button>
                   <button
-                    onClick={() => setIsOpen(false)}
+                    onClick={() => requestClose(() => setIsOpen(false))}
                     title="إغلاق"
                     style={{
                       display: "flex", alignItems: "center", gap: 5,
@@ -2500,6 +2674,9 @@ export default function Products() {
                   categories={categories}
                   groups={groups as any}
                   productId={editId}
+                  skuRef={skuRef}
+                  nameRef={nameRef}
+                  fieldErrors={fieldErrors}
                 />
               </div>
             </div>
@@ -2507,6 +2684,13 @@ export default function Products() {
         </>,
         workspaceEl
       )}
+
+      <UnsavedChangesDialog
+        open={confirmOpen}
+        onSave={() => confirmSave(handleSubmit)}
+        onDiscard={confirmDiscard}
+        onCancel={confirmCancel}
+      />
     </div>
   );
 }

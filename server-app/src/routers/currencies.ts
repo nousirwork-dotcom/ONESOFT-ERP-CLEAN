@@ -4,6 +4,7 @@ import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import { currencies } from '../schema.js';
 import { eq, and } from 'drizzle-orm';
+import { assertCanUpdate, assertCanDelete } from '../lib/foundation-framework.js';
 
 const currencyInput = z.object({
   code:          z.string().min(1).max(10).toUpperCase(),
@@ -52,6 +53,12 @@ export const currenciesRouter = router({
       const { id, ...rest } = input;
       const orgId = ctx.user.orgId;
 
+      const current = await db.query.currencies.findFirst({
+        where: and(eq(currencies.id, id), eq(currencies.orgId, orgId)),
+      });
+      if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'العملة غير موجودة' });
+      assertCanUpdate(current.recordPolicy, current.nameAr, ctx.user.role === 'superadmin');
+
       if (rest.code) {
         const dup = await db.select({ id: currencies.id }).from(currencies)
           .where(and(eq(currencies.orgId, orgId), eq(currencies.code, rest.code)))
@@ -76,11 +83,12 @@ export const currenciesRouter = router({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input, ctx }) => {
       const orgId = ctx.user.orgId;
-      const existing = await db.select({ isBase: currencies.isBase }).from(currencies)
-        .where(and(eq(currencies.id, input.id), eq(currencies.orgId, orgId)))
-        .limit(1);
-      if (!existing.length) throw new TRPCError({ code: 'NOT_FOUND', message: 'العملة غير موجودة' });
-      if (existing[0].isBase) throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن حذف العملة الأساسية' });
+      const current = await db.query.currencies.findFirst({
+        where: and(eq(currencies.id, input.id), eq(currencies.orgId, orgId)),
+      });
+      if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'العملة غير موجودة' });
+      if (current.isBase) throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن حذف العملة الأساسية' });
+      assertCanDelete(current.recordPolicy, current.nameAr, ctx.user.role === 'superadmin');
       await db.update(currencies).set({ isActive: false, updatedAt: new Date() })
         .where(and(eq(currencies.id, input.id), eq(currencies.orgId, orgId)));
       return { success: true };

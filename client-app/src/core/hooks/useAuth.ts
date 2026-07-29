@@ -1,6 +1,7 @@
 import { trpc } from "@/shared/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
 import { useCallback, useEffect, useMemo } from "react";
+import { clearSessionTabs } from "@/core/contexts/TabManagerContext";
 
 type UseAuthOptions = {
   redirectOnUnauthenticated?: boolean;
@@ -17,28 +18,28 @@ export function useAuth(options?: UseAuthOptions) {
     refetchOnWindowFocus: false,
   });
 
-  const logoutMutation = trpc.auth.logout.useMutation({
-    onSuccess: () => {
-      utils.auth.me.setData(undefined, null);
-    },
-  });
+  const logoutMutation = trpc.auth.logout.useMutation();
 
   const logout = useCallback(async () => {
     try {
       await logoutMutation.mutateAsync();
     } catch (error: unknown) {
-      if (
-        error instanceof TRPCClientError &&
-        error.data?.code === "UNAUTHORIZED"
-      ) {
-        return;
+      // إذا كانت الجلسة منتهية بالفعل أو أي خطأ آخر — نكمل التنظيف على أي حال
+      if (!(error instanceof TRPCClientError && error.data?.code === "UNAUTHORIZED")) {
+        console.warn('[logout] mutation error (continuing cleanup):', error);
       }
-      throw error;
     } finally {
-      utils.auth.me.setData(undefined, null);
-      await utils.auth.me.invalidate();
+      // مسح بيانات المستخدم من localStorage و sessionStorage
+      localStorage.removeItem('manus-runtime-user-info');
+      // مسح التبويبات المحفوظة في sessionStorage
+      clearSessionTabs();
+      // مسح علامة الجلسة — يمنع tryAutoLogin من تجاوز شاشة الدخول
+      sessionStorage.removeItem('onesoft_login_launch');
+      // إعادة توجيه كاملة (replace) لمنع زر Back من إظهار الصفحات المحمية
+      // كذلك تمسح كل React state و cache تلقائياً بإعادة تحميل الصفحة
+      window.location.replace('/login');
     }
-  }, [logoutMutation, utils]);
+  }, [logoutMutation]);
 
   const state = useMemo(() => {
     localStorage.setItem(

@@ -25,6 +25,14 @@ import { updatesRouter }            from './updates.js';
 import { brandingRouter }           from './branding.js';
 import { licenseRouter }            from './license.js';
 import { aiRouter }                 from './ai.js';
+import { supportTicketsRouter }     from './supportTickets.js';
+import { custodyTrackingRouter }    from './custodyTracking.js';
+import { linksServicesRouter }      from './linksServices.js';
+import { rePurchasesRouter }        from './rePurchases.js';
+import { reDocumentsRouter }        from './reDocuments.js';
+import { reTrialBalanceRouter }     from './reTrialBalance.js';
+import { reUnitsRouter }             from './reUnits.js';
+import { foundationAdminRouter }    from './foundationAdmin.js';
 import { licenseCenterRouter }      from './licenseCenter.js';
 import { authRouter }               from './auth.js';
 import { recoveryRouter }           from './recovery.js';
@@ -39,6 +47,7 @@ import { dashboardRouter }          from './dashboard.js';
 import { reportsRouter }            from './reports.js';
 import { vouchersRouter, receiptVouchersRouter, paymentVouchersRouter } from './vouchers.js';
 import { accountingRouter }         from './accounting.js';
+import { documentToolsRouter }      from './documentTools.js';
 import {
   userGroupsRouter, userCategoriesRouter, groupMembersRouter,
   qrSettingsRouter, branchesRouter, unitsRouter, freeProductsRouter,
@@ -87,6 +96,7 @@ const baseConfig = {
   reports:             reportsRouter,
   freeProducts:        freeProductsRouter,
   accounting:          accountingRouter,
+  documentTools:       documentToolsRouter,
   sales:               salesRouter,
   salesInvoices:       salesRouter,
   purchases:           purchasesRouter,
@@ -110,6 +120,14 @@ const baseConfig = {
   branding:            brandingRouter,
   license:             licenseRouter,
   ai:                  aiRouter,
+  supportTickets:      supportTicketsRouter,
+  custodyTracking:     custodyTrackingRouter,
+  linksServices:       linksServicesRouter,
+  rePurchases:           rePurchasesRouter,
+  reDocuments:           reDocumentsRouter,
+  reTrialBalance:        reTrialBalanceRouter,
+  reUnits:               reUnitsRouter,
+  foundationAdmin:       foundationAdminRouter,
 };
 
 // ─── Full config (يشمل licenseCenter — للمالك فقط) ──────────────────────────

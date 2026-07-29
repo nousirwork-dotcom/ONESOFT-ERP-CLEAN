@@ -3,6 +3,7 @@
  * النسخة 2.0: Workflow متكامل + مؤشرات الحالة + لوحة تحكم محسّنة
  */
 import React, { useState } from "react";
+import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import { trpc } from "@/shared/lib/trpc";
 import { toast } from "sonner";
 
@@ -1193,7 +1194,7 @@ function CsidSection() {
               </div>
               <div>
                 <label style={lbl}>تاريخ انتهاء الشهادة</label>
-                <input type="date" style={fld} value={cfg.certExpiryDate?.slice(0, 10) ?? ""} onChange={e => set("certExpiryDate", e.target.value)} />
+                <DateSegmentInput value={cfg.certExpiryDate?.slice(0, 10) ?? ""} onChange={v => set("certExpiryDate", v)} standalone style={fld} />
               </div>
             </div>
           </div>

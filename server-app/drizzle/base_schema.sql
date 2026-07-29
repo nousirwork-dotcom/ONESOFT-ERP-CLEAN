@@ -12,7 +12,7 @@ DO $$ BEGIN
     CREATE TYPE "invoice_status" AS ENUM ('draft', 'confirmed', 'cancelled', 'paid');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-    CREATE TYPE "invoice_type" AS ENUM ('sale', 'return', 'quote');
+    CREATE TYPE "invoice_type" AS ENUM ('sale', 'return', 'quote', 'order');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
     CREATE TYPE "journal_status" AS ENUM ('draft', 'posted', 'cancelled');
@@ -200,6 +200,12 @@ CREATE TABLE IF NOT EXISTS "document_journals" (
     "allowed_user_group" VARCHAR(255),
     "allowed_user_id" INTEGER,
     "print_template" VARCHAR(100),
+    "print_template_2" VARCHAR(100),
+    "customers_journal" VARCHAR(50),
+    "suppliers_journal" VARCHAR(50),
+    "payment_types_config" JSONB,
+    "issuance_config" JSONB,
+    "options_config" JSONB,
     "notes" TEXT,
     "is_active" BOOLEAN NOT NULL DEFAULT true,
     "sort_order" INTEGER NOT NULL DEFAULT 0,
@@ -437,6 +443,10 @@ CREATE TABLE IF NOT EXISTS "stock_voucher_items" (
     "quantity" NUMERIC(18, 4) NOT NULL,
     "unit_cost" NUMERIC(18, 4) DEFAULT '0',
     "total_cost" NUMERIC(18, 4) DEFAULT '0',
+    "product_code" VARCHAR(100),
+    "unit" VARCHAR(100),
+    "batch_number" VARCHAR(100),
+    "expiry_date" VARCHAR(10),
     "sort_order" INTEGER DEFAULT 0
 );
 
@@ -454,6 +464,7 @@ CREATE TABLE IF NOT EXISTS "stock_vouchers" (
     "total_cost" NUMERIC(18, 4) DEFAULT '0',
     "status" VARCHAR(20) NOT NULL DEFAULT 'confirmed',
     "user_id" INTEGER,
+    "receiver_user_id" INTEGER,
     "created_at" TIMESTAMP NOT NULL DEFAULT now()
 );
 
@@ -462,10 +473,12 @@ CREATE TABLE IF NOT EXISTS "suppliers" (
     "org_id" INTEGER NOT NULL,
     "code" VARCHAR(50),
     "name" VARCHAR(500) NOT NULL,
+    "supplier_type" VARCHAR(20) NOT NULL DEFAULT 'individual',
     "phone" VARCHAR(50),
     "email" VARCHAR(255),
     "address" TEXT,
     "tax_number" VARCHAR(50),
+    "registration_number" VARCHAR(100),
     "balance" NUMERIC(18, 4) DEFAULT '0',
     "is_active" BOOLEAN NOT NULL DEFAULT true,
     "created_at" TIMESTAMP NOT NULL DEFAULT now()
@@ -909,6 +922,11 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
     ALTER TABLE "stock_vouchers" ADD CONSTRAINT "stock_vouchers_user_id_users_id_fk"
         FOREIGN KEY ("user_id") REFERENCES "users" ("id")
+        ON DELETE NO ACTION ON UPDATE NO ACTION;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    ALTER TABLE "stock_vouchers" ADD CONSTRAINT "stock_vouchers_receiver_user_id_users_id_fk"
+        FOREIGN KEY ("receiver_user_id") REFERENCES "users" ("id")
         ON DELETE NO ACTION ON UPDATE NO ACTION;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN

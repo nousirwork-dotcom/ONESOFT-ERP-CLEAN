@@ -12,7 +12,7 @@ import { ENV } from './env.js';
 import { logger } from './logger.js';
 import { createContext } from './trpc.js';
 import { appRouter } from './routers/index.js';
-import { loginHandler, logoutHandler, meHandler } from './auth.js';
+import { loginHandler, logoutHandler, meHandler, getAuthCookieOptions } from './auth.js';
 import { pool } from './db.js';
 import { checkSchema } from './check-schema.js';
 
@@ -59,8 +59,8 @@ app.post('/api/auth/auto-login', async (req, res) => {
   const isLocalhost = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '');
   const isElectron  = ENV.isElectron;
 
-  // في الإنتاج: يجب أن يكون الطلب من localhost + Electron
-  // في التطوير: مسموح من أي مكان (Replit proxy)
+  // في الإنتاج: auto-login يجب أن يكون الطلب من localhost + Electron
+  // في التطوير (Replit preview): نرخّص الـ Electron فقط في production.
   if (ENV.nodeEnv === 'production' && (!isElectron || !isLocalhost)) {
     return res.status(403).json({ error: 'auto-login متاح فقط لتطبيق Electron من localhost' });
   }
@@ -78,14 +78,14 @@ app.post('/api/auth/auto-login', async (req, res) => {
     });
     if (!user) return res.status(404).json({ error: 'لا يوجد مستخدم' });
 
-    // الدخول التلقائي يعمل فقط إذا password_status = 'not_set'
-    // بمجرد تعيين كلمة مرور لا يُسمح بالدخول التلقائي أبدًا
-    if (user.passwordStatus !== 'not_set') {
+    // الدخول التلقائي يعمل فقط إذا password_status = 'not_set' (في الإنتاج)
+    // في التطوير: نسمح بالدخول التلقائي دائماً لتسهيل الاختبار
+    if (ENV.nodeEnv === 'production' && user.passwordStatus !== 'not_set') {
       return res.status(403).json({ error: 'يجب تسجيل الدخول يدوياً' });
     }
 
-    const token = await createToken({ userId: user.id, orgId: user.orgId, username: user.username, role: user.role });
-    res.cookie(ENV.cookieName, token, { httpOnly: true, secure: false, sameSite: 'lax', maxAge: ENV.sessionExpiry });
+    const token = await createToken({ userId: user.id, orgId: user.orgId, username: user.username, role: user.role, sessionVersion: user.sessionVersion ?? 1 });
+    res.cookie(ENV.cookieName, token, { ...getAuthCookieOptions(), maxAge: ENV.sessionExpiry });
     return res.json({ success: true, user: { id: user.id, name: user.name, username: user.username, role: user.role, orgId: user.orgId } });
   } catch (err) {
     console.error('[AutoLogin]', err);
@@ -276,8 +276,32 @@ console.log(`[OneSoft] clientBuildPath  = ${clientBuildPath}`);
 console.log(`[OneSoft] index.html found = ${clientFilesExist}`);
 
 if (clientFilesExist) {
-  app.use(express.static(clientBuildPath));
+  const NO_CACHE_HEADERS = {
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'Surrogate-Control': 'no-store',
+  };
+
+  app.use(express.static(clientBuildPath, {
+    index: false, // نتعامل مع index.html يدوياً
+    setHeaders: (res, filePath) => {
+      const basename = path.basename(filePath);
+      // sw.js و manifest.json: لا كاش أبداً
+      if (basename === 'sw.js' || basename === 'manifest.json') {
+        Object.entries(NO_CACHE_HEADERS).forEach(([k, v]) => res.setHeader(k, v));
+        return;
+      }
+      // أصول مع hash في اسم الملف (assets/name.HASH.js): كاش دائم
+      if (filePath.includes(`${path.sep}assets${path.sep}`) && /\.[a-f0-9]{8,}\.(js|css|woff2?|ttf|eot|svg|png|webp|ico)$/i.test(basename)) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    },
+  }));
+
+  // index.html: لا يُخزَّن في الكاش أبداً — يجب دائماً تحميل أحدث نسخة
   app.get('*', (_req, res) => {
+    Object.entries(NO_CACHE_HEADERS).forEach(([k, v]) => res.set(k, v));
     res.sendFile(clientIndexPath);
   });
 } else {
@@ -411,6 +435,15 @@ try {
   await ensureDefaultAdmin();
 } catch (err) {
   console.error('[startup] ⚠️ ensureDefaultAdmin error:', err);
+}
+
+// ── Foundation Update للعملاء الحاليين ───────────────────────────────────────
+// يُضيف السجلات التأسيسية الجديدة فقط (idempotent — لا يُعدّل أو يحذف أي سجل).
+try {
+  const { runFoundationUpdateForAllOrgs } = await import('./foundation-update.js');
+  await runFoundationUpdateForAllOrgs(ENV.dbUrl);
+} catch (err) {
+  console.error('[startup] ⚠️ foundation-update error:', err);
 }
 
 console.log('[6/6] ✅ PostgreSQL connected — schema OK — server fully ready');

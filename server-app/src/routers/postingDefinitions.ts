@@ -3,6 +3,7 @@ import { eq, and, asc } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import { postingDefinitions, postingDefinitionLines, chartOfAccounts } from '../schema.js';
+import { assertCanUpdate, assertCanDelete } from '../lib/foundation-framework.js';
 
 export const POSTING_DOC_TYPES = [
   { id: 'sales_invoice',    variant: 'cash',   label: 'فاتورة مبيعات نقدية' },
@@ -57,7 +58,7 @@ export const postingDefinitionsRouter = router({
         description:  postingDefinitionLines.description,
         accountId:    postingDefinitionLines.accountId,
         accountCode:  chartOfAccounts.code,
-        accountName:  chartOfAccounts.nameAr,
+        accountName:  chartOfAccounts.name,
         direction:    postingDefinitionLines.direction,
         amountSource: postingDefinitionLines.amountSource,
         sortOrder:    postingDefinitionLines.sortOrder,
@@ -101,6 +102,7 @@ export const postingDefinitionsRouter = router({
         }).returning();
         def = created;
       } else {
+        assertCanUpdate(def.recordPolicy, def.name, ctx.user.role === 'superadmin');
         await db.update(postingDefinitions)
           .set({ name, updatedAt: new Date() })
           .where(eq(postingDefinitions.id, def.id));
@@ -137,6 +139,7 @@ export const postingDefinitionsRouter = router({
         ),
       });
       if (!def) return { ok: true };
+      assertCanDelete(def.recordPolicy, def.name, ctx.user.role === 'superadmin');
       await db.delete(postingDefinitions).where(eq(postingDefinitions.id, def.id));
       return { ok: true };
     }),

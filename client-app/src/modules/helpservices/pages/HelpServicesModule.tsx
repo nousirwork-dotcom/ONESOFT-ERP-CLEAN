@@ -1,6 +1,6 @@
 import {
   LifeBuoy, FileSignature, Wallet, UserSearch, ListTodo, Landmark,
-  StickyNote, MessagesSquare, Sparkles,
+  StickyNote, MessagesSquare, Sparkles, Headphones, Building2,
 } from "lucide-react";
 import { Card, CardContent } from "@/core/ui/card";
 import { useLang } from "@/core/contexts/LanguageContext";
@@ -22,10 +22,13 @@ export const menuSections = [
       { id: "hs-custody",       label: "العهد والمصروفات",            icon: Wallet,         path: "/hs/custody" },
       { id: "hs-customers",     label: "متابعة العملاء",              icon: UserSearch,     path: "/hs/customers" },
       { id: "hs-tasks",         label: "المهام والتذكيرات",           icon: ListTodo,       path: "/hs/tasks" },
-      { id: "hs-gov-links",     label: "الروابط والخدمات الحكومية",   icon: Landmark,       path: "/hs/gov-links" },
+      { id: "hs-gov-links",     label: "الروابط والخدمات",            icon: Landmark,       path: "/hs/gov-links" },
       { id: "hs-notes",         label: "الملاحظات",                   icon: StickyNote,     path: "/hs/notes" },
       { id: "hs-internal-comm", label: "التواصل الداخلي",             icon: MessagesSquare, path: "/hs/internal-comm" },
       { id: "hs-ai-assistant",  label: "المساعد الذكي",               icon: Sparkles,       path: "/hs/ai-assistant" },
+      { id: "hs-support",       label: "طلب الدعم الفني",             icon: Headphones,     path: "/hs/support" },
+      { id: "hs-real-estate",  label: "المطور العقاري",              icon: Building2,     path: "/hs/real-estate" },
+      { id: "hs-re-units",      label: "الوحدات السكنية",              icon: Building2,     path: "/hs/re-units" },
     ] as Array<{ id: string; label: string; icon: React.ElementType; path?: string }>,
   },
 ];
@@ -97,10 +100,10 @@ export const HS_CARDS: HsCard[] = [
     perm: "hs_gov_links",
     path: "/hs/gov-links",
     icon: Landmark,
-    labelAr: "الروابط والخدمات الحكومية",
-    labelEn: "Government Links & Services",
-    descAr: "وصول سريع للمنصات والخدمات الحكومية المتعلقة بالأعمال.",
-    descEn: "Quick access to business-related government platforms and services.",
+    labelAr: "الروابط والخدمات",
+    labelEn: "Links & Services",
+    descAr: "وصول سريع للمنصات والخدمات المختلفة المتعلقة بالأعمال.",
+    descEn: "Quick access to various business-related platforms and services.",
     color: "text-sky-600 dark:text-sky-400",
     bg: "bg-sky-500/10",
   },
@@ -139,6 +142,30 @@ export const HS_CARDS: HsCard[] = [
     descEn: "Smart assistant for searching, summarizing, follow-up, and drafting inside the system.",
     color: "text-fuchsia-600 dark:text-fuchsia-400",
     bg: "bg-fuchsia-500/10",
+  },
+  {
+    id: "support",
+    perm: "hs_support",
+    path: "/hs/support",
+    icon: Headphones,
+    labelAr: "طلب الدعم الفني",
+    labelEn: "Technical Support",
+    descAr: "تقديم طلبات الدعم الفني ومتابعة الردود وتقييم الخدمة.",
+    descEn: "Submit support requests, follow up on replies, and rate the service.",
+    color: "text-cyan-600 dark:text-cyan-400",
+    bg: "bg-cyan-500/10",
+  },
+  {
+    id: "real-estate",
+    perm: "hs_real_estate",
+    path: "/hs/real-estate",
+    icon: Building2,
+    labelAr: "المطور العقاري",
+    labelEn: "Real Estate Developer",
+    descAr: "إدارة مشاريع التطوير العقاري: المشتريات، المستندات، والمراجعة المبسطة.",
+    descEn: "Manage real estate development projects: purchases, documents, and simplified review.",
+    color: "text-teal-600 dark:text-teal-400",
+    bg: "bg-teal-500/10",
   },
 ];
 

@@ -2,14 +2,22 @@
  * DocumentInvoicePage.tsx — صفحة مستندات متعددة الأغراض
  * تعمل مع: فاتورة مبيعات/مشتريات، مردود، عرض سعر، أمر بيع/شراء
  */
-import React, { useState, useRef, useCallback, useEffect, KeyboardEvent } from "react";
+import React, { useState, useRef, useCallback, useEffect, useMemo, KeyboardEvent } from "react";
 import { Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/shared/lib/trpc";
 import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
-import ERPToolbar, { ERPMode } from "@/shared/components/ERPToolbar";
+import ContextSelectInput from "@/shared/components/ContextSelectInput";
+import { useToolbarActions } from "@/components/unified-toolbar/ToolbarActionsContext";
+import type { ToolbarActionMap } from "@/components/unified-toolbar/toolbar.types";
+import { useDocumentNavigation } from "@/components/unified-toolbar/useDocumentNavigation";
+type ERPMode = "view" | "new" | "edit" | "search";
+import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import PostingPreviewModal from "@/shared/components/PostingPreviewModal";
 import InvoicePrintModal, { type DocTemplateConfig } from "@/shared/components/InvoicePrintModal";
+import styles from "@/components/responsive-layout/ResponsiveLayout.module.css";
+import { InvoiceTableColgroup } from "@/components/responsive-layout";
+import "./purchase-invoice-header.css";
 
 // ─── Config ────────────────────────────────────────────────────────────────────
 export interface DocPageConfig {
@@ -39,6 +47,8 @@ interface InvoiceLine {
   taxPct: string;
   taxAmt: string;
   total: string;
+  batchNumber: string;
+  expiryDate: string;
   productId?: number;
 }
 
@@ -48,11 +58,12 @@ const EMPTY_LINE = (): InvoiceLine => ({
   id: crypto.randomUUID(),
   productCode: "", productName: "", quantity: "1", unit: "",
   unitPrice: "", discountPct: "0", discountAmt: "0", taxPct: "0", taxAmt: "0", total: "0",
+  batchNumber: "", expiryDate: "",
 });
 
 const COL_FIELDS: (keyof InvoiceLine)[] = [
   "productCode", "productName", "quantity", "unit", "unitPrice",
-  "discountPct", "discountAmt", "taxPct", "taxAmt",
+  "discountPct", "discountAmt", "taxPct", "taxAmt", "batchNumber", "expiryDate",
 ];
 
 function calcLineTotal(line: InvoiceLine): string {
@@ -71,10 +82,27 @@ function fmt(n: number) { return n.toFixed(3); }
 function HF({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <label style={{ fontSize: "10px", fontWeight: 700, color: "#666", fontFamily: "'Cairo', Tahoma" }}>
+      <label style={{ fontSize: "var(--app-font-size-field-label)", fontWeight: 700, color: "var(--app-text-primary)", fontFamily: "var(--app-font-family)" }}>
         {label}
       </label>
       {children}
+    </div>
+  );
+}
+
+function PurchaseField({
+  label,
+  children,
+  alignStart = false,
+}: {
+  label: string;
+  children: React.ReactNode;
+  alignStart?: boolean;
+}) {
+  return (
+    <div className={`purchase-field-row${alignStart ? " purchase-field-row-start" : ""}`}>
+      <label>{label}</label>
+      <div className="purchase-field-control">{children}</div>
     </div>
   );
 }
@@ -85,7 +113,7 @@ function TF({ label, value, highlight, big, color }: {
 }) {
   return (
     <div className="flex items-center gap-1">
-      <span style={{ fontSize: 11, color: "#555", whiteSpace: "nowrap" }}>{label}</span>
+      <span style={{ fontSize: "var(--app-font-size-field-label)", color: "var(--app-text-primary)", whiteSpace: "nowrap" }}>{label}</span>
       <input readOnly value={value} className="classic-input text-center"
         style={{
           width: big ? 100 : 88,
@@ -193,7 +221,9 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   const [partyId, setPartyId]                         = useState<number | null>(null);
   const [partyName, setPartyName]                     = useState("");
   const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState("");
+  const [branchId, setBranchId]                         = useState<number | null>(null);
   const [warehouseId, setWarehouseId]                 = useState<number | null>(null);
+  const [warehouseDisplayName, setWarehouseDisplayName] = useState<string>("");
   const [journalWarehouseId, setJournalWarehouseId]   = useState<number | null>(null);
   const [docTypeWarehouseId, setDocTypeWarehouseId]   = useState<number | null>(null);
   const [paymentType, setPaymentType]                 = useState<PaymentType>("cash");
@@ -215,25 +245,183 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   const [journalOpen, setJournalOpen]   = useState(false);
 
   const [savedInvoiceId, setSavedInvoiceId]       = useState<number | null>(null);
+  const [navInvoiceId, setNavInvoiceId]           = useState<number | null>(null);
   const [isPosted, setIsPosted]                   = useState(false);
   const [showPostingPreview, setShowPostingPreview] = useState(false);
+  const [purchaseBranchMenuOpen, setPurchaseBranchMenuOpen] = useState(false);
+  const [purchaseBranchEditMode, setPurchaseBranchEditMode] = useState(false);
+  const [purchaseBranchEditText, setPurchaseBranchEditText] = useState("");
+  const [supplierPickerOpen, setSupplierPickerOpen] = useState(false);
+  const [supplierSearch, setSupplierSearch] = useState("");
+  const [showAddSupplier, setShowAddSupplier] = useState(false);
+  const [newSupplierName, setNewSupplierName] = useState("");
+  const [newSupplierType, setNewSupplierType] = useState<"individual" | "organization">("individual");
+  const [newSupplierPhone, setNewSupplierPhone] = useState("");
+  const [newSupplierEmail, setNewSupplierEmail] = useState("");
+  const [newSupplierAddress, setNewSupplierAddress] = useState("");
+  const purchaseBranchMenuRef = useRef<HTMLDivElement>(null);
+  const purchaseBranchInputRef = useRef<HTMLInputElement>(null);
 
   const [erpMode, setErpMode] = useState<ERPMode>("new");
+  const isDirty = erpMode === "new" || erpMode === "edit";
   const [showPrintModal, setShowPrintModal] = useState(false);
+  const [showUnsaved, setShowUnsaved] = useState(false);
+  const [pendingNav, setPendingNav] = useState<(() => void) | null>(null);
 
   const cellRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
   // ── Queries ────────────────────────────────────────────────────────────────
-  const customersQuery  = trpc.customers.list.useQuery({}, { enabled: config.docCategory === "sales" });
-  const suppliersQuery  = trpc.suppliers.list.useQuery({}, { enabled: config.docCategory === "purchase" });
+  const customersQuery  = trpc.customers.list.useQuery(undefined, { enabled: config.docCategory === "sales" });
+  const suppliersQuery  = trpc.suppliers.list.useQuery(undefined, { enabled: config.docCategory === "purchase" });
+  const utils = trpc.useUtils();
+  const createSupplierMutation = trpc.suppliers.create.useMutation({
+    onError: error => toast.error(error.message),
+  });
   const parties = config.docCategory === "sales"
     ? (customersQuery.data ?? [])
     : (suppliersQuery.data ?? []);
+  const filteredSuppliers = useMemo(() => {
+    const term = supplierSearch.trim().toLowerCase();
+    return (suppliersQuery.data ?? []).filter((supplier: any) =>
+      !term || supplier.name.toLowerCase().includes(term) ||
+      supplier.phone?.toLowerCase().includes(term) ||
+      supplier.code?.toLowerCase().includes(term)
+    );
+  }, [suppliersQuery.data, supplierSearch]);
+  const selectedSupplier = (suppliersQuery.data ?? []).find((supplier: any) => supplier.id === partyId);
+  const supplierOptions = useMemo(() => [
+    { value: "", label: "بدون اختيار" },
+    ...(parties as any[]).map(supplier => ({
+      value: String(supplier.id),
+      label: supplier.code ? `${supplier.code} — ${supplier.name}` : supplier.name,
+      sublabel: supplier.phone ?? undefined,
+    })),
+  ], [parties]);
+
+  const selectSupplier = useCallback((value: string) => {
+    const id = Number(value);
+    const supplier = (parties as any[]).find(item => item.id === id);
+    setPartyId(Number.isFinite(id) && id > 0 ? id : null);
+    setPartyName(supplier?.name ?? "");
+    setSupplierPickerOpen(false);
+    setSupplierSearch("");
+  }, [parties]);
+
+  const createSupplierFromInvoice = useCallback(async () => {
+    const name = newSupplierName.trim();
+    if (!name) {
+      toast.error("اسم المورد مطلوب");
+      return;
+    }
+    try {
+      const created = await createSupplierMutation.mutateAsync({
+        name,
+        supplierType: newSupplierType,
+        phone: newSupplierPhone.trim() || undefined,
+        email: newSupplierEmail.trim() || undefined,
+        address: newSupplierAddress.trim() || undefined,
+      });
+      await utils.suppliers.list.invalidate();
+      setPartyId(created.id);
+      setPartyName(created.name);
+      setShowAddSupplier(false);
+      setSupplierPickerOpen(false);
+      setSupplierSearch("");
+      setNewSupplierName("");
+      setNewSupplierType("individual");
+      setNewSupplierPhone("");
+      setNewSupplierEmail("");
+      setNewSupplierAddress("");
+      toast.success("تم إضافة المورد واختياره");
+    } catch {
+      // mutation يعرض رسالة الخطأ عبر onError
+    }
+  }, [
+    createSupplierMutation,
+    newSupplierAddress,
+    newSupplierEmail,
+    newSupplierName,
+    newSupplierType,
+    newSupplierPhone,
+    utils.suppliers.list,
+  ]);
 
   const warehousesQuery = trpc.warehouses.list.useQuery();
+  const branchesQuery   = trpc.branches.list.useQuery(undefined, {
+    enabled: config.docCategory === "purchase",
+    retry: 2,
+    refetchOnMount: "always",
+  });
   const productsQuery   = trpc.products.list.useQuery({});
   const journalsQuery   = trpc.documentJournals.list.useQuery({ docType: config.journalDocType });
   const docTypesQuery   = trpc.documentTypes.list.useQuery({ typeId: config.docTypeFilter });
+  const purchaseBranchOptions = useMemo(() => {
+    if (config.docCategory !== "purchase") return [];
+
+    const branches = branchesQuery.data ?? [];
+    const warehouses = warehousesQuery.data ?? [];
+    const journals = journalsQuery.data ?? [];
+    const options: Array<{ value: string; label: string; branchId: number | null; warehouseId: number; journalId: number }> = [];
+    const usedWarehouses = new Set<number>();
+
+    // Prefer the normal branch → warehouse → purchase journal relationship.
+    for (const branch of branches as any[]) {
+      const warehouse = warehouses.find((item: any) => item.branchId === branch.id);
+      const journal = warehouse
+        ? journals.find((item: any) => item.warehouseId === warehouse.id)
+        : undefined;
+      if (warehouse && journal) {
+        options.push({
+          value: `branch:${branch.id}`,
+          label: branch.name,
+          branchId: branch.id,
+          warehouseId: warehouse.id,
+          journalId: journal.id,
+        });
+        usedWarehouses.add(warehouse.id);
+      }
+    }
+
+    // Some existing organizations have purchase journals linked to warehouses
+    // whose branch_id is empty. Keep those selectable instead of hiding them.
+    for (const journal of journals as any[]) {
+      if (!journal.warehouseId || usedWarehouses.has(journal.warehouseId)) continue;
+      const warehouse = warehouses.find((item: any) => item.id === journal.warehouseId);
+      if (!warehouse) continue;
+      options.push({
+        value: `journal:${journal.id}`,
+        label: journal.name || warehouse.name,
+        branchId: warehouse.branchId ?? (branches[0]?.id ?? null),
+        warehouseId: warehouse.id,
+        journalId: journal.id,
+      });
+    }
+
+    // If no journal has been configured yet, still show the actual branches.
+    if (options.length === 0) {
+      return (branches as any[]).map((branch: any) => ({
+        value: `branch:${branch.id}`,
+        label: branch.name,
+        branchId: branch.id,
+        warehouseId: 0,
+        journalId: 0,
+      }));
+    }
+    return options;
+  }, [config.docCategory, branchesQuery.data, warehousesQuery.data, journalsQuery.data]);
+
+  const selectedPurchaseBranchValue = useMemo(() => {
+    if (config.docCategory !== "purchase" || !branchId) return "";
+    const byJournal = journalId
+      ? purchaseBranchOptions.find(option => option.journalId === journalId)
+      : undefined;
+    const byBranch = purchaseBranchOptions.find(option => option.branchId === branchId);
+    return (byJournal ?? byBranch)?.value ?? "";
+  }, [config.docCategory, branchId, journalId, purchaseBranchOptions]);
+  const selectedPurchaseBranchLabel = useMemo(
+    () => purchaseBranchOptions.find(option => option.value === selectedPurchaseBranchValue)?.label ?? "",
+    [purchaseBranchOptions, selectedPurchaseBranchValue],
+  );
 
   const salesNextNumberQuery = trpc.salesInvoices.nextNumber.useQuery(
     { prefix: config.numberPrefix },
@@ -243,6 +431,71 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     { prefix: config.numberPrefix },
     { enabled: config.docCategory === "purchase" }
   );
+
+  const listQuery = config.docCategory === "sales"
+    ? trpc.salesInvoices.list.useQuery({ invoiceType: (config.invoiceType === "invoice" ? "sale" : config.invoiceType) as any })
+    : trpc.purchases.list.useQuery({ invoiceType: config.invoiceType });
+
+  const navInvoiceQuery = config.docCategory === "sales"
+    ? trpc.salesInvoices.get.useQuery({ id: navInvoiceId! }, { enabled: !!navInvoiceId })
+    : trpc.purchases.get.useQuery({ id: navInvoiceId! }, { enabled: !!navInvoiceId });
+
+  // تحميل المستند المختار بالتنقل
+  useEffect(() => {
+    const inv = navInvoiceQuery.data as any;
+    if (!inv) return;
+    setInvoiceNumber(inv.invoiceNumber || "");
+    setInvoiceDate(inv.invoiceDate ? new Date(inv.invoiceDate).toISOString().split("T")[0] : "");
+    setDueDate(inv.dueDate ? new Date(inv.dueDate).toISOString().split("T")[0] : "");
+    setPartyId(inv.customerId ?? inv.supplierId ?? null);
+    setPartyName(inv.customerName ?? inv.supplierName ?? "");
+    setSupplierInvoiceNumber(inv.supplierInvoiceNumber || "");
+    setWarehouseId(inv.warehouseId ?? null);
+    setBranchId(
+      inv.branchId ??
+      warehousesQuery.data?.find((warehouse: any) => warehouse.id === inv.warehouseId)?.branchId ??
+      null,
+    );
+    setWarehouseDisplayName(
+      inv.warehouseName ??
+      warehousesQuery.data?.find((warehouse: any) => warehouse.id === inv.warehouseId)?.name ??
+      "",
+    );
+    setJournalId(inv.journalId ?? null);
+    setJournalWarehouseId(
+      inv.journalId
+        ? (journalsQuery.data ?? []).find((journal: any) => journal.id === inv.journalId)?.warehouseId ?? null
+        : null,
+    );
+    setCurrency(inv.currency ?? "SAR");
+    setExchangeRate(inv.exchangeRate ?? "1.000");
+    setPaymentType((inv.paymentMethod ?? "cash") as PaymentType);
+    setNotes(inv.notes ?? "");
+    setPaidAmountOverride(inv.paidAmount ?? "");
+    setSavedInvoiceId(inv.id);
+    setIsPosted(inv.isPosted ?? false);
+    setErpMode("view");
+    if (inv.items && inv.items.length > 0) {
+      setLines(inv.items.map((item: any) => ({
+        id: crypto.randomUUID(),
+        productCode: item.productCode ?? "",
+        productName: item.productName,
+        unit: item.unit ?? "",
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        discountPct: item.discountPercent ?? "0",
+        discountAmt: item.discountAmount ?? "0",
+        taxPct: item.taxPercent ?? "0",
+        taxAmt: item.taxAmount ?? "0",
+        total: item.total,
+         batchNumber: item.batchNumber ?? "",
+         expiryDate: item.expiryDate ?? "",
+        productId: item.productId ?? undefined,
+      })));
+    } else {
+      setLines([EMPTY_LINE()]);
+    }
+  }, [navInvoiceQuery.data, warehousesQuery.data, journalsQuery.data]);
 
   const stockQuery = trpc.reports.stockByWarehouse.useQuery(
     { warehouseId: warehouseId! },
@@ -268,8 +521,6 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   );
 
   const nextJournalNumberMutation = trpc.documentJournals.nextNumber.useMutation();
-  const utils = trpc.useUtils();
-
   const basedOnQuery = trpc.salesInvoices.getByNumber.useQuery(
     { type: basedOnType as any, number: basedOnTrigger },
     { enabled: config.docCategory === "sales" && !!basedOnType && !!basedOnTrigger }
@@ -278,8 +529,23 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   // Set initial invoice number
   useEffect(() => {
     const n = config.docCategory === "sales" ? salesNextNumberQuery.data : purchaseNextNumberQuery.data;
-    if (n && !invoiceNumber) setInvoiceNumber(n);
-  }, [salesNextNumberQuery.data, purchaseNextNumberQuery.data]);
+    if (config.docCategory === "sales" && n && !invoiceNumber) setInvoiceNumber(n);
+  }, [config.docCategory, salesNextNumberQuery.data, purchaseNextNumberQuery.data, invoiceNumber]);
+
+  // تحديث اسم المخزن الظاهر عند تحميل قائمة المخازن أو تغير المخزن المختار
+  useEffect(() => {
+    if (!warehouseId) return;
+    const wh = warehousesQuery.data?.find(w => w.id === warehouseId);
+    if (wh?.name) setWarehouseDisplayName(wh.name);
+  }, [warehouseId, warehousesQuery.data]);
+
+  // For purchases, branch is the UI selector while warehouse remains the
+  // single operational source of truth in the invoice payload.
+  useEffect(() => {
+    if (config.docCategory !== "purchase" || !warehouseId) return;
+    const warehouse = warehousesQuery.data?.find((item: any) => item.id === warehouseId);
+    if (warehouse?.branchId && warehouse.branchId !== branchId) setBranchId(warehouse.branchId);
+  }, [config.docCategory, warehouseId, warehousesQuery.data, branchId]);
 
   // Fill from source doc (بناءً على)
   useEffect(() => {
@@ -287,7 +553,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     if (!src) return;
     if (src.customerName) setPartyName(src.customerName);
     if (src.customerId)   setPartyId(src.customerId);
-    if (src.warehouseId && !journalWarehouseId) setWarehouseId(src.warehouseId);
+    if (src.warehouseId && !journalWarehouseId) setWarehouseId(src.warehouseId ?? null);
     if (src.currency) setCurrency(src.currency);
     if (src.notes)    setNotes(src.notes ?? "");
     if (src.items.length > 0) {
@@ -303,6 +569,8 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   }, [basedOnQuery.data]);
 
   // ── Mutations ──────────────────────────────────────────────────────────────
+  const pendingNavRef = useRef<(() => void) | null>(null);
+
   const salesCreateMutation = trpc.salesInvoices.create.useMutation({
     onSuccess: (data) => {
       const autoPosted = (data as any).isPosted === true;
@@ -312,11 +580,13 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
           : `الإجمالي: ${fmt(netTotal)} ${currency} — اضغط "ترحيل" لترحيل القيد`,
         duration: 5000,
       });
-      setSavedInvoiceId(data.id);
+      setSavedInvoiceId(data.id ?? null);
       setIsPosted(autoPosted);
       setErpMode("view");
+      pendingNavRef.current?.();
+      pendingNavRef.current = null;
     },
-    onError: (e) => toast.error(`خطأ في الحفظ: ${e.message}`),
+    onError: (e) => { toast.error(`خطأ في الحفظ: ${e.message}`); pendingNavRef.current = null; },
   });
 
   const purchaseCreateMutation = trpc.purchases.create.useMutation({
@@ -328,8 +598,10 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       setSavedInvoiceId(data.id);
       setIsPosted(false);
       setErpMode("view");
+      pendingNavRef.current?.();
+      pendingNavRef.current = null;
     },
-    onError: (e) => toast.error(`خطأ في الحفظ: ${e.message}`),
+    onError: (e) => { toast.error(`خطأ في الحفظ: ${e.message}`); pendingNavRef.current = null; },
   });
 
   const isSaving = config.docCategory === "sales"
@@ -345,10 +617,31 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     onError: (e) => toast.error(`خطأ في الترحيل: ${e.message}`),
   });
 
+  const purchasePostMutation = trpc.posting.postPurchaseInvoice.useMutation({
+    onSuccess: (data) => {
+      toast.success(`✓ تم الترحيل — قيد رقم ${data.entryNumber}`);
+      setIsPosted(true);
+      setShowPostingPreview(false);
+    },
+    onError: (e) => toast.error(`خطأ في ترحيل فاتورة المشتريات: ${e.message}`),
+  });
+
   const unpostMutation = trpc.posting.unpostSalesInvoice.useMutation({
     onSuccess: () => { toast.success("تم إلغاء الترحيل"); setIsPosted(false); },
     onError: (e) => toast.error(`خطأ في إلغاء الترحيل: ${e.message}`),
   });
+
+  const purchaseUnpostMutation = trpc.posting.unpostPurchaseInvoice.useMutation({
+    onSuccess: () => { toast.success("تم إلغاء ترحيل فاتورة المشتريات"); setIsPosted(false); },
+    onError: (e) => toast.error(`خطأ في إلغاء ترحيل فاتورة المشتريات: ${e.message}`),
+  });
+
+  const activePostMutation = config.docCategory === "purchase"
+    ? purchasePostMutation
+    : postMutation;
+  const activeUnpostMutation = config.docCategory === "purchase"
+    ? purchaseUnpostMutation
+    : unpostMutation;
 
   // ── Calculations ───────────────────────────────────────────────────────────
   const subtotal = lines.reduce((s, l) =>
@@ -409,12 +702,12 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     updateLine(idx, "productCode", code);
     if (!code) return;
     const found = (productsQuery.data ?? []).find(p =>
-      p.sku === code || p.barcode === code || String(p.id) === code);
+      (p as any).sku === code || p.barcode === code || String(p.id) === code);
     if (found) {
       setLines(prev => {
         const u = [...prev];
         const l = { ...u[idx] };
-        l.productCode = found.sku ?? found.barcode ?? code;
+        l.productCode = (found as any).sku ?? found.barcode ?? code;
         l.productName = found.name;
         l.productId   = found.id;
         l.unit        = found.unit ?? "";
@@ -432,26 +725,42 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   ) => {
     const totalCols = COL_FIELDS.length;
     const totalRows = lines.length;
-    if (e.ctrlKey && e.key === "c") {
+    if (e.ctrlKey && e.code === "KeyC") {
       e.preventDefault(); setCopiedLine({ ...lines[rowIdx] }); toast.info(`تم نسخ السطر ${rowIdx + 1}`); return;
     }
-    if (e.ctrlKey && e.key === "v") {
+    if (e.ctrlKey && e.code === "KeyV") {
       e.preventDefault();
       if (!copiedLine) { toast.warning("لا يوجد سطر منسوخ"); return; }
       setLines(prev => { const u = [...prev]; u.splice(rowIdx + 1, 0, { ...copiedLine, id: crypto.randomUUID() }); return u; });
       setTimeout(() => cellRefs.current.get(`${rowIdx + 1}-0`)?.focus(), 50); return;
     }
-    if (e.key === "Tab" || e.key === "Enter") {
+    if (e.key === "Tab" && e.shiftKey) {
       e.preventDefault();
-      if (colIdx + 1 < totalCols) { cellRefs.current.get(`${rowIdx}-${colIdx + 1}`)?.focus(); }
-      else if (rowIdx + 1 < totalRows) { setSelectedLineIdx(rowIdx + 1); cellRefs.current.get(`${rowIdx + 1}-0`)?.focus(); }
-      else { addLine(); setTimeout(() => cellRefs.current.get(`${rowIdx + 1}-0`)?.focus(), 50); }
+      const prevCol = colIdx - 1;
+      if (prevCol >= 0 && cellRefs.current.has(`${rowIdx}-${prevCol}`)) {
+        cellRefs.current.get(`${rowIdx}-${prevCol}`)?.focus();
+      } else if (rowIdx > 0) {
+        for (let c = totalCols; c >= 0; c--) {
+          if (cellRefs.current.has(`${rowIdx - 1}-${c}`)) {
+            cellRefs.current.get(`${rowIdx - 1}-${c}`)?.focus();
+            break;
+          }
+        }
+      }
       return;
     }
-    if (e.shiftKey && e.key === "Tab") {
+    if ((e.key === "Tab" && !e.shiftKey) || e.key === "Enter") {
       e.preventDefault();
-      if (colIdx - 1 >= 0) cellRefs.current.get(`${rowIdx}-${colIdx - 1}`)?.focus();
-      else if (rowIdx > 0) cellRefs.current.get(`${rowIdx - 1}-${totalCols - 1}`)?.focus();
+      const nextKey = `${rowIdx}-${colIdx + 1}`;
+      if (cellRefs.current.has(nextKey)) {
+        cellRefs.current.get(nextKey)?.focus();
+      } else if (rowIdx + 1 < totalRows) {
+        setSelectedLineIdx(rowIdx + 1);
+        cellRefs.current.get(`${rowIdx + 1}-0`)?.focus();
+      } else {
+        addLine();
+        setTimeout(() => cellRefs.current.get(`${rowIdx + 1}-0`)?.focus(), 50);
+      }
       return;
     }
     if (e.ctrlKey && e.key === "Delete") { e.preventDefault(); deleteLine(rowIdx); }
@@ -462,8 +771,23 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     setJournalId(id); setJournalOpen(false);
     const j = (journalsQuery.data ?? []).find((x: any) => x.id === id);
     if (j) {
-      if (j.warehouseId) { setWarehouseId(j.warehouseId); setJournalWarehouseId(j.warehouseId); }
-      else setJournalWarehouseId(null);
+      if (j.warehouseId) {
+        setWarehouseId(j.warehouseId);
+        setJournalWarehouseId(j.warehouseId);
+        const whName = warehousesQuery.data?.find((w: any) => w.id === j.warehouseId)?.name ?? "";
+        setWarehouseDisplayName(whName);
+        if (config.docCategory === "purchase") {
+          const branch = warehousesQuery.data?.find((w: any) => w.id === j.warehouseId)?.branchId;
+          if (branch) setBranchId(branch);
+        }
+      } else {
+        setJournalWarehouseId(null);
+        setWarehouseDisplayName("");
+        if (config.docCategory === "purchase") {
+          setBranchId(null);
+          setWarehouseId(null);
+        }
+      }
       if (j.defaultCurrency) setCurrency(j.defaultCurrency);
       if (j.defaultPayMethod) setPaymentType(j.defaultPayMethod as any);
     }
@@ -476,7 +800,146 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       const preview = await utils.documentJournals.previewNextNumber.fetch({ journalId: id });
       if (preview) setInvoiceNumber(preview);
     } catch { toast.error("تعذّر جلب رقم المستند من الدفتر"); }
-  }, [journalsQuery.data, docTypesQuery.data, utils]);
+  }, [config.docCategory, journalsQuery.data, warehousesQuery.data, docTypesQuery.data, utils]);
+
+  const handlePurchaseBranchSelect = useCallback(async (selection: string) => {
+    if (config.docCategory !== "purchase") return;
+    const selected = purchaseBranchOptions.find(option => option.value === selection);
+    const nextBranchId = selected?.branchId ?? null;
+    if (
+      branchId &&
+      nextBranchId &&
+      branchId !== nextBranchId &&
+      lines.some(line => line.productName.trim() || line.productId)
+    ) {
+      const accepted = window.confirm(
+        "تغيير الفرع سيؤدي إلى تغيير المخزن ورقم المستند، وقد تتغير كميات الأصناف المتاحة. هل تريد المتابعة؟",
+      );
+      if (!accepted) return;
+    }
+    if (!nextBranchId) {
+      setBranchId(null);
+      setWarehouseId(null);
+      setWarehouseDisplayName("");
+      setJournalId(null);
+      setJournalWarehouseId(null);
+      setInvoiceNumber("");
+      setPurchaseBranchMenuOpen(false);
+      setPurchaseBranchEditMode(false);
+      return;
+    }
+    const warehouse = selected?.warehouseId
+      ? (warehousesQuery.data ?? []).find((item: any) => item.id === selected.warehouseId)
+      : (warehousesQuery.data ?? []).find((item: any) => item.branchId === nextBranchId);
+    if (!warehouse) {
+      toast.error("لا يوجد مخزن مرتبط بالفرع المحدد.");
+      return;
+    }
+    const journal = selected?.journalId
+      ? (journalsQuery.data ?? []).find((item: any) => item.id === selected.journalId)
+      : (journalsQuery.data ?? []).find((item: any) => item.warehouseId === warehouse.id);
+    if (!journal) {
+      toast.error("لا يوجد دفتر مشتريات مرتبط بالفرع المحدد.");
+      return;
+    }
+    setBranchId(nextBranchId);
+    setWarehouseId(warehouse.id);
+    setWarehouseDisplayName(warehouse.name);
+    setJournalId(journal.id);
+    setJournalWarehouseId(warehouse.id);
+    setDocTypeId(prev => {
+      const filtered = (docTypesQuery.data ?? []).filter((dt: any) => dt.journal === String(journal.id));
+      return filtered.some((dt: any) => String(dt.id) === prev)
+        ? prev
+        : (filtered[0] ? String(filtered[0].id) : "");
+    });
+    if (journal.defaultCurrency) setCurrency(journal.defaultCurrency);
+    if (journal.defaultPayMethod) setPaymentType(journal.defaultPayMethod as any);
+    setPurchaseBranchMenuOpen(false);
+    setPurchaseBranchEditMode(false);
+    try {
+      // Reserve the exact number shown to the user. Saving must not reserve
+      // another number and silently replace the visible document number.
+      const reserved = await nextJournalNumberMutation.mutateAsync({ journalId: journal.id });
+      setInvoiceNumber(reserved);
+    } catch {
+      setInvoiceNumber("");
+      toast.error("تعذّر جلب رقم المستند من دفتر الفرع");
+    }
+  }, [
+    config.docCategory,
+    branchId,
+    lines,
+    purchaseBranchOptions,
+    warehousesQuery.data,
+    journalsQuery.data,
+    docTypesQuery.data,
+    utils,
+    nextJournalNumberMutation,
+  ]);
+
+  const clearPurchaseBranchSelection = useCallback(() => {
+    setBranchId(null);
+    setWarehouseId(null);
+    setWarehouseDisplayName("");
+    setJournalId(null);
+    setJournalWarehouseId(null);
+    setDocTypeId("");
+    setDocTypeWarehouseId(null);
+    setInvoiceNumber("");
+    setPurchaseBranchEditMode(false);
+    setPurchaseBranchEditText("");
+  }, []);
+
+  const openPurchaseBranchMenu = useCallback(() => {
+    if (!purchaseBranchEditMode) setPurchaseBranchMenuOpen(true);
+  }, [purchaseBranchEditMode]);
+
+  const startPurchaseBranchEdit = useCallback(() => {
+    setPurchaseBranchEditText(selectedPurchaseBranchLabel);
+    setPurchaseBranchEditMode(true);
+    setPurchaseBranchMenuOpen(false);
+  }, [selectedPurchaseBranchLabel]);
+
+  const commitPurchaseBranchEdit = useCallback(() => {
+    const text = purchaseBranchEditText.trim();
+    if (!text) {
+      clearPurchaseBranchSelection();
+      return;
+    }
+    const match = purchaseBranchOptions.find(option => option.label.trim() === text);
+    if (match) {
+      void handlePurchaseBranchSelect(match.value);
+      return;
+    }
+    toast.error("اختر فرعًا موجودًا من القائمة");
+    setPurchaseBranchEditText(selectedPurchaseBranchLabel);
+    setPurchaseBranchEditMode(false);
+  }, [
+    clearPurchaseBranchSelection,
+    handlePurchaseBranchSelect,
+    purchaseBranchEditText,
+    purchaseBranchOptions,
+    selectedPurchaseBranchLabel,
+  ]);
+
+  useEffect(() => {
+    if (!purchaseBranchMenuOpen) return;
+    const closeMenu = (event: MouseEvent) => {
+      if (!purchaseBranchMenuRef.current?.contains(event.target as Node)) {
+        setPurchaseBranchMenuOpen(false);
+        setPurchaseBranchEditMode(false);
+      }
+    };
+    document.addEventListener("mousedown", closeMenu);
+    return () => document.removeEventListener("mousedown", closeMenu);
+  }, [purchaseBranchMenuOpen]);
+
+  useEffect(() => {
+    if (!purchaseBranchEditMode) return;
+    purchaseBranchInputRef.current?.focus();
+    purchaseBranchInputRef.current?.select();
+  }, [purchaseBranchEditMode]);
 
   const handleDocTypeSelect = useCallback((id: string) => {
     setDocTypeId(id);
@@ -492,6 +955,10 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
 
   // ── Save ───────────────────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
+    if (config.docCategory === "purchase" && !branchId) {
+      toast.error("يجب اختيار الفرع أولًا لتحديد المخزن ودفتر المستند");
+      return;
+    }
     if (!invoiceNumber.trim()) { toast.error("رقم المستند مطلوب"); return; }
     const validLines = lines.filter(l => l.productName.trim() !== "");
     if (validLines.length === 0) { toast.error("يجب إضافة صنف واحد على الأقل"); return; }
@@ -523,7 +990,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       }
     }
     let finalInvoiceNumber = invoiceNumber;
-    if (journalId) {
+    if (journalId && config.docCategory !== "purchase") {
       try {
         finalInvoiceNumber = await nextJournalNumberMutation.mutateAsync({ journalId });
         setInvoiceNumber(finalInvoiceNumber);
@@ -537,7 +1004,9 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       productId: l.productId, productCode: l.productCode || undefined, productName: l.productName,
       unit: l.unit || undefined, quantity: l.quantity, unitPrice: l.unitPrice,
       discountPercent: l.discountPct, discountAmount: l.discountAmt,
-      taxPercent: l.taxPct, taxAmount: l.taxAmt, total: l.total, sortOrder: idx,
+       taxPercent: l.taxPct, taxAmount: l.taxAmt, total: l.total,
+       ...(config.docCategory === "purchase" ? { batchNumber: l.batchNumber || undefined, expiryDate: l.expiryDate || undefined } : {}),
+       sortOrder: idx,
     }));
     const common = {
       invoiceNumber: finalInvoiceNumber, invoiceType: config.invoiceType, invoiceDate,
@@ -550,7 +1019,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       notes: notes || undefined, items: itemsPayload,
     };
     if (config.docCategory === "sales") {
-      salesCreateMutation.mutate({ ...common, customerId: partyId ?? undefined, customerName: partyName || undefined });
+      salesCreateMutation.mutate({ ...common, customerId: partyId ?? undefined, customerName: partyName || undefined } as any);
     } else {
       purchaseCreateMutation.mutate({
         ...common,
@@ -564,13 +1033,13 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     warehouseId, currency, exchangeRate, paymentType, paidAmount, remainingAmount,
     notes, lines, subtotal, totalDiscount, totalTax, netTotal,
     salesCreateMutation, purchaseCreateMutation, journalId, nextJournalNumberMutation,
-    docTypeId, docTypesQuery.data, salesperson, stockQuery.data, config,
+     docTypeId, docTypesQuery.data, salesperson, stockQuery.data, config, branchId,
   ]);
 
   /* ── نسخة مماثلة ── */
   const handleDuplicate = useCallback(() => {
     if (!savedInvoiceId) { toast.warning("لا يوجد مستند محفوظ للنسخ — احفظ أولاً"); return; }
-    setSavedInvoiceId(null); setIsPosted(false); setShowPostingPreview(false);
+    setSavedInvoiceId(null); setNavInvoiceId(null); setIsPosted(false); setShowPostingPreview(false);
     setErpMode("new");
     setBasedOnType(""); setBasedOnNum(""); setBasedOnTrigger("");
     setPaidAmountOverride("");
@@ -585,11 +1054,11 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   const handleNew = useCallback(() => {
     setLines([EMPTY_LINE()]); setSelectedLineIdx(0);
     setPartyId(null); setPartyName(""); setSupplierInvoiceNumber("");
-    setWarehouseId(null); setPaymentType("cash");
+     setWarehouseId(null); setBranchId(null); setPaymentType("cash");
     setBasedOnType(""); setBasedOnNum(""); setBasedOnTrigger("");
     setNotes(""); setDueDate(""); setSalesperson(""); setPaidAmountOverride("");
     setErpMode("new"); setJournalWarehouseId(null);
-    setSavedInvoiceId(null); setIsPosted(false); setShowPostingPreview(false);
+    setSavedInvoiceId(null); setNavInvoiceId(null); setIsPosted(false); setShowPostingPreview(false);
     if (journalId) {
       utils.documentJournals.previewNextNumber.fetch({ journalId }).then(p => {
         if (p) setInvoiceNumber(p);
@@ -597,61 +1066,397 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     } else setInvoiceNumber("");
   }, [journalId, utils]);
 
+  // ── التحقق من أن المستند الجديد لا يحتوي على بيانات مُدخلة ───────────────────
+  const isDocumentEmpty = useCallback(() => {
+    const hasLine = lines.some(
+      l => l.productId || l.productName.trim() || l.productCode.trim() || l.quantity !== "1" || l.unitPrice.trim()
+    );
+    return !hasLine && !partyName.trim() && !partyId && !warehouseId && !notes.trim() && !basedOnType && !basedOnNum;
+  }, [lines, partyName, partyId, warehouseId, notes, basedOnType, basedOnNum]);
+
+  // ── حفظ المسودة — يُستخدم من حوار التنقل عند وجود تعديلات غير محفوظة ───────
+  const handleSaveDraft = useCallback(async () => {
+    const validLines = lines.filter(l => l.productName.trim() !== "");
+    if (validLines.length === 0) { toast.error("يجب إضافة صنف واحد على الأقل"); return; }
+    const itemsPayload = validLines.map((l, idx) => ({
+      productId: l.productId, productCode: l.productCode || undefined, productName: l.productName,
+      unit: l.unit || undefined, quantity: l.quantity, unitPrice: l.unitPrice,
+      discountPercent: l.discountPct, discountAmount: l.discountAmt,
+       taxPercent: l.taxPct, taxAmount: l.taxAmt, total: l.total,
+       ...(config.docCategory === "purchase" ? { batchNumber: l.batchNumber || undefined, expiryDate: l.expiryDate || undefined } : {}),
+       sortOrder: idx,
+    }));
+    const common = {
+      invoiceNumber: `DRAFT-${Date.now()}`,
+      invoiceType: config.invoiceType,
+      invoiceDate,
+      dueDate: dueDate || undefined,
+      warehouseId: warehouseId ?? undefined,
+      journalId: journalId ?? undefined,
+      currency,
+      exchangeRate,
+      subtotal: fmt(subtotal), discountAmount: fmt(totalDiscount),
+      taxAmount: fmt(totalTax), total: fmt(netTotal),
+      paidAmount: "0.000", remainingAmount: fmt(netTotal),
+      paymentMethod: "credit" as any,
+      status: "draft" as any,
+      notes: notes || undefined,
+      items: itemsPayload,
+    };
+    try {
+      if (config.docCategory === "sales") {
+        await salesCreateMutation.mutateAsync({ ...common, customerId: partyId ?? undefined, customerName: partyName || undefined } as any);
+      } else {
+        await purchaseCreateMutation.mutateAsync({
+          ...common,
+          supplierId: partyId ?? undefined,
+          supplierName: partyName || undefined,
+          supplierInvoiceNumber: supplierInvoiceNumber || undefined,
+        });
+      }
+    } catch {
+      throw new Error("draft-save-failed");
+    }
+  }, [
+    invoiceDate, dueDate, partyId, partyName, supplierInvoiceNumber, warehouseId,
+    currency, exchangeRate, notes, lines, subtotal, totalDiscount, totalTax, netTotal,
+    salesCreateMutation, purchaseCreateMutation, journalId, config.docCategory, config.invoiceType,
+  ]);
+
+  // ── التنقل المركزي بين المستندات المحفوظة ────────────────────────────────────
+  const {
+    handlers: navHandlers,
+    hasRecord: navHasRecord,
+    hasPrevious: navHasPrevious,
+    hasNext: navHasNext,
+    showUnsavedDialog: navShowUnsavedDialog,
+    unsavedDialogActions: navUnsavedDialogActions,
+    isSavingDraft: navIsSavingDraft,
+  } = useDocumentNavigation({
+    records: (listQuery.data as any) as Array<{ id: number }> | undefined,
+    currentId: navInvoiceId ?? savedInvoiceId,
+    setCurrentId: id => { setNavInvoiceId(id); },
+    isDirty,
+    isEmpty: isDocumentEmpty,
+    saveAsDraft: handleSaveDraft,
+    onBeforeNavigate: () => setErpMode("view" as ERPMode),
+  });
+
+  // ── Unified Toolbar ──────────────────────────────────────────────────────────
+  const _tbRef = useRef<any>({});
+  _tbRef.current = { erpMode, isSaving, savedInvoiceId, isPosted, isPrintEnabled, config, handleSave, handleNew, handleDuplicate, setErpMode, setPendingNav, setShowUnsaved, setShowPrintModal, setShowPostingPreview, unpostMutation: activeUnpostMutation };
+  const toolbarActions = useMemo(() => {
+    const canPost = config.canPost !== false;
+    const hasSaved = savedInvoiceId !== null;
+    const isDirtyMode = erpMode === "new" || erpMode === "edit";
+    return ({
+      save: { supported: true as const, allowed: true, loading: isSaving, stateEnabled: !isSaving && isDirtyMode, disabledReason: isDirtyMode ? undefined : "وضع العرض — اضغط تعديل أولًا", onClick: () => { _tbRef.current.handleSave(); } },
+      new: { supported: true as const, allowed: true, stateEnabled: true, onClick: () => { const s = _tbRef.current; const dirty = s.erpMode === "new" || s.erpMode === "edit"; const doNew = () => { s.handleNew(); s.setErpMode("new"); }; if (dirty) { s.setPendingNav(() => doNew); s.setShowUnsaved(true); } else doNew(); } },
+      duplicate: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "احفظ المستند أولًا لنسخه", onClick: () => _tbRef.current.handleDuplicate() },
+      edit: { supported: true as const, allowed: true, stateEnabled: erpMode === "view", disabledReason: erpMode !== "view" ? "المستند في وضع التعديل بالفعل" : undefined, onClick: () => { _tbRef.current.setErpMode("edit"); toast.info("وضع التعديل"); } },
+      delete: { supported: false as const, disabledReason: "حذف المستند غير متاح في هذه الشاشة" },
+      draft: { supported: false as const, disabledReason: "المسودة غير مستخدمة" },
+      first:    { supported: true as const, stateEnabled: navHasRecord, disabledReason: "لا توجد سجلات", onClick: navHandlers.first },
+      previous: { supported: true as const, stateEnabled: navHasPrevious, disabledReason: "لا يوجد سجل سابق", onClick: navHandlers.previous },
+      next:     { supported: true as const, stateEnabled: navHasNext, disabledReason: "لا يوجد سجل تالي", onClick: navHandlers.next },
+      last:     { supported: true as const, stateEnabled: navHasRecord, disabledReason: "لا توجد سجلات", onClick: navHandlers.last },
+      approve: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "احفظ المستند أولًا للاعتماد", onClick: () => toast.success("تم الاعتماد") },
+      cancel: { supported: canPost, allowed: true, stateEnabled: hasSaved && isPosted, disabledReason: !hasSaved ? "احفظ المستند أولًا" : !isPosted ? "المستند غير مرحّل" : undefined, onClick: () => { const s = _tbRef.current; if (!s.savedInvoiceId) return; if (window.confirm("هل أنت متأكد من إلغاء ترحيل هذا المستند؟")) s.unpostMutation.mutate({ invoiceId: s.savedInvoiceId! }); } },
+      preview: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "احفظ المستند أولًا للمطالعة", onClick: () => { const s = _tbRef.current; if (s.savedInvoiceId) s.setErpMode("view"); else toast.info("لا يوجد سجل محفوظ للمطالعة"); } },
+      tools: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "احفظ المستند أولًا" },
+      send: { supported: false as const, disabledReason: "الإرسال غير متاح في هذه الشاشة" },
+      print: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "احفظ المستند أولًا للطباعة", onClick: () => { const s = _tbRef.current; if (s.isPrintEnabled) s.setShowPrintModal(true); else toast.info("جاري الطباعة..."); } },
+      exit: { supported: true as const, allowed: true, stateEnabled: true, onClick: () => { const s = _tbRef.current; const dirty = s.erpMode === "new" || s.erpMode === "edit"; const doExit = () => toast.info("أغلق التبويب لإغلاق الشاشة"); if (dirty) { s.setPendingNav(() => doExit); s.setShowUnsaved(true); } else doExit(); } },
+    }) as unknown as ToolbarActionMap;
+  }, [erpMode, isSaving, savedInvoiceId, isPosted, isPrintEnabled, config, navHasRecord, navHasPrevious, navHasNext, navHandlers]);
+  const toolbarTools = useMemo(() => {
+    const canPost = config.canPost !== false;
+    const hasSaved = savedInvoiceId !== null;
+    return [
+      { id: "post", label: "ترحيل المستند", enabled: canPost && hasSaved && !isPosted, disabledReason: !canPost ? "الترحيل غير متاح لهذا النوع" : !hasSaved ? "احفظ المستند أولًا" : isPosted ? "المستند مرحّل بالفعل" : undefined, onClick: () => { if (!_tbRef.current.savedInvoiceId) { toast.warning("يجب حفظ المستند أولاً"); return; } _tbRef.current.setShowPostingPreview(true); } },
+      { id: "unpost", label: "إلغاء ترحيل المستند", enabled: canPost && hasSaved && isPosted, disabledReason: !canPost ? "غير متاح" : !isPosted ? "المستند غير مرحّل" : undefined, onClick: () => { const s = _tbRef.current; if (!s.savedInvoiceId) return; if (window.confirm("هل أنت متأكد من إلغاء ترحيل هذا المستند؟")) s.unpostMutation.mutate({ invoiceId: s.savedInvoiceId! }); } },
+      { id: "suspend", label: "تعليق الترحيل", enabled: false, disabledReason: "قريباً" },
+      { id: "activity", label: "نشاط المستخدمين", separatorBefore: true as const, enabled: false, disabledReason: "قريباً" },
+      { id: "attachments", label: "إرفاق المستندات", enabled: false, disabledReason: "قريباً" },
+    ];
+  }, [config, savedInvoiceId, isPosted]);
+  useToolbarActions(toolbarActions, toolbarTools);
+
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <div
-      className="flex flex-col h-full text-[#1a1a1a] select-none"
-      style={{ fontFamily: "'Cairo', Tahoma, Arial, sans-serif", fontSize: "12px", background: "#ECE7DD" }}
+      className={`${styles.screenContainer} flex flex-col h-full text-[#2d241e] select-none ${config.docCategory === "purchase" ? "purchase-invoice-page" : ""}`}
+      style={{ fontFamily: "'Cairo', Tahoma, Arial, sans-serif", fontSize: "12px", background: config.docCategory === "purchase" ? "#f7f2e9" : "var(--background)" }}
       dir="rtl"
     >
-      {/* ── ERP Toolbar ───────────────────────────────────────────────────── */}
-      <ERPToolbar
-        pageTitle={config.pageTitle}
-        mode={erpMode}
-        saveDisabled={isSaving || erpMode === "view"}
-        isSaved={savedInvoiceId !== null}
-        isPosted={isPosted}
-        postingStatus={savedInvoiceId !== null ? (isPosted ? "posted" : "unposted") : null}
-        onNew={() => { handleNew(); setErpMode("new"); }}
-        onSave={() => handleSave()}
-        onEdit={() => { setErpMode("edit"); toast.info("وضع التعديل"); }}
-        onDelete={() => toast.info("حذف المستند...")}
-        onSearch={() => { setErpMode("search"); toast.info("بحث..."); }}
-        onRefresh={() => {
-          if (config.docCategory === "sales") salesNextNumberQuery.refetch();
-          else purchaseNextNumberQuery.refetch();
+      {/* ── Unsaved Changes Guard ──────────────────────────────────────────────── */}
+      <UnsavedChangesDialog
+        open={showUnsaved}
+        isSaving={isSaving}
+        onSave={() => {
+          pendingNavRef.current = pendingNav;
+          setShowUnsaved(false);
+          setPendingNav(null);
+          handleSave();
         }}
-        onCopy={handleDuplicate}
-        onPost={config.canPost !== false && config.docCategory === "sales" ? () => {
-          if (!savedInvoiceId) { toast.warning("يجب حفظ المستند أولاً"); return; }
-          setShowPostingPreview(true);
-        } : undefined}
-        onUnpost={config.canPost !== false && config.docCategory === "sales" ? () => {
-          if (!savedInvoiceId) return;
-          if (window.confirm("هل أنت متأكد من إلغاء ترحيل هذا المستند؟"))
-            unpostMutation.mutate({ invoiceId: savedInvoiceId! });
-        } : undefined}
-        onPreviewJournal={config.canPost !== false && config.docCategory === "sales" ? () => {
-          if (!savedInvoiceId) { toast.warning("يجب حفظ المستند أولاً"); return; }
-          setShowPostingPreview(true);
-        } : undefined}
-        onApprove={() => toast.success("تم الاعتماد")}
-        onCancel={() => { setErpMode("view"); toast.info("تم الإلغاء"); }}
-        onPrint={() => {
-          if (isPrintEnabled) {
-            setShowPrintModal(true);
-          } else {
-            toast.info("جاري الطباعة...");
-          }
+        onDiscard={() => {
+          setShowUnsaved(false);
+          pendingNav?.();
+          setPendingNav(null);
         }}
-        onFirst={() => {}} onPrev={() => {}} onNext={() => {}} onLast={() => {}}
-        onClose={() => toast.info("إغلاق")}
-        enableShortcuts
+        onCancel={() => { setShowUnsaved(false); setPendingNav(null); }}
+      />
+
+      {/* ── حوار التنقل عند وجود تعديلات غير محفوظة ── */}
+      <UnsavedChangesDialog
+        open={navShowUnsavedDialog}
+        onSaveAsDraft={navUnsavedDialogActions.onSaveAsDraft}
+        onDiscard={navUnsavedDialogActions.onDiscard}
+        onCancel={navUnsavedDialogActions.onCancel}
+        isSaving={navIsSavingDraft}
       />
 
       {/* ── Header Form ───────────────────────────────────────────────────── */}
-      <div className="bg-white border-b border-[#b0a89a] px-3 pt-2 pb-1.5" style={{ boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }}>
+      <div
+        className={config.docCategory === "purchase" ? "purchase-invoice-header" : "border-b px-3 pt-2 pb-1.5"}
+        style={{
+          background: config.docCategory === "purchase" ? "#fbf8f3" : "#fff",
+          borderColor: config.docCategory === "purchase" ? "#d8c7b5" : "#b0a89a",
+          boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
+        }}
+      >
 
+        {config.docCategory === "purchase" ? (
+          <div
+            className="purchase-header-columns"
+            style={{ direction: "rtl" }}
+            data-testid="purchase-invoice-three-column-header"
+          >
+            {/* العمود الأول من اليمين: بيانات المستند */}
+            <div className="purchase-header-column">
+              <PurchaseField label="الفرع">
+                <div
+                  ref={purchaseBranchMenuRef}
+                  className="relative w-full"
+                  onContextMenu={event => {
+                    event.preventDefault();
+                    openPurchaseBranchMenu();
+                  }}
+                >
+                  {purchaseBranchEditMode ? (
+                    <input
+                      ref={purchaseBranchInputRef}
+                      value={purchaseBranchEditText}
+                      onChange={event => setPurchaseBranchEditText(event.target.value)}
+                      onBlur={commitPurchaseBranchEdit}
+                      onKeyDown={event => {
+                        if (event.key === "Enter") commitPurchaseBranchEdit();
+                        if (event.key === "Escape") setPurchaseBranchEditMode(false);
+                      }}
+                      className="classic-input w-full font-bold"
+                      style={{ borderColor: "#c8ad93", color: "#4b3424", background: "#fffdf8" }}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className="classic-input w-full cursor-pointer text-right font-bold"
+                      style={{ borderColor: "#c8ad93", color: "#4b3424", background: "#fffdf8" }}
+                      onClick={openPurchaseBranchMenu}
+                      onDoubleClick={startPurchaseBranchEdit}
+                      onContextMenu={event => {
+                        event.preventDefault();
+                        openPurchaseBranchMenu();
+                      }}
+                      aria-haspopup="listbox"
+                      aria-expanded={purchaseBranchMenuOpen}
+                      title="اضغط لعرض الفروع، انقر مرتين للتعديل"
+                    >
+                      {selectedPurchaseBranchLabel || (
+                        branchesQuery.isLoading || warehousesQuery.isLoading || journalsQuery.isLoading
+                          ? "جاري تحميل الفروع..."
+                          : branchesQuery.error || warehousesQuery.error || journalsQuery.error
+                            ? "تعذّر تحميل الفروع"
+                            : "بدون اختيار"
+                      )}
+                    </button>
+                  )}
+                  {purchaseBranchMenuOpen && !purchaseBranchEditMode && (
+                    <div
+                      className="absolute right-0 z-50 mt-0 max-h-52 w-full overflow-y-auto rounded border border-[#c8ad93] bg-[#fffdf8] shadow-lg"
+                      role="listbox"
+                    >
+                      <button
+                        type="button"
+                        className="block w-full px-2 py-1 text-right text-sm hover:bg-[#eadbc9]"
+                        onClick={() => handlePurchaseBranchSelect("")}
+                      >
+                        بدون اختيار
+                      </button>
+                      {purchaseBranchOptions.map(option => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={`block w-full px-2 py-1 text-right text-sm hover:bg-[#eadbc9] ${
+                            option.value === selectedPurchaseBranchValue ? "bg-[#d9e9fa]" : ""
+                          }`}
+                          onClick={() => handlePurchaseBranchSelect(option.value)}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </PurchaseField>
+              <PurchaseField label="رقم المستند">
+                <input
+                  value={branchId ? invoiceNumber : ""}
+                  readOnly
+                  placeholder="يظهر بعد اختيار الفرع"
+                  className="classic-input w-full text-center font-bold"
+                  style={{ borderColor: "#c8ad93", background: "#f8f1e8", color: "#4b3424" }}
+                />
+              </PurchaseField>
+              <PurchaseField label="المخزن">
+                <input
+                  value={branchId ? warehouseDisplayName : ""}
+                  readOnly
+                  placeholder="يحدد تلقائيًا من الفرع"
+                  className="classic-input w-full"
+                  style={{ borderColor: "#c8ad93", background: "#f8f1e8", color: "#4b3424" }}
+                />
+              </PurchaseField>
+              <PurchaseField label="تاريخ التحرير">
+                <DateSegmentInput value={invoiceDate} onChange={setInvoiceDate} standalone className="classic-input w-full" />
+              </PurchaseField>
+              <PurchaseField label="تاريخ الاستحقاق">
+                <DateSegmentInput value={dueDate} onChange={setDueDate} standalone className="classic-input w-full" />
+              </PurchaseField>
+            </div>
+
+            {/* العمود الأوسط: المورد وبياناته */}
+            <div className="purchase-header-column">
+              <PurchaseField label="اسم المورد">
+                <div className="relative flex w-full gap-1">
+                  <div className="relative min-w-0 flex-1">
+                    <button
+                      type="button"
+                      className="classic-input w-full cursor-pointer text-right font-bold"
+                      style={{ borderColor: "#c8ad93", color: "#4b3424", background: "#fffdf8" }}
+                      onClick={() => setSupplierPickerOpen(open => !open)}
+                      onContextMenu={event => { event.preventDefault(); setSupplierPickerOpen(true); }}
+                      onDoubleClick={() => { setSupplierSearch(selectedSupplier?.name ?? ""); setSupplierPickerOpen(true); }}
+                      title="اضغط لعرض الموردين، كليك يمين لفتح القائمة، ودبل كليك للبحث"
+                    >
+                      {selectedSupplier?.name || "بدون اختيار"}
+                    </button>
+                    {supplierPickerOpen && (
+                      <div className="absolute right-0 z-50 mt-0 w-full overflow-hidden rounded border border-[#c8ad93] bg-[#fffdf8] shadow-lg">
+                        <div className="border-b border-[#decdbb] p-1">
+                          <input
+                            autoFocus
+                            value={supplierSearch}
+                            onChange={event => setSupplierSearch(event.target.value)}
+                            onKeyDown={event => {
+                              if (event.key === "Escape") setSupplierPickerOpen(false);
+                            }}
+                            placeholder="ابحث باسم المورد أو الكود..."
+                            className="classic-input w-full text-right text-xs"
+                          />
+                        </div>
+                        <div className="max-h-48 overflow-y-auto">
+                          <button type="button" className="block w-full px-2 py-1 text-right text-sm hover:bg-[#eadbc9]" onClick={() => selectSupplier("")}>
+                            بدون اختيار
+                          </button>
+                          {filteredSuppliers.map((supplier: any) => (
+                            <button
+                              type="button"
+                              key={supplier.id}
+                              className={`block w-full px-2 py-1 text-right text-sm hover:bg-[#eadbc9] ${supplier.id === partyId ? "bg-[#d9e9fa]" : ""}`}
+                              onClick={() => selectSupplier(String(supplier.id))}
+                            >
+                              <span className="block">{supplier.name}</span>
+                              {(supplier.code || supplier.phone) && <span className="block text-[10px] text-gray-500">{supplier.code || supplier.phone}</span>}
+                            </button>
+                          ))}
+                          {filteredSuppliers.length === 0 && <div className="px-2 py-2 text-center text-xs text-gray-500">لا يوجد مورد مطابق</div>}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="shrink-0 rounded border border-[#8a5a2b] bg-[#8a5a2b] px-2 text-sm font-bold text-white hover:bg-[#70471f]"
+                    onClick={() => { setShowAddSupplier(true); setSupplierPickerOpen(false); }}
+                    title="إضافة مورد جديد"
+                  >+</button>
+                </div>
+              </PurchaseField>
+              <PurchaseField label="رقم فاتورة المورد">
+                <input value={supplierInvoiceNumber} onChange={e => setSupplierInvoiceNumber(e.target.value)} className="classic-input w-full" />
+              </PurchaseField>
+              <PurchaseField label="ملاحظة" alignStart>
+                <textarea value={notes} onChange={e => setNotes(e.target.value)} className="classic-input w-full resize-none" style={{ height: 62 }} />
+              </PurchaseField>
+            </div>
+
+            {/* العمود الثالث من اليمين: المرجع والعملة والضريبة */}
+            <div className="purchase-header-column">
+              <PurchaseField label="بناءً على">
+                <input disabled className="classic-input w-full" placeholder="—" />
+              </PurchaseField>
+              <PurchaseField label="رقم المستند">
+                <input value={basedOnNum} onChange={e => setBasedOnNum(e.target.value)} className="classic-input w-full" placeholder="رقم المستند..." />
+              </PurchaseField>
+              <PurchaseField label="العملة">
+                <ContextSelectInput
+                  value={currency}
+                  onChange={setCurrency}
+                  options={[
+                    { value: "SAR", label: "ريال (SAR)" },
+                    { value: "USD", label: "دولار (USD)" },
+                    { value: "EUR", label: "يورو (EUR)" },
+                    { value: "AED", label: "درهم (AED)" },
+                  ]}
+                  placeholder="بدون اختيار"
+                  className="classic-input w-full text-right"
+                />
+              </PurchaseField>
+              <PurchaseField label="سعر الصرف">
+                <input value={exchangeRate} onChange={e => setExchangeRate(e.target.value)} className="classic-input w-full text-center" />
+              </PurchaseField>
+              <PurchaseField label="نوع السند">
+                {(() => {
+                  const allDocTypes = docTypesQuery.data ?? [];
+                  const filteredDocTypes = journalId ? allDocTypes.filter((dt: any) => dt.journal === String(journalId)) : allDocTypes;
+                  return allDocTypes.length > 0 ? (
+                    <ContextSelectInput
+                      value={docTypeId}
+                      onChange={handleDocTypeSelect}
+                      options={[
+                        { value: "", label: "بدون اختيار" },
+                        ...filteredDocTypes.map((dt: any) => ({
+                          value: String(dt.id),
+                          label: dt.codeAr ? `${dt.codeAr} — ${dt.nameAr}` : dt.nameAr,
+                        })),
+                      ]}
+                      placeholder="بدون اختيار"
+                      className="classic-input w-full text-right"
+                    />
+                  ) : (
+                    <ContextSelectInput
+                      value={paymentType}
+                      onChange={value => setPaymentType(value as PaymentType)}
+                      options={[{ value: "cash", label: "نقدًا" }, { value: "credit", label: "آجل" }]}
+                      className="classic-input w-full text-right"
+                    />
+                  );
+                })()}
+              </PurchaseField>
+            </div>
+          </div>
+        ) : (
+        <>
         {/* Row 1: رقم المستند + 5-col grid */}
         <div className="flex items-start gap-2 mb-1.5">
 
@@ -679,7 +1484,8 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
                 </div>
                 <div className="flex items-stretch">
                   <input
-                    value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)}
+                     value={invoiceNumber}
+                     onChange={e => setInvoiceNumber(e.target.value)}
                     onContextMenu={e => { e.preventDefault(); setJournalOpen(o => !o); }}
                     onKeyDown={e => { if (e.key === "F4" || (e.key === "ArrowDown" && e.altKey)) { e.preventDefault(); setJournalOpen(o => !o); } }}
                     className="classic-input text-center font-bold"
@@ -760,7 +1566,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
           })()}
 
           {/* ─ 5-col main fields ─ */}
-          <div className="grid gap-x-2 gap-y-1 flex-1" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
+          <div className={`${styles.formGrid5} gap-x-2 gap-y-1`}>
             <HF label={config.partyLabel}>
               <select value={partyId ?? ""} onChange={e => {
                 const id = parseInt(e.target.value);
@@ -775,24 +1581,29 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
               </select>
             </HF>
             <HF label="تاريخ التحرير">
-              <input type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className="classic-input w-full" />
+              <DateSegmentInput value={invoiceDate} onChange={setInvoiceDate} standalone className="classic-input w-full" />
             </HF>
             <HF label="تاريخ الاستحقاق">
-              <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="classic-input w-full" />
+              <DateSegmentInput value={dueDate} onChange={setDueDate} standalone className="classic-input w-full" />
             </HF>
             <HF label="المخزن">
               {(() => {
                 const lockedWh = journalWarehouseId ?? docTypeWarehouseId;
+                const whFromList = warehousesQuery.data?.find(w => w.id === (lockedWh ?? warehouseId));
+                const whName = whFromList?.name ?? warehouseDisplayName ?? "";
                 return (
                   <select value={warehouseId ?? ""}
                     onChange={e => !lockedWh && setWarehouseId(parseInt(e.target.value) || null)}
-                    className="classic-input w-full" disabled={!!lockedWh}
-                    title={lockedWh ? "المخزن محدد ولا يمكن تغييره" : undefined}>
+                     className="classic-input w-full" disabled={!!lockedWh}
+                    title={lockedWh ? `المخزن: ${whName}` : undefined}>
                     <option value="">-- اختر مخزن --</option>
                     {(lockedWh
                       ? warehousesQuery.data?.filter(w => w.id === lockedWh)
                       : warehousesQuery.data
                     )?.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                    {lockedWh && !whFromList && warehouseId && (
+                      <option key={warehouseId} value={warehouseId}>{whName}</option>
+                    )}
                   </select>
                 );
               })()}
@@ -804,7 +1615,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
         </div>
 
         {/* Row 2 */}
-        <div className="grid gap-x-2 gap-y-1" style={{ gridTemplateColumns: "150px 120px 90px 100px 1fr 1fr" }}>
+        <div className={`${styles.formGrid6} gap-x-2 gap-y-1`}>
 
           {/* نوع السند */}
           <HF label="نوع السند">
@@ -858,11 +1669,8 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
           </HF>
 
           {/* بناءً على (sales) | رقم فاتورة المورد (purchase) */}
-          <HF label={config.docCategory === "purchase" ? "رقم فاتورة المورد" : "بناءً على"}>
-            {config.docCategory === "purchase" ? (
-              <input value={supplierInvoiceNumber} onChange={e => setSupplierInvoiceNumber(e.target.value)}
-                className="classic-input w-full" placeholder="رقم الفاتورة الأصلية..." />
-            ) : (config.basedOnOptions && config.basedOnOptions.length > 0) ? (
+          <HF label="بناءً على">
+            {(config.basedOnOptions && config.basedOnOptions.length > 0) ? (
               <div className="flex gap-1 w-full">
                 <select value={basedOnType}
                   onChange={e => { setBasedOnType(e.target.value); setBasedOnNum(""); setBasedOnTrigger(""); }}
@@ -892,27 +1700,38 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
 
           <div />
         </div>
+        </>
+        )}
       </div>
 
       {/* ── Lines Table ───────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-auto bg-white border-b border-[#b0a89a]">
-        <table className="w-full border-collapse" style={{ fontSize: "12px" }}>
+        <table className="w-full border-collapse" style={{ fontSize: config.docCategory === "purchase" ? "13px" : "12px" }}>
+          {/* Column widths — sourced centrally from INVOICE_TABLE_COLS via InvoiceTableColgroup */}
+          <InvoiceTableColgroup />
           <thead className="sticky top-0 z-10">
-            <tr style={{ background: `linear-gradient(to bottom, ${themeColor}, #365E80)`, color: "#fff" }}>
-              <th className="inv-th w-8 text-center">#</th>
-              <th className="inv-th w-24">رقم الصنف</th>
+            <tr style={{
+              background: config.docCategory === "purchase"
+                ? "linear-gradient(to bottom, #6b7075, #4d5257)"
+                : `linear-gradient(to bottom, ${themeColor}, #365E80)`,
+              color: "#fff",
+            }}>
+               <th className="inv-th text-center">#</th>
+              <th className="inv-th">رقم الصنف</th>
               <th className="inv-th">اسم الصنف</th>
-              <th className="inv-th w-20 text-center">الكمية</th>
-              <th className="inv-th w-20 text-center">الوحدة</th>
-              <th className="inv-th w-24 text-center">السعر</th>
-              <th className="inv-th w-14 text-center">خصم%</th>
-              <th className="inv-th w-24 text-center">الخصم ﷼</th>
-              <th className="inv-th w-14 text-center">ض%</th>
-              <th className="inv-th w-24 text-center font-bold">الإجمالي</th>
-              <th className="inv-th w-7"></th>
+              <th className="inv-th text-center">الكمية</th>
+              <th className="inv-th text-center">الوحدة</th>
+              <th className="inv-th text-center">السعر</th>
+              <th className="inv-th text-center">خصم%</th>
+              <th className="inv-th text-center">الخصم ﷼</th>
+              <th className="inv-th text-center">ض%</th>
+              <th className="inv-th text-center font-bold">الإجمالي</th>
+              {config.docCategory === "purchase" && <th className="inv-th text-center">التشغيلة</th>}
+              {config.docCategory === "purchase" && <th className="inv-th text-center">تاريخ الصلاحية</th>}
+              <th className="inv-th"></th>
             </tr>
           </thead>
-          <tbody>
+          <tbody data-nav-internal="true">
             {lines.map((line, rowIdx) => (
               <tr key={line.id}
                 className={`border-b border-[#e8e4dc] ${selectedLineIdx === rowIdx ? "bg-[#EEF4FA]" : rowIdx % 2 === 0 ? "bg-white" : "bg-[#FAFAF8]"}`}
@@ -974,6 +1793,33 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
                 <td className="inv-td text-center font-bold" style={{ color: "#003399", fontSize: "12px" }}>
                   {parseFloat(line.total).toFixed(3)}
                 </td>
+                {config.docCategory === "purchase" && (
+                  <>
+                    <td className="inv-td p-0">
+                      <input
+                        ref={el => { if (el) cellRefs.current.set(`${rowIdx}-8`, el); }}
+                        value={line.batchNumber}
+                        onChange={e => updateLine(rowIdx, "batchNumber", e.target.value)}
+                        onFocus={() => setSelectedLineIdx(rowIdx)}
+                        onKeyDown={e => handleCellKeyDown(e, rowIdx, 8)}
+                        className="inv-cell text-center"
+                        placeholder="تشغيلة"
+                      />
+                    </td>
+                    <td className="inv-td p-0">
+                      <input
+                        ref={el => { if (el) cellRefs.current.set(`${rowIdx}-9`, el); }}
+                        value={line.expiryDate}
+                        onChange={e => updateLine(rowIdx, "expiryDate", e.target.value)}
+                        onFocus={() => setSelectedLineIdx(rowIdx)}
+                        onKeyDown={e => handleCellKeyDown(e, rowIdx, 9)}
+                        className="inv-cell text-center"
+                        placeholder="YYYY-MM-DD"
+                        maxLength={10}
+                      />
+                    </td>
+                  </>
+                )}
                 <td className="inv-td text-center">
                   <button onClick={() => deleteLine(rowIdx)} className="text-red-400 hover:text-red-600 transition-colors" title="حذف السطر (Ctrl+Del)">
                     <X className="w-3 h-3" />
@@ -992,73 +1838,70 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
         </div>
       </div>
 
-      {/* ── Totals Bar ────────────────────────────────────────────────────── */}
-      <div style={{ background: "#E8E4DC", borderTop: "1px solid #b0a89a" }}>
-        <div className="flex items-center gap-0 px-3 py-1.5">
-          <div className="flex items-center gap-3 flex-1">
-            <TF label="إجمالي" value={fmt(subtotal)} />
-            <span className="text-[#aaa]">−</span>
-            <TF label="الخصم" value={fmt(totalDiscount)} color="#C0392B" />
-            <span className="text-[#aaa]">+</span>
-            <TF label="الضريبة" value={fmt(totalTax)} />
+      {/* ── Totals / payment summary ─────────────────────────────────────── */}
+      {config.docCategory === "purchase" ? (
+        <div className="purchase-sales-like-totals" dir="rtl">
+          <div className="purchase-total-group">
+            <span>إجمالي قبل الخصم</span><strong>{fmt(subtotal)}</strong>
+            <span>إجمالي الخصم</span><strong className="purchase-negative">{fmt(totalDiscount)}</strong>
+            <span>إجمالي بعد الخصم</span><strong>{fmt(subtotal - totalDiscount)}</strong>
+            <span>إجمالي الضريبة</span><strong>{fmt(totalTax)}</strong>
+            <span>صافي الفاتورة</span><strong>{fmt(netTotal)}</strong>
           </div>
-          <div style={{ width: 1, height: 28, background: "#b0a89a", margin: "0 12px" }} />
-          <div className="flex items-center gap-3">
-            <TF label="الصافي" value={fmt(netTotal)} highlight />
-            {paymentType === "cash" ? (
-              <>
-                <TF label="مدفوع نقداً" value={fmt(netTotal)} color="#16A34A" />
-                <TF label="المتبقي" value="0.000" />
-              </>
-            ) : (
-              <>
-                <div className="flex items-center gap-1">
-                  <span className="text-[11px] text-[#444] whitespace-nowrap">مدفوع:</span>
-                  <input type="number" value={paidAmountOverride} onChange={e => setPaidAmountOverride(e.target.value)}
-                    placeholder="0.000" className="classic-input text-center w-24"
-                    style={{ background: "#FFF7ED", borderColor: "#D97706" }} min="0" />
-                </div>
-                <TF label="المتبقي" value={fmt(remainingAmount)} color={remainingAmount > 0 ? "#C0392B" : "#16A34A"} />
-              </>
-            )}
-            <div style={{ width: 1, height: 28, background: "#b0a89a", margin: "0 4px" }} />
-            <TF label="الإجمالي الكلي" value={fmt(netTotal)} highlight big />
+          <div className="purchase-net-total">
+            <span>صافي الفاتورة</span>
+            <strong>{fmt(netTotal)}</strong>
+            <small>{currency === "SAR" ? "ريال سعودي" : currency}</small>
           </div>
         </div>
-
-        <div className="flex items-center justify-between px-3 py-0.5 border-t border-[#c8c0b4]"
-          style={{ background: "#DDD9D0", fontSize: "10px", color: "#666" }}>
-          <div className="flex gap-4">
-            <span>
-              نوع السند:&nbsp;
-              <strong style={{ color: paymentType === "cash" ? "#16A34A" : "#B45309" }}>
-                {paymentType === "cash" ? "نقدًا — سيُحفظ بحالة مدفوع" : "آجل — يمكن المدفوع الجزئي"}
-              </strong>
-            </span>
-            <span>الأصناف: <strong style={{ color: "#406B93" }}>{lines.filter(l => l.productName).length}</strong></span>
-          </div>
-          <div className="flex gap-3">
-            <span>Tab/Enter: انتقال</span>
-            <span>Ctrl+C: نسخ سطر</span>
-            <span>Ctrl+V: لصق</span>
-            <span>Ctrl+Del: حذف سطر</span>
-            <span>F1: جديد</span>
-            <span>F2: حفظ</span>
+      ) : (
+        <div style={{ background: "#E8E4DC", borderTop: "1px solid #b0a89a" }}>
+          <div className="flex items-center gap-0 px-3 py-1.5">
+            <div className="flex items-center gap-3 flex-1">
+              <TF label="إجمالي" value={fmt(subtotal)} />
+              <span className="text-[#aaa]">−</span>
+              <TF label="الخصم" value={fmt(totalDiscount)} color="#C0392B" />
+              <span className="text-[#aaa]">+</span>
+              <TF label="الضريبة" value={fmt(totalTax)} />
+            </div>
+            <div style={{ width: 1, height: 28, background: "#b0a89a", margin: "0 12px" }} />
+            <div className="flex items-center gap-3">
+              <TF label="الصافي" value={fmt(netTotal)} highlight />
+              {paymentType === "cash" ? (
+                <>
+                  <TF label="مدفوع نقداً" value={fmt(netTotal)} color="#16A34A" />
+                  <TF label="المتبقي" value="0.000" />
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[11px] text-[#444] whitespace-nowrap">مدفوع:</span>
+                    <input type="number" value={paidAmountOverride} onChange={e => setPaidAmountOverride(e.target.value)}
+                      placeholder="0.000" className="classic-input text-center w-24"
+                      style={{ background: "#FFF7ED", borderColor: "#D97706" }} min="0" />
+                  </div>
+                  <TF label="المتبقي" value={fmt(remainingAmount)} color={remainingAmount > 0 ? "#C0392B" : "#16A34A"} />
+                </>
+              )}
+              <div style={{ width: 1, height: 28, background: "#b0a89a", margin: "0 4px" }} />
+              <TF label="الإجمالي الكلي" value={fmt(netTotal)} highlight big />
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* ── Styles ────────────────────────────────────────────────────────── */}
-      <style>{`
-        .classic-input {
-          border: 1px solid #a0a0a0; padding: 1px 5px; height: 22px; font-size: 12px;
-          font-family: 'Cairo', Tahoma, Arial, sans-serif; background: #fff; outline: none; border-radius: 1px;
+       <style>{`
+           .classic-input {
+            border: 1px solid #a0a0a0; padding: 5px 9px; height: var(--app-control-height); font-size: var(--app-font-size-field-value);
+           font-family: var(--app-font-family); color: var(--app-text-primary); background: #fff; outline: none; border-radius: 1px;
         }
-        .classic-input:focus { border-color: #406B93; background: #F0F6FF; box-shadow: 0 0 0 1px rgba(64,107,147,0.2); }
-        .inv-th { border: 1px solid rgba(255,255,255,0.15); border-bottom: 2px solid rgba(0,0,0,0.15); padding: 4px 6px; text-align: right; font-weight: 700; font-size: 11px; white-space: nowrap; font-family: 'Cairo', Tahoma, sans-serif; }
-        .inv-td { border: 1px solid #e8e4dc; padding: 1px 3px; height: 24px; vertical-align: middle; }
-        .inv-cell { border: none; outline: none; padding: 1px 4px; height: 22px; font-size: 12px; font-family: 'Cairo', Tahoma, Arial, sans-serif; background: transparent; width: 100%; }
-        .inv-cell:focus { background: #FFFFF0; border: 1px solid #406B93; box-shadow: inset 0 0 0 1px rgba(64,107,147,0.15); }
+          .classic-input:focus { border: 2px solid ${config.docCategory === "purchase" ? "#8a5a2b" : "#406B93"}; background: ${config.docCategory === "purchase" ? "#fffdf8" : "#F0F6FF"}; box-shadow: 0 0 0 2px ${config.docCategory === "purchase" ? "rgba(138,90,43,0.2)" : "rgba(64,107,147,0.2)"}; }
+         .classic-input::placeholder, .inv-cell::placeholder { color: ${config.docCategory === "purchase" ? "#766558" : "#888"}; opacity: 1; }
+          .inv-th { border: 1px solid rgba(255,255,255,0.15); border-bottom: 2px solid rgba(0,0,0,0.15); padding: 7px 8px; text-align: right; font-weight: 700; font-size: var(--app-font-size-table-header); line-height: 18px; white-space: nowrap; font-family: var(--app-font-family); }
+          .inv-td { border: 1px solid #e8e4dc; padding: 2px 4px; height: var(--app-table-row-height); vertical-align: middle; }
+          .inv-cell { border: none; outline: none; padding: 5px 6px; height: var(--app-control-height); font-size: var(--app-font-size-table-cell); font-weight: 400; font-family: var(--app-font-family); color: var(--app-text-primary); background: transparent; width: 100%; }
+          .inv-cell:focus { background: ${config.docCategory === "purchase" ? "#fffdf8" : "#FFFFF0"}; border: 2px solid ${config.docCategory === "purchase" ? "#8a5a2b" : "#406B93"}; box-shadow: inset 0 0 0 1px ${config.docCategory === "purchase" ? "rgba(138,90,43,0.15)" : "rgba(64,107,147,0.15)"}; }
         input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
       `}</style>
 
@@ -1066,10 +1909,127 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       {showPostingPreview && savedInvoiceId && (
         <PostingPreviewModal
           invoiceId={savedInvoiceId}
+          docCategory={config.docCategory}
           onClose={() => setShowPostingPreview(false)}
-          onConfirmPost={() => postMutation.mutate({ invoiceId: savedInvoiceId! })}
-          isPosting={postMutation.isPending}
+          onConfirmPost={() => activePostMutation.mutate({ invoiceId: savedInvoiceId! })}
+          isPosting={activePostMutation.isPending}
         />
+      )}
+
+      {config.docCategory === "purchase" && showAddSupplier && (
+        <div
+          className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/40"
+          onMouseDown={event => {
+            if (event.target === event.currentTarget) setShowAddSupplier(false);
+          }}
+        >
+          <div
+            dir="rtl"
+            className="w-[430px] max-w-[95vw] rounded border-2 border-[#9d9d9d] bg-[#f4f4f4] shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-label="إضافة مورد"
+          >
+            <div className="flex items-center justify-between bg-[#8a5a2b] px-3 py-2 text-white">
+              <strong className="text-sm">إضافة مورد جديد</strong>
+              <button
+                type="button"
+                className="text-lg leading-none"
+                onClick={() => setShowAddSupplier(false)}
+                aria-label="إغلاق"
+              >
+                ×
+              </button>
+            </div>
+            <div className="grid gap-2 p-3">
+              <label className="text-xs font-bold text-[#4b3424]">
+                اسم المورد *
+                <input
+                  autoFocus
+                  value={newSupplierName}
+                  onChange={event => setNewSupplierName(event.target.value)}
+                  onKeyDown={event => {
+                    if (event.key === "Enter") void createSupplierFromInvoice();
+                  }}
+                  className="classic-input mt-1 w-full"
+                  placeholder="اكتب اسم المورد"
+                />
+              </label>
+              <div className="text-xs font-bold text-[#4b3424]">
+                نوع المورد
+                <div className="mt-1 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNewSupplierType("individual")}
+                    className={`flex-1 rounded border px-3 py-1.5 text-xs font-bold ${
+                      newSupplierType === "individual"
+                        ? "border-[#8a5a2b] bg-[#eadbc9] text-[#4b3424]"
+                        : "border-gray-300 bg-white text-gray-600"
+                    }`}
+                  >
+                    فرد
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewSupplierType("organization")}
+                    className={`flex-1 rounded border px-3 py-1.5 text-xs font-bold ${
+                      newSupplierType === "organization"
+                        ? "border-[#8a5a2b] bg-[#eadbc9] text-[#4b3424]"
+                        : "border-gray-300 bg-white text-gray-600"
+                    }`}
+                  >
+                    مؤسسة
+                  </button>
+                </div>
+              </div>
+              <label className="text-xs font-bold text-[#4b3424]">
+                الهاتف
+                <input
+                  value={newSupplierPhone}
+                  onChange={event => setNewSupplierPhone(event.target.value)}
+                  className="classic-input mt-1 w-full"
+                  placeholder="رقم الهاتف"
+                />
+              </label>
+              <label className="text-xs font-bold text-[#4b3424]">
+                البريد الإلكتروني
+                <input
+                  type="email"
+                  value={newSupplierEmail}
+                  onChange={event => setNewSupplierEmail(event.target.value)}
+                  className="classic-input mt-1 w-full"
+                  placeholder="example@domain.com"
+                />
+              </label>
+              <label className="text-xs font-bold text-[#4b3424]">
+                العنوان
+                <input
+                  value={newSupplierAddress}
+                  onChange={event => setNewSupplierAddress(event.target.value)}
+                  className="classic-input mt-1 w-full"
+                  placeholder="عنوان المورد"
+                />
+              </label>
+              <div className="mt-2 flex justify-start gap-2">
+                <button
+                  type="button"
+                  disabled={createSupplierMutation.isPending}
+                  onClick={() => void createSupplierFromInvoice()}
+                  className="rounded border border-[#70471f] bg-[#8a5a2b] px-4 py-1.5 text-xs font-bold text-white disabled:opacity-50"
+                >
+                  {createSupplierMutation.isPending ? "جاري الحفظ..." : "حفظ واختيار"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAddSupplier(false)}
+                  className="rounded border border-gray-400 bg-white px-4 py-1.5 text-xs font-bold text-gray-700"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Print Modal (Purchase Invoice / Sales Return) ──────────────────── */}

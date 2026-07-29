@@ -316,6 +316,7 @@ export function AIChatBox({
           placeholder={placeholder}
           className="flex-1 max-h-32 resize-none min-h-9"
           rows={1}
+          data-global-keyboard="false"
         />
         <Button
           type="submit"

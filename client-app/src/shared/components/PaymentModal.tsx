@@ -78,7 +78,7 @@ interface PaymentModalProps {
   invoiceTotal: number;
   currency?: string;
   customerId?: number | null;
-  onSaveFirst?: () => Promise<number | null>;
+  onSaveFirst?: (breakdown: Record<string, number>) => Promise<number | null>;
   onConfirmed: (paidAmount: number, breakdown: Record<string, number>) => void;
 }
 
@@ -166,17 +166,11 @@ export default function PaymentModal({
     onError: (e) => toast.error(e.message),
   });
 
+  const isBusy = isSavingFirst || updatePaymentMut.isPending;
+
   // ─── core save (after validation) ────────────────────────────────────────
   const doSave = useCallback(async (finalAmounts: Record<string, string>) => {
-    let finalId = invoiceId;
-    if (!finalId && onSaveFirst) {
-      setIsSavingFirst(true);
-      try { finalId = await onSaveFirst(); }
-      finally { setIsSavingFirst(false); }
-      if (!finalId) return;
-    }
-    if (!finalId) { toast.error("لا يمكن تسجيل الدفع — يجب حفظ الفاتورة أولاً"); return; }
-
+    if (isSavingFirst || updatePaymentMut.isPending) return;
     const breakdown: Record<string, number> = {};
     Object.entries(finalAmounts).forEach(([k, v]) => {
       const n = parseFloat(v) || 0;
@@ -184,17 +178,38 @@ export default function PaymentModal({
     });
     const paid = Object.values(breakdown).reduce((s, v) => s + v, 0);
     const isFullPaid = Math.abs(paid - invoiceTotal) < 0.005;
+
+    // فاتورة جديدة: أنشئها مع تفاصيل الدفع في transaction واحد، ثم أبلغ عن النجاح
+    if (!invoiceId && onSaveFirst) {
+      setIsSavingFirst(true);
+      try {
+        const finalId = await onSaveFirst(breakdown);
+        if (!finalId) {
+          toast.error("تم تنفيذ الطلب دون إرجاع رقم الفاتورة؛ لم يتم إغلاق شاشة الدفع. راجع سجل الخادم أو أعد المحاولة.");
+          return;
+        }
+        toast.success("تم تسجيل الدفع بنجاح ✓");
+        onConfirmed(paid, breakdown);
+      } finally {
+        setIsSavingFirst(false);
+      }
+      return;
+    }
+
+    if (!invoiceId) { toast.error("لا يمكن تسجيل الدفع — يجب حفظ الفاتورة أولاً"); return; }
+
     updatePaymentMut.mutate({
-      id: finalId,
+      id: invoiceId,
       paymentBreakdown: breakdown,
       paidAmount: paid.toFixed(4),
       remainingAmount: Math.max(0, invoiceTotal - paid).toFixed(4),
       status: isFullPaid ? "paid" : "confirmed",
     });
-  }, [invoiceId, invoiceTotal, onSaveFirst, updatePaymentMut]);
+  }, [invoiceId, invoiceTotal, onSaveFirst, updatePaymentMut, onConfirmed, isSavingFirst]);
 
   // ─── confirm ──────────────────────────────────────────────────────────────
   const handleConfirm = useCallback(async () => {
+    if (isBusy) return;
     if (!hasAnyPayment) { toast.warning("أدخل مبلغاً واحداً على الأقل"); return; }
     if (isOverPaid)     { toast.error("المبلغ المدفوع يتجاوز إجمالي الفاتورة"); return; }
 
@@ -204,7 +219,7 @@ export default function PaymentModal({
       return;
     }
     await doSave(amounts);
-  }, [hasAnyPayment, isOverPaid, isFullyPaid, remaining, amounts, doSave]);
+  }, [hasAnyPayment, isOverPaid, isFullyPaid, remaining, amounts, doSave, isBusy]);
 
   // ─── ترحيل المتبقي على حساب العميل ───────────────────────────────────────
   const handleMoveToAccount = useCallback(async () => {
@@ -231,8 +246,6 @@ export default function PaymentModal({
       .reduce((s, [, v]) => s + (parseFloat(v) || 0), 0);
     setAmounts((prev) => ({ ...prev, [code]: Math.max(0, invoiceTotal - otherTotal).toFixed(2) }));
   }, [amounts, invoiceTotal]);
-
-  const isBusy = isSavingFirst || updatePaymentMut.isPending;
 
   // ─── prevent outside-click close: show shake instead ─────────────────────
   const handleAttemptClose = useCallback(() => {

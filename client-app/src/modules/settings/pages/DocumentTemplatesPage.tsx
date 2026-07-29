@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Input } from "@/core/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/core/ui/select";
+import { SelectItem } from "@/core/ui/select";
+import RightClickSelect from "@/core/ui/RightClickSelect";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/core/ui/dialog";
 import { Button } from "@/core/ui/button";
 import { trpc } from "@/shared/lib/trpc";
@@ -86,12 +87,9 @@ const FI = ({ value, onChange, placeholder, disabled }: { value: string; onChang
     className="h-7 text-[11px] px-2 border-slate-200 focus:border-indigo-400 focus-visible:ring-0 focus-visible:ring-offset-0 bg-white rounded disabled:bg-slate-50 disabled:text-slate-400" />
 );
 const FS = ({ value, onValueChange, children }: { value: string; onValueChange: (v: string) => void; children: React.ReactNode }) => (
-  <Select value={value} onValueChange={onValueChange}>
-    <SelectTrigger className="h-7 text-[11px] px-2 border-slate-200 focus:ring-0 focus:ring-offset-0 bg-white rounded">
-      <SelectValue placeholder="— اختر —" />
-    </SelectTrigger>
-    <SelectContent>{children}</SelectContent>
-  </Select>
+  <RightClickSelect value={value} onValueChange={onValueChange} placeholder="— اختر —" className="w-full">
+    {children}
+  </RightClickSelect>
 );
 const P = ({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) => (
   <div className="overflow-hidden" style={{ border: "1px solid #e8edf3", borderRadius: 6, boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
@@ -350,7 +348,7 @@ export default function DocumentTemplatesPage() {
       <div className="flex-1 flex flex-col overflow-hidden">
 
         {/* Toolbar */}
-        <div className="flex items-center gap-1 px-3 py-1.5 border-b shrink-0" style={{ background: "#EBE7DE", borderBottomColor: "#d8d3c8" }}>
+        <div className="flex items-center gap-1 px-3 py-1.5 border-b shrink-0" style={{ background: "#E8EBF0", borderBottomColor: "#C8CDD6", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
           <span className="text-[11px] font-semibold text-slate-700 ml-2">{currentTypeMeta?.label}</span>
           <div className="flex-1" />
 

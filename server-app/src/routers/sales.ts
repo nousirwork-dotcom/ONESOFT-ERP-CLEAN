@@ -1,9 +1,111 @@
 import { z } from 'zod';
-import { eq, and, desc, like, or } from 'drizzle-orm';
+import { eq, and, desc, like, or, sql } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { salesInvoices, salesInvoiceItems, salesInvoicePayments, paymentMethods, products, customers, stockVouchers, stockVoucherItems } from '../schema.js';
+import { salesInvoices, salesInvoiceItems, salesInvoicePayments, paymentMethods, products, customers, stockVouchers, stockVoucherItems, documentJournals, warehouses, users } from '../schema.js';
 import { autoPostSalesInvoice } from './posting.js';
+import { TRPCError } from '@trpc/server';
+import { validateSalesInvoiceWarehouseContext } from '../lib/salesWarehouseValidation.js';
+
+// ── تحقق أن جميع بنود الفاتورة تُشير إلى أصناف مسجلة في النظام ──────────────────
+async function validateInvoiceItems(items: { productId?: number; productName: string; productCode?: string }[], orgId: number) {
+  if (!items || items.length === 0) return;
+  for (const item of items) {
+    if (!item.productId) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'الصنف غير مسجل، يرجى اختيار صنف من القائمة.' });
+    }
+    const product = await db.query.products.findFirst({
+      where: and(eq(products.id, item.productId), eq(products.orgId, orgId)),
+    });
+    if (!product) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: `الصنف "${item.productName || item.productCode || ''}" غير مسجل في النظام.` });
+    }
+  }
+}
+
+// ── توليد رقم فاتورة المبيعات من دفتر المستندات داخل transaction ───────────────
+// القواعد:
+// - آخر رقم مستخدم = currentSeq (0 = لم يُستخدم شيء بعد).
+// - الرقم التالي = max(آخر رقم مستخدم + increment, أول رقم).
+// - حقل "آخر رقم" (lastNumber) هو الحد الأقصى فقط، وليس الرقم التالي.
+async function generateInvoiceNumberForJournal(tx: any, journalId: number, orgId: number): Promise<string> {
+  const journal = await tx.query.documentJournals.findFirst({
+    where: and(eq(documentJournals.id, journalId), eq(documentJournals.orgId, orgId)),
+  });
+  if (!journal) throw new Error('الدفتر غير موجود');
+
+  const firstNumber = journal.firstNumber ?? 1;
+  const increment   = journal.increment ?? 1;
+  const lastNumber  = journal.lastNumber ?? 999999;
+
+  let lastUsed = journal.currentSeq ?? 0;
+  if (lastUsed === 0) {
+    // لم يُستخدم شيء بعد: نبدأ من قبل أول رقم بمقدار increment ليصبح الرقم التالي = firstNumber
+    lastUsed = firstNumber - increment;
+  }
+
+  let nextSeq = lastUsed + increment;
+  if (nextSeq < firstNumber) nextSeq = firstNumber;
+  if (nextSeq > lastNumber) throw new Error('تم استنفاد أرقام دفتر المستندات');
+
+  await tx.update(documentJournals)
+    .set({ currentSeq: nextSeq, updatedAt: new Date() })
+    .where(eq(documentJournals.id, journalId));
+
+  const prefix  = journal.numberPrefix ?? 'INV';
+  const digits  = journal.numDigits ?? 6;
+  const numPart = String(nextSeq).padStart(digits, '0');
+  if (journal.includeYear) return `${prefix}${new Date().getFullYear()}-${numPart}`;
+  return `${prefix}${numPart}`;
+}
+
+// ── توليد رقم مسودة من دفتر المستندات داخل transaction ───────────────────────────
+async function generateDraftNumberForJournal(tx: any, journalId: number, orgId: number): Promise<string> {
+  const journal = await tx.query.documentJournals.findFirst({
+    where: and(eq(documentJournals.id, journalId), eq(documentJournals.orgId, orgId)),
+  });
+  if (!journal) throw new Error('الدفتر غير موجود');
+
+  const firstNumber = journal.draftFirstNumber ?? 1;
+  const lastNumber  = journal.draftLastNumber ?? 999999;
+
+  let lastUsed = journal.draftCurrentSeq ?? 0;
+  if (lastUsed === 0) {
+    lastUsed = firstNumber - 1;
+  }
+
+  let nextSeq = lastUsed + 1;
+  if (nextSeq < firstNumber) nextSeq = firstNumber;
+  if (nextSeq > lastNumber) throw new Error('تم استنفاد أرقام مسودات دفتر المستندات');
+
+  await tx.update(documentJournals)
+    .set({ draftCurrentSeq: nextSeq, updatedAt: new Date() })
+    .where(eq(documentJournals.id, journalId));
+
+  const prefix = journal.draftNumberPrefix ?? 'DRAFT';
+  const digits = journal.draftNumDigits ?? 6;
+  const numPart = String(nextSeq).padStart(digits, '0');
+  return `${prefix}${numPart}`;
+}
+
+// ── تحديد المخزن/الفرع الصحيح: إذا لم يُرسل warehouseId نحله من دفتر المستندات ──
+async function resolveInvoiceWarehouseId(
+  tx: any,
+  inputWarehouseId: number | null | undefined,
+  journalId: number | null | undefined,
+  orgId: number,
+): Promise<number> {
+  if (inputWarehouseId) return inputWarehouseId;
+
+  if (journalId) {
+    const journal = await tx.query.documentJournals.findFirst({
+      where: and(eq(documentJournals.id, journalId), eq(documentJournals.orgId, orgId)),
+    });
+    if (journal?.warehouseId) return journal.warehouseId;
+  }
+
+  throw new Error('لم يتم تحديد المخزن/الفرع — يجب اختيار دفتر مرتبط بمخزن');
+}
 
 export const salesRouter = router({
   // قائمة الفواتير/عروض الأسعار
@@ -13,7 +115,7 @@ export const salesRouter = router({
       limit: z.number().default(200),
       search: z.string().optional(),
       status: z.string().optional(),
-      invoiceType: z.enum(['sale', 'return', 'quote']).optional(),
+      invoiceType: z.enum(['sale', 'return', 'quote', 'order']).optional(),
       dateFrom: z.string().optional(),      // YYYY-MM-DD
       dateTo: z.string().optional(),        // YYYY-MM-DD
       warehouseId: z.number().optional(),    // فلتر المخزن
@@ -21,6 +123,8 @@ export const salesRouter = router({
       customerId: z.number().optional(),     // فلتر بـ ID العميل
       excludeReturns: z.boolean().optional(),// استثناء المردودات
       numberPrefix: z.string().optional(),   // فلتر دفتر المستند (بادئة الرقم)
+      excludeCancelled: z.boolean().optional(), // استثناء الملغاة
+      excludeFullyConverted: z.boolean().optional(), // استثناء أوامر البيع المحوّلة بالكامل
     }).optional())
     .query(async ({ ctx, input }) => {
       const orgId = ctx.user.orgId;
@@ -28,12 +132,80 @@ export const salesRouter = router({
         where: eq(salesInvoices.orgId, orgId),
         orderBy: [desc(salesInvoices.invoiceDate)],
       });
-      let filtered = allRecords;
+      const [warehousesList, usersList] = await Promise.all([
+        db.query.warehouses.findMany({ where: eq(warehouses.orgId, orgId) }),
+        db.query.users.findMany({ where: eq(users.orgId, orgId) }),
+      ]);
+      const warehouseMap = new Map(warehousesList.map(w => [w.id, w.name]));
+      const userMap = new Map(usersList.map(u => [u.id, u.name]));
+      const records = allRecords.map(r => ({
+        ...r,
+        warehouseName: warehouseMap.get(r.warehouseId!) ?? null,
+        userName: userMap.get(r.userId!) ?? null,
+      }));
+      let filtered = records;
       if (input?.invoiceType) {
         filtered = filtered.filter(r => r.invoiceType === input.invoiceType);
       }
       if (input?.excludeReturns) {
         filtered = filtered.filter(r => r.invoiceType !== 'return');
+      }
+      if (input?.excludeCancelled) {
+        filtered = filtered.filter(r => r.status !== 'cancelled');
+      }
+
+      // ── استثناء المستندات المحوّلة بالكامل (أوامر البيع وعروض الأسعار) ────────
+      if (input?.excludeFullyConverted && (input?.invoiceType === 'order' || input?.invoiceType === 'quote') && filtered.length > 0) {
+        const sourceType = input.invoiceType; // 'order' | 'quote'
+        // اجمع الفواتير التي تستند إلى هذا النوع من المستندات
+        const referencingInvoices = await db.query.salesInvoices.findMany({
+          where: and(
+            eq(salesInvoices.orgId, orgId),
+            eq(salesInvoices.basedOnType, sourceType),
+          ),
+        });
+        // مجموعة أرقام الأوامر التي لها فاتورة مستندة
+        const referencedNums = new Set(referencingInvoices.map(r => r.basedOnNumber).filter(Boolean) as string[]);
+
+        if (referencedNums.size > 0) {
+          const ordersToCheck = filtered.filter(o => referencedNums.has(o.invoiceNumber!));
+          const fullyConvertedIds = new Set<number>();
+
+          for (const order of ordersToCheck) {
+            // أصناف الأمر
+            const orderItems = await db.query.salesInvoiceItems.findMany({
+              where: eq(salesInvoiceItems.invoiceId, order.id),
+            });
+            if (orderItems.length === 0) continue;
+
+            // كميات المُحوَّل من الفواتير المستندة لهذا الأمر
+            const refInvs = referencingInvoices.filter(r => r.basedOnNumber === order.invoiceNumber);
+            const usedQty = new Map<number, number>();
+            for (const inv of refInvs) {
+              const invItems = await db.query.salesInvoiceItems.findMany({
+                where: eq(salesInvoiceItems.invoiceId, inv.id),
+              });
+              for (const it of invItems) {
+                if (it.productId) {
+                  usedQty.set(it.productId, (usedQty.get(it.productId) ?? 0) + parseFloat(it.quantity as string));
+                }
+              }
+            }
+
+            // إذا جميع الأصناف تمت تغطيتها → الأمر مكتمل التحويل
+            const allCovered = orderItems.every(i => {
+              if (!i.productId) return false;
+              const ordered = parseFloat(i.quantity as string);
+              const used = usedQty.get(i.productId) ?? 0;
+              return used >= ordered - 0.001;
+            });
+            if (allCovered) fullyConvertedIds.add(order.id);
+          }
+
+          if (fullyConvertedIds.size > 0) {
+            filtered = filtered.filter(o => !fullyConvertedIds.has(o.id));
+          }
+        }
       }
       if (input?.status) {
         filtered = filtered.filter(r => r.status === input.status);
@@ -110,7 +282,17 @@ export const salesRouter = router({
         where: eq(salesInvoiceItems.invoiceId, input.id),
         orderBy: (i, { asc }) => [asc(i.sortOrder)],
       });
-      return { ...invoice, items };
+
+      // إرجاع اسم المخزن/الفرع مع المستند لتعبئة الحقل عند فتح سجل محفوظ
+      let warehouseName: string | null = null;
+      if (invoice.warehouseId) {
+        const wh = await db.query.warehouses.findFirst({
+          where: and(eq(warehouses.id, invoice.warehouseId), eq(warehouses.orgId, ctx.user.orgId)),
+        });
+        warehouseName = wh?.name ?? null;
+      }
+
+      return { ...invoice, warehouseName, items };
     }),
 
   // إنشاء فاتورة/عرض سعر
@@ -124,6 +306,7 @@ export const salesRouter = router({
       customerName: z.string().optional(),
       customerType: z.string().optional(),
       customerTaxNumber: z.string().optional(),
+      sellerUserId: z.number().optional(),
       warehouseId: z.number().optional(),
       journalId: z.number().optional(),
       currency: z.string().default('SAR'),
@@ -140,6 +323,10 @@ export const salesRouter = router({
       status: z.enum(['draft', 'confirmed', 'cancelled', 'paid']).default('confirmed'),
       notes: z.string().optional(),
       docTypeId: z.number().optional(),
+      basedOnType: z.string().optional(),
+      basedOnNumber: z.string().optional(),
+      sourceDocumentId: z.number().optional(),
+      draftNumber: z.string().optional(),
       items: z.array(z.object({
         productId: z.number().optional(),
         productCode: z.string().optional(),
@@ -158,55 +345,146 @@ export const salesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { items, dueDate, ...invoiceData } = input;
       const orgId = ctx.user.orgId;
-      let invoice: typeof salesInvoices.$inferSelect;
-      try {
-        const [row] = await db.insert(salesInvoices).values({
-          ...invoiceData,
+      const isDraft = invoiceData.status === 'draft';
+
+      // ── تحقق: المسودة لا تخضع للتحققات المشددة (لا مخزن/فرع، لا أصناف) ─────
+      if (!isDraft) {
+        // ── تحقق: سياق المخزن/الفرع الموحد (المخزن = الفرع في مسار المستندات) ──
+        await validateSalesInvoiceWarehouseContext({
+          warehouseId: invoiceData.warehouseId,
+          journalId: invoiceData.journalId,
+          sellerUserId: invoiceData.sellerUserId,
+          sourceDocumentId: invoiceData.sourceDocumentId,
           orgId,
-          userId: ctx.user.id,
-          invoiceDate: new Date(invoiceData.invoiceDate),
-          ...(dueDate ? { dueDate: new Date(dueDate) } : {}),
-        }).returning();
-        invoice = row;
-      } catch (e: any) {
-        console.error('[sales.create] INSERT ERROR:', {
-          message: e?.message,
-          code: e?.code,
-          detail: e?.detail,
-          constraint: e?.constraint,
-          table: e?.table,
-          data: { invoiceNumber: invoiceData.invoiceNumber, orgId, paymentMethod: invoiceData.paymentMethod },
         });
-        throw e;
+
+        // ── تحقق: جميع الأصناف مسجلة في النظام (لا يُقبل نص يدوي بدون productId) ──
+        await validateInvoiceItems(items, orgId);
       }
-      if (items.length > 0) {
-        await db.insert(salesInvoiceItems).values(
-          items.map((item, idx) => ({
-            ...item,
-            invoiceId: invoice.id,
-            orgId,
-            sortOrder: item.sortOrder ?? idx,
-          }))
+      const { invoice, finalInvoiceNumber, isPosted, autoPostedEntryNumber } = await db.transaction(async (tx) => {
+        // حلّ warehouseId من الدفتر إذا لم يُرسل، أو رفض الحفظ إذا تعذّر
+        const resolvedWarehouseId = await resolveInvoiceWarehouseId(
+          tx,
+          invoiceData.warehouseId,
+          invoiceData.journalId,
+          orgId,
         );
-      }
 
-      // ── ترحيل تلقائي فور الحفظ ──────────────────────────────────────────────
-      try {
-        const posted = await autoPostSalesInvoice(invoice.id, orgId, ctx.user.id);
-        if (posted) {
-          return { ...invoice, isPosted: true, autoPostedEntryNumber: posted.entryNumber };
+        // ── حجز الرقم التسلسلي داخل نفس transaction الحفظ ──────────────────
+        // المسودة لا تستهلك الرقم الرسمي من دفتر المستندات.
+        // قفل استشاري على الدفتر لمنع race conditions بين مستخدمين متعددين
+        if (invoiceData.journalId && !isDraft) {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(${invoiceData.journalId}::bigint)`);
         }
-      } catch (e) {
-        console.error('[sales.create] autoPostSalesInvoice error:', e);
-      }
+        let finalInvoiceNumber = invoiceData.invoiceNumber;
+        let draftNumber: string | undefined = undefined;
+        if (isDraft && invoiceData.journalId) {
+          // المسودة تحصل على رقم من مسلسل مسودات الدفتر
+          draftNumber = await generateDraftNumberForJournal(tx, invoiceData.journalId, orgId);
+          finalInvoiceNumber = draftNumber;
+        } else if (!isDraft && invoiceData.journalId) {
+          finalInvoiceNumber = await generateInvoiceNumberForJournal(tx, invoiceData.journalId, orgId);
+        }
 
-      return invoice;
+        let invoice: typeof salesInvoices.$inferSelect;
+        try {
+          const [row] = await tx.insert(salesInvoices).values({
+            ...invoiceData,
+            warehouseId: resolvedWarehouseId,
+            invoiceNumber: finalInvoiceNumber,
+            draftNumber: draftNumber ?? invoiceData.draftNumber,
+            orgId,
+            userId: ctx.user.id,
+            invoiceDate: new Date(invoiceData.invoiceDate),
+            ...(dueDate ? { dueDate: new Date(dueDate) } : {}),
+          }).returning();
+          invoice = row;
+        } catch (e: any) {
+          console.error('[sales.create] INSERT ERROR:', {
+            message: e?.message,
+            code: e?.code,
+            detail: e?.detail,
+            constraint: e?.constraint,
+            table: e?.table,
+            data: { invoiceNumber: finalInvoiceNumber, orgId, paymentMethod: invoiceData.paymentMethod },
+          });
+          throw e;
+        }
+        if (items.length > 0) {
+          await tx.insert(salesInvoiceItems).values(
+            items.map((item, idx) => ({
+              ...item,
+              invoiceId: invoice.id,
+              orgId,
+              sortOrder: item.sortOrder ?? idx,
+            }))
+          );
+        }
+
+        // ── تسجيل تفاصيل الدفع داخل نفس transaction الإنشاء عند تأكيد الدفع ─────
+        // يضمن ذلك عدم ترك فاتورة بدون دفع في قاعدة البيانات.
+        if (!isDraft && invoiceData.paymentBreakdown != null) {
+          const pmEntries = Object.entries(invoiceData.paymentBreakdown).filter(([, v]) => v > 0);
+          if (pmEntries.length > 0) {
+            const pms = await tx.query.paymentMethods.findMany({
+              where: eq(paymentMethods.orgId, orgId),
+            });
+            const pmMap = new Map(pms.map(p => [p.code, p.nameAr]));
+            await tx.insert(salesInvoicePayments).values(
+              pmEntries.map(([code, amount]) => ({
+                orgId,
+                invoiceId: invoice.id,
+                paymentMethodCode: code,
+                paymentMethodName: pmMap.get(code) ?? code,
+                amount: amount.toFixed(4),
+              }))
+            );
+          }
+        }
+
+        // ── ترحيل تلقائي داخل نفس transaction الحفظ ───────────────────────────
+        // المسودة لا تُرحّل ولا تُنشئ حركات مخزون أو قيود محاسبية.
+        if (!isDraft) {
+          try {
+            const posted = await autoPostSalesInvoice(invoice.id, orgId, ctx.user.id, tx);
+            if (posted) {
+              return {
+                invoice,
+                finalInvoiceNumber,
+                isPosted: true,
+                autoPostedEntryNumber: posted.entryNumber,
+              };
+            }
+          } catch (e) {
+            console.error('[sales.create] autoPostSalesInvoice error — rolling back:', e);
+            throw e;
+          }
+        }
+
+        return {
+          invoice,
+          finalInvoiceNumber,
+          isPosted: false,
+          autoPostedEntryNumber: undefined,
+        };
+      });
+
+      return {
+        ...invoice,
+        invoiceNumber: finalInvoiceNumber,
+        isPosted,
+        autoPostedEntryNumber,
+      };
     }),
 
   // تعديل مستند
   update: protectedProcedure
     .input(z.object({
       id: z.number(),
+      // حقول السياق — اختيارية عند التعديل، الموجود يُستخدم كقيمة افتراضية
+      warehouseId:     z.number().optional(),
+      journalId:       z.number().optional(),
+      sellerUserId:    z.number().optional(),
       invoiceDate: z.string().optional(),
       customerId: z.number().optional(),
       customerName: z.string().optional(),
@@ -219,8 +497,12 @@ export const salesRouter = router({
       paidAmount: z.string().optional(),
       remainingAmount: z.string().optional(),
       paymentBreakdown: z.record(z.string(), z.number()).optional().nullable(),
+      paymentMethod: z.enum(['cash', 'bank', 'credit', 'check', 'other']).optional(),
       status: z.enum(['draft', 'confirmed', 'cancelled', 'paid']).optional(),
       notes: z.string().optional(),
+      basedOnType: z.string().optional(),
+      basedOnNumber: z.string().optional(),
+      sourceDocumentId: z.number().optional(),
       items: z.array(z.object({
         productId: z.number().optional(),
         productCode: z.string().optional(),
@@ -244,25 +526,120 @@ export const salesRouter = router({
       });
       if (existing?.isPosted)
         throw new Error('لا يمكن تعديل مستند مرحّل — يجب فك الترحيل أولاً');
-      await db.update(salesInvoices).set({
-        ...rest,
-        ...(invoiceDate ? { invoiceDate: new Date(invoiceDate) } : {}),
-        updatedAt: new Date(),
-      }).where(and(eq(salesInvoices.id, id), eq(salesInvoices.orgId, ctx.user.orgId)));
-      if (items) {
-        await db.delete(salesInvoiceItems).where(eq(salesInvoiceItems.invoiceId, id));
-        if (items.length > 0) {
-          await db.insert(salesInvoiceItems).values(
-            items.map((item, idx) => ({
-              ...item,
-              invoiceId: id,
-              orgId: ctx.user.orgId,
-              sortOrder: item.sortOrder ?? idx,
-            }))
-          );
-        }
+
+      const wasDraft = existing?.status === 'draft';
+      const isNowDraft = rest.status === 'draft';
+      const isFinalizing = wasDraft && !isNowDraft;
+
+      // ── الحالة النهائية الكاملة: دمج القيم الموجودة مع المدخلات الجديدة ─────
+      const finalWarehouseId  = rest.warehouseId  ?? existing?.warehouseId  ?? undefined;
+      const finalJournalId    = rest.journalId    ?? existing?.journalId    ?? undefined;
+      const finalSellerUserId = rest.sellerUserId ?? existing?.sellerUserId ?? undefined;
+      const finalSourceDocId  = rest.sourceDocumentId !== undefined
+        ? rest.sourceDocumentId
+        : existing?.sourceDocumentId ?? undefined;
+
+      // التحقق من المخزن/الأصناف يُتخطى للمسودة فقط؛ عند تحويلها نهائية يجب التحقق
+      if (!isNowDraft) {
+        await validateSalesInvoiceWarehouseContext({
+          warehouseId:      finalWarehouseId,
+          journalId:        finalJournalId,
+          sellerUserId:     finalSellerUserId,
+          sourceDocumentId: finalSourceDocId,
+          orgId: ctx.user.orgId,
+        });
+
+        // ── تحقق: جميع الأصناف مسجلة في النظام (لا يُقبل نص يدوي بدون productId) ──
+        if (items) await validateInvoiceItems(items, ctx.user.orgId);
       }
-      return { success: true };
+
+      // تنفيذ التحديث داخل transaction؛ حجز القفل الاستشاري عند تحويل مسودة لمنع تضارب الأرقام
+      const { finalInvoiceNumber, isPosted, autoPostedEntryNumber } = await db.transaction(async (tx) => {
+        // حلّ warehouseId إذا كان فارغاً/غير مُرسل من الدفتر (السجلات القديمة)
+        const resolvedWarehouseId = await resolveInvoiceWarehouseId(
+          tx,
+          finalWarehouseId,
+          finalJournalId,
+          ctx.user.orgId,
+        );
+
+        if (isFinalizing && finalJournalId) {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(${finalJournalId}::bigint)`);
+        }
+
+        // عند تحويل مسودة إلى مستند نهائي: استبدل رقم المسودة بالرقم الرسمي من دفتر المستندات
+        let finalInvoiceNumber = existing?.invoiceNumber ?? '';
+        let finalDraftNumber = existing?.draftNumber ?? null;
+        if (isFinalizing && finalJournalId) {
+          finalInvoiceNumber = await generateInvoiceNumberForJournal(tx, finalJournalId, ctx.user.orgId);
+          // الاحتفاظ برقم المسودة الأصلي: إذا لم يكن موجوداً (بيانات قديمة)، نسجله من رقم المسودة السابق
+          if (!finalDraftNumber && existing?.invoiceNumber) {
+            finalDraftNumber = existing.invoiceNumber;
+          }
+        }
+
+        await tx.update(salesInvoices).set({
+          ...rest,
+          ...(invoiceDate ? { invoiceDate: new Date(invoiceDate) } : {}),
+          ...(isFinalizing ? { invoiceNumber: finalInvoiceNumber, draftNumber: finalDraftNumber } : {}),
+          warehouseId: resolvedWarehouseId,
+          updatedAt: new Date(),
+        }).where(and(eq(salesInvoices.id, id), eq(salesInvoices.orgId, ctx.user.orgId)));
+        if (items) {
+          await tx.delete(salesInvoiceItems).where(eq(salesInvoiceItems.invoiceId, id));
+          if (items.length > 0) {
+            await tx.insert(salesInvoiceItems).values(
+              items.map((item, idx) => ({
+                ...item,
+                invoiceId: id,
+                orgId: ctx.user.orgId,
+                sortOrder: item.sortOrder ?? idx,
+              }))
+            );
+          }
+        }
+
+        // ── عند تحويل المسودة إلى مستند نهائي: سجّل تفاصيل الدفع داخل نفس transaction ──
+        if (isFinalizing && rest.paymentBreakdown != null) {
+          // امسح أي مدفوعات سابقة للمسودة (لا ينبغي أن تكون موجودة، لكن تأميناً)
+          await tx.delete(salesInvoicePayments).where(
+            and(eq(salesInvoicePayments.invoiceId, id), eq(salesInvoicePayments.orgId, ctx.user.orgId))
+          );
+          const pmEntries = Object.entries(rest.paymentBreakdown).filter(([, v]) => v > 0);
+          if (pmEntries.length > 0) {
+            const pms = await tx.query.paymentMethods.findMany({
+              where: eq(paymentMethods.orgId, ctx.user.orgId),
+            });
+            const pmMap = new Map(pms.map(p => [p.code, p.nameAr]));
+            await tx.insert(salesInvoicePayments).values(
+              pmEntries.map(([code, amount]) => ({
+                orgId: ctx.user.orgId,
+                invoiceId: id,
+                paymentMethodCode: code,
+                paymentMethodName: pmMap.get(code) ?? code,
+                amount: amount.toFixed(4),
+              }))
+            );
+          }
+        }
+
+        // ── الترحيل التلقائي عند تحويل المسودة إلى مستند نهائي ─────────────────────
+        if (isFinalizing) {
+          try {
+            const posted = await autoPostSalesInvoice(id, ctx.user.orgId, ctx.user.id, tx);
+            if (posted) {
+              return { finalInvoiceNumber, isPosted: true, autoPostedEntryNumber: posted.entryNumber };
+            }
+          } catch (e) {
+            console.error('[sales.update] autoPostSalesInvoice error — rolling back:', e);
+            throw e;
+          }
+        }
+
+        return { finalInvoiceNumber, isPosted: false, autoPostedEntryNumber: undefined };
+      });
+
+      return { success: true, invoiceNumber: isFinalizing ? finalInvoiceNumber : undefined, isPosted, autoPostedEntryNumber };
     }),
 
   // جلب بيانات السداد المحفوظة لفاتورة معينة
@@ -284,67 +661,7 @@ export const salesRouter = router({
       return { payments, breakdown };
     }),
 
-  // تحديث بيانات السداد فقط (من شاشة الدفع)
-  updatePayment: protectedProcedure
-    .input(z.object({
-      id: z.number(),
-      paymentBreakdown: z.record(z.string(), z.number()),
-      paidAmount: z.string(),
-      remainingAmount: z.string(),
-      status: z.enum(['draft', 'confirmed', 'paid']).optional(),
-    }))
-    .mutation(async ({ ctx, input }) => {
-      const orgId = ctx.user.orgId;
-      const { id, paymentBreakdown, paidAmount, remainingAmount } = input;
-      const existing = await db.query.salesInvoices.findFirst({
-        where: and(eq(salesInvoices.id, id), eq(salesInvoices.orgId, orgId)),
-      });
-      if (!existing) throw new Error('الفاتورة غير موجودة');
-
-      // حساب حالة السداد تلقائياً
-      const invoiceTotal = parseFloat(existing.total as string);
-      const paid = parseFloat(paidAmount);
-      const autoStatus = paid <= 0 ? 'confirmed'
-        : paid >= invoiceTotal - 0.005 ? 'paid'
-        : 'confirmed';
-
-      // تحديث بيانات الفاتورة
-      await db.update(salesInvoices)
-        .set({
-          paymentBreakdown,
-          paidAmount,
-          remainingAmount,
-          status: autoStatus,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(salesInvoices.id, id), eq(salesInvoices.orgId, orgId)));
-
-      // حذف حركات السداد القديمة وإعادة إدخالها
-      await db.delete(salesInvoicePayments)
-        .where(and(
-          eq(salesInvoicePayments.invoiceId, id),
-          eq(salesInvoicePayments.orgId, orgId),
-        ));
-
-      for (const [code, amount] of Object.entries(paymentBreakdown)) {
-        if (amount > 0.001) {
-          const method = await db.query.paymentMethods.findFirst({
-            where: and(eq(paymentMethods.orgId, orgId), eq(paymentMethods.code, code)),
-          });
-          await db.insert(salesInvoicePayments).values({
-            orgId,
-            invoiceId: id,
-            paymentMethodCode: code,
-            paymentMethodName: method?.nameAr ?? code,
-            amount: amount.toFixed(4),
-          });
-        }
-      }
-
-      return { success: true, status: autoStatus };
-    }),
-
-  // بحث عن مستند مصدر (بناءً على)
+  // جلب مستند مصدر بالرقم (بناءً على)
   getByNumber: protectedProcedure
     .input(z.object({
       type: z.enum(['sale', 'quote', 'order', 'transfer']),
@@ -370,6 +687,8 @@ export const salesRouter = router({
           customerId: null as number | null,
           customerName: null as string | null,
           warehouseId: voucher.warehouseId,
+          journalId: null as number | null,
+          status: null as string | null,
           currency: 'SAR',
           notes: voucher.notes,
           items: items.map(i => ({
@@ -387,9 +706,11 @@ export const salesRouter = router({
           })),
         };
       }
+
       const typeFilter = input.type === 'order' ? 'order'
         : input.type === 'quote' ? 'quote'
         : 'sale';
+
       const invoice = await db.query.salesInvoices.findFirst({
         where: and(
           eq(salesInvoices.orgId, ctx.user.orgId),
@@ -398,16 +719,87 @@ export const salesRouter = router({
         ),
       });
       if (!invoice) return null;
+
+      // ── قواعد أمر البيع: رفض الملغاة ──────────────────────────────────────
+      if (input.type === 'order' && invoice.status === 'cancelled') return null;
+
       const items = await db.query.salesInvoiceItems.findMany({
         where: eq(salesInvoiceItems.invoiceId, invoice.id),
         orderBy: (i, { asc }) => [asc(i.sortOrder)],
       });
+
+      // ── حساب الكميات المتبقية لأوامر البيع ────────────────────────────────
+      if (input.type === 'order') {
+        // اجمع الكميات المُحوَّلة من الفواتير التي تستند إلى هذا الأمر
+        const referencingInvoices = await db.query.salesInvoices.findMany({
+          where: and(
+            eq(salesInvoices.orgId, ctx.user.orgId),
+            eq(salesInvoices.basedOnType, 'order'),
+            eq(salesInvoices.basedOnNumber, invoice.invoiceNumber),
+          ),
+        });
+
+        if (referencingInvoices.length > 0) {
+          // اجمع كميات كل صنف من الفواتير المستندة
+          const usedQtyByProduct = new Map<number, number>();
+          for (const inv of referencingInvoices) {
+            const invItems = await db.query.salesInvoiceItems.findMany({
+              where: eq(salesInvoiceItems.invoiceId, inv.id),
+            });
+            for (const it of invItems) {
+              if (it.productId) {
+                const cur = usedQtyByProduct.get(it.productId) ?? 0;
+                usedQtyByProduct.set(it.productId, cur + parseFloat(it.quantity as string));
+              }
+            }
+          }
+
+          // احسب الكميات المتبقية
+          const remainingItems = items.map(i => {
+            const ordered = parseFloat(i.quantity as string);
+            const used = i.productId ? (usedQtyByProduct.get(i.productId) ?? 0) : 0;
+            const remaining = Math.max(0, ordered - used);
+            return { ...i, remainingQty: remaining };
+          }).filter(i => i.remainingQty > 0);
+
+          // محوَّل بالكامل
+          if (remainingItems.length === 0) return null;
+
+          return {
+            sourceType: 'order' as const,
+            number: invoice.invoiceNumber,
+            customerId: invoice.customerId,
+            customerName: invoice.customerName,
+            warehouseId: invoice.warehouseId,
+            journalId: invoice.journalId,
+            status: invoice.status,
+            currency: invoice.currency ?? 'SAR',
+            notes: invoice.notes,
+            items: remainingItems.map(i => ({
+              productId: i.productId,
+              productCode: i.productCode ?? '',
+              productName: i.productName,
+              unit: i.unit ?? '',
+              quantity: String(i.remainingQty),
+              unitPrice: i.unitPrice,
+              discountPct: i.discountPercent ?? '0',
+              discountAmt: i.discountAmount ?? '0',
+              taxPct: i.taxPercent ?? '0',
+              taxAmt: i.taxAmount ?? '0',
+              total: i.total,
+            })),
+          };
+        }
+      }
+
       return {
         sourceType: input.type,
         number: invoice.invoiceNumber,
         customerId: invoice.customerId,
         customerName: invoice.customerName,
         warehouseId: invoice.warehouseId,
+        journalId: invoice.journalId,
+        status: invoice.status,
         currency: invoice.currency ?? 'SAR',
         notes: invoice.notes,
         items: items.map(i => ({
@@ -424,6 +816,58 @@ export const salesRouter = router({
           total: i.total,
         })),
       };
+    }),
+
+  // تحديث الدفع (PaymentModal)
+  updatePayment: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      paymentBreakdown: z.record(z.string(), z.number()).optional().nullable(),
+      paidAmount: z.string(),
+      remainingAmount: z.string(),
+      status: z.enum(['paid', 'confirmed', 'draft']).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { id, paymentBreakdown, paidAmount, remainingAmount, status } = input;
+      const orgId = ctx.user.orgId;
+
+      return db.transaction(async (tx) => {
+        const invoice = await tx.query.salesInvoices.findFirst({
+          where: and(eq(salesInvoices.id, id), eq(salesInvoices.orgId, orgId)),
+        });
+        if (!invoice) throw new Error('الفاتورة غير موجودة');
+        if (invoice.isPosted) throw new Error('لا يمكن تعديل دفعة فاتورة مرحّلة');
+
+        await tx.update(salesInvoices).set({
+          paidAmount,
+          remainingAmount,
+          ...(status ? { status } : {}),
+          updatedAt: new Date(),
+        }).where(and(eq(salesInvoices.id, id), eq(salesInvoices.orgId, orgId)));
+
+        if (paymentBreakdown != null) {
+          await tx.delete(salesInvoicePayments).where(
+            and(eq(salesInvoicePayments.invoiceId, id), eq(salesInvoicePayments.orgId, orgId))
+          );
+          const pmEntries = Object.entries(paymentBreakdown).filter(([, v]) => v > 0);
+          if (pmEntries.length > 0) {
+            const pms = await tx.query.paymentMethods.findMany({
+              where: eq(paymentMethods.orgId, orgId),
+            });
+            const pmMap = new Map(pms.map(p => [p.code, p.nameAr]));
+            await tx.insert(salesInvoicePayments).values(
+              pmEntries.map(([code, amount]) => ({
+                orgId,
+                invoiceId: id,
+                paymentMethodCode: code,
+                paymentMethodName: pmMap.get(code) ?? code,
+                amount: amount.toFixed(4),
+              }))
+            );
+          }
+        }
+        return { success: true };
+      });
     }),
 
   // حذف مستند

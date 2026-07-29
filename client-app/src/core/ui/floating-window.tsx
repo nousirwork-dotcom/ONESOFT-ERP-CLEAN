@@ -138,14 +138,14 @@ export function FloatingWindow({
   };
 
   const windowStyle: React.CSSProperties = maximized
-    ? { position: "fixed", left: 0, top: 0, width: "100vw", height: "100vh", zIndex: 50 }
-    : { position: "fixed", left: pos.x, top: pos.y, width: size.w, height: size.h, zIndex: 50, minWidth: minWidth, minHeight: minHeight };
+    ? { position: "fixed", left: 0, top: 0, width: "100vw", height: "100vh", zIndex: 5000 }
+    : { position: "fixed", left: pos.x, top: pos.y, width: size.w, height: size.h, zIndex: 5000, minWidth: minWidth, minHeight: minHeight };
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
         {/* Overlay شفاف */}
-        <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-black/30 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-[4990] bg-black/30 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
 
         <DialogPrimitive.Content
           style={windowStyle}

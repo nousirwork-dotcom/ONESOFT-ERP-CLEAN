@@ -148,6 +148,279 @@
       "when": 1784500000000,
       "tag": "0020_ai_assistant",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1784600000000,
+      "tag": "0021_support_tickets",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1784700000000,
+      "tag": "0022_custody_tracking",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1784800000000,
+      "tag": "0023_custody_records",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1784900000000,
+      "tag": "0024_links_services",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1785000000000,
+      "tag": "0025_re_purchases",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1785010000000,
+      "tag": "0026_re_purchase_statements",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1785020000000,
+      "tag": "0027_re_purchases_enhancements",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1785025000000,
+      "tag": "0028_re_documents",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1785200000000,
+      "tag": "0029_re_trial_balance",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1789900000000,
+      "tag": "0030_add_settlement_account_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1790000000000,
+      "tag": "0031_re_housing_units",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1790100000000,
+      "tag": "0032_add_record_type_system_key",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1790200000000,
+      "tag": "0033_foundation_policy_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1790300000000,
+      "tag": "0034_foundation_origin_version",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1790400000000,
+      "tag": "0035_foundation_products_customers_suppliers",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1790500000000,
+      "tag": "0036_document_types_journal_cols",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1790600000000,
+      "tag": "0037_user_extended_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1790700000000,
+      "tag": "0038_user_session_version",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1790800000000,
+      "tag": "0039_sales_invoice_based_on",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1790900000000,
+      "tag": "0040_branch_seller",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1791000000000,
+      "tag": "0041_user_branch_assignments",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1791100000000,
+      "tag": "0042_source_document_id_shared_journal",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1791200000000,
+      "tag": "0043_warehouse_as_branch_unification",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1791300000000,
+      "tag": "0044_user_audit_log",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1791400000000,
+      "tag": "0045_user_group_members_fk_upgrade",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1753056000000,
+      "tag": "0046_user_groups_code_required_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1753142400000,
+      "tag": "0047_user_email_unique_per_org",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1753228800000,
+      "tag": "0048_user_allow_email_login",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1753315200000,
+      "tag": "0049_user_login_method",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1753401600000,
+      "tag": "0050_add_draft_numbering_to_document_journals",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1753488000000,
+      "tag": "0051_add_draft_number_to_sales_invoices",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1753574400000,
+      "tag": "0052_add_unposted_purchase_movements",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1753660800000,
+      "tag": "0053_link_unposted_movements",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1753747200000,
+      "tag": "0054_purchase_issuance_links",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1753833600000,
+      "tag": "0055_purchase_item_batch_expiry",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1753920000000,
+      "tag": "0056_supplier_type",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1754006400000,
+      "tag": "0057_supplier_registration_number",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1754092800000,
+      "tag": "0058_stock_receipt_line_details",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1754179200000,
+      "tag": "0059_stock_receipt_receiver",
+      "breakpoints": true
     }
   ]
 }

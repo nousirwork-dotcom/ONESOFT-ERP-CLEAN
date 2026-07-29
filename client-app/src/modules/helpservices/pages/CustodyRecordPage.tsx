@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import { trpc } from "@/shared/lib/trpc";
 import { useTabManager } from "@/core/contexts/TabManagerContext";
 import { useTabPath } from "@/core/contexts/TabPathContext";
@@ -11,15 +12,22 @@ import { Button } from "@/core/ui/button";
 import { Input } from "@/core/ui/input";
 import { Label } from "@/core/ui/label";
 
-// ─── نوع الحركة ───────────────────────────────────────────────────────────────
+// ─── نوع الحركة ── 4 أعمدة للوارد + 4 أعمدة للمصروف ──────────────────────────────────────────────
 type Entry = {
   _key:            string;
   entryDate:       string;
   description:     string;
   referenceNumber: string;
-  amountCollected: number;
-  amountPaid:      number;
-  note:            string;
+  // ── الوارد ──
+  incomeDue:       number;  // المستحق
+  amountCollected: number;  // المحصل
+  incomeRemaining: number;  // المتبقي (محسوب‎)
+  incomeNote:      string;  // ملحوظة الوارد
+  // ── المصروف ──
+  expenseDue:      number;  // المستحق
+  amountPaid:      number;  // المسدد
+  expenseRemaining: number; // المتبقي (محسوب‎)
+  expenseNote:     string;  // ملحوظة المصروف
   sortOrder:       number;
 };
 
@@ -31,20 +39,31 @@ const today = () => new Date().toISOString().slice(0, 10);
 function emptyEntry(sortOrder: number): Entry {
   return {
     _key: newKey(), entryDate: today(), description: "",
-    referenceNumber: "", amountCollected: 0, amountPaid: 0,
-    note: "", sortOrder,
+    referenceNumber: "",
+    incomeDue: 0, amountCollected: 0, incomeRemaining: 0, incomeNote: "",
+    expenseDue: 0, amountPaid: 0, expenseRemaining: 0, expenseNote: "",
+    sortOrder,
   };
 }
 
 function fromServer(row: any, idx: number): Entry {
+  const dueI = Number(row.incomeDue       ?? row.income_due       ?? 0);
+  const colI = Number(row.incomeCollected ?? row.income_collected ?? 0);
+  const dueE = Number(row.expenseDue      ?? row.expense_due      ?? 0);
+  const colE = Number(row.expensePaid     ?? row.expense_paid     ?? 0);
   return {
     _key:            newKey(),
     entryDate:       row.entryDate       ?? row.entry_date       ?? today(),
     description:     row.description     ?? "",
     referenceNumber: row.referenceNumber ?? row.reference_number ?? "",
-    amountCollected: Number(row.incomeCollected ?? row.income_collected ?? 0),
-    amountPaid:      Number(row.expensePaid     ?? row.expense_paid     ?? 0),
-    note:            row.incomeNote      ?? row.income_note      ?? "",
+    incomeDue:       dueI,
+    amountCollected: colI,
+    incomeRemaining: Math.max(0, dueI - colI),
+    incomeNote:      row.incomeNote      ?? row.income_note      ?? "",
+    expenseDue:      dueE,
+    amountPaid:      colE,
+    expenseRemaining: Math.max(0, dueE - colE),
+    expenseNote:     row.expenseNote     ?? row.expense_note     ?? "",
     sortOrder:       row.sortOrder       ?? row.sort_order       ?? idx,
   };
 }
@@ -84,19 +103,21 @@ export default function CustodyRecordPage() {
     {
       enabled: !!custodyId && !isNaN(custodyId),
       refetchOnWindowFocus: false,
-      onSuccess: (data: any) => {
-        if (!loaded) {
-          setCustodyName(data.record.custodyName  ?? data.record.custody_name  ?? "");
-          setEmail(data.record.email ?? "");
-          setAutoSend(data.record.autoSendEmail   ?? data.record.auto_send_email ?? false);
-          setRecordNumber(data.record.recordNumber ?? data.record.record_number ?? null);
-          const mapped = (data.entries as any[]).map((e, i) => fromServer(e, i));
-          setEntries(mapped.length > 0 ? mapped : [emptyEntry(0)]);
-          setLoaded(true);
-        }
-      },
     }
   );
+
+  useEffect(() => {
+    const data = recordQ.data as any;
+    if (data && !loaded) {
+      setCustodyName(data.record.custodyName  ?? data.record.custody_name  ?? "");
+      setEmail(data.record.email ?? "");
+      setAutoSend(data.record.autoSendEmail   ?? data.record.auto_send_email ?? false);
+      setRecordNumber(data.record.recordNumber ?? data.record.record_number ?? null);
+      const mapped = (data.entries as any[]).map((e, i) => fromServer(e, i));
+      setEntries(mapped.length > 0 ? mapped : [emptyEntry(0)]);
+      setLoaded(true);
+    }
+  }, [recordQ.data, loaded]);
 
   const createM     = trpc.custodyTracking.createRecord.useMutation();
   const updateM     = trpc.custodyTracking.updateRecord.useMutation();
@@ -112,9 +133,23 @@ export default function CustodyRecordPage() {
   const updateField = useCallback((key: string, field: keyof Entry, raw: string) => {
     setEntries(prev => prev.map(e => {
       if (e._key !== key) return e;
-      const numFields: (keyof Entry)[] = ["amountCollected", "amountPaid"];
-      const val = numFields.includes(field) ? (parseFloat(raw) || 0) : raw;
-      return { ...e, [field]: val };
+      const numFields: (keyof Entry)[] = [
+        "incomeDue", "amountCollected",
+        "expenseDue", "amountPaid",
+      ];
+      if (numFields.includes(field)) {
+        const val = parseFloat(raw) || 0;
+        let next = { ...e, [field]: val };
+        // تحديث المتبقي تلقائياً
+        if (field === "incomeDue" || field === "amountCollected") {
+          next = { ...next, incomeRemaining: Math.max(0, (next as Entry).incomeDue - (next as Entry).amountCollected) };
+        }
+        if (field === "expenseDue" || field === "amountPaid") {
+          next = { ...next, expenseRemaining: Math.max(0, (next as Entry).expenseDue - (next as Entry).amountPaid) };
+        }
+        return next;
+      }
+      return { ...e, [field]: raw };
     }));
   }, []);
 
@@ -127,12 +162,16 @@ export default function CustodyRecordPage() {
   }, []);
 
   // ── التنقل بين الخلايا ──
-  const COLS = ["entryDate", "description", "referenceNumber", "amountCollected", "amountPaid", "note"];
+  const COLS: (keyof Entry)[] = [
+    "entryDate", "description", "referenceNumber",
+    "incomeDue", "amountCollected", "incomeRemaining", "incomeNote",
+    "expenseDue", "amountPaid", "expenseRemaining", "expenseNote",
+  ];
 
-  function focusCell(rowKey: string, col: string) {
+  function focusCell(rowKey: string, col: keyof Entry) {
     cellRefs.current.get(`${rowKey}__${col}`)?.focus();
   }
-  function nextCell(rowKey: string, col: string) {
+  function nextCell(rowKey: string, col: keyof Entry) {
     const ci = COLS.indexOf(col);
     const ri = entries.findIndex(e => e._key === rowKey);
     if (ci < COLS.length - 1) {
@@ -149,7 +188,7 @@ export default function CustodyRecordPage() {
       }, 60);
     }
   }
-  function prevCell(rowKey: string, col: string) {
+  function prevCell(rowKey: string, col: keyof Entry) {
     const ci = COLS.indexOf(col);
     const ri = entries.findIndex(e => e._key === rowKey);
     if (ci > 0) focusCell(rowKey, COLS[ci - 1]);
@@ -182,7 +221,9 @@ export default function CustodyRecordPage() {
         });
       }
       const nonEmpty = entries.filter(e =>
-        e.description.trim() || e.amountCollected || e.amountPaid || e.referenceNumber.trim()
+        e.description.trim() || e.referenceNumber.trim() ||
+        e.incomeDue || e.amountCollected || e.incomeNote.trim() ||
+        e.expenseDue || e.amountPaid || e.expenseNote.trim()
       );
       await saveEntrM.mutateAsync({
         custodyId: id!,
@@ -190,9 +231,12 @@ export default function CustodyRecordPage() {
           entryDate:       e.entryDate,
           description:     e.description,
           referenceNumber: e.referenceNumber || null,
+          incomeDue:       e.incomeDue,
           amountCollected: e.amountCollected,
+          incomeNote:      e.incomeNote || null,
+          expenseDue:      e.expenseDue,
           amountPaid:      e.amountPaid,
-          note:            e.note || null,
+          expenseNote:     e.expenseNote || null,
           sortOrder:       i,
         })),
       });
@@ -272,9 +316,13 @@ export default function CustodyRecordPage() {
   }, [custodyId, email, sendEmailM]);
 
   // ── الإجماليات ──
-  const totalCollected = entries.reduce((s, e) => s + e.amountCollected, 0);
-  const totalPaid      = entries.reduce((s, e) => s + e.amountPaid, 0);
-  const diff           = totalCollected - totalPaid;
+  const totalIncomeDue       = entries.reduce((s, e) => s + e.incomeDue, 0);
+  const totalCollected       = entries.reduce((s, e) => s + e.amountCollected, 0);
+  const totalIncomeRemaining = entries.reduce((s, e) => s + e.incomeRemaining, 0);
+  const totalExpenseDue      = entries.reduce((s, e) => s + e.expenseDue, 0);
+  const totalPaid            = entries.reduce((s, e) => s + e.amountPaid, 0);
+  const totalExpenseRemaining= entries.reduce((s, e) => s + e.expenseRemaining, 0);
+  const diff                 = totalCollected - totalPaid;
 
   // ── تسمية الفرق بين المحصل والمسدد ──
   const diffLabel = diff > 0
@@ -303,7 +351,7 @@ export default function CustodyRecordPage() {
       <div className="shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-border/60 bg-muted/20 flex-wrap">
         <button
           className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          onClick={() => openTab("/hs/custody-tracking", "متابعة العهد")}
+          onClick={() => openTab("/hs/custody-tracking", "متابعة العهد", ArrowRight)}
         >
           <ArrowRight className="w-4 h-4" />
           <span className="text-xs">متابعة العهد</span>
@@ -330,7 +378,7 @@ export default function CustodyRecordPage() {
 
         <Button
           size="sm" variant="outline" className="h-8 gap-1.5 text-xs"
-          onClick={() => openTab("/hs/custody-tracking", "متابعة العهد")}
+          onClick={() => openTab("/hs/custody-tracking", "متابعة العهد", ArrowRight)}
         >
           إلغاء والعودة
         </Button>
@@ -423,27 +471,38 @@ export default function CustodyRecordPage() {
 
           {/* ── جدول الحركات ── */}
           <div className="overflow-auto">
-            <table className="w-full border-collapse text-[12px]" style={{ minWidth: 860 }}>
+            <table className="w-full border-collapse text-[12px]" style={{ minWidth: 1100 }}>
               <thead className="sticky top-0 z-10">
+                {/* الصف العلوي — الرأس الرئيسي */}
                 <tr>
-                  <th className="border border-gray-300 bg-[#1B2B5C] text-white px-2 py-2 text-center w-8 whitespace-nowrap">م</th>
-                  <th className="border border-gray-300 bg-[#1B2B5C] text-white px-2 py-2 whitespace-nowrap w-28">التاريخ</th>
-                  <th className="border border-gray-300 bg-[#1B2B5C] text-white px-2 py-2 whitespace-nowrap min-w-[200px]">البيان</th>
-                  <th className="border border-gray-300 bg-[#1B2B5C] text-white px-2 py-2 whitespace-nowrap w-28">رقم المرجع</th>
-                  <th className="border border-gray-300 bg-[#2D4F9C] text-white px-2 py-2 whitespace-nowrap w-28">المبلغ المحصل</th>
-                  <th className="border border-gray-300 bg-[#1E6B3A] text-white px-2 py-2 whitespace-nowrap w-28">المبلغ المسدد</th>
-                  <th className="border border-gray-300 bg-[#1B2B5C] text-white px-2 py-2 whitespace-nowrap min-w-[150px]">ملاحظة</th>
-                  <th className="border border-gray-300 bg-[#1B2B5C] text-white px-2 py-2 text-center w-8"></th>
+                  <th rowSpan={2} className="border border-gray-300 bg-[#1B2B5C] text-white px-2 py-2 text-center w-8 whitespace-nowrap">م</th>
+                  <th rowSpan={2} className="border border-gray-300 bg-[#1B2B5C] text-white px-2 py-2 whitespace-nowrap w-28">التاريخ</th>
+                  <th rowSpan={2} className="border border-gray-300 bg-[#1B2B5C] text-white px-2 py-2 whitespace-nowrap min-w-[180px]">البيان</th>
+                  <th rowSpan={2} className="border border-gray-300 bg-[#1B2B5C] text-white px-2 py-2 whitespace-nowrap w-24">رقم المرجع</th>
+                  <th colSpan={4} className="border border-gray-300 bg-[#2D4F9C] text-white px-2 py-2 text-center whitespace-nowrap">الوارد</th>
+                  <th colSpan={4} className="border border-gray-300 bg-[#1E6B3A] text-white px-2 py-2 text-center whitespace-nowrap">المصروف</th>
+                  <th rowSpan={2} className="border border-gray-300 bg-[#1B2B5C] text-white px-1 py-2 text-center w-8"></th>
+                </tr>
+                {/* الصف السفلي — الأعمدة الفرعية */}
+                <tr>
+                  <th className="border border-gray-300 bg-[#3B5FA8] text-white px-1 py-1 whitespace-nowrap w-24">المستحق</th>
+                  <th className="border border-gray-300 bg-[#3B5FA8] text-white px-1 py-1 whitespace-nowrap w-24">المحصل</th>
+                  <th className="border border-gray-300 bg-[#3B5FA8] text-white px-1 py-1 whitespace-nowrap w-24">المتبقي</th>
+                  <th className="border border-gray-300 bg-[#3B5FA8] text-white px-1 py-1 whitespace-nowrap min-w-[100px]">ملحوظة</th>
+                  <th className="border border-gray-300 bg-[#2E8B4A] text-white px-1 py-1 whitespace-nowrap w-24">المستحق</th>
+                  <th className="border border-gray-300 bg-[#2E8B4A] text-white px-1 py-1 whitespace-nowrap w-24">المسدد</th>
+                  <th className="border border-gray-300 bg-[#2E8B4A] text-white px-1 py-1 whitespace-nowrap w-24">المتبقي</th>
+                  <th className="border border-gray-300 bg-[#2E8B4A] text-white px-1 py-1 whitespace-nowrap min-w-[100px]">ملحوظة</th>
                 </tr>
               </thead>
               <tbody>
                 {entries.map((row, idx) => {
-                  const mkRef = (col: string) => (el: HTMLInputElement | null) => {
+                  const mkRef = (col: keyof Entry) => (el: HTMLInputElement | null) => {
                     const k = `${row._key}__${col}`;
                     if (el) cellRefs.current.set(k, el);
                     else cellRefs.current.delete(k);
                   };
-                  const kbNav = (col: string) => ({
+                  const kbNav = (col: keyof Entry) => ({
                     onKeyDown: (e: React.KeyboardEvent) => {
                       if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); nextCell(row._key, col); }
                       else if (e.key === "Tab" && e.shiftKey) { e.preventDefault(); prevCell(row._key, col); }
@@ -459,11 +518,11 @@ export default function CustodyRecordPage() {
                       <td className="border border-gray-200 text-center text-muted-foreground py-0.5 px-1 select-none">{idx + 1}</td>
 
                       <td className="border border-gray-200 p-0">
-                        <input
-                          ref={mkRef("entryDate")} type="date" value={row.entryDate} dir="ltr"
-                          className="w-full h-8 px-1.5 text-[11px] border-0 outline-none bg-transparent focus:bg-blue-50/60 focus:ring-1 focus:ring-blue-400 rounded"
-                          onChange={e => updateField(row._key, "entryDate", e.target.value)}
-                          {...kbNav("entryDate")}
+                        <DateSegmentInput
+                          value={row.entryDate}
+                          onChange={v => updateField(row._key, "entryDate", v)}
+                          standalone
+                          style={{ height: 32, border: "1px solid transparent", background: "transparent", fontSize: 11 }}
                         />
                       </td>
 
@@ -485,32 +544,67 @@ export default function CustodyRecordPage() {
                         />
                       </td>
 
-                      <td className="border border-gray-200 p-0 bg-blue-50/20">
+                      {/* ── الوارد: المستحق / المحصل / المتبقي / ملحوظة ── */}
+                      <td className="border border-gray-200 p-0 bg-blue-50/10">
+                        <input
+                          ref={mkRef("incomeDue")} type="number" value={row.incomeDue || ""} dir="ltr" placeholder="0"
+                          className="w-full h-8 px-1 text-[11px] border-0 outline-none bg-transparent text-left focus:bg-blue-50/60 focus:ring-1 focus:ring-blue-400 rounded"
+                          onChange={e => updateField(row._key, "incomeDue", e.target.value)}
+                          {...kbNav("incomeDue")}
+                        />
+                      </td>
+                      <td className="border border-gray-200 p-0 bg-blue-50/10">
                         <input
                           ref={mkRef("amountCollected")} type="number" value={row.amountCollected || ""} dir="ltr" placeholder="0"
-                          className="w-full h-8 px-1.5 text-[12px] border-0 outline-none bg-transparent text-left focus:bg-blue-50/80 focus:ring-1 focus:ring-blue-400 rounded"
+                          className="w-full h-8 px-1 text-[11px] border-0 outline-none bg-transparent text-left focus:bg-blue-50/60 focus:ring-1 focus:ring-blue-400 rounded"
                           onChange={e => updateField(row._key, "amountCollected", e.target.value)}
                           {...kbNav("amountCollected")}
                         />
                       </td>
+                      <td className="border border-gray-200 p-0 bg-blue-50/20">
+                        <div className="w-full h-8 px-1 text-[11px] flex items-center text-left font-mono text-blue-800">
+                          {row.incomeRemaining > 0 ? fmt(row.incomeRemaining) : ""}
+                        </div>
+                      </td>
+                      <td className="border border-gray-200 p-0 bg-blue-50/10">
+                        <input
+                          ref={mkRef("incomeNote")} type="text" value={row.incomeNote} dir="rtl" placeholder="..."
+                          className="w-full h-8 px-1 text-[11px] border-0 outline-none bg-transparent text-right focus:bg-blue-50/60 focus:ring-1 focus:ring-blue-400 rounded"
+                          onChange={e => updateField(row._key, "incomeNote", e.target.value)}
+                          {...kbNav("incomeNote")}
+                        />
+                      </td>
 
-                      <td className="border border-gray-200 p-0 bg-green-50/20">
+                      {/* ── المصروف: المستحق / المسدد / المتبقي / ملحوظة ── */}
+                      <td className="border border-gray-200 p-0 bg-green-50/10">
+                        <input
+                          ref={mkRef("expenseDue")} type="number" value={row.expenseDue || ""} dir="ltr" placeholder="0"
+                          className="w-full h-8 px-1 text-[11px] border-0 outline-none bg-transparent text-left focus:bg-green-50/60 focus:ring-1 focus:ring-green-400 rounded"
+                          onChange={e => updateField(row._key, "expenseDue", e.target.value)}
+                          {...kbNav("expenseDue")}
+                        />
+                      </td>
+                      <td className="border border-gray-200 p-0 bg-green-50/10">
                         <input
                           ref={mkRef("amountPaid")} type="number" value={row.amountPaid || ""} dir="ltr" placeholder="0"
-                          className="w-full h-8 px-1.5 text-[12px] border-0 outline-none bg-transparent text-left focus:bg-green-50/80 focus:ring-1 focus:ring-green-400 rounded"
+                          className="w-full h-8 px-1 text-[11px] border-0 outline-none bg-transparent text-left focus:bg-green-50/60 focus:ring-1 focus:ring-green-400 rounded"
                           onChange={e => updateField(row._key, "amountPaid", e.target.value)}
                           {...kbNav("amountPaid")}
                         />
                       </td>
-
-                      <td className="border border-gray-200 p-0">
+                      <td className="border border-gray-200 p-0 bg-green-50/20">
+                        <div className="w-full h-8 px-1 text-[11px] flex items-center text-left font-mono text-green-800">
+                          {row.expenseRemaining > 0 ? fmt(row.expenseRemaining) : ""}
+                        </div>
+                      </td>
+                      <td className="border border-gray-200 p-0 bg-green-50/10">
                         <input
-                          ref={mkRef("note")} type="text" value={row.note} dir="rtl" placeholder="ملاحظة"
-                          className="w-full h-8 px-1.5 text-[11px] border-0 outline-none bg-transparent text-right focus:bg-blue-50/60 focus:ring-1 focus:ring-blue-400 rounded"
-                          onChange={e => updateField(row._key, "note", e.target.value)}
+                          ref={mkRef("expenseNote")} type="text" value={row.expenseNote} dir="rtl" placeholder="..."
+                          className="w-full h-8 px-1 text-[11px] border-0 outline-none bg-transparent text-right focus:bg-green-50/60 focus:ring-1 focus:ring-green-400 rounded"
+                          onChange={e => updateField(row._key, "expenseNote", e.target.value)}
                           onKeyDown={e => {
-                            if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); nextCell(row._key, "note"); }
-                            else if (e.key === "Tab" && e.shiftKey) { e.preventDefault(); prevCell(row._key, "note"); }
+                            if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); nextCell(row._key, "expenseNote"); }
+                            else if (e.key === "Tab" && e.shiftKey) { e.preventDefault(); prevCell(row._key, "expenseNote"); }
                             else if (e.key === "Enter") { e.preventDefault(); addEntry(); setTimeout(() => setEntries(p => { if (p.length > 0) focusCell(p[p.length - 1]._key, COLS[0]); return p; }), 60); }
                           }}
                         />
@@ -534,15 +628,20 @@ export default function CustodyRecordPage() {
               <tfoot className="sticky bottom-0 z-10">
                 <tr className="bg-indigo-900 text-white font-bold text-[12px]">
                   <td colSpan={4} className="border border-indigo-700 px-3 py-2 text-center">الإجمالي</td>
-                  <td className="border border-indigo-700 px-2 py-2 text-left">{fmt(totalCollected)}</td>
-                  <td className="border border-indigo-700 px-2 py-2 text-left">{fmt(totalPaid)}</td>
-                  <td colSpan={2} className="border border-indigo-700 px-2 py-2" />
+                  <td className="border border-indigo-700 px-1 py-2 text-left">{fmt(totalIncomeDue)}</td>
+                  <td className="border border-indigo-700 px-1 py-2 text-left">{fmt(totalCollected)}</td>
+                  <td className="border border-indigo-700 px-1 py-2 text-left">{fmt(totalIncomeRemaining)}</td>
+                  <td className="border border-indigo-700 px-1 py-2" />
+                  <td className="border border-indigo-700 px-1 py-2 text-left">{fmt(totalExpenseDue)}</td>
+                  <td className="border border-indigo-700 px-1 py-2 text-left">{fmt(totalPaid)}</td>
+                  <td className="border border-indigo-700 px-1 py-2 text-left">{fmt(totalExpenseRemaining)}</td>
+                  <td className="border border-indigo-700 px-1 py-2" />
                 </tr>
                 <tr className="bg-[#1B2B5C] text-white font-extrabold text-[13px]">
                   <td colSpan={4} className="border border-[#0F1D40] px-3 py-2.5 text-center text-xs font-bold">
                     الفرق بين المحصل والمسدد
                   </td>
-                  <td colSpan={4} className={`border border-[#0F1D40] px-3 py-2.5 text-center text-base ${diff >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+                  <td colSpan={9} className={`border border-[#0F1D40] px-3 py-2.5 text-center text-base ${diff >= 0 ? "text-emerald-300" : "text-red-300"}`}>
                     {diffLabel}
                   </td>
                 </tr>

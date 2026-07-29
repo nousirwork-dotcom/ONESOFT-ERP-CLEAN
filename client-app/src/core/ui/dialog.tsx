@@ -89,15 +89,19 @@ function DialogOverlay({
 
 DialogOverlay.displayName = "DialogOverlay";
 
+type DialogContentProps = React.ComponentProps<typeof DialogPrimitive.Content> & {
+  showCloseButton?: boolean;
+};
+
 function DialogContent({
   className,
   children,
   showCloseButton = true,
   onEscapeKeyDown,
+  onPointerDownOutside,
+  onInteractOutside,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content> & {
-  showCloseButton?: boolean;
-}) {
+}: DialogContentProps) {
   const { isComposing } = useDialogComposition();
 
   const handleEscapeKeyDown = React.useCallback(
@@ -118,6 +122,36 @@ function DialogContent({
     [isComposing, onEscapeKeyDown]
   );
 
+  // By default, prevent dialog from closing when clicking outside.
+  // Callers can opt in to closing by providing their own onPointerDownOutside
+  // that does NOT call e.preventDefault().
+  const handlePointerDownOutside = React.useCallback(
+    (e: Parameters<NonNullable<DialogContentProps["onPointerDownOutside"]>>[0]) => {
+      if (onPointerDownOutside) {
+        onPointerDownOutside(e);
+      } else {
+        e.preventDefault();
+      }
+    },
+    [onPointerDownOutside]
+  );
+
+  const handleInteractOutside = React.useCallback(
+    (e: Parameters<NonNullable<DialogContentProps["onInteractOutside"]>>[0]) => {
+      if (onInteractOutside) {
+        onInteractOutside(e);
+      } else {
+        e.preventDefault();
+      }
+    },
+    [onInteractOutside]
+  );
+
+  // When className includes "w-[" the caller is setting a custom fixed width,
+  // so we skip the default max-w/grid/p-6 layout and only apply centering + border.
+  const hasFullscreen = className?.includes("inset-0") || className?.includes("w-screen");
+  const hasCustomSize = !hasFullscreen && className?.includes("w-[");
+
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
@@ -125,19 +159,23 @@ function DialogContent({
         data-slot="dialog-content"
         className={cn(
           "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed z-[10001] shadow-lg duration-200",
-          className?.includes("inset-0") || className?.includes("w-screen")
+          hasFullscreen
             ? ""
-            : "top-[50%] left-[50%] grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 sm:max-w-lg",
+            : hasCustomSize
+              ? "top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] rounded-lg border"
+              : "top-[50%] left-[50%] grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 sm:max-w-lg",
           className
         )}
         onEscapeKeyDown={handleEscapeKeyDown}
+        onPointerDownOutside={handlePointerDownOutside}
+        onInteractOutside={handleInteractOutside}
         {...props}
       >
         {children}
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
-            className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+            className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-4 end-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
           >
             <XIcon />
             <span className="sr-only">Close</span>
@@ -209,4 +247,3 @@ export {
   DialogTitle,
   DialogTrigger
 };
-

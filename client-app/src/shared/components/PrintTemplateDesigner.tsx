@@ -736,7 +736,7 @@ export default function PrintTemplateDesigner({
 
   /* ─── Render ─── */
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-slate-100" dir="rtl">
+    <div className="flex flex-col h-full overflow-hidden bg-background" dir="rtl">
       {/* ── Toolbar ── */}
       <div className="shrink-0 flex items-center gap-1.5 px-3 h-11 border-b border-slate-200 bg-white shadow-sm flex-wrap">
         <button onClick={() => { if (!isDirty || confirm("يوجد تعديلات غير محفوظة، هل تريد الخروج؟")) onBack(); }}
@@ -926,8 +926,8 @@ export default function PrintTemplateDesigner({
 
         {/* ── Center: canvas OR live preview ── */}
         {showPreview ? (
-          <div className="flex-1 overflow-auto flex flex-col items-center p-4 bg-slate-400"
-            style={{ backgroundImage:"radial-gradient(circle, #64748b 1px, transparent 1px)", backgroundSize:"14px 14px" }}>
+          <div className="flex-1 overflow-auto flex flex-col items-center p-4 bg-background"
+            style={{ backgroundImage:"radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px)", backgroundSize:"14px 14px" }}>
             <div className="mb-2 flex items-center gap-2 bg-emerald-700 text-white text-[10px] px-3 py-1 rounded-full shadow">
               <Monitor className="w-3 h-3" /> معاينة بالبيانات النموذجية — التغييرات في تبويب «الفاتورة» تظهر فوراً
             </div>
@@ -944,8 +944,8 @@ export default function PrintTemplateDesigner({
           </div>
         ) : (
           /* ── Element canvas with rulers ── */
-          <div className="flex-1 overflow-auto flex items-start justify-center p-6 bg-slate-300"
-            style={{ backgroundImage:"radial-gradient(circle, #94a3b8 1px, transparent 1px)", backgroundSize:"16px 16px" }}>
+          <div className="flex-1 overflow-auto flex items-start justify-center p-6 bg-background"
+            style={{ backgroundImage:"radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px)", backgroundSize:"16px 16px" }}>
             {/* Wrapper with rulers */}
             <div className="relative" style={{ width: CWIDTH + (showRulers ? RULER_SIZE : 0), height: cHeight + (showRulers ? RULER_SIZE : 0) }}>
               {/* Corner square */}

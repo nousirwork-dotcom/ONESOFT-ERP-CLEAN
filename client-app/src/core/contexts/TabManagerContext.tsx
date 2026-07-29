@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode, useCallback, useRef, useEffect } from "react";
+import { createContext, useContext, useState, useMemo, ReactNode, useCallback, useRef, useEffect } from "react";
 import {
   TrendingUp, ShoppingBag, Boxes, Factory, Calculator,
   UserCheck, Wrench, Settings, LayoutGrid, LifeBuoy,
@@ -24,6 +24,7 @@ type TabManagerContextType = {
   tabs: AppTab[];
   activeTabId: string | null;
   dashboardVisible: boolean;
+  isPosWorkspaceActive: boolean;
   openTab: (path: string, label: string, Icon: React.ElementType, pinned?: boolean) => void;
   closeTab: (id: string) => void;
   activateTab: (id: string) => void;
@@ -86,6 +87,9 @@ function pathToIcon(path: string): React.ElementType {
 const TABS_KEY        = 'onesoft_open_tabs';
 const FLAG_KEY        = 'onesoft_cfg_remember_tabs';
 const STARTUP_PAGE_KEY = 'onesoft_cfg_startup_page';
+/** تُخزَّن التبويبات المفتوحة في sessionStorage لاستعادتها إذا أُعيد mount المزوّد
+ *  خلال نفس الجلسة (مثلاً بسبب تحقق من الجلسة أو إعادة توجيه مؤقتة). */
+const SESSION_TABS_KEY = 'onesoft_session_tabs';
 
 function isRememberEnabled(): boolean {
   try { return localStorage.getItem(FLAG_KEY) === 'true'; } catch { return false; }
@@ -93,8 +97,44 @@ function isRememberEnabled(): boolean {
 
 type SavedTab = { path: string; label: string };
 
+/** يحفظ التبويبات في sessionStorage فوراً (مستقل عن إعداد "تذكر التبويبات"). */
+export function persistSessionTabs(tabs: AppTab[]): void {
+  try {
+    const toSave: SavedTab[] = tabs.map(t => ({ path: t.path, label: t.label }));
+    sessionStorage.setItem(SESSION_TABS_KEY, JSON.stringify(toSave));
+  } catch { /* ignore */ }
+}
+
+/** يمسح بيانات التبويبات من sessionStorage — يُستدعى عند تسجيل الخروج. */
+export function clearSessionTabs(): void {
+  try { sessionStorage.removeItem(SESSION_TABS_KEY); } catch { /* ignore */ }
+}
+
 function loadSavedTabs(): AppTab[] {
   try {
+    // أولاً: حاول استعادة التبويبات من sessionStorage (حفظ داخل الجلسة الحالية)
+    // هذا يحمي من أي remount للمزوّد ناتج عن تحقق المصادقة أو إعادة توجيه مؤقتة.
+    const sessionRaw = sessionStorage.getItem(SESSION_TABS_KEY);
+    if (sessionRaw) {
+      const parsed = JSON.parse(sessionRaw) as SavedTab[];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map((t, i) => ({
+          id:          `session-${i}-${t.path.replace(/\//g, '_')}`,
+          path:        t.path,
+          label:       t.label,
+          Icon:        pathToIcon(t.path),
+          pinned:      false,
+          pos:         { x: 40 + i * 8, y: 40 + i * 8 },
+          size:        { w: 1200, h: 760 },
+          prevPos:     { x: 40, y: 40 },
+          prevSize:    { w: 1200, h: 760 },
+          windowState: 'maximized' as WindowState,
+          zIndex:      100 + i,
+        }));
+      }
+    }
+
+    // ثانياً: الاستعادة من localStorage (إعداد "تذكر التبويبات")
     if (!isRememberEnabled()) return [];
     // القاعدة: التبويبات تُستعاد فقط عندما startup_page = 'last_opened'
     // إذا كان startup_page = dashboard/sales/etc. → يفتح الصفحة المحددة فقط ولا تعارض
@@ -171,8 +211,37 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
     restoredTabs.length === 0
   );
 
-  const toggleDashboard = useCallback(() => setDashboardVisible(v => !v), []);
-  const showDashboard   = useCallback(() => setDashboardVisible(true),    []);
+  // حفظ فوري في sessionStorage عند كل تغيير في التبويبات
+  useEffect(() => {
+    persistSessionTabs(tabs);
+  }, [tabs]);
+  /* Idempotent helper — exits fullscreen (Electron or browser DOM) without
+     throwing if fullscreen is not active. Called from closeTab before the
+     POS tab is removed so the exit fires before any component unmounts. */
+  function exitPosFullscreen() {
+    const erpAPI = (window as any).erpAPI;
+    if (erpAPI?.setFullScreen) {
+      erpAPI.setFullScreen(false);
+    } else if (document.fullscreenElement) {
+      document.exitFullscreen?.();
+    }
+  }
+
+  /* POS workspace flag — pure derived state. No setter: truth comes from
+     activeTabId + tab path + windowState + dashboardVisible. */
+  const isPosWorkspaceActive = useMemo(() => {
+    if (dashboardVisible) return false;
+    const activeTab = tabs.find(t => t.id === activeTabId);
+    return (
+      activeTab?.path === '/sales/pos' &&
+      activeTab?.windowState !== 'minimized'
+    );
+  }, [tabs, activeTabId, dashboardVisible]);
+
+  const toggleDashboard = useCallback(() => {
+    setDashboardVisible(v => !v);
+  }, []);
+  const showDashboard = useCallback(() => setDashboardVisible(true), []);
 
   // Persist tabs to localStorage whenever they change
   useEffect(() => {
@@ -220,6 +289,14 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
     setTabs(prev => {
       const tab = prev.find(t => t.id === id);
       if (!tab || tab.pinned) return prev;
+
+      // Exit fullscreen BEFORE removing the POS tab so the exit fires
+      // while LivePOSPage is still mounted. exitPosFullscreen is idempotent
+      // (safe if called in React StrictMode's double-invocation).
+      if (tab.path === '/sales/pos' && activeTabId === id) {
+        exitPosFullscreen();
+      }
+
       const next = prev.filter(t => t.id !== id);
       if (next.length === 0) {
         setActiveTabId(null);
@@ -281,6 +358,7 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
   return (
     <TabManagerContext.Provider value={{
       tabs, activeTabId, dashboardVisible,
+      isPosWorkspaceActive,
       openTab, closeTab, activateTab,
       setDashboardVisible, toggleDashboard, showDashboard,
       minimizeWindow, toggleMaximize, bringToFront,

@@ -1,0 +1,85 @@
+/* ═══════════════════════════════════════════════════════════════════
+   OneSoft ERP — Responsive Layout CSS Module
+   All container queries use the named container "erp-screen" which is
+   set on the outermost screen div via .screenContainer.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Container context ──────────────────────────────────────────── */
+.screenContainer {
+  container-type: inline-size;
+  container-name: erp-screen;
+}
+
+/* ── Form grids ─────────────────────────────────────────────────── */
+
+/* 4-column header grid (SalesInvoicePage, master-data, settings) */
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(var(--field-min-w-md, 120px), 1fr));
+  column-gap: var(--gap-md, 8px);
+  row-gap: var(--gap-xs, 3px);
+  align-items: center;
+}
+
+/* 5-column header grid (DocumentInvoicePage row 1) */
+.formGrid5 {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(var(--field-min-w-md, 120px), 1fr));
+  column-gap: var(--gap-md, 8px);
+  row-gap: var(--gap-xs, 3px);
+  align-items: center;
+  flex: 1;
+}
+
+/* 6-column header grid (DocumentInvoicePage row 2) */
+.formGrid6 {
+  display: grid;
+  grid-template-columns: minmax(130px, 150px) minmax(100px, 120px) minmax(80px, 90px) minmax(80px, 100px) minmax(var(--field-min-w-md, 120px), 1fr) minmax(var(--field-min-w-md, 120px), 1fr);
+  column-gap: var(--gap-md, 8px);
+  row-gap: var(--gap-xs, 3px);
+  align-items: center;
+}
+
+/* ── Summary panel ──────────────────────────────────────────────── */
+.summaryPanel {
+  width: var(--summary-panel-w, clamp(250px, 22%, 320px));
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Container Query Breakpoints
+   All responsive rules are scoped to @container erp-screen so they
+   react to the panel width, not the viewport.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── ≤1000px: collapse to 3 columns ──────────────────────────────── */
+@container erp-screen (max-width: 1000px) {
+  .formGrid,
+  .formGrid5,
+  .formGrid6 {
+    grid-template-columns: repeat(3, minmax(var(--field-min-w, 80px), 1fr));
+  }
+}
+
+/* ── ≤760px: collapse to 2 columns ───────────────────────────────── */
+@container erp-screen (max-width: 760px) {
+  .formGrid,
+  .formGrid5,
+  .formGrid6 {
+    grid-template-columns: repeat(2, minmax(var(--field-min-w, 80px), 1fr));
+  }
+
+  .summaryPanel {
+    width: 100%;
+  }
+}
+
+/* ── ≤500px: single column ───────────────────────────────────────── */
+@container erp-screen (max-width: 500px) {
+  .formGrid,
+  .formGrid5,
+  .formGrid6 {
+    grid-template-columns: 1fr;
+  }
+}

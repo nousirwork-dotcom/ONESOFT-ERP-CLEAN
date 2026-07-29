@@ -636,7 +636,7 @@ function CardsView({ links, ...actions }: { links: LinkRow[] } & LinkActions) {
               <MoreVertical className="w-4 h-4 text-muted-foreground" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" dir="rtl">
+          <DropdownMenuContent align="start" dir={"rtl" as const}>
             <DropdownMenuItem onClick={() => actions.onOpen(l)}>
               <ExternalLink className="w-4 h-4 ml-2" /> فتح الرابط
             </DropdownMenuItem>

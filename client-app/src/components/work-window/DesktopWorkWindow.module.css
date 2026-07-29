@@ -1,0 +1,177 @@
+/* ─────────────────────────────────────────────────────────────
+   متغيرات Density ثابتة — ثلاثة مستويات بدلاً من Zoom/Scale المستمر
+   الوضع Normal يحتفظ بالأحجام الحالية (القيم الافتراضية).
+   Compact = أصغر بقليل، Large = أكبر بقليل فقط.
+   ───────────────────────────────────────────────────────────── */
+.window[data-density="compact"] {
+  --work-font-size: 11px;
+  --work-field-h:   23px;
+  --work-cell-h:    22px;
+  --work-row-h:     24px;
+  --work-btn-h:     27px;
+  --work-gap:       3px;
+  --work-pad:       4px;
+}
+
+.window[data-density="large"] {
+  --work-font-size: 13px;
+  --work-field-h:   29px;
+  --work-cell-h:    28px;
+  --work-row-h:     30px;
+  --work-btn-h:     33px;
+  --work-gap:       6px;
+  --work-pad:       8px;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   طبقة الحاوية الكاملة — تملأ مساحة AppWindow بالكامل
+   ───────────────────────────────────────────────────────────── */
+.layer {
+  position:       absolute;
+  inset:          0;
+  z-index:        2000;
+  pointer-events: auto; /* يُلغي pointer-events:none الموروثة من portal host */
+}
+
+/* ─────────────────────────────────────────────────────────────
+   طبقة الحجب الكريمية البنية
+   - تمتص النقر (pointer-events: auto) وتُشغّل اهتزاز النافذة
+   - لا تُغلق النافذة عند النقر عليها
+   - اللون الكريمي يندمج مع ثيم البرنامج ويحجب تفاصيل الخلفية
+   ───────────────────────────────────────────────────────────── */
+.backdrop {
+  position:        absolute;
+  inset:           0;
+  background:      rgba(226, 217, 202, 0.84);
+  backdrop-filter: blur(1.5px) saturate(0.50);
+  /* fallback: إذا كان backdrop-filter غير مدعوم يكفي اللون وحده */
+  pointer-events:  auto;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   إطار النافذة
+   - position: absolute مع top/right لموضع أعلى اليمين الافتراضي
+   - السحب يُطبَّق عبر transform translate
+   ───────────────────────────────────────────────────────────── */
+.window {
+  position:       absolute;
+  top:            6px;
+  right:          14px;
+
+  display:        grid;
+  grid-template-rows: auto minmax(0, 1fr);
+
+  background:     #E6DED2;  /* يظهر في منطقة الـ padding كإطار داخلي */
+  background-clip: padding-box; /* لا يمتد تحت الـ border الأزرق */
+  border:         6px solid #BAC6D0;
+  border-radius:  8px;
+  /* مسافة للإطار البني الكريمي: يمين/يسار 10px, أسفل 10px, أعلى 0 */
+  padding:        0 10px 10px 10px;
+  box-sizing:     border-box;
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.20),
+    0  3px  9px rgba(0, 0, 0, 0.10),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.70);
+
+  outline:        1px solid #6B4A2D;
+  outline-offset: -1px;
+
+  overflow:       hidden;
+  transition:     width 0.18s ease, height 0.18s ease, border-radius 0.18s ease;
+  will-change:    transform;
+}
+
+/* ─── موضع المنتصف (center placement) ───
+   تُحسب الإزاحة في JS ليتوافق مع منطق السحب. */
+.window[data-placement="center"] {
+  /* الإزاحة الأولية تُطبَّق بـ JS في useEffect */
+}
+
+/* ─── أحجام مسبقة الإعداد مع Auto-Fit ذكي ─── */
+/* القيم الافتراضية: تستخدم clamp فتعطي حدوداً عليا ودنيا
+   يُطبَّق auto-fit عبر ResizeObserver في JS ويُضبط عبر style.width/height مباشرة */
+.window[data-preset="compact"] {
+  width:  clamp(680px, 85%, 960px);
+  height: clamp(480px, 85%, calc(100% - 16px));
+}
+.window[data-preset="standard"] {
+  width:  clamp(980px, 92%, 1280px);
+  height: clamp(620px, 90%, calc(100% - 16px));
+}
+.window[data-preset="wide"] {
+  width:  clamp(1100px, 94%, 1400px);
+  height: clamp(620px, 90%, calc(100% - 16px));
+}
+.window[data-preset="fullscreen"] {
+  width:         calc(100% - 12px);
+  height:        calc(100% - 12px);
+  border-radius: 5px;
+}
+
+/* ─── وضع التكبير — يُلغي الحجم والموضع والـ transform ─── */
+.window.maximized {
+  top:           6px  !important;
+  right:         6px  !important;
+  width:         calc(100% - 12px) !important;
+  height:        calc(100% - 12px) !important;
+  border-radius: 5px  !important;
+  transform:     none !important;
+}
+
+/* ─── حاوية شريط العنوان — تمتد على كامل العرض (تلغي 10px padding) ─ */
+.titleBarWrapper {
+  margin-left:  -10px;
+  margin-right: -10px;
+  flex-shrink:  0;
+  background:   #2F5F8F; /* يطابق لون شريط العنوان — يمنع ظهور الكريمي */
+}
+
+/* ─── جسم النافذة — يحتوي المحتوى والشريط السفلي ويملأ الصف الثاني من الـ Grid ─── */
+.workBody {
+  min-height:      0;
+  display:         flex;
+  flex-direction:  column;
+  overflow:        hidden;
+}
+
+/* ─── منطقة المحتوى — تملأ المساحة المتبقية بعد شريط العنوان ─── */
+.content {
+  flex:           1 1 0;
+  overflow-y:     auto;
+  overflow-x:     hidden;
+  display:        flex;
+  flex-direction: column;
+  min-height:     0;
+  background:     #FFFFFF;
+  font-size:      var(--work-font-size);
+}
+
+/* ─── الشريط السفلي — ملاصق للحافة السفلية، لا يقص الأزرار ─── */
+.footer {
+  flex-shrink:     0;
+  margin:          0;
+  width:           100%;
+  display:         flex;
+  flex-direction:  column;
+  align-items:     center;
+  overflow:        visible;
+  padding:         6px 0 4px 0;
+  border-top:      1px solid #E5E7EB;
+  background:      #FCFAF5;
+}
+
+/* ─── اهتزاز الاهتمام عند النقر خارج النافذة ─── */
+@keyframes ww-shake {
+  0%   { transform: translateX(var(--tx, 0)) translateY(var(--ty, 0)); }
+  15%  { transform: translateX(calc(var(--tx, 0) - 7px)) translateY(var(--ty, 0)); }
+  30%  { transform: translateX(calc(var(--tx, 0) + 7px)) translateY(var(--ty, 0)); }
+  45%  { transform: translateX(calc(var(--tx, 0) - 5px)) translateY(var(--ty, 0)); }
+  60%  { transform: translateX(calc(var(--tx, 0) + 5px)) translateY(var(--ty, 0)); }
+  75%  { transform: translateX(calc(var(--tx, 0) - 3px)) translateY(var(--ty, 0)); }
+  90%  { transform: translateX(calc(var(--tx, 0) + 2px)) translateY(var(--ty, 0)); }
+  100% { transform: translateX(var(--tx, 0)) translateY(var(--ty, 0)); }
+}
+
+.window.shaking {
+  animation: ww-shake 0.36s ease-in-out;
+}

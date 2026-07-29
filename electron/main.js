@@ -96,6 +96,17 @@ function writeLog(level, msg) {
   } catch {}
 }
 
+// ── Launch ID — يتغيّر عند كل تشغيل للتطبيق ─────────────────────────────────
+// يُولَّد مرة واحدة عند بدء التشغيل ويُمرَّر عبر preload للواجهة.
+// يضمن أن إغلاق التطبيق وإعادة فتحه يُلغي جلسة المتصفح
+// حتى لو ظلت Cookie صالحة.
+const LAUNCH_ID = require('crypto').randomUUID();
+// طباعة Launch ID في DEV فقط — لإثبات تغيّره بين كل تشغيل
+// ممنوع طباعته في الإنتاج (app.isPackaged = true في Production)
+if (!app.isPackaged) {
+  console.log('[auth] Electron Launch ID:', LAUNCH_ID);
+}
+
 // ── حالة عامة ─────────────────────────────────────────────────────────────────
 let splashWin        = null;
 let mainWin          = null;
@@ -324,6 +335,14 @@ function createMainWindow() {
 
   mainWin = new BrowserWindow(winOpts);
 
+  // POS fullscreen sync: notify renderer of Electron fullscreen state changes
+  mainWin.on('enter-full-screen', () => {
+    if (!mainWin.isDestroyed()) mainWin.webContents.send('pos:fullscreenChanged', true);
+  });
+  mainWin.on('leave-full-screen', () => {
+    if (!mainWin.isDestroyed()) mainWin.webContents.send('pos:fullscreenChanged', false);
+  });
+
   mainWin.once('ready-to-show', () => {
     // fullscreen_on_start: تكبير النافذة لملء الشاشة
     if (fullscreen || (rememberSize && winState?.isMaximized)) {
@@ -353,12 +372,28 @@ function createMainWindow() {
     writeLog('ERROR', `main window failed to load ${SERVER_URL}: ${err.message}`);
   });
 
-  // إغلاق النافذة يخفيها فقط (البرنامج يبقى في الـ Tray)، إلا عند الإنهاء الفعلي
+  // علامة X الرئيسية: رسالة تأكيد قبل إغلاق البرنامج بالكامل
+  // (مع خيار التصغير إلى شريط النظام للحفاظ على سلوك الـ Tray)
   mainWin.on('close', (e) => {
-    if (!isQuitting) {
-      e.preventDefault();
+    if (isQuitting) return;
+    e.preventDefault();
+    const choice = dialog.showMessageBoxSync(mainWin, {
+      type: 'question',
+      title: 'إغلاق OneSoft ERP',
+      message: 'هل تريد إغلاق برنامج OneSoft ERP؟',
+      detail: 'يمكنك أيضاً تصغير البرنامج إلى شريط النظام ليبقى يعمل في الخلفية.',
+      buttons: ['إغلاق البرنامج', 'تصغير إلى شريط النظام', 'إلغاء'],
+      defaultId: 0,
+      cancelId: 2,
+      noLink: true,
+    });
+    if (choice === 0) {
+      isQuitting = true;
+      app.quit();
+    } else if (choice === 1) {
       mainWin.hide();
     }
+    // choice === 2 → إلغاء: لا شيء
   });
 
   mainWin.on('closed', () => { mainWin = null; });
@@ -434,12 +469,20 @@ function updateTrayMenu() {
 }
 
 // ── IPC Handlers ──────────────────────────────────────────────────────────────
+// Launch ID — يُقرأ بشكل متزامن من preload عبر sendSync
+ipcMain.on('get-launch-id-sync', (event) => { event.returnValue = LAUNCH_ID; });
+
 ipcMain.handle('get-config',       ()  => cfg);
 ipcMain.handle('open-browser',     ()  => shell.openExternal(SERVER_URL));
 ipcMain.handle('get-server-status',()  => ({ running: !!serverProc, ready: serverReady, url: SERVER_URL }));
 ipcMain.handle('restart-server',   ()  => {
   stopServer();
   setTimeout(() => { startServer(); waitForServer(20000).catch(() => {}); }, 1000);
+  return { ok: true };
+});
+ipcMain.handle('pos:setFullScreen', (_e, v) => {
+  const win = BrowserWindow.getFocusedWindow();
+  if (win) win.setFullScreen(Boolean(v));
   return { ok: true };
 });
 ipcMain.handle('get-logs', (_e, n = 100) => {

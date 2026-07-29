@@ -50,6 +50,7 @@ export function HsCustodyPage() {
           labelEn: "Custody Tracking",
           descAr: "سجل تفصيلي لعمليات العهدة وأرصدتها.",
           descEn: "Detailed log of custody transactions and balances.",
+          route: "/hs/custody-tracking",
         },
       ]}
     />
@@ -91,10 +92,10 @@ export function HsGovLinksPage() {
     <HsPageShell
       perm="hs_gov_links"
       icon={Landmark}
-      titleAr="الروابط والخدمات الحكومية"
-      titleEn="Government Links & Services"
-      descAr="وصول سريع للمنصات والخدمات الحكومية المتعلقة بالأعمال."
-      descEn="Quick access to business-related government platforms and services."
+      titleAr="الروابط والخدمات"
+      titleEn="Links & Services"
+      descAr="وصول سريع للمنصات والخدمات المختلفة المتعلقة بالأعمال."
+      descEn="Quick access to various business-related platforms and services."
       color="text-sky-600 dark:text-sky-400"
       bg="bg-sky-500/10"
     />

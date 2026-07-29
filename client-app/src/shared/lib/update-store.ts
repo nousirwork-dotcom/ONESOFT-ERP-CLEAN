@@ -1,15 +1,9 @@
 /**
- * update-store.ts — حالة التحديث المشتركة بين UpdateDialog و UpdatesPage
- *
- * لماذا module-level وليس Zustand/Context؟
- * لأن UpdateDialog مُركَّب دائماً في App.tsx ويستقبل IPC events.
- * UpdatesPage مُركَّب فقط عند فتح الإعدادات.
- * كلاهما يحتاجان لرؤية نفس الحالة بدون re-subscribe لـ IPC.
+ * update-store.ts — حالة التحديث المشتركة بين UpdateDialog، UpdateProgressBadge و UpdatesPage
  */
 
 import { useEffect, useState } from "react";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 export interface PendingManifest {
   latestVersion:       string;
   minSupportedVersion: string;
@@ -24,45 +18,53 @@ export interface PendingManifest {
 }
 
 export interface UpdateState {
-  /** التحديث المتاح — يبقى بعد "لاحقاً" حتى يتم التحديث */
-  pendingManifest:   PendingManifest | null;
-  updateType:        "optional" | "mandatory" | null;
-  currentVersion:    string;
-  /** true = تحديث إجباري → يُمنع الدخول لأي مسار */
-  mandatoryBlocked:  boolean;
-  lastChecked:       Date | null;
-  lastError:         string | null;
+  pendingManifest:        PendingManifest | null;
+  updateType:             "optional" | "mandatory" | null;
+  currentVersion:         string;
+  mandatoryBlocked:       boolean;
+  lastChecked:            Date | null;
+  lastError:              string | null;
+  /** التحميل جارٍ في الخلفية */
+  backgroundDownloading:  boolean;
+  /** نسبة التحميل 0-100 */
+  downloadPercent:        number;
+  /** التحميل اكتمل وجاهز للتثبيت */
+  downloadReady:          boolean;
+  /** عرض نافذة التحديث الكاملة */
+  dialogVisible:          boolean;
 }
 
-// ─── Module-level state ───────────────────────────────────────────────────────
 let _state: UpdateState = {
-  pendingManifest:  null,
-  updateType:       null,
-  currentVersion:   "",
-  mandatoryBlocked: false,
-  lastChecked:      null,
-  lastError:        null,
+  pendingManifest:       null,
+  updateType:            null,
+  currentVersion:        "",
+  mandatoryBlocked:      false,
+  lastChecked:           null,
+  lastError:             null,
+  backgroundDownloading: false,
+  downloadPercent:       0,
+  downloadReady:         false,
+  dialogVisible:         false,
 };
 
 const _listeners = new Set<() => void>();
+function _notify(): void { _listeners.forEach((fn) => fn()); }
 
-function _notify(): void {
-  _listeners.forEach((fn) => fn());
-}
-
-// ─── Store API ────────────────────────────────────────────────────────────────
 export const updateStore = {
   getState: (): Readonly<UpdateState> => _state,
 
   setOptional(manifest: PendingManifest, currentVersion: string): void {
     _state = {
       ..._state,
-      pendingManifest:  manifest,
-      updateType:       "optional",
+      pendingManifest:       manifest,
+      updateType:            "optional",
       currentVersion,
-      mandatoryBlocked: false,
-      lastChecked:      new Date(),
-      lastError:        null,
+      mandatoryBlocked:      false,
+      lastChecked:           new Date(),
+      lastError:             null,
+      dialogVisible:         true,
+      backgroundDownloading: false,
+      downloadReady:         false,
     };
     _notify();
   },
@@ -70,12 +72,15 @@ export const updateStore = {
   setMandatory(manifest: PendingManifest, currentVersion: string): void {
     _state = {
       ..._state,
-      pendingManifest:  manifest,
-      updateType:       "mandatory",
+      pendingManifest:       manifest,
+      updateType:            "mandatory",
       currentVersion,
-      mandatoryBlocked: true,
-      lastChecked:      new Date(),
-      lastError:        null,
+      mandatoryBlocked:      true,
+      lastChecked:           new Date(),
+      lastError:             null,
+      dialogVisible:         true,
+      backgroundDownloading: false,
+      downloadReady:         false,
     };
     _notify();
   },
@@ -83,27 +88,74 @@ export const updateStore = {
   setNoUpdate(currentVersion: string): void {
     _state = {
       ..._state,
-      pendingManifest:  null,
-      updateType:       null,
+      pendingManifest:       null,
+      updateType:            null,
       currentVersion,
-      mandatoryBlocked: false,
-      lastChecked:      new Date(),
-      lastError:        null,
+      mandatoryBlocked:      false,
+      lastChecked:           new Date(),
+      lastError:             null,
+      backgroundDownloading: false,
+      downloadReady:         false,
+      dialogVisible:         false,
     };
     _notify();
   },
 
   setError(error: string): void {
-    _state = { ..._state, lastError: error, lastChecked: new Date() };
+    _state = {
+      ..._state,
+      lastError:             error,
+      lastChecked:           new Date(),
+      backgroundDownloading: false,
+    };
+    _notify();
+  },
+
+  setDownloading(percent: number): void {
+    _state = { ..._state, backgroundDownloading: true, downloadPercent: percent };
+    _notify();
+  },
+
+  setDownloadDone(): void {
+    _state = {
+      ..._state,
+      backgroundDownloading: false,
+      downloadPercent:       100,
+      downloadReady:         true,
+      dialogVisible:         true,
+    };
+    _notify();
+  },
+
+  setDownloadCancelled(): void {
+    _state = {
+      ..._state,
+      backgroundDownloading: false,
+      downloadPercent:       0,
+      downloadReady:         false,
+    };
+    _notify();
+  },
+
+  showDialog(): void {
+    _state = { ..._state, dialogVisible: true };
+    _notify();
+  },
+
+  hideDialog(): void {
+    _state = { ..._state, dialogVisible: false };
     _notify();
   },
 
   clearPending(): void {
     _state = {
       ..._state,
-      pendingManifest:  null,
-      updateType:       null,
-      mandatoryBlocked: false,
+      pendingManifest:       null,
+      updateType:            null,
+      mandatoryBlocked:      false,
+      backgroundDownloading: false,
+      downloadReady:         false,
+      dialogVisible:         false,
     };
     _notify();
   },
@@ -114,18 +166,15 @@ export const updateStore = {
   },
 };
 
-// ─── React hooks ──────────────────────────────────────────────────────────────
-/** Hook عام — يُعيد حالة التحديث الكاملة مع إعادة الرسم عند التغيير */
 export function useUpdateState(): UpdateState {
   const [s, setS] = useState<UpdateState>(_state);
   useEffect(() => {
-    setS(_state); // sync on mount (قد تغيّرت قبل mount هذا المكوّن)
+    setS(_state);
     return updateStore.subscribe(() => setS({ ..._state }));
   }, []);
   return s;
 }
 
-/** Hook مُبسَّط — هل التحديث الإجباري مفعَّل؟ (يُستخدم في App.tsx) */
 export function useIsMandatoryBlocked(): boolean {
   const [blocked, setBlocked] = useState(_state.mandatoryBlocked);
   useEffect(() => {

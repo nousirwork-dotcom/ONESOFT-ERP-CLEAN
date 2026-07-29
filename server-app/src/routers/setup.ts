@@ -26,6 +26,26 @@ function getAppVersion(): string {
   } catch { return '1.0.0'; }
 }
 
+// ── Build Info — يُقرأ من dist/build-info.json الذي يُكتب وقت البناء ─────────
+// لا يتغيّر بإعادة تشغيل الخادم — يعكس آخر `node build.mjs` فعلياً
+// في بيئة التطوير (tsx watch) يُعرض 'dev' إذا لم يُنفَّذ build بعد
+function readBuildInfo(): { buildDate: string; buildCommit: string } {
+  try {
+    const infoPath = path.join(__dirname, '..', 'build-info.json');
+    const raw = fs.readFileSync(infoPath, 'utf-8');
+    const info = JSON.parse(raw);
+    return {
+      buildDate:   info.buildDate   ?? 'dev',
+      buildCommit: info.buildCommit ?? 'dev',
+    };
+  } catch {
+    // dev mode — build.mjs لم يُشغَّل بعد
+    return { buildDate: new Date().toISOString().slice(0, 10) + ' (dev)', buildCommit: 'dev' };
+  }
+}
+
+const { buildDate: BUILD_DATE, buildCommit: BUILD_NUMBER } = readBuildInfo();
+
 // ── إصدار PostgreSQL ──────────────────────────────────────────────────────────
 async function getPgVersion(): Promise<string> {
   try {
@@ -96,8 +116,8 @@ export const setupRouter = router({
       app: {
         name:        'OneSoft ERP',
         version:     getAppVersion(),
-        buildDate:   '2026-06-29',
-        buildNumber: '888aa8f',
+        buildDate:   BUILD_DATE,
+        buildNumber: BUILD_NUMBER,
         schemaVersion,
         environment: ENV.nodeEnv,
         isElectron:  ENV.isElectron,

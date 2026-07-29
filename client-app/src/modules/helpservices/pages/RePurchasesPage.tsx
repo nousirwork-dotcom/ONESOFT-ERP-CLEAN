@@ -226,7 +226,7 @@ export default function RePurchasesPage() {
   });
   const executeImportMut = trpc.rePurchases.executeImport.useMutation({
     onSuccess: (data) => {
-      toast.success(ar ? `تم استيراد ${data.imported} فاتورة` : `Imported ${data.imported} invoices`);
+      toast.success(ar ? `تم استيراد ${data.importedCount} فاتورة` : `Imported ${data.importedCount} invoices`);
       setShowImportModal(false);
       setImportPreview([]); setImportSummary(null);
       listInvQ.refetch(); refreshDupMap();

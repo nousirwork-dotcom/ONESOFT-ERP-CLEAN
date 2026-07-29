@@ -24,6 +24,11 @@ interface Props {
   menuTitle?:   string;
   className?:   string;
   style?:       React.CSSProperties;
+  focusedEntityType?: string;
+  focusedEntityId?: number | string | null;
+  focusedFieldName?: string;
+  focusedSourceScreen?: string;
+  focusedEntityTitle?: string;
 }
 
 /* ── ألوان القائمة ── */
@@ -38,16 +43,25 @@ export default function ContextSelectInput({
   disabled, title, menuTitle,
   className = "classic-input",
   style,
+  focusedEntityType,
+  focusedEntityId,
+  focusedFieldName,
+  focusedSourceScreen,
+  focusedEntityTitle,
 }: Props) {
 
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuPos,     setMenuPos]     = useState({ x: 0, y: 0 });
   const [hovered,     setHovered]     = useState<string | null>(null);
+  const [focused,     setFocused]     = useState(false);
+  const [editMode,    setEditMode]    = useState(false);
+  const [editText,    setEditText]    = useState("");
 
   const menuRef  = useRef<HTMLDivElement>(null);
   const wrapRef  = useRef<HTMLDivElement>(null);
 
   const selectedLabel = options.find(o => o.value === value)?.label ?? "";
+  const inputRef = useRef<HTMLInputElement>(null);
 
   /* ── Close on outside click / Escape ── */
   useEffect(() => {
@@ -82,11 +96,8 @@ export default function ContextSelectInput({
 
   function handleClick(e: MouseEvent<HTMLDivElement>) {
     if (disabled) return;
-    if (menuVisible) { setMenuVisible(false); return; }
-    /* فتح تحت الحقل مباشرة */
-    const rect = wrapRef.current?.getBoundingClientRect();
-    if (rect) openMenu(rect.right, rect.bottom + 1);
-    else       openMenu(e.clientX, e.clientY);
+    if (editMode) return;
+    openMenu(e.clientX, e.clientY);
   }
 
   function handleContextMenu(e: MouseEvent<HTMLDivElement>) {
@@ -98,6 +109,29 @@ export default function ContextSelectInput({
   function pick(opt: ContextSelectOption) {
     onChange(opt.value);
     setMenuVisible(false);
+    setEditMode(false);
+  }
+
+  function startEdit() {
+    if (disabled) return;
+    setEditText(selectedLabel);
+    setEditMode(true);
+    setMenuVisible(false);
+    window.setTimeout(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }, 0);
+  }
+
+  function commitEdit() {
+    const text = editText.trim();
+    if (!text) {
+      onChange("");
+    } else {
+      const match = options.find(o => o.label.trim() === text);
+      if (match) onChange(match.value);
+    }
+    setEditMode(false);
   }
 
   /* ── تظليل العنصر المحدد ── */
@@ -113,44 +147,71 @@ export default function ContextSelectInput({
       <div
         ref={wrapRef}
         className="relative flex-1 min-w-0"
-        style={{ cursor: disabled ? "not-allowed" : "default" }}
+        data-enter-nav="true"
+        data-focused-entity-type={focusedEntityType}
+        data-focused-entity-id={focusedEntityId ?? undefined}
+        data-focused-field={focusedFieldName}
+        data-focused-source={focusedSourceScreen}
+        data-focused-entity-title={focusedEntityTitle}
+        style={{
+          cursor: disabled ? "not-allowed" : "default",
+          outline: focused && !menuVisible ? "2px solid #818cf8" : "none",
+          outlineOffset: -1,
+          borderRadius: 2,
+        }}
+        tabIndex={disabled ? -1 : 0}
         onClick={handleClick}
+        onDoubleClick={startEdit}
         onContextMenu={handleContextMenu}
+        aria-expanded={menuVisible ? "true" : "false"}
+        onFocus={() => setFocused(true)}
+        onBlur={() => { setFocused(false); }}
+        onKeyDown={(e) => {
+          if (disabled) return;
+          // Space opens the menu (standard select-widget keyboard UX)
+          if (e.key === " " || e.code === "Space") {
+            e.preventDefault();
+            if (!menuVisible) {
+              const rect = wrapRef.current?.getBoundingClientRect();
+              if (rect) openMenu(rect.right, rect.bottom);
+            }
+          }
+          // Enter when menu is open: close/dismiss (option selection is via mouse/click)
+          if (e.key === "Enter" && menuVisible) {
+            e.preventDefault();
+            setMenuVisible(false);
+          }
+          // Enter when menu is closed: do nothing — global hook handles navigation
+          if (e.key === "Escape" && menuVisible) {
+            e.preventDefault();
+            setMenuVisible(false);
+          }
+        }}
       >
         <input
+          ref={inputRef}
           type="text"
-          readOnly
-          value={selectedLabel}
+          readOnly={!editMode}
+          value={editMode ? editText : selectedLabel}
+          onChange={e => setEditText(e.target.value)}
+          onBlur={editMode ? commitEdit : undefined}
+          onKeyDown={e => {
+            if (!editMode) return;
+            if (e.key === "Enter") commitEdit();
+            if (e.key === "Escape") setEditMode(false);
+          }}
           disabled={disabled}
           placeholder={disabled ? "" : placeholder}
           title={title ?? (disabled ? "" : "اضغط للاختيار")}
           className={className}
           style={{
             cursor:     disabled ? "not-allowed" : "default",
-            userSelect: "none",
-            pointerEvents: "none",   /* الضغط يصل للـ wrapper */
+             userSelect: editMode ? "text" : "none",
+             pointerEvents: editMode ? "auto" : "none",
             ...style,
           }}
           tabIndex={-1}
         />
-        {/* chevron */}
-        {!disabled && (
-          <div
-            className="absolute inset-y-0 left-1.5 flex items-center pointer-events-none"
-            style={{ zIndex: 1 }}
-          >
-            <svg
-              width="9" height="9" viewBox="0 0 10 10" fill="none"
-              style={{ transform: menuVisible ? "rotate(180deg)" : "", transition: "transform 0.15s" }}
-            >
-              <path
-                d="M2 3.5L5 6.5L8 3.5"
-                stroke={selectedLabel ? "#444" : "#9CA3AF"}
-                strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"
-              />
-            </svg>
-          </div>
-        )}
       </div>
 
       {/* ── Windows-style Context Menu ── */}

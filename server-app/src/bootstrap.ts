@@ -14,6 +14,7 @@ import { organizations, users } from './schema.js';
 import { hashPassword } from './auth.js';
 import { logger } from './logger.js';
 import { sql } from 'drizzle-orm';
+import { seedFoundationAccounts } from './seed-foundation.js';
 
 // يُضبط true بعد انتهاء ensureDefaultAdmin (نجاحاً أو فشلاً).
 // setup.isFirstRun يستخدمه لمنع ظهور معالج «إنشاء أول مدير» أثناء نافذة الإقلاع
@@ -69,6 +70,17 @@ export async function ensureDefaultAdmin(): Promise<void> {
       isActive:       true,
     });
     logger.info('bootstrap', 'default ADMIN user created (empty password, password_status=not_set)');
+
+    // ── بذر شجرة الحسابات الأساسية للمؤسسة الجديدة ──────────────────────────
+    await seedFoundationAccounts(org.id);
+
+    // ── تطبيق قالب التأسيس (إن وُجد) ──────────────────────────────────────
+    try {
+      const { seedFromFoundationTemplate } = await import('./foundation-update.js');
+      await seedFromFoundationTemplate(org.id);
+    } catch (ftErr) {
+      logger.warn('bootstrap', `seedFromFoundationTemplate: ${(ftErr as Error).message}`);
+    }
   } catch (err) {
     // لا نوقف الخادم — نسجّل الخطأ فقط؛ شاشة الدخول ستُظهر خطأً واضحاً بدل حلقة
     logger.error('bootstrap', `ensureDefaultAdmin failed: ${(err as Error).message}`);

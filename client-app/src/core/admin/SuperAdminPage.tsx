@@ -1,10 +1,12 @@
 import { fmtDate } from "@/shared/utils/dateUtils";
 import { useState } from 'react';
+import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import { trpc } from '@/shared/lib/trpc';
 import { toast } from 'sonner';
+import FoundationAdminTab from './FoundationAdminTab';
 
 export default function SuperAdminPage() {
-  
+  const [activeTab, setActiveTab] = useState<'orgs' | 'foundation'>('orgs');
   const [showAddOrg, setShowAddOrg] = useState(false);
   const [showAddUser, setShowAddUser] = useState<number | null>(null);
   const [newOrg, setNewOrg] = useState({
@@ -68,6 +70,26 @@ export default function SuperAdminPage() {
       </div>
 
       <div className="p-6 max-w-6xl mx-auto">
+
+        {/* تبويبات */}
+        <div className="flex gap-1 mb-6 bg-slate-800 border border-slate-700 rounded-xl p-1 w-fit">
+          <button
+            onClick={() => setActiveTab('orgs')}
+            className={`px-5 py-2 rounded-lg text-sm font-medium transition ${activeTab === 'orgs' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
+          >
+            🏢 المؤسسات
+          </button>
+          <button
+            onClick={() => setActiveTab('foundation')}
+            className={`px-5 py-2 rounded-lg text-sm font-medium transition ${activeTab === 'foundation' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'}`}
+          >
+            📦 قالب التأسيس
+          </button>
+        </div>
+
+        {activeTab === 'foundation' && <FoundationAdminTab />}
+
+        {activeTab === 'orgs' && (<>
         {/* إحصائيات */}
         <div className="grid grid-cols-3 gap-4 mb-6">
           {[
@@ -158,6 +180,7 @@ export default function SuperAdminPage() {
             </div>
           )}
         </div>
+      </>)}
       </div>
 
       {/* Modal إضافة مؤسسة */}
@@ -197,8 +220,8 @@ export default function SuperAdminPage() {
                 </div>
                 <div>
                   <label className="block text-sm text-slate-300 mb-1">تاريخ انتهاء الاشتراك</label>
-                  <input type="date" value={newOrg.subscriptionExpiry} onChange={e => setNewOrg(f => ({ ...f, subscriptionExpiry: e.target.value }))}
-                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+                  <DateSegmentInput value={newOrg.subscriptionExpiry} onChange={v => setNewOrg(f => ({ ...f, subscriptionExpiry: v }))} standalone
+                    style={{ width: "100%", borderColor: "#475569", borderRadius: 8, padding: "7px 12px", fontSize: 14, background: "#334155", color: "#f8fafc" }} />
                 </div>
                 <div>
                   <label className="block text-sm text-slate-300 mb-1">عدد المستخدمين المسموح</label>

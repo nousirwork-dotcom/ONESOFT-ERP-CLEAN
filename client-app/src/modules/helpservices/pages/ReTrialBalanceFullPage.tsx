@@ -3,6 +3,7 @@
  * Simplified Trial Balance for Real Estate Developer
  */
 import { useState, useEffect, useMemo } from "react";
+import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import { trpc } from "@/shared/lib/trpc";
 import { toast } from "sonner";
 import {
@@ -249,8 +250,8 @@ export default function ReTrialBalanceFullPage() {
                 <label className="text-xs font-medium text-gray-600">{ar ? "تسمية الفترة" : "Period Label"}</label>
                 <input value={form.periodLabel} onChange={(e) => setForm({ ...form, periodLabel: e.target.value })} className="w-full text-xs border rounded px-2 py-1" style={{ borderColor: C.border }} />
                 <div className="grid grid-cols-2 gap-2">
-                  <div><label className="text-xs font-medium text-gray-600">{ar ? "من" : "From"}</label><input type="date" value={form.fromDate} onChange={(e) => setForm({ ...form, fromDate: e.target.value })} className="w-full text-xs border rounded px-2 py-1" style={{ borderColor: C.border }} /></div>
-                  <div><label className="text-xs font-medium text-gray-600">{ar ? "إلى" : "To"}</label><input type="date" value={form.toDate} onChange={(e) => setForm({ ...form, toDate: e.target.value })} className="w-full text-xs border rounded px-2 py-1" style={{ borderColor: C.border }} /></div>
+                  <div><label className="text-xs font-medium text-gray-600">{ar ? "من" : "From"}</label><DateSegmentInput value={form.fromDate} onChange={v => setForm({ ...form, fromDate: v })} standalone className="w-full text-xs" style={{ borderColor: C.border, borderRadius: 4, padding: "4px 8px" }} /></div>
+                  <div><label className="text-xs font-medium text-gray-600">{ar ? "إلى" : "To"}</label><DateSegmentInput value={form.toDate} onChange={v => setForm({ ...form, toDate: v })} standalone className="w-full text-xs" style={{ borderColor: C.border, borderRadius: 4, padding: "4px 8px" }} /></div>
                 </div>
                 <label className="text-xs font-medium text-gray-600">{ar ? "المدى" : "Scope"}</label>
                 <select value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value })} className="w-full text-xs border rounded px-2 py-1" style={{ borderColor: C.border }}>
@@ -352,6 +353,7 @@ export default function ReTrialBalanceFullPage() {
           <div className="flex items-center gap-1 flex-wrap">
             {unsaved && <span className="text-xs text-amber-600 font-medium px-2 py-0.5 rounded bg-amber-50 border border-amber-200">{ar ? "تغييرات غير محفوظة" : "Unsaved changes"}</span>}
             <Button size="sm" variant="outline" onClick={handleSaveEntries} disabled={!unsaved || saveEntries.isLoading}><Save className="w-3.5 h-3.5 mr-1" />{ar ? "حفظ" : "Save"}</Button>
+            <Button size="sm" variant="outline" className="text-indigo-700 hover:bg-indigo-50 border-indigo-200" onClick={() => setView("detail")}><Eye className="w-3.5 h-3.5 mr-1" />{ar ? "مطالعة" : "Browse"}</Button>
             <Button size="sm" variant="outline" onClick={() => setView("taxReturn")}><Receipt className="w-3.5 h-3.5 mr-1" />{ar ? "الضريبة" : "Tax"}</Button>
             <Button size="sm" variant="outline" onClick={() => setView("review")}><ClipboardCheck className="w-3.5 h-3.5 mr-1" />{ar ? "المراجعة" : "Review"}</Button>
             <Button size="sm" variant="outline" onClick={() => setView("accountTree")}><FolderTree className="w-3.5 h-3.5 mr-1" />{ar ? "الدليل" : "Accounts"}</Button>
