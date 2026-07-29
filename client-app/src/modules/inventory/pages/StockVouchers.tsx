@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { fmtDate } from "@/shared/utils/dateUtils";
 import { trpc } from "@/shared/lib/trpc";
 import { Button } from "@/core/ui/button";
@@ -13,6 +13,7 @@ import { Textarea } from "@/core/ui/textarea";
 import { toast } from "sonner";
 import { Plus, ArrowDownCircle, ArrowUpCircle, Trash2, Search, Eye } from "lucide-react";
 import SupplyReceiptDialog from "./SupplyReceiptDialog";
+import { DesktopWorkWindow } from "@/components/work-window";
 
 type VoucherItem = { productId: number; productName: string; quantity: string; unitCost: string; totalCost: string; };
 
@@ -42,6 +43,10 @@ export default function StockVouchers({ initialTab = "receipt" }: { initialTab?:
     warehouseId: "", branchId: "", supplierId: "", reason: "", notes: "",
   });
   const [items, setItems] = useState<VoucherItem[]>([]);
+  const receiptCloseRequestRef = useRef<() => void>(() => {
+    setShowDialog(false);
+    resetForm();
+  });
 
   const resetForm = () => {
     setForm({ warehouseId: "", branchId: "", supplierId: "", reason: "", notes: "" });
@@ -185,15 +190,25 @@ export default function StockVouchers({ initialTab = "receipt" }: { initialTab?:
       </Tabs>
 
       {/* Dialog إنشاء سند */}
-      <SupplyReceiptDialog
-        open={showDialog && activeTab === "receipt"}
-        onClose={() => { setShowDialog(false); resetForm(); }}
-        branches={branches as any}
-        warehouses={warehouses as any}
-        suppliers={suppliers as any}
-        products={products as any}
-        onSaved={() => { setShowDialog(false); resetForm(); }}
-      />
+      {showDialog && activeTab === "receipt" && (
+        <DesktopWorkWindow
+          title="سند توريد مخزني"
+          preset="wide"
+          placement="top-right"
+          onClose={() => receiptCloseRequestRef.current()}
+        >
+          <SupplyReceiptDialog
+            open
+            onClose={() => { setShowDialog(false); resetForm(); }}
+            branches={branches as any}
+            warehouses={warehouses as any}
+            suppliers={suppliers as any}
+            products={products as any}
+            onSaved={() => { setShowDialog(false); resetForm(); }}
+            registerClose={(requestClose) => { receiptCloseRequestRef.current = requestClose; }}
+          />
+        </DesktopWorkWindow>
+      )}
       <Dialog open={showDialog && activeTab === "issue"} onOpenChange={(o) => { setShowDialog(o); if (!o) resetForm(); }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" dir="rtl">
           <DialogHeader>

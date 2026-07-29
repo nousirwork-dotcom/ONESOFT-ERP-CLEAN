@@ -1,11 +1,9 @@
-import { useCallback, useMemo, useRef, useState } from "react";
-import { ArrowDownCircle, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/shared/lib/trpc";
-import { UnifiedBottomToolbar } from "@/components/unified-toolbar/UnifiedBottomToolbar";
 import type { ToolbarActionMap } from "@/components/unified-toolbar/toolbar.types";
+import { useToolbarActions } from "@/components/unified-toolbar/ToolbarActionsContext";
 import { useFocusedEntityRegistrySafe } from "@/components/unified-toolbar/FocusedEntityRegistry";
-import { useModalAttention } from "@/modules/settings/pages/useModalAttention";
 import { useUnsavedChangesGuard } from "@/core/hooks/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import DateSegmentInput from "@/shared/components/DateSegmentInput";
@@ -23,13 +21,14 @@ type Line = {
 type Props = {
   open: boolean; onClose: () => void; branches: Branch[]; warehouses: Warehouse[];
   suppliers: Supplier[]; products: Product[]; onSaved: () => void;
+  registerClose?: (closeRequest: () => void) => void;
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
 const emptyLine = (): Line => ({ productCode: "", productName: "", unit: "", quantity: "1", unitCost: "", batchNumber: "", expiryDate: "" });
 const editableColumns = ["code", "unit", "quantity", "unitCost", "batchNumber", "expiryDate"] as const;
 
-export default function SupplyReceiptDialog({ open, onClose, branches, warehouses, suppliers, products, onSaved }: Props) {
+export default function SupplyReceiptDialog({ open, onClose, branches, warehouses, suppliers, products, onSaved, registerClose }: Props) {
   const [branchId, setBranchId] = useState("");
   const [supplierId, setSupplierId] = useState("");
   const [receiverUserId, setReceiverUserId] = useState("");
@@ -45,11 +44,8 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
   const [activeLookup, setActiveLookup] = useState<number | null>(null);
   const [lookupIndex, setLookupIndex] = useState(0);
   const [isDirty, setIsDirty] = useState(false);
-  const [shaking, setShaking] = useState(false);
   const [reserving, setReserving] = useState(false);
   const cellRefs = useRef<Map<string, HTMLInputElement>>(new Map());
-  const modalRef = useRef<HTMLDivElement>(null);
-  const { contentRef: attentionRef, attractAttention } = useModalAttention();
   const { previewFocusedEntity } = useFocusedEntityRegistrySafe();
   const { confirmOpen, requestClose, confirmSave, confirmDiscard, confirmCancel } = useUnsavedChangesGuard({ isDirty });
   const utils = trpc.useUtils();
@@ -71,6 +67,9 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
     setNotes(""); setDocumentNumber(""); setJournalId(null); setLines([emptyLine()]); setActiveLookup(null); setLookupIndex(0); setIsDirty(false);
   };
   const close = () => requestClose(onClose);
+  useEffect(() => {
+    registerClose?.(close);
+  }, [registerClose, close]);
   const chooseBranch = async (value: string) => {
     setBranchId(value); setDocumentNumber(""); setJournalId(null); setIsDirty(true);
     const selected = warehouses.find(w => w.branchId === Number(value));
@@ -185,11 +184,6 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
       })),
     });
   };
-  const backdrop = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (event.target !== event.currentTarget) return;
-    setShaking(false); requestAnimationFrame(() => setShaking(true)); window.setTimeout(() => setShaking(false), 350);
-    attractAttention(); modalRef.current?.focus();
-  };
   const actions = useMemo<ToolbarActionMap>(() => ({
     save: { supported: true, stateEnabled: !create.isPending && !reserving, loading: create.isPending, onClick: async () => { try { await save(); } catch (e) { toast.error(e instanceof Error ? e.message : "تعذر حفظ السند"); } } },
     draft: { supported: false }, new: { supported: true, stateEnabled: !create.isPending, onClick: () => { if (isDirty) { toast.info("احفظ السند أو أغلق النافذة أولًا"); return; } reset(); } },
@@ -198,12 +192,11 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
     approve: { supported: false }, cancel: { supported: false }, preview: { supported: true, onClick: previewFocusedEntity }, send: { supported: false },
     print: { supported: false }, exit: { supported: true, onClick: close },
   }), [close, create.isPending, isDirty, previewFocusedEntity, reserving, save]);
+  useToolbarActions(actions, undefined, create.isPending ? "save" : undefined);
 
   if (!open) return null;
   return (
-    <div className="supply-receipt-backdrop" onMouseDown={backdrop}>
-      <div ref={node => { modalRef.current = node; attentionRef.current = node; }} tabIndex={-1} className={`supply-receipt-window${shaking ? " supply-receipt-shake" : ""}`} dir="rtl" onMouseDown={e => e.stopPropagation()}>
-        <div className="supply-receipt-titlebar"><span><ArrowDownCircle size={15} /> سند توريد مخزني</span><button onClick={close} aria-label="إغلاق"><X size={14} /></button></div>
+    <div className="supply-receipt-window" dir="rtl">
         <div className="supply-receipt-subtitle">سند جديد <span>{isDirty ? "تعديلات غير محفوظة" : "جاهز"}</span></div>
         <div className="supply-receipt-scroll">
           <div className="supply-receipt-main-layout">
@@ -265,8 +258,6 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
             </div>
           </div>
         </div>
-        <UnifiedBottomToolbar actions={actions} activeAction={create.isPending ? "save" : undefined} />
-      </div>
       <UnsavedChangesDialog open={confirmOpen} onSave={() => confirmSave(save)} onDiscard={confirmDiscard} onCancel={confirmCancel} isSaving={create.isPending} />
     </div>
   );
