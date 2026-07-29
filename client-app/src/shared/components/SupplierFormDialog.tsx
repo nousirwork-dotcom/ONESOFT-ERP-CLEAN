@@ -7,6 +7,7 @@ import type { ToolbarActionMap } from "@/components/unified-toolbar/toolbar.type
 import { useModalAttention } from "@/modules/settings/pages/useModalAttention";
 import { useUnsavedChangesGuard } from "@/core/hooks/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
+import { PartyMainTab } from "@/shared/components/PartyMainTab";
 
 type SupplierRecord = {
   id?: number;
@@ -17,6 +18,7 @@ type SupplierRecord = {
   email?: string | null;
   address?: string | null;
   taxNumber?: string | null;
+  registrationNumber?: string | null;
   recordPolicy?: "strict" | "flexible" | "foundation";
   foundationKey?: string | null;
   includeInFoundation?: boolean;
@@ -91,6 +93,7 @@ export default function SupplierFormDialog({ open, editData, onClose, onSaved }:
       email: form.email || undefined,
       address: form.address || undefined,
       taxNumber: form.taxNumber || undefined,
+      registrationNumber: form.registrationNumber || undefined,
       recordPolicy: form.recordPolicy,
       foundationKey: form.foundationKey || undefined,
       includeInFoundation: form.includeInFoundation,
@@ -164,24 +167,24 @@ export default function SupplierFormDialog({ open, editData, onClose, onSaved }:
         <div style={{ background: "#e5e4e1", borderBottom: "1px solid #9da3a8", display: "flex", flexShrink: 0, paddingRight: 7 }}>
           {["نافذة رئيسية", "عنوان", "التسعير والضوابط", "قنوات الإرسال", "أرصدة", "مشتريات", "مردودات مشتريات"].map(label => <button key={label} type="button" className="customer-tab-button" style={{ padding: "6px 12px 5px", fontSize: 10, fontWeight: 600 }}>{label}</button>)}
         </div>
-        <div style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto", padding: "8px 14px" }}>
-          <div className="customer-section-title">نوع المورد</div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-            {(["individual", "organization"] as const).map(type => <button key={type} type="button" onClick={() => setField("supplierType", type)} style={{ flex: 1, height: 32, background: form.supplierType === type ? "#168447" : "#eee", color: form.supplierType === type ? "white" : "#555", border: "1px solid #c9c4bc", borderRadius: 3, fontSize: 12, fontWeight: 700 }}>{type === "individual" ? "فرد" : "مؤسسة"}</button>)}
-          </div>
-          <div className="customer-section-title">المعلومات الأساسية</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            {[
-              ["code", "كود المورد", form.code ?? "", true],
-              ["name", "اسم المورد", form.name ?? "", false],
-              ["phone", "رقم جوال المورد", form.phone ?? "", false],
-              ["email", "البريد الإلكتروني", form.email ?? "", false],
-              ["taxNumber", "الرقم الضريبي للمورد", form.taxNumber ?? "", false],
-              ["address", "عنوان المورد", form.address ?? "", false],
-            ].map(([key, label, value, readOnly]) => <label key={key as string} className="customer-field-label"><span>{label as string}</span><input ref={key === "name" ? nameRef : undefined} className="customer-field-input" value={value as string} readOnly={readOnly as boolean} onChange={event => setField(key as keyof SupplierRecord, event.target.value)} /></label>)}
-          </div>
-          <div className="customer-section-title" style={{ marginTop: 10 }}>التسعير والضوابط</div>
-          <p className="customer-section-note">بيانات المشتريات والأرصدة الخاصة بالمورد تظهر من فواتير المشتريات.</p>
+        <div style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto", padding: "10px 12px" }}>
+          <PartyMainTab
+            entityType="supplier"
+            form={{
+              code: form.code ?? "",
+              name: form.name ?? "",
+              partyType: form.supplierType,
+              phone: form.phone ?? "",
+              email: form.email ?? "",
+              taxNumber: form.taxNumber ?? "",
+              registrationNumber: form.registrationNumber ?? "",
+            }}
+            onChange={(key, value) => {
+              const mapped = key === "partyType" ? "supplierType" : key;
+              setField(mapped as keyof SupplierRecord, value);
+            }}
+            nameRef={nameRef}
+          />
         </div>
         <UnifiedBottomToolbar actions={actions} />
       </div>

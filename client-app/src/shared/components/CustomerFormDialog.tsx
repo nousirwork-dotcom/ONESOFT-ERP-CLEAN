@@ -14,6 +14,7 @@ import type { RecordPolicy } from "@/shared/components/FoundationPolicyPanel";
 import { UnifiedBottomToolbar } from "@/components/unified-toolbar/UnifiedBottomToolbar";
 import type { ToolbarActionMap } from "@/components/unified-toolbar/toolbar.types";
 import { useModalAttention } from "@/modules/settings/pages/useModalAttention";
+import { PartyMainTab } from "@/shared/components/PartyMainTab";
 
 /* ═══════════════════════════ Types ═══════════════════════════ */
 interface CustomerData {
@@ -448,58 +449,23 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
 
           {/* ══ نافذة رئيسية ══ */}
           {tab === "main" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-
-              <ESection title="نوع العميل">
-                <div style={{ display: "flex", gap: 8 }}>
-                  <TypeBtn active={!isOrg} label="🧾 فرد (فاتورة مبسطة)" color="#15803D"
-                    onClick={() => { set("customerType", "individual"); set("taxNumber", ""); }} />
-                  <TypeBtn active={isOrg}  label="📋 مؤسسة (فاتورة ضريبية)" color="#1D4ED8"
-                    onClick={() => set("customerType", "organization")} />
-                </div>
-              </ESection>
-
-              <ESection title="المعلومات الأساسية">
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 14px" }}>
-                  <EField label="كود العميل" hint="يُعبأ تلقائياً إن تُرك فارغاً">
-                    <EInput value={form.code} onChange={v => set("code", v)} placeholder="مثال: CU-001" mono />
-                  </EField>
-                  <EField label={isOrg ? "اسم المؤسسة *" : "اسم العميل *"}>
-                    <EInput inputRef={nameRef} value={form.name} onChange={v => set("name", v)}
-                      placeholder={isOrg ? "اسم الشركة أو المؤسسة..." : "أدخل اسم العميل..."} />
-                  </EField>
-                  <EField label="رقم الجوال">
-                    <EInput value={form.phone} onChange={v => set("phone", v)} placeholder="05xxxxxxxx" ltr />
-                  </EField>
-                  <EField label="البريد الإلكتروني">
-                    <EInput value={form.email} onChange={v => set("email", v)} placeholder="example@domain.com" ltr />
-                  </EField>
-                </div>
-              </ESection>
-
-              <ESection title="البيانات الضريبية والتجارية"
-                headerColor={isOrg ? "#1D4ED8" : undefined}
-                note={!isOrg ? "تنطبق على المؤسسات فقط" : undefined}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 14px",
-                              opacity: isOrg ? 1 : 0.4, pointerEvents: isOrg ? "auto" : "none" }}>
-                  <EField label="الرقم الضريبي *">
-                    <EInput value={form.taxNumber} onChange={v => set("taxNumber", v)}
-                      placeholder="3xxxxxxxxxxxxxxxxx" ltr
-                      style={isOrg
-                        ? (form.taxNumber?.trim()
-                            ? { borderColor: "#86EFAC", background: "#F0FDF4" }
-                            : { borderColor: "#FCA5A5", background: "#FFF5F5" })
-                        : undefined}
-                    />
-                  </EField>
-                  <EField label="رقم السجل التجاري">
-                    <EInput value={form.registrationNumber} onChange={v => set("registrationNumber", v)}
-                      placeholder="1010xxxxxx" ltr />
-                  </EField>
-                </div>
-              </ESection>
-
-            </div>
+            <PartyMainTab
+              entityType="customer"
+              form={{
+                code: form.code,
+                name: form.name,
+                partyType: form.customerType,
+                phone: form.phone,
+                email: form.email,
+                taxNumber: form.taxNumber,
+                registrationNumber: form.registrationNumber,
+              }}
+              onChange={(key, value) => {
+                const mapped = key === "partyType" ? "customerType" : key;
+                set(mapped as keyof CustomerData, value);
+              }}
+              nameRef={nameRef}
+            />
           )}
 
           {/* ══ عنوان ══ */}

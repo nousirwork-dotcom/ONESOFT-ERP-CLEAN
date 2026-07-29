@@ -473,6 +473,7 @@ CREATE TABLE IF NOT EXISTS "suppliers" (
     "email" VARCHAR(255),
     "address" TEXT,
     "tax_number" VARCHAR(50),
+    "registration_number" VARCHAR(100),
     "balance" NUMERIC(18, 4) DEFAULT '0',
     "is_active" BOOLEAN NOT NULL DEFAULT true,
     "created_at" TIMESTAMP NOT NULL DEFAULT now()

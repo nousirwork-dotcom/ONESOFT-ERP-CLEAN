@@ -299,6 +299,7 @@ export const suppliers = pgTable('suppliers', {
   email: varchar('email', { length: 255 }),
   address: text('address'),
   taxNumber: varchar('tax_number', { length: 50 }),
+  registrationNumber: varchar('registration_number', { length: 100 }),
   balance: decimal('balance', { precision: 18, scale: 4 }).default('0'),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),
