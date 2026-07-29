@@ -289,7 +289,7 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
       },
     },
     duplicate: { supported: false, disabledReason: "نسخ العميل غير مستخدم في هذه الشاشة" },
-    tools: { supported: false, disabledReason: "لا توجد أدوات إضافية متاحة للعميل" },
+    tools: { supported: true, stateEnabled: !isPending },
     edit: {
       supported: !!editData?.id,
       stateEnabled: !isPending,
@@ -904,11 +904,13 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
           <UnifiedBottomToolbar
             actions={toolbarActions}
             visibleActions={[
-              "save", "new", "duplicate", "edit", "delete",
+              "save", "draft", "new", "duplicate", "tools", "edit", "delete",
               "first", "previous", "next", "last",
-              "preview", "print", "exit",
+              "approve", "unapprove",
+              "preview", "send", "print", "exit",
             ]}
             activeAction={isPending ? "save" : undefined}
+            className="customer-toolbar"
           />
         </div>
 
