@@ -311,7 +311,7 @@ export function UserFormDialog({
       supported: false,
       disabledReason: "الاعتماد غير مستخدم في شاشة المستخدمين",
     },
-    unapprove: {
+    cancel: {
       supported: false,
       disabledReason: "إلغاء الاعتماد غير مستخدم في شاشة المستخدمين",
     },

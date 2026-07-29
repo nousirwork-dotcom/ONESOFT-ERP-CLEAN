@@ -31,7 +31,7 @@ export default function Invoices() {
     next:      { supported: false as const, disabledReason: "التنقل يتم داخل نافذة الفاتورة" },
     last:      { supported: false as const, disabledReason: "التنقل يتم داخل نافذة الفاتورة" },
     approve:   { supported: false as const, disabledReason: "غير مستخدم في قائمة الفواتير" },
-    unapprove: { supported: false as const, disabledReason: "غير مستخدم في قائمة الفواتير" },
+    cancel: { supported: false as const, disabledReason: "غير مستخدم في قائمة الفواتير" },
     preview:   { supported: false as const, disabledReason: "اضغط مرتين على فاتورة لمطالعتها" },
     send:      { supported: false as const, disabledReason: "افتح فاتورة أولًا للإرسال" },
     print:     { supported: true as const, allowed: true, stateEnabled: true, onClick: () => { toast.info("طباعة القائمة..."); } },

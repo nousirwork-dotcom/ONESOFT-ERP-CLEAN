@@ -11,7 +11,7 @@ export type ToolbarActionId =
   | "next"
   | "last"
   | "approve"
-  | "unapprove"
+  | "cancel"
   | "preview"
   | "send"
   | "print"

@@ -15,7 +15,7 @@ export type CommandId =
   | "save" | "draft" | "new" | "duplicate" | "tools"
   | "edit" | "delete"
   | "first" | "previous" | "next" | "last"
-  | "approve" | "unapprove"
+  | "approve" | "cancel"
   | "preview" | "send" | "print" | "exit";
 
 /** Map من معرّف الأمر إلى الوظيفة المقابلة في الشاشة */
@@ -155,14 +155,14 @@ export function computeButtonStates(
       onClick: handlers.approve,
     } : { supported: false },
 
-    unapprove: has("unapprove") ? {
+  cancel: has("cancel") ? {
       supported: true,
       allowed: canApprove,
       stateEnabled: hasRecord && isApproved && !isBusy,
       disabledReason: !hasRecord
         ? "احفظ السجل اولا"
         : !isApproved ? "السجل غير معتمد" : undefined,
-      onClick: handlers.unapprove,
+      onClick: handlers.cancel,
     } : { supported: false },
 
     preview: has("preview") ? {

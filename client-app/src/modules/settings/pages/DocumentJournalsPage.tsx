@@ -926,7 +926,7 @@ export default function DocumentJournalsPage() {
       next: { supported: true as const, allowed: true, stateEnabled: inForm && currentIndex < typeJournals.length - 1, disabledReason: "لا يوجد سجل تالٍ", onClick: () => { const s = _djpRef.current; if (s.currentIndex < s.typeJournals.length - 1) s.safeNavigate(() => s.openEdit(s.typeJournals[s.currentIndex + 1])); } },
       last: { supported: true as const, allowed: true, stateEnabled: inForm && typeJournals.length > 0, disabledReason: "لا توجد دفاتر", onClick: () => { const s = _djpRef.current; const l = s.typeJournals.at(-1); if (l) s.safeNavigate(() => s.openEdit(l)); } },
       approve: { supported: false as const, disabledReason: "الاعتماد غير متاح لدفاتر المستندات" },
-      unapprove: { supported: false as const, disabledReason: "غير متاح" },
+      cancel: { supported: false as const, disabledReason: "غير متاح" },
       preview: { supported: true as const, allowed: true, stateEnabled: inForm, disabledReason: "اختر دفترًا أولًا", onClick: () => _djpRef.current.handleMutalaah() },
       tools: { supported: false as const, disabledReason: "الأدوات غير متاحة هنا" },
       send: { supported: false as const, disabledReason: "الإرسال غير متاح هنا" },

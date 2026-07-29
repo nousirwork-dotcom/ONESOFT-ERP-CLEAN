@@ -42,7 +42,7 @@ export default function Customers() {
     next:      { supported: false as const, disabledReason: "التنقل يتم داخل نافذة العميل" },
     last:      { supported: false as const, disabledReason: "التنقل يتم داخل نافذة العميل" },
     approve:   { supported: false as const, disabledReason: "غير مستخدم في قائمة العملاء" },
-    unapprove: { supported: false as const, disabledReason: "غير مستخدم في قائمة العملاء" },
+    cancel: { supported: false as const, disabledReason: "غير مستخدم في قائمة العملاء" },
     preview:   { supported: false as const, disabledReason: "اضغط مرتين على عميل لمطالعة بياناته" },
     send:      { supported: false as const, disabledReason: "افتح سجل عميل أولًا للإرسال" },
     print:     { supported: true as const, allowed: true, stateEnabled: true, onClick: () => { toast.info("جاري طباعة قائمة العملاء..."); } },

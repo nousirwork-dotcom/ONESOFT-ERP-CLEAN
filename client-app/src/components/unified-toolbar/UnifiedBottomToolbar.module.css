@@ -181,7 +181,7 @@
   min-width: 52px;
 }
 
-.toolbarButton[data-action="unapprove"] {
+.toolbarButton[data-action="cancel"] {
   width: 60px;
   min-width: 60px;
 }

@@ -319,7 +319,7 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
     next: { supported: false, disabledReason: "التنقل بين العملاء غير مربوط داخل النافذة" },
     last: { supported: false, disabledReason: "التنقل بين العملاء غير مربوط داخل النافذة" },
     approve: { supported: false, disabledReason: "اعتماد العميل غير مستخدم في هذه الشاشة" },
-    unapprove: { supported: false, disabledReason: "إلغاء اعتماد العميل غير مستخدم في هذه الشاشة" },
+    cancel: { supported: false, disabledReason: "الإلغاء غير مستخدم في هذه الشاشة" },
     preview: {
       supported: !!editData?.id,
       stateEnabled: !isPending,

@@ -14,7 +14,7 @@ export function resolveShortcutAction(event: KeyboardEvent): ToolbarActionId | n
   if (event.key === "PageDown") return "next";
   if (event.ctrlKey && event.key === "End") return "last";
   if (event.ctrlKey && event.key === "F11") return "approve";
-  if (event.key === "F7" && !event.ctrlKey) return "unapprove";
+  if (event.key === "F7" && !event.ctrlKey) return "cancel";
   if (event.ctrlKey && event.key.toLowerCase() === "p") return "print";
   if (event.key === "F9" && !event.ctrlKey) return "exit";
   return null;

@@ -321,7 +321,7 @@ export function LivePOSPage() {
     next:      { supported: false as const, disabledReason: "غير متاح في نقطة البيع" },
     last:      { supported: false as const, disabledReason: "غير متاح في نقطة البيع" },
     approve:   { supported: false as const, disabledReason: "غير متاح في نقطة البيع" },
-    unapprove: { supported: false as const, disabledReason: "غير متاح في نقطة البيع" },
+    cancel: { supported: false as const, disabledReason: "غير متاح في نقطة البيع" },
     preview:   { supported: false as const, disabledReason: "غير متاح في نقطة البيع" },
     send:      { supported: false as const, disabledReason: "غير متاح في نقطة البيع" },
     print:     { supported: true as const, allowed: true, stateEnabled: true, onClick: () => { window.print(); } },

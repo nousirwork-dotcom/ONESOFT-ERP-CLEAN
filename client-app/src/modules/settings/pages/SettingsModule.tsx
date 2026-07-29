@@ -1938,7 +1938,7 @@ function UserGroupsPage() {
       next: { supported: true as const, allowed: true, stateEnabled: hasSel && currentGroupIndex < totalGroups - 1, disabledReason: "لا يوجد سجل تالٍ", onClick: () => _ugRef.current.handleNav('next') },
       last: { supported: true as const, allowed: true, stateEnabled: hasSel && currentGroupIndex < totalGroups - 1, disabledReason: "آخر مجموعة في القائمة بالفعل", onClick: () => _ugRef.current.handleNav('last') },
       approve: { supported: false as const, disabledReason: "غير متاح" },
-      unapprove: { supported: false as const, disabledReason: "غير متاح" },
+      cancel: { supported: false as const, disabledReason: "غير متاح" },
       preview: { supported: false as const, disabledReason: "المطالعة غير متاحة هنا" },
       tools: { supported: false as const, disabledReason: "الأدوات غير متاحة هنا" },
       send: { supported: false as const, disabledReason: "الإرسال غير متاح هنا" },

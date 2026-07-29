@@ -24,7 +24,6 @@ import styles from "./UnifiedBottomToolbar.module.css";
 interface UnifiedBottomToolbarProps {
   actions: ToolbarActionMap;
   tools?: ToolbarToolItem[];
-  visibleActions?: ToolbarActionId[];
   activeAction?: ToolbarActionId;
   className?: string;
 }
@@ -68,7 +67,6 @@ function canExecuteAction(
 export function UnifiedBottomToolbar({
   actions,
   tools = DEFAULT_DOCUMENT_TOOLS,
-  visibleActions,
   activeAction,
   className = "",
 }: UnifiedBottomToolbarProps) {
@@ -85,7 +83,6 @@ export function UnifiedBottomToolbar({
     toolsRuntime?.stateEnabled !== false &&
     toolsRuntime?.loading !== true &&
     tools.length > 0;
-  const visibleActionSet = visibleActions ? new Set(visibleActions) : null;
 
   useLayoutEffect(() => {
     if (!toolsOpen || !toolsButtonRef.current) return;
@@ -158,13 +155,7 @@ export function UnifiedBottomToolbar({
       aria-label="شريط أوامر الشاشة"
     >
       <div className={styles.toolbarGroups}>
-          {TOOLBAR_GROUPS
-            .map(group => ({
-              ...group,
-              actions: group.actions.filter(actionId => !visibleActionSet || visibleActionSet.has(actionId)),
-            }))
-            .filter(group => group.actions.length > 0)
-            .map((group) => (
+          {TOOLBAR_GROUPS.map((group) => (
             <div
               key={group.id}
               className={styles.toolbarGroup}
