@@ -443,6 +443,10 @@ CREATE TABLE IF NOT EXISTS "stock_voucher_items" (
     "quantity" NUMERIC(18, 4) NOT NULL,
     "unit_cost" NUMERIC(18, 4) DEFAULT '0',
     "total_cost" NUMERIC(18, 4) DEFAULT '0',
+    "product_code" VARCHAR(100),
+    "unit" VARCHAR(100),
+    "batch_number" VARCHAR(100),
+    "expiry_date" VARCHAR(10),
     "sort_order" INTEGER DEFAULT 0
 );
 

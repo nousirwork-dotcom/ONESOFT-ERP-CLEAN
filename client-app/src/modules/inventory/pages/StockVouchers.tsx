@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/core/ui/textarea";
 import { toast } from "sonner";
 import { Plus, ArrowDownCircle, ArrowUpCircle, Trash2, Search, Eye } from "lucide-react";
+import SupplyReceiptDialog from "./SupplyReceiptDialog";
 
 type VoucherItem = { productId: number; productName: string; quantity: string; unitCost: string; totalCost: string; };
 
@@ -184,7 +185,16 @@ export default function StockVouchers({ initialTab = "receipt" }: { initialTab?:
       </Tabs>
 
       {/* Dialog إنشاء سند */}
-      <Dialog open={showDialog} onOpenChange={(o) => { setShowDialog(o); if (!o) resetForm(); }}>
+      <SupplyReceiptDialog
+        open={showDialog && activeTab === "receipt"}
+        onClose={() => { setShowDialog(false); resetForm(); }}
+        branches={branches as any}
+        warehouses={warehouses as any}
+        suppliers={suppliers as any}
+        products={products as any}
+        onSaved={() => { setShowDialog(false); resetForm(); }}
+      />
+      <Dialog open={showDialog && activeTab === "issue"} onOpenChange={(o) => { setShowDialog(o); if (!o) resetForm(); }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" dir="rtl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">

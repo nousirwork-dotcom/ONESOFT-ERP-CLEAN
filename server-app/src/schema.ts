@@ -664,6 +664,10 @@ export const stockVoucherItems = pgTable('stock_voucher_items', {
   quantity: decimal('quantity', { precision: 18, scale: 4 }).notNull(),
   unitCost: decimal('unit_cost', { precision: 18, scale: 4 }).default('0'),
   totalCost: decimal('total_cost', { precision: 18, scale: 4 }).default('0'),
+  productCode: varchar('product_code', { length: 100 }),
+  unit: varchar('unit', { length: 100 }),
+  batchNumber: varchar('batch_number', { length: 100 }),
+  expiryDate: varchar('expiry_date', { length: 10 }),
   sortOrder: integer('sort_order').default(0),
 });
 

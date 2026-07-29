@@ -36,12 +36,19 @@ export const stockVouchersRouter = router({
       supplierId:  z.number().optional(),
       reason:      z.string().optional(),
       notes:       z.string().optional(),
+       voucherDate: z.string().optional(),
+       sourceDocType: z.string().optional(),
+       sourceDocNumber: z.string().optional(),
       items: z.array(z.object({
         productId:   z.number(),
         productName: z.string(),
         quantity:    z.string(),
         unitCost:    z.string(),
         totalCost:   z.string(),
+         productCode: z.string().optional(),
+         unit: z.string().optional(),
+         batchNumber: z.string().optional(),
+         expiryDate: z.string().optional(),
       })),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -57,7 +64,8 @@ export const stockVouchersRouter = router({
       const voucherNumber = `${prefix}-${String(num).padStart(4, '0')}`;
 
       const [v] = await db.insert(stockVouchers).values({
-        ...rest, orgId: ctx.user.orgId, userId: ctx.user.id, voucherNumber, totalCost, status: 'confirmed',
+        ...rest, voucherDate: rest.voucherDate ? new Date(rest.voucherDate) : undefined,
+        orgId: ctx.user.orgId, userId: ctx.user.id, voucherNumber, totalCost, status: 'confirmed',
       }).returning();
 
       if (items.length > 0) {
