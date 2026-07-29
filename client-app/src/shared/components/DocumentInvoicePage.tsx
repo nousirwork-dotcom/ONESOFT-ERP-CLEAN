@@ -82,7 +82,7 @@ function fmt(n: number) { return n.toFixed(3); }
 function HF({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <label style={{ fontSize: "10px", fontWeight: 700, color: "#666", fontFamily: "'Cairo', Tahoma" }}>
+      <label style={{ fontSize: "var(--app-font-size-field-label)", fontWeight: 700, color: "var(--app-text-primary)", fontFamily: "var(--app-font-family)" }}>
         {label}
       </label>
       {children}
@@ -113,7 +113,7 @@ function TF({ label, value, highlight, big, color }: {
 }) {
   return (
     <div className="flex items-center gap-1">
-      <span style={{ fontSize: 11, color: "#555", whiteSpace: "nowrap" }}>{label}</span>
+      <span style={{ fontSize: "var(--app-font-size-field-label)", color: "var(--app-text-primary)", whiteSpace: "nowrap" }}>{label}</span>
       <input readOnly value={value} className="classic-input text-center"
         style={{
           width: big ? 100 : 88,
@@ -1892,15 +1892,15 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
 
       {/* ── Styles ────────────────────────────────────────────────────────── */}
        <style>{`
-         .classic-input {
-           border: 1px solid #a0a0a0; padding: 2px 6px; height: ${config.docCategory === "purchase" ? "25px" : "22px"}; font-size: ${config.docCategory === "purchase" ? "13px" : "12px"};
-          font-family: 'Cairo', Tahoma, Arial, sans-serif; background: #fff; outline: none; border-radius: 1px;
+           .classic-input {
+            border: 1px solid #a0a0a0; padding: 5px 9px; height: var(--app-control-height); font-size: var(--app-font-size-field-value);
+           font-family: var(--app-font-family); color: var(--app-text-primary); background: #fff; outline: none; border-radius: 1px;
         }
           .classic-input:focus { border: 2px solid ${config.docCategory === "purchase" ? "#8a5a2b" : "#406B93"}; background: ${config.docCategory === "purchase" ? "#fffdf8" : "#F0F6FF"}; box-shadow: 0 0 0 2px ${config.docCategory === "purchase" ? "rgba(138,90,43,0.2)" : "rgba(64,107,147,0.2)"}; }
          .classic-input::placeholder, .inv-cell::placeholder { color: ${config.docCategory === "purchase" ? "#766558" : "#888"}; opacity: 1; }
-         .inv-th { border: 1px solid rgba(255,255,255,0.15); border-bottom: 2px solid rgba(0,0,0,0.15); padding: ${config.docCategory === "purchase" ? "6px 6px" : "4px 6px"}; text-align: right; font-weight: 800; font-size: ${config.docCategory === "purchase" ? "12px" : "11px"}; line-height: 16px; white-space: nowrap; font-family: 'Cairo', Tahoma, sans-serif; }
-         .inv-td { border: 1px solid #e8e4dc; padding: 1px 3px; height: ${config.docCategory === "purchase" ? "27px" : "24px"}; vertical-align: middle; }
-         .inv-cell { border: none; outline: none; padding: 2px 4px; height: ${config.docCategory === "purchase" ? "25px" : "22px"}; font-size: ${config.docCategory === "purchase" ? "13px" : "12px"}; font-weight: ${config.docCategory === "purchase" ? "600" : "400"}; font-family: 'Cairo', Tahoma, Arial, sans-serif; color: ${config.docCategory === "purchase" ? "#241b15" : "inherit"}; background: transparent; width: 100%; }
+          .inv-th { border: 1px solid rgba(255,255,255,0.15); border-bottom: 2px solid rgba(0,0,0,0.15); padding: 7px 8px; text-align: right; font-weight: 700; font-size: var(--app-font-size-table-header); line-height: 18px; white-space: nowrap; font-family: var(--app-font-family); }
+          .inv-td { border: 1px solid #e8e4dc; padding: 2px 4px; height: var(--app-table-row-height); vertical-align: middle; }
+          .inv-cell { border: none; outline: none; padding: 5px 6px; height: var(--app-control-height); font-size: var(--app-font-size-table-cell); font-weight: 400; font-family: var(--app-font-family); color: var(--app-text-primary); background: transparent; width: 100%; }
           .inv-cell:focus { background: ${config.docCategory === "purchase" ? "#fffdf8" : "#FFFFF0"}; border: 2px solid ${config.docCategory === "purchase" ? "#8a5a2b" : "#406B93"}; box-shadow: inset 0 0 0 1px ${config.docCategory === "purchase" ? "rgba(138,90,43,0.15)" : "rgba(64,107,147,0.15)"}; }
         input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
       `}</style>

@@ -264,7 +264,7 @@ export default function CustomerFormDialog({ open, editData, onClose, onSaved }:
                background: "rgba(0,0,0,0.45)", display: "flex",
                alignItems: "center", justifyContent: "center" }}
     >
-      <div dir="rtl" style={{
+      <div className="erp-standard-ui" dir="rtl" style={{
         width: 940, maxWidth: "98vw",
         height: 620, maxHeight: "calc(100vh - 24px)",
         minHeight: 620,

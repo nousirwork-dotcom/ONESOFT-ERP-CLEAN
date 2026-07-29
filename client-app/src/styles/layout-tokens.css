@@ -36,3 +36,66 @@
   /* --bp-md:  1000px  (normal: three columns)        */
   /* --bp-lg:  1300px  (wide: full column count)      */
 }
+
+/* Shared density for entity and document screens. No zoom/transform is used. */
+.erp-standard-ui {
+  font-family: var(--app-font-family);
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-field-value);
+}
+
+.erp-standard-ui label,
+.erp-standard-ui [data-slot="label"] {
+  font-size: var(--app-font-size-field-label);
+  font-weight: 600;
+  color: var(--app-text-primary);
+}
+
+.erp-standard-ui input,
+.erp-standard-ui textarea,
+.erp-standard-ui [data-slot="input"],
+.erp-standard-ui [data-slot="select-trigger"] {
+  min-height: var(--app-control-height);
+  font-size: var(--app-font-size-field-value);
+  color: var(--app-text-primary);
+  padding-block: 6px;
+}
+
+.erp-standard-ui table {
+  font-size: var(--app-font-size-table-cell);
+  color: var(--app-text-primary);
+}
+
+.erp-standard-ui th,
+.erp-standard-ui [data-slot="table-head"] {
+  height: var(--app-table-row-height);
+  font-size: var(--app-font-size-table-header);
+  font-weight: 700;
+  color: var(--app-text-primary);
+  padding-block: 7px;
+}
+
+.erp-standard-ui td,
+.erp-standard-ui [data-slot="table-cell"] {
+  min-height: var(--app-table-row-height);
+  height: var(--app-table-row-height);
+  font-size: var(--app-font-size-table-cell);
+  color: var(--app-text-primary);
+  padding-block: 7px;
+}
+
+.erp-standard-ui button {
+  font-family: var(--app-font-family);
+  font-size: var(--app-font-size-toolbar);
+}
+
+.erp-standard-ui [data-slot="tabs-trigger"] {
+  font-size: var(--app-font-size-toolbar);
+}
+
+.erp-standard-ui .text-xs,
+.erp-standard-ui .text-\[10px\],
+.erp-standard-ui .text-\[11px\],
+.erp-standard-ui .text-\[12px\] {
+  font-size: var(--app-font-size-helper);
+}

@@ -1561,8 +1561,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
     <div
       ref={workRootRef}
       onKeyDownCapture={handleWorkKeyDown}
-      className={`${styles.screenContainer} flex flex-col h-full text-[#1a1a1a] select-none`}
-      style={{ fontFamily: "'Cairo', Tahoma, Arial, sans-serif", fontSize: "var(--work-font-size, 12px)", background: "var(--background)" }}
+       className={`${styles.screenContainer} erp-standard-ui flex flex-col h-full text-[#1a1a1a] select-none`}
+       style={{ fontFamily: "var(--app-font-family)", fontSize: "var(--app-font-size-field-value)", background: "var(--background)" }}
       dir="rtl"
     >
       {/* ── Main Content: outer flex row (left-col + summary) ──────────── */}

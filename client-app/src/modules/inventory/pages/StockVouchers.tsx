@@ -102,7 +102,7 @@ export default function StockVouchers({ initialTab = "receipt" }: { initialTab?:
     : "bg-red-500/10 text-red-600 border-red-500/20";
 
   return (
-    <div className="space-y-4">
+    <div className="erp-standard-ui space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <ArrowDownCircle className="w-5 h-5 text-primary" />

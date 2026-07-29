@@ -221,7 +221,7 @@ function SuppliersListPage() {
   }, [form, createMutation]);
 
   return (
-    <div className="space-y-3">
+    <div className="erp-standard-ui space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="font-bold text-sm flex items-center gap-2">
           <Users className="w-4 h-4 text-primary" /> دليل الموردين

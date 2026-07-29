@@ -52,7 +52,7 @@ export default function Customers() {
   useToolbarActions(toolbarActions);
 
   return (
-    <div className="space-y-4" dir="rtl">
+    <div className="erp-standard-ui space-y-4" dir="rtl">
 
       {/* ── Search ── */}
       <div style={{ position: "relative", maxWidth: 340 }}>
@@ -65,22 +65,22 @@ export default function Customers() {
           onChange={e => setSearch(e.target.value)}
           placeholder="بحث بالاسم أو الكود أو الهاتف..."
           style={{
-            width: "100%", height: 30, paddingRight: 32, paddingLeft: 8,
-            fontSize: 13, border: "1px solid #C0C0C0", borderRadius: 3,
-            background: "white", outline: "none", fontFamily: "inherit",
+            width: "100%", height: "var(--app-control-height)", paddingRight: 32, paddingLeft: 10,
+            fontSize: "var(--app-font-size-field-value)", border: "1px solid #C0C0C0", borderRadius: 3,
+            background: "white", outline: "none", fontFamily: "var(--app-font-family)", color: "var(--app-text-primary)",
           }}
         />
       </div>
 
       {/* ── Table ── */}
       <div style={{ border: "1px solid #D0D0D0", borderRadius: 4, overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--app-font-size-table-cell)", fontFamily: "var(--app-font-family)", color: "var(--app-text-primary)" }}>
           <thead>
             <tr style={{ background: "#E8EEF4", borderBottom: "2px solid #C0C0C0" }}>
               {["الكود", "النوع", "الاسم", "الهاتف", "المدينة", "الرقم الضريبي", "الرصيد", ""].map((h, i) => (
                 <th key={i} style={{
                   textAlign: "right", padding: "6px 10px",
-                  fontWeight: 700, color: "#2B4A6A", fontSize: 12,
+                  fontWeight: 700, color: "#2B4A6A", fontSize: "var(--app-font-size-table-header)",
                   whiteSpace: "nowrap",
                 }}>{h}</th>
               ))}
@@ -123,7 +123,7 @@ export default function Customers() {
                   <td style={{ padding: "6px 10px" }}>
                     {c.code
                       ? <span style={{
-                          fontFamily: "monospace", fontSize: 11, fontWeight: 700,
+                          fontFamily: "monospace", fontSize: "var(--app-font-size-table-cell)", fontWeight: 700,
                           padding: "2px 6px", borderRadius: 4,
                           background: "#E0EAF4", color: "#406B93",
                         }}>{c.code}</span>
@@ -134,11 +134,11 @@ export default function Customers() {
                   <td style={{ padding: "6px 10px" }}>
                     {c.customerType === "organization"
                       ? <span style={{
-                          fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 10,
+                          fontSize: "var(--app-font-size-table-cell)", fontWeight: 700, padding: "2px 7px", borderRadius: 10,
                           background: "#DBEAFE", color: "#1D4ED8", border: "1px solid #93C5FD",
                         }}>📋 مؤسسة</span>
                       : <span style={{
-                          fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 10,
+                          fontSize: "var(--app-font-size-table-cell)", fontWeight: 700, padding: "2px 7px", borderRadius: 10,
                           background: "#DCFCE7", color: "#15803D", border: "1px solid #86EFAC",
                         }}>🧾 فرد</span>
                     }
@@ -150,20 +150,20 @@ export default function Customers() {
                     </div>
                   </td>
                   {/* الهاتف */}
-                  <td style={{ padding: "6px 10px", color: "#555", fontFamily: "monospace", fontSize: 12 }}>
+                  <td style={{ padding: "7px 10px", color: "var(--app-text-primary)", fontFamily: "monospace", fontSize: "var(--app-font-size-table-cell)" }}>
                     {c.phone ?? "—"}
                   </td>
                   {/* المدينة */}
                   <td style={{ padding: "6px 10px", color: "#555" }}>{c.city ?? "—"}</td>
                   {/* الرقم الضريبي */}
-                  <td style={{ padding: "6px 10px", color: "#555", fontFamily: "monospace", fontSize: 11 }}>
+                  <td style={{ padding: "7px 10px", color: "var(--app-text-primary)", fontFamily: "monospace", fontSize: "var(--app-font-size-table-cell)" }}>
                     {c.taxNumber
                       ? <span style={{ background: "#FEF3C7", color: "#92400E", padding: "1px 5px", borderRadius: 3 }}>{c.taxNumber}</span>
                       : "—"
                     }
                   </td>
                   {/* الرصيد */}
-                  <td style={{ padding: "6px 10px", textAlign: "left", fontFamily: "monospace", fontSize: 12 }}>
+                  <td style={{ padding: "7px 10px", textAlign: "left", fontFamily: "monospace", fontSize: "var(--app-font-size-table-cell)" }}>
                     {parseFloat(c.balance ?? "0") !== 0
                       ? <span style={{ color: parseFloat(c.balance) > 0 ? "#DC2626" : "#15803D", fontWeight: 700 }}>
                           {parseFloat(c.balance).toLocaleString("ar-SA", { minimumFractionDigits: 2 })}
@@ -176,7 +176,7 @@ export default function Customers() {
                     <button
                       onClick={e => { e.stopPropagation(); openEdit(c); }}
                       style={{
-                        fontSize: 10, padding: "2px 8px", borderRadius: 3,
+                        fontSize: "var(--app-font-size-toolbar)", padding: "4px 9px", borderRadius: 3,
                         background: "#E8EEF4", color: "#406B93",
                         border: "1px solid #B8CFE0", cursor: "pointer",
                         fontFamily: "inherit", fontWeight: 600,
@@ -192,7 +192,7 @@ export default function Customers() {
 
       {/* ── Summary bar ── */}
       {!isLoading && (customers ?? []).length > 0 && (
-        <div style={{ fontSize: 11, color: "#888", display: "flex", gap: 16 }}>
+        <div style={{ fontSize: "var(--app-font-size-helper)", color: "var(--app-text-secondary)", display: "flex", gap: 16 }}>
           <span>إجمالي العملاء: <strong>{(customers ?? []).length}</strong></span>
           <span>مؤسسات: <strong style={{ color: "#1D4ED8" }}>
             {(customers ?? []).filter((c: any) => c.customerType === "organization").length}
