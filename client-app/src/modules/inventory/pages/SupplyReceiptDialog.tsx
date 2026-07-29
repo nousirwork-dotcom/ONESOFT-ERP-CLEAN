@@ -243,16 +243,16 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
               <Field label="الفرع" required><select value={branchId} onChange={e => void chooseBranch(e.target.value)}><option value="">اختر الفرع</option>{branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></Field>
               <Field label="رقم المستند"><input readOnly value={reserving ? "جارٍ حجز الرقم..." : documentNumber || "يظهر بعد اختيار الفرع"} /></Field>
               <Field label="المخزن المستلم"><input readOnly value={warehouse?.name ?? ""} placeholder="يحدد تلقائيًا من الفرع" /></Field>
-              <Field label="تاريخ التحرير" required><DateSegmentInput standalone value={issueDate} onChange={v => { setIssueDate(v); setIsDirty(true); }} /></Field>
+              <Field label="تاريخ التحرير" required><DateSegmentInput className="supply-receipt-date-field" standalone value={issueDate} onChange={v => { setIssueDate(v); setIsDirty(true); }} /></Field>
               <Field label="بناءً على"><select value={basedOn} onChange={e => { setBasedOn(e.target.value); setIsDirty(true); }}><option value="">بدون</option><option value="purchase_order">أمر شراء</option><option value="purchase_invoice">فاتورة مشتريات</option></select></Field>
-              <Field label="رقم المستند المبني عليه"><input value={sourceNumber} disabled={!basedOn} onChange={e => setSourceNumber(e.target.value)} placeholder={basedOn ? "رقم المستند" : "اختر النوع أولًا"} /></Field>
+              <Field label="رقم المستند"><input value={sourceNumber} disabled={!basedOn} onChange={e => setSourceNumber(e.target.value)} placeholder={basedOn ? "رقم المستند" : "اختر النوع أولًا"} /></Field>
               <Field label="نوع السند"><input readOnly value="سند توريد مخزني" /></Field>
               </div>
               <div className="supply-receipt-card supply-receipt-supplier-card">
               <Field label="المورد"><select value={supplierId} onChange={e => { setSupplierId(e.target.value); setIsDirty(true); }}><option value="">اختر المورد</option>{suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
               <Field label="مسؤول الاستلام"><select value={receiverUserId} onChange={e => { setReceiverUserId(e.target.value); setIsDirty(true); }}><option value="">اختر المستخدم</option>{users.map(u => <option key={u.id} value={u.id}>{u.name || u.username}</option>)}</select></Field>
               <Field label="رقم مستند المورد"><input value={supplierDoc} onChange={e => { setSupplierDoc(e.target.value); setIsDirty(true); }} /></Field>
-              <Field label="تاريخ مستند المورد"><DateSegmentInput standalone value={supplierDocDate} onChange={v => { setSupplierDocDate(v); setIsDirty(true); }} /></Field>
+              <Field label="تاريخ مستند المورد"><DateSegmentInput className="supply-receipt-date-field" standalone value={supplierDocDate} onChange={v => { setSupplierDocDate(v); setIsDirty(true); }} /></Field>
               <Field label="ملاحظة" alignStart><textarea rows={3} value={notes} onChange={e => { setNotes(e.target.value); setIsDirty(true); }} /></Field>
               </div>
             </div>
