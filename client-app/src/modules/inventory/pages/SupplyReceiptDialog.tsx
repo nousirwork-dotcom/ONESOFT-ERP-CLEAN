@@ -26,7 +26,7 @@ type Props = {
 
 const today = () => new Date().toISOString().slice(0, 10);
 const emptyLine = (): Line => ({ productCode: "", productName: "", unit: "", quantity: "1", unitCost: "", batchNumber: "", expiryDate: "" });
-const editableColumns = ["code", "unit", "quantity", "unitCost", "batchNumber", "expiryDate"] as const;
+const editableColumns = ["code", "name", "unit", "quantity", "unitCost", "batchNumber", "expiryDate"] as const;
 
 export default function SupplyReceiptDialog({ open, onClose, branches, warehouses, suppliers, products, onSaved, registerClose }: Props) {
   const [branchId, setBranchId] = useState("");
@@ -90,15 +90,15 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
       productName: product.name, unit, quantity: line.quantity || "1", unitCost: product.costPrice ?? "0",
     } : line));
     setActiveLookup(null); setLookupIndex(0); setIsDirty(true);
-    requestAnimationFrame(() => cellRefs.current.get(`${index}-1`)?.focus());
+     requestAnimationFrame(() => cellRefs.current.get(`${index}-2`)?.focus());
   }, [lines]);
   const lookupProducts = (index: number) => {
-    const q = lines[index]?.productCode.trim().toLowerCase() ?? "";
+    const q = lines[index]?.productName.trim().toLowerCase() ?? "";
     return products.filter(p => !q || `${p.name} ${p.code ?? ""} ${p.barcode ?? ""}`.toLowerCase().includes(q)).slice(0, 12);
   };
   const addBlankAfter = (index: number) => {
     setLines(current => current.length > index + 1 ? current : [...current, emptyLine()]);
-    requestAnimationFrame(() => cellRefs.current.get(`${index + 1}-0`)?.focus());
+    requestAnimationFrame(() => cellRefs.current.get(`${index + 1}-1`)?.focus());
   };
   const updateLine = (index: number, key: keyof Line, value: string) => {
     const safe = key === "quantity" || key === "unitCost" ? value.replace(/[^\d.]/g, "") : value;
@@ -110,17 +110,10 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
     setIsDirty(true);
     requestAnimationFrame(() => cellRefs.current.get(`${Math.max(0, index - 1)}-0`)?.focus());
   };
-  const resolveCode = (index: number) => {
-    const code = lines[index]?.productCode.trim().toLowerCase();
-    const product = products.find(p => p.code?.toLowerCase() === code || p.barcode?.toLowerCase() === code || String(p.id) === code);
-    if (product) { selectProduct(index, product); return true; }
-    if (code) toast.error("رقم الصنف غير مسجل");
-    return false;
-  };
   const handleCellKeyDown = (event: React.KeyboardEvent<HTMLInputElement>, row: number, column: number) => {
     const lastRow = row === lines.length - 1;
     const lastColumn = column === editableColumns.length - 1;
-    const lookup = column === 0 && activeLookup === row && !lines[row]?.productId ? lookupProducts(row) : [];
+    const lookup = column === 1 && activeLookup === row && !lines[row]?.productId ? lookupProducts(row) : [];
     if (event.key === "Escape" && activeLookup === row) { event.preventDefault(); setActiveLookup(null); setLookupIndex(0); return; }
     if (lookup.length && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
       event.preventDefault();
@@ -129,13 +122,19 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
         : Math.max(current - 1, 0));
       return;
     }
-    if (lookup.length && event.key === "Enter" && column === 0) {
+    if (lookup.length && event.key === "Enter" && column === 1) {
       event.preventDefault();
       selectProduct(row, lookup[lookupIndex] ?? lookup[0]);
       return;
     }
-    if (column === 0 && (event.key === "Enter" || event.key === "Tab")) {
-      if (!resolveCode(row)) { event.preventDefault(); return; }
+    if (column === 1 && (event.key === "Enter" || event.key === "Tab") && !lines[row]?.productId) {
+      const lookupProduct = lookupProducts(row)[lookupIndex] ?? lookupProducts(row)[0];
+      if (lookupProduct) {
+        event.preventDefault();
+        selectProduct(row, lookupProduct);
+        return;
+      }
+      if (lines[row]?.productName.trim()) { event.preventDefault(); return; }
     }
     if (event.key === "Enter" || event.key === "Tab") {
       event.preventDefault();
@@ -208,27 +207,35 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
                 <table className="supply-receipt-grid">
                   <thead><tr><th>م</th><th>رقم الصنف</th><th>اسم الصنف</th><th>الوحدة</th><th>الكمية</th><th>سعر الوحدة</th><th>رقم التشغيلة</th><th>تاريخ الانتهاء</th><th /></tr></thead>
                   <tbody>{lines.map((line, i) => <tr key={`${i}-${line.productId ?? "empty"}`}><td>{i + 1}</td>
-                    <td className="product-code-cell">
+                     <td className="product-code-cell">
                       <input ref={el => { if (el) cellRefs.current.set(`${i}-0`, el); }} value={line.productCode}
-                        placeholder="كود / بحث..." readOnly={!!line.productId}
+                         placeholder="كود الصنف"
                         data-focused-entity-type={line.productId ? "product" : undefined} data-focused-entity-id={line.productId}
-                        onFocus={() => { setActiveLookup(i); setLookupIndex(0); }} onChange={e => { updateLine(i, "productCode", e.target.value); setActiveLookup(i); setLookupIndex(0); }}
+                         onChange={e => updateLine(i, "productCode", e.target.value)}
                         onBlur={() => window.setTimeout(() => setActiveLookup(current => current === i ? null : current), 150)}
                         onKeyDown={e => handleCellKeyDown(e, i, 0)} />
-                      {activeLookup === i && !line.productId && <div className="supply-inline-lookup">
-                        {lookupProducts(i).map((product, productIndex) => <button type="button" key={product.id} className={productIndex === lookupIndex ? "active" : ""} onMouseDown={e => e.preventDefault()} onClick={() => selectProduct(i, product)}>
-                          <b>{product.code ?? product.barcode ?? "—"}</b><span>{product.name}</span><small>{product.unit ?? "وحدة"}</small>
-                        </button>)}
-                        {!lookupProducts(i).length && <span className="supply-inline-lookup-empty">لا توجد أصناف مطابقة</span>}
-                      </div>}
                     </td>
-                    <td className="product-name">{line.productName || "—"}</td>
-                    <td><input ref={el => { if (el) cellRefs.current.set(`${i}-1`, el); }} value={line.unit} placeholder="وحدة" onChange={e => updateLine(i, "unit", e.target.value)} onKeyDown={e => handleCellKeyDown(e, i, 1)} /></td>
-                    <td><input ref={el => { if (el) cellRefs.current.set(`${i}-2`, el); }} className="numeric-input" type="text" inputMode="decimal" value={line.quantity} onChange={e => updateLine(i, "quantity", e.target.value)} onKeyDown={e => handleCellKeyDown(e, i, 2)} /></td>
-                    <td><input ref={el => { if (el) cellRefs.current.set(`${i}-3`, el); }} className="numeric-input" type="text" inputMode="decimal" value={line.unitCost} onChange={e => updateLine(i, "unitCost", e.target.value)} onKeyDown={e => handleCellKeyDown(e, i, 3)} /></td>
-                    <td><input ref={el => { if (el) cellRefs.current.set(`${i}-4`, el); }} value={line.batchNumber} onChange={e => updateLine(i, "batchNumber", e.target.value)} onKeyDown={e => handleCellKeyDown(e, i, 4)} /></td>
+                     <td className="product-name product-name-cell">
+                       <input ref={el => { if (el) cellRefs.current.set(`${i}-1`, el); }} value={line.productName}
+                         placeholder="ابحث باسم الصنف..."
+                         readOnly={!!line.productId}
+                         onFocus={() => { setActiveLookup(i); setLookupIndex(0); }}
+                         onChange={e => { updateLine(i, "productName", e.target.value); setActiveLookup(i); setLookupIndex(0); }}
+                         onBlur={() => window.setTimeout(() => setActiveLookup(current => current === i ? null : current), 150)}
+                         onKeyDown={e => handleCellKeyDown(e, i, 1)} />
+                       {activeLookup === i && !line.productId && <div className="supply-inline-lookup">
+                         {lookupProducts(i).map((product, productIndex) => <button type="button" key={product.id} className={productIndex === lookupIndex ? "active" : ""} onMouseDown={e => e.preventDefault()} onClick={() => selectProduct(i, product)}>
+                           <b>{product.code ?? product.barcode ?? "—"}</b><span>{product.name}</span><small>{product.unit ?? "وحدة"}</small>
+                         </button>)}
+                         {!lookupProducts(i).length && <span className="supply-inline-lookup-empty">لا توجد أصناف مطابقة</span>}
+                       </div>}
+                     </td>
+                     <td><input ref={el => { if (el) cellRefs.current.set(`${i}-2`, el); }} value={line.unit} placeholder="وحدة" onChange={e => updateLine(i, "unit", e.target.value)} onKeyDown={e => handleCellKeyDown(e, i, 2)} /></td>
+                     <td><input ref={el => { if (el) cellRefs.current.set(`${i}-3`, el); }} className="numeric-input" type="text" inputMode="decimal" value={line.quantity} onChange={e => updateLine(i, "quantity", e.target.value)} onKeyDown={e => handleCellKeyDown(e, i, 3)} /></td>
+                     <td><input ref={el => { if (el) cellRefs.current.set(`${i}-4`, el); }} className="numeric-input" type="text" inputMode="decimal" value={line.unitCost} onChange={e => updateLine(i, "unitCost", e.target.value)} onKeyDown={e => handleCellKeyDown(e, i, 4)} /></td>
+                     <td><input ref={el => { if (el) cellRefs.current.set(`${i}-5`, el); }} value={line.batchNumber} onChange={e => updateLine(i, "batchNumber", e.target.value)} onKeyDown={e => handleCellKeyDown(e, i, 5)} /></td>
                     <td><DateSegmentInput standalone value={line.expiryDate} onChange={v => updateLine(i, "expiryDate", v)} onNavigate={direction => {
-                      const target = direction === "previous" ? `${i}-4` : i === lines.length - 1 ? undefined : `${i + 1}-0`;
+                       const target = direction === "previous" ? `${i}-5` : i === lines.length - 1 ? undefined : `${i + 1}-0`;
                       if (target) cellRefs.current.get(target)?.focus();
                       else addBlankAfter(i);
                     }} /></td>
