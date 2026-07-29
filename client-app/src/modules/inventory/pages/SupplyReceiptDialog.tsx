@@ -139,7 +139,17 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
         <div className="supply-receipt-titlebar"><span><ArrowDownCircle size={15} /> سند توريد مخزني</span><button onClick={close} aria-label="إغلاق"><X size={14} /></button></div>
         <div className="supply-receipt-subtitle">سند جديد <span>{isDirty ? "تعديلات غير محفوظة" : "جاهز"}</span></div>
         <div className="supply-receipt-scroll">
-          <div className="supply-receipt-header">
+          <div className="supply-receipt-main-layout">
+            <div className="supply-receipt-materials">
+              <div className="supply-receipt-materials-title">
+                <span>مواد سند التوريد</span>
+                <button className="supply-receipt-add" onClick={() => setPickerOpen(true)}><Plus size={15} /> إضافة صنف</button>
+              </div>
+              <div className="supply-receipt-grid-wrapper">
+                <table className="supply-receipt-grid"><thead><tr><th>م</th><th>رقم الصنف</th><th>اسم الصنف</th><th>الوحدة</th><th>الكمية</th><th>سعر الوحدة</th><th>رقم التشغيلة</th><th>تاريخ الانتهاء</th><th /></tr></thead><tbody>{lines.map((line, i) => <tr key={`${line.productId}-${line.unit}-${line.batchNumber}-${line.expiryDate}`}><td>{i + 1}</td><td><button className="product-preview-link" data-focused-entity-type="product" data-focused-entity-id={line.productId} data-focused-field="productCode" data-focused-source="SupplyReceipt" data-focused-entity-title={line.productName} onClick={previewFocusedEntity}>{line.productCode}</button></td><td className="product-name">{line.productName}</td><td>{line.unit}</td><td><input ref={i === lines.length - 1 ? quantityRef : undefined} className="numeric-input" type="text" inputMode="decimal" value={line.quantity} onChange={e => updateLine(i, "quantity", e.target.value)} /></td><td><input className="numeric-input" type="text" inputMode="decimal" value={line.unitCost} onChange={e => updateLine(i, "unitCost", e.target.value)} /></td><td><input value={line.batchNumber} onChange={e => updateLine(i, "batchNumber", e.target.value)} /></td><td><DateSegmentInput standalone value={line.expiryDate} onChange={v => updateLine(i, "expiryDate", v)} /></td><td><button className="remove-line" onClick={() => { setLines(current => current.filter((_, n) => n !== i)); setIsDirty(true); }}>×</button></td></tr>)}</tbody></table>{!lines.length && <div className="supply-receipt-empty">اضغط «إضافة صنف» لإضافة أصناف السند</div>}
+              </div>
+              <div className="supply-receipt-totals"><span>إجمالي عدد الأصناف: {lines.length}</span><span>إجمالي الكمية: <b dir="ltr">{totalQty.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}</b></span><span>إجمالي القيمة: <b dir="ltr">{totalValue.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}</b> ريال سعودي</span></div>
+            </div>
             <div className="supply-receipt-header-side">
               <div className="supply-receipt-card">
               <Field label="الفرع" required><select value={branchId} onChange={e => void chooseBranch(e.target.value)}><option value="">اختر الفرع</option>{branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></Field>
@@ -159,9 +169,6 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
               </div>
             </div>
           </div>
-          <div className="supply-receipt-add-row"><button className="supply-receipt-add" onClick={() => setPickerOpen(true)}><Plus size={15} /> إضافة صنف</button></div>
-          <div className="supply-receipt-grid-wrapper"><table className="supply-receipt-grid"><thead><tr><th>م</th><th>رقم الصنف</th><th>اسم الصنف</th><th>الوحدة</th><th>الكمية</th><th>سعر الوحدة</th><th>رقم التشغيلة</th><th>تاريخ الانتهاء</th><th /></tr></thead><tbody>{lines.map((line, i) => <tr key={`${line.productId}-${line.unit}-${line.batchNumber}-${line.expiryDate}`}><td>{i + 1}</td><td><button className="product-preview-link" data-focused-entity-type="product" data-focused-entity-id={line.productId} data-focused-field="productCode" data-focused-source="SupplyReceipt" data-focused-entity-title={line.productName} onClick={previewFocusedEntity}>{line.productCode}</button></td><td className="product-name">{line.productName}</td><td>{line.unit}</td><td><input ref={i === lines.length - 1 ? quantityRef : undefined} className="numeric-input" type="text" inputMode="decimal" value={line.quantity} onChange={e => updateLine(i, "quantity", e.target.value)} /></td><td><input className="numeric-input" type="text" inputMode="decimal" value={line.unitCost} onChange={e => updateLine(i, "unitCost", e.target.value)} /></td><td><input value={line.batchNumber} onChange={e => updateLine(i, "batchNumber", e.target.value)} /></td><td><DateSegmentInput standalone value={line.expiryDate} onChange={v => updateLine(i, "expiryDate", v)} /></td><td><button className="remove-line" onClick={() => { setLines(current => current.filter((_, n) => n !== i)); setIsDirty(true); }}>×</button></td></tr>)}</tbody></table>{!lines.length && <div className="supply-receipt-empty">اضغط «إضافة صنف» لإضافة أصناف السند</div>}</div>
-          <div className="supply-receipt-totals"><span>إجمالي عدد الأصناف: {lines.length}</span><span>إجمالي الكمية: <b dir="ltr">{totalQty.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}</b></span><span>إجمالي القيمة: <b dir="ltr">{totalValue.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}</b> ريال سعودي</span></div>
         </div>
         <UnifiedBottomToolbar actions={actions} activeAction={create.isPending ? "save" : undefined} />
       </div>
