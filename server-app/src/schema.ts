@@ -647,6 +647,7 @@ export const stockVouchers = pgTable('stock_vouchers', {
   totalCost: decimal('total_cost', { precision: 18, scale: 4 }).default('0'),
   status: varchar('status', { length: 20 }).notNull().default('confirmed'),
   userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+  receiverUserId: integer('receiver_user_id').references(() => users.id, { onDelete: 'set null' }),
   sourceDocType: varchar('source_doc_type', { length: 50 }),
   sourceDocId: integer('source_doc_id'),
   sourceDocNumber: varchar('source_doc_number', { length: 100 }),

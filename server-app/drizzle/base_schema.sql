@@ -464,6 +464,7 @@ CREATE TABLE IF NOT EXISTS "stock_vouchers" (
     "total_cost" NUMERIC(18, 4) DEFAULT '0',
     "status" VARCHAR(20) NOT NULL DEFAULT 'confirmed',
     "user_id" INTEGER,
+    "receiver_user_id" INTEGER,
     "created_at" TIMESTAMP NOT NULL DEFAULT now()
 );
 
@@ -921,6 +922,11 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
     ALTER TABLE "stock_vouchers" ADD CONSTRAINT "stock_vouchers_user_id_users_id_fk"
         FOREIGN KEY ("user_id") REFERENCES "users" ("id")
+        ON DELETE NO ACTION ON UPDATE NO ACTION;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    ALTER TABLE "stock_vouchers" ADD CONSTRAINT "stock_vouchers_receiver_user_id_users_id_fk"
+        FOREIGN KEY ("receiver_user_id") REFERENCES "users" ("id")
         ON DELETE NO ACTION ON UPDATE NO ACTION;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
