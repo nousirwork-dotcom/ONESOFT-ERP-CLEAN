@@ -86,3 +86,26 @@
 .supply-receipt-grid tbody > tr:not(.supply-receipt-grid-spacer):nth-child(even) > td:last-child {
   background: #f1f1f1;
 }
+
+/* صف إدخال مضغوط مع الحفاظ على وضوح النص */
+.supply-receipt-grid tbody > tr:not(.supply-receipt-grid-spacer) {
+  height: 30px;
+}
+
+.supply-receipt-grid tbody > tr:not(.supply-receipt-grid-spacer) > td {
+  height: 30px;
+  padding-block: 2px;
+  line-height: 1.1;
+}
+
+.supply-receipt-grid tbody > tr:not(.supply-receipt-grid-spacer) > td input {
+  height: 26px;
+  min-height: 26px;
+  padding-block: 2px;
+  line-height: 1.1;
+}
+
+.supply-receipt-grid tbody > tr:not(.supply-receipt-grid-spacer) .supply-receipt-line-date {
+  min-height: 26px;
+  height: 26px;
+}
