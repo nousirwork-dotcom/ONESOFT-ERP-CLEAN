@@ -9,3 +9,56 @@
 .supply-receipt-totals{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;direction:rtl;width:100%;min-width:0;margin:8px 0;padding:8px 12px;background:#fbf8f3;border:1px solid #d8c7b5;border-radius:5px;font-size:12px;font-weight:700;flex-shrink:0;box-sizing:border-box}.supply-receipt-totals span:nth-child(2){text-align:center}.supply-receipt-totals span:nth-child(3){text-align:left}
 .supply-picker-search{display:flex;align-items:center;gap:8px;padding:8px;border:1px solid #d8c7b5;border-radius:5px;background:#fff}.supply-picker-search input{width:100%;border:0;outline:0;background:transparent;font:inherit}.supply-picker-list{max-height:360px;overflow-y:auto;margin-top:10px;border:1px solid #e5dbd0;border-radius:5px}.supply-picker-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 10px;border-bottom:1px solid #eee5dc;font-size:13px}.supply-picker-row:last-child{border-bottom:0}.supply-picker-row span{display:flex;gap:6px;align-items:center}.supply-picker-row small{color:#777}.supply-picker-row button{padding:5px 12px;color:#fff;background:#805c40;border:0;border-radius:4px;cursor:pointer}
 @media(max-width:900px){.supply-receipt-main-layout{display:flex;flex-direction:column}.supply-receipt-header-side,.supply-receipt-materials{width:100%;flex:0 0 auto}.supply-receipt-totals{grid-template-columns:1fr}.supply-receipt-totals span{text-align:right!important}}
+
+/* وضوح حقول سند التوريد */
+.supply-receipt-field input,
+.supply-receipt-field select,
+.supply-receipt-field textarea {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.supply-receipt-grid tbody > tr:not(.supply-receipt-grid-spacer):nth-child(odd) > td {
+  background: #fff;
+}
+
+.supply-receipt-grid tbody > tr:not(.supply-receipt-grid-spacer):nth-child(even) > td {
+  background: #f1f1f1;
+}
+
+.supply-receipt-grid tbody > tr:not(.supply-receipt-grid-spacer) > td {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.supply-receipt-grid tbody > tr:not(.supply-receipt-grid-spacer) > td input {
+  font-size: 12px;
+  font-weight: 700;
+  background: transparent;
+}
+
+.supply-receipt-grid tbody > tr:not(.supply-receipt-grid-spacer) > td input:focus {
+  background: #fff;
+}
+
+.supply-receipt-grid .product-name-cell,
+.supply-receipt-grid .product-name-cell input,
+.supply-receipt-grid .supply-receipt-line-date,
+.supply-receipt-grid .supply-receipt-line-date input {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+}
+
+.supply-receipt-grid .supply-receipt-line-date {
+  background: transparent !important;
+}
+
+.supply-receipt-field .supply-receipt-date-field,
+.supply-receipt-field .supply-receipt-date-field input {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+}
+
+.supply-receipt-grid .supply-receipt-grid-spacer td {
+  background: #fff !important;
+}

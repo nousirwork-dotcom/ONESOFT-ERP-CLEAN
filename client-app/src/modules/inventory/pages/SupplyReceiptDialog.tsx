@@ -234,7 +234,7 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
                      <td><input ref={el => { if (el) cellRefs.current.set(`${i}-3`, el); }} className="numeric-input" type="text" inputMode="decimal" value={line.quantity} onChange={e => updateLine(i, "quantity", e.target.value)} onKeyDown={e => handleCellKeyDown(e, i, 3)} /></td>
                      <td><input ref={el => { if (el) cellRefs.current.set(`${i}-4`, el); }} className="numeric-input" type="text" inputMode="decimal" value={line.unitCost} onChange={e => updateLine(i, "unitCost", e.target.value)} onKeyDown={e => handleCellKeyDown(e, i, 4)} /></td>
                      <td><input ref={el => { if (el) cellRefs.current.set(`${i}-5`, el); }} value={line.batchNumber} onChange={e => updateLine(i, "batchNumber", e.target.value)} onKeyDown={e => handleCellKeyDown(e, i, 5)} /></td>
-                    <td><DateSegmentInput standalone value={line.expiryDate} onChange={v => updateLine(i, "expiryDate", v)} onNavigate={direction => {
+                     <td><DateSegmentInput className="supply-receipt-line-date" standalone value={line.expiryDate} onChange={v => updateLine(i, "expiryDate", v)} onNavigate={direction => {
                        const target = direction === "previous" ? `${i}-5` : i === lines.length - 1 ? undefined : `${i + 1}-0`;
                       if (target) cellRefs.current.get(target)?.focus();
                       else addBlankAfter(i);
