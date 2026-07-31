@@ -10,6 +10,22 @@ export type EditableGridKeyAction =
   | "cancel"
   | "pass-through";
 
+export type EditableGridRowShortcut = "insert" | "delete" | null;
+
+export function resolveEditableGridRowShortcut(input: {
+  key: string;
+  code?: string;
+  ctrlKey?: boolean;
+  shiftKey?: boolean;
+  altKey?: boolean;
+}): EditableGridRowShortcut {
+  const { key, code, ctrlKey = false, shiftKey = false, altKey = false } = input;
+  if (!ctrlKey || shiftKey || altKey) return null;
+  if (key === "Insert" || code === "Insert") return "insert";
+  if (key === "Delete" || code === "Delete") return "delete";
+  return null;
+}
+
 export function resolveEditableGridKey(input: {
   key: string;
   isEditing: boolean;
@@ -62,7 +78,9 @@ export type EditableGridCellProps = {
   className?: string;
   disabled?: boolean;
   isSelected?: boolean;
+  isEditing?: boolean;
   onSelect?: () => void;
+  onEditingChange?: (editing: boolean) => void;
 };
 
 export default function EditableGridCell({
@@ -76,10 +94,12 @@ export default function EditableGridCell({
   className,
   disabled = false,
   isSelected: selectedProp,
+  isEditing: editingProp,
   onSelect,
+  onEditingChange,
 }: EditableGridCellProps) {
   const [internalSelected, setInternalSelected] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
+  const [internalEditing, setInternalEditing] = useState(false);
   const [typingToReplace, setTypingToReplace] = useState(false);
   const [lookupOpen, setLookupOpen] = useState(false);
   const inputElement = useRef<HTMLInputElement | null>(null);
@@ -88,14 +108,23 @@ export default function EditableGridCell({
   const originalValue = useRef(value);
   const isControlled = selectedProp !== undefined;
   const isSelected = isControlled ? selectedProp : internalSelected;
+  const isEditingControlled = editingProp !== undefined;
+  const isEditing = isEditingControlled ? editingProp : internalEditing;
 
   useEffect(() => {
     if (isControlled) selectedRef.current = Boolean(selectedProp);
     if (isControlled && !selectedProp) {
       editingRef.current = false;
-      setIsEditing(false);
+      setInternalEditing(false);
+      setTypingToReplace(false);
     }
   }, [isControlled, selectedProp]);
+  useEffect(() => {
+    if (!isEditingControlled) return;
+    editingRef.current = Boolean(editingProp);
+    setInternalEditing(Boolean(editingProp));
+    if (!editingProp) setTypingToReplace(false);
+  }, [editingProp, isEditingControlled]);
 
   const focusInput = useCallback((placeCaretAtEnd = false) => {
     requestAnimationFrame(() => {
@@ -113,33 +142,36 @@ export default function EditableGridCell({
     selectedRef.current = true;
     editingRef.current = false;
     setInternalSelected(true);
-    setIsEditing(false);
+    setInternalEditing(false);
     setTypingToReplace(false);
+    onEditingChange?.(false);
     onSelect?.();
-  }, [onSelect]);
+  }, [onEditingChange, onSelect]);
 
-  const startEditing = useCallback((replacement?: string) => {
+  const startEditing = useCallback((replacement?: string, focus = true) => {
     originalValue.current = value;
     selectedRef.current = true;
     editingRef.current = true;
     setInternalSelected(true);
-    setIsEditing(true);
+    setInternalEditing(true);
     setTypingToReplace(replacement !== undefined);
     onSelect?.();
+    onEditingChange?.(true);
     onStartEditing?.(value);
     if (replacement !== undefined) onChange(replacement);
-    focusInput(replacement !== undefined);
-  }, [focusInput, onChange, onSelect, onStartEditing, value]);
+    if (focus) focusInput(replacement !== undefined);
+  }, [focusInput, onChange, onEditingChange, onSelect, onStartEditing, value]);
 
   const commitEditing = useCallback(() => {
     if (!editingRef.current) return;
     editingRef.current = false;
     selectedRef.current = true;
     setInternalSelected(true);
-    setIsEditing(false);
+    setInternalEditing(false);
     setTypingToReplace(false);
+    onEditingChange?.(false);
     onCommit?.(value);
-  }, [onCommit, value]);
+  }, [onCommit, onEditingChange, value]);
 
   const cancelEditing = useCallback(() => {
     if (!editingRef.current) return;
@@ -147,12 +179,13 @@ export default function EditableGridCell({
     editingRef.current = false;
     selectedRef.current = true;
     setInternalSelected(true);
-    setIsEditing(false);
+    setInternalEditing(false);
     setTypingToReplace(false);
+    onEditingChange?.(false);
     onChange(previous);
     onCancel?.(previous);
     focusInput();
-  }, [focusInput, onCancel, onChange]);
+  }, [focusInput, onCancel, onChange, onEditingChange]);
 
   const handleKeyDown = useCallback((event: KeyboardEvent<HTMLInputElement>) => {
     const action = resolveEditableGridKey({
@@ -203,13 +236,16 @@ export default function EditableGridCell({
       event.preventDefault();
       setSelectionMode();
       if (event.target instanceof HTMLInputElement) inputElement.current = event.target;
-      focusInput();
+      // The first click is selection only. Do not focus or select the input:
+      // the second click must enter edit mode at the browser's click position.
       return;
     }
     if (!editingRef.current) {
-      startEditing();
+      // Let the browser's native mousedown processing place the caret at
+      // the actual click position. Keyboard/F2 paths still focus explicitly.
+      startEditing(undefined, false);
     }
-  }, [disabled, focusInput, isControlled, selectedProp, setSelectionMode, startEditing]);
+  }, [disabled, isControlled, selectedProp, setSelectionMode, startEditing]);
 
   const handleFocus = useCallback(() => {
     if (!editingRef.current) setSelectionMode();

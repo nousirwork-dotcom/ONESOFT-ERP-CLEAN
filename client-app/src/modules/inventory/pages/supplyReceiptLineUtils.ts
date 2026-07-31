@@ -39,3 +39,28 @@ export function insertBlankLine<T extends SupplyReceiptLineShape>(
   next.splice(Math.max(0, Math.min(index, next.length)), 0, emptyLine());
   return next;
 }
+
+export const SUPPLY_RECEIPT_NAVIGATION_COLUMNS = [
+  "code",
+  "name",
+  "unit",
+  "quantity",
+  "unitCost",
+  "batchNumber",
+  "expiryDate",
+] as const;
+
+export function nextSupplyReceiptCell(
+  row: number,
+  column: number,
+  rowCount: number,
+  backwards = false,
+) {
+  const lastColumn = SUPPLY_RECEIPT_NAVIGATION_COLUMNS.length - 1;
+  if (backwards) {
+    if (column > 0) return { row, column: column - 1 };
+    return row > 0 ? { row: row - 1, column: lastColumn } : null;
+  }
+  if (column < lastColumn) return { row, column: column + 1 };
+  return row + 1 < rowCount ? { row: row + 1, column: 0 } : null;
+}

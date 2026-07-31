@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveEditableGridKey } from "./EditableGridCell";
+import { resolveEditableGridKey, resolveEditableGridRowShortcut } from "./EditableGridCell";
 
 describe("EditableGridCell selection and editing policy", () => {
   it("starts editing with F2 without selecting the existing value", () => {
@@ -30,5 +30,14 @@ describe("EditableGridCell selection and editing policy", () => {
   it("does not capture Ctrl+A or arrow movement while editing", () => {
     expect(resolveEditableGridKey({ key: "a", isEditing: false, ctrlKey: true })).toBe("pass-through");
     expect(resolveEditableGridKey({ key: "ArrowLeft", isEditing: true })).toBe("pass-through");
+  });
+
+  it("recognizes Ctrl+Insert and Ctrl+Delete from key or code", () => {
+    expect(resolveEditableGridRowShortcut({ key: "Insert", ctrlKey: true })).toBe("insert");
+    expect(resolveEditableGridRowShortcut({ key: "Unidentified", code: "Insert", ctrlKey: true })).toBe("insert");
+    expect(resolveEditableGridRowShortcut({ key: "Delete", ctrlKey: true })).toBe("delete");
+    expect(resolveEditableGridRowShortcut({ key: "Unidentified", code: "Delete", ctrlKey: true })).toBe("delete");
+    expect(resolveEditableGridRowShortcut({ key: "Insert", ctrlKey: true, shiftKey: true })).toBeNull();
+    expect(resolveEditableGridRowShortcut({ key: "Insert", ctrlKey: true, altKey: true })).toBeNull();
   });
 });

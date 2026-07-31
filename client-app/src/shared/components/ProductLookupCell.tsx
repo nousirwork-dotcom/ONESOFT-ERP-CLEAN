@@ -232,7 +232,14 @@ export default function ProductLookupCell({
         data-focused-entity-type={focusedEntityType}
         data-focused-entity-id={focusedEntityId}
         onMouseDown={onMouseDown}
-        onFocus={() => { setOpen(false); onOpenChange?.(false); setHighlighted(0); onFocus?.(); }}
+        onFocus={() => {
+          if (!(isEditing && openOnValueChange && query.trim())) {
+            setOpen(false);
+            onOpenChange?.(false);
+            setHighlighted(0);
+          }
+          onFocus?.();
+        }}
         onChange={event => {
           const next = event.target.value;
           setQuery(next);
