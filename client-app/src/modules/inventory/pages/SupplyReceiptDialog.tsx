@@ -273,7 +273,6 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
                           products={products}
                           inputRef={el => { if (el) cellRefs.current.set(`${i}-1`, el); }}
                           className="supply-product-lookup-input"
-                          readOnly={!!line.productId}
                           onChange={value => updateLine(i, "productName", value)}
                           onSelect={product => selectProduct(i, product)}
                           displayValue={product => product.name}

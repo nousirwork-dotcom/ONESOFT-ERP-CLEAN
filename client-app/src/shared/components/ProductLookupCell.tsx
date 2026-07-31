@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, Ref } from "react";
+import "./ProductLookupCell.css";
 
 export type ProductLookupOption = {
   id: number;
@@ -11,53 +12,91 @@ export type ProductLookupOption = {
   costPrice?: string | null;
 };
 
-type ProductLookupCellProps = {
+export type ProductLookupSearch = (
+  query: string,
+  products: ProductLookupOption[],
+) => ProductLookupOption[];
+
+export type ProductLookupCellProps = {
   value: string;
   placeholder: string;
-  products: ProductLookupOption[];
+  products?: ProductLookupOption[];
   onChange: (value: string) => void;
   onSelect: (product: ProductLookupOption) => void;
   onNavigate: (event: KeyboardEvent<HTMLInputElement>) => void;
   displayValue?: (product: ProductLookupOption) => string;
+  getDisplayValue?: (product: ProductLookupOption) => string;
+  searchProducts?: ProductLookupSearch;
   onInvalid?: () => void;
   onFocus?: () => void;
   onBlur?: () => void;
   inputRef?: Ref<HTMLInputElement>;
   readOnly?: boolean;
+  disabled?: boolean;
+  autoFocus?: boolean;
   className?: string;
+  menuClassName?: string;
   "data-focused-entity-type"?: string;
   "data-focused-entity-id"?: number;
 };
 
-function matches(product: ProductLookupOption, query: string) {
+export function filterProductLookupOptions(productList: ProductLookupOption[], query: string) {
   const normalized = query.trim().toLowerCase();
-  if (!normalized) return true;
-  return [product.name, product.code, product.barcode]
+  if (!normalized) return productList;
+  return productList.filter(product => [product.name, product.code, product.barcode]
     .filter(Boolean)
-    .some(value => String(value).toLowerCase().includes(normalized));
+    .some(value => String(value).toLowerCase().includes(normalized)));
 }
 
-function isExactMatch(product: ProductLookupOption, query: string) {
+export function findExactProductLookupOption(productList: ProductLookupOption[], query: string) {
   const normalized = query.trim().toLowerCase();
-  return [product.name, product.code, product.barcode]
+  if (!normalized) return undefined;
+  return productList.find(product => [product.name, product.code, product.barcode]
     .filter(Boolean)
-    .some(value => String(value).trim().toLowerCase() === normalized);
+    .some(value => String(value).trim().toLowerCase() === normalized));
+}
+
+export type ProductLookupKeyAction = "navigate" | "highlight-next" | "highlight-previous" | "select" | "close" | "invalid";
+
+export function resolveProductLookupKey(input: {
+  key: string;
+  open: boolean;
+  query: string;
+  readOnly?: boolean;
+  products?: ProductLookupOption[];
+  filteredLength: number;
+  highlighted: number;
+}) : ProductLookupKeyAction {
+  const { key, open, query, readOnly = false, products = [], filteredLength, highlighted } = input;
+  if (open && key === "ArrowDown") return "highlight-next";
+  if (open && key === "ArrowUp") return "highlight-previous";
+  if (open && query.trim() && (key === "Enter" || key === "Tab") && highlighted < filteredLength) return "select";
+  if (open && key === "Escape") return "close";
+  if ((key === "Enter" || key === "Tab") && !readOnly && query.trim()) {
+    return findExactProductLookupOption(products, query) ? "select" : "invalid";
+  }
+  return "navigate";
 }
 
 export default function ProductLookupCell({
   value,
   placeholder,
-  products,
+  products = [],
   onChange,
   onSelect,
   onNavigate,
   displayValue = product => product.name,
+  getDisplayValue = displayValue,
+  searchProducts,
   onInvalid,
   onFocus,
   onBlur,
   inputRef,
   readOnly = false,
+  disabled = false,
+  autoFocus = false,
   className,
+  menuClassName,
   "data-focused-entity-type": focusedEntityType,
   "data-focused-entity-id": focusedEntityId,
 }: ProductLookupCellProps) {
@@ -65,10 +104,15 @@ export default function ProductLookupCell({
   const [open, setOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(0);
   const internalRef = useRef<HTMLInputElement | null>(null);
-  const dropRef = useRef<HTMLDivElement | null>(null);
-  const filtered = useMemo(() => products.filter(product => matches(product, query)).slice(0, 12), [products, query]);
+  const filtered = useMemo(() => (searchProducts
+    ? searchProducts(query, products)
+    : filterProductLookupOptions(products, query)
+  ).slice(0, 12), [products, query, searchProducts]);
 
   useEffect(() => setQuery(value), [value]);
+  useEffect(() => {
+    if (autoFocus && !disabled && !readOnly) internalRef.current?.focus();
+  }, [autoFocus, disabled, readOnly]);
 
   const focusInvalid = () => {
     onInvalid?.();
@@ -79,33 +123,45 @@ export default function ProductLookupCell({
   };
 
   const select = (product: ProductLookupOption) => {
-    setQuery(displayValue(product));
+    setQuery(getDisplayValue(product));
     setOpen(false);
     setHighlighted(0);
     onSelect(product);
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (open && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+    const action = resolveProductLookupKey({
+      key: event.key,
+      open,
+      query,
+      readOnly,
+      products,
+      filteredLength: filtered.length,
+      highlighted,
+    });
+    if (action === "highlight-next" || action === "highlight-previous") {
       event.preventDefault();
-      setHighlighted(current => event.key === "ArrowDown"
+      setHighlighted(current => action === "highlight-next"
         ? Math.min(current + 1, Math.max(0, filtered.length - 1))
         : Math.max(current - 1, 0));
       return;
     }
-    if (open && (event.key === "Enter" || event.key === "Tab") && filtered[highlighted]) {
-      event.preventDefault();
-      select(filtered[highlighted]);
-      return;
+    if (action === "select") {
+      const selected = open ? filtered[highlighted] : findExactProductLookupOption(products, query);
+      if (selected) {
+        event.preventDefault();
+        select(selected);
+        return;
+      }
     }
-    if (event.key === "Escape" && open) {
+    if (action === "close") {
       event.preventDefault();
       event.stopPropagation();
       setOpen(false);
       return;
     }
-    if ((event.key === "Enter" || event.key === "Tab") && !readOnly && query.trim()) {
-      const exact = products.find(product => isExactMatch(product, query));
+    if (action === "invalid") {
+      const exact = findExactProductLookupOption(products, query);
       if (exact) {
         event.preventDefault();
         select(exact);
@@ -129,22 +185,23 @@ export default function ProductLookupCell({
         value={query}
         placeholder={placeholder}
         readOnly={readOnly}
+        disabled={disabled}
         autoComplete="off"
         className={className}
         data-focused-entity-type={focusedEntityType}
         data-focused-entity-id={focusedEntityId}
-        onFocus={() => { setOpen(!readOnly); setHighlighted(0); onFocus?.(); }}
+        onFocus={() => { setOpen(!readOnly && !disabled); setHighlighted(0); onFocus?.(); }}
         onChange={event => {
           const next = event.target.value;
           setQuery(next);
           setHighlighted(0);
-          setOpen(!readOnly);
+          setOpen(!readOnly && !disabled);
           onChange(next);
         }}
         onBlur={() => {
           window.setTimeout(() => {
-            if (!readOnly && query.trim()) {
-              const exact = products.find(product => isExactMatch(product, query));
+            if (!readOnly && !disabled && query.trim()) {
+              const exact = findExactProductLookupOption(products, query);
               if (exact) select(exact);
               else focusInvalid();
             }
@@ -154,8 +211,8 @@ export default function ProductLookupCell({
         }}
         onKeyDown={handleKeyDown}
       />
-      {open && !readOnly && (
-        <div ref={dropRef} className="supply-inline-lookup">
+      {open && !readOnly && !disabled && (
+        <div className={menuClassName ?? "product-lookup-menu"}>
           {filtered.map((product, index) => (
             <button
               type="button"
@@ -169,7 +226,7 @@ export default function ProductLookupCell({
               <small>{product.unit ?? "وحدة"}</small>
             </button>
           ))}
-          {!filtered.length && <span className="supply-inline-lookup-empty">لا توجد أصناف مطابقة</span>}
+          {!filtered.length && <span className="product-lookup-empty">لا توجد أصناف مطابقة</span>}
         </div>
       )}
     </div>

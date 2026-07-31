@@ -1,0 +1,63 @@
+.product-lookup-cell {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+.product-lookup-cell > input {
+  display: block;
+}
+
+.product-lookup-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 2px);
+  right: 2px;
+  left: 2px;
+  max-height: 230px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #b99b7e;
+  border-radius: 4px;
+  box-shadow: 0 5px 14px rgba(61, 42, 26, .18);
+  text-align: right;
+}
+
+.product-lookup-menu button {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 7px;
+  align-items: center;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-bottom: 1px solid #eee5dc;
+  background: #fff;
+  color: #2d241e;
+  text-align: right;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.product-lookup-menu button:hover,
+.product-lookup-menu button.active {
+  background: #f5eee6;
+}
+
+.product-lookup-menu button b {
+  direction: ltr;
+  color: #6f4d34;
+}
+
+.product-lookup-menu button small,
+.product-lookup-empty {
+  color: #8b7a6d;
+}
+
+.product-lookup-empty {
+  display: block;
+  padding: 12px;
+  text-align: center;
+  font-size: 11px;
+}
