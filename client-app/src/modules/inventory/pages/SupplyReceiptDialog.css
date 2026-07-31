@@ -109,3 +109,13 @@
   min-height: 26px;
   height: 26px;
 }
+
+.product-lookup-cell {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+.product-lookup-cell > input {
+  display: block;
+}

@@ -7,18 +7,11 @@ import { useFocusedEntityRegistrySafe } from "@/components/unified-toolbar/Focus
 import { useUnsavedChangesGuard } from "@/core/hooks/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import DateSegmentInput from "@/shared/components/DateSegmentInput";
+import ProductLookupCell, { type ProductLookupOption } from "@/shared/components/ProductLookupCell";
+import { ensureSingleTrailingBlank, insertBlankLine, lineHasContent } from "./supplyReceiptLineUtils";
 import "./SupplyReceiptDialog.css";
 
-type Product = {
-  id: number;
-  name: string;
-  code?: string | null;
-  barcode?: string | null;
-  costPrice?: string | null;
-  purchasePrice?: string | null;
-  unit?: string | null;
-  itemType?: string | null;
-};
+type Product = ProductLookupOption & { itemType?: string | null };
 type Warehouse = { id: number; name: string; branchId?: number | null };
 type Branch = { id: number; name: string };
 type Supplier = { id: number; name: string };
@@ -35,14 +28,6 @@ type Props = {
 
 const today = () => new Date().toISOString().slice(0, 10);
 const emptyLine = (): Line => ({ productCode: "", productName: "", unit: "", quantity: "1", unitCost: "", batchNumber: "", expiryDate: "" });
-const lineHasContent = (line: Line) => Boolean(
-  line.productId ||
-  line.productCode.trim() ||
-  line.productName.trim() ||
-  line.unit.trim() ||
-  line.batchNumber.trim() ||
-  line.expiryDate.trim()
-);
 const editableColumns = ["code", "name", "unit", "quantity", "unitCost", "batchNumber", "expiryDate"] as const;
 
 export default function SupplyReceiptDialog({ open, onClose, branches, warehouses, suppliers, products, onSaved, registerClose }: Props) {
@@ -58,9 +43,6 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
   const [documentNumber, setDocumentNumber] = useState("");
   const [journalId, setJournalId] = useState<number | null>(null);
   const [lines, setLines] = useState<Line[]>([emptyLine()]);
-  const [activeLookup, setActiveLookup] = useState<number | null>(null);
-  const [activeLookupColumn, setActiveLookupColumn] = useState<0 | 1>(1);
-  const [lookupIndex, setLookupIndex] = useState(0);
   const [isDirty, setIsDirty] = useState(false);
   const [reserving, setReserving] = useState(false);
   const cellRefs = useRef<Map<string, HTMLInputElement>>(new Map());
@@ -91,7 +73,7 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
   const reset = () => {
     setBranchId(""); setSupplierId(""); setReceiverUserId(""); setIssueDate(today());
     setBasedOn(""); setSourceNumber(""); setSupplierDoc(""); setSupplierDocDate("");
-    setNotes(""); setDocumentNumber(""); setJournalId(null); setLines([emptyLine()]); setActiveLookup(null); setActiveLookupColumn(1); setLookupIndex(0); setIsDirty(false);
+    setNotes(""); setDocumentNumber(""); setJournalId(null); setLines([emptyLine()]); setIsDirty(false);
   };
   const close = () => requestClose(onClose);
   useEffect(() => {
@@ -103,17 +85,12 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
       if (event.key !== "Escape") return;
       const target = event.target as HTMLElement | null;
       if (!target?.closest(".supply-receipt-window")) return;
-      if (activeLookup !== null) {
-        setActiveLookup(null);
-        setLookupIndex(0);
-        return;
-      }
       event.preventDefault();
       requestClose(onClose);
     };
     document.addEventListener("keydown", onEscape);
     return () => document.removeEventListener("keydown", onEscape);
-  }, [activeLookup, onClose, open, requestClose]);
+  }, [onClose, open, requestClose]);
   const chooseBranch = async (value: string) => {
     setBranchId(value); setDocumentNumber(""); setJournalId(null); setIsDirty(true);
     const selected = warehouses.find(w => w.branchId === Number(value));
@@ -135,26 +112,17 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
         productName: product.name, unit, quantity: line.quantity || "1",
         unitCost: product.purchasePrice ?? product.costPrice ?? "0",
       } : line);
-      return normalizeLines(index === current.length - 1 ? [...next, emptyLine()] : next);
+      return ensureSingleTrailingBlank(index === current.length - 1 ? [...next, emptyLine()] : next, emptyLine);
     });
-    setActiveLookup(null); setLookupIndex(0); setIsDirty(true);
+    setIsDirty(true);
      requestAnimationFrame(() => cellRefs.current.get(`${index}-2`)?.focus());
   }, [lines]);
-  const lookupProducts = (index: number, column: 0 | 1 = activeLookupColumn) => {
-    const line = lines[index];
-    const q = (column === 0 ? line?.productCode : line?.productName)?.trim().toLowerCase() ?? "";
-    return products.filter(p => !q || `${p.name} ${p.code ?? ""} ${p.barcode ?? ""}`.toLowerCase().includes(q)).slice(0, 12);
-  };
   const addBlankAfter = (index: number) => {
     setLines(current => {
-      if (current.length > index + 1) return current;
-      return [...current, emptyLine()];
+      if (index !== current.length - 1 || !lineHasContent(current[index])) return current;
+      return ensureSingleTrailingBlank([...current, emptyLine()], emptyLine);
     });
     requestAnimationFrame(() => cellRefs.current.get(`${index + 1}-1`)?.focus());
-  };
-  const normalizeLines = (current: Line[]) => {
-    const used = current.filter(lineHasContent);
-    return [...used, emptyLine()];
   };
   const updateLine = (index: number, key: keyof Line, value: string) => {
     const safe = key === "quantity" || key === "unitCost" ? value.replace(/[^\d.]/g, "") : value;
@@ -168,7 +136,7 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
     setIsDirty(true);
   };
   const deleteLine = (index: number) => {
-    setLines(current => normalizeLines(current.filter((_, i) => i !== index)));
+    setLines(current => ensureSingleTrailingBlank(current.filter((_, i) => i !== index), emptyLine));
     setIsDirty(true);
     requestAnimationFrame(() => {
       const target = Math.min(Math.max(0, index), Math.max(0, lines.length - 2));
@@ -176,80 +144,16 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
     });
   };
   const insertLine = (index: number) => {
-    setLines(current => {
-      const hasTrailingBlank = current.length > 0 && !lineHasContent(current[current.length - 1]);
-      const next = hasTrailingBlank ? current.slice(0, -1) : [...current];
-      next.splice(Math.min(index, next.length), 0, emptyLine());
-      if (lineHasContent(next[next.length - 1])) next.push(emptyLine());
-      return next;
-    });
+    setLines(current => insertBlankLine(current, index, emptyLine));
     setIsDirty(true);
     requestAnimationFrame(() => cellRefs.current.get(`${index}-0`)?.focus());
   };
-  const rejectUnresolvedLine = useCallback((index: number) => {
-    const line = lines[index];
-    if (!line || line.productId || (!line.productCode.trim() && !line.productName.trim())) return;
+  const notifyInvalidProduct = useCallback(() => {
     toast.error("كود الصنف غير موجود");
-    requestAnimationFrame(() => {
-      const target = cellRefs.current.get(`${index}-${line.productCode.trim() ? 0 : 1}`);
-      target?.focus();
-      target?.select();
-    });
-  }, [lines]);
-  const finishLookup = (index: number, column: 0 | 1) => {
-    window.setTimeout(() => {
-      const line = lines[index];
-      if (!line || line.productId) return;
-      const value = (column === 0 ? line.productCode : line.productName).trim().toLowerCase();
-      if (!value) {
-        setActiveLookup(current => current === index ? null : current);
-        return;
-      }
-      const exact = products.find(product =>
-        [product.name, product.code, product.barcode]
-          .filter(Boolean)
-          .some(candidate => String(candidate).trim().toLowerCase() === value)
-      );
-      if (exact) selectProduct(index, exact);
-      else rejectUnresolvedLine(index);
-    }, 180);
-  };
+  }, []);
   const handleCellKeyDown = (event: React.KeyboardEvent<HTMLInputElement>, row: number, column: number) => {
     const lastRow = row === lines.length - 1;
     const lastColumn = column === editableColumns.length - 1;
-    const lookupColumn = column === 0 || column === 1 ? column as 0 | 1 : activeLookupColumn;
-    const lookupQuery = (lookupColumn === 0 ? lines[row]?.productCode : lines[row]?.productName)?.trim() ?? "";
-    const lookup = (lookupColumn === 0 || lookupColumn === 1) && activeLookup === row && !lines[row]?.productId
-      ? lookupProducts(row, lookupColumn)
-      : [];
-    if (event.key === "Escape" && activeLookup === row) { event.preventDefault(); setActiveLookup(null); setLookupIndex(0); return; }
-    if (lookup.length && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
-      event.preventDefault();
-      setLookupIndex(current => event.key === "ArrowDown"
-        ? Math.min(current + 1, lookup.length - 1)
-        : Math.max(current - 1, 0));
-      return;
-    }
-    if (lookup.length && lookupQuery && event.key === "Enter" && (column === 0 || column === 1)) {
-      event.preventDefault();
-      selectProduct(row, lookup[lookupIndex] ?? lookup[0]);
-      return;
-    }
-    if ((column === 0 || column === 1) && (event.key === "Enter" || event.key === "Tab") && !lines[row]?.productId) {
-      const lookupProduct = lookupQuery
-        ? lookupProducts(row, lookupColumn)[lookupIndex] ?? lookupProducts(row, lookupColumn)[0]
-        : undefined;
-      if (lookupProduct) {
-        event.preventDefault();
-        selectProduct(row, lookupProduct);
-        return;
-      }
-      if (lines[row]?.productCode.trim() || lines[row]?.productName.trim()) {
-        event.preventDefault();
-        rejectUnresolvedLine(row);
-        return;
-      }
-    }
     if ((event.key === "Enter" || event.key === "Tab") && lastRow && !lineHasContent(lines[row])) {
       event.preventDefault();
       return;
@@ -346,25 +250,36 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
                 <table className="supply-receipt-grid">
                   <thead><tr><th>م</th><th>رقم الصنف</th><th>اسم الصنف</th><th>الوحدة</th><th>الكمية</th><th>سعر الوحدة</th><th>رقم التشغيلة</th><th>تاريخ الانتهاء</th><th /></tr></thead>
                    <tbody>{lines.map((line, i) => <tr data-supply-row={i} key={`${i}-${line.productId ?? "empty"}`}><td>{i + 1}</td>
-                     <td className="product-code-cell">
-                      <input ref={el => { if (el) cellRefs.current.set(`${i}-0`, el); }} value={line.productCode}
+                      <td className="product-code-cell">
+                       <ProductLookupCell
+                         value={line.productCode}
                          placeholder="كود الصنف"
-                        data-focused-entity-type={line.productId ? "product" : undefined} data-focused-entity-id={line.productId}
-                         onChange={e => updateLine(i, "productCode", e.target.value)}
-                         onFocus={() => { setActiveLookup(i); setActiveLookupColumn(0); setLookupIndex(0); }}
-                         onBlur={() => finishLookup(i, 0)}
-                        onKeyDown={e => handleCellKeyDown(e, i, 0)} />
-                        {activeLookup === i && activeLookupColumn === 0 && !line.productId && <ProductLookupList products={lookupProducts(i, 0)} lookupIndex={lookupIndex} onSelect={product => selectProduct(i, product)} />}
+                         products={products}
+                         inputRef={el => { if (el) cellRefs.current.set(`${i}-0`, el); }}
+                         className="supply-product-lookup-input"
+                         data-focused-entity-type={line.productId ? "product" : undefined}
+                         data-focused-entity-id={line.productId}
+                         onChange={value => updateLine(i, "productCode", value)}
+                         onSelect={product => selectProduct(i, product)}
+                         displayValue={product => product.code ?? product.barcode ?? ""}
+                         onInvalid={notifyInvalidProduct}
+                         onNavigate={event => handleCellKeyDown(event, i, 0)}
+                       />
                     </td>
                      <td className="product-name product-name-cell">
-                       <input ref={el => { if (el) cellRefs.current.set(`${i}-1`, el); }} value={line.productName}
-                         placeholder="ابحث باسم الصنف..."
+                        <ProductLookupCell
+                          value={line.productName}
+                          placeholder="ابحث باسم الصنف..."
+                          products={products}
+                          inputRef={el => { if (el) cellRefs.current.set(`${i}-1`, el); }}
+                          className="supply-product-lookup-input"
                           readOnly={!!line.productId}
-                          onFocus={() => { setActiveLookup(i); setActiveLookupColumn(1); setLookupIndex(0); }}
-                         onChange={e => { updateLine(i, "productName", e.target.value); setActiveLookup(i); setLookupIndex(0); }}
-                          onBlur={() => finishLookup(i, 1)}
-                         onKeyDown={e => handleCellKeyDown(e, i, 1)} />
-                        {activeLookup === i && activeLookupColumn === 1 && !line.productId && <ProductLookupList products={lookupProducts(i, 1)} lookupIndex={lookupIndex} onSelect={product => selectProduct(i, product)} />}
+                          onChange={value => updateLine(i, "productName", value)}
+                          onSelect={product => selectProduct(i, product)}
+                          displayValue={product => product.name}
+                          onInvalid={notifyInvalidProduct}
+                          onNavigate={event => handleCellKeyDown(event, i, 1)}
+                        />
                      </td>
                      <td><input ref={el => { if (el) cellRefs.current.set(`${i}-2`, el); }} value={line.unit} placeholder="وحدة" onChange={e => updateLine(i, "unit", e.target.value)} onKeyDown={e => handleCellKeyDown(e, i, 2)} /></td>
                      <td><input ref={el => { if (el) cellRefs.current.set(`${i}-3`, el); }} className="numeric-input" type="text" inputMode="decimal" value={line.quantity} onChange={e => updateLine(i, "quantity", e.target.value)} onKeyDown={e => handleCellKeyDown(e, i, 3)} /></td>
@@ -408,33 +323,4 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
 
 function Field({ label, required, alignStart, children }: { label: string; required?: boolean; alignStart?: boolean; children: React.ReactNode }) {
   return <label className={`supply-receipt-field${alignStart ? " start" : ""}`}><span>{label}{required ? " *" : ""}</span>{children}</label>;
-}
-
-function ProductLookupList({
-  products,
-  lookupIndex,
-  onSelect,
-}: {
-  products: Product[];
-  lookupIndex: number;
-  onSelect: (product: Product) => void;
-}) {
-  return (
-    <div className="supply-inline-lookup">
-      {products.map((product, productIndex) => (
-        <button
-          type="button"
-          key={product.id}
-          className={productIndex === lookupIndex ? "active" : ""}
-          onMouseDown={event => event.preventDefault()}
-          onClick={() => onSelect(product)}
-        >
-          <b>{product.code ?? product.barcode ?? "—"}</b>
-          <span>{product.name}</span>
-          <small>{product.unit ?? "وحدة"}</small>
-        </button>
-      ))}
-      {!products.length && <span className="supply-inline-lookup-empty">لا توجد أصناف مطابقة</span>}
-    </div>
-  );
 }

@@ -74,7 +74,7 @@ export const stockVouchersRouter = router({
        receiverUserId: z.number().optional(),
       items: z.array(z.object({
         productId:   z.number(),
-        productName: z.string(),
+        productName: z.string().optional(),
         quantity:    z.string(),
         unitCost:    z.string(),
         totalCost:   z.string(),
@@ -117,12 +117,6 @@ export const stockVouchersRouter = router({
           const acceptedCodes = [product.code, product.barcode].filter(Boolean).map(String);
           if (submittedCode && !acceptedCodes.includes(submittedCode)) {
             throw new TRPCError({ code: 'BAD_REQUEST', message: `كود الصنف لا يطابق الصنف في السطر ${index + 1}` });
-          }
-          if (!item.productName.trim()) {
-            throw new TRPCError({ code: 'BAD_REQUEST', message: `اسم الصنف مفقود في السطر ${index + 1}` });
-          }
-          if (item.productName.trim() !== product.name.trim()) {
-            throw new TRPCError({ code: 'BAD_REQUEST', message: `اسم الصنف لا يطابق الصنف المرتبط في السطر ${index + 1}` });
           }
           if (!(item.unit?.trim() || product.unit?.trim())) {
             throw new TRPCError({ code: 'BAD_REQUEST', message: `الوحدة مفقودة في السطر ${index + 1}` });
