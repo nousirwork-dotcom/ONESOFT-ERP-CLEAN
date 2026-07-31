@@ -8,6 +8,7 @@ import { useUnsavedChangesGuard } from "@/core/hooks/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import DateSegmentInput from "@/shared/components/DateSegmentInput";
 import ProductLookupCell, { type ProductLookupOption } from "@/shared/components/ProductLookupCell";
+import EditableGridCell from "@/shared/components/EditableGridCell";
 import { ensureSingleTrailingBlank, insertBlankLine, lineHasContent } from "./supplyReceiptLineUtils";
 import "./SupplyReceiptDialog.css";
 
@@ -45,6 +46,7 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
   const [lines, setLines] = useState<Line[]>([emptyLine()]);
   const [isDirty, setIsDirty] = useState(false);
   const [reserving, setReserving] = useState(false);
+  const [selectedCell, setSelectedCell] = useState<string | null>(null);
   const cellRefs = useRef<Map<string, HTMLInputElement>>(new Map());
   const { previewFocusedEntity } = useFocusedEntityRegistrySafe();
   const { confirmOpen, requestClose, confirmSave, confirmDiscard, confirmCancel } = useUnsavedChangesGuard({ isDirty });
@@ -73,7 +75,7 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
   const reset = () => {
     setBranchId(""); setSupplierId(""); setReceiverUserId(""); setIssueDate(today());
     setBasedOn(""); setSourceNumber(""); setSupplierDoc(""); setSupplierDocDate("");
-    setNotes(""); setDocumentNumber(""); setJournalId(null); setLines([emptyLine()]); setIsDirty(false);
+    setNotes(""); setDocumentNumber(""); setJournalId(null); setLines([emptyLine()]); setSelectedCell(null); setIsDirty(false);
   };
   const close = () => requestClose(onClose);
   useEffect(() => {
@@ -236,7 +238,7 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
 
   if (!open) return null;
   return (
-    <div className="supply-receipt-window" dir="rtl">
+      <div className="supply-receipt-window" dir="rtl">
         <div className="supply-receipt-subtitle">سند جديد <span>{isDirty ? "تعديلات غير محفوظة" : "جاهز"}</span></div>
         <div className="supply-receipt-scroll">
           <div className="supply-receipt-main-layout">
@@ -248,45 +250,79 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
                 <table className="supply-receipt-grid">
                   <thead><tr><th>م</th><th>رقم الصنف</th><th>اسم الصنف</th><th>الوحدة</th><th>الكمية</th><th>سعر الوحدة</th><th>رقم التشغيلة</th><th>تاريخ الانتهاء</th><th /></tr></thead>
                    <tbody>{lines.map((line, i) => <tr data-supply-row={i} key={`${i}-${line.productId ?? "empty"}`}><td>{i + 1}</td>
-                      <td className="product-code-cell">
-                       <ProductLookupCell
-                         value={line.productCode}
-                         placeholder="كود الصنف"
-                         products={products}
-                         inputRef={el => { if (el) cellRefs.current.set(`${i}-0`, el); }}
-                         className="supply-product-lookup-input"
-                         data-focused-entity-type={line.productId ? "product" : undefined}
-                         data-focused-entity-id={line.productId}
-                         onChange={value => updateLine(i, "productCode", value)}
-                         onSelect={product => selectProduct(i, product)}
-                         displayValue={product => product.code ?? product.barcode ?? ""}
-                         onInvalid={notifyInvalidProduct}
-                         onNavigate={event => handleCellKeyDown(event, i, 0)}
-                       />
-                    </td>
-                     <td className="product-name product-name-cell">
-                        <ProductLookupCell
-                          value={line.productName}
-                          placeholder="ابحث باسم الصنف..."
-                          products={products}
-                          inputRef={el => { if (el) cellRefs.current.set(`${i}-1`, el); }}
-                          className="supply-product-lookup-input"
-                          onChange={value => updateLine(i, "productName", value)}
-                          onSelect={product => selectProduct(i, product)}
-                          displayValue={product => product.name}
-                          onInvalid={notifyInvalidProduct}
-                          onNavigate={event => handleCellKeyDown(event, i, 1)}
-                        />
+                       <td className="product-code-cell">
+                        <EditableGridCell value={line.productCode} onChange={value => updateLine(i, "productCode", value)}
+                          onNavigate={event => handleCellKeyDown(event, i, 0)}
+                          isSelected={selectedCell === `${i}-0`} onSelect={() => setSelectedCell(`${i}-0`)}
+                          onStartEditing={() => setSelectedCell(`${i}-0`)}>
+                          {cell => <ProductLookupCell value={line.productCode} placeholder="كود الصنف" products={products}
+                            inputRef={el => { if (el) cellRefs.current.set(`${i}-0`, el); }}
+                            className="supply-product-lookup-input" isEditing={cell.isEditing}
+                            openOnValueChange={cell.typingToReplace}
+                            onMouseDown={cell.handleMouseDown} onKeyDown={cell.handleKeyDown}
+                            onOpenChange={cell.setLookupOpen}
+                            data-focused-entity-type={line.productId ? "product" : undefined}
+                            data-focused-entity-id={line.productId}
+                            onChange={value => cell.onChange(value)}
+                            onSelect={product => { selectProduct(i, product); cell.commitEditing(); }}
+                            displayValue={product => product.code ?? product.barcode ?? ""}
+                            onInvalid={notifyInvalidProduct} selectOnInvalid={false} onNavigate={() => {}} />}
+                        </EditableGridCell>
                      </td>
-                     <td><input ref={el => { if (el) cellRefs.current.set(`${i}-2`, el); }} value={line.unit} placeholder="وحدة" onChange={e => updateLine(i, "unit", e.target.value)} onKeyDown={e => handleCellKeyDown(e, i, 2)} /></td>
-                     <td><input ref={el => { if (el) cellRefs.current.set(`${i}-3`, el); }} className="numeric-input" type="text" inputMode="decimal" value={line.quantity} onChange={e => updateLine(i, "quantity", e.target.value)} onKeyDown={e => handleCellKeyDown(e, i, 3)} /></td>
-                     <td><input ref={el => { if (el) cellRefs.current.set(`${i}-4`, el); }} className="numeric-input" type="text" inputMode="decimal" value={line.unitCost} onChange={e => updateLine(i, "unitCost", e.target.value)} onKeyDown={e => handleCellKeyDown(e, i, 4)} /></td>
-                     <td><input ref={el => { if (el) cellRefs.current.set(`${i}-5`, el); }} value={line.batchNumber} onChange={e => updateLine(i, "batchNumber", e.target.value)} onKeyDown={e => handleCellKeyDown(e, i, 5)} /></td>
-                     <td><DateSegmentInput className="supply-receipt-line-date" standalone value={line.expiryDate} onChange={v => updateLine(i, "expiryDate", v)} onNavigate={direction => {
-                       const target = direction === "previous" ? `${i}-5` : i === lines.length - 1 ? undefined : `${i + 1}-0`;
-                      if (target) cellRefs.current.get(target)?.focus();
-                      else addBlankAfter(i);
-                    }} /></td>
+                      <td className="product-name product-name-cell">
+                        <EditableGridCell value={line.productName} onChange={value => updateLine(i, "productName", value)}
+                          onNavigate={event => handleCellKeyDown(event, i, 1)}
+                          isSelected={selectedCell === `${i}-1`} onSelect={() => setSelectedCell(`${i}-1`)}
+                          onStartEditing={() => setSelectedCell(`${i}-1`)}>
+                          {cell => <ProductLookupCell value={line.productName} placeholder="ابحث باسم الصنف..." products={products}
+                            inputRef={el => { if (el) cellRefs.current.set(`${i}-1`, el); }}
+                            className="supply-product-lookup-input" isEditing={cell.isEditing}
+                            openOnValueChange={cell.typingToReplace}
+                            onMouseDown={cell.handleMouseDown} onKeyDown={cell.handleKeyDown}
+                            onOpenChange={cell.setLookupOpen}
+                            onChange={value => cell.onChange(value)}
+                            onSelect={product => { selectProduct(i, product); cell.commitEditing(); }}
+                            displayValue={product => product.name}
+                            onInvalid={notifyInvalidProduct} selectOnInvalid={false} onNavigate={() => {}} />}
+                        </EditableGridCell>
+                      </td>
+                      {[
+                        ["unit", line.unit, "وحدة", false],
+                        ["quantity", line.quantity, "", true],
+                        ["unitCost", line.unitCost, "", true],
+                        ["batchNumber", line.batchNumber, "", false],
+                      ].map(([key, value, placeholder, numeric], offset) => {
+                        const column = offset + 2;
+                        return <td key={key as string}>
+                          <EditableGridCell value={value as string} onChange={next => updateLine(i, key as keyof Line, next)}
+                            onNavigate={event => handleCellKeyDown(event, i, column)}
+                            isSelected={selectedCell === `${i}-${column}`} onSelect={() => setSelectedCell(`${i}-${column}`)}
+                            onStartEditing={() => setSelectedCell(`${i}-${column}`)}>
+                            {cell => <input ref={cell.inputRef} {...cell.inputProps}
+                              className={numeric ? "numeric-input" : undefined}
+                              type="text" inputMode={numeric ? "decimal" : undefined}
+                              placeholder={placeholder as string} />}
+                          </EditableGridCell>
+                        </td>;
+                      })}
+                      <td>
+                        <EditableGridCell value={line.expiryDate} onChange={value => updateLine(i, "expiryDate", value)}
+                          onNavigate={event => handleCellKeyDown(event, i, 6)}
+                          isSelected={selectedCell === `${i}-6`} onSelect={() => setSelectedCell(`${i}-6`)}
+                          onStartEditing={() => setSelectedCell(`${i}-6`)}>
+                          {cell => <DateSegmentInput className="supply-receipt-line-date" standalone value={line.expiryDate}
+                            readOnly={!cell.isEditing} selectOnFocus={false} inputRef={cell.inputRef}
+                            onMouseDown={cell.handleMouseDown} onFocus={cell.inputProps.onFocus}
+                            onKeyDown={cell.handleKeyDown}
+                            onChange={value => cell.onChange(value)}
+                            onNavigate={direction => {
+                              if (cell.isEditing) return;
+                              const target = direction === "previous" ? `${i}-5` : i === lines.length - 1 ? undefined : `${i + 1}-0`;
+                              if (target) cellRefs.current.get(target)?.focus();
+                              else addBlankAfter(i);
+                            }} />}
+                        </EditableGridCell>
+                      </td>
                     <td><button className="remove-line" tabIndex={-1} onClick={() => deleteLine(i)}>×</button></td>
                    </tr>)}<tr className="supply-receipt-grid-spacer" aria-hidden="true"><td colSpan={9} /></tr></tbody>
                 </table>

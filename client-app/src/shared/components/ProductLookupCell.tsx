@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent, Ref } from "react";
+import type { KeyboardEvent, MouseEvent, Ref } from "react";
 import "./ProductLookupCell.css";
 
 export type ProductLookupOption = {
@@ -33,6 +33,12 @@ export type ProductLookupCellProps = {
   onInvalid?: () => void;
   onFocus?: () => void;
   onBlur?: () => void;
+  onMouseDown?: (event: MouseEvent<HTMLElement>) => void;
+  onKeyDown?: (event: KeyboardEvent<HTMLInputElement>) => void;
+  onOpenChange?: (open: boolean) => void;
+  selectOnInvalid?: boolean;
+  isEditing?: boolean;
+  openOnValueChange?: boolean;
   inputRef?: Ref<HTMLInputElement>;
   readOnly?: boolean;
   disabled?: boolean;
@@ -71,6 +77,7 @@ export function resolveProductLookupKey(input: {
   highlighted: number;
 }) : ProductLookupKeyAction {
   const { key, open, query, readOnly = false, products = [], filteredLength, highlighted } = input;
+  if (readOnly) return "navigate";
   if (!open && query.trim() && key === "ArrowDown") return "open";
   if (open && key === "ArrowDown") return "highlight-next";
   if (open && key === "ArrowUp") return "highlight-previous";
@@ -95,6 +102,12 @@ export default function ProductLookupCell({
   onInvalid,
   onFocus,
   onBlur,
+  onMouseDown,
+  onKeyDown: externalOnKeyDown,
+  onOpenChange,
+  selectOnInvalid = true,
+  isEditing = true,
+  openOnValueChange = false,
   inputRef,
   readOnly = false,
   disabled = false,
@@ -113,7 +126,17 @@ export default function ProductLookupCell({
     : filterProductLookupOptions(products, query)
   ).slice(0, 12), [products, query, searchProducts]);
 
-  useEffect(() => setQuery(value), [value]);
+  useEffect(() => {
+    setQuery(value);
+    if (isEditing && openOnValueChange && value.trim()) {
+      setOpen(true);
+      onOpenChange?.(true);
+    }
+    if (!isEditing) {
+      setOpen(false);
+      onOpenChange?.(false);
+    }
+  }, [isEditing, onOpenChange, openOnValueChange, value]);
   useEffect(() => {
     if (autoFocus && !disabled && !readOnly) internalRef.current?.focus();
   }, [autoFocus, disabled, readOnly]);
@@ -122,7 +145,7 @@ export default function ProductLookupCell({
     onInvalid?.();
     requestAnimationFrame(() => {
       internalRef.current?.focus();
-      internalRef.current?.select();
+      if (selectOnInvalid) internalRef.current?.select();
     });
   };
 
@@ -130,10 +153,13 @@ export default function ProductLookupCell({
     setQuery(getDisplayValue(product));
     setOpen(false);
     setHighlighted(0);
+    onOpenChange?.(false);
     onSelect(product);
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    externalOnKeyDown?.(event);
+    if (event.defaultPrevented) return;
     const action = resolveProductLookupKey({
       key: event.key,
       open,
@@ -143,6 +169,9 @@ export default function ProductLookupCell({
       filteredLength: filtered.length,
       highlighted,
     });
+    if (isEditing && !open && (event.key.startsWith("Arrow") || event.key === "Home" || event.key === "End")) {
+      return;
+    }
     if (action === "highlight-next" || action === "highlight-previous") {
       event.preventDefault();
       setHighlighted(current => action === "highlight-next"
@@ -154,6 +183,7 @@ export default function ProductLookupCell({
       event.preventDefault();
       setOpen(true);
       setHighlighted(0);
+      onOpenChange?.(true);
       return;
     }
     if (action === "select") {
@@ -168,6 +198,7 @@ export default function ProductLookupCell({
       event.preventDefault();
       event.stopPropagation();
       setOpen(false);
+      onOpenChange?.(false);
       return;
     }
     if (action === "invalid") {
@@ -194,18 +225,20 @@ export default function ProductLookupCell({
         }}
         value={query}
         placeholder={placeholder}
-        readOnly={readOnly}
+         readOnly={readOnly || !isEditing}
         disabled={disabled}
         autoComplete="off"
         className={className}
         data-focused-entity-type={focusedEntityType}
         data-focused-entity-id={focusedEntityId}
-        onFocus={() => { setOpen(false); setHighlighted(0); onFocus?.(); }}
+        onMouseDown={onMouseDown}
+        onFocus={() => { setOpen(false); onOpenChange?.(false); setHighlighted(0); onFocus?.(); }}
         onChange={event => {
           const next = event.target.value;
           setQuery(next);
           setHighlighted(0);
           setOpen(!readOnly && !disabled && Boolean(next.trim()));
+           onOpenChange?.(!readOnly && !disabled && Boolean(next.trim()));
           onChange(next);
         }}
         onBlur={() => {
@@ -216,6 +249,7 @@ export default function ProductLookupCell({
               else focusInvalid();
             }
             setOpen(false);
+            onOpenChange?.(false);
             onBlur?.();
           }, 180);
         }}
