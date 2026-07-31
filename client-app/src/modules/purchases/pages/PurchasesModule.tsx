@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { useUnsavedChangesGuard } from "@/core/hooks/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
+import ProductLookupCell, { type ProductLookupOption } from "@/shared/components/ProductLookupCell";
 import { FoundationPolicyPanel } from "@/shared/components/FoundationPolicyPanel";
 import type { RecordPolicy } from "@/shared/components/FoundationPolicyPanel";
 import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
@@ -806,21 +807,32 @@ function PurchaseDocPage({ invoiceType }: { invoiceType: InvoiceType }) {
                       <TableRow key={i} className="hover:bg-muted/5">
                         <TableCell className="text-center text-xs text-muted-foreground">{i + 1}</TableCell>
                         <TableCell>
-                          <Select value={line.productId} onValueChange={v => {
-                            const prod = productsQuery.data?.find(p => p.id.toString() === v);
-                            setLines(prev => prev.map((l, idx) => idx === i ? {
-                              ...l, productId: v,
-                              productName: prod?.name ?? l.productName,
-                              unitPrice: prod?.purchasePrice ?? l.unitPrice,
-                            } : l));
-                          }}>
-                            <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="اختر..." /></SelectTrigger>
-                            <SelectContent>
-                              {productsQuery.data?.map(p => (
-                                <SelectItem key={p.id} value={p.id.toString()}>{p.sku ?? p.id} - {p.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <ProductLookupCell
+                            value={line.productName}
+                            placeholder="كود أو اسم أو باركود..."
+                            products={(productsQuery.data ?? []).map(p => ({
+                              id: p.id,
+                              name: p.name,
+                              code: (p as any).sku ?? (p as any).code,
+                              barcode: (p as any).barcode,
+                              unit: (p as any).unit,
+                              purchasePrice: (p as any).purchasePrice ?? (p as any).costPrice,
+                            })) as ProductLookupOption[]}
+                            onChange={value => setLines(prev => prev.map((l, idx) => idx === i
+                              ? { ...l, productId: "", productName: value }
+                              : l))}
+                            onSelect={product => setLines(prev => prev.map((l, idx) => idx === i ? {
+                              ...l,
+                              productId: String(product.id),
+                              productName: product.name,
+                              unit: product.unit ?? l.unit,
+                              unitPrice: product.purchasePrice ?? product.costPrice ?? l.unitPrice,
+                            } : l))}
+                            displayValue={product => product.name}
+                            onInvalid={() => toast.error("الصنف غير موجود")}
+                            onNavigate={() => {}}
+                            className="h-7 text-xs"
+                          />
                         </TableCell>
                         <TableCell>
                           <Input value={line.productName} onChange={e => updateLine(i, "productName", e.target.value)} className="h-7 text-xs" />

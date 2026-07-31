@@ -10,6 +10,9 @@ export type ProductLookupOption = {
   unit?: string | null;
   purchasePrice?: string | null;
   costPrice?: string | null;
+  salePrice?: string | number | null;
+  taxRate?: string | number | null;
+  itemType?: string | null;
 };
 
 export type ProductLookupSearch = (
@@ -56,7 +59,7 @@ export function findExactProductLookupOption(productList: ProductLookupOption[],
     .some(value => String(value).trim().toLowerCase() === normalized));
 }
 
-export type ProductLookupKeyAction = "navigate" | "highlight-next" | "highlight-previous" | "select" | "close" | "invalid";
+export type ProductLookupKeyAction = "navigate" | "open" | "highlight-next" | "highlight-previous" | "select" | "close" | "invalid";
 
 export function resolveProductLookupKey(input: {
   key: string;
@@ -68,6 +71,7 @@ export function resolveProductLookupKey(input: {
   highlighted: number;
 }) : ProductLookupKeyAction {
   const { key, open, query, readOnly = false, products = [], filteredLength, highlighted } = input;
+  if (!open && query.trim() && key === "ArrowDown") return "open";
   if (open && key === "ArrowDown") return "highlight-next";
   if (open && key === "ArrowUp") return "highlight-previous";
   if (open && query.trim() && (key === "Enter" || key === "Tab") && highlighted < filteredLength) return "select";
@@ -146,6 +150,12 @@ export default function ProductLookupCell({
         : Math.max(current - 1, 0));
       return;
     }
+    if (action === "open") {
+      event.preventDefault();
+      setOpen(true);
+      setHighlighted(0);
+      return;
+    }
     if (action === "select") {
       const selected = open ? filtered[highlighted] : findExactProductLookupOption(products, query);
       if (selected) {
@@ -190,12 +200,12 @@ export default function ProductLookupCell({
         className={className}
         data-focused-entity-type={focusedEntityType}
         data-focused-entity-id={focusedEntityId}
-        onFocus={() => { setOpen(!readOnly && !disabled); setHighlighted(0); onFocus?.(); }}
+        onFocus={() => { setOpen(false); setHighlighted(0); onFocus?.(); }}
         onChange={event => {
           const next = event.target.value;
           setQuery(next);
           setHighlighted(0);
-          setOpen(!readOnly && !disabled);
+          setOpen(!readOnly && !disabled && Boolean(next.trim()));
           onChange(next);
         }}
         onBlur={() => {
@@ -211,7 +221,7 @@ export default function ProductLookupCell({
         }}
         onKeyDown={handleKeyDown}
       />
-      {open && !readOnly && !disabled && (
+      {open && query.trim() && !readOnly && !disabled && (
         <div className={menuClassName ?? "product-lookup-menu"}>
           {filtered.map((product, index) => (
             <button
@@ -224,6 +234,7 @@ export default function ProductLookupCell({
               <b>{product.code ?? product.barcode ?? "—"}</b>
               <span>{product.name}</span>
               <small>{product.unit ?? "وحدة"}</small>
+              {product.barcode && <small className="product-lookup-barcode">{product.barcode}</small>}
             </button>
           ))}
           {!filtered.length && <span className="product-lookup-empty">لا توجد أصناف مطابقة</span>}

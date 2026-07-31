@@ -60,4 +60,28 @@ describe("ProductLookupCell lookup rules", () => {
       key: "Delete", open: false, query: "", filteredLength: 0, highlighted: 0,
     })).toBe("navigate");
   });
+
+  it("does not open the menu for focus or an empty query", () => {
+    expect(resolveProductLookupKey({
+      key: "ArrowDown", open: false, query: "", filteredLength: 0, highlighted: 0,
+    })).toBe("navigate");
+    expect(resolveProductLookupKey({
+      key: "Enter", open: false, query: "", filteredLength: 0, highlighted: 0,
+    })).toBe("navigate");
+  });
+
+  it("only considers the menu active after a non-empty query", () => {
+    expect(resolveProductLookupKey({
+      key: "ArrowDown", open: true, query: "P-", filteredLength: 2, highlighted: 0,
+    })).toBe("highlight-next");
+  });
+
+  it("opens from ArrowDown only when text exists", () => {
+    expect(resolveProductLookupKey({
+      key: "ArrowDown", open: false, query: "P-", filteredLength: 2, highlighted: 0,
+    })).toBe("open");
+    expect(resolveProductLookupKey({
+      key: "ArrowDown", open: false, query: " ", filteredLength: 2, highlighted: 0,
+    })).toBe("navigate");
+  });
 });

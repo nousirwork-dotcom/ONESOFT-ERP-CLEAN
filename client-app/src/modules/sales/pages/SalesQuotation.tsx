@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/core/ui/table";
 import { Textarea } from "@/core/ui/textarea";
 import { toast } from "sonner";
+import ProductLookupCell, { type ProductLookupOption } from "@/shared/components/ProductLookupCell";
 import {
   Tag, Plus, Trash2, Search, Eye, Printer, ChevronRight,
   ChevronFirst, ChevronLast, ChevronLeft, Save, FileText,
@@ -243,8 +244,6 @@ function QuotationForm({
   const [selectedIdx, setSelectedIdx]   = useState(0);
   const [copiedLine, setCopiedLine]     = useState<QuoteLine | null>(null);
   const [productSearch, setProductSearch] = useState("");
-  const [showProdDropdown, setShowProdDropdown] = useState(false);
-  const [searchForRow, setSearchForRow] = useState<number | null>(null);
 
   const cellRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
@@ -253,6 +252,10 @@ function QuotationForm({
   const customers  = trpc.customers.list.useQuery({});
   const productsQ  = trpc.products.list.useQuery({});
   const existing   = trpc.salesInvoices.get.useQuery({ id: existingId! }, { enabled: !!existingId });
+  const filteredCustomers = (customers.data as any[] || []).filter(c =>
+    !customerSearch || c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+    (c.code ?? "").toLowerCase().includes(customerSearch.toLowerCase())
+  ).slice(0, 8);
 
   useEffect(() => {
     if (nextNum.data && !quoteNumber && !existingId) {
@@ -415,18 +418,8 @@ function QuotationForm({
       return updated;
     });
     setProductSearch("");
-    setShowProdDropdown(false);
-    setSearchForRow(null);
     setTimeout(() => focusCell(rowIdx, 2), 50);
   };
-
-  const filteredCustomers = (customers.data as any[] || []).filter(c =>
-    !customerSearch || c.name.toLowerCase().includes(customerSearch.toLowerCase())
-  ).slice(0, 8);
-
-  const filteredProducts = (productsQ.data as any[] || []).filter(p =>
-    !productSearch || p.name.toLowerCase().includes(productSearch.toLowerCase()) || (p.code || "").includes(productSearch)
-  ).slice(0, 10);
 
   const handleSave = (saveStatus: typeof status) => {
     const validLines = lines.filter(l => l.productName && parseFloat(l.unitPrice) > 0);
@@ -570,32 +563,16 @@ function QuotationForm({
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         {/* Product search bar */}
         <div className="p-2 border-b border-border bg-muted/20 flex items-center gap-2">
-          <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-          <div className="relative flex-1">
-            <Input
-              placeholder="ابحث عن صنف لإضافته للسطر المحدد..."
-              value={productSearch}
-              onChange={e => { setProductSearch(e.target.value); setShowProdDropdown(true); setSearchForRow(selectedIdx); }}
-              onFocus={() => { setShowProdDropdown(true); setSearchForRow(selectedIdx); }}
-              onBlur={() => setTimeout(() => setShowProdDropdown(false), 150)}
-              className="h-7 text-xs"
-              disableSelectOnFocus
-            />
-            {showProdDropdown && productSearch && filteredProducts.length > 0 && (
-              <div className="absolute z-50 top-full mt-1 w-full bg-card border border-border rounded-lg shadow-xl max-h-56 overflow-y-auto">
-                {filteredProducts.map((p: any) => (
-                  <button
-                    key={p.id}
-                    className="w-full text-right px-3 py-2 text-xs hover:bg-accent/50 flex justify-between items-center border-b border-border/30 last:border-0"
-                    onMouseDown={() => pickProduct(p, searchForRow ?? selectedIdx)}
-                  >
-                    <span className="font-medium">{p.name}</span>
-                    <span className="text-primary font-semibold">{Number(p.salePrice || 0).toFixed(2)} {currency}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <ProductLookupCell
+            value={productSearch}
+            placeholder="ابحث بالكود أو الاسم أو الباركود لإضافته للسطر المحدد..."
+            products={(productsQ.data ?? []) as ProductLookupOption[]}
+            onChange={setProductSearch}
+            onSelect={product => pickProduct(product, selectedIdx)}
+            onInvalid={() => toast.error("الصنف غير موجود")}
+            onNavigate={() => {}}
+            className="h-7 text-xs"
+          />
           <Button variant="outline" size="sm" className="h-7 text-xs gap-1 shrink-0" onClick={addLine}>
             <Plus className="w-3 h-3" /> سطر
           </Button>

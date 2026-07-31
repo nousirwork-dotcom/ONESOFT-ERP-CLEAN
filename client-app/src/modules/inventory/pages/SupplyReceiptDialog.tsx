@@ -104,8 +104,6 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
   };
   const selectProduct = useCallback((index: number, product: Product) => {
     const unit = product.unit ?? "وحدة";
-    const duplicate = lines.some((line, i) => i !== index && line.productId === product.id && line.unit === unit && !line.batchNumber && !line.expiryDate);
-    if (duplicate) { toast.info("الصنف موجود بنفس الوحدة والتشغيلة والتاريخ"); return; }
     setLines(current => {
       const next = current.map((line, i) => i === index ? {
         ...line, productId: product.id, productCode: product.code ?? product.barcode ?? "",
@@ -116,7 +114,7 @@ export default function SupplyReceiptDialog({ open, onClose, branches, warehouse
     });
     setIsDirty(true);
      requestAnimationFrame(() => cellRefs.current.get(`${index}-2`)?.focus());
-  }, [lines]);
+  }, []);
   const addBlankAfter = (index: number) => {
     setLines(current => {
       if (index !== current.length - 1 || !lineHasContent(current[index])) return current;

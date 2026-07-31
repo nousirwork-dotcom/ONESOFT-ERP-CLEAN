@@ -14,6 +14,7 @@ import { useAuth } from "@/core/hooks/useAuth";
 import { ArrowLeftRight, Check, Eye, Minus, Package, Plus, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import ProductLookupCell from "@/shared/components/ProductLookupCell";
 
 type TransferItem = { productId: number; productName: string; quantity: string };
 
@@ -58,7 +59,6 @@ export default function Transfers() {
   const resetForm = () => { setForm({ fromWarehouseId: "", toWarehouseId: "", notes: "" }); setItems([]); };
 
   const addItem = (product: any) => {
-    if (items.find((i) => i.productId === product.id)) { toast.error("الصنف موجود بالفعل"); return; }
     setItems([...items, { productId: product.id, productName: product.name, quantity: "1" }]);
     setProductSearch("");
   };
@@ -184,18 +184,15 @@ export default function Transfers() {
             <div>
               <Label>إضافة أصناف</Label>
               <div className="relative mt-1">
-                <Input value={productSearch} onChange={(e) => setProductSearch(e.target.value)} placeholder="ابحث عن صنف للإضافة..." />
-                {productSearch && products && products.length > 0 && (
-                  <div className="absolute z-10 top-full mt-1 w-full bg-popover border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                    {products.slice(0, 8).map((p) => (
-                      <button key={p.id} onClick={() => addItem(p)} className="w-full flex items-center gap-2 px-3 py-2 hover:bg-accent text-sm text-right">
-                        <Package className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                        <span className="flex-1 truncate">{p.name}</span>
-                        <span className="text-muted-foreground text-xs">{p.barcode}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <ProductLookupCell
+                  value={productSearch}
+                  placeholder="ابحث بالكود أو الاسم أو الباركود..."
+                  products={(products ?? []) as any[]}
+                  onChange={setProductSearch}
+                  onSelect={product => { addItem(product); setProductSearch(""); }}
+                  onNavigate={() => {}}
+                  onInvalid={() => toast.error("الصنف غير موجود")}
+                />
               </div>
             </div>
 

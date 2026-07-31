@@ -28,6 +28,7 @@ import PaymentModal from "@/shared/components/PaymentModal";
 import { PrintEngine } from "@/shared/lib/print";
 import { usePrintTemplate } from "@/shared/hooks/usePrintTemplate";
 import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
+import ProductLookupCell, { type ProductLookupOption } from "@/shared/components/ProductLookupCell";
 import BasedOnDocInput from "@/shared/components/BasedOnDocInput";
 import ContextSelectInput from "@/shared/components/ContextSelectInput";
 import { InvoiceTableColgroup } from "@/components/responsive-layout";
@@ -831,15 +832,16 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
   // ── Product auto-fill ─────────────────────────────────────────────────────
   const handleProductCodeChange = useCallback((idx: number, code: string) => {
     updateLine(idx, "productCode", code);
-    if (!code.trim()) {
-      // مسح الصنف المختار يُمسح كل بيانات السطر
-      setLines(prev => {
-        const updated = [...prev];
-        updated[idx] = { ...EMPTY_LINE(), id: updated[idx].id };
-        return updated;
-      });
-      return;
-    }
+    setLines(prev => {
+      const updated = [...prev];
+      const current = updated[idx];
+      if (!current) return prev;
+      updated[idx] = code.trim()
+        ? { ...current, productCode: code, productId: undefined, productName: "", unit: "", unitPrice: "", taxPct: "0", total: "0" }
+        : { ...EMPTY_LINE(), id: current.id };
+      return updated;
+    });
+    if (!code.trim()) return;
     const found = (productsQuery.data ?? []).find(
       (p: any) => p.code === code || p.barcode === code || String(p.id) === code
     );
@@ -868,6 +870,29 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
       });
     }
   }, [productsQuery.data]);
+
+  const selectProductForLine = useCallback((idx: number, product: ProductLookupOption) => {
+    const isStock = product.itemType !== "service";
+    setLines(prev => {
+      const updated = [...prev];
+      const current = updated[idx];
+      if (!current) return prev;
+      const line = {
+        ...current,
+        productCode: product.code ?? product.barcode ?? "",
+        productName: product.name,
+        productId: product.id,
+        isStockItem: isStock,
+        unit: product.unit ?? "",
+        unitPrice: product.salePrice ? String(product.salePrice) : "",
+        taxPct: (product as any).taxRate ? String((product as any).taxRate) : "0",
+      };
+      line.total = calcLineTotal(line);
+      updated[idx] = line;
+      return updated;
+    });
+    requestAnimationFrame(() => cellRefs.current.get(`${idx}-2`)?.focus());
+  }, []);
 
   // ── Keyboard Navigation ───────────────────────────────────────────────────
   const handleCellKeyDown = useCallback((
@@ -2152,29 +2177,24 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
                 <td className="inv-td text-center text-[#999] text-[11px]">{rowIdx + 1}</td>
 
                 <td className="inv-td p-0">
-                  <input
-                    ref={el => { if (el) cellRefs.current.set(`${rowIdx}-0`, el); }}
+                  <ProductLookupCell
+                    value={line.productCode}
+                    placeholder="كود / بحث..."
+                    products={(productsQuery.data ?? []) as ProductLookupOption[]}
+                    inputRef={el => { if (el) cellRefs.current.set(`${rowIdx}-0`, el); }}
+                    className="inv-cell"
                     data-focused-entity-type={line.productId ? "product" : undefined}
                     data-focused-entity-id={line.productId ?? undefined}
-                    data-focused-field="productCode"
-                    data-focused-source="sales-invoice"
-                    data-focused-row={line.id}
-                    data-focused-entity-title={line.productCode || line.productName || undefined}
-                    value={line.productCode}
-                    onChange={e => { if (!line.productId) handleProductCodeChange(rowIdx, e.target.value); }}
-                    onFocus={() => setSelectedLineIdx(rowIdx)}
-                    onBlur={() => handleProductCodeBlur(rowIdx)}
-                    onKeyDown={e => handleProductCodeKeyDown(e, rowIdx)}
-                    className="inv-cell"
-                    placeholder={line.productId ? "" : "كود / بحث..."}
-                    readOnly={!!line.productId}
-                    title={line.productId ? "كود الصنف لا يمكن تعديله" : "اكتب كود الصنف واضغط Enter"}
-                    style={line.productId ? { background: "#f5f5f3", color: "#555", cursor: "default" } : undefined}
+                    onChange={value => handleProductCodeChange(rowIdx, value)}
+                    onSelect={product => selectProductForLine(rowIdx, product)}
+                    displayValue={product => product.code ?? product.barcode ?? ""}
+                    onInvalid={() => rejectInvalidProduct(`${rowIdx}-0`)}
+                    onNavigate={event => handleCellKeyDown(event, rowIdx, 0)}
                   />
                 </td>
 
                 <td className="inv-td p-0">
-                  <ProductNameCell
+                  {line.isStockItem === false ? <ProductNameCell
                     rowIdx={rowIdx}
                     value={line.productName}
                     products={productsQuery.data ?? []}
@@ -2218,7 +2238,24 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
                     }}
                     onKeyDown={e => handleCellKeyDown(e, rowIdx, 1)}
                     onFocus={() => setSelectedLineIdx(rowIdx)}
-                  />
+                  /> : <ProductLookupCell
+                    value={line.productName}
+                    placeholder="اسم الصنف / بحث..."
+                    products={(productsQuery.data ?? []) as ProductLookupOption[]}
+                    inputRef={el => { if (el) cellRefs.current.set(`${rowIdx}-1`, el); }}
+                    className="inv-cell"
+                    data-focused-entity-type={line.productId ? "product" : undefined}
+                    data-focused-entity-id={line.productId ?? undefined}
+                    onChange={value => {
+                      setLines(prev => prev.map((item, index) => index === rowIdx
+                        ? { ...item, productName: value, productId: undefined, productCode: "", unit: "", unitPrice: "", taxPct: "0", total: "0" }
+                        : item));
+                    }}
+                    onSelect={product => selectProductForLine(rowIdx, product)}
+                    displayValue={product => product.name}
+                    onInvalid={() => rejectInvalidProduct(`${rowIdx}-1`)}
+                    onNavigate={event => handleCellKeyDown(event, rowIdx, 1)}
+                  />}
                 </td>
 
                 <td className="inv-td p-0">
