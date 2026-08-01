@@ -18,6 +18,35 @@ describe('ZATCA submission lifecycle', () => {
     expect(isUncertainZatcaState('submitted_pending')).toBe(true);
   });
 
+  it('keeps a lost response uncertain without inventing an authority result', () => {
+    const response = buildMockAuthorityResponse({
+      operation: 'clearance',
+      outcome: 'connection_loss',
+      uuid: 'uuid-lost',
+      icv: 44,
+      correlationId: 'corr-lost',
+      now: '2026-08-01T00:00:00.000Z',
+    });
+    expect(stateForMockOutcome('clearance', 'connection_loss')).toBe('uncertain');
+    expect(response).toMatchObject({
+      uuid: 'uuid-lost',
+      icv: 44,
+      correlationId: 'corr-lost',
+      final: false,
+      authorityStatus: 'UNKNOWN',
+      receivedAt: null,
+      httpStatus: null,
+    });
+    expect(isFinalZatcaState(response.authorityStatus)).toBe(false);
+  });
+
+  it('does not allow a final result to transition into retry', () => {
+    for (const finalState of ['cleared', 'reported', 'accepted_with_warnings', 'rejected'] as const) {
+      expect(isFinalZatcaState(finalState)).toBe(true);
+      expect(canTransitionZatcaState(finalState, 'retry_pending')).toBe(false);
+    }
+  });
+
   it('allows the first submission to pass through sending before a final result', () => {
     expect(canTransitionZatcaState('not_submitted', 'submitting')).toBe(true);
     expect(canTransitionZatcaState('submitting', 'cleared')).toBe(true);

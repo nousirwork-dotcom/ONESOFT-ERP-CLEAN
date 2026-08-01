@@ -128,7 +128,7 @@ export type ResolvedZatcaContext = {
   };
   csid: {
     id: number;
-    type: 'compliance' | 'production';
+    type: 'compliance' | 'operational' | 'production';
     certificateId: number;
     hasSecret: boolean;
   };
@@ -291,9 +291,14 @@ function assertContextRecords(records: ZatcaContextRecords, requestedEnvironment
   ) {
     throwContext('CSID_INVALID', 'شهادة CSID غير صالحة لوحدة EGS أو للبيئة المحددة');
   }
+  // Simulation uses the operational CSID for reporting/clearance once it is
+  // issued. Before that point, compliance CSID remains usable for the
+  // compliance-test flow and keeps onboarding status resolvable.
   const csidValue = requestedEnvironment === 'production'
     ? records.csid.productionCsid
-    : records.csid.complianceCsid;
+    : requestedEnvironment === 'simulation'
+      ? (records.csid.productionCsid ?? records.csid.complianceCsid)
+      : records.csid.complianceCsid;
   if (!csidValue) {
     throwContext('CSID_INVALID', 'لا يوجد CSID صالح للبيئة المحددة');
   }
@@ -334,7 +339,11 @@ function assertContextRecords(records: ZatcaContextRecords, requestedEnvironment
     },
     csid: {
       id: records.csid.id,
-      type: requestedEnvironment === 'production' ? 'production' : 'compliance',
+      type: requestedEnvironment === 'production'
+        ? 'production'
+        : requestedEnvironment === 'simulation' && Boolean(records.csid.productionCsid)
+          ? 'operational'
+          : 'compliance',
       certificateId: records.csid.certificateId,
       hasSecret: Boolean(csidValue),
     },

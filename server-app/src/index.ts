@@ -448,4 +448,14 @@ try {
 
 console.log('[6/6] ✅ PostgreSQL connected — schema OK — server fully ready');
 
+// Durable Mock-only ZATCA queue. It is started only after schema validation,
+// survives process restarts through PostgreSQL, and never contacts Production.
+try {
+  const { startZatcaQueueWorker } = await import('./services/zatcaQueue.js');
+  startZatcaQueueWorker();
+  console.log('[zatca-queue] durable Mock worker started');
+} catch (err) {
+  console.error('[zatca-queue] worker could not start:', err);
+}
+
 export type { AppRouter } from './routers/index.js';

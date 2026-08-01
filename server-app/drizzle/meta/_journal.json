@@ -442,6 +442,48 @@
       "when": 1785715200000,
       "tag": "0062_zatca_invoice_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1785801600000,
+      "tag": "0063_zatca_attempts_queue",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1785888000000,
+      "tag": "0064_zatca_queue_dedup",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1785974400000,
+      "tag": "0065_zatca_queue_index_cleanup",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1786060800000,
+      "tag": "0066_zatca_transaction_index_scope",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1786147200000,
+      "tag": "0067_zatca_drop_global_transaction_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1786233600000,
+      "tag": "0068_zatca_compliance_secret",
+      "breakpoints": true
     }
   ]
 }

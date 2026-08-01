@@ -159,25 +159,11 @@ export const menuSections = [
   },
   {
     id: "zatca-integration-center",
-    label: "مركز التكامل مع هيئة الزكاة والضريبة والجمارك",
+    label: "مركز الفوترة الإلكترونية – ZATCA",
     color: "#D19C05",
     emoji: "🏛️",
     children: [
-      { id: "zatca-center-dashboard", label: "لوحة التحكم",                  status: "done",    path: "/cfg/zatca-center" },
-      { id: "zatca-center-env",       label: "إعدادات البيئة",               status: "done",    path: "/cfg/zatca-center" },
-      { id: "zatca-center-devices",   label: "إدارة الأجهزة (EGS)",           status: "missing", path: "/cfg/zatca-center" },
-      { id: "zatca-center-certs",     label: "إدارة الشهادات",               status: "partial", path: "/cfg/zatca-center" },
-      { id: "zatca-center-keys",      label: "مفاتيح التشفير",               status: "missing", path: "/cfg/zatca-center" },
-      { id: "zatca-center-xml",       label: "التحقق من XML",                status: "done",    path: "/cfg/zatca-center" },
-      { id: "zatca-center-csr",       label: "إنشاء CSR",                   status: "missing", path: "/cfg/zatca-center" },
-      { id: "zatca-center-register",  label: "تسجيل الجهاز",                 status: "missing", path: "/cfg/zatca-center" },
-      { id: "zatca-center-csid",      label: "إدارة CSID",                  status: "partial", path: "/cfg/zatca-center" },
-      { id: "zatca-center-test",      label: "اختبار الاتصال",               status: "done",    path: "/cfg/zatca-center" },
-      { id: "zatca-center-send",      label: "إرسال الفواتير",               status: "done",    path: "/cfg/zatca-center" },
-      { id: "zatca-center-oplogs",    label: "سجل الإرسال والاستقبال",        status: "done",    path: "/cfg/zatca-center" },
-      { id: "zatca-center-errlogs",   label: "سجل الأخطاء",                 status: "done",    path: "/cfg/zatca-center" },
-      { id: "zatca-center-diag",      label: "أدوات التشخيص",               status: "done",    path: "/cfg/zatca-center" },
-      { id: "zatca-center-reports",   label: "التقارير والإحصائيات",          status: "done",    path: "/cfg/zatca-center" },
+      { id: "zatca-center-dashboard", label: "فتح مركز الفوترة الإلكترونية", status: "done", path: "/cfg/zatca-center" },
     ],
   },
   {
@@ -216,6 +202,7 @@ function StatusIcon({ status }: { status: string }) {
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
 function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
+  const [collapsed, setCollapsed] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
     general: true,
     loyalty: false,
@@ -230,15 +217,28 @@ function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id:
   const toggle = (id: string) => setExpanded(p => ({ ...p, [id]: !p[id] }));
 
   return (
-    <nav className="w-64 shrink-0 border-l border-border bg-[#1a1a2e] overflow-y-auto flex flex-col">
-      <div className="px-4 py-3 border-b border-border/30">
-        <button onClick={() => onSelect("overview")}
-          className="w-full flex items-center justify-end gap-2 text-sm font-bold text-[#a855f7] hover:opacity-80 transition-opacity">
-          الإعدادات
-          <Settings className="w-4 h-4" />
-        </button>
+    <nav className={`${collapsed ? "w-12" : "w-56"} shrink-0 border-l border-border bg-[#1a1a2e] overflow-y-auto flex flex-col transition-[width] duration-200`}>
+      <div className={`${collapsed ? "px-1" : "px-3"} py-3 border-b border-border/30`}>
+        <div className={`flex items-center ${collapsed ? "justify-center" : "justify-between"} gap-2`}>
+          {!collapsed && (
+            <button onClick={() => onSelect("overview")}
+              className="flex-1 flex items-center justify-end gap-2 text-sm font-bold text-[#a855f7] hover:opacity-80 transition-opacity">
+              الإعدادات
+              <Settings className="w-4 h-4" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setCollapsed(value => !value)}
+            title={collapsed ? "توسيع قائمة الإعدادات" : "طي قائمة الإعدادات"}
+            aria-label={collapsed ? "توسيع قائمة الإعدادات" : "طي قائمة الإعدادات"}
+            className="p-1 rounded text-muted-foreground hover:text-white hover:bg-white/10"
+          >
+            {collapsed ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          </button>
+        </div>
       </div>
-      <div className="py-1 flex-1">
+      {!collapsed && <div className="py-1 flex-1">
         {menuSections.map(section => (
           <div key={section.id}>
             <button onClick={() => toggle(section.id)}
@@ -266,7 +266,7 @@ function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id:
             )}
           </div>
         ))}
-      </div>
+      </div>}
     </nav>
   );
 }

@@ -10,10 +10,18 @@ import {
   zatcaDevices,
   documentJournals,
   warehouses,
+  branches,
   zatcaInvoiceTransactions,
+  zatcaSubmissionAttempts,
+  zatcaSubmissionQueue,
   zatcaRequestLog,
   zatcaResponseLog,
   zatcaErrorLog,
+  zatcaEnvironments,
+  zatcaCertificates,
+  zatcaCsid,
+  zatcaKeys,
+  zatcaCsrRequests,
 } from '../schema.js';
 import { eq, and, desc, count, sql, gte, lte, like, or, asc, notInArray } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -31,12 +39,20 @@ import {
   redactZatcaPayload,
   stateForMockOutcome,
 } from '../services/zatcaLifecycle.js';
+import { enqueueZatcaSubmission } from '../services/zatcaQueue.js';
+import {
+  generateSimulationCsr,
+  postFatooraSimulation,
+  getSimulationUrl,
+} from '../services/zatcaFatooraSimulation.js';
+import { buildAndSignSimulationInvoice } from '../services/zatcaInvoiceSubmission.js';
+import { decrypt, encrypt } from '../config-crypto.js';
 
 // ─── Zod Schemas ──────────────────────────────────────────────────────────────
 
 const ZatcaConfigSchema = z.object({
   enabled:             z.boolean().default(false),
-  environment:         z.enum(['sandbox', 'production']).default('sandbox'),
+  environment:         z.enum(['sandbox', 'simulation', 'production']).default('sandbox'),
   vatNumber:           z.string().default(''),
   businessName:        z.string().default(''),
   businessNameEn:      z.string().default(''),
@@ -53,7 +69,7 @@ const ZatcaConfigSchema = z.object({
   // حقول حساسة — تعبّأ فقط بواسطة مسؤول الربط
   csid:                z.string().default(''),
   secretKey:           z.string().default(''),
-  apiBaseUrl:          z.string().default('https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal'),
+  apiBaseUrl:          z.string().default('https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation'),
   apiVersion:          z.string().default('V2'),
   onboardingStep:      z.number().default(0),
   lastOnboardedAt:     z.string().nullable().default(null),
@@ -89,15 +105,47 @@ function lifecycleMessage(state: ZatcaLifecycleState): string {
     ready_to_submit: 'الفاتورة جاهزة للإرسال',
     submitting: 'جاري إرسال الطلب',
     submitted_pending: 'تم إرسال الطلب ولم تصل نتيجة نهائية بعد',
-    cleared: 'تم التخليص رسمياً من الهيئة',
-    reported: 'تم الإبلاغ رسمياً للهيئة',
-    accepted_with_warnings: 'قُبلت الفاتورة مع تحذيرات',
-    rejected: 'رُفضت الفاتورة من الهيئة',
+    cleared: 'نتيجة Mock: محاكاة تخليص — ليست نتيجة رسمية من الهيئة',
+    reported: 'نتيجة Mock: محاكاة إبلاغ — ليست نتيجة رسمية من الهيئة',
+    accepted_with_warnings: 'نتيجة Mock: قبول تجريبي مع تحذيرات',
+    rejected: 'نتيجة Mock: رفض تجريبي — ليست نتيجة رسمية من الهيئة',
     connection_issue: 'حدثت مشكلة اتصال قبل تأكيد النتيجة',
     retry_pending: 'الفاتورة بانتظار إعادة المحاولة',
     uncertain: 'الحالة غير مؤكدة وتحتاج مطابقة',
   };
   return messages[state];
+}
+
+function simulationEnvironmentValues() {
+  return {
+    name: 'Simulation',
+    baseApiUrl: 'https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation',
+    complianceUrl: getSimulationUrl('/compliance'),
+    reportingUrl: getSimulationUrl('/invoices/reporting/single'),
+    clearanceUrl: getSimulationUrl('/invoices/clearance/single'),
+    oauthUrl: null,
+    portalUrl: 'https://fatoora.zatca.gov.sa/',
+  };
+}
+
+function requireSimulationEncryptionKey() {
+  if (
+    process.env.NODE_ENV === 'production'
+    && (!process.env.ENCRYPTION_KEY || process.env.ENCRYPTION_KEY.length < 32)
+  ) {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message: 'لا يمكن حفظ اعتماد Simulation قبل تهيئة ENCRYPTION_KEY الآمن للخادم',
+    });
+  }
+}
+
+function safeRemoteResponse(response: { body: unknown; httpStatus: number | null; requestId: string | null }) {
+  return redactZatcaPayload({
+    httpStatus: response.httpStatus,
+    requestId: response.requestId,
+    body: response.body,
+  });
 }
 
 async function getPosUnitForOrg(orgId: number, posUnitId: number) {
@@ -128,6 +176,7 @@ export const zatcaRouter = router({
       status: zatcaPosUnits.status,
       warehouseId: zatcaPosUnits.warehouseId,
       warehouseName: warehouses.name,
+      branchName: branches.name,
       isActive: zatcaPosUnits.isActive,
       createdAt: zatcaPosUnits.createdAt,
       updatedAt: zatcaPosUnits.updatedAt,
@@ -145,6 +194,10 @@ export const zatcaRouter = router({
         eq(zatcaDevices.orgId, ctx.user.orgId),
         eq(zatcaDevices.isActive, true),
         eq(zatcaDevices.isDeleted, false),
+      ))
+      .leftJoin(branches, and(
+        eq(branches.id, warehouses.branchId),
+        eq(branches.orgId, ctx.user.orgId),
       ))
       .where(and(
         eq(zatcaPosUnits.orgId, ctx.user.orgId),
@@ -173,6 +226,37 @@ export const zatcaRouter = router({
       ...unit,
       journals: journals.filter((journal) => journal.posUnitId === unit.id),
     }));
+  }),
+
+  listLinkingJournalOptions: protectedProcedure.query(async ({ ctx }) => {
+    const rows = await db.select({
+      id: documentJournals.id,
+      code: documentJournals.code,
+      name: documentJournals.name,
+      docType: documentJournals.docType,
+      warehouseId: documentJournals.warehouseId,
+      warehouseName: warehouses.name,
+      branchId: warehouses.branchId,
+      branchName: branches.name,
+      zatcaPosUnitId: documentJournals.zatcaPosUnitId,
+    })
+      .from(documentJournals)
+      .leftJoin(warehouses, and(
+        eq(warehouses.id, documentJournals.warehouseId),
+        eq(warehouses.orgId, ctx.user.orgId),
+      ))
+      .leftJoin(branches, and(
+        eq(branches.id, warehouses.branchId),
+        eq(branches.orgId, ctx.user.orgId),
+      ))
+      .where(and(
+        eq(documentJournals.orgId, ctx.user.orgId),
+        eq(documentJournals.isActive, true),
+        sql`${documentJournals.docType} IN ('sales_invoice', 'sales_return', 'credit_note', 'debit_note')`,
+      ))
+      .orderBy(asc(documentJournals.sortOrder), asc(documentJournals.id));
+
+    return rows;
   }),
 
   createPosUnit: adminProcedure
@@ -309,6 +393,586 @@ export const zatcaRouter = router({
         .returning();
       if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'دفتر المستند غير موجود' });
       return updated;
+    }),
+
+  // ── تهيئة EGS في Fatoora Simulation ───────────────────────────────────────
+  // المفتاح الخاص يُنشأ داخل الخادم ولا يغادره. هذه العملية لا ترسل OTP.
+  createSimulationCsr: adminProcedure
+    .input(z.object({
+      posUnitId: z.number().int().positive(),
+      serialNumber: z.string().trim().min(1).max(100),
+      solutionName: z.string().trim().min(1).max(100).default('OneSoft'),
+      model: z.string().trim().min(1).max(100).default('ERP'),
+      branchName: z.string().trim().min(1).max(255),
+      branchLocation: z.string().trim().min(1).max(255),
+      businessCategory: z.string().trim().min(1).max(255),
+      taxpayerProvidedId: z.string().trim().min(1).max(255),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      requireSimulationEncryptionKey();
+      const [org, unit] = await Promise.all([
+        db.query.organizations.findFirst({
+          where: eq(organizations.id, ctx.user.orgId),
+          columns: { name: true, zatcaConfig: true },
+        }),
+        getPosUnitForOrg(ctx.user.orgId, input.posUnitId),
+      ]);
+      if (!org) throw new TRPCError({ code: 'NOT_FOUND', message: 'المنشأة غير موجودة' });
+
+      const cfg = (org.zatcaConfig ?? {}) as Record<string, unknown>;
+      if (!String(cfg.vatNumber ?? '').trim()) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'أكمل الرقم الضريبي قبل إنشاء CSR' });
+      }
+
+      const csr = generateSimulationCsr({
+        commonName: input.taxpayerProvidedId,
+        organizationName: String(cfg.businessNameEn ?? cfg.businessName ?? org.name ?? ''),
+        organizationUnitName: input.branchName,
+        serialNumber: input.serialNumber,
+        vatNumber: String(cfg.vatNumber),
+        branchLocation: input.branchLocation,
+        businessCategory: input.businessCategory,
+        solutionName: input.solutionName,
+        model: input.model,
+        branchName: input.branchName,
+        taxpayerProvidedId: input.taxpayerProvidedId,
+      });
+
+      return db.transaction(async (tx) => {
+        let environment = await tx.query.zatcaEnvironments.findFirst({
+          where: and(
+            eq(zatcaEnvironments.orgId, ctx.user.orgId),
+            eq(zatcaEnvironments.name, 'Simulation'),
+            eq(zatcaEnvironments.isActive, true),
+            eq(zatcaEnvironments.isDeleted, false),
+          ),
+        });
+        if (!environment) {
+          const [createdEnvironment] = await tx.insert(zatcaEnvironments).values({
+            orgId: ctx.user.orgId,
+            ...simulationEnvironmentValues(),
+            createdBy: ctx.user.id,
+            updatedBy: ctx.user.id,
+          }).returning();
+          environment = createdEnvironment;
+        }
+
+        let device = await tx.query.zatcaDevices.findFirst({
+          where: and(
+            eq(zatcaDevices.orgId, ctx.user.orgId),
+            eq(zatcaDevices.posUnitId, unit.id),
+            eq(zatcaDevices.environmentId, environment.id),
+            eq(zatcaDevices.isActive, true),
+            eq(zatcaDevices.isDeleted, false),
+          ),
+        });
+        if (!device) {
+          const [createdDevice] = await tx.insert(zatcaDevices).values({
+            orgId: ctx.user.orgId,
+            posUnitId: unit.id,
+            deviceName: unit.unitName,
+            serialNumber: input.serialNumber,
+            environmentId: environment.id,
+            registrationStatus: 'csr_ready',
+            createdBy: ctx.user.id,
+            updatedBy: ctx.user.id,
+          }).returning();
+          device = createdDevice;
+        }
+
+        await tx.update(zatcaKeys).set({
+          status: 'rotated',
+          isActive: false,
+          updatedAt: new Date(),
+          updatedBy: ctx.user.id,
+        }).where(and(
+          eq(zatcaKeys.orgId, ctx.user.orgId),
+          eq(zatcaKeys.deviceId, device.id),
+          eq(zatcaKeys.isActive, true),
+          eq(zatcaKeys.isDeleted, false),
+        ));
+
+        const [key] = await tx.insert(zatcaKeys).values({
+          orgId: ctx.user.orgId,
+          deviceId: device.id,
+          algorithm: 'EC',
+          curve: 'secp256k1',
+          publicKey: csr.publicKeyPem,
+          privateKeyEncrypted: encrypt(csr.privateKeyPem),
+          fingerprint: csr.fingerprint,
+          status: 'active',
+          createdBy: ctx.user.id,
+          updatedBy: ctx.user.id,
+        }).returning({ id: zatcaKeys.id });
+
+        const [csrRequest] = await tx.insert(zatcaCsrRequests).values({
+          orgId: ctx.user.orgId,
+          deviceId: device.id,
+          csrText: csr.csrBase64,
+          pem: csr.csrPem,
+          status: 'pending_otp',
+          response: JSON.stringify({
+            environment: 'Simulation',
+            template: 'PREZATCA-Code-Signing',
+            keyId: key.id,
+            fingerprint: csr.fingerprint,
+          }),
+          createdBy: ctx.user.id,
+          updatedBy: ctx.user.id,
+        }).returning({ id: zatcaCsrRequests.id, requestDate: zatcaCsrRequests.requestDate });
+
+        await tx.update(zatcaDevices).set({
+          registrationStatus: 'csr_ready',
+          lastRegistrationDate: new Date(),
+          updatedAt: new Date(),
+          updatedBy: ctx.user.id,
+        }).where(eq(zatcaDevices.id, device.id));
+
+        await tx.insert(zatcaLogs).values({
+          orgId: ctx.user.orgId,
+          eventType: 'simulation_csr_created',
+          status: 'success',
+          environment: 'simulation',
+          userId: ctx.user.id,
+          userName: (ctx.user as any).name ?? 'مسؤول',
+          requestBody: JSON.stringify({
+            posUnitId: unit.id,
+            deviceId: device.id,
+            csrRequestId: csrRequest.id,
+            fingerprint: csr.fingerprint,
+          }),
+          responseBody: JSON.stringify({ template: 'PREZATCA-Code-Signing' }),
+        });
+
+        return {
+          ok: true,
+          posUnitId: unit.id,
+          deviceId: device.id,
+          csrRequestId: csrRequest.id,
+          requestDate: csrRequest.requestDate,
+          fingerprint: csr.fingerprint,
+          environment: 'Simulation',
+          template: 'PREZATCA-Code-Signing',
+          privateKeyReturned: false,
+          csrReturned: false,
+        };
+      });
+    }),
+
+  requestSimulationComplianceCsid: adminProcedure
+    .input(z.object({
+      posUnitId: z.number().int().positive(),
+      csrRequestId: z.number().int().positive().optional(),
+      otp: z.string().trim().min(1).max(32),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      requireSimulationEncryptionKey();
+      const unit = await getPosUnitForOrg(ctx.user.orgId, input.posUnitId);
+      const environment = await db.query.zatcaEnvironments.findFirst({
+        where: and(
+          eq(zatcaEnvironments.orgId, ctx.user.orgId),
+          eq(zatcaEnvironments.name, 'Simulation'),
+          eq(zatcaEnvironments.isActive, true),
+          eq(zatcaEnvironments.isDeleted, false),
+        ),
+      });
+      if (!environment) {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'أنشئ CSR لوحدة الربط أولاً' });
+      }
+      const device = await db.query.zatcaDevices.findFirst({
+        where: and(
+          eq(zatcaDevices.orgId, ctx.user.orgId),
+          eq(zatcaDevices.posUnitId, unit.id),
+          eq(zatcaDevices.environmentId, environment.id),
+          eq(zatcaDevices.isActive, true),
+          eq(zatcaDevices.isDeleted, false),
+        ),
+      });
+      if (!device) throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'لا توجد وحدة EGS جاهزة لهذا الربط' });
+
+      const csrRequest = await db.query.zatcaCsrRequests.findFirst({
+        where: and(
+          eq(zatcaCsrRequests.orgId, ctx.user.orgId),
+          eq(zatcaCsrRequests.deviceId, device.id),
+          ...(input.csrRequestId ? [eq(zatcaCsrRequests.id, input.csrRequestId)] : []),
+          eq(zatcaCsrRequests.isActive, true),
+          eq(zatcaCsrRequests.isDeleted, false),
+        ),
+        orderBy: desc(zatcaCsrRequests.createdAt),
+      });
+      if (!csrRequest?.csrText) {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'لا يوجد CSR صالح لإرسال طلب Compliance CSID' });
+      }
+
+      // OTP يُستخدم في الذاكرة لهذا الطلب فقط ولا يدخل قاعدة البيانات أو السجل.
+      const response = await postFatooraSimulation({
+        apiPath: '/compliance',
+        body: { csr: csrRequest.csrText },
+        otp: input.otp,
+      });
+      const safeResponse = safeRemoteResponse(response);
+      const rawBody = response.body && typeof response.body === 'object'
+        ? response.body as Record<string, unknown>
+        : {};
+      const requestId = String(rawBody.requestID ?? rawBody.requestId ?? response.requestId ?? '') || null;
+      const binarySecurityToken = String(rawBody.binarySecurityToken ?? '');
+      const secret = String(rawBody.secret ?? '');
+      const certificateValue = String(rawBody.certificate ?? rawBody.certificateContent ?? '');
+      const successful = response.httpStatus != null
+        && response.httpStatus >= 200
+        && response.httpStatus < 300
+        && Boolean(binarySecurityToken && secret);
+
+      await db.update(zatcaCsrRequests).set({
+        status: successful ? 'compliance_received' : 'compliance_failed',
+        response: JSON.stringify(safeResponse),
+        updatedAt: new Date(),
+        updatedBy: ctx.user.id,
+      }).where(eq(zatcaCsrRequests.id, csrRequest.id));
+
+      await db.insert(zatcaRequestLog).values({
+        orgId: ctx.user.orgId,
+        url: response.url,
+        httpMethod: 'POST',
+        headers: { 'Accept-Version': 'V2', 'OTP': '[REDACTED]' },
+        requestBody: JSON.stringify({ csr: '[REDACTED]' }),
+        requestTime: new Date(),
+        createdBy: ctx.user.id,
+        updatedBy: ctx.user.id,
+      });
+      await db.insert(zatcaResponseLog).values({
+        orgId: ctx.user.orgId,
+        httpStatus: response.httpStatus,
+        responseBody: JSON.stringify(safeResponse),
+        responseTime: new Date(),
+        createdBy: ctx.user.id,
+        updatedBy: ctx.user.id,
+      });
+
+      if (!successful) {
+        await db.insert(zatcaLogs).values({
+          orgId: ctx.user.orgId,
+          eventType: 'simulation_compliance_csid',
+          status: 'error',
+          environment: 'simulation',
+          userId: ctx.user.id,
+          userName: (ctx.user as any).name ?? 'مسؤول',
+          requestBody: JSON.stringify({ csrRequestId: csrRequest.id }),
+          responseBody: JSON.stringify(safeResponse),
+          errorMessage: 'لم تُقبل استجابة Compliance CSID أو لم تصل نتيجة صالحة',
+        });
+        return {
+          ok: false,
+          requestId,
+          httpStatus: response.httpStatus,
+          result: safeResponse,
+          message: 'لم يتم إنشاء Compliance CSID؛ راجع رد Fatoora Simulation',
+        };
+      }
+
+      const key = await db.query.zatcaKeys.findFirst({
+        where: and(
+          eq(zatcaKeys.orgId, ctx.user.orgId),
+          eq(zatcaKeys.deviceId, device.id),
+          eq(zatcaKeys.isActive, true),
+          eq(zatcaKeys.isDeleted, false),
+        ),
+        orderBy: desc(zatcaKeys.createdAt),
+      });
+      const [certificate] = await db.insert(zatcaCertificates).values({
+        orgId: ctx.user.orgId,
+        deviceId: device.id,
+        csr: csrRequest.csrText,
+        publicCertificate: certificateValue || null,
+        privateKeyEncrypted: key?.privateKeyEncrypted ?? null,
+        secretKeyEncrypted: encrypt(secret),
+        complianceSecretEncrypted: encrypt(secret),
+        certificateVersion: 'Simulation',
+        status: 'active',
+        isActive: true,
+        createdBy: ctx.user.id,
+        updatedBy: ctx.user.id,
+      }).returning({ id: zatcaCertificates.id });
+      const [csid] = await db.insert(zatcaCsid).values({
+        orgId: ctx.user.orgId,
+        deviceId: device.id,
+        certificateId: certificate.id,
+        complianceCsid: encrypt(binarySecurityToken),
+        productionCsid: null,
+        issueDate: new Date(),
+        status: 'active',
+        createdBy: ctx.user.id,
+        updatedBy: ctx.user.id,
+      }).returning({ id: zatcaCsid.id });
+      await db.update(zatcaDevices).set({
+        currentCsidId: csid.id,
+        registrationStatus: 'active',
+        lastRegistrationDate: new Date(),
+        lastConnectionDate: new Date(),
+        updatedAt: new Date(),
+        updatedBy: ctx.user.id,
+      }).where(eq(zatcaDevices.id, device.id));
+
+      await db.insert(zatcaLogs).values({
+        orgId: ctx.user.orgId,
+        eventType: 'simulation_compliance_csid',
+        status: 'success',
+        environment: 'simulation',
+        userId: ctx.user.id,
+        userName: (ctx.user as any).name ?? 'مسؤول',
+        requestBody: JSON.stringify({ csrRequestId: csrRequest.id }),
+        responseBody: JSON.stringify(safeResponse),
+      });
+      return {
+        ok: true,
+        requestId,
+        httpStatus: response.httpStatus,
+        result: safeResponse,
+        message: 'تم استلام Compliance CSID من منصة محاكاة فاتورة الرسمية وحفظه مشفّراً',
+        secretsReturned: false,
+      };
+    }),
+
+  requestSimulationOperationalCsid: adminProcedure
+    .input(z.object({
+      posUnitId: z.number().int().positive(),
+      csrRequestId: z.number().int().positive().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      requireSimulationEncryptionKey();
+      const unit = await getPosUnitForOrg(ctx.user.orgId, input.posUnitId);
+      const environment = await db.query.zatcaEnvironments.findFirst({
+        where: and(
+          eq(zatcaEnvironments.orgId, ctx.user.orgId),
+          eq(zatcaEnvironments.name, 'Simulation'),
+          eq(zatcaEnvironments.isActive, true),
+          eq(zatcaEnvironments.isDeleted, false),
+        ),
+      });
+      if (!environment) {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'لم تُهيّأ بيئة Simulation بعد' });
+      }
+
+      const device = await db.query.zatcaDevices.findFirst({
+        where: and(
+          eq(zatcaDevices.orgId, ctx.user.orgId),
+          eq(zatcaDevices.posUnitId, unit.id),
+          eq(zatcaDevices.environmentId, environment.id),
+          eq(zatcaDevices.isActive, true),
+          eq(zatcaDevices.isDeleted, false),
+        ),
+      });
+      if (!device?.currentCsidId) {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'اطلب Compliance CSID أولاً' });
+      }
+
+      const csid = await db.query.zatcaCsid.findFirst({
+        where: and(
+          eq(zatcaCsid.id, device.currentCsidId),
+          eq(zatcaCsid.orgId, ctx.user.orgId),
+          eq(zatcaCsid.deviceId, device.id),
+          eq(zatcaCsid.status, 'active'),
+          eq(zatcaCsid.isActive, true),
+          eq(zatcaCsid.isDeleted, false),
+        ),
+      });
+      if (!csid?.complianceCsid || !csid.certificateId) {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Compliance CSID غير مكتمل لهذه الوحدة' });
+      }
+
+      const certificate = await db.query.zatcaCertificates.findFirst({
+        where: and(
+          eq(zatcaCertificates.id, csid.certificateId),
+          eq(zatcaCertificates.orgId, ctx.user.orgId),
+          eq(zatcaCertificates.deviceId, device.id),
+          eq(zatcaCertificates.status, 'active'),
+          eq(zatcaCertificates.isActive, true),
+          eq(zatcaCertificates.isDeleted, false),
+        ),
+      });
+      if (!certificate?.complianceSecretEncrypted && !certificate?.secretKeyEncrypted) {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'سر Compliance CSID غير متوفر داخليًا' });
+      }
+
+      const csrRequest = await db.query.zatcaCsrRequests.findFirst({
+        where: and(
+          eq(zatcaCsrRequests.orgId, ctx.user.orgId),
+          eq(zatcaCsrRequests.deviceId, device.id),
+          ...(input.csrRequestId ? [eq(zatcaCsrRequests.id, input.csrRequestId)] : []),
+          eq(zatcaCsrRequests.isActive, true),
+          eq(zatcaCsrRequests.isDeleted, false),
+        ),
+        orderBy: desc(zatcaCsrRequests.createdAt),
+      });
+      const priorResponse = csrRequest?.response ? JSON.parse(csrRequest.response) as Record<string, unknown> : {};
+      const complianceRequestId = String(
+        priorResponse.requestId
+        ?? priorResponse.requestID
+        ?? '',
+      );
+      if (!complianceRequestId) {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'لم يُحفظ Request ID الخاص بـCompliance CSID' });
+      }
+
+      const response = await postFatooraSimulation({
+        apiPath: '/production/csids',
+        body: { compliance_request_id: complianceRequestId },
+        binarySecurityToken: decrypt(csid.complianceCsid),
+        secret: decrypt(certificate.complianceSecretEncrypted ?? certificate.secretKeyEncrypted ?? ''),
+      });
+      const safeResponse = safeRemoteResponse(response);
+      const rawBody = response.body && typeof response.body === 'object'
+        ? response.body as Record<string, unknown>
+        : {};
+      const requestId = String(rawBody.requestID ?? rawBody.requestId ?? response.requestId ?? '') || null;
+      const operationalToken = String(rawBody.binarySecurityToken ?? '');
+      const operationalSecret = String(rawBody.secret ?? '');
+      const successful = response.httpStatus != null
+        && response.httpStatus >= 200
+        && response.httpStatus < 300
+        && Boolean(operationalToken && operationalSecret);
+
+      await db.insert(zatcaRequestLog).values({
+        orgId: ctx.user.orgId,
+        url: response.url,
+        httpMethod: 'POST',
+        headers: { 'Accept-Version': 'V2', Authorization: '[REDACTED]' },
+        requestBody: JSON.stringify({ compliance_request_id: complianceRequestId }),
+        requestTime: new Date(),
+        createdBy: ctx.user.id,
+        updatedBy: ctx.user.id,
+      });
+      await db.insert(zatcaResponseLog).values({
+        orgId: ctx.user.orgId,
+        httpStatus: response.httpStatus,
+        responseBody: JSON.stringify(safeResponse),
+        responseTime: new Date(),
+        createdBy: ctx.user.id,
+        updatedBy: ctx.user.id,
+      });
+
+      if (!successful) {
+        await db.insert(zatcaLogs).values({
+          orgId: ctx.user.orgId,
+          eventType: 'simulation_operational_csid',
+          status: 'error',
+          environment: 'simulation',
+          userId: ctx.user.id,
+          userName: (ctx.user as any).name ?? 'مسؤول',
+          requestBody: JSON.stringify({ posUnitId: unit.id, complianceRequestId }),
+          responseBody: JSON.stringify(safeResponse),
+          errorMessage: 'لم تُقبل استجابة CSID التشغيلي أو لم تصل نتيجة مكتملة',
+        });
+        return {
+          ok: false,
+          requestId,
+          httpStatus: response.httpStatus,
+          result: safeResponse,
+          message: 'لم يتم إنشاء CSID التشغيلي؛ راجع رد Fatoora Simulation',
+        };
+      }
+
+      await db.transaction(async (tx) => {
+        await tx.update(zatcaCsid).set({
+          productionCsid: encrypt(operationalToken),
+          updatedAt: new Date(),
+          updatedBy: ctx.user.id,
+        }).where(and(eq(zatcaCsid.id, csid.id), eq(zatcaCsid.orgId, ctx.user.orgId)));
+        await tx.update(zatcaCertificates).set({
+          secretKeyEncrypted: encrypt(operationalSecret),
+          updatedAt: new Date(),
+          updatedBy: ctx.user.id,
+        }).where(and(eq(zatcaCertificates.id, certificate.id), eq(zatcaCertificates.orgId, ctx.user.orgId)));
+        await tx.update(zatcaDevices).set({
+          registrationStatus: 'operational',
+          lastConnectionDate: new Date(),
+          updatedAt: new Date(),
+          updatedBy: ctx.user.id,
+        }).where(and(eq(zatcaDevices.id, device.id), eq(zatcaDevices.orgId, ctx.user.orgId)));
+        await tx.insert(zatcaLogs).values({
+          orgId: ctx.user.orgId,
+          eventType: 'simulation_operational_csid',
+          status: 'success',
+          environment: 'simulation',
+          userId: ctx.user.id,
+          userName: (ctx.user as any).name ?? 'مسؤول',
+          requestBody: JSON.stringify({ posUnitId: unit.id, complianceRequestId }),
+          responseBody: JSON.stringify(safeResponse),
+        });
+      });
+
+      return {
+        ok: true,
+        requestId,
+        httpStatus: response.httpStatus,
+        result: safeResponse,
+        message: 'تم استلام CSID التشغيلي من Fatoora Simulation وحفظه مشفّراً',
+        secretsReturned: false,
+      };
+    }),
+
+  getSimulationOnboardingStatus: protectedProcedure
+    .input(z.object({ posUnitId: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      const unit = await getPosUnitForOrg(ctx.user.orgId, input.posUnitId);
+      const environment = await db.query.zatcaEnvironments.findFirst({
+        where: and(
+          eq(zatcaEnvironments.orgId, ctx.user.orgId),
+          eq(zatcaEnvironments.name, 'Simulation'),
+          eq(zatcaEnvironments.isActive, true),
+          eq(zatcaEnvironments.isDeleted, false),
+        ),
+      });
+      if (!environment) return { environment: 'Simulation', device: null, csr: null, csid: null };
+      const device = await db.query.zatcaDevices.findFirst({
+        where: and(
+          eq(zatcaDevices.orgId, ctx.user.orgId),
+          eq(zatcaDevices.posUnitId, unit.id),
+          eq(zatcaDevices.environmentId, environment.id),
+          eq(zatcaDevices.isActive, true),
+          eq(zatcaDevices.isDeleted, false),
+        ),
+        columns: {
+          id: true,
+          deviceName: true,
+          serialNumber: true,
+          registrationStatus: true,
+          currentCsidId: true,
+          lastRegistrationDate: true,
+          lastConnectionDate: true,
+        },
+      });
+      if (!device) return { environment: 'Simulation', device: null, csr: null, csid: null };
+      const [csr, csid] = await Promise.all([
+        db.query.zatcaCsrRequests.findFirst({
+          where: and(
+            eq(zatcaCsrRequests.orgId, ctx.user.orgId),
+            eq(zatcaCsrRequests.deviceId, device.id),
+            eq(zatcaCsrRequests.isActive, true),
+            eq(zatcaCsrRequests.isDeleted, false),
+          ),
+          columns: { id: true, status: true, requestDate: true, updatedAt: true },
+          orderBy: desc(zatcaCsrRequests.createdAt),
+        }),
+        device.currentCsidId == null ? null : db.query.zatcaCsid.findFirst({
+          where: and(
+            eq(zatcaCsid.id, device.currentCsidId),
+            eq(zatcaCsid.orgId, ctx.user.orgId),
+            eq(zatcaCsid.isActive, true),
+            eq(zatcaCsid.isDeleted, false),
+          ),
+          columns: { id: true, status: true, issueDate: true, expiryDate: true },
+        }),
+      ]);
+      return {
+        environment: 'Simulation',
+        device,
+        csr,
+        csid,
+        operationalReady: device.registrationStatus === 'operational',
+        endpoint: getSimulationUrl('/compliance'),
+        secretsReturned: false,
+      };
     }),
 
   resolveContext: protectedProcedure
@@ -491,17 +1155,17 @@ export const zatcaRouter = router({
 
       const org = await db.query.organizations.findFirst({
         where: eq(organizations.id, ctx.user.orgId),
-        columns: { zatcaConfig: true },
+        columns: { zatcaConfig: true, name: true },
       });
       const cfg = (org?.zatcaConfig ?? {}) as Record<string, unknown>;
       if (!cfg.enabled) {
         return { ok: false, status: currentState, message: 'منظومة ZATCA غير مفعَّلة' };
       }
       if (cfg.environment === 'production') {
-        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'اتصال Production مغلق في هذه المرحلة؛ استخدم Mock أو Simulation' });
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'اتصال Production مغلق في هذه المرحلة' });
       }
 
-      const existing = await db.query.zatcaInvoiceTransactions.findFirst({
+      let existing = await db.query.zatcaInvoiceTransactions.findFirst({
         where: and(
           eq(zatcaInvoiceTransactions.orgId, ctx.user.orgId),
           eq(zatcaInvoiceTransactions.invoiceId, input.invoiceId),
@@ -521,13 +1185,24 @@ export const zatcaRouter = router({
         };
       }
 
+      const resolvedContext = await resolveZatcaContext({
+        journalId: inv.journalId ?? -1,
+        environment: cfg.environment === 'simulation' ? 'simulation' : 'sandbox',
+        user: {
+          id: ctx.user.id,
+          orgId: ctx.user.orgId,
+          role: ctx.user.role,
+          userGroupId: ctx.user.userGroupId,
+        },
+      });
+
       const now = new Date();
-      const uuid = inv.zatcaUuid ?? existing?.invoiceUuid?.toString() ?? crypto.randomUUID();
-      const icv = inv.zatcaInvoiceCounter ?? existing?.invoiceCounter ?? input.invoiceId;
-      const correlationId = existing?.correlationId ?? crypto.randomUUID();
-      const idempotencyKey = `${ctx.user.orgId}:${input.invoiceId}:${uuid}:${operation}`;
-      const attemptCount = (existing?.attemptCount ?? inv.zatcaAttemptCount ?? 0) + 1;
-      const requestPayload = redactZatcaPayload({
+      let uuid = inv.zatcaUuid ?? existing?.invoiceUuid?.toString() ?? crypto.randomUUID();
+      let icv = inv.zatcaInvoiceCounter ?? existing?.invoiceCounter ?? input.invoiceId;
+      let correlationId = existing?.correlationId ?? crypto.randomUUID();
+      let idempotencyKey = `${ctx.user.orgId}:${input.invoiceId}:${uuid}:${operation}`;
+      let attemptCount = (existing?.attemptCount ?? inv.zatcaAttemptCount ?? 0) + 1;
+      let requestPayload = redactZatcaPayload({
         invoiceId: input.invoiceId,
         invoiceNumber: inv.invoiceNumber,
         uuid,
@@ -554,8 +1229,40 @@ export const zatcaRouter = router({
           environmentId: null,
           createdBy: ctx.user.id,
           updatedBy: ctx.user.id,
-        }).returning({ id: zatcaInvoiceTransactions.id });
-        transactionId = created.id;
+        }).onConflictDoNothing().returning({ id: zatcaInvoiceTransactions.id });
+        transactionId = created?.id;
+        if (transactionId == null) {
+          existing = await db.query.zatcaInvoiceTransactions.findFirst({
+            where: and(
+              eq(zatcaInvoiceTransactions.orgId, ctx.user.orgId),
+              eq(zatcaInvoiceTransactions.invoiceId, input.invoiceId),
+              eq(zatcaInvoiceTransactions.isActive, true),
+              eq(zatcaInvoiceTransactions.isDeleted, false),
+            ),
+            orderBy: desc(zatcaInvoiceTransactions.createdAt),
+          });
+          if (!existing) {
+            throw new TRPCError({
+              code: 'CONFLICT',
+              message: 'تعذر تثبيت معاملة ZATCA الوحيدة للفواتير المتزامنة',
+            });
+          }
+          transactionId = existing.id;
+          uuid = existing.invoiceUuid?.toString() ?? uuid;
+          icv = existing.invoiceCounter ?? icv;
+          correlationId = existing.correlationId ?? correlationId;
+          idempotencyKey = existing.idempotencyKey ?? `${ctx.user.orgId}:${input.invoiceId}:${uuid}:${operation}`;
+          attemptCount = (existing.attemptCount ?? 0) + 1;
+          requestPayload = redactZatcaPayload({
+            invoiceId: input.invoiceId,
+            invoiceNumber: inv.invoiceNumber,
+            uuid,
+            icv,
+            operation,
+            idempotencyKey,
+            submittedAt: now.toISOString(),
+          }) as Record<string, unknown>;
+        }
       }
 
       await db.update(zatcaInvoiceTransactions).set({
@@ -565,6 +1272,8 @@ export const zatcaRouter = router({
         invoiceStatus: 'submitting',
         correlationId,
         idempotencyKey,
+        deviceId: resolvedContext.egs.id,
+        environmentId: resolvedContext.environment.id,
         requestPayload: requestPayload as any,
         lastAttemptAt: now,
         attemptCount,
@@ -595,6 +1304,293 @@ export const zatcaRouter = router({
         updatedBy: ctx.user.id,
       });
 
+      const [attempt] = await db.insert(zatcaSubmissionAttempts).values({
+        orgId: ctx.user.orgId,
+        transactionId,
+        attemptNumber: attemptCount,
+        startedAt: now,
+        requestId: correlationId,
+        requestPayload: requestPayload as any,
+        result: 'started',
+      }).onConflictDoNothing().returning({
+        id: zatcaSubmissionAttempts.id,
+        attemptId: zatcaSubmissionAttempts.attemptId,
+      });
+      if (!attempt) {
+        const concurrent = await db.query.zatcaInvoiceTransactions.findFirst({
+          where: and(
+            eq(zatcaInvoiceTransactions.id, transactionId),
+            eq(zatcaInvoiceTransactions.orgId, ctx.user.orgId),
+          ),
+        });
+        return {
+          ok: true,
+          status: concurrent?.invoiceStatus ?? 'submitting',
+          uuid: concurrent?.invoiceUuid ?? uuid,
+          correlationId: concurrent?.correlationId ?? correlationId,
+          message: lifecycleMessage((concurrent?.invoiceStatus ?? 'submitting') as ZatcaLifecycleState),
+          idempotent: true,
+        };
+      }
+
+      if (cfg.environment === 'simulation') {
+        const [currentCsid, signingCertificate, signingKey, originalInvoice] = await Promise.all([
+          db.query.zatcaCsid.findFirst({
+            where: and(
+              eq(zatcaCsid.id, resolvedContext.csid.id),
+              eq(zatcaCsid.orgId, ctx.user.orgId),
+              eq(zatcaCsid.deviceId, resolvedContext.egs.id),
+              eq(zatcaCsid.isActive, true),
+              eq(zatcaCsid.isDeleted, false),
+            ),
+          }),
+          db.query.zatcaCertificates.findFirst({
+            where: and(
+              eq(zatcaCertificates.id, resolvedContext.certificate.id),
+              eq(zatcaCertificates.orgId, ctx.user.orgId),
+              eq(zatcaCertificates.deviceId, resolvedContext.egs.id),
+              eq(zatcaCertificates.isActive, true),
+              eq(zatcaCertificates.isDeleted, false),
+              eq(zatcaCertificates.status, 'active'),
+            ),
+          }),
+          db.query.zatcaKeys.findFirst({
+            where: and(
+              eq(zatcaKeys.orgId, ctx.user.orgId),
+              eq(zatcaKeys.deviceId, resolvedContext.egs.id),
+              eq(zatcaKeys.isActive, true),
+              eq(zatcaKeys.isDeleted, false),
+              eq(zatcaKeys.status, 'active'),
+            ),
+            orderBy: desc(zatcaKeys.createdAt),
+          }),
+          inv.refInvoiceId
+            ? db.query.salesInvoices.findFirst({
+                where: and(
+                  eq(salesInvoices.id, inv.refInvoiceId),
+                  eq(salesInvoices.orgId, ctx.user.orgId),
+                ),
+                columns: {
+                  invoiceNumber: true,
+                  zatcaUuid: true,
+                  invoiceDate: true,
+                },
+              })
+            : Promise.resolve(null),
+        ]);
+
+        if (
+          !currentCsid?.productionCsid
+          || !signingCertificate?.publicCertificate
+          || !signingCertificate.secretKeyEncrypted
+          || !signingKey?.privateKeyEncrypted
+          || resolvedContext.egs.registrationStatus !== 'operational'
+        ) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'الإرسال الرسمي يتطلب CSID تشغيلياً وشهادة ومفتاحاً صالحين لوحدة EGS',
+          });
+        }
+        if (inv.invoiceType === 'return' && (!originalInvoice?.zatcaUuid || !originalInvoice.invoiceNumber)) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'مردود المبيعات الإلكتروني يتطلب فاتورة أصلية مرتبطة تحمل UUID رسميًا',
+          });
+        }
+
+        let signed: ReturnType<typeof buildAndSignSimulationInvoice>;
+        try {
+          signed = buildAndSignSimulationInvoice({
+            invoice: inv,
+            items: await db.select({
+              id: salesInvoiceItems.id,
+              productName: salesInvoiceItems.productName,
+              quantity: salesInvoiceItems.quantity,
+              unit: salesInvoiceItems.unit,
+              unitPrice: salesInvoiceItems.unitPrice,
+              total: salesInvoiceItems.total,
+              taxAmount: salesInvoiceItems.taxAmount,
+              taxPercent: salesInvoiceItems.taxPercent,
+              discountAmount: salesInvoiceItems.discountAmount,
+            }).from(salesInvoiceItems).where(and(
+              eq(salesInvoiceItems.invoiceId, input.invoiceId),
+              eq(salesInvoiceItems.orgId, ctx.user.orgId),
+            )).orderBy(asc(salesInvoiceItems.sortOrder)),
+            seller: {
+              nameAr: String(cfg.businessName ?? org?.name ?? ''),
+              nameEn: String(cfg.businessNameEn ?? cfg.businessName ?? org?.name ?? ''),
+              vatNumber: String(cfg.vatNumber ?? ''),
+              crNumber: cfg.crNumber ? String(cfg.crNumber) : undefined,
+              street: String(cfg.streetName ?? ''),
+              building: String(cfg.buildingNumber ?? ''),
+              district: String(cfg.district ?? ''),
+              city: String(cfg.city ?? ''),
+              postalCode: String(cfg.postalCode ?? ''),
+              countryCode: String(cfg.countryCode ?? 'SA'),
+            },
+            uuid,
+            invoiceCounter: icv,
+            previousInvoiceHash: inv.zatcaPih ?? '',
+            submissionType: operation,
+            privateKeyPem: decrypt(signingKey.privateKeyEncrypted),
+            certificatePem: signingCertificate.publicCertificate,
+            originalInvoice: originalInvoice?.zatcaUuid && originalInvoice.invoiceNumber
+              ? originalInvoice
+              : undefined,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'تعذر توقيع XML الفاتورة';
+          await db.update(zatcaSubmissionAttempts).set({
+            finishedAt: new Date(),
+            result: 'rejected',
+            errorMessage: message,
+          }).where(eq(zatcaSubmissionAttempts.id, attempt.id));
+          await db.update(zatcaInvoiceTransactions).set({
+            invoiceStatus: 'rejected',
+            lastError: message,
+            responseDate: new Date(),
+            updatedAt: new Date(),
+            updatedBy: ctx.user.id,
+          }).where(eq(zatcaInvoiceTransactions.id, transactionId));
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message });
+        }
+
+        await db.update(zatcaInvoiceTransactions).set({
+          invoiceHash: signed.invoiceHash,
+          requestPayload: redactZatcaPayload({
+            ...requestPayload,
+            invoiceHash: signed.invoiceHash,
+            invoice: '[BASE64_SIGNED_XML]',
+          }) as any,
+          updatedAt: new Date(),
+          updatedBy: ctx.user.id,
+        }).where(eq(zatcaInvoiceTransactions.id, transactionId));
+
+        const authorityResponse = await postFatooraSimulation({
+          apiPath: operation === 'clearance'
+            ? '/invoices/clearance/single'
+            : '/invoices/reporting/single',
+          body: {
+            invoiceHash: signed.invoiceHash,
+            uuid,
+            invoice: signed.invoiceBase64,
+          },
+          binarySecurityToken: decrypt(currentCsid.productionCsid),
+          secret: decrypt(signingCertificate.secretKeyEncrypted),
+          clearance: operation === 'clearance',
+          clearanceStatus: operation === 'clearance' ? '1' : '0',
+          correlationId,
+          idempotencyKey,
+        });
+        const safeAuthorityResponse = safeRemoteResponse(authorityResponse) as Record<string, unknown>;
+        const authorityBody = authorityResponse.body && typeof authorityResponse.body === 'object'
+          ? authorityResponse.body as Record<string, any>
+          : {};
+        const accepted = authorityResponse.httpStatus != null
+          && authorityResponse.httpStatus >= 200
+          && authorityResponse.httpStatus < 300
+          && (
+            Array.isArray(authorityBody.acceptedInvoices) && authorityBody.acceptedInvoices.length > 0
+            || String(authorityBody.reportingStatus ?? '').toUpperCase() === 'REPORTED'
+            || String(authorityBody.clearanceStatus ?? '').toUpperCase() === 'CLEARED'
+          );
+        const nextState: ZatcaLifecycleState = accepted
+          ? (operation === 'clearance' ? 'cleared' : 'reported')
+          : authorityResponse.httpStatus == null
+            ? 'uncertain'
+            : 'rejected';
+        const responseTime = new Date();
+        const responseError = accepted ? null : `Fatoora Simulation لم تقبل الطلب (${authorityResponse.httpStatus ?? 'بدون رد'})`;
+        const responsePayload = redactZatcaPayload({
+          ...safeAuthorityResponse,
+          uuid,
+          invoiceHash: signed.invoiceHash,
+          correlationId,
+        }) as Record<string, unknown>;
+
+        await db.update(zatcaSubmissionAttempts).set({
+          finishedAt: responseTime,
+          httpStatus: authorityResponse.httpStatus,
+          responsePayload: responsePayload as any,
+          result: nextState,
+          errorMessage: responseError,
+        }).where(eq(zatcaSubmissionAttempts.id, attempt.id));
+        await db.update(zatcaInvoiceTransactions).set({
+          invoiceStatus: nextState,
+          invoiceHash: signed.invoiceHash,
+          httpStatus: authorityResponse.httpStatus,
+          authorityStatus: accepted ? (operation === 'clearance' ? 'CLEARED' : 'REPORTED') : 'REJECTED',
+          responsePayload: responsePayload as any,
+          responseDate: authorityResponse.httpStatus == null ? null : responseTime,
+          uncertainAt: nextState === 'uncertain' ? responseTime : null,
+          lastError: responseError,
+          updatedAt: responseTime,
+          updatedBy: ctx.user.id,
+        }).where(eq(zatcaInvoiceTransactions.id, transactionId));
+        await db.update(salesInvoices).set({
+          zatcaUuid: uuid,
+          zatcaHash: signed.invoiceHash,
+          zatcaXml: signed.signedXml,
+          zatcaStatus: nextState,
+          zatcaResponse: responsePayload,
+          zatcaAttemptCount: attemptCount,
+          zatcaSubmittedAt: inv.zatcaSubmittedAt ?? now,
+          zatcaRejectionReason: responseError,
+          ...(nextState === 'cleared' || nextState === 'reported' ? { zatcaClearedAt: responseTime } : {}),
+          updatedAt: responseTime,
+        }).where(and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, ctx.user.orgId)));
+        await db.insert(zatcaRequestLog).values({
+          orgId: ctx.user.orgId,
+          transactionId,
+          url: authorityResponse.url,
+          httpMethod: 'POST',
+          headers: { 'x-correlation-id': correlationId, 'idempotency-key': idempotencyKey },
+          requestBody: JSON.stringify({ invoiceHash: signed.invoiceHash, uuid, invoice: '[BASE64_SIGNED_XML]' }),
+          requestTime: now,
+          createdBy: ctx.user.id,
+          updatedBy: ctx.user.id,
+        });
+        await db.insert(zatcaResponseLog).values({
+          orgId: ctx.user.orgId,
+          transactionId,
+          httpStatus: authorityResponse.httpStatus,
+          responseBody: JSON.stringify(responsePayload),
+          responseTime,
+          createdBy: ctx.user.id,
+          updatedBy: ctx.user.id,
+        });
+        await db.insert(zatcaLogs).values({
+          orgId: ctx.user.orgId,
+          invoiceId: input.invoiceId,
+          invoiceNumber: inv.invoiceNumber,
+          eventType: 'simulation_submit',
+          status: nextState,
+          environment: 'simulation',
+          userId: ctx.user.id,
+          userName: (ctx.user as any).name ?? (ctx.user as any).username ?? 'مستخدم',
+          requestBody: JSON.stringify({ invoiceId: input.invoiceId, invoiceHash: signed.invoiceHash, uuid, operation }),
+          responseBody: JSON.stringify(responsePayload),
+          errorMessage: responseError,
+        });
+
+        return {
+          ok: accepted,
+          status: nextState,
+          uuid,
+          icv,
+          correlationId,
+          operation,
+          invoiceHash: signed.invoiceHash,
+          response: responsePayload,
+          message: accepted
+            ? operation === 'clearance' ? 'تم التخليص من Fatoora Simulation' : 'تم الإبلاغ إلى Fatoora Simulation'
+            : nextState === 'uncertain'
+              ? 'أُرسل الطلب ولم تصل نتيجة نهائية؛ أعد المحاولة بنفس المعرفات'
+              : 'رفضت Fatoora Simulation الفاتورة',
+          idempotent: false,
+        };
+      }
+
       const response = buildMockAuthorityResponse({
         operation,
         outcome: input.mockOutcome,
@@ -616,6 +1612,29 @@ export const zatcaRouter = router({
       const responseDate = response.receivedAt ? new Date(response.receivedAt) : null;
       const errorText = response.errors.length ? response.errors.map((item) => item.message).join('، ') : null;
       const safeResponse = redactZatcaPayload(response) as Record<string, unknown>;
+      await db.update(zatcaSubmissionAttempts).set({
+        finishedAt: new Date(),
+        httpStatus: response.httpStatus,
+        responsePayload: safeResponse as any,
+        result: nextState,
+        errorMessage: errorText,
+      }).where(eq(zatcaSubmissionAttempts.id, attempt.id));
+
+      if (!isFinalZatcaState(nextState)) {
+        await enqueueZatcaSubmission({
+          orgId: ctx.user.orgId,
+          transactionId,
+          posUnitId: resolvedContext.posUnit.id,
+          deviceId: resolvedContext.egs.id,
+          operation,
+          uuid,
+          invoiceCounter: icv,
+          idempotencyKey,
+          mockOutcome: input.mockOutcome,
+          initialState: input.mockOutcome === 'connection_issue' ? 'retry_pending' : 'uncertain',
+          availableAt: new Date(now.getTime() + 5 * 60 * 1000),
+        });
+      }
 
       await db.update(zatcaInvoiceTransactions).set({
         invoiceStatus: nextState,
@@ -750,6 +1769,18 @@ export const zatcaRouter = router({
         zatcaStatus: 'retry_pending',
         updatedAt: now,
       }).where(and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, ctx.user.orgId)));
+      await db.update(zatcaSubmissionQueue).set({
+        state: 'queued',
+        availableAt: now,
+        lockedAt: null,
+        lockedBy: null,
+        lastError: null,
+        updatedAt: now,
+      }).where(and(
+        eq(zatcaSubmissionQueue.transactionId, transaction.id),
+        eq(zatcaSubmissionQueue.orgId, ctx.user.orgId),
+        sql`${zatcaSubmissionQueue.state} IN ('retry_pending', 'processing', 'uncertain')`,
+      ));
       await db.insert(zatcaLogs).values({
         orgId: ctx.user.orgId,
         invoiceId: input.invoiceId,
@@ -832,7 +1863,7 @@ export const zatcaRouter = router({
       if (!invoice) throw new TRPCError({ code: 'NOT_FOUND', message: 'الفاتورة غير موجودة' });
       if (!transaction) return { invoice, transaction: null, requests: [], responses: [], errors: [] };
 
-      const [requests, responses, errors] = await Promise.all([
+      const [requests, responses, errors, attempts, queue] = await Promise.all([
         db.query.zatcaRequestLog.findMany({
           where: and(eq(zatcaRequestLog.transactionId, transaction.id), eq(zatcaRequestLog.orgId, ctx.user.orgId)),
           orderBy: desc(zatcaRequestLog.requestTime),
@@ -845,8 +1876,22 @@ export const zatcaRouter = router({
           where: and(eq(zatcaErrorLog.transactionId, transaction.id), eq(zatcaErrorLog.orgId, ctx.user.orgId)),
           orderBy: desc(zatcaErrorLog.createdAt),
         }),
+        db.query.zatcaSubmissionAttempts.findMany({
+          where: and(
+            eq(zatcaSubmissionAttempts.transactionId, transaction.id),
+            eq(zatcaSubmissionAttempts.orgId, ctx.user.orgId),
+          ),
+          orderBy: desc(zatcaSubmissionAttempts.startedAt),
+        }),
+        db.query.zatcaSubmissionQueue.findMany({
+          where: and(
+            eq(zatcaSubmissionQueue.transactionId, transaction.id),
+            eq(zatcaSubmissionQueue.orgId, ctx.user.orgId),
+          ),
+          orderBy: desc(zatcaSubmissionQueue.createdAt),
+        }),
       ]);
-      return { invoice, transaction, requests, responses, errors };
+      return { invoice, transaction, requests, responses, errors, attempts, queue };
     }),
 
   getUncertainInvoices: protectedProcedure

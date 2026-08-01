@@ -1212,7 +1212,8 @@ export const zatcaCertificates = pgTable('zatca_certificates', {
   csr:                  text('csr'),
   publicCertificate:    text('public_certificate'),
   privateKeyEncrypted:  text('private_key_encrypted'),        // مشفَّر AES-256-GCM
-  secretKeyEncrypted:   text('secret_key_encrypted'),         // مشفَّر AES-256-GCM
+  secretKeyEncrypted:   text('secret_key_encrypted'),         // السر التشغيلي المشفّر AES-256-GCM
+  complianceSecretEncrypted: text('compliance_secret_encrypted'), // سر Compliance المشفّر
   certificateVersion:   varchar('certificate_version', { length: 20 }),
   startDate:            timestamp('start_date'),
   expiryDate:           timestamp('expiry_date'),
@@ -1319,7 +1320,67 @@ export const zatcaInvoiceTransactions = pgTable('zatca_invoice_transactions', {
   updatedAt:       timestamp('updated_at').notNull().defaultNow(),
   createdBy:       integer('created_by').references(() => users.id, { onDelete: 'set null' }),
   updatedBy:       integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
-});
+ }, (t) => [
+   uniqueIndex('idx_zatca_trx_invoice_active')
+     .on(t.orgId, t.invoiceId)
+     .where(sql`${t.invoiceId} IS NOT NULL AND ${t.isActive} = true AND ${t.isDeleted} = false`),
+ ]);
+
+// ─── 7b. ZATCA Submission Attempts ────────────────────────────────────────────
+// سجل مستقل لكل محاولة؛ لا ينشئ معاملة فاتورة جديدة.
+export const zatcaSubmissionAttempts = pgTable('zatca_submission_attempts', {
+  id:              serial('id').primaryKey(),
+  orgId:           integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  transactionId:   integer('transaction_id').notNull().references(() => zatcaInvoiceTransactions.id, { onDelete: 'cascade' }),
+  attemptNumber:   integer('attempt_number').notNull(),
+  attemptId:       uuid('attempt_id').notNull().defaultRandom(),
+  startedAt:       timestamp('started_at').notNull().defaultNow(),
+  finishedAt:      timestamp('finished_at'),
+  requestId:       varchar('request_id', { length: 120 }),
+  httpStatus:      integer('http_status'),
+  requestPayload:  jsonb('request_payload'),
+  responsePayload: jsonb('response_payload'),
+  result:          varchar('result', { length: 40 }).notNull().default('started'),
+  errorMessage:    text('error_message'),
+  createdAt:       timestamp('created_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('zatca_submission_attempt_transaction_number_uidx')
+    .on(t.transactionId, t.attemptNumber),
+  uniqueIndex('zatca_submission_attempt_attempt_id_uidx')
+    .on(t.attemptId),
+]);
+
+// ─── 7c. ZATCA Durable Queue ──────────────────────────────────────────────────
+// Durable queue: Mock/Sandbox only until the official Simulation sender owns
+// retries; Simulation rows are rejected by the legacy Mock worker.
+export const zatcaSubmissionQueue = pgTable('zatca_submission_queue', {
+  id:              serial('id').primaryKey(),
+  orgId:           integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  transactionId:   integer('transaction_id').notNull().references(() => zatcaInvoiceTransactions.id, { onDelete: 'cascade' }),
+  posUnitId:       integer('pos_unit_id').references(() => zatcaPosUnits.id, { onDelete: 'set null' }),
+  deviceId:        integer('device_id').references(() => zatcaDevices.id, { onDelete: 'set null' }),
+  queueKey:        varchar('queue_key', { length: 160 }).notNull(),
+  operation:       varchar('operation', { length: 20 }).notNull(),
+  uuid:             uuid('uuid'),
+  invoiceCounter:  integer('invoice_counter'),
+  idempotencyKey:  varchar('idempotency_key', { length: 160 }),
+  mockOutcome:     varchar('mock_outcome', { length: 40 }).notNull().default('accepted'),
+  state:            varchar('state', { length: 20 }).notNull().default('queued'),
+  availableAt:     timestamp('available_at').notNull().defaultNow(),
+  lockedAt:        timestamp('locked_at'),
+  lockedBy:        varchar('locked_by', { length: 120 }),
+  attemptId:       uuid('attempt_id'),
+  lastError:       text('last_error'),
+  createdAt:       timestamp('created_at').notNull().defaultNow(),
+  updatedAt:       timestamp('updated_at').notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('zatca_submission_queue_transaction_uidx')
+    .on(t.transactionId),
+  index('zatca_submission_queue_due_idx')
+    .on(t.state, t.availableAt),
+  index('zatca_submission_queue_unit_idx')
+    .on(t.queueKey, t.state),
+]);
 
 // ─── 8. ZATCA Request Log ─────────────────────────────────────────────────────
 export const zatcaRequestLog = pgTable('zatca_request_log', {

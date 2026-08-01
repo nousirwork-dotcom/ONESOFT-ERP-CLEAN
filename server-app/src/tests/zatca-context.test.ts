@@ -163,6 +163,18 @@ describe('resolveZatcaContext', () => {
       .toThrow('لا يوجد CSID صالح');
   });
 
+  it('prefers the operational CSID for Simulation when it exists', () => {
+    const result = resolveZatcaContextFromRecords(records({
+      csid: {
+        ...records().csid!,
+        complianceCsid: 'compliance-csid',
+        productionCsid: 'operational-csid',
+      },
+    }), 'simulation');
+    expect(result.csid.hasSecret).toBe(true);
+    expect(result.csid.type).toBe('operational');
+  });
+
   it('rejects an expired certificate', () => {
     expect(() => resolveZatcaContextFromRecords(records({
       certificate: { ...records().certificate!, expiryDate: new Date('2025-01-01T00:00:00Z') },

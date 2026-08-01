@@ -11,45 +11,59 @@ import { toast } from "sonner";
 type Section =
   | "dashboard" | "units" | "otp-sim" | "env" | "devices" | "certs" | "keys"
   | "xmlcheck"  | "csr" | "register" | "csid" | "test"
-  | "send"      | "tracking" | "uncertain" | "oplogs" | "errlogs" | "diag" | "reports";
+  | "send"      | "tracking" | "uncertain" | "oplogs" | "errlogs" | "diag" | "reports"
+  | "support";
 
 type SetupStepStatus = "done" | "active" | "pending" | "error";
 
 // ─── قائمة الأقسام ────────────────────────────────────────────────────────────
-const SECTIONS: { id: Section; label: string; icon: string }[] = [
+const PRIMARY_SECTIONS: { id: Section; label: string; icon: string }[] = [
   { id: "dashboard", label: "لوحة التحكم",            icon: "🏠" },
   { id: "units",     label: "وحدات الربط والدفاتر",   icon: "🧩" },
-  { id: "otp-sim",   label: "OTP محاكاة فقط",         icon: "🧪" },
-  { id: "env",       label: "إعدادات البيئة",          icon: "🌐" },
-  { id: "devices",   label: "إدارة الأجهزة (EGS)",     icon: "💻" },
-  { id: "certs",     label: "إدارة الشهادات",          icon: "🛡️" },
-  { id: "keys",      label: "مفاتيح التشفير",          icon: "🔐" },
-  { id: "xmlcheck",  label: "التحقق من XML",           icon: "🔎" },
-  { id: "csr",       label: "إنشاء CSR",              icon: "📜" },
-  { id: "register",  label: "تسجيل الجهاز",            icon: "📱" },
-  { id: "csid",      label: "إدارة CSID",             icon: "🔑" },
-  { id: "test",      label: "اختبار الاتصال",          icon: "🔌" },
-  { id: "send",      label: "إرسال الفواتير",          icon: "📤" },
-  { id: "tracking",  label: "متابعة الحالات",          icon: "🧭" },
-  { id: "uncertain", label: "الفواتير غير المؤكدة",    icon: "❔" },
-  { id: "oplogs",    label: "سجل الإرسال",             icon: "📋" },
-  { id: "errlogs",   label: "سجل الأخطاء",            icon: "🚨" },
-  { id: "diag",      label: "أدوات التشخيص",          icon: "🔬" },
+  { id: "otp-sim",   label: "تفعيل الربط",             icon: "🧪" },
+  { id: "send",      label: "الفواتير الإلكترونية",    icon: "🧾" },
+  { id: "uncertain", label: "الحالات غير المؤكدة",      icon: "❔" },
+  { id: "errlogs",   label: "المشاكل والتنبيهات",      icon: "🚨" },
   { id: "reports",   label: "التقارير",               icon: "📊" },
+  { id: "support",   label: "الدعم الفني",             icon: "🛟" },
 ];
+
+const TECHNICAL_SECTIONS: { id: Exclude<Section, "dashboard" | "units" | "otp-sim" | "send" | "uncertain" | "errlogs" | "reports" | "support">; label: string; icon: string }[] = [
+  { id: "devices",  label: "إدارة EGS",       icon: "💻" },
+  { id: "certs",    label: "الشهادات",         icon: "🛡️" },
+  { id: "keys",     label: "مفاتيح التشفير",   icon: "🔐" },
+  { id: "csr",      label: "إنشاء CSR",        icon: "📜" },
+  { id: "xmlcheck", label: "التحقق من XML",    icon: "🔎" },
+  { id: "oplogs",   label: "السجلات الفنية",   icon: "📋" },
+];
+
+const JOURNAL_TYPE_LABELS: Record<string, string> = {
+  sales_invoice: "فاتورة مبيعات",
+  sales_return: "مردود مبيعات",
+  credit_note: "إشعار دائن",
+  debit_note: "إشعار مدين",
+};
+
+function journalTypeLabel(docType: string) {
+  return JOURNAL_TYPE_LABELS[docType] ?? "دفتر مبيعات";
+}
+
+function locationLabel(item: { branchName?: string | null; warehouseName?: string | null }) {
+  return item.branchName && item.warehouseName
+    ? `${item.branchName} — ${item.warehouseName}`
+    : item.warehouseName ?? item.branchName ?? "غير محدد";
+}
 
 // ─── خطوات الإعداد ────────────────────────────────────────────────────────────
 const SETUP_STEPS: { id: number; label: string; sublabel: string; section: Section; icon: string }[] = [
-  { id: 1,  label: "بيئة المحاكاة",          sublabel: "Sandbox فقط", section: "env",      icon: "🌐" },
-  { id: 2,  label: "CSR — مؤجل",             sublabel: "خارج نطاق المرحلة", section: "csr", icon: "📜" },
-  { id: 3,  label: "إرسال CSR — محجوب",      sublabel: "لا يوجد اتصال بالهيئة", section: "csr",      icon: "📤" },
-  { id: 4,  label: "الشهادة — مؤجلة",        sublabel: "لا تُحفظ شهادة حقيقية",    section: "certs",    icon: "🛡️" },
-  { id: 5,  label: "حفظ الشهادة — محجوب",    sublabel: "حتى اعتماد Secrets", section: "certs",   icon: "📋" },
-  { id: 6,  label: "Secret Key — محجوب",     sublabel: "لا تخزين للأسرار",        section: "csid",     icon: "🗝️" },
-  { id: 7,  label: "EGS — مؤجل",             sublabel: "لا تسجيل فعلي",   section: "register", icon: "📱" },
-  { id: 8,  label: "الاتصال — محجوب",        sublabel: "SDK وSimulation لاحقًا",       section: "test",     icon: "🔌" },
-  { id: 9,  label: "فاتورة Mock",            sublabel: "محاكاة داخلية فقط",    section: "send",     icon: "🧾" },
-  { id: 10, label: "إغلاق النموذج الداخلي",  sublabel: "ليس اعتماد Production",  section: "dashboard",icon: "✅" },
+  { id: 1,  label: "بيئة Simulation",         sublabel: "Fatoora Simulation فقط", section: "env",      icon: "🌐" },
+  { id: 2,  label: "إنشاء CSR",               sublabel: "على الخادم فقط", section: "csr", icon: "📜" },
+  { id: 3,  label: "إدخال OTP",               sublabel: "لا يُحفظ بعد الطلب", section: "otp-sim", icon: "🔢" },
+  { id: 4,  label: "Compliance CSID",         sublabel: "من منصة Fatoora الرسمية", section: "csid",    icon: "🛡️" },
+  { id: 5,  label: "اختبارات الامتثال",       sublabel: "قبل إرسال الفواتير", section: "send",   icon: "📋" },
+  { id: 6,  label: "EGS ووحدة الربط",         sublabel: "اعتماد واحد للمجموعة", section: "units",     icon: "📱" },
+  { id: 7,  label: "Reporting / Clearance",  sublabel: "Simulation فقط", section: "send",     icon: "🔌" },
+  { id: 8,  label: "Production",              sublabel: "محجوب صراحة", section: "dashboard",     icon: "🚫" },
 ];
 
 // ─── أنماط مشتركة ─────────────────────────────────────────────────────────────
@@ -63,10 +77,10 @@ const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> =
   ready_to_submit:       { label: "جاهزة للإرسال",                color: "#475569", bg: "#f1f5f9" },
   submitting:            { label: "جاري الإرسال",                 color: "#7c3aed", bg: "#ede9fe" },
   submitted_pending:     { label: "أُرسل — بانتظار الرد",         color: "#d97706", bg: "#fef3c7" },
-  cleared:               { label: "تم التخليص",                   color: "#16a34a", bg: "#dcfce7" },
-  reported:              { label: "تم الإبلاغ",                   color: "#0ea5e9", bg: "#e0f2fe" },
-  accepted_with_warnings:{ label: "مقبولة مع تحذيرات",            color: "#ca8a04", bg: "#fef9c3" },
-  rejected:              { label: "مرفوضة",                       color: "#dc2626", bg: "#fee2e2" },
+  cleared:               { label: "Mock: تخليص تجريبي",            color: "#16a34a", bg: "#dcfce7" },
+  reported:              { label: "Mock: إبلاغ تجريبي",            color: "#0ea5e9", bg: "#e0f2fe" },
+  accepted_with_warnings:{ label: "Mock: قبول تجريبي مع تحذيرات",  color: "#ca8a04", bg: "#fef9c3" },
+  rejected:              { label: "Mock: رفض تجريبي",              color: "#dc2626", bg: "#fee2e2" },
   connection_issue:      { label: "مشكلة اتصال",                  color: "#dc2626", bg: "#fee2e2" },
   retry_pending:         { label: "بانتظار إعادة المحاولة",       color: "#ea580c", bg: "#ffedd5" },
   uncertain:             { label: "حالة غير مؤكدة",               color: "#9333ea", bg: "#f3e8ff" },
@@ -365,24 +379,24 @@ function DashboardSection({ onStartSetup, onNavigate }: { onStartSetup: () => vo
 
   const statCards = [
     { label: "إجمالي الفواتير", value: s?.totalInvoices ?? 0, icon: "📄", color: "#6366f1" },
-    { label: "مُخلَّصة",         value: s?.cleared ?? 0,        icon: "✅", color: "#16a34a" },
+    { label: "Mock: تخليص تجريبي", value: s?.cleared ?? 0,        icon: "✅", color: "#16a34a" },
     { label: "في الانتظار",    value: s?.pending ?? 0,        icon: "⏳", color: "#d97706" },
-    { label: "مرفوضة",          value: s?.rejected ?? 0,       icon: "❌", color: "#dc2626" },
+    { label: "Mock: رفض تجريبي", value: s?.rejected ?? 0,       icon: "❌", color: "#dc2626" },
     { label: "أخطاء",           value: s?.errors ?? 0,         icon: "⚠️", color: "#7c3aed" },
     { label: "لم تُرسَل",       value: s?.notSubmitted ?? 0,   icon: "📭", color: "#6b7280" },
   ];
 
   return (
     <div>
-      <SecTitle icon="🏠" title="لوحة التحكم — مركز التكامل مع هيئة الزكاة" />
+       <SecTitle icon="🏠" title="لوحة التحكم — مركز الفوترة الإلكترونية" />
 
       {/* زر بدء الإعداد */}
       {readyPct < 100 && (
         <div style={{ background: "linear-gradient(135deg, #1e293b, #334155)", borderRadius: 12, padding: "20px 24px", marginBottom: 20, display: "flex", gap: 20, alignItems: "center" }}>
           <div style={{ fontSize: 48 }}>🏛️</div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 800, fontSize: 16, color: "#fff", marginBottom: 4 }}>الربط مع هيئة الزكاة والضريبة والجمارك</div>
-            <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 8 }}>اتبع الخطوات العشر لإكمال الإعداد الكامل والبدء في إرسال الفواتير الإلكترونية</div>
+             <div style={{ fontWeight: 800, fontSize: 16, color: "#fff", marginBottom: 4 }}>إعداد مركز الفوترة الإلكترونية</div>
+              <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 8 }}>أنشئ وحدة ربط من دفتر مبيعات، وسيُعد OneSoft الربط الفني تلقائيًا داخل البيئة التجريبية.</div>
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <div style={{ flex: 1, height: 6, borderRadius: 3, background: "rgba(255,255,255,0.15)" }}>
                 <div style={{ height: "100%", width: `${readyPct}%`, background: "#D19C05", borderRadius: 3 }} />
@@ -434,7 +448,7 @@ function DashboardSection({ onStartSetup, onNavigate }: { onStartSetup: () => vo
           )}
           {(s?.rejected ?? 0) > 0 && (
             <div style={{ background: "#fef2f2", border: "1px solid #f87171", borderRadius: 8, padding: "10px 14px", display: "flex", gap: 10, alignItems: "center" }}>
-              ❌ <span style={{ color: "#7f1d1d", fontWeight: 700, fontSize: 12, flex: 1 }}>يوجد {s!.rejected} فاتورة مرفوضة تحتاج مراجعة</span>
+              ❌ <span style={{ color: "#7f1d1d", fontWeight: 700, fontSize: 12, flex: 1 }}>يوجد {s!.rejected} فاتورة Mock مرفوضة تجريبيًا تحتاج مراجعة داخلية</span>
               <button onClick={() => onNavigate("errlogs")} style={{ height: 26, padding: "0 12px", background: "#dc2626", color: "#fff", border: "none", borderRadius: 5, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>سجل الأخطاء</button>
             </div>
           )}
@@ -468,13 +482,13 @@ function DashboardSection({ onStartSetup, onNavigate }: { onStartSetup: () => vo
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 20 }}>
           <StatusCard label="البيئة الحالية"      value={cfg?.environment === "production" ? "🟢 الإنتاج" : cfg?.environment === "sandbox" ? "🧪 الاختبار" : "غير محدد"} dot={envDot} sub={cfg?.environment ? "تم التهيئة" : "اضغط لإعداد البيئة"} onClick={() => onNavigate("env")} />
-          <StatusCard label="حالة الاتصال"        value={(cfg as any)?.lastConnectionStatus === "success" ? "متصل ✓" : (cfg as any)?.lastConnectionStatus === "failed" ? "منقطع ✗" : "لم يُختبر"} dot={connDot} sub={cfg?.lastConnectionTest ? `آخر اختبار: ${new Date(cfg.lastConnectionTest).toLocaleDateString("ar-SA")}` : "لم يُجرَ اختبار بعد"} onClick={() => onNavigate("test")} />
+           <StatusCard label="حالة Mock"        value={(cfg as any)?.lastConnectionStatus === "success" ? "Mock ✓" : (cfg as any)?.lastConnectionStatus === "failed" ? "Mock ✗" : "لم تُختبر"} dot={connDot} sub={cfg?.lastConnectionTest ? `آخر اختبار Mock: ${new Date(cfg.lastConnectionTest).toLocaleDateString("ar-SA")}` : "لا يوجد اتصال خارجي"} onClick={() => onNavigate("test")} />
           <StatusCard label="شهادة CSID"          value={cfg?.csid ? "موجودة ✓" : "غير موجودة"} dot={csidDot} sub={certDays !== null ? (certDays > 0 ? `${certDays} يوم متبقٍ` : "منتهية!") : "—"} onClick={() => onNavigate("certs")} />
           <StatusCard label="Secret Key"          value={cfg?.csid ? "موجود ✓" : "غير موجود"} dot={keyDot} sub="مشفّر AES-256-GCM في DB" onClick={() => onNavigate("keys")} />
           <StatusCard label="الأجهزة (EGS)"       value="0 جهاز مسجّل" dot={devDot} sub="انقر لإدارة الأجهزة" onClick={() => onNavigate("devices")} />
           <StatusCard label="تفعيل ZATCA"         value={cfg?.enabled ? "مُفعَّلة ✓" : "غير مُفعَّلة"} dot={enabledDot} sub={cfg?.vatNumber ?? "الرقم الضريبي غير محدد"} onClick={() => onNavigate("env")} />
-          <StatusCard label="فواتير اليوم"         value={String(s?.todayCount ?? s?.cleared ?? 0)} dot={(s?.todayCount ?? 0) > 0 ? "ok" : "none"} sub={`إجمالي مُخلَّصة: ${s?.cleared ?? 0}`} onClick={() => onNavigate("oplogs")} />
-          <StatusCard label="نسبة نجاح الإرسال"  value={s?.totalInvoices ? `${Math.round((s.cleared / s.totalInvoices) * 100)}%` : "—"} dot={s?.totalInvoices && s.cleared / s.totalInvoices > 0.8 ? "ok" : s?.totalInvoices ? "warn" : "none"} sub={`${s?.rejected ?? 0} مرفوضة`} onClick={() => onNavigate("reports")} />
+           <StatusCard label="فواتير اليوم (Mock)" value={String(s?.todayCount ?? s?.cleared ?? 0)} dot={(s?.todayCount ?? 0) > 0 ? "ok" : "none"} sub={`إجمالي تخليص تجريبي: ${s?.cleared ?? 0}`} onClick={() => onNavigate("oplogs")} />
+          <StatusCard label="نسبة نجاح Mock"  value={s?.totalInvoices ? `${Math.round((s.cleared / s.totalInvoices) * 100)}%` : "—"} dot={s?.totalInvoices && s.cleared / s.totalInvoices > 0.8 ? "ok" : s?.totalInvoices ? "warn" : "none"} sub={`${s?.rejected ?? 0} رفض Mock تجريبي`} onClick={() => onNavigate("reports")} />
         </div>
       )}
 
@@ -484,10 +498,10 @@ function DashboardSection({ onStartSetup, onNavigate }: { onStartSetup: () => vo
         <KpiCard label="الأجهزة النشطة"     icon="💻" value={0}                                                        color="#0ea5e9" sub="من 1 جهاز إجمالي"         onClick={() => onNavigate("devices")} />
         <KpiCard label="شهادات سارية"        icon="🛡️" value={cfg?.csid ? 1 : 0}                                       color="#16a34a" sub={certDays !== null ? `${certDays} يوم متبقٍ` : "—"} onClick={() => onNavigate("certs")} />
         <KpiCard label="CSID نشطة"           icon="🔑" value={cfg?.csid ? 1 : 0}                                       color="#8b5cf6" sub="معرّفات الاتصال"            onClick={() => onNavigate("csid")} />
-        <KpiCard label="إجمالي الفواتير"     icon="📄" value={s?.totalInvoices ?? 0}                                   color="#6366f1" sub={`${s?.cleared ?? 0} مُخلَّصة`} onClick={() => onNavigate("oplogs")} />
+         <KpiCard label="إجمالي الفواتير"     icon="📄" value={s?.totalInvoices ?? 0}                                   color="#6366f1" sub={`${s?.cleared ?? 0} تخليص Mock تجريبي`} onClick={() => onNavigate("oplogs")} />
         <KpiCard label="شهادات منتهية"       icon="⏰" value={certDays !== null && certDays <= 0 ? 1 : 0}             color="#dc2626" sub="تحتاج تجديد فوري"           onClick={() => onNavigate("certs")} />
         <KpiCard label="ستنتهي قريباً"       icon="🕐" value={certDays !== null && certDays > 0 && certDays <= 30 ? 1 : 0} color="#d97706" sub="خلال 30 يوم"         onClick={() => onNavigate("certs")} />
-        <KpiCard label="مرفوضة"              icon="❌" value={s?.rejected ?? 0}                                        color="#ef4444" sub="تحتاج مراجعة"              onClick={() => onNavigate("errlogs")} />
+         <KpiCard label="رفض Mock تجريبي"      icon="❌" value={s?.rejected ?? 0}                                        color="#ef4444" sub="تحتاج مراجعة داخلية"              onClick={() => onNavigate("errlogs")} />
         <KpiCard label="في الانتظار"         icon="⏳" value={s?.pending ?? 0}                                         color="#f59e0b" sub="لم تُرسَل بعد"             onClick={() => onNavigate("send")} />
       </div>
 
@@ -513,14 +527,14 @@ function DashboardSection({ onStartSetup, onNavigate }: { onStartSetup: () => vo
           </div>
           {s && s.totalInvoices > 0 && (
             <>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#374151", marginBottom: 4 }}>نسبة الامتثال</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#374151", marginBottom: 4 }}>نسبة نجاح Mock</div>
               <div style={{ height: 10, borderRadius: 5, background: "#f1f5f9", overflow: "hidden", marginBottom: 6 }}>
                 <div style={{ height: "100%", width: `${Math.round((s.cleared / s.totalInvoices) * 100)}%`, background: "linear-gradient(90deg,#16a34a,#22c55e)", borderRadius: 5, transition: "width 0.5s" }} />
               </div>
               <div style={{ display: "flex", gap: 12, fontSize: 11 }}>
                 <span style={{ color: "#16a34a", fontWeight: 700 }}>{Math.round((s.cleared / s.totalInvoices) * 100)}%</span>
-                <span style={{ color: "#6b7280" }}>{s.cleared} من {s.totalInvoices}</span>
-                {s.rejected > 0 && <span style={{ color: "#dc2626" }}>• {s.rejected} مرفوضة</span>}
+                <span style={{ color: "#6b7280" }}>{s.cleared} تخليص Mock تجريبي من {s.totalInvoices}</span>
+                {s.rejected > 0 && <span style={{ color: "#dc2626" }}>• {s.rejected} رفض Mock تجريبي</span>}
               </div>
             </>
           )}
@@ -534,11 +548,11 @@ function DashboardSection({ onStartSetup, onNavigate }: { onStartSetup: () => vo
             <button onClick={() => onNavigate("oplogs")} style={{ fontSize: 10, color: "#D19C05", background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>عرض الكل ↗</button>
           </div>
           <Timeline items={[
-            ...((cfg as any)?.lastConnectionStatus === "success" ? [{ icon: "✅", label: "نجاح الربط بالهيئة", detail: "اختبار الاتصال ناجح", time: cfg?.lastConnectionTest ? new Date(cfg.lastConnectionTest).toLocaleDateString("ar-SA") : "—", color: "#16a34a" }] : []),
-            ...(cfg?.csid ? [{ icon: "🔑", label: "تم إنشاء CSID", detail: "شهادة الاتصال نشطة", time: "—", color: "#8b5cf6" }] : []),
+             ...((cfg as any)?.lastConnectionStatus === "success" ? [{ icon: "✅", label: "نجاح اختبار Mock", detail: "لا يوجد اتصال فعلي بـ Fatoora", time: cfg?.lastConnectionTest ? new Date(cfg.lastConnectionTest).toLocaleDateString("ar-SA") : "—", color: "#16a34a" }] : []),
+             ...(cfg?.csid ? [{ icon: "🔑", label: "CSID محاكاة موجود", detail: "ليس اعتمادًا رسميًا", time: "—", color: "#8b5cf6" }] : []),
             ...(cfg?.environment ? [{ icon: "🌐", label: `تم تعيين البيئة: ${cfg.environment === "production" ? "الإنتاج" : "الاختبار"}`, detail: "إعدادات البيئة محفوظة", time: "—", color: "#0ea5e9" }] : []),
-            ...((s?.cleared ?? 0) > 0 ? [{ icon: "📄", label: `${s!.cleared} فاتورة مُخلَّصة`, detail: "تم إرسالها بنجاح", time: "اليوم", color: "#16a34a" }] : []),
-            ...((s?.rejected ?? 0) > 0 ? [{ icon: "❌", label: `${s!.rejected} فاتورة مرفوضة`, detail: "تحتاج مراجعة", time: "اليوم", color: "#dc2626" }] : []),
+            ...((s?.cleared ?? 0) > 0 ? [{ icon: "📄", label: `${s!.cleared} فاتورة Mock بتخليص تجريبي`, detail: "بيانات اختبار — لا يوجد اتصال فعلي بـ Fatoora", time: "اليوم", color: "#16a34a" }] : []),
+            ...((s?.rejected ?? 0) > 0 ? [{ icon: "❌", label: `${s!.rejected} فاتورة Mock مرفوضة تجريبيًا`, detail: "تحتاج مراجعة داخلية فقط", time: "اليوم", color: "#dc2626" }] : []),
           ]} />
           {!(cfg?.environment) && !(cfg?.csid) && <div style={{ textAlign: "center", color: "#9ca3af", fontSize: 12, padding: "12px 0" }}>ابدأ الإعداد لرؤية السجل الزمني</div>}
         </div>
@@ -662,12 +676,10 @@ function EnvSection() {
 // ══════════════════════════════════════════════════════════════════════════════
 // 2b. وحدات الربط ودفاترها — إدارة داخل مركز ZATCA فقط
 // ══════════════════════════════════════════════════════════════════════════════
-function LinkingUnitsSection() {
+function LinkingUnitsSection({ onActivate }: { onActivate?: () => void }) {
   const utils = trpc.useUtils();
   const unitsQ = trpc.zatca.listPosUnits.useQuery();
-  const journalsQ = trpc.documentJournals.list.useQuery({
-    docTypes: ["sales_invoice", "sales_return", "credit_note", "debit_note"],
-  });
+  const journalsQ = trpc.zatca.listLinkingJournalOptions.useQuery();
   const [form, setForm] = useState({ journalId: "", unitCode: "", unitName: "" });
   const [linkingUnitId, setLinkingUnitId] = useState<number | null>(null);
 
@@ -676,7 +688,7 @@ function LinkingUnitsSection() {
       toast.success("تم إنشاء وحدة الربط وربط الدفتر الأول");
       setForm({ journalId: "", unitCode: "", unitName: "" });
       utils.zatca.listPosUnits.invalidate();
-      utils.documentJournals.list.invalidate();
+      utils.zatca.listLinkingJournalOptions.invalidate();
     },
     onError: e => toast.error(e.message),
   });
@@ -685,7 +697,7 @@ function LinkingUnitsSection() {
       toast.success("تم ربط الدفتر بوحدة ZATCA");
       setLinkingUnitId(null);
       utils.zatca.listPosUnits.invalidate();
-      utils.documentJournals.list.invalidate();
+      utils.zatca.listLinkingJournalOptions.invalidate();
     },
     onError: e => toast.error(e.message),
   });
@@ -693,45 +705,83 @@ function LinkingUnitsSection() {
     onSuccess: () => {
       toast.success("تم فك ربط الدفتر دون حذف بيانات ZATCA");
       utils.zatca.listPosUnits.invalidate();
-      utils.documentJournals.list.invalidate();
+      utils.zatca.listLinkingJournalOptions.invalidate();
     },
     onError: e => toast.error(e.message),
   });
 
   const journals = journalsQ.data ?? [];
-  const unlinked = journals.filter(j => !("zatcaPosUnitId" in j) || j.zatcaPosUnitId == null);
-  const canCreate = Boolean(form.journalId && form.unitCode.trim() && form.unitName.trim());
+  const selected = journals.find(j => j.id === Number(form.journalId));
+  const unlinked = journals.filter(j => j.zatcaPosUnitId == null);
+  const sameLocation = selected
+    ? unlinked.filter(j => j.warehouseId === selected.warehouseId && j.id !== selected.id)
+    : [];
+  const canCreate = Boolean(form.journalId && selected && form.unitCode.trim() && form.unitName.trim());
   const busy = createM.isPending || linkM.isPending || unlinkM.isPending;
 
   return (
     <div>
-      <SecTitle icon="🧩" title="وحدات الربط ودفاترها" />
-      <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", borderRadius: 8, padding: "10px 12px", fontSize: 11, lineHeight: 1.7, marginBottom: 14 }}>
-        هذا القسم يدير نموذج الربط الداخلي فقط: <strong>journalId → وحدة الربط → EGS → CSID → الشهادة</strong>.
-        لا ينشئ اتصالًا بالهيئة ولا يخزن OTP أو مفاتيح أو شهادات.
+      <SecTitle icon="🧩" title="وحدات الربط والدفاتر" />
+      <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", borderRadius: 8, padding: "10px 12px", fontSize: 12, lineHeight: 1.7, marginBottom: 14 }}>
+        أنشئ وحدة ربط من أحد دفاتر المبيعات، وسيقوم OneSoft بتحديد المخزن وتجميع الدفاتر المرتبطة وإعداد الربط الفني تلقائيًا.
       </div>
 
       <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14, marginBottom: 16 }}>
-        <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 10 }}>＋ إنشاء وحدة ربط من دفتر</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr auto", gap: 8, alignItems: "end" }}>
+        <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 10 }}>＋ إنشاء وحدة ربط جديدة</div>
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(220px,1.4fr) 1fr 1fr", gap: 8, alignItems: "end" }}>
           <div>
-            <label style={lbl}>الدفتر الأول *</label>
-            <select style={fld} value={form.journalId} onChange={e => setForm(f => ({ ...f, journalId: e.target.value }))}>
+            <label style={lbl}>دفتر فاتورة مبيعات *</label>
+            <select style={fld} value={form.journalId} onChange={e => {
+              const next = journals.find(j => j.id === Number(e.target.value));
+              setForm(f => ({
+                ...f,
+                journalId: e.target.value,
+                unitCode: next ? `EGS-${String(next.id).padStart(3, "0")}` : "",
+                unitName: next ? `وحدة ربط – ${next.warehouseName ?? "المخزن الرئيسي"} – نقطة إصدار 1` : "",
+              }));
+            }}>
               <option value="">اختر دفترًا غير مرتبط</option>
-              {unlinked.map(j => <option key={j.id} value={j.id}>{j.code} — {j.name} ({j.docType})</option>)}
+              {unlinked.map(j => <option key={j.id} value={j.id}>{j.code} — {j.name} — {journalTypeLabel(j.docType)}</option>)}
             </select>
           </div>
           <div>
-            <label style={lbl}>رمز الوحدة *</label>
+            <label style={lbl}>رمز وحدة الربط (قابل للتعديل) *</label>
             <input style={fld} value={form.unitCode} onChange={e => setForm(f => ({ ...f, unitCode: e.target.value }))} placeholder="POS-01" />
           </div>
           <div>
             <label style={lbl}>اسم الوحدة *</label>
-            <input style={fld} value={form.unitName} onChange={e => setForm(f => ({ ...f, unitName: e.target.value }))} placeholder="وحدة الربط الرئيسية" />
+            <input style={fld} value={form.unitName} onChange={e => setForm(f => ({ ...f, unitName: e.target.value }))} placeholder="وحدة ربط – المخزن الرئيسي – كاشير 1" />
           </div>
+        </div>
+        {selected && (
+          <div style={{ marginTop: 12, border: "1px solid #c7d2fe", background: "#f8faff", borderRadius: 8, padding: 12 }}>
+            <div style={{ fontWeight: 800, fontSize: 12, color: "#3730a3", marginBottom: 8 }}>مراجعة بيانات وحدة الربط</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 8 }}>
+              {[
+                ["الدفتر المحدد", `${selected.code} — ${selected.name}`],
+                ["نوع المستند", journalTypeLabel(selected.docType)],
+                ["المخزن/الفرع المستنتج", locationLabel(selected)],
+                ["حالة الدفتر", selected.zatcaPosUnitId ? "مرتبط" : "غير مرتبط"],
+                ["دفاتر مؤهلة إضافية", String(sameLocation.length)],
+                ["سياسة المخزن", "يُحدد من الدفتر تلقائيًا"],
+              ].map(([label, value]) => (
+                <div key={label} style={{ background: "#fff", borderRadius: 6, padding: "7px 9px", border: "1px solid #e5e7eb" }}>
+                  <div style={{ color: "#64748b", fontSize: 10 }}>{label}</div>
+                  <strong style={{ fontSize: 11 }}>{value}</strong>
+                </div>
+              ))}
+            </div>
+            {sameLocation.length > 0 && (
+              <div style={{ marginTop: 8, color: "#475569", fontSize: 11 }}>
+                دفاتر أخرى في نفس الموقع: {sameLocation.map(j => `${j.code} — ${journalTypeLabel(j.docType)}`).join("، ")}
+              </div>
+            )}
+          </div>
+        )}
+        <div style={{ display: "flex", justifyContent: "flex-start", marginTop: 12 }}>
           <button disabled={!canCreate || busy} onClick={() => createM.mutate({ journalId: Number(form.journalId), unitCode: form.unitCode.trim(), unitName: form.unitName.trim() })}
-            style={{ ...smallBtn, height: 28, background: canCreate && !busy ? "#D19C05" : "#cbd5e1", color: "#fff", cursor: canCreate && !busy ? "pointer" : "not-allowed" }}>
-            {createM.isPending ? "جارٍ..." : "إنشاء وربط"}
+            style={{ ...smallBtn, height: 32, padding: "0 18px", background: canCreate && !busy ? "#D19C05" : "#cbd5e1", color: "#fff", cursor: canCreate && !busy ? "pointer" : "not-allowed", fontSize: 12 }}>
+            {createM.isPending ? "جارٍ الإنشاء..." : "إنشاء وحدة الربط"}
           </button>
         </div>
         {!journalsQ.isLoading && unlinked.length === 0 && <div style={{ marginTop: 8, color: "#9ca3af", fontSize: 11 }}>لا توجد دفاتر مؤهلة غير مرتبطة.</div>}
@@ -745,26 +795,31 @@ function LinkingUnitsSection() {
                 <div style={{ width: 38, height: 38, borderRadius: 9, background: "#fef3c7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>🧩</div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 800, fontSize: 13 }}>{unit.unitName} <span style={{ color: "#64748b", fontFamily: "monospace", fontSize: 11 }}>({unit.unitCode})</span></div>
-                  <div style={{ color: "#6b7280", fontSize: 11 }}>المخزن/الفرع: {unit.warehouseName ?? "—"}</div>
+                  <div style={{ color: "#6b7280", fontSize: 11 }}>
+                    المخزن/الفرع: {unit.branchName ? `${unit.branchName} — ` : ""}{unit.warehouseName ?? "—"}
+                  </div>
                 </div>
                 <StatusBadge status={unit.egsId ? unit.egsStatus : "pending"} />
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 10 }}>
+                <div style={{ background: "#f8fafc", borderRadius: 6, padding: "7px 9px", fontSize: 10 }}>
+                  <div style={{ color: "#9ca3af" }}>البيئة</div><strong>محاكاة</strong>
+                </div>
                 <div style={{ background: "#f8fafc", borderRadius: 6, padding: "7px 9px", fontSize: 10 }}>
                   <div style={{ color: "#9ca3af" }}>EGS</div><strong>{unit.egsName ?? "غير مرتبط"}</strong>
                 </div>
                 <div style={{ background: "#f8fafc", borderRadius: 6, padding: "7px 9px", fontSize: 10 }}>
-                  <div style={{ color: "#9ca3af" }}>الحالة الفنية</div><strong>{unit.status}</strong>
+                  <div style={{ color: "#9ca3af" }}>الشهادة</div><strong>غير مرتبطة</strong>
                 </div>
                 <div style={{ background: "#f8fafc", borderRadius: 6, padding: "7px 9px", fontSize: 10 }}>
-                  <div style={{ color: "#9ca3af" }}>مسار الحل</div><strong>journalId → EGS</strong>
+                  <div style={{ color: "#9ca3af" }}>التفعيل</div><strong>{unit.status === "active" ? "مفعّلة" : "غير مفعّلة"}</strong>
                 </div>
               </div>
               <div style={{ fontWeight: 700, fontSize: 11, marginBottom: 6 }}>الدفاتر المرتبطة ({unit.journals.length})</div>
               {unit.journals.length === 0 && <div style={{ color: "#9ca3af", fontSize: 11, marginBottom: 8 }}>لا توجد دفاتر مرتبطة.</div>}
               {unit.journals.map(journal => (
                 <div key={journal.journalId} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderTop: "1px solid #f1f5f9", fontSize: 11 }}>
-                  <span style={{ flex: 1 }}><strong>{journal.journalCode}</strong> — {journal.journalName} <span style={{ color: "#9ca3af" }}>({journal.docType})</span></span>
+                  <span style={{ flex: 1 }}><strong>{journal.journalCode}</strong> — {journal.journalName} <span style={{ color: "#9ca3af" }}>({journalTypeLabel(journal.docType)})</span></span>
                   <button disabled={busy} onClick={() => unlinkM.mutate({ journalId: journal.journalId })} style={{ ...smallBtn, background: "#fff", color: "#dc2626", border: "1px solid #fecaca", cursor: busy ? "not-allowed" : "pointer" }}>فك الربط</button>
                 </div>
               ))}
@@ -775,16 +830,20 @@ function LinkingUnitsSection() {
                     if (journalId) linkM.mutate({ posUnitId: unit.id, journalId });
                   }}>
                     <option value="">اختر دفترًا لإضافته</option>
-                    {unlinked.filter(j => j.warehouseId === unit.warehouseId).map(j => <option key={j.id} value={j.id}>{j.code} — {j.name}</option>)}
+                    {unlinked.filter(j => j.warehouseId === unit.warehouseId).map(j => <option key={j.id} value={j.id}>{j.code} — {j.name} — {journalTypeLabel(j.docType)}</option>)}
                   </select>
                   <button onClick={() => setLinkingUnitId(null)} style={{ ...smallBtn, background: "#f1f5f9", color: "#475569" }}>إلغاء</button>
                 </div>
               ) : (
-                <button onClick={() => setLinkingUnitId(unit.id)} disabled={busy} style={{ ...smallBtn, marginTop: 8, background: "#eff6ff", color: "#1d4ed8", cursor: busy ? "not-allowed" : "pointer" }}>＋ ربط دفتر من نفس المخزن</button>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                  <button onClick={() => setLinkingUnitId(unit.id)} disabled={busy} style={{ ...smallBtn, background: "#eff6ff", color: "#1d4ed8", cursor: busy ? "not-allowed" : "pointer" }}>إدارة الدفاتر</button>
+                  <button onClick={() => onActivate?.()} style={{ ...smallBtn, background: "#fef3c7", color: "#92400e" }}>فتح التفعيل</button>
+                  <button onClick={() => toast.info(`تفاصيل وحدة الربط: ${unit.unitName}`)} style={{ ...smallBtn, background: "#f1f5f9", color: "#475569" }}>التفاصيل</button>
+                </div>
               )}
             </div>
           ))}
-          {!unitsQ.isLoading && (unitsQ.data ?? []).length === 0 && <div style={{ background: "#fff", border: "1px dashed #cbd5e1", borderRadius: 10, padding: 24, textAlign: "center", color: "#64748b", fontSize: 12 }}>لم تُنشأ وحدات ربط بعد.</div>}
+          {!unitsQ.isLoading && (unitsQ.data ?? []).length === 0 && <div style={{ background: "#fff", border: "1px dashed #cbd5e1", borderRadius: 10, padding: 24, textAlign: "center", color: "#64748b", fontSize: 12 }}>لم يتم إنشاء وحدات ربط بعد. ابدأ باختيار دفتر فاتورة مبيعات تابع لنقطة الإصدار.</div>}
         </div>
       )}
     </div>
@@ -792,39 +851,156 @@ function LinkingUnitsSection() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 2c. OTP محاكاة — لا حفظ ولا اتصال خارجي
+// 2c. تفعيل Fatoora Simulation — OTP مؤقت ولا يُحفظ
 // ══════════════════════════════════════════════════════════════════════════════
 function OtpSimulationSection() {
-  const [requested, setRequested] = useState(false);
+  const unitsQ = trpc.zatca.listPosUnits.useQuery();
+  const utils = trpc.useUtils();
+  const [posUnitId, setPosUnitId] = useState<number | null>(null);
+  const [csrRequestId, setCsrRequestId] = useState<number | null>(null);
   const [otp, setOtp] = useState("");
-  const [result, setResult] = useState<"idle" | "verified" | "rejected">("idle");
+  const [result, setResult] = useState<any>(null);
+  const [csrStatus, setCsrStatus] = useState<any>(null);
 
-  const requestOtp = () => {
-    setRequested(true);
-    setOtp("");
-    setResult("idle");
-  };
-  const verifyOtp = () => setResult(otp === "246810" ? "verified" : "rejected");
+  const statusQ = trpc.zatca.getSimulationOnboardingStatus.useQuery(
+    { posUnitId: posUnitId ?? 0 },
+    { enabled: !!posUnitId },
+  );
+  const createCsrM = trpc.zatca.createSimulationCsr.useMutation({
+    onSuccess: (data) => {
+      setCsrStatus(data);
+      setCsrRequestId(data.csrRequestId);
+      setResult(null);
+      statusQ.refetch();
+      toast.success("تم إنشاء CSR على الخادم — لا يغادر المفتاح الخاص الخادم");
+    },
+    onError: (error) => toast.error(error.message),
+  });
+  const complianceM = trpc.zatca.requestSimulationComplianceCsid.useMutation({
+    onSuccess: (data) => {
+      setResult(data);
+      setOtp("");
+      utils.zatca.getConfig.invalidate();
+      statusQ.refetch();
+      if (data.ok) toast.success(data.message);
+      else toast.error(data.message);
+    },
+    onError: (error) => toast.error(error.message),
+  });
+  const operationalM = trpc.zatca.requestSimulationOperationalCsid.useMutation({
+    onSuccess: (data) => {
+      setResult(data);
+      statusQ.refetch();
+      if (data.ok) toast.success(data.message);
+      else toast.error(data.message);
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const selectedUnit = (unitsQ.data ?? []).find(unit => unit.id === posUnitId);
+  const hasCsr = !!(csrStatus?.csrRequestId || statusQ.data?.csr?.id);
+  const hasComplianceCsid = !!statusQ.data?.csid?.id;
+  const operationalReady = !!statusQ.data?.operationalReady;
 
   return (
     <div style={{ maxWidth: 680 }}>
-      <SecTitle icon="🧪" title="معالج OTP — محاكاة فقط" />
+      <SecTitle icon="🔐" title="تفعيل الربط مع Fatoora Simulation الرسمية" />
       <div style={{ background: "#fff7ed", border: "1px solid #fdba74", color: "#9a3412", borderRadius: 8, padding: 12, fontSize: 12, lineHeight: 1.8, marginBottom: 16 }}>
-        <strong>محاكاة محلية فقط.</strong> لا يوجد اتصال بـZATCA، ولا يتم إنشاء CSID أو شهادة أو مفتاح، ولا يُحفظ رمز OTP في قاعدة البيانات أو المتصفح. النشر العام لا يُستخدم لأي OTP حقيقي.
+        <strong>تنبيه أمني:</strong> هذا المسار يتصل بـFatoora Simulation فقط عند ضغط زر الإرسال. أدخل OTP الذي تولده بوابة المحاكاة الرسمية خلال ساعة من إنشائه. لا يُحفظ OTP، ولا يُعاد المفتاح الخاص أو CSID أو Secret إلى المتصفح، ولا يوجد أي مسار Production.
       </div>
       <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 18 }}>
-        <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 8 }}>الخطوة 1: طلب OTP محاكى</div>
-        <p style={{ color: "#64748b", fontSize: 11, lineHeight: 1.7, marginTop: 0 }}>هذا الزر يغيّر حالة الواجهة فقط. لا يرسل رسالة ولا يستدعي API خارجيًا.</p>
-        <button onClick={requestOtp} style={{ ...smallBtn, height: 30, background: "#D19C05", color: "#fff" }}>إصدار OTP تجريبي</button>
-        {requested && (
-          <div style={{ marginTop: 14, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12 }}>
-            <div style={{ fontSize: 11, color: "#475569", marginBottom: 8 }}>رمز المحاكاة الثابت للاختبار المحلي: <strong style={{ fontFamily: "monospace", letterSpacing: 2 }}>246810</strong></div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" placeholder="أدخل 6 أرقام" style={{ ...fld, width: 160, direction: "ltr", fontFamily: "monospace", letterSpacing: 2 }} />
-              <button onClick={verifyOtp} disabled={otp.length !== 6} style={{ ...smallBtn, height: 28, background: otp.length === 6 ? "#2563eb" : "#cbd5e1", color: "#fff" }}>تحقق محلي</button>
-            </div>
-            {result === "verified" && <div style={{ color: "#15803d", fontSize: 11, fontWeight: 700, marginTop: 8 }}>✅ نجحت المحاكاة — لم تُنشأ أي بيانات اعتماد.</div>}
-            {result === "rejected" && <div style={{ color: "#dc2626", fontSize: 11, fontWeight: 700, marginTop: 8 }}>❌ الرمز غير صحيح — المحاكاة لم تنشئ أي سجل.</div>}
+        <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 8 }}>الخطوة 1: اختر وحدة الربط</div>
+        <select
+          value={posUnitId ?? ""}
+          onChange={e => {
+            const value = Number(e.target.value);
+            setPosUnitId(value || null);
+            setCsrRequestId(null);
+            setCsrStatus(null);
+            setResult(null);
+          }}
+          style={{ ...fld, maxWidth: 420, marginBottom: 14 }}
+        >
+          <option value="">اختر وحدة ربط EGS</option>
+          {(unitsQ.data ?? []).map(unit => (
+            <option key={unit.id} value={unit.id}>
+              {unit.unitCode} — {unit.unitName} — {unit.warehouseName ?? "مخزن غير محدد"}
+            </option>
+          ))}
+        </select>
+
+        {selectedUnit && (
+          <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, marginBottom: 14, fontSize: 11, lineHeight: 1.8 }}>
+            <strong>{selectedUnit.unitName}</strong>
+            <div>الدفاتر المرتبطة: {selectedUnit.journals.length} — الاعتماد واحد لكل دفاتر هذه الوحدة.</div>
+            <div>حالة EGS: {statusQ.data?.device?.registrationStatus ?? "لم يبدأ"}</div>
+            <div>حالة CSR: {statusQ.data?.csr?.status ?? "لم يُنشأ"}</div>
+            <div>حالة CSID: {statusQ.data?.csid?.status ?? "غير موجود"}</div>
+          </div>
+        )}
+
+        <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 8 }}>الخطوة 2: إنشاء CSR ومفتاح EC</div>
+        <p style={{ color: "#64748b", fontSize: 11, lineHeight: 1.7, marginTop: 0 }}>
+          ينشئ الخادم مفتاح secp256k1 وCSR باستخدام قالب <code>PREZATCA-Code-Signing</code>. لا يتم تنزيل المفتاح الخاص أو CSR إلى الواجهة.
+        </p>
+        <button
+          disabled={!posUnitId || createCsrM.isPending}
+          onClick={() => posUnitId && createCsrM.mutate({
+            posUnitId,
+            serialNumber: selectedUnit?.unitCode ?? `EGS-${posUnitId}`,
+            solutionName: "OneSoft",
+            model: "ERP",
+            branchName: selectedUnit?.branchName ?? selectedUnit?.warehouseName ?? "OneSoft",
+            branchLocation: selectedUnit?.warehouseName ?? "Saudi Arabia",
+            businessCategory: "Retail and invoicing",
+            taxpayerProvidedId: selectedUnit?.unitCode ?? `OneSoft-${posUnitId}`,
+          })}
+          style={{ ...smallBtn, height: 30, background: posUnitId ? "#D19C05" : "#cbd5e1", color: "#fff", cursor: posUnitId ? "pointer" : "not-allowed" }}
+        >
+          {createCsrM.isPending ? "جارٍ إنشاء CSR..." : hasCsr ? "🔄 تدوير CSR والمفتاح" : "🔧 إنشاء CSR الآن"}
+        </button>
+
+        <div style={{ marginTop: 18, fontWeight: 800, fontSize: 13, marginBottom: 8 }}>الخطوة 3: إدخال OTP الرسمي</div>
+        <p style={{ color: "#64748b", fontSize: 11, lineHeight: 1.7, marginTop: 0 }}>
+          افتح بوابة Fatoora Simulation، أنشئ OTP لوحدة EGS، ثم أدخله هنا. لن يُرسل الطلب قبل إنشاء CSR.
+        </p>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <input
+            value={otp}
+            onChange={e => setOtp(e.target.value.replace(/\s/g, "").slice(0, 64))}
+            autoComplete="one-time-code"
+            placeholder="OTP من Fatoora Simulation"
+            style={{ ...fld, width: 250, direction: "ltr", fontFamily: "monospace", letterSpacing: 1 }}
+          />
+          <button
+            onClick={() => posUnitId && complianceM.mutate({ posUnitId, csrRequestId: csrRequestId ?? statusQ.data?.csr?.id, otp })}
+            disabled={!posUnitId || !hasCsr || !otp || complianceM.isPending}
+            style={{ ...smallBtn, height: 28, background: posUnitId && hasCsr && otp ? "#2563eb" : "#cbd5e1", color: "#fff", cursor: posUnitId && hasCsr && otp ? "pointer" : "not-allowed" }}
+          >
+            {complianceM.isPending ? "جارٍ الاتصال..." : "طلب Compliance CSID"}
+          </button>
+        </div>
+        <div style={{ marginTop: 8, fontSize: 10, color: "#64748b" }}>
+          بوابة Fatoora Simulation: <a href="https://fatoora.zatca.gov.sa/" target="_blank" rel="noreferrer">فتح البوابة الرسمية</a>
+        </div>
+        <div style={{ marginTop: 18, fontWeight: 800, fontSize: 13, marginBottom: 8 }}>الخطوة 4: طلب CSID التشغيلي</div>
+        <p style={{ color: "#64748b", fontSize: 11, lineHeight: 1.7, marginTop: 0 }}>
+          بعد نجاح Compliance CSID، يطلب الخادم CSID التشغيلي من Simulation باستخدام الاعتماد المشفّر داخليًا. لا يُفتح Production الحقيقي.
+        </p>
+        <button
+          onClick={() => posUnitId && operationalM.mutate({ posUnitId, csrRequestId: csrRequestId ?? statusQ.data?.csr?.id })}
+          disabled={!posUnitId || !hasComplianceCsid || operationalReady || operationalM.isPending}
+          style={{ ...smallBtn, height: 28, background: posUnitId && hasComplianceCsid && !operationalReady ? "#7c3aed" : "#cbd5e1", color: "#fff", cursor: posUnitId && hasComplianceCsid && !operationalReady ? "pointer" : "not-allowed" }}
+        >
+          {operationalM.isPending ? "جارٍ طلب CSID التشغيلي..." : operationalReady ? "✅ CSID التشغيلي موجود" : "طلب CSID التشغيلي"}
+        </button>
+        {result && (
+          <div style={{ marginTop: 14, background: result.ok ? "#f0fdf4" : "#fef2f2", border: `1px solid ${result.ok ? "#86efac" : "#fecaca"}`, borderRadius: 8, padding: 12, fontSize: 11, lineHeight: 1.8 }}>
+            <strong>{result.ok ? "✅ تم استلام الرد الرسمي" : "❌ لم يكتمل طلب Compliance CSID"}</strong>
+            <div>Request ID: <span style={{ fontFamily: "monospace" }}>{result.requestId ?? "—"}</span></div>
+            <div>HTTP Status: <span style={{ fontFamily: "monospace" }}>{result.httpStatus ?? "لا يوجد رد"}</span></div>
+            <div>{result.message}</div>
+            <div style={{ color: "#64748b" }}>لم يتم عرض أو حفظ أي Secret أو Private Key في هذه الشاشة.</div>
           </div>
         )}
       </div>
@@ -859,7 +1035,7 @@ function DevicesSection() {
       <SecTitle icon="💻" title="إدارة الأجهزة (EGS)" />
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-        <div style={{ fontSize: 12, color: "#6b7280" }}>أجهزة الفوترة الإلكترونية المسجّلة لدى الهيئة</div>
+        <div style={{ fontSize: 12, color: "#6b7280" }}>أجهزة الفوترة الإلكترونية — Mock فقط، لا تسجيل لدى الهيئة</div>
         <button onClick={() => setShowAdd(!showAdd)}
           style={{ height: 32, padding: "0 16px", background: "#D19C05", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
           ＋ إضافة جهاز
@@ -945,7 +1121,7 @@ function DevicesSection() {
               style={{ height: 30, padding: "0 14px", background: "#0ea5e9", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer", color: "#fff" }}>
               🔌 اختبار الجهاز
             </button>
-            <button title="مزامنة بيانات الجهاز مع الهيئة" onClick={() => toast.info("جارٍ المزامنة...")}
+            <button title="مزامنة Mock فقط — لا اتصال بالهيئة" onClick={() => toast.info("Mock فقط — لا يوجد اتصال خارجي")}
               style={{ height: 30, padding: "0 14px", background: "#8b5cf6", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer", color: "#fff" }}>
               🔄 مزامنة
             </button>
@@ -1219,61 +1395,83 @@ function KeysSection() {
 // ══════════════════════════════════════════════════════════════════════════════
 function CsrSection() {
   const cfgQ = trpc.zatca.getConfig.useQuery();
-  const cfg  = cfgQ.data;
-  const [form, setForm] = useState({ cn: "", ou: "", o: "", c: "SA", uid: "", serialNumber: "" });
-  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+  const unitsQ = trpc.zatca.listPosUnits.useQuery();
+  const createM = trpc.zatca.createSimulationCsr.useMutation({
+    onSuccess: (data) => {
+      toast.success(`تم إنشاء CSR لوحدة الربط. بصمة المفتاح: ${data.fingerprint}`);
+      setCreated(data);
+    },
+    onError: (error) => toast.error(error.message),
+  });
+  const cfg = cfgQ.data;
+  const [posUnitId, setPosUnitId] = useState<number | null>(null);
+  const [serialNumber, setSerialNumber] = useState("");
+  const [branchName, setBranchName] = useState("");
+  const [branchLocation, setBranchLocation] = useState("");
+  const [businessCategory, setBusinessCategory] = useState("Retail and invoicing");
+  const [created, setCreated] = useState<any>(null);
+  const selectedUnit = (unitsQ.data ?? []).find(unit => unit.id === posUnitId);
 
   return (
     <div style={{ maxWidth: 640 }}>
       <SecTitle icon="📜" title="إنشاء CSR (Certificate Signing Request)" />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 16 }}>
-        <StatusCard label="الحالة"     value="لم يُنشَأ بعد" dot="none" />
+        <StatusCard label="الحالة"     value={created ? "CSR جاهز لـ OTP" : "لم يُنشَأ بعد"} dot={created ? "ok" : "none"} />
         <StatusCard label="الخوارزمية" value="EC secp256k1"  dot="ok"  />
-        <StatusCard label="الإصدار"    value="ZATCA v2.1"    dot="ok"  />
+        <StatusCard label="القالب"    value="PREZATCA-Code-Signing"    dot="ok"  />
       </div>
 
       <div style={{ background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 12, color: "#92400e" }}>
-        ℹ️ يُشتَق CSR من بيانات منشأتك. تأكد من مطابقة البيانات لما هو مسجّل لدى الهيئة.
+        ℹ️ يُنشأ المفتاح الخاص وCSR على الخادم فقط. لا يتم عرض أو تنزيل المفتاح الخاص أو ملف CSR.
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
         <div style={grp}>
-          <label style={lbl}>CN (الاسم العام) *</label>
-          <input style={fld} value={form.cn || cfg?.businessName || ""} onChange={e => set("cn", e.target.value)} placeholder="اسم المنشأة بالإنجليزية" />
+          <label style={lbl}>وحدة الربط *</label>
+          <select style={fld} value={posUnitId ?? ""} onChange={e => setPosUnitId(Number(e.target.value) || null)}>
+            <option value="">اختر وحدة EGS</option>
+            {(unitsQ.data ?? []).map(unit => <option key={unit.id} value={unit.id}>{unit.unitCode} — {unit.unitName}</option>)}
+          </select>
         </div>
         <div style={grp}>
-          <label style={lbl}>O (المنشأة) *</label>
-          <input style={fld} value={form.o || cfg?.businessName || ""} onChange={e => set("o", e.target.value)} placeholder="Organization Name" />
+          <label style={lbl}>Serial Number *</label>
+          <input style={{ ...fld, fontFamily: "monospace", direction: "ltr" }} value={serialNumber || selectedUnit?.unitCode || ""} onChange={e => setSerialNumber(e.target.value)} placeholder="EGS-01-SERIAL" />
         </div>
         <div style={grp}>
-          <label style={lbl}>OU (القسم)</label>
-          <input style={fld} value={form.ou} onChange={e => set("ou", e.target.value)} placeholder="E-Invoicing Department" />
+          <label style={lbl}>اسم الفرع *</label>
+          <input style={fld} value={branchName || selectedUnit?.branchName || ""} onChange={e => setBranchName(e.target.value)} placeholder="Riyadh Branch" />
         </div>
         <div style={grp}>
-          <label style={lbl}>C (الدولة)</label>
-          <input style={{ ...fld, direction: "ltr" }} value={form.c} onChange={e => set("c", e.target.value)} placeholder="SA" />
+          <label style={lbl}>عنوان الفرع *</label>
+          <input style={fld} value={branchLocation || selectedUnit?.warehouseName || ""} onChange={e => setBranchLocation(e.target.value)} placeholder="Riyadh, Saudi Arabia" />
         </div>
         <div style={grp}>
-          <label style={lbl}>UID (الرقم الضريبي) *</label>
-          <input style={{ ...fld, fontFamily: "monospace", direction: "ltr" }} value={form.uid || cfg?.vatNumber || ""} onChange={e => set("uid", e.target.value)} placeholder="3XXXXXXXXXXXXXX3" />
-        </div>
-        <div style={grp}>
-          <label style={lbl}>Serial Number</label>
-          <input style={{ ...fld, fontFamily: "monospace", direction: "ltr" }} value={form.serialNumber} onChange={e => set("serialNumber", e.target.value)} placeholder="1-TST|2-TST|3-XXX" />
+          <label style={lbl}>النشاط *</label>
+          <input style={fld} value={businessCategory} onChange={e => setBusinessCategory(e.target.value)} />
         </div>
       </div>
 
       <div style={{ display: "flex", gap: 10 }}>
-        <button onClick={() => toast.info("إنشاء CSR — سيتم تطويره قريباً مع تكامل الباك إند")}
-          style={{ height: 36, padding: "0 24px", background: "#D19C05", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-          🔧 إنشاء CSR الآن
-        </button>
-        <button onClick={() => toast.info("استيراد CSR موجود")}
-          style={{ height: 36, padding: "0 16px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 12, cursor: "pointer" }}>
-          📥 استيراد CSR موجود
+        <button
+          disabled={!posUnitId || !serialNumber && !selectedUnit?.unitCode || !branchName && !selectedUnit?.branchName || !branchLocation && !selectedUnit?.warehouseName || createM.isPending}
+          onClick={() => posUnitId && createM.mutate({
+            posUnitId,
+            serialNumber: serialNumber || selectedUnit?.unitCode || `EGS-${posUnitId}`,
+            solutionName: "OneSoft",
+            model: "ERP",
+            branchName: branchName || selectedUnit?.branchName || "OneSoft",
+            branchLocation: branchLocation || selectedUnit?.warehouseName || "Saudi Arabia",
+            businessCategory,
+            taxpayerProvidedId: selectedUnit?.unitCode || `OneSoft-${posUnitId}`,
+          })}
+          style={{ height: 36, padding: "0 24px", background: posUnitId ? "#D19C05" : "#cbd5e1", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: posUnitId ? "pointer" : "not-allowed" }}>
+          {createM.isPending ? "جارٍ إنشاء CSR..." : "🔧 إنشاء CSR الآن"}
         </button>
       </div>
+      {created && <div style={{ marginTop: 14, background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 8, padding: 12, fontSize: 11, lineHeight: 1.8 }}>
+        ✅ تم إنشاء CSR. Request ID الداخلي: {created.csrRequestId} — بصمة المفتاح: <span style={{ fontFamily: "monospace" }}>{created.fingerprint}</span>. انتقل إلى «إدخال OTP» لإكمال الطلب الرسمي.
+      </div>}
     </div>
   );
 }
@@ -1504,7 +1702,7 @@ function SendSection() {
       <SecTitle icon="📤" title="إرسال الفواتير الإلكترونية" />
 
       <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: "10px 12px", marginBottom: 12, fontSize: 11, color: "#92400e" }}>
-        قاعدة المتابعة: «تم إرسال الطلب» لا يساوي «تم الاعتماد». اختر نتيجة Mock للاختبار؛ لا يوجد اتصال Production في هذه المرحلة.
+         Test data — no actual connection to Fatoora. قاعدة المتابعة: «تم إرسال الطلب» لا تساوي نتيجة رسمية. اختر نتيجة Mock للاختبار فقط.
       </div>
       <div style={{ display: "flex", gap: 8, alignItems: "end", flexWrap: "wrap", marginBottom: 12 }}>
         <div style={{ minWidth: 150 }}>
@@ -1518,9 +1716,9 @@ function SendSection() {
           <label style={lbl}>نتيجة Mock</label>
           <select style={{ ...fld, height: 28 }} value={mockOutcome} onChange={e => setMockOutcome(e.target.value as typeof mockOutcome)}>
             <option value="delayed">تم الإرسال — لا رد نهائي</option>
-            <option value="accepted">قبول نهائي</option>
-            <option value="accepted_with_warnings">قبول مع تحذيرات</option>
-            <option value="rejected">رفض</option>
+             <option value="accepted">Mock: قبول تجريبي</option>
+             <option value="accepted_with_warnings">Mock: قبول تجريبي مع تحذيرات</option>
+             <option value="rejected">Mock: رفض تجريبي</option>
             <option value="uncertain">حالة غير مؤكدة</option>
             <option value="connection_issue">فشل اتصال قبل الإرسال</option>
             <option value="connection_loss">انقطاع الرد بعد الإرسال — غير مؤكدة</option>
@@ -1597,7 +1795,7 @@ function TrackingSection() {
 
   return (
     <div>
-      <SecTitle icon="🧭" title="متابعة حالة الهيئة" />
+      <SecTitle icon="🧭" title="متابعة حالة Mock — لا توجد حالة رسمية" />
       <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 14, minHeight: 420 }}>
         <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, overflow: "auto", maxHeight: 620 }}>
           {rows.map(inv => (
@@ -1631,7 +1829,7 @@ function TrackingSection() {
                     ["المحاولات", transaction?.attemptCount ?? detail.invoice.zatcaAttemptCount],
                     ["وقت الإرسال", transaction?.lastAttemptAt ? new Date(transaction.lastAttemptAt).toLocaleString("ar-SA") : "—"],
                     ["وقت الرد", transaction?.responseDate ? new Date(transaction.responseDate).toLocaleString("ar-SA") : "لم يصل"],
-                    ["حالة الهيئة", transaction?.authorityStatus],
+                    ["حالة Mock", transaction?.authorityStatus],
                   ].map(([label, value]) => <div key={String(label)} style={{ background: "#f8fafc", padding: 7, borderRadius: 5 }}><div style={{ color: "#64748b" }}>{label}</div><div style={{ fontFamily: "monospace", marginTop: 3, wordBreak: "break-all" }}>{String(value ?? "—")}</div></div>)}
                 </div>
                 {transaction?.lastError && <div style={{ marginTop: 10, background: "#fef2f2", color: "#b91c1c", padding: 8, borderRadius: 5, fontSize: 11 }}>{transaction.lastError}</div>}
@@ -1640,8 +1838,22 @@ function TrackingSection() {
                 <PayloadCard title="الطلب بعد حذف الأسرار" payload={transaction?.requestPayload} />
                 <PayloadCard title="الرد بعد حذف الأسرار" payload={transaction?.responsePayload} />
               </div>
-              <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, marginTop: 10 }}>
-                <strong style={{ fontSize: 12 }}>سجل الاستجابات والأخطاء</strong>
+               <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, marginTop: 10 }}>
+                 <strong style={{ fontSize: 12 }}>سجل المحاولات (نفس المعاملة، Mock فقط)</strong>
+                 <div style={{ marginTop: 8, fontSize: 11 }}>
+                   {(detail.attempts ?? []).map(item => (
+                     <div key={item.id} style={{ padding: 7, borderBottom: "1px solid #f1f5f9" }}>
+                       <strong>محاولة #{item.attemptNumber}</strong>
+                       {" · "}Attempt ID: <code>{item.attemptId}</code>
+                       {" · "}Request ID: <code>{item.requestId ?? "—"}</code>
+                       {" · "}HTTP {item.httpStatus ?? "—"}
+                       {" · "}{item.result}
+                       {" · "}{new Date(item.startedAt).toLocaleString("ar-SA")}
+                     </div>
+                   ))}
+                   {!detail.attempts?.length && <div style={{ color: "#94a3b8" }}>لا توجد محاولات مسجلة</div>}
+                 </div>
+                 <strong style={{ display: "block", fontSize: 12, marginTop: 12 }}>سجل الاستجابات والأخطاء</strong>
                 <div style={{ marginTop: 8, fontSize: 11 }}>
                   {(detail.responses ?? []).map(item => <div key={item.id} style={{ padding: 6, borderBottom: "1px solid #f1f5f9" }}>رد HTTP {item.httpStatus ?? "—"} · {new Date(item.responseTime).toLocaleString("ar-SA")}</div>)}
                   {(detail.errors ?? []).map(item => <div key={item.id} style={{ padding: 6, color: "#b91c1c", borderBottom: "1px solid #f1f5f9" }}>{item.errorCode}: {item.errorMessage}</div>)}
@@ -1726,7 +1938,7 @@ function UncertainSection() {
           </tbody>
         </table>
       </div>
-      {selected && <div style={{ marginTop: 8, fontSize: 11, color: "#64748b" }}>تم تحديد الفاتورة {selected} للمطابقة. يجب أن تصل نتيجة الهيئة الفعلية عبر مسار المطابقة قبل اعتمادها.</div>}
+      {selected && <div style={{ marginTop: 8, fontSize: 11, color: "#64748b" }}>تم تحديد الفاتورة {selected} للمطابقة الداخلية. لا توجد نتيجة هيئة فعلية في Mock؛ استخدم نتيجة Simulation فقط.</div>}
     </div>
   );
 }
@@ -2034,11 +2246,11 @@ function ReportsSection() {
 
   const reportCards = [
     { title: "جاهزة للإرسال",       value: s?.readyToSubmit ?? s?.notSubmitted ?? 0, total: s?.totalInvoices ?? 0, color: "#475569", icon: "📭" },
-    { title: "تم التخليص",           value: s?.cleared ?? 0,     total: s?.totalInvoices ?? 0, color: "#16a34a", icon: "✅" },
-    { title: "تم الإبلاغ",           value: s?.reported ?? 0,    total: s?.totalInvoices ?? 0, color: "#0ea5e9", icon: "📨" },
+    { title: "Mock: تخليص تجريبي",   value: s?.cleared ?? 0,     total: s?.totalInvoices ?? 0, color: "#16a34a", icon: "✅" },
+    { title: "Mock: إبلاغ تجريبي",   value: s?.reported ?? 0,    total: s?.totalInvoices ?? 0, color: "#0ea5e9", icon: "📨" },
     { title: "بانتظار النتيجة",      value: (s?.submittedPending ?? 0) + (s?.submitting ?? 0), total: s?.totalInvoices ?? 0, color: "#d97706", icon: "⏳" },
-    { title: "مقبولة مع تحذيرات",    value: s?.acceptedWithWarnings ?? 0, total: s?.totalInvoices ?? 0, color: "#ca8a04", icon: "⚠️" },
-    { title: "مرفوضة",               value: s?.rejected ?? 0,    total: s?.totalInvoices ?? 0, color: "#dc2626", icon: "❌" },
+    { title: "Mock: قبول تجريبي مع تحذيرات", value: s?.acceptedWithWarnings ?? 0, total: s?.totalInvoices ?? 0, color: "#ca8a04", icon: "⚠️" },
+    { title: "Mock: رفض تجريبي",      value: s?.rejected ?? 0,    total: s?.totalInvoices ?? 0, color: "#dc2626", icon: "❌" },
     { title: "مشاكل/غير مؤكدة",      value: (s?.connectionIssue ?? 0) + (s?.retryPending ?? 0) + (s?.uncertain ?? 0), total: s?.totalInvoices ?? 0, color: "#9333ea", icon: "❔" },
   ];
 
@@ -2076,7 +2288,7 @@ function ReportsSection() {
                   .map((seg, i) => <div key={i} style={{ flex: seg.v, background: seg.c, minWidth: seg.v > 0 ? 4 : 0 }} />)}
               </div>
               <div style={{ display: "flex", gap: 12, marginTop: 6, fontSize: 10, color: "#6b7280", flexWrap: "wrap" }}>
-                {[["#16a34a","مُخلَّصة"],["#d97706","انتظار"],["#dc2626","مرفوضة"],["#7c3aed","أخطاء"],["#e2e8f0","لم تُرسَل"]].map(([c,l]) => (
+                {[["#16a34a","تخليص Mock تجريبي"],["#d97706","انتظار"],["#dc2626","رفض Mock تجريبي"],["#7c3aed","أخطاء"],["#e2e8f0","لم تُرسَل"]].map(([c,l]) => (
                   <span key={l} style={{ display: "flex", gap: 4, alignItems: "center" }}>
                     <span style={{ width: 8, height: 8, borderRadius: 2, background: c, flexShrink: 0 }} />{l}
                   </span>
@@ -2120,6 +2332,7 @@ function ReportsSection() {
 export default function ZatcaCenterPage() {
   const [active, setActive]      = useState<Section>("dashboard");
   const [showWizard, setShowWizard] = useState(false);
+  const [technicalOpen, setTechnicalOpen] = useState(false);
 
   const cfgQ   = trpc.zatca.getConfig.useQuery();
   const statsQ = trpc.zatca.getStats.useQuery();
@@ -2129,7 +2342,7 @@ export default function ZatcaCenterPage() {
   function renderSection() {
     switch (active) {
       case "dashboard": return <DashboardSection onStartSetup={() => setShowWizard(true)} onNavigate={navigateTo} />;
-        case "units":     return <LinkingUnitsSection />;
+        case "units":     return <LinkingUnitsSection onActivate={() => setActive("otp-sim")} />;
         case "otp-sim":   return <OtpSimulationSection />;
       case "env":       return <EnvSection />;
       case "devices":   return <DevicesSection />;
@@ -2147,6 +2360,15 @@ export default function ZatcaCenterPage() {
       case "errlogs":   return <LogsSection errorsOnly={true} />;
       case "diag":      return <DiagSection />;
       case "reports":   return <ReportsSection />;
+      case "support":   return (
+        <div>
+          <SecTitle icon="🛟" title="الدعم الفني" />
+          <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 18, color: "#475569", fontSize: 12, lineHeight: 1.9 }}>
+            <strong style={{ color: "#1e293b" }}>هل تحتاج إلى مساعدة؟</strong>
+            <p style={{ margin: "6px 0 0" }}>راجع الحالات غير المؤكدة والمشاكل والتنبيهات أولًا. لا يتم تشغيل OTP أو الاتصال الفعلي من هذا المركز.</p>
+          </div>
+        </div>
+      );
       default:          return null;
     }
   }
@@ -2165,10 +2387,10 @@ export default function ZatcaCenterPage() {
       )}
 
       {/* الشريط الجانبي */}
-      <div style={{ width: 210, background: "#fff", borderLeft: "1px solid #e2e8f0", display: "flex", flexDirection: "column", flexShrink: 0 }}>
+      <div style={{ width: 188, background: "#fff", borderLeft: "1px solid #e2e8f0", display: "flex", flexDirection: "column", flexShrink: 0 }}>
         {/* رأس الشريط */}
         <div style={{ padding: "14px 16px", borderBottom: "1px solid #e2e8f0", background: "linear-gradient(135deg,#1e293b,#334155)" }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: "#D19C05" }}>🏛️ مركز ZATCA</div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: "#D19C05" }}>🏛️ مركز الفوترة الإلكترونية – ZATCA</div>
           <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>هيئة الزكاة والضريبة والجمارك</div>
         </div>
 
@@ -2180,12 +2402,25 @@ export default function ZatcaCenterPage() {
           </button>
         </div>
 
-        {/* قائمة الأقسام */}
+        {/* قائمة الأقسام الأساسية والتفاصيل الفنية */}
         <div style={{ flex: 1, overflowY: "auto", padding: "6px 0" }}>
-          {SECTIONS.map(sec => (
+          {PRIMARY_SECTIONS.map(sec => (
             <button key={sec.id} onClick={() => setActive(sec.id)}
-              style={{ width: "100%", textAlign: "right", padding: "9px 16px", border: "none", background: active === sec.id ? "#fef3c7" : "transparent", borderRight: `3px solid ${active === sec.id ? "#D19C05" : "transparent"}`, cursor: "pointer", display: "flex", gap: 8, alignItems: "center", fontSize: 12, fontWeight: active === sec.id ? 700 : 500, color: active === sec.id ? "#D19C05" : "#374151", transition: "all 0.1s" }}>
+              style={{ width: "100%", textAlign: "right", padding: "8px 12px", border: "none", background: active === sec.id ? "#fef3c7" : "transparent", borderRight: `3px solid ${active === sec.id ? "#D19C05" : "transparent"}`, cursor: "pointer", display: "flex", gap: 8, alignItems: "center", fontSize: 11, fontWeight: active === sec.id ? 700 : 500, color: active === sec.id ? "#D19C05" : "#374151", transition: "all 0.1s" }}>
               <span style={{ fontSize: 16 }}>{sec.icon}</span>
+              <span>{sec.label}</span>
+            </button>
+          ))}
+          <button onClick={() => setTechnicalOpen(value => !value)}
+            style={{ width: "100%", textAlign: "right", padding: "9px 12px", marginTop: 4, border: "none", borderTop: "1px solid #e2e8f0", background: technicalOpen ? "#f8fafc" : "transparent", cursor: "pointer", display: "flex", gap: 8, alignItems: "center", fontSize: 11, fontWeight: 700, color: "#475569" }}>
+            <span style={{ fontSize: 15 }}>⚙️</span>
+            <span style={{ flex: 1 }}>التفاصيل الفنية</span>
+            <span>{technicalOpen ? "⌃" : "⌄"}</span>
+          </button>
+          {technicalOpen && TECHNICAL_SECTIONS.map(sec => (
+            <button key={sec.id} onClick={() => setActive(sec.id)}
+              style={{ width: "100%", textAlign: "right", padding: "7px 24px", border: "none", background: active === sec.id ? "#fef3c7" : "transparent", borderRight: `3px solid ${active === sec.id ? "#D19C05" : "transparent"}`, cursor: "pointer", display: "flex", gap: 7, alignItems: "center", fontSize: 10, fontWeight: active === sec.id ? 700 : 500, color: active === sec.id ? "#D19C05" : "#64748b" }}>
+              <span>{sec.icon}</span>
               <span>{sec.label}</span>
             </button>
           ))}
@@ -2194,6 +2429,9 @@ export default function ZatcaCenterPage() {
 
       {/* المحتوى الرئيسي */}
       <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+        <div style={{ background: "#fff7ed", border: "1px solid #fb923c", color: "#9a3412", borderRadius: 8, padding: "9px 12px", marginBottom: 12, fontSize: 11, fontWeight: 700 }}>
+          بيئة تجريبية — لا يوجد اتصال فعلي بمنصة فاتورة، ولا تستخدم بيانات أو رموز تفعيل حقيقية.
+        </div>
         {renderSection()}
       </div>
     </div>
