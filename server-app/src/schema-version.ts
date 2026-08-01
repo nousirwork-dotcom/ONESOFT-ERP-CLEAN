@@ -5,4 +5,4 @@
  * constant to match the new filename (without the .sql extension), then
  * run `pnpm migrate` so the live database is stamped with the new version.
  */
-export const REQUIRED_SCHEMA_VERSION = '0069_credit_debit_notes';
+export const REQUIRED_SCHEMA_VERSION = '0070_move_debit_note_to_sales';

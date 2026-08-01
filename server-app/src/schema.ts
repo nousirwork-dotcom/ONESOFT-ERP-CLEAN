@@ -4,7 +4,7 @@ import { relations, sql } from 'drizzle-orm';
 // ─── Enums ────────────────────────────────────────────────────────────────────
 export const userRoleEnum = pgEnum('user_role', ['superadmin', 'admin', 'cashier', 'accountant', 'warehouse_manager', 'viewer']);
 export const orgStatusEnum = pgEnum('org_status', ['active', 'suspended', 'trial', 'expired']);
-export const invoiceTypeEnum = pgEnum('invoice_type', ['sale', 'return', 'quote', 'order', 'credit_note']);
+export const invoiceTypeEnum = pgEnum('invoice_type', ['sale', 'return', 'quote', 'order', 'credit_note', 'debit_note']);
 export const invoiceStatusEnum = pgEnum('invoice_status', ['draft', 'confirmed', 'cancelled', 'paid']);
 export const paymentMethodEnum = pgEnum('payment_method', ['cash', 'bank', 'credit', 'check', 'other']);
 export const voucherTypeEnum = pgEnum('voucher_type', ['receipt', 'payment']);

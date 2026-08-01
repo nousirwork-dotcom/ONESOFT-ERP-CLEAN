@@ -527,6 +527,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     { type: basedOnType as any, number: basedOnTrigger },
     { enabled: config.docCategory === "sales" && !!basedOnType && !!basedOnTrigger }
   );
+  const sourceDocumentId = basedOnQuery.data?.id;
 
   // Set initial invoice number
   useEffect(() => {
@@ -1027,6 +1028,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       notes: notes || undefined,
       basedOnType: basedOnType || undefined,
       basedOnNumber: basedOnNum || undefined,
+      ...(config.docCategory === "sales" && sourceDocumentId ? { sourceDocumentId } : {}),
       items: itemsPayload,
     };
     if (config.docCategory === "sales") {
@@ -1042,7 +1044,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   }, [
     invoiceNumber, invoiceDate, dueDate, partyId, partyName, supplierInvoiceNumber,
     warehouseId, currency, exchangeRate, paymentType, paidAmount, remainingAmount,
-    notes, lines, subtotal, totalDiscount, totalTax, netTotal,
+    notes, lines, subtotal, totalDiscount, totalTax, netTotal, sourceDocumentId,
     salesCreateMutation, purchaseCreateMutation, journalId, nextJournalNumberMutation,
      docTypeId, docTypesQuery.data, salesperson, stockQuery.data, config, branchId,
   ]);
@@ -1114,6 +1116,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       notes: notes || undefined,
       basedOnType: basedOnType || undefined,
       basedOnNumber: basedOnNum || undefined,
+      ...(config.docCategory === "sales" && sourceDocumentId ? { sourceDocumentId } : {}),
       items: itemsPayload,
     };
     try {
@@ -1133,7 +1136,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   }, [
     invoiceDate, dueDate, partyId, partyName, supplierInvoiceNumber, warehouseId,
     currency, exchangeRate, notes, lines, subtotal, totalDiscount, totalTax, netTotal,
-    salesCreateMutation, purchaseCreateMutation, journalId, config.docCategory, config.invoiceType,
+    salesCreateMutation, purchaseCreateMutation, journalId, config.docCategory, config.invoiceType, sourceDocumentId,
   ]);
 
   // ── التنقل المركزي بين المستندات المحفوظة ────────────────────────────────────

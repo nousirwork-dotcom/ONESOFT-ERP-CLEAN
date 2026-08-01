@@ -8,6 +8,7 @@ import SalesInvoicePageNew from "./SalesInvoicePage";
 import SalesQuotation from "./SalesQuotation";
 import SalesReturnPage from "./SalesReturnPage";
 import SalesCreditNotePage from "./SalesCreditNotePage";
+import SalesDebitNotePage from "./SalesDebitNotePage";
 import SalesQuotePage from "./SalesQuotePage";
 import SalesOrderPage from "./SalesOrderPage";
 import { useTabManager } from "@/core/contexts/TabManagerContext";
@@ -48,6 +49,7 @@ export const menuSections = [
       { id: "sales-invoice",    label: "فاتورة مبيعات",      icon: Receipt,      path: "/sales/invoice" },
       { id: "sales-return",     label: "مردود المبيعات",      icon: RotateCcw,    path: "/sales/return" },
       { id: "credit-note",      label: "إشعار دائن",          icon: FileText,     path: "/sales/credit-note" },
+      { id: "debit-note",       label: "إشعار مدين",          icon: DollarSign,  path: "/sales/debit-note" },
       { id: "quotation",        label: "عرض سعر مبيعات",     icon: Tag,          path: "/sales/quotation" },
       { id: "sales-order",      label: "أمر بيع",             icon: ClipboardList,path: "/sales/order" },
       { id: "delivery-order",   label: "أمر تسليم مبيعات",   icon: ArrowRight,   path: "/sales/delivery" },
@@ -2652,7 +2654,8 @@ function SalesContent({ activeId, onSelect, settings, onSettingsChange }: {
     case "all-transactions":      return <SalesTransactionsView />;
     case "sales-invoice":         return <SalesInvoiceListView />;
     case "sales-return":          return <ComingSoon title="مردود المبيعات" />;
-    case "credit-note":           return <ComingSoon title="إشعار دائن" />;
+    case "credit-note":           return <SalesCreditNotePage />;
+    case "debit-note":            return <SalesDebitNotePage />;
     case "quotation":             return <SalesQuotation />;
     case "sales-order":           return <ComingSoon title="أمر بيع" />;
     case "delivery-order":        return <DeliveryOrderPage />;
@@ -2674,6 +2677,7 @@ export function SalesTransactionsTab()  { return <div className="h-full flex fle
 export function SalesInvoiceTab()       { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesInvoiceListView /></div>; }
 export function SalesReturnTab()        { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesReturnPage /></div>; }
 export function SalesCreditNoteTab()    { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesCreditNotePage /></div>; }
+export function SalesDebitNoteTab()     { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesDebitNotePage /></div>; }
 export function SalesQuotationTab()     { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesQuotePage /></div>; }
 export function SalesOrderTab()         { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesOrderPage /></div>; }
 export function SalesDeliveryTab()      { return <div className="h-full overflow-auto p-5" dir="rtl"><DeliveryOrderPage /></div>; }

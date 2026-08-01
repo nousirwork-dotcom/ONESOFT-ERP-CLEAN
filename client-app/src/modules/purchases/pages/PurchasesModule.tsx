@@ -8,7 +8,6 @@ import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import { fmtDate } from "@/shared/utils/dateUtils";
 import PurchaseInvoicePage from "./PurchaseInvoicePage";
 import PurchaseReturnPage from "./PurchaseReturnPage";
-import PurchaseDebitNotePage from "./PurchaseDebitNotePage";
 import PurchaseOrderPage from "./PurchaseOrderPage";
 import {
   ChevronDown, ChevronRight, ShoppingCart, FileText, Users,
@@ -42,7 +41,6 @@ export const menuSections = [
     children: [
       { id: "purchase-invoices", label: "فاتورة مشتريات",  icon: FileText,       path: "/purchases/invoices" },
       { id: "purchase-returns",  label: "مردود المشتريات", icon: RotateCcw,      path: "/purchases/returns" },
-      { id: "debit-note",        label: "إشعار مدين",      icon: DollarSign,     path: "/purchases/debit-note" },
       { id: "purchase-orders",   label: "امر شراء",        icon: ClipboardList,  path: "/purchases/orders" },
     ],
   },
@@ -1084,7 +1082,6 @@ function PurchasesContent({ activeId, onSelect }: { activeId: MenuId; onSelect: 
     case "overview":           return <PurchasesOverview onSelect={onSelect} />;
     case "purchase-invoices":  return <PurchaseInvoicePage />;
     case "purchase-returns":   return <PurchaseReturnPage />;
-    case "debit-note":         return <PurchaseDebitNotePage />;
     case "purchase-orders":    return <PurchaseOrderPage />;
     case "suppliers-list":     return <SupplierDirectoryPage />;
     case "supplier-groups":    return <SupplierGroupsPage />;
@@ -1112,9 +1109,6 @@ export function PurchaseInvoicesPage() {
 }
 export function PurchaseReturnsPage() {
   return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><PurchaseReturnPage /></div>;
-}
-export function PurchaseDebitNotePageTab() {
-  return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><PurchaseDebitNotePage /></div>;
 }
 export function PurchaseRptSupplierPage() {
   return <div className="h-full overflow-auto p-5" dir="rtl"><ReportBySupplier /></div>;

@@ -175,9 +175,15 @@ export const postingRouter = router({
         orgId,
         userId:          ctx.user.id,
         date:            invoice.invoiceDate,
-        description:     `ترحيل فاتورة مبيعات ${invoice.invoiceNumber}`,
+        description:     `ترحيل ${invoice.invoiceType === 'debit_note' ? 'إشعار مدين' : 'مستند مبيعات'} ${invoice.invoiceNumber}`,
         reference:       invoice.invoiceNumber,
-        sourceDocType:   'sales_invoice',
+        sourceDocType:   invoice.invoiceType === 'debit_note'
+          ? 'debit_note'
+          : invoice.invoiceType === 'credit_note'
+            ? 'credit_note'
+            : invoice.invoiceType === 'return'
+              ? 'sales_return'
+              : 'sales_invoice',
         sourceDocId:     invoice.id,
         sourceDocNumber: invoice.invoiceNumber,
         lines,
@@ -318,65 +324,8 @@ export const postingRouter = router({
         if (!lockedRow) throw new Error('الفاتورة غير موجودة');
         if (lockedRow.isPosted) throw new Error('الفاتورة مرحَّلة مسبقاً');
 
-        // إشعار مدين = أثر مالي فقط. لا يُنشئ سند توريداً أو حركة مخزون،
-        // حتى لو كانت البنود مرتبطة بأصناف مخزنية.
         if (invoice.invoiceType === 'debit_note') {
-          const entry = await insertJournalEntry({
-            orgId,
-            userId: ctx.user.id,
-            date: invoice.invoiceDate,
-            description: `ترحيل إشعار مدين ${invoice.invoiceNumber}`,
-            reference: invoice.invoiceNumber,
-            sourceDocType: 'debit_note',
-            sourceDocId: invoice.id,
-            sourceDocNumber: invoice.invoiceNumber,
-            lines,
-            journalId: journal?.id ?? undefined,
-            generatedDocType: 'debit_note',
-            tx,
-          });
-
-          const [updatedInvoice] = await tx.update(purchaseInvoices)
-            .set({
-              isPosted: true,
-              postedAt: new Date(),
-              postedJournalEntryId: entry.id,
-              generatedStockVoucherId: null,
-              generatedStockJournalEntryId: null,
-              inventoryPosted: false,
-              updatedAt: new Date(),
-            })
-            .where(and(
-              eq(purchaseInvoices.id, invoice.id),
-              eq(purchaseInvoices.orgId, orgId),
-              eq(purchaseInvoices.isPosted, false),
-            ))
-            .returning({ id: purchaseInvoices.id });
-          if (!updatedInvoice) throw new Error('الفاتورة تغيرت حالتها أثناء ترحيل الإشعار المدين');
-
-          await tx.update(pendingAccountMovements)
-            .set({
-              status: 'linked',
-              linkedJournalEntryId: entry.id,
-              linkedStockVoucherId: null,
-              updatedAt: new Date(),
-            })
-            .where(and(
-              eq(pendingAccountMovements.orgId, orgId),
-              eq(pendingAccountMovements.sourceDocType, 'debit_note'),
-              eq(pendingAccountMovements.sourceDocId, invoice.id),
-              eq(pendingAccountMovements.status, 'unposted'),
-            ));
-
-          return {
-            success: true,
-            journalEntryId: entry.id,
-            entryNumber: entry.entryNumber,
-            stockVoucherId: null,
-            stockVoucherNumber: null,
-            stockJournalEntryId: null,
-            stockEntryNumber: null,
-          };
+          throw new Error('إشعار المدين مستند مبيعات صادر ولا يجوز ترحيله من مسار المشتريات');
         }
 
         const issuance = parseIssuanceConfig(journal?.issuanceConfig);

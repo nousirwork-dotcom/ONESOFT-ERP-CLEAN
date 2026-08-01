@@ -491,6 +491,13 @@
       "when": 1786316400000,
       "tag": "0069_credit_debit_notes",
       "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1786317000000,
+      "tag": "0070_move_debit_note_to_sales",
+      "breakpoints": true
     }
   ]
 }

@@ -42,7 +42,7 @@ const JOURNAL_TYPE_LABELS: Record<string, string> = {
   sales_invoice: "فاتورة مبيعات",
   sales_return: "مردود مبيعات",
   credit_note: "إشعار دائن",
-  debit_note: "إشعار مدين",
+  debit_note: "إشعار مدين مبيعات",
 };
 
 function journalTypeLabel(docType: string) {

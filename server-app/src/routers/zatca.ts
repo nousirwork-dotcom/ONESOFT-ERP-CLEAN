@@ -126,8 +126,8 @@ const ZATCA_SCREEN_CAPABILITIES = {
     detail: 'الشاشة التشغيلية موجودة وتدعم XML بإشارة الفاتورة الأصلية وسبب الإصدار',
   },
   debit_note: {
-    path: '/purchases/debit-note',
-    label: 'إشعار مدين',
+    path: '/sales/debit-note',
+    label: 'إشعار مدين مبيعات',
     screenExists: true,
     xmlReady: true,
     detail: 'الشاشة التشغيلية موجودة وتدعم XML بإشارة الفاتورة الأصلية وسبب الإصدار',
@@ -1742,6 +1742,7 @@ export const zatcaRouter = router({
             ? db.query.salesInvoices.findFirst({
                 where: and(
                   eq(salesInvoices.orgId, ctx.user.orgId),
+                  eq(salesInvoices.invoiceType, 'sale'),
                   inv.sourceDocumentId
                     ? eq(salesInvoices.id, inv.sourceDocumentId)
                     : inv.refInvoiceId
@@ -2549,7 +2550,7 @@ export const zatcaRouter = router({
     .input(z.object({ invoiceId: z.number() }))
     .mutation(async ({ ctx, input }) => {
       // جلب الفاتورة والبنود والإعدادات معاً
-      const [inv, items, org] = await Promise.all([
+      const [inv, items, org, originalInvoice] = await Promise.all([
         db.query.salesInvoices.findFirst({
           where: and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, ctx.user.orgId)),
         }),
@@ -2560,6 +2561,30 @@ export const zatcaRouter = router({
           where: eq(organizations.id, ctx.user.orgId),
           columns: { zatcaConfig: true, name: true },
         }),
+        db.query.salesInvoices.findFirst({
+          where: and(
+            eq(salesInvoices.orgId, ctx.user.orgId),
+            eq(salesInvoices.invoiceType, 'sale'),
+            sql`${salesInvoices.id} = COALESCE(
+              (SELECT source_document_id FROM sales_invoices WHERE id = ${input.invoiceId}),
+              (SELECT ref_invoice_id FROM sales_invoices WHERE id = ${input.invoiceId}),
+              (SELECT original.id
+               FROM sales_invoices original
+               WHERE original.org_id = ${ctx.user.orgId}
+                 AND original.invoice_type = 'sale'
+                 AND original.invoice_number = (
+                   SELECT based_on_number
+                   FROM sales_invoices
+                   WHERE id = ${input.invoiceId}
+                 ))
+            )`,
+          ),
+          columns: {
+            invoiceNumber: true,
+            zatcaUuid: true,
+            invoiceDate: true,
+          },
+        }),
       ]);
 
       if (!inv) throw new Error('Invoice not found');
@@ -2568,8 +2593,9 @@ export const zatcaRouter = router({
       // ── توليد XML ──────────────────────────────────────────────────────────
       const issueDate = inv.invoiceDate ? new Date(inv.invoiceDate).toISOString().split('T')[0] : '';
       const issueTime = inv.invoiceDate ? new Date(inv.invoiceDate).toISOString().split('T')[1]?.slice(0, 8) ?? '00:00:00' : '00:00:00';
-      const isAdjustment = inv.invoiceType === 'return' || inv.invoiceType === 'credit_note';
-      const invTypeCode = isAdjustment ? '381' : '388';
+      const isDebitNote = inv.invoiceType === 'debit_note';
+      const isAdjustment = inv.invoiceType === 'return' || inv.invoiceType === 'credit_note' || isDebitNote;
+      const invTypeCode = isDebitNote ? '383' : isAdjustment ? '381' : '388';
       const currency   = inv.currency ?? 'SAR';
       const uuid       = inv.zatcaUuid ?? '';
       const pih        = inv.zatcaPih ?? 'NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjNmQ2OTZjOTljNWVlNzljMmYxZjUzMGE4NzBhM2UwNjMxNmViMmMy';
@@ -2638,8 +2664,8 @@ export const zatcaRouter = router({
     <cbc:ID>ICV</cbc:ID>
     <cbc:UUID>${inv.zatcaInvoiceCounter ?? 1}</cbc:UUID>
   </cac:AdditionalDocumentReference>
-  ${isAdjustment && (inv.basedOnNumber || inv.sourceDocumentId || inv.refInvoiceId)
-    ? `<cac:BillingReference><cac:InvoiceDocumentReference><cbc:ID>${String(inv.basedOnNumber ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;')}</cbc:ID></cac:InvoiceDocumentReference></cac:BillingReference>`
+  ${isAdjustment && (inv.basedOnNumber || originalInvoice?.invoiceNumber || inv.sourceDocumentId || inv.refInvoiceId)
+    ? `<cac:BillingReference><cac:InvoiceDocumentReference><cbc:ID>${String(originalInvoice?.invoiceNumber ?? inv.basedOnNumber ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;')}<\/cbc:ID>${originalInvoice?.zatcaUuid ? `<cbc:UUID>${String(originalInvoice.zatcaUuid).replace(/&/g, '&amp;').replace(/</g, '&lt;')}</cbc:UUID>` : ''}</cac:InvoiceDocumentReference></cac:BillingReference>`
     : ''}
   ${isAdjustment && inv.notes
     ? `<cbc:Note>${String(inv.notes).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</cbc:Note>`

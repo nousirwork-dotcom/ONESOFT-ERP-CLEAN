@@ -1,20 +1,21 @@
 import DocumentInvoicePage from "@/shared/components/DocumentInvoicePage";
 
-export default function PurchaseDebitNotePage() {
+export default function SalesDebitNotePage() {
   return (
     <DocumentInvoicePage config={{
       pageTitle: "الإشعار المدين",
-      docCategory: "purchase",
+      docCategory: "sales",
       invoiceType: "debit_note",
       journalDocType: "debit_note",
-      docTypeFilter: "purchases",
-      partyLabel: "المورد",
-      numberPrefix: "PDN",
+      docTypeFilter: "sales",
+      partyLabel: "العميل",
+      numberPrefix: "SDN",
       journalDropdownTitle: "دفاتر الإشعار المدين",
+      basedOnOptions: [{ value: "sale", label: "فاتورة مبيعات أصلية" }],
       requireReference: true,
       requireReason: true,
       canPost: true,
-      themeColor: "#7C4A03",
+      themeColor: "#2F6B57",
     }} />
   );
 }

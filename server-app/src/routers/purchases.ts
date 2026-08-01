@@ -35,7 +35,7 @@ async function syncUnpostedPurchaseEffects(
   items: any[],
   orgId: number,
 ) {
-  const sourceType = invoice.invoiceType === 'debit_note' ? 'debit_note' : 'purchase_invoice';
+  const sourceType = 'purchase_invoice';
   const oldStock = await tx.query.pendingStockMovements.findMany({
     where: and(
       eq(pendingStockMovements.orgId, orgId),
@@ -95,9 +95,6 @@ async function syncUnpostedPurchaseEffects(
     }));
   if (accountRows.length) await tx.insert(pendingAccountMovements).values(accountRows);
 
-  // A debit note changes the financial value of the original purchase only.
-  // It must never create inventory or pending stock movement automatically.
-  if (invoice.invoiceType === 'debit_note') return;
   const stockItems = items.filter((item) => item.productId);
   if (!stockItems.length || !invoice.warehouseId) return;
   const productRows = await tx.query.products.findMany({
@@ -154,7 +151,7 @@ async function syncUnpostedPurchaseEffects(
 }
 
 async function removeUnpostedPurchaseEffects(tx: PurchaseClient, invoice: any, orgId: number) {
-  const sourceType = invoice?.invoiceType === 'debit_note' ? 'debit_note' : 'purchase_invoice';
+  const sourceType = 'purchase_invoice';
   const oldStock = await tx.query.pendingStockMovements.findMany({
     where: and(
       eq(pendingStockMovements.orgId, orgId),
@@ -345,13 +342,11 @@ export const purchasesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { items, dueDate, ...invoiceData } = input;
       const orgId = ctx.user.orgId;
-      if (invoiceData.status !== 'draft' && invoiceData.invoiceType === 'debit_note') {
-        if (!invoiceData.basedOnNumber?.trim()) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'الإشعار المدين يتطلب مرجع الفاتورة الأصلية' });
-        }
-        if (!invoiceData.notes?.trim()) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'الإشعار المدين يتطلب سبب الإصدار' });
-        }
+      if (invoiceData.invoiceType === 'debit_note') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'إشعار المدين مستند مبيعات صادر؛ لا يمكن إنشاؤه في المشتريات',
+        });
       }
       const resolvedWarehouseId = await resolvePurchaseWarehouseId(
         db,
@@ -430,13 +425,11 @@ export const purchasesRouter = router({
         where: and(eq(purchaseInvoices.id, id), eq(purchaseInvoices.orgId, ctx.user.orgId)),
       });
       const finalInvoiceType = rest.invoiceType ?? existing?.invoiceType;
-      if (rest.status !== 'draft' && finalInvoiceType === 'debit_note') {
-        if (!rest.basedOnNumber?.trim() && !existing?.basedOnNumber?.trim()) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'الإشعار المدين يتطلب مرجع الفاتورة الأصلية' });
-        }
-        if (!rest.notes?.trim() && !existing?.notes?.trim()) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'الإشعار المدين يتطلب سبب الإصدار' });
-        }
+      if (finalInvoiceType === 'debit_note') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'إشعار المدين مستند مبيعات صادر؛ لا يمكن تعديله في المشتريات',
+        });
       }
       if (existing?.isPosted)
         throw new Error('لا يمكن تعديل مستند مرحَّل — يجب فك الترحيل أولاً');

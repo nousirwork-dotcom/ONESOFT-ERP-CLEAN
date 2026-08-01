@@ -20,11 +20,10 @@ import Invoices from "@/modules/sales/pages/Invoices";
 import PurchasesModule, {
   PurchaseSuppliersPage, PurchaseSupplierGroupsPage, PurchaseOrdersPage,
   PurchaseInvoicesPage, PurchaseReturnsPage, PurchaseRptSupplierPage, PurchaseRptItemPage,
-  PurchaseDebitNotePageTab,
 } from "@/modules/purchases/pages/PurchasesModule";
 import SalesModule, {
   SalesTransactionsTab,
-  SalesInvoiceTab, SalesReturnTab, SalesCreditNoteTab, SalesQuotationTab,
+  SalesInvoiceTab, SalesReturnTab, SalesCreditNoteTab, SalesDebitNoteTab, SalesQuotationTab,
   SalesOrderTab, SalesDeliveryTab, SalesPosTab,
   SalesCustomersTab, SalesCustomerGroupsTab, SalesCustomerBalancesTab,
   SalesCustomerStatementTab, SalesCustomerReportsTab,
@@ -158,13 +157,13 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/purchases/orders":           PurchaseOrdersPage,
   "/purchases/invoices":     PurchaseInvoicesPage,
   "/purchases/returns":      PurchaseReturnsPage,
-  "/purchases/debit-note":   PurchaseDebitNotePageTab,
   "/purchases/rpt-supplier": PurchaseRptSupplierPage,
   "/purchases/rpt-item":     PurchaseRptItemPage,
   "/sales/transactions":      SalesTransactionsTab,
   "/sales/invoice":           SalesInvoiceTab,
   "/sales/return":            SalesReturnTab,
   "/sales/credit-note":       SalesCreditNoteTab,
+  "/sales/debit-note":        SalesDebitNoteTab,
   "/sales/quotation":         SalesQuotationTab,
   "/sales/order":             SalesOrderTab,
   "/sales/delivery":          SalesDeliveryTab,

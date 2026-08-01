@@ -278,6 +278,17 @@ export async function buildSalesInvoiceLines(
   journal: typeof documentJournals.$inferSelect | null,
   orgId: number,
 ) {
+  // A sales debit note increases the customer's receivable. It is not a
+  // payment/settlement document, so account-links and the legacy fallback must
+  // resolve its debit side as customer receivable.
+  if (invoice.invoiceType === 'debit_note') {
+    invoice = {
+      ...invoice,
+      paymentMethod: 'credit',
+      paymentBreakdown: null,
+      paidAmount: '0',
+    };
+  }
   const ptCfg = journal?.paymentTypesConfig as { accountLinks?: AccountLinkConfig[] } | null | undefined;
   const configLinks: AccountLinkConfig[] = Array.isArray(ptCfg?.accountLinks) ? (ptCfg!.accountLinks as AccountLinkConfig[]) : [];
   const hasConfiguredLinks = configLinks.some(l => l.accountId && l.postingName && l.postingSide);
@@ -698,12 +709,15 @@ export async function autoPostSalesInvoice(
   const { lines: rawLines, isBalanced } = await buildSalesInvoiceLines(invoice, effectiveJournal, orgId);
   if (!isBalanced || rawLines.length === 0) return null;
 
+  const isDebitNote = (invoice.invoiceType as string) === 'debit_note';
   const isReturn = invoice.invoiceType === 'return' || invoice.invoiceType === 'credit_note';
   const reversedLines = isReturn
     ? rawLines.map(l => ({ ...l, debit: l.credit, credit: l.debit }))
     : rawLines;
 
-  const docLabel    = invoice.invoiceType === 'credit_note'
+  const docLabel    = isDebitNote
+    ? 'إشعار مدين'
+    : invoice.invoiceType === 'credit_note'
     ? 'إشعار دائن'
     : isReturn ? 'مردود مبيعات' : 'فاتورة مبيعات';
   const docTypeName = docTypeAccs?.docType?.nameAr ?? docLabel;
@@ -716,7 +730,9 @@ export async function autoPostSalesInvoice(
     date:            invoice.invoiceDate,
     description:     docTypeName,
     reference:       invoice.invoiceNumber,
-    sourceDocType:   invoice.invoiceType === 'credit_note'
+    sourceDocType:   isDebitNote
+      ? 'debit_note'
+      : invoice.invoiceType === 'credit_note'
       ? 'credit_note'
       : isReturn ? 'sales_return' : 'sales_invoice',
     sourceDocId:     invoice.id,
@@ -779,12 +795,14 @@ export async function autoPostPurchaseInvoice(
   if (!isBalanced || rawLines.length === 0) return null;
 
   const isReturn    = invoice.invoiceType === 'return';
-  const isDebitNote  = invoice.invoiceType === 'debit_note';
+  if (invoice.invoiceType === 'debit_note') {
+    throw new Error('إشعار المدين مستند مبيعات صادر ولا يجوز ترحيله من مسار المشتريات');
+  }
   const reversedLines = isReturn
     ? rawLines.map(l => ({ ...l, debit: l.credit, credit: l.debit }))
     : rawLines;
 
-  const docLabel    = isDebitNote ? 'إشعار مدين' : isReturn ? 'مردود مشتريات' : 'فاتورة مشتريات';
+  const docLabel    = isReturn ? 'مردود مشتريات' : 'فاتورة مشتريات';
   const docTypeName = docTypeAccs?.docType?.nameAr ?? docLabel;
   const lineDesc    = `${docTypeName} - ${invoice.invoiceNumber}`;
   const lines       = reversedLines.map(l => ({ ...l, description: lineDesc }));
@@ -795,7 +813,7 @@ export async function autoPostPurchaseInvoice(
     date:            invoice.invoiceDate,
     description:     docTypeName,
     reference:       invoice.invoiceNumber,
-    sourceDocType:   isDebitNote ? 'debit_note' : isReturn ? 'purchase_return' : 'purchase_invoice',
+    sourceDocType:   isReturn ? 'purchase_return' : 'purchase_invoice',
     sourceDocId:     invoice.id,
     sourceDocNumber: invoice.invoiceNumber,
     lines,

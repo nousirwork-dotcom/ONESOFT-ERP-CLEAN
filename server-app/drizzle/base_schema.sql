@@ -12,7 +12,7 @@ DO $$ BEGIN
     CREATE TYPE "invoice_status" AS ENUM ('draft', 'confirmed', 'cancelled', 'paid');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-    CREATE TYPE "invoice_type" AS ENUM ('sale', 'return', 'quote', 'order', 'credit_note');
+    CREATE TYPE "invoice_type" AS ENUM ('sale', 'return', 'quote', 'order', 'credit_note', 'debit_note');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
     CREATE TYPE "journal_status" AS ENUM ('draft', 'posted', 'cancelled');

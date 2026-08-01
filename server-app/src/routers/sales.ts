@@ -299,7 +299,7 @@ export const salesRouter = router({
   create: protectedProcedure
     .input(z.object({
       invoiceNumber: z.string(),
-      invoiceType: z.enum(['sale', 'return', 'quote', 'order', 'credit_note']).default('sale'),
+      invoiceType: z.enum(['sale', 'return', 'quote', 'order', 'credit_note', 'debit_note']).default('sale'),
       invoiceDate: z.string(),
       dueDate: z.string().optional(),
       customerId: z.number().optional(),
@@ -346,13 +346,34 @@ export const salesRouter = router({
       const { items, dueDate, ...invoiceData } = input;
       const orgId = ctx.user.orgId;
       const isDraft = invoiceData.status === 'draft';
-      if (!isDraft && invoiceData.invoiceType === 'credit_note') {
+      if (!isDraft && ['credit_note', 'debit_note'].includes(invoiceData.invoiceType)) {
         if (!invoiceData.basedOnNumber?.trim() && !invoiceData.sourceDocumentId) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'الإشعار الدائن يتطلب مرجع الفاتورة الأصلية' });
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'الإشعار يتطلب مرجع فاتورة المبيعات الأصلية' });
         }
         if (!invoiceData.notes?.trim()) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'الإشعار الدائن يتطلب سبب الإصدار' });
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'الإشعار يتطلب سبب الإصدار' });
         }
+        const original = invoiceData.sourceDocumentId
+          ? await db.query.salesInvoices.findFirst({
+              where: and(eq(salesInvoices.id, invoiceData.sourceDocumentId), eq(salesInvoices.orgId, orgId)),
+              columns: { id: true, invoiceType: true, invoiceNumber: true },
+            })
+          : invoiceData.basedOnNumber
+            ? await db.query.salesInvoices.findFirst({
+                where: and(
+                  eq(salesInvoices.orgId, orgId),
+                  eq(salesInvoices.invoiceNumber, invoiceData.basedOnNumber),
+                  eq(salesInvoices.invoiceType, 'sale'),
+                ),
+                columns: { id: true, invoiceType: true, invoiceNumber: true },
+              })
+            : null;
+        if (!original || original.invoiceType !== 'sale') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'مرجع الإشعار يجب أن يكون فاتورة مبيعات أصلية، وليس مستند مشتريات أو إشعاراً آخر' });
+        }
+        invoiceData.sourceDocumentId = original.id;
+        invoiceData.basedOnNumber = original.invoiceNumber;
+        invoiceData.basedOnType = 'sale';
       }
 
       // ── تحقق: المسودة لا تخضع للتحققات المشددة (لا مخزن/فرع، لا أصناف) ─────
@@ -489,7 +510,7 @@ export const salesRouter = router({
   update: protectedProcedure
     .input(z.object({
       id: z.number(),
-      invoiceType: z.enum(['sale', 'return', 'quote', 'order', 'credit_note']).optional(),
+      invoiceType: z.enum(['sale', 'return', 'quote', 'order', 'credit_note', 'debit_note']).optional(),
       // حقول السياق — اختيارية عند التعديل، الموجود يُستخدم كقيمة افتراضية
       warehouseId:     z.number().optional(),
       journalId:       z.number().optional(),
@@ -549,13 +570,34 @@ export const salesRouter = router({
         : existing?.sourceDocumentId ?? undefined;
 
       // التحقق من المخزن/الأصناف يُتخطى للمسودة فقط؛ عند تحويلها نهائية يجب التحقق
-      if (!isNowDraft && rest.invoiceType === 'credit_note') {
+      if (!isNowDraft && ['credit_note', 'debit_note'].includes(rest.invoiceType ?? '')) {
         if (!rest.basedOnNumber?.trim() && !finalSourceDocId) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'الإشعار الدائن يتطلب مرجع الفاتورة الأصلية' });
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'الإشعار يتطلب مرجع فاتورة المبيعات الأصلية' });
         }
         if (!rest.notes?.trim() && !existing?.notes?.trim()) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'الإشعار الدائن يتطلب سبب الإصدار' });
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'الإشعار يتطلب سبب الإصدار' });
         }
+        const original = finalSourceDocId
+          ? await db.query.salesInvoices.findFirst({
+              where: and(eq(salesInvoices.id, finalSourceDocId), eq(salesInvoices.orgId, ctx.user.orgId)),
+              columns: { id: true, invoiceType: true, invoiceNumber: true },
+            })
+          : rest.basedOnNumber
+            ? await db.query.salesInvoices.findFirst({
+                where: and(
+                  eq(salesInvoices.orgId, ctx.user.orgId),
+                  eq(salesInvoices.invoiceNumber, rest.basedOnNumber),
+                  eq(salesInvoices.invoiceType, 'sale'),
+                ),
+                columns: { id: true, invoiceType: true, invoiceNumber: true },
+              })
+            : null;
+        if (!original || original.invoiceType !== 'sale') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'مرجع الإشعار يجب أن يكون فاتورة مبيعات أصلية، وليس مستند مشتريات أو إشعاراً آخر' });
+        }
+        rest.sourceDocumentId = original.id;
+        rest.basedOnNumber = original.invoiceNumber;
+        rest.basedOnType = 'sale';
       }
       if (!isNowDraft) {
         await validateSalesInvoiceWarehouseContext({
@@ -810,6 +852,7 @@ export const salesRouter = router({
       }
 
       return {
+        id: invoice.id,
         sourceType: input.type,
         number: invoice.invoiceNumber,
         customerId: invoice.customerId,
