@@ -1,4 +1,5 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { useTabManagerSafe, useTabScopeSafe } from "@/core/contexts/TabManagerContext";
 
 interface Options {
   isDirty: boolean;
@@ -7,6 +8,8 @@ interface Options {
 export function useUnsavedChangesGuard({ isDirty }: Options) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const afterCloseRef = useRef<(() => void) | null>(null);
+  const tabManager = useTabManagerSafe();
+  const tabId = useTabScopeSafe();
 
   const requestClose = useCallback(
     (afterClose?: () => void) => {
@@ -43,6 +46,11 @@ export function useUnsavedChangesGuard({ isDirty }: Options) {
     afterCloseRef.current = null;
     setConfirmOpen(false);
   }, []);
+
+  useEffect(() => {
+    if (!tabManager || !tabId) return;
+    return tabManager.registerTabCloseGuard(tabId, requestClose, isDirty);
+  }, [isDirty, requestClose, tabId, tabManager]);
 
   return { confirmOpen, requestClose, confirmSave, confirmDiscard, confirmCancel };
 }

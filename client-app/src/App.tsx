@@ -12,6 +12,7 @@ import { TabManagerProvider, useTabManager } from "@/core/contexts/TabManagerCon
 import { UiPrefsProvider, useUiPrefs } from "@/core/contexts/UiPrefsContext";
 import AppsHome from "@/shared/components/AppsHome";
 import TrialBanner from "@/shared/components/TrialBanner";
+import ApplicationExitGuard from "@/shared/components/ApplicationExitGuard";
 import { LanguageProvider } from "@/core/contexts/LanguageContext";
 import Dashboard from "@/modules/dashboard/pages/Dashboard";
 import POS from "@/modules/sales/pages/POS";
@@ -509,13 +510,11 @@ function AppRoutes() {
         <Route path="/superadmin" component={SuperAdminPage} />
       )}
       <Route>
-        <TabManagerProvider>
-          <UiPrefsProvider>
-            <DashboardLayout>
-              <TabContent />
-            </DashboardLayout>
-          </UiPrefsProvider>
-        </TabManagerProvider>
+        <UiPrefsProvider>
+          <DashboardLayout>
+            <TabContent />
+          </DashboardLayout>
+        </UiPrefsProvider>
       </Route>
     </Switch>
   );
@@ -549,8 +548,10 @@ function App() {
               لا login — لا dashboard — لا أي صفحة أخرى.
               يُرفع الحجب تلقائياً بعد إعادة التشغيل مع الإصدار الجديد.
             */}
-            {!mandatoryUpdateActive && (
-              <Switch>
+            <TabManagerProvider>
+              <ApplicationExitGuard />
+              {!mandatoryUpdateActive && (
+                <Switch>
                 <Route path="/login" component={LoginPage} />
                 {/* صفحة التفعيل عامة — لا تحتاج تسجيل دخول (جهاز جديد بدون ترخيص) */}
                 <Route path="/cfg/license" component={LicenseActivationPage} />
@@ -577,8 +578,9 @@ function App() {
                     <AppRoutes />
                   </AuthGuard>
                 </Route>
-              </Switch>
-            )}
+                </Switch>
+              )}
+            </TabManagerProvider>
           </TooltipProvider>
         </ThemeProvider>
         </BrandingProvider>

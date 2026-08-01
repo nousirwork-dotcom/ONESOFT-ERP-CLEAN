@@ -9,7 +9,8 @@ interface ElectronAPI {
 }
 
 function getElectronAPI(): ElectronAPI | null {
-  return (window as unknown as { installer?: ElectronAPI }).installer ?? null;
+  const win = window as unknown as { erpAPI?: ElectronAPI; installer?: ElectronAPI };
+  return win.erpAPI ?? win.installer ?? null;
 }
 
 export default function ElectronTitleBar() {

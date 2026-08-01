@@ -91,7 +91,7 @@ const AR = {
 
   // ─── Unsaved changes dialog ───────────────────
   unsavedTitle:   "تعديلات غير محفوظة",
-  unsavedMessage: "يوجد تعديلات غير محفوظة. هل تريد الحفظ أولاً؟",
+  unsavedMessage: "توجد تعديلات غير محفوظة في هذه الشاشة، هل تريد إغلاقها دون حفظ؟",
   unsavedSave:        "حفظ",
   unsavedSaveAsDraft: "حفظ كمسودة",
   unsavedSaving:      "جاري الحفظ...",
@@ -165,7 +165,7 @@ const EN: Record<keyof typeof AR, string> = {
   tbUnpostedBadge:  "Unposted",
   tbCancelledBadge: "✕ Cancelled",
   unsavedTitle:   "Unsaved Changes",
-  unsavedMessage: "You have unsaved changes. Save first?",
+  unsavedMessage: "This screen has unsaved changes. Close it without saving?",
   unsavedSave:    "Save",
   unsavedSaveAsDraft: "Save as Draft",
   unsavedSaving:  "Saving...",

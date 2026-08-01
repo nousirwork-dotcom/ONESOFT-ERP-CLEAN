@@ -21,8 +21,19 @@ contextBridge.exposeInMainWorld('erpAPI', {
   restartServer:  ()    => ipcRenderer.invoke('restart-server'),
   getServerStatus:()    => ipcRenderer.invoke('get-server-status'),
   getLogs:        (n)   => ipcRenderer.invoke('get-logs', n),
+  minimize:       ()    => ipcRenderer.invoke('window:minimize'),
+  maximize:       ()    => ipcRenderer.invoke('window:maximize'),
+  isMaximized:    ()    => ipcRenderer.invoke('window:is-maximized'),
+  close:          ()    => ipcRenderer.invoke('window:close'),
+  getVersion:     ()    => ipcRenderer.invoke('app:get-version'),
   onServerStatus: (cb)  => ipcRenderer.on('server-status', (_e, s) => cb(s)),
   setFullScreen:       (v)  => ipcRenderer.invoke('pos:setFullScreen', v),
+  onExitRequest:       (cb) => {
+    const listener = () => cb();
+    ipcRenderer.on('app:exit-request', listener);
+    return () => ipcRenderer.removeListener('app:exit-request', listener);
+  },
+  respondToExitRequest: (response) => ipcRenderer.send('app:exit-response', response),
   onFullScreenChange:  (cb) => {
     const listener = (_e, v) => cb(v);
     ipcRenderer.on('pos:fullscreenChanged', listener);

@@ -27,6 +27,12 @@ type TabManagerContextType = {
   isPosWorkspaceActive: boolean;
   openTab: (path: string, label: string, Icon: React.ElementType, pinned?: boolean) => void;
   closeTab: (id: string) => void;
+  registerTabCloseGuard: (
+    id: string,
+    requestClose: (afterClose: () => void) => void,
+    isDirty: boolean,
+  ) => () => void;
+  dirtyTabIds: string[];
   activateTab: (id: string) => void;
   setDashboardVisible: (v: boolean) => void;
   toggleDashboard: () => void;
@@ -39,11 +45,31 @@ type TabManagerContextType = {
 };
 
 const TabManagerContext = createContext<TabManagerContextType | null>(null);
+const TabScopeContext = createContext<string | null>(null);
 
 export function useTabManager() {
   const ctx = useContext(TabManagerContext);
   if (!ctx) throw new Error("useTabManager must be used inside TabManagerProvider");
   return ctx;
+}
+
+export function useTabManagerSafe(): TabManagerContextType | null {
+  return useContext(TabManagerContext);
+}
+
+/** Returns the AppWindow tab id for descendants that need close/dirty registration. */
+export function useTabScopeSafe(): string | null {
+  return useContext(TabScopeContext);
+}
+
+export function TabScopeProvider({
+  tabId,
+  children,
+}: {
+  tabId: string;
+  children: ReactNode;
+}) {
+  return <TabScopeContext.Provider value={tabId}>{children}</TabScopeContext.Provider>;
 }
 
 // ─── Tab Persistence Helpers ──────────────────────────────────────────────────
@@ -96,6 +122,11 @@ function isRememberEnabled(): boolean {
 }
 
 type SavedTab = { path: string; label: string };
+
+type TabCloseGuard = {
+  requestClose: (afterClose: () => void) => void;
+  isDirty: boolean;
+};
 
 /** يحفظ التبويبات في sessionStorage فوراً (مستقل عن إعداد "تذكر التبويبات"). */
 export function persistSessionTabs(tabs: AppTab[]): void {
@@ -210,6 +241,8 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
   const [dashboardVisible, setDashboardVisible] = useState<boolean>(
     restoredTabs.length === 0
   );
+  const closeGuardsRef = useRef<Map<string, TabCloseGuard[]>>(new Map());
+  const [dirtyTabIds, setDirtyTabIds] = useState<string[]>([]);
 
   // حفظ فوري في sessionStorage عند كل تغيير في التبويبات
   useEffect(() => {
@@ -285,7 +318,7 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const closeTab = useCallback((id: string) => {
+  const performCloseTab = useCallback((id: string) => {
     setTabs(prev => {
       const tab = prev.find(t => t.id === id);
       if (!tab || tab.pinned) return prev;
@@ -308,6 +341,45 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
       return next;
     });
   }, [activeTabId]);
+
+  const registerTabCloseGuard = useCallback((
+    id: string,
+    requestClose: (afterClose: () => void) => void,
+    isDirty: boolean,
+  ) => {
+    const guards = closeGuardsRef.current.get(id) ?? [];
+    const guard = { requestClose, isDirty };
+    closeGuardsRef.current.set(id, [...guards, guard]);
+    setDirtyTabIds(current => current.includes(id) || !isDirty ? current : [...current, id]);
+
+    return () => {
+      const current = closeGuardsRef.current.get(id) ?? [];
+      const next = current.filter(item => item !== guard);
+      if (next.length) closeGuardsRef.current.set(id, next);
+      else closeGuardsRef.current.delete(id);
+      setDirtyTabIds(currentIds => {
+        const stillDirty = next.some(item => item.isDirty);
+        return stillDirty ? currentIds : currentIds.filter(tabId => tabId !== id);
+      });
+    };
+  }, []);
+
+  const closeTab = useCallback((id: string) => {
+    const guards = closeGuardsRef.current.get(id) ?? [];
+    const dirtyGuard = [...guards].reverse().find(guard => guard.isDirty);
+    if (dirtyGuard) {
+      zCounter++;
+      setTabs(prev => prev.map(tab => tab.id === id
+        ? { ...tab, zIndex: zCounter, windowState: tab.windowState === "minimized" ? "normal" : tab.windowState }
+        : tab
+      ));
+      setActiveTabId(id);
+      setDashboardVisible(false);
+      dirtyGuard.requestClose(() => performCloseTab(id));
+      return;
+    }
+    performCloseTab(id);
+  }, [performCloseTab]);
 
   const activateTab = useCallback((id: string) => {
     zCounter++;
@@ -359,7 +431,7 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
     <TabManagerContext.Provider value={{
       tabs, activeTabId, dashboardVisible,
       isPosWorkspaceActive,
-      openTab, closeTab, activateTab,
+      openTab, closeTab, registerTabCloseGuard, dirtyTabIds, activateTab,
       setDashboardVisible, toggleDashboard, showDashboard,
       minimizeWindow, toggleMaximize, bringToFront,
       moveWindow, resizeWindow,

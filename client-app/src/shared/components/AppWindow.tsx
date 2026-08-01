@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import { Minus, Square, X } from "lucide-react";
-import { useTabManager, AppTab } from "@/core/contexts/TabManagerContext";
+import { useTabManager, AppTab, TabScopeProvider } from "@/core/contexts/TabManagerContext";
 import { useWorkspaceEl } from "@/core/contexts/WorkspaceContext";
 import { TASKBAR_H } from "@/shared/components/WindowTaskbar";
 import { ToolbarActionsProvider } from "@/components/unified-toolbar/ToolbarActionsContext";
@@ -118,6 +118,7 @@ export default function AppWindow({ tab, children, showToolbar = true }: AppWind
         حتى يستطيع WorkWindowPortalHost الوصول إلى الـ context ويُسجِّل
         العنصر الذي يُصيَّر فيه Portal نافذة العمل.
       */}
+      <TabScopeProvider tabId={tab.id}>
       <WorkWindowProvider>
         {/* Window frame — position:relative ضروري لـ portal host المُطلَق */}
         <div style={{
@@ -212,6 +213,7 @@ export default function AppWindow({ tab, children, showToolbar = true }: AppWind
           <WorkWindowPortalHost />
         </div>
       </WorkWindowProvider>
+      </TabScopeProvider>
     </div>
   );
 }
