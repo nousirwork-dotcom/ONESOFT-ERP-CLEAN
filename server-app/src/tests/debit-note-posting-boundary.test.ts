@@ -9,10 +9,16 @@ describe('sales debit note posting boundary', () => {
     const purchases = readFileSync(resolve(process.cwd(), 'src/routers/purchases.ts'), 'utf8');
 
     expect(posting).toContain("invoice.invoiceType === 'debit_note'");
-    expect(posting).toContain("sourceDocType:   invoice.invoiceType === 'debit_note'");
+    expect(posting).toContain("sourceDocType: locked.invoiceType === 'debit_note'");
     expect(purchases).toContain('إشعار المدين مستند مبيعات صادر');
     expect(engine).toContain("sourceDocType:   isDebitNote");
     expect(engine).toContain("paymentMethod: 'credit'");
+    expect(engine).toContain("invoice.invoiceType !== 'debit_note'");
     expect(engine).not.toContain("sourceDocType: isDebitNote ? 'debit_note'");
+    expect(engine).toContain("invoice.invoiceType === 'return'");
+    expect(engine).toContain("postSalesReturnStock");
+    expect(engine).toContain("reverseSalesReturnStock");
+    expect(posting).toContain("postSalesReturnStock");
+    expect(posting).toContain("generatedStockVoucherId");
   });
 });

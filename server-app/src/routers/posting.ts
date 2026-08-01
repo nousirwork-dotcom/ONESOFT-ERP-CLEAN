@@ -18,6 +18,8 @@ import {
   buildPurchaseInvoiceLines,
   autoPostSalesInvoice,
   autoPostPurchaseInvoice,
+  postSalesReturnStock,
+  reverseSalesReturnStock,
   validateAccounts,
   insertJournalEntry,
   reserveDocumentNumber,
@@ -171,29 +173,46 @@ export const postingRouter = router({
 
       await validateAccounts(lines.map(l => l.accountId));
 
-      const entry = await insertJournalEntry({
-        orgId,
-        userId:          ctx.user.id,
-        date:            invoice.invoiceDate,
-        description:     `ترحيل ${invoice.invoiceType === 'debit_note' ? 'إشعار مدين' : 'مستند مبيعات'} ${invoice.invoiceNumber}`,
-        reference:       invoice.invoiceNumber,
-        sourceDocType:   invoice.invoiceType === 'debit_note'
-          ? 'debit_note'
-          : invoice.invoiceType === 'credit_note'
-            ? 'credit_note'
-            : invoice.invoiceType === 'return'
-              ? 'sales_return'
-              : 'sales_invoice',
-        sourceDocId:     invoice.id,
-        sourceDocNumber: invoice.invoiceNumber,
-        lines,
+      return db.transaction(async (tx) => {
+        const locked = await tx.query.salesInvoices.findFirst({
+          where: and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, orgId)),
+        });
+        if (!locked || locked.isPosted) throw new Error('الفاتورة مرحَّلة مسبقاً أو غير موجودة');
+
+        const entry = await insertJournalEntry({
+          orgId,
+          userId: ctx.user.id,
+          date: locked.invoiceDate,
+          description: `ترحيل ${locked.invoiceType === 'debit_note' ? 'إشعار مدين' : 'مستند مبيعات'} ${locked.invoiceNumber}`,
+          reference: locked.invoiceNumber,
+          sourceDocType: locked.invoiceType === 'debit_note'
+            ? 'debit_note'
+            : locked.invoiceType === 'credit_note'
+              ? 'credit_note'
+              : locked.invoiceType === 'return'
+                ? 'sales_return'
+                : 'sales_invoice',
+          sourceDocId: locked.id,
+          sourceDocNumber: locked.invoiceNumber,
+          lines,
+          tx,
+        });
+        const stockVoucher = locked.invoiceType === 'return'
+          ? await postSalesReturnStock(locked, orgId, ctx.user.id, tx)
+          : null;
+
+        await tx.update(salesInvoices)
+          .set({
+            isPosted: true,
+            postedAt: new Date(),
+            postedJournalEntryId: entry.id,
+            ...(stockVoucher ? { generatedStockVoucherId: stockVoucher.id } : {}),
+            updatedAt: new Date(),
+          })
+          .where(and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, orgId)));
+
+        return { success: true, journalEntryId: entry.id, entryNumber: entry.entryNumber };
       });
-
-      await db.update(salesInvoices)
-        .set({ isPosted: true, postedAt: new Date(), postedJournalEntryId: entry.id, updatedAt: new Date() })
-        .where(and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, orgId)));
-
-      return { success: true, journalEntryId: entry.id, entryNumber: entry.entryNumber };
     }),
 
   unpostSalesInvoice: protectedProcedure
@@ -215,18 +234,35 @@ export const postingRouter = router({
       if (journal && !journal.allowUnpost)
         throw new Error('إلغاء الترحيل غير مسموح به في هذا الدفتر');
 
-      if (invoice.postedJournalEntryId) {
-        await db.delete(journalEntryLines)
-          .where(eq(journalEntryLines.entryId, invoice.postedJournalEntryId));
-        await db.delete(journalEntries)
-          .where(and(eq(journalEntries.id, invoice.postedJournalEntryId), eq(journalEntries.orgId, orgId)));
-      }
+      return db.transaction(async (tx) => {
+        const locked = await tx.query.salesInvoices.findFirst({
+          where: and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, orgId)),
+        });
+        if (!locked || !locked.isPosted) throw new Error('الفاتورة ليست مرحَّلة');
 
-      await db.update(salesInvoices)
-        .set({ isPosted: false, postedAt: null, postedJournalEntryId: null, updatedAt: new Date() })
-        .where(and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, orgId)));
+        if (locked.invoiceType === 'return') {
+          await reverseSalesReturnStock(locked, orgId, tx);
+        }
+        if (locked.postedJournalEntryId) {
+          await tx.delete(journalEntryLines)
+            .where(eq(journalEntryLines.entryId, locked.postedJournalEntryId));
+          await tx.delete(journalEntries)
+            .where(and(eq(journalEntries.id, locked.postedJournalEntryId), eq(journalEntries.orgId, orgId)));
+        }
 
-      return { success: true };
+        await tx.update(salesInvoices)
+          .set({
+            isPosted: false,
+            postedAt: null,
+            postedJournalEntryId: null,
+            generatedStockVoucherId: null,
+            generatedStockJournalEntryId: null,
+            updatedAt: new Date(),
+          })
+          .where(and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, orgId)));
+
+        return { success: true };
+      });
     }),
 
   // ══════════════════════════════════════════════════════════════════════════

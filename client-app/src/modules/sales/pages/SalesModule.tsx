@@ -2653,7 +2653,7 @@ function SalesContent({ activeId, onSelect, settings, onSettingsChange }: {
     case "overview":              return <SalesOverview onSelect={onSelect} settings={settings} onSettingsChange={onSettingsChange} />;
     case "all-transactions":      return <SalesTransactionsView />;
     case "sales-invoice":         return <SalesInvoiceListView />;
-    case "sales-return":          return <ComingSoon title="مردود المبيعات" />;
+    case "sales-return":          return <SalesReturnPage />;
     case "credit-note":           return <SalesCreditNotePage />;
     case "debit-note":            return <SalesDebitNotePage />;
     case "quotation":             return <SalesQuotation />;

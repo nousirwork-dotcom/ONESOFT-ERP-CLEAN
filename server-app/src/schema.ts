@@ -370,6 +370,8 @@ export const salesInvoices = pgTable('sales_invoices', {
   isPosted: boolean('is_posted').notNull().default(false),
   postedAt: timestamp('posted_at'),
   postedJournalEntryId: integer('posted_journal_entry_id'),
+  generatedStockVoucherId: integer('generated_stock_voucher_id'),
+  generatedStockJournalEntryId: integer('generated_stock_journal_entry_id'),
   costPosted: boolean('cost_posted').notNull().default(false),
   costPostedJournalEntryId: integer('cost_posted_journal_entry_id'),
   zatcaUuid: varchar('zatca_uuid', { length: 100 }),

@@ -433,6 +433,8 @@ CREATE TABLE IF NOT EXISTS "sales_invoices" (
     "status" "invoice_status" NOT NULL DEFAULT 'draft',
     "notes" TEXT,
     "ref_invoice_id" INTEGER,
+    "generated_stock_voucher_id" INTEGER,
+    "generated_stock_journal_entry_id" INTEGER,
     "created_at" TIMESTAMP NOT NULL DEFAULT now(),
     "updated_at" TIMESTAMP NOT NULL DEFAULT now()
 );

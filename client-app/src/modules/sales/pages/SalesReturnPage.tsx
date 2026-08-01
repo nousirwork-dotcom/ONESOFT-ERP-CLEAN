@@ -15,7 +15,7 @@ export default function SalesReturnPage() {
         { value: "sale", label: "فاتورة مبيعات" },
         { value: "order", label: "أمر بيع" },
       ],
-      canPost: false,
+      canPost: true,
       themeColor: "#C0392B",
     }} />
   );

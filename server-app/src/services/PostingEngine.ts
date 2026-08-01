@@ -14,6 +14,7 @@
 import { db } from '../db.js';
 import {
   salesInvoices, purchaseInvoices, purchaseInvoiceItems,
+  salesInvoiceItems, stockVouchers, stockVoucherItems, inventory,
   journalEntries, journalEntryLines,
   documentJournals, chartOfAccounts, documentTypes,
   warehouseAccountLinks, paymentMethods,
@@ -664,12 +665,22 @@ export async function autoPostSalesInvoice(
   userId: number,
   tx?: DbClient,
 ): Promise<{ entryNumber: string } | null> {
+  if (!tx) {
+    return db.transaction((transaction) =>
+      autoPostSalesInvoice(invoiceId, orgId, userId, transaction),
+    );
+  }
   const client = tx ?? db;
   const invoice = await client.query.salesInvoices.findFirst({
     where: and(eq(salesInvoices.id, invoiceId), eq(salesInvoices.orgId, orgId)),
   });
   if (!invoice || invoice.isPosted) return null;
-  if (invoice.invoiceType !== 'sale' && invoice.invoiceType !== 'return' && invoice.invoiceType !== 'credit_note') return null;
+  if (
+    invoice.invoiceType !== 'sale' &&
+    invoice.invoiceType !== 'return' &&
+    invoice.invoiceType !== 'credit_note' &&
+    invoice.invoiceType !== 'debit_note'
+  ) return null;
   if (!invoice.journalId && !invoice.docTypeId) return null;
 
   const journal = invoice.journalId
@@ -741,11 +752,176 @@ export async function autoPostSalesInvoice(
     tx,
   });
 
+  const stockVoucher = invoice.invoiceType === 'return'
+    ? await postSalesReturnStock(invoice, orgId, userId, client)
+    : null;
+
   await client.update(salesInvoices)
-    .set({ isPosted: true, postedAt: new Date(), postedJournalEntryId: entry.id, updatedAt: new Date() })
+    .set({
+      isPosted: true,
+      postedAt: new Date(),
+      postedJournalEntryId: entry.id,
+      ...(stockVoucher ? { generatedStockVoucherId: stockVoucher.id } : {}),
+      updatedAt: new Date(),
+    })
     .where(and(eq(salesInvoices.id, invoiceId), eq(salesInvoices.orgId, orgId)));
 
   return { entryNumber: entry.entryNumber };
+}
+
+/**
+ * Creates the operational stock receipt for a sales return.
+ *
+ * A financial credit note is deliberately not included here: only the
+ * `return` document represents goods physically coming back to the warehouse.
+ */
+export async function postSalesReturnStock(
+  invoice: typeof salesInvoices.$inferSelect,
+  orgId: number,
+  userId: number,
+  tx: DbClient = db,
+) {
+  const items = await tx.query.salesInvoiceItems.findMany({
+    where: eq(salesInvoiceItems.invoiceId, invoice.id),
+  });
+  const stockItems = items.filter((item) => item.productId && Number(item.quantity) > 0);
+  if (stockItems.length === 0) return null;
+
+  const existingVoucher = await tx.query.stockVouchers.findFirst({
+    where: and(
+      eq(stockVouchers.orgId, orgId),
+      eq(stockVouchers.sourceDocType, 'sales_return'),
+      eq(stockVouchers.sourceDocId, invoice.id),
+      eq(stockVouchers.status, 'confirmed'),
+    ),
+  });
+  if (existingVoucher) return existingVoucher;
+
+  if (!invoice.warehouseId) {
+    throw new Error('لا يمكن ترحيل مردود المبيعات مخزنيًا بدون مخزن');
+  }
+
+  const stockJournal = await tx.query.documentJournals.findFirst({
+    where: and(
+      eq(documentJournals.orgId, orgId),
+      eq(documentJournals.warehouseId, invoice.warehouseId),
+      eq(documentJournals.docType, 'stock_receipt'),
+      eq(documentJournals.isActive, true),
+    ),
+  });
+  const voucherNumber = stockJournal
+    ? (await reserveDocumentNumber(stockJournal.id, orgId, tx)).number
+    : `SR-STK-${invoice.invoiceNumber}`;
+
+  const inventoryRows = await tx.query.inventory.findMany({
+    where: and(
+      eq(inventory.orgId, orgId),
+      eq(inventory.warehouseId, invoice.warehouseId),
+      inArray(inventory.productId, stockItems.map((item) => item.productId!)),
+    ),
+  });
+  const inventoryMap = new Map(inventoryRows.map((row) => [row.productId, row]));
+  const normalizedItems = stockItems.map((item) => {
+    const quantity = Number(item.quantity);
+    const unitCost = Number(inventoryMap.get(item.productId!)?.avgCost ?? item.unitPrice ?? 0);
+    return {
+      productId: item.productId!,
+      productName: item.productName,
+      productCode: item.productCode,
+      unit: item.unit,
+      quantity: quantity.toFixed(4),
+      unitCost: unitCost.toFixed(4),
+      totalCost: (quantity * unitCost).toFixed(4),
+    };
+  });
+  const totalCost = normalizedItems.reduce((sum, item) => sum + Number(item.totalCost), 0).toFixed(4);
+
+  const [voucher] = await tx.insert(stockVouchers).values({
+    orgId,
+    voucherNumber,
+    type: 'receipt',
+    voucherDate: invoice.invoiceDate,
+    warehouseId: invoice.warehouseId,
+    branchId: null,
+    reason: `مردود مبيعات ${invoice.invoiceNumber}`,
+    notes: invoice.notes,
+    totalCost,
+    status: 'confirmed',
+    userId,
+    sourceDocType: 'sales_return',
+    sourceDocId: invoice.id,
+    sourceDocNumber: invoice.invoiceNumber,
+    sourceJournalId: stockJournal?.id ?? null,
+  }).returning();
+
+  await tx.insert(stockVoucherItems).values(
+    normalizedItems.map((item, sortOrder) => ({ ...item, voucherId: voucher.id, orgId, sortOrder })),
+  );
+
+  for (const item of normalizedItems) {
+    const current = inventoryMap.get(item.productId);
+    const quantity = Number(item.quantity);
+    if (current) {
+      await tx.update(inventory)
+        .set({
+          quantity: (Number(current.quantity) + quantity).toFixed(4),
+          updatedAt: new Date(),
+        })
+        .where(eq(inventory.id, current.id));
+    } else {
+      await tx.insert(inventory).values({
+        orgId,
+        productId: item.productId,
+        warehouseId: invoice.warehouseId,
+        quantity: quantity.toFixed(4),
+        avgCost: item.unitCost,
+      });
+    }
+  }
+
+  return voucher;
+}
+
+export async function reverseSalesReturnStock(
+  invoice: typeof salesInvoices.$inferSelect,
+  orgId: number,
+  tx: DbClient = db,
+) {
+  const voucher = await tx.query.stockVouchers.findFirst({
+    where: and(
+      eq(stockVouchers.orgId, orgId),
+      eq(stockVouchers.sourceDocType, 'sales_return'),
+      eq(stockVouchers.sourceDocId, invoice.id),
+      eq(stockVouchers.status, 'confirmed'),
+    ),
+  });
+  if (!voucher) return;
+
+  const items = await tx.query.stockVoucherItems.findMany({
+    where: eq(stockVoucherItems.voucherId, voucher.id),
+  });
+  for (const item of items) {
+    if (!item.productId || !invoice.warehouseId) continue;
+    const current = await tx.query.inventory.findFirst({
+      where: and(
+        eq(inventory.orgId, orgId),
+        eq(inventory.productId, item.productId),
+        eq(inventory.warehouseId, invoice.warehouseId),
+      ),
+    });
+    const nextQuantity = Number(current?.quantity ?? 0) - Number(item.quantity);
+    if (nextQuantity < -0.0001) {
+      throw new Error(`لا يمكن إلغاء ترحيل مردود المبيعات: كمية المخزون للصنف ${item.productName} أقل من كمية السند`);
+    }
+    if (current) {
+      await tx.update(inventory)
+        .set({ quantity: Math.max(0, nextQuantity).toFixed(4), updatedAt: new Date() })
+        .where(eq(inventory.id, current.id));
+    }
+  }
+  await tx.update(stockVouchers)
+    .set({ status: 'cancelled' })
+    .where(and(eq(stockVouchers.id, voucher.id), eq(stockVouchers.orgId, orgId)));
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
