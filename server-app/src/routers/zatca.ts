@@ -23,7 +23,7 @@ import {
   zatcaKeys,
   zatcaCsrRequests,
 } from '../schema.js';
-import { eq, and, desc, count, sql, gte, lte, like, or, asc, notInArray } from 'drizzle-orm';
+import { eq, and, desc, count, sql, gte, lte, like, or, asc, notInArray, inArray } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { resolveZatcaContext, type ZatcaEnvironment } from '../services/zatcaContext.js';
 import {
@@ -89,6 +89,49 @@ const REDACTED_CREDENTIAL = '••••••••••••••••';
 
 const POS_LINK_JOURNAL_TYPES = ['sales_invoice', 'sales_return', 'credit_note', 'debit_note'] as const;
 const PosLinkJournalTypeSchema = z.enum(POS_LINK_JOURNAL_TYPES);
+const READINESS_INVOICE_TYPES = ['simplified', 'standard', 'both'] as const;
+const JOURNAL_TYPE_LABELS: Record<string, string> = {
+  sales_invoice: 'فاتورة مبيعات',
+  sales_return: 'مردود مبيعات / إشعار دائن',
+  credit_note: 'إشعار دائن',
+  debit_note: 'إشعار مدين',
+};
+
+/**
+ * These are deliberately declared server-side rather than inferred from menu
+ * labels. A route marked "قريباً" is not an operational document screen and
+ * cannot be treated as XML-capable.
+ */
+const ZATCA_SCREEN_CAPABILITIES = {
+  sales_invoice: {
+    path: '/sales/invoice',
+    label: 'فاتورة المبيعات',
+    screenExists: true,
+    xmlReady: true,
+    detail: 'الشاشة التشغيلية موجودة وتدعم إنشاء XML موقّع',
+  },
+  sales_return: {
+    path: '/sales/return',
+    label: 'مردود المبيعات / Credit Note',
+    screenExists: true,
+    xmlReady: true,
+    detail: 'الشاشة التشغيلية موجودة وتدعم XML للمردود مع فاتورة أصلية مرجعية',
+  },
+  credit_note: {
+    path: '/sales/credit-note',
+    label: 'إشعار دائن',
+    screenExists: false,
+    xmlReady: false,
+    detail: 'المسار يعرض "قريباً" ولا توجد شاشة تشغيلية قادرة على إنشاء XML',
+  },
+  debit_note: {
+    path: '/purchases/debit-note',
+    label: 'إشعار مدين',
+    screenExists: false,
+    xmlReady: false,
+    detail: 'المسار يعرض "قريباً" ولا توجد شاشة تشغيلية قادرة على إنشاء XML',
+  },
+} as const;
 const ZatcaOperationSchema = z.enum(['clearance', 'reporting']);
 const ZatcaMockOutcomeSchema = z.enum([
   'accepted',
@@ -159,6 +202,189 @@ async function getPosUnitForOrg(orgId: number, posUnitId: number) {
   });
   if (!unit) throw new TRPCError({ code: 'NOT_FOUND', message: 'وحدة ربط نقطة البيع غير موجودة أو غير فعالة' });
   return unit;
+}
+
+type ReadinessWarehouseId = number | undefined;
+
+async function getZatcaReadiness(
+  orgId: number,
+  selectedWarehouseId?: ReadinessWarehouseId,
+  selectedInvoiceType: typeof READINESS_INVOICE_TYPES[number] = 'both',
+) {
+  const [org, locationRows, journalRows, simulationEnvironment] = await Promise.all([
+    db.query.organizations.findFirst({
+      where: eq(organizations.id, orgId),
+      columns: {
+        id: true,
+        name: true,
+        nameEn: true,
+        taxNumber: true,
+        commercialReg: true,
+        zatcaConfig: true,
+      },
+    }),
+    db.select({
+      id: warehouses.id,
+      name: warehouses.name,
+      code: warehouses.code,
+      branchId: warehouses.branchId,
+      branchName: branches.name,
+    })
+      .from(warehouses)
+      .leftJoin(branches, and(
+        eq(branches.id, warehouses.branchId),
+        eq(branches.orgId, orgId),
+      ))
+      .where(and(
+        eq(warehouses.orgId, orgId),
+        eq(warehouses.isActive, true),
+      ))
+      .orderBy(asc(warehouses.name), asc(warehouses.id)),
+    selectedWarehouseId
+      ? db.select({
+          id: documentJournals.id,
+          code: documentJournals.code,
+          name: documentJournals.name,
+          docType: documentJournals.docType,
+          warehouseId: documentJournals.warehouseId,
+          zatcaPosUnitId: documentJournals.zatcaPosUnitId,
+        })
+          .from(documentJournals)
+          .where(and(
+            eq(documentJournals.orgId, orgId),
+            eq(documentJournals.warehouseId, selectedWarehouseId),
+            eq(documentJournals.isActive, true),
+            inArray(documentJournals.docType, POS_LINK_JOURNAL_TYPES),
+          ))
+          .orderBy(asc(documentJournals.sortOrder), asc(documentJournals.id))
+      : Promise.resolve([]),
+    db.query.zatcaEnvironments.findFirst({
+      where: and(
+        eq(zatcaEnvironments.orgId, orgId),
+        eq(zatcaEnvironments.name, 'Simulation'),
+        eq(zatcaEnvironments.isActive, true),
+        eq(zatcaEnvironments.isDeleted, false),
+      ),
+      columns: { id: true, name: true, baseApiUrl: true },
+    }),
+  ]);
+
+  if (!org) throw new TRPCError({ code: 'NOT_FOUND', message: 'المنشأة غير موجودة' });
+
+  const cfg = ZatcaConfigSchema.parse(org.zatcaConfig ?? {});
+  const vatNumber = String(cfg.vatNumber || org.taxNumber || '').trim();
+  const businessName = String(cfg.businessName || org.name || '').trim();
+  const businessNameEn = String(cfg.businessNameEn || org.nameEn || '').trim();
+  const missingOrganizationFields: string[] = [];
+  if (!/^3\d{13}3$/.test(vatNumber)) missingOrganizationFields.push('الرقم الضريبي الصحيح');
+  if (!businessName) missingOrganizationFields.push('اسم المنشأة');
+  if (!businessNameEn) missingOrganizationFields.push('الاسم الإنجليزي للمنشأة');
+  if (!cfg.streetName.trim()) missingOrganizationFields.push('اسم الشارع');
+  if (!cfg.buildingNumber.trim()) missingOrganizationFields.push('رقم المبنى');
+  if (!cfg.district.trim()) missingOrganizationFields.push('الحي');
+  if (!cfg.city.trim()) missingOrganizationFields.push('المدينة');
+  if (!cfg.postalCode.trim()) missingOrganizationFields.push('الرمز البريدي');
+
+  const selectedWarehouse = selectedWarehouseId == null
+    ? null
+    : locationRows.find(row => row.id === selectedWarehouseId) ?? null;
+  const journalByType = new Map(journalRows.map(row => [row.docType, row]));
+  const journals = POS_LINK_JOURNAL_TYPES.map(docType => {
+    const journal = journalByType.get(docType);
+    return {
+      docType,
+      label: JOURNAL_TYPE_LABELS[docType] ?? docType,
+      found: Boolean(journal),
+      linked: Boolean(journal?.zatcaPosUnitId),
+      linkedUnitId: journal?.zatcaPosUnitId ?? null,
+      journal: journal ?? null,
+    };
+  });
+  const linkedUnitIds = journals
+    .map(item => item.linkedUnitId)
+    .filter((id): id is number => id != null);
+  const linkingUnitId = linkedUnitIds.length > 0 && new Set(linkedUnitIds).size === 1
+    ? linkedUnitIds[0]
+    : null;
+  const allJournalsPresent = journals.every(item => item.found);
+  const allJournalsLinked = journals.every(item => item.linked);
+  const allJournalsSameUnit = allJournalsLinked && linkingUnitId != null;
+  const screens = POS_LINK_JOURNAL_TYPES.map(docType => ({
+    docType,
+    ...ZATCA_SCREEN_CAPABILITIES[docType],
+  }));
+  const allScreensReady = screens.every(screen => screen.screenExists && screen.xmlReady);
+  const simulationConfigured = cfg.environment === 'simulation'
+    && cfg.apiBaseUrl === simulationEnvironmentValues().baseApiUrl
+    && Boolean(simulationEnvironment);
+  const reasons: string[] = [];
+  if (missingOrganizationFields.length) reasons.push(`أكمل بيانات المنشأة: ${missingOrganizationFields.join('، ')}`);
+  if (!selectedWarehouse) reasons.push('اختر المخزن/الفرع من القائمة');
+  if (selectedWarehouse && !allJournalsPresent) reasons.push('يجب إنشاء الدفاتر الأربعة للمخزن/الفرع المحدد');
+  if (selectedWarehouse && allJournalsPresent && !allJournalsLinked) reasons.push('اربط الدفاتر الأربعة بوحدة ربط ZATCA');
+  if (selectedWarehouse && allJournalsSameUnit === false && allJournalsLinked) reasons.push('يجب أن ترتبط الدفاتر الأربعة بوحدة ربط واحدة');
+  if (!allScreensReady) reasons.push('شاشتا الإشعار الدائن والمدين غير مكتملتين أو غير قادرتين على إنشاء XML');
+  if (!simulationConfigured) reasons.push('فعّل بيئة Fatoora Simulation من إعدادات البيئة');
+
+  return {
+    availableOrganizations: [{
+      id: org.id,
+      name: org.name,
+      nameEn: org.nameEn,
+      selected: true,
+      dataComplete: missingOrganizationFields.length === 0,
+    }],
+    organization: {
+      id: org.id,
+      name: org.name,
+      nameEn: org.nameEn,
+      commercialReg: org.commercialReg,
+      vatNumber: vatNumber || null,
+      dataComplete: missingOrganizationFields.length === 0,
+      missingFields: missingOrganizationFields,
+    },
+    locations: locationRows.map(row => ({
+      ...row,
+      label: row.branchName ? `${row.branchName} — ${row.name}` : row.name,
+      selected: row.id === selectedWarehouseId,
+    })),
+    selectedWarehouseId: selectedWarehouse?.id ?? null,
+    selectedLocation: selectedWarehouse
+      ? {
+          id: selectedWarehouse.id,
+          label: selectedWarehouse.branchName
+            ? `${selectedWarehouse.branchName} — ${selectedWarehouse.name}`
+            : selectedWarehouse.name,
+          branchId: selectedWarehouse.branchId,
+          branchName: selectedWarehouse.branchName,
+        }
+      : null,
+    invoiceTypeOptions: [
+      { value: 'simplified', label: 'فواتير مبسطة' },
+      { value: 'standard', label: 'فواتير عادية' },
+      { value: 'both', label: 'كلاهما' },
+    ],
+    selectedInvoiceType,
+    simulation: {
+      configured: simulationConfigured,
+      configEnvironment: cfg.environment,
+      environmentRecordExists: Boolean(simulationEnvironment),
+    },
+    journals,
+    screens,
+    linkingUnitId,
+    allJournalsPresent,
+    allJournalsLinked,
+    allJournalsSameUnit,
+    allScreensReady,
+    readyForCsr: missingOrganizationFields.length === 0
+      && Boolean(selectedWarehouse)
+      && allJournalsPresent
+      && allJournalsSameUnit
+      && allScreensReady
+      && simulationConfigured,
+    reasons,
+  };
 }
 
 // ─── Router ───────────────────────────────────────────────────────────────────
@@ -258,6 +484,22 @@ export const zatcaRouter = router({
 
     return rows;
   }),
+
+  /**
+   * Business-first readiness gate for the Simulation onboarding flow.
+   * The query is intentionally read-only: it never creates a journal, unit,
+   * EGS record, VAT value, or remote request.
+   */
+  getReadiness: protectedProcedure
+    .input(z.object({
+      warehouseId: z.number().int().positive().optional(),
+      invoiceType: z.enum(READINESS_INVOICE_TYPES).default('both'),
+    }).optional())
+    .query(async ({ ctx, input }) => getZatcaReadiness(
+      ctx.user.orgId,
+      input?.warehouseId,
+      input?.invoiceType ?? 'both',
+    )),
 
   createPosUnit: adminProcedure
     .input(z.object({
@@ -413,15 +655,27 @@ export const zatcaRouter = router({
       const [org, unit] = await Promise.all([
         db.query.organizations.findFirst({
           where: eq(organizations.id, ctx.user.orgId),
-          columns: { name: true, zatcaConfig: true },
+          columns: { name: true, taxNumber: true, zatcaConfig: true },
         }),
         getPosUnitForOrg(ctx.user.orgId, input.posUnitId),
       ]);
       if (!org) throw new TRPCError({ code: 'NOT_FOUND', message: 'المنشأة غير موجودة' });
 
+      const readiness = await getZatcaReadiness(ctx.user.orgId, unit.warehouseId, 'both');
+      if (!readiness.readyForCsr) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: `لا يمكن إنشاء CSR قبل اكتمال الجاهزية: ${readiness.reasons.join('؛ ')}`,
+        });
+      }
+
       const cfg = (org.zatcaConfig ?? {}) as Record<string, unknown>;
-      if (!String(cfg.vatNumber ?? '').trim()) {
+      const vatNumber = String(cfg.vatNumber ?? org.taxNumber ?? '').trim();
+      if (!vatNumber) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'أكمل الرقم الضريبي قبل إنشاء CSR' });
+      }
+      if (cfg.environment !== 'simulation') {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'اختر بيئة Fatoora Simulation واحفظها قبل إنشاء CSR' });
       }
 
       const csr = generateSimulationCsr({
@@ -429,7 +683,7 @@ export const zatcaRouter = router({
         organizationName: String(cfg.businessNameEn ?? cfg.businessName ?? org.name ?? ''),
         organizationUnitName: input.branchName,
         serialNumber: input.serialNumber,
-        vatNumber: String(cfg.vatNumber),
+        vatNumber,
         branchLocation: input.branchLocation,
         businessCategory: input.businessCategory,
         solutionName: input.solutionName,
@@ -448,13 +702,10 @@ export const zatcaRouter = router({
           ),
         });
         if (!environment) {
-          const [createdEnvironment] = await tx.insert(zatcaEnvironments).values({
-            orgId: ctx.user.orgId,
-            ...simulationEnvironmentValues(),
-            createdBy: ctx.user.id,
-            updatedBy: ctx.user.id,
-          }).returning();
-          environment = createdEnvironment;
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'بيئة Fatoora Simulation غير مهيأة؛ احفظ إعداد البيئة أولاً',
+          });
         }
 
         let device = await tx.query.zatcaDevices.findFirst({
@@ -1055,6 +1306,29 @@ export const zatcaRouter = router({
       await db.update(organizations)
         .set({ zatcaConfig: updated as any, updatedAt: new Date() })
         .where(eq(organizations.id, ctx.user.orgId));
+
+      // The Simulation environment record is created only after the admin
+      // explicitly selects and saves Simulation; readiness/CSR never creates
+      // it as a hidden side effect.
+      if (input.environment === 'simulation') {
+        const existingEnvironment = await db.query.zatcaEnvironments.findFirst({
+          where: and(
+            eq(zatcaEnvironments.orgId, ctx.user.orgId),
+            eq(zatcaEnvironments.name, 'Simulation'),
+            eq(zatcaEnvironments.isActive, true),
+            eq(zatcaEnvironments.isDeleted, false),
+          ),
+          columns: { id: true },
+        });
+        if (!existingEnvironment) {
+          await db.insert(zatcaEnvironments).values({
+            orgId: ctx.user.orgId,
+            ...simulationEnvironmentValues(),
+            createdBy: ctx.user.id,
+            updatedBy: ctx.user.id,
+          });
+        }
+      }
 
       await db.insert(zatcaLogs).values({
         orgId:      ctx.user.orgId,

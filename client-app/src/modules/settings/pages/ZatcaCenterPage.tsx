@@ -2,14 +2,14 @@
  * ZatcaCenterPage.tsx — مركز التكامل مع هيئة الزكاة والضريبة والجمارك
  * النسخة 2.0: Workflow متكامل + مؤشرات الحالة + لوحة تحكم محسّنة
  */
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { DateSegmentInput } from "@/shared/components/DateSegmentInput";
 import { trpc } from "@/shared/lib/trpc";
 import { toast } from "sonner";
 
 // ─── أنواع ────────────────────────────────────────────────────────────────────
 type Section =
-  | "dashboard" | "units" | "otp-sim" | "env" | "devices" | "certs" | "keys"
+  | "dashboard" | "readiness" | "units" | "otp-sim" | "env" | "devices" | "certs" | "keys"
   | "xmlcheck"  | "csr" | "register" | "csid" | "test"
   | "send"      | "tracking" | "uncertain" | "oplogs" | "errlogs" | "diag" | "reports"
   | "support";
@@ -19,6 +19,7 @@ type SetupStepStatus = "done" | "active" | "pending" | "error";
 // ─── قائمة الأقسام ────────────────────────────────────────────────────────────
 const PRIMARY_SECTIONS: { id: Section; label: string; icon: string }[] = [
   { id: "dashboard", label: "لوحة التحكم",            icon: "🏠" },
+  { id: "readiness", label: "جاهزية الربط",            icon: "✅" },
   { id: "units",     label: "وحدات الربط والدفاتر",   icon: "🧩" },
   { id: "otp-sim",   label: "تفعيل الربط",             icon: "🧪" },
   { id: "send",      label: "الفواتير الإلكترونية",    icon: "🧾" },
@@ -580,6 +581,182 @@ function DashboardSection({ onStartSetup, onNavigate }: { onStartSetup: () => vo
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// 1b. جاهزية الربط — قراءة فقط قبل رحلة CSR/OTP
+// ══════════════════════════════════════════════════════════════════════════════
+function ReadinessSection({ onNavigate }: { onNavigate: (section: Section) => void }) {
+  const meQ = trpc.auth.me.useQuery();
+  const [warehouseId, setWarehouseId] = useState<number | null>(null);
+  const [invoiceType, setInvoiceType] = useState<"simplified" | "standard" | "both">("both");
+  const [selectionLoaded, setSelectionLoaded] = useState(false);
+
+  const readinessQ = trpc.zatca.getReadiness.useQuery({
+    warehouseId: warehouseId ?? undefined,
+    invoiceType,
+  });
+  const data = readinessQ.data;
+  const selectionKey = meQ.data?.id ? `zatca-readiness-selection.u${meQ.data.id}` : null;
+
+  useEffect(() => {
+    if (!selectionKey || selectionLoaded) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(selectionKey) ?? "null") as {
+        warehouseId?: number;
+        invoiceType?: "simplified" | "standard" | "both";
+      } | null;
+      if (saved?.warehouseId) setWarehouseId(saved.warehouseId);
+      if (saved?.invoiceType) setInvoiceType(saved.invoiceType);
+    } catch {
+      // A corrupt local preference must not block the readiness screen.
+    }
+    setSelectionLoaded(true);
+  }, [selectionKey, selectionLoaded]);
+
+  useEffect(() => {
+    if (!selectionKey || !selectionLoaded) return;
+    localStorage.setItem(selectionKey, JSON.stringify({ warehouseId, invoiceType }));
+  }, [selectionKey, selectionLoaded, warehouseId, invoiceType]);
+
+  const setWarehouse = (value: number | null) => {
+    setWarehouseId(value);
+  };
+  const statusStyle = (ok: boolean, neutral = false) => ({
+    background: neutral ? "#f8fafc" : ok ? "#f0fdf4" : "#fff7ed",
+    border: `1px solid ${neutral ? "#e2e8f0" : ok ? "#bbf7d0" : "#fed7aa"}`,
+    color: neutral ? "#475569" : ok ? "#166534" : "#9a3412",
+  });
+  const Status = ({ ok, text }: { ok: boolean; text: string }) => (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, color: ok ? "#16a34a" : "#d97706" }}>
+      <span style={{ width: 8, height: 8, borderRadius: "50%", background: ok ? "#16a34a" : "#d97706" }} />
+      {text}
+    </span>
+  );
+
+  return (
+    <div>
+      <SecTitle icon="✅" title="جاهزية الربط مع منصة فاتورة" />
+      <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", borderRadius: 8, padding: "11px 13px", fontSize: 12, lineHeight: 1.8, marginBottom: 14 }}>
+        هذه الشاشة فحص قراءة فقط قبل إنشاء CSR. لا تنشئ دفاتر أو وحدة ربط أو بيانات ضريبية، ولا تُرسل OTP أو أي طلب خارجي.
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14 }}>
+          <label style={lbl}>المنشأة</label>
+          <select style={fld} value={data?.organization?.id ?? ""} disabled>
+            {(data?.availableOrganizations ?? []).map(org => (
+              <option key={org.id} value={org.id}>{org.name}{org.nameEn ? ` — ${org.nameEn}` : ""}</option>
+            ))}
+          </select>
+          <div style={{ marginTop: 9, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 11, color: "#64748b" }}>المنشأة الحالية لحساب المستخدم</span>
+            <Status ok={Boolean(data?.organization?.dataComplete)} text={data?.organization?.dataComplete ? "بيانات مكتملة" : "بيانات ناقصة"} />
+          </div>
+          {!data?.organization?.dataComplete && (
+            <div style={{ marginTop: 8, fontSize: 11, color: "#9a3412", lineHeight: 1.7 }}>
+              الناقص: {data?.organization?.missingFields?.join("، ") || "جارٍ الفحص"}
+            </div>
+          )}
+        </div>
+        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14 }}>
+          <label style={lbl}>المخزن / الفرع</label>
+          <select
+            style={fld}
+            value={warehouseId ?? ""}
+            onChange={e => setWarehouse(Number(e.target.value) || null)}
+          >
+            <option value="">اختر المخزن/الفرع</option>
+            {(data?.locations ?? []).map(location => (
+              <option key={location.id} value={location.id}>{location.label}</option>
+            ))}
+          </select>
+          <div style={{ marginTop: 9, fontSize: 11, color: "#64748b" }}>
+            يُستنتج الفرع من المخزن، ولا تُدخل أي ID يدويًا.
+          </div>
+        </div>
+      </div>
+
+      <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14, marginBottom: 14 }}>
+        <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 9 }}>نوع الفواتير المستهدف</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {[
+            ["simplified", "فواتير مبسطة"],
+            ["standard", "فواتير عادية"],
+            ["both", "كلاهما"],
+          ].map(([value, label]) => (
+            <button key={value} onClick={() => setInvoiceType(value as typeof invoiceType)}
+              style={{ height: 32, padding: "0 15px", borderRadius: 7, border: `1px solid ${invoiceType === value ? "#D19C05" : "#cbd5e1"}`, background: invoiceType === value ? "#fef3c7" : "#fff", color: invoiceType === value ? "#92400e" : "#475569", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>
+              {invoiceType === value ? "● " : "○ "}{label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {readinessQ.isLoading ? <Skeleton height={150} radius={10} /> : (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14 }}>
+              <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 10 }}>حالة الدفاتر الأربعة</div>
+              {(data?.journals ?? []).map(journal => (
+                <div key={journal.docType} style={{ ...statusStyle(journal.found && journal.linked), display: "flex", alignItems: "center", gap: 8, padding: "8px 9px", borderRadius: 6, marginBottom: 6 }}>
+                  <span style={{ flex: 1, fontSize: 11, fontWeight: 700 }}>{journal.label}</span>
+                  <span style={{ fontSize: 10, color: "#64748b" }}>
+                    {!journal.found ? "الدفتر غير موجود" : !journal.linked ? "غير مرتبط" : "مرتبط"}
+                  </span>
+                  <Status ok={journal.found && journal.linked} text={journal.found && journal.linked ? "جاهز" : "ناقص"} />
+                </div>
+              ))}
+              {!warehouseId && <div style={{ fontSize: 11, color: "#9a3412", marginTop: 8 }}>اختر المخزن/الفرع لفحص دفاتره.</div>}
+              {data?.allJournalsSameUnit && <div style={{ fontSize: 11, color: "#166534", marginTop: 8 }}>الدفاتر الأربعة مرتبطة بوحدة ربط واحدة.</div>}
+            </div>
+            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14 }}>
+              <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 10 }}>الشاشات وقدرة XML</div>
+              {(data?.screens ?? []).map(screen => (
+                <div key={screen.docType} style={{ ...statusStyle(screen.screenExists && screen.xmlReady), padding: "8px 9px", borderRadius: 6, marginBottom: 6 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ flex: 1, fontSize: 11, fontWeight: 700 }}>{screen.label}</span>
+                    <Status ok={screen.screenExists} text={screen.screenExists ? "الشاشة موجودة" : "غير موجودة"} />
+                  </div>
+                  <div style={{ fontSize: 10, color: "#64748b", marginTop: 4 }}>{screen.detail}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14, marginBottom: 14 }}>
+            <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 10 }}>بوابة Fatoora Simulation</div>
+            <div style={{ ...statusStyle(Boolean(data?.simulation.configured)), padding: "9px 10px", borderRadius: 7, display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ flex: 1, fontSize: 11, fontWeight: 700 }}>
+                {data?.simulation.configured ? "تم اختيار بيئة Simulation الرسمية" : "بيئة Simulation غير مهيأة"}
+              </span>
+              <Status ok={Boolean(data?.simulation.configured)} text={data?.simulation.configured ? "مكتملة" : "ناقصة"} />
+              {!data?.simulation.configured && <button onClick={() => onNavigate("env")} style={{ ...smallBtn, background: "#fef3c7", color: "#92400e" }}>فتح إعداد البيئة</button>}
+            </div>
+          </div>
+
+          {!data?.readyForCsr && (
+            <div style={{ background: "#fff7ed", border: "1px solid #fdba74", color: "#9a3412", borderRadius: 8, padding: "11px 13px", marginBottom: 12 }}>
+              <div style={{ fontWeight: 800, fontSize: 12, marginBottom: 5 }}>لا يمكن بدء إنشاء CSR بعد</div>
+              <ul style={{ margin: 0, paddingRight: 18, fontSize: 11, lineHeight: 1.8 }}>
+                {(data?.reasons ?? ["جارٍ فحص متطلبات الجاهزية"]).map(reason => <li key={reason}>{reason}</li>)}
+              </ul>
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button
+              disabled={!data?.readyForCsr}
+              onClick={() => onNavigate("csr")}
+              style={{ height: 36, padding: "0 18px", border: "none", borderRadius: 7, background: data?.readyForCsr ? "#D19C05" : "#cbd5e1", color: "#fff", fontWeight: 800, fontSize: 12, cursor: data?.readyForCsr ? "pointer" : "not-allowed" }}
+            >
+              {data?.readyForCsr ? "🔧 إنشاء CSR وبدء التفعيل" : "🔒 إنشاء CSR معطّل حتى اكتمال الجاهزية"}
+            </button>
+            <button onClick={() => readinessQ.refetch()} style={{ ...smallBtn, height: 30, background: "#f1f5f9", color: "#475569" }}>🔄 تحديث الفحص</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // 2. إعدادات البيئة
 // ══════════════════════════════════════════════════════════════════════════════
 function EnvSection() {
@@ -600,15 +777,19 @@ function EnvSection() {
       <SecTitle icon="🌐" title="إعدادات البيئة" />
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
-        {(["sandbox"] as const).map(env => (
-          <div key={env} onClick={() => isAdmin && set("environment", env)}
+        {(["simulation", "sandbox"] as const).map(env => (
+          <div key={env} onClick={() => isAdmin && (
+            env === "simulation"
+              ? setForm(f => ({ ...f, environment: env, apiBaseUrl: "https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation" }))
+              : set("environment", env)
+          )}
             style={{ borderRadius: 10, padding: "16px 18px", border: `2px solid ${cfg.environment === env ? "#D19C05" : "#e2e8f0"}`, background: cfg.environment === env ? "#fef3c7" : "#fff", cursor: isAdmin ? "pointer" : "default", transition: "all 0.15s" }}>
-            <div style={{ fontSize: 28, marginBottom: 6 }}>🧪</div>
+            <div style={{ fontSize: 28, marginBottom: 6 }}>{env === "simulation" ? "🧪" : "🧰"}</div>
             <div style={{ fontWeight: 800, fontSize: 14, color: cfg.environment === env ? "#D19C05" : "#374151" }}>
-              بيئة الاختبار (Sandbox)
+              {env === "simulation" ? "Fatoora Simulation" : "Sandbox الداخلي"}
             </div>
             <div style={{ fontSize: 11, color: "#6b7280", marginTop: 4 }}>
-              للاختبار والتطوير — لا تؤثر على الفواتير الحقيقية
+              {env === "simulation" ? "الناقل الرسمي للمحاكاة — لا Production" : "للاختبار الداخلي فقط — لا اتصال بالهيئة"}
             </div>
             {cfg.environment === env && (
               <div style={{ marginTop: 8, display: "inline-flex", alignItems: "center", gap: 4 }}>
@@ -1396,6 +1577,7 @@ function KeysSection() {
 function CsrSection() {
   const cfgQ = trpc.zatca.getConfig.useQuery();
   const unitsQ = trpc.zatca.listPosUnits.useQuery();
+  const readinessQ = trpc.zatca.getReadiness.useQuery({ invoiceType: "both" });
   const createM = trpc.zatca.createSimulationCsr.useMutation({
     onSuccess: (data) => {
       toast.success(`تم إنشاء CSR لوحدة الربط. بصمة المفتاح: ${data.fingerprint}`);
@@ -1411,6 +1593,7 @@ function CsrSection() {
   const [businessCategory, setBusinessCategory] = useState("Retail and invoicing");
   const [created, setCreated] = useState<any>(null);
   const selectedUnit = (unitsQ.data ?? []).find(unit => unit.id === posUnitId);
+  const readiness = readinessQ.data;
 
   return (
     <div style={{ maxWidth: 640 }}>
@@ -1425,6 +1608,12 @@ function CsrSection() {
       <div style={{ background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 12, color: "#92400e" }}>
         ℹ️ يُنشأ المفتاح الخاص وCSR على الخادم فقط. لا يتم عرض أو تنزيل المفتاح الخاص أو ملف CSR.
       </div>
+      {!readiness?.readyForCsr && (
+        <div style={{ background: "#fff7ed", border: "1px solid #fdba74", borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 11, color: "#9a3412", lineHeight: 1.8 }}>
+          <strong>إنشاء CSR محجوب:</strong> أكمل شاشة «جاهزية الربط» أولاً.
+          {(readiness?.reasons ?? []).length > 0 && <div>{readiness!.reasons.join("؛ ")}</div>}
+        </div>
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
         <div style={grp}>
@@ -1454,7 +1643,7 @@ function CsrSection() {
 
       <div style={{ display: "flex", gap: 10 }}>
         <button
-          disabled={!posUnitId || !serialNumber && !selectedUnit?.unitCode || !branchName && !selectedUnit?.branchName || !branchLocation && !selectedUnit?.warehouseName || createM.isPending}
+          disabled={!readiness?.readyForCsr || !posUnitId || !serialNumber && !selectedUnit?.unitCode || !branchName && !selectedUnit?.branchName || !branchLocation && !selectedUnit?.warehouseName || createM.isPending}
           onClick={() => posUnitId && createM.mutate({
             posUnitId,
             serialNumber: serialNumber || selectedUnit?.unitCode || `EGS-${posUnitId}`,
@@ -1465,7 +1654,7 @@ function CsrSection() {
             businessCategory,
             taxpayerProvidedId: selectedUnit?.unitCode || `OneSoft-${posUnitId}`,
           })}
-          style={{ height: 36, padding: "0 24px", background: posUnitId ? "#D19C05" : "#cbd5e1", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: posUnitId ? "pointer" : "not-allowed" }}>
+           style={{ height: 36, padding: "0 24px", background: readiness?.readyForCsr && posUnitId ? "#D19C05" : "#cbd5e1", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: readiness?.readyForCsr && posUnitId ? "pointer" : "not-allowed" }}>
           {createM.isPending ? "جارٍ إنشاء CSR..." : "🔧 إنشاء CSR الآن"}
         </button>
       </div>
@@ -2342,6 +2531,7 @@ export default function ZatcaCenterPage() {
   function renderSection() {
     switch (active) {
       case "dashboard": return <DashboardSection onStartSetup={() => setShowWizard(true)} onNavigate={navigateTo} />;
+        case "readiness": return <ReadinessSection onNavigate={navigateTo} />;
         case "units":     return <LinkingUnitsSection onActivate={() => setActive("otp-sim")} />;
         case "otp-sim":   return <OtpSimulationSection />;
       case "env":       return <EnvSection />;
