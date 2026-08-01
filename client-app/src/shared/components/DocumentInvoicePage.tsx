@@ -528,6 +528,11 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     { enabled: config.docCategory === "sales" && !!basedOnType && !!basedOnTrigger }
   );
   const sourceDocumentId = basedOnQuery.data?.id;
+  const sourceInvoice = config.docCategory === "sales" && config.requireReference ? basedOnQuery.data : null;
+  const sourceInvoiceTypeLabel = sourceInvoice?.zatcaInvoiceType === "standard" ? "Standard" : "Simplified";
+  const sourceInvoiceDateLabel = sourceInvoice?.invoiceDate
+    ? new Date(sourceInvoice.invoiceDate).toLocaleDateString("ar-SA")
+    : "—";
 
   // Set initial invoice number
   useEffect(() => {
@@ -557,7 +562,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     if (src.customerName) setPartyName(src.customerName);
     if (src.customerId)   setPartyId(src.customerId);
     if (src.warehouseId && !journalWarehouseId) setWarehouseId(src.warehouseId ?? null);
-    if (src.currency) setCurrency(src.currency);
+    if (src.currency && !(config.requireReference && sourceDocumentId)) setCurrency(src.currency);
     if (src.notes)    setNotes(src.notes ?? "");
     if (src.items.length > 0) {
       setLines(src.items.map(i => ({
@@ -569,7 +574,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       })));
     }
     toast.success(`✓ تم استيراد بيانات المستند ${src.number}`);
-  }, [basedOnQuery.data]);
+  }, [basedOnQuery.data, config.requireReference, sourceDocumentId]);
 
   // ── Mutations ──────────────────────────────────────────────────────────────
   const pendingNavRef = useRef<(() => void) | null>(null);
@@ -1672,7 +1677,13 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
           </HF>
 
           <HF label="العملة">
-            <select value={currency} onChange={e => setCurrency(e.target.value)} className="classic-input w-full">
+            <select
+              value={currency}
+              onChange={e => setCurrency(e.target.value)}
+              className="classic-input w-full"
+              disabled={Boolean(sourceInvoice)}
+              title={sourceInvoice ? "عملة الإشعار موروثة من الفاتورة الأصلية" : undefined}
+            >
               <option value="SAR">ريال (SAR)</option>
               <option value="USD">دولار (USD)</option>
               <option value="EUR">يورو (EUR)</option>
@@ -1716,6 +1727,40 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
 
           <div />
         </div>
+        {sourceInvoice && (
+          <div
+            className="mt-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-slate-700"
+            dir="rtl"
+            aria-label="بطاقة الفاتورة الأصلية"
+          >
+            <div className="mb-1.5 flex items-center justify-between">
+              <strong className="text-blue-900">الفاتورة الأصلية — للقراءة فقط</strong>
+              <span className="rounded bg-white px-2 py-0.5 font-semibold text-blue-800">
+                {sourceInvoiceTypeLabel}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 md:grid-cols-4">
+              <span><b>الرقم:</b> {sourceInvoice.number || "—"}</span>
+              <span><b>التاريخ:</b> {sourceInvoiceDateLabel}</span>
+              <span><b>العميل:</b> {sourceInvoice.customerName || "—"}</span>
+              <span><b>العملة:</b> {sourceInvoice.currency || "SAR"}</span>
+              <span><b>الحالة:</b> {sourceInvoice.status || "—"}</span>
+              <span><b>الإجمالي:</b> {sourceInvoice.total || "0"}</span>
+              <span><b>المخزن/الفرع:</b> {sourceInvoice.warehouseName || "—"}</span>
+              <span><b>دفتر الفاتورة:</b> {sourceInvoice.journal?.name || sourceInvoice.journalId || "—"}</span>
+              <span>
+                <b>وحدة ZATCA:</b>{" "}
+                {sourceInvoice.zatcaUnit
+                  ? `${sourceInvoice.zatcaUnit.unitCode || ""}${sourceInvoice.zatcaUnit.unitName ? ` — ${sourceInvoice.zatcaUnit.unitName}` : ""}`
+                  : "—"}
+              </span>
+              <span><b>حالة ZATCA:</b> {sourceInvoice.zatcaStatus || "not_submitted"}</span>
+              <span className="col-span-2 break-all">
+                <b>UUID:</b> {sourceInvoice.zatcaUuid || "غير مُرسل بعد"}
+              </span>
+            </div>
+          </div>
+        )}
         </>
         )}
       </div>

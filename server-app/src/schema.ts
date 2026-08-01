@@ -377,6 +377,8 @@ export const salesInvoices = pgTable('sales_invoices', {
   zatcaQrCode: text('zatca_qr_code'),
   zatcaXml: text('zatca_xml'),
   zatcaStatus: varchar('zatca_status', { length: 30 }).default('not_submitted'),
+  // لقطة ثابتة لتصنيف ZATCA (لا تُستنتج من شاشة الإرسال عند إنشاء الإشعار)
+  zatcaInvoiceType: varchar('zatca_invoice_type', { length: 20 }).notNull().default('simplified'),
   zatcaClearedAt: timestamp('zatca_cleared_at'),
   zatcaResponse: jsonb('zatca_response'),
   zatcaInvoiceCounter: integer('zatca_invoice_counter'),

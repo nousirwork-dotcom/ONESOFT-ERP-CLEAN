@@ -746,6 +746,25 @@ function ReadinessSection({ onNavigate }: { onNavigate: (section: Section) => vo
             </div>
           </div>
 
+          <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14, marginBottom: 14 }}>
+            <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 4 }}>الاختبار التشغيلي الفعلي</div>
+            <div style={{ fontSize: 10, color: "#64748b", marginBottom: 10 }}>
+              لا يُحتسب الاختبار من وجود الشاشة أو مولّد XML فقط؛ يجب وجود مستند نهائي مُرحّل، XML محفوظ، ونتيجة Simulation نهائية، مع تطبيق قاعدة المخزون المناسبة.
+            </div>
+            {(data?.operationalTests ?? []).map(test => (
+              <div key={test.docType} style={{ ...statusStyle(test.completed), display: "flex", alignItems: "center", gap: 8, padding: "7px 9px", borderRadius: 6, marginBottom: 5 }}>
+                <span style={{ flex: 1, fontSize: 11, fontWeight: 700 }}>{test.label}</span>
+                <span style={{ fontSize: 10, color: "#64748b" }}>
+                  {test.completed ? `مستند ${test.invoiceNumber ?? ""} اجتاز الفحص` : "لا توجد نتيجة تشغيلية مكتملة"}
+                </span>
+                <Status ok={test.completed} text={test.completed ? "تم" : "لم يتم"} />
+              </div>
+            ))}
+            <div style={{ marginTop: 8, fontSize: 11, fontWeight: 800, color: data?.operationalTestCompleted ? "#166534" : "#9a3412" }}>
+              الاختبار التشغيلي الفعلي: {data?.operationalTestCompleted ? "تم" : "لم يتم"}
+            </div>
+          </div>
+
           {!data?.readyForCsr && (
             <div style={{ background: "#fff7ed", border: "1px solid #fdba74", color: "#9a3412", borderRadius: 8, padding: "11px 13px", marginBottom: 12 }}>
               <div style={{ fontWeight: 800, fontSize: 12, marginBottom: 5 }}>لا يمكن بدء إنشاء CSR بعد</div>

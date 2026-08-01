@@ -23,6 +23,7 @@ import {
   zatcaKeys,
   zatcaCsrRequests,
   zatcaReadinessSettings,
+  stockVouchers,
 } from '../schema.js';
 import { eq, and, desc, count, sql, gte, lte, like, or, asc, notInArray, inArray } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -212,7 +213,7 @@ async function getZatcaReadiness(
   selectedWarehouseId?: ReadinessWarehouseId,
   selectedInvoiceType: typeof READINESS_INVOICE_TYPES[number] = 'both',
 ) {
-  const [org, locationRows, journalRows, simulationEnvironment, savedSettings, linkingUnits] = await Promise.all([
+  const [org, locationRows, journalRows, simulationEnvironment, savedSettings, linkingUnits, operationalRows, stockRows] = await Promise.all([
     db.query.organizations.findFirst({
       where: eq(organizations.id, orgId),
       columns: {
@@ -289,6 +290,39 @@ async function getZatcaReadiness(
       eq(zatcaPosUnits.isActive, true),
       eq(zatcaPosUnits.isDeleted, false),
     )).orderBy(asc(zatcaPosUnits.unitName)),
+    db.select({
+      invoiceId: salesInvoices.id,
+      invoiceType: salesInvoices.invoiceType,
+      invoiceNumber: salesInvoices.invoiceNumber,
+      invoiceWarehouseId: salesInvoices.warehouseId,
+      isPosted: salesInvoices.isPosted,
+      zatcaXml: salesInvoices.zatcaXml,
+      zatcaInvoiceType: salesInvoices.zatcaInvoiceType,
+      transactionStatus: zatcaInvoiceTransactions.invoiceStatus,
+      checkedAt: zatcaInvoiceTransactions.updatedAt,
+    })
+      .from(zatcaInvoiceTransactions)
+      .innerJoin(salesInvoices, eq(salesInvoices.id, zatcaInvoiceTransactions.invoiceId))
+      .where(and(
+        eq(zatcaInvoiceTransactions.orgId, orgId),
+        eq(salesInvoices.orgId, orgId),
+        eq(zatcaInvoiceTransactions.isActive, true),
+        eq(zatcaInvoiceTransactions.isDeleted, false),
+        inArray(zatcaInvoiceTransactions.invoiceStatus, ['cleared', 'reported', 'accepted_with_warnings']),
+        inArray(salesInvoices.invoiceType, ['sale', 'return', 'credit_note', 'debit_note']),
+        selectedWarehouseId ? eq(salesInvoices.warehouseId, selectedWarehouseId) : sql`TRUE`,
+        selectedInvoiceType === 'both'
+          ? sql`TRUE`
+          : eq(salesInvoices.zatcaInvoiceType, selectedInvoiceType),
+      ))
+      .orderBy(desc(zatcaInvoiceTransactions.updatedAt)),
+    db.select({
+      sourceDocId: stockVouchers.sourceDocId,
+      sourceDocType: stockVouchers.sourceDocType,
+      status: stockVouchers.status,
+    })
+      .from(stockVouchers)
+      .where(eq(stockVouchers.orgId, orgId)),
   ]);
 
   if (!org) throw new TRPCError({ code: 'NOT_FOUND', message: 'المنشأة غير موجودة' });
@@ -336,6 +370,36 @@ async function getZatcaReadiness(
     ...ZATCA_SCREEN_CAPABILITIES[docType],
   }));
   const allScreensReady = screens.every(screen => screen.screenExists && screen.xmlReady);
+  const latestOperationalByType = new Map<string, (typeof operationalRows)[number]>();
+  for (const row of operationalRows) {
+    if (!latestOperationalByType.has(row.invoiceType)) latestOperationalByType.set(row.invoiceType, row);
+  }
+  const operationalTests = POS_LINK_JOURNAL_TYPES.map((docType) => {
+    const invoiceType = docType === 'sales_invoice' ? 'sale' : docType === 'sales_return' ? 'return' : docType;
+    const candidate = latestOperationalByType.get(invoiceType);
+    const linkedStock = candidate
+      ? stockRows.filter((stock) => stock.sourceDocId === candidate.invoiceId && stock.status !== 'cancelled')
+      : [];
+    const saved = Boolean(candidate);
+    const posted = Boolean(candidate?.isPosted);
+    const xml = Boolean(candidate?.zatcaXml?.trim());
+    const zatca = Boolean(candidate?.transactionStatus);
+    const stockRule = invoiceType === 'credit_note' || invoiceType === 'debit_note'
+      ? linkedStock.length === 0
+      : invoiceType === 'return'
+        ? linkedStock.length > 0
+        : true;
+    return {
+      docType,
+      label: JOURNAL_TYPE_LABELS[docType] ?? docType,
+      completed: saved && posted && xml && zatca && stockRule,
+      invoiceId: candidate?.invoiceId ?? null,
+      invoiceNumber: candidate?.invoiceNumber ?? null,
+      checkedAt: candidate?.checkedAt ?? null,
+      checks: { saved, posted, xml, zatca, stockRule },
+    };
+  });
+  const operationalTestCompleted = operationalTests.every((test) => test.completed);
   const simulationConfigured = cfg.environment === 'simulation'
     && cfg.apiBaseUrl === simulationEnvironmentValues().baseApiUrl
     && Boolean(simulationEnvironment);
@@ -347,6 +411,7 @@ async function getZatcaReadiness(
   if (selectedWarehouse && allJournalsSameUnit === false && allJournalsLinked) reasons.push('يجب أن ترتبط الدفاتر الأربعة بوحدة ربط واحدة');
   if (!allScreensReady) reasons.push('شاشتا الإشعار الدائن والمدين غير مكتملتين أو غير قادرتين على إنشاء XML');
   if (!simulationConfigured) reasons.push('فعّل بيئة Fatoora Simulation من إعدادات البيئة');
+  if (!operationalTestCompleted) reasons.push('الاختبار التشغيلي الفعلي لم يكتمل لكل مسارات الفواتير والإشعارات');
 
   return {
     availableOrganizations: [{
@@ -409,11 +474,14 @@ async function getZatcaReadiness(
     allJournalsLinked,
     allJournalsSameUnit,
     allScreensReady,
+    operationalTestCompleted,
+    operationalTests,
     readyForCsr: missingOrganizationFields.length === 0
       && Boolean(selectedWarehouse)
       && allJournalsPresent
       && allJournalsSameUnit
       && allScreensReady
+      && operationalTestCompleted
       && simulationConfigured,
     reasons,
   };
@@ -1511,6 +1579,8 @@ export const zatcaRouter = router({
   submitInvoice: protectedProcedure
     .input(z.object({
       invoiceId:   z.number(),
+      // Deprecated compatibility input. The server always uses the immutable
+      // snapshot stored on sales_invoices instead of trusting the client.
       invoiceType: z.enum(['standard', 'simplified']).default('simplified'),
       mockOutcome: ZatcaMockOutcomeSchema.default('delayed'),
       forceResend: z.boolean().default(false),
@@ -1521,7 +1591,8 @@ export const zatcaRouter = router({
       });
       if (!inv) throw new TRPCError({ code: 'NOT_FOUND', message: 'الفاتورة غير موجودة' });
 
-      const operation: ZatcaOperation = input.invoiceType === 'standard' ? 'clearance' : 'reporting';
+      const persistedInvoiceType = inv.zatcaInvoiceType === 'standard' ? 'standard' : 'simplified';
+      const operation: ZatcaOperation = persistedInvoiceType === 'standard' ? 'clearance' : 'reporting';
       const currentState = (inv.zatcaStatus ?? 'ready_to_submit') as ZatcaLifecycleState;
       if (isFinalZatcaState(currentState)) {
         return { ok: false, status: currentState, uuid: inv.zatcaUuid, message: 'الفاتورة تحمل نتيجة نهائية؛ لا يمكن إعادة إرسالها تلقائياً' };

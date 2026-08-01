@@ -361,6 +361,7 @@ CREATE TABLE IF NOT EXISTS "purchase_invoices" (
     "paid_amount" NUMERIC(18, 4) DEFAULT '0',
     "status" "invoice_status" NOT NULL DEFAULT 'draft',
     "notes" TEXT,
+    "zatca_invoice_type" VARCHAR(20) NOT NULL DEFAULT 'simplified',
     "based_on_type" VARCHAR(20),
     "based_on_number" VARCHAR(50),
     "created_at" TIMESTAMP NOT NULL DEFAULT now()

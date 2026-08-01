@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { eq, and, desc, like, or, sql } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { salesInvoices, salesInvoiceItems, salesInvoicePayments, paymentMethods, products, customers, stockVouchers, stockVoucherItems, documentJournals, warehouses, users } from '../schema.js';
+import { salesInvoices, salesInvoiceItems, salesInvoicePayments, paymentMethods, products, customers, stockVouchers, stockVoucherItems, documentJournals, warehouses, users, zatcaPosUnits } from '../schema.js';
 import { autoPostSalesInvoice } from './posting.js';
 import { TRPCError } from '@trpc/server';
 import { validateSalesInvoiceWarehouseContext } from '../lib/salesWarehouseValidation.js';
@@ -115,7 +115,7 @@ export const salesRouter = router({
       limit: z.number().default(200),
       search: z.string().optional(),
       status: z.string().optional(),
-      invoiceType: z.enum(['sale', 'return', 'quote', 'order', 'credit_note']).optional(),
+      invoiceType: z.enum(['sale', 'return', 'quote', 'order', 'credit_note', 'debit_note']).optional(),
       dateFrom: z.string().optional(),      // YYYY-MM-DD
       dateTo: z.string().optional(),        // YYYY-MM-DD
       warehouseId: z.number().optional(),    // فلتر المخزن
@@ -326,6 +326,7 @@ export const salesRouter = router({
       basedOnType: z.string().optional(),
       basedOnNumber: z.string().optional(),
       sourceDocumentId: z.number().optional(),
+      zatcaInvoiceType: z.enum(['standard', 'simplified']).optional(),
       draftNumber: z.string().optional(),
       items: z.array(z.object({
         productId: z.number().optional(),
@@ -356,7 +357,12 @@ export const salesRouter = router({
         const original = invoiceData.sourceDocumentId
           ? await db.query.salesInvoices.findFirst({
               where: and(eq(salesInvoices.id, invoiceData.sourceDocumentId), eq(salesInvoices.orgId, orgId)),
-              columns: { id: true, invoiceType: true, invoiceNumber: true },
+              columns: {
+                id: true, invoiceType: true, invoiceNumber: true, invoiceDate: true,
+                customerId: true, customerName: true, currency: true, warehouseId: true,
+                journalId: true, zatcaUuid: true, zatcaStatus: true, zatcaInvoiceType: true,
+                status: true, total: true,
+              },
             })
           : invoiceData.basedOnNumber
             ? await db.query.salesInvoices.findFirst({
@@ -365,15 +371,57 @@ export const salesRouter = router({
                   eq(salesInvoices.invoiceNumber, invoiceData.basedOnNumber),
                   eq(salesInvoices.invoiceType, 'sale'),
                 ),
-                columns: { id: true, invoiceType: true, invoiceNumber: true },
+                columns: {
+                  id: true, invoiceType: true, invoiceNumber: true, invoiceDate: true,
+                  customerId: true, customerName: true, currency: true, warehouseId: true,
+                  journalId: true, zatcaUuid: true, zatcaStatus: true, zatcaInvoiceType: true,
+                  status: true, total: true,
+                },
               })
             : null;
-        if (!original || original.invoiceType !== 'sale') {
+        if (
+          !original ||
+          original.invoiceType !== 'sale' ||
+          original.status === 'draft' ||
+          original.status === 'cancelled' ||
+          original.customerId == null
+        ) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'مرجع الإشعار يجب أن يكون فاتورة مبيعات أصلية، وليس مستند مشتريات أو إشعاراً آخر' });
         }
         invoiceData.sourceDocumentId = original.id;
         invoiceData.basedOnNumber = original.invoiceNumber;
         invoiceData.basedOnType = 'sale';
+        invoiceData.zatcaInvoiceType = original.zatcaInvoiceType === 'standard' ? 'standard' : 'simplified';
+        if (invoiceData.customerId !== original.customerId) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'العميل يجب أن يطابق العميل في الفاتورة الأصلية' });
+        }
+        if (invoiceData.currency && invoiceData.currency !== (original.currency ?? 'SAR')) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'عملة الإشعار يجب أن تطابق عملة الفاتورة الأصلية' });
+        }
+        if (invoiceData.warehouseId != null && invoiceData.warehouseId !== original.warehouseId) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'مخزن/فرع الإشعار يجب أن يطابق الفاتورة الأصلية' });
+        }
+        if (invoiceData.journalId != null) {
+          const journal = await db.query.documentJournals.findFirst({
+            where: and(eq(documentJournals.id, invoiceData.journalId), eq(documentJournals.orgId, orgId)),
+            columns: { id: true, docType: true, warehouseId: true, zatcaPosUnitId: true },
+          });
+          if (!journal || journal.docType !== invoiceData.invoiceType) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'دفتر الإشعار يجب أن يكون من النوع الصحيح' });
+          }
+          if (journal.warehouseId !== original.warehouseId) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'دفتر الإشعار يجب أن يكون مرتبطاً بمخزن/فرع الفاتورة الأصلية' });
+          }
+          if (original.journalId) {
+            const sourceJournal = await db.query.documentJournals.findFirst({
+              where: and(eq(documentJournals.id, original.journalId), eq(documentJournals.orgId, orgId)),
+              columns: { zatcaPosUnitId: true },
+            });
+            if (sourceJournal?.zatcaPosUnitId !== journal.zatcaPosUnitId) {
+              throw new TRPCError({ code: 'BAD_REQUEST', message: 'دفتر الإشعار يجب أن يرتبط بوحدة ZATCA نفسها للفواتير الأصلية' });
+            }
+          }
+        }
       }
 
       // ── تحقق: المسودة لا تخضع للتحققات المشددة (لا مخزن/فرع، لا أصناف) ─────
@@ -520,6 +568,7 @@ export const salesRouter = router({
       customerName: z.string().optional(),
       customerType: z.string().optional(),
       customerTaxNumber: z.string().optional(),
+      currency: z.string().optional(),
       subtotal: z.string().optional(),
       discountAmount: z.string().optional(),
       taxAmount: z.string().optional(),
@@ -533,6 +582,7 @@ export const salesRouter = router({
       basedOnType: z.string().optional(),
       basedOnNumber: z.string().optional(),
       sourceDocumentId: z.number().optional(),
+      zatcaInvoiceType: z.enum(['standard', 'simplified']).optional(),
       items: z.array(z.object({
         productId: z.number().optional(),
         productCode: z.string().optional(),
@@ -580,7 +630,12 @@ export const salesRouter = router({
         const original = finalSourceDocId
           ? await db.query.salesInvoices.findFirst({
               where: and(eq(salesInvoices.id, finalSourceDocId), eq(salesInvoices.orgId, ctx.user.orgId)),
-              columns: { id: true, invoiceType: true, invoiceNumber: true },
+              columns: {
+                id: true, invoiceType: true, invoiceNumber: true, invoiceDate: true,
+                customerId: true, customerName: true, currency: true, warehouseId: true,
+                journalId: true, zatcaUuid: true, zatcaStatus: true, zatcaInvoiceType: true,
+                status: true, total: true,
+              },
             })
           : rest.basedOnNumber
             ? await db.query.salesInvoices.findFirst({
@@ -589,15 +644,57 @@ export const salesRouter = router({
                   eq(salesInvoices.invoiceNumber, rest.basedOnNumber),
                   eq(salesInvoices.invoiceType, 'sale'),
                 ),
-                columns: { id: true, invoiceType: true, invoiceNumber: true },
+                columns: {
+                  id: true, invoiceType: true, invoiceNumber: true, invoiceDate: true,
+                  customerId: true, customerName: true, currency: true, warehouseId: true,
+                  journalId: true, zatcaUuid: true, zatcaStatus: true, zatcaInvoiceType: true,
+                  status: true, total: true,
+                },
               })
             : null;
-        if (!original || original.invoiceType !== 'sale') {
+        if (
+          !original ||
+          original.invoiceType !== 'sale' ||
+          original.status === 'draft' ||
+          original.status === 'cancelled' ||
+          original.customerId == null
+        ) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'مرجع الإشعار يجب أن يكون فاتورة مبيعات أصلية، وليس مستند مشتريات أو إشعاراً آخر' });
         }
         rest.sourceDocumentId = original.id;
         rest.basedOnNumber = original.invoiceNumber;
         rest.basedOnType = 'sale';
+        rest.zatcaInvoiceType = original.zatcaInvoiceType === 'standard' ? 'standard' : 'simplified';
+        if (rest.customerId !== undefined && rest.customerId !== original.customerId) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'العميل يجب أن يطابق العميل في الفاتورة الأصلية' });
+        }
+        if (rest.currency && rest.currency !== (original.currency ?? 'SAR')) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'عملة الإشعار يجب أن تطابق عملة الفاتورة الأصلية' });
+        }
+        if (rest.warehouseId != null && rest.warehouseId !== original.warehouseId) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'مخزن/فرع الإشعار يجب أن يطابق الفاتورة الأصلية' });
+        }
+        if (finalJournalId) {
+          const journal = await db.query.documentJournals.findFirst({
+            where: and(eq(documentJournals.id, finalJournalId), eq(documentJournals.orgId, ctx.user.orgId)),
+            columns: { id: true, docType: true, warehouseId: true, zatcaPosUnitId: true },
+          });
+          if (!journal || journal.docType !== rest.invoiceType) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'دفتر الإشعار يجب أن يكون من النوع الصحيح' });
+          }
+          if (journal.warehouseId !== original.warehouseId) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'دفتر الإشعار يجب أن يكون مرتبطاً بمخزن/فرع الفاتورة الأصلية' });
+          }
+          if (original.journalId) {
+            const sourceJournal = await db.query.documentJournals.findFirst({
+              where: and(eq(documentJournals.id, original.journalId), eq(documentJournals.orgId, ctx.user.orgId)),
+              columns: { zatcaPosUnitId: true },
+            });
+            if (sourceJournal?.zatcaPosUnitId !== journal.zatcaPosUnitId) {
+              throw new TRPCError({ code: 'BAD_REQUEST', message: 'دفتر الإشعار يجب أن يرتبط بوحدة ZATCA نفسها للفواتير الأصلية' });
+            }
+          }
+        }
       }
       if (!isNowDraft) {
         await validateSalesInvoiceWarehouseContext({
@@ -781,6 +878,9 @@ export const salesRouter = router({
 
       // ── قواعد أمر البيع: رفض الملغاة ──────────────────────────────────────
       if (input.type === 'order' && invoice.status === 'cancelled') return null;
+      if (input.type === 'sale' && (invoice.status === 'draft' || invoice.status === 'cancelled' || invoice.customerId == null)) {
+        return null;
+      }
 
       const items = await db.query.salesInvoiceItems.findMany({
         where: eq(salesInvoiceItems.invoiceId, invoice.id),
@@ -851,6 +951,19 @@ export const salesRouter = router({
         }
       }
 
+      const sourceJournal = invoice.journalId
+        ? await db.query.documentJournals.findFirst({
+            where: and(eq(documentJournals.id, invoice.journalId), eq(documentJournals.orgId, ctx.user.orgId)),
+            columns: { id: true, code: true, name: true, docType: true, warehouseId: true, zatcaPosUnitId: true },
+          })
+        : null;
+      let sourceZatcaUnit: { id: number; unitCode: string | null; unitName: string | null } | null = null;
+      if (sourceJournal?.zatcaPosUnitId) {
+        sourceZatcaUnit = await db.query.zatcaPosUnits.findFirst({
+          where: and(eq(zatcaPosUnits.id, sourceJournal.zatcaPosUnitId), eq(zatcaPosUnits.orgId, ctx.user.orgId)),
+          columns: { id: true, unitCode: true, unitName: true },
+        }) ?? null;
+      }
       return {
         id: invoice.id,
         sourceType: input.type,
@@ -861,6 +974,18 @@ export const salesRouter = router({
         journalId: invoice.journalId,
         status: invoice.status,
         currency: invoice.currency ?? 'SAR',
+        invoiceDate: invoice.invoiceDate,
+        zatcaUuid: invoice.zatcaUuid,
+        zatcaStatus: invoice.zatcaStatus,
+        zatcaInvoiceType: invoice.zatcaInvoiceType ?? 'simplified',
+        warehouseName: invoice.warehouseId
+          ? (await db.query.warehouses.findFirst({
+              where: and(eq(warehouses.id, invoice.warehouseId), eq(warehouses.orgId, ctx.user.orgId)),
+              columns: { name: true },
+            }))?.name ?? null
+          : null,
+        journal: sourceJournal,
+        zatcaUnit: sourceZatcaUnit,
         notes: invoice.notes,
         items: items.map(i => ({
           productId: i.productId,
