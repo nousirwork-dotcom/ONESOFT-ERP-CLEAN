@@ -2,9 +2,17 @@ import { z } from 'zod';
 import { eq, and, asc, inArray, sql } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { documentJournals, zatcaPosUnits } from '../schema.js';
+import {
+  branches,
+  documentJournals,
+  zatcaCertificates,
+  zatcaCsid,
+  zatcaDevices,
+  zatcaEnvironments,
+  zatcaPosUnits,
+  warehouses,
+} from '../schema.js';
 import { assertCanUpdate, assertCanDelete, deriveFoundationKey } from '../lib/foundation-framework.js';
-import { TRPCError } from '@trpc/server';
 
 export const DOC_TYPES = [
   { id: 'sales_invoice',        label: 'فاتورة مبيعات' },
@@ -46,7 +54,6 @@ const journalInputShape = {
   draftLastNumber:   z.number().default(999999),
   draftNumDigits:    z.number().default(6),
   warehouseId:       z.number().nullable().optional(),
-  zatcaPosUnitId:    z.number().nullable().optional(),
   salesAccountId:   z.number().nullable().optional(),
   cashAccountId:    z.number().nullable().optional(),
   creditAccountId:  z.number().nullable().optional(),
@@ -74,51 +81,28 @@ const journalInputShape = {
   includeInFoundation:  z.boolean().optional(),
 };
 
-const ZATCA_JOURNAL_DOC_TYPES = new Set([
-  'sales_invoice',
-  'sales_return',
-  'credit_note',
-  'debit_note',
-]);
+const ZATCA_JOURNAL_ROLES: Record<string, string> = {
+  sales_invoice: 'دفتر فاتورة المبيعات',
+  sales_return: 'دفتر مردود المبيعات',
+  credit_note: 'دفتر الإشعار الدائن',
+  debit_note: 'دفتر الإشعار المدين',
+};
 
-async function assertZatcaBinding(params: {
-  orgId: number;
-  docType: string;
-  warehouseId: number | null | undefined;
-  zatcaPosUnitId: number | null | undefined;
-}) {
-  const { orgId, docType, warehouseId, zatcaPosUnitId } = params;
-  if (zatcaPosUnitId == null) return;
-  if (!ZATCA_JOURNAL_DOC_TYPES.has(docType)) {
-    throw new TRPCError({
-      code: 'BAD_REQUEST',
-      message: 'لا يمكن ربط هذا النوع من الدفاتر بوحدة ZATCA — اربط دفاتر المبيعات والمردود والدائن والمدين فقط',
-    });
-  }
-  if (warehouseId == null) {
-    throw new TRPCError({
-      code: 'BAD_REQUEST',
-      message: 'لا يمكن ربط دفتر ZATCA قبل ربطه بمخزن/فرع',
-    });
-  }
-  const unit = await db.query.zatcaPosUnits.findFirst({
-    where: and(
-      eq(zatcaPosUnits.id, zatcaPosUnitId),
-      eq(zatcaPosUnits.orgId, orgId),
-      eq(zatcaPosUnits.isActive, true),
-      eq(zatcaPosUnits.isDeleted, false),
-    ),
-    columns: { id: true, warehouseId: true },
-  });
-  if (!unit) {
-    throw new TRPCError({ code: 'NOT_FOUND', message: 'وحدة ربط نقطة البيع مع ZATCA غير موجودة أو غير فعالة' });
-  }
-  if (unit.warehouseId !== warehouseId) {
-    throw new TRPCError({
-      code: 'BAD_REQUEST',
-      message: 'وحدة ربط ZATCA لا تنتمي إلى المخزن/الفرع المحدد للدفتر',
-    });
-  }
+function getEnvironmentLabel(name: string | null): 'محاكاة' | 'إنتاج' | null {
+  const value = name?.trim().toLowerCase();
+  if (!value) return null;
+  if (value === 'production' || value === 'prod' || value === 'live') return 'إنتاج';
+  if (value === 'sandbox' || value === 'simulation' || value === 'test') return 'محاكاة';
+  return null;
+}
+
+function getCertificateStatus(
+  certificate: { status: string; isActive: boolean; isDeleted: boolean; expiryDate: Date | null } | null,
+): string {
+  if (!certificate) return 'غير مرتبطة';
+  if (certificate.isDeleted || !certificate.isActive) return 'غير فعالة';
+  if (certificate.expiryDate != null && certificate.expiryDate <= new Date()) return 'منتهية';
+  return certificate.status;
 }
 
 export const documentJournalsRouter = router({
@@ -139,6 +123,122 @@ export const documentJournalsRouter = router({
       return rows;
     }),
 
+  // قراءة فقط: مصدر الحقيقة والإدارة يبقيان داخل مركز ZATCA.
+  // لا يعيد هذا الاستعلام CSID أو الشهادة أو أي مفتاح/إعداد فني.
+  getZatcaLinkStatus: protectedProcedure
+    .input(z.object({ journalId: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      const [row] = await db.select({
+        journalId: documentJournals.id,
+        journalCode: documentJournals.code,
+        journalName: documentJournals.name,
+        docType: documentJournals.docType,
+        warehouseId: documentJournals.warehouseId,
+        warehouseName: warehouses.name,
+        branchId: warehouses.branchId,
+        branchName: branches.name,
+        posUnitId: zatcaPosUnits.id,
+        posUnitCode: zatcaPosUnits.unitCode,
+        posUnitName: zatcaPosUnits.unitName,
+        posUnitActive: zatcaPosUnits.isActive,
+        posUnitDeleted: zatcaPosUnits.isDeleted,
+        egsId: zatcaDevices.id,
+        egsName: zatcaDevices.deviceName,
+        egsRegistrationStatus: zatcaDevices.registrationStatus,
+        egsActive: zatcaDevices.isActive,
+        egsDeleted: zatcaDevices.isDeleted,
+        environmentName: zatcaEnvironments.name,
+        certificateId: zatcaCertificates.id,
+        certificateStatus: zatcaCertificates.status,
+        certificateActive: zatcaCertificates.isActive,
+        certificateDeleted: zatcaCertificates.isDeleted,
+        certificateExpiryDate: zatcaCertificates.expiryDate,
+      })
+        .from(documentJournals)
+        .leftJoin(zatcaPosUnits, and(
+          eq(zatcaPosUnits.id, documentJournals.zatcaPosUnitId),
+          eq(zatcaPosUnits.orgId, ctx.user.orgId),
+        ))
+        .leftJoin(warehouses, and(
+          eq(warehouses.id, documentJournals.warehouseId),
+          eq(warehouses.orgId, ctx.user.orgId),
+        ))
+        .leftJoin(branches, and(
+          eq(branches.id, warehouses.branchId),
+          eq(branches.orgId, ctx.user.orgId),
+        ))
+        .leftJoin(zatcaDevices, and(
+          eq(zatcaDevices.posUnitId, zatcaPosUnits.id),
+          eq(zatcaDevices.orgId, ctx.user.orgId),
+          eq(zatcaDevices.isActive, true),
+          eq(zatcaDevices.isDeleted, false),
+        ))
+        .leftJoin(zatcaEnvironments, and(
+          eq(zatcaEnvironments.id, zatcaDevices.environmentId),
+          eq(zatcaEnvironments.orgId, ctx.user.orgId),
+        ))
+        .leftJoin(zatcaCsid, and(
+          eq(zatcaCsid.id, zatcaDevices.currentCsidId),
+          eq(zatcaCsid.orgId, ctx.user.orgId),
+        ))
+        .leftJoin(zatcaCertificates, and(
+          eq(zatcaCertificates.id, zatcaCsid.certificateId),
+          eq(zatcaCertificates.orgId, ctx.user.orgId),
+        ))
+        .where(and(
+          eq(documentJournals.id, input.journalId),
+          eq(documentJournals.orgId, ctx.user.orgId),
+        ))
+        .limit(1);
+
+      if (!row) throw new Error('الدفتر غير موجود');
+
+      const linked = row.posUnitId != null && row.posUnitActive === true && row.posUnitDeleted === false;
+      const egsLinked = row.egsId != null && row.egsActive === true && row.egsDeleted === false;
+      const certificate = row.certificateId == null
+        ? null
+        : {
+            status: row.certificateStatus ?? 'unknown',
+            isActive: row.certificateActive === true,
+            isDeleted: row.certificateDeleted === true,
+            expiryDate: row.certificateExpiryDate,
+          };
+
+      return {
+        journalId: row.journalId,
+        journalCode: row.journalCode,
+        journalName: row.journalName,
+        docType: row.docType,
+        linkStatus: linked ? 'linked' as const : 'unlinked' as const,
+        linkStatusLabel: linked ? 'مرتبط' : 'غير مرتبط',
+        posUnit: linked ? {
+          id: row.posUnitId!,
+          code: row.posUnitCode,
+          name: row.posUnitName,
+        } : null,
+        warehouse: row.warehouseId == null ? null : {
+          id: row.warehouseId,
+          name: row.warehouseName,
+        },
+        branch: row.branchId == null ? null : {
+          id: row.branchId,
+          name: row.branchName,
+        },
+        journalRole: ZATCA_JOURNAL_ROLES[row.docType] ?? null,
+        environment: getEnvironmentLabel(row.environmentName),
+        egs: egsLinked ? {
+          id: row.egsId!,
+          name: row.egsName,
+          status: row.egsRegistrationStatus,
+        } : null,
+        certificate: {
+          id: row.certificateId,
+          status: getCertificateStatus(certificate),
+        },
+        openCenterPath: '/cfg/zatca-center',
+      };
+    }),
+
   get: protectedProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ ctx, input }) => {
@@ -152,12 +252,6 @@ export const documentJournalsRouter = router({
   create: protectedProcedure
     .input(z.object(journalInputShape))
     .mutation(async ({ ctx, input }) => {
-      await assertZatcaBinding({
-        orgId: ctx.user.orgId,
-        docType: input.docType,
-        warehouseId: input.warehouseId ?? null,
-        zatcaPosUnitId: input.zatcaPosUnitId ?? null,
-      });
       const { recordPolicy: _rp, includeInFoundation: _if, ...inputData } = input;
       const [row] = await db.insert(documentJournals).values({
         ...inputData,
@@ -184,14 +278,6 @@ export const documentJournalsRouter = router({
         where: and(eq(documentJournals.id, id), eq(documentJournals.orgId, ctx.user.orgId)),
       });
       if (!current) throw new Error('الدفتر غير موجود');
-      await assertZatcaBinding({
-        orgId: ctx.user.orgId,
-        docType: (data as any).docType ?? current.docType,
-        warehouseId: (data as any).warehouseId ?? current.warehouseId,
-        zatcaPosUnitId: (data as any).zatcaPosUnitId !== undefined
-          ? (data as any).zatcaPosUnitId
-          : current.zatcaPosUnitId,
-      });
       const isSuperadmin = ctx.user.role === 'superadmin';
       assertCanUpdate(current.recordPolicy, current.name, isSuperadmin);
       const policyFields: Record<string, unknown> = {};
