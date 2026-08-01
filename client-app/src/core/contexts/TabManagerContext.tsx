@@ -123,6 +123,21 @@ function isRememberEnabled(): boolean {
 
 type SavedTab = { path: string; label: string };
 
+const LEGACY_ZATCA_PATHS = new Set([
+  "/cfg/zatca",
+  "/cfg/zatca-mon",
+  "/cfg/zatca-inv",
+  "/cfg/zatca-log",
+]);
+const ZATCA_CENTER_PATH = "/cfg/zatca-center";
+const ZATCA_CENTER_LABEL = "مركز التكامل مع هيئة الزكاة والضريبة والجمارك";
+
+function normalizeTabTarget(path: string, label: string): { path: string; label: string } {
+  return LEGACY_ZATCA_PATHS.has(path)
+    ? { path: ZATCA_CENTER_PATH, label: ZATCA_CENTER_LABEL }
+    : { path, label };
+}
+
 type TabCloseGuard = {
   requestClose: (afterClose: () => void) => void;
   isDirty: boolean;
@@ -149,7 +164,10 @@ function loadSavedTabs(): AppTab[] {
     if (sessionRaw) {
       const parsed = JSON.parse(sessionRaw) as SavedTab[];
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map((t, i) => ({
+        const normalized = parsed
+          .map(t => normalizeTabTarget(t.path, t.label))
+          .filter((t, i, all) => all.findIndex(candidate => candidate.path === t.path) === i);
+        return normalized.map((t, i) => ({
           id:          `session-${i}-${t.path.replace(/\//g, '_')}`,
           path:        t.path,
           label:       t.label,
@@ -175,7 +193,10 @@ function loadSavedTabs(): AppTab[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as SavedTab[];
     if (!Array.isArray(parsed) || parsed.length === 0) return [];
-    return parsed.map((t, i) => ({
+    const normalized = parsed
+      .map(t => normalizeTabTarget(t.path, t.label))
+      .filter((t, i, all) => all.findIndex(candidate => candidate.path === t.path) === i);
+    return normalized.map((t, i) => ({
       id:          `restored-${i}-${t.path.replace(/\//g, '_')}`,
       path:        t.path,
       label:       t.label,
@@ -289,6 +310,9 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const openTab = useCallback((path: string, label: string, Icon: React.ElementType, pinned = false) => {
+    const target = normalizeTabTarget(path, label);
+    path = target.path;
+    label = target.label;
     setDashboardVisible(false);
     setTabs(prev => {
       const existing = prev.find(t => t.path === path);

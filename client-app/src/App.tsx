@@ -74,7 +74,6 @@ import SettingsModule, {
   CfgMessagingTemplatesTab, CfgMessagingLogTab, CfgAiAssistantTab,
   CfgPrintSettingsTab, CfgLogoStampTab, CfgSignaturesTab, CfgEmailPdfTab,
   CfgFieldDictionaryTab, CfgPaymentMethodsTab,
-  CfgZatcaTab, CfgZatcaMonitorTab, CfgZatcaInvoicesTab, CfgZatcaLogsTab,
   CfgGosiTab, CfgGaztTab,
   CfgZatcaCenterTab,
   CfgSystemInfoTab,
@@ -308,10 +307,6 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/cfg/signatures":             CfgSignaturesTab,
   "/cfg/email-pdf":              CfgEmailPdfTab,
   "/cfg/zatca-center":           CfgZatcaCenterTab,
-  "/cfg/zatca":                  CfgZatcaTab,
-  "/cfg/zatca-mon":              CfgZatcaMonitorTab,
-  "/cfg/zatca-inv":              CfgZatcaInvoicesTab,
-  "/cfg/zatca-log":              CfgZatcaLogsTab,
   "/cfg/gosi":                   CfgGosiTab,
   "/cfg/gazt":                   CfgGaztTab,
   "/cfg/system-info":            CfgSystemInfoTab,
@@ -321,6 +316,16 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/cfg/branding":               BrandingSettingsPage,
   "/cfg/license":                LicenseActivationPage,
 };
+
+// مسارات ZATCA الكلاسيكية تبقى معرّفة للتوافق مع التبويبات القديمة،
+// لكن لا يجوز أن تفتح واجهة الكلاسيك بعد توحيد المركز.
+const LEGACY_ZATCA_PATHS = new Set([
+  "/cfg/zatca",
+  "/cfg/zatca-mon",
+  "/cfg/zatca-inv",
+  "/cfg/zatca-log",
+]);
+const ZATCA_CENTER_PATH = "/cfg/zatca-center";
 
 // ─── مسارات لا تعرض شريط الأدوات الموحد ──────────────────────────────────
 // صفحات التنقل والأقسام الرئيسية فقط — أي مسار آخر يرث showToolbar=true
@@ -482,13 +487,22 @@ function TabContent() {
         </div>
       )}
       {tabs.map(tab => {
-        const Component = PAGE_MAP[tab.path]
+        const isLegacyZatcaTab = LEGACY_ZATCA_PATHS.has(tab.path);
+        const effectivePath = isLegacyZatcaTab ? ZATCA_CENTER_PATH : tab.path;
+        const effectiveTab = isLegacyZatcaTab
+          ? {
+              ...tab,
+              path: ZATCA_CENTER_PATH,
+              label: "مركز التكامل مع هيئة الزكاة والضريبة والجمارك",
+            }
+          : tab;
+        const Component = PAGE_MAP[effectivePath]
           ?? (tab.path.startsWith("/hs/custody-record/") ? CustodyRecordPage : null);
-        const showToolbar = !NO_TOOLBAR_PATHS.has(tab.path);
+        const showToolbar = !NO_TOOLBAR_PATHS.has(effectivePath);
         return (
-          <AppWindow key={tab.id} tab={tab} showToolbar={showToolbar}>
+          <AppWindow key={tab.id} tab={effectiveTab} showToolbar={showToolbar}>
             <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }} dir="rtl">
-              <TabPathContext.Provider value={tab.path}>
+              <TabPathContext.Provider value={effectivePath}>
                 {Component ? <Component /> : <NotFound />}
               </TabPathContext.Provider>
             </div>

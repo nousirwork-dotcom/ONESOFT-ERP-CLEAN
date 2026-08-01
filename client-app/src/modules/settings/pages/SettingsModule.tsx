@@ -186,7 +186,6 @@ export const menuSections = [
     color: "#16a34a",
     emoji: "🏢",
     children: [
-      { id: "zatca-config",   label: "إعدادات ZATCA (كلاسيك)",              status: "partial", path: "/cfg/zatca"      },
       { id: "gosi-config",    label: "التأمينات الاجتماعية (GOSI)",          status: "missing", path: "/cfg/gosi"       },
       { id: "gazt-config",    label: "الزكاة والدخل (GAZT)",                 status: "missing", path: "/cfg/gazt"       },
     ],
