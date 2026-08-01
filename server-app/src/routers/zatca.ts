@@ -94,8 +94,8 @@ const READINESS_INVOICE_TYPES = ['simplified', 'standard', 'both'] as const;
 const JOURNAL_TYPE_LABELS: Record<string, string> = {
   sales_invoice: 'فاتورة مبيعات',
   sales_return: 'مردود مبيعات / إشعار دائن',
-  credit_note: 'إشعار دائن',
-  debit_note: 'إشعار مدين',
+  credit_note: 'إشعار دائن مبيعات',
+  debit_note: 'إشعار مدين مبيعات',
 };
 
 /**

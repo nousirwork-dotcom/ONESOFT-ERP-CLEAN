@@ -41,7 +41,7 @@ const TECHNICAL_SECTIONS: { id: Exclude<Section, "dashboard" | "units" | "otp-si
 const JOURNAL_TYPE_LABELS: Record<string, string> = {
   sales_invoice: "فاتورة مبيعات",
   sales_return: "مردود مبيعات",
-  credit_note: "إشعار دائن",
+  credit_note: "إشعار دائن مبيعات",
   debit_note: "إشعار مدين مبيعات",
 };
 
