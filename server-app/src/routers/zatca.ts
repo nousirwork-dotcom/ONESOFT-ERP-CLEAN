@@ -72,9 +72,9 @@ async function getPosUnitForOrg(orgId: number, posUnitId: number) {
 
 export const zatcaRouter = router({
 
-  // ── وحدات ربط نقاط البيع الإلكترونية ──────────────────────────────────────
-  // هذه الإجراءات لا تنشئ نقطة بيع تشغيلية جديدة؛ بل تربط المخزن والدفاتر
-  // الموجودة بوحدة EGS مستقبلية داخل المركز نفسه.
+  // ── وحدات ربط ZATCA / مجموعات دفاتر الربط ────────────────────────────────
+  // هذا كيان فني داخل مركز ZATCA فقط؛ لا ينشئ نقطة بيع تشغيلية جديدة.
+  // يبدأ إنشاء المجموعة من دفتر، ويُستنتج المخزن منه للتحقق فقط.
   listPosUnits: protectedProcedure.query(async ({ ctx }) => {
     const units = await db.select({
       id: zatcaPosUnits.id,
@@ -132,32 +132,62 @@ export const zatcaRouter = router({
 
   createPosUnit: adminProcedure
     .input(z.object({
-      warehouseId: z.number().int().positive(),
+      journalId: z.number().int().positive(),
       unitCode: z.string().trim().min(1).max(50),
       unitName: z.string().trim().min(1).max(255),
     }))
     .mutation(async ({ ctx, input }) => {
-      const warehouse = await db.query.warehouses.findFirst({
-        where: and(
-          eq(warehouses.id, input.warehouseId),
+      return db.transaction(async (tx) => {
+        const journal = await tx.query.documentJournals.findFirst({
+          where: and(
+            eq(documentJournals.id, input.journalId),
+            eq(documentJournals.orgId, ctx.user.orgId),
+            eq(documentJournals.isActive, true),
+          ),
+        });
+        if (!journal) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'دفتر المستند غير موجود أو غير فعال' });
+        }
+        if (!POS_LINK_JOURNAL_TYPES.includes(journal.docType as typeof POS_LINK_JOURNAL_TYPES[number])) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'نوع الدفتر غير مدعوم في ربط ZATCA' });
+        }
+        if (journal.warehouseId == null) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن إنشاء وحدة ربط قبل ربط الدفتر بالمخزن/الفرع' });
+        }
+        if (journal.zatcaPosUnitId != null) {
+          throw new TRPCError({ code: 'CONFLICT', message: 'الدفتر مرتبط بالفعل بوحدة ربط ZATCA' });
+        }
+
+        const warehouse = await tx.query.warehouses.findFirst({
+          where: and(
+            eq(warehouses.id, journal.warehouseId),
           eq(warehouses.orgId, ctx.user.orgId),
           eq(warehouses.isActive, true),
-        ),
-        columns: { id: true },
-      });
-      if (!warehouse) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'المخزن/الفرع غير موجود أو غير فعال' });
-      }
+          ),
+          columns: { id: true },
+        });
+        if (!warehouse) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'مخزن دفتر المستند غير موجود أو غير فعال' });
+        }
 
-      const [unit] = await db.insert(zatcaPosUnits).values({
-        orgId: ctx.user.orgId,
-        warehouseId: input.warehouseId,
-        unitCode: input.unitCode,
-        unitName: input.unitName,
-        createdBy: ctx.user.id,
-        updatedBy: ctx.user.id,
-      }).returning();
-      return unit;
+        const [unit] = await tx.insert(zatcaPosUnits).values({
+          orgId: ctx.user.orgId,
+          warehouseId: journal.warehouseId,
+          unitCode: input.unitCode,
+          unitName: input.unitName,
+          createdBy: ctx.user.id,
+          updatedBy: ctx.user.id,
+        }).returning();
+        const [linkedJournal] = await tx.update(documentJournals)
+          .set({ zatcaPosUnitId: unit.id, updatedAt: new Date() })
+          .where(and(
+            eq(documentJournals.id, journal.id),
+            eq(documentJournals.orgId, ctx.user.orgId),
+            eq(documentJournals.isActive, true),
+          ))
+          .returning();
+        return { ...unit, journalId: linkedJournal.id };
+      });
     }),
 
   updatePosUnit: adminProcedure

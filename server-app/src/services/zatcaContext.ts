@@ -31,6 +31,14 @@ type JournalRecord = {
   allowedUserGroup: string | null;
 };
 
+type GroupJournalRecord = {
+  id: number;
+  orgId: number;
+  warehouseId: number | null;
+  zatcaPosUnitId: number | null;
+  isActive: boolean;
+};
+
 type PosUnitRecord = {
   id: number;
   orgId: number;
@@ -87,6 +95,7 @@ type CertificateRecord = {
 export type ZatcaContextRecords = {
   journal: JournalRecord | null;
   activeJournalLinks?: Array<{ posUnitId: number }>;
+  groupJournals?: GroupJournalRecord[];
   posUnit: PosUnitRecord | null;
   egs: EgsRecord[];
   environment: EnvironmentRecord | null;
@@ -139,6 +148,7 @@ export class ZatcaContextError extends Error {
       | 'MULTIPLE_JOURNAL_LINKS'
       | 'UNIT_NOT_FOUND'
       | 'UNIT_WAREHOUSE_MISMATCH'
+       | 'GROUP_WAREHOUSE_MISMATCH'
       | 'EGS_NOT_LINKED'
       | 'MULTIPLE_EGS'
       | 'ENVIRONMENT_INVALID'
@@ -221,15 +231,27 @@ function assertContextRecords(records: ZatcaContextRecords, requestedEnvironment
     throwContext('UNIT_WAREHOUSE_MISMATCH', 'وحدة ربط ZATCA لا تنتمي إلى مخزن/فرع دفتر المستند');
   }
 
-  if (records.egs.length === 0) {
-    throwContext('EGS_NOT_LINKED', 'وحدة ربط نقطة البيع غير مرتبطة بوحدة EGS');
-  }
-  if (records.egs.length > 1) {
-    throwContext('MULTIPLE_EGS', 'وحدة ربط نقطة البيع مرتبطة بأكثر من وحدة EGS فعالة');
-  }
-  const egs = records.egs[0]!;
-  if (!egs.isActive || egs.isDeleted || egs.orgId !== user.orgId || egs.posUnitId !== records.posUnit.id) {
-    throwContext('EGS_NOT_LINKED', 'وحدة EGS غير موجودة أو غير فعالة لهذه الوحدة');
+  const groupJournals = records.groupJournals ?? [{
+    id: journal.id,
+    orgId: journal.orgId,
+    warehouseId: journal.warehouseId,
+    zatcaPosUnitId: records.posUnit.id,
+    isActive: journal.isActive,
+  }];
+  const invalidGroupJournal = groupJournals.find((groupJournal) => (
+    groupJournal.isActive
+    && groupJournal.zatcaPosUnitId === records.posUnit!.id
+    && (
+      groupJournal.orgId !== user.orgId
+      || groupJournal.warehouseId == null
+      || groupJournal.warehouseId !== records.posUnit!.warehouseId
+    )
+  ));
+  if (invalidGroupJournal) {
+    throwContext(
+      'GROUP_WAREHOUSE_MISMATCH',
+      'يوجد دفتر داخل مجموعة ربط ZATCA يتبع مخزنًا مختلفًا — يجب تصحيح المجموعة قبل المتابعة',
+    );
   }
 
   if (!records.environment || !records.environment.isActive || records.environment.isDeleted || records.environment.orgId !== user.orgId) {
@@ -239,9 +261,24 @@ function assertContextRecords(records: ZatcaContextRecords, requestedEnvironment
   if (!environmentKey || environmentKey !== requestedEnvironment) {
     throwContext('EGS_ENVIRONMENT_MISMATCH', 'وحدة EGS غير مرتبطة ببيئة ZATCA المطلوبة');
   }
-  if (egs.environmentId !== records.environment.id) {
-    throwContext('EGS_ENVIRONMENT_MISMATCH', 'وحدة EGS غير مرتبطة ببيئة ZATCA المطلوبة');
+
+  const matchingEgs = records.egs.filter((candidate) => (
+    candidate.isActive
+    && !candidate.isDeleted
+    && candidate.orgId === user.orgId
+    && candidate.posUnitId === records.posUnit.id
+    && candidate.environmentId === records.environment!.id
+  ));
+  if (matchingEgs.length === 0 && records.egs.length > 0) {
+    throwContext('EGS_ENVIRONMENT_MISMATCH', 'لا توجد وحدة EGS نشطة لوحدة الربط في البيئة المطلوبة');
   }
+  if (matchingEgs.length === 0) {
+    throwContext('EGS_NOT_LINKED', 'وحدة ربط ZATCA غير مرتبطة بوحدة EGS نشطة للبيئة المطلوبة');
+  }
+  if (matchingEgs.length > 1) {
+    throwContext('MULTIPLE_EGS', 'وحدة ربط ZATCA مرتبطة بأكثر من وحدة EGS نشطة للبيئة المطلوبة');
+  }
+  const egs = matchingEgs[0]!;
 
   if (
     !records.csid ||
@@ -373,53 +410,70 @@ export async function resolveZatcaContext(input: {
     }
   }
 
-  const [posUnit, egs, environments] = await Promise.all([
-    journal.zatcaPosUnitId == null
-      ? Promise.resolve(null)
-      : db.query.zatcaPosUnits.findFirst({
-          where: and(
-            eq(zatcaPosUnits.id, journal.zatcaPosUnitId),
-            eq(zatcaPosUnits.orgId, user.orgId),
-          ),
-        }),
-    journal.zatcaPosUnitId == null
-      ? Promise.resolve([])
-      : db.query.zatcaDevices.findMany({
-          where: and(
-            eq(zatcaDevices.orgId, user.orgId),
-            eq(zatcaDevices.posUnitId, journal.zatcaPosUnitId),
-            eq(zatcaDevices.isActive, true),
-            eq(zatcaDevices.isDeleted, false),
-          ),
-          columns: {
-            id: true,
-            orgId: true,
-            posUnitId: true,
-            deviceName: true,
-            deviceUuid: true,
-            environmentId: true,
-            currentCsidId: true,
-            registrationStatus: true,
-            isActive: true,
-            isDeleted: true,
-          },
-        }),
-    db.select({
-      id: zatcaEnvironments.id,
-      orgId: zatcaEnvironments.orgId,
-      name: zatcaEnvironments.name,
-      isActive: zatcaEnvironments.isActive,
-      isDeleted: zatcaEnvironments.isDeleted,
-    }).from(zatcaEnvironments).where(eq(zatcaEnvironments.orgId, user.orgId)),
-  ]);
+  const environmentRow = await db.select({
+    id: zatcaEnvironments.id,
+    orgId: zatcaEnvironments.orgId,
+    name: zatcaEnvironments.name,
+    isActive: zatcaEnvironments.isActive,
+    isDeleted: zatcaEnvironments.isDeleted,
+  }).from(zatcaEnvironments).where(and(
+    eq(zatcaEnvironments.orgId, user.orgId),
+  )).then((rows) => rows.find((row) => normalizeEnvironment(row.name) === environment) ?? null);
 
-  const egsRow = egs.length === 1 ? egs[0] : null;
-  const environmentRow = environments.find((row) => normalizeEnvironment(row.name) === environment);
-  const csid = egsRow?.currentCsidId == null
+  const posUnit = journal.zatcaPosUnitId == null
     ? null
-    : await db.query.zatcaCsid.findFirst({
+    : await db.query.zatcaPosUnits.findFirst({
         where: and(
-          eq(zatcaCsid.id, egsRow.currentCsidId),
+          eq(zatcaPosUnits.id, journal.zatcaPosUnitId),
+          eq(zatcaPosUnits.orgId, user.orgId),
+        ),
+      });
+
+  const egs = journal.zatcaPosUnitId == null || environmentRow == null
+    ? []
+    : await db.query.zatcaDevices.findMany({
+        where: and(
+          eq(zatcaDevices.orgId, user.orgId),
+          eq(zatcaDevices.posUnitId, journal.zatcaPosUnitId),
+          eq(zatcaDevices.environmentId, environmentRow.id),
+          eq(zatcaDevices.isActive, true),
+          eq(zatcaDevices.isDeleted, false),
+        ),
+        columns: {
+          id: true,
+          orgId: true,
+          posUnitId: true,
+          deviceName: true,
+          deviceUuid: true,
+          environmentId: true,
+          currentCsidId: true,
+          registrationStatus: true,
+          isActive: true,
+          isDeleted: true,
+        },
+      });
+
+  const groupJournals = journal.zatcaPosUnitId == null
+    ? []
+    : await db.query.documentJournals.findMany({
+        where: and(
+          eq(documentJournals.orgId, user.orgId),
+          eq(documentJournals.zatcaPosUnitId, journal.zatcaPosUnitId),
+          eq(documentJournals.isActive, true),
+        ),
+        columns: {
+          id: true,
+          orgId: true,
+          warehouseId: true,
+          zatcaPosUnitId: true,
+          isActive: true,
+        },
+      });
+
+  const csid = egs.length === 1 && egs[0]!.currentCsidId != null
+    ? await db.query.zatcaCsid.findFirst({
+        where: and(
+          eq(zatcaCsid.id, egs[0]!.currentCsidId),
           eq(zatcaCsid.orgId, user.orgId),
         ),
         columns: {
@@ -433,7 +487,8 @@ export async function resolveZatcaContext(input: {
           isActive: true,
           isDeleted: true,
         },
-      });
+      })
+    : null;
   const certificate = csid?.certificateId == null
     ? null
     : await db.query.zatcaCertificates.findFirst({
@@ -455,9 +510,10 @@ export async function resolveZatcaContext(input: {
   try {
     return assertContextRecords({
       journal,
+      groupJournals,
       posUnit,
       egs: egs as EgsRecord[],
-      environment: environmentRow ?? null,
+      environment: environmentRow,
       csid,
       certificate,
       user,
@@ -465,7 +521,10 @@ export async function resolveZatcaContext(input: {
     }, environment);
   } catch (error) {
     if (error instanceof ZatcaContextError) {
-      throw new TRPCError({ code: 'BAD_REQUEST', message: error.message });
+      throw new TRPCError({
+        code: error.reason === 'JOURNAL_NOT_ALLOWED' ? 'FORBIDDEN' : 'BAD_REQUEST',
+        message: error.message,
+      });
     }
     throw error;
   }

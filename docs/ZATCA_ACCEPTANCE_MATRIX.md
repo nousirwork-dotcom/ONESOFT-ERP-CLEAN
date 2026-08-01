@@ -4,6 +4,7 @@
 **تاريخ المرجع:** 2026-08-01  
 **المصدر:** `attached_assets/Pasted--ZATCA--1785559422350_1785559422352.txt`
 **التوضيح المعماري:** `attached_assets/Pasted--ZATCA--1785559529529_1785559529530.txt`
+**مراجعة الحل:** `attached_assets/Pasted--resolveZatcaContext--1785559883386_1785559883390.txt`
 
 ## طريقة قراءة الحالة
 
@@ -51,6 +52,33 @@ documentJournals.getZatcaLinkStatus({ journalId })
 
 وهو قراءة فقط ولا يعيد CSID أو الشهادة أو المفاتيح أو الأسرار. أما عمليات الإنشاء والتعديل والربط والفك فموجودة في Router مركز ZATCA فقط.
 
+المخزن هو الفرع ومصدر الحقيقة الوحيد في مسار التوجيه؛ يعاد من API كـ`warehouseId` و`warehouseName` ويعرض في الواجهة بعنوان «المخزن/الفرع». لا يعتمد التوجيه الجديد على `branchId` ولا يقدمه كاختيار مستقل.
+
+## قيود قاعدة البيانات في 0060 و0061
+
+`0060_zatca_pos_linking_units.sql`:
+
+- ينشئ `zatca_pos_units` مع `org_id`, `warehouse_id`, `unit_code`, `unit_name`, الحالة وحقول التدقيق.
+- يضيف `document_journals.zatca_pos_unit_id`.
+- يضيف `zatca_devices.pos_unit_id`.
+- يضيف فهارس الربط والفهارس الفريدة للوحدة/الكود، دفتر/وحدة/نوع، وEGS نشط/وحدة.
+- كل العلاقات Foreign Keys غير مدمرة، مع `ON DELETE SET NULL` أو `RESTRICT` أو `CASCADE` حسب الملكية.
+- لا يحتوي `DROP` أو `DELETE`، ولا يحول البيانات القديمة؛ يحتفظ بالحقول والجداول القديمة ومنها `zatca_devices.user_id`.
+
+`0061_zatca_pos_linking_integrity.sql`:
+
+- يضيف 8 فهارس ownership مركبة على المنظمات والمخازن والدفاتر ووحدات الربط وEGS والبيئة وCSID والشهادات.
+- يثبت أن الوحدة والدفتر ينتميان إلى نفس المنظمة والمخزن.
+- يثبت أن `document_journals.zatca_pos_unit_id` لا يرتبط بوحدة من منظمة أخرى.
+- يثبت أن مخزن الدفتر يساوي مخزن وحدة الربط، وأن الربط يتطلب `warehouse_id`.
+- يقصر الدفاتر المرتبطة على أدوار المبيعات والمردود والدائن والمدين.
+- يثبت أن EGS والبيئة وCSID والشهادة تنتمي إلى المنظمة نفسها.
+- يشترط وجود بيئة عند ربط EGS بوحدة.
+- يعتمد الفهرس الفريد الجزئي لمنع أكثر من EGS فعال لنفس الوحدة.
+- يستخدم قيودًا `NOT VALID` عند الإضافة حتى لا تفشل القاعدة بسبب بيانات قديمة؛ هذا يعني أن PostgreSQL يعرض `convalidated=false` عمدًا، مع استمرار فرض القيد على كل `INSERT/UPDATE` جديد. تم فحص وجود القيود والفهارس مباشرة في قاعدة التطوير، واختبار مساري fresh/upgrade.
+
+لا توجد علاقة تشغيلية مستقلة بين `warehouseId` و`branchId` في مسار التوجيه الجديد.
+
 ## اختبارات مرحلة نموذج الربط الحالية
 
 الاختبارات الآلية الحالية في:
@@ -62,7 +90,7 @@ server-app/src/tests/zatca-context.test.ts
 وتغطي:
 
 1. وحدة واحدة ومخزن واحد وEGS واحد.
-2. وحدتان `EGS-01` و`EGS-02` بمخزنين مختلفين.
+2. مخزن واحد ووحدتان `EGS-01` و`EGS-02`.
 3. استخدام EGS نفسه لدفاتر:
    - `sales_invoice`
    - `sales_return`
@@ -80,6 +108,80 @@ server-app/src/tests/zatca-context.test.ts
 13. رفض اختلاف المخزن.
 14. رفض الشهادة غير الفعالة، مع إثبات عدم تسريب `privateKey` أو `secretKey`.
 
+وتوجد مصفوفة قبول مسماة إضافية في:
+
+```text
+server-app/src/tests/zatca-acceptance-matrix.test.ts
+```
+
+نتيجتها الحالية `13/13`، وتشمل:
+
+1. دفتر واحد في مخزن واحد → `EGS-01`.
+2. مجموعتا دفاتر مختلفتان في المخزن نفسه → `EGS-01` و`EGS-02`.
+3. مدير بصلاحية الدفترين.
+4. توجيه `journalId` من مجموعتي دفاتر مختلفتين.
+5. أدوار المبيعات والمردود والدائن والمدين لمجموعة واحدة.
+6. اختلاف EGS بين مجموعتي دفاتر.
+7. عدم التصريح مع سبب `JOURNAL_NOT_ALLOWED` الذي يتحول إلى `FORBIDDEN` في API.
+8. دفتر غير مرتبط.
+9. أكثر من ربط فعال.
+10. عزل مؤسستين.
+11. فحص عدم وجود mutation عام داخل Router الدفاتر.
+12. إثبات بقاء إدارة الربط في Router مركز ZATCA.
+13. رفض مجموعة دفاتر تحتوي دفترًا من مخزن مختلف.
+
+النتيجة الكلية لاختبارات الخادم بعد إضافة حواجز البيئة واتساق المجموعة: `73/73`.
+
+## أمثلة عقد API
+
+### `documentJournals.getZatcaLinkStatus`
+
+استجابة دفتر مرتبط:
+
+```json
+{
+  "journalId": 100,
+  "linkStatus": "linked",
+  "posUnit": { "id": 1, "code": "EGS-01", "name": "وحدة ربط 1" },
+  "warehouse": { "id": 7, "name": "المخزن الرئيسي" },
+  "environment": "محاكاة",
+  "egs": { "id": 20, "name": "EGS-01", "status": "active" },
+  "certificate": { "id": 50, "status": "active" },
+  "openCenterPath": "/cfg/zatca-center"
+}
+```
+
+استجابة دفتر غير مرتبط:
+
+```json
+{
+  "journalId": 101,
+  "linkStatus": "unlinked",
+  "posUnit": null,
+  "warehouse": { "id": 7, "name": "المخزن الرئيسي" },
+  "environment": null,
+  "egs": null,
+  "certificate": { "id": null, "status": "غير مرتبطة" },
+  "openCenterPath": "/cfg/zatca-center"
+}
+```
+
+لا تحتوي الاستجابتان على `CSID`, `Secret`, `Private Key`, `OTP`, أو `Certificate Content`.
+
+### `resolveZatcaContext`
+
+```text
+journalId=100
+→ zatcaPosUnitId=1
+→ warehouseId=7 (اتساق الدفتر مع الوحدة)
+→ egsDeviceId=20
+→ environmentId=30 / Simulation
+→ activeCsidId=40
+→ certificateId=50
+```
+
+تعيد النتيجة معرفات وحالة الشهادة فقط، ولا تعيد قيمة CSID أو secret أو private key أو محتوى الشهادة.
+
 ## اختبارات الربط الخلفية
 
 | السيناريو | المتوقع |
@@ -93,6 +195,10 @@ server-app/src/tests/zatca-context.test.ts
 | فك الربط | إزالة الربط فقط، دون حذف الدفتر أو بيانات ZATCA القديمة |
 | طلب إنشاء/تعديل دفتر مع `zatcaPosUnitId` من Router الدفاتر | لا يكون حقل إدارة مقبولًا؛ إدارة الربط تتم من مركز ZATCA فقط |
 | قراءة `getZatcaLinkStatus` | يعيد linked/unlinked، الوحدة، المخزن، الدور، البيئة، EGS، الشهادة، ورابط المركز دون أسرار |
+
+واجهة `documentJournals` لا تقبل `zatcaPosUnitId` في `create/update`، ولا توجد bulk mutation أو admin endpoint أخرى لتعديل هذا الحقل. عمليات الإنشاء والتعديل والربط والفك موجودة في Router مركز ZATCA فقط.
+
+لا توجد شاشة ربط كاملة داخل دفتر المستندات في هذه المرحلة، وتبويب «الفوترة الإلكترونية» مؤجل لمرحلة الواجهات ولا يعتبر مكتملًا الآن.
 
 ## بوابة Production
 

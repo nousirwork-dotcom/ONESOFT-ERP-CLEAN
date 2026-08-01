@@ -428,6 +428,13 @@
       "when": 1785542400000,
       "tag": "0060_zatca_pos_linking_units",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1785628800000,
+      "tag": "0061_zatca_pos_linking_integrity",
+      "breakpoints": true
     }
   ]
 }

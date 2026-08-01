@@ -68,7 +68,7 @@ function records(overrides: Partial<ZatcaContextRecords> = {}): ZatcaContextReco
 }
 
 describe('resolveZatcaContext', () => {
-  it('resolves one warehouse and one electronic POS linking unit', () => {
+  it('resolves one document journal to one ZATCA linking unit', () => {
     const result = resolveZatcaContextFromRecords(records(), 'simulation');
     expect(result.warehouseId).toBe(7);
     expect(result.posUnit.code).toBe('EGS-01');
@@ -77,18 +77,18 @@ describe('resolveZatcaContext', () => {
     expect(result).not.toHaveProperty('userId');
   });
 
-  it('selects EGS-01 and EGS-02 for two warehouses/units', () => {
+  it('selects EGS-01 and EGS-02 for two journal groups in one warehouse', () => {
     const first = resolveZatcaContextFromRecords(records(), 'simulation');
     const second = resolveZatcaContextFromRecords(records({
-      journal: { ...baseJournal, id: 101, warehouseId: 8, zatcaPosUnitId: 2 },
-      posUnit: { ...records().posUnit!, id: 2, warehouseId: 8, unitCode: 'EGS-02' },
+      journal: { ...baseJournal, id: 101, warehouseId: 7, zatcaPosUnitId: 2 },
+      posUnit: { ...records().posUnit!, id: 2, warehouseId: 7, unitCode: 'EGS-02' },
       egs: [{ ...records().egs[0]!, id: 21, posUnitId: 2, deviceName: 'EGS-02', currentCsidId: 41 }],
       csid: { ...records().csid!, id: 41, deviceId: 21, certificateId: 51 },
       certificate: { ...records().certificate!, id: 51, deviceId: 21 },
     }), 'simulation');
     expect(first.egs.deviceName).toBe('EGS-01');
     expect(second.egs.deviceName).toBe('EGS-02');
-    expect(second.warehouseId).toBe(8);
+    expect(second.warehouseId).toBe(7);
   });
 
   it('uses one EGS for sales, return, credit and debit journals of one unit', () => {
@@ -134,10 +134,25 @@ describe('resolveZatcaContext', () => {
       .toThrow('غير مرتبطة بوحدة EGS');
   });
 
-  it('rejects a unit whose EGS belongs to another environment', () => {
+  it('rejects a unit with no EGS active for the requested environment', () => {
     expect(() => resolveZatcaContextFromRecords(records({
       egs: [{ ...records().egs[0]!, environmentId: 99 }],
-    }), 'simulation')).toThrow('بيئة ZATCA');
+    }), 'simulation')).toThrow('لا توجد وحدة EGS نشطة');
+  });
+
+  it('selects the EGS linked to the journal group for the requested environment', () => {
+    const base = records();
+    const productionEgs = {
+      ...base.egs[0]!,
+      id: 21,
+      deviceName: 'EGS-01-PROD',
+      environmentId: 31,
+      currentCsidId: 41,
+    };
+    const result = resolveZatcaContextFromRecords(records({
+      egs: [base.egs[0]!, productionEgs],
+    }), 'simulation');
+    expect(result.egs.deviceName).toBe('EGS-01');
   });
 
   it('rejects production when only compliance CSID exists', () => {
@@ -164,6 +179,15 @@ describe('resolveZatcaContext', () => {
     expect(() => resolveZatcaContextFromRecords(records({
       posUnit: { ...records().posUnit!, warehouseId: 8 },
     }), 'simulation')).toThrow('لا تنتمي إلى مخزن');
+  });
+
+  it('rejects a journal group containing a journal from a different warehouse', () => {
+    expect(() => resolveZatcaContextFromRecords(records({
+      groupJournals: [
+        { id: 100, orgId: 1, warehouseId: 7, zatcaPosUnitId: 1, isActive: true },
+        { id: 101, orgId: 1, warehouseId: 8, zatcaPosUnitId: 1, isActive: true },
+      ],
+    }), 'simulation')).toThrow('مخزنًا مختلفًا');
   });
 
   it('rejects an inactive certificate without exposing certificate contents', () => {

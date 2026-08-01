@@ -3,7 +3,6 @@ import { eq, and, asc, inArray, sql } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import {
-  branches,
   documentJournals,
   zatcaCertificates,
   zatcaCsid,
@@ -135,8 +134,6 @@ export const documentJournalsRouter = router({
         docType: documentJournals.docType,
         warehouseId: documentJournals.warehouseId,
         warehouseName: warehouses.name,
-        branchId: warehouses.branchId,
-        branchName: branches.name,
         posUnitId: zatcaPosUnits.id,
         posUnitCode: zatcaPosUnits.unitCode,
         posUnitName: zatcaPosUnits.unitName,
@@ -162,10 +159,6 @@ export const documentJournalsRouter = router({
         .leftJoin(warehouses, and(
           eq(warehouses.id, documentJournals.warehouseId),
           eq(warehouses.orgId, ctx.user.orgId),
-        ))
-        .leftJoin(branches, and(
-          eq(branches.id, warehouses.branchId),
-          eq(branches.orgId, ctx.user.orgId),
         ))
         .leftJoin(zatcaDevices, and(
           eq(zatcaDevices.posUnitId, zatcaPosUnits.id),
@@ -219,10 +212,6 @@ export const documentJournalsRouter = router({
         warehouse: row.warehouseId == null ? null : {
           id: row.warehouseId,
           name: row.warehouseName,
-        },
-        branch: row.branchId == null ? null : {
-          id: row.branchId,
-          name: row.branchName,
         },
         journalRole: ZATCA_JOURNAL_ROLES[row.docType] ?? null,
         environment: getEnvironmentLabel(row.environmentName),
