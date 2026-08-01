@@ -187,7 +187,6 @@ export const menuSections = [
     emoji: "🏢",
     children: [
       { id: "gosi-config",    label: "التأمينات الاجتماعية (GOSI)",          status: "missing", path: "/cfg/gosi"       },
-      { id: "gazt-config",    label: "الزكاة والدخل (GAZT)",                 status: "missing", path: "/cfg/gazt"       },
     ],
   },
   {

@@ -131,8 +131,14 @@ const LEGACY_ZATCA_PATHS = new Set([
 ]);
 const ZATCA_CENTER_PATH = "/cfg/zatca-center";
 const ZATCA_CENTER_LABEL = "مركز التكامل مع هيئة الزكاة والضريبة والجمارك";
+const REMOVED_GOVERNMENT_PATHS = new Set(["/cfg/gazt"]);
+const SETTINGS_PATH = "/settings";
+const SETTINGS_LABEL = "الإعدادات";
 
 function normalizeTabTarget(path: string, label: string): { path: string; label: string } {
+  if (REMOVED_GOVERNMENT_PATHS.has(path)) {
+    return { path: SETTINGS_PATH, label: SETTINGS_LABEL };
+  }
   return LEGACY_ZATCA_PATHS.has(path)
     ? { path: ZATCA_CENTER_PATH, label: ZATCA_CENTER_LABEL }
     : { path, label };
