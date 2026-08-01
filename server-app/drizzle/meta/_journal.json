@@ -421,6 +421,13 @@
       "when": 1754179200000,
       "tag": "0059_stock_receipt_receiver",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1785542400000,
+      "tag": "0060_zatca_pos_linking_units",
+      "breakpoints": true
     }
   ]
 }

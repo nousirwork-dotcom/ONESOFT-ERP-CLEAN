@@ -728,6 +728,28 @@ export const messages = pgTable('messages', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
+// ─── ZATCA POS Linking Units (وحدات ربط نقاط البيع الإلكترونية) ───────────────
+// هذا كيان ربط إلكتروني فقط؛ لا يمثل شاشة نقطة بيع تشغيلية جديدة.
+// المخزن هو مصدر الفرع الوحيد، والدفاتر الحالية هي مصدر صلاحيات الاستخدام.
+export const zatcaPosUnits = pgTable('zatca_pos_units', {
+  id:          serial('id').primaryKey(),
+  orgId:       integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  warehouseId: integer('warehouse_id').notNull().references(() => warehouses.id, { onDelete: 'restrict' }),
+  unitCode:    varchar('unit_code', { length: 50 }).notNull(),
+  unitName:    varchar('unit_name', { length: 255 }).notNull(),
+  status:      varchar('status', { length: 30 }).notNull().default('unlinked'),
+  isActive:    boolean('is_active').notNull().default(true),
+  isDeleted:   boolean('is_deleted').notNull().default(false),
+  createdAt:   timestamp('created_at').notNull().defaultNow(),
+  updatedAt:   timestamp('updated_at').notNull().defaultNow(),
+  createdBy:   integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy:   integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+}, (t) => ({
+  orgCodeActiveUidx: uniqueIndex('zatca_pos_units_org_code_active_uidx')
+    .on(t.orgId, t.unitCode)
+    .where(sql`${t.isActive} = true AND ${t.isDeleted} = false`),
+}));
+
 // ─── Document Journals (دفاتر المستندات) ─────────────────────────────────────
 // كل دفتر هو وحدة تشغيلية مستقلة: ترقيم + مخزن + فرع + حسابات + صلاحيات
 export const documentJournals = pgTable('document_journals', {
@@ -758,6 +780,8 @@ export const documentJournals = pgTable('document_journals', {
   draftCurrentSeq:   integer('draft_current_seq').notNull().default(0),
   // ── الربط بالكيان (المخزن = الفرع في مسار المستندات) ─────────────────────────
   warehouseId:   integer('warehouse_id').references(() => warehouses.id, { onDelete: 'set null' }),
+  // ── الربط الإلكتروني فقط — لا ينشئ نقطة بيع تشغيلية موازية ────────────────
+  zatcaPosUnitId: integer('zatca_pos_unit_id').references(() => zatcaPosUnits.id, { onDelete: 'set null' }),
   // ── الحسابات الافتراضية ───────────────────────────────────────────────────
   salesAccountId:   integer('sales_account_id').references(() => chartOfAccounts.id, { onDelete: 'set null' }),
   cashAccountId:    integer('cash_account_id').references(() => chartOfAccounts.id, { onDelete: 'set null' }),
@@ -798,7 +822,11 @@ export const documentJournals = pgTable('document_journals', {
   sortOrder:            integer('sort_order').notNull().default(0),
   createdAt:            timestamp('created_at').notNull().defaultNow(),
   updatedAt:            timestamp('updated_at').notNull().defaultNow(),
-});
+}, (t) => ({
+  zatcaDocTypeActiveUidx: uniqueIndex('document_journals_zatca_unit_doc_type_uidx')
+    .on(t.orgId, t.zatcaPosUnitId, t.docType)
+    .where(sql`${t.zatcaPosUnitId} IS NOT NULL AND ${t.isActive} = true`),
+}));
 
 export type DocumentJournal = typeof documentJournals.$inferSelect;
 
@@ -1153,6 +1181,7 @@ export const zatcaEnvironments = pgTable('zatca_environments', {
 export const zatcaDevices = pgTable('zatca_devices', {
   id:                   serial('id').primaryKey(),
   orgId:                integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  posUnitId:            integer('pos_unit_id').references(() => zatcaPosUnits.id, { onDelete: 'set null' }),
   deviceName:           varchar('device_name', { length: 255 }).notNull(),
   deviceUuid:           uuid('device_uuid').notNull().defaultRandom(),
   serialNumber:         varchar('serial_number', { length: 100 }),
@@ -1169,7 +1198,11 @@ export const zatcaDevices = pgTable('zatca_devices', {
   updatedAt:            timestamp('updated_at').notNull().defaultNow(),
   createdBy:            integer('created_by').references(() => users.id, { onDelete: 'set null' }),
   updatedBy:            integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
-});
+}, (t) => ({
+  activePosUnitUidx: uniqueIndex('zatca_devices_active_pos_unit_uidx')
+    .on(t.orgId, t.posUnitId)
+    .where(sql`${t.posUnitId} IS NOT NULL AND ${t.isActive} = true AND ${t.isDeleted} = false`),
+}));
 
 // ─── 3. ZATCA Certificates ────────────────────────────────────────────────────
 export const zatcaCertificates = pgTable('zatca_certificates', {
@@ -1918,7 +1951,8 @@ export type Voucher = typeof vouchers.$inferSelect;
 export type ReceiptVoucher = typeof receiptVouchers.$inferSelect;
 export type PaymentVoucher = typeof paymentVouchers.$inferSelect;
 
-// ZATCA Architecture Types (0012)
+// ZATCA Architecture Types (0012 + 0060)
+export type ZatcaPosUnit            = typeof zatcaPosUnits.$inferSelect;
 export type ZatcaEnvironment         = typeof zatcaEnvironments.$inferSelect;
 export type ZatcaDevice              = typeof zatcaDevices.$inferSelect;
 export type ZatcaCertificate         = typeof zatcaCertificates.$inferSelect;

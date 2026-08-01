@@ -1,8 +1,19 @@
 import { z } from 'zod';
 import { router, protectedProcedure, adminProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { organizations, salesInvoices, salesInvoiceItems, zatcaLogs } from '../schema.js';
-import { eq, and, desc, count, sql, gte, lte, like, or } from 'drizzle-orm';
+import {
+  organizations,
+  salesInvoices,
+  salesInvoiceItems,
+  zatcaLogs,
+  zatcaPosUnits,
+  zatcaDevices,
+  documentJournals,
+  warehouses,
+} from '../schema.js';
+import { eq, and, desc, count, sql, gte, lte, like, or, asc } from 'drizzle-orm';
+import { TRPCError } from '@trpc/server';
+import { resolveZatcaContext, type ZatcaEnvironment } from '../services/zatcaContext.js';
 
 // ─── Zod Schemas ──────────────────────────────────────────────────────────────
 
@@ -41,9 +52,205 @@ const ZatcaConfigSchema = z.object({
   certSerialNumber:    z.string().nullable().default(null),
 });
 
+const POS_LINK_JOURNAL_TYPES = ['sales_invoice', 'sales_return', 'credit_note', 'debit_note'] as const;
+const PosLinkJournalTypeSchema = z.enum(POS_LINK_JOURNAL_TYPES);
+
+async function getPosUnitForOrg(orgId: number, posUnitId: number) {
+  const unit = await db.query.zatcaPosUnits.findFirst({
+    where: and(
+      eq(zatcaPosUnits.id, posUnitId),
+      eq(zatcaPosUnits.orgId, orgId),
+      eq(zatcaPosUnits.isActive, true),
+      eq(zatcaPosUnits.isDeleted, false),
+    ),
+  });
+  if (!unit) throw new TRPCError({ code: 'NOT_FOUND', message: 'وحدة ربط نقطة البيع غير موجودة أو غير فعالة' });
+  return unit;
+}
+
 // ─── Router ───────────────────────────────────────────────────────────────────
 
 export const zatcaRouter = router({
+
+  // ── وحدات ربط نقاط البيع الإلكترونية ──────────────────────────────────────
+  // هذه الإجراءات لا تنشئ نقطة بيع تشغيلية جديدة؛ بل تربط المخزن والدفاتر
+  // الموجودة بوحدة EGS مستقبلية داخل المركز نفسه.
+  listPosUnits: protectedProcedure.query(async ({ ctx }) => {
+    const units = await db.select({
+      id: zatcaPosUnits.id,
+      unitCode: zatcaPosUnits.unitCode,
+      unitName: zatcaPosUnits.unitName,
+      status: zatcaPosUnits.status,
+      warehouseId: zatcaPosUnits.warehouseId,
+      warehouseName: warehouses.name,
+      isActive: zatcaPosUnits.isActive,
+      createdAt: zatcaPosUnits.createdAt,
+      updatedAt: zatcaPosUnits.updatedAt,
+      egsId: zatcaDevices.id,
+      egsName: zatcaDevices.deviceName,
+      egsStatus: zatcaDevices.registrationStatus,
+    })
+      .from(zatcaPosUnits)
+      .innerJoin(warehouses, and(
+        eq(warehouses.id, zatcaPosUnits.warehouseId),
+        eq(warehouses.orgId, ctx.user.orgId),
+      ))
+      .leftJoin(zatcaDevices, and(
+        eq(zatcaDevices.posUnitId, zatcaPosUnits.id),
+        eq(zatcaDevices.orgId, ctx.user.orgId),
+        eq(zatcaDevices.isActive, true),
+        eq(zatcaDevices.isDeleted, false),
+      ))
+      .where(and(
+        eq(zatcaPosUnits.orgId, ctx.user.orgId),
+        eq(zatcaPosUnits.isActive, true),
+        eq(zatcaPosUnits.isDeleted, false),
+      ))
+      .orderBy(asc(warehouses.name), asc(zatcaPosUnits.unitCode));
+
+    const journals = await db.select({
+      posUnitId: documentJournals.zatcaPosUnitId,
+      journalId: documentJournals.id,
+      journalCode: documentJournals.code,
+      journalName: documentJournals.name,
+      docType: documentJournals.docType,
+      warehouseId: documentJournals.warehouseId,
+    })
+      .from(documentJournals)
+      .where(and(
+        eq(documentJournals.orgId, ctx.user.orgId),
+        eq(documentJournals.isActive, true),
+        sql`${documentJournals.zatcaPosUnitId} IS NOT NULL`,
+      ))
+      .orderBy(asc(documentJournals.sortOrder), asc(documentJournals.id));
+
+    return units.map((unit) => ({
+      ...unit,
+      journals: journals.filter((journal) => journal.posUnitId === unit.id),
+    }));
+  }),
+
+  createPosUnit: adminProcedure
+    .input(z.object({
+      warehouseId: z.number().int().positive(),
+      unitCode: z.string().trim().min(1).max(50),
+      unitName: z.string().trim().min(1).max(255),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const warehouse = await db.query.warehouses.findFirst({
+        where: and(
+          eq(warehouses.id, input.warehouseId),
+          eq(warehouses.orgId, ctx.user.orgId),
+          eq(warehouses.isActive, true),
+        ),
+        columns: { id: true },
+      });
+      if (!warehouse) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'المخزن/الفرع غير موجود أو غير فعال' });
+      }
+
+      const [unit] = await db.insert(zatcaPosUnits).values({
+        orgId: ctx.user.orgId,
+        warehouseId: input.warehouseId,
+        unitCode: input.unitCode,
+        unitName: input.unitName,
+        createdBy: ctx.user.id,
+        updatedBy: ctx.user.id,
+      }).returning();
+      return unit;
+    }),
+
+  updatePosUnit: adminProcedure
+    .input(z.object({
+      id: z.number().int().positive(),
+      unitCode: z.string().trim().min(1).max(50).optional(),
+      unitName: z.string().trim().min(1).max(255).optional(),
+      status: z.string().trim().min(1).max(30).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await getPosUnitForOrg(ctx.user.orgId, input.id);
+      const [unit] = await db.update(zatcaPosUnits)
+        .set({
+          ...(input.unitCode !== undefined ? { unitCode: input.unitCode } : {}),
+          ...(input.unitName !== undefined ? { unitName: input.unitName } : {}),
+          ...(input.status !== undefined ? { status: input.status } : {}),
+          updatedBy: ctx.user.id,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(zatcaPosUnits.id, input.id), eq(zatcaPosUnits.orgId, ctx.user.orgId)))
+        .returning();
+      return unit;
+    }),
+
+  linkJournalToPosUnit: adminProcedure
+    .input(z.object({
+      posUnitId: z.number().int().positive(),
+      journalId: z.number().int().positive(),
+      docType: PosLinkJournalTypeSchema.optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const unit = await getPosUnitForOrg(ctx.user.orgId, input.posUnitId);
+      const journal = await db.query.documentJournals.findFirst({
+        where: and(
+          eq(documentJournals.id, input.journalId),
+          eq(documentJournals.orgId, ctx.user.orgId),
+          eq(documentJournals.isActive, true),
+        ),
+      });
+      if (!journal) throw new TRPCError({ code: 'NOT_FOUND', message: 'دفتر المستند غير موجود أو غير فعال' });
+      if (!POS_LINK_JOURNAL_TYPES.includes(journal.docType as typeof POS_LINK_JOURNAL_TYPES[number])) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'نوع الدفتر غير مدعوم في ربط ZATCA' });
+      }
+      if (input.docType && journal.docType !== input.docType) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'نوع الدفتر المدخل لا يطابق نوع الدفتر الفعلي' });
+      }
+      if (journal.warehouseId !== unit.warehouseId) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'الدفتر ووحدة الربط لا ينتميان إلى نفس المخزن/الفرع' });
+      }
+      if (journal.zatcaPosUnitId != null && journal.zatcaPosUnitId !== unit.id) {
+        throw new TRPCError({ code: 'CONFLICT', message: 'الدفتر مرتبط بالفعل بوحدة ربط أخرى' });
+      }
+
+      const [updated] = await db.update(documentJournals)
+        .set({ zatcaPosUnitId: unit.id, updatedAt: new Date() })
+        .where(and(
+          eq(documentJournals.id, journal.id),
+          eq(documentJournals.orgId, ctx.user.orgId),
+          eq(documentJournals.isActive, true),
+        ))
+        .returning();
+      return updated;
+    }),
+
+  unlinkJournalFromPosUnit: adminProcedure
+    .input(z.object({ journalId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const [updated] = await db.update(documentJournals)
+        .set({ zatcaPosUnitId: null, updatedAt: new Date() })
+        .where(and(
+          eq(documentJournals.id, input.journalId),
+          eq(documentJournals.orgId, ctx.user.orgId),
+        ))
+        .returning();
+      if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'دفتر المستند غير موجود' });
+      return updated;
+    }),
+
+  resolveContext: protectedProcedure
+    .input(z.object({
+      journalId: z.number().int().positive(),
+      environment: z.enum(['sandbox', 'simulation', 'production']),
+    }))
+    .query(async ({ ctx, input }) => resolveZatcaContext({
+      journalId: input.journalId,
+      environment: input.environment as ZatcaEnvironment,
+      user: {
+        id: ctx.user.id,
+        orgId: ctx.user.orgId,
+        role: ctx.user.role,
+        userGroupId: ctx.user.userGroupId,
+      },
+    })),
 
   // ── إعدادات ZATCA للمنشأة ─────────────────────────────────────────────────
   getConfig: protectedProcedure.query(async ({ ctx }) => {

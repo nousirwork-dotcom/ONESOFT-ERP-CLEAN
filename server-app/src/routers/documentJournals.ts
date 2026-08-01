@@ -2,8 +2,9 @@ import { z } from 'zod';
 import { eq, and, asc, inArray, sql } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { documentJournals } from '../schema.js';
+import { documentJournals, zatcaPosUnits } from '../schema.js';
 import { assertCanUpdate, assertCanDelete, deriveFoundationKey } from '../lib/foundation-framework.js';
+import { TRPCError } from '@trpc/server';
 
 export const DOC_TYPES = [
   { id: 'sales_invoice',        label: 'فاتورة مبيعات' },
@@ -45,6 +46,7 @@ const journalInputShape = {
   draftLastNumber:   z.number().default(999999),
   draftNumDigits:    z.number().default(6),
   warehouseId:       z.number().nullable().optional(),
+  zatcaPosUnitId:    z.number().nullable().optional(),
   salesAccountId:   z.number().nullable().optional(),
   cashAccountId:    z.number().nullable().optional(),
   creditAccountId:  z.number().nullable().optional(),
@@ -71,6 +73,53 @@ const journalInputShape = {
   recordPolicy:         z.enum(['protected', 'editable', 'flexible']).optional(),
   includeInFoundation:  z.boolean().optional(),
 };
+
+const ZATCA_JOURNAL_DOC_TYPES = new Set([
+  'sales_invoice',
+  'sales_return',
+  'credit_note',
+  'debit_note',
+]);
+
+async function assertZatcaBinding(params: {
+  orgId: number;
+  docType: string;
+  warehouseId: number | null | undefined;
+  zatcaPosUnitId: number | null | undefined;
+}) {
+  const { orgId, docType, warehouseId, zatcaPosUnitId } = params;
+  if (zatcaPosUnitId == null) return;
+  if (!ZATCA_JOURNAL_DOC_TYPES.has(docType)) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'لا يمكن ربط هذا النوع من الدفاتر بوحدة ZATCA — اربط دفاتر المبيعات والمردود والدائن والمدين فقط',
+    });
+  }
+  if (warehouseId == null) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'لا يمكن ربط دفتر ZATCA قبل ربطه بمخزن/فرع',
+    });
+  }
+  const unit = await db.query.zatcaPosUnits.findFirst({
+    where: and(
+      eq(zatcaPosUnits.id, zatcaPosUnitId),
+      eq(zatcaPosUnits.orgId, orgId),
+      eq(zatcaPosUnits.isActive, true),
+      eq(zatcaPosUnits.isDeleted, false),
+    ),
+    columns: { id: true, warehouseId: true },
+  });
+  if (!unit) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'وحدة ربط نقطة البيع مع ZATCA غير موجودة أو غير فعالة' });
+  }
+  if (unit.warehouseId !== warehouseId) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'وحدة ربط ZATCA لا تنتمي إلى المخزن/الفرع المحدد للدفتر',
+    });
+  }
+}
 
 export const documentJournalsRouter = router({
 
@@ -103,6 +152,12 @@ export const documentJournalsRouter = router({
   create: protectedProcedure
     .input(z.object(journalInputShape))
     .mutation(async ({ ctx, input }) => {
+      await assertZatcaBinding({
+        orgId: ctx.user.orgId,
+        docType: input.docType,
+        warehouseId: input.warehouseId ?? null,
+        zatcaPosUnitId: input.zatcaPosUnitId ?? null,
+      });
       const { recordPolicy: _rp, includeInFoundation: _if, ...inputData } = input;
       const [row] = await db.insert(documentJournals).values({
         ...inputData,
@@ -129,6 +184,14 @@ export const documentJournalsRouter = router({
         where: and(eq(documentJournals.id, id), eq(documentJournals.orgId, ctx.user.orgId)),
       });
       if (!current) throw new Error('الدفتر غير موجود');
+      await assertZatcaBinding({
+        orgId: ctx.user.orgId,
+        docType: (data as any).docType ?? current.docType,
+        warehouseId: (data as any).warehouseId ?? current.warehouseId,
+        zatcaPosUnitId: (data as any).zatcaPosUnitId !== undefined
+          ? (data as any).zatcaPosUnitId
+          : current.zatcaPosUnitId,
+      });
       const isSuperadmin = ctx.user.role === 'superadmin';
       assertCanUpdate(current.recordPolicy, current.name, isSuperadmin);
       const policyFields: Record<string, unknown> = {};
