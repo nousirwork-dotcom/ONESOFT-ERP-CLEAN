@@ -111,6 +111,12 @@ function assertSeller(seller: SellerInput) {
   }
 }
 
+export function getSimulationInvoiceTypeCode(invoiceType: string): '381' | '383' | '388' {
+  if (invoiceType === 'return' || invoiceType === 'credit_note') return '381';
+  if (invoiceType === 'debit_note') return '383';
+  return '388';
+}
+
 export function buildAndSignSimulationInvoice(
   input: BuildSignedInvoiceInput,
 ): SignedInvoiceSubmission {
@@ -121,7 +127,7 @@ export function buildAndSignSimulationInvoice(
   const currency = input.invoice.currency || 'SAR';
   if (currency !== 'SAR') throw new Error('عملة الفاتورة الرسمية يجب أن تكون SAR');
 
-  const invoiceTypeCode = input.invoice.invoiceType === 'return' ? '381' : '388';
+  const invoiceTypeCode = getSimulationInvoiceTypeCode(input.invoice.invoiceType);
   const invoiceTypeCodeName = input.submissionType === 'clearance' ? '0100000' : '0200000';
   const subtotal = numberValue(input.invoice.subtotal);
   const discountTotal = numberValue(input.invoice.discountAmount);
@@ -194,7 +200,7 @@ export function buildAndSignSimulationInvoice(
   };
 
   let unsignedXml: string;
-  if (invoiceTypeCode === '381') {
+  if (invoiceTypeCode === '381' || invoiceTypeCode === '383') {
     if (!input.originalInvoice) {
       throw new Error('مردود المبيعات الإلكتروني يتطلب فاتورة أصلية مرجعية');
     }
@@ -203,7 +209,7 @@ export function buildAndSignSimulationInvoice(
       originalInvoiceNumber: input.originalInvoice.invoiceNumber,
       originalInvoiceUuid: input.originalInvoice.uuid,
       originalInvoiceDate: dateParts(input.originalInvoice.invoiceDate).date,
-      reason: input.invoice.notes || 'Sales return',
+      reason: input.invoice.notes || (invoiceTypeCode === '383' ? 'Debit note' : 'Sales return'),
     };
     unsignedXml = generateCreditNoteXml(creditNote);
   } else {

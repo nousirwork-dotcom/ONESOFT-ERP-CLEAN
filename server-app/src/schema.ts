@@ -4,7 +4,7 @@ import { relations, sql } from 'drizzle-orm';
 // ─── Enums ────────────────────────────────────────────────────────────────────
 export const userRoleEnum = pgEnum('user_role', ['superadmin', 'admin', 'cashier', 'accountant', 'warehouse_manager', 'viewer']);
 export const orgStatusEnum = pgEnum('org_status', ['active', 'suspended', 'trial', 'expired']);
-export const invoiceTypeEnum = pgEnum('invoice_type', ['sale', 'return', 'quote', 'order']);
+export const invoiceTypeEnum = pgEnum('invoice_type', ['sale', 'return', 'quote', 'order', 'credit_note']);
 export const invoiceStatusEnum = pgEnum('invoice_status', ['draft', 'confirmed', 'cancelled', 'paid']);
 export const paymentMethodEnum = pgEnum('payment_method', ['cash', 'bank', 'credit', 'check', 'other']);
 export const voucherTypeEnum = pgEnum('voucher_type', ['receipt', 'payment']);
@@ -440,6 +440,8 @@ export const purchaseInvoices = pgTable('purchase_invoices', {
   paymentMethod: varchar('payment_method', { length: 20 }).default('cash'),
   status: invoiceStatusEnum('status').notNull().default('draft'),
   notes: text('notes'),
+  basedOnType: varchar('based_on_type', { length: 20 }),
+  basedOnNumber: varchar('based_on_number', { length: 50 }),
   userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
   docTypeId: integer('doc_type_id'),
   isPosted: boolean('is_posted').notNull().default(false),
@@ -886,6 +888,20 @@ export const documentTypes = pgTable('document_types', {
   foundationTemplateVersion:   varchar('foundation_template_version', { length: 20 }),
   createdAt:            timestamp('created_at').notNull().defaultNow(),
   updatedAt:            timestamp('updated_at').notNull().defaultNow(),
+});
+
+// ─── ZATCA readiness draft (persistent organization-scoped setup) ────────────
+// This is configuration metadata only. It never stores OTPs, CSIDs, secrets,
+// certificates, or private keys.
+export const zatcaReadinessSettings = pgTable('zatca_readiness_settings', {
+  id: serial('id').primaryKey(),
+  orgId: integer('org_id').notNull().unique().references(() => organizations.id, { onDelete: 'cascade' }),
+  warehouseId: integer('warehouse_id').references(() => warehouses.id, { onDelete: 'set null' }),
+  invoiceType: varchar('invoice_type', { length: 20 }).notNull().default('both'),
+  zatcaPosUnitId: integer('zatca_pos_unit_id').references(() => zatcaPosUnits.id, { onDelete: 'set null' }),
+  updatedBy: integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
 export type DocumentType = typeof documentTypes.$inferSelect;

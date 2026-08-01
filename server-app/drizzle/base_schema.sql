@@ -12,7 +12,7 @@ DO $$ BEGIN
     CREATE TYPE "invoice_status" AS ENUM ('draft', 'confirmed', 'cancelled', 'paid');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-    CREATE TYPE "invoice_type" AS ENUM ('sale', 'return', 'quote', 'order');
+    CREATE TYPE "invoice_type" AS ENUM ('sale', 'return', 'quote', 'order', 'credit_note');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
     CREATE TYPE "journal_status" AS ENUM ('draft', 'posted', 'cancelled');
@@ -361,6 +361,8 @@ CREATE TABLE IF NOT EXISTS "purchase_invoices" (
     "paid_amount" NUMERIC(18, 4) DEFAULT '0',
     "status" "invoice_status" NOT NULL DEFAULT 'draft',
     "notes" TEXT,
+    "based_on_type" VARCHAR(20),
+    "based_on_number" VARCHAR(50),
     "created_at" TIMESTAMP NOT NULL DEFAULT now()
 );
 

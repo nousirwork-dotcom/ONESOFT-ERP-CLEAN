@@ -22,6 +22,7 @@ import {
   zatcaCsid,
   zatcaKeys,
   zatcaCsrRequests,
+  zatcaReadinessSettings,
 } from '../schema.js';
 import { eq, and, desc, count, sql, gte, lte, like, or, asc, notInArray, inArray } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -120,16 +121,16 @@ const ZATCA_SCREEN_CAPABILITIES = {
   credit_note: {
     path: '/sales/credit-note',
     label: 'إشعار دائن',
-    screenExists: false,
-    xmlReady: false,
-    detail: 'المسار يعرض "قريباً" ولا توجد شاشة تشغيلية قادرة على إنشاء XML',
+    screenExists: true,
+    xmlReady: true,
+    detail: 'الشاشة التشغيلية موجودة وتدعم XML بإشارة الفاتورة الأصلية وسبب الإصدار',
   },
   debit_note: {
     path: '/purchases/debit-note',
     label: 'إشعار مدين',
-    screenExists: false,
-    xmlReady: false,
-    detail: 'المسار يعرض "قريباً" ولا توجد شاشة تشغيلية قادرة على إنشاء XML',
+    screenExists: true,
+    xmlReady: true,
+    detail: 'الشاشة التشغيلية موجودة وتدعم XML بإشارة الفاتورة الأصلية وسبب الإصدار',
   },
 } as const;
 const ZatcaOperationSchema = z.enum(['clearance', 'reporting']);
@@ -211,7 +212,7 @@ async function getZatcaReadiness(
   selectedWarehouseId?: ReadinessWarehouseId,
   selectedInvoiceType: typeof READINESS_INVOICE_TYPES[number] = 'both',
 ) {
-  const [org, locationRows, journalRows, simulationEnvironment] = await Promise.all([
+  const [org, locationRows, journalRows, simulationEnvironment, savedSettings, linkingUnits] = await Promise.all([
     db.query.organizations.findFirst({
       where: eq(organizations.id, orgId),
       columns: {
@@ -267,6 +268,27 @@ async function getZatcaReadiness(
       ),
       columns: { id: true, name: true, baseApiUrl: true },
     }),
+    db.query.zatcaReadinessSettings.findFirst({
+      where: eq(zatcaReadinessSettings.orgId, orgId),
+      columns: {
+        warehouseId: true,
+        invoiceType: true,
+        zatcaPosUnitId: true,
+        updatedBy: true,
+        updatedAt: true,
+      },
+    }),
+    db.select({
+      id: zatcaPosUnits.id,
+      unitCode: zatcaPosUnits.unitCode,
+      unitName: zatcaPosUnits.unitName,
+      warehouseId: zatcaPosUnits.warehouseId,
+      status: zatcaPosUnits.status,
+    }).from(zatcaPosUnits).where(and(
+      eq(zatcaPosUnits.orgId, orgId),
+      eq(zatcaPosUnits.isActive, true),
+      eq(zatcaPosUnits.isDeleted, false),
+    )).orderBy(asc(zatcaPosUnits.unitName)),
   ]);
 
   if (!org) throw new TRPCError({ code: 'NOT_FOUND', message: 'المنشأة غير موجودة' });
@@ -365,6 +387,16 @@ async function getZatcaReadiness(
       { value: 'both', label: 'كلاهما' },
     ],
     selectedInvoiceType,
+    savedSettings: savedSettings
+      ? {
+          warehouseId: savedSettings.warehouseId,
+          invoiceType: savedSettings.invoiceType,
+          zatcaPosUnitId: savedSettings.zatcaPosUnitId,
+          updatedBy: savedSettings.updatedBy,
+          updatedAt: savedSettings.updatedAt,
+        }
+      : null,
+    linkingUnits,
     simulation: {
       configured: simulationConfigured,
       configEnvironment: cfg.environment,
@@ -500,6 +532,74 @@ export const zatcaRouter = router({
       input?.warehouseId,
       input?.invoiceType ?? 'both',
     )),
+
+  saveReadinessSettings: protectedProcedure
+    .input(z.object({
+      warehouseId: z.number().int().positive(),
+      invoiceType: z.enum(READINESS_INVOICE_TYPES),
+      zatcaPosUnitId: z.number().int().positive().nullable().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const warehouse = await db.query.warehouses.findFirst({
+        where: and(
+          eq(warehouses.id, input.warehouseId),
+          eq(warehouses.orgId, ctx.user.orgId),
+          eq(warehouses.isActive, true),
+        ),
+        columns: { id: true },
+      });
+      if (!warehouse) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'المخزن/الفرع غير صالح للمنظمة الحالية' });
+      }
+
+      let unitId = input.zatcaPosUnitId ?? null;
+      if (unitId != null) {
+        const unit = await db.query.zatcaPosUnits.findFirst({
+          where: and(
+            eq(zatcaPosUnits.id, unitId),
+            eq(zatcaPosUnits.orgId, ctx.user.orgId),
+            eq(zatcaPosUnits.warehouseId, input.warehouseId),
+            eq(zatcaPosUnits.isActive, true),
+            eq(zatcaPosUnits.isDeleted, false),
+          ),
+          columns: { id: true },
+        });
+        if (!unit) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'وحدة الربط لا تنتمي إلى المخزن المختار' });
+        }
+      }
+
+      const now = new Date();
+      const [saved] = await db.insert(zatcaReadinessSettings).values({
+        orgId: ctx.user.orgId,
+        warehouseId: input.warehouseId,
+        invoiceType: input.invoiceType,
+        zatcaPosUnitId: unitId,
+        updatedBy: ctx.user.id,
+        createdAt: now,
+        updatedAt: now,
+      }).onConflictDoUpdate({
+        target: zatcaReadinessSettings.orgId,
+        set: {
+          warehouseId: input.warehouseId,
+          invoiceType: input.invoiceType,
+          zatcaPosUnitId: unitId,
+          updatedBy: ctx.user.id,
+          updatedAt: now,
+        },
+      }).returning();
+
+      return {
+        ok: true,
+        settings: {
+          warehouseId: saved.warehouseId,
+          invoiceType: saved.invoiceType,
+          zatcaPosUnitId: saved.zatcaPosUnitId,
+          updatedBy: saved.updatedBy,
+          updatedAt: saved.updatedAt,
+        },
+      };
+    }),
 
   createPosUnit: adminProcedure
     .input(z.object({
@@ -1638,11 +1738,15 @@ export const zatcaRouter = router({
             ),
             orderBy: desc(zatcaKeys.createdAt),
           }),
-          inv.refInvoiceId
+          (inv.sourceDocumentId || inv.refInvoiceId || inv.basedOnNumber)
             ? db.query.salesInvoices.findFirst({
                 where: and(
-                  eq(salesInvoices.id, inv.refInvoiceId),
                   eq(salesInvoices.orgId, ctx.user.orgId),
+                  inv.sourceDocumentId
+                    ? eq(salesInvoices.id, inv.sourceDocumentId)
+                    : inv.refInvoiceId
+                      ? eq(salesInvoices.id, inv.refInvoiceId)
+                      : eq(salesInvoices.invoiceNumber, inv.basedOnNumber!),
                 ),
                 columns: {
                   invoiceNumber: true,
@@ -1665,10 +1769,11 @@ export const zatcaRouter = router({
             message: 'الإرسال الرسمي يتطلب CSID تشغيلياً وشهادة ومفتاحاً صالحين لوحدة EGS',
           });
         }
-        if (inv.invoiceType === 'return' && (!originalInvoice?.zatcaUuid || !originalInvoice.invoiceNumber)) {
+        if (['return', 'credit_note', 'debit_note'].includes(inv.invoiceType)
+          && (!originalInvoice?.zatcaUuid || !originalInvoice.invoiceNumber)) {
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
-            message: 'مردود المبيعات الإلكتروني يتطلب فاتورة أصلية مرتبطة تحمل UUID رسميًا',
+            message: 'المستند الإلكتروني يتطلب فاتورة أصلية مرتبطة تحمل UUID رسميًا',
           });
         }
 
@@ -1709,7 +1814,11 @@ export const zatcaRouter = router({
             privateKeyPem: decrypt(signingKey.privateKeyEncrypted),
             certificatePem: signingCertificate.publicCertificate,
             originalInvoice: originalInvoice?.zatcaUuid && originalInvoice.invoiceNumber
-              ? originalInvoice
+              ? {
+                  invoiceNumber: originalInvoice.invoiceNumber,
+                  uuid: originalInvoice.zatcaUuid,
+                  invoiceDate: originalInvoice.invoiceDate,
+                }
               : undefined,
           });
         } catch (error) {
@@ -2459,7 +2568,8 @@ export const zatcaRouter = router({
       // ── توليد XML ──────────────────────────────────────────────────────────
       const issueDate = inv.invoiceDate ? new Date(inv.invoiceDate).toISOString().split('T')[0] : '';
       const issueTime = inv.invoiceDate ? new Date(inv.invoiceDate).toISOString().split('T')[1]?.slice(0, 8) ?? '00:00:00' : '00:00:00';
-      const invTypeCode = inv.invoiceType === 'return' ? '381' : '388';
+      const isAdjustment = inv.invoiceType === 'return' || inv.invoiceType === 'credit_note';
+      const invTypeCode = isAdjustment ? '381' : '388';
       const currency   = inv.currency ?? 'SAR';
       const uuid       = inv.zatcaUuid ?? '';
       const pih        = inv.zatcaPih ?? 'NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjNmQ2OTZjOTljNWVlNzljMmYxZjUzMGE4NzBhM2UwNjMxNmViMmMy';
@@ -2521,13 +2631,19 @@ export const zatcaRouter = router({
   <cbc:UUID>${uuid}</cbc:UUID>
   <cbc:IssueDate>${issueDate}</cbc:IssueDate>
   <cbc:IssueTime>${issueTime}</cbc:IssueTime>
-  <cbc:InvoiceTypeCode name="${inv.invoiceType === 'return' ? '0200000' : '0100000'}">${invTypeCode}</cbc:InvoiceTypeCode>
+  <cbc:InvoiceTypeCode name="${isAdjustment ? '0200000' : '0100000'}">${invTypeCode}</cbc:InvoiceTypeCode>
   <cbc:DocumentCurrencyCode>${currency}</cbc:DocumentCurrencyCode>
   <cbc:TaxCurrencyCode>SAR</cbc:TaxCurrencyCode>
   <cac:AdditionalDocumentReference>
     <cbc:ID>ICV</cbc:ID>
     <cbc:UUID>${inv.zatcaInvoiceCounter ?? 1}</cbc:UUID>
   </cac:AdditionalDocumentReference>
+  ${isAdjustment && (inv.basedOnNumber || inv.sourceDocumentId || inv.refInvoiceId)
+    ? `<cac:BillingReference><cac:InvoiceDocumentReference><cbc:ID>${String(inv.basedOnNumber ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;')}</cbc:ID></cac:InvoiceDocumentReference></cac:BillingReference>`
+    : ''}
+  ${isAdjustment && inv.notes
+    ? `<cbc:Note>${String(inv.notes).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</cbc:Note>`
+    : ''}
   <cac:AdditionalDocumentReference>
     <cbc:ID>PIH</cbc:ID>
     <cac:Attachment>
@@ -2651,7 +2767,13 @@ export const zatcaRouter = router({
 
       // نوع الفاتورة
       if (!['388', '381', '383'].includes(invTypeCode)) err('cbc:InvoiceTypeCode', 'كود نوع الفاتورة غير صحيح', invTypeCode, '388 (أصلية) أو 381 (مرتجع) أو 383 (خصم)', 'حدد نوع الفاتورة الصحيح');
-      else info('cbc:InvoiceTypeCode', 'كود نوع الفاتورة صحيح', `${invTypeCode} (${invTypeCode === '388' ? 'فاتورة أصلية' : invTypeCode === '381' ? 'مرتجع' : 'إشعار خصم'})`, '388 أو 381 أو 383', '—');
+      else info(
+        'cbc:InvoiceTypeCode',
+        'كود نوع الفاتورة صحيح',
+        `${invTypeCode} (${invTypeCode === '388' ? 'فاتورة أصلية' : invTypeCode === '381' ? 'مرتجع / إشعار دائن' : 'إشعار مدين'})`,
+        '388 أو 381 أو 383',
+        '—',
+      );
 
       // البنود
       if (items.length === 0) err('cac:InvoiceLine', 'الفاتورة لا تحتوي على بنود', '0 بنود', 'بند واحد على الأقل', 'أضف منتجاً أو خدمة للفاتورة');

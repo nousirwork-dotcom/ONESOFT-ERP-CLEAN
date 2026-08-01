@@ -20,6 +20,7 @@ import Invoices from "@/modules/sales/pages/Invoices";
 import PurchasesModule, {
   PurchaseSuppliersPage, PurchaseSupplierGroupsPage, PurchaseOrdersPage,
   PurchaseInvoicesPage, PurchaseReturnsPage, PurchaseRptSupplierPage, PurchaseRptItemPage,
+  PurchaseDebitNotePageTab,
 } from "@/modules/purchases/pages/PurchasesModule";
 import SalesModule, {
   SalesTransactionsTab,
@@ -157,6 +158,7 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
   "/purchases/orders":           PurchaseOrdersPage,
   "/purchases/invoices":     PurchaseInvoicesPage,
   "/purchases/returns":      PurchaseReturnsPage,
+  "/purchases/debit-note":   PurchaseDebitNotePageTab,
   "/purchases/rpt-supplier": PurchaseRptSupplierPage,
   "/purchases/rpt-item":     PurchaseRptItemPage,
   "/sales/transactions":      SalesTransactionsTab,

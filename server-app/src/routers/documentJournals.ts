@@ -16,10 +16,12 @@ import { assertCanUpdate, assertCanDelete, deriveFoundationKey } from '../lib/fo
 export const DOC_TYPES = [
   { id: 'sales_invoice',        label: 'فاتورة مبيعات' },
   { id: 'sales_return',         label: 'مردود مبيعات' },
+  { id: 'credit_note',          label: 'إشعار دائن' },
   { id: 'sales_order',          label: 'أمر بيع' },
   { id: 'sales_quote',          label: 'عرض سعر مبيعات' },
   { id: 'purchase_invoice',     label: 'فاتورة مشتريات' },
   { id: 'purchase_return',      label: 'مردود مشتريات' },
+  { id: 'debit_note',            label: 'إشعار مدين' },
   { id: 'purchase_order',       label: 'أمر شراء' },
   { id: 'purchase_quote',       label: 'عرض سعر مشتريات' },
   { id: 'receipt_voucher',      label: 'سند قبض' },

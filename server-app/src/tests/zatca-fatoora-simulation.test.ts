@@ -4,6 +4,7 @@ import {
   generateSimulationCsr,
   getSimulationUrl,
 } from '../services/zatcaFatooraSimulation.js';
+import { getSimulationInvoiceTypeCode } from '../services/zatcaInvoiceSubmission.js';
 
 describe('Fatoora Simulation transport', () => {
   it('generates a secp256k1 CSR with the Simulation template', () => {
@@ -46,5 +47,12 @@ describe('Fatoora Simulation transport', () => {
     expect(() => assertSimulationUrl(
       'http://gw-fatoora.zatca.gov.sa/e-invoicing/simulation/compliance',
     )).toThrow();
+  });
+
+  it('maps invoice documents to the required ZATCA type codes', () => {
+    expect(getSimulationInvoiceTypeCode('sale')).toBe('388');
+    expect(getSimulationInvoiceTypeCode('return')).toBe('381');
+    expect(getSimulationInvoiceTypeCode('credit_note')).toBe('381');
+    expect(getSimulationInvoiceTypeCode('debit_note')).toBe('383');
   });
 });

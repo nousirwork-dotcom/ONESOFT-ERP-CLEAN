@@ -584,40 +584,37 @@ function DashboardSection({ onStartSetup, onNavigate }: { onStartSetup: () => vo
 // 1b. جاهزية الربط — قراءة فقط قبل رحلة CSR/OTP
 // ══════════════════════════════════════════════════════════════════════════════
 function ReadinessSection({ onNavigate }: { onNavigate: (section: Section) => void }) {
-  const meQ = trpc.auth.me.useQuery();
+  const utils = trpc.useUtils();
   const [warehouseId, setWarehouseId] = useState<number | null>(null);
   const [invoiceType, setInvoiceType] = useState<"simplified" | "standard" | "both">("both");
-  const [selectionLoaded, setSelectionLoaded] = useState(false);
+  const [unitId, setUnitId] = useState<number | null>(null);
+  const [savedLoaded, setSavedLoaded] = useState(false);
 
   const readinessQ = trpc.zatca.getReadiness.useQuery({
     warehouseId: warehouseId ?? undefined,
     invoiceType,
   });
   const data = readinessQ.data;
-  const selectionKey = meQ.data?.id ? `zatca-readiness-selection.u${meQ.data.id}` : null;
+  const saveM = trpc.zatca.saveReadinessSettings.useMutation({
+    onSuccess: () => {
+      toast.success("تم حفظ إعداد الجاهزية في قاعدة البيانات");
+      utils.zatca.getReadiness.invalidate();
+    },
+    onError: error => toast.error(error.message),
+  });
 
   useEffect(() => {
-    if (!selectionKey || selectionLoaded) return;
-    try {
-      const saved = JSON.parse(localStorage.getItem(selectionKey) ?? "null") as {
-        warehouseId?: number;
-        invoiceType?: "simplified" | "standard" | "both";
-      } | null;
-      if (saved?.warehouseId) setWarehouseId(saved.warehouseId);
-      if (saved?.invoiceType) setInvoiceType(saved.invoiceType);
-    } catch {
-      // A corrupt local preference must not block the readiness screen.
-    }
-    setSelectionLoaded(true);
-  }, [selectionKey, selectionLoaded]);
-
-  useEffect(() => {
-    if (!selectionKey || !selectionLoaded) return;
-    localStorage.setItem(selectionKey, JSON.stringify({ warehouseId, invoiceType }));
-  }, [selectionKey, selectionLoaded, warehouseId, invoiceType]);
+    if (savedLoaded || !data?.savedSettings) return;
+    const saved = data.savedSettings;
+    setWarehouseId(saved.warehouseId);
+    setInvoiceType((saved.invoiceType as typeof invoiceType) || "both");
+    setUnitId(saved.zatcaPosUnitId ?? null);
+    setSavedLoaded(true);
+  }, [data?.savedSettings, savedLoaded]);
 
   const setWarehouse = (value: number | null) => {
     setWarehouseId(value);
+    setUnitId(null);
   };
   const statusStyle = (ok: boolean, neutral = false) => ({
     background: neutral ? "#f8fafc" : ok ? "#f0fdf4" : "#fff7ed",
@@ -670,6 +667,23 @@ function ReadinessSection({ onNavigate }: { onNavigate: (section: Section) => vo
           </select>
           <div style={{ marginTop: 9, fontSize: 11, color: "#64748b" }}>
             يُستنتج الفرع من المخزن، ولا تُدخل أي ID يدويًا.
+          </div>
+        </div>
+        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14 }}>
+          <label style={lbl}>وحدة الربط</label>
+          <select
+            style={fld}
+            value={unitId ?? ""}
+            onChange={event => setUnitId(Number(event.target.value) || null)}
+            disabled={!warehouseId}
+          >
+            <option value="">اختيار تلقائي من الدفاتر</option>
+            {data?.linkingUnits
+              ?.filter(unit => unit.warehouseId === warehouseId)
+              .map(unit => <option key={unit.id} value={unit.id}>{unit.unitName} — {unit.unitCode}</option>)}
+          </select>
+          <div style={{ marginTop: 9, fontSize: 11, color: "#64748b" }}>
+            الإعداد محفوظ للمنظمة، ولا تُحفظ هنا أي أسرار أو مفاتيح.
           </div>
         </div>
       </div>
@@ -741,6 +755,13 @@ function ReadinessSection({ onNavigate }: { onNavigate: (section: Section) => vo
             </div>
           )}
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button
+              disabled={!warehouseId || saveM.isPending}
+              onClick={() => warehouseId && saveM.mutate({ warehouseId, invoiceType, zatcaPosUnitId: unitId })}
+              style={{ ...smallBtn, height: 36, background: warehouseId ? "#406B93" : "#cbd5e1", color: "#fff", cursor: warehouseId ? "pointer" : "not-allowed" }}
+            >
+              {saveM.isPending ? "جارٍ الحفظ..." : "💾 حفظ إعداد الجاهزية"}
+            </button>
             <button
               disabled={!data?.readyForCsr}
               onClick={() => onNavigate("csr")}

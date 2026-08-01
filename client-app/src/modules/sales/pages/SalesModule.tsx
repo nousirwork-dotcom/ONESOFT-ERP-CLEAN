@@ -7,6 +7,7 @@ import CustomerFormDialog from "@/shared/components/CustomerFormDialog";
 import SalesInvoicePageNew from "./SalesInvoicePage";
 import SalesQuotation from "./SalesQuotation";
 import SalesReturnPage from "./SalesReturnPage";
+import SalesCreditNotePage from "./SalesCreditNotePage";
 import SalesQuotePage from "./SalesQuotePage";
 import SalesOrderPage from "./SalesOrderPage";
 import { useTabManager } from "@/core/contexts/TabManagerContext";
@@ -2672,7 +2673,7 @@ function SalesContent({ activeId, onSelect, settings, onSettingsChange }: {
 export function SalesTransactionsTab()  { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesTransactionsView /></div>; }
 export function SalesInvoiceTab()       { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesInvoiceListView /></div>; }
 export function SalesReturnTab()        { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesReturnPage /></div>; }
-export function SalesCreditNoteTab()    { return <div className="h-full overflow-auto p-5" dir="rtl"><ComingSoon title="إشعار دائن" /></div>; }
+export function SalesCreditNoteTab()    { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesCreditNotePage /></div>; }
 export function SalesQuotationTab()     { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesQuotePage /></div>; }
 export function SalesOrderTab()         { return <div className="h-full flex flex-col" dir="rtl" style={{ height: "100%" }}><SalesOrderPage /></div>; }
 export function SalesDeliveryTab()      { return <div className="h-full overflow-auto p-5" dir="rtl"><DeliveryOrderPage /></div>; }

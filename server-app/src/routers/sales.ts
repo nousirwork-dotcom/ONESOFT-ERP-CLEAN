@@ -115,7 +115,7 @@ export const salesRouter = router({
       limit: z.number().default(200),
       search: z.string().optional(),
       status: z.string().optional(),
-      invoiceType: z.enum(['sale', 'return', 'quote', 'order']).optional(),
+      invoiceType: z.enum(['sale', 'return', 'quote', 'order', 'credit_note']).optional(),
       dateFrom: z.string().optional(),      // YYYY-MM-DD
       dateTo: z.string().optional(),        // YYYY-MM-DD
       warehouseId: z.number().optional(),    // فلتر المخزن
@@ -299,7 +299,7 @@ export const salesRouter = router({
   create: protectedProcedure
     .input(z.object({
       invoiceNumber: z.string(),
-      invoiceType: z.enum(['sale', 'return', 'quote', 'order']).default('sale'),
+      invoiceType: z.enum(['sale', 'return', 'quote', 'order', 'credit_note']).default('sale'),
       invoiceDate: z.string(),
       dueDate: z.string().optional(),
       customerId: z.number().optional(),
@@ -346,6 +346,14 @@ export const salesRouter = router({
       const { items, dueDate, ...invoiceData } = input;
       const orgId = ctx.user.orgId;
       const isDraft = invoiceData.status === 'draft';
+      if (!isDraft && invoiceData.invoiceType === 'credit_note') {
+        if (!invoiceData.basedOnNumber?.trim() && !invoiceData.sourceDocumentId) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'الإشعار الدائن يتطلب مرجع الفاتورة الأصلية' });
+        }
+        if (!invoiceData.notes?.trim()) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'الإشعار الدائن يتطلب سبب الإصدار' });
+        }
+      }
 
       // ── تحقق: المسودة لا تخضع للتحققات المشددة (لا مخزن/فرع، لا أصناف) ─────
       if (!isDraft) {
@@ -481,6 +489,7 @@ export const salesRouter = router({
   update: protectedProcedure
     .input(z.object({
       id: z.number(),
+      invoiceType: z.enum(['sale', 'return', 'quote', 'order', 'credit_note']).optional(),
       // حقول السياق — اختيارية عند التعديل، الموجود يُستخدم كقيمة افتراضية
       warehouseId:     z.number().optional(),
       journalId:       z.number().optional(),
@@ -540,6 +549,14 @@ export const salesRouter = router({
         : existing?.sourceDocumentId ?? undefined;
 
       // التحقق من المخزن/الأصناف يُتخطى للمسودة فقط؛ عند تحويلها نهائية يجب التحقق
+      if (!isNowDraft && rest.invoiceType === 'credit_note') {
+        if (!rest.basedOnNumber?.trim() && !finalSourceDocId) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'الإشعار الدائن يتطلب مرجع الفاتورة الأصلية' });
+        }
+        if (!rest.notes?.trim() && !existing?.notes?.trim()) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'الإشعار الدائن يتطلب سبب الإصدار' });
+        }
+      }
       if (!isNowDraft) {
         await validateSalesInvoiceWarehouseContext({
           warehouseId:      finalWarehouseId,

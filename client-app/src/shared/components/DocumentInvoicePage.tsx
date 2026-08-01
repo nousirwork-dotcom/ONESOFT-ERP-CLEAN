@@ -30,6 +30,8 @@ export interface DocPageConfig {
   numberPrefix: string;
   journalDropdownTitle: string;
   basedOnOptions?: Array<{ value: string; label: string }>;
+  requireReference?: boolean;
+  requireReason?: boolean;
   canPost?: boolean;
   themeColor?: string;
 }
@@ -562,7 +564,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
         productCode: i.productCode, productName: i.productName, unit: i.unit || "",
         quantity: i.quantity, unitPrice: i.unitPrice, discountPct: i.discountPct,
         discountAmt: i.discountAmt, taxPct: i.taxPct, taxAmt: i.taxAmt,
-        total: i.total, productId: i.productId ?? undefined,
+        total: i.total, productId: i.productId ?? undefined, batchNumber: "", expiryDate: "",
       })));
     }
     toast.success(`✓ تم استيراد بيانات المستند ${src.number}`);
@@ -960,6 +962,12 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       return;
     }
     if (!invoiceNumber.trim()) { toast.error("رقم المستند مطلوب"); return; }
+    if (config.requireReference && !basedOnNum.trim()) {
+      toast.error("مرجع المستند الأصلي مطلوب"); return;
+    }
+    if (config.requireReason && !notes.trim()) {
+      toast.error("سبب الإصدار مطلوب"); return;
+    }
     const validLines = lines.filter(l => l.productName.trim() !== "");
     if (validLines.length === 0) { toast.error("يجب إضافة صنف واحد على الأقل"); return; }
     for (const l of validLines) {
@@ -1016,7 +1024,10 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       taxAmount: fmt(totalTax), total: fmt(netTotal),
       paidAmount: paid, remainingAmount: remaining,
       paymentMethod: payMethod as any, status: status as any,
-      notes: notes || undefined, items: itemsPayload,
+      notes: notes || undefined,
+      basedOnType: basedOnType || undefined,
+      basedOnNumber: basedOnNum || undefined,
+      items: itemsPayload,
     };
     if (config.docCategory === "sales") {
       salesCreateMutation.mutate({ ...common, customerId: partyId ?? undefined, customerName: partyName || undefined } as any);
@@ -1101,6 +1112,8 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       paymentMethod: "credit" as any,
       status: "draft" as any,
       notes: notes || undefined,
+      basedOnType: basedOnType || undefined,
+      basedOnNumber: basedOnNum || undefined,
       items: itemsPayload,
     };
     try {

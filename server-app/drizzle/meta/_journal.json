@@ -484,6 +484,13 @@
       "when": 1786233600000,
       "tag": "0068_zatca_compliance_secret",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1786316400000,
+      "tag": "0069_credit_debit_notes",
+      "breakpoints": true
     }
   ]
 }

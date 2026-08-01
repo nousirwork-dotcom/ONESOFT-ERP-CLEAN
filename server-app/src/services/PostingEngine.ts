@@ -658,7 +658,7 @@ export async function autoPostSalesInvoice(
     where: and(eq(salesInvoices.id, invoiceId), eq(salesInvoices.orgId, orgId)),
   });
   if (!invoice || invoice.isPosted) return null;
-  if (invoice.invoiceType !== 'sale' && invoice.invoiceType !== 'return') return null;
+  if (invoice.invoiceType !== 'sale' && invoice.invoiceType !== 'return' && invoice.invoiceType !== 'credit_note') return null;
   if (!invoice.journalId && !invoice.docTypeId) return null;
 
   const journal = invoice.journalId
@@ -698,12 +698,14 @@ export async function autoPostSalesInvoice(
   const { lines: rawLines, isBalanced } = await buildSalesInvoiceLines(invoice, effectiveJournal, orgId);
   if (!isBalanced || rawLines.length === 0) return null;
 
-  const isReturn = invoice.invoiceType === 'return';
+  const isReturn = invoice.invoiceType === 'return' || invoice.invoiceType === 'credit_note';
   const reversedLines = isReturn
     ? rawLines.map(l => ({ ...l, debit: l.credit, credit: l.debit }))
     : rawLines;
 
-  const docLabel    = isReturn ? 'مردود مبيعات' : 'فاتورة مبيعات';
+  const docLabel    = invoice.invoiceType === 'credit_note'
+    ? 'إشعار دائن'
+    : isReturn ? 'مردود مبيعات' : 'فاتورة مبيعات';
   const docTypeName = docTypeAccs?.docType?.nameAr ?? docLabel;
   const lineDesc    = `${docTypeName} - ${invoice.invoiceNumber}`;
   const lines       = reversedLines.map(l => ({ ...l, description: lineDesc }));
@@ -714,7 +716,9 @@ export async function autoPostSalesInvoice(
     date:            invoice.invoiceDate,
     description:     docTypeName,
     reference:       invoice.invoiceNumber,
-    sourceDocType:   isReturn ? 'sales_return' : 'sales_invoice',
+    sourceDocType:   invoice.invoiceType === 'credit_note'
+      ? 'credit_note'
+      : isReturn ? 'sales_return' : 'sales_invoice',
     sourceDocId:     invoice.id,
     sourceDocNumber: invoice.invoiceNumber,
     lines,
@@ -736,15 +740,17 @@ export async function autoPostPurchaseInvoice(
   invoiceId: number,
   orgId: number,
   userId: number,
+  tx?: DbClient,
 ): Promise<{ entryNumber: string } | null> {
-  const invoice = await db.query.purchaseInvoices.findFirst({
+  const client = tx ?? db;
+  const invoice = await client.query.purchaseInvoices.findFirst({
     where: and(eq(purchaseInvoices.id, invoiceId), eq(purchaseInvoices.orgId, orgId)),
   });
   if (!invoice || invoice.isPosted) return null;
   if (!invoice.journalId && !invoice.docTypeId) return null;
 
   const journal = invoice.journalId
-    ? await db.query.documentJournals.findFirst({
+    ? await client.query.documentJournals.findFirst({
         where: and(eq(documentJournals.id, invoice.journalId), eq(documentJournals.orgId, orgId)),
       })
     : null;
@@ -773,11 +779,12 @@ export async function autoPostPurchaseInvoice(
   if (!isBalanced || rawLines.length === 0) return null;
 
   const isReturn    = invoice.invoiceType === 'return';
+  const isDebitNote  = invoice.invoiceType === 'debit_note';
   const reversedLines = isReturn
     ? rawLines.map(l => ({ ...l, debit: l.credit, credit: l.debit }))
     : rawLines;
 
-  const docLabel    = isReturn ? 'مردود مشتريات' : 'فاتورة مشتريات';
+  const docLabel    = isDebitNote ? 'إشعار مدين' : isReturn ? 'مردود مشتريات' : 'فاتورة مشتريات';
   const docTypeName = docTypeAccs?.docType?.nameAr ?? docLabel;
   const lineDesc    = `${docTypeName} - ${invoice.invoiceNumber}`;
   const lines       = reversedLines.map(l => ({ ...l, description: lineDesc }));
@@ -788,13 +795,14 @@ export async function autoPostPurchaseInvoice(
     date:            invoice.invoiceDate,
     description:     docTypeName,
     reference:       invoice.invoiceNumber,
-    sourceDocType:   isReturn ? 'purchase_return' : 'purchase_invoice',
+    sourceDocType:   isDebitNote ? 'debit_note' : isReturn ? 'purchase_return' : 'purchase_invoice',
     sourceDocId:     invoice.id,
     sourceDocNumber: invoice.invoiceNumber,
     lines,
+    tx,
   });
 
-  await db.update(purchaseInvoices)
+  await client.update(purchaseInvoices)
     .set({ isPosted: true, postedAt: new Date(), postedJournalEntryId: entry.id, updatedAt: new Date() })
     .where(and(eq(purchaseInvoices.id, invoiceId), eq(purchaseInvoices.orgId, orgId)));
 

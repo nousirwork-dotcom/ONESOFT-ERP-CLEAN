@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { eq, and, desc, inArray } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
+import { TRPCError } from '@trpc/server';
 import { db } from '../db.js';
 import {
   purchaseInvoices, purchaseInvoiceItems, documentJournals, warehouses,
@@ -34,7 +35,7 @@ async function syncUnpostedPurchaseEffects(
   items: any[],
   orgId: number,
 ) {
-  const sourceType = 'purchase_invoice';
+  const sourceType = invoice.invoiceType === 'debit_note' ? 'debit_note' : 'purchase_invoice';
   const oldStock = await tx.query.pendingStockMovements.findMany({
     where: and(
       eq(pendingStockMovements.orgId, orgId),
@@ -94,6 +95,9 @@ async function syncUnpostedPurchaseEffects(
     }));
   if (accountRows.length) await tx.insert(pendingAccountMovements).values(accountRows);
 
+  // A debit note changes the financial value of the original purchase only.
+  // It must never create inventory or pending stock movement automatically.
+  if (invoice.invoiceType === 'debit_note') return;
   const stockItems = items.filter((item) => item.productId);
   if (!stockItems.length || !invoice.warehouseId) return;
   const productRows = await tx.query.products.findMany({
@@ -150,10 +154,11 @@ async function syncUnpostedPurchaseEffects(
 }
 
 async function removeUnpostedPurchaseEffects(tx: PurchaseClient, invoice: any, orgId: number) {
+  const sourceType = invoice?.invoiceType === 'debit_note' ? 'debit_note' : 'purchase_invoice';
   const oldStock = await tx.query.pendingStockMovements.findMany({
     where: and(
       eq(pendingStockMovements.orgId, orgId),
-      eq(pendingStockMovements.sourceDocType, 'purchase_invoice'),
+      eq(pendingStockMovements.sourceDocType, sourceType),
       eq(pendingStockMovements.sourceDocId, invoice.id),
       eq(pendingStockMovements.status, 'unposted'),
     ),
@@ -170,12 +175,12 @@ async function removeUnpostedPurchaseEffects(tx: PurchaseClient, invoice: any, o
   }
   await tx.delete(pendingAccountMovements).where(and(
     eq(pendingAccountMovements.orgId, orgId),
-    eq(pendingAccountMovements.sourceDocType, 'purchase_invoice'),
+    eq(pendingAccountMovements.sourceDocType, sourceType),
     eq(pendingAccountMovements.sourceDocId, invoice.id),
   ));
   await tx.delete(pendingStockMovements).where(and(
     eq(pendingStockMovements.orgId, orgId),
-    eq(pendingStockMovements.sourceDocType, 'purchase_invoice'),
+    eq(pendingStockMovements.sourceDocType, sourceType),
     eq(pendingStockMovements.sourceDocId, invoice.id),
   ));
 }
@@ -298,7 +303,7 @@ export const purchasesRouter = router({
   create: protectedProcedure
     .input(z.object({
       invoiceNumber: z.string(),
-      invoiceType: z.string().default('invoice'),
+  invoiceType: z.string().default('invoice'),
       invoiceDate: z.string(),
       dueDate: z.string().optional(),
       supplierId: z.number().optional(),
@@ -318,6 +323,8 @@ export const purchasesRouter = router({
       paymentMethod: z.enum(['cash', 'bank', 'credit', 'check', 'other']).default('cash'),
       status: z.enum(['draft', 'confirmed', 'cancelled', 'paid']).default('confirmed'),
       notes: z.string().optional(),
+      basedOnType: z.string().optional(),
+      basedOnNumber: z.string().optional(),
       items: z.array(z.object({
         productId: z.number().optional(),
         productCode: z.string().optional(),
@@ -338,6 +345,14 @@ export const purchasesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { items, dueDate, ...invoiceData } = input;
       const orgId = ctx.user.orgId;
+      if (invoiceData.status !== 'draft' && invoiceData.invoiceType === 'debit_note') {
+        if (!invoiceData.basedOnNumber?.trim()) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'الإشعار المدين يتطلب مرجع الفاتورة الأصلية' });
+        }
+        if (!invoiceData.notes?.trim()) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'الإشعار المدين يتطلب سبب الإصدار' });
+        }
+      }
       const resolvedWarehouseId = await resolvePurchaseWarehouseId(
         db,
         invoiceData.warehouseId,
@@ -375,6 +390,7 @@ export const purchasesRouter = router({
   update: protectedProcedure
     .input(z.object({
       id: z.number(),
+      invoiceType: z.string().optional(),
       invoiceDate: z.string().optional(),
       supplierId: z.number().optional(),
       supplierName: z.string().optional(),
@@ -388,6 +404,8 @@ export const purchasesRouter = router({
       remainingAmount: z.string().optional(),
       status: z.enum(['draft', 'confirmed', 'cancelled', 'paid']).optional(),
       notes: z.string().optional(),
+      basedOnType: z.string().optional(),
+      basedOnNumber: z.string().optional(),
       docTypeId: z.number().optional(),
       items: z.array(z.object({
         productId: z.number().optional(),
@@ -411,6 +429,15 @@ export const purchasesRouter = router({
       const existing = await db.query.purchaseInvoices.findFirst({
         where: and(eq(purchaseInvoices.id, id), eq(purchaseInvoices.orgId, ctx.user.orgId)),
       });
+      const finalInvoiceType = rest.invoiceType ?? existing?.invoiceType;
+      if (rest.status !== 'draft' && finalInvoiceType === 'debit_note') {
+        if (!rest.basedOnNumber?.trim() && !existing?.basedOnNumber?.trim()) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'الإشعار المدين يتطلب مرجع الفاتورة الأصلية' });
+        }
+        if (!rest.notes?.trim() && !existing?.notes?.trim()) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'الإشعار المدين يتطلب سبب الإصدار' });
+        }
+      }
       if (existing?.isPosted)
         throw new Error('لا يمكن تعديل مستند مرحَّل — يجب فك الترحيل أولاً');
       const resolvedWarehouseId = await resolvePurchaseWarehouseId(
