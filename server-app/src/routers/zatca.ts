@@ -10,10 +10,27 @@ import {
   zatcaDevices,
   documentJournals,
   warehouses,
+  zatcaInvoiceTransactions,
+  zatcaRequestLog,
+  zatcaResponseLog,
+  zatcaErrorLog,
 } from '../schema.js';
-import { eq, and, desc, count, sql, gte, lte, like, or, asc } from 'drizzle-orm';
+import { eq, and, desc, count, sql, gte, lte, like, or, asc, notInArray } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { resolveZatcaContext, type ZatcaEnvironment } from '../services/zatcaContext.js';
+import {
+  ZATCA_LIFECYCLE_STATES,
+  type ZatcaLifecycleState,
+  type ZatcaOperation,
+  type ZatcaMockOutcome,
+  buildMockAuthorityResponse,
+  canTransitionZatcaState,
+  isFinalZatcaState,
+  isUncertainZatcaState,
+  nextRetryState,
+  redactZatcaPayload,
+  stateForMockOutcome,
+} from '../services/zatcaLifecycle.js';
 
 // ─── Zod Schemas ──────────────────────────────────────────────────────────────
 
@@ -52,8 +69,36 @@ const ZatcaConfigSchema = z.object({
   certSerialNumber:    z.string().nullable().default(null),
 });
 
+const REDACTED_CREDENTIAL = '••••••••••••••••';
+
 const POS_LINK_JOURNAL_TYPES = ['sales_invoice', 'sales_return', 'credit_note', 'debit_note'] as const;
 const PosLinkJournalTypeSchema = z.enum(POS_LINK_JOURNAL_TYPES);
+const ZatcaOperationSchema = z.enum(['clearance', 'reporting']);
+const ZatcaMockOutcomeSchema = z.enum([
+  'accepted',
+  'accepted_with_warnings',
+  'rejected',
+  'delayed',
+  'uncertain',
+  'connection_issue',
+  'connection_loss',
+]);
+
+function lifecycleMessage(state: ZatcaLifecycleState): string {
+  const messages: Record<ZatcaLifecycleState, string> = {
+    ready_to_submit: 'الفاتورة جاهزة للإرسال',
+    submitting: 'جاري إرسال الطلب',
+    submitted_pending: 'تم إرسال الطلب ولم تصل نتيجة نهائية بعد',
+    cleared: 'تم التخليص رسمياً من الهيئة',
+    reported: 'تم الإبلاغ رسمياً للهيئة',
+    accepted_with_warnings: 'قُبلت الفاتورة مع تحذيرات',
+    rejected: 'رُفضت الفاتورة من الهيئة',
+    connection_issue: 'حدثت مشكلة اتصال قبل تأكيد النتيجة',
+    retry_pending: 'الفاتورة بانتظار إعادة المحاولة',
+    uncertain: 'الحالة غير مؤكدة وتحتاج مطابقة',
+  };
+  return messages[state];
+}
 
 async function getPosUnitForOrg(orgId: number, posUnitId: number) {
   const unit = await db.query.zatcaPosUnits.findFirst({
@@ -290,19 +335,33 @@ export const zatcaRouter = router({
     });
     const cfg = (org?.zatcaConfig ?? {}) as Record<string, unknown>;
     const parsed = ZatcaConfigSchema.parse(cfg);
-    // إخفاء المفاتيح الحساسة للمستخدم غير المسؤول
-    const isAdmin = ctx.user.role === 'admin' || ctx.user.role === 'superadmin';
-    if (!isAdmin) {
-      parsed.secretKey = parsed.secretKey ? '••••••••••••••••' : '';
-      parsed.apiBaseUrl = parsed.apiBaseUrl ? '(محجوب)' : '';
-      parsed.csid = parsed.csid ? `${parsed.csid.slice(0, 8)}••••` : '';
-    }
-    return { ...parsed, isAdmin };
+    // لا تُعاد القيم الحساسة لأي دور؛ تُعاد حالة وجودها فقط.
+    return {
+      ...parsed,
+      csid: parsed.csid ? REDACTED_CREDENTIAL : '',
+      secretKey: parsed.secretKey ? REDACTED_CREDENTIAL : '',
+      isAdmin: ctx.user.role === 'admin' || ctx.user.role === 'superadmin',
+    };
   }),
 
   saveConfig: adminProcedure
     .input(ZatcaConfigSchema)
     .mutation(async ({ ctx, input }) => {
+      if (input.environment === 'production') {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'بيئة Production محجوبة في هذه المرحلة؛ لا تحفظ إعدادات اتصال فعلية قبل تأمين بيئة النشر واعتماد Secrets',
+        });
+      }
+      if (
+        (input.csid.trim() && input.csid.trim() !== REDACTED_CREDENTIAL)
+        || (input.secretKey.trim() && input.secretKey.trim() !== REDACTED_CREDENTIAL)
+      ) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'لا يُسمح بحفظ CSID أو Secret Key في هذه المرحلة؛ استخدم محاكاة OTP فقط',
+        });
+      }
       const now = new Date().toISOString();
       const userName = (ctx.user as any).name ?? (ctx.user as any).username ?? 'مسؤول';
 
@@ -314,6 +373,10 @@ export const zatcaRouter = router({
 
       const updated = {
         ...input,
+        // الاعتمادات القديمة تبقى داخل الخادم ولا تُعاد إلى العميل ولا تُستبدل
+        // من مسار الإعداد العام؛ إدخال اعتماد جديد محجوب حتى اعتماد Secrets.
+        csid: existingCfg.csid ?? '',
+        secretKey: existingCfg.secretKey ?? '',
         lastConfigUpdate:   now,
         lastConfigUpdateBy: userName,
         // إذا كانت المنظومة تُفعَّل لأول مرة
@@ -350,8 +413,6 @@ export const zatcaRouter = router({
     });
     const cfg = (org?.zatcaConfig ?? {}) as any;
 
-    // محاكاة اختبار الاتصال
-    const success = !!cfg.csid && !!cfg.secretKey;
     const now = new Date().toISOString();
     const userName = (ctx.user as any).name ?? (ctx.user as any).username ?? 'مسؤول';
 
@@ -359,7 +420,7 @@ export const zatcaRouter = router({
       zatcaConfig: {
         ...cfg,
         lastConnectionTest:   now,
-        lastConnectionStatus: success ? 'success' : 'failed',
+        lastConnectionStatus: 'unknown',
       } as any,
       updatedAt: new Date(),
     }).where(eq(organizations.id, ctx.user.orgId));
@@ -367,15 +428,15 @@ export const zatcaRouter = router({
     await db.insert(zatcaLogs).values({
       orgId:       ctx.user.orgId,
       eventType:   'connection_test',
-      status:      success ? 'success' : 'error',
+      status:      'error',
       environment: cfg.environment ?? 'sandbox',
       userId:      ctx.user.id,
       userName,
-      responseBody: JSON.stringify({ success, testedAt: now }),
-      errorMessage: success ? null : 'CSID أو Secret Key غير مكتملين',
+      responseBody: JSON.stringify({ simulated: false, testedAt: now, reason: 'production_connector_not_implemented' }),
+      errorMessage: 'اختبار الاتصال الفعلي غير منفذ؛ هذه المرحلة تسمح بمحاكاة OTP فقط',
     });
 
-    return { ok: success, message: success ? 'الاتصال بالهيئة ناجح' : 'فشل الاتصال — تحقق من بيانات CSID' };
+    return { ok: false, message: 'الاتصال الفعلي غير منفذ — استخدم OTP محاكاة فقط حتى اعتماد SDK وFatoora Simulation' };
   }),
 
   // ── بيانات ZATCA لفاتورة معينة ────────────────────────────────────────────
@@ -408,123 +469,504 @@ export const zatcaRouter = router({
       return inv;
     }),
 
-  // ── إرسال فاتورة للهيئة ───────────────────────────────────────────────────
+  // ── إرسال ومتابعة فاتورة للهيئة ───────────────────────────────────────────
   submitInvoice: protectedProcedure
     .input(z.object({
       invoiceId:   z.number(),
       invoiceType: z.enum(['standard', 'simplified']).default('simplified'),
+      mockOutcome: ZatcaMockOutcomeSchema.default('delayed'),
       forceResend: z.boolean().default(false),
     }))
     .mutation(async ({ ctx, input }) => {
       const inv = await db.query.salesInvoices.findFirst({
-        where: and(
-          eq(salesInvoices.id, input.invoiceId),
-          eq(salesInvoices.orgId, ctx.user.orgId),
-        ),
+        where: and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, ctx.user.orgId)),
       });
-      if (!inv) throw new Error('Invoice not found');
+      if (!inv) throw new TRPCError({ code: 'NOT_FOUND', message: 'الفاتورة غير موجودة' });
 
-      if (inv.zatcaStatus === 'cleared' && !input.forceResend) {
-        return { ok: false, message: 'الفاتورة مُخلَّصة بالفعل لدى هيئة الزكاة' };
+      const operation: ZatcaOperation = input.invoiceType === 'standard' ? 'clearance' : 'reporting';
+      const currentState = (inv.zatcaStatus ?? 'ready_to_submit') as ZatcaLifecycleState;
+      if (isFinalZatcaState(currentState)) {
+        return { ok: false, status: currentState, uuid: inv.zatcaUuid, message: 'الفاتورة تحمل نتيجة نهائية؛ لا يمكن إعادة إرسالها تلقائياً' };
       }
 
       const org = await db.query.organizations.findFirst({
         where: eq(organizations.id, ctx.user.orgId),
         columns: { zatcaConfig: true },
       });
-      const cfg = (org?.zatcaConfig ?? {}) as any;
-
-      if (!cfg?.enabled) {
-        return { ok: false, message: 'منظومة ZATCA غير مُفعَّلة — يرجى إعداد التكامل أولاً' };
+      const cfg = (org?.zatcaConfig ?? {}) as Record<string, unknown>;
+      if (!cfg.enabled) {
+        return { ok: false, status: currentState, message: 'منظومة ZATCA غير مفعَّلة' };
+      }
+      if (cfg.environment === 'production') {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'اتصال Production مغلق في هذه المرحلة؛ استخدم Mock أو Simulation' });
       }
 
-      const uuid = inv.zatcaUuid ?? crypto.randomUUID();
-      const environment = cfg.environment ?? 'sandbox';
-      const mockSuccess  = environment === 'sandbox';
-      const mockStatus   = mockSuccess ? 'cleared' : 'pending';
-      const mockResponse = {
-        status:          mockSuccess ? 'CLEARED' : 'SUBMITTED',
-        clearanceStatus: mockSuccess ? 'CLEARED' : 'NOT_CLEARED',
-        reportingStatus: mockSuccess ? 'REPORTED' : 'NOT_REPORTED',
-        invoiceHash:     uuid,
-        timestamp:       new Date().toISOString(),
-        warnings:        [],
-        errors:          [],
-      };
+      const existing = await db.query.zatcaInvoiceTransactions.findFirst({
+        where: and(
+          eq(zatcaInvoiceTransactions.orgId, ctx.user.orgId),
+          eq(zatcaInvoiceTransactions.invoiceId, input.invoiceId),
+          eq(zatcaInvoiceTransactions.isActive, true),
+          eq(zatcaInvoiceTransactions.isDeleted, false),
+        ),
+        orderBy: desc(zatcaInvoiceTransactions.createdAt),
+      });
+      if (existing && !input.forceResend && !isFinalZatcaState(existing.invoiceStatus)) {
+        return {
+          ok: true,
+          status: existing.invoiceStatus,
+          uuid: existing.invoiceUuid,
+          correlationId: existing.correlationId,
+          message: lifecycleMessage(existing.invoiceStatus as ZatcaLifecycleState),
+          idempotent: true,
+        };
+      }
 
-      const newAttemptCount = (inv.zatcaAttemptCount ?? 0) + 1;
-      const userName = (ctx.user as any).name ?? (ctx.user as any).username ?? 'مستخدم';
+      const now = new Date();
+      const uuid = inv.zatcaUuid ?? existing?.invoiceUuid?.toString() ?? crypto.randomUUID();
+      const icv = inv.zatcaInvoiceCounter ?? existing?.invoiceCounter ?? input.invoiceId;
+      const correlationId = existing?.correlationId ?? crypto.randomUUID();
+      const idempotencyKey = `${ctx.user.orgId}:${input.invoiceId}:${uuid}:${operation}`;
+      const attemptCount = (existing?.attemptCount ?? inv.zatcaAttemptCount ?? 0) + 1;
+      const requestPayload = redactZatcaPayload({
+        invoiceId: input.invoiceId,
+        invoiceNumber: inv.invoiceNumber,
+        uuid,
+        icv,
+        operation,
+        idempotencyKey,
+        submittedAt: now.toISOString(),
+      }) as Record<string, unknown>;
+
+      let transactionId = existing?.id;
+      if (transactionId == null) {
+        const [created] = await db.insert(zatcaInvoiceTransactions).values({
+          orgId: ctx.user.orgId,
+          invoiceId: input.invoiceId,
+          invoiceNumber: inv.invoiceNumber,
+          invoiceUuid: uuid,
+          invoiceCounter: icv,
+          submissionType: operation,
+          invoiceStatus: 'ready_to_submit',
+          correlationId,
+          idempotencyKey,
+          attemptCount: 0,
+          deviceId: null,
+          environmentId: null,
+          createdBy: ctx.user.id,
+          updatedBy: ctx.user.id,
+        }).returning({ id: zatcaInvoiceTransactions.id });
+        transactionId = created.id;
+      }
+
+      await db.update(zatcaInvoiceTransactions).set({
+        invoiceUuid: uuid,
+        invoiceCounter: icv,
+        submissionType: operation,
+        invoiceStatus: 'submitting',
+        correlationId,
+        idempotencyKey,
+        requestPayload: requestPayload as any,
+        lastAttemptAt: now,
+        attemptCount,
+        updatedAt: now,
+        updatedBy: ctx.user.id,
+      }).where(eq(zatcaInvoiceTransactions.id, transactionId));
 
       await db.update(salesInvoices).set({
-        zatcaUuid:            uuid,
-        zatcaStatus:          mockStatus,
-        zatcaClearedAt:       mockSuccess ? new Date() : null,
-        zatcaResponse:        mockResponse as any,
-        zatcaSubmittedAt:     inv.zatcaSubmittedAt ?? new Date(),
-        zatcaAttemptCount:    newAttemptCount,
-        zatcaRejectionReason: mockSuccess ? null : inv.zatcaRejectionReason,
-        updatedAt:            new Date(),
-      }).where(eq(salesInvoices.id, input.invoiceId));
+        zatcaUuid: uuid,
+        zatcaInvoiceCounter: icv,
+        zatcaStatus: 'submitting',
+        zatcaSubmittedAt: inv.zatcaSubmittedAt ?? now,
+        zatcaAttemptCount: attemptCount,
+        zatcaResponse: null,
+        zatcaRejectionReason: null,
+        updatedAt: now,
+      }).where(and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, ctx.user.orgId)));
 
+      await db.insert(zatcaRequestLog).values({
+        orgId: ctx.user.orgId,
+        transactionId,
+        url: 'mock://zatca/submit',
+        httpMethod: 'POST',
+        headers: { 'x-correlation-id': correlationId, 'idempotency-key': idempotencyKey },
+        requestBody: JSON.stringify(requestPayload),
+        requestTime: now,
+        createdBy: ctx.user.id,
+        updatedBy: ctx.user.id,
+      });
+
+      const response = buildMockAuthorityResponse({
+        operation,
+        outcome: input.mockOutcome,
+        uuid,
+        icv,
+        correlationId,
+        now: now.toISOString(),
+      });
+      const nextState = stateForMockOutcome(operation, input.mockOutcome);
+      if (
+        !canTransitionZatcaState(currentState, 'submitting')
+        || !canTransitionZatcaState('submitting', nextState)
+      ) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: `انتقال حالة ZATCA غير مسموح: ${currentState} → submitting → ${nextState}`,
+        });
+      }
+      const responseDate = response.receivedAt ? new Date(response.receivedAt) : null;
+      const errorText = response.errors.length ? response.errors.map((item) => item.message).join('، ') : null;
+      const safeResponse = redactZatcaPayload(response) as Record<string, unknown>;
+
+      await db.update(zatcaInvoiceTransactions).set({
+        invoiceStatus: nextState,
+        httpStatus: response.httpStatus,
+        authorityStatus: response.authorityStatus,
+        warnings: response.warnings as any,
+        errors: response.errors as any,
+        responsePayload: safeResponse as any,
+        responseDate,
+        uncertainAt: isUncertainZatcaState(nextState) ? now : null,
+        lastError: errorText,
+        nextRetryAt: nextState === 'connection_issue' || isUncertainZatcaState(nextState)
+          ? new Date(now.getTime() + 5 * 60 * 1000)
+          : null,
+        updatedAt: new Date(),
+        updatedBy: ctx.user.id,
+      }).where(eq(zatcaInvoiceTransactions.id, transactionId));
+      if (response.receivedAt) {
+        await db.insert(zatcaResponseLog).values({
+          orgId: ctx.user.orgId,
+          transactionId,
+          httpStatus: response.httpStatus,
+          responseBody: JSON.stringify(safeResponse),
+          responseTime: responseDate ?? now,
+          createdBy: ctx.user.id,
+          updatedBy: ctx.user.id,
+        });
+      }
+      if (
+        errorText
+        || input.mockOutcome === 'connection_issue'
+        || input.mockOutcome === 'connection_loss'
+      ) {
+        await db.insert(zatcaErrorLog).values({
+          orgId: ctx.user.orgId,
+          transactionId,
+          errorCode: input.mockOutcome === 'connection_loss'
+            ? 'RESPONSE_LOST'
+            : input.mockOutcome === 'connection_issue'
+              ? 'CONNECTION_ERROR'
+              : 'AUTHORITY_REJECTED',
+          errorType: input.mockOutcome === 'connection_issue' || input.mockOutcome === 'connection_loss'
+            ? 'connection'
+            : 'authority',
+          errorMessage: errorText ?? (
+            input.mockOutcome === 'connection_loss'
+              ? 'انقطع الاتصال بعد إرسال الطلب وقبل وصول النتيجة النهائية'
+              : 'تعذر الاتصال بناقل ZATCA'
+          ),
+          retryCount: attemptCount,
+          createdBy: ctx.user.id,
+          updatedBy: ctx.user.id,
+        });
+      }
+
+      const invoiceUpdate: Record<string, unknown> = {
+        zatcaStatus: nextState,
+        zatcaResponse: safeResponse,
+        zatcaAttemptCount: attemptCount,
+        zatcaSubmittedAt: inv.zatcaSubmittedAt ?? now,
+        zatcaRejectionReason: errorText,
+        updatedAt: new Date(),
+      };
+      if (nextState === 'cleared' || nextState === 'reported') invoiceUpdate.zatcaClearedAt = responseDate;
+      await db.update(salesInvoices).set(invoiceUpdate as any)
+        .where(and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, ctx.user.orgId)));
+
+      const userName = (ctx.user as any).name ?? (ctx.user as any).username ?? 'مستخدم';
       await db.insert(zatcaLogs).values({
-        orgId:         ctx.user.orgId,
-        invoiceId:     input.invoiceId,
+        orgId: ctx.user.orgId,
+        invoiceId: input.invoiceId,
         invoiceNumber: inv.invoiceNumber,
-        eventType:     input.forceResend ? 'resend' : 'submit',
-        status:        mockStatus,
-        environment,
-        userId:        ctx.user.id,
+        eventType: input.forceResend ? 'retry' : 'submit',
+        status: nextState,
+        environment: String(cfg.environment ?? 'sandbox'),
+        userId: ctx.user.id,
         userName,
-        requestBody:   JSON.stringify({ invoiceId: input.invoiceId, invoiceType: input.invoiceType, attempt: newAttemptCount }),
-        responseBody:  JSON.stringify(mockResponse),
+        requestBody: JSON.stringify(requestPayload),
+        responseBody: JSON.stringify(safeResponse),
+        errorMessage: errorText,
       });
 
       return {
-        ok:       true,
-        status:   mockStatus,
+        ok: true,
+        status: nextState,
         uuid,
-        environment,
-        response: mockResponse,
-        message:  mockSuccess
-          ? 'تم التخليص بنجاح لدى هيئة الزكاة (بيئة الاختبار)'
-          : 'جارٍ المعالجة — تحقق من الحالة لاحقاً',
+        icv,
+        correlationId,
+        operation,
+        response: safeResponse,
+        message: lifecycleMessage(nextState),
+        idempotent: false,
       };
     }),
 
-  // ── تحديث حالة الفاتورة يدوياً ───────────────────────────────────────────
+  retryInvoice: protectedProcedure
+    .input(z.object({ invoiceId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const [invoice, transaction] = await Promise.all([
+        db.query.salesInvoices.findFirst({
+          where: and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, ctx.user.orgId)),
+          columns: { id: true, zatcaStatus: true },
+        }),
+        db.query.zatcaInvoiceTransactions.findFirst({
+          where: and(
+            eq(zatcaInvoiceTransactions.invoiceId, input.invoiceId),
+            eq(zatcaInvoiceTransactions.orgId, ctx.user.orgId),
+            eq(zatcaInvoiceTransactions.isActive, true),
+            eq(zatcaInvoiceTransactions.isDeleted, false),
+          ),
+          orderBy: desc(zatcaInvoiceTransactions.createdAt),
+        }),
+      ]);
+      if (!invoice || !transaction) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'لا توجد معاملة ZATCA قابلة لإعادة المحاولة' });
+      }
+      if (isFinalZatcaState(transaction.invoiceStatus)) {
+        throw new TRPCError({ code: 'CONFLICT', message: 'الفاتورة تحمل نتيجة نهائية ولا تحتاج إعادة محاولة' });
+      }
+      if (!canTransitionZatcaState(transaction.invoiceStatus, 'retry_pending')) {
+        throw new TRPCError({ code: 'CONFLICT', message: 'لا يمكن وضع هذه المعاملة في قائمة إعادة المحاولة' });
+      }
+
+      const now = new Date();
+      await db.update(zatcaInvoiceTransactions).set({
+        invoiceStatus: 'retry_pending',
+        nextRetryAt: now,
+        updatedAt: now,
+        updatedBy: ctx.user.id,
+      }).where(eq(zatcaInvoiceTransactions.id, transaction.id));
+      await db.update(salesInvoices).set({
+        zatcaStatus: 'retry_pending',
+        updatedAt: now,
+      }).where(and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, ctx.user.orgId)));
+      await db.insert(zatcaLogs).values({
+        orgId: ctx.user.orgId,
+        invoiceId: input.invoiceId,
+        eventType: 'retry_scheduled',
+        status: 'retry_pending',
+        userId: ctx.user.id,
+        userName: (ctx.user as any).name ?? 'مستخدم',
+        requestBody: JSON.stringify({
+          transactionId: transaction.id,
+          uuid: transaction.invoiceUuid,
+          icv: transaction.invoiceCounter,
+          correlationId: transaction.correlationId,
+        }),
+      });
+      return {
+        ok: true,
+        status: 'retry_pending' as const,
+        transactionId: transaction.id,
+        uuid: transaction.invoiceUuid,
+        icv: transaction.invoiceCounter,
+        correlationId: transaction.correlationId,
+        message: lifecycleMessage('retry_pending'),
+      };
+    }),
+
+  // ── حالة هيئة ZATCA لا تُعدّل يدوياً ─────────────────────────────────────
   updateInvoiceStatus: adminProcedure
     .input(z.object({
-      invoiceId:        z.number(),
-      status:           z.enum(['not_submitted', 'pending', 'cleared', 'reported', 'rejected', 'error']),
-      rejectionReason:  z.string().optional(),
-      notes:            z.string().optional(),
+      invoiceId: z.number(),
+      status: z.enum(['ready_to_submit', 'retry_pending']),
+      notes: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const userName = (ctx.user as any).name ?? (ctx.user as any).username ?? 'مسؤول';
-      await db.update(salesInvoices).set({
-        zatcaStatus:          input.status,
-        zatcaRejectionReason: input.rejectionReason ?? null,
-        updatedAt:            new Date(),
-        ...(input.status === 'cleared' ? { zatcaClearedAt: new Date() } : {}),
-      }).where(and(
-        eq(salesInvoices.id, input.invoiceId),
-        eq(salesInvoices.orgId, ctx.user.orgId),
-      ));
-
+      const [updated] = await db.update(salesInvoices).set({
+        zatcaStatus: input.status,
+        updatedAt: new Date(),
+      }).where(and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, ctx.user.orgId))).returning();
+      if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'الفاتورة غير موجودة' });
       await db.insert(zatcaLogs).values({
-        orgId:       ctx.user.orgId,
-        invoiceId:   input.invoiceId,
-        eventType:   'manual_status_update',
-        status:      input.status,
-        userId:      ctx.user.id,
-        userName,
-        requestBody: JSON.stringify({ notes: input.notes, rejectionReason: input.rejectionReason }),
+        orgId: ctx.user.orgId,
+        invoiceId: input.invoiceId,
+        eventType: 'manual_review',
+        status: input.status,
+        userId: ctx.user.id,
+        userName: (ctx.user as any).name ?? 'مسؤول',
+        requestBody: JSON.stringify({ notes: input.notes }),
       });
-
-      return { ok: true };
+      return { ok: true, status: input.status };
     }),
 
   // ── سجل العمليات ──────────────────────────────────────────────────────────
+  getLifecycle: protectedProcedure
+    .input(z.object({ invoiceId: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      const [invoice, transaction] = await Promise.all([
+        db.query.salesInvoices.findFirst({
+          where: and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, ctx.user.orgId)),
+          columns: {
+            id: true,
+            invoiceNumber: true,
+            zatcaUuid: true,
+            zatcaInvoiceCounter: true,
+            zatcaStatus: true,
+            zatcaResponse: true,
+            zatcaSubmittedAt: true,
+            zatcaAttemptCount: true,
+            zatcaRejectionReason: true,
+          },
+        }),
+        db.query.zatcaInvoiceTransactions.findFirst({
+          where: and(
+            eq(zatcaInvoiceTransactions.invoiceId, input.invoiceId),
+            eq(zatcaInvoiceTransactions.orgId, ctx.user.orgId),
+            eq(zatcaInvoiceTransactions.isActive, true),
+            eq(zatcaInvoiceTransactions.isDeleted, false),
+          ),
+          orderBy: desc(zatcaInvoiceTransactions.createdAt),
+        }),
+      ]);
+      if (!invoice) throw new TRPCError({ code: 'NOT_FOUND', message: 'الفاتورة غير موجودة' });
+      if (!transaction) return { invoice, transaction: null, requests: [], responses: [], errors: [] };
+
+      const [requests, responses, errors] = await Promise.all([
+        db.query.zatcaRequestLog.findMany({
+          where: and(eq(zatcaRequestLog.transactionId, transaction.id), eq(zatcaRequestLog.orgId, ctx.user.orgId)),
+          orderBy: desc(zatcaRequestLog.requestTime),
+        }),
+        db.query.zatcaResponseLog.findMany({
+          where: and(eq(zatcaResponseLog.transactionId, transaction.id), eq(zatcaResponseLog.orgId, ctx.user.orgId)),
+          orderBy: desc(zatcaResponseLog.responseTime),
+        }),
+        db.query.zatcaErrorLog.findMany({
+          where: and(eq(zatcaErrorLog.transactionId, transaction.id), eq(zatcaErrorLog.orgId, ctx.user.orgId)),
+          orderBy: desc(zatcaErrorLog.createdAt),
+        }),
+      ]);
+      return { invoice, transaction, requests, responses, errors };
+    }),
+
+  getUncertainInvoices: protectedProcedure
+    .input(z.object({ limit: z.number().int().min(1).max(100).default(50) }))
+    .query(async ({ ctx, input }) => {
+      const uncertainStates = ['submitted_pending', 'connection_issue', 'retry_pending', 'uncertain'];
+      return db.select({
+        invoiceId: salesInvoices.id,
+        invoiceNumber: salesInvoices.invoiceNumber,
+        invoiceDate: salesInvoices.invoiceDate,
+        total: salesInvoices.total,
+        zatcaUuid: salesInvoices.zatcaUuid,
+        zatcaInvoiceCounter: salesInvoices.zatcaInvoiceCounter,
+        zatcaStatus: salesInvoices.zatcaStatus,
+        transactionId: zatcaInvoiceTransactions.id,
+        operation: zatcaInvoiceTransactions.submissionType,
+        correlationId: zatcaInvoiceTransactions.correlationId,
+        lastAttemptAt: zatcaInvoiceTransactions.lastAttemptAt,
+        nextRetryAt: zatcaInvoiceTransactions.nextRetryAt,
+        attemptCount: zatcaInvoiceTransactions.attemptCount,
+        lastError: zatcaInvoiceTransactions.lastError,
+        authorityStatus: zatcaInvoiceTransactions.authorityStatus,
+      })
+        .from(zatcaInvoiceTransactions)
+        .innerJoin(salesInvoices, eq(salesInvoices.id, zatcaInvoiceTransactions.invoiceId))
+        .where(and(
+          eq(zatcaInvoiceTransactions.orgId, ctx.user.orgId),
+          eq(salesInvoices.orgId, ctx.user.orgId),
+          eq(zatcaInvoiceTransactions.isActive, true),
+          eq(zatcaInvoiceTransactions.isDeleted, false),
+          sql`${zatcaInvoiceTransactions.invoiceStatus} IN (${sql.join(uncertainStates.map((state) => sql`${state}`), sql`, `)})`,
+        ))
+        .orderBy(desc(zatcaInvoiceTransactions.updatedAt))
+        .limit(input.limit);
+    }),
+
+  matchAuthorityResponse: adminProcedure
+    .input(z.object({
+      invoiceId: z.number().int().positive(),
+      correlationId: z.string().trim().min(1).optional(),
+      outcome: z.enum(['accepted', 'accepted_with_warnings', 'rejected', 'pending', 'unknown']),
+      authorityStatus: z.string().trim().min(1).max(100),
+      httpStatus: z.number().int().min(100).max(599).nullable().optional(),
+      warnings: z.array(z.object({ code: z.string(), message: z.string() })).default([]),
+      errors: z.array(z.object({ code: z.string(), message: z.string() })).default([]),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const transaction = await db.query.zatcaInvoiceTransactions.findFirst({
+        where: and(
+          eq(zatcaInvoiceTransactions.invoiceId, input.invoiceId),
+          eq(zatcaInvoiceTransactions.orgId, ctx.user.orgId),
+          eq(zatcaInvoiceTransactions.isActive, true),
+          eq(zatcaInvoiceTransactions.isDeleted, false),
+        ),
+        orderBy: desc(zatcaInvoiceTransactions.createdAt),
+      });
+      if (!transaction) throw new TRPCError({ code: 'NOT_FOUND', message: 'لا توجد معاملة ZATCA لمطابقة الرد' });
+      if (input.correlationId && transaction.correlationId !== input.correlationId) {
+        throw new TRPCError({ code: 'CONFLICT', message: 'Correlation ID لا يطابق معاملة الفاتورة' });
+      }
+      const operation = transaction.submissionType === 'reporting' ? 'reporting' : 'clearance';
+      const nextState: ZatcaLifecycleState =
+        input.outcome === 'accepted' ? (operation === 'clearance' ? 'cleared' : 'reported')
+          : input.outcome === 'accepted_with_warnings' ? 'accepted_with_warnings'
+          : input.outcome === 'rejected' ? 'rejected'
+          : input.outcome === 'pending' ? 'submitted_pending'
+          : 'uncertain';
+      const now = new Date();
+      const responsePayload = redactZatcaPayload({
+        correlationId: transaction.correlationId,
+        uuid: transaction.invoiceUuid,
+        icv: transaction.invoiceCounter,
+        authorityStatus: input.authorityStatus,
+        warnings: input.warnings,
+        errors: input.errors,
+        matchedAt: now.toISOString(),
+      }) as any;
+      await db.update(zatcaInvoiceTransactions).set({
+        invoiceStatus: nextState,
+        authorityStatus: input.authorityStatus,
+        httpStatus: input.httpStatus ?? null,
+        warnings: input.warnings as any,
+        errors: input.errors as any,
+        responsePayload,
+        responseDate: now,
+        uncertainAt: isUncertainZatcaState(nextState) ? now : null,
+        nextRetryAt: isUncertainZatcaState(nextState) ? new Date(now.getTime() + 5 * 60 * 1000) : null,
+        lastError: input.errors.map((error) => error.message).join('، ') || null,
+        updatedAt: now,
+        updatedBy: ctx.user.id,
+      }).where(eq(zatcaInvoiceTransactions.id, transaction.id));
+      await db.update(salesInvoices).set({
+        zatcaStatus: nextState,
+        zatcaResponse: responsePayload,
+        zatcaRejectionReason: input.errors.map((error) => error.message).join('، ') || null,
+        zatcaClearedAt: nextState === 'cleared' || nextState === 'reported' ? now : null,
+        updatedAt: now,
+      }).where(and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, ctx.user.orgId)));
+      await db.insert(zatcaResponseLog).values({
+        orgId: ctx.user.orgId,
+        transactionId: transaction.id,
+        httpStatus: input.httpStatus ?? null,
+        responseBody: JSON.stringify(responsePayload),
+        responseTime: now,
+        createdBy: ctx.user.id,
+        updatedBy: ctx.user.id,
+      });
+      await db.insert(zatcaLogs).values({
+        orgId: ctx.user.orgId,
+        invoiceId: input.invoiceId,
+        eventType: 'authority_reconciliation',
+        status: nextState,
+        userId: ctx.user.id,
+        userName: (ctx.user as any).name ?? 'مسؤول',
+        responseBody: JSON.stringify(responsePayload),
+        errorMessage: input.errors.map((error) => error.message).join('، ') || null,
+      });
+      return { ok: true, status: nextState, message: lifecycleMessage(nextState) };
+    }),
+
   getLogs: protectedProcedure
     .input(z.object({
       page:          z.number().default(1),
@@ -575,21 +1017,66 @@ export const zatcaRouter = router({
     });
     const cfg = (org?.zatcaConfig ?? {}) as any;
 
-    const [total, cleared, pending, rejected, errors, notSubmitted] = await Promise.all([
+    const [total, readyToSubmit, cleared, reported, pending, submittedPending, submitting, acceptedWithWarnings, rejected, connectionIssue, retryPending, uncertain, errors, notSubmitted, today, simplifiedDueSoon, simplifiedOverdue] = await Promise.all([
       db.select({ cnt: count() }).from(salesInvoices)
         .where(and(eq(salesInvoices.orgId, ctx.user.orgId), eq(salesInvoices.invoiceType, 'sale'))),
       db.select({ cnt: count() }).from(salesInvoices)
+        .where(and(
+          eq(salesInvoices.orgId, ctx.user.orgId),
+          eq(salesInvoices.invoiceType, 'sale'),
+          sql`${salesInvoices.zatcaStatus} IS NULL OR ${salesInvoices.zatcaStatus} IN ('not_submitted', 'ready_to_submit')`,
+        )),
+      db.select({ cnt: count() }).from(salesInvoices)
         .where(and(eq(salesInvoices.orgId, ctx.user.orgId), eq(salesInvoices.zatcaStatus, 'cleared'))),
+      db.select({ cnt: count() }).from(salesInvoices)
+        .where(and(eq(salesInvoices.orgId, ctx.user.orgId), eq(salesInvoices.zatcaStatus, 'reported'))),
       db.select({ cnt: count() }).from(salesInvoices)
         .where(and(eq(salesInvoices.orgId, ctx.user.orgId), eq(salesInvoices.zatcaStatus, 'pending'))),
       db.select({ cnt: count() }).from(salesInvoices)
+        .where(and(eq(salesInvoices.orgId, ctx.user.orgId), eq(salesInvoices.zatcaStatus, 'submitted_pending'))),
+      db.select({ cnt: count() }).from(salesInvoices)
+        .where(and(eq(salesInvoices.orgId, ctx.user.orgId), eq(salesInvoices.zatcaStatus, 'submitting'))),
+      db.select({ cnt: count() }).from(salesInvoices)
+        .where(and(eq(salesInvoices.orgId, ctx.user.orgId), eq(salesInvoices.zatcaStatus, 'accepted_with_warnings'))),
+      db.select({ cnt: count() }).from(salesInvoices)
         .where(and(eq(salesInvoices.orgId, ctx.user.orgId), eq(salesInvoices.zatcaStatus, 'rejected'))),
+      db.select({ cnt: count() }).from(salesInvoices)
+        .where(and(eq(salesInvoices.orgId, ctx.user.orgId), eq(salesInvoices.zatcaStatus, 'connection_issue'))),
+      db.select({ cnt: count() }).from(salesInvoices)
+        .where(and(eq(salesInvoices.orgId, ctx.user.orgId), eq(salesInvoices.zatcaStatus, 'retry_pending'))),
+      db.select({ cnt: count() }).from(salesInvoices)
+        .where(and(eq(salesInvoices.orgId, ctx.user.orgId), eq(salesInvoices.zatcaStatus, 'uncertain'))),
       db.select({ cnt: count() }).from(salesInvoices)
         .where(and(eq(salesInvoices.orgId, ctx.user.orgId), eq(salesInvoices.zatcaStatus, 'error'))),
       db.select({ cnt: count() }).from(salesInvoices)
         .where(and(
           eq(salesInvoices.orgId, ctx.user.orgId),
-          sql`${salesInvoices.zatcaStatus} IS NULL OR ${salesInvoices.zatcaStatus} = 'not_submitted'`,
+          sql`${salesInvoices.zatcaStatus} IS NULL OR ${salesInvoices.zatcaStatus} IN ('not_submitted', 'ready_to_submit')`,
+        )),
+      db.select({ cnt: count() }).from(salesInvoices)
+        .where(and(
+          eq(salesInvoices.orgId, ctx.user.orgId),
+          eq(salesInvoices.invoiceType, 'sale'),
+          gte(salesInvoices.invoiceDate, new Date(new Date().setHours(0, 0, 0, 0))),
+        )),
+      db.select({ cnt: count() }).from(salesInvoices)
+        .innerJoin(zatcaInvoiceTransactions, eq(zatcaInvoiceTransactions.invoiceId, salesInvoices.id))
+        .where(and(
+          eq(salesInvoices.orgId, ctx.user.orgId),
+          eq(zatcaInvoiceTransactions.orgId, ctx.user.orgId),
+          eq(zatcaInvoiceTransactions.submissionType, 'reporting'),
+          sql`${salesInvoices.invoiceDate} >= now() - interval '24 hours'`,
+          sql`${salesInvoices.invoiceDate} < now() - interval '20 hours'`,
+          notInArray(salesInvoices.zatcaStatus, ['cleared', 'reported', 'accepted_with_warnings', 'rejected']),
+        )),
+      db.select({ cnt: count() }).from(salesInvoices)
+        .innerJoin(zatcaInvoiceTransactions, eq(zatcaInvoiceTransactions.invoiceId, salesInvoices.id))
+        .where(and(
+          eq(salesInvoices.orgId, ctx.user.orgId),
+          eq(zatcaInvoiceTransactions.orgId, ctx.user.orgId),
+          eq(zatcaInvoiceTransactions.submissionType, 'reporting'),
+          sql`${salesInvoices.invoiceDate} < now() - interval '24 hours'`,
+          notInArray(salesInvoices.zatcaStatus, ['cleared', 'reported', 'accepted_with_warnings', 'rejected']),
         )),
     ]);
 
@@ -604,11 +1091,22 @@ export const zatcaRouter = router({
 
     return {
       totalInvoices:       total[0]?.cnt ?? 0,
+      readyToSubmit:       readyToSubmit[0]?.cnt ?? 0,
       cleared:             cleared[0]?.cnt ?? 0,
+      reported:            reported[0]?.cnt ?? 0,
       pending:             pending[0]?.cnt ?? 0,
+      submittedPending:    submittedPending[0]?.cnt ?? 0,
+      submitting:          submitting[0]?.cnt ?? 0,
+      acceptedWithWarnings: acceptedWithWarnings[0]?.cnt ?? 0,
       rejected:            rejected[0]?.cnt ?? 0,
+      connectionIssue:     connectionIssue[0]?.cnt ?? 0,
+      retryPending:        retryPending[0]?.cnt ?? 0,
+      uncertain:           uncertain[0]?.cnt ?? 0,
       errors:              errors[0]?.cnt ?? 0,
       notSubmitted:        notSubmitted[0]?.cnt ?? 0,
+      todayCount:          today[0]?.cnt ?? 0,
+      simplifiedReportingDueSoon: simplifiedDueSoon[0]?.cnt ?? 0,
+      simplifiedReportingOverdue: simplifiedOverdue[0]?.cnt ?? 0,
       connectionStatus:    cfg.lastConnectionStatus ?? 'unknown',
       lastConnectionTest:  cfg.lastConnectionTest ?? null,
       certExpiryDate:      cfg.certExpiryDate ?? null,

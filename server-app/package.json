@@ -11,6 +11,7 @@
     "pipeline": "pnpm build && pnpm verify-build",
     "setup-db": "tsx scripts/setup-db.ts",
     "migrate": "pnpm check-fk:static && tsx scripts/run-migrations.ts && pnpm check-fk:db",
+    "audit:zatca-0061": "tsx scripts/audit-zatca-0061.ts",
     "test:migrations": "tsx scripts/test-migrations.ts",
     "stamp-migration": "tsx scripts/stamp-migration.ts",
     "check-fk": "tsx ../scripts/check-fk-delete-rules.ts",
