@@ -4,6 +4,7 @@ import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import { salesInvoices, salesInvoiceItems, salesInvoicePayments, paymentMethods, products, customers, stockVouchers, stockVoucherItems, documentJournals, warehouses, users, zatcaPosUnits } from '../schema.js';
 import { autoPostSalesInvoice } from './posting.js';
+import type { DbClient } from '../services/PostingEngine.js';
 import { TRPCError } from '@trpc/server';
 import { validateSalesInvoiceWarehouseContext } from '../lib/salesWarehouseValidation.js';
 
@@ -21,6 +22,118 @@ async function validateInvoiceItems(items: { productId?: number; productName: st
       throw new TRPCError({ code: 'BAD_REQUEST', message: `الصنف "${item.productName || item.productCode || ''}" غير مسجل في النظام.` });
     }
   }
+}
+
+type SalesReturnValidationItem = {
+  productId?: number;
+  productName: string;
+  quantity: string;
+};
+
+async function validateSalesReturnReference(opts: {
+  orgId: number;
+  sourceDocumentId?: number;
+  basedOnNumber?: string;
+  customerId?: number;
+  warehouseId?: number;
+  items: SalesReturnValidationItem[];
+  tx?: DbClient;
+}) {
+  const { orgId, sourceDocumentId, basedOnNumber, customerId, warehouseId, items, tx = db } = opts;
+  const original = sourceDocumentId
+    ? await tx.query.salesInvoices.findFirst({
+        where: and(eq(salesInvoices.id, sourceDocumentId), eq(salesInvoices.orgId, orgId)),
+      })
+    : basedOnNumber
+      ? await tx.query.salesInvoices.findFirst({
+          where: and(
+            eq(salesInvoices.orgId, orgId),
+            eq(salesInvoices.invoiceNumber, basedOnNumber),
+            eq(salesInvoices.invoiceType, 'sale'),
+          ),
+        })
+      : null;
+
+  if (
+    !original ||
+    original.invoiceType !== 'sale' ||
+    !original.isPosted ||
+    original.status === 'draft' ||
+    original.status === 'cancelled'
+  ) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'مردود المبيعات يجب أن يرتبط بفاتورة مبيعات أصلية مرحّلة',
+    });
+  }
+  if (!original.customerId || customerId !== original.customerId) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'عميل مردود المبيعات يجب أن يطابق عميل الفاتورة الأصلية',
+    });
+  }
+  if (!original.warehouseId || warehouseId !== original.warehouseId) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'مخزن مردود المبيعات يجب أن يطابق مخزن الفاتورة الأصلية',
+    });
+  }
+
+  const originalItems = await tx.query.salesInvoiceItems.findMany({
+    where: eq(salesInvoiceItems.invoiceId, original.id),
+  });
+  const soldQty = new Map<number, number>();
+  for (const item of originalItems) {
+    if (item.productId) {
+      soldQty.set(item.productId, (soldQty.get(item.productId) ?? 0) + Number(item.quantity));
+    }
+  }
+
+  const priorReturns = await tx.query.salesInvoices.findMany({
+    where: and(
+      eq(salesInvoices.orgId, orgId),
+      eq(salesInvoices.invoiceType, 'return'),
+      eq(salesInvoices.sourceDocumentId, original.id),
+      eq(salesInvoices.isPosted, true),
+    ),
+  });
+  const returnedQty = new Map<number, number>();
+  for (const prior of priorReturns) {
+    const priorItems = await tx.query.salesInvoiceItems.findMany({
+      where: eq(salesInvoiceItems.invoiceId, prior.id),
+    });
+    for (const item of priorItems) {
+      if (item.productId) {
+        returnedQty.set(item.productId, (returnedQty.get(item.productId) ?? 0) + Number(item.quantity));
+      }
+    }
+  }
+
+  for (const item of items) {
+    if (!item.productId) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `الصنف "${item.productName}" غير موجود في الفاتورة الأصلية`,
+      });
+    }
+    const quantity = Number(item.quantity);
+    const sold = soldQty.get(item.productId) ?? 0;
+    const alreadyReturned = returnedQty.get(item.productId) ?? 0;
+    if (sold <= 0) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `الصنف "${item.productName}" غير موجود في الفاتورة الأصلية`,
+      });
+    }
+    if (alreadyReturned + quantity > sold + 0.0001) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `كمية مردود الصنف "${item.productName}" تتجاوز الكمية المتبقية بعد المردودات السابقة`,
+      });
+    }
+  }
+
+  return original;
 }
 
 // ── توليد رقم فاتورة المبيعات من دفتر المستندات داخل transaction ───────────────
@@ -437,6 +550,20 @@ export const salesRouter = router({
 
         // ── تحقق: جميع الأصناف مسجلة في النظام (لا يُقبل نص يدوي بدون productId) ──
         await validateInvoiceItems(items, orgId);
+
+        if (invoiceData.invoiceType === 'return') {
+          const original = await validateSalesReturnReference({
+            orgId,
+            sourceDocumentId: invoiceData.sourceDocumentId,
+            basedOnNumber: invoiceData.basedOnNumber,
+            customerId: invoiceData.customerId,
+            warehouseId: invoiceData.warehouseId,
+            items,
+          });
+          invoiceData.sourceDocumentId = original.id;
+          invoiceData.basedOnNumber = original.invoiceNumber;
+          invoiceData.basedOnType = 'sale';
+        }
       }
       const { invoice, finalInvoiceNumber, isPosted, autoPostedEntryNumber } = await db.transaction(async (tx) => {
         // حلّ warehouseId من الدفتر إذا لم يُرسل، أو رفض الحفظ إذا تعذّر
@@ -446,6 +573,21 @@ export const salesRouter = router({
           invoiceData.journalId,
           orgId,
         );
+
+        if (!isDraft && invoiceData.invoiceType === 'return') {
+          const original = await validateSalesReturnReference({
+            orgId,
+            sourceDocumentId: invoiceData.sourceDocumentId,
+            basedOnNumber: invoiceData.basedOnNumber,
+            customerId: invoiceData.customerId,
+            warehouseId: resolvedWarehouseId,
+            items,
+            tx,
+          });
+          invoiceData.sourceDocumentId = original.id;
+          invoiceData.basedOnNumber = original.invoiceNumber;
+          invoiceData.basedOnType = 'sale';
+        }
 
         // ── حجز الرقم التسلسلي داخل نفس transaction الحفظ ──────────────────
         // المسودة لا تستهلك الرقم الرسمي من دفتر المستندات.
@@ -707,6 +849,33 @@ export const salesRouter = router({
 
         // ── تحقق: جميع الأصناف مسجلة في النظام (لا يُقبل نص يدوي بدون productId) ──
         if (items) await validateInvoiceItems(items, ctx.user.orgId);
+
+        if ((rest.invoiceType ?? existing?.invoiceType) === 'return') {
+          const returnItems: SalesReturnValidationItem[] = items
+            ? items.map((item) => ({
+                productId: item.productId,
+                productName: item.productName,
+                quantity: item.quantity,
+              }))
+            : (await db.query.salesInvoiceItems.findMany({
+                where: eq(salesInvoiceItems.invoiceId, id),
+              })).map((row) => ({
+                productId: row.productId ?? undefined,
+                productName: row.productName,
+                quantity: row.quantity,
+              }));
+          const original = await validateSalesReturnReference({
+            orgId: ctx.user.orgId,
+            sourceDocumentId: finalSourceDocId,
+            basedOnNumber: rest.basedOnNumber ?? existing?.basedOnNumber ?? undefined,
+            customerId: rest.customerId ?? existing?.customerId ?? undefined,
+            warehouseId: finalWarehouseId,
+            items: returnItems,
+          });
+          rest.sourceDocumentId = original.id;
+          rest.basedOnNumber = original.invoiceNumber;
+          rest.basedOnType = 'sale';
+        }
       }
 
       // تنفيذ التحديث داخل transaction؛ حجز القفل الاستشاري عند تحويل مسودة لمنع تضارب الأرقام
@@ -718,6 +887,34 @@ export const salesRouter = router({
           finalJournalId,
           ctx.user.orgId,
         );
+
+        if (!isNowDraft && (rest.invoiceType ?? existing?.invoiceType) === 'return') {
+          const returnItems: SalesReturnValidationItem[] = items
+            ? items.map((item) => ({
+                productId: item.productId,
+                productName: item.productName,
+                quantity: item.quantity,
+              }))
+            : (await tx.query.salesInvoiceItems.findMany({
+                where: eq(salesInvoiceItems.invoiceId, id),
+              })).map((row) => ({
+                productId: row.productId ?? undefined,
+                productName: row.productName,
+                quantity: row.quantity,
+              }));
+          const original = await validateSalesReturnReference({
+            orgId: ctx.user.orgId,
+            sourceDocumentId: rest.sourceDocumentId ?? existing?.sourceDocumentId ?? undefined,
+            basedOnNumber: rest.basedOnNumber ?? existing?.basedOnNumber ?? undefined,
+            customerId: rest.customerId ?? existing?.customerId ?? undefined,
+            warehouseId: resolvedWarehouseId,
+            items: returnItems,
+            tx,
+          });
+          rest.sourceDocumentId = original.id;
+          rest.basedOnNumber = original.invoiceNumber;
+          rest.basedOnType = 'sale';
+        }
 
         if (isFinalizing && finalJournalId) {
           await tx.execute(sql`SELECT pg_advisory_xact_lock(${finalJournalId}::bigint)`);

@@ -19,7 +19,7 @@ import {
   documentJournals, chartOfAccounts, documentTypes,
   warehouseAccountLinks, paymentMethods,
 } from '../schema.js';
-import { eq, and, desc, inArray, sql } from 'drizzle-orm';
+import { eq, and, desc, gt, inArray, sql } from 'drizzle-orm';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Types
@@ -55,16 +55,16 @@ export type AccountLinkConfig = {
 // resolveDocTypeAccounts — تحليل حسابات نوع المستند
 // ══════════════════════════════════════════════════════════════════════════════
 
-export async function resolveDocTypeAccountsByJournal(journalId: number, orgId: number) {
-  const docType = await db.query.documentTypes.findFirst({
+export async function resolveDocTypeAccountsByJournal(journalId: number, orgId: number, tx: DbClient = db) {
+  const docType = await tx.query.documentTypes.findFirst({
     where: and(eq(documentTypes.journal, String(journalId)), eq(documentTypes.orgId, orgId)),
   });
   if (!docType) return null;
-  return resolveDocTypeAccounts(docType.id, orgId);
+  return resolveDocTypeAccounts(docType.id, orgId, tx);
 }
 
-export async function resolveDocTypeAccounts(docTypeId: number, orgId: number) {
-  const docType = await db.query.documentTypes.findFirst({
+export async function resolveDocTypeAccounts(docTypeId: number, orgId: number, tx: DbClient = db) {
+  const docType = await tx.query.documentTypes.findFirst({
     where: and(eq(documentTypes.id, docTypeId), eq(documentTypes.orgId, orgId)),
   });
   if (!docType) return null;
@@ -78,7 +78,7 @@ export async function resolveDocTypeAccounts(docTypeId: number, orgId: number) {
 
   const walById = new Map<number, { accountId: number | null }>();
   if (linkIds.length > 0) {
-    const walRows = await db.query.warehouseAccountLinks.findMany({
+    const walRows = await tx.query.warehouseAccountLinks.findMany({
       where: inArray(warehouseAccountLinks.id, linkIds),
     });
     walRows.forEach(w => walById.set(w.id, w));
@@ -108,10 +108,10 @@ export async function resolveDocTypeAccounts(docTypeId: number, orgId: number) {
 // validateAccounts — التحقق من صحة الحسابات
 // ══════════════════════════════════════════════════════════════════════════════
 
-export async function validateAccounts(accountIds: (number | null)[]): Promise<void> {
+export async function validateAccounts(accountIds: (number | null)[], tx: DbClient = db): Promise<void> {
   const ids = accountIds.filter((id): id is number => id !== null);
   if (!ids.length) return;
-  const accs = await db.query.chartOfAccounts.findMany({
+  const accs = await tx.query.chartOfAccounts.findMany({
     where: inArray(chartOfAccounts.id, ids),
   });
   for (const acc of accs) {
@@ -671,6 +671,7 @@ export async function autoPostSalesInvoice(
     );
   }
   const client = tx ?? db;
+  await client.execute(sql`SELECT pg_advisory_xact_lock(${invoiceId}::bigint)`);
   const invoice = await client.query.salesInvoices.findFirst({
     where: and(eq(salesInvoices.id, invoiceId), eq(salesInvoices.orgId, orgId)),
   });
@@ -692,9 +693,9 @@ export async function autoPostSalesInvoice(
   if (journal?.postingMode === 'disabled') return null;
 
   const docTypeAccs = invoice.docTypeId
-    ? await resolveDocTypeAccounts(invoice.docTypeId, orgId)
+    ? await resolveDocTypeAccounts(invoice.docTypeId, orgId, client)
     : invoice.journalId
-      ? await resolveDocTypeAccountsByJournal(invoice.journalId, orgId)
+      ? await resolveDocTypeAccountsByJournal(invoice.journalId, orgId, client)
       : null;
 
   const effectiveJournal = {
@@ -716,6 +717,13 @@ export async function autoPostSalesInvoice(
     const hasDebitAcc = isCredit ? !!effectiveJournal.creditAccountId : !!effectiveJournal.cashAccountId;
     if (!effectiveJournal.salesAccountId || !hasDebitAcc) return null;
   }
+  await validateAccounts([
+    effectiveJournal.cashAccountId,
+    effectiveJournal.creditAccountId,
+    effectiveJournal.salesAccountId,
+    effectiveJournal.taxAccountId,
+    effectiveJournal.discountAccountId,
+  ], client);
 
   const { lines: rawLines, isBalanced } = await buildSalesInvoiceLines(invoice, effectiveJournal, orgId);
   if (!isBalanced || rawLines.length === 0) return null;
@@ -754,19 +762,311 @@ export async function autoPostSalesInvoice(
 
   const stockVoucher = invoice.invoiceType === 'return'
     ? await postSalesReturnStock(invoice, orgId, userId, client)
-    : null;
+    : invoice.invoiceType === 'sale'
+      ? await postSalesInvoiceStock(invoice, orgId, userId, client)
+      : null;
 
   await client.update(salesInvoices)
     .set({
       isPosted: true,
       postedAt: new Date(),
       postedJournalEntryId: entry.id,
-      ...(stockVoucher ? { generatedStockVoucherId: stockVoucher.id } : {}),
+      ...(stockVoucher ? {
+        generatedStockVoucherId: stockVoucher.id,
+        generatedStockJournalEntryId: stockVoucher.generatedJournalEntryId ?? null,
+      } : {}),
       updatedAt: new Date(),
     })
     .where(and(eq(salesInvoices.id, invoiceId), eq(salesInvoices.orgId, orgId)));
 
   return { entryNumber: entry.entryNumber };
+}
+
+type SalesStockMovementKind = 'sale' | 'return';
+
+async function postSalesStockMovement(
+  invoice: typeof salesInvoices.$inferSelect,
+  orgId: number,
+  userId: number,
+  kind: SalesStockMovementKind,
+  tx: DbClient,
+) {
+  if (!invoice.warehouseId) {
+    throw new Error('لا يمكن ترحيل مستند المبيعات مخزنيًا بدون مخزن');
+  }
+
+  const sourceDocType = kind === 'sale' ? 'sales_invoice' : 'sales_return';
+  const existingVoucher = await tx.query.stockVouchers.findFirst({
+    where: and(
+      eq(stockVouchers.orgId, orgId),
+      eq(stockVouchers.sourceDocType, sourceDocType),
+      eq(stockVouchers.sourceDocId, invoice.id),
+      eq(stockVouchers.status, 'confirmed'),
+    ),
+  });
+  if (existingVoucher) return existingVoucher;
+
+  const items = await tx.query.salesInvoiceItems.findMany({
+    where: eq(salesInvoiceItems.invoiceId, invoice.id),
+  });
+  const stockItems = items.filter((item) => item.productId && Number(item.quantity) > 0);
+  if (stockItems.length === 0) return null;
+
+  const stockDocType = kind === 'sale' ? 'stock_issue_items' : 'stock_receipt_items';
+  const stockJournal = await tx.query.documentJournals.findFirst({
+    where: and(
+      eq(documentJournals.orgId, orgId),
+      eq(documentJournals.warehouseId, invoice.warehouseId),
+      eq(documentJournals.docType, stockDocType),
+      eq(documentJournals.isActive, true),
+    ),
+  });
+  if (!stockJournal) {
+    throw new Error(`لا يوجد دفتر ${kind === 'sale' ? 'صرف' : 'استلام'} مخزني فعال مرتبط بالمخزن`);
+  }
+  const stockDocTypeAccounts = await resolveDocTypeAccountsByJournal(stockJournal.id, orgId, tx);
+  const inventoryAccountId = stockDocTypeAccounts?.inventoryAccountId ?? stockJournal.inventoryAccountId;
+  const cogsAccountId = stockDocTypeAccounts?.cogsAccountId ?? stockJournal.cogsAccountId;
+  if (!inventoryAccountId || !cogsAccountId) {
+    throw new Error('دفتر المخزون يجب أن يحدد حساب المخزون وحساب تكلفة المبيعات');
+  }
+  await validateAccounts([inventoryAccountId, cogsAccountId], tx);
+
+  const productIds = [...new Set(stockItems.map((item) => item.productId!))];
+  const inventoryRows = await tx.query.inventory.findMany({
+    where: and(
+      eq(inventory.orgId, orgId),
+      eq(inventory.warehouseId, invoice.warehouseId),
+      inArray(inventory.productId, productIds),
+    ),
+  });
+  const inventoryMap = new Map(inventoryRows.map((row) => [row.productId, row]));
+
+  const sourceCostByProduct = new Map<number, number>();
+  const sourceQtyByProduct = new Map<number, number>();
+  if (kind === 'return') {
+    if (!invoice.sourceDocumentId) {
+      throw new Error('مردود المبيعات يتطلب فاتورة مبيعات أصلية');
+    }
+    const sourceInvoice = await tx.query.salesInvoices.findFirst({
+      where: and(
+        eq(salesInvoices.id, invoice.sourceDocumentId),
+        eq(salesInvoices.orgId, orgId),
+        eq(salesInvoices.invoiceType, 'sale'),
+        eq(salesInvoices.isPosted, true),
+      ),
+    });
+    if (!sourceInvoice || sourceInvoice.customerId !== invoice.customerId || sourceInvoice.warehouseId !== invoice.warehouseId) {
+      throw new Error('فاتورة المبيعات الأصلية لا تطابق العميل أو المخزن أو ليست مرحّلة');
+    }
+    const sourceVoucher = await tx.query.stockVouchers.findFirst({
+      where: and(
+        eq(stockVouchers.orgId, orgId),
+        eq(stockVouchers.sourceDocType, 'sales_invoice'),
+        eq(stockVouchers.sourceDocId, sourceInvoice.id),
+        eq(stockVouchers.status, 'confirmed'),
+      ),
+    });
+    if (!sourceVoucher) {
+      throw new Error('لا يمكن ترحيل المردود قبل وجود سند صرف مخزني للفاتورة الأصلية');
+    }
+    const sourceItems = await tx.query.stockVoucherItems.findMany({
+      where: eq(stockVoucherItems.voucherId, sourceVoucher.id),
+    });
+    for (const item of sourceItems) {
+      if (!item.productId) continue;
+      sourceQtyByProduct.set(item.productId, (sourceQtyByProduct.get(item.productId) ?? 0) + Number(item.quantity));
+      sourceCostByProduct.set(item.productId, Number(item.unitCost ?? 0));
+    }
+  }
+
+  const priorReturnQty = new Map<number, number>();
+  if (kind === 'return') {
+    const priorReturns = await tx.query.salesInvoices.findMany({
+      where: and(
+        eq(salesInvoices.orgId, orgId),
+        eq(salesInvoices.invoiceType, 'return'),
+        eq(salesInvoices.sourceDocumentId, invoice.sourceDocumentId!),
+        eq(salesInvoices.isPosted, true),
+      ),
+    });
+    for (const prior of priorReturns) {
+      const priorItems = await tx.query.salesInvoiceItems.findMany({
+        where: eq(salesInvoiceItems.invoiceId, prior.id),
+      });
+      for (const item of priorItems) {
+        if (item.productId) {
+          priorReturnQty.set(item.productId, (priorReturnQty.get(item.productId) ?? 0) + Number(item.quantity));
+        }
+      }
+    }
+  }
+
+  const normalizedItems = stockItems.map((item) => {
+    const quantity = Number(item.quantity);
+    const current = inventoryMap.get(item.productId!);
+    const unitCost = kind === 'return'
+      ? (sourceCostByProduct.get(item.productId!) ?? 0)
+      : Number(current?.avgCost ?? 0);
+
+    if (kind === 'sale' && Number(current?.quantity ?? 0) + 0.0001 < quantity) {
+      throw new Error(`لا يمكن ترحيل الفاتورة: الكمية المتاحة للصنف ${item.productName} أقل من الكمية المطلوبة`);
+    }
+    if (kind === 'sale' && unitCost <= 0) {
+      throw new Error(`لا توجد تكلفة مخزنية معروفة للصنف "${item.productName}"`);
+    }
+    if (kind === 'return') {
+      const soldQty = sourceQtyByProduct.get(item.productId!) ?? 0;
+      const returnedQty = priorReturnQty.get(item.productId!) ?? 0;
+      if (soldQty <= 0) {
+        throw new Error(`الصنف "${item.productName}" غير موجود في الفاتورة الأصلية`);
+      }
+      if (returnedQty + quantity > soldQty + 0.0001) {
+        throw new Error(`كمية مردود الصنف "${item.productName}" تتجاوز الكمية المتبقية بعد المردودات السابقة`);
+      }
+      if (unitCost <= 0) {
+        throw new Error(`لا توجد تكلفة مخزنية محفوظة للصنف "${item.productName}" في الفاتورة الأصلية`);
+      }
+    }
+    return {
+      productId: item.productId!,
+      productName: item.productName,
+      productCode: item.productCode,
+      unit: item.unit,
+      quantity: quantity.toFixed(4),
+      unitCost: unitCost.toFixed(4),
+      totalCost: (quantity * unitCost).toFixed(4),
+    };
+  });
+  const totalCost = normalizedItems.reduce((sum, item) => sum + Number(item.totalCost), 0);
+  const voucherNumber = (await reserveDocumentNumber(stockJournal.id, orgId, tx)).number;
+
+  const [voucher] = await tx.insert(stockVouchers).values({
+    orgId,
+    voucherNumber,
+    type: kind === 'sale' ? 'issue' : 'receipt',
+    voucherDate: invoice.invoiceDate,
+    warehouseId: invoice.warehouseId,
+    branchId: null,
+    reason: kind === 'sale' ? `صرف مبيعات ${invoice.invoiceNumber}` : `مردود مبيعات ${invoice.invoiceNumber}`,
+    notes: invoice.notes,
+    totalCost: totalCost.toFixed(4),
+    status: 'confirmed',
+    userId,
+    sourceDocType,
+    sourceDocId: invoice.id,
+    sourceDocNumber: invoice.invoiceNumber,
+    sourceJournalId: stockJournal.id,
+  }).returning();
+
+  await tx.insert(stockVoucherItems).values(
+    normalizedItems.map((item, sortOrder) => ({
+      ...item,
+      voucherId: voucher.id,
+      orgId,
+      sortOrder,
+    })),
+  );
+
+  for (const item of normalizedItems) {
+    const current = inventoryMap.get(item.productId);
+    const quantity = Number(item.quantity);
+    if (current) {
+      const oldQty = Number(current.quantity);
+      const newQty = kind === 'sale' ? oldQty - quantity : oldQty + quantity;
+      const oldValue = oldQty * Number(current.avgCost ?? 0);
+      const newAvgCost = kind === 'return' && newQty > 0
+        ? (oldValue + quantity * Number(item.unitCost)) / newQty
+        : Number(current.avgCost ?? item.unitCost);
+      await tx.update(inventory)
+        .set({
+          quantity: newQty.toFixed(4),
+          avgCost: newAvgCost.toFixed(4),
+          updatedAt: new Date(),
+        })
+        .where(eq(inventory.id, current.id));
+    } else if (kind === 'return') {
+      await tx.insert(inventory).values({
+        orgId,
+        productId: item.productId,
+        warehouseId: invoice.warehouseId,
+        quantity: quantity.toFixed(4),
+        avgCost: item.unitCost,
+      });
+    }
+  }
+
+  const inventoryAccount = await tx.query.chartOfAccounts.findFirst({
+    where: eq(chartOfAccounts.id, inventoryAccountId),
+  });
+  const cogsAccount = await tx.query.chartOfAccounts.findFirst({
+    where: eq(chartOfAccounts.id, cogsAccountId),
+  });
+  const costLines: PostingLine[] = kind === 'sale'
+    ? [
+        {
+          accountId: cogsAccountId,
+          accountCode: cogsAccount?.code ?? '---',
+          accountName: cogsAccount?.name ?? 'تكلفة المبيعات',
+          debit: totalCost.toFixed(4),
+          credit: '0.0000',
+          description: `تكلفة مبيعات - ${invoice.invoiceNumber}`,
+        },
+        {
+          accountId: inventoryAccountId,
+          accountCode: inventoryAccount?.code ?? '---',
+          accountName: inventoryAccount?.name ?? 'المخزون',
+          debit: '0.0000',
+          credit: totalCost.toFixed(4),
+          description: `تخفيض المخزون - ${invoice.invoiceNumber}`,
+        },
+      ]
+    : [
+        {
+          accountId: inventoryAccountId,
+          accountCode: inventoryAccount?.code ?? '---',
+          accountName: inventoryAccount?.name ?? 'المخزون',
+          debit: totalCost.toFixed(4),
+          credit: '0.0000',
+          description: `عكس تكلفة مردود المبيعات - ${invoice.invoiceNumber}`,
+        },
+        {
+          accountId: cogsAccountId,
+          accountCode: cogsAccount?.code ?? '---',
+          accountName: cogsAccount?.name ?? 'تكلفة المبيعات',
+          debit: '0.0000',
+          credit: totalCost.toFixed(4),
+          description: `عكس تكلفة المبيعات - ${invoice.invoiceNumber}`,
+        },
+      ];
+  const costEntry = await insertJournalEntry({
+    orgId,
+    userId,
+    date: invoice.invoiceDate,
+    description: kind === 'sale' ? `تكلفة مبيعات ${invoice.invoiceNumber}` : `عكس تكلفة مردود ${invoice.invoiceNumber}`,
+    reference: invoice.invoiceNumber,
+    sourceDocType: kind === 'sale' ? 'sales_cogs' : 'sales_return_cogs',
+    sourceDocId: invoice.id,
+    sourceDocNumber: invoice.invoiceNumber,
+    lines: costLines,
+    journalId: stockJournal.id,
+    generatedDocType: stockDocType,
+    tx,
+  });
+  await tx.update(stockVouchers)
+    .set({ generatedJournalEntryId: costEntry.id })
+    .where(eq(stockVouchers.id, voucher.id));
+
+  return { ...voucher, generatedJournalEntryId: costEntry.id };
+}
+
+export async function postSalesInvoiceStock(
+  invoice: typeof salesInvoices.$inferSelect,
+  orgId: number,
+  userId: number,
+  tx: DbClient = db,
+) {
+  return postSalesStockMovement(invoice, orgId, userId, 'sale', tx);
 }
 
 /**
@@ -781,108 +1081,10 @@ export async function postSalesReturnStock(
   userId: number,
   tx: DbClient = db,
 ) {
-  const items = await tx.query.salesInvoiceItems.findMany({
-    where: eq(salesInvoiceItems.invoiceId, invoice.id),
-  });
-  const stockItems = items.filter((item) => item.productId && Number(item.quantity) > 0);
-  if (stockItems.length === 0) return null;
-
-  const existingVoucher = await tx.query.stockVouchers.findFirst({
-    where: and(
-      eq(stockVouchers.orgId, orgId),
-      eq(stockVouchers.sourceDocType, 'sales_return'),
-      eq(stockVouchers.sourceDocId, invoice.id),
-      eq(stockVouchers.status, 'confirmed'),
-    ),
-  });
-  if (existingVoucher) return existingVoucher;
-
-  if (!invoice.warehouseId) {
-    throw new Error('لا يمكن ترحيل مردود المبيعات مخزنيًا بدون مخزن');
-  }
-
-  const stockJournal = await tx.query.documentJournals.findFirst({
-    where: and(
-      eq(documentJournals.orgId, orgId),
-      eq(documentJournals.warehouseId, invoice.warehouseId),
-      eq(documentJournals.docType, 'stock_receipt'),
-      eq(documentJournals.isActive, true),
-    ),
-  });
-  const voucherNumber = stockJournal
-    ? (await reserveDocumentNumber(stockJournal.id, orgId, tx)).number
-    : `SR-STK-${invoice.invoiceNumber}`;
-
-  const inventoryRows = await tx.query.inventory.findMany({
-    where: and(
-      eq(inventory.orgId, orgId),
-      eq(inventory.warehouseId, invoice.warehouseId),
-      inArray(inventory.productId, stockItems.map((item) => item.productId!)),
-    ),
-  });
-  const inventoryMap = new Map(inventoryRows.map((row) => [row.productId, row]));
-  const normalizedItems = stockItems.map((item) => {
-    const quantity = Number(item.quantity);
-    const unitCost = Number(inventoryMap.get(item.productId!)?.avgCost ?? item.unitPrice ?? 0);
-    return {
-      productId: item.productId!,
-      productName: item.productName,
-      productCode: item.productCode,
-      unit: item.unit,
-      quantity: quantity.toFixed(4),
-      unitCost: unitCost.toFixed(4),
-      totalCost: (quantity * unitCost).toFixed(4),
-    };
-  });
-  const totalCost = normalizedItems.reduce((sum, item) => sum + Number(item.totalCost), 0).toFixed(4);
-
-  const [voucher] = await tx.insert(stockVouchers).values({
-    orgId,
-    voucherNumber,
-    type: 'receipt',
-    voucherDate: invoice.invoiceDate,
-    warehouseId: invoice.warehouseId,
-    branchId: null,
-    reason: `مردود مبيعات ${invoice.invoiceNumber}`,
-    notes: invoice.notes,
-    totalCost,
-    status: 'confirmed',
-    userId,
-    sourceDocType: 'sales_return',
-    sourceDocId: invoice.id,
-    sourceDocNumber: invoice.invoiceNumber,
-    sourceJournalId: stockJournal?.id ?? null,
-  }).returning();
-
-  await tx.insert(stockVoucherItems).values(
-    normalizedItems.map((item, sortOrder) => ({ ...item, voucherId: voucher.id, orgId, sortOrder })),
-  );
-
-  for (const item of normalizedItems) {
-    const current = inventoryMap.get(item.productId);
-    const quantity = Number(item.quantity);
-    if (current) {
-      await tx.update(inventory)
-        .set({
-          quantity: (Number(current.quantity) + quantity).toFixed(4),
-          updatedAt: new Date(),
-        })
-        .where(eq(inventory.id, current.id));
-    } else {
-      await tx.insert(inventory).values({
-        orgId,
-        productId: item.productId,
-        warehouseId: invoice.warehouseId,
-        quantity: quantity.toFixed(4),
-        avgCost: item.unitCost,
-      });
-    }
-  }
-
-  return voucher;
+  return postSalesStockMovement(invoice, orgId, userId, 'return', tx);
 }
 
-export async function reverseSalesReturnStock(
+export async function reverseSalesStockMovement(
   invoice: typeof salesInvoices.$inferSelect,
   orgId: number,
   tx: DbClient = db,
@@ -890,8 +1092,10 @@ export async function reverseSalesReturnStock(
   const voucher = await tx.query.stockVouchers.findFirst({
     where: and(
       eq(stockVouchers.orgId, orgId),
-      eq(stockVouchers.sourceDocType, 'sales_return'),
       eq(stockVouchers.sourceDocId, invoice.id),
+      invoice.invoiceType === 'sale'
+        ? eq(stockVouchers.sourceDocType, 'sales_invoice')
+        : eq(stockVouchers.sourceDocType, 'sales_return'),
       eq(stockVouchers.status, 'confirmed'),
     ),
   });
@@ -902,6 +1106,25 @@ export async function reverseSalesReturnStock(
   });
   for (const item of items) {
     if (!item.productId || !invoice.warehouseId) continue;
+    const laterVouchers = await tx.query.stockVouchers.findMany({
+      where: and(
+        eq(stockVouchers.orgId, orgId),
+        eq(stockVouchers.warehouseId, invoice.warehouseId),
+        eq(stockVouchers.status, 'confirmed'),
+        gt(stockVouchers.createdAt, voucher.createdAt),
+      ),
+      columns: { id: true },
+    });
+    if (laterVouchers.length > 0) {
+      const laterVoucherIds = laterVouchers.map((row) => row.id);
+      const laterItems = await tx.query.stockVoucherItems.findMany({
+        where: inArray(stockVoucherItems.voucherId, laterVoucherIds),
+        columns: { id: true, voucherId: true, productId: true },
+      });
+      if (laterItems.some((laterItem) => laterItem.productId === item.productId)) {
+        throw new Error(`لا يمكن إلغاء الترحيل: توجد حركة مخزنية لاحقة للصنف "${item.productName}" في المخزن نفسه`);
+      }
+    }
     const current = await tx.query.inventory.findFirst({
       where: and(
         eq(inventory.orgId, orgId),
@@ -909,20 +1132,45 @@ export async function reverseSalesReturnStock(
         eq(inventory.warehouseId, invoice.warehouseId),
       ),
     });
-    const nextQuantity = Number(current?.quantity ?? 0) - Number(item.quantity);
+    const currentQuantity = Number(current?.quantity ?? 0);
+    const itemQuantity = Number(item.quantity);
+    const nextQuantity = voucher.type === 'issue'
+      ? currentQuantity + itemQuantity
+      : currentQuantity - itemQuantity;
     if (nextQuantity < -0.0001) {
-      throw new Error(`لا يمكن إلغاء ترحيل مردود المبيعات: كمية المخزون للصنف ${item.productName} أقل من كمية السند`);
+      throw new Error(`لا يمكن إلغاء الترحيل: توجد حركة لاحقة جعلت مخزون الصنف "${item.productName}" أقل من كمية سند الاستلام`);
     }
     if (current) {
+      const currentAverageCost = Number(current.avgCost ?? 0);
+      const restoredAverageCost = voucher.type === 'receipt' && nextQuantity > 0
+        ? Math.max(
+            0,
+            ((currentQuantity * currentAverageCost) - (itemQuantity * Number(item.unitCost ?? 0))) / nextQuantity,
+          )
+        : currentAverageCost;
       await tx.update(inventory)
-        .set({ quantity: Math.max(0, nextQuantity).toFixed(4), updatedAt: new Date() })
+        .set({
+          quantity: Math.max(0, nextQuantity).toFixed(4),
+          avgCost: restoredAverageCost.toFixed(4),
+          updatedAt: new Date(),
+        })
         .where(eq(inventory.id, current.id));
     }
+  }
+  if (voucher.generatedJournalEntryId) {
+    await tx.update(journalEntries)
+      .set({ status: 'cancelled' })
+      .where(and(
+        eq(journalEntries.id, voucher.generatedJournalEntryId),
+        eq(journalEntries.orgId, orgId),
+      ));
   }
   await tx.update(stockVouchers)
     .set({ status: 'cancelled' })
     .where(and(eq(stockVouchers.id, voucher.id), eq(stockVouchers.orgId, orgId)));
 }
+
+export const reverseSalesReturnStock = reverseSalesStockMovement;
 
 // ══════════════════════════════════════════════════════════════════════════════
 // autoPostPurchaseInvoice — ترحيل تلقائي فاتورة مشتريات / مردود
@@ -950,9 +1198,9 @@ export async function autoPostPurchaseInvoice(
   if (journal?.postingMode === 'disabled') return null;
 
   const docTypeAccs = invoice.docTypeId
-    ? await resolveDocTypeAccounts(invoice.docTypeId, orgId)
+    ? await resolveDocTypeAccounts(invoice.docTypeId, orgId, client)
     : invoice.journalId
-      ? await resolveDocTypeAccountsByJournal(invoice.journalId, orgId)
+      ? await resolveDocTypeAccountsByJournal(invoice.journalId, orgId, client)
       : null;
 
   const effectiveJournal = {
@@ -966,6 +1214,13 @@ export async function autoPostPurchaseInvoice(
   const isCredit = invoice.paymentMethod === 'credit';
   const hasCounterAcc = isCredit ? !!effectiveJournal.supplierAccountId : !!effectiveJournal.cashAccountId;
   if (!effectiveJournal.purchaseAccountId || !hasCounterAcc) return null;
+  await validateAccounts([
+    effectiveJournal.purchaseAccountId,
+    effectiveJournal.supplierAccountId,
+    effectiveJournal.cashAccountId,
+    effectiveJournal.taxAccountId,
+    effectiveJournal.discountAccountId,
+  ], client);
 
   const { lines: rawLines, isBalanced } = await buildPurchaseInvoiceLines(invoice, effectiveJournal, orgId);
   if (!isBalanced || rawLines.length === 0) return null;

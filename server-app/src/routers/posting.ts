@@ -19,7 +19,8 @@ import {
   autoPostSalesInvoice,
   autoPostPurchaseInvoice,
   postSalesReturnStock,
-  reverseSalesReturnStock,
+  postSalesInvoiceStock,
+  reverseSalesStockMovement,
   validateAccounts,
   insertJournalEntry,
   reserveDocumentNumber,
@@ -174,6 +175,7 @@ export const postingRouter = router({
       await validateAccounts(lines.map(l => l.accountId));
 
       return db.transaction(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${input.invoiceId}::bigint)`);
         const locked = await tx.query.salesInvoices.findFirst({
           where: and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, orgId)),
         });
@@ -199,14 +201,19 @@ export const postingRouter = router({
         });
         const stockVoucher = locked.invoiceType === 'return'
           ? await postSalesReturnStock(locked, orgId, ctx.user.id, tx)
-          : null;
+          : locked.invoiceType === 'sale'
+            ? await postSalesInvoiceStock(locked, orgId, ctx.user.id, tx)
+            : null;
 
         await tx.update(salesInvoices)
           .set({
             isPosted: true,
             postedAt: new Date(),
             postedJournalEntryId: entry.id,
-            ...(stockVoucher ? { generatedStockVoucherId: stockVoucher.id } : {}),
+            ...(stockVoucher ? {
+              generatedStockVoucherId: stockVoucher.id,
+              generatedStockJournalEntryId: stockVoucher.generatedJournalEntryId ?? null,
+            } : {}),
             updatedAt: new Date(),
           })
           .where(and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, orgId)));
@@ -235,13 +242,14 @@ export const postingRouter = router({
         throw new Error('إلغاء الترحيل غير مسموح به في هذا الدفتر');
 
       return db.transaction(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${input.invoiceId}::bigint)`);
         const locked = await tx.query.salesInvoices.findFirst({
           where: and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, orgId)),
         });
         if (!locked || !locked.isPosted) throw new Error('الفاتورة ليست مرحَّلة');
 
-        if (locked.invoiceType === 'return') {
-          await reverseSalesReturnStock(locked, orgId, tx);
+        if (locked.invoiceType === 'return' || locked.invoiceType === 'sale') {
+          await reverseSalesStockMovement(locked, orgId, tx);
         }
         if (locked.postedJournalEntryId) {
           await tx.delete(journalEntryLines)
