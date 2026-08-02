@@ -123,6 +123,152 @@ function getNavGroups(lang: "ar" | "en"): NavGroup[] {
   ];
 }
 
+type OpenTab = (
+  path: string,
+  label: string,
+  Icon: React.ElementType,
+  pinned?: boolean,
+) => void;
+
+function UserMenu({
+  user,
+  userInitials,
+  lang,
+  openTab,
+  setShowChangePassword,
+  logout,
+}: {
+  user: any;
+  userInitials: string;
+  lang: "ar" | "en";
+  openTab: OpenTab;
+  setShowChangePassword: (open: boolean) => void;
+  logout: () => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-accent transition-colors">
+          <Avatar className="w-7 h-7 shrink-0">
+            <AvatarFallback className="bg-primary/20 text-primary text-[10px] font-bold">
+              {userInitials}
+            </AvatarFallback>
+          </Avatar>
+          <span className="text-xs font-medium text-foreground hidden sm:block">
+            {user.name ?? t(lang, "user")}
+          </span>
+          <ChevronDown className="w-3 h-3 text-muted-foreground hidden sm:block" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        className="w-48"
+        style={{ direction: "rtl" }}
+        collisionPadding={{ top: 40 }}
+      >
+        <DropdownMenuLabel className="text-xs text-muted-foreground">
+          {user.username}
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => openTab("/settings", t(lang, "settings"), Settings)}>
+          <Settings className="w-4 h-4 ml-2" />
+          {t(lang, "settings")}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setShowChangePassword(true)}>
+          <KeyRound className="w-4 h-4 ml-2" />
+          تغيير كلمة المرور
+        </DropdownMenuItem>
+        {import.meta.env.DEV && (user?.role === "superadmin" || user?.role === "admin") && (
+          <DropdownMenuItem onClick={() => openTab("/dev/source-code", "مستعرض الكود", Code2)}>
+            <Code2 className="w-4 h-4 ml-2" />
+            مستعرض الكود
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
+          <LogOut className="w-4 h-4 ml-2" />
+          {t(lang, "logout")}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function LangToggleBtn({
+  lang,
+  isAr,
+  toggleLang,
+}: {
+  lang: "ar" | "en";
+  isAr: boolean;
+  toggleLang: () => void;
+}) {
+  return (
+    <button
+      onClick={toggleLang}
+      title={isAr ? t(lang, "switchToEnglish") : t(lang, "switchToArabic")}
+      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-accent transition-all duration-150"
+    >
+      <Languages className="w-3.5 h-3.5" />
+      <span className="hidden sm:block">{isAr ? "EN" : "ع"}</span>
+    </button>
+  );
+}
+
+function LayoutToggleBtn({
+  layoutMode,
+  setLayoutMode,
+  isAr,
+}: {
+  layoutMode: LayoutMode;
+  setLayoutMode: (mode: LayoutMode) => void;
+  isAr: boolean;
+}) {
+  const modeMeta: Record<LayoutMode, { icon: React.ElementType; label: string }> = {
+    vertical:   { icon: PanelRight, label: isAr ? "رأسية"  : "Vertical" },
+    horizontal: { icon: LayoutGrid,  label: isAr ? "أفقية"  : "Horizontal" },
+    apps:       { icon: Grid3x3,    label: isAr ? "مركزية" : "Centered" },
+  };
+  const CurrentIcon = modeMeta[layoutMode]?.icon ?? PanelRight;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          title={isAr ? "طريقة عرض واجهة النظام" : "Interface view mode"}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-all duration-150"
+          data-testid="button-layout-switcher"
+        >
+          <CurrentIcon className="w-3.5 h-3.5" />
+          <span className="hidden sm:block">{modeMeta[layoutMode]?.label}</span>
+          <ChevronDown className="w-3 h-3 opacity-60" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        className="w-44"
+        style={{ direction: isAr ? "rtl" : "ltr" }}
+      >
+        {(Object.keys(modeMeta) as LayoutMode[]).map((mode) => {
+          const Icon = modeMeta[mode].icon;
+          return (
+            <DropdownMenuItem
+              key={mode}
+              onClick={() => setLayoutMode(mode)}
+              className={layoutMode === mode ? "bg-accent font-semibold" : ""}
+              data-testid={`menu-layout-${mode}`}
+            >
+              <Icon className="w-4 h-4 ml-2" />
+              {modeMeta[mode].label}
+              {layoutMode === mode && <Check className="w-3.5 h-3.5 mr-auto text-primary" />}
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function OnlineIndicator() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   useEffect(() => {
@@ -409,102 +555,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     warehouse_manager: t(lang, "roleWarehouseManager"),
   };
 
-  /* ---- User Menu (shared) ---- */
-  const UserMenu = () => (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-accent transition-colors">
-          <Avatar className="w-7 h-7 shrink-0">
-            <AvatarFallback className="bg-primary/20 text-primary text-[10px] font-bold">
-              {userInitials}
-            </AvatarFallback>
-          </Avatar>
-          <span className="text-xs font-medium text-foreground hidden sm:block">
-            {user.name ?? t(lang, "user")}
-          </span>
-          <ChevronDown className="w-3 h-3 text-muted-foreground hidden sm:block" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48" dir={dir} collisionPadding={{ top: 40 }}>
-        <DropdownMenuLabel className="text-xs text-muted-foreground">{user.email}</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => openTab("/settings", t(lang, "settings"), Settings)}>
-          <Settings className="w-4 h-4 ml-2" />
-          {t(lang, "settings")}
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setShowChangePassword(true)}>
-          <KeyRound className="w-4 h-4 ml-2" />
-          تغيير كلمة المرور
-        </DropdownMenuItem>
-        {import.meta.env.DEV && (user?.role === "superadmin" || user?.role === "admin") && (
-          <DropdownMenuItem onClick={() => openTab("/dev/source-code", "مستعرض الكود", Code2)}>
-            <Code2 className="w-4 h-4 ml-2" />
-            مستعرض الكود
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
-          <LogOut className="w-4 h-4 ml-2" />
-          {t(lang, "logout")}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-
-  /* ---- Language Toggle Button ---- */
-  const LangToggleBtn = () => (
-    <button
-      onClick={toggleLang}
-      title={isAr ? t(lang, "switchToEnglish") : t(lang, "switchToArabic")}
-      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-accent transition-all duration-150"
-    >
-      <Languages className="w-3.5 h-3.5" />
-      <span className="hidden sm:block">{isAr ? "EN" : "ع"}</span>
-    </button>
-  );
-
-  /* ---- Layout Toggle Button (3 أنماط) ---- */
-  const MODE_META: Record<LayoutMode, { icon: React.ElementType; label: string }> = {
-    vertical:   { icon: PanelRight, label: isAr ? "رأسية"  : "Vertical" },
-    horizontal: { icon: LayoutGrid, label: isAr ? "أفقية"  : "Horizontal" },
-    apps:       { icon: Grid3x3,    label: isAr ? "مركزية" : "Centered" },
-  };
-  const LayoutToggleBtn = () => {
-    const CurrentIcon = MODE_META[layoutMode]?.icon ?? PanelRight;
-    return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            title={isAr ? "طريقة عرض واجهة النظام" : "Interface view mode"}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-all duration-150"
-            data-testid="button-layout-switcher"
-          >
-            <CurrentIcon className="w-3.5 h-3.5" />
-            <span className="hidden sm:block">{MODE_META[layoutMode]?.label}</span>
-            <ChevronDown className="w-3 h-3 opacity-60" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-44" dir={dir}>
-          {(Object.keys(MODE_META) as LayoutMode[]).map(m => {
-            const Icon = MODE_META[m].icon;
-            return (
-              <DropdownMenuItem
-                key={m}
-                onClick={() => setLayoutMode(m)}
-                className={layoutMode === m ? "bg-accent font-semibold" : ""}
-                data-testid={`menu-layout-${m}`}
-              >
-                <Icon className="w-4 h-4 ml-2" />
-                {MODE_META[m].label}
-                {layoutMode === m && <Check className="w-3.5 h-3.5 mr-auto text-primary" />}
-              </DropdownMenuItem>
-            );
-          })}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    );
-  };
-
   /* ================================================
      APPS LAYOUT RENDER (شاشة تطبيقات مركزية)
   ================================================ */
@@ -535,9 +585,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <span className="text-xs text-muted-foreground hidden md:block">
               {fmtDate(new Date())}
             </span>
-            <LangToggleBtn />
-            <LayoutToggleBtn />
-            <UserMenu />
+            <LangToggleBtn lang={lang} isAr={isAr} toggleLang={toggleLang} />
+            <LayoutToggleBtn layoutMode={layoutMode} setLayoutMode={setLayoutMode} isAr={isAr} />
+            <UserMenu
+              user={user}
+              userInitials={userInitials}
+              lang={lang}
+              openTab={openTab}
+              setShowChangePassword={setShowChangePassword}
+              logout={logout}
+            />
           </div>
         </header>
 
@@ -582,9 +639,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <span className="text-xs text-muted-foreground hidden md:block">
               {fmtDate(new Date())}
             </span>
-            <LangToggleBtn />
-            <LayoutToggleBtn />
-            <UserMenu />
+            <LangToggleBtn lang={lang} isAr={isAr} toggleLang={toggleLang} />
+            <LayoutToggleBtn layoutMode={layoutMode} setLayoutMode={setLayoutMode} isAr={isAr} />
+            <UserMenu
+              user={user}
+              userInitials={userInitials}
+              lang={lang}
+              openTab={openTab}
+              setShowChangePassword={setShowChangePassword}
+              logout={logout}
+            />
           </div>
 
           {/* Row 2: Horizontal Nav */}
@@ -662,9 +726,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <ChevronDown className="w-3.5 h-3.5 text-sidebar-foreground/40 shrink-0" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48" dir={dir} collisionPadding={{ top: 40 }}>
+            <DropdownMenuContent
+              align="end"
+              className="w-48"
+              style={{ direction: dir }}
+              collisionPadding={{ top: 40 }}
+            >
               <DropdownMenuLabel className="text-xs text-muted-foreground">
-                {user.email}
+                {user.username}
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => openTab("/settings", t(lang, "settings"), Settings)}>
@@ -705,9 +774,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <span className="text-xs text-muted-foreground hidden sm:block">
               {fmtDate(new Date())}
             </span>
-            <LangToggleBtn />
-            <LayoutToggleBtn />
-            <UserMenu />
+            <LangToggleBtn lang={lang} isAr={isAr} toggleLang={toggleLang} />
+            <LayoutToggleBtn layoutMode={layoutMode} setLayoutMode={setLayoutMode} isAr={isAr} />
+            <UserMenu
+              user={user}
+              userInitials={userInitials}
+              lang={lang}
+              openTab={openTab}
+              setShowChangePassword={setShowChangePassword}
+              logout={logout}
+            />
           </div>
         </header>
 

@@ -27,6 +27,8 @@ interface ToolbarActionsApi {
 }
 
 const ToolbarActionsContext = createContext<ToolbarActionsApi | null>(null);
+const EMPTY_ACTIONS: ToolbarActionMap = {};
+const EMPTY_TOOLS: ToolbarToolItem[] = [];
 
 export function ToolbarActionsProvider({
   children,
@@ -96,18 +98,25 @@ export function useToolbarActions(
   // when actions/tools change, NOT on every context state update.
   const { setActions, setTools, setActiveAction } = ctx;
 
+  // Register the current screen state without clearing the toolbar first.
+  // Clearing on every dependency change briefly unmounts the toolbar and its
+  // Radix Presence tree; when a screen updates several fields together this
+  // can turn into a maximum-update-depth loop.
   useEffect(() => {
     setActions(actions);
     if (tools !== undefined) setTools(tools);
     setActiveAction(activeAction);
-
-    return () => {
-      setActions({});
-      setTools([]);
-      setActiveAction(undefined);
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setActions, setTools, setActiveAction, actions, tools, activeAction]);
+
+  // Clear only when the registering screen actually unmounts.
+  useEffect(() => {
+    return () => {
+      setActions(EMPTY_ACTIONS);
+      setTools(EMPTY_TOOLS);
+      setActiveAction(undefined);
+    };
+  }, [setActions, setTools, setActiveAction]);
 }
 
 export function useToolbarState(): ToolbarState {
