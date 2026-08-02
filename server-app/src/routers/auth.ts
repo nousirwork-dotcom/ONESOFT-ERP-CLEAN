@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { router, publicProcedure, protectedProcedure } from '../trpc.js';
 import { TRPCError } from '@trpc/server';
 import { db } from '../db.js';
-import { users, organizations, appSettings } from '../schema.js';
+import { users, organizations, appSettings, userGroups, userGroupMembers } from '../schema.js';
 import { and, eq } from 'drizzle-orm';
 import { verifyPassword, getAuthCookieOptions } from '../auth.js';
 import { ENV } from '../env.js';
@@ -10,16 +10,41 @@ import { ENV } from '../env.js';
 export const authRouter = router({
 
   me: publicProcedure.query(async ({ ctx }) => {
-    return ctx.user ? {
+    if (!ctx.user) return null;
+    const [groups, directPermissions] = await Promise.all([
+      db.select({
+        id: userGroups.id,
+        code: userGroups.code,
+        name: userGroups.name,
+      })
+        .from(userGroupMembers)
+        .innerJoin(userGroups, eq(userGroups.id, userGroupMembers.groupId))
+        .where(and(
+          eq(userGroupMembers.orgId, ctx.user.orgId),
+          eq(userGroupMembers.memberType, 'user'),
+          eq(userGroupMembers.memberUserId, ctx.user.id),
+          eq(userGroups.isActive, true),
+        ))
+        .orderBy(userGroups.name),
+      Promise.resolve((ctx.user.extraPermissions ?? {}) as Record<string, boolean>),
+    ]);
+    return {
       id:               ctx.user.id,
       name:             ctx.user.name,
       username:         ctx.user.username,
       role:             ctx.user.role,
       orgId:            ctx.user.orgId,
-      extraPermissions: (ctx.user.extraPermissions ?? {}) as Record<string, boolean>,
+      groups,
+      extraPermissions: directPermissions,
+      permissions: {
+        ...directPermissions,
+        ...(ctx.user.role === 'admin' || ctx.user.role === 'superadmin'
+          ? { users_view: true, users_create: true, users_edit: true, permissions_manage: true, company_view: true, company_edit: true, zatca_manage: true }
+          : {}),
+      },
       canBeSalesperson: ctx.user.canBeSalesperson ?? false,
       defaultWarehouseId: ctx.user.defaultWarehouseId ?? null,
-    } : null;
+    };
   }),
 
   // ── حالة كلمة مرور المدير (هل تم تعيينها؟) ──────────────────────────────

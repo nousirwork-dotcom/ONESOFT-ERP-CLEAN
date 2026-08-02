@@ -6,6 +6,7 @@ import { eq, and, sql } from 'drizzle-orm';
 import { ENV } from './env.js';
 import type { Request, Response } from 'express';
 import { saveDevicePrefs } from './lib/devicePrefs.js';
+import { logger } from './logger.js';
 
 const SECRET = new TextEncoder().encode(ENV.jwtSecret);
 
@@ -123,13 +124,14 @@ export async function loginHandler(req: Request, res: Response) {
 
     // ── البحث عن المستخدم حسب نوع المدخل ────────────────────────────────────────
     // كل مستخدم يملك loginMethod خاصاً به: 'username' | 'username_or_email' | 'email'
-    const isEmailInput = username.includes('@');
+    const loginInput = String(username).trim();
+    const isEmailInput = loginInput.includes('@');
     let user: typeof import('./schema.js').users.$inferSelect | undefined;
     let foundByEmail = false;
 
     if (isEmailInput) {
       // ── البحث بالبريد: نقبل فقط من loginMethod يسمح بالبريد ──────────────
-      const emailVal = username.toLowerCase().trim();
+      const emailVal = loginInput.toLowerCase();
       const emailCond = orgId
         ? and(eq(sql`lower(trim(${users.email}))`, emailVal), eq(users.orgId, orgId), eq(users.isActive, true))
         : and(eq(sql`lower(trim(${users.email}))`, emailVal), eq(users.isActive, true));
@@ -140,9 +142,10 @@ export async function loginHandler(req: Request, res: Response) {
       }
     } else {
       // ── البحث باسم المستخدم: نقبل فقط من loginMethod يسمح باسم المستخدم ──
+      const usernameVal = loginInput.toLowerCase();
       const userCond = orgId
-        ? and(eq(users.username, username), eq(users.orgId, orgId), eq(users.isActive, true))
-        : and(eq(users.username, username), eq(users.isActive, true));
+        ? and(eq(sql`lower(trim(${users.username}))`, usernameVal), eq(users.orgId, orgId), eq(users.isActive, true))
+        : and(eq(sql`lower(trim(${users.username}))`, usernameVal), eq(users.isActive, true));
       const usernameUser = await db.query.users.findFirst({ where: userCond });
       if (usernameUser && usernameUser.loginMethod !== 'email') {
         user = usernameUser;
@@ -188,6 +191,16 @@ export async function loginHandler(req: Request, res: Response) {
 
     // تحديث آخر دخول
     await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
+
+    logger.info('auth', 'login success identity', {
+      userId: user.id,
+      username: user.username,
+      displayName: user.name,
+      organizationId: user.orgId,
+      role: user.role,
+      groupId: user.userGroupId ?? null,
+      permissionKeys: Object.keys((user.extraPermissions ?? {}) as Record<string, boolean>),
+    });
 
     // حفظ كود المؤسسة على الجهاز (إن تم تحديده)
     if (orgRecord) {

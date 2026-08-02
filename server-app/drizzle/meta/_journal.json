@@ -512,6 +512,13 @@
       "when": 1786318200000,
       "tag": "0072_sales_return_stock_links",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1786318800000,
+      "tag": "0073_users_username_unique_case_insensitive",
+      "breakpoints": true
     }
   ]
 }

@@ -309,6 +309,7 @@ function SettingsOverview({ onSelect }: { onSelect: (id: MenuId) => void }) {
 // ─── Company Info ──────────────────────────────────────────────────────────────
 
 function CompanyInfoPage() {
+  const meQ = trpc.auth.me.useQuery();
   const orgQ = trpc.orgs.currentOrg.useQuery();
   const utils = trpc.useUtils();
   const saveM = trpc.orgs.updateCurrent.useMutation({
@@ -320,6 +321,7 @@ function CompanyInfoPage() {
     onError: error => toast.error(error.message),
   });
   const [form, setForm] = useState<Record<string, string>>({});
+  const canEdit = meQ.data?.role === "admin" || meQ.data?.role === "superadmin";
   useEffect(() => {
     if (!orgQ.data) return;
     const cfg = (orgQ.data.zatcaConfig ?? {}) as Record<string, unknown>;
@@ -358,6 +360,11 @@ function CompanyInfoPage() {
         {missing.length > 0 && <div className="mt-1">الحقول الناقصة: {missing.join("، ")}</div>}
         <div className="mt-1 text-[11px] opacity-80">المصدر: قاعدة بيانات النظام، وليس Local Storage.</div>
       </div>
+      {!canEdit && meQ.data && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-900">
+          هذا الحساب للعرض فقط؛ لا تملك صلاحية تعديل معلومات الشركة.
+        </div>
+      )}
       <Card className="border-border/50">
         <CardContent className="p-5 space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -368,7 +375,7 @@ function CompanyInfoPage() {
               </div>
             ))}
           </div>
-          <Button className="w-full h-9" onClick={() => saveM.mutate(form as any)} disabled={saveM.isPending || !orgQ.data}>
+          <Button className="w-full h-9" onClick={() => saveM.mutate(form as any)} disabled={saveM.isPending || !orgQ.data || !canEdit}>
             {saveM.isPending ? "جارٍ الحفظ..." : "حفظ معلومات الشركة"}
             <Save className="w-4 h-4 ml-2" />
           </Button>

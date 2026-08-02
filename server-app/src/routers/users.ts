@@ -245,8 +245,12 @@ export const usersRouter = router({
         }
       }
 
+      const username = input.username.trim();
       const existing = await db.query.users.findFirst({
-        where: and(eq(users.username, input.username), eq(users.orgId, ctx.user.orgId)),
+        where: and(
+          eq(sql`lower(trim(${users.username}))`, username.toLowerCase()),
+          eq(users.orgId, ctx.user.orgId),
+        ),
       });
       if (existing) throw new Error('اسم المستخدم مستخدم بالفعل');
 
@@ -312,28 +316,35 @@ export const usersRouter = router({
       }
 
       const passwordHash = await hashPassword(input.password);
-      const [user] = await db.insert(users).values({
-        orgId: ctx.user.orgId,
-        code: finalCode,
-        username: input.username,
-        passwordHash,
-        name: input.name,
-        email: input.email,
-        phone: input.phone,
-        role: input.role,
-        categoryId: input.categoryId,
-        userGroupId: input.userGroupId ?? null,
-        defaultBranchId: input.defaultBranchId ?? null,
-        defaultWarehouseId: input.defaultWarehouseId ?? null,
-        defaultLanguage: input.defaultLanguage ?? null,
-        allowLogin: input.allowLogin ?? true,
-        allowEmailLogin: input.allowEmailLogin ?? false,
-        loginMethod: input.loginMethod ?? 'username',
-        isActive: true,
-        passwordStatus: wantsPasswordless ? 'not_set' : 'set',
-      }).returning({ id: users.id, code: users.code, name: users.name, username: users.username, role: users.role });
+      try {
+        const [user] = await db.insert(users).values({
+          orgId: ctx.user.orgId,
+          code: finalCode,
+          username,
+          passwordHash,
+          name: input.name,
+          email: input.email,
+          phone: input.phone,
+          role: input.role,
+          categoryId: input.categoryId,
+          userGroupId: input.userGroupId ?? null,
+          defaultBranchId: input.defaultBranchId ?? null,
+          defaultWarehouseId: input.defaultWarehouseId ?? null,
+          defaultLanguage: input.defaultLanguage ?? null,
+          allowLogin: input.allowLogin ?? true,
+          allowEmailLogin: input.allowEmailLogin ?? false,
+          loginMethod: input.loginMethod ?? 'username',
+          isActive: true,
+          passwordStatus: wantsPasswordless ? 'not_set' : 'set',
+        }).returning({ id: users.id, code: users.code, name: users.name, username: users.username, role: users.role });
 
-      return user;
+        return user;
+      } catch (err: any) {
+        if (err?.code === '23505' && err?.constraint === 'users_org_username_unique_lower') {
+          throw new TRPCError({ code: 'CONFLICT', message: 'اسم المستخدم مستخدم بالفعل' });
+        }
+        throw err;
+      }
     }),
 
   // تعديل مستخدم

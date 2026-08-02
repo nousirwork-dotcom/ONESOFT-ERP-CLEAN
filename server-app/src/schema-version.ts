@@ -5,4 +5,4 @@
  * constant to match the new filename (without the .sql extension), then
  * run `pnpm migrate` so the live database is stamped with the new version.
  */
-export const REQUIRED_SCHEMA_VERSION = '0072_sales_return_stock_links';
+export const REQUIRED_SCHEMA_VERSION = '0073_users_username_unique_case_insensitive';
