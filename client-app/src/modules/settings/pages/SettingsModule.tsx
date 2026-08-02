@@ -52,6 +52,7 @@ export const menuSections = [
       { id: "company-info",    label: "معلومات الشركة",         status: "done",    path: "/cfg/company" },
       { id: "currencies",      label: "العملات",               status: "done",    path: "/cfg/currencies" },
       { id: "taxes",           label: "الضرائب",               status: "done",    path: "/cfg/taxes" },
+      { id: "electronic-invoicing-center", label: "مركز الفوترة الإلكترونية", status: "done", path: "/cfg/e-invoicing-center" },
       { id: "fiscal-periods",  label: "الفترات المحاسبية",     status: "done",    path: "/cfg/fiscal" },
       { id: "field-dictionary",label: "تعريف الحقول (Field Dictionary)", status: "done", path: "/cfg/field-dictionary" },
       { id: "payment-methods",  label: "وسائل الدفع",                      status: "done", path: "/cfg/payment-methods"  },
@@ -133,7 +134,6 @@ export const menuSections = [
       { id: "warehouses-config",   label: "المخازن",             status: "partial", path: "/cfg/warehouses" },
       { id: "document-journals",   label: "دفاتر المستندات",     status: "partial", path: "/cfg/document-journals" },
       { id: "posting-settings",    label: "ترحيل المستندات",     status: "partial", path: "/cfg/posting-settings" },
-      { id: "electronic-invoicing-center", label: "مركز الفوترة الإلكترونية", status: "done", path: "/cfg/e-invoicing-center" },
 
       { id: "license",             label: "الترخيص والتفعيل",               status: "done",    path: "/cfg/license" },
       { id: "backup",              label: "النسخ الاحتياطي",                 status: "done",    path: "/cfg/backup" },
@@ -5775,7 +5775,7 @@ function ElectronicInvoicingCenter({ initialTab = "qr" }: { initialTab?: Electro
                 : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
-            الفوترة وQR
+            إعدادات QR Code
           </button>
           <button
             type="button"
@@ -5788,7 +5788,7 @@ function ElectronicInvoicingCenter({ initialTab = "qr" }: { initialTab?: Electro
                 : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
-            السعودية – الربط مع هيئة الزكاة والضريبة والجمارك ZATCA
+            إعدادات الربط مع هيئة الزكاة والضريبة والجمارك – السعودية
           </button>
         </div>
       </div>
