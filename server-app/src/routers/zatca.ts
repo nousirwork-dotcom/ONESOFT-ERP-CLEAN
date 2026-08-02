@@ -94,13 +94,16 @@ const ZatcaConfigSchema = z.object({
 
 type ZatcaConfig = z.infer<typeof ZatcaConfigSchema>;
 
-function canonicalizeZatcaConfig(value: unknown): ZatcaConfig {
+function canonicalizeZatcaConfig(
+  value: unknown,
+  organization?: { name?: string | null; nameEn?: string | null; taxNumber?: string | null },
+): ZatcaConfig {
   const raw = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
   return ZatcaConfigSchema.parse({
     ...raw,
-    legalName: raw.legalName ?? raw.businessName ?? '',
-    englishName: raw.englishName ?? raw.businessNameEn ?? '',
-    vatNumber: raw.vatNumber ?? '',
+    legalName: organization?.name ?? raw.legalName ?? raw.businessName ?? '',
+    englishName: organization?.nameEn ?? raw.englishName ?? raw.businessNameEn ?? '',
+    vatNumber: organization?.taxNumber ?? raw.vatNumber ?? '',
     commercialReg: raw.commercialReg ?? raw.crNumber ?? '',
     activity: raw.activity ?? raw.businessCategory ?? '',
     country: raw.country ?? raw.countryName ?? '',
@@ -350,10 +353,10 @@ async function getZatcaReadiness(
 
   if (!org) throw new TRPCError({ code: 'NOT_FOUND', message: 'المنشأة غير موجودة' });
 
-  const cfg = ZatcaConfigSchema.parse(canonicalizeZatcaConfig(org.zatcaConfig));
-  const vatNumber = String(cfg.vatNumber || org.taxNumber || '').trim();
-  const businessName = String(cfg.legalName || org.name || '').trim();
-  const businessNameEn = String(cfg.englishName || org.nameEn || '').trim();
+  const cfg = ZatcaConfigSchema.parse(canonicalizeZatcaConfig(org.zatcaConfig, org));
+  const vatNumber = String(cfg.vatNumber || '').trim();
+  const businessName = String(cfg.legalName || '').trim();
+  const businessNameEn = String(cfg.englishName || '').trim();
   const missingOrganizationFields: string[] = [];
   if (!/^3\d{13}3$/.test(vatNumber)) missingOrganizationFields.push('الرقم الضريبي الصحيح');
   if (!businessName) missingOrganizationFields.push('اسم المنشأة');
@@ -875,7 +878,7 @@ export const zatcaRouter = router({
       const [org, unit] = await Promise.all([
         db.query.organizations.findFirst({
           where: eq(organizations.id, ctx.user.orgId),
-          columns: { name: true, taxNumber: true, zatcaConfig: true },
+          columns: { name: true, nameEn: true, taxNumber: true, zatcaConfig: true },
         }),
         getPosUnitForOrg(ctx.user.orgId, input.posUnitId),
       ]);
@@ -889,8 +892,8 @@ export const zatcaRouter = router({
         });
       }
 
-      const cfg = canonicalizeZatcaConfig(org.zatcaConfig);
-      const vatNumber = String(cfg.vatNumber ?? org.taxNumber ?? '').trim();
+      const cfg = canonicalizeZatcaConfig(org.zatcaConfig, org);
+      const vatNumber = String(cfg.vatNumber ?? '').trim();
       if (!vatNumber) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'أكمل الرقم الضريبي قبل إنشاء CSR' });
       }
@@ -1466,10 +1469,10 @@ export const zatcaRouter = router({
   getConfig: protectedProcedure.query(async ({ ctx }) => {
     const org = await db.query.organizations.findFirst({
       where: eq(organizations.id, ctx.user.orgId),
-      columns: { zatcaConfig: true },
+      columns: { name: true, nameEn: true, taxNumber: true, zatcaConfig: true },
     });
     const cfg = (org?.zatcaConfig ?? {}) as Record<string, unknown>;
-    const parsed = ZatcaConfigSchema.parse(canonicalizeZatcaConfig(cfg));
+    const parsed = ZatcaConfigSchema.parse(canonicalizeZatcaConfig(cfg, org));
     // لا تُعاد القيم الحساسة لأي دور؛ تُعاد حالة وجودها فقط.
     return {
       ...parsed,
@@ -1502,12 +1505,16 @@ export const zatcaRouter = router({
 
       const existing = await db.query.organizations.findFirst({
         where: eq(organizations.id, ctx.user.orgId),
-        columns: { zatcaConfig: true },
+        columns: { name: true, nameEn: true, taxNumber: true, zatcaConfig: true },
       });
       const existingCfg = (existing?.zatcaConfig ?? {}) as any;
 
       const updated = {
         ...input,
+        // هوية المنشأة لا تُحفظ من مركز ZATCA؛ مصدرها الوحيد معلومات المؤسسة.
+        legalName: existing?.name ?? '',
+        englishName: existing?.nameEn ?? '',
+        vatNumber: existing?.taxNumber ?? '',
         // الاعتمادات القديمة تبقى داخل الخادم ولا تُعاد إلى العميل ولا تُستبدل
         // من مسار الإعداد العام؛ إدخال اعتماد جديد محجوب حتى اعتماد Secrets.
         csid: existingCfg.csid ?? '',
@@ -1567,9 +1574,9 @@ export const zatcaRouter = router({
   testConnection: adminProcedure.mutation(async ({ ctx }) => {
     const org = await db.query.organizations.findFirst({
       where: eq(organizations.id, ctx.user.orgId),
-      columns: { zatcaConfig: true },
+      columns: { name: true, nameEn: true, taxNumber: true, zatcaConfig: true },
     });
-    const cfg = canonicalizeZatcaConfig(org?.zatcaConfig);
+    const cfg = canonicalizeZatcaConfig(org?.zatcaConfig, org);
 
     const now = new Date().toISOString();
     const userName = (ctx.user as any).name ?? (ctx.user as any).username ?? 'مسؤول';
@@ -1652,9 +1659,9 @@ export const zatcaRouter = router({
 
       const org = await db.query.organizations.findFirst({
         where: eq(organizations.id, ctx.user.orgId),
-        columns: { zatcaConfig: true, name: true },
+        columns: { zatcaConfig: true, name: true, nameEn: true, taxNumber: true },
       });
-      const cfg = canonicalizeZatcaConfig(org?.zatcaConfig);
+      const cfg = canonicalizeZatcaConfig(org?.zatcaConfig, org);
       if (!cfg.enabled) {
         return { ok: false, status: currentState, message: 'منظومة ZATCA غير مفعَّلة' };
       }
@@ -1920,9 +1927,9 @@ export const zatcaRouter = router({
               eq(salesInvoiceItems.orgId, ctx.user.orgId),
             )).orderBy(asc(salesInvoiceItems.sortOrder)),
             seller: {
-              nameAr: String(cfg.legalName ?? org?.name ?? ''),
+              nameAr: String(inv.sellerLegalName ?? cfg.legalName ?? org?.name ?? ''),
               nameEn: String(cfg.englishName ?? cfg.legalName ?? org?.name ?? ''),
-              vatNumber: String(cfg.vatNumber ?? ''),
+              vatNumber: String(inv.sellerTaxNumber ?? cfg.vatNumber ?? ''),
               crNumber: cfg.commercialReg ? String(cfg.commercialReg) : undefined,
               street: String(cfg.street ?? ''),
               building: String(cfg.buildingNumber ?? ''),
@@ -2565,9 +2572,9 @@ export const zatcaRouter = router({
   getStats: protectedProcedure.query(async ({ ctx }) => {
     const org = await db.query.organizations.findFirst({
       where: eq(organizations.id, ctx.user.orgId),
-      columns: { zatcaConfig: true },
+      columns: { zatcaConfig: true, name: true, nameEn: true, taxNumber: true },
     });
-    const cfg = canonicalizeZatcaConfig(org?.zatcaConfig);
+    const cfg = canonicalizeZatcaConfig(org?.zatcaConfig, org);
 
     const [total, readyToSubmit, cleared, reported, pending, submittedPending, submitting, acceptedWithWarnings, rejected, connectionIssue, retryPending, uncertain, errors, notSubmitted, today, simplifiedDueSoon, simplifiedOverdue] = await Promise.all([
       db.select({ cnt: count() }).from(salesInvoices)
@@ -2682,7 +2689,7 @@ export const zatcaRouter = router({
           .orderBy(salesInvoiceItems.sortOrder),
         db.query.organizations.findFirst({
           where: eq(organizations.id, ctx.user.orgId),
-          columns: { zatcaConfig: true, name: true },
+          columns: { zatcaConfig: true, name: true, nameEn: true, taxNumber: true },
         }),
         db.query.salesInvoices.findFirst({
           where: and(
@@ -2711,7 +2718,7 @@ export const zatcaRouter = router({
       ]);
 
       if (!inv) throw new Error('Invoice not found');
-      const cfg = canonicalizeZatcaConfig(org?.zatcaConfig);
+      const cfg = canonicalizeZatcaConfig(org?.zatcaConfig, org);
 
       // ── توليد XML ──────────────────────────────────────────────────────────
       const issueDate = inv.invoiceDate ? new Date(inv.invoiceDate).toISOString().split('T')[0] : '';
@@ -2811,11 +2818,11 @@ export const zatcaRouter = router({
         <cac:Country><cbc:IdentificationCode>${cfg.countryCode ?? 'SA'}</cbc:IdentificationCode></cac:Country>
       </cac:PostalAddress>
       <cac:PartyTaxScheme>
-        <cbc:CompanyID>${cfg.vatNumber ?? ''}</cbc:CompanyID>
+        <cbc:CompanyID>${inv.sellerTaxNumber ?? cfg.vatNumber ?? ''}</cbc:CompanyID>
         <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
       </cac:PartyTaxScheme>
       <cac:PartyLegalEntity>
-        <cbc:RegistrationName>${cfg.legalName ?? (org?.name ?? '')}</cbc:RegistrationName>
+        <cbc:RegistrationName>${inv.sellerLegalName ?? cfg.legalName ?? (org?.name ?? '')}</cbc:RegistrationName>
       </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingSupplierParty>
@@ -2883,13 +2890,13 @@ export const zatcaRouter = router({
       else info('cbc:DocumentCurrencyCode', 'العملة صحيحة', currency, 'SAR', '—');
 
       // الرقم الضريبي للبائع
-      const sellerVat = cfg.vatNumber ?? '';
+      const sellerVat = inv.sellerTaxNumber ?? cfg.vatNumber ?? '';
       if (!sellerVat) err('cac:AccountingSupplierParty / cbc:CompanyID', 'الرقم الضريبي للبائع غير محدد في إعدادات ZATCA', '(فارغ)', '15 رقماً يبدأ وينتهي بـ 3', 'أكمل إعدادات ZATCA بالرقم الضريبي');
       else if (!/^3\d{13}3$/.test(sellerVat)) err('cac:AccountingSupplierParty / cbc:CompanyID', 'تنسيق الرقم الضريبي للبائع غير صحيح', sellerVat, '15 رقماً يبدأ وينتهي بـ 3 (مثال: 3XXXXXXXXXXX3)', 'صحّح الرقم الضريبي في إعدادات ZATCA');
       else info('cac:AccountingSupplierParty / cbc:CompanyID', 'الرقم الضريبي للبائع صالح', sellerVat, '15 رقماً', '—');
 
       // اسم البائع
-      const sellerName = cfg.legalName ?? (org?.name ?? '');
+      const sellerName = inv.sellerLegalName ?? cfg.legalName ?? (org?.name ?? '');
       if (!sellerName) err('cac:AccountingSupplierParty / cbc:RegistrationName', 'اسم المنشأة (البائع) غير محدد', '(فارغ)', 'اسم المنشأة', 'أكمل اسم المنشأة في إعدادات ZATCA');
       else info('cac:AccountingSupplierParty / cbc:RegistrationName', 'اسم البائع موجود', sellerName, 'اسم المنشأة', '—');
 

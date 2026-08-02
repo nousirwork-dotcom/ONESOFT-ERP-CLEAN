@@ -222,6 +222,8 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   const [dueDate, setDueDate]                         = useState("");
   const [partyId, setPartyId]                         = useState<number | null>(null);
   const [partyName, setPartyName]                     = useState("");
+  const [sellerLegalNameSnapshot, setSellerLegalNameSnapshot] = useState("");
+  const [sellerTaxNumberSnapshot, setSellerTaxNumberSnapshot] = useState("");
   const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState("");
   const [branchId, setBranchId]                         = useState<number | null>(null);
   const [warehouseId, setWarehouseId]                 = useState<number | null>(null);
@@ -451,6 +453,8 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     setDueDate(inv.dueDate ? new Date(inv.dueDate).toISOString().split("T")[0] : "");
     setPartyId(inv.customerId ?? inv.supplierId ?? null);
     setPartyName(inv.customerName ?? inv.supplierName ?? "");
+    setSellerLegalNameSnapshot(config.docCategory === "sales" ? (inv.sellerLegalName ?? "") : "");
+    setSellerTaxNumberSnapshot(config.docCategory === "sales" ? (inv.sellerTaxNumber ?? "") : "");
     setSupplierInvoiceNumber(inv.supplierInvoiceNumber || "");
     setWarehouseId(inv.warehouseId ?? null);
     setBranchId(
@@ -519,6 +523,10 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     "sales_invoice";
 
   const orgQuery             = trpc.orgs.currentOrg.useQuery();
+  const effectiveSellerLegalName = sellerLegalNameSnapshot.trim() ||
+    String(orgQuery.data?.legalName ?? orgQuery.data?.name ?? "").trim();
+  const effectiveSellerTaxNumber = sellerTaxNumberSnapshot.trim() ||
+    String(orgQuery.data?.vatNumber ?? orgQuery.data?.taxNumber ?? "").trim();
   const qrSettingsQuery      = trpc.qrSettings.get.useQuery();
   const defaultTemplateQuery = trpc.documentTemplates.getDefault.useQuery(
     { docType: printDocType },
@@ -592,6 +600,10 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
         duration: 5000,
       });
       setSavedInvoiceId(data.id ?? null);
+      if (config.docCategory === "sales") {
+        setSellerLegalNameSnapshot(effectiveSellerLegalName);
+        setSellerTaxNumberSnapshot(effectiveSellerTaxNumber);
+      }
       setIsPosted(autoPosted);
       setErpMode("view");
       pendingNavRef.current?.();
@@ -1061,6 +1073,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   const handleDuplicate = useCallback(() => {
     if (!savedInvoiceId) { toast.warning("لا يوجد مستند محفوظ للنسخ — احفظ أولاً"); return; }
     setSavedInvoiceId(null); setNavInvoiceId(null); setIsPosted(false); setShowPostingPreview(false);
+    setSellerLegalNameSnapshot(""); setSellerTaxNumberSnapshot("");
     setErpMode("new");
     setBasedOnType(""); setBasedOnNum(""); setBasedOnTrigger("");
     setPaidAmountOverride("");
@@ -1080,6 +1093,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     setNotes(""); setDueDate(""); setSalesperson(""); setPaidAmountOverride("");
     setErpMode("new"); setJournalWarehouseId(null);
     setSavedInvoiceId(null); setNavInvoiceId(null); setIsPosted(false); setShowPostingPreview(false);
+    setSellerLegalNameSnapshot(""); setSellerTaxNumberSnapshot("");
     if (journalId) {
       utils.documentJournals.previewNextNumber.fetch({ journalId }).then(p => {
         if (p) setInvoiceNumber(p);
@@ -2113,8 +2127,6 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
           qrSettings={qrSettingsQuery.data ? {
             isEnabled: qrSettingsQuery.data.isEnabled,
             countrySystem: qrSettingsQuery.data.countrySystem as any,
-            sellerName: qrSettingsQuery.data.sellerName ?? undefined,
-            taxNumber: qrSettingsQuery.data.taxNumber ?? undefined,
             customFormat: qrSettingsQuery.data.customFormat ?? undefined,
             showOnSalesInvoice: qrSettingsQuery.data.showOnSalesInvoice,
             showOnPurchaseInvoice: qrSettingsQuery.data.showOnPurchaseInvoice,
@@ -2148,12 +2160,12 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
             grandTotal: netTotal,
             paidAmount,
             remainingAmount,
-            sellerName: orgQuery.data?.name ?? qrSettingsQuery.data?.sellerName ?? "OneSoft ERP",
-            sellerNameEn: orgQuery.data?.nameEn ?? undefined,
-            sellerTaxNumber: orgQuery.data?.taxNumber ?? qrSettingsQuery.data?.taxNumber ?? "",
-            sellerCommercialReg: orgQuery.data?.commercialReg || undefined,
-            sellerAddress: orgQuery.data?.address ?? undefined,
-            sellerPhone: orgQuery.data?.phone ?? undefined,
+            sellerName: effectiveSellerLegalName,
+            sellerNameEn: String(orgQuery.data?.englishName ?? orgQuery.data?.nameEn ?? "") || undefined,
+            sellerTaxNumber: effectiveSellerTaxNumber,
+            sellerCommercialReg: String(orgQuery.data?.commercialReg ?? "") || undefined,
+            sellerAddress: String(orgQuery.data?.address ?? "") || undefined,
+            sellerPhone: String(orgQuery.data?.phone ?? "") || undefined,
           }}
         />
       )}

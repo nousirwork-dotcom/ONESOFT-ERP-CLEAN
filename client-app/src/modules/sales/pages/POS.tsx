@@ -192,10 +192,10 @@ export default function POS() {
         grandTotal: total,
         paidAmount: paidAmount > 0 ? paidAmount : (paymentMethod === "cash" ? total : 0),
         changeAmount: paidAmount > total ? paidAmount - total : 0,
-        sellerName: orgData?.name ?? "OneSoft ERP",
-        sellerTaxNumber: orgData?.taxNumber ?? undefined,
-        sellerAddress: orgData?.address ?? undefined,
-        sellerPhone: orgData?.phone ?? undefined,
+        sellerName: String(orgData?.legalName ?? orgData?.name ?? ""),
+        sellerTaxNumber: String(orgData?.vatNumber ?? orgData?.taxNumber ?? "") || undefined,
+        sellerAddress: String(orgData?.address ?? "") || undefined,
+        sellerPhone: String(orgData?.phone ?? "") || undefined,
         currency: "SAR",
       };
       setReceiptData(rData);
@@ -495,8 +495,6 @@ export default function POS() {
           qrSettings={qrSettingsData ? {
             isEnabled: qrSettingsData.isEnabled,
             countrySystem: qrSettingsData.countrySystem as any,
-            sellerName: qrSettingsData.sellerName ?? undefined,
-            taxNumber: qrSettingsData.taxNumber ?? undefined,
             customFormat: qrSettingsData.customFormat ?? undefined,
             showOnSalesInvoice: qrSettingsData.showOnSalesInvoice,
             showOnPurchaseInvoice: qrSettingsData.showOnPurchaseInvoice,

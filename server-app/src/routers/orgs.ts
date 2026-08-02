@@ -28,9 +28,9 @@ export const orgsRouter = router({
     if (!org) return null;
     const cfg = (org.zatcaConfig ?? {}) as Record<string, unknown>;
     const safeZatcaConfig = {
-      legalName: cfg.legalName ?? cfg.businessName ?? org.name ?? '',
+      legalName: org.name ?? cfg.legalName ?? cfg.businessName ?? '',
       englishName: cfg.englishName ?? cfg.businessNameEn ?? org.nameEn ?? '',
-      vatNumber: cfg.vatNumber ?? org.taxNumber ?? '',
+      vatNumber: org.taxNumber ?? cfg.vatNumber ?? '',
       commercialReg: cfg.commercialReg ?? cfg.crNumber ?? org.commercialReg ?? '',
       activity: cfg.activity ?? cfg.businessCategory ?? '',
       country: cfg.country ?? cfg.countryName ?? '',

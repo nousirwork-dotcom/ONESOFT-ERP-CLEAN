@@ -526,6 +526,13 @@
       "when": 1786319400000,
       "tag": "0074_zatca_readiness_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1786319500000,
+      "tag": "0075_sales_invoice_seller_snapshot",
+      "breakpoints": true
     }
   ]
 }

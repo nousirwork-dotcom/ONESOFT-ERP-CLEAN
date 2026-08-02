@@ -25,7 +25,7 @@ import {
   MessageSquare, Send, Bot, Mail, Eye, RefreshCw, Search, Check, X,
 } from "lucide-react";
 import QRCodeDisplay from "@/shared/components/QRCodeDisplay";
-import { decodeQrContent, generateQrContent, QR_SYSTEMS, CUSTOM_TEMPLATE_HELP, type QrSystem } from "@/shared/lib/qrUtils";
+import { decodeQrContent, generateQrContent, QR_SYSTEMS, CUSTOM_TEMPLATE_HELP, validateQrCompanyData, type QrSystem } from "@/shared/lib/qrUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/core/ui/card";
 import { Checkbox } from "@/core/ui/checkbox";
 import { Button } from "@/core/ui/button";
@@ -3262,6 +3262,8 @@ function ComingSoon({ title }: { title: string }) {
 
 function QRSettingsPage() {
   const qrQuery = trpc.qrSettings.get.useQuery();
+  const orgQuery = trpc.orgs.currentOrg.useQuery();
+  const tabManager = useTabManager();
   const upsertMutation = trpc.qrSettings.upsert.useMutation({
     onSuccess: () => {
       toast.success("✓ تم حفظ إعدادات QR Code");
@@ -3274,8 +3276,6 @@ function QRSettingsPage() {
 
   const [isEnabled, setIsEnabled] = useState(true);
   const [system, setSystem] = useState<QrSystem>("zatca");
-  const [sellerName, setSellerName] = useState("");
-  const [taxNumber, setTaxNumber] = useState("");
   const [customFormat, setCustomFormat] = useState("{{sellerName}}\n{{taxNumber}}\n{{invoiceDateTime}}\n{{totalAmount}}\n{{vatAmount}}");
   const [showOnSales, setShowOnSales] = useState(true);
   const [showHelp, setShowHelp] = useState(false);
@@ -3288,8 +3288,6 @@ function QRSettingsPage() {
     if (!s) return;
     setIsEnabled(s.isEnabled);
     setSystem((s.countrySystem as QrSystem) ?? "zatca");
-    setSellerName(s.sellerName ?? "");
-    setTaxNumber(s.taxNumber ?? "");
     setCustomFormat(s.customFormat ?? "{{sellerName}}\n{{taxNumber}}\n{{invoiceDateTime}}\n{{totalAmount}}\n{{vatAmount}}");
     setShowOnSales(s.showOnSalesInvoice);
     setPreviewGenerated(false);
@@ -3298,9 +3296,12 @@ function QRSettingsPage() {
     setPreviewError("");
   }, [s]);
 
+  const sellerName = String(orgQuery.data?.legalName ?? orgQuery.data?.name ?? "").trim();
+  const taxNumber = String(orgQuery.data?.vatNumber ?? orgQuery.data?.taxNumber ?? "").trim();
+  const companyValidationError = validateQrCompanyData(system, sellerName, taxNumber);
   const sampleData = useMemo(() => ({
-    sellerName: sellerName || "OneSoft Company",
-    taxNumber: taxNumber || "300000000000003",
+    sellerName,
+    taxNumber,
     invoiceDateTime: "2026-08-02T10:30:00+03:00",
     totalAmount: 1150.00,
     vatAmount: 150.00,
@@ -3340,14 +3341,12 @@ function QRSettingsPage() {
   const handleSave = () => {
     upsertMutation.mutate({
       isEnabled, countrySystem: system,
-      sellerName: sellerName || null,
-      taxNumber: taxNumber || null,
       customFormat: system === "custom" ? customFormat : null,
       showOnSalesInvoice: showOnSales,
     });
   };
 
-  if (qrQuery.isLoading) return <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">جاري التحميل...</div>;
+  if (qrQuery.isLoading || orgQuery.isLoading) return <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">جاري التحميل...</div>;
 
   const selectedSystem = QR_SYSTEMS.find(item => item.id === system);
 
@@ -3424,19 +3423,30 @@ function QRSettingsPage() {
                   <CardContent className="space-y-3 p-4">
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label>
-                        <Label className="text-xs text-muted-foreground">اسم المنشأة</Label>
-                        <Input value={sellerName} onChange={e => { setSellerName(e.target.value); setPreviewGenerated(false); setPreviewChecked(false); setDecodedPreview(null); setPreviewError(""); }}
-                          placeholder="اسم الشركة أو المنشأة..." className="mt-1 h-9 text-sm" />
+                        <Label className="text-xs text-muted-foreground">اسم المنشأة القانوني</Label>
+                        <Input value={sellerName || "غير مكتمل"} readOnly className="mt-1 h-9 bg-[#f7f1e9] text-sm" />
                       </label>
                       <label>
-                        <Label className="text-xs text-muted-foreground">الرقم أو المعرف الضريبي</Label>
-                        <Input value={taxNumber} onChange={e => { setTaxNumber(e.target.value); setPreviewGenerated(false); setPreviewChecked(false); setDecodedPreview(null); setPreviewError(""); }}
-                          placeholder="300000000000003" className="mt-1 h-9 font-mono text-sm" />
+                        <Label className="text-xs text-muted-foreground">الرقم الضريبي أو المعرف الضريبي</Label>
+                        <Input value={taxNumber || "غير مكتمل"} readOnly className="mt-1 h-9 bg-[#f7f1e9] font-mono text-sm" />
                       </label>
                     </div>
-                    <p className="rounded-md border border-[#e5d4bc] bg-[#fff8ed] px-3 py-2 text-[11px] text-[#765f4b]">
-                      إذا تُركت البيانات فارغة، تُستخدم بيانات المنشأة والفاتورة الفعلية عند إنشاء QR النهائي.
-                    </p>
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#e5d4bc] bg-[#fff8ed] px-3 py-2 text-[11px] text-[#765f4b]">
+                      <span>يتم جلب بيانات المنشأة تلقائيًا من شاشة معلومات المؤسسة.</span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-7 border-[#b89b7d] px-2 text-[11px] text-[#70471f]"
+                        onClick={() => tabManager.openTab("/cfg/company", "معلومات الشركة", Building2)}
+                      >
+                        <Building2 className="ml-1 h-3.5 w-3.5" />فتح معلومات المؤسسة
+                      </Button>
+                    </div>
+                    {companyValidationError && (
+                      <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-5 text-amber-900">
+                        {companyValidationError}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 
@@ -3534,7 +3544,21 @@ function QRSettingsPage() {
                   <p className="mt-0.5 text-xs font-semibold text-[#4e321f]">{selectedSystem?.label}</p>
                 </div>
                 <div className="flex gap-2">
-                  <Button type="button" onClick={() => { setPreviewGenerated(true); setPreviewChecked(false); }} disabled={!isEnabled || !previewContent}
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      const error = validateQrCompanyData(system, sellerName, taxNumber);
+                      if (error) {
+                        setPreviewGenerated(false);
+                        setPreviewChecked(false);
+                        setPreviewError(error);
+                        return;
+                      }
+                      setPreviewGenerated(true);
+                      setPreviewChecked(false);
+                      setPreviewError("");
+                    }}
+                    disabled={!isEnabled}
                     className="h-9 flex-1 bg-[#8a5a2b] text-xs hover:bg-[#70471f]">
                     <RefreshCw className="ml-1 h-3.5 w-3.5" />إنشاء معاينة
                   </Button>
@@ -3577,7 +3601,19 @@ function QRSettingsPage() {
                 )}
                 {previewError && (
                   <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
-                    <span className="font-bold">يوجد خطأ في كود QR:</span> {previewError}
+                    <div>
+                      <span className="font-bold">يوجد خطأ في كود QR:</span> {previewError}
+                    </div>
+                    {companyValidationError && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="mt-2 h-7 border-red-300 px-2 text-[11px] text-red-800"
+                        onClick={() => tabManager.openTab("/cfg/company", "معلومات الشركة", Building2)}
+                      >
+                        <Building2 className="ml-1 h-3.5 w-3.5" />فتح معلومات المؤسسة
+                      </Button>
+                    )}
                   </div>
                 )}
                 {isEnabled && (

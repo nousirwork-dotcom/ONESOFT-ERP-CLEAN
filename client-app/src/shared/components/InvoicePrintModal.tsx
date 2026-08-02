@@ -53,8 +53,6 @@ export default function InvoicePrintModal({
     qrSettings?.isEnabled ? "1" : "0",
     qrSettings?.countrySystem ?? "",
     qrSettings?.customFormat ?? "",
-    qrSettings?.sellerName ?? "",
-    qrSettings?.taxNumber ?? "",
     showQrSetting ? "1" : "0",
     data.invoiceNumber,
     data.invoiceDate,
@@ -79,8 +77,8 @@ export default function InvoicePrintModal({
     }
 
     const invoiceData: QrInvoiceData = {
-      sellerName:      qrSettings?.sellerName || data.sellerName,
-      taxNumber:       qrSettings?.taxNumber  || data.sellerTaxNumber || "",
+      sellerName:      data.sellerName,
+      taxNumber:       data.sellerTaxNumber || "",
       invoiceDateTime: `${data.invoiceDate}T${data.invoiceTime ?? "00:00:00"}`,
       totalAmount:     data.grandTotal,
       vatAmount:       data.taxTotal,

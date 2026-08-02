@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { eq, and, desc, like, or, sql } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { salesInvoices, salesInvoiceItems, salesInvoicePayments, paymentMethods, products, customers, stockVouchers, stockVoucherItems, documentJournals, warehouses, users, zatcaPosUnits } from '../schema.js';
+import { salesInvoices, salesInvoiceItems, salesInvoicePayments, paymentMethods, products, customers, stockVouchers, stockVoucherItems, documentJournals, warehouses, users, zatcaPosUnits, organizations } from '../schema.js';
 import { autoPostSalesInvoice } from './posting.js';
 import { TRPCError } from '@trpc/server';
 import { validateSalesInvoiceWarehouseContext } from '../lib/salesWarehouseValidation.js';
@@ -526,6 +526,10 @@ export const salesRouter = router({
 
         let invoice: typeof salesInvoices.$inferSelect;
         try {
+          const organization = await tx.query.organizations.findFirst({
+            where: eq(organizations.id, orgId),
+            columns: { name: true, taxNumber: true },
+          });
           const [row] = await tx.insert(salesInvoices).values({
             ...invoiceData,
             warehouseId: resolvedWarehouseId,
@@ -534,6 +538,8 @@ export const salesRouter = router({
             orgId,
             userId: ctx.user.id,
             invoiceDate: new Date(invoiceData.invoiceDate),
+            sellerLegalName: organization?.name ?? null,
+            sellerTaxNumber: organization?.taxNumber ?? null,
             ...(dueDate ? { dueDate: new Date(dueDate) } : {}),
           }).returning();
           invoice = row;
@@ -820,10 +826,20 @@ export const salesRouter = router({
           }
         }
 
+        const organization = isFinalizing
+          ? await tx.query.organizations.findFirst({
+              where: eq(organizations.id, ctx.user.orgId),
+              columns: { name: true, taxNumber: true },
+            })
+          : null;
         await tx.update(salesInvoices).set({
           ...rest,
           ...(invoiceDate ? { invoiceDate: new Date(invoiceDate) } : {}),
           ...(isFinalizing ? { invoiceNumber: finalInvoiceNumber, draftNumber: finalDraftNumber } : {}),
+          ...(isFinalizing ? {
+            sellerLegalName: organization?.name ?? null,
+            sellerTaxNumber: organization?.taxNumber ?? null,
+          } : {}),
           warehouseId: resolvedWarehouseId,
           updatedAt: new Date(),
         }).where(and(eq(salesInvoices.id, id), eq(salesInvoices.orgId, ctx.user.orgId)));

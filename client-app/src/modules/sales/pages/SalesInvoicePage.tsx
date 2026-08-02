@@ -283,6 +283,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
   // ── Customer type & tax ───────────────────────────────────────────────────
   const [customerType, setCustomerType]         = useState<'individual' | 'organization'>('individual');
   const [customerTaxNumber, setCustomerTaxNumber] = useState("");
+  const [sellerLegalNameSnapshot, setSellerLegalNameSnapshot] = useState("");
+  const [sellerTaxNumberSnapshot, setSellerTaxNumberSnapshot] = useState("");
 
   // ── Add Customer Modal ────────────────────────────────────────────────────
   const [showAddCustomer, setShowAddCustomer] = useState(false);
@@ -332,6 +334,10 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
   const allInvoicesQuery = trpc.salesInvoices.list.useQuery({});
   const qrSettingsQuery       = trpc.qrSettings.get.useQuery();
   const orgQuery              = trpc.orgs.currentOrg.useQuery();
+  const effectiveSellerLegalName = sellerLegalNameSnapshot.trim() ||
+    String(orgQuery.data?.legalName ?? orgQuery.data?.name ?? "").trim();
+  const effectiveSellerTaxNumber = sellerTaxNumberSnapshot.trim() ||
+    String(orgQuery.data?.vatNumber ?? orgQuery.data?.taxNumber ?? "").trim();
   const selectedJournalForPrint = (journalsQuery.data ?? []).find((j: any) => j.id === journalId);
   const { templateConfig }    = usePrintTemplate(
     "sales_invoice",
@@ -512,6 +518,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
     setCustomerCode(inv.customerId ? ((customersQuery.data ?? []).find(c => c.id === inv.customerId)?.code ?? "") : "");
     setCustomerType((inv.customerType as any) ?? 'individual');
     setCustomerTaxNumber(inv.customerTaxNumber ?? "");
+    setSellerLegalNameSnapshot((inv as any).sellerLegalName ?? "");
+    setSellerTaxNumberSnapshot((inv as any).sellerTaxNumber ?? "");
     setWarehouseId(inv.warehouseId ?? null);
     setWarehouseDisplayName(inv.warehouseName ?? "");
     setJournalId(inv.journalId ?? null);
@@ -551,6 +559,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
       setNavInvoiceId(data.id ?? null);
       setIsPosted(data.isPosted ?? false);
       setInvoiceNumber(data.invoiceNumber ?? invoiceNumber);
+      setSellerLegalNameSnapshot(effectiveSellerLegalName);
+      setSellerTaxNumberSnapshot(effectiveSellerTaxNumber);
       setErpMode("view");
       // رسالة النجاح تُعرض هنا فقط للحفظ المباشر (آجل)؛ أما عند التأكيد من شاشة الدفع فالنافذة تُعرضها.
       if (!skipSaveToast.current) {
@@ -1383,6 +1393,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
     if (!hasDoc) { toast.warning("لا يوجد مستند محفوظ للنسخ — احفظ الفاتورة أولاً"); return; }
     setSavedInvoiceId(null);
     setNavInvoiceId(null);
+    setSellerLegalNameSnapshot("");
+    setSellerTaxNumberSnapshot("");
     setIsPosted(false);
     setShowPostingPreview(false);
     setErpMode("new");
@@ -1415,6 +1427,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
     setShowCustDrop(false);
     setCustomerType('individual');
     setCustomerTaxNumber("");
+    setSellerLegalNameSnapshot("");
+    setSellerTaxNumberSnapshot("");
     setWarehouseId(null);
     setPaymentType("cash");
     setBasedOnType('');
@@ -1477,8 +1491,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
         const content = generateQrContent(
           qrSettingsQuery.data!.countrySystem as any,
           {
-            sellerName: orgQuery.data?.name ?? qrSettingsQuery.data?.sellerName ?? "OneSoft ERP",
-            taxNumber: orgQuery.data?.taxNumber ?? qrSettingsQuery.data?.taxNumber ?? "",
+            sellerName: effectiveSellerLegalName,
+            taxNumber: effectiveSellerTaxNumber,
             invoiceDateTime: `${invoiceDate}T${new Date().toTimeString().slice(0,8)}`,
             totalAmount: netTotal, vatAmount: totalTax,
             invoiceNumber: invoiceNumber,
@@ -1527,11 +1541,11 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
           grandTotal: netTotal,
           paidAmount,
           remainingAmount,
-          sellerName: orgQuery.data?.name ?? qrSettingsQuery.data?.sellerName ?? "OneSoft ERP",
-          sellerTaxNumber: orgQuery.data?.taxNumber ?? qrSettingsQuery.data?.taxNumber ?? "",
-          sellerCommercialReg: orgQuery.data?.commercialReg || undefined,
-          sellerAddress: orgQuery.data?.address ?? undefined,
-          sellerPhone: orgQuery.data?.phone ?? undefined,
+          sellerName: effectiveSellerLegalName,
+          sellerTaxNumber: effectiveSellerTaxNumber,
+          sellerCommercialReg: String(orgQuery.data?.commercialReg ?? "") || undefined,
+          sellerAddress: String(orgQuery.data?.address ?? "") || undefined,
+          sellerPhone: String(orgQuery.data?.phone ?? "") || undefined,
         },
         templateConfig,
         qrDataUrl: qrDataUrl || undefined,
@@ -1545,7 +1559,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
     }
   }, [invoiceNumber, invoiceDate, customerName, customerCode, customerTaxNumber, sellerUserId, salespersonsQuery.data,
       paymentType, currency, notes, lines, subtotal, totalDiscount, totalTax, netTotal,
-      paidAmount, remainingAmount, orgQuery.data, qrSettingsQuery.data, templateConfig]);
+      paidAmount, remainingAmount, effectiveSellerLegalName, effectiveSellerTaxNumber,
+      orgQuery.data, qrSettingsQuery.data, templateConfig]);
 
   // ── Unified Toolbar ──────────────────────────────────────────────────────────
   const _sipRef = useRef<any>({});
@@ -2730,8 +2745,6 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
           qrSettings={qrSettingsQuery.data ? {
             isEnabled: qrSettingsQuery.data.isEnabled,
             countrySystem: qrSettingsQuery.data.countrySystem as any,
-            sellerName: qrSettingsQuery.data.sellerName ?? undefined,
-            taxNumber: qrSettingsQuery.data.taxNumber ?? undefined,
             customFormat: qrSettingsQuery.data.customFormat ?? undefined,
             showOnSalesInvoice: qrSettingsQuery.data.showOnSalesInvoice,
             showOnPurchaseInvoice: qrSettingsQuery.data.showOnPurchaseInvoice,
@@ -2776,12 +2789,12 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
             grandTotal: netTotal,
             paidAmount,
             remainingAmount,
-            sellerName: orgQuery.data?.name ?? qrSettingsQuery.data?.sellerName ?? "OneSoft ERP",
-            sellerNameEn: orgQuery.data?.nameEn ?? undefined,
-            sellerTaxNumber: orgQuery.data?.taxNumber ?? qrSettingsQuery.data?.taxNumber ?? "",
-            sellerCommercialReg: orgQuery.data?.commercialReg || undefined,
-            sellerAddress: orgQuery.data?.address ?? undefined,
-            sellerPhone: orgQuery.data?.phone ?? undefined,
+            sellerName: effectiveSellerLegalName,
+            sellerNameEn: String(orgQuery.data?.englishName ?? orgQuery.data?.nameEn ?? "") || undefined,
+            sellerTaxNumber: effectiveSellerTaxNumber,
+            sellerCommercialReg: String(orgQuery.data?.commercialReg ?? "") || undefined,
+            sellerAddress: String(orgQuery.data?.address ?? "") || undefined,
+            sellerPhone: String(orgQuery.data?.phone ?? "") || undefined,
           }}
         />
       )}

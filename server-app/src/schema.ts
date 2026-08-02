@@ -388,6 +388,9 @@ export const salesInvoices = pgTable('sales_invoices', {
   zatcaSubmittedAt: timestamp('zatca_submitted_at'),
   zatcaAttemptCount: integer('zatca_attempt_count').notNull().default(0),
   zatcaRejectionReason: text('zatca_rejection_reason'),
+  // لقطة هوية المنشأة وقت الإصدار؛ تمنع إعادة طباعة فاتورة قديمة ببيانات حالية.
+  sellerLegalName: varchar('seller_legal_name', { length: 255 }),
+  sellerTaxNumber: varchar('seller_tax_number', { length: 50 }),
   basedOnType: varchar('based_on_type', { length: 20 }),
   basedOnNumber: varchar('based_on_number', { length: 50 }),
   sourceDocumentId: integer('source_document_id'), // FK للفاتورة المصدر — يُتحقق منه لأمان الفرع

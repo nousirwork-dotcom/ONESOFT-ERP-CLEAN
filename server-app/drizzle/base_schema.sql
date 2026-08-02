@@ -432,6 +432,8 @@ CREATE TABLE IF NOT EXISTS "sales_invoices" (
     "payment_method" "payment_method" DEFAULT 'cash',
     "status" "invoice_status" NOT NULL DEFAULT 'draft',
     "notes" TEXT,
+    "seller_legal_name" VARCHAR(255),
+    "seller_tax_number" VARCHAR(50),
     "ref_invoice_id" INTEGER,
     "generated_stock_voucher_id" INTEGER,
     "generated_stock_journal_entry_id" INTEGER,

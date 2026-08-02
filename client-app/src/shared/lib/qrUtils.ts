@@ -11,8 +11,6 @@ export type QrSystem = 'zatca' | 'eta' | 'custom';
 export interface QrSettings {
   isEnabled: boolean;
   countrySystem: QrSystem;
-  sellerName?: string;
-  taxNumber?: string;
   customFormat?: string;
   showOnSalesInvoice: boolean;
   showOnPurchaseInvoice: boolean;
@@ -32,6 +30,19 @@ export interface QrInvoiceData {
   invoiceNumber?: string;
   buyerName?: string;
   buyerTaxNumber?: string;
+}
+
+export function validateQrCompanyData(system: QrSystem, sellerName: string, taxNumber: string): string | null {
+  if (!sellerName.trim()) return "اسم المنشأة القانوني غير مكتمل. افتح معلومات المؤسسة وأكمل الاسم القانوني.";
+  if (!taxNumber.trim()) return "الرقم الضريبي أو المعرف الضريبي غير مكتمل. افتح معلومات المؤسسة وأكمل البيانات.";
+  if (system === "zatca" && !/^3\d{13}3$/.test(taxNumber.trim())) {
+    return "الرقم الضريبي غير صالح لنظام ZATCA. يجب أن يتكون من 15 رقمًا ويبدأ وينتهي بالرقم 3.";
+  }
+  return null;
+}
+
+export function validateQrInvoiceData(system: QrSystem, data: QrInvoiceData): string | null {
+  return validateQrCompanyData(system, data.sellerName, data.taxNumber);
 }
 
 // ─── ZATCA TLV Encoder ───────────────────────────────────────────────────────
@@ -103,6 +114,8 @@ export function generateCustomQrContent(data: QrInvoiceData, template: string): 
 // ─── المُولِّد الرئيسي ────────────────────────────────────────────────────────
 
 export function generateQrContent(system: QrSystem, data: QrInvoiceData, customTemplate?: string): string {
+  const validationError = validateQrInvoiceData(system, data);
+  if (validationError) throw new Error(validationError);
   switch (system) {
     case 'zatca':
       return generateZATCAQrContent(data);
