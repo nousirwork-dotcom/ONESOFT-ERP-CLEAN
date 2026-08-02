@@ -1649,6 +1649,12 @@ export const zatcaRouter = router({
         where: and(eq(salesInvoices.id, input.invoiceId), eq(salesInvoices.orgId, ctx.user.orgId)),
       });
       if (!inv) throw new TRPCError({ code: 'NOT_FOUND', message: 'الفاتورة غير موجودة' });
+      if (!inv.sellerLegalName?.trim() || !inv.sellerTaxNumber?.trim()) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'لا يمكن إعادة إصدار QR/XML أو توقيع فاتورة قديمة: لقطة اسم المنشأة والرقم الضريبي غير محفوظة لهذه الفاتورة.',
+        });
+      }
 
       const persistedInvoiceType = inv.zatcaInvoiceType === 'standard' ? 'standard' : 'simplified';
       const operation: ZatcaOperation = persistedInvoiceType === 'standard' ? 'clearance' : 'reporting';
@@ -2718,6 +2724,12 @@ export const zatcaRouter = router({
       ]);
 
       if (!inv) throw new Error('Invoice not found');
+      if (!inv.sellerLegalName?.trim() || !inv.sellerTaxNumber?.trim()) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'لا يمكن توليد أو إعادة معالجة XML: لقطة اسم المنشأة والرقم الضريبي غير محفوظة لهذه الفاتورة القديمة.',
+        });
+      }
       const cfg = canonicalizeZatcaConfig(org?.zatcaConfig, org);
 
       // ── توليد XML ──────────────────────────────────────────────────────────

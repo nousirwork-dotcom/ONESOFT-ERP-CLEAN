@@ -338,6 +338,10 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
     String(orgQuery.data?.legalName ?? orgQuery.data?.name ?? "").trim();
   const effectiveSellerTaxNumber = sellerTaxNumberSnapshot.trim() ||
     String(orgQuery.data?.vatNumber ?? orgQuery.data?.taxNumber ?? "").trim();
+  const issuedWithoutSellerSnapshot = !!savedInvoiceId && invoiceStatus !== "draft" &&
+    (!sellerLegalNameSnapshot.trim() || !sellerTaxNumberSnapshot.trim());
+  const canUseSellerIdentityForPrint = !issuedWithoutSellerSnapshot;
+  const sellerSnapshotWarning = "لا يمكن إعادة طباعة أو توليد QR لهذه الفاتورة: لقطة اسم المنشأة والرقم الضريبي غير محفوظة تاريخيًا.";
   const selectedJournalForPrint = (journalsQuery.data ?? []).find((j: any) => j.id === journalId);
   const { templateConfig }    = usePrintTemplate(
     "sales_invoice",
@@ -559,8 +563,13 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
       setNavInvoiceId(data.id ?? null);
       setIsPosted(data.isPosted ?? false);
       setInvoiceNumber(data.invoiceNumber ?? invoiceNumber);
-      setSellerLegalNameSnapshot(effectiveSellerLegalName);
-      setSellerTaxNumberSnapshot(effectiveSellerTaxNumber);
+      if ((data as any).status !== "draft") {
+        setSellerLegalNameSnapshot(effectiveSellerLegalName);
+        setSellerTaxNumberSnapshot(effectiveSellerTaxNumber);
+      } else {
+        setSellerLegalNameSnapshot("");
+        setSellerTaxNumberSnapshot("");
+      }
       setErpMode("view");
       // رسالة النجاح تُعرض هنا فقط للحفظ المباشر (آجل)؛ أما عند التأكيد من شاشة الدفع فالنافذة تُعرضها.
       if (!skipSaveToast.current) {
@@ -1484,6 +1493,10 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
   /* ── تحميل PDF الفاتورة (تُستخدم في SendDocumentPanel) ── */
   const handleDownloadPdf = useCallback(async () => {
     try {
+      if (!canUseSellerIdentityForPrint) {
+        toast.error(sellerSnapshotWarning);
+        return;
+      }
       const qrEnabled = !!(qrSettingsQuery.data?.isEnabled && qrSettingsQuery.data?.showOnSalesInvoice);
       let qrDataUrl = "";
       if (qrEnabled) {
@@ -1560,11 +1573,17 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
   }, [invoiceNumber, invoiceDate, customerName, customerCode, customerTaxNumber, sellerUserId, salespersonsQuery.data,
       paymentType, currency, notes, lines, subtotal, totalDiscount, totalTax, netTotal,
       paidAmount, remainingAmount, effectiveSellerLegalName, effectiveSellerTaxNumber,
-      orgQuery.data, qrSettingsQuery.data, templateConfig]);
+      canUseSellerIdentityForPrint, sellerSnapshotWarning, orgQuery.data, qrSettingsQuery.data, templateConfig]);
 
   // ── Unified Toolbar ──────────────────────────────────────────────────────────
   const _sipRef = useRef<any>({});
-  _sipRef.current = { erpMode, isDirty, savedInvoiceId, isPosted, handleNew, handleSave, handleSaveDraft, handleDelete, handleDuplicate, handleRepost, createMutation, unpostMutation, allInvoicesQuery, navInvoiceId, setNavInvoiceId, setErpMode, requestWorkClose, setShowPostingPreview, setShowPrintModal, setShowSendPanel, nextNumberQuery };
+  _sipRef.current = {
+    erpMode, isDirty, savedInvoiceId, isPosted, handleNew, handleSave, handleSaveDraft,
+    handleDelete, handleDuplicate, handleRepost, createMutation, unpostMutation,
+    allInvoicesQuery, navInvoiceId, setNavInvoiceId, setErpMode, requestWorkClose,
+    setShowPostingPreview, setShowPrintModal, setShowSendPanel, nextNumberQuery,
+    canUseSellerIdentityForPrint, sellerSnapshotWarning,
+  };
 
   // handlers مستقرة ([] deps) — جميع الوصولات عبر _sipRef.current
   const sipHandlers = useMemo<CommandHandlers>(() => ({
@@ -1582,7 +1601,14 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
     cancel: () => { const s = _sipRef.current; if (!s.savedInvoiceId) return; if (window.confirm("هل أنت متأكد من إلغاء ترحيل هذه الفاتورة؟")) s.unpostMutation.mutate({ invoiceId: s.savedInvoiceId }); },
     preview:   () => { const s = _sipRef.current; if (!s.savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً"); return; } s.setShowPostingPreview(true); },
     send:      () => { const s = _sipRef.current; if (!s.savedInvoiceId) { toast.warning("يجب حفظ الفاتورة أولاً قبل الإرسال"); return; } s.setShowSendPanel(true); },
-    print:     () => { _sipRef.current.setShowPrintModal(true); },
+    print:     () => {
+      const s = _sipRef.current;
+      if (!s.canUseSellerIdentityForPrint) {
+        toast.error(s.sellerSnapshotWarning);
+        return;
+      }
+      s.setShowPrintModal(true);
+    },
     exit:      () => {
       _sipRef.current.requestWorkClose();
     },
@@ -2737,7 +2763,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
         />
       )}
 
-      {showPrintModal && (
+      {showPrintModal && canUseSellerIdentityForPrint && (
         <InvoicePrintModal
           open={showPrintModal}
           onClose={() => setShowPrintModal(false)}

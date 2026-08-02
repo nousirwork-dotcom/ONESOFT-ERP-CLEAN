@@ -538,8 +538,10 @@ export const salesRouter = router({
             orgId,
             userId: ctx.user.id,
             invoiceDate: new Date(invoiceData.invoiceDate),
-            sellerLegalName: organization?.name ?? null,
-            sellerTaxNumber: organization?.taxNumber ?? null,
+            ...(isDraft ? {} : {
+              sellerLegalName: organization?.name ?? null,
+              sellerTaxNumber: organization?.taxNumber ?? null,
+            }),
             ...(dueDate ? { dueDate: new Date(dueDate) } : {}),
           }).returning();
           invoice = row;

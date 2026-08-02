@@ -251,6 +251,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   const [savedInvoiceId, setSavedInvoiceId]       = useState<number | null>(null);
   const [navInvoiceId, setNavInvoiceId]           = useState<number | null>(null);
   const [isPosted, setIsPosted]                   = useState(false);
+  const [documentStatus, setDocumentStatus]       = useState<"draft" | "confirmed" | "paid" | "cancelled">("draft");
   const [showPostingPreview, setShowPostingPreview] = useState(false);
   const [purchaseBranchMenuOpen, setPurchaseBranchMenuOpen] = useState(false);
   const [purchaseBranchEditMode, setPurchaseBranchEditMode] = useState(false);
@@ -480,6 +481,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     setPaidAmountOverride(inv.paidAmount ?? "");
     setSavedInvoiceId(inv.id);
     setIsPosted(inv.isPosted ?? false);
+    setDocumentStatus((inv.status as "draft" | "confirmed" | "paid" | "cancelled") ?? "draft");
     setErpMode("view");
     if (inv.items && inv.items.length > 0) {
       setLines(inv.items.map((item: any) => ({
@@ -527,6 +529,12 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     String(orgQuery.data?.legalName ?? orgQuery.data?.name ?? "").trim();
   const effectiveSellerTaxNumber = sellerTaxNumberSnapshot.trim() ||
     String(orgQuery.data?.vatNumber ?? orgQuery.data?.taxNumber ?? "").trim();
+  const issuedSalesWithoutSellerSnapshot = config.docCategory === "sales" &&
+    !!savedInvoiceId &&
+    documentStatus !== "draft" &&
+    (!sellerLegalNameSnapshot.trim() || !sellerTaxNumberSnapshot.trim());
+  const canUseSellerIdentityForPrint = !issuedSalesWithoutSellerSnapshot;
+  const sellerSnapshotWarning = "لا يمكن إعادة طباعة أو توليد QR لهذه الفاتورة: لقطة اسم المنشأة والرقم الضريبي غير محفوظة تاريخيًا.";
   const qrSettingsQuery      = trpc.qrSettings.get.useQuery();
   const defaultTemplateQuery = trpc.documentTemplates.getDefault.useQuery(
     { docType: printDocType },
@@ -600,9 +608,13 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
         duration: 5000,
       });
       setSavedInvoiceId(data.id ?? null);
-      if (config.docCategory === "sales") {
+      setDocumentStatus(((data as any).status as "draft" | "confirmed" | "paid" | "cancelled") ?? "confirmed");
+      if (config.docCategory === "sales" && (data as any).status !== "draft") {
         setSellerLegalNameSnapshot(effectiveSellerLegalName);
         setSellerTaxNumberSnapshot(effectiveSellerTaxNumber);
+      } else if (config.docCategory === "sales") {
+        setSellerLegalNameSnapshot("");
+        setSellerTaxNumberSnapshot("");
       }
       setIsPosted(autoPosted);
       setErpMode("view");
@@ -619,6 +631,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
         duration: 5000,
       });
       setSavedInvoiceId(data.id);
+      setDocumentStatus(((data as any).status as "draft" | "confirmed" | "paid" | "cancelled") ?? "confirmed");
       setIsPosted(false);
       setErpMode("view");
       pendingNavRef.current?.();
@@ -1072,7 +1085,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   /* ── نسخة مماثلة ── */
   const handleDuplicate = useCallback(() => {
     if (!savedInvoiceId) { toast.warning("لا يوجد مستند محفوظ للنسخ — احفظ أولاً"); return; }
-    setSavedInvoiceId(null); setNavInvoiceId(null); setIsPosted(false); setShowPostingPreview(false);
+    setSavedInvoiceId(null); setNavInvoiceId(null); setIsPosted(false); setDocumentStatus("draft"); setShowPostingPreview(false);
     setSellerLegalNameSnapshot(""); setSellerTaxNumberSnapshot("");
     setErpMode("new");
     setBasedOnType(""); setBasedOnNum(""); setBasedOnTrigger("");
@@ -1092,7 +1105,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     setBasedOnType(""); setBasedOnNum(""); setBasedOnTrigger("");
     setNotes(""); setDueDate(""); setSalesperson(""); setPaidAmountOverride("");
     setErpMode("new"); setJournalWarehouseId(null);
-    setSavedInvoiceId(null); setNavInvoiceId(null); setIsPosted(false); setShowPostingPreview(false);
+    setSavedInvoiceId(null); setNavInvoiceId(null); setIsPosted(false); setDocumentStatus("draft"); setShowPostingPreview(false);
     setSellerLegalNameSnapshot(""); setSellerTaxNumberSnapshot("");
     if (journalId) {
       utils.documentJournals.previewNextNumber.fetch({ journalId }).then(p => {
@@ -1182,7 +1195,12 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
 
   // ── Unified Toolbar ──────────────────────────────────────────────────────────
   const _tbRef = useRef<any>({});
-  _tbRef.current = { erpMode, isSaving, savedInvoiceId, isPosted, isPrintEnabled, config, handleSave, handleNew, handleDuplicate, setErpMode, setPendingNav, setShowUnsaved, setShowPrintModal, setShowPostingPreview, unpostMutation: activeUnpostMutation };
+  _tbRef.current = {
+    erpMode, isSaving, savedInvoiceId, isPosted, isPrintEnabled, config, handleSave,
+    handleNew, handleDuplicate, setErpMode, setPendingNav, setShowUnsaved,
+    setShowPrintModal, setShowPostingPreview, unpostMutation: activeUnpostMutation,
+    canUseSellerIdentityForPrint, sellerSnapshotWarning,
+  };
   const toolbarActions = useMemo(() => {
     const canPost = config.canPost !== false;
     const hasSaved = savedInvoiceId !== null;
@@ -1203,7 +1221,18 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       preview: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "احفظ المستند أولًا للمطالعة", onClick: () => { const s = _tbRef.current; if (s.savedInvoiceId) s.setErpMode("view"); else toast.info("لا يوجد سجل محفوظ للمطالعة"); } },
       tools: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "احفظ المستند أولًا" },
       send: { supported: false as const, disabledReason: "الإرسال غير متاح في هذه الشاشة" },
-      print: { supported: true as const, allowed: true, stateEnabled: hasSaved, disabledReason: "احفظ المستند أولًا للطباعة", onClick: () => { const s = _tbRef.current; if (s.isPrintEnabled) s.setShowPrintModal(true); else toast.info("جاري الطباعة..."); } },
+      print: {
+        supported: true as const,
+        allowed: true,
+        stateEnabled: hasSaved,
+        disabledReason: "احفظ المستند أولًا للطباعة",
+        onClick: () => {
+          const s = _tbRef.current;
+          if (!s.isPrintEnabled) { toast.info("جاري الطباعة..."); return; }
+          if (!s.canUseSellerIdentityForPrint) { toast.error(s.sellerSnapshotWarning); return; }
+          s.setShowPrintModal(true);
+        },
+      },
       exit: { supported: true as const, allowed: true, stateEnabled: true, onClick: () => { const s = _tbRef.current; const dirty = s.erpMode === "new" || s.erpMode === "edit"; const doExit = () => toast.info("أغلق التبويب لإغلاق الشاشة"); if (dirty) { s.setPendingNav(() => doExit); s.setShowUnsaved(true); } else doExit(); } },
     }) as unknown as ToolbarActionMap;
   }, [erpMode, isSaving, savedInvoiceId, isPosted, isPrintEnabled, config, navHasRecord, navHasPrevious, navHasNext, navHandlers]);
@@ -2111,7 +2140,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       )}
 
       {/* ── Print Modal (Purchase Invoice / Sales Return) ──────────────────── */}
-      {showPrintModal && isPrintEnabled && (
+      {showPrintModal && isPrintEnabled && canUseSellerIdentityForPrint && (
         <InvoicePrintModal
           open={showPrintModal}
           onClose={() => setShowPrintModal(false)}

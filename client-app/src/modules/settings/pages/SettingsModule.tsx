@@ -194,6 +194,7 @@ function StatusIcon({ status }: { status: string }) {
 
 function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
   const [collapsed, setCollapsed] = useState(false);
+  const activeItemRef = useRef<HTMLButtonElement>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
     general: true,
     "electronic-invoicing-center": true,
@@ -207,8 +208,12 @@ function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id:
   });
   const toggle = (id: string) => setExpanded(p => ({ ...p, [id]: !p[id] }));
 
+  useEffect(() => {
+    activeItemRef.current?.scrollIntoView({ block: "nearest" });
+  }, [activeId]);
+
   return (
-    <nav className={`${collapsed ? "w-12" : "w-56"} shrink-0 border-l border-border bg-[#1a1a2e] overflow-y-auto flex flex-col transition-[width] duration-200`}>
+    <nav className={`${collapsed ? "w-12" : "w-56"} h-full min-h-0 shrink-0 border-l border-[#45484f] bg-[#303238] overflow-hidden flex flex-col transition-[width] duration-200`}>
       <div className={`${collapsed ? "px-1" : "px-3"} py-3 border-b border-border/30`}>
         <div className={`flex items-center ${collapsed ? "justify-center" : "justify-between"} gap-2`}>
           {!collapsed && (
@@ -229,7 +234,7 @@ function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id:
           </button>
         </div>
       </div>
-      {!collapsed && <div className="py-1 flex-1">
+      {!collapsed && <div className="min-h-0 flex-1 overflow-y-auto py-1">
         {menuSections.map(section => (
           <div key={section.id}>
             <button onClick={() => toggle(section.id)}
@@ -243,10 +248,10 @@ function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id:
             {expanded[section.id] && (
               <div className="mb-1">
                 {section.children.map(child => (
-                  <button key={child.id} onClick={(e) => { e.stopPropagation(); onSelect(child.id); }}
+                  <button key={child.id} ref={activeId === child.id ? activeItemRef : undefined} onClick={(e) => { e.stopPropagation(); onSelect(child.id); }}
                     className={`w-full flex items-center gap-2 px-4 py-1.5 text-xs transition-colors ${
                       activeId === child.id
-                        ? "bg-[#a855f7]/15 text-white font-semibold"
+                        ? "bg-[#D8AE55]/20 text-white font-semibold border-r-2 border-[#D8AE55]"
                         : "text-gray-300 hover:text-white hover:bg-white/5"
                     }`}>
                     <StatusIcon status={child.status} />
@@ -5835,9 +5840,14 @@ type ElectronicInvoicingTab = "qr" | "zatca";
  */
 function ElectronicInvoicingCenter({ initialTab = "qr" }: { initialTab?: ElectronicInvoicingTab }) {
   const [activeTab, setActiveTab] = useState<ElectronicInvoicingTab>(initialTab);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    panelRef.current?.scrollTo({ top: 0, behavior: "auto" });
+  }, [activeTab]);
 
   return (
-    <div className="h-full overflow-auto bg-background" dir="rtl">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background" dir="rtl">
       <div className="border-b border-border bg-card px-5 pt-4">
         <div className="mb-3">
           <h2 className="text-lg font-bold text-foreground">مركز الفوترة الإلكترونية</h2>
@@ -5874,7 +5884,7 @@ function ElectronicInvoicingCenter({ initialTab = "qr" }: { initialTab?: Electro
           </button>
         </div>
       </div>
-      <div role="tabpanel" aria-label={activeTab === "qr" ? "الفوترة وQR" : "الربط مع ZATCA"}>
+      <div ref={panelRef} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden" role="tabpanel" aria-label={activeTab === "qr" ? "الفوترة وQR" : "الربط مع ZATCA"}>
         {activeTab === "qr"
           ? <div className="p-5"><QRSettingsPage /></div>
           : <div className="h-full min-h-[620px]"><ZatcaCenterPage initialSection="dashboard" /></div>}
@@ -5886,7 +5896,7 @@ function ElectronicInvoicingCenter({ initialTab = "qr" }: { initialTab?: Electro
 /** شاشة مستقلة لكل خيار من خيارات مركز الفوترة الإلكترونية. */
 function ElectronicInvoicingStandalone({ tab }: { tab: ElectronicInvoicingTab }) {
   return tab === "qr"
-    ? <div className="h-full overflow-auto bg-background p-5" dir="rtl"><QRSettingsPage /></div>
+    ? <div className="h-full min-h-0 overflow-y-auto overflow-x-hidden bg-background p-5" dir="rtl"><QRSettingsPage /></div>
     : <div className="h-full min-h-[620px]"><ZatcaCenterPage initialSection="dashboard" /></div>;
 }
 
@@ -5995,10 +6005,16 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
 
 export default function SettingsModule() {
   const [activeId, setActiveId] = useState<MenuId>("overview");
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    contentRef.current?.scrollTo({ top: 0, behavior: "auto" });
+  }, [activeId]);
+
   return (
-    <div className="flex h-full" dir="rtl">
+    <div className="flex h-full min-h-0 overflow-hidden" dir="rtl">
       <SettingsMenu activeId={activeId} onSelect={setActiveId} />
-      <div className="flex-1 overflow-auto p-5 bg-background">
+      <div ref={contentRef} className="min-w-0 min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-5 bg-background">
         <SettingsContent activeId={activeId} onSelect={setActiveId} />
       </div>
     </div>
