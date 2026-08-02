@@ -64,7 +64,8 @@ export const menuSections = [
     color: "#D19C05",
     emoji: "🏛️",
     children: [
-      { id: "electronic-invoicing-center", label: "فتح مركز الفوترة الإلكترونية", status: "done", path: "/cfg/e-invoicing-center" },
+      { id: "electronic-invoicing-qr", label: "إعداد QR Code", status: "done", path: "/cfg/e-invoicing-center/qr" },
+      { id: "electronic-invoicing-zatca", label: "إعدادات الربط مع هيئة الزكاة والضريبة والجمارك – السعودية", status: "done", path: "/cfg/e-invoicing-center/zatca" },
     ],
   },
   {
@@ -3335,7 +3336,7 @@ function QRSettingsPage() {
         <div>
           <h3 className="font-bold text-base flex items-center gap-2">
             <QrCode className="w-5 h-5 text-[#406B93]" />
-            إعدادات QR Code
+            إعداد QR Code
           </h3>
           <p className="text-muted-foreground text-xs mt-0.5">تهيئة نظام QR Code للفواتير ونماذج الطباعة</p>
         </div>
@@ -5836,6 +5837,8 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
 
     case "document-templates":   return <TemplatesManagerPage />;
     case "electronic-invoicing-center": return <ElectronicInvoicingCenter />;
+    case "electronic-invoicing-qr": return <ElectronicInvoicingCenter initialTab="qr" />;
+    case "electronic-invoicing-zatca": return <ElectronicInvoicingCenter initialTab="zatca" />;
     case "qr-settings":          return <ElectronicInvoicingCenter initialTab="qr" />;
     case "field-design":         return <FieldDesignPage />;
     case "backup":               return <BackupPage />;
