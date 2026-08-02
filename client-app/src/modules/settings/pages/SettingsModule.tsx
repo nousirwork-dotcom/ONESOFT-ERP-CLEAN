@@ -52,11 +52,19 @@ export const menuSections = [
       { id: "company-info",    label: "معلومات الشركة",         status: "done",    path: "/cfg/company" },
       { id: "currencies",      label: "العملات",               status: "done",    path: "/cfg/currencies" },
       { id: "taxes",           label: "الضرائب",               status: "done",    path: "/cfg/taxes" },
-      { id: "electronic-invoicing-center", label: "مركز الفوترة الإلكترونية", status: "done", path: "/cfg/e-invoicing-center" },
       { id: "fiscal-periods",  label: "الفترات المحاسبية",     status: "done",    path: "/cfg/fiscal" },
       { id: "field-dictionary",label: "تعريف الحقول (Field Dictionary)", status: "done", path: "/cfg/field-dictionary" },
       { id: "payment-methods",  label: "وسائل الدفع",                      status: "done", path: "/cfg/payment-methods"  },
       { id: "system-branding",  label: "هوية النظام والألوان",             status: "done", path: "/cfg/branding"          },
+    ],
+  },
+  {
+    id: "electronic-invoicing-center",
+    label: "مركز الفوترة الإلكترونية",
+    color: "#D19C05",
+    emoji: "🏛️",
+    children: [
+      { id: "electronic-invoicing-center", label: "فتح مركز الفوترة الإلكترونية", status: "done", path: "/cfg/e-invoicing-center" },
     ],
   },
   {
@@ -158,15 +166,6 @@ export const menuSections = [
     ],
   },
   {
-    id: "gov-integrations",
-    label: "تكاملات حكومية أخرى",
-    color: "#16a34a",
-    emoji: "🏢",
-    children: [
-      { id: "gosi-config",    label: "التأمينات الاجتماعية (GOSI)",          status: "missing", path: "/cfg/gosi"       },
-    ],
-  },
-  {
     id: "hr-settings",
     label: "إعدادات أخرى",
     color: "#a855f7",
@@ -196,13 +195,13 @@ function SettingsMenu({ activeId, onSelect }: { activeId: MenuId; onSelect: (id:
   const [collapsed, setCollapsed] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
     general: true,
+    "electronic-invoicing-center": true,
     loyalty: false,
     "user-management": false,
     approvals: false,
     notifications: false,
     system: false,
     messaging: false,
-    "gov-integrations": false,
     "hr-settings": false,
   });
   const toggle = (id: string) => setExpanded(p => ({ ...p, [id]: !p[id] }));
@@ -5882,7 +5881,6 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
     case "zatca-monitor":        return <ZatcaIntegrationPage initialTab="monitor" />;
     case "zatca-invoices":       return <ZatcaIntegrationPage initialTab="invoices" />;
     case "zatca-logs":           return <ZatcaIntegrationPage initialTab="logs" />;
-    case "gosi-config":          return <ComingSoon title="التأمينات الاجتماعية (GOSI)" />;
     case "gazt-config":          return <ComingSoon title="الزكاة والدخل (GAZT)" />;
     // مركز الرسائل والتكاملات
     case "messaging-whatsapp":   return <MessagingWhatsAppPage />;
@@ -5983,7 +5981,6 @@ export function CfgZatcaTab()            { return <CfgSubPage activeId="zatca-co
 export function CfgZatcaMonitorTab()     { return <CfgSubPage activeId="zatca-monitor" />; }
 export function CfgZatcaInvoicesTab()    { return <CfgSubPage activeId="zatca-invoices" />; }
 export function CfgZatcaLogsTab()        { return <CfgSubPage activeId="zatca-logs" />; }
-export function CfgGosiTab()             { return <CfgSubPage activeId="gosi-config" />; }
 export function CfgGaztTab()             { return <CfgSubPage activeId="gazt-config" />; }
 export function CfgSystemInfoTab()         { return <CfgSubPage activeId="system-info" />; }
 export function CfgServiceManagementTab() { return <CfgSubPage activeId="service-management" />; }
