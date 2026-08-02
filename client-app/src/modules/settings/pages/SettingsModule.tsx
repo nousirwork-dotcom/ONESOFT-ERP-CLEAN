@@ -309,51 +309,68 @@ function SettingsOverview({ onSelect }: { onSelect: (id: MenuId) => void }) {
 // ─── Company Info ──────────────────────────────────────────────────────────────
 
 function CompanyInfoPage() {
-  const [form, setForm] = useState({
-    name: "ONESOFT ERP", nameEn: "ONESOFT ERP",
-    address: "الرياض، المملكة العربية السعودية", phone: "+966 11 000 0000",
-    email: "info@onesoft.sa", website: "www.onesoft.sa",
-    taxNumber: "300000000000003", crNumber: "1010000000",
-    currency: "SAR", language: "ar",
+  const orgQ = trpc.orgs.currentOrg.useQuery();
+  const utils = trpc.useUtils();
+  const saveM = trpc.orgs.updateCurrent.useMutation({
+    onSuccess: () => {
+      toast.success("تم حفظ معلومات الشركة في قاعدة البيانات");
+      utils.orgs.currentOrg.invalidate();
+      utils.zatca.getReadiness.invalidate();
+    },
+    onError: error => toast.error(error.message),
   });
+  const [form, setForm] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!orgQ.data) return;
+    const cfg = (orgQ.data.zatcaConfig ?? {}) as Record<string, unknown>;
+    setForm({
+      name: orgQ.data.name ?? "",
+      nameEn: orgQ.data.nameEn ?? "",
+      taxNumber: orgQ.data.taxNumber ?? String(cfg.vatNumber ?? ""),
+      crNumber: orgQ.data.commercialReg ?? String(cfg.crNumber ?? ""),
+      activityType: String(cfg.businessCategory ?? ""),
+      country: String(cfg.countryName ?? ""),
+      city: String(cfg.city ?? ""),
+      district: String(cfg.district ?? ""),
+      streetName: String(cfg.streetName ?? ""),
+      buildingNumber: String(cfg.buildingNumber ?? ""),
+      postalCode: String(cfg.postalCode ?? ""),
+      additionalNumber: String(cfg.additionalNumber ?? ""),
+      address: orgQ.data.address ?? "",
+      phone: orgQ.data.phone ?? "",
+      email: orgQ.data.email ?? "",
+    });
+  }, [orgQ.data]);
   const update = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
+  const required: Array<[string, string]> = [
+    ["name", "الاسم القانوني"], ["taxNumber", "الرقم الضريبي"], ["crNumber", "السجل التجاري"],
+    ["activityType", "النشاط"], ["country", "الدولة"], ["city", "المدينة"], ["district", "الحي"],
+    ["streetName", "الشارع"], ["buildingNumber", "رقم المبنى"], ["postalCode", "الرمز البريدي"],
+    ["additionalNumber", "الرقم الإضافي"],
+  ];
+  const missing = required.filter(([key]) => !form[key]?.trim()).map(([, label]) => label);
+  if (orgQ.isLoading) return <div className="p-5 text-sm text-muted-foreground">جارٍ تحميل معلومات الشركة من قاعدة البيانات...</div>;
   return (
     <div className="space-y-4 max-w-2xl">
       <h3 className="font-semibold text-sm">معلومات الشركة</h3>
+      <div className={`rounded-lg border px-4 py-3 text-xs ${missing.length ? "border-orange-200 bg-orange-50 text-orange-900" : "border-green-200 bg-green-50 text-green-900"}`}>
+        <strong>{missing.length ? "بيانات المنشأة غير مكتملة" : "بيانات المنشأة مكتملة"}</strong>
+        {missing.length > 0 && <div className="mt-1">الحقول الناقصة: {missing.join("، ")}</div>}
+        <div className="mt-1 text-[11px] opacity-80">المصدر: قاعدة بيانات النظام، وليس Local Storage.</div>
+      </div>
       <Card className="border-border/50">
         <CardContent className="p-5 space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            {[["name","اسم الشركة (عربي)"],["nameEn","اسم الشركة (إنجليزي)"],["address","العنوان"],["phone","الهاتف"],["email","البريد الإلكتروني"],["website","الموقع الإلكتروني"],["taxNumber","الرقم الضريبي"],["crNumber","السجل التجاري"]].map(([k,l]) => (
+            {[["name","الاسم القانوني"],["nameEn","اسم الشركة (إنجليزي)"],["taxNumber","الرقم الضريبي"],["crNumber","السجل التجاري"],["activityType","النشاط"],["country","الدولة"],["city","المدينة"],["district","الحي"],["streetName","الشارع"],["buildingNumber","رقم المبنى"],["postalCode","الرمز البريدي"],["additionalNumber","الرقم الإضافي"],["address","العنوان التفصيلي"],["phone","الهاتف"],["email","البريد الإلكتروني"]].map(([k,l]) => (
               <div key={k}>
                 <Label className="text-xs text-muted-foreground">{l}</Label>
-                <Input value={(form as any)[k]} onChange={e => update(k, e.target.value)} className="h-8 text-sm mt-1" />
+                <Input value={form[k] ?? ""} onChange={e => update(k, e.target.value)} className="h-8 text-sm mt-1" />
               </div>
             ))}
-            <div>
-              <Label className="text-xs text-muted-foreground">العملة الأساسية</Label>
-              <Select value={form.currency} onValueChange={v => update("currency", v)}>
-                <SelectTrigger className="h-8 text-sm mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="SAR">ريال سعودي (SAR)</SelectItem>
-                  <SelectItem value="USD">دولار أمريكي (USD)</SelectItem>
-                  <SelectItem value="EUR">يورو (EUR)</SelectItem>
-                  <SelectItem value="AED">درهم إماراتي (AED)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">لغة النظام</Label>
-              <Select value={form.language} onValueChange={v => update("language", v)}>
-                <SelectTrigger className="h-8 text-sm mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ar">العربية</SelectItem>
-                  <SelectItem value="en">English</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
-          <Button className="w-full h-9" onClick={() => toast.success("تم حفظ معلومات الشركة")}>
-            <Save className="w-4 h-4 ml-2" /> حفظ التغييرات
+          <Button className="w-full h-9" onClick={() => saveM.mutate(form as any)} disabled={saveM.isPending || !orgQ.data}>
+            {saveM.isPending ? "جارٍ الحفظ..." : "حفظ معلومات الشركة"}
+            <Save className="w-4 h-4 ml-2" />
           </Button>
         </CardContent>
       </Card>
@@ -5740,7 +5757,7 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
     case "zatca-center-oplogs":
     case "zatca-center-errlogs":
     case "zatca-center-diag":
-    case "zatca-center-reports":   return <ZatcaCenterPage />;
+    case "zatca-center-reports":   return <ZatcaCenterPage onOpenCompanyInfo={() => onSelect("company-info")} />;
     // التكاملات الحكومية (كلاسيك)
     case "zatca-config":         return <ZatcaIntegrationPage initialTab="settings" />;
     case "zatca-monitor":        return <ZatcaIntegrationPage initialTab="monitor" />;

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { eq, and } from 'drizzle-orm';
-import { router, superAdminProcedure, protectedProcedure } from '../trpc.js';
+import { TRPCError } from '@trpc/server';
+import { router, superAdminProcedure, protectedProcedure, adminProcedure } from '../trpc.js';
 import { db } from '../db.js';
 import { organizations, users } from '../schema.js';
 import { hashPassword } from '../auth.js';
@@ -15,15 +16,91 @@ export const orgsRouter = router({
         nameEn:        organizations.nameEn,
         code:          organizations.code,
         phone:         organizations.phone,
+        email:         organizations.email,
         address:       organizations.address,
         taxNumber:     organizations.taxNumber,
         commercialReg: organizations.commercialReg,
         currency:      organizations.currency,
+        zatcaConfig:   organizations.zatcaConfig,
       })
       .from(organizations)
       .where(eq(organizations.id, ctx.user.orgId));
-    return org ?? null;
+    if (!org) return null;
+    const cfg = (org.zatcaConfig ?? {}) as Record<string, unknown>;
+    const safeZatcaConfig = {
+      businessName: cfg.businessName ?? '',
+      businessNameEn: cfg.businessNameEn ?? '',
+      vatNumber: cfg.vatNumber ?? '',
+      crNumber: cfg.crNumber ?? '',
+      businessCategory: cfg.businessCategory ?? '',
+      countryName: cfg.countryName ?? '',
+      city: cfg.city ?? '',
+      district: cfg.district ?? '',
+      streetName: cfg.streetName ?? '',
+      buildingNumber: cfg.buildingNumber ?? '',
+      postalCode: cfg.postalCode ?? '',
+      additionalNumber: cfg.additionalNumber ?? '',
+    };
+    return { ...org, zatcaConfig: safeZatcaConfig };
   }),
+
+  // معلومات الشركة الحالية — تُحفظ في organizations وzatca_config داخل PostgreSQL.
+  updateCurrent: adminProcedure
+    .input(z.object({
+      name:            z.string().max(255),
+      nameEn:          z.string().max(255),
+      taxNumber:       z.string().max(50),
+      commercialReg:   z.string().max(50),
+      activityType:    z.string().max(255),
+      country:         z.string().max(100),
+      city:            z.string().max(100),
+      district:        z.string().max(100),
+      streetName:      z.string().max(255),
+      buildingNumber:  z.string().max(20),
+      postalCode:      z.string().max(20),
+      additionalNumber:z.string().max(20),
+      address:         z.string().max(1000),
+      phone:           z.string().max(50),
+      email:           z.string().max(255),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const existing = await db.query.organizations.findFirst({
+        where: eq(organizations.id, ctx.user.orgId),
+        columns: { zatcaConfig: true },
+      });
+      if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'المنشأة غير موجودة' });
+
+      const currentConfig = (existing.zatcaConfig ?? {}) as Record<string, unknown>;
+      const nextConfig = {
+        ...currentConfig,
+        businessName: input.name,
+        businessNameEn: input.nameEn,
+        vatNumber: input.taxNumber,
+        crNumber: input.commercialReg,
+        businessCategory: input.activityType,
+        countryName: input.country,
+        city: input.city,
+        district: input.district,
+        streetName: input.streetName,
+        buildingNumber: input.buildingNumber,
+        postalCode: input.postalCode,
+        additionalNumber: input.additionalNumber,
+      };
+
+      await db.update(organizations).set({
+        name: input.name,
+        nameEn: input.nameEn || null,
+        taxNumber: input.taxNumber || null,
+        commercialReg: input.commercialReg || null,
+        address: input.address || null,
+        phone: input.phone || null,
+        email: input.email || null,
+        zatcaConfig: nextConfig,
+        updatedAt: new Date(),
+      }).where(eq(organizations.id, ctx.user.orgId));
+
+      return { ok: true };
+    }),
 
   // قائمة المؤسسات (للمدير العام فقط)
   list: superAdminProcedure.query(async () => {

@@ -59,12 +59,15 @@ const ZatcaConfigSchema = z.object({
   businessName:        z.string().default(''),
   businessNameEn:      z.string().default(''),
   crNumber:            z.string().default(''),
+  businessCategory:    z.string().default(''),
+  countryName:         z.string().default(''),
   buildingNumber:      z.string().default(''),
   streetName:          z.string().default(''),
   district:            z.string().default(''),
   city:                z.string().default(''),
   postalCode:          z.string().default(''),
-  countryCode:         z.string().default('SA'),
+  additionalNumber:    z.string().default(''),
+  countryCode:         z.string().default(''),
   sellerType:          z.enum(['B2B', 'B2C', 'both']).default('both'),
   autoSubmit:          z.boolean().default(false),
   submitOnPost:        z.boolean().default(true),
@@ -335,11 +338,15 @@ async function getZatcaReadiness(
   if (!/^3\d{13}3$/.test(vatNumber)) missingOrganizationFields.push('الرقم الضريبي الصحيح');
   if (!businessName) missingOrganizationFields.push('اسم المنشأة');
   if (!businessNameEn) missingOrganizationFields.push('الاسم الإنجليزي للمنشأة');
+  if (!String(cfg.crNumber || org.commercialReg || '').trim()) missingOrganizationFields.push('السجل التجاري');
+  if (!cfg.businessCategory.trim()) missingOrganizationFields.push('النشاط');
+  if (!cfg.countryName.trim()) missingOrganizationFields.push('الدولة');
   if (!cfg.streetName.trim()) missingOrganizationFields.push('اسم الشارع');
   if (!cfg.buildingNumber.trim()) missingOrganizationFields.push('رقم المبنى');
   if (!cfg.district.trim()) missingOrganizationFields.push('الحي');
   if (!cfg.city.trim()) missingOrganizationFields.push('المدينة');
   if (!cfg.postalCode.trim()) missingOrganizationFields.push('الرمز البريدي');
+  if (!cfg.additionalNumber.trim()) missingOrganizationFields.push('الرقم الإضافي');
 
   const selectedWarehouse = selectedWarehouseId == null
     ? null
@@ -426,6 +433,14 @@ async function getZatcaReadiness(
       name: org.name,
       nameEn: org.nameEn,
       commercialReg: org.commercialReg,
+      activityType: cfg.businessCategory,
+      country: cfg.countryName,
+      city: cfg.city,
+      district: cfg.district,
+      streetName: cfg.streetName,
+      buildingNumber: cfg.buildingNumber,
+      postalCode: cfg.postalCode,
+      additionalNumber: cfg.additionalNumber,
       vatNumber: vatNumber || null,
       dataComplete: missingOrganizationFields.length === 0,
       missingFields: missingOrganizationFields,
@@ -707,6 +722,23 @@ export const zatcaRouter = router({
         });
         if (!warehouse) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'مخزن دفتر المستند غير موجود أو غير فعال' });
+        }
+
+        const locationJournals = await tx.select({
+          docType: documentJournals.docType,
+        }).from(documentJournals).where(and(
+          eq(documentJournals.orgId, ctx.user.orgId),
+          eq(documentJournals.warehouseId, journal.warehouseId),
+          eq(documentJournals.isActive, true),
+          inArray(documentJournals.docType, POS_LINK_JOURNAL_TYPES),
+        ));
+        const availableTypes = new Set(locationJournals.map((row) => row.docType));
+        const missingTypes = POS_LINK_JOURNAL_TYPES.filter((docType) => !availableTypes.has(docType));
+        if (missingTypes.length > 0) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: `لا يمكن إنشاء وحدة الربط قبل ظهور الدفاتر الأربعة في نفس المخزن: ${missingTypes.map((type) => JOURNAL_TYPE_LABELS[type]).join('، ')}`,
+          });
         }
 
         const [unit] = await tx.insert(zatcaPosUnits).values({

@@ -583,7 +583,10 @@ function DashboardSection({ onStartSetup, onNavigate }: { onStartSetup: () => vo
 // ══════════════════════════════════════════════════════════════════════════════
 // 1b. جاهزية الربط — قراءة فقط قبل رحلة CSR/OTP
 // ══════════════════════════════════════════════════════════════════════════════
-function ReadinessSection({ onNavigate }: { onNavigate: (section: Section) => void }) {
+function ReadinessSection({ onNavigate, onOpenCompanyInfo }: {
+  onNavigate: (section: Section) => void;
+  onOpenCompanyInfo?: () => void;
+}) {
   const utils = trpc.useUtils();
   const [warehouseId, setWarehouseId] = useState<number | null>(null);
   const [invoiceType, setInvoiceType] = useState<"simplified" | "standard" | "both">("both");
@@ -595,6 +598,8 @@ function ReadinessSection({ onNavigate }: { onNavigate: (section: Section) => vo
     invoiceType,
   });
   const data = readinessQ.data;
+  const organizationComplete = Boolean(data?.organization?.dataComplete);
+  const overallReady = Boolean(data?.readyForCsr);
   const saveM = trpc.zatca.saveReadinessSettings.useMutation({
     onSuccess: () => {
       toast.success("تم حفظ إعداد الجاهزية في قاعدة البيانات");
@@ -634,6 +639,26 @@ function ReadinessSection({ onNavigate }: { onNavigate: (section: Section) => vo
       <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", borderRadius: 8, padding: "11px 13px", fontSize: 12, lineHeight: 1.8, marginBottom: 14 }}>
         هذه الشاشة فحص قراءة فقط قبل إنشاء CSR. لا تنشئ دفاتر أو وحدة ربط أو بيانات ضريبية، ولا تُرسل OTP أو أي طلب خارجي.
       </div>
+      <div style={{
+        background: overallReady ? "#f0fdf4" : "#fef2f2",
+        border: `1px solid ${overallReady ? "#86efac" : "#fecaca"}`,
+        color: overallReady ? "#166534" : "#991b1b",
+        borderRadius: 10, padding: "13px 15px", marginBottom: 14,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 18 }}>{overallReady ? "✅" : "⛔"}</span>
+          <strong style={{ fontSize: 14 }}>
+            {overallReady ? "جاهز لإنشاء CSR" : "غير جاهز"}
+          </strong>
+        </div>
+        <div style={{ fontSize: 11, marginTop: 5, lineHeight: 1.7 }}>
+          {overallReady
+            ? "اكتملت جميع شروط ما قبل التفعيل."
+            : organizationComplete
+              ? "يوجد شرط أو أكثر من شروط ما قبل التفعيل لم يكتمل."
+              : "بيانات المنشأة ناقصة؛ لا يمكن إنشاء CSR قبل استكمالها."}
+        </div>
+      </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
         <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14 }}>
@@ -645,12 +670,20 @@ function ReadinessSection({ onNavigate }: { onNavigate: (section: Section) => vo
           </select>
           <div style={{ marginTop: 9, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontSize: 11, color: "#64748b" }}>المنشأة الحالية لحساب المستخدم</span>
-            <Status ok={Boolean(data?.organization?.dataComplete)} text={data?.organization?.dataComplete ? "بيانات مكتملة" : "بيانات ناقصة"} />
+            <Status ok={organizationComplete} text={organizationComplete ? "بيانات مكتملة" : "بيانات ناقصة"} />
           </div>
           {!data?.organization?.dataComplete && (
             <div style={{ marginTop: 8, fontSize: 11, color: "#9a3412", lineHeight: 1.7 }}>
               الناقص: {data?.organization?.missingFields?.join("، ") || "جارٍ الفحص"}
             </div>
+          )}
+          {onOpenCompanyInfo && (
+            <button
+              onClick={onOpenCompanyInfo}
+              style={{ ...smallBtn, marginTop: 10, background: "#fff7ed", color: "#9a3412", border: "1px solid #fdba74" }}
+            >
+              🏢 فتح معلومات الشركة
+            </button>
           )}
         </div>
         <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14 }}>
@@ -715,7 +748,10 @@ function ReadinessSection({ onNavigate }: { onNavigate: (section: Section) => vo
                   <span style={{ fontSize: 10, color: "#64748b" }}>
                     {!journal.found ? "الدفتر غير موجود" : !journal.linked ? "غير مرتبط" : "مرتبط"}
                   </span>
-                  <Status ok={journal.found && journal.linked} text={journal.found && journal.linked ? "جاهز" : "ناقص"} />
+                  <Status
+                    ok={journal.found && journal.linked && organizationComplete}
+                    text={!journal.found ? "ناقص" : !journal.linked ? "غير مرتبط" : organizationComplete ? "مكتمل" : "يُراجع بعد اكتمال المنشأة"}
+                  />
                 </div>
               ))}
               {!warehouseId && <div style={{ fontSize: 11, color: "#9a3412", marginTop: 8 }}>اختر المخزن/الفرع لفحص دفاتره.</div>}
@@ -937,7 +973,20 @@ function LinkingUnitsSection({ onActivate }: { onActivate?: () => void }) {
   const sameLocation = selected
     ? unlinked.filter(j => j.warehouseId === selected.warehouseId && j.id !== selected.id)
     : [];
-  const canCreate = Boolean(form.journalId && selected && form.unitCode.trim() && form.unitName.trim());
+  const selectedLocationJournals = selected
+    ? journals.filter(j => j.warehouseId === selected.warehouseId)
+    : [];
+  const requiredJournalTypes = ["sales_invoice", "sales_return", "credit_note", "debit_note"];
+  const missingJournalTypes = requiredJournalTypes.filter(type =>
+    !selectedLocationJournals.some(j => j.docType === type)
+  );
+  const canCreate = Boolean(
+    form.journalId
+    && selected
+    && form.unitCode.trim()
+    && form.unitName.trim()
+    && missingJournalTypes.length === 0
+  );
   const busy = createM.isPending || linkM.isPending || unlinkM.isPending;
 
   return (
@@ -999,6 +1048,30 @@ function LinkingUnitsSection({ onActivate }: { onActivate?: () => void }) {
             )}
           </div>
         )}
+        <div style={{ marginTop: 12, border: "1px solid #e2e8f0", background: "#fff", borderRadius: 8, padding: 12 }}>
+          <div style={{ fontWeight: 800, fontSize: 12, marginBottom: 8 }}>تحقق الدفاتر الأربعة قبل إنشاء الوحدة</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 6 }}>
+            {requiredJournalTypes.map(type => {
+              const found = selectedLocationJournals.find(j => j.docType === type);
+              return (
+                <div key={type} style={{
+                  padding: "7px 9px", borderRadius: 6,
+                  background: found ? "#f0fdf4" : "#fff7ed",
+                  border: `1px solid ${found ? "#bbf7d0" : "#fed7aa"}`,
+                  color: found ? "#166534" : "#9a3412", fontSize: 11,
+                }}>
+                  {found ? "✓" : "!"} {journalTypeLabel(type)}
+                  {found && <span style={{ display: "block", color: "#64748b", fontSize: 10, marginTop: 2 }}>{found.code} — {found.name}</span>}
+                </div>
+              );
+            })}
+          </div>
+          {selected && missingJournalTypes.length > 0 && (
+            <div style={{ marginTop: 8, color: "#9a3412", fontSize: 11 }}>
+              لا يمكن إنشاء وحدة الربط قبل ظهور: {missingJournalTypes.map(journalTypeLabel).join("، ")}.
+            </div>
+          )}
+        </div>
         <div style={{ display: "flex", justifyContent: "flex-start", marginTop: 12 }}>
           <button disabled={!canCreate || busy} onClick={() => createM.mutate({ journalId: Number(form.journalId), unitCode: form.unitCode.trim(), unitName: form.unitName.trim() })}
             style={{ ...smallBtn, height: 32, padding: "0 18px", background: canCreate && !busy ? "#D19C05" : "#cbd5e1", color: "#fff", cursor: canCreate && !busy ? "pointer" : "not-allowed", fontSize: 12 }}>
@@ -1630,7 +1703,7 @@ function CsrSection() {
   const [serialNumber, setSerialNumber] = useState("");
   const [branchName, setBranchName] = useState("");
   const [branchLocation, setBranchLocation] = useState("");
-  const [businessCategory, setBusinessCategory] = useState("Retail and invoicing");
+  const [businessCategory, setBusinessCategory] = useState("");
   const [created, setCreated] = useState<any>(null);
   const selectedUnit = (unitsQ.data ?? []).find(unit => unit.id === posUnitId);
   const readiness = readinessQ.data;
@@ -2558,7 +2631,7 @@ function ReportsSection() {
 // ══════════════════════════════════════════════════════════════════════════════
 // المكوّن الرئيسي
 // ══════════════════════════════════════════════════════════════════════════════
-export default function ZatcaCenterPage() {
+export default function ZatcaCenterPage({ onOpenCompanyInfo }: { onOpenCompanyInfo?: () => void } = {}) {
   const [active, setActive]      = useState<Section>("dashboard");
   const [showWizard, setShowWizard] = useState(false);
   const [technicalOpen, setTechnicalOpen] = useState(false);
@@ -2571,7 +2644,7 @@ export default function ZatcaCenterPage() {
   function renderSection() {
     switch (active) {
       case "dashboard": return <DashboardSection onStartSetup={() => setShowWizard(true)} onNavigate={navigateTo} />;
-        case "readiness": return <ReadinessSection onNavigate={navigateTo} />;
+        case "readiness": return <ReadinessSection onNavigate={navigateTo} onOpenCompanyInfo={onOpenCompanyInfo} />;
         case "units":     return <LinkingUnitsSection onActivate={() => setActive("otp-sim")} />;
         case "otp-sim":   return <OtpSimulationSection />;
       case "env":       return <EnvSection />;
