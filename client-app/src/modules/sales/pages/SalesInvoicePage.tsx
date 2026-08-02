@@ -68,6 +68,50 @@ const EMPTY_LINE = (): InvoiceLine => ({
   total: "0",
 });
 
+class PaymentDialogErrorBoundary extends React.Component<
+  { children: React.ReactNode; onClose: () => void },
+  { hasError: boolean }
+> {
+  state: { hasError: boolean } = { hasError: false };
+
+  static getDerivedStateFromError(): { hasError: boolean } {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error(
+      `[sales.payment-dialog] isolated render error: ${error.message}`,
+      info.componentStack,
+    );
+  }
+
+  render() {
+    if (!this.state.hasError) return this.props.children;
+
+    return (
+      <div
+        role="alert"
+        dir="rtl"
+        className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/50"
+      >
+        <div className="w-[min(92vw,420px)] rounded-lg bg-white p-5 text-center shadow-xl">
+          <p className="font-bold text-slate-800">تعذر فتح شاشة الدفع</p>
+          <p className="mt-2 text-sm text-slate-500">
+            بقيت الفاتورة مفتوحة. أغلق هذه الرسالة ثم أعد المحاولة.
+          </p>
+          <button
+            type="button"
+            className="mt-4 rounded bg-[#406B93] px-5 py-2 text-sm font-bold text-white"
+            onClick={this.props.onClose}
+          >
+            إغلاق
+          </button>
+        </div>
+      </div>
+    );
+  }
+}
+
 const COL_FIELDS: (keyof InvoiceLine)[] = [
   "productCode", "productName", "quantity", "unit", "unitPrice",
   "discountPct", "discountAmt", "taxPct", "taxAmt",
@@ -2614,31 +2658,39 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
 
       {/* ── شاشة الدفع ──────────────────────────────────────────────────── */}
       {showPaymentModal && (
-        <PaymentModal
-          open={showPaymentModal}
+        <PaymentDialogErrorBoundary
           onClose={() => {
-            // إذا أُلغيت شاشة الدفع دون تأكيد، احتفظ بالمسودة كما هي ولا تُحدِث DB
             draftIdToFinalizeRef.current = null;
             pendingCreatePayloadRef.current = null;
             setShowPaymentModal(false);
           }}
-          invoiceId={pendingPayInvoiceId}
-          invoiceNumber={pendingPayInvoiceNumber}
-          invoiceTotal={pendingPayTotal}
-          currency={currency}
-          customerId={customerId}
-          onSaveFirst={!pendingPayInvoiceId ? saveForPayment : undefined}
-          onConfirmed={(paidAmt, breakdown) => {
-            setShowPaymentModal(false);
-            setPaymentBreakdown(breakdown);
-            const keys = Object.keys(breakdown);
-            const methods = keys.join(" + ");
-            toast.success(`✓ تم حفظ الفاتورة وتسجيل الدفع: ${paidAmt.toFixed(2)} ${currency}`, {
-              description: keys.length > 0 ? `وسائل الدفع: ${methods}` : undefined,
-              duration: 5000,
-            });
-          }}
-        />
+        >
+          <PaymentModal
+            open={showPaymentModal}
+            onClose={() => {
+              // إذا أُلغيت شاشة الدفع دون تأكيد، احتفظ بالمسودة كما هي ولا تُحدِث DB
+              draftIdToFinalizeRef.current = null;
+              pendingCreatePayloadRef.current = null;
+              setShowPaymentModal(false);
+            }}
+            invoiceId={pendingPayInvoiceId}
+            invoiceNumber={pendingPayInvoiceNumber}
+            invoiceTotal={pendingPayTotal}
+            currency={currency}
+            customerId={customerId}
+            onSaveFirst={!pendingPayInvoiceId ? saveForPayment : undefined}
+            onConfirmed={(paidAmt, breakdown) => {
+              setShowPaymentModal(false);
+              setPaymentBreakdown(breakdown);
+              const keys = Object.keys(breakdown);
+              const methods = keys.join(" + ");
+              toast.success(`✓ تم حفظ الفاتورة وتسجيل الدفع: ${paidAmt.toFixed(2)} ${currency}`, {
+                description: keys.length > 0 ? `وسائل الدفع: ${methods}` : undefined,
+                duration: 5000,
+              });
+            }}
+          />
+        </PaymentDialogErrorBoundary>
       )}
 
       {/* ── نافذة الطباعة مع QR Code ──────────────────────────────────── */}

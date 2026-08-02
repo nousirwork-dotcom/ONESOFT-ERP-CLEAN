@@ -38,10 +38,46 @@ export default function InvoicePrintModal({
 
   const cfg   = templateConfig ?? DEFAULT_TEMPLATE_CONFIG;
   const color = cfg.primaryColor;
+  const isPurchaseDoc =
+    docType === "purchase_invoice" ||
+    docType === "purchase_order" ||
+    docType === "purchase_return";
+  const showQrSetting = isPurchaseDoc
+    ? qrSettings?.showOnPurchaseInvoice
+    : qrSettings?.showOnSalesInvoice;
+
+  // SalesInvoicePage supplies these objects inline. Depend on their actual
+  // values instead of object identity so a parent render cannot restart the
+  // QR request and briefly clear the image used by the preview iframe.
+  const qrRequestKey = [
+    qrSettings?.isEnabled ? "1" : "0",
+    qrSettings?.countrySystem ?? "",
+    qrSettings?.customFormat ?? "",
+    qrSettings?.sellerName ?? "",
+    qrSettings?.taxNumber ?? "",
+    showQrSetting ? "1" : "0",
+    qrSettings?.qrSize ?? 100,
+    data.invoiceNumber,
+    data.invoiceDate,
+    data.invoiceTime ?? "",
+    data.sellerName,
+    data.sellerTaxNumber,
+    data.customerName,
+    data.customerTaxNumber ?? "",
+    data.grandTotal,
+    data.taxTotal,
+  ].join("|");
 
   /* ── حل QR عبر QRCodeService ── */
   useEffect(() => {
-    if (!open) return;
+    let cancelled = false;
+
+    if (!open) {
+      setQrDataUrl("");
+      return () => {
+        cancelled = true;
+      };
+    }
 
     const invoiceData: QrInvoiceData = {
       sellerName:      qrSettings?.sellerName || data.sellerName,
@@ -55,24 +91,27 @@ export default function InvoicePrintModal({
     };
 
     QRCodeService.resolveForInvoice(qrSettings, invoiceData, docType as "sales_invoice" | "purchase_invoice" | "receipt_voucher" | undefined)
-      .then(result => setQrDataUrl(result.dataUrl))
-      .catch(() => setQrDataUrl(""));
-  }, [open, data, qrSettings, docType]);
+      .then(result => {
+        if (!cancelled) setQrDataUrl(result.show ? result.dataUrl : "");
+      })
+      .catch(() => {
+        if (!cancelled) setQrDataUrl("");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, qrRequestKey, docType]);
 
   /* ── HTML الفاتورة — نفس المخرج للمعاينة والطباعة ── */
   const invoiceHtml = useMemo(() => {
-    const isPurchaseDoc = docType === "purchase_invoice" || docType === "purchase_order" || docType === "purchase_return";
-    const showQR = !!(qrSettings?.isEnabled && qrDataUrl && (
-      isPurchaseDoc
-        ? qrSettings?.showOnPurchaseInvoice
-        : qrSettings?.showOnSalesInvoice
-    ));
+    const showQR = !!(qrSettings?.isEnabled && showQrSetting && qrDataUrl);
     const qrLabel = qrSettings?.countrySystem === "zatca" ? "ZATCA QR"
                   : qrSettings?.countrySystem === "eta"   ? "ETA QR"  : "QR Code";
     const qrSize  = qrSettings?.qrSize ?? 100;
 
     return buildInvoiceHtml(data, cfg, showQR ? qrDataUrl : undefined, qrLabel, qrSize, docType);
-  }, [data, cfg, qrDataUrl, qrSettings, docType]);
+  }, [data, cfg, qrDataUrl, qrSettings?.countrySystem, qrSettings?.isEnabled, showQrSetting, docType]);
 
   /* ── طباعة / تصدير PDF عبر PrintEngine ── */
   const handlePrint = () => { PrintEngine.print(invoiceHtml); };

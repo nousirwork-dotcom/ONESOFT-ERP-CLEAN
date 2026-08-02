@@ -380,7 +380,10 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
     const guards = closeGuardsRef.current.get(id) ?? [];
     const guard = { requestClose, isDirty };
     closeGuardsRef.current.set(id, [...guards, guard]);
-    setDirtyTabIds(current => current.includes(id) || !isDirty ? current : [...current, id]);
+    setDirtyTabIds(current => {
+      if (!isDirty || current.includes(id)) return current;
+      return [...current, id];
+    });
 
     return () => {
       const current = closeGuardsRef.current.get(id) ?? [];
@@ -389,7 +392,8 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
       else closeGuardsRef.current.delete(id);
       setDirtyTabIds(currentIds => {
         const stillDirty = next.some(item => item.isDirty);
-        return stillDirty ? currentIds : currentIds.filter(tabId => tabId !== id);
+        if (stillDirty || !currentIds.includes(id)) return currentIds;
+        return currentIds.filter(tabId => tabId !== id);
       });
     };
   }, []);
@@ -457,15 +461,22 @@ export function TabManagerProvider({ children }: { children: ReactNode }) {
     setTabs(prev => prev.map(t => t.id === id ? { ...t, pos, size } : t));
   }, []);
 
-  return (
-    <TabManagerContext.Provider value={{
+  const contextValue = useMemo(() => ({
       tabs, activeTabId, dashboardVisible,
       isPosWorkspaceActive,
       openTab, closeTab, registerTabCloseGuard, dirtyTabIds, activateTab,
       setDashboardVisible, toggleDashboard, showDashboard,
       minimizeWindow, toggleMaximize, bringToFront,
       moveWindow, resizeWindow,
-    }}>
+  }), [
+    tabs, activeTabId, dashboardVisible, isPosWorkspaceActive,
+    openTab, closeTab, registerTabCloseGuard, dirtyTabIds, activateTab,
+    toggleDashboard, showDashboard, minimizeWindow, toggleMaximize,
+    bringToFront, moveWindow, resizeWindow,
+  ]);
+
+  return (
+    <TabManagerContext.Provider value={contextValue}>
       {children}
     </TabManagerContext.Provider>
   );
