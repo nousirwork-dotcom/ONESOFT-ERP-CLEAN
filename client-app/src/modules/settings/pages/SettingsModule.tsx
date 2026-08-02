@@ -733,16 +733,70 @@ function CurrenciesPage() {
 // ─── Taxes ─────────────────────────────────────────────────────────────────────
 
 function TaxesPage() {
-  const taxes = [
-    { id: 1, name: "ضريبة القيمة المضافة", code: "VAT", rate: 15, type: "نسبة مئوية", active: true },
-    { id: 2, name: "ضريبة الاستقطاع",      code: "WHT", rate: 5,  type: "نسبة مئوية", active: true },
-    { id: 3, name: "رسوم جمركية",           code: "CUS", rate: 5,  type: "نسبة مئوية", active: false },
-  ];
+  type TaxRow = {
+    id: number;
+    name: string;
+    code: string;
+    category: string;
+    valueType: string;
+    value: string;
+    isActive: boolean;
+    isSystem: boolean;
+    notes: string | null;
+    effectiveFrom: Date | null;
+    usage: { products: number; salesInvoices: number; purchaseInvoices: number };
+  };
+  const utils = trpc.useUtils();
+  const { data: taxes = [], isLoading } = trpc.taxDefinitions.list.useQuery({});
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<TaxRow | null>(null);
+  const [form, setForm] = useState({
+    name: "", code: "", category: "tax" as "tax" | "withholding" | "fee",
+    valueType: "percentage" as "percentage" | "fixed", value: "0",
+    isActive: true, notes: "", effectiveFrom: "",
+  });
+  const resetForm = () => setForm({
+    name: "", code: "", category: "tax", valueType: "percentage", value: "0",
+    isActive: true, notes: "", effectiveFrom: "",
+  });
+  const openCreate = () => { setEditing(null); resetForm(); setDialogOpen(true); };
+  const openEdit = (tax: TaxRow) => {
+    setEditing(tax);
+    setForm({
+      name: tax.name, code: tax.code, category: tax.category as "tax" | "withholding" | "fee",
+      valueType: tax.valueType as "percentage" | "fixed", value: String(tax.value ?? "0"),
+      isActive: tax.isActive, notes: tax.notes ?? "",
+      effectiveFrom: tax.effectiveFrom ? new Date(tax.effectiveFrom).toISOString().slice(0, 10) : "",
+    });
+    setDialogOpen(true);
+  };
+  const saveTax = trpc.taxDefinitions.create.useMutation({
+    onSuccess: () => { utils.taxDefinitions.list.invalidate(); setDialogOpen(false); toast.success("تم إضافة الضريبة أو الرسم"); },
+    onError: e => toast.error(e.message),
+  });
+  const updateTax = trpc.taxDefinitions.update.useMutation({
+    onSuccess: () => { utils.taxDefinitions.list.invalidate(); setDialogOpen(false); toast.success("تم تحديث الضريبة أو الرسم"); },
+    onError: e => toast.error(e.message),
+  });
+  const toggleTax = trpc.taxDefinitions.setActive.useMutation({
+    onSuccess: () => { utils.taxDefinitions.list.invalidate(); toast.success("تم تحديث حالة الضريبة"); },
+    onError: e => toast.error(e.message),
+  });
+  const deleteTax = trpc.taxDefinitions.delete.useMutation({
+    onSuccess: () => { utils.taxDefinitions.list.invalidate(); toast.success("تم حذف الضريبة أو الرسم"); },
+    onError: e => toast.error(e.message),
+  });
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    const payload = { ...form, code: form.code.trim().toUpperCase(), value: form.value.trim() };
+    if (editing) updateTax.mutate({ id: editing.id, ...payload });
+    else saveTax.mutate(payload);
+  };
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="font-semibold text-sm">إدارة الضرائب والرسوم</h3>
-        <Button className="h-8 text-sm" onClick={() => toast.info("إضافة ضريبة")}><Plus className="w-3.5 h-3.5 ml-1" />إضافة ضريبة</Button>
+        <Button className="h-8 text-sm" onClick={openCreate}><Plus className="w-3.5 h-3.5 ml-1" />إضافة ضريبة</Button>
       </div>
       <Card className="border-border/50">
         <Table>
@@ -752,24 +806,33 @@ function TaxesPage() {
               <TableHead className="text-xs">الكود</TableHead>
               <TableHead className="text-xs text-center">النسبة %</TableHead>
               <TableHead className="text-xs">النوع</TableHead>
+              <TableHead className="text-xs text-center">الاستخدام</TableHead>
               <TableHead className="text-xs text-center">الحالة</TableHead>
               <TableHead className="text-xs">الإجراءات</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
+            {isLoading && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">جارٍ التحميل...</TableCell></TableRow>}
+            {!isLoading && taxes.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">لا توجد ضرائب أو رسوم</TableCell></TableRow>}
             {taxes.map(t => (
               <TableRow key={t.id}>
-                <TableCell className="text-xs font-medium">{t.name}</TableCell>
+                <TableCell className="text-xs font-medium">{t.name}{t.isSystem && <Badge variant="outline" className="mr-2 text-[10px]">نظامية</Badge>}</TableCell>
                 <TableCell className="text-xs font-mono">{t.code}</TableCell>
-                <TableCell className="text-xs text-center">{t.rate}%</TableCell>
-                <TableCell className="text-xs">{t.type}</TableCell>
+                <TableCell className="text-xs text-center">{t.valueType === "percentage" ? `${t.value}%` : t.value}</TableCell>
+                <TableCell className="text-xs">{t.category === "withholding" ? "استقطاع" : t.category === "fee" ? "رسم" : "ضريبة"}</TableCell>
+                <TableCell className="text-xs text-center">{(t.usage.products + t.usage.salesInvoices + t.usage.purchaseInvoices) || "—"}</TableCell>
                 <TableCell className="text-center">
-                  <Badge variant={t.active ? "default" : "secondary"} className="text-xs">{t.active ? "فعّال" : "موقوف"}</Badge>
+                  <div className="flex items-center justify-center gap-2">
+                    <Badge variant={t.isActive ? "default" : "secondary"} className="text-xs">{t.isActive ? "فعّال" : "موقوف"}</Badge>
+                    <Switch checked={t.isActive} onCheckedChange={checked => toggleTax.mutate({ id: t.id, isActive: checked })} />
+                  </div>
                 </TableCell>
                 <TableCell>
                   <div className="flex gap-2">
-                    <button className="text-primary text-xs hover:underline" onClick={() => toast.info("تعديل")}>تعديل</button>
-                    <button className="text-destructive text-xs hover:underline" onClick={() => toast.error("حذف")}>حذف</button>
+                    <button className="text-primary text-xs hover:underline" onClick={() => openEdit(t)}>تعديل</button>
+                    <button className="text-destructive text-xs hover:underline" onClick={() => {
+                      if (window.confirm("هل تريد حذف هذه الضريبة أو الرسم؟ لا يمكن حذف السجل المستخدم؛ استخدم الإيقاف بدلًا من ذلك.")) deleteTax.mutate({ id: t.id });
+                    }}>حذف</button>
                   </div>
                 </TableCell>
               </TableRow>
@@ -777,6 +840,24 @@ function TaxesPage() {
           </TableBody>
         </Table>
       </Card>
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent dir="rtl" className="max-w-lg">
+          <DialogHeader><DialogTitle>{editing ? "تعديل ضريبة أو رسم" : "إضافة ضريبة أو رسم"}</DialogTitle></DialogHeader>
+          <form onSubmit={submit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>الاسم</Label><Input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
+              <div><Label>الكود</Label><Input required dir="ltr" value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} /></div>
+              <div><Label>التصنيف</Label><Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v as typeof f.category }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="tax">ضريبة</SelectItem><SelectItem value="withholding">استقطاع</SelectItem><SelectItem value="fee">رسم</SelectItem></SelectContent></Select></div>
+              <div><Label>نوع القيمة</Label><Select value={form.valueType} onValueChange={v => setForm(f => ({ ...f, valueType: v as typeof f.valueType }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="percentage">نسبة مئوية</SelectItem><SelectItem value="fixed">قيمة ثابتة</SelectItem></SelectContent></Select></div>
+              <div><Label>{form.valueType === "percentage" ? "النسبة" : "القيمة"}</Label><Input required type="number" min="0" step="0.0001" dir="ltr" value={form.value} onChange={e => setForm(f => ({ ...f, value: e.target.value }))} /></div>
+              <div><Label>تاريخ السريان</Label><Input type="date" value={form.effectiveFrom} onChange={e => setForm(f => ({ ...f, effectiveFrom: e.target.value }))} /></div>
+            </div>
+            <div><Label>ملاحظات</Label><Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
+            <div className="flex items-center gap-2"><Switch checked={form.isActive} onCheckedChange={isActive => setForm(f => ({ ...f, isActive }))} /><Label>فعّالة</Label></div>
+            <DialogFooter><Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>إلغاء</Button><Button type="submit" disabled={saveTax.isPending || updateTax.isPending}>حفظ</Button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

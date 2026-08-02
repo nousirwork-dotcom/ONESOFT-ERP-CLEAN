@@ -49,6 +49,7 @@ interface InvoiceLine {
   taxAmt: string;
   total: string;
   productId?: number;
+  taxId?: number;
   isStockItem?: boolean;
 }
 
@@ -920,6 +921,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
         l.productCode = found.code ?? found.barcode ?? code;
         l.productName = found.name;
         l.productId = found.id;
+        l.taxId = found.taxId ?? undefined;
         l.isStockItem = isStock;
         l.unit = found.unit ?? "";
         l.unitPrice = found.salePrice ? String(found.salePrice) : "";
@@ -949,6 +951,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
         productCode: product.code ?? product.barcode ?? "",
         productName: product.name,
         productId: product.id,
+        taxId: (product as any).taxId ?? undefined,
         isStockItem: isStock,
         unit: product.unit ?? "",
         unitPrice: product.salePrice ? String(product.salePrice) : "",
@@ -1221,6 +1224,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
       sourceDocumentId: basedOnQuery.data && basedOnQuery.data.sourceType !== 'transfer' ? (basedOnQuery.data as any).id ?? undefined : undefined,
       items: validLines.map((l, idx) => ({
         productId: l.productId,
+        taxId: l.taxId,
         productCode: l.productCode || undefined,
         productName: l.productName,
         unit: l.unit || undefined,
@@ -1370,6 +1374,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
         sourceDocumentId: basedOnQuery.data && basedOnQuery.data.sourceType !== 'transfer' ? (basedOnQuery.data as any).id ?? undefined : undefined,
         items: validLines.map((l, idx) => ({
           productId: l.productId,
+          taxId: l.taxId,
           productCode: l.productCode || undefined,
           productName: l.productName,
           unit: l.unit || undefined,

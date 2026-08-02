@@ -533,6 +533,13 @@
       "when": 1786319500000,
       "tag": "0075_sales_invoice_seller_snapshot",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1786319600000,
+      "tag": "0076_tax_definitions",
+      "breakpoints": true
     }
   ]
 }

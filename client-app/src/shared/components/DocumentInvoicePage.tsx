@@ -52,6 +52,7 @@ interface InvoiceLine {
   batchNumber: string;
   expiryDate: string;
   productId?: number;
+  taxId?: number;
 }
 
 type PaymentType = "cash" | "credit";
@@ -746,6 +747,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
         l.productCode = (found as any).sku ?? found.barcode ?? code;
         l.productName = found.name;
         l.productId   = found.id;
+        l.taxId       = (found as any).taxId ?? undefined;
         l.unit        = found.unit ?? "";
         l.unitPrice   = found.salePrice ? String(found.salePrice) : "";
         l.taxPct      = found.taxRate ? String(found.taxRate) : "0";
@@ -1046,7 +1048,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       productId: l.productId, productCode: l.productCode || undefined, productName: l.productName,
       unit: l.unit || undefined, quantity: l.quantity, unitPrice: l.unitPrice,
       discountPercent: l.discountPct, discountAmount: l.discountAmt,
-       taxPercent: l.taxPct, taxAmount: l.taxAmt, total: l.total,
+       taxId: l.taxId, taxPercent: l.taxPct, taxAmount: l.taxAmt, total: l.total,
        ...(config.docCategory === "purchase" ? { batchNumber: l.batchNumber || undefined, expiryDate: l.expiryDate || undefined } : {}),
        sortOrder: idx,
     }));
@@ -1130,7 +1132,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
       productId: l.productId, productCode: l.productCode || undefined, productName: l.productName,
       unit: l.unit || undefined, quantity: l.quantity, unitPrice: l.unitPrice,
       discountPercent: l.discountPct, discountAmount: l.discountAmt,
-       taxPercent: l.taxPct, taxAmount: l.taxAmt, total: l.total,
+       taxId: l.taxId, taxPercent: l.taxPct, taxAmount: l.taxAmt, total: l.total,
        ...(config.docCategory === "purchase" ? { batchNumber: l.batchNumber || undefined, expiryDate: l.expiryDate || undefined } : {}),
        sortOrder: idx,
     }));

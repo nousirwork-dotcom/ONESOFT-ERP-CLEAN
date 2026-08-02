@@ -74,6 +74,7 @@ export type ProductForm = {
   taxType: string;
   prevTaxType: string;
   taxable: boolean;
+  taxId: string;
   vatRate: string;
   // حقول قديمة
   nameEn: string;
@@ -133,7 +134,7 @@ const emptyForm: ProductForm = {
   category1: "", category2: "", category3: "",
   unitsJson: "", catsJson: "",
   distinguishNo: "", weight: "", size: "", colorCode: "", itemSize: "",
-  taxType: "", prevTaxType: "", taxable: true, vatRate: "15",
+  taxType: "", prevTaxType: "", taxable: true, taxId: "", vatRate: "15",
   nameEn: "", brand: "", model: "", description: "",
   purchaseUnit: "", saleUnit: "", minStock: "0", maxStock: "0", reorderPoint: "0",
   trackBatch: false, trackSerial: false, hasBOM: false,
@@ -183,6 +184,7 @@ export function productToForm(p: any): ProductForm {
     taxType: p?.taxType ?? "",
     prevTaxType: p?.prevTaxType ?? "",
     taxable: p?.taxable ?? true,
+    taxId: p?.taxId ? String(p.taxId) : "",
     vatRate: p?.vatRate ?? p?.taxRate ?? "15",
     nameEn: p?.nameEn ?? "",
     brand: p?.brand ?? "",
@@ -296,6 +298,7 @@ export function ProductCard({
   setForm,
   categories,
   groups,
+  activeTaxes = [],
   productId,
   skuRef,
   nameRef,
@@ -306,6 +309,7 @@ export function ProductCard({
   setForm: React.Dispatch<React.SetStateAction<ProductForm>>;
   categories: Array<{ id: number; name: string }> | undefined;
   groups: Array<{ id: number; groupCode?: string | null; name: string; groupType?: string | null; parentId?: number | null; autoNumbering?: boolean | null; codeDigits?: number | null }> | undefined;
+  activeTaxes?: Array<{ id: number; name: string; code: string; valueType: string; value: string }>;
   productId?: number | null;
   skuRef?: React.RefObject<HTMLInputElement | null>;
   nameRef?: React.RefObject<HTMLInputElement | null>;
@@ -907,7 +911,31 @@ export function ProductCard({
                   <span className="text-xs text-slate-600 dark:text-slate-400">نوع الضريبة</span>
                 </div>
                 <div className="flex-1 px-1 py-0.5">
-                  <CInput value={form.vatRate} onChange={(v) => set("vatRate", v)} type="number" placeholder="15" className="w-full" />
+                  <Select
+                    value={form.taxId || "none"}
+                    onValueChange={(value) => {
+                      const selectedTax = activeTaxes.find(tax => String(tax.id) === value);
+                      setForm(current => ({
+                        ...current,
+                        taxId: value === "none" ? "" : value,
+                        vatRate: selectedTax?.valueType === "percentage"
+                          ? String(selectedTax.value)
+                          : current.vatRate,
+                      }));
+                    }}
+                  >
+                    <SelectTrigger className="h-7 text-xs">
+                      <SelectValue placeholder="اختر ضريبة فعّالة" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">بدون ضريبة</SelectItem>
+                      {activeTaxes.map(tax => (
+                        <SelectItem key={tax.id} value={String(tax.id)}>
+                          {tax.name} ({tax.code}) — {tax.valueType === "percentage" ? `${tax.value}%` : tax.value}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </div>
@@ -1470,6 +1498,10 @@ export default function Products() {
 
   const { data: categories } = trpc.categories.list.useQuery(undefined, { staleTime: 60000 });
   const { data: groups } = trpc.productGroups.list.useQuery(undefined, { staleTime: 60000 });
+  const { data: activeTaxes = [] } = trpc.taxDefinitions.list.useQuery(
+    { activeOnly: true },
+    { staleTime: 60000 },
+  );
 
   const leafGroups = useMemo(() => {
     const all = groups ?? [];
@@ -1650,6 +1682,7 @@ export default function Products() {
       canBuy: p.canBuy ?? true,
       canReturn: p.canReturn ?? true,
       taxable: p.taxable ?? false,
+      taxId: p.taxId ? String(p.taxId) : "",
       taxRate: p.taxRate ?? "15",
       allowNegative: p.allowNegative ?? false,
       isActive: p.isActive ?? true,
@@ -1719,6 +1752,7 @@ export default function Products() {
       taxType: p.taxType ?? "",
       prevTaxType: p.prevTaxType ?? "",
       taxable: p.taxable ?? true,
+      taxId: p.taxId ? String(p.taxId) : "",
       vatRate: p.vatRate ?? "15",
       nameEn: p.nameEn ?? "",
       brand: p.brand ?? "",
@@ -1815,7 +1849,7 @@ export default function Products() {
       salePrice5:    form.salePrice5 || undefined,
       wholesalePrice: form.wholesalePrice || undefined,
       vatRate:       form.vatRate || "15",
-      taxRate:       form.taxRate || undefined,
+      taxId:         form.taxId ? Number(form.taxId) : null,
       taxable:       form.taxable,
       taxType:       form.taxType.trim() || undefined,
       minStock:      Number(form.minStock) || 0,
@@ -2673,6 +2707,7 @@ export default function Products() {
                   setForm={setForm}
                   categories={categories}
                   groups={groups as any}
+                  activeTaxes={activeTaxes}
                   productId={editId}
                   skuRef={skuRef}
                   nameRef={nameRef}

@@ -106,6 +106,7 @@ export const productsRouter = router({
       costPrice: z.string().optional(),
       vatRate: z.string().optional(),
       taxRate: z.string().optional(),
+      taxId: z.number().int().positive().optional().nullable(),
       taxable: z.boolean().optional(),
       taxType: z.string().optional(),
       minStock: z.number().optional(),
@@ -128,7 +129,7 @@ export const productsRouter = router({
         unit, unit2, unit3, unitsJson, catsJson,
         salePrice, salePrice2, salePrice3, salePrice4, salePrice5,
         wholesalePrice, purchasePrice, costPrice,
-        vatRate, taxRate, taxable, taxType,
+        vatRate, taxRate, taxId, taxable, taxType,
         minStock, maxStock, reorderPoint,
         itemType, brand, model,
         description, notes,
@@ -175,6 +176,7 @@ export const productsRouter = router({
           salePrice:          salePrice || "0",
           purchasePrice:      costPrice || purchasePrice || "0",
           taxRate:            vatRate || taxRate || "0",
+          taxId,
           minStock:           minStock != null ? String(minStock) : "0",
           isActive:           true,
           notes:              notesStr,
@@ -269,6 +271,7 @@ export const productsRouter = router({
       costPrice: z.string().optional(),
       vatRate: z.string().optional(),
       taxRate: z.string().optional(),
+      taxId: z.number().int().positive().optional().nullable(),
       taxable: z.boolean().optional(),
       taxType: z.string().optional(),
       minStock: z.number().optional(),
@@ -285,7 +288,7 @@ export const productsRouter = router({
       includeInFoundation: z.boolean().optional(),
     }).passthrough())
     .mutation(async ({ ctx, input }) => {
-      const { id, sku, name2, nameEn, categoryId, costPrice, vatRate, taxable, taxType,
+      const { id, sku, name2, nameEn, categoryId, costPrice, vatRate, taxId, taxable, taxType,
         barcode2, barcode3, unit2, unit3, unitsJson, catsJson,
         salePrice2, salePrice3, salePrice4, salePrice5,
         wholesalePrice, maxStock, reorderPoint, itemType, brand, model, description,
@@ -330,6 +333,7 @@ export const productsRouter = router({
       if (rest.salePrice !== undefined)                      updateData.salePrice     = rest.salePrice;
       if (costPrice !== undefined || rest.purchasePrice !== undefined) updateData.purchasePrice = costPrice || rest.purchasePrice;
       if (vatRate !== undefined || rest.taxRate !== undefined) updateData.taxRate     = vatRate || rest.taxRate;
+      if (taxId !== undefined)                                updateData.taxId        = taxId;
       if (rest.minStock !== undefined)                       updateData.minStock      = String(rest.minStock);
       if (rest.isActive !== undefined)                       updateData.isActive      = rest.isActive;
       if (notesStr !== undefined)                            updateData.notes         = notesStr;

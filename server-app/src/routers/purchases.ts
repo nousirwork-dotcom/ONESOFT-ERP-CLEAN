@@ -324,6 +324,7 @@ export const purchasesRouter = router({
       basedOnNumber: z.string().optional(),
       items: z.array(z.object({
         productId: z.number().optional(),
+        taxId: z.number().int().positive().optional(),
         productCode: z.string().optional(),
         productName: z.string(),
         unit: z.string().optional(),
@@ -404,6 +405,7 @@ export const purchasesRouter = router({
       docTypeId: z.number().optional(),
       items: z.array(z.object({
         productId: z.number().optional(),
+        taxId: z.number().int().positive().optional(),
         productCode: z.string().optional(),
         productName: z.string(),
         unit: z.string().optional(),

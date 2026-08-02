@@ -366,6 +366,7 @@ export const salesRouter = router({
       draftNumber: z.string().optional(),
       items: z.array(z.object({
         productId: z.number().optional(),
+        taxId: z.number().int().positive().optional(),
         productCode: z.string().optional(),
         productName: z.string(),
         unit: z.string().optional(),
@@ -654,6 +655,7 @@ export const salesRouter = router({
       zatcaInvoiceType: z.enum(['standard', 'simplified']).optional(),
       items: z.array(z.object({
         productId: z.number().optional(),
+        taxId: z.number().int().positive().optional(),
         productCode: z.string().optional(),
         productName: z.string(),
         unit: z.string().optional(),

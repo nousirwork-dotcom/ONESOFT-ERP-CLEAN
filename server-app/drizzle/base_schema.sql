@@ -336,6 +336,7 @@ CREATE TABLE IF NOT EXISTS "products" (
     "group_id" INTEGER,
     "unit_id" INTEGER,
     "unit" VARCHAR(100),
+    "tax_id" INTEGER,
     "sale_price" NUMERIC(18, 4) DEFAULT '0',
     "purchase_price" NUMERIC(18, 4) DEFAULT '0',
     "tax_rate" NUMERIC(5, 2) DEFAULT '0',
@@ -343,6 +344,23 @@ CREATE TABLE IF NOT EXISTS "products" (
     "is_active" BOOLEAN NOT NULL DEFAULT true,
     "notes" TEXT,
     "created_at" TIMESTAMP NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS "tax_definitions" (
+    "id" SERIAL PRIMARY KEY,
+    "org_id" INTEGER NOT NULL,
+    "name" VARCHAR(255) NOT NULL,
+    "code" VARCHAR(50) NOT NULL,
+    "category" VARCHAR(30) NOT NULL DEFAULT 'tax',
+    "value_type" VARCHAR(20) NOT NULL DEFAULT 'percentage',
+    "value" NUMERIC(18, 4) NOT NULL DEFAULT '0',
+    "is_active" BOOLEAN NOT NULL DEFAULT true,
+    "is_system" BOOLEAN NOT NULL DEFAULT false,
+    "notes" TEXT,
+    "effective_from" TIMESTAMP,
+    "created_at" TIMESTAMP NOT NULL DEFAULT now(),
+    "updated_at" TIMESTAMP NOT NULL DEFAULT now(),
+    CONSTRAINT "tax_definitions_org_code_uidx" UNIQUE ("org_id", "code")
 );
 
 CREATE TABLE IF NOT EXISTS "purchase_invoices" (
@@ -393,6 +411,7 @@ CREATE TABLE IF NOT EXISTS "sales_invoice_items" (
     "invoice_id" INTEGER NOT NULL,
     "org_id" INTEGER NOT NULL,
     "product_id" INTEGER,
+    "tax_id" INTEGER,
     "product_code" VARCHAR(100),
     "product_name" VARCHAR(500) NOT NULL,
     "unit" VARCHAR(100),
@@ -405,6 +424,27 @@ CREATE TABLE IF NOT EXISTS "sales_invoice_items" (
     "total" NUMERIC(18, 4) NOT NULL,
     "warehouse_id" INTEGER,
     "notes" TEXT,
+    "sort_order" INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS "purchase_invoice_items" (
+    "id" SERIAL PRIMARY KEY,
+    "invoice_id" INTEGER NOT NULL,
+    "org_id" INTEGER NOT NULL,
+    "product_id" INTEGER,
+    "tax_id" INTEGER,
+    "product_code" VARCHAR(100),
+    "product_name" VARCHAR(500) NOT NULL,
+    "unit" VARCHAR(100),
+    "quantity" NUMERIC(18, 4) NOT NULL,
+    "unit_price" NUMERIC(18, 4) NOT NULL,
+    "discount_percent" NUMERIC(5, 2) DEFAULT '0',
+    "discount_amount" NUMERIC(18, 4) DEFAULT '0',
+    "tax_percent" NUMERIC(5, 2) DEFAULT '0',
+    "tax_amount" NUMERIC(18, 4) DEFAULT '0',
+    "total" NUMERIC(18, 4) NOT NULL,
+    "batch_number" VARCHAR(100),
+    "expiry_date" VARCHAR(20),
     "sort_order" INTEGER DEFAULT 0
 );
 
@@ -812,6 +852,16 @@ DO $$ BEGIN
         ON DELETE NO ACTION ON UPDATE NO ACTION;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
+    ALTER TABLE "products" ADD CONSTRAINT "products_tax_id_tax_definitions_id_fk"
+        FOREIGN KEY ("tax_id") REFERENCES "tax_definitions" ("id")
+        ON DELETE SET NULL ON UPDATE NO ACTION;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    ALTER TABLE "tax_definitions" ADD CONSTRAINT "tax_definitions_org_id_organizations_id_fk"
+        FOREIGN KEY ("org_id") REFERENCES "organizations" ("id")
+        ON DELETE CASCADE ON UPDATE NO ACTION;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
     ALTER TABLE "purchase_invoices" ADD CONSTRAINT "purchase_invoices_org_id_organizations_id_fk"
         FOREIGN KEY ("org_id") REFERENCES "organizations" ("id")
         ON DELETE NO ACTION ON UPDATE NO ACTION;
@@ -862,9 +912,34 @@ DO $$ BEGIN
         ON DELETE NO ACTION ON UPDATE NO ACTION;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
+    ALTER TABLE "sales_invoice_items" ADD CONSTRAINT "sales_invoice_items_tax_id_tax_definitions_id_fk"
+        FOREIGN KEY ("tax_id") REFERENCES "tax_definitions" ("id")
+        ON DELETE SET NULL ON UPDATE NO ACTION;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
     ALTER TABLE "sales_invoice_items" ADD CONSTRAINT "sales_invoice_items_warehouse_id_warehouses_id_fk"
         FOREIGN KEY ("warehouse_id") REFERENCES "warehouses" ("id")
         ON DELETE NO ACTION ON UPDATE NO ACTION;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    ALTER TABLE "purchase_invoice_items" ADD CONSTRAINT "purchase_invoice_items_tax_id_tax_definitions_id_fk"
+        FOREIGN KEY ("tax_id") REFERENCES "tax_definitions" ("id")
+        ON DELETE SET NULL ON UPDATE NO ACTION;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    ALTER TABLE "purchase_invoice_items" ADD CONSTRAINT "purchase_invoice_items_invoice_id_purchase_invoices_id_fk"
+        FOREIGN KEY ("invoice_id") REFERENCES "purchase_invoices" ("id")
+        ON DELETE CASCADE ON UPDATE NO ACTION;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    ALTER TABLE "purchase_invoice_items" ADD CONSTRAINT "purchase_invoice_items_org_id_organizations_id_fk"
+        FOREIGN KEY ("org_id") REFERENCES "organizations" ("id")
+        ON DELETE NO ACTION ON UPDATE NO ACTION;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    ALTER TABLE "purchase_invoice_items" ADD CONSTRAINT "purchase_invoice_items_product_id_products_id_fk"
+        FOREIGN KEY ("product_id") REFERENCES "products" ("id")
+        ON DELETE SET NULL ON UPDATE NO ACTION;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
     ALTER TABLE "sales_invoices" ADD CONSTRAINT "sales_invoices_org_id_organizations_id_fk"

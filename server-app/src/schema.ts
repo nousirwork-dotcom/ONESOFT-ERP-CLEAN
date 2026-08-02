@@ -224,6 +224,27 @@ export const productGroups = pgTable('product_groups', {
   foundationTemplateVersion:   varchar('foundation_template_version', { length: 20 }),
 });
 
+// ─── Tax Definitions ──────────────────────────────────────────────────────────
+// Tax definitions are reusable master data. Invoice items keep a taxId snapshot
+// alongside taxPercent so changing a definition never rewrites old invoices.
+export const taxDefinitions = pgTable('tax_definitions', {
+  id: serial('id').primaryKey(),
+  orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 255 }).notNull(),
+  code: varchar('code', { length: 50 }).notNull(),
+  category: varchar('category', { length: 30 }).notNull().default('tax'),
+  valueType: varchar('value_type', { length: 20 }).notNull().default('percentage'),
+  value: decimal('value', { precision: 18, scale: 4 }).notNull().default('0'),
+  isActive: boolean('is_active').notNull().default(true),
+  isSystem: boolean('is_system').notNull().default(false),
+  notes: text('notes'),
+  effectiveFrom: timestamp('effective_from'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => ({
+  orgCodeUnique: uniqueIndex('tax_definitions_org_code_uidx').on(t.orgId, t.code),
+}));
+
 // ─── Products ─────────────────────────────────────────────────────────────────
 export const products = pgTable('products', {
   id: serial('id').primaryKey(),
@@ -235,6 +256,7 @@ export const products = pgTable('products', {
   groupId: integer('group_id').references(() => productGroups.id, { onDelete: 'set null' }),
   unitId: integer('unit_id').references(() => units.id, { onDelete: 'set null' }),
   unit: varchar('unit', { length: 100 }),
+  taxId: integer('tax_id').references(() => taxDefinitions.id, { onDelete: 'set null' }),
   salePrice: decimal('sale_price', { precision: 18, scale: 4 }).default('0'),
   purchasePrice: decimal('purchase_price', { precision: 18, scale: 4 }).default('0'),
   taxRate: decimal('tax_rate', { precision: 5, scale: 2 }).default('0'),
@@ -407,6 +429,7 @@ export const salesInvoiceItems = pgTable('sales_invoice_items', {
   invoiceId: integer('invoice_id').notNull().references(() => salesInvoices.id, { onDelete: 'cascade' }),
   orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   productId: integer('product_id').references(() => products.id, { onDelete: 'set null' }),
+  taxId: integer('tax_id').references(() => taxDefinitions.id, { onDelete: 'set null' }),
   productCode: varchar('product_code', { length: 100 }),
   productName: varchar('product_name', { length: 500 }).notNull(),
   unit: varchar('unit', { length: 100 }),
@@ -468,6 +491,7 @@ export const purchaseInvoiceItems = pgTable('purchase_invoice_items', {
   invoiceId: integer('invoice_id').notNull().references(() => purchaseInvoices.id, { onDelete: 'cascade' }),
   orgId: integer('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   productId: integer('product_id').references(() => products.id, { onDelete: 'set null' }),
+  taxId: integer('tax_id').references(() => taxDefinitions.id, { onDelete: 'set null' }),
   productCode: varchar('product_code', { length: 100 }),
   productName: varchar('product_name', { length: 500 }).notNull(),
   unit: varchar('unit', { length: 100 }),
