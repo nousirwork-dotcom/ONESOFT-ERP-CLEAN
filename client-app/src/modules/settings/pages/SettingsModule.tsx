@@ -52,7 +52,6 @@ export const menuSections = [
       { id: "company-info",    label: "معلومات الشركة",         status: "done",    path: "/cfg/company" },
       { id: "currencies",      label: "العملات",               status: "done",    path: "/cfg/currencies" },
       { id: "taxes",           label: "الضرائب",               status: "done",    path: "/cfg/taxes" },
-      { id: "qr-settings",     label: "إعدادات QR Code",       status: "done",    path: "/cfg/qr-settings" },
       { id: "fiscal-periods",  label: "الفترات المحاسبية",     status: "done",    path: "/cfg/fiscal" },
       { id: "field-dictionary",label: "تعريف الحقول (Field Dictionary)", status: "done", path: "/cfg/field-dictionary" },
       { id: "payment-methods",  label: "وسائل الدفع",                      status: "done", path: "/cfg/payment-methods"  },
@@ -134,6 +133,7 @@ export const menuSections = [
       { id: "warehouses-config",   label: "المخازن",             status: "partial", path: "/cfg/warehouses" },
       { id: "document-journals",   label: "دفاتر المستندات",     status: "partial", path: "/cfg/document-journals" },
       { id: "posting-settings",    label: "ترحيل المستندات",     status: "partial", path: "/cfg/posting-settings" },
+      { id: "electronic-invoicing-center", label: "مركز الفوترة الإلكترونية", status: "done", path: "/cfg/e-invoicing-center" },
 
       { id: "license",             label: "الترخيص والتفعيل",               status: "done",    path: "/cfg/license" },
       { id: "backup",              label: "النسخ الاحتياطي",                 status: "done",    path: "/cfg/backup" },
@@ -155,15 +155,6 @@ export const menuSections = [
       { id: "messaging-templates", label: "قوالب الرسائل",        status: "partial", path: "/cfg/messaging-templates" },
       { id: "messaging-log",       label: "سجل الإرسال",          status: "partial", path: "/cfg/messaging-log"       },
       { id: "ai-assistant",        label: "المساعد الذكي",        status: "partial", path: "/cfg/ai-assistant"        },
-    ],
-  },
-  {
-    id: "zatca-integration-center",
-    label: "مركز الفوترة الإلكترونية – ZATCA",
-    color: "#D19C05",
-    emoji: "🏛️",
-    children: [
-      { id: "zatca-center-dashboard", label: "فتح مركز الفوترة الإلكترونية", status: "done", path: "/cfg/zatca-center" },
     ],
   },
   {
@@ -5754,6 +5745,62 @@ function PaymentMethodsPage() {
 
 // ─── Content Router ────────────────────────────────────────────────────────────
 
+type ElectronicInvoicingTab = "qr" | "zatca";
+
+/**
+ * المركز الموحد لا يملك إعدادات جديدة؛ يستدعي الصفحتين الحاليتين مباشرةً.
+ * لذلك تبقى كل واجهات API والجداول وحالات الحفظ كما هي.
+ */
+function ElectronicInvoicingCenter({ initialTab = "qr" }: { initialTab?: ElectronicInvoicingTab }) {
+  const [activeTab, setActiveTab] = useState<ElectronicInvoicingTab>(initialTab);
+
+  return (
+    <div className="h-full overflow-auto bg-background" dir="rtl">
+      <div className="border-b border-border bg-card px-5 pt-4">
+        <div className="mb-3">
+          <h2 className="text-lg font-bold text-foreground">مركز الفوترة الإلكترونية</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            إعداد الفوترة وQR والربط السعودي مع هيئة الزكاة والضريبة والجمارك
+          </p>
+        </div>
+        <div className="flex gap-1" role="tablist" aria-label="مركز الفوترة الإلكترونية">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "qr"}
+            onClick={() => setActiveTab("qr")}
+            className={`border-b-2 px-4 py-2 text-sm font-semibold transition-colors ${
+              activeTab === "qr"
+                ? "border-[#406B93] text-[#406B93]"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            الفوترة وQR
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "zatca"}
+            onClick={() => setActiveTab("zatca")}
+            className={`border-b-2 px-4 py-2 text-sm font-semibold transition-colors ${
+              activeTab === "zatca"
+                ? "border-[#D19C05] text-[#D19C05]"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            السعودية – الربط مع هيئة الزكاة والضريبة والجمارك ZATCA
+          </button>
+        </div>
+      </div>
+      <div role="tabpanel" aria-label={activeTab === "qr" ? "الفوترة وQR" : "الربط مع ZATCA"}>
+        {activeTab === "qr"
+          ? <div className="p-5"><QRSettingsPage /></div>
+          : <div className="h-full min-h-[620px]"><ZatcaCenterPage initialSection="dashboard" /></div>}
+      </div>
+    </div>
+  );
+}
+
 function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
   switch (activeId) {
     // الإعدادات العامة
@@ -5789,7 +5836,8 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
     case "document-journals":    return <DocumentJournalsPage />;
 
     case "document-templates":   return <TemplatesManagerPage />;
-    case "qr-settings":          return <QRSettingsPage />;
+    case "electronic-invoicing-center": return <ElectronicInvoicingCenter />;
+    case "qr-settings":          return <ElectronicInvoicingCenter initialTab="qr" />;
     case "field-design":         return <FieldDesignPage />;
     case "backup":               return <BackupPage />;
     case "audit-log":            return <AuditLogPage />;
@@ -5828,7 +5876,7 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
     case "zatca-center-oplogs":
     case "zatca-center-errlogs":
     case "zatca-center-diag":
-    case "zatca-center-reports":   return <ZatcaCenterPage onOpenCompanyInfo={() => onSelect("company-info")} />;
+    case "zatca-center-reports":   return <ElectronicInvoicingCenter initialTab="zatca" />;
     // التكاملات الحكومية (كلاسيك)
     case "zatca-config":         return <ZatcaIntegrationPage initialTab="settings" />;
     case "zatca-monitor":        return <ZatcaIntegrationPage initialTab="monitor" />;
@@ -5901,7 +5949,7 @@ export function CfgDocumentTemplatesTab() { return <CfgSubPage activeId="documen
 export function CfgFieldDesignTab()      { return <CfgSubPage activeId="field-design" />; }
 export function CfgBackupTab()           { return <CfgSubPage activeId="backup" />; }
 export function CfgAuditLogTab()         { return <CfgSubPage activeId="audit-log" />; }
-export function CfgQrSettingsTab()       { return <CfgSubPage activeId="qr-settings" />; }
+export function CfgQrSettingsTab()       { return <ElectronicInvoicingCenter initialTab="qr" />; }
 export function CfgMissingDocsTab()      { return <CfgSubPage activeId="missing-doc-numbers" />; }
 export function CfgPayrollPeriodsTab()   { return <CfgSubPage activeId="payroll-periods" />; }
 export function CfgOrgChartTab()         { return <CfgSubPage activeId="org-chart" />; }
@@ -5921,7 +5969,10 @@ export function CfgMessagingEmailTab()     { return <CfgSubPage activeId="messag
 export function CfgMessagingTemplatesTab() { return <CfgSubPage activeId="messaging-templates" />; }
 export function CfgMessagingLogTab()       { return <CfgSubPage activeId="messaging-log" />; }
 export function CfgAiAssistantTab()        { return <CfgSubPage activeId="ai-assistant" />; }
-export function CfgZatcaCenterTab()        { return <CfgSubPage activeId="zatca-center-dashboard" />; }
+export function CfgZatcaCenterTab()        { return <ElectronicInvoicingCenter initialTab="zatca" />; }
+export function CfgElectronicInvoicingCenterTab() { return <ElectronicInvoicingCenter />; }
+export function CfgElectronicInvoicingQrTab() { return <ElectronicInvoicingCenter initialTab="qr" />; }
+export function CfgElectronicInvoicingZatcaTab() { return <ElectronicInvoicingCenter initialTab="zatca" />; }
 export function CfgPrintSettingsTab()      { return <CfgSubPage activeId="print-settings" />; }
 export function CfgLogoStampTab()          { return <CfgSubPage activeId="logo-stamp" />; }
 export function CfgSignaturesTab()         { return <CfgSubPage activeId="signatures" />; }

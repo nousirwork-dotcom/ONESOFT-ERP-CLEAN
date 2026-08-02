@@ -2631,8 +2631,14 @@ function ReportsSection() {
 // ══════════════════════════════════════════════════════════════════════════════
 // المكوّن الرئيسي
 // ══════════════════════════════════════════════════════════════════════════════
-export default function ZatcaCenterPage({ onOpenCompanyInfo }: { onOpenCompanyInfo?: () => void } = {}) {
-  const [active, setActive]      = useState<Section>("dashboard");
+export default function ZatcaCenterPage({
+  onOpenCompanyInfo,
+  initialSection,
+}: {
+  onOpenCompanyInfo?: () => void;
+  initialSection?: Section;
+} = {}) {
+  const [active, setActive]      = useState<Section>(initialSection ?? "dashboard");
   const [showWizard, setShowWizard] = useState(false);
   const [technicalOpen, setTechnicalOpen] = useState(false);
 

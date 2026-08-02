@@ -282,7 +282,7 @@ export const documentTemplatesRouter = router({
     .input(z.object({ docType: z.string() }))
     .query(async ({ ctx, input }) => {
       const orgId = ctx.user.orgId;
-      let tpl = await db.query.documentTemplates.findFirst({
+      let tpl: typeof documentTemplates.$inferSelect | null = await db.query.documentTemplates.findFirst({
         where: and(
           eq(documentTemplates.orgId, orgId),
           eq(documentTemplates.docType, input.docType),

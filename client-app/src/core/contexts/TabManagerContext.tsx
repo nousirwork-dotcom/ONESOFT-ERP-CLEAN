@@ -128,9 +128,13 @@ const LEGACY_ZATCA_PATHS = new Set([
   "/cfg/zatca-mon",
   "/cfg/zatca-inv",
   "/cfg/zatca-log",
+  "/cfg/zatca-center",
 ]);
-const ZATCA_CENTER_PATH = "/cfg/zatca-center";
-const ZATCA_CENTER_LABEL = "مركز التكامل مع هيئة الزكاة والضريبة والجمارك";
+const LEGACY_QR_PATH = "/cfg/qr-settings";
+const ELECTRONIC_INVOICING_CENTER_PATH = "/cfg/e-invoicing-center";
+const ELECTRONIC_INVOICING_QR_PATH = `${ELECTRONIC_INVOICING_CENTER_PATH}/qr`;
+const ELECTRONIC_INVOICING_ZATCA_PATH = `${ELECTRONIC_INVOICING_CENTER_PATH}/zatca`;
+const ELECTRONIC_INVOICING_LABEL = "مركز الفوترة الإلكترونية";
 const REMOVED_GOVERNMENT_PATHS = new Set(["/cfg/gazt"]);
 const SETTINGS_PATH = "/settings";
 const SETTINGS_LABEL = "الإعدادات";
@@ -139,9 +143,13 @@ function normalizeTabTarget(path: string, label: string): { path: string; label:
   if (REMOVED_GOVERNMENT_PATHS.has(path)) {
     return { path: SETTINGS_PATH, label: SETTINGS_LABEL };
   }
-  return LEGACY_ZATCA_PATHS.has(path)
-    ? { path: ZATCA_CENTER_PATH, label: ZATCA_CENTER_LABEL }
-    : { path, label };
+  if (path === LEGACY_QR_PATH) {
+    return { path: ELECTRONIC_INVOICING_QR_PATH, label: ELECTRONIC_INVOICING_LABEL };
+  }
+  if (LEGACY_ZATCA_PATHS.has(path)) {
+    return { path: ELECTRONIC_INVOICING_ZATCA_PATH, label: ELECTRONIC_INVOICING_LABEL };
+  }
+  return { path, label };
 }
 
 type TabCloseGuard = {

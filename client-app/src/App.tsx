@@ -75,6 +75,7 @@ import SettingsModule, {
   CfgPrintSettingsTab, CfgLogoStampTab, CfgSignaturesTab, CfgEmailPdfTab,
   CfgFieldDictionaryTab, CfgPaymentMethodsTab,
   CfgGosiTab,
+  CfgElectronicInvoicingCenterTab, CfgElectronicInvoicingQrTab, CfgElectronicInvoicingZatcaTab,
   CfgZatcaCenterTab,
   CfgSystemInfoTab,
   CfgServiceManagementTab,
@@ -281,6 +282,9 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
 
   "/cfg/document-templates":  CfgDocumentTemplatesTab,
   "/cfg/qr-settings":       CfgQrSettingsTab,
+  "/cfg/e-invoicing-center": CfgElectronicInvoicingCenterTab,
+  "/cfg/e-invoicing-center/qr": CfgElectronicInvoicingQrTab,
+  "/cfg/e-invoicing-center/zatca": CfgElectronicInvoicingZatcaTab,
   "/cfg/field-design":      CfgFieldDesignTab,
   "/cfg/backup":            CfgBackupTab,
   "/cfg/audit-log":         CfgAuditLogTab,
@@ -319,13 +323,17 @@ export const PAGE_MAP: Record<string, React.ComponentType<any>> = {
 
 // مسارات ZATCA الكلاسيكية تبقى معرّفة للتوافق مع التبويبات القديمة،
 // لكن لا يجوز أن تفتح واجهة الكلاسيك بعد توحيد المركز.
+const LEGACY_QR_PATH = "/cfg/qr-settings";
 const LEGACY_ZATCA_PATHS = new Set([
   "/cfg/zatca",
   "/cfg/zatca-mon",
   "/cfg/zatca-inv",
   "/cfg/zatca-log",
+  "/cfg/zatca-center",
 ]);
-const ZATCA_CENTER_PATH = "/cfg/zatca-center";
+const ELECTRONIC_INVOICING_CENTER_PATH = "/cfg/e-invoicing-center";
+const ELECTRONIC_INVOICING_QR_PATH = `${ELECTRONIC_INVOICING_CENTER_PATH}/qr`;
+const ELECTRONIC_INVOICING_ZATCA_PATH = `${ELECTRONIC_INVOICING_CENTER_PATH}/zatca`;
 
 // ─── مسارات لا تعرض شريط الأدوات الموحد ──────────────────────────────────
 // صفحات التنقل والأقسام الرئيسية فقط — أي مسار آخر يرث showToolbar=true
@@ -487,13 +495,19 @@ function TabContent() {
         </div>
       )}
       {tabs.map(tab => {
+        const isLegacyQrTab = tab.path === LEGACY_QR_PATH;
         const isLegacyZatcaTab = LEGACY_ZATCA_PATHS.has(tab.path);
-        const effectivePath = isLegacyZatcaTab ? ZATCA_CENTER_PATH : tab.path;
-        const effectiveTab = isLegacyZatcaTab
+        const effectivePath = isLegacyQrTab
+          ? ELECTRONIC_INVOICING_QR_PATH
+          : isLegacyZatcaTab
+            ? ELECTRONIC_INVOICING_ZATCA_PATH
+            : tab.path;
+        const isLegacyElectronicInvoicingTab = isLegacyQrTab || isLegacyZatcaTab;
+        const effectiveTab = isLegacyElectronicInvoicingTab
           ? {
               ...tab,
-              path: ZATCA_CENTER_PATH,
-              label: "مركز التكامل مع هيئة الزكاة والضريبة والجمارك",
+              path: effectivePath,
+              label: "مركز الفوترة الإلكترونية",
             }
           : tab;
         const Component = PAGE_MAP[effectivePath]
