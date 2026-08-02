@@ -56,17 +56,19 @@ const ZatcaConfigSchema = z.object({
   enabled:             z.boolean().default(false),
   environment:         z.enum(['sandbox', 'simulation', 'production']).default('sandbox'),
   vatNumber:           z.string().default(''),
-  businessName:        z.string().default(''),
-  businessNameEn:      z.string().default(''),
-  crNumber:            z.string().default(''),
-  businessCategory:    z.string().default(''),
-  countryName:         z.string().default(''),
+  legalName:           z.string().default(''),
+  englishName:         z.string().default(''),
+  commercialReg:       z.string().default(''),
+  activity:            z.string().default(''),
+  country:             z.string().default(''),
   buildingNumber:      z.string().default(''),
-  streetName:          z.string().default(''),
+  street:              z.string().default(''),
   district:            z.string().default(''),
   city:                z.string().default(''),
   postalCode:          z.string().default(''),
   additionalNumber:    z.string().default(''),
+  phone:               z.string().default(''),
+  email:               z.string().default(''),
   countryCode:         z.string().default(''),
   sellerType:          z.enum(['B2B', 'B2C', 'both']).default('both'),
   autoSubmit:          z.boolean().default(false),
@@ -89,6 +91,24 @@ const ZatcaConfigSchema = z.object({
   certExpiryDate:      z.string().nullable().default(null),
   certSerialNumber:    z.string().nullable().default(null),
 });
+
+type ZatcaConfig = z.infer<typeof ZatcaConfigSchema>;
+
+function canonicalizeZatcaConfig(value: unknown): ZatcaConfig {
+  const raw = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
+  return ZatcaConfigSchema.parse({
+    ...raw,
+    legalName: raw.legalName ?? raw.businessName ?? '',
+    englishName: raw.englishName ?? raw.businessNameEn ?? '',
+    vatNumber: raw.vatNumber ?? '',
+    commercialReg: raw.commercialReg ?? raw.crNumber ?? '',
+    activity: raw.activity ?? raw.businessCategory ?? '',
+    country: raw.country ?? raw.countryName ?? '',
+    street: raw.street ?? raw.streetName ?? '',
+    phone: raw.phone ?? '',
+    email: raw.email ?? '',
+  });
+}
 
 const REDACTED_CREDENTIAL = '••••••••••••••••';
 
@@ -330,18 +350,18 @@ async function getZatcaReadiness(
 
   if (!org) throw new TRPCError({ code: 'NOT_FOUND', message: 'المنشأة غير موجودة' });
 
-  const cfg = ZatcaConfigSchema.parse(org.zatcaConfig ?? {});
+  const cfg = ZatcaConfigSchema.parse(canonicalizeZatcaConfig(org.zatcaConfig));
   const vatNumber = String(cfg.vatNumber || org.taxNumber || '').trim();
-  const businessName = String(cfg.businessName || org.name || '').trim();
-  const businessNameEn = String(cfg.businessNameEn || org.nameEn || '').trim();
+  const businessName = String(cfg.legalName || org.name || '').trim();
+  const businessNameEn = String(cfg.englishName || org.nameEn || '').trim();
   const missingOrganizationFields: string[] = [];
   if (!/^3\d{13}3$/.test(vatNumber)) missingOrganizationFields.push('الرقم الضريبي الصحيح');
   if (!businessName) missingOrganizationFields.push('اسم المنشأة');
   if (!businessNameEn) missingOrganizationFields.push('الاسم الإنجليزي للمنشأة');
-  if (!String(cfg.crNumber || org.commercialReg || '').trim()) missingOrganizationFields.push('السجل التجاري');
-  if (!cfg.businessCategory.trim()) missingOrganizationFields.push('النشاط');
-  if (!cfg.countryName.trim()) missingOrganizationFields.push('الدولة');
-  if (!cfg.streetName.trim()) missingOrganizationFields.push('اسم الشارع');
+  if (!String(cfg.commercialReg || org.commercialReg || '').trim()) missingOrganizationFields.push('السجل التجاري');
+  if (!cfg.activity.trim()) missingOrganizationFields.push('النشاط');
+  if (!cfg.country.trim()) missingOrganizationFields.push('الدولة');
+  if (!cfg.street.trim()) missingOrganizationFields.push('اسم الشارع');
   if (!cfg.buildingNumber.trim()) missingOrganizationFields.push('رقم المبنى');
   if (!cfg.district.trim()) missingOrganizationFields.push('الحي');
   if (!cfg.city.trim()) missingOrganizationFields.push('المدينة');
@@ -433,11 +453,11 @@ async function getZatcaReadiness(
       name: org.name,
       nameEn: org.nameEn,
       commercialReg: org.commercialReg,
-      activityType: cfg.businessCategory,
-      country: cfg.countryName,
+      activity: cfg.activity,
+      country: cfg.country,
       city: cfg.city,
       district: cfg.district,
-      streetName: cfg.streetName,
+      street: cfg.street,
       buildingNumber: cfg.buildingNumber,
       postalCode: cfg.postalCode,
       additionalNumber: cfg.additionalNumber,
@@ -869,7 +889,7 @@ export const zatcaRouter = router({
         });
       }
 
-      const cfg = (org.zatcaConfig ?? {}) as Record<string, unknown>;
+      const cfg = canonicalizeZatcaConfig(org.zatcaConfig);
       const vatNumber = String(cfg.vatNumber ?? org.taxNumber ?? '').trim();
       if (!vatNumber) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'أكمل الرقم الضريبي قبل إنشاء CSR' });
@@ -880,7 +900,7 @@ export const zatcaRouter = router({
 
       const csr = generateSimulationCsr({
         commonName: input.taxpayerProvidedId,
-        organizationName: String(cfg.businessNameEn ?? cfg.businessName ?? org.name ?? ''),
+        organizationName: String(cfg.englishName ?? cfg.legalName ?? org.name ?? ''),
         organizationUnitName: input.branchName,
         serialNumber: input.serialNumber,
         vatNumber,
@@ -1449,7 +1469,7 @@ export const zatcaRouter = router({
       columns: { zatcaConfig: true },
     });
     const cfg = (org?.zatcaConfig ?? {}) as Record<string, unknown>;
-    const parsed = ZatcaConfigSchema.parse(cfg);
+    const parsed = ZatcaConfigSchema.parse(canonicalizeZatcaConfig(cfg));
     // لا تُعاد القيم الحساسة لأي دور؛ تُعاد حالة وجودها فقط.
     return {
       ...parsed,
@@ -1549,7 +1569,7 @@ export const zatcaRouter = router({
       where: eq(organizations.id, ctx.user.orgId),
       columns: { zatcaConfig: true },
     });
-    const cfg = (org?.zatcaConfig ?? {}) as any;
+    const cfg = canonicalizeZatcaConfig(org?.zatcaConfig);
 
     const now = new Date().toISOString();
     const userName = (ctx.user as any).name ?? (ctx.user as any).username ?? 'مسؤول';
@@ -1634,7 +1654,7 @@ export const zatcaRouter = router({
         where: eq(organizations.id, ctx.user.orgId),
         columns: { zatcaConfig: true, name: true },
       });
-      const cfg = (org?.zatcaConfig ?? {}) as Record<string, unknown>;
+      const cfg = canonicalizeZatcaConfig(org?.zatcaConfig);
       if (!cfg.enabled) {
         return { ok: false, status: currentState, message: 'منظومة ZATCA غير مفعَّلة' };
       }
@@ -1900,11 +1920,11 @@ export const zatcaRouter = router({
               eq(salesInvoiceItems.orgId, ctx.user.orgId),
             )).orderBy(asc(salesInvoiceItems.sortOrder)),
             seller: {
-              nameAr: String(cfg.businessName ?? org?.name ?? ''),
-              nameEn: String(cfg.businessNameEn ?? cfg.businessName ?? org?.name ?? ''),
+              nameAr: String(cfg.legalName ?? org?.name ?? ''),
+              nameEn: String(cfg.englishName ?? cfg.legalName ?? org?.name ?? ''),
               vatNumber: String(cfg.vatNumber ?? ''),
-              crNumber: cfg.crNumber ? String(cfg.crNumber) : undefined,
-              street: String(cfg.streetName ?? ''),
+              crNumber: cfg.commercialReg ? String(cfg.commercialReg) : undefined,
+              street: String(cfg.street ?? ''),
               building: String(cfg.buildingNumber ?? ''),
               district: String(cfg.district ?? ''),
               city: String(cfg.city ?? ''),
@@ -2547,7 +2567,7 @@ export const zatcaRouter = router({
       where: eq(organizations.id, ctx.user.orgId),
       columns: { zatcaConfig: true },
     });
-    const cfg = (org?.zatcaConfig ?? {}) as any;
+    const cfg = canonicalizeZatcaConfig(org?.zatcaConfig);
 
     const [total, readyToSubmit, cleared, reported, pending, submittedPending, submitting, acceptedWithWarnings, rejected, connectionIssue, retryPending, uncertain, errors, notSubmitted, today, simplifiedDueSoon, simplifiedOverdue] = await Promise.all([
       db.select({ cnt: count() }).from(salesInvoices)
@@ -2691,7 +2711,7 @@ export const zatcaRouter = router({
       ]);
 
       if (!inv) throw new Error('Invoice not found');
-      const cfg = (org?.zatcaConfig ?? {}) as any;
+      const cfg = canonicalizeZatcaConfig(org?.zatcaConfig);
 
       // ── توليد XML ──────────────────────────────────────────────────────────
       const issueDate = inv.invoiceDate ? new Date(inv.invoiceDate).toISOString().split('T')[0] : '';
@@ -2781,9 +2801,9 @@ export const zatcaRouter = router({
   </cac:AdditionalDocumentReference>
   <cac:AccountingSupplierParty>
     <cac:Party>
-      <cac:PartyIdentification><cbc:ID schemeID="CRN">${cfg.crNumber ?? ''}</cbc:ID></cac:PartyIdentification>
+      <cac:PartyIdentification><cbc:ID schemeID="CRN">${cfg.commercialReg ?? ''}</cbc:ID></cac:PartyIdentification>
       <cac:PostalAddress>
-        <cbc:StreetName>${cfg.streetName ?? ''}</cbc:StreetName>
+        <cbc:StreetName>${cfg.street ?? ''}</cbc:StreetName>
         <cbc:BuildingNumber>${cfg.buildingNumber ?? ''}</cbc:BuildingNumber>
         <cbc:CityName>${cfg.city ?? ''}</cbc:CityName>
         <cbc:PostalZone>${cfg.postalCode ?? ''}</cbc:PostalZone>
@@ -2795,7 +2815,7 @@ export const zatcaRouter = router({
         <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
       </cac:PartyTaxScheme>
       <cac:PartyLegalEntity>
-        <cbc:RegistrationName>${cfg.businessName ?? (org?.name ?? '')}</cbc:RegistrationName>
+        <cbc:RegistrationName>${cfg.legalName ?? (org?.name ?? '')}</cbc:RegistrationName>
       </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingSupplierParty>
@@ -2869,19 +2889,19 @@ export const zatcaRouter = router({
       else info('cac:AccountingSupplierParty / cbc:CompanyID', 'الرقم الضريبي للبائع صالح', sellerVat, '15 رقماً', '—');
 
       // اسم البائع
-      const sellerName = cfg.businessName ?? (org?.name ?? '');
+      const sellerName = cfg.legalName ?? (org?.name ?? '');
       if (!sellerName) err('cac:AccountingSupplierParty / cbc:RegistrationName', 'اسم المنشأة (البائع) غير محدد', '(فارغ)', 'اسم المنشأة', 'أكمل اسم المنشأة في إعدادات ZATCA');
       else info('cac:AccountingSupplierParty / cbc:RegistrationName', 'اسم البائع موجود', sellerName, 'اسم المنشأة', '—');
 
       // السجل التجاري
-      if (!cfg.crNumber) warn('cac:PartyIdentification / cbc:ID (CRN)', 'السجل التجاري غير محدد في إعدادات ZATCA', '(فارغ)', 'رقم السجل التجاري', 'أضف رقم السجل التجاري في إعدادات ZATCA');
-      else info('cac:PartyIdentification / cbc:ID', 'السجل التجاري موجود', cfg.crNumber, 'رقم السجل التجاري', '—');
+      if (!cfg.commercialReg) warn('cac:PartyIdentification / cbc:ID (CRN)', 'السجل التجاري غير محدد في إعدادات ZATCA', '(فارغ)', 'رقم السجل التجاري', 'أضف رقم السجل التجاري في إعدادات ZATCA');
+      else info('cac:PartyIdentification / cbc:ID', 'السجل التجاري موجود', cfg.commercialReg, 'رقم السجل التجاري', '—');
 
       // العنوان
-      if (!cfg.streetName || !cfg.city || !cfg.buildingNumber) {
-        const missing = [!cfg.streetName && 'الشارع', !cfg.buildingNumber && 'رقم المبنى', !cfg.city && 'المدينة'].filter(Boolean).join('، ');
+      if (!cfg.street || !cfg.city || !cfg.buildingNumber) {
+        const missing = [!cfg.street && 'الشارع', !cfg.buildingNumber && 'رقم المبنى', !cfg.city && 'المدينة'].filter(Boolean).join('، ');
         warn('cac:PostalAddress', `بيانات العنوان غير مكتملة — مفقود: ${missing}`, '(جزئي)', 'الشارع + رقم المبنى + المدينة + الرمز البريدي', 'أكمل بيانات العنوان في إعدادات ZATCA');
-      } else info('cac:PostalAddress', 'بيانات العنوان مكتملة', `${cfg.streetName}، ${cfg.city}`, 'عنوان كامل', '—');
+      } else info('cac:PostalAddress', 'بيانات العنوان مكتملة', `${cfg.street}، ${cfg.city}`, 'عنوان كامل', '—');
 
       // اسم العميل
       if (!inv.customerName) warn('cac:AccountingCustomerParty / cbc:RegistrationName', 'اسم العميل غير محدد', '(فارغ)', 'اسم العميل', 'حدد اسم العميل في الفاتورة');

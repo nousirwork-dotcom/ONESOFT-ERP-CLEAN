@@ -28,40 +28,59 @@ export const orgsRouter = router({
     if (!org) return null;
     const cfg = (org.zatcaConfig ?? {}) as Record<string, unknown>;
     const safeZatcaConfig = {
-      businessName: cfg.businessName ?? '',
-      businessNameEn: cfg.businessNameEn ?? '',
-      vatNumber: cfg.vatNumber ?? '',
-      crNumber: cfg.crNumber ?? '',
-      businessCategory: cfg.businessCategory ?? '',
-      countryName: cfg.countryName ?? '',
+      legalName: cfg.legalName ?? cfg.businessName ?? org.name ?? '',
+      englishName: cfg.englishName ?? cfg.businessNameEn ?? org.nameEn ?? '',
+      vatNumber: cfg.vatNumber ?? org.taxNumber ?? '',
+      commercialReg: cfg.commercialReg ?? cfg.crNumber ?? org.commercialReg ?? '',
+      activity: cfg.activity ?? cfg.businessCategory ?? '',
+      country: cfg.country ?? cfg.countryName ?? '',
       city: cfg.city ?? '',
       district: cfg.district ?? '',
-      streetName: cfg.streetName ?? '',
+      street: cfg.street ?? cfg.streetName ?? '',
       buildingNumber: cfg.buildingNumber ?? '',
       postalCode: cfg.postalCode ?? '',
       additionalNumber: cfg.additionalNumber ?? '',
+      phone: cfg.phone ?? org.phone ?? '',
+      email: cfg.email ?? org.email ?? '',
     };
-    return { ...org, zatcaConfig: safeZatcaConfig };
+    return {
+      ...org,
+      legalName: safeZatcaConfig.legalName,
+      englishName: safeZatcaConfig.englishName,
+      vatNumber: safeZatcaConfig.vatNumber,
+      commercialReg: safeZatcaConfig.commercialReg,
+      activity: safeZatcaConfig.activity,
+      country: safeZatcaConfig.country,
+      city: safeZatcaConfig.city,
+      district: safeZatcaConfig.district,
+      street: safeZatcaConfig.street,
+      buildingNumber: safeZatcaConfig.buildingNumber,
+      postalCode: safeZatcaConfig.postalCode,
+      additionalNumber: safeZatcaConfig.additionalNumber,
+      phone: safeZatcaConfig.phone,
+      email: safeZatcaConfig.email,
+      zatcaConfig: safeZatcaConfig,
+    };
   }),
 
   // معلومات الشركة الحالية — تُحفظ في organizations وzatca_config داخل PostgreSQL.
   updateCurrent: adminProcedure
     .input(z.object({
-      name:            z.string().max(255),
-      nameEn:          z.string().max(255),
-      taxNumber:       z.string().max(50),
-      commercialReg:   z.string().max(50),
-      activityType:    z.string().max(255),
-      country:         z.string().max(100),
-      city:            z.string().max(100),
-      district:        z.string().max(100),
-      streetName:      z.string().max(255),
-      buildingNumber:  z.string().max(20),
-      postalCode:      z.string().max(20),
-      additionalNumber:z.string().max(20),
-      address:         z.string().max(1000),
-      phone:           z.string().max(50),
-      email:           z.string().max(255),
+      legalName:       z.string().max(255).default(''),
+      englishName:     z.string().max(255).default(''),
+      vatNumber:       z.string().max(50).default(''),
+      commercialReg:   z.string().max(50).default(''),
+      activity:        z.string().max(255).default(''),
+      country:         z.string().max(100).default(''),
+      city:            z.string().max(100).default(''),
+      district:        z.string().max(100).default(''),
+      street:          z.string().max(255).default(''),
+      buildingNumber:  z.string().max(20).default(''),
+      postalCode:      z.string().max(20).default(''),
+      additionalNumber:z.string().max(20).default(''),
+      address:         z.string().max(1000).default(''),
+      phone:           z.string().max(50).default(''),
+      email:           z.string().max(255).default(''),
     }))
     .mutation(async ({ ctx, input }) => {
       const existing = await db.query.organizations.findFirst({
@@ -71,26 +90,37 @@ export const orgsRouter = router({
       if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'المنشأة غير موجودة' });
 
       const currentConfig = (existing.zatcaConfig ?? {}) as Record<string, unknown>;
+      const {
+        businessName: _legacyBusinessName,
+        businessNameEn: _legacyBusinessNameEn,
+        crNumber: _legacyCrNumber,
+        businessCategory: _legacyBusinessCategory,
+        countryName: _legacyCountryName,
+        streetName: _legacyStreetName,
+        ...restConfig
+      } = currentConfig;
       const nextConfig = {
-        ...currentConfig,
-        businessName: input.name,
-        businessNameEn: input.nameEn,
-        vatNumber: input.taxNumber,
-        crNumber: input.commercialReg,
-        businessCategory: input.activityType,
-        countryName: input.country,
+        ...restConfig,
+        legalName: input.legalName,
+        englishName: input.englishName,
+        vatNumber: input.vatNumber,
+        commercialReg: input.commercialReg,
+        activity: input.activity,
+        country: input.country,
         city: input.city,
         district: input.district,
-        streetName: input.streetName,
+        street: input.street,
         buildingNumber: input.buildingNumber,
         postalCode: input.postalCode,
         additionalNumber: input.additionalNumber,
+        phone: input.phone,
+        email: input.email,
       };
 
       await db.update(organizations).set({
-        name: input.name,
-        nameEn: input.nameEn || null,
-        taxNumber: input.taxNumber || null,
+        name: input.legalName,
+        nameEn: input.englishName || null,
+        taxNumber: input.vatNumber || null,
         commercialReg: input.commercialReg || null,
         address: input.address || null,
         phone: input.phone || null,

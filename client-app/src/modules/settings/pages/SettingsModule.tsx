@@ -308,6 +308,68 @@ function SettingsOverview({ onSelect }: { onSelect: (id: MenuId) => void }) {
 
 // ─── Company Info ──────────────────────────────────────────────────────────────
 
+type CompanyForm = {
+  legalName: string;
+  englishName: string;
+  vatNumber: string;
+  commercialReg: string;
+  activity: string;
+  country: string;
+  city: string;
+  district: string;
+  street: string;
+  buildingNumber: string;
+  postalCode: string;
+  additionalNumber: string;
+  address: string;
+  phone: string;
+  email: string;
+};
+
+const EMPTY_COMPANY_FORM: CompanyForm = {
+  legalName: "",
+  englishName: "",
+  vatNumber: "",
+  commercialReg: "",
+  activity: "",
+  country: "",
+  city: "",
+  district: "",
+  street: "",
+  buildingNumber: "",
+  postalCode: "",
+  additionalNumber: "",
+  address: "",
+  phone: "",
+  email: "",
+};
+
+const COMPANY_FIELD_LABELS: Array<[keyof CompanyForm, string]> = [
+  ["legalName", "الاسم القانوني"],
+  ["englishName", "اسم الشركة (إنجليزي)"],
+  ["vatNumber", "الرقم الضريبي"],
+  ["commercialReg", "السجل التجاري"],
+  ["activity", "النشاط"],
+  ["country", "الدولة"],
+  ["city", "المدينة"],
+  ["district", "الحي"],
+  ["street", "الشارع"],
+  ["buildingNumber", "رقم المبنى"],
+  ["postalCode", "الرمز البريدي"],
+  ["additionalNumber", "الرقم الإضافي"],
+  ["address", "العنوان التفصيلي"],
+  ["phone", "الهاتف"],
+  ["email", "البريد الإلكتروني"],
+];
+
+function companySaveErrorMessage(error: unknown): string {
+  const fieldErrors = (error as { data?: { zodError?: { fieldErrors?: Record<string, unknown> } } })
+    ?.data?.zodError?.fieldErrors;
+  if (fieldErrors?.commercialReg) return "تعذر الحفظ: حقل السجل التجاري غير مُرسل بشكل صحيح";
+  if (fieldErrors) return "تعذر الحفظ: راجع بيانات معلومات الشركة ثم أعد المحاولة";
+  return "تعذر حفظ معلومات الشركة. حاول مرة أخرى";
+}
+
 function CompanyInfoPage() {
   const meQ = trpc.auth.me.useQuery();
   const orgQ = trpc.orgs.currentOrg.useQuery();
@@ -315,39 +377,41 @@ function CompanyInfoPage() {
   const saveM = trpc.orgs.updateCurrent.useMutation({
     onSuccess: () => {
       toast.success("تم حفظ معلومات الشركة في قاعدة البيانات");
-      utils.orgs.currentOrg.invalidate();
-      utils.zatca.getReadiness.invalidate();
+      void Promise.all([
+        utils.orgs.currentOrg.invalidate(),
+        utils.zatca.getReadiness.invalidate(),
+      ]);
     },
-    onError: error => toast.error(error.message),
+    onError: error => toast.error(companySaveErrorMessage(error)),
   });
-  const [form, setForm] = useState<Record<string, string>>({});
+  const [form, setForm] = useState<CompanyForm>(EMPTY_COMPANY_FORM);
   const canEdit = meQ.data?.role === "admin" || meQ.data?.role === "superadmin";
   useEffect(() => {
     if (!orgQ.data) return;
     const cfg = (orgQ.data.zatcaConfig ?? {}) as Record<string, unknown>;
     setForm({
-      name: orgQ.data.name ?? "",
-      nameEn: orgQ.data.nameEn ?? "",
-      taxNumber: orgQ.data.taxNumber ?? String(cfg.vatNumber ?? ""),
-      crNumber: orgQ.data.commercialReg ?? String(cfg.crNumber ?? ""),
-      activityType: String(cfg.businessCategory ?? ""),
-      country: String(cfg.countryName ?? ""),
+      legalName: String(orgQ.data.legalName ?? orgQ.data.name ?? cfg.legalName ?? ""),
+      englishName: String(orgQ.data.englishName ?? orgQ.data.nameEn ?? cfg.englishName ?? ""),
+      vatNumber: String(orgQ.data.vatNumber ?? orgQ.data.taxNumber ?? cfg.vatNumber ?? ""),
+      commercialReg: String(orgQ.data.commercialReg ?? cfg.commercialReg ?? ""),
+      activity: String(orgQ.data.activity ?? cfg.activity ?? ""),
+      country: String(orgQ.data.country ?? cfg.country ?? ""),
       city: String(cfg.city ?? ""),
       district: String(cfg.district ?? ""),
-      streetName: String(cfg.streetName ?? ""),
+      street: String(cfg.street ?? ""),
       buildingNumber: String(cfg.buildingNumber ?? ""),
       postalCode: String(cfg.postalCode ?? ""),
       additionalNumber: String(cfg.additionalNumber ?? ""),
       address: orgQ.data.address ?? "",
-      phone: orgQ.data.phone ?? "",
-      email: orgQ.data.email ?? "",
+      phone: String(orgQ.data.phone ?? cfg.phone ?? ""),
+      email: String(orgQ.data.email ?? cfg.email ?? ""),
     });
   }, [orgQ.data]);
-  const update = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
-  const required: Array<[string, string]> = [
-    ["name", "الاسم القانوني"], ["taxNumber", "الرقم الضريبي"], ["crNumber", "السجل التجاري"],
-    ["activityType", "النشاط"], ["country", "الدولة"], ["city", "المدينة"], ["district", "الحي"],
-    ["streetName", "الشارع"], ["buildingNumber", "رقم المبنى"], ["postalCode", "الرمز البريدي"],
+  const update = (key: keyof CompanyForm, value: string) => setForm(p => ({ ...p, [key]: value }));
+  const required: Array<[keyof CompanyForm, string]> = [
+    ["legalName", "الاسم القانوني"], ["vatNumber", "الرقم الضريبي"], ["commercialReg", "السجل التجاري"],
+    ["activity", "النشاط"], ["country", "الدولة"], ["city", "المدينة"], ["district", "الحي"],
+    ["street", "الشارع"], ["buildingNumber", "رقم المبنى"], ["postalCode", "الرمز البريدي"],
     ["additionalNumber", "الرقم الإضافي"],
   ];
   const missing = required.filter(([key]) => !form[key]?.trim()).map(([, label]) => label);
@@ -368,14 +432,14 @@ function CompanyInfoPage() {
       <Card className="border-border/50">
         <CardContent className="p-5 space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            {[["name","الاسم القانوني"],["nameEn","اسم الشركة (إنجليزي)"],["taxNumber","الرقم الضريبي"],["crNumber","السجل التجاري"],["activityType","النشاط"],["country","الدولة"],["city","المدينة"],["district","الحي"],["streetName","الشارع"],["buildingNumber","رقم المبنى"],["postalCode","الرمز البريدي"],["additionalNumber","الرقم الإضافي"],["address","العنوان التفصيلي"],["phone","الهاتف"],["email","البريد الإلكتروني"]].map(([k,l]) => (
+            {COMPANY_FIELD_LABELS.map(([k, l]) => (
               <div key={k}>
                 <Label className="text-xs text-muted-foreground">{l}</Label>
                 <Input value={form[k] ?? ""} onChange={e => update(k, e.target.value)} className="h-8 text-sm mt-1" />
               </div>
             ))}
           </div>
-          <Button className="w-full h-9" onClick={() => saveM.mutate(form as any)} disabled={saveM.isPending || !orgQ.data || !canEdit}>
+          <Button className="w-full h-9" onClick={() => saveM.mutate({ ...form })} disabled={saveM.isPending || !orgQ.data || !canEdit}>
             {saveM.isPending ? "جارٍ الحفظ..." : "حفظ معلومات الشركة"}
             <Save className="w-4 h-4 ml-2" />
           </Button>

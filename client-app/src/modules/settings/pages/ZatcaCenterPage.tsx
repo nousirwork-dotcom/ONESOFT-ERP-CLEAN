@@ -1466,7 +1466,7 @@ function CertsSection() {
       date: cfg?.certExpiryDate ? new Date(cfg.certExpiryDate).toLocaleDateString("ar-SA") : null, issuer: "ZATCA CA",
       details: {
         fingerprint:        cfg?.csid ? "SHA-256: xx:xx:...(مشفّر)" : "—",
-        subject:            cfg?.businessName ? `CN=${cfg.businessName}, O=${cfg.businessName}, C=SA` : "—",
+        subject:            cfg?.legalName ? `CN=${cfg.legalName}, O=${cfg.legalName}, C=SA` : "—",
         serialNumber:       cfg?.csid ? "0x1A2B3C (مثال)" : "—",
         signatureAlgorithm: "SHA256WithECDSA",
         validFrom:          "—",
@@ -1940,7 +1940,7 @@ function TestSection() {
     { label: "رابط API الهيئة",      ok: !!cfg?.apiBaseUrl,   dot: !!cfg?.apiBaseUrl ? "ok" as const : "error" as const, desc: cfg?.apiBaseUrl || "غير محدد" },
     { label: "تفعيل منظومة ZATCA",   ok: !!cfg?.enabled,      dot: !!cfg?.enabled ? "ok" as const : "warn" as const, desc: cfg?.enabled ? "مُفعَّلة ✓" : "غير مُفعَّلة" },
     { label: "الرقم الضريبي (VAT)",  ok: !!cfg?.vatNumber && /^3\d{13}3$/.test(cfg?.vatNumber ?? ""), dot: !!cfg?.vatNumber ? "ok" as const : "error" as const, desc: cfg?.vatNumber || "غير محدد" },
-    { label: "اسم المنشأة",          ok: !!cfg?.businessName, dot: !!cfg?.businessName ? "ok" as const : "warn" as const, desc: cfg?.businessName || "غير محدد" },
+    { label: "اسم المنشأة",          ok: !!cfg?.legalName, dot: !!cfg?.legalName ? "ok" as const : "warn" as const, desc: cfg?.legalName || "غير محدد" },
   ];
 
   return (
@@ -2361,8 +2361,8 @@ function DiagSection() {
 
   const checks = [
     { id: "vat",    label: "صحة الرقم الضريبي",     dot: !!cfg?.vatNumber && /^3\d{13}3$/.test(cfg?.vatNumber ?? "") ? "ok" as const : "error" as const, detail: cfg?.vatNumber || "غير محدد" },
-    { id: "name",   label: "اسم المنشأة",             dot: !!cfg?.businessName ? "ok" as const : "warn" as const, detail: cfg?.businessName || "غير محدد" },
-    { id: "addr",   label: "اكتمال العنوان",          dot: !!(cfg?.streetName && cfg?.city) ? "ok" as const : "warn" as const, detail: cfg?.streetName ? `${cfg.streetName}، ${cfg.city}` : "غير مكتمل" },
+    { id: "name",   label: "اسم المنشأة",             dot: !!cfg?.legalName ? "ok" as const : "warn" as const, detail: cfg?.legalName || "غير محدد" },
+    { id: "addr",   label: "اكتمال العنوان",          dot: !!(cfg?.street && cfg?.city) ? "ok" as const : "warn" as const, detail: cfg?.street ? `${cfg.street}، ${cfg.city}` : "غير مكتمل" },
     { id: "csid",   label: "CSID",                   dot: !!cfg?.csid ? "ok" as const : "error" as const, detail: cfg?.csid ? "موجود ✓" : "مفقود" },
     { id: "cert",   label: "صلاحية الشهادة",          dot: !!(cfg?.certExpiryDate && (s?.certDaysLeft ?? 0) > 0) ? "ok" as const : s?.certDaysLeft !== null && (s?.certDaysLeft ?? 0) > 0 ? "ok" as const : "error" as const, detail: s?.certDaysLeft != null ? `${s!.certDaysLeft} يوم متبقٍ` : "غير محدد" },
     { id: "env",    label: "تهيئة البيئة",            dot: !!cfg?.apiBaseUrl ? "ok" as const : "error" as const, detail: cfg?.environment === "production" ? "إنتاج ✓" : "اختبار" },
