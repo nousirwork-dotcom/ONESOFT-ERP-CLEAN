@@ -332,7 +332,11 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
   const allInvoicesQuery = trpc.salesInvoices.list.useQuery({});
   const qrSettingsQuery       = trpc.qrSettings.get.useQuery();
   const orgQuery              = trpc.orgs.currentOrg.useQuery();
-  const { templateConfig }    = usePrintTemplate("sales_invoice");
+  const selectedJournalForPrint = (journalsQuery.data ?? []).find((j: any) => j.id === journalId);
+  const { templateConfig }    = usePrintTemplate(
+    "sales_invoice",
+    selectedJournalForPrint?.printTemplate || undefined,
+  );
 
   const currentInvId          = navInvoiceId ?? savedInvoiceId;
   const zatcaQuery            = trpc.zatca.getInvoiceZatca.useQuery(
@@ -1492,6 +1496,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
           invoiceNumber: invoiceNumber || "—",
           invoiceDate,
           invoiceTime: new Date().toTimeString().slice(0, 8),
+          deliveryDate: invoiceDate,
+          warehouseName: warehousesQuery.data?.find((w: any) => w.id === warehouseId)?.name ?? warehouseDisplayName ?? undefined,
           customerName: customerName || "عميل نقدي",
           customerCode: customerCode || undefined,
           customerTaxNumber: customerTaxNumber || undefined,
@@ -2737,6 +2743,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
             invoiceNumber: invoiceNumber || "—",
             invoiceDate,
             invoiceTime: new Date().toTimeString().slice(0, 8),
+            deliveryDate: invoiceDate,
+            warehouseName: warehousesQuery.data?.find((w: any) => w.id === warehouseId)?.name ?? warehouseDisplayName ?? undefined,
             customerName: customerName || "عميل نقدي",
             customerCode: customerCode || undefined,
             customerTaxNumber: customerTaxNumber || undefined,

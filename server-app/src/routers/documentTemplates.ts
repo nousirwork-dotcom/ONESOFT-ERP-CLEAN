@@ -26,8 +26,9 @@ const POS01_CONFIG = JSON.stringify({
 const INV01_CONFIG = JSON.stringify({
   version: 1,
   type: "config_v1",
+  renderer: "sales_invoice_reference_v1",
   paperSize: "A4",
-  orientation: "portrait",
+  orientation: "landscape",
   language: "bilingual",
   primaryColor: "#1B4F8E",
   columns: {
@@ -223,6 +224,32 @@ const PVCH01_CONFIG = JSON.stringify({
   ],
 });
 
+async function ensureSalesReferenceTemplate(
+  template: typeof documentTemplates.$inferSelect | null | undefined,
+  orgId: number,
+) {
+  if (!template || template.docType !== 'sales_invoice' || template.code !== 'INV01') {
+    return template ?? null;
+  }
+
+  let isLegacy = false;
+  try {
+    const parsed = template.layoutJson
+      ? JSON.parse(template.layoutJson) as Record<string, unknown>
+      : null;
+    isLegacy = parsed?.type === 'config_v1' && !parsed?.renderer;
+  } catch { /* لا نغيّر قالباً غير صالح تلقائياً */ }
+
+  if (!isLegacy) return template;
+
+  const [updated] = await db.update(documentTemplates)
+    .set({ layoutJson: INV01_CONFIG, orientation: 'landscape', updatedAt: new Date() })
+    .where(and(eq(documentTemplates.id, template.id), eq(documentTemplates.orgId, orgId)))
+    .returning();
+
+  return updated ?? { ...template, layoutJson: INV01_CONFIG, orientation: 'landscape' };
+}
+
 export const documentTemplatesRouter = router({
 
   list: protectedProcedure
@@ -237,6 +264,20 @@ export const documentTemplatesRouter = router({
       });
     }),
 
+  getByCode: protectedProcedure
+    .input(z.object({ docType: z.string(), code: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const template = await db.query.documentTemplates.findFirst({
+        where: and(
+          eq(documentTemplates.orgId, ctx.user.orgId),
+          eq(documentTemplates.docType, input.docType),
+          eq(documentTemplates.code, input.code),
+          eq(documentTemplates.isActive, true),
+        ),
+      }) ?? null;
+      return ensureSalesReferenceTemplate(template, ctx.user.orgId);
+    }),
+
   getDefault: protectedProcedure
     .input(z.object({ docType: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -249,6 +290,7 @@ export const documentTemplatesRouter = router({
           eq(documentTemplates.isActive, true),
         ),
       });
+      tpl = await ensureSalesReferenceTemplate(tpl, orgId);
       // إذا لم يوجد نموذج افتراضي، أنشئه تلقائياً (seed)
       if (!tpl) {
         const defMap: Record<string, { code: string; nameAr: string; nameEn: string; paperSize: string; layoutJson: string }> = {
@@ -287,15 +329,17 @@ export const documentTemplatesRouter = router({
             where: and(eq(documentTemplates.orgId, orgId), eq(documentTemplates.code, def.code)),
           });
           if (existing) {
+            tpl = await ensureSalesReferenceTemplate(existing, orgId);
             // وجد لكن ليس افتراضياً — اجعله افتراضياً
             await db.update(documentTemplates)
               .set({ isDefault: true, updatedAt: new Date() })
               .where(and(eq(documentTemplates.id, existing.id), eq(documentTemplates.orgId, orgId)));
-            tpl = { ...existing, isDefault: true };
+            tpl = tpl ? { ...tpl, isDefault: true } : tpl;
           } else {
             const [row] = await db.insert(documentTemplates).values({
               orgId, code: def.code, nameAr: def.nameAr, nameEn: def.nameEn,
-              docType: input.docType, paperSize: def.paperSize, orientation: 'portrait',
+              docType: input.docType, paperSize: def.paperSize,
+              orientation: input.docType === 'sales_invoice' ? 'landscape' : 'portrait',
               isDefault: true, isActive: true, sortOrder: 1,
               layoutJson: def.layoutJson,
             }).returning();
@@ -355,16 +399,26 @@ export const documentTemplatesRouter = router({
       if (!existing) {
         await db.insert(documentTemplates).values({
           orgId, code: def.code, nameAr: def.nameAr, nameEn: def.nameEn,
-          docType: input.docType, paperSize: def.paperSize, orientation: 'portrait',
+          docType: input.docType, paperSize: def.paperSize,
+          orientation: input.docType === 'sales_invoice' ? 'landscape' : 'portrait',
           isDefault: true, isActive: true, sortOrder: 1,
           layoutJson: def.layoutJson, notes: def.notes,
         });
         return { seeded: true };
       } else if (!existing.layoutJson || input.forceReset) {
         await db.update(documentTemplates)
-          .set({ layoutJson: def.layoutJson, isDefault: true, updatedAt: new Date() })
+          .set({
+            layoutJson: def.layoutJson,
+            isDefault: true,
+            ...(input.docType === 'sales_invoice' ? { orientation: 'landscape' } : {}),
+            updatedAt: new Date(),
+          })
           .where(and(eq(documentTemplates.id, existing.id), eq(documentTemplates.orgId, orgId)));
         return { seeded: true };
+      }
+      if (input.docType === 'sales_invoice' && existing.code === 'INV01') {
+        const upgraded = await ensureSalesReferenceTemplate(existing, orgId);
+        if (upgraded?.layoutJson !== existing.layoutJson) return { seeded: true };
       }
       return { seeded: false };
     }),
@@ -419,7 +473,8 @@ export const documentTemplatesRouter = router({
         if (!existing) {
           await db.insert(documentTemplates).values({
             orgId: ctx.user.orgId, code: def.code, nameAr: def.nameAr, nameEn: def.nameEn,
-            docType: def.docType, paperSize: def.paperSize, orientation: 'portrait',
+            docType: def.docType, paperSize: def.paperSize,
+            orientation: def.docType === 'sales_invoice' ? 'landscape' : 'portrait',
             isDefault: true, isActive: true, sortOrder: 1,
             layoutJson: def.layoutJson, notes: def.notes,
           });
@@ -427,9 +482,17 @@ export const documentTemplatesRouter = router({
         } else if (!existing.layoutJson) {
           // تحديث النموذج الموجود إذا كان بدون تصميم
           await db.update(documentTemplates)
-            .set({ layoutJson: def.layoutJson, isDefault: true, updatedAt: new Date() })
+            .set({
+              layoutJson: def.layoutJson,
+              isDefault: true,
+              ...(def.docType === 'sales_invoice' ? { orientation: 'landscape' } : {}),
+              updatedAt: new Date(),
+            })
             .where(and(eq(documentTemplates.id, existing.id), eq(documentTemplates.orgId, ctx.user.orgId)));
           seededCount++;
+        } else if (def.docType === 'sales_invoice' && def.code === 'INV01') {
+          const upgraded = await ensureSalesReferenceTemplate(existing, ctx.user.orgId);
+          if (upgraded?.layoutJson !== existing.layoutJson) seededCount++;
         }
       }
       return { seeded: seededCount > 0, count: seededCount };

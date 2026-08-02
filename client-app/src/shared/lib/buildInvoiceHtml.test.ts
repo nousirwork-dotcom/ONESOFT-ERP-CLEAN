@@ -31,6 +31,7 @@ const data: InvPrintData = {
 
 const positionedConfig: InvDocTemplateConfig = {
   type: "config_v1",
+  renderer: "sales_invoice_reference_v1",
   language: "bilingual",
   primaryColor: "#406B93",
   columns: {
@@ -49,6 +50,17 @@ const positionedConfig: InvDocTemplateConfig = {
 };
 
 describe("sales invoice QR print output", () => {
+  it("uses the attached landscape sales invoice design for sales invoices", () => {
+    const html = buildInvoiceHtml(data, positionedConfig, undefined, "ZATCA QR", 100, "sales_invoice");
+
+    expect(html).toContain('id="sales-invoice-print"');
+    expect(html).toContain("A4 landscape");
+    expect(html).toContain("P-001");
+    expect(html).toContain("مؤسسة اختبار");
+    expect(html).toContain("data:image/svg+xml");
+    expect(html).not.toContain("class=\"page\"");
+  });
+
   it("embeds the generated data URL in positioned invoice HTML", () => {
     const qrDataUrl = "data:image/png;base64,TEST_QR_DATA";
     const html = buildInvoiceHtml(data, positionedConfig, qrDataUrl, "ZATCA QR", 100, "sales_invoice");
@@ -62,5 +74,12 @@ describe("sales invoice QR print output", () => {
 
     expect(html).not.toContain("<img src=\"undefined\"");
     expect(html).not.toContain("<img src=\"\"");
+  });
+
+  it("uses the normal configurable renderer when the selected template has no renderer", () => {
+    const html = buildInvoiceHtml(data, { ...positionedConfig, renderer: undefined });
+
+    expect(html).toContain('class="page"');
+    expect(html).not.toContain('id="sales-invoice-print"');
   });
 });
