@@ -5801,6 +5801,13 @@ function ElectronicInvoicingCenter({ initialTab = "qr" }: { initialTab?: Electro
   );
 }
 
+/** شاشة مستقلة لكل خيار من خيارات مركز الفوترة الإلكترونية. */
+function ElectronicInvoicingStandalone({ tab }: { tab: ElectronicInvoicingTab }) {
+  return tab === "qr"
+    ? <div className="h-full overflow-auto bg-background p-5" dir="rtl"><QRSettingsPage /></div>
+    : <div className="h-full min-h-[620px]"><ZatcaCenterPage initialSection="dashboard" /></div>;
+}
+
 function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (id: MenuId) => void }) {
   switch (activeId) {
     // الإعدادات العامة
@@ -5837,9 +5844,9 @@ function SettingsContent({ activeId, onSelect }: { activeId: MenuId; onSelect: (
 
     case "document-templates":   return <TemplatesManagerPage />;
     case "electronic-invoicing-center": return <ElectronicInvoicingCenter />;
-    case "electronic-invoicing-qr": return <ElectronicInvoicingCenter initialTab="qr" />;
-    case "electronic-invoicing-zatca": return <ElectronicInvoicingCenter initialTab="zatca" />;
-    case "qr-settings":          return <ElectronicInvoicingCenter initialTab="qr" />;
+    case "electronic-invoicing-qr": return <ElectronicInvoicingStandalone tab="qr" />;
+    case "electronic-invoicing-zatca": return <ElectronicInvoicingStandalone tab="zatca" />;
+    case "qr-settings":          return <ElectronicInvoicingStandalone tab="qr" />;
     case "field-design":         return <FieldDesignPage />;
     case "backup":               return <BackupPage />;
     case "audit-log":            return <AuditLogPage />;
@@ -5970,10 +5977,10 @@ export function CfgMessagingEmailTab()     { return <CfgSubPage activeId="messag
 export function CfgMessagingTemplatesTab() { return <CfgSubPage activeId="messaging-templates" />; }
 export function CfgMessagingLogTab()       { return <CfgSubPage activeId="messaging-log" />; }
 export function CfgAiAssistantTab()        { return <CfgSubPage activeId="ai-assistant" />; }
-export function CfgZatcaCenterTab()        { return <ElectronicInvoicingCenter initialTab="zatca" />; }
+export function CfgZatcaCenterTab()        { return <ElectronicInvoicingStandalone tab="zatca" />; }
 export function CfgElectronicInvoicingCenterTab() { return <ElectronicInvoicingCenter />; }
-export function CfgElectronicInvoicingQrTab() { return <ElectronicInvoicingCenter initialTab="qr" />; }
-export function CfgElectronicInvoicingZatcaTab() { return <ElectronicInvoicingCenter initialTab="zatca" />; }
+export function CfgElectronicInvoicingQrTab() { return <ElectronicInvoicingStandalone tab="qr" />; }
+export function CfgElectronicInvoicingZatcaTab() { return <ElectronicInvoicingStandalone tab="zatca" />; }
 export function CfgPrintSettingsTab()      { return <CfgSubPage activeId="print-settings" />; }
 export function CfgLogoStampTab()          { return <CfgSubPage activeId="logo-stamp" />; }
 export function CfgSignaturesTab()         { return <CfgSubPage activeId="signatures" />; }
