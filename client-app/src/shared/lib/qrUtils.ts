@@ -17,8 +17,10 @@ export interface QrSettings {
   showOnSalesInvoice: boolean;
   showOnPurchaseInvoice: boolean;
   showOnReceiptVoucher: boolean;
-  qrSize: number;
-  qrPosition: string;
+  /** توافق داخلي: كل مستندات دورة المبيعات تستخدم showOnSalesInvoice. */
+  /** حقول توافق قديمة؛ الحجم والموضع يحددهما قالب الطباعة. */
+  qrSize?: number;
+  qrPosition?: string;
 }
 
 export interface QrInvoiceData {
@@ -111,6 +113,55 @@ export function generateQrContent(system: QrSystem, data: QrInvoiceData, customT
     default:
       return generateZATCAQrContent(data);
   }
+}
+
+export type DecodedQrData = Partial<QrInvoiceData> & { raw?: string };
+
+/**
+ * يفك محتوى QR التجريبي لعرض القيم المقروءة في شاشة الإعدادات.
+ * لا يُستخدم في دورة إصدار الفواتير؛ خدمة الطباعة تكتفي بتوليد المحتوى.
+ */
+export function decodeQrContent(system: QrSystem, content: string): DecodedQrData {
+  if (!content) throw new Error("محتوى QR فارغ");
+
+  if (system === "zatca") {
+    const bytes = Uint8Array.from(atob(content), char => char.charCodeAt(0));
+    const decoder = new TextDecoder();
+    const values: Record<number, string> = {};
+    let offset = 0;
+    while (offset < bytes.length) {
+      const tag = bytes[offset];
+      const length = bytes[offset + 1];
+      if (length === undefined || offset + 2 + length > bytes.length) {
+        throw new Error("بيانات ZATCA غير مكتملة");
+      }
+      values[tag] = decoder.decode(bytes.slice(offset + 2, offset + 2 + length));
+      offset += 2 + length;
+    }
+    return {
+      sellerName: values[1],
+      taxNumber: values[2],
+      invoiceDateTime: values[3],
+      totalAmount: Number(values[4]),
+      vatAmount: Number(values[5]),
+      raw: content,
+    };
+  }
+
+  if (system === "eta") {
+    const parsed = JSON.parse(content) as Record<string, unknown>;
+    return {
+      sellerName: String(parsed.issuer ?? ""),
+      taxNumber: String(parsed.taxId ?? ""),
+      invoiceNumber: String(parsed.invNo ?? ""),
+      invoiceDateTime: String(parsed.date ?? ""),
+      totalAmount: Number(parsed.total ?? 0),
+      vatAmount: Number(parsed.vat ?? 0),
+      raw: content,
+    };
+  }
+
+  return { raw: content };
 }
 
 // ─── نص المساعدة للنظام المخصص ───────────────────────────────────────────────

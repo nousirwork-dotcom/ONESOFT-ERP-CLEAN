@@ -19,4 +19,6 @@ const InvoiceBuilder: DocumentBuilder = {
 registerBuilder("sales_invoice",    InvoiceBuilder);
 registerBuilder("purchase_invoice", InvoiceBuilder);
 registerBuilder("sales_return",     InvoiceBuilder);
+registerBuilder("credit_note",      InvoiceBuilder);
+registerBuilder("debit_note",       InvoiceBuilder);
 registerBuilder("purchase_return",  InvoiceBuilder);

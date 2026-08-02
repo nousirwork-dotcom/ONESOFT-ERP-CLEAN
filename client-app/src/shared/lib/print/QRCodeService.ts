@@ -66,20 +66,31 @@ export const QRCodeService = {
   async resolveForInvoice(
     settings: QrSettings | null | undefined,
     invoiceData: QrInvoiceData,
-    docType: "sales_invoice" | "purchase_invoice" | "receipt_voucher" = "sales_invoice",
+    docType:
+      | "sales_invoice"
+      | "pos_invoice"
+      | "sales_return"
+      | "credit_note"
+      | "debit_note"
+      | "purchase_invoice"
+      | "purchase_order"
+      | "purchase_return"
+      | "receipt_voucher" = "sales_invoice",
   ): Promise<{ dataUrl: string; content: string; label: string; size: number; show: boolean }> {
     if (!settings?.isEnabled) {
       return { dataUrl: "", content: "", label: "", size: 100, show: false };
     }
 
     const show =
-      docType === "purchase_invoice"
+      docType === "purchase_invoice" ||
+      docType === "purchase_order" ||
+      docType === "purchase_return"
         ? !!settings.showOnPurchaseInvoice
         : docType === "receipt_voucher"
           ? !!settings.showOnReceiptVoucher
           : !!settings.showOnSalesInvoice;
 
-    if (!show) return { dataUrl: "", content: "", label: "", size: settings.qrSize ?? 100, show: false };
+    if (!show) return { dataUrl: "", content: "", label: "", size: 100, show: false };
 
     const label =
       settings.countrySystem === "zatca" ? "ZATCA QR" :
@@ -91,7 +102,8 @@ export const QRCodeService = {
       settings.customFormat,
     );
 
-    const size    = settings.qrSize ?? 100;
+    // الحجم النهائي يحدده قالب الطباعة؛ هذا الحجم الداخلي ثابت للتوليد فقط.
+    const size    = 100;
     const dataUrl = await QRCodeService.generateDataUrl(content, size);
 
     return { dataUrl, content, label, size, show: true };

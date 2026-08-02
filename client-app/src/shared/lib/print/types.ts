@@ -10,6 +10,8 @@ export type PrintDocumentType =
   | "sales_invoice"
   | "purchase_invoice"
   | "sales_return"
+  | "credit_note"
+  | "debit_note"
   | "purchase_return"
   | "receipt_voucher"
   | "payment_voucher"

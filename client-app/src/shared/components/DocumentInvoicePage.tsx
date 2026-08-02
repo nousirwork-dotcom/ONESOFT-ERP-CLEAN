@@ -507,12 +507,15 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
   // نوع الفاتورة للطباعة
   const isPrintEnabled =
     (config.docCategory === "purchase" && ["invoice", "order", "return"].includes(config.invoiceType)) ||
-    (config.docCategory === "sales"    && config.invoiceType === "return");
+    (config.docCategory === "sales"    && ["invoice", "return", "credit_note", "debit_note"].includes(config.invoiceType));
 
   const printDocType: string =
     config.docCategory === "purchase" && config.invoiceType === "order"  ? "purchase_order"  :
     config.docCategory === "purchase" && config.invoiceType === "return" ? "purchase_return" :
     config.docCategory === "purchase"                                    ? "purchase_invoice" :
+    config.invoiceType === "return"                                      ? "sales_return" :
+    config.invoiceType === "credit_note"                                 ? "credit_note" :
+    config.invoiceType === "debit_note"                                  ? "debit_note" :
     "sales_invoice";
 
   const orgQuery             = trpc.orgs.currentOrg.useQuery();
@@ -2098,7 +2101,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
         <InvoicePrintModal
           open={showPrintModal}
           onClose={() => setShowPrintModal(false)}
-          docType={printDocType as "sales_invoice" | "purchase_invoice" | "purchase_order" | "purchase_return"}
+           docType={printDocType as "sales_invoice" | "sales_return" | "credit_note" | "debit_note" | "purchase_invoice" | "purchase_order" | "purchase_return"}
           templateConfig={(() => {
             try {
               const raw = defaultTemplateQuery.data?.layoutJson;
@@ -2116,8 +2119,7 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
             showOnSalesInvoice: qrSettingsQuery.data.showOnSalesInvoice,
             showOnPurchaseInvoice: qrSettingsQuery.data.showOnPurchaseInvoice,
             showOnReceiptVoucher: qrSettingsQuery.data.showOnReceiptVoucher,
-            qrSize: qrSettingsQuery.data.qrSize,
-            qrPosition: qrSettingsQuery.data.qrPosition,
+            qrSize: 100,
           } : null}
           data={{
             invoiceNumber: invoiceNumber || "—",

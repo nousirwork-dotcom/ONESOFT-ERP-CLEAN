@@ -25,7 +25,7 @@ import {
   MessageSquare, Send, Bot, Mail, Eye, RefreshCw, Search, Check, X,
 } from "lucide-react";
 import QRCodeDisplay from "@/shared/components/QRCodeDisplay";
-import { generateQrContent, QR_SYSTEMS, CUSTOM_TEMPLATE_HELP, type QrSystem } from "@/shared/lib/qrUtils";
+import { decodeQrContent, generateQrContent, QR_SYSTEMS, CUSTOM_TEMPLATE_HELP, type QrSystem } from "@/shared/lib/qrUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/core/ui/card";
 import { Checkbox } from "@/core/ui/checkbox";
 import { Button } from "@/core/ui/button";
@@ -3278,11 +3278,11 @@ function QRSettingsPage() {
   const [taxNumber, setTaxNumber] = useState("");
   const [customFormat, setCustomFormat] = useState("{{sellerName}}\n{{taxNumber}}\n{{invoiceDateTime}}\n{{totalAmount}}\n{{vatAmount}}");
   const [showOnSales, setShowOnSales] = useState(true);
-  const [showOnPurchase, setShowOnPurchase] = useState(false);
-  const [showOnReceipt, setShowOnReceipt] = useState(false);
-  const [qrSize, setQrSize] = useState(100);
-  const [qrPosition, setQrPosition] = useState("top-right");
   const [showHelp, setShowHelp] = useState(false);
+  const [previewGenerated, setPreviewGenerated] = useState(false);
+  const [previewChecked, setPreviewChecked] = useState(false);
+  const [decodedPreview, setDecodedPreview] = useState<ReturnType<typeof decodeQrContent> | null>(null);
+  const [previewError, setPreviewError] = useState("");
 
   useEffect(() => {
     if (!s) return;
@@ -3292,28 +3292,50 @@ function QRSettingsPage() {
     setTaxNumber(s.taxNumber ?? "");
     setCustomFormat(s.customFormat ?? "{{sellerName}}\n{{taxNumber}}\n{{invoiceDateTime}}\n{{totalAmount}}\n{{vatAmount}}");
     setShowOnSales(s.showOnSalesInvoice);
-    setShowOnPurchase(s.showOnPurchaseInvoice);
-    setShowOnReceipt(s.showOnReceiptVoucher);
-    setQrSize(s.qrSize ?? 100);
-    setQrPosition(s.qrPosition ?? "top-right");
+    setPreviewGenerated(false);
+    setPreviewChecked(false);
+    setDecodedPreview(null);
+    setPreviewError("");
   }, [s]);
 
-  // معاينة QR
-  const previewContent = (() => {
-    const sampleData = {
-      sellerName: sellerName || "OneSoft Company",
-      taxNumber: taxNumber || "300000000000003",
-      invoiceDateTime: new Date().toISOString(),
-      totalAmount: 1150.00,
-      vatAmount: 150.00,
-      invoiceNumber: "INV-2026-000001",
-    };
+  const sampleData = useMemo(() => ({
+    sellerName: sellerName || "OneSoft Company",
+    taxNumber: taxNumber || "300000000000003",
+    invoiceDateTime: "2026-08-02T10:30:00+03:00",
+    totalAmount: 1150.00,
+    vatAmount: 150.00,
+    invoiceNumber: "INV-2026-000001",
+  }), [sellerName, taxNumber]);
+
+  const previewContent = useMemo(() => {
     try {
       return generateQrContent(system, sampleData, customFormat);
     } catch {
       return "";
     }
-  })();
+  }, [customFormat, sampleData, system]);
+
+  const embeddedRows = system === "zatca"
+    ? [
+        ["اسم البائع أو المنشأة", sampleData.sellerName],
+        ["الرقم الضريبي", sampleData.taxNumber],
+        ["تاريخ ووقت إصدار الفاتورة", sampleData.invoiceDateTime],
+        ["إجمالي الفاتورة شامل الضريبة", sampleData.totalAmount.toFixed(2)],
+        ["إجمالي مبلغ الضريبة", sampleData.vatAmount.toFixed(2)],
+      ]
+    : system === "eta"
+      ? [
+          ["اسم البائع أو المنشأة", sampleData.sellerName],
+          ["الرقم الضريبي", sampleData.taxNumber],
+          ["رقم الفاتورة", sampleData.invoiceNumber],
+          ["الإجمالي شامل الضريبة", sampleData.totalAmount.toFixed(2)],
+          ["مبلغ الضريبة", sampleData.vatAmount.toFixed(2)],
+        ]
+      : [
+          ["اسم المنشأة", sampleData.sellerName],
+          ["الرقم الضريبي", sampleData.taxNumber],
+          ["التاريخ والمبالغ", "حسب القالب المخصص"],
+        ];
 
   const handleSave = () => {
     upsertMutation.mutate({
@@ -3322,230 +3344,254 @@ function QRSettingsPage() {
       taxNumber: taxNumber || null,
       customFormat: system === "custom" ? customFormat : null,
       showOnSalesInvoice: showOnSales,
-      showOnPurchaseInvoice: showOnPurchase,
-      showOnReceiptVoucher: showOnReceipt,
-      qrSize, qrPosition,
     });
   };
 
   if (qrQuery.isLoading) return <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">جاري التحميل...</div>;
 
+  const selectedSystem = QR_SYSTEMS.find(item => item.id === system);
+
   return (
-    <div className="space-y-5 max-w-3xl" dir="rtl">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="font-bold text-base flex items-center gap-2">
-            <QrCode className="w-5 h-5 text-[#406B93]" />
-            إعداد QR Code
-          </h3>
-          <p className="text-muted-foreground text-xs mt-0.5">تهيئة نظام QR Code للفواتير ونماذج الطباعة</p>
-        </div>
-        <Button onClick={handleSave} disabled={upsertMutation.isPending} className="h-8 text-sm bg-[#406B93] hover:bg-[#315578]">
-          <Save className="w-3.5 h-3.5 ml-1" />
-          {upsertMutation.isPending ? "جاري الحفظ..." : "حفظ الإعدادات"}
-        </Button>
-      </div>
-
-      {/* تفعيل QR */}
-      <Card className="border-border/50">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold">تفعيل نظام QR Code</p>
-              <p className="text-xs text-muted-foreground mt-0.5">عند التفعيل يظهر QR تلقائياً في نماذج الطباعة المحددة</p>
-            </div>
-            <Switch checked={isEnabled} onCheckedChange={setIsEnabled} />
+    <div className="min-h-full bg-[#f4efe7] p-4 sm:p-5" dir="rtl">
+      <div className="mx-auto max-w-6xl space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#d8c7b1] bg-[#fffdf9] px-4 py-3 shadow-sm">
+          <div>
+            <h3 className="flex items-center gap-2 text-base font-bold text-[#4e321f]">
+              <QrCode className="h-5 w-5 text-[#8a5a2b]" />
+              إعدادات كود QR
+            </h3>
+            <p className="mt-1 text-xs text-[#765f4b]">إعداد وتشغيل QR للمستندات الضريبية ومعاينة البيانات المضمنة</p>
           </div>
-        </CardContent>
-      </Card>
+          <Button onClick={handleSave} disabled={upsertMutation.isPending} className="h-9 bg-[#8a5a2b] text-sm hover:bg-[#70471f]">
+            <Save className="ml-1 h-3.5 w-3.5" />
+            {upsertMutation.isPending ? "جاري الحفظ..." : "حفظ الإعدادات"}
+          </Button>
+        </div>
 
-      {isEnabled && (<>
-        {/* اختيار النظام */}
-        <Card className="border-border/50">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-bold">نظام QR Code</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4 space-y-3">
-            {QR_SYSTEMS.map(sys => (
-              <div key={sys.id}
-                onClick={() => setSystem(sys.id)}
-                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                  system === sys.id
-                    ? "border-[#406B93] bg-[#406B93]/5"
-                    : "border-border hover:border-[#406B93]/40 hover:bg-accent/10"
-                }`}
-              >
-                <div className={`w-4 h-4 rounded-full border-2 mt-0.5 flex-shrink-0 transition-all ${
-                  system === sys.id ? "border-[#406B93] bg-[#406B93]" : "border-gray-300"
-                }`}>
-                  {system === sys.id && <div className="w-2 h-2 rounded-full bg-white m-auto mt-0.5" />}
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold">{sys.label}</span>
-                    <Badge variant="outline" className="text-[10px] py-0 px-1.5">{sys.country}</Badge>
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_330px]">
+          <div className="space-y-4">
+            <Card className="border-[#d8c7b1] shadow-sm">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold text-[#4e321f]">تفعيل كود QR</p>
+                    <p className="mt-1 text-xs text-muted-foreground">عند التفعيل يظهر QR على مستندات المبيعات المحددة</p>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">{sys.description}</p>
+                  <Switch checked={isEnabled} onCheckedChange={setIsEnabled} />
                 </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
 
-        {/* بيانات المنشأة */}
-        <Card className="border-border/50">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-bold">بيانات المنشأة في QR</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs text-muted-foreground">اسم المنشأة</Label>
-                <Input value={sellerName} onChange={e => setSellerName(e.target.value)}
-                  placeholder="اسم الشركة أو المنشأة..." className="h-8 text-sm mt-1" />
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">الرقم الضريبي</Label>
-                <Input value={taxNumber} onChange={e => setTaxNumber(e.target.value)}
-                  placeholder="300000000000003" className="h-8 text-sm mt-1 font-mono" />
-              </div>
-            </div>
-            <p className="text-[11px] text-muted-foreground bg-blue-50 border border-blue-100 rounded px-2 py-1.5">
-              ℹ️ إذا تُركت فارغة، يُستخدم الرقم الضريبي واسم المنشأة من بيانات الفاتورة تلقائياً
-            </p>
-          </CardContent>
-        </Card>
+            {isEnabled && (
+              <>
+                <Card className="border-[#d8c7b1] shadow-sm">
+                  <CardHeader className="border-b border-[#eadfd1] px-4 py-3">
+                    <CardTitle className="text-sm font-bold text-[#4e321f]">نظام QR Code</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 p-4">
+                    {QR_SYSTEMS.map(sys => (
+                      <button
+                        type="button"
+                        key={sys.id}
+                        onClick={() => { setSystem(sys.id); setPreviewGenerated(false); setPreviewChecked(false); setDecodedPreview(null); setPreviewError(""); }}
+                        className={`flex w-full items-start gap-3 rounded-lg border p-3 text-right transition-all ${
+                          system === sys.id
+                            ? "border-[#8a5a2b] bg-[#fbf3e8] shadow-sm"
+                            : "border-[#e2d7c9] bg-white hover:border-[#b89b7d]"
+                        }`}
+                      >
+                        <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
+                          system === sys.id ? "border-[#8a5a2b] bg-[#8a5a2b]" : "border-[#c7b9a8]"
+                        }`}>
+                          {system === sys.id && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex flex-wrap items-center gap-2 text-sm font-semibold text-[#4e321f]">
+                            {sys.label}
+                            <Badge variant="outline" className="border-[#d8c7b1] text-[10px]">{sys.country}</Badge>
+                          </span>
+                          <span className="mt-1 block text-xs text-muted-foreground">{sys.description}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </CardContent>
+                </Card>
 
-        {/* قالب مخصص */}
-        {system === "custom" && (
-          <Card className="border-border/50">
-            <CardHeader className="pb-2 pt-4 px-4">
-              <div className="flex justify-between items-center">
-                <CardTitle className="text-sm font-bold">قالب QR المخصص</CardTitle>
-                <button onClick={() => setShowHelp(h => !h)} className="text-xs text-[#406B93] hover:underline">
-                  {showHelp ? "إخفاء المساعدة" : "عرض المتغيرات المتاحة"}
-                </button>
-              </div>
-            </CardHeader>
-            <CardContent className="px-4 pb-4 space-y-2">
-              {showHelp && (
-                <pre className="text-[10px] bg-gray-50 border border-gray-200 rounded p-2 text-gray-600 leading-5 whitespace-pre-wrap font-mono">
-                  {CUSTOM_TEMPLATE_HELP}
-                </pre>
-              )}
-              <Textarea
-                value={customFormat}
-                onChange={e => setCustomFormat(e.target.value)}
-                rows={5}
-                className="font-mono text-xs"
-                placeholder="اكتب قالب QR المخصص هنا..."
-              />
-            </CardContent>
-          </Card>
-        )}
+                <Card className="border-[#d8c7b1] shadow-sm">
+                  <CardHeader className="border-b border-[#eadfd1] px-4 py-3">
+                    <CardTitle className="text-sm font-bold text-[#4e321f]">بيانات المنشأة</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3 p-4">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label>
+                        <Label className="text-xs text-muted-foreground">اسم المنشأة</Label>
+                        <Input value={sellerName} onChange={e => { setSellerName(e.target.value); setPreviewGenerated(false); setPreviewChecked(false); setDecodedPreview(null); setPreviewError(""); }}
+                          placeholder="اسم الشركة أو المنشأة..." className="mt-1 h-9 text-sm" />
+                      </label>
+                      <label>
+                        <Label className="text-xs text-muted-foreground">الرقم أو المعرف الضريبي</Label>
+                        <Input value={taxNumber} onChange={e => { setTaxNumber(e.target.value); setPreviewGenerated(false); setPreviewChecked(false); setDecodedPreview(null); setPreviewError(""); }}
+                          placeholder="300000000000003" className="mt-1 h-9 font-mono text-sm" />
+                      </label>
+                    </div>
+                    <p className="rounded-md border border-[#e5d4bc] bg-[#fff8ed] px-3 py-2 text-[11px] text-[#765f4b]">
+                      إذا تُركت البيانات فارغة، تُستخدم بيانات المنشأة والفاتورة الفعلية عند إنشاء QR النهائي.
+                    </p>
+                  </CardContent>
+                </Card>
 
-        {/* نماذج الطباعة */}
-        <Card className="border-border/50">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-bold">نماذج الطباعة التي تعرض QR</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4 space-y-3">
-            {[
-              { id: "sales", label: "فاتورة المبيعات", val: showOnSales, set: setShowOnSales },
-              { id: "purchase", label: "فاتورة المشتريات", val: showOnPurchase, set: setShowOnPurchase },
-              { id: "receipt", label: "سند القبض", val: showOnReceipt, set: setShowOnReceipt },
-            ].map(item => (
-              <div key={item.id} className="flex items-center justify-between py-1">
-                <div className="flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm">{item.label}</span>
-                </div>
-                <Switch checked={item.val} onCheckedChange={item.set} />
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+                <Card className="border-[#d8c7b1] shadow-sm">
+                  <CardHeader className="border-b border-[#eadfd1] px-4 py-3">
+                    <CardTitle className="text-sm font-bold text-[#4e321f]">المستندات المطبق عليها QR</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 p-4">
+                    <div className="flex items-center justify-between rounded-md bg-[#fbf3e8] px-3 py-2">
+                      <div>
+                        <p className="text-xs font-semibold text-[#4e321f]">تفعيل QR على مستندات المبيعات</p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">إعداد واحد يطبق على جميع المستندات التالية</p>
+                      </div>
+                      <Switch checked={showOnSales} onCheckedChange={setShowOnSales} />
+                    </div>
+                    {[
+                      "فاتورة المبيعات",
+                      "فاتورة نقاط البيع POS",
+                      "مرتجع المبيعات",
+                      "الإشعار الدائن",
+                      "الإشعار المدين",
+                    ].map(label => (
+                      <div key={label} className="flex items-center justify-between border-b border-[#eee6dc] py-2 last:border-0">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-[#8a5a2b]" />
+                          <span className="text-sm text-[#4e321f]">{label}</span>
+                        </div>
+                        <Badge variant={showOnSales ? "default" : "secondary"} className="text-[10px]">
+                          {showOnSales ? "مطبق" : "متوقف"}
+                        </Badge>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
 
-        {/* مظهر QR */}
-        <Card className="border-border/50">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-bold">مظهر QR Code</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-xs text-muted-foreground">حجم QR (بكسل)</Label>
-                <div className="flex items-center gap-2 mt-1">
-                  <Input
-                    type="number" min={50} max={300} value={qrSize}
-                    onChange={e => setQrSize(Number(e.target.value))}
-                    className="h-8 text-sm w-24"
-                  />
-                  <span className="text-xs text-muted-foreground">{qrSize}×{qrSize} px</span>
-                </div>
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">موضع QR في الفاتورة</Label>
-                <Select value={qrPosition} onValueChange={setQrPosition}>
-                  <SelectTrigger className="h-8 text-sm mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="top-right">أعلى اليمين</SelectItem>
-                    <SelectItem value="top-left">أعلى اليسار</SelectItem>
-                    <SelectItem value="bottom-right">أسفل اليمين</SelectItem>
-                    <SelectItem value="bottom-left">أسفل اليسار</SelectItem>
-                    <SelectItem value="bottom-center">أسفل الوسط</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+                {system === "custom" && (
+                  <Card className="border-[#d8c7b1] shadow-sm">
+                    <CardHeader className="border-b border-[#eadfd1] px-4 py-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <CardTitle className="text-sm font-bold text-[#4e321f]">قالب QR المخصص</CardTitle>
+                        <button type="button" onClick={() => setShowHelp(h => !h)} className="text-xs text-[#8a5a2b] hover:underline">
+                          {showHelp ? "إخفاء المساعدة" : "عرض المتغيرات"}
+                        </button>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-2 p-4">
+                      {showHelp && <pre className="whitespace-pre-wrap rounded border border-[#e5d4bc] bg-[#fff8ed] p-2 font-mono text-[10px] leading-5 text-[#765f4b]">{CUSTOM_TEMPLATE_HELP}</pre>}
+                      <Textarea value={customFormat} onChange={e => { setCustomFormat(e.target.value); setPreviewGenerated(false); setPreviewChecked(false); setDecodedPreview(null); setPreviewError(""); }}
+                        rows={4} className="font-mono text-xs" placeholder="اكتب قالب QR المخصص هنا..." />
+                    </CardContent>
+                  </Card>
+                )}
 
-        {/* معاينة QR */}
-        <Card className="border-border/50">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-bold">معاينة QR Code</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <div className="flex items-center gap-6">
-              {previewContent ? (
-                <div className="flex flex-col items-center gap-2">
-                  <QRCodeDisplay content={previewContent} size={Math.min(qrSize, 160)} />
-                  <span className="text-[10px] text-muted-foreground">
-                    معاينة ({QR_SYSTEMS.find(s => s.id === system)?.country})
-                  </span>
+                <Card className="border-[#d8c7b1] shadow-sm">
+                  <CardHeader className="border-b border-[#eadfd1] px-4 py-3">
+                    <CardTitle className="text-sm font-bold text-[#4e321f]">البيانات المضمنة داخل QR</CardTitle>
+                  </CardHeader>
+                  <CardContent className="grid gap-x-5 gap-y-2 p-4 sm:grid-cols-2">
+                    {embeddedRows.map(([label, value]) => (
+                      <div key={label} className="rounded-md border border-[#eee6dc] bg-[#fffdf9] px-3 py-2">
+                        <p className="text-[11px] text-muted-foreground">{label}</p>
+                        <p className="mt-0.5 truncate text-xs font-semibold text-[#4e321f]" title={value}>{value}</p>
+                      </div>
+                    ))}
+                    <div className="rounded-md border border-[#eee6dc] bg-[#fffdf9] px-3 py-2 sm:col-span-2">
+                      <p className="text-[11px] text-muted-foreground">ملاحظة</p>
+                      <p className="mt-0.5 text-xs text-[#765f4b]">التاريخ والمبالغ تُقرأ من الفاتورة الفعلية عند الإنشاء، وليست إعدادات ثابتة.</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </div>
+
+          <aside className="space-y-4 lg:sticky lg:top-4">
+            <Card className="border-[#d8c7b1] shadow-sm">
+              <CardHeader className="border-b border-[#eadfd1] px-4 py-3">
+                <CardTitle className="flex items-center gap-2 text-sm font-bold text-[#4e321f]">
+                  <Eye className="h-4 w-4 text-[#8a5a2b]" />
+                  معاينة وفحص كود QR
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 p-4">
+                <div className="rounded-lg border border-dashed border-[#cdb99f] bg-[#fffdf9] p-4 text-center">
+                  {previewGenerated && isEnabled && previewContent ? (
+                    <QRCodeDisplay content={previewContent} size={190} className="mx-auto rounded bg-white p-2" />
+                  ) : (
+                    <div className="flex h-[190px] items-center justify-center text-xs text-muted-foreground">
+                      اضغط «إنشاء معاينة» لعرض كود QR
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <div className="w-32 h-32 bg-gray-100 border border-dashed border-gray-300 rounded flex items-center justify-center text-gray-400 text-xs">
-                  لا توجد معاينة
+                <div className="rounded-md bg-[#fbf3e8] px-3 py-2">
+                  <p className="text-[11px] text-muted-foreground">النظام المستخدم</p>
+                  <p className="mt-0.5 text-xs font-semibold text-[#4e321f]">{selectedSystem?.label}</p>
                 </div>
-              )}
-              <div className="flex-1 space-y-2">
-                <div>
-                  <p className="text-xs font-semibold text-muted-foreground mb-0.5">النظام المختار</p>
-                  <Badge className="text-[11px]">{QR_SYSTEMS.find(s => s.id === system)?.label}</Badge>
+                <div className="flex gap-2">
+                  <Button type="button" onClick={() => { setPreviewGenerated(true); setPreviewChecked(false); }} disabled={!isEnabled || !previewContent}
+                    className="h-9 flex-1 bg-[#8a5a2b] text-xs hover:bg-[#70471f]">
+                    <RefreshCw className="ml-1 h-3.5 w-3.5" />إنشاء معاينة
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => {
+                    try {
+                      setDecodedPreview(decodeQrContent(system, previewContent));
+                      setPreviewChecked(true);
+                      setPreviewError("");
+                    } catch (error) {
+                      setDecodedPreview(null);
+                      setPreviewChecked(false);
+                      setPreviewError(error instanceof Error ? error.message : "تعذر فحص كود QR");
+                    }
+                  }} disabled={!previewGenerated || !previewContent}
+                    className="h-9 flex-1 border-[#b89b7d] text-xs text-[#70471f]">
+                    <CheckCircle className="ml-1 h-3.5 w-3.5" />فحص كود QR
+                  </Button>
                 </div>
-                <div>
-                  <p className="text-xs font-semibold text-muted-foreground mb-0.5">بيانات المعاينة (عيّنة)</p>
-                  <p className="text-xs text-gray-500">إجمالي: 1,150.000 — ضريبة: 150.000</p>
-                </div>
-                {system === "zatca" && (
-                  <div className="bg-amber-50 border border-amber-200 rounded p-2 text-[11px] text-amber-700">
-                    ✓ متوافق مع معيار ZATCA e-invoice Phase 2 (TLV → Base64)
+                <p className="text-[11px] leading-5 text-muted-foreground">
+                  المعاينة تستخدم تاريخًا ومبالغ تجريبية. عند إصدار المستند، يُنشأ QR من بيانات الفاتورة الفعلية.
+                </p>
+                {previewChecked && (
+                  <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                    <div className="flex items-center gap-2 text-xs font-bold text-emerald-700">
+                      <CheckCircle className="h-4 w-4" /> كود QR صالح وتمت قراءة البيانات
+                    </div>
+                    {[
+                      ["اسم البائع أو المنشأة", decodedPreview?.sellerName ?? "—"],
+                      ["الرقم الضريبي", decodedPreview?.taxNumber ?? "—"],
+                      ["تاريخ ووقت الفاتورة", decodedPreview?.invoiceDateTime ?? "—"],
+                      ["الإجمالي شامل الضريبة", decodedPreview?.totalAmount?.toFixed(2) ?? "—"],
+                      ["مبلغ الضريبة", decodedPreview?.vatAmount?.toFixed(2) ?? "—"],
+                    ].map(([label, value]) => (
+                      <div key={label} className="flex items-start justify-between gap-3 border-b border-emerald-100 pb-1 text-[11px] last:border-0 last:pb-0">
+                        <span className="text-emerald-700">{label}</span>
+                        <span className="max-w-[150px] truncate text-left font-semibold text-emerald-900" title={value}>{value}</span>
+                      </div>
+                    ))}
                   </div>
                 )}
-                {system === "eta" && (
-                  <div className="bg-blue-50 border border-blue-200 rounded p-2 text-[11px] text-blue-700">
-                    ✓ متوافق مع معيار ETA (النظام الضريبي المصري) — JSON
+                {previewError && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                    <span className="font-bold">يوجد خطأ في كود QR:</span> {previewError}
                   </div>
                 )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </>)}
+                {isEnabled && (
+                  <div className="rounded-md border border-[#e5d4bc] bg-[#fff8ed] p-3 text-[11px] leading-5 text-[#765f4b]">
+                    <p className="mb-1 font-bold text-[#70471f]">حالة QR</p>
+                    <p>{previewGenerated ? "تم إنشاء المحتوى التجريبي." : "لم يتم إنشاء معاينة بعد."}</p>
+                    <p>الحجم والموضع يحددهما قالب الطباعة، وليس إعدادًا عامًا هنا.</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </aside>
+        </div>
+      </div>
     </div>
   );
 }

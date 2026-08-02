@@ -1537,7 +1537,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
         qrDataUrl: qrDataUrl || undefined,
         qrLabel: qrSettingsQuery.data?.countrySystem === "zatca" ? "ZATCA QR"
           : qrSettingsQuery.data?.countrySystem === "eta" ? "ETA QR" : "QR Code",
-        qrSize: qrSettingsQuery.data?.qrSize ?? 100,
+         qrSize: 100,
       });
       if (!ok) toast.error("تعذّر فتح نافذة PDF — تحقق من إعدادات المتصفح (السماح بالنوافذ المنبثقة)");
     } catch (e: any) {

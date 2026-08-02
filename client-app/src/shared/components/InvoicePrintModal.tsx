@@ -27,7 +27,7 @@ interface InvoicePrintModalProps {
   data:            PrintInvoiceData;
   qrSettings?:     QrSettings | null;
   templateConfig?: DocTemplateConfig | null;
-  docType?:        "sales_invoice" | "purchase_invoice" | "purchase_order" | "purchase_return";
+  docType?:        "sales_invoice" | "sales_return" | "credit_note" | "debit_note" | "purchase_invoice" | "purchase_order" | "purchase_return";
 }
 
 /* ═══════════════════ Component ═══════════════════ */
@@ -56,7 +56,6 @@ export default function InvoicePrintModal({
     qrSettings?.sellerName ?? "",
     qrSettings?.taxNumber ?? "",
     showQrSetting ? "1" : "0",
-    qrSettings?.qrSize ?? 100,
     data.invoiceNumber,
     data.invoiceDate,
     data.invoiceTime ?? "",
@@ -90,7 +89,7 @@ export default function InvoicePrintModal({
       buyerTaxNumber:  data.customerTaxNumber,
     };
 
-    QRCodeService.resolveForInvoice(qrSettings, invoiceData, docType as "sales_invoice" | "purchase_invoice" | "receipt_voucher" | undefined)
+    QRCodeService.resolveForInvoice(qrSettings, invoiceData, docType)
       .then(result => {
         if (!cancelled) setQrDataUrl(result.show ? result.dataUrl : "");
       })
@@ -108,7 +107,8 @@ export default function InvoicePrintModal({
     const showQR = !!(qrSettings?.isEnabled && showQrSetting && qrDataUrl);
     const qrLabel = qrSettings?.countrySystem === "zatca" ? "ZATCA QR"
                   : qrSettings?.countrySystem === "eta"   ? "ETA QR"  : "QR Code";
-    const qrSize  = qrSettings?.qrSize ?? 100;
+    // الحجم والموضع يحددهما قالب الطباعة؛ إعدادات QR العامة لا تتحكم بهما.
+    const qrSize  = 100;
 
     return buildInvoiceHtml(data, cfg, showQR ? qrDataUrl : undefined, qrLabel, qrSize, docType);
   }, [data, cfg, qrDataUrl, qrSettings?.countrySystem, qrSettings?.isEnabled, showQrSetting, docType]);
