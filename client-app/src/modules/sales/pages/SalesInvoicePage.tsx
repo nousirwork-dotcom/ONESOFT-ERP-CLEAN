@@ -328,6 +328,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
   const customersQuery   = trpc.customers.list.useQuery({});
   const warehousesQuery  = trpc.warehouses.list.useQuery();
   const productsQuery    = trpc.products.list.useQuery({});
+  const activeTaxesQuery = trpc.taxDefinitions.list.useQuery({ activeOnly: true }, { staleTime: 60000 });
+  const activeTaxes = activeTaxesQuery.data ?? [];
   const journalsQuery    = trpc.documentJournals.list.useQuery({ docType: "sales_invoice" });
   const salespersonsQuery = trpc.users.listSalespersons.useQuery({ warehouseId: warehouseId ?? undefined });
   const nextNumberQuery  = trpc.salesInvoices.nextNumber.useQuery({ prefix: "INV" });
@@ -925,7 +927,8 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
         l.isStockItem = isStock;
         l.unit = found.unit ?? "";
         l.unitPrice = found.salePrice ? String(found.salePrice) : "";
-        l.taxPct = found.taxRate ? String(found.taxRate) : "0";
+        const tax = activeTaxes.find(t => t.id === found.taxId);
+        l.taxPct = tax?.valueType === "percentage" && tax.category === "tax" ? String(tax.value) : "0";
         l.total = calcLineTotal(l);
         updated[idx] = l;
         return updated;
@@ -938,7 +941,7 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
         return updated;
       });
     }
-  }, [productsQuery.data]);
+  }, [productsQuery.data, activeTaxes]);
 
   const selectProductForLine = useCallback((idx: number, product: ProductLookupOption) => {
     const isStock = product.itemType !== "service";
@@ -955,14 +958,17 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
         isStockItem: isStock,
         unit: product.unit ?? "",
         unitPrice: product.salePrice ? String(product.salePrice) : "",
-        taxPct: (product as any).taxRate ? String((product as any).taxRate) : "0",
+        taxPct: (() => {
+          const tax = activeTaxes.find(t => t.id === (product as any).taxId);
+          return tax?.valueType === "percentage" && tax.category === "tax" ? String(tax.value) : "0";
+        })(),
       };
       line.total = calcLineTotal(line);
       updated[idx] = line;
       return updated;
     });
     requestAnimationFrame(() => cellRefs.current.get(`${idx}-2`)?.focus());
-  }, []);
+  }, [activeTaxes]);
 
   // ── Keyboard Navigation ───────────────────────────────────────────────────
   const handleCellKeyDown = useCallback((
@@ -2303,10 +2309,14 @@ export default function SalesInvoicePage({ initialInvoiceId, onDocTypeChange, on
                     focusedSourceScreen="sales-invoice"
                     focusedRowId={line.id}
                     focusedEntityTitle={line.productCode || line.productName || undefined}
-                     onSelect={(name, code, id, unit, price, tax, itemType) => {
+                      onSelect={(name, code, id, unit, price, _tax, itemType, taxId) => {
                       setLines(prev => {
                         const updated = [...prev];
-                        const l = { ...updated[rowIdx], productName: name, productCode: code, productId: id, unit, unitPrice: price, taxPct: tax, isStockItem: itemType !== "service" };
+                         const definition = activeTaxes.find(t => t.id === taxId);
+                         const taxPct = definition?.valueType === "percentage" && definition.category === "tax"
+                           ? String(definition.value)
+                           : "0";
+                         const l = { ...updated[rowIdx], productName: name, productCode: code, productId: id, taxId, unit, unitPrice: price, taxPct, isStockItem: itemType !== "service" };
                         l.total = calcLineTotal(l);
                         updated[rowIdx] = l;
                         return updated;
@@ -3195,7 +3205,7 @@ function ProductNameCell({
   value: string;
   products: any[];
   cellRefs: React.MutableRefObject<Map<string, HTMLInputElement>>;
-  onSelect: (name: string, code: string, id: number, unit: string, price: string, tax: string, itemType: string) => void;
+   onSelect: (name: string, code: string, id: number, unit: string, price: string, tax: string, itemType: string, taxId?: number) => void;
   onChange?: (v: string) => void;
   onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
   onFocus: () => void;
@@ -3239,7 +3249,16 @@ function ProductNameCell({
   const handleSelect = (p: any) => {
     setSearch(p.name);
     setOpen(false);
-    onSelect(p.name, p.code ?? p.barcode ?? "", p.id, p.unit ?? "", p.salePrice ? String(p.salePrice) : "", p.taxRate ? String(p.taxRate) : "0", p.itemType ?? "stock");
+    onSelect(
+      p.name,
+      p.code ?? p.barcode ?? "",
+      p.id,
+      p.unit ?? "",
+      p.salePrice ? String(p.salePrice) : "",
+      p.taxRate ? String(p.taxRate) : "0",
+      p.itemType ?? "stock",
+      p.taxId ?? undefined,
+    );
   };
 
   const tryExactMatch = () => {

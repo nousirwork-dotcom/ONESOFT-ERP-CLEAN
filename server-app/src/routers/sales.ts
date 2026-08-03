@@ -6,6 +6,7 @@ import { salesInvoices, salesInvoiceItems, salesInvoicePayments, paymentMethods,
 import { autoPostSalesInvoice } from './posting.js';
 import { TRPCError } from '@trpc/server';
 import { validateSalesInvoiceWarehouseContext } from '../lib/salesWarehouseValidation.js';
+import { resolveInvoiceTaxItems } from '../lib/invoiceTaxValidation.js';
 
 // ── تحقق أن جميع بنود الفاتورة تُشير إلى أصناف مسجلة في النظام ──────────────────
 async function validateInvoiceItems(items: { productId?: number; productName: string; productCode?: string }[], orgId: number) {
@@ -381,8 +382,9 @@ export const salesRouter = router({
       })),
     }))
     .mutation(async ({ ctx, input }) => {
-      const { items, dueDate, ...invoiceData } = input;
+      const { items: rawItems, dueDate, ...invoiceData } = input;
       const orgId = ctx.user.orgId;
+      const items = await resolveInvoiceTaxItems(rawItems, orgId);
       const isDraft = invoiceData.status === 'draft';
       if (!isDraft && ['credit_note', 'debit_note'].includes(invoiceData.invoiceType)) {
         if (!invoiceData.basedOnNumber?.trim() && !invoiceData.sourceDocumentId) {
@@ -670,7 +672,7 @@ export const salesRouter = router({
       })).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const { id, items, invoiceDate, ...rest } = input;
+      const { id, items: rawItems, invoiceDate, ...rest } = input;
       // القاعدة الخامسة: منع تعديل المستندات المرحّلة
       const existing = await db.query.salesInvoices.findFirst({
         where: and(eq(salesInvoices.id, id), eq(salesInvoices.orgId, ctx.user.orgId)),
@@ -681,6 +683,7 @@ export const salesRouter = router({
       const wasDraft = existing?.status === 'draft';
       const isNowDraft = rest.status === 'draft';
       const isFinalizing = wasDraft && !isNowDraft;
+      const items = rawItems ? await resolveInvoiceTaxItems(rawItems, ctx.user.orgId) : undefined;
 
       // ── الحالة النهائية الكاملة: دمج القيم الموجودة مع المدخلات الجديدة ─────
       const finalWarehouseId  = rest.warehouseId  ?? existing?.warehouseId  ?? undefined;

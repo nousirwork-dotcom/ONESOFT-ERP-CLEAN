@@ -9,7 +9,8 @@ const taxInput = z.object({
   name: z.string().trim().min(1, 'يرجى إدخال اسم الضريبة أو الرسم'),
   code: z.string().trim().min(1, 'يرجى إدخال كود الضريبة أو الرسم').max(50),
   category: z.enum(['tax', 'withholding', 'fee']).default('tax'),
-  valueType: z.enum(['percentage', 'fixed']).default('percentage'),
+  // Fixed values are not supported by the invoice calculation engine yet.
+  valueType: z.literal('percentage').default('percentage'),
   value: z.string().trim().regex(/^\d+(\.\d{1,4})?$/, 'أدخل قيمة رقمية صحيحة'),
   isActive: z.boolean().default(true),
   notes: z.string().optional(),

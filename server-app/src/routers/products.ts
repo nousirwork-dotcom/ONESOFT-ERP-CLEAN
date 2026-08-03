@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc.js';
 import { db } from '../db.js';
-import { products, productGroups } from '../schema.js';
+import { products, productGroups, taxDefinitions } from '../schema.js';
 import { eq, and, or, like, desc, asc, isNotNull, ne } from 'drizzle-orm';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -28,6 +28,22 @@ async function assertProductCodeUnique(code: string, orgId: number, excludeId?: 
   });
   if (existing) {
     throw new TRPCError({ code: 'CONFLICT', message: 'يوجد صنف مسجل بنفس الكود.' });
+  }
+}
+
+async function assertProductTaxSupported(taxId: number | null | undefined, orgId: number) {
+  if (taxId == null) return;
+  const tax = await db.query.taxDefinitions.findFirst({
+    where: and(eq(taxDefinitions.id, taxId), eq(taxDefinitions.orgId, orgId)),
+  });
+  if (!tax) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'تعريف الضريبة المحدد غير موجود في هذه المؤسسة.' });
+  }
+  if (!tax.isActive) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن ربط الصنف بضريبة موقوفة؛ اختر ضريبة فعّالة أو بدون ضريبة.' });
+  }
+  if (tax.valueType !== 'percentage' || tax.category !== 'tax') {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'اختيار الصنف يدعم الضرائب النسبية الفعّالة فقط حاليًا.' });
   }
 }
 
@@ -138,6 +154,7 @@ export const productsRouter = router({
 
       validateProductRequired(name, sku);
       await assertProductCodeUnique(sku, ctx.user.orgId);
+      await assertProductTaxSupported(taxId, ctx.user.orgId);
 
       const resolvedGroupId = groupId ?? categoryId ?? undefined;
       const extraData: Record<string, any> = {};
@@ -297,6 +314,7 @@ export const productsRouter = router({
 
       validateProductRequired(rest.name, sku);
       await assertProductCodeUnique(sku, ctx.user.orgId, id);
+      await assertProductTaxSupported(taxId, ctx.user.orgId);
 
       const extraData: Record<string, any> = {};
       if (name2 !== undefined)         extraData.name2          = name2;

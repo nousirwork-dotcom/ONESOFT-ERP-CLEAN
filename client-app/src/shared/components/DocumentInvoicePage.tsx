@@ -136,7 +136,7 @@ function ProductNameCell({
 }: {
   rowIdx: number; value: string; products: any[];
   cellRefs: React.MutableRefObject<Map<string, HTMLInputElement>>;
-  onSelect: (name: string, code: string, id: number, unit: string, price: string, tax: string) => void;
+  onSelect: (name: string, code: string, id: number, unit: string, price: string, tax: string, taxId?: number) => void;
   onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
   onFocus: () => void;
 }) {
@@ -162,7 +162,15 @@ function ProductNameCell({
 
   const handleSelect = (p: any) => {
     setSearch(p.name); setOpen(false);
-    onSelect(p.name, p.sku ?? p.barcode ?? p.code ?? "", p.id, p.unit ?? "", p.salePrice ? String(p.salePrice) : "", p.taxRate ? String(p.taxRate) : "0");
+    onSelect(
+      p.name,
+      p.sku ?? p.barcode ?? p.code ?? "",
+      p.id,
+      p.unit ?? "",
+      p.salePrice ? String(p.salePrice) : "",
+      p.taxRate ? String(p.taxRate) : "0",
+      p.taxId ?? undefined,
+    );
   };
 
   useEffect(() => {
@@ -359,6 +367,8 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
     refetchOnMount: "always",
   });
   const productsQuery   = trpc.products.list.useQuery({});
+  const activeTaxesQuery = trpc.taxDefinitions.list.useQuery({ activeOnly: true }, { staleTime: 60000 });
+  const activeTaxes = activeTaxesQuery.data ?? [];
   const journalsQuery   = trpc.documentJournals.list.useQuery({ docType: config.journalDocType });
   const docTypesQuery   = trpc.documentTypes.list.useQuery({ typeId: config.docTypeFilter });
   const purchaseBranchOptions = useMemo(() => {
@@ -750,13 +760,14 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
         l.taxId       = (found as any).taxId ?? undefined;
         l.unit        = found.unit ?? "";
         l.unitPrice   = found.salePrice ? String(found.salePrice) : "";
-        l.taxPct      = found.taxRate ? String(found.taxRate) : "0";
+        const tax = activeTaxes.find(t => t.id === found.taxId);
+        l.taxPct      = tax?.valueType === "percentage" && tax.category === "tax" ? String(tax.value) : "0";
         l.total       = calcLineTotal(l);
         u[idx] = l;
         return u;
       });
     }
-  }, [productsQuery.data]);
+  }, [productsQuery.data, activeTaxes]);
 
   const handleCellKeyDown = useCallback((
     e: KeyboardEvent<HTMLInputElement>, rowIdx: number, colIdx: number
@@ -1854,10 +1865,14 @@ export default function DocumentInvoicePage({ config }: { config: DocPageConfig 
                 </td>
                 <td className="inv-td p-0">
                   <ProductNameCell rowIdx={rowIdx} value={line.productName} products={productsQuery.data ?? []} cellRefs={cellRefs}
-                    onSelect={(name, code, id, unit, price, tax) => {
+                     onSelect={(name, code, id, unit, price, _tax, taxId) => {
                       setLines(prev => {
                         const u = [...prev];
-                        const l = { ...u[rowIdx], productName: name, productCode: code, productId: id, unit, unitPrice: price, taxPct: tax };
+                         const definition = activeTaxes.find(t => t.id === taxId);
+                         const taxPct = definition?.valueType === "percentage" && definition.category === "tax"
+                           ? String(definition.value)
+                           : "0";
+                         const l = { ...u[rowIdx], productName: name, productCode: code, productId: id, taxId, unit, unitPrice: price, taxPct };
                         l.total = calcLineTotal(l); u[rowIdx] = l; return u;
                       });
                     }}

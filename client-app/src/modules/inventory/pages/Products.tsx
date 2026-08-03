@@ -309,7 +309,7 @@ export function ProductCard({
   setForm: React.Dispatch<React.SetStateAction<ProductForm>>;
   categories: Array<{ id: number; name: string }> | undefined;
   groups: Array<{ id: number; groupCode?: string | null; name: string; groupType?: string | null; parentId?: number | null; autoNumbering?: boolean | null; codeDigits?: number | null }> | undefined;
-  activeTaxes?: Array<{ id: number; name: string; code: string; valueType: string; value: string }>;
+  activeTaxes?: Array<{ id: number; name: string; code: string; category: string; valueType: string; value: string }>;
   productId?: number | null;
   skuRef?: React.RefObject<HTMLInputElement | null>;
   nameRef?: React.RefObject<HTMLInputElement | null>;
@@ -319,6 +319,9 @@ export function ProductCard({
   const [activeTab, setActiveTab] = useState<string>("main");
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const isEdit = !!productId;
+  const supportedTaxes = activeTaxes.filter(
+    tax => tax.valueType === "percentage" && tax.category === "tax",
+  );
 
   // ── Imperative auto-code generation on group select ──────────────────────
   const trpcUtils = trpc.useUtils();
@@ -914,7 +917,7 @@ export function ProductCard({
                   <Select
                     value={form.taxId || "none"}
                     onValueChange={(value) => {
-                      const selectedTax = activeTaxes.find(tax => String(tax.id) === value);
+                      const selectedTax = supportedTaxes.find(tax => String(tax.id) === value);
                       setForm(current => ({
                         ...current,
                         taxId: value === "none" ? "" : value,
@@ -929,7 +932,7 @@ export function ProductCard({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">بدون ضريبة</SelectItem>
-                      {activeTaxes.map(tax => (
+                      {supportedTaxes.map(tax => (
                         <SelectItem key={tax.id} value={String(tax.id)}>
                           {tax.name} ({tax.code}) — {tax.valueType === "percentage" ? `${tax.value}%` : tax.value}
                         </SelectItem>
@@ -1501,6 +1504,9 @@ export default function Products() {
   const { data: activeTaxes = [] } = trpc.taxDefinitions.list.useQuery(
     { activeOnly: true },
     { staleTime: 60000 },
+  );
+  const supportedTaxes = activeTaxes.filter(
+    tax => tax.valueType === "percentage" && tax.category === "tax",
   );
 
   const leafGroups = useMemo(() => {
@@ -2707,7 +2713,7 @@ export default function Products() {
                   setForm={setForm}
                   categories={categories}
                   groups={groups as any}
-                  activeTaxes={activeTaxes}
+                  activeTaxes={supportedTaxes}
                   productId={editId}
                   skuRef={skuRef}
                   nameRef={nameRef}

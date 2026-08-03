@@ -8,6 +8,7 @@ import {
   pendingAccountMovements, pendingStockMovements, inventory, products,
 } from '../schema.js';
 import { buildPurchaseInvoiceLines } from './posting.js';
+import { resolveInvoiceTaxItems } from '../lib/invoiceTaxValidation.js';
 
 type PurchaseClient = typeof db | any;
 
@@ -341,8 +342,9 @@ export const purchasesRouter = router({
       })),
     }))
     .mutation(async ({ ctx, input }) => {
-      const { items, dueDate, ...invoiceData } = input;
+      const { items: rawItems, dueDate, ...invoiceData } = input;
       const orgId = ctx.user.orgId;
+      const items = await resolveInvoiceTaxItems(rawItems, orgId);
       if (invoiceData.invoiceType === 'debit_note') {
         throw new TRPCError({
           code: 'BAD_REQUEST',
@@ -422,7 +424,7 @@ export const purchasesRouter = router({
       })).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const { id, items, invoiceDate, ...rest } = input;
+      const { id, items: rawItems, invoiceDate, ...rest } = input;
       const existing = await db.query.purchaseInvoices.findFirst({
         where: and(eq(purchaseInvoices.id, id), eq(purchaseInvoices.orgId, ctx.user.orgId)),
       });
@@ -435,6 +437,7 @@ export const purchasesRouter = router({
       }
       if (existing?.isPosted)
         throw new Error('لا يمكن تعديل مستند مرحَّل — يجب فك الترحيل أولاً');
+      const items = rawItems ? await resolveInvoiceTaxItems(rawItems, ctx.user.orgId) : undefined;
       const resolvedWarehouseId = await resolvePurchaseWarehouseId(
         db,
         rest.warehouseId ?? existing?.warehouseId,

@@ -752,7 +752,7 @@ function TaxesPage() {
   const [editing, setEditing] = useState<TaxRow | null>(null);
   const [form, setForm] = useState({
     name: "", code: "", category: "tax" as "tax" | "withholding" | "fee",
-    valueType: "percentage" as "percentage" | "fixed", value: "0",
+    valueType: "percentage" as const, value: "0",
     isActive: true, notes: "", effectiveFrom: "",
   });
   const resetForm = () => setForm({
@@ -764,7 +764,7 @@ function TaxesPage() {
     setEditing(tax);
     setForm({
       name: tax.name, code: tax.code, category: tax.category as "tax" | "withholding" | "fee",
-      valueType: tax.valueType as "percentage" | "fixed", value: String(tax.value ?? "0"),
+      valueType: "percentage", value: String(tax.value ?? "0"),
       isActive: tax.isActive, notes: tax.notes ?? "",
       effectiveFrom: tax.effectiveFrom ? new Date(tax.effectiveFrom).toISOString().slice(0, 10) : "",
     });
@@ -841,21 +841,121 @@ function TaxesPage() {
         </Table>
       </Card>
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent dir="rtl" className="max-w-lg">
-          <DialogHeader><DialogTitle>{editing ? "تعديل ضريبة أو رسم" : "إضافة ضريبة أو رسم"}</DialogTitle></DialogHeader>
-          <form onSubmit={submit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>الاسم</Label><Input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
-              <div><Label>الكود</Label><Input required dir="ltr" value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} /></div>
-              <div><Label>التصنيف</Label><Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v as typeof f.category }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="tax">ضريبة</SelectItem><SelectItem value="withholding">استقطاع</SelectItem><SelectItem value="fee">رسم</SelectItem></SelectContent></Select></div>
-              <div><Label>نوع القيمة</Label><Select value={form.valueType} onValueChange={v => setForm(f => ({ ...f, valueType: v as typeof f.valueType }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="percentage">نسبة مئوية</SelectItem><SelectItem value="fixed">قيمة ثابتة</SelectItem></SelectContent></Select></div>
-              <div><Label>{form.valueType === "percentage" ? "النسبة" : "القيمة"}</Label><Input required type="number" min="0" step="0.0001" dir="ltr" value={form.value} onChange={e => setForm(f => ({ ...f, value: e.target.value }))} /></div>
-              <div><Label>تاريخ السريان</Label><Input type="date" value={form.effectiveFrom} onChange={e => setForm(f => ({ ...f, effectiveFrom: e.target.value }))} /></div>
-            </div>
-            <div><Label>ملاحظات</Label><Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
-            <div className="flex items-center gap-2"><Switch checked={form.isActive} onCheckedChange={isActive => setForm(f => ({ ...f, isActive }))} /><Label>فعّالة</Label></div>
-            <DialogFooter><Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>إلغاء</Button><Button type="submit" disabled={saveTax.isPending || updateTax.isPending}>حفظ</Button></DialogFooter>
-          </form>
+        <DialogContent
+          dir="rtl"
+          showCloseButton={false}
+          className="w-[620px] max-w-[calc(100vw-32px)] overflow-hidden rounded-2xl border-border bg-card p-0 shadow-2xl"
+        >
+          <div className="flex max-h-[calc(100vh-32px)] flex-col">
+            <DialogHeader className="shrink-0 border-b px-6 py-4 text-right">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <Tag className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <DialogTitle className="text-xl">
+                      {editing ? "تعديل ضريبة أو رسم" : "إضافة ضريبة أو رسم"}
+                    </DialogTitle>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      تعريف النسبة أو القيمة وربطها بالمستندات والأصناف.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setDialogOpen(false)}
+                  aria-label="إغلاق"
+                  className="shrink-0 text-muted-foreground hover:text-foreground"
+                >
+                  <span className="text-lg leading-none">×</span>
+                </Button>
+              </div>
+            </DialogHeader>
+
+            <form onSubmit={submit} className="min-h-0 overflow-y-auto px-6 py-5">
+              <div className="space-y-4">
+                <section className="rounded-2xl border bg-muted/20 p-4">
+                  <div className="mb-3">
+                    <h3 className="text-sm font-semibold">هوية الضريبة أو الرسم</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">البيانات الأساسية المطلوبة للتعريف.</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="tax-name">الاسم <span className="text-destructive">*</span></Label>
+                      <Input id="tax-name" required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="اسم الضريبة أو الرسم" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="tax-code">الكود <span className="text-destructive">*</span></Label>
+                      <Input id="tax-code" required dir="ltr" className="text-left" value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} placeholder="VAT" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>التصنيف</Label>
+                      <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v as typeof f.category }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="tax">ضريبة</SelectItem>
+                          <SelectItem value="withholding">استقطاع</SelectItem>
+                          <SelectItem value="fee">رسم</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>نوع القيمة</Label>
+                          <div className="flex h-10 items-center rounded-md border bg-muted/30 px-3 text-sm">
+                            نسبة مئوية
+                          </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border bg-muted/20 p-4">
+                  <div className="mb-3">
+                    <h3 className="text-sm font-semibold">القيمة والسريان</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">الحساب الحالي يدعم النسب المئوية فقط.</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="tax-value">النسبة <span className="text-destructive">*</span></Label>
+                      <Input id="tax-value" required type="number" min="0" step="0.0001" dir="ltr" className="text-left" value={form.value} onChange={e => setForm(f => ({ ...f, value: e.target.value }))} placeholder="15" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="tax-effective-from">تاريخ السريان</Label>
+                      <DateSegmentInput
+                        value={form.effectiveFrom}
+                        onChange={effectiveFrom => setForm(f => ({ ...f, effectiveFrom }))}
+                        standalone
+                        className="h-10 w-full"
+                      />
+                    </div>
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border bg-muted/20 p-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="tax-notes">ملاحظات</Label>
+                    <Textarea id="tax-notes" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="أضف أي ملاحظات إضافية..." className="min-h-20 resize-y" />
+                  </div>
+                  <div className="mt-4 flex items-center justify-between rounded-xl border bg-background p-4">
+                    <div>
+                      <Label htmlFor="tax-active" className="cursor-pointer">تفعيل الضريبة</Label>
+                      <p className="mt-1 text-xs text-muted-foreground">الضريبة الموقوفة لا تظهر في الاختيارات الجديدة.</p>
+                    </div>
+                    <Switch id="tax-active" checked={form.isActive} onCheckedChange={isActive => setForm(f => ({ ...f, isActive }))} />
+                  </div>
+                </section>
+              </div>
+
+              <div className="mt-5 flex items-center justify-start gap-2 border-t pt-4">
+                <Button type="submit" disabled={saveTax.isPending || updateTax.isPending}>
+                  {saveTax.isPending || updateTax.isPending ? "جاري الحفظ..." : "حفظ"}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>إلغاء</Button>
+              </div>
+            </form>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
