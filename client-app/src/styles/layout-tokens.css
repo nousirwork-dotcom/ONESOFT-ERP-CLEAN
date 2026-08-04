@@ -206,12 +206,12 @@
   color: #A6A096 !important;
 }
 
-.product-card-classic [class*="bg-slate-50"],
-.product-card-classic [class*="bg-slate-100"],
-.product-card-classic [class*="bg-slate-200"],
-.product-card-classic [class*="bg-blue-50"],
-.product-card-classic [class*="bg-purple-100"],
-.product-card-classic [class*="bg-emerald-50"] {
+.product-card-classic :not(button):not(input):not(select):not(textarea)[class*="bg-slate-50"],
+.product-card-classic :not(button):not(input):not(select):not(textarea)[class*="bg-slate-100"],
+.product-card-classic :not(button):not(input):not(select):not(textarea)[class*="bg-slate-200"],
+.product-card-classic :not(button):not(input):not(select):not(textarea)[class*="bg-blue-50"],
+.product-card-classic :not(button):not(input):not(select):not(textarea)[class*="bg-purple-100"],
+.product-card-classic :not(button):not(input):not(select):not(textarea)[class*="bg-emerald-50"] {
   background-color: #F2F0EC !important;
 }
 
@@ -221,15 +221,15 @@
   border-color: #D8D3C8 !important;
 }
 
-.product-card-classic [class*="bg-slate-800"],
-.product-card-classic [class*="bg-slate-700"] {
+.product-card-classic :not(button):not(input):not(select):not(textarea)[class*="bg-slate-800"],
+.product-card-classic :not(button):not(input):not(select):not(textarea)[class*="bg-slate-700"] {
   background-color: #F2F0EC !important;
 }
 
-.product-card-classic [class*="bg-[#EBE7DF]"],
-.product-card-classic [class*="bg-[#EDE7DF]"],
-.product-card-classic [class*="bg-[#F0EDE8]"],
-.product-card-classic [class*="bg-[#F5F0E8]"] {
+.product-card-classic :not(button):not(input):not(select):not(textarea)[class*="bg-[#EBE7DF]"],
+.product-card-classic :not(button):not(input):not(select):not(textarea)[class*="bg-[#EDE7DF]"],
+.product-card-classic :not(button):not(input):not(select):not(textarea)[class*="bg-[#F0EDE8]"],
+.product-card-classic :not(button):not(input):not(select):not(textarea)[class*="bg-[#F5F0E8]"] {
   background-color: #F2F0EC !important;
 }
 
@@ -238,4 +238,104 @@
 .product-card-classic [style*="background: #fff"],
 .product-card-classic [style*="background:#fff"] {
   background-color: #F2F0EC !important;
+}
+
+/* Product form readability and spacing. Keep these rules scoped to the
+   add/edit item card so the rest of the ERP keeps its existing density. */
+.product-card-classic .product-field-label,
+.product-card-classic .product-form-field > label {
+  color: #334155 !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  line-height: 20px !important;
+}
+
+.product-card-classic .product-card-body input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.product-card-classic .product-card-body select,
+.product-card-classic .product-card-body textarea,
+.product-card-classic .product-card-body [role="combobox"] {
+  min-height: 38px !important;
+  height: 40px !important;
+  padding: 7px 12px !important;
+  border: 1px solid #D8DDE5 !important;
+  border-radius: 6px !important;
+  font-size: 14px !important;
+  line-height: 22px !important;
+  color: #334155 !important;
+  background-color: #FCFAF5 !important;
+  transition: border-color 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
+}
+
+.product-card-classic .product-card-body textarea {
+  height: auto !important;
+  min-height: 40px !important;
+}
+
+.product-card-classic .product-card-body input:focus,
+.product-card-classic .product-card-body select:focus,
+.product-card-classic .product-card-body textarea:focus,
+.product-card-classic .product-card-body [role="combobox"]:focus,
+.product-card-classic .product-card-body [role="combobox"][data-state="open"] {
+  outline: none !important;
+  border-color: #93BDF0 !important;
+  box-shadow: 0 0 0 3px rgba(147, 189, 240, 0.24) !important;
+  background-color: #FFFFFF !important;
+}
+
+.product-card-classic .product-card-body input::placeholder,
+.product-card-classic .product-card-body textarea::placeholder {
+  color: #94A3B8 !important;
+  opacity: 1;
+}
+
+.product-card-classic .product-card-body [class~="py-0.5"] {
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
+}
+
+.product-card-classic .product-card-body .product-form-field {
+  gap: 6px !important;
+}
+
+.product-card-classic .product-card-body span.text-xs.font-semibold,
+.product-card-classic .product-card-body th.text-xs {
+  font-size: 14px !important;
+  line-height: 20px !important;
+  font-weight: 600 !important;
+  color: #334155 !important;
+}
+
+.product-card-classic .product-card-body [class*="shrink-0"][class*="items-center"] > span.text-xs {
+  font-size: 14px !important;
+  line-height: 20px !important;
+  font-weight: 600 !important;
+  color: #334155 !important;
+}
+
+.product-card-classic .product-card-body button,
+.product-card-classic .product-card-body label[for] {
+  border-radius: 6px !important;
+}
+
+.product-card-classic .product-tabs .product-tab-button {
+  min-height: 42px;
+  padding: 8px 14px 7px !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  line-height: 22px;
+}
+
+@media (max-width: 900px) {
+  .product-card-classic .product-card-body input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  .product-card-classic .product-card-body select,
+  .product-card-classic .product-card-body textarea,
+  .product-card-classic .product-card-body [role="combobox"] {
+    min-height: 38px !important;
+    height: 38px !important;
+    padding-inline: 9px !important;
+  }
+
+  .product-card-classic .product-tabs .product-tab-button {
+    padding-inline: 10px !important;
+  }
 }

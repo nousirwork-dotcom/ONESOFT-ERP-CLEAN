@@ -248,8 +248,8 @@ function CField({
   className?: string;
 }) {
   return (
-    <div className={`flex flex-col gap-0.5 ${className}`}>
-      <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+    <div className={`product-form-field flex flex-col gap-0.5 ${className}`}>
+      <label className="product-field-label text-xs font-medium text-slate-600 dark:text-slate-400">
         {label}{required && <span className="text-red-500 mr-0.5">*</span>}
       </label>
       {children}
@@ -512,7 +512,7 @@ export function ProductCard({
     <div className="product-card-classic flex flex-col h-full" dir="rtl">
       {/* شريط التبويبات — نفس ألوان نافذة دفاتر المستندات */}
       <div
-        className="flex flex-wrap flex-shrink-0 overflow-x-auto"
+        className="product-tabs flex flex-wrap flex-shrink-0 overflow-x-auto"
         style={{ background: "#F2F0EC", borderBottom: "1px solid #D8D3C8", paddingRight: 7 }}
       >
         {tabs.map((tab) => (
@@ -520,7 +520,7 @@ export function ProductCard({
             key={tab.id}
             type="button"
             onClick={() => setActiveTab(tab.id)}
-            className="whitespace-nowrap transition-colors"
+            className="product-tab-button whitespace-nowrap transition-colors"
             style={{
               padding: "6px 12px 5px",
               fontSize: 10,
@@ -2810,6 +2810,7 @@ export default function Products() {
               <UnifiedBottomToolbar
                 actions={toolbarActions}
                 tools={toolbarTools}
+                className="product-card-toolbar"
               />
             </div>
           </Rnd>

@@ -201,6 +201,44 @@
   line-height: 10px;
 }
 
+/* Add-item screen modifier: readable controls without changing other ERP
+   screens or the shared shortcut/action behavior. */
+:global(.product-card-toolbar) .toolbarButton,
+:global(.product-card-toolbar) .toolbarButton[data-action="delete"],
+:global(.product-card-toolbar) .toolbarButton[data-action="cancel"] {
+  width: 52px;
+  min-width: 52px;
+  height: 58px;
+  padding: 3px 2px;
+  border-radius: 6px;
+}
+
+:global(.product-card-toolbar) .toolbarLabel {
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 700;
+}
+
+:global(.product-card-toolbar) .toolbarShortcut {
+  font-size: 9px;
+  line-height: 11px;
+}
+
+@media (max-width: 900px) {
+  :global(.product-card-toolbar) .toolbarButton,
+  :global(.product-card-toolbar) .toolbarButton[data-action="delete"],
+  :global(.product-card-toolbar) .toolbarButton[data-action="cancel"] {
+    width: 45px;
+    min-width: 45px;
+    height: 54px;
+  }
+
+  :global(.product-card-toolbar) .toolbarLabel {
+    font-size: 12px;
+    line-height: 16px;
+  }
+}
+
 /* ─── Tools drop-down menu ────────────────────────────────────────── */
 .toolsMenu {
   overflow:      hidden;
